@@ -5,8 +5,14 @@ import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
-import { formatActiveStreamRetention } from '@shared/copy/executionHistory';
-import { releaseStreamResources } from '@tools/approval';
+import {
+  formatActiveStreamRetention,
+  formatStreamDeletionRetention,
+} from '@shared/copy/executionHistory';
+import {
+  cleanupUnscopedApprovals,
+  releaseStreamResources,
+} from '@tools/approval';
 
 import type { ProgressStreamLifecycleHost as ProgressStreamLifecycleHostPort } from '@controllers/progressView/ProgressStreamLifecycleController';
 import type { ProgressViewProvider } from '../ProgressViewProvider';
@@ -62,11 +68,18 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
     this.provider.webviewBridge.clearStream(stream);
   }
 
-  cleanupDeletedStreams(streams: StreamTabId[]): void {
+  cleanupDeletedStreams(
+    streams: StreamTabId[],
+    options: { allDeleted: boolean },
+  ): void {
     for (const stream of streams) {
       releaseStreamResources(stream);
       this.backupCleaner.clearStreamBackups(stream);
       this.provider.webviewBridge.clearStream(stream);
+    }
+    if (options.allDeleted) {
+      cleanupUnscopedApprovals();
+      this.interactions.cancel({ cause: 'All streams deleted.' });
     }
   }
 
@@ -82,9 +95,14 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
     await this.provider.setActiveStream(stream);
   }
 
-  async notifyDeletionRetained(count: number): Promise<void> {
+  async notifyDeletionRetained(
+    activeCount: number,
+    failedCount = 0,
+  ): Promise<void> {
     await vscode.window.showInformationMessage(
-      formatActiveStreamRetention(count),
+      failedCount === 0
+        ? formatActiveStreamRetention(activeCount)
+        : formatStreamDeletionRetention(activeCount, failedCount),
     );
   }
 }

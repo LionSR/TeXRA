@@ -18,6 +18,7 @@ import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 // Local imports - utils
 import { unique } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - transcript types
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
@@ -35,6 +36,11 @@ export interface SessionStoresOptions {
     forget(stream: StreamTabId): Promise<void>;
     forgetMany(streams: readonly StreamTabId[]): Promise<void>;
   };
+}
+
+export interface DeleteAllStreamsResult {
+  readonly active: ReadonlySet<StreamTabId>;
+  readonly failed: ReadonlySet<StreamTabId>;
 }
 
 /**
@@ -95,7 +101,7 @@ export class SessionStores {
     );
   }
 
-  async deleteAll(): Promise<ReadonlySet<StreamTabId>> {
+  async deleteAll(): Promise<DeleteAllStreamsResult> {
     const persistedStreams = await this.snapshots.listPersistedStreams();
     const streamIds = unique([...persistedStreams, ...this.streamLogs.keys()]);
     const executionIdsByStream = new Map(this.snapshots.getExecutionIdMap());
@@ -125,19 +131,42 @@ export class SessionStores {
       streams.push(stream);
       streamsByExecution.set(executionId, streams);
     }
-    const retainedStreams = new Set<StreamTabId>();
-    await Promise.all([
-      this.deleteAdjacentStreamStates(streamsWithoutExecution),
-      ...[...streamsByExecution].map(async ([executionId, streams]) => {
-        const result = await this.deleteExecution(executionId, {
-          beforeDelete: () => this.deleteAdjacentStreamStates(streams),
-        });
-        if (result.status === 'active') {
-          for (const stream of streams) retainedStreams.add(stream);
+    const active = new Set<StreamTabId>();
+    const failed = new Set<StreamTabId>();
+    await Promise.all(
+      streamsWithoutExecution.map(async (stream) => {
+        try {
+          await this.deleteAdjacentStreamState(stream);
+        } catch (error) {
+          logger.warn(
+            CHANNEL,
+            `Failed to delete stream ${stream}: ${toErrorMessage(error)}`,
+            { data: error },
+          );
+          failed.add(stream);
         }
       }),
-    ]);
-    return retainedStreams;
+    );
+    await Promise.all(
+      [...streamsByExecution].map(async ([executionId, streams]) => {
+        try {
+          const result = await this.deleteExecution(executionId, {
+            beforeDelete: () => this.deleteAdjacentStreamStates(streams),
+          });
+          if (result.status === 'active') {
+            for (const stream of streams) active.add(stream);
+          }
+        } catch (error) {
+          logger.warn(
+            CHANNEL,
+            `Failed to delete execution ${executionId}: ${toErrorMessage(error)}`,
+            { data: error },
+          );
+          for (const stream of streams) failed.add(stream);
+        }
+      }),
+    );
+    return { active, failed };
   }
 
   async sweepOrphanedStreams(

@@ -45,3 +45,22 @@ export function formatActiveStreamRetention(count: number): string {
     ? 'The stream is still active in TeXRA and was not deleted.'
     : `${formatResultCount(count, 'stream')} are still active in TeXRA and were not deleted.`;
 }
+
+export function formatStreamDeletionRetention(
+  activeCount: number,
+  failedCount: number,
+): string {
+  const reasons = [
+    activeCount > 0
+      ? formatResultCount(activeCount, 'active stream')
+      : undefined,
+    failedCount > 0
+      ? formatResultCount(
+          failedCount,
+          'stream that could not be deleted',
+          'streams that could not be deleted',
+        )
+      : undefined,
+  ].filter((reason): reason is string => reason !== undefined);
+  return `Kept ${reasons.join(' and ')}.`;
+}

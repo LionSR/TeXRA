@@ -84,7 +84,6 @@ export async function runToolUseAgent(
       const execution = await executeCliToolUseConfig(config, runContext, {
         enforceCategory: true,
         registerExecution: true,
-        markErrorOnThrow: true,
         stopAfterCycle: true,
         categoryMismatchMessage: `Agent "${init.agent}" resolved to a non tool-use run.`,
       });

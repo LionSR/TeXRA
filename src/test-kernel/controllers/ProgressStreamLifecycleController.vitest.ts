@@ -76,7 +76,7 @@ describe('ProgressStreamLifecycleController', () => {
   });
 
   it('keeps a protected stream rendered and selected', async () => {
-    const { controller, recorder, streams, activeStream } =
+    const { controller, recorder, streams, activeStream, syncCalls } =
       createProgressStreamLifecycleHarness({
         activeStream: 'stream-a',
         protectedStreams: ['stream-a'],
@@ -88,7 +88,8 @@ describe('ProgressStreamLifecycleController', () => {
     assert.equal(activeStream(), 'stream-a');
     assert.deepEqual(recorder.calls.get('cleanupApprovals'), undefined);
     assert.deepEqual(recorder.calls.get('deleteWebview'), undefined);
-    assert.deepEqual(recorder.calls.get('retained'), ['1']);
+    assert.deepEqual(recorder.calls.get('retained'), ['1/0']);
+    assert.deepEqual(syncCalls, [{ forceRebuild: true }]);
   });
 
   it('deletes active finished streams and activates the next visible stream', async () => {
@@ -236,7 +237,7 @@ describe('ProgressStreamLifecycleController', () => {
     await controller.deleteAllStreams();
 
     assert.deepEqual(streams(), ['stream-b']);
-    assert.deepEqual(recorder.calls.get('retained'), ['1']);
+    assert.deepEqual(recorder.calls.get('retained'), ['1/0']);
     assert.deepEqual(recorder.calls.get('cleanupApprovals'), ['stream-a']);
     assert.deepEqual(recorder.calls.get('clearBackups'), ['stream-a']);
     assert.deepEqual(recorder.calls.get('clearWebview'), ['stream-a']);

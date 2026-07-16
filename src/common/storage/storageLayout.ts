@@ -3,6 +3,7 @@ export const WORKSPACE_STORAGE_LAYOUT = {
   memory: 'memories',
   runs: 'executions',
   executionLeases: 'executionLeases',
+  executionLocks: 'executionLocks',
   legacyRuns: 'taskRuns',
   streamData: 'streamData',
   streamLogs: 'streamLogs',

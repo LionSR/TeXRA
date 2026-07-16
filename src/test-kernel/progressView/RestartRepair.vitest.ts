@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { setupPlatform } from '@test/support/setupPlatform';
-import { repairRestartedStreams } from '@controllers/progressView/backend/restartRepair';
+import {
+  repairRestartedStreams,
+  RestartRepairRetryScheduler,
+} from '@controllers/progressView/backend/restartRepair';
 import { getExecutionStore } from '@agent/storage';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
@@ -48,6 +51,33 @@ function createDurableFinalizer() {
 }
 
 describe('repairRestartedStreams', () => {
+  it('keeps only one delayed lease retry and cancels it on disposal', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const scheduler = new RestartRepairRetryScheduler();
+    const superseded = vi.fn();
+    const retry = vi.fn();
+    const disposed = vi.fn();
+
+    try {
+      scheduler.schedule(1_010, superseded);
+      scheduler.schedule(1_020, retry);
+      vi.advanceTimersByTime(19);
+      expect(superseded).not.toHaveBeenCalled();
+      expect(retry).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(retry).toHaveBeenCalledOnce();
+
+      scheduler.schedule(1_030, disposed);
+      scheduler.dispose();
+      vi.advanceTimersByTime(10);
+      expect(disposed).not.toHaveBeenCalled();
+    } finally {
+      scheduler.dispose();
+      vi.useRealTimers();
+    }
+  });
+
   it('skips every repair mutation for a fresh foreign lease', async () => {
     const streamId = 'stream-foreign-active' as StreamTabId;
     const executionId = 'execution-foreign-active' as ExecutionId;
@@ -75,6 +105,7 @@ describe('repairRestartedStreams', () => {
       closedWaitingGroups: [],
       closedFailedGroups: [],
       terminalStatusUpdated: [],
+      nextLeaseCheckAt: 120_124,
     });
     expect(closeRunningGroups).not.toHaveBeenCalled();
     expect(finalizeExecution).not.toHaveBeenCalled();
@@ -554,5 +585,32 @@ describe('repairRestartedStreams', () => {
       },
     });
     expect(result.terminalStatusUpdated).toEqual([executionId]);
+  });
+
+  it('terminalizes a suffix-derived execution without a snapshot mapping', async () => {
+    const executionId = 'de1a1ed8644' as ExecutionId;
+    const streamId = `assistant#${executionId}` as StreamTabId;
+    const store = getExecutionStore(executionId);
+    await store.writeMeta({ timestamp: '2026-07-16T00:00:00.000Z' });
+    const streamStatus = new StreamStatusMachine();
+    seedRunning(streamStatus, streamId);
+
+    try {
+      const result = await repairRestartedStreams({
+        streamStatus,
+        waitingStreams: new Set(),
+        executionIds: new Map(),
+        repairStreams: [streamId],
+        closeRunningGroups: async () => [],
+      });
+
+      await expect(store.readMeta()).resolves.toMatchObject({
+        terminalStatus: EXECUTION_STATUS.ERROR,
+        outcome: RUN_OUTCOME.FAILED,
+      });
+      expect(result.terminalStatusUpdated).toEqual([executionId]);
+    } finally {
+      await store.clear();
+    }
   });
 });

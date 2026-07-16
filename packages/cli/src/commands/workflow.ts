@@ -111,61 +111,74 @@ export async function runWorkflowAgent(
         agentCategory: AgentCategory.Workflow,
       };
 
+      let workflowResult: CliWorkflowRunResult | undefined;
+      let workflowOutputError: unknown;
       const execution = await executeCliConfig(config, runContext, {
         enforceCategory: true,
         registerExecution: true,
-        markErrorOnThrow: true,
         expectedCategory: AgentCategory.Workflow,
         categoryMismatchMessage: `Agent "${init.agent}" resolved to a non workflow run.`,
+        openWorkflowOutput: async (result) => {
+          try {
+            workflowResult = await resolveWorkflowOutput(
+              init.output,
+              init.outputDir,
+              result,
+              runContext,
+              {
+                expectedOutputFiles: init.outputDir
+                  ? expectedOutputFilesForOutputDir(agent, inputFiles)
+                  : undefined,
+              },
+            );
+            await persistWorkflowResultMeta(
+              result.executionId,
+              buildCliWorkflowResultMeta(result, {
+                outcome: result.outcome,
+                copiedOutput: workflowResult.copiedOutput,
+                copiedOutputs: workflowResult.copiedOutputs,
+              }),
+            );
+          } catch (error) {
+            workflowOutputError = error;
+            await persistWorkflowResultMeta(
+              result.executionId,
+              buildCliWorkflowResultMeta(result, {
+                outcome:
+                  result.outcome === RUN_OUTCOME.CANCELLED
+                    ? result.outcome
+                    : RUN_OUTCOME.FAILED,
+              }),
+            );
+            if (result.outcome !== RUN_OUTCOME.CANCELLED) {
+              await finalizeCliExecution(
+                result.executionId,
+                EXECUTION_STATUS.ERROR,
+                'delete',
+                (finalizationError) =>
+                  writeTextStderr(
+                    `Warning: ${toErrorMessage(finalizationError)}`,
+                  ),
+              );
+            }
+          }
+        },
       });
       if (!execution.ok) return execution.exitCode;
 
-      const { executionId, result } = execution;
-      let workflowResult: CliWorkflowRunResult;
-      try {
-        workflowResult = await resolveWorkflowOutput(
-          init.output,
-          init.outputDir,
-          result,
-          runContext,
-          {
-            expectedOutputFiles: init.outputDir
-              ? expectedOutputFilesForOutputDir(agent, inputFiles)
-              : undefined,
-          },
-        );
-        await persistWorkflowResultMeta(
-          executionId,
-          buildCliWorkflowResultMeta(result, {
-            outcome: result.outcome,
-            copiedOutput: workflowResult.copiedOutput,
-            copiedOutputs: workflowResult.copiedOutputs,
-          }),
-        );
-      } catch (error) {
-        await persistWorkflowResultMeta(
-          executionId,
-          buildCliWorkflowResultMeta(result, {
-            outcome:
-              result.outcome === RUN_OUTCOME.CANCELLED
-                ? result.outcome
-                : RUN_OUTCOME.FAILED,
-          }),
-        );
+      const { result } = execution;
+      if (workflowOutputError !== undefined) {
         if (result.outcome === RUN_OUTCOME.CANCELLED) {
-          writeErrorStderr(error);
+          writeErrorStderr(workflowOutputError);
           return CliExitCode.Interrupted;
         }
-
-        await finalizeCliExecution(
-          executionId,
-          EXECUTION_STATUS.ERROR,
-          'delete',
-          (finalizationError) =>
-            writeTextStderr(`Warning: ${toErrorMessage(finalizationError)}`),
-        );
-        writeErrorStderr(error);
+        writeErrorStderr(workflowOutputError);
         return CliExitCode.AgentError;
+      }
+      if (!workflowResult) {
+        throw new Error(
+          'Workflow output was not finalized before lease release.',
+        );
       }
 
       const displayResult = serializeCliRunResult(workflowResult);

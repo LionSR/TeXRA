@@ -1937,7 +1937,10 @@ describe('ProgressBackend', () => {
 
       const retained = await backend.state.clearAll();
 
-      expect(retained).toEqual(new Set([stream]));
+      expect(retained).toEqual({
+        active: new Set([stream]),
+        failed: new Set(),
+      });
       expect(backend.state.streamLogs.has(stream)).toBe(true);
       expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
       expect(GoalStore.getForStream(stream)).not.toBeNull();
@@ -1947,6 +1950,57 @@ describe('ProgressBackend', () => {
       );
       await GoalStore.forget(stream);
       await getExecutionStore(executionId).clear();
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('reconciles successful and failed execution deletions independently', async () => {
+    const failedStream = 'tool@deepseek#fa11ed6966' as StreamTabId;
+    const deletedStream = 'tool@deepseek#de1e7ed6966' as StreamTabId;
+    const failedExecution = 'fa11ed6966' as ExecutionId;
+    const deletedExecution = 'de1e7ed6966' as ExecutionId;
+    const { backend, session } = createIsolatedRecordingBackend();
+    backend.state.streamLogs.ensureStream(failedStream);
+    backend.state.streamLogs.ensureStream(deletedStream);
+    backend.state.snapshots.setTaskState(
+      failedStream,
+      toolUseTaskState('search', 'deepseekproT'),
+      failedExecution,
+    );
+    backend.state.snapshots.setTaskState(
+      deletedStream,
+      toolUseTaskState('search', 'deepseekproT'),
+      deletedExecution,
+    );
+    const stores = backend.state.stores as unknown as {
+      deleteExecution(
+        executionId: ExecutionId,
+        options?: DeleteExecutionOptions,
+      ): Promise<DeleteExecutionResult>;
+    };
+    const deleteExecutionSpy = vi
+      .spyOn(stores, 'deleteExecution')
+      .mockImplementation(async (executionId, options) => {
+        if (executionId === failedExecution) {
+          throw new Error('execution directory is locked');
+        }
+        await options?.beforeDelete?.();
+        return { status: 'deleted', executionId };
+      });
+
+    try {
+      const result = await backend.state.clearAll();
+
+      expect(result).toEqual({
+        active: new Set(),
+        failed: new Set([failedStream]),
+      });
+      expect(backend.state.streamLogs.has(failedStream)).toBe(true);
+      expect(backend.state.streamLogs.has(deletedStream)).toBe(false);
+    } finally {
+      deleteExecutionSpy.mockRestore();
       await backend.state.clearAll();
       backend.dispose();
       session.dispose();

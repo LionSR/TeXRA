@@ -82,7 +82,11 @@ function leasePath(root: string, executionId: ExecutionId): string {
 
 function coordinationPath(root: string, executionId: ExecutionId): string {
   const safeExecutionId = LeaseExecutionIdSchema.parse(executionId);
-  return path.join(root, 'execution-locks', safeExecutionId);
+  return path.join(
+    root,
+    WORKSPACE_STORAGE_LAYOUT.executionLocks,
+    safeExecutionId,
+  );
 }
 
 async function readLease(

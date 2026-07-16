@@ -19,7 +19,7 @@ describe('nodeFileLocks', () => {
   it('serializes independent callers using the same shared path', async () => {
     const root = await mkdtemp(join(tmpdir(), 'texra-file-lock-'));
     tempDirs.push(root);
-    const lockPath = join(root, 'execution-locks', 'a8644a');
+    const lockPath = join(root, 'executionLocks', 'a8644a');
     let releaseFirst: (() => void) | undefined;
     const firstPaused = new Promise<void>((resolve) => {
       releaseFirst = resolve;

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  acquireResumedExecutionLease: vi.fn(),
   executeAgent: vi.fn(),
   finalizeExecution: vi.fn(),
   registerExecution: vi.fn(),
@@ -8,6 +9,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/storage', () => ({
+  acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
   finalizeExecution: mocks.finalizeExecution,
   registerExecution: mocks.registerExecution,
   releaseOwnedExecutionLeaseBestEffort:
@@ -34,6 +36,7 @@ describe('runAgent execution ownership', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.registerExecution.mockResolvedValue(undefined);
+    mocks.acquireResumedExecutionLease.mockResolvedValue('acquired');
     mocks.releaseOwnedExecutionLeaseBestEffort.mockResolvedValue(undefined);
     mocks.finalizeExecution.mockResolvedValue({
       status: 'durable',
@@ -56,6 +59,21 @@ describe('runAgent execution ownership', () => {
 
     expect(mocks.registerExecution).toHaveBeenCalledOnce();
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
+    expect(mocks.releaseOwnedExecutionLeaseBestEffort).toHaveBeenCalledWith(
+      EXECUTION_ID,
+    );
+  });
+
+  it('acquires and releases ownership for an existing execution', async () => {
+    await runAgent(
+      { config: CONFIG, executionId: EXECUTION_ID },
+      { runtimeHost: RUNTIME_HOST },
+    );
+
+    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.acquireResumedExecutionLease).toHaveBeenCalledWith(
+      EXECUTION_ID,
+    );
     expect(mocks.releaseOwnedExecutionLeaseBestEffort).toHaveBeenCalledWith(
       EXECUTION_ID,
     );
@@ -109,6 +127,66 @@ describe('runAgent execution ownership', () => {
     ).rejects.toBe(launchError);
 
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+    expect(mocks.releaseOwnedExecutionLeaseBestEffort).toHaveBeenCalledWith(
+      EXECUTION_ID,
+    );
+  });
+
+  it('persists final host artifacts before releasing ownership', async () => {
+    const order: string[] = [];
+    mocks.executeAgent.mockImplementationOnce(async () => {
+      order.push('execute');
+      return {
+        category: 'toolUse',
+        executionId: EXECUTION_ID,
+        streamId: EXECUTION_ID,
+        outcome: 'COMPLETED',
+      };
+    });
+    mocks.releaseOwnedExecutionLeaseBestEffort.mockImplementationOnce(
+      async () => {
+        order.push('release');
+      },
+    );
+
+    await runAgent(
+      { config: CONFIG, executionId: EXECUTION_ID },
+      {
+        runtimeHost: RUNTIME_HOST,
+        registerExecution: true,
+        beforeLeaseRelease: async () => {
+          order.push('artifacts');
+        },
+      },
+    );
+
+    expect(order).toEqual(['execute', 'artifacts', 'release']);
+  });
+
+  it('preserves run and final-artifact failures before releasing ownership', async () => {
+    const runError = new Error('run failed');
+    const artifactError = new Error('transcript flush failed');
+    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
+      options.onRun?.();
+      throw runError;
+    });
+
+    const failure = await runAgent(
+      { config: CONFIG, executionId: EXECUTION_ID },
+      {
+        runtimeHost: RUNTIME_HOST,
+        registerExecution: true,
+        beforeLeaseRelease: async () => {
+          throw artifactError;
+        },
+      },
+    ).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect((failure as AggregateError).errors).toEqual([
+      runError,
+      artifactError,
+    ]);
     expect(mocks.releaseOwnedExecutionLeaseBestEffort).toHaveBeenCalledWith(
       EXECUTION_ID,
     );

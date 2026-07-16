@@ -95,7 +95,7 @@ export function createProgressStreamLifecycleHarness(
     clearAll: async () => {
       streams = streams.filter((stream) => protectedStreams.has(stream));
       activeStream = streams[0] ?? '';
-      return new Set(protectedStreams);
+      return { active: new Set(protectedStreams), failed: new Set() };
     },
   };
   const host: ProgressStreamLifecycleHost = {
@@ -129,8 +129,11 @@ export function createProgressStreamLifecycleHarness(
     rebuildRenderedStreams: (options) => syncCalls.push(options),
     activateStream: async (stream) =>
       recorder.record('setActiveStream', stream),
-    notifyDeletionRetained: async (count) =>
-      recorder.record('retained', String(count) as StreamTabId),
+    notifyDeletionRetained: async (activeCount, failedCount = 0) =>
+      recorder.record(
+        'retained',
+        `${activeCount}/${failedCount}` as StreamTabId,
+      ),
   };
 
   return {

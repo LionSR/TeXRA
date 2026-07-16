@@ -4,7 +4,10 @@ import {
   type FinalizeExecutionInput,
   type FinalizeExecutionResult,
 } from '@agent/storage/executionLifecycle';
-import { runWithInactiveExecutionLease as defaultRunWithInactiveExecutionLease } from '@agent/storage/executionLease';
+import {
+  EXECUTION_LEASE_STALE_MS,
+  runWithInactiveExecutionLease as defaultRunWithInactiveExecutionLease,
+} from '@agent/storage/executionLease';
 import { executionIdFromStream } from '@agent/storage/executionIdFromStream';
 import type {
   StreamStatusEmitOptions,
@@ -67,6 +70,35 @@ export interface RestartRepairResult {
   closedWaitingGroups: StreamTabId[];
   closedFailedGroups: StreamTabId[];
   terminalStatusUpdated: ExecutionId[];
+  /** Earliest time a fresh lease skipped at startup can be checked again. */
+  nextLeaseCheckAt?: number;
+}
+
+/** Owns the single delayed retry used to revisit leases left fresh by a crash. */
+export class RestartRepairRetryScheduler {
+  private timer: ReturnType<typeof setTimeout> | undefined;
+
+  schedule(nextLeaseCheckAt: number | undefined, retry: () => void): void {
+    this.cancel();
+    if (nextLeaseCheckAt === undefined) return;
+    this.timer = setTimeout(
+      () => {
+        this.timer = undefined;
+        retry();
+      },
+      Math.max(0, nextLeaseCheckAt - Date.now()),
+    );
+    this.timer.unref();
+  }
+
+  dispose(): void {
+    this.cancel();
+  }
+
+  private cancel(): void {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = undefined;
+  }
 }
 
 export const RESTART_REPAIR_PHASES: ReadonlySet<StreamPhase> = new Set([
@@ -242,7 +274,7 @@ export async function repairRestartedStreams(
     try {
       const repair = () => {
         repairStarted = true;
-        return repairRestartedStream(options, streamId, now);
+        return repairRestartedStream(options, streamId, executionId, now);
       };
       const repaired = executionId
         ? await (
@@ -251,6 +283,12 @@ export async function repairRestartedStreams(
           )(executionId, repair)
         : { status: 'performed' as const, value: await repair() };
       if (repaired.status === 'active') {
+        const nextLeaseCheckAt =
+          repaired.heartbeatAt + EXECUTION_LEASE_STALE_MS + 1;
+        result.nextLeaseCheckAt = Math.min(
+          result.nextLeaseCheckAt ?? Number.POSITIVE_INFINITY,
+          nextLeaseCheckAt,
+        );
         options.logger?.debug(
           `Skipped restart repair for active execution ${executionId}`,
         );
@@ -277,6 +315,7 @@ export async function repairRestartedStreams(
 async function repairRestartedStream(
   options: RestartRepairOptions,
   streamId: StreamTabId,
+  executionId: ExecutionId | undefined,
   now: number,
 ): Promise<RestartRepairResult> {
   const waitingStreams: StreamTabId[] = [];
@@ -356,7 +395,9 @@ async function repairRestartedStream(
     : [];
   const terminalStatusUpdated = await writeFailedTerminalStatuses(
     failedStreams,
-    options.executionIds,
+    executionId
+      ? new Map<StreamTabId, ExecutionId>([[streamId, executionId]])
+      : options.executionIds,
     options.finalizeExecution ?? defaultFinalizeExecution,
     options.synchronizeResultOutcome ?? defaultSynchronizeResultOutcome,
     options.logger,

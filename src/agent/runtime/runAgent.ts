@@ -1,4 +1,5 @@
 import {
+  acquireResumedExecutionLease,
   finalizeExecution,
   registerExecution,
   releaseOwnedExecutionLeaseBestEffort,
@@ -30,6 +31,8 @@ export interface RunAgentOptions extends Pick<
   | 'onIdle'
 > {
   openWorkflowOutput?: (result: WorkflowFlowResult) => Promise<void>;
+  /** Persist host-owned final artifacts while this run still owns its lease. */
+  beforeLeaseRelease?: () => Promise<void>;
   registerExecution?: boolean;
   /**
    * Opt-in set by the "fix LaTeX" VS Code actions (Fix-Compilation command, the
@@ -61,6 +64,7 @@ export async function runAgent(
   // it forwards verbatim and a newly-picked option needs no change here.
   const {
     openWorkflowOutput,
+    beforeLeaseRelease,
     registerExecution: registerExecutionOption,
     preferHelperModel,
     ...executeAgentOptions
@@ -87,40 +91,77 @@ export async function runAgent(
       undefined,
       config.agentCategory,
     );
+  } else {
+    await acquireResumedExecutionLease(executionId);
   }
 
   let lifecycleStarted = false;
+  let runResult: AgentFlowResult | undefined;
+  let runFailure: unknown;
+  let hasRunFailure = false;
   const callerOnRun = executeAgentOptions.onRun;
   try {
-    const result = await executeAgent(config, executionId, {
-      ...executeAgentOptions,
-      onRun: async (handle) => {
-        lifecycleStarted = true;
-        await callerOnRun?.(handle);
-      },
-    });
-    if (result.category === 'workflow') {
-      await openWorkflowOutput?.(result);
-    }
-    return result;
-  } catch (error) {
-    if (shouldRegister && !lifecycleStarted) {
-      const finalization = await finalizeExecution({
-        executionId,
-        terminalStatus: EXECUTION_STATUS.ERROR,
-        flowRecord: 'delete',
+    try {
+      const result = await executeAgent(config, executionId, {
+        ...executeAgentOptions,
+        onRun: async (handle) => {
+          lifecycleStarted = true;
+          await callerOnRun?.(handle);
+        },
       });
-      if (finalization.status === 'failed') {
-        throw new AggregateError(
-          [error, finalization.error],
-          `Execution ${executionId} failed before lifecycle startup and its error status could not be persisted`,
-        );
+      if (result.category === 'workflow') {
+        await openWorkflowOutput?.(result);
+      }
+      runResult = result;
+    } catch (error) {
+      hasRunFailure = true;
+      runFailure = error;
+      if (shouldRegister && !lifecycleStarted) {
+        try {
+          const finalization = await finalizeExecution({
+            executionId,
+            terminalStatus: EXECUTION_STATUS.ERROR,
+            flowRecord: 'delete',
+          });
+          if (finalization.status === 'failed') {
+            runFailure = new AggregateError(
+              [error, finalization.error],
+              `Execution ${executionId} failed before lifecycle startup and its error status could not be persisted`,
+            );
+          }
+        } catch (finalizationError) {
+          runFailure = new AggregateError(
+            [error, finalizationError],
+            `Execution ${executionId} failed before lifecycle startup and its error status could not be persisted`,
+          );
+        }
       }
     }
-    throw error;
-  } finally {
-    if (shouldRegister) {
-      await releaseOwnedExecutionLeaseBestEffort(executionId);
+
+    let artifactFailure: unknown;
+    let hasArtifactFailure = false;
+    try {
+      await beforeLeaseRelease?.();
+    } catch (error) {
+      hasArtifactFailure = true;
+      artifactFailure = error;
     }
+
+    if (hasRunFailure) {
+      if (hasArtifactFailure) {
+        throw new AggregateError(
+          [runFailure, artifactFailure],
+          `Execution ${executionId} failed and its final artifacts could not be persisted`,
+        );
+      }
+      throw runFailure;
+    }
+    if (hasArtifactFailure) throw artifactFailure;
+    if (!runResult) {
+      throw new Error(`Execution ${executionId} finished without a result.`);
+    }
+    return runResult;
+  } finally {
+    await releaseOwnedExecutionLeaseBestEffort(executionId);
   }
 }

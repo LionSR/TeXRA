@@ -407,61 +407,63 @@ export async function executeAgent(
     } = ctx.runScope;
     const { isSubagent } = options;
 
-    // Fire-and-forget: generate AI session description from the user's instruction.
-    // Triggered at the start so cancelled/errored sessions still get descriptions.
-    // Applies to tool-use agents, including subagents, so their progress tabs show
-    // meaningful descriptions in multi-agent pipelines. The callee owns its
-    // best-effort failure reporting and never rejects.
-    void generateSessionDescription(
+    // Start description generation concurrently with the run, but join it
+    // before the owner can release its execution lease. This prevents the
+    // metadata write from recreating an execution deleted by another host.
+    const sessionDescription = generateSessionDescription(
       runExecutionId,
       runStreamId,
       config,
       runSession,
     );
-    const result = await runFlowWithLifecycle(
-      ctx,
-      async (handle, lifecycle) => {
-        // Pre-execution UI setup (RUNNING is set by runFlowWithLifecycle)
-        if (executionId) await ensureRunDir(executionId);
-        logger.info(`Starting task execution (streamId: ${runStreamId})`);
-        logger.info(`Input file: ${config.inputFiles[0] ?? '(none)'}`);
-        logger.debug('Task execution details', {
-          data: {
-            streamId: runStreamId,
-            agent: config.agent,
-            model: config.model,
-          },
-        });
-        logger.debug(`Output files: ${config.outputFiles?.length ?? 0}`);
-        // Subagents don't need to force-open the progress board or show notifications —
-        // the orchestrator's stream is already visible.
-        if (!isSubagent && !getProgressViewBridge().isViewVisible()) {
-          runRuntimeHost.emit('requestEnsureProgressView', {
-            fallbackNotification: buildFallbackNotification(config),
+    try {
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async (handle, lifecycle) => {
+          // Pre-execution UI setup (RUNNING is set by runFlowWithLifecycle)
+          if (executionId) await ensureRunDir(executionId);
+          logger.info(`Starting task execution (streamId: ${runStreamId})`);
+          logger.info(`Input file: ${config.inputFiles[0] ?? '(none)'}`);
+          logger.debug('Task execution details', {
+            data: {
+              streamId: runStreamId,
+              agent: config.agent,
+              model: config.model,
+            },
           });
-        }
-        logger.info('Executing agent', {
-          data: { agent: config.agent, model: config.model },
-        });
+          logger.debug(`Output files: ${config.outputFiles?.length ?? 0}`);
+          // Subagents don't need to force-open the progress board or show notifications —
+          // the orchestrator's stream is already visible.
+          if (!isSubagent && !getProgressViewBridge().isViewVisible()) {
+            runRuntimeHost.emit('requestEnsureProgressView', {
+              fallbackNotification: buildFallbackNotification(config),
+            });
+          }
+          logger.info('Executing agent', {
+            data: { agent: config.agent, model: config.model },
+          });
 
-        if (setting.agentCategory === AgentCategory.ToolUse) {
-          return runToolUseAgent(ctx, handle, lifecycle, setting, options);
-        }
-        return runReflectionAgent(ctx, handle, setting);
-      },
-      {
-        isSubagent,
-        parentStreamId: options.parentStreamId,
-        onError: options.onRunError,
-        onRun: options.onRun,
-      },
-    );
-    if (isWaitingFlowResult(result) && options.allowWaitingResult !== true) {
-      throw new Error(
-        'executeAgent received a non-terminal WAITING result without allowWaitingResult.',
+          if (setting.agentCategory === AgentCategory.ToolUse) {
+            return runToolUseAgent(ctx, handle, lifecycle, setting, options);
+          }
+          return runReflectionAgent(ctx, handle, setting);
+        },
+        {
+          isSubagent,
+          parentStreamId: options.parentStreamId,
+          onError: options.onRunError,
+          onRun: options.onRun,
+        },
       );
+      if (isWaitingFlowResult(result) && options.allowWaitingResult !== true) {
+        throw new Error(
+          'executeAgent received a non-terminal WAITING result without allowWaitingResult.',
+        );
+      }
+      return result;
+    } finally {
+      await sessionDescription;
     }
-    return result;
   });
 }
 
@@ -493,9 +495,7 @@ export async function resumeToolUseFromSnapshot(
   runtimeHost: AgentRuntimeHost,
   options: ResumeToolUseFromSnapshotOptions = {},
 ): Promise<AgentRuntimeFlowResult> {
-  const leaseAcquisition = await acquireResumedExecutionLease(
-    snapshot.executionId,
-  );
+  await acquireResumedExecutionLease(snapshot.executionId);
   const modelHandlerCompatibilityKey =
     snapshot.modelHandlerCompatibilityKey ??
     inferPersistedModelHandlerCompatibilityKey(
@@ -521,13 +521,10 @@ export async function resumeToolUseFromSnapshot(
       session: options.session,
     });
   } catch (error) {
-    if (leaseAcquisition === 'acquired') {
-      throw await releaseOwnedExecutionLeaseAfterFailure(
-        snapshot.executionId,
-        error,
-      );
-    }
-    throw error;
+    throw await releaseOwnedExecutionLeaseAfterFailure(
+      snapshot.executionId,
+      error,
+    );
   }
   const runContextOptions = {
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
@@ -604,17 +601,14 @@ export async function resumeToolUseFromSnapshot(
         return result;
       },
     );
-    if (!isSubagent && !isWaitingFlowResult(result)) {
+    if (!isWaitingFlowResult(result)) {
       await releaseOwnedExecutionLeaseBestEffort(snapshot.executionId);
     }
     return result;
   } catch (error) {
-    if (leaseAcquisition === 'acquired') {
-      throw await releaseOwnedExecutionLeaseAfterFailure(
-        snapshot.executionId,
-        error,
-      );
-    }
-    throw error;
+    throw await releaseOwnedExecutionLeaseAfterFailure(
+      snapshot.executionId,
+      error,
+    );
   }
 }

@@ -3,6 +3,7 @@ import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 
 // Local imports - shared
 import type { StreamTabId } from '@shared/schemas';
+import type { DeleteAllStreamsResult } from './backend/state/SessionStores';
 
 export interface ProgressStreamLifecycleState {
   getActiveStream(): StreamTabId | '';
@@ -13,7 +14,7 @@ export interface ProgressStreamLifecycleState {
   pickValidActiveStream(availableStreams: StreamTabId[]): StreamTabId | '';
   waitForOwnedExecutionRelease(stream: StreamTabId): Promise<void>;
   clearStream(stream: StreamTabId): Promise<boolean>;
-  clearAll(): Promise<ReadonlySet<StreamTabId>>;
+  clearAll(): Promise<DeleteAllStreamsResult>;
 }
 
 export interface ProgressStreamLifecycleControllerDeps {
@@ -30,11 +31,17 @@ export interface ProgressStreamLifecycleHost {
     options?: { clearRetryRequest?: boolean },
   ): Promise<void>;
   cleanupDeletedStream(stream: StreamTabId): void;
-  cleanupDeletedStreams(streams: StreamTabId[]): void;
+  cleanupDeletedStreams(
+    streams: StreamTabId[],
+    options: { allDeleted: boolean },
+  ): void;
   deleteRenderedStream(stream: StreamTabId): void;
   rebuildRenderedStreams(options: { forceRebuild: boolean }): void;
   activateStream(stream: StreamTabId): Promise<void>;
-  notifyDeletionRetained(count: number): Promise<void>;
+  notifyDeletionRetained(
+    activeCount: number,
+    failedCount?: number,
+  ): Promise<void>;
 }
 
 export class ProgressStreamLifecycleController {
@@ -69,6 +76,7 @@ export class ProgressStreamLifecycleController {
 
     const deleted = await this.deps.state.clearStream(stream);
     if (!deleted) {
+      this.deps.host.rebuildRenderedStreams({ forceRebuild: true });
       await this.deps.host.notifyDeletionRetained(1);
       return;
     }
@@ -118,11 +126,17 @@ export class ProgressStreamLifecycleController {
     );
 
     const retained = await this.deps.state.clearAll();
-    const deleted = streamIds.filter((stream) => !retained.has(stream));
-    this.deps.host.cleanupDeletedStreams(deleted);
+    const retainedStreams = new Set([...retained.active, ...retained.failed]);
+    const deleted = streamIds.filter((stream) => !retainedStreams.has(stream));
+    this.deps.host.cleanupDeletedStreams(deleted, {
+      allDeleted: retainedStreams.size === 0,
+    });
     this.deps.host.rebuildRenderedStreams({ forceRebuild: true });
-    if (retained.size > 0) {
-      await this.deps.host.notifyDeletionRetained(retained.size);
+    if (retainedStreams.size > 0) {
+      await this.deps.host.notifyDeletionRetained(
+        retained.active.size,
+        retained.failed.size,
+      );
     }
   }
 }

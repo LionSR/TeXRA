@@ -34,7 +34,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { GoalStore } from '@tools/goal';
 import { clamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { SessionStores } from './SessionStores';
+import { SessionStores, type DeleteAllStreamsResult } from './SessionStores';
 import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 
 /** Bounded fan-out for the one-time legacy-instruction backfill at load(),
@@ -418,7 +418,7 @@ export class ProgressViewState {
     return true;
   }
 
-  async clearAll(): Promise<ReadonlySet<StreamTabId>> {
+  async clearAll(): Promise<DeleteAllStreamsResult> {
     this.logger.warn(
       '[Persistence] clearAll() called - this will delete all persisted data!',
       { data: { stack: new Error().stack } },
@@ -430,7 +430,8 @@ export class ProgressViewState {
       ...this._streamStates.keys(),
       ...[...this.streamStatus.entries()].map(([stream]) => stream),
     ]);
-    const retainedStreams = await this.stores.deleteAll();
+    const deletion = await this.stores.deleteAll();
+    const retainedStreams = new Set([...deletion.active, ...deletion.failed]);
     for (const stream of knownStreams) {
       if (retainedStreams.has(stream)) continue;
       this.streamStatus.clearStream(stream);
@@ -442,7 +443,7 @@ export class ProgressViewState {
     } else if (!retainedStreams.has(this._prefs.get('activeStream'))) {
       this._prefs.update({ activeStream: this.topmostStreamTab() });
     }
-    return retainedStreams;
+    return deletion;
   }
 
   async load(): Promise<void> {

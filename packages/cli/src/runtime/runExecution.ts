@@ -8,6 +8,7 @@ import {
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
 import { runAgent } from '@agent/runtime/runAgent';
+import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { AgentError } from '@common/errors';
 import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
@@ -34,16 +35,11 @@ export interface CliExecuteOptions {
   /** Forwarded to `runAgent`. */
   readonly enforceCategory?: boolean;
   readonly registerExecution?: boolean;
-  /**
-   * Mark the execution ERROR before rethrowing. The headless `run` /
-   * `multi-agent run` paths own the status they create; `resume` re-runs a
-   * stored config and must leave the prior terminal status untouched.
-   */
-  readonly markErrorOnThrow?: boolean;
   /** Stop a tool-use execution after one model/tool cycle. */
   readonly stopAfterCycle?: boolean;
   /** Additional tools unavailable in this CLI runtime. */
   readonly runtimeUnavailableTools?: readonly string[];
+  readonly openWorkflowOutput?: (result: WorkflowFlowResult) => Promise<void>;
   /** Wrap the run (e.g. multi-agent preset visibility) without leaking the
    *  runtime-host lifecycle into the caller. */
   readonly wrap?: (
@@ -232,16 +228,31 @@ export async function executeCliRequest(
         );
       })
     : undefined;
-  let lifecycleStarted = false;
+  const streamLogStore = session.transcripts;
+  let runArtifactsFlushed: Promise<void> | undefined;
+  const flushRunArtifacts = (): Promise<void> => {
+    runArtifactsFlushed ??= (async () => {
+      if (shutdownInterrupted && ownedExecutionId) {
+        await finalizeCliExecution(
+          ownedExecutionId,
+          EXECUTION_STATUS.INTERRUPTED,
+          'preserve',
+          reportShutdownFinalizationFailure,
+        );
+      }
+      flushPendingRunTraces();
+      await Promise.all([streamLogStore.flush(), snapshotStore.flush()]);
+    })();
+    return runArtifactsFlushed;
+  };
   const invoke = (): Promise<ExecuteAgentResult> =>
     runAgent(request, {
       runtimeHost: interactionHost,
       session,
       enforceCategory: options.enforceCategory,
       registerExecution: options.registerExecution,
-      onRun: () => {
-        lifecycleStarted = true;
-      },
+      openWorkflowOutput: options.openWorkflowOutput,
+      beforeLeaseRelease: flushRunArtifacts,
       stopAfterCycle: options.stopAfterCycle,
       approvalPromptsUnavailable: approvalPromptsUnavailable(runContext),
       runtimeUnavailableTools: [
@@ -249,8 +260,6 @@ export async function executeCliRequest(
         ...(options.runtimeUnavailableTools ?? []),
       ],
     });
-
-  const streamLogStore = session.transcripts;
 
   let runResult:
     | { readonly ok: true; readonly result: ExecuteAgentResult }
@@ -271,19 +280,6 @@ export async function executeCliRequest(
       : trackedInvoke());
     runResult = { ok: true, result };
   } catch (err) {
-    if (
-      options.markErrorOnThrow &&
-      request.executionId &&
-      !invokeSettledOk &&
-      !lifecycleStarted
-    ) {
-      await finalizeCliExecution(
-        request.executionId,
-        EXECUTION_STATUS.ERROR,
-        'delete',
-        reportFinalizationFailure,
-      );
-    }
     // Only a classified, already-handled AgentError resolves to a non-zero
     // exit code here; anything else (e.g. registerExecution disk I/O,
     // workspaceState.update failures) is unexpected and must keep
@@ -293,27 +289,13 @@ export async function executeCliRequest(
     }
   } finally {
     disposeShutdownStatus?.dispose();
-    // If the run settles while shutdown is in progress, keep the
-    // signal-owned interrupted status as the final write.
-    if (shutdownInterrupted && ownedExecutionId) {
-      await finalizeCliExecution(
-        ownedExecutionId,
-        EXECUTION_STATUS.INTERRUPTED,
-        'preserve',
-        reportShutdownFinalizationFailure,
-      );
-    }
     detachResultToast();
     detachRunProgressRenderer();
     detachSessionProgressProjection();
     detachHostInteractions();
     try {
-      try {
-        flushPendingRunTraces();
-      } finally {
-        detachSnapshotEvents();
-      }
-      await Promise.all([streamLogStore.flush(), snapshotStore.flush()]);
+      detachSnapshotEvents();
+      await flushRunArtifacts();
     } finally {
       await interactionHost.close();
     }
