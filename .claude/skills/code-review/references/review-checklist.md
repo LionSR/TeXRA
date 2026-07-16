@@ -24,6 +24,7 @@ Design rules in `CLAUDE.md` → "Schema and Type Guidelines" / "Backward Compati
 - **Manual `safeParse` + ternary for defaults** → `Schema.catch(default).parse(data)` — display/derived defaults only; on persisted data see §15.
 - **`z.custom<T>()` without a comment** justifying why a real schema isn't possible.
 - **`.prefault` vs `.default` vs `.catch`** misuse: `.prefault` normalizes input _before_ validation (deserialization); `.default` fills in _after_ a missing field; `.catch` recovers from validation throws. Wrong choice silently corrupts state.
+- **Tool parameter required despite having an obvious default** → make it `.nullish()` plus a dispatch-time default; a required param that models routinely omit is a tool bug, not a model error. Also check description strings that enumerate dispatch behavior ("every command except X") against the actual dispatch table whenever either changes. Precedent: the memory tool's required `path` on `view`, and its own fix's `rename` description drifting from the dispatch table.
 
 ## 3. PocketFlow / agent runtime
 
@@ -142,6 +143,18 @@ Standing rules from the 2026-07 error-handling audit: 880 catch sites read acros
 - **No downgrade below `warn` on a resume/persisted-state read failure.** `logger.debug` in a catch that changes run behavior (fresh start, dropped history, zeroed usage) is a blocker.
 - **Fire-and-forget writes get exactly one logging rejection owner.** A chain-keep-alive `.catch(() => {})` on a write queue is legal only paired with one shared observer that logs the rejection.
 - **Cleaner-solutions menu** (the fix names which it uses): parse-at-entry (Zod at the boundary, canonical thereafter); decide-once-carry-as-data; result types (`{ok}|{error}`) in core with one throw boundary; define-errors-out-of-existence (make the invalid state unrepresentable); loud read (warn + surface + `schemaVersion`); single classifier boundary; delete-the-guard (let it crash to an existing L1/L4 boundary).
+
+## 16. Code quality rules (2026-07 simplification campaign)
+
+Concrete rules earned from the 2026-07 whole-repo simplification campaign. Full rationale and evidence lives in `AGENTS.md` → "Code quality rules"; don't restate it in review comments, just check for it.
+
+- **New exports need a consumer in the same PR.** `rg "exportedSymbol" src/ packages/extension packages/desktop packages/cli` for any newly exported symbol; zero outside hits is a finding. Search the whole workspace, not just `src/` — a root export consumed only via a `packages/*` import (e.g. `@shared`, `@utils`, `@agent`) is still live. Sharpens §8's "dead exports" grep from a cleanup pass into a pre-merge gate.
+- **No new convenience barrels.** A new index/barrel re-export file is a finding unless it documents a real external public surface (precedent: the trace events SDK contract).
+- **Shared mutable literals must be frozen or factory-made.** A module-level object that a function returns or that crosses a boundary needs `as const` plus `Object.freeze` (deep-freeze, or a factory, for literals with nested objects/arrays or `Map`/`Set` — a shallow freeze doesn't stop those from mutating), or a factory returning a fresh object per call, not a bare shared literal.
+- **Fixture rule of three.** Same literal test setup block 3+ times in one file → file-local helper; setup shared across suites → `src/test-kernel/support/`.
+- **Local fakes need justification.** A local fake for a platform port that already has a shared fake in `src/test-kernel/support/` needs a one-line comment naming the capability gap.
+- **Registrations need a consumer.** Global registration (component, command, provider) needs an external surface that actually references it; internal-only usage imports locally.
+- **No new bare module-level mutable singletons in tested code.** Flag module-level `let`/mutable object state that tests would need to reset between runs; it needs an injectable, resettable handle instead.
 
 ## Final pass
 
