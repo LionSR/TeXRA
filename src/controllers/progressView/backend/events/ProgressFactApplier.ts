@@ -1,7 +1,4 @@
-import {
-  WebviewUpdater,
-  type LogContentExtras,
-} from '@controllers/progressView/backend/WebviewUpdater';
+import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
 import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
 import {
   ProgressViewState,
@@ -44,6 +41,7 @@ import {
 } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
+import { buildStreamContentSync } from '@shared/streams/streamContentSync';
 import { assertNever, mapToRecord } from '@utils/core';
 
 import { withEventErrorHandling } from './errorHandling';
@@ -61,13 +59,16 @@ export type ProgressEventSubscription = {
   dispose(): void;
 };
 
-export interface ProgressStreamControls {
+interface ProgressStreamBypassControls {
   toolEditBypass: boolean;
   superYoloBypass: boolean;
-  goalActive: boolean;
-  goalStatus?: GoalStatus;
-  goalObjective?: string;
 }
+
+export type ProgressStreamControls = ProgressStreamBypassControls &
+  (
+    | { goalActive: false }
+    | { goalActive: true; goalStatus: GoalStatus; goalObjective: string }
+  );
 
 export type GetProgressStreamControls = (
   stream: StreamTabId,
@@ -766,68 +767,73 @@ export class ProgressFactApplier {
 
     if (!stream) {
       // Clear the stream surface when no stream is active.
-      this.webviewUpdater.sendSyncStreamContent({
-        stream: '',
-        action: 'clear',
-        todos: [],
-        plan: null,
-        queuedFollowUps: [],
-      });
+      this.webviewUpdater.sendSyncStreamContent(
+        buildStreamContentSync({ action: 'clear' }),
+      );
       return;
     }
 
     this.webviewBridge.syncStream(stream);
 
-    const extras = this.buildStreamSyncExtras(stream);
-    const { todos, plan } = this.state.snapshots.getWorkPlan(stream);
-    const queuedFollowUps = this.state.followUps.getAll(stream);
-    const agentCategory = this.getStreamCategory(stream);
+    const kind = this.getStreamCategory(stream) ?? AgentCategory.Workflow;
 
-    // Optionally include active-stream state (replaces syncActiveStreamState).
-    let conversationProgress: ConversationProgress | undefined;
-    let roundStage: StreamExecutionState['roundStage'] | undefined;
-    let badges: StreamBadgeSnapshot | undefined;
-    let parentStreamId: StreamTabId | undefined;
-    if (includeActiveState) {
-      const streamState = this.state.getStreamState(stream);
-      if (streamState) {
-        conversationProgress = streamState.conversationProgress;
-        roundStage = streamState.roundStage;
-        badges = this.toBadgeSnapshot(streamState);
-      }
-      parentStreamId = this.state.snapshots.getParentStreamId(stream);
+    const activeState = includeActiveState
+      ? this.toActiveStreamContentSync(
+          stream,
+          this.state.getOrCreateStreamState(stream, kind),
+        )
+      : undefined;
+
+    const shared = {
+      stream,
+      runUsage: mapToRecord(this.state.snapshots.getRunUsage(stream)),
+      activeState,
+    };
+
+    if (kind === AgentCategory.Workflow) {
+      this.webviewUpdater.sendSyncStreamContent(
+        buildStreamContentSync({
+          ...shared,
+          kind,
+          files: this.state.snapshots.getOutputFiles(stream),
+          missingOutputs: this.state.snapshots.getMissingOutputs(stream),
+          compileFailures: this.state.snapshots.getCompileFailures(stream),
+        }),
+      );
+      return;
     }
 
-    // Always include toggle/goal state so buttons render correctly on tab switch.
-    const streamControls = this.getStreamControls(stream);
-
-    this.webviewUpdater.sendSyncStreamContent({
-      stream,
-      action: 'render',
-      ...extras,
-      todos,
-      plan,
-      queuedFollowUps,
-      agentCategory,
-      conversationProgress,
-      roundStage: includeActiveState ? (roundStage ?? null) : undefined,
-      badges,
-      parentStreamId,
-      ...streamControls,
-    });
+    const { todos, plan } = this.state.snapshots.getWorkPlan(stream);
+    const controls = this.getStreamControls(stream);
+    this.webviewUpdater.sendSyncStreamContent(
+      buildStreamContentSync({
+        ...shared,
+        kind,
+        todos,
+        plan,
+        queuedFollowUps: this.state.followUps.getAll(stream),
+        toolEditBypass: controls.toolEditBypass,
+        superYoloBypass: controls.superYoloBypass,
+        goal: controls.goalActive
+          ? {
+              active: true,
+              status: controls.goalStatus,
+              objective: controls.goalObjective,
+            }
+          : { active: false },
+      }),
+    );
   }
 
-  private buildStreamSyncExtras(stream: StreamTabId): LogContentExtras {
+  private toActiveStreamContentSync(
+    stream: StreamTabId,
+    state: StreamExecutionState,
+  ) {
     return {
-      // Workflow files/missing outputs are flat (one run per tab), already in
-      // the canonical round-indexed record shape the webview consumes.
-      workflowFiles: this.state.snapshots.getOutputFiles(stream),
-      workflowMissingOutputs: this.state.snapshots.getMissingOutputs(stream),
-      workflowCompileFailures: this.state.snapshots.getCompileFailures(stream),
-      // Per-run usage map — shared by workflow and tool-use. Frontend derives
-      // sessionUsage as the sum so cumulative totals survive resume.
-      runUsage: mapToRecord(this.state.snapshots.getRunUsage(stream)),
-      contextState: this.state.getContextState(stream),
+      conversationProgress: state.conversationProgress,
+      roundStage: state.roundStage ?? null,
+      badges: this.toBadgeSnapshot(state),
+      parentStreamId: this.state.snapshots.getParentStreamId(stream) ?? null,
     };
   }
 

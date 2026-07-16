@@ -120,8 +120,8 @@ function createSyncCapture(): SyncCapture {
   return { messages, updater, bridge };
 }
 
-describe('progress view snapshot hydration', () => {
-  it('syncs the durable display snapshot from the shared progress-view backend', async () => {
+describe('progress view stream-content projection', () => {
+  it('projects the tool-use snapshot and active state', async () => {
     const state = await createLoadedState();
     const { messages, updater, bridge } = createSyncCapture();
     const handler = new ProgressFactApplier(
@@ -131,9 +131,6 @@ describe('progress view snapshot hydration', () => {
       () => false,
     );
 
-    state.snapshots.addOutputFiles(stream, { 1: [outputFile] });
-    state.snapshots.updateMissingOutputs(stream, { 1: ['paper.pdf'] });
-    state.snapshots.updateCompileFailures(stream, { 1: [compileFailure] });
     state.snapshots.addUsage(stream, runId, usage);
     state.snapshots.setTodos(stream, [todo]);
     state.snapshots.setPlan(stream, plan);
@@ -156,37 +153,88 @@ describe('progress view snapshot hydration', () => {
     expect(messages.at(-1)).toMatchObject({
       stream,
       action: 'render',
-      workflowFiles: {
-        1: [outputFile],
-      },
-      workflowMissingOutputs: {
-        1: ['paper.pdf'],
-      },
-      workflowCompileFailures: {
-        1: [compileFailure],
-      },
+      kind: AgentCategory.ToolUse,
       runUsage: {
         [runId]: usage,
       },
-      todos: [todo],
-      plan,
-      queuedFollowUps: [],
-      agentCategory: AgentCategory.ToolUse,
-      conversationProgress: { toolCallCount: 5 },
-      roundStage: { index: 2 },
-      badges: {
-        activeSubagents: [activeSubagent],
-        finishedSubagentCount: 2,
-        activeProcesses: [],
-        finishedProcessCount: 0,
+      workPlan: {
+        todos: [todo],
+        plan,
+        queuedFollowUps: [],
       },
-      parentStreamId: parentStream,
+      controls: {
+        toolEditBypass: false,
+        superYoloBypass: false,
+        goal: { active: false },
+      },
+      activeState: {
+        conversationProgress: { toolCallCount: 5 },
+        roundStage: { index: 2 },
+        badges: {
+          activeSubagents: [activeSubagent],
+          finishedSubagentCount: 2,
+          activeProcesses: [],
+          finishedProcessCount: 0,
+        },
+        parentStreamId: parentStream,
+      },
     });
     expect(state.snapshots.getWorkPlan(stream)).toEqual({
       todos: [todo],
       plan,
       planSummary: 'Hydrate plan and todo state from one backend owner.',
     });
+  });
+
+  it('projects workflow outputs without tool-use capabilities', async () => {
+    const state = await createLoadedState();
+    const { messages, updater, bridge } = createSyncCapture();
+    const handler = new ProgressFactApplier(
+      state,
+      updater,
+      bridge,
+      () => false,
+    );
+
+    state.updateStreamMetadata(stream, {
+      agentCategory: AgentCategory.Workflow,
+    });
+    state.snapshots.addOutputFiles(stream, { 1: [outputFile] });
+    state.snapshots.updateMissingOutputs(stream, { 1: ['paper.pdf'] });
+    state.snapshots.updateCompileFailures(stream, { 1: [compileFailure] });
+    state.snapshots.addUsage(stream, runId, usage);
+
+    handler.syncStreamContent(stream);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      action: 'render',
+      stream,
+      kind: AgentCategory.Workflow,
+      runUsage: { [runId]: usage },
+      outputs: {
+        files: { 1: [outputFile] },
+        missing: { 1: ['paper.pdf'] },
+        compileFailures: { 1: [compileFailure] },
+      },
+    });
+    expect(messages[0]).not.toHaveProperty('workPlan');
+    expect(messages[0]).not.toHaveProperty('controls');
+  });
+
+  it('projects clear without placeholder stream content', async () => {
+    const state = await createLoadedState();
+    const { messages, updater, bridge } = createSyncCapture();
+    const handler = new ProgressFactApplier(
+      state,
+      updater,
+      bridge,
+      () => false,
+    );
+
+    handler.syncStreamContent('');
+
+    expect(messages).toEqual([{ action: 'clear' }]);
   });
 
   it('includes host-provided stream controls in synced content', async () => {
@@ -210,16 +258,25 @@ describe('progress view snapshot hydration', () => {
       },
     );
 
+    state.updateStreamMetadata(controlledStream, {
+      agentCategory: AgentCategory.ToolUse,
+    });
+
     handler.syncStreamContent(controlledStream);
 
     expect(messages.at(-1)).toMatchObject({
       stream: controlledStream,
       action: 'render',
-      toolEditBypass: true,
-      superYoloBypass: true,
-      goalActive: true,
-      goalStatus: 'active',
-      goalObjective: 'Keep making progress.',
+      kind: AgentCategory.ToolUse,
+      controls: {
+        toolEditBypass: true,
+        superYoloBypass: true,
+        goal: {
+          active: true,
+          status: 'active',
+          objective: 'Keep making progress.',
+        },
+      },
     });
   });
 });

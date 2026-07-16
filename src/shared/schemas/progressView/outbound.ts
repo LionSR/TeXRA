@@ -12,6 +12,7 @@ import {
 } from '@shared/utils/dispatcher';
 import { ThemeSchema } from '../commonViewMessages';
 import { GoalStatusSchema } from '../goal';
+import { AgentCategory } from '../agent';
 
 import { StreamTabIdSchema } from '../identifiers';
 import { StreamLogEntrySchema, StreamLogTextDeltaSchema } from '../log';
@@ -41,7 +42,6 @@ import {
 } from '../streamState';
 import { PlanSchema } from '../plan';
 import { TodoItemSchema } from '../todo';
-import { ContextStateDataSchema } from '../contextManagement';
 import { RunUsageMapSchema, TokenUsageStatsSchema } from '../usage';
 import {
   AgentCategoryFilterSchema,
@@ -291,46 +291,98 @@ export const UpdateInquiryThreadMessageSchema = z.object({
   thread: InquiryThreadUpdatedEventSchema,
 });
 
-export const SyncStreamContentMessageSchema = z.object({
+const StreamContentRenderFields = {
   command: z.literal(PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT),
-  stream: z.union([StreamTabIdSchema, z.literal('')]),
-  action: z.enum(['render', 'clear']).optional(),
-  // Workflow flat files (one run per tab)
-  workflowFiles: roundIndexedRecord(OutputFileInfoSchema).optional(),
-  workflowMissingOutputs: roundIndexedRecord(z.string()).optional(),
-  workflowCompileFailures: roundIndexedRecord(CompileFailureSchema).optional(),
-  // Per-run usage map — used by both workflow and tool-use so resume
-  // correctly accumulates. Frontend derives sessionUsage as the sum.
-  runUsage: RunUsageMapSchema.optional(),
-  contextState: ContextStateDataSchema.optional(),
-  todos: z.array(TodoItemSchema),
-  plan: PlanSchema.nullable(),
-  queuedFollowUps: z.array(z.string()),
-  agentCategory: z.string().optional(),
-  // Tab-switch state (R2: replaces separate syncActiveStreamState messages)
-  conversationProgress: ConversationProgressSchema.optional(),
-  roundStage: RoundStageSchema.nullable().optional(),
-  badges: z
-    .object({
-      activeSubagents: z.array(ActiveChildInfoSchema),
-      finishedSubagentCount: z.number(),
-      activeProcesses: z.array(ActiveChildInfoSchema),
-      finishedProcessCount: z.number(),
+  action: z.literal('render'),
+  stream: StreamTabIdSchema,
+  // Per-run usage is shared by both stream kinds. The frontend derives the
+  // cumulative session total from this canonical map.
+  runUsage: RunUsageMapSchema,
+  // Active state is all-or-nothing. Partial tab-activation snapshots would
+  // preserve unrelated stale fields in the frontend.
+  activeState: z
+    .strictObject({
+      conversationProgress: ConversationProgressSchema,
+      roundStage: RoundStageSchema.nullable(),
+      badges: z.strictObject({
+        activeSubagents: z.array(ActiveChildInfoSchema),
+        finishedSubagentCount: z.number(),
+        activeProcesses: z.array(ActiveChildInfoSchema),
+        finishedProcessCount: z.number(),
+      }),
+      parentStreamId: StreamTabIdSchema.nullable(),
     })
     .optional(),
-  parentStreamId: StreamTabIdSchema.optional(),
-  // Toggle bypass state (hydrated on tab switch so toggles display correctly)
-  toolEditBypass: z.boolean().optional(),
-  superYoloBypass: z.boolean().optional(),
-  goalActive: z.boolean().optional(),
-  goalStatus: GoalStatusSchema.optional(),
-  goalObjective: z.string().optional(),
+};
+
+const ClearStreamContentMessageSchema = z.strictObject({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT),
+  action: z.literal('clear'),
 });
 
-export type SyncStreamContentPayload = Omit<
-  z.infer<typeof SyncStreamContentMessageSchema>,
-  'command'
+const WorkflowStreamContentMessageSchema = z.strictObject({
+  ...StreamContentRenderFields,
+  kind: z.literal(AgentCategory.Workflow),
+  outputs: z.strictObject({
+    files: roundIndexedRecord(OutputFileInfoSchema),
+    missing: roundIndexedRecord(z.string()),
+    compileFailures: roundIndexedRecord(CompileFailureSchema),
+  }),
+});
+
+const GoalSyncSchema = z.discriminatedUnion('active', [
+  z.strictObject({ active: z.literal(false) }),
+  z.strictObject({
+    active: z.literal(true),
+    status: GoalStatusSchema,
+    objective: z.string(),
+  }),
+]);
+
+const ToolUseStreamContentMessageSchema = z.strictObject({
+  ...StreamContentRenderFields,
+  kind: z.literal(AgentCategory.ToolUse),
+  workPlan: z.strictObject({
+    todos: z.array(TodoItemSchema),
+    plan: PlanSchema.nullable(),
+    queuedFollowUps: z.array(z.string()),
+  }),
+  controls: z.strictObject({
+    toolEditBypass: z.boolean(),
+    superYoloBypass: z.boolean(),
+    goal: GoalSyncSchema,
+  }),
+});
+
+/** Full tab snapshots, expressed as the only three valid transport states. */
+const RenderStreamContentMessageSchema = z.discriminatedUnion('kind', [
+  WorkflowStreamContentMessageSchema,
+  ToolUseStreamContentMessageSchema,
+]);
+
+export const SyncStreamContentMessageSchema = z.discriminatedUnion('action', [
+  ClearStreamContentMessageSchema,
+  RenderStreamContentMessageSchema,
+]);
+
+type WithoutCommand<T> = T extends unknown ? Omit<T, 'command'> : never;
+
+export type SyncStreamContentPayload = WithoutCommand<
+  z.infer<typeof SyncStreamContentMessageSchema>
 >;
+
+export type WorkflowStreamContentPayload = Extract<
+  SyncStreamContentPayload,
+  { action: 'render'; kind: typeof AgentCategory.Workflow }
+>;
+
+export type ToolUseStreamContentPayload = Extract<
+  SyncStreamContentPayload,
+  { action: 'render'; kind: typeof AgentCategory.ToolUse }
+>;
+
+export type StreamContentRenderPayload =
+  WorkflowStreamContentPayload | ToolUseStreamContentPayload;
 
 const GoalActiveUpdatedMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.GOAL_ACTIVE_UPDATED),
