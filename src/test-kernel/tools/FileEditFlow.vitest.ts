@@ -19,6 +19,7 @@ describe('replaceLiteralMatches', () => {
     ).toEqual({
       content: 'alpha\ndelta\ngamma',
       count: 1,
+      firstMatchLine: 2,
       lineNumbers: [2],
     });
   });
@@ -49,8 +50,21 @@ describe('replaceLiteralMatches', () => {
     ).toEqual({
       content: '$& and $&',
       count: 2,
+      firstMatchLine: 1,
       lineNumbers: [1],
     });
+  });
+
+  it('reports the exact first line of a multi-line match', () => {
+    expect(
+      replaceLiteralMatches({
+        content: 'header\nfirst\nsecond\nfooter',
+        search: 'first\nsecond',
+        replacement: 'joined',
+        mode: 'unique',
+        notFoundError: () => 'missing',
+      }).firstMatchLine,
+    ).toBe(2);
   });
 });
 

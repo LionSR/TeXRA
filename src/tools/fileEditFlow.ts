@@ -100,6 +100,7 @@ interface LiteralReplacementRequest {
 interface LiteralReplacement {
   content: string;
   count: number;
+  firstMatchLine: number;
   lineNumbers: number[];
 }
 
@@ -118,6 +119,7 @@ export function replaceLiteralMatches({
   }
 
   const lineNumbers = findOccurrenceLineNumbers(content, search);
+  const firstMatchIndex = content.indexOf(search);
   if (mode === 'unique' && count > 1) {
     if (!multipleMatchesError) {
       throw new ToolError('The text to replace must be unique.');
@@ -131,6 +133,7 @@ export function replaceLiteralMatches({
         ? replaceAllLiteral(content, search, replacement)
         : replaceFirstLiteral(content, search, replacement),
     count: mode === 'all' ? count : 1,
+    firstMatchLine: content.slice(0, firstMatchIndex).split('\n').length,
     lineNumbers,
   };
 }

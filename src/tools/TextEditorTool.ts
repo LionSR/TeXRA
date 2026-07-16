@@ -354,7 +354,7 @@ export class TextEditorTool extends defineTool({
       // patterns and corrupt LaTeX/code); see editPrimitives.
       const newFileContent = replacement.content;
 
-      const replacementLine = replacement.lineNumbers[0] ?? 1;
+      const replacementLine = replacement.firstMatchLine;
       const startLine = Math.max(1, replacementLine - SNIPPET_LINES);
       const endLine =
         replacementLine + SNIPPET_LINES + (newStr.match(/\n/g) ?? []).length;
