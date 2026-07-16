@@ -1,5 +1,7 @@
+// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
+// Local imports - progress view backend
 import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
 
 interface TestRequest {
