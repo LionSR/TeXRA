@@ -1380,6 +1380,7 @@ describe('CLI transcript state', () => {
     expect(entries.map((entry) => entry.text)).toEqual([
       '### Verification Report\n\nThe proof is **fully verified**.',
     ]);
+    expect(entries[0]?.messageType).toBe(MESSAGE_TYPES.MODEL_RESPONSE);
     expect(entries[0]?.text).not.toContain('<h3>');
     expect(entries[0]?.text).not.toContain('<b>');
   });
