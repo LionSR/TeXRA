@@ -6,6 +6,7 @@ import { FileType, type FileStat } from '@platform/interfaces';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 
 // Local imports - memory tool under test
+import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
 import { MemoryTool } from '@tools/memory/MemoryTool';
 import { StorageFS } from '@utils/files';
 
@@ -47,7 +48,7 @@ describe('MemoryTool view with an omitted path', () => {
     const omitted = await new MemoryTool().call({ command: 'view' });
     const explicitRoot = await new MemoryTool().call({
       command: 'view',
-      path: '/memories',
+      path: MEMORY_DISPLAY_ROOT,
     });
 
     expect(omitted.status).toBe('executed');
@@ -73,7 +74,7 @@ describe('MemoryTool view with an omitted path', () => {
     const omitted = await new MemoryTool().call({ command: 'view' });
     const explicitRoot = await new MemoryTool().call({
       command: 'view',
-      path: '/memories',
+      path: MEMORY_DISPLAY_ROOT,
     });
 
     expect(omitted.status).toBe('executed');
@@ -82,7 +83,7 @@ describe('MemoryTool view with an omitted path', () => {
     expect(omitted.output).toContain('/memories/notes.md');
   });
 
-  it('still requires path for every other command', async () => {
+  it('still requires path for non-view commands, e.g. create', async () => {
     const create = await new MemoryTool().call({
       command: 'create',
       file_text: 'body',
