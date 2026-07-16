@@ -288,6 +288,28 @@ describe('StreamLogStore load', () => {
     expect(store.keys()).toEqual([]);
   });
 
+  it('persists an empty stream registration across fresh opens', async () => {
+    const logs: Record<string, unknown> = {};
+    const storage = mockStorage({ logs, summaries: {} });
+
+    const first = await StreamLogStore.open();
+    first.ensureStream('registered-empty');
+    await first.flush();
+
+    expect(
+      storage.writes.get(storageFile(STREAM_LOGS_DIR, 'registered-empty')),
+    ).toEqual([]);
+    logs['registered-empty'] = [];
+
+    const second = await StreamLogStore.open();
+    expect(second.keys()).toEqual(['registered-empty']);
+    expect(second.get('registered-empty')).toBeUndefined();
+
+    const third = await StreamLogStore.open();
+    expect(third.keys()).toEqual(['registered-empty']);
+    expect(storage.fullLogReads()).toBe(2);
+  });
+
   it('opens a read-only store without creating directories or writing caches', async () => {
     const storage = mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 200)] },
@@ -306,11 +328,15 @@ describe('StreamLogStore load', () => {
     expect(() => store.append('alpha', logEntry('alpha', 2, 250))).toThrow(
       'read-only transcript store',
     );
+    expect(() => store.ensureStream('beta')).toThrow(
+      'read-only transcript store',
+    );
   });
 
   it('constructs an inspectable ephemeral store only with an explicit reason', async () => {
     const store = StreamLogStore.ephemeral('interactive fallback test');
 
+    store.ensureStream('empty-ephemeral');
     store.append('ephemeral-stream', logEntry('ephemeral-stream', 1, 100));
     store.releaseEntries('ephemeral-stream');
     await store.flush();
@@ -319,6 +345,8 @@ describe('StreamLogStore load', () => {
       kind: 'ephemeral',
       reason: 'interactive fallback test',
     });
+    expect(store.has('empty-ephemeral')).toBe(true);
+    expect(store.get('empty-ephemeral')?.size).toBe(0);
     expect(store.get('ephemeral-stream')?.size).toBe(1);
     expect(() => StreamLogStore.ephemeral('  ')).toThrow('requires a reason');
   });
@@ -640,6 +668,41 @@ describe('StreamLogStore load', () => {
       hasRunningGroup: false,
       hasRunningStreamingText: false,
     });
+  });
+
+  it('reports unfinished streams from summaries without loading transcripts', async () => {
+    const storage = mockStorage({
+      logs: {
+        group: [runningGroupEntry('group', 1, 100)],
+        streaming: [runningStreamingTextEntry('streaming', 1, 110)],
+        complete: [logEntry('complete', 1, 120)],
+      },
+      summaries: {
+        group: {
+          firstTimestamp: 100,
+          lastTimestamp: 100,
+          hasRunningGroup: true,
+          hasRunningStreamingText: false,
+        },
+        streaming: {
+          firstTimestamp: 110,
+          lastTimestamp: 110,
+          hasRunningGroup: false,
+          hasRunningStreamingText: true,
+        },
+        complete: {
+          firstTimestamp: 120,
+          lastTimestamp: 120,
+          hasRunningGroup: false,
+          hasRunningStreamingText: false,
+        },
+      },
+    });
+
+    const store = await StreamLogStore.open();
+
+    expect(store.getUnfinishedStreamIds()).toEqual(['group', 'streaming']);
+    expect(storage.fullLogReads()).toBe(0);
   });
 
   it('can close running groups for only selected summarized streams', async () => {

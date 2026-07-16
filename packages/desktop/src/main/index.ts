@@ -46,10 +46,6 @@ import {
   detectPackageManager,
 } from '@utils/system/toolUtils';
 import { setDesktopAgentResumeHandler } from './desktopAgentResume.js';
-import {
-  openDesktopStreamSnapshotStore,
-  type DesktopStreamSnapshotStore,
-} from './desktopStreamSnapshot.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
@@ -304,7 +300,6 @@ function createWindow(options: {
   authCallbackState: DesktopAuthCallbackState;
   initializeCrashReporting: () => Promise<void>;
   lifecycle: LifecycleHost;
-  streamSnapshotStore?: DesktopStreamSnapshotStore;
   progressSnapshotStore: StreamSnapshotStore;
   /**
    * Captured in `initializeElectronPlatform` BEFORE the bundled-agent sync
@@ -591,8 +586,10 @@ function createWindow(options: {
   const agentExecutionOptions: DesktopAgentExecutionOptions = {
     postToRenderer: postToRendererIfAlive,
     host: agentExecutionHost,
-    streamSnapshotStore: options.streamSnapshotStore,
     progressSnapshotStore: options.progressSnapshotStore,
+    legacyStreamFilePath: protocolLifecycle.ownsSingleInstanceLock
+      ? join(app.getPath('userData'), 'streams.json')
+      : undefined,
   };
   let agentExecution: DesktopAgentExecution | undefined;
   let agentExecutionLoad: Promise<DesktopAgentExecution> | undefined;
@@ -1190,25 +1187,6 @@ if (protocolLifecycle.shouldContinue) {
       );
       initializeDesktopServerSideKeyAccess(console);
       installContentSecurityPolicy();
-      // Cross-launch stream rail persistence — audit item D /
-      // trajectory #19. A failed open shouldn't block app startup,
-      // so we treat it as "no snapshot available" and continue.
-      let streamSnapshotStore: DesktopStreamSnapshotStore | undefined;
-      try {
-        const openedStreamSnapshotStore = await openDesktopStreamSnapshotStore(
-          join(app.getPath('userData'), 'streams.json'),
-        );
-        streamSnapshotStore = openedStreamSnapshotStore;
-        lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
-          openedStreamSnapshotStore.flush(),
-        );
-      } catch (error) {
-        console.warn('Failed to open desktop stream snapshot store', error);
-      }
-      await platformInit.progressSnapshotStore.preload(
-        streamSnapshotStore?.hydrated.map((snapshot) => snapshot.streamId) ??
-          [],
-      );
       reopenMainWindow = () =>
         createWindow({
           workspacePath: platformInit.workspacePath,
@@ -1216,7 +1194,6 @@ if (protocolLifecycle.shouldContinue) {
           authCallbackState,
           initializeCrashReporting,
           lifecycle,
-          streamSnapshotStore,
           progressSnapshotStore: platformInit.progressSnapshotStore,
           hasPriorInstall: platformInit.hasPriorInstall,
           resourcesPath: platformInit.resourcesPath,
