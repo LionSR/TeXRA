@@ -1955,6 +1955,7 @@ describe('DesktopProgressBridge', () => {
         unknown,
         unknown,
         {
+          drainedFollowUps?: readonly { text: string; origin?: string }[];
           setupSession(session: {
             appendFollowUp(followUp: {
               text: string;
@@ -1965,12 +1966,15 @@ describe('DesktopProgressBridge', () => {
           }): void;
         },
       ];
+      // The drained batch travels via the direct drainedFollowUps handoff (a
+      // subagent's WAITING cursor never reads the stream queue); setupSession
+      // replays only items that race in after the drain.
+      expect(resumeOptions.drainedFollowUps?.map((item) => item.text)).toEqual([
+        'queued follow-up',
+      ]);
       const appendFollowUp = vi.fn();
       resumeOptions.setupSession({ appendFollowUp });
-      expect(appendFollowUp).toHaveBeenCalledWith({
-        text: 'queued follow-up',
-        origin: 'user',
-      });
+      expect(appendFollowUp).not.toHaveBeenCalled();
     } finally {
       bridgeFollowUps(bridge).release('stream-1');
       bridgeStatus(bridge).clearStream('stream-1');
