@@ -2,6 +2,7 @@ import * as path from 'node:path';
 
 import { z } from 'zod';
 
+import { EXTERNAL_INQUIRY_THREADS_DIR } from '@platform/defaults/globalStorage';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { createChannelTrace } from '@agent/trace';
 import { isFileNotFoundError } from '@common/errors';
@@ -29,7 +30,7 @@ import {
 import { GlobalStorageFS, StorageFS } from '@utils/files';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
 
-const THREADS_DIR = 'ei_threads';
+const THREADS_DIR = EXTERNAL_INQUIRY_THREADS_DIR;
 const EXEC_DIR = 'ei';
 const QUESTION_PREVIEW_CHARS = 200;
 const logger = createChannelTrace('ExternalInquiryStorage');

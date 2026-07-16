@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
+- **One conversation history across TeXRA apps** — sessions created in the
+  CLI, desktop app, or VS Code extension now appear in the same project
+  history when that project is opened in another TeXRA app.
 - **Custom agents can run resumable multi-agent workflows** — agent authors can
   opt into deterministic workflow scripts whose completed steps resume after
   interruption and whose progress appears in the existing session view.

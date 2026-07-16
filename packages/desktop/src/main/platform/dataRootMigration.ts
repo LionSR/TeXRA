@@ -1,58 +1,30 @@
 // Node imports
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, rename } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 
-// Local imports - utils
-import { toErrorMessage } from '@utils/errors/errorMessage';
+// Local imports - platform
+import {
+  mergeLegacyWorkspaceStorageBucket,
+  moveEntryIfAbsent,
+  readLegacyDirEntries,
+} from '@platform/defaults/legacyDataMigration';
+import { resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
 
-// Type imports - node
-import type { Dirent } from 'node:fs';
+// Type imports - platform
+import type { LegacyDataMigrationLogger } from '@platform/defaults/legacyDataMigration';
 
-export interface DesktopDataRootMigrationLogger {
-  info(message: string): void;
-  warn(message: string): void;
-}
+export type DesktopDataRootMigrationLogger = LegacyDataMigrationLogger;
 
 const GLOBAL_STORAGE_DIR = 'global-storage';
 const WORKSPACE_STORAGE_DIR = 'workspace-storage';
 
-function errorCodeOf(error: unknown): string | undefined {
-  return typeof error === 'object' &&
-    error != null &&
-    'code' in error &&
-    typeof (error as { code?: unknown }).code === 'string'
-    ? (error as { code: string }).code
-    : undefined;
-}
-
-async function moveDirectoryIfAbsent(
-  legacyPath: string,
-  targetPath: string,
-  label: string,
+function desktopPrefixed(
   logger: DesktopDataRootMigrationLogger,
-): Promise<void> {
-  if (!existsSync(legacyPath)) return;
-  if (existsSync(targetPath)) {
-    logger.warn(
-      `[desktop] Skipping legacy data migration for "${label}": a directory already exists at ${targetPath}. Legacy data is still at ${legacyPath}; move it manually if needed.`,
-    );
-    return;
-  }
-  try {
-    await mkdir(dirname(targetPath), { recursive: true });
-    await rename(legacyPath, targetPath);
-    logger.info(`[desktop] Migrated legacy "${label}" to ${targetPath}.`);
-  } catch (error) {
-    // Surface the errno code (e.g. EXDEV on some Windows redirected-profile
-    // setups, EACCES on permission-restricted trees, ENOSPC when the target
-    // volume is full) so a failure is diagnosable from the log line alone —
-    // this stays non-throwing/best-effort either way.
-    const code = errorCodeOf(error);
-    logger.warn(
-      `[desktop] Failed to migrate legacy "${label}" to ${targetPath}${code ? ` (${code})` : ''}. Legacy data is still at ${legacyPath}. Cause: ${toErrorMessage(error)}`,
-    );
-  }
+): LegacyDataMigrationLogger {
+  return {
+    info: (message) => logger.info(`[desktop] ${message}`),
+    warn: (message) => logger.warn(`[desktop] ${message}`),
+  };
 }
 
 /**
@@ -79,37 +51,48 @@ export async function migrateLegacyDesktopDataRoot(
   logger: DesktopDataRootMigrationLogger = console,
 ): Promise<void> {
   if (legacyRoot === targetRoot) return;
+  const prefixed = desktopPrefixed(logger);
 
-  await moveDirectoryIfAbsent(
+  await moveEntryIfAbsent(
     join(legacyRoot, GLOBAL_STORAGE_DIR),
     join(targetRoot, GLOBAL_STORAGE_DIR),
     GLOBAL_STORAGE_DIR,
-    logger,
+    prefixed,
   );
 
   const legacyWorkspaceRoot = join(legacyRoot, WORKSPACE_STORAGE_DIR);
   if (!existsSync(legacyWorkspaceRoot)) return;
 
-  // Best-effort here too: an unreadable legacy directory (EACCES, or
-  // ENOTDIR if something unexpected occupies that path) must not abort
-  // startup — it only means this run can't migrate workspace-storage.
-  let entries: Dirent[];
-  try {
-    entries = await readdir(legacyWorkspaceRoot, { withFileTypes: true });
-  } catch (error) {
-    const code = errorCodeOf(error);
-    logger.warn(
-      `[desktop] Failed to read legacy workspace-storage directory ${legacyWorkspaceRoot}${code ? ` (${code})` : ''}. Cause: ${toErrorMessage(error)}`,
-    );
-    return;
-  }
+  const entries = await readLegacyDirEntries(legacyWorkspaceRoot, prefixed);
+  if (!entries) return;
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    await moveDirectoryIfAbsent(
+    await moveEntryIfAbsent(
       join(legacyWorkspaceRoot, entry.name),
       join(targetRoot, WORKSPACE_STORAGE_DIR, entry.name),
       `${WORKSPACE_STORAGE_DIR}/${entry.name}`,
-      logger,
+      prefixed,
     );
   }
+}
+
+/**
+ * Merge a pre-canonical desktop workspace bucket into its physical-path
+ * bucket. This is a one-time identity migration, not an ongoing read fallback.
+ */
+export async function migrateLegacyDesktopWorkspaceBucket(
+  dataRoot: string,
+  legacyWorkspacePath: string | undefined,
+  workspacePath: string | undefined,
+  logger: DesktopDataRootMigrationLogger = console,
+): Promise<void> {
+  if (!legacyWorkspacePath || !workspacePath) return;
+  await mergeLegacyWorkspaceStorageBucket(
+    resolveWorkspaceStoragePath(dataRoot, legacyWorkspacePath),
+    resolveWorkspaceStoragePath(dataRoot, workspacePath),
+    {
+      label: 'desktop-workspace-alias',
+      logger: desktopPrefixed(logger),
+    },
+  );
 }

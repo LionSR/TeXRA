@@ -1,5 +1,7 @@
 import { strict as assert } from 'node:assert';
-import { resolve } from 'node:path';
+import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { describe, it } from 'vitest';
 
 import {
@@ -51,6 +53,26 @@ describe('desktop workspace path', () => {
       }),
       undefined,
     );
+  });
+
+  it('uses the physical path for a symlinked workspace', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'texra-desktop-workspace-'));
+    try {
+      const target = join(root, 'target');
+      const link = join(root, 'link');
+      await mkdir(target);
+      await symlink(target, link, 'dir');
+
+      assert.equal(
+        resolveWorkspacePath({
+          argv: ['--texra-workspace', link],
+          env: {},
+        }),
+        await realpath(target),
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it('does not treat empty workspace flags as an opened workspace', () => {
