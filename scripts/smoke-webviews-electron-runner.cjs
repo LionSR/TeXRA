@@ -125,7 +125,7 @@ async function waitForRenderedElement(window, view) {
   );
 }
 
-async function assertWebviewRuntime(window, view) {
+async function assertWebviewRuntime(window) {
   return window.webContents.executeJavaScript(
     `
       (async () => {
@@ -491,7 +491,7 @@ async function smokeView(window, view, outputDir, errors) {
   if (errors.length > 0) {
     throw new Error(`${view.name} console errors:\n${errors.join('\n')}`);
   }
-  await assertWebviewRuntime(window, view);
+  await assertWebviewRuntime(window);
   const fixtureResult = await applyViewFixture(window, view);
   await assertViewSpecificLayout(window, view);
 

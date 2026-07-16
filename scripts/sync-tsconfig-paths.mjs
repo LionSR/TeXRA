@@ -36,12 +36,6 @@ const targets = [
   },
 ];
 
-function parseArgs() {
-  return {
-    check: process.argv.includes('--check'),
-  };
-}
-
 async function formatJson(text, filepath) {
   const options = (await prettier.resolveConfig(filepath)) ?? {};
   return prettier.format(text, { ...options, filepath });
@@ -51,7 +45,7 @@ function normalizeLineEndings(text) {
   return text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
 }
 
-const { check } = parseArgs();
+const check = process.argv.includes('--check');
 const rootPaths = loadRootPaths(rootDir);
 let outOfSync = false;
 
