@@ -18,6 +18,12 @@ type BypassPermission = Extract<
   { kind: BypassPermissionKind }
 >;
 
+// `this.permission` is `Extract<PermissionState, { kind: K }>` for the
+// generic `K`; TS cannot distribute that conditional type over the
+// `PermissionState` union while `K` is unresolved, so direct property access
+// on `this.permission` fails to typecheck. Passing it through this
+// concretely-typed helper (bound to the literal `BypassPermissionKind`, not
+// the generic `K`) gives the compiler a resolvable type to check against.
 function canBypassSession({ data }: BypassPermission): boolean {
   return Boolean(data.allowBypass && data.streamId);
 }
