@@ -12,8 +12,10 @@
  * Sink output is secret-redacted by default. A host may opt out only for a
  * trusted operator terminal whose output is neither persisted nor exported.
  */
+// Third-party imports
 import { format } from 'date-fns';
 
+// Local imports
 import { redactSecrets } from '@logger/redaction';
 import { LOG_LEVELS, type LogLevel } from '@shared/schemas';
 import { getConfig } from '@utils/config';
@@ -200,6 +202,11 @@ export function initialize(channel: string, isAgent = false): void {
   ensureChannel(channel, isAgent);
 }
 
+/**
+ * Replace the host sink factory and dispose all cached sinks. New sinks redact
+ * secrets unless the host explicitly identifies a local operator terminal as
+ * trusted.
+ */
 export function setOutputChannelFactory(
   factory: OutputChannelFactory | null,
   options: OutputChannelFactoryOptions = {},

@@ -271,8 +271,8 @@ SDK boundary would bypass, not an independent task.)_
 
 1. **Now (mechanical, no behavior change):** 1.1 delete `IModelHandler` shim,
    1.2/1.3 inline the two single-caller helpers. One small PR.
-2. **Next (leak cleanup):** 2.1 xAI clamp override, 2.2 move 4 host-UI ports off
-   `Platform`, 2.4 default-on redaction. Each independently landable.
+2. **Next (leak cleanup):** 2.1 xAI clamp override and 2.2 move 4 host-UI ports
+   off `Platform`. Each independently landable.
 3. **Structural (the actual SDK enablers):** §2.1 curated boundary + §2.2 accept
    `Platform` as an explicit argument to the SDK entrypoint (dissolve the global
    locator). These unlock a real `@texra/core`.

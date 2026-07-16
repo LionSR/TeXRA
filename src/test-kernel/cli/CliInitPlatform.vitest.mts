@@ -1,5 +1,7 @@
+// Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Local imports
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
 import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
