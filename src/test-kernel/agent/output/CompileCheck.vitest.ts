@@ -82,6 +82,15 @@ function outputFile(
   };
 }
 
+/** Seeds a single round-0 `main.tex` output -- the common single-file case. */
+function seedMainTexOutput(executionId: ExecutionId) {
+  const outputState = createOutputState();
+  ensureRoundData(outputState, 0).outputs = [
+    outputFile(executionId, path.join('r0', 'main.tex'), 'main.tex', 0),
+  ];
+  return outputState;
+}
+
 function logger(): AgentTrace {
   return {
     debug: vi.fn(),
@@ -117,10 +126,7 @@ describe('runCompileCheck', () => {
     // before compileLatex2Pdf is ever invoked.
     await initLatexPlatform({});
 
-    const outputState = createOutputState();
-    ensureRoundData(outputState, 0).outputs = [
-      outputFile(executionId, path.join('r0', 'main.tex'), 'main.tex', 0),
-    ];
+    const outputState = seedMainTexOutput(executionId);
 
     const result = await runCompileCheck(
       {
@@ -196,10 +202,7 @@ describe('runCompileCheck', () => {
     ).join('\n');
     mocks.compileLatex2Pdf.mockResolvedValue({ ok: false, logTail });
 
-    const outputState = createOutputState();
-    ensureRoundData(outputState, 0).outputs = [
-      outputFile(executionId, path.join('r0', 'main.tex'), 'main.tex', 0),
-    ];
+    const outputState = seedMainTexOutput(executionId);
 
     const result = await runCompileCheck(
       {
@@ -242,10 +245,7 @@ describe('runCompileCheck', () => {
       logTail: lines.join('\n'),
     });
 
-    const outputState = createOutputState();
-    ensureRoundData(outputState, 0).outputs = [
-      outputFile(executionId, path.join('r0', 'main.tex'), 'main.tex', 0),
-    ];
+    const outputState = seedMainTexOutput(executionId);
 
     const result = await runCompileCheck(
       {
@@ -281,10 +281,7 @@ describe('runCompileCheck', () => {
       logTail: 'stale failure log',
     });
 
-    const outputState = createOutputState();
-    ensureRoundData(outputState, 0).outputs = [
-      outputFile(executionId, path.join('r0', 'main.tex'), 'main.tex', 0),
-    ];
+    const outputState = seedMainTexOutput(executionId);
     const ctx = {
       fileService: new TaskRunFileService(executionId),
       outputState,
@@ -327,10 +324,7 @@ describe('runCompileCheck', () => {
       [legacyLogPath]: 'Compile check failed for main.tex (pre-upgrade)\n',
     });
 
-    const outputState = createOutputState();
-    ensureRoundData(outputState, 0).outputs = [
-      outputFile(executionId, path.join('r0', 'main.tex'), 'main.tex', 0),
-    ];
+    const outputState = seedMainTexOutput(executionId);
 
     const result = await runCompileCheck(
       {
