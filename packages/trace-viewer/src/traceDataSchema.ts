@@ -13,8 +13,8 @@
  */
 import { z } from 'zod';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExecutionMeta } from '@agent/storage';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory, AgentSourceSchema } from '@shared/schemas/agent';
 import {
   ExecutionIdSchema,
