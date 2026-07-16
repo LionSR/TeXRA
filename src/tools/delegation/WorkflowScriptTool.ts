@@ -79,6 +79,7 @@ Durable resume is content-keyed: re-running the identical script and args in thi
     const checkpointId = deriveWorkflowScriptCheckpointId({
       script: input.script,
       args: input.args,
+      defaultAgent: input.agent,
       parentExecutionId: parent.runScope.executionId,
     });
     if (!callContext.trace) {
@@ -88,10 +89,20 @@ Durable resume is content-keyed: re-running the identical script and args in thi
     }
 
     const store = getExecutionStore(parent.runScope.executionId);
+    // Delta accounting across attempts: a checkpoint now outlives one tool
+    // call, and every attempt (including the failure path) settles cost, so
+    // re-settling replayed entries would double-bill the parent. Each attempt
+    // settles only the entries it journaled itself; the whole journal is
+    // still validated so malformed entries fail closed.
+    const settledEntries = new Set(
+      (await readWorkflowScriptCheckpoint(store, checkpointId))?.journal.map(
+        (entry) => entry.index,
+      ),
+    );
     let costSettled = false;
     const settleCost = (journal: readonly WorkflowJournalEntry[]): void => {
       if (costSettled) return;
-      const cost = sumCompletedWorkflowJournalCost(journal);
+      const cost = sumCompletedWorkflowJournalCost(journal, settledEntries);
       costSettled = true;
       callContext.hooks?.recordSubagentCost?.(cost);
     };

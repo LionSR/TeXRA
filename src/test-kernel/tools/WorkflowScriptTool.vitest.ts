@@ -57,6 +57,7 @@ function checkpointIdFor(scriptSource: string, args?: unknown): string {
   return deriveWorkflowScriptCheckpointId({
     script: scriptSource,
     args,
+    defaultAgent: 'correct',
     parentExecutionId: executionId,
   });
 }
@@ -150,8 +151,10 @@ describe('WorkflowScriptTool', () => {
       summary: "Completed workflow script 'tool-test' (1 agent call)",
     });
     expect(result.output).toContain('"category": "workflow"');
+    // Delta accounting: replayed entries were settled by the attempt that
+    // executed them, so a pure replay settles zero instead of double-billing.
     expect(recordCost).toHaveBeenCalledTimes(1);
-    expect(recordCost).toHaveBeenCalledWith(0.42);
+    expect(recordCost).toHaveBeenCalledWith(0);
 
     // A retry mints a new tool-call id; identical content resumes the journal.
     clearStoreCache();
@@ -161,7 +164,20 @@ describe('WorkflowScriptTool', () => {
       recordCost: retryCost,
     });
     expect(retry).toMatchObject({ status: 'executed' });
-    expect(retryCost).toHaveBeenCalledWith(0.42);
+    expect(retryCost).toHaveBeenCalledWith(0);
+  });
+
+  it('derives distinct checkpoints when args presence or default agent differ', () => {
+    const base = checkpointIdFor(script);
+    expect(checkpointIdFor(script, null)).not.toBe(base);
+    expect(
+      deriveWorkflowScriptCheckpointId({
+        script,
+        args: undefined,
+        defaultAgent: 'merge',
+        parentExecutionId: executionId,
+      }),
+    ).not.toBe(base);
   });
 
   it('passes JSON arguments through and formats a zero-call result', async () => {
@@ -212,8 +228,9 @@ throw new Error('script failed after replay')`;
       status: 'error',
       error: expect.stringContaining('script failed after replay'),
     });
+    // The seeding attempt journaled the entry; this attempt only replays it.
     expect(recordCost).toHaveBeenCalledTimes(1);
-    expect(recordCost).toHaveBeenCalledWith(0.42);
+    expect(recordCost).toHaveBeenCalledWith(0);
   });
 
   it('fails closed on malformed journal costs without recording a scalar', async () => {
