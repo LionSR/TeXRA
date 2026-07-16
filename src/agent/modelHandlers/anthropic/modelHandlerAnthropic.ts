@@ -37,15 +37,19 @@ import type {
 import {
   attachStreamDiagnostics,
   handleStreamingFailure,
+  isUserAbort,
   trackStreamConnect,
   takeTail,
-  isUserAbort,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
-import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
+import type {
+  FileLocation,
+  MediaAttachmentKind,
+  StreamDiagnostics,
+} from '@shared/schemas';
 import type {
   ToolFileAttachment,
   ToolResult,
@@ -359,6 +363,120 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return tagAnthropicSdkError;
   }
 
+  /** Enriches an Anthropic stream failure without hiding SDK or abort identity. */
+  private decorateStreamError(
+    error: unknown,
+    partialText: string,
+    diagnostics: StreamDiagnostics,
+    requestId?: string,
+  ): unknown {
+    tagAnthropicSdkError(error, this.config.provider);
+
+    const isAbort = isUserAbort(error);
+    const enrichedError =
+      !diagnostics.messageStartReceived &&
+      error instanceof Error &&
+      !(error instanceof AnthropicAPIError) &&
+      !isAbort
+        ? new Error(
+            `Stream closed before message_start after ${diagnostics.elapsedSecs}s ` +
+              `(${diagnostics.eventsProcessed} events). ` +
+              'Likely connection dropped before the API responded.',
+            { cause: error },
+          )
+        : error;
+
+    // detectRequestId() reads request_id from the thrown object.
+    if (requestId && enrichedError instanceof Error) {
+      (enrichedError as ErrorWithRequestId).request_id = requestId;
+    }
+
+    // The retry node owns user-facing failure reporting. Diagnostics stay on
+    // the debug channel so the same failure does not produce a visible row.
+    this.logger.debug(`Stream ${isAbort ? 'aborted' : 'failed'}`, {
+      data: {
+        isUsingRelay: this.shouldUseServerSideKeys(),
+        baseUrl: this.getBaseUrl() ?? 'default',
+        model: this.config.fullName,
+        streamDiagnostics: diagnostics,
+        partialTextLength: partialText.length,
+        error: enrichedError,
+      },
+    });
+
+    attachStreamDiagnostics(enrichedError, diagnostics);
+    return enrichedError;
+  }
+
+  /** Executes Anthropic's event-emitter stream and preserves its SDK-specific lifecycle. */
+  private async executeStreamingResponse(
+    client: Anthropic,
+    options: MessageCreateParams,
+    signal?: AbortSignal,
+  ): Promise<BetaMessage> {
+    const stream = await client.beta.messages.stream(options, { signal });
+
+    if (signal?.aborted) {
+      stream.controller.abort();
+      throw new AnthropicUserAbortError();
+    }
+
+    const connect = trackStreamConnect(stream);
+    const abortStream = (): void => stream.controller.abort();
+    signal?.addEventListener('abort', abortStream, { once: true });
+
+    const streamHandler = new AnthropicStreamHandler(
+      this.logger,
+      { progressViewEnabled: this.progressViewEnabled },
+      {
+        // Anthropic emits explicit phase signals, so stream starts are eager.
+        createThinkingStream: () =>
+          this.createThinkingStream({ atPhaseSignal: true }),
+        createOutputStream: () =>
+          this.createOutputStream({ atPhaseSignal: true }),
+      },
+    );
+
+    try {
+      streamHandler.attachToStream(stream);
+      const response = await stream.finalMessage();
+
+      // A relay can close cleanly before message_stop, leaving finalMessage()
+      // resolved with a truncated response rather than an SDK error.
+      const diagnostics = streamHandler.getDiagnostics();
+      if (!diagnostics.messageStopReceived) {
+        throw new Error(
+          `Stream ended without message_stop after ${diagnostics.elapsedSecs}s ` +
+            `(${diagnostics.eventsProcessed} events, ` +
+            `${diagnostics.thinkingChars} thinking chars, ` +
+            `${diagnostics.textChars} text chars). ` +
+            'Stream truncated, likely proxy idle timeout during extended thinking.',
+        );
+      }
+
+      this.processThinkingBlock(response);
+      return response;
+    } catch (streamError) {
+      return handleStreamingFailure(streamError, {
+        // Anthropic finalizes unconditionally below, including on success.
+        partialTail: () =>
+          extractPartialTextTail(stream.currentMessage, PARTIAL_TEXT_TAIL_MAX),
+        retryEligible: (tail) => connect.isConnected() || tail.length > 0,
+        decorateError: (error, partialText) =>
+          this.decorateStreamError(
+            error,
+            partialText,
+            streamHandler.getDiagnostics(),
+            stream.request_id ?? undefined,
+          ),
+      });
+    } finally {
+      streamHandler.finalize();
+      connect.cleanup();
+      signal?.removeEventListener('abort', abortStream);
+    }
+  }
+
   /** Creates an Anthropic response after SDK-boundary error tagging is installed. */
   protected override async createResponseImpl(
     requestOptions: CreateResponseOptions<MessageParam, Anthropic>,
@@ -597,156 +715,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       ensureBeta(options, FILES_API_BETA);
     }
 
-    // Phase 4: EXECUTE - Make the API call
-    let response: BetaMessage;
-
-    if (useStreaming) {
-      // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
-      // we should also make sure partial results can be returned in the presence of errors!
-      const stream = await client.beta.messages.stream(options, { signal });
-
-      if (signal?.aborted) {
-        stream.controller.abort();
-        throw new AnthropicUserAbortError();
-      }
-
-      const connect = trackStreamConnect(stream);
-
-      let cleanupAbortListener: (() => void) | undefined;
-      if (signal) {
-        const abortListener = () => {
-          stream.controller.abort();
-          signal.removeEventListener('abort', abortListener);
-        };
-        signal.addEventListener('abort', abortListener);
-        cleanupAbortListener = () => {
-          signal.removeEventListener('abort', abortListener);
-        };
-      }
-
-      const streamHandler = new AnthropicStreamHandler(
-        this.logger,
-        {
-          progressViewEnabled: this.progressViewEnabled,
-        },
-        {
-          // The stream handler opens these at `content_block_start` — the
-          // provider's explicit phase signal — so the starts emit eagerly.
-          createThinkingStream: () =>
-            this.createThinkingStream({ atPhaseSignal: true }),
-          createOutputStream: () =>
-            this.createOutputStream({ atPhaseSignal: true }),
-        },
-      );
-
-      try {
-        streamHandler.attachToStream(stream);
-
-        // Note that there is no second consumption problem as per anthropic sdk examples
-        response = await stream.finalMessage();
-
-        // Validate stream completeness: when a relay proxy gracefully closes the
-        // connection mid-thinking, the SDK's for-await loop ends normally and
-        // finalMessage() resolves with a partial response (stop_reason: null,
-        // no message_stop event). Detect this and throw instead of silently
-        // returning truncated output.
-        const diagnostics = streamHandler.getDiagnostics();
-        if (!diagnostics.messageStopReceived) {
-          // The catch block below will read current diagnostics, attach them
-          // to the enriched error, and keep one diagnostics snapshot. The
-          // retry node owns the visible failure row.
-          throw new Error(
-            `Stream ended without message_stop after ${diagnostics.elapsedSecs}s ` +
-              `(${diagnostics.eventsProcessed} events, ` +
-              `${diagnostics.thinkingChars} thinking chars, ` +
-              `${diagnostics.textChars} text chars). ` +
-              `Stream truncated, likely proxy idle timeout during extended thinking.`,
-          );
-        }
-
-        // Store thinking blocks for API conversation continuation
-        this.processThinkingBlock(response);
-      } catch (streamError) {
-        return handleStreamingFailure(streamError, {
-          // No finalizeOnError hook: Anthropic finalizes the stream handler
-          // unconditionally in the `finally` block below (it also needs to
-          // run on the success path), not as a catch-only step.
-          partialTail: () =>
-            extractPartialTextTail(
-              stream.currentMessage,
-              PARTIAL_TEXT_TAIL_MAX,
-            ),
-          retryEligible: (tail) => connect.isConnected() || tail.length > 0,
-          decorateError: (err, partialText) => {
-            tagAnthropicSdkError(err, this.config.provider);
-
-            const diagnostics = streamHandler.getDiagnostics();
-            const requestId = stream.request_id;
-
-            // Wrap only non-APIError, non-abort stream failures that
-            // happened before message_start. APIError subclasses carry
-            // status/headers/requestID/type needed for retry classification;
-            // aborts are identified through the metadata tag attached above
-            // (isUserAbort), which wrapping would hide. Gate on
-            // diagnostics.messageStartReceived (tracked from the actual
-            // message_start SSE event) rather than stream.currentMessage,
-            // which the SDK does not keep populated once finalMessage() has
-            // settled — using it here previously mislabeled post-
-            // message_start failures (e.g. the message_stop guard above) as
-            // "closed before message_start", clobbering the more accurate
-            // error.
-            const isAbort = isUserAbort(err);
-            let enrichedError: unknown = err;
-            if (
-              !diagnostics.messageStartReceived &&
-              err instanceof Error &&
-              !(err instanceof AnthropicAPIError) &&
-              !isAbort
-            ) {
-              enrichedError = new Error(
-                `Stream closed before message_start after ${diagnostics.elapsedSecs}s ` +
-                  `(${diagnostics.eventsProcessed} events). ` +
-                  `Likely connection dropped before the API responded.`,
-                { cause: err },
-              );
-            }
-
-            // detectRequestId() reads .request_id off the thrown error, so
-            // set it on whichever object we're throwing (the wrapper or the
-            // original).
-            if (requestId && enrichedError instanceof Error) {
-              (enrichedError as ErrorWithRequestId).request_id = requestId;
-            }
-
-            const logMessage = `Stream ${isAbort ? 'aborted' : 'failed'}`;
-            const logData = {
-              data: {
-                isUsingRelay: this.shouldUseServerSideKeys(),
-                baseUrl: this.getBaseUrl() ?? 'default',
-                model: this.config.fullName,
-                streamDiagnostics: diagnostics,
-                partialTextLength: partialText.length,
-                error: enrichedError,
-              },
-            };
-            // The retry node owns user-facing failure reporting. Keep stream
-            // diagnostics available without showing a second visible failure
-            // row.
-            this.logger.debug(logMessage, logData);
-
-            attachStreamDiagnostics(enrichedError, diagnostics);
-            return enrichedError;
-          },
-        });
-      } finally {
-        // Always finalize stream handler to prevent memory leaks on error
-        streamHandler.finalize();
-        connect.cleanup();
-        cleanupAbortListener?.();
-      }
-    } else {
-      response = await client.beta.messages.create(options, { signal });
-    }
+    // Phase 4: EXECUTE - Dispatch through the provider's two SDK paths.
+    const response = useStreaming
+      ? await this.executeStreamingResponse(client, options, signal)
+      : await client.beta.messages.create(options, { signal });
 
     // Log server-side compaction events when present in response content.
     logContextManagementFromResponse(
