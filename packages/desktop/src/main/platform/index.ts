@@ -24,11 +24,15 @@ import { configKeyVariants } from '@shared/config/configKeys';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { migrateLegacyDesktopDataRoot } from './dataRootMigration.js';
+import {
+  migrateLegacyDesktopDataRoot,
+  migrateLegacyDesktopWorkspaceBucket,
+} from './dataRootMigration.js';
 import { ElectronSecrets } from './electronSecrets.js';
 import { repairLaunchPath } from './pathFix.js';
 import {
   resolveDesktopDataRoot,
+  resolveLegacyWorkspacePath,
   resolveResourcesPath,
   resolveWorkspacePath,
 } from './paths.js';
@@ -109,11 +113,12 @@ export async function initializeElectronPlatform(
     join(userDataPath, 'state', 'global.json'),
     { corruptionPolicy: 'fail' },
   );
-  const workspacePath = resolveWorkspacePath({
-    storedWorkspacePath: globalStateStore.get<string>(
-      DESKTOP_WORKSPACE_PATH_STATE_KEY,
-    ),
-  });
+  const storedWorkspacePath = globalStateStore.get<string>(
+    DESKTOP_WORKSPACE_PATH_STATE_KEY,
+  );
+  const workspaceOptions = { storedWorkspacePath };
+  const legacyWorkspacePath = resolveLegacyWorkspacePath(workspaceOptions);
+  const workspacePath = resolveWorkspacePath(workspaceOptions);
   // Desktop's memory/history/executions data root: shared with the CLI's
   // `~/.texra` scheme in production so a workspace worked on from both hosts
   // shows one history (#7987). A best-effort, one-time move of any legacy
@@ -121,6 +126,11 @@ export async function initializeElectronPlatform(
   // is no ongoing read fallback afterward — only `dataRoot` is ever read.
   const dataRoot = resolveDesktopDataRoot(userDataPath);
   await migrateLegacyDesktopDataRoot(userDataPath, dataRoot);
+  await migrateLegacyDesktopWorkspaceBucket(
+    dataRoot,
+    legacyWorkspacePath,
+    workspacePath,
+  );
   const storage = new WorkspaceStorageProvider(dataRoot, workspacePath);
   const workspaceStateStore = await JsonStore.open(
     join(storage.getStoragePath(), 'state.json'),
@@ -284,6 +294,10 @@ export async function initializeElectronPlatform(
       },
       agentDirectories,
       getWorkspacePath: () => workspacePath,
+      getLegacyWorkspacePaths: () =>
+        legacyWorkspacePath && legacyWorkspacePath !== workspacePath
+          ? [legacyWorkspacePath]
+          : [],
     }),
   );
 
