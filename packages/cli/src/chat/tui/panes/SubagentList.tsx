@@ -85,7 +85,12 @@ function SessionRow({
     },
     nowMs,
   );
-  const summary = latestChildResponseSummary(session.slice?.entries);
+  // Child rows summarize what the subagent last said; the root row is the
+  // conversation itself — echoing your own last message there is noise.
+  const summary =
+    session.parentId !== undefined
+      ? latestChildResponseSummary(session.slice?.entries)
+      : undefined;
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
       <Text color={focused ? COLOR_HINT : undefined}>

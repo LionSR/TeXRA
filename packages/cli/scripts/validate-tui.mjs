@@ -2363,7 +2363,7 @@ const SCENARIOS = [
     },
     bootExpect: 'Tab sessions',
     expect: [
-      '+3 sessions, +1 process',
+      '+4 more',
       '3 sub',
       '1 proc',
       'Tab sessions',
@@ -2474,7 +2474,9 @@ const SCENARIOS = [
     bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN],
     resizes: [{ cols: 44, rows: 7 }],
-    expect: ['leanSolver waiti', '+3 sessions', 'latex build running'],
+    // The unified list windows around the highlighted row (leanSolver after
+    // two Downs) and reports clipped rows as one combined "+N more".
+    expect: ['leanSolver wait', '+3 more'],
     maxOccurrences: [{ text: 'leanSolver waiting for you', max: 1 }],
   },
   {
