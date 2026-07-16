@@ -34,10 +34,14 @@ export interface ChildListSelectionState {
 
 type ChildListSelectionAction =
   | { readonly kind: 'blur' }
-  | { readonly kind: 'focus'; readonly fallbackValue?: ChildListValue }
+  | { readonly kind: 'focus'; readonly value?: ChildListValue }
   | { readonly kind: 'focusStream'; readonly streamId: StreamTabId }
   | { readonly kind: 'highlight'; readonly value: ChildListValue }
-  | { readonly kind: 'syncActiveStream'; readonly streamId: StreamTabId }
+  | {
+      readonly kind: 'syncActiveStream';
+      readonly streamId: StreamTabId;
+      readonly values: readonly ChildListValue[];
+    }
   | {
       readonly kind: 'reconcile';
       readonly activeStreamId: StreamTabId | undefined;
@@ -58,8 +62,9 @@ function resolveChildSelectionValue(
   if (activeStreamId) {
     const activeValue = childStreamListValue(activeStreamId);
     if (values.includes(activeValue)) return activeValue;
+    return undefined;
   }
-  return values.find((value) => childListStreamId(value) !== undefined);
+  return values[0];
 }
 
 /** Apply one keyboard or child-lifecycle transition to child-list state. */
@@ -72,9 +77,8 @@ export function reduceChildListSelection(
       return { ...state, focused: false };
     case 'focus':
       return {
-        ...state,
         focused: true,
-        selectedValue: state.selectedValue ?? action.fallbackValue,
+        selectedValue: state.selectedValue ?? action.value,
       };
     case 'focusStream':
       return {
@@ -86,7 +90,11 @@ export function reduceChildListSelection(
     case 'syncActiveStream':
       return {
         ...state,
-        selectedValue: childStreamListValue(action.streamId),
+        selectedValue: resolveChildSelectionValue(
+          action.values,
+          undefined,
+          action.streamId,
+        ),
       };
     case 'reconcile': {
       if (action.values.length === 0) return state;

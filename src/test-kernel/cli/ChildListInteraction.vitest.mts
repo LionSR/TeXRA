@@ -10,6 +10,7 @@ import {
   type ChildListValue,
 } from '@cli/chat/tui/state/childListSelection';
 import type { StreamView } from '@cli/chat/tui/state/streamViews';
+import { POINTER } from '@cli/chat/tui/ui/glyphs';
 import type { StreamTabId } from '@shared/schemas';
 
 const cliRequire = createRequire(
@@ -20,8 +21,10 @@ class FakeStdout extends EventEmitter {
   readonly isTTY = true;
   readonly columns = 100;
   readonly rows = 24;
+  output = '';
 
-  write(): boolean {
+  write(chunk: string): boolean {
+    this.output += chunk;
     return true;
   }
 
@@ -64,6 +67,37 @@ function session(id: StreamTabId, active = false): StreamView {
 }
 
 describe('CLI child list interaction', () => {
+  it('renders no process highlight before the list receives a selection', async () => {
+    const ink = (await import(cliRequire.resolve('ink'))) as any;
+    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const stdout = new FakeStdout();
+    const instance = ink.render(
+      React.createElement(SubagentList, {
+        activeProcesses: [
+          {
+            kind: 'process',
+            executionId: 'process-exec',
+            agentName: 'latexmk',
+            status: 'running',
+          },
+        ],
+        keyboardActive: false,
+        maxRows: 3,
+      }),
+      {
+        stdout,
+        patchConsole: false,
+      },
+    );
+
+    try {
+      await waitFor(() => stdout.output.includes('latexmk'));
+      expect(stdout.output).not.toContain(POINTER);
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it('views and kills only the selected active session, then focuses it', async () => {
     const ink = (await import(cliRequire.resolve('ink'))) as any;
     const React = ((await import(cliRequire.resolve('react'))) as any).default;

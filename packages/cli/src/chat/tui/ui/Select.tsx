@@ -44,8 +44,9 @@ export interface SelectProps<T> {
   readonly showOverflow?: boolean;
   /** Whether this list currently owns terminal input. */
   readonly isActive?: boolean;
-  /** Controlled highlighted value. Useful when item identities outlive rows. */
-  readonly highlightedValue?: T;
+  /** Controlled highlighted value. `null` keeps the internal keyboard cursor
+   *  ready without presenting a row as selected. */
+  readonly highlightedValue?: T | null;
   readonly onHighlightChange?: (value: T) => void;
   /** Disable direct 1-9/a-z activation for arrow-only lists. */
   readonly hotkeys?: boolean;
@@ -99,7 +100,7 @@ export function selectControlledHighlightIndex<T>({
   items,
   previousIndex,
 }: {
-  readonly highlightedValue?: T;
+  readonly highlightedValue?: T | null;
   readonly items: ReadonlyArray<SelectItem<T>>;
   readonly previousIndex: number;
 }): number {
@@ -363,7 +364,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
       ) : null}
       {visibleItems.map((item, offset) => {
         const i = visibleRange.start + offset;
-        const focused = i === highlight;
+        const focused = props.highlightedValue !== null && i === highlight;
         const active = item.value === props.activeValue;
         const pointer = focused ? POINTER : ' ';
         const tick = active ? TICK : ' ';

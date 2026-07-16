@@ -79,13 +79,30 @@ describe('CLI child list selection', () => {
   it('selects the owner when lifecycle completion changes the active stream', () => {
     const state = reduceChildListSelection(
       { focused: true, selectedValue: strategyValue },
-      { kind: 'syncActiveStream', streamId: main },
+      {
+        kind: 'syncActiveStream',
+        streamId: main,
+        values: [mainValue, strategyValue],
+      },
     );
 
     expect(state).toEqual({ focused: true, selectedValue: mainValue });
   });
 
-  it('falls back to a stream without preselecting a process-only list', () => {
+  it('clears a stale row when the active stream is not in the projected list', () => {
+    const state = reduceChildListSelection(
+      { focused: true, selectedValue: strategyValue },
+      {
+        kind: 'syncActiveStream',
+        streamId: main,
+        values: [processValue],
+      },
+    );
+
+    expect(state).toEqual({ focused: true, selectedValue: undefined });
+  });
+
+  it('falls back to the active stream and then the first row', () => {
     let state = reconcileSelection(
       { focused: true, selectedValue: childProcessListValue('gone') },
       [processValue, mainValue],
@@ -94,9 +111,11 @@ describe('CLI child list selection', () => {
     expect(state.selectedValue).toBe(mainValue);
 
     state = reconcileSelection(state, [processValue, strategyValue], undefined);
-    expect(state.selectedValue).toBe(strategyValue);
+    expect(state.selectedValue).toBe(processValue);
+  });
 
-    state = reconcileSelection(
+  it('does not preselect a process while the active root is absent from the list', () => {
+    let state = reconcileSelection(
       INITIAL_CHILD_LIST_SELECTION,
       [processValue],
       main,
@@ -105,7 +124,7 @@ describe('CLI child list selection', () => {
 
     state = reduceChildListSelection(state, {
       kind: 'focus',
-      fallbackValue: processValue,
+      value: processValue,
     });
     expect(state).toEqual({ focused: true, selectedValue: processValue });
   });

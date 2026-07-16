@@ -77,7 +77,7 @@ import {
   reduceChildListSelection,
   type ChildListValue,
 } from './state/childListSelection';
-import { activeStreamTreeViews, streamDisplayLabel } from './state/streamViews';
+import { streamDisplayLabel, streamTreeViews } from './state/streamViews';
 import { useSignal } from './state/useSignal';
 import type { TranscriptViewportChange } from './state/transcriptViewportMode';
 import type { InputHistory } from './history/inputHistory';
@@ -222,7 +222,7 @@ export function App(props: AppProps): React.JSX.Element {
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const sessionViews = useMemo(
     () =>
-      activeStreamTreeViews({
+      streamTreeViews({
         activeStreamId,
         childStreamEntries,
         parentStream,
@@ -298,9 +298,10 @@ export function App(props: AppProps): React.JSX.Element {
       dispatchChildListSelection({
         kind: 'syncActiveStream',
         streamId: activeStreamId,
+        values: childListValues,
       });
     }
-  }, [activeStreamId]);
+  }, [activeStreamId, childListValues]);
   useEffect(() => {
     if (!childListAvailable && childListFocused) {
       dispatchChildListSelection({ kind: 'blur' });
@@ -499,11 +500,9 @@ export function App(props: AppProps): React.JSX.Element {
 
     // Tab transfers keyboard ownership from the input to the child list.
     if (key.tab) {
-      if (childListAvailable) {
-        dispatchChildListSelection({
-          kind: 'focus',
-          fallbackValue: childListValues[0],
-        });
+      const firstChildValue = childListValues.at(0);
+      if (firstChildValue) {
+        dispatchChildListSelection({ kind: 'focus', value: firstChildValue });
       }
       return;
     }

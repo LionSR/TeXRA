@@ -9,10 +9,7 @@ import {
 import { formatCompactDuration } from '@utils/core';
 
 // Local imports - CLI state
-import {
-  activeStreamTreeEntries,
-  nearestActiveStreamAncestor,
-} from './streamViews';
+import { nearestActiveStreamAncestor, streamTreeEntries } from './streamViews';
 import {
   visibleSubagentRows,
   type ChildStreamEntries,
@@ -148,10 +145,12 @@ export function numericFocusTargetForActiveStream(init: {
 }): StreamTabId | undefined {
   if (!init.activeStreamId || init.zeroBasedIndex < 0) return undefined;
   const shortcutIndex = init.zeroBasedIndex + 1;
-  return activeStreamTreeEntries({
+  const target = resolveChildListTarget(init);
+  return streamTreeEntries({
     activeStreamId: init.activeStreamId,
     childStreamEntries: init.childStreamEntries,
     parentStream: init.parentStream,
+    rootStreamId: target.streamId,
     streams: init.streams,
   }).find((entry) => entry.shortcutIndex === shortcutIndex)?.id;
 }

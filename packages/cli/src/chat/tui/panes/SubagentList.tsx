@@ -290,7 +290,7 @@ export function SubagentList(
         activeValue={
           activeSession ? childStreamListValue(activeSession.id) : undefined
         }
-        highlightedValue={props.selectedValue}
+        highlightedValue={props.selectedValue ?? null}
         hotkeys={false}
         isActive={props.keyboardActive}
         items={items}

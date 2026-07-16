@@ -23,7 +23,7 @@ import {
   type ProcessOutputTail,
   type StreamSlice,
 } from '@cli/chat/tui/state/cliState';
-import { activeStreamTreeViews } from '@cli/chat/tui/state/streamViews';
+import { streamTreeViews } from '@cli/chat/tui/state/streamViews';
 import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 
 const root = 'root' as StreamTabId;
@@ -181,7 +181,7 @@ describe('CLI child controls', () => {
 
     expect(target.streamId).toBe(child);
     expect(
-      activeStreamTreeViews({
+      streamTreeViews({
         activeStreamId: child,
         childStreamEntries: entries,
         parentStream,
@@ -189,6 +189,16 @@ describe('CLI child controls', () => {
         streams,
       }).map((view) => view.id),
     ).toEqual([child, leaf]);
+
+    expect(
+      numericFocusTargetForActiveStream({
+        activeStreamId: child,
+        childStreamEntries: entries,
+        parentStream,
+        streams,
+        zeroBasedIndex: 0,
+      }),
+    ).toBe(leaf);
   });
 
   it('preserves Alt/Esc-number stream focus order', () => {

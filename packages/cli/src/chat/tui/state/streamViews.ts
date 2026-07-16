@@ -154,26 +154,18 @@ export function streamViewForId(init: {
   };
 }
 
-interface OrderedStreamViewInput {
+interface StreamTreeViewInput {
   readonly activeStreamId: StreamTabId | undefined;
   readonly childStreamEntries: ChildStreamEntries;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-  readonly rootStreamId?: StreamTabId;
+  readonly rootStreamId: StreamTabId | undefined;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }
 
-function activeTreeRoot(init: OrderedStreamViewInput): StreamTabId | undefined {
-  return (
-    init.rootStreamId ??
-    activeStreamParentOrSelfId(init) ??
-    init.streams.keys().next().value
-  );
-}
-
-export function activeStreamTreeEntries(
-  init: OrderedStreamViewInput,
+export function streamTreeEntries(
+  init: StreamTreeViewInput,
 ): readonly ActiveStreamTreeEntry[] {
-  const root = activeTreeRoot(init);
+  const root = init.rootStreamId;
   if (!root) return [];
   // Newest-first: `orderedDescendantsFromTree` returns children oldest-first
   // (retained order, then creation order), so the child list and its
@@ -195,10 +187,10 @@ export function activeStreamTreeEntries(
   return out;
 }
 
-export function activeStreamTreeViews(
-  init: OrderedStreamViewInput,
+export function streamTreeViews(
+  init: StreamTreeViewInput,
 ): readonly StreamView[] {
-  const ordered = activeStreamTreeEntries(init);
+  const ordered = streamTreeEntries(init);
   if (ordered.length < 2) return [];
   return ordered.map((entry) =>
     streamViewForId({
