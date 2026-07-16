@@ -164,6 +164,25 @@ describe('ProgressApiKeyRetryController', () => {
     assert.deepEqual(harness.retries, []);
   });
 
+  it('returns a fresh result when no retry occurs', async () => {
+    const harness = createHarness({
+      keys: { anthropic: 'stored-key' },
+      retryPending: false,
+    });
+    const request = {
+      stream: 'stream-a' as const,
+      requestId: 'retry:stale',
+      provider: 'anthropic' as const,
+      exhaustionReason: 'copilot-subscription' as const,
+    };
+
+    const first = await harness.controller.useOwnApiKey(request);
+    const second = await harness.controller.useOwnApiKey(request);
+
+    assert.notStrictEqual(first, second);
+    assert.deepEqual(first, second);
+  });
+
   it('accepts a changed key from any provider when depletion has no provider hint', async () => {
     const harness = createHarness({
       keys: { openai: 'old-openai', anthropic: undefined },
