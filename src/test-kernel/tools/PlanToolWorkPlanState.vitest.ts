@@ -13,6 +13,7 @@ import {
   WorkPlanState,
 } from '@agent/core/state/AgentWorkspaceState';
 import { withToolEnvironment } from '@agent/followUp/ToolFileInteractionContext';
+import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';
 import { planSummaryLine, type Plan, type StreamTabId } from '@shared/schemas';
 import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas/goal';
 import {
@@ -26,6 +27,7 @@ import {
   createRecordingHost,
   sessionWithInteractions,
   type RecordedProgressEvent,
+  type RecordingHostDecisions,
 } from '../agent/progressTestUtils';
 
 const plan: Plan = {
@@ -82,6 +84,18 @@ function findPlanApproval(
   return approval!;
 }
 
+/** Submits a plan-approval decision for the request the tool showed. */
+function submitPlanDecision(
+  decisions: RecordingHostDecisions,
+  approval: RecordedProgressEvent,
+  decision: PlanApprovalResult,
+): boolean {
+  return decisions.submitPlan(
+    (approval.payload as { approvalId: string }).approvalId,
+    decision,
+  );
+}
+
 describe('PlanTool — update (plan approval)', () => {
   it('keeps an approved plan in displayed work-plan state and defers steps to the todo tool', async () => {
     await installPlatform(false);
@@ -92,12 +106,9 @@ describe('PlanTool — update (plan approval)', () => {
 
     const approval = findPlanApproval(events);
     expect((approval.payload as { plan: Plan }).plan).toEqual(plan);
-    expect(
-      decisions.submitPlan(
-        (approval.payload as { approvalId: string }).approvalId,
-        { action: 'approve' },
-      ),
-    ).toBe(true);
+    expect(submitPlanDecision(decisions, approval, { action: 'approve' })).toBe(
+      true,
+    );
 
     const result = await resultPromise;
     expect(result.status).toBe('executed');
@@ -115,10 +126,10 @@ describe('PlanTool — update (plan approval)', () => {
 
     const approval = findPlanApproval(events);
     expect(
-      decisions.submitPlan(
-        (approval.payload as { approvalId: string }).approvalId,
-        { action: 'reject', feedback: 'Too broad.' },
-      ),
+      submitPlanDecision(decisions, approval, {
+        action: 'reject',
+        feedback: 'Too broad.',
+      }),
     ).toBe(true);
 
     const result = await resultPromise;
@@ -141,10 +152,9 @@ describe('PlanTool — update (plan approval)', () => {
         true,
       );
       expect(
-        decisions.submitPlan(
-          (approval.payload as { approvalId: string }).approvalId,
-          { action: 'approve_and_goal' },
-        ),
+        submitPlanDecision(decisions, approval, {
+          action: 'approve_and_goal',
+        }),
       ).toBe(true);
 
       const result = await resultPromise;
@@ -175,10 +185,9 @@ describe('PlanTool — update (plan approval)', () => {
     try {
       const approval = findPlanApproval(events);
       expect(
-        decisions.submitPlan(
-          (approval.payload as { approvalId: string }).approvalId,
-          { action: 'approve_and_goal' },
-        ),
+        submitPlanDecision(decisions, approval, {
+          action: 'approve_and_goal',
+        }),
       ).toBe(true);
 
       const result = await resultPromise;
@@ -216,10 +225,9 @@ describe('PlanTool — update (plan approval)', () => {
 
       (platform.config as FakeConfigProvider).set(GOAL_FEATURE_FLAG_KEY, false);
       expect(
-        decisions.submitPlan(
-          (approval.payload as { approvalId: string }).approvalId,
-          { action: 'approve_and_goal' },
-        ),
+        submitPlanDecision(decisions, approval, {
+          action: 'approve_and_goal',
+        }),
       ).toBe(true);
 
       const result = await resultPromise;
@@ -240,12 +248,9 @@ describe('PlanTool — update (plan approval)', () => {
     );
 
     const approval = findPlanApproval(events);
-    expect(
-      decisions.submitPlan(
-        (approval.payload as { approvalId: string }).approvalId,
-        { action: 'timeout' },
-      ),
-    ).toBe(true);
+    expect(submitPlanDecision(decisions, approval, { action: 'timeout' })).toBe(
+      true,
+    );
 
     const result = await resultPromise;
     expect(result.status).toBe('error');
