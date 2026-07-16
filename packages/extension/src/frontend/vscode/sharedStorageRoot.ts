@@ -10,6 +10,7 @@
  * config stay VS Code-native.
  */
 // Node imports
+import { realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // VS Code imports
@@ -25,25 +26,36 @@ import {
 } from '@platform/defaults/workspaceStorage';
 import { STREAM_DATA_DIR } from '@transcript/streamDataPaths';
 import * as logger from '@logger/logUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
+// Local imports - frontend
+import { VscodeWorkspace } from './vscodeWorkspace';
 
 // Type imports
 import type { StorageProvider } from '@platform/interfaces';
 
+const vscodeWorkspace = new VscodeWorkspace();
+
 /**
  * Workspace identity string hashed into the `~/.texra/workspace-storage`
- * bucket id. It must be byte-identical to what the CLI (`process.cwd()`) and
- * desktop (`resolve(workspacePath)`) hash for the same folder, or the hosts
- * land in different buckets. VS Code's `Uri.fsPath` lower-cases the Windows
- * drive letter while Node's `cwd()` reports it upper-case, so normalize it
- * back before hashing.
+ * bucket id. It must be byte-identical to what the CLI hashes for the same
+ * folder (`realpath(process.cwd())`, falling back to the raw path — see
+ * `cliContext.ts`), or the hosts land in different buckets: canonicalize
+ * symlinks the same way, and normalize the Windows drive letter that VS
+ * Code's `Uri.fsPath` lower-cases while Node reports it upper-case.
  */
 export function sharedStorageWorkspacePath(): string | undefined {
-  const fsPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const fsPath = vscodeWorkspace.getWorkspacePath();
   if (!fsPath) return undefined;
-  const resolved = resolve(fsPath);
-  return /^[a-z]:/.test(resolved)
-    ? `${resolved.charAt(0).toUpperCase()}${resolved.slice(1)}`
-    : resolved;
+  let canonical = resolve(fsPath);
+  try {
+    canonical = realpathSync(canonical);
+  } catch {
+    // Keep the resolved path — mirrors the CLI's realpath fallback.
+  }
+  return /^[a-z]:/.test(canonical)
+    ? `${canonical.charAt(0).toUpperCase()}${canonical.slice(1)}`
+    : canonical;
 }
 
 export function createSharedStorageProvider(): StorageProvider {
@@ -79,26 +91,35 @@ export async function migrateLegacyVscodeStorage(
     info: (message: string) => logger.info('extension', message),
     warn: (message: string) => logger.warn('extension', message),
   };
-  if (context.storageUri) {
-    await mergeLegacyStorageBucket(
-      context.storageUri.fsPath,
-      storage.getStoragePath(),
-      {
-        mergePerChild: MERGE_PER_CHILD,
-        label: 'vscode-workspace-storage',
-        logger: migrationLogger,
-      },
-    );
-  }
-  if (context.globalStorageUri) {
-    await mergeLegacyStorageBucket(
-      context.globalStorageUri.fsPath,
-      storage.getGlobalStoragePath(),
-      {
-        mergePerChild: MERGE_PER_CHILD,
-        label: 'vscode-global-storage',
-        logger: migrationLogger,
-      },
+  // The merge helpers swallow per-entry I/O errors, but getStoragePath() /
+  // getGlobalStoragePath() do real disk I/O (mkdir, sidecar write) — a failure
+  // there must degrade to a warning, never break activation.
+  try {
+    if (context.storageUri) {
+      await mergeLegacyStorageBucket(
+        context.storageUri.fsPath,
+        storage.getStoragePath(),
+        {
+          mergePerChild: MERGE_PER_CHILD,
+          label: 'vscode-workspace-storage',
+          logger: migrationLogger,
+        },
+      );
+    }
+    if (context.globalStorageUri) {
+      await mergeLegacyStorageBucket(
+        context.globalStorageUri.fsPath,
+        storage.getGlobalStoragePath(),
+        {
+          mergePerChild: MERGE_PER_CHILD,
+          label: 'vscode-global-storage',
+          logger: migrationLogger,
+        },
+      );
+    }
+  } catch (error) {
+    migrationLogger.warn(
+      `Legacy storage migration failed; legacy data stays in place. Cause: ${toErrorMessage(error)}`,
     );
   }
 }
