@@ -20,7 +20,7 @@ import type {
   DesktopMessageHandler,
 } from './desktopIpcTypes.js';
 
-export interface DesktopFileSelectionDialogOptions {
+interface DesktopFileSelectionDialogOptions {
   title: string;
   defaultPath?: string;
   filters: Array<{ name: string; extensions: string[] }>;

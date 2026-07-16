@@ -3,8 +3,8 @@ import { join, resolve } from 'node:path';
 
 import { app } from 'electron';
 
-import { BUNDLED_AGENT_DIRECTORY_NAMES } from '@agent/index/BundledAgentDirectories';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
+import { BUNDLED_AGENT_DIRECTORY_NAMES } from '@agent/index/BundledAgentDirectories';
 import { getWorkspacePathInput } from '@desktop/workspacePath.js';
 
 interface WorkspacePathOptions {
