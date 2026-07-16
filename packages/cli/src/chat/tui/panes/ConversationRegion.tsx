@@ -1,5 +1,6 @@
 // Conversation render boundary: static scrollback, live transcript, foreground
-// surfaces, compact side panels, tips, and queued follow-ups above the footer.
+// surfaces, tips, and queued follow-ups above the footer, with the compact
+// side panels below it.
 
 // Third-party imports
 import { Box } from 'ink';
@@ -42,7 +43,7 @@ import type { StreamSlice } from '../state/cliState';
 import type { StreamView } from '../state/streamViews';
 
 // Cap the bottom subagent/todos panels so they never crowd out the
-// conversation or push the input bar off-screen.
+// conversation, even though they now render below the input bar.
 const BOTTOM_PANEL_MAX_ROWS = 10;
 interface ConversationRegionSnapshot {
   readonly activeStreamId: StreamTabId | undefined;
@@ -243,6 +244,21 @@ export function ConversationRegion({
             </Box>
           ) : null}
         </Box>
+        {tipRowVisible ? (
+          <TipRow
+            agentSelectionAvailable={agentSelectionAvailable}
+            hour={tipHour}
+            responseRunning={activeResponseRunning}
+          />
+        ) : null}
+        {queuedFollowUpPanelVisible ? (
+          <QueuedFollowUpsPanel
+            maxRows={queuedFollowUpPanelRows}
+            messages={queuedFollowUpMessages}
+            width={columns}
+          />
+        ) : null}
+        {renderFooterChrome(queuedFollowUpPanelVisible)}
         {bottomPanelBudget > 0 ? (
           <Box flexDirection="column" overflowY="hidden">
             <SubagentList
@@ -259,21 +275,6 @@ export function ConversationRegion({
             <TodosPlanPanel maxRows={todosPlanRows} />
           </Box>
         ) : null}
-        {tipRowVisible ? (
-          <TipRow
-            agentSelectionAvailable={agentSelectionAvailable}
-            hour={tipHour}
-            responseRunning={activeResponseRunning}
-          />
-        ) : null}
-        {queuedFollowUpPanelVisible ? (
-          <QueuedFollowUpsPanel
-            maxRows={queuedFollowUpPanelRows}
-            messages={queuedFollowUpMessages}
-            width={columns}
-          />
-        ) : null}
-        {renderFooterChrome(queuedFollowUpPanelVisible)}
       </Box>
     </>
   );
