@@ -1,5 +1,5 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,6 +9,7 @@
     />
     <link rel="stylesheet" href="${commonStyleUri}" />
     <link rel="stylesheet" href="${progressStyleUri}" />
+    <title>TeXRA Progress</title>
     <style nonce="${nonce}">
       body {
         padding: 0;
@@ -19,7 +20,7 @@
     </style>
   </head>
   <body>
-    <progress-app></progress-app>
+    <progress-app role="main" aria-label="TeXRA progress"></progress-app>
     <script type="module" nonce="${nonce}" src="${progressBundleUri}"></script>
   </body>
 </html>

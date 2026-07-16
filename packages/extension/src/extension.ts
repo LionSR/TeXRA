@@ -134,6 +134,7 @@ async function refreshApiKeyStatus() {
 
   if (!showReminders) {
     apiKeyStatusBarItem.hide();
+    statusBarItem?.show();
     return;
   }
 
@@ -142,13 +143,18 @@ async function refreshApiKeyStatus() {
   // keys in agreement about whether the first-run CTA should remain visible.
   const exists = await hasAnyUsableSetupCredential();
   if (!exists) {
+    statusBarItem?.hide();
     apiKeyStatusBarItem.text = '$(rocket) TeXRA: Get Started';
     apiKeyStatusBarItem.tooltip =
       'Click to run the setup assistant — sign in, use ChatGPT, or add an API key';
     apiKeyStatusBarItem.command = 'texra.runSetupAssistant';
+    apiKeyStatusBarItem.accessibilityInformation = {
+      label: 'TeXRA setup, get started',
+    };
     apiKeyStatusBarItem.show();
   } else {
     apiKeyStatusBarItem.hide();
+    statusBarItem?.show();
   }
 }
 
@@ -599,19 +605,35 @@ export async function activate(context: vscode.ExtensionContext) {
   applyGitAuthorConfig();
 
   statusBarItem = vscode.window.createStatusBarItem(
+    'texra.taskStatus',
     vscode.StatusBarAlignment.Left,
   );
+  statusBarItem.name = 'TeXRA Tasks';
   statusBarItem.command = 'texra.showProgressView';
   statusBarItem.text = '$(bracket-dot) TeXRA: Idle';
   statusBarItem.tooltip = 'Show TeXRA Tasks';
+  statusBarItem.accessibilityInformation = {
+    label: 'TeXRA tasks, idle',
+  };
   statusBarItem.show();
 
   apiKeyStatusBarItem = vscode.window.createStatusBarItem(
+    'texra.setupStatus',
     vscode.StatusBarAlignment.Left,
   );
+  apiKeyStatusBarItem.name = 'TeXRA Setup';
   context.subscriptions.push(apiKeyStatusBarItem);
+  let apiKeyStatusRefreshQueue = Promise.resolve();
+  const queueApiKeyStatusRefresh = (): Promise<void> => {
+    const refresh = apiKeyStatusRefreshQueue.then(refreshApiKeyStatus);
+    // Keep the queue usable after a failed lookup while preserving the error
+    // for this caller. Serial execution ensures the last refresh sees the
+    // newest credential state and is the last one to update the UI.
+    apiKeyStatusRefreshQueue = refresh.catch(() => undefined);
+    return refresh;
+  };
   const safeRefreshApiKeyStatus = () =>
-    refreshApiKeyStatus().catch((err) =>
+    queueApiKeyStatusRefresh().catch((err) =>
       logger.error(
         'extension',
         `API key status refresh failed: ${toErrorMessage(err)}`,
@@ -656,11 +678,20 @@ export async function activate(context: vscode.ExtensionContext) {
     if (!statusBarItem) return;
     const count = statusBarUsageTracker.activeStreamCount;
     if (count > 1) {
-      statusBarItem.text = `$(loading) TeXRA: ${count} active`;
+      statusBarItem.text = `$(loading~spin) TeXRA: ${count} active`;
+      statusBarItem.accessibilityInformation = {
+        label: `TeXRA tasks, ${count} active`,
+      };
     } else if (count === 1) {
-      statusBarItem.text = '$(loading) TeXRA: Running';
+      statusBarItem.text = '$(loading~spin) TeXRA: Running';
+      statusBarItem.accessibilityInformation = {
+        label: 'TeXRA tasks, one active',
+      };
     } else {
       statusBarItem.text = '$(bracket-dot) TeXRA: Idle';
+      statusBarItem.accessibilityInformation = {
+        label: 'TeXRA tasks, idle',
+      };
     }
   };
 
@@ -704,7 +735,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // `activate()`.
     vscode.commands.registerCommand('texra.showMainView', showMainView),
     vscode.commands.registerCommand('texra.refreshApiKeyStatus', async () => {
-      await refreshApiKeyStatus();
+      await queueApiKeyStatusRefresh();
       // Credential facts changed (set/unset API key from any entry point —
       // palette, walkthrough, welcome card), so the onboarding funnel must
       // recompute too: the State 0 card has no other signal when a key is
