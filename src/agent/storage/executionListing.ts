@@ -203,8 +203,11 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
  * The structured result distinguishes deletion, absence, and active ownership.
  */
 export type DeleteExecutionResult =
-  | { readonly status: 'deleted'; readonly executionId: ExecutionId }
-  | { readonly status: 'not-found'; readonly executionId: ExecutionId }
+  | {
+      readonly status: 'deleted' | 'not-found';
+      readonly executionId: ExecutionId;
+      readonly adjacentCleanupFailure?: string;
+    }
   | {
       readonly status: 'active';
       readonly executionId: ExecutionId;
@@ -222,8 +225,8 @@ export interface DeleteAllExecutionsResult {
 }
 
 export interface DeleteExecutionOptions {
-  /** Work that must happen only after liveness is checked and before removal. */
-  readonly beforeDelete?: () => Promise<void>;
+  /** Adjacent cleanup run under the lock only after execution storage is gone. */
+  readonly afterDelete?: () => Promise<void>;
 }
 
 export async function deleteExecution(
@@ -232,25 +235,35 @@ export async function deleteExecution(
 ): Promise<DeleteExecutionResult> {
   const guarded = await runWithInactiveExecutionLease(
     executionId,
-    async (): Promise<'deleted' | 'not-found'> => {
-      await options.beforeDelete?.();
+    async (): Promise<DeleteExecutionResult> => {
       const existed = await StorageFS.exists(
         `${RUNS_STORAGE_DIR}/${executionId}`,
       );
-      if (!existed) return 'not-found';
+      let status: 'deleted' | 'not-found' = 'not-found';
+      if (existed) {
+        try {
+          await getExecutionStore(executionId).clear();
+          status = 'deleted';
+        } catch (error) {
+          if (!isFileNotFoundError(error)) throw error;
+        }
+      }
       try {
-        await getExecutionStore(executionId).clear();
-        return 'deleted';
+        await options.afterDelete?.();
+        return { status, executionId };
       } catch (error) {
-        if (isFileNotFoundError(error)) return 'not-found';
-        throw error;
+        return {
+          status,
+          executionId,
+          adjacentCleanupFailure: toErrorMessage(error),
+        };
       }
     },
   );
   if (guarded.status === 'active') {
     return { status: 'active', executionId, heartbeatAt: guarded.heartbeatAt };
   }
-  return { status: guarded.value, executionId };
+  return guarded.value;
 }
 
 /**

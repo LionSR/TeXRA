@@ -8,18 +8,19 @@
 //
 // Host-agnostic, VS Code-free.
 
-import {
-  releaseOwnedExecutionLeaseBestEffort,
-  synchronizeAgentResultOutcome,
-  type ResultMeta,
-} from '@agent/storage';
+import { synchronizeAgentResultOutcome, type ResultMeta } from '@agent/storage';
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
+import {
+  markOwnedExecutionLeaseUndurable,
+  onOwnedExecutionLeaseLost,
+} from '@agent/storage/executionLease';
 import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
+import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import type {
   AgentExecutionHandle,
   ExecutionInterruptHandler,
@@ -325,6 +326,7 @@ async function persistReportBestEffort(
 ): Promise<void> {
   const result = await persistChildRunReport(executionId, msg);
   if (result.kind === 'failed') {
+    markOwnedExecutionLeaseUndurable(executionId);
     logger.warn(`Failed to persist report for ${executionId}`, {
       data: result.err,
     });
@@ -340,6 +342,7 @@ async function persistResultMetaBestEffort(
   if (!resultMeta) return;
   const result = await persistChildRunResultMeta(executionId, resultMeta);
   if (result.kind === 'failed') {
+    markOwnedExecutionLeaseUndurable(executionId);
     logger.warn(`Failed to persist result manifest for ${executionId}`, {
       data: result.err,
     });
@@ -504,6 +507,12 @@ export function startChildRunLoop<TTurn>(
 
   const runSession = currentSession();
   const loop = new ChildRunInterruptible(runSession, childStreamId);
+  const stopWatchingLease = onOwnedExecutionLeaseLost(executionId, () => {
+    logger.error('Execution lease was lost; interrupting the former owner', {
+      data: { executionId, childStreamId },
+    });
+    loop.interrupt();
+  });
   const queue = runSession.followUps.acquire(childStreamId);
   loop.setQueue(queue);
   let attachedHandle: AgentExecutionHandle | undefined;
@@ -733,7 +742,15 @@ export function startChildRunLoop<TTurn>(
           logger,
         );
       } finally {
-        await releaseOwnedExecutionLeaseBestEffort(executionId);
+        try {
+          await releaseExecutionLeaseAfterArtifacts(runSession, executionId);
+        } catch (error) {
+          logger.warn('Failed to persist final child-run artifacts', {
+            data: { executionId, error },
+          });
+        } finally {
+          stopWatchingLease();
+        }
       }
     }
   })();

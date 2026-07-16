@@ -1,15 +1,19 @@
 import {
+  abandonOwnedExecutionLease,
   acquireResumedExecutionLease,
+  completeOwnedExecutionLease,
   finalizeExecution,
   registerExecution,
-  releaseOwnedExecutionLeaseBestEffort,
 } from '@agent/storage';
+import { markOwnedExecutionLeaseUndurable } from '@agent/storage/executionLease';
 
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
+import { defaultSession } from './SessionHandle';
+import { flushOwnedExecutionArtifacts } from './executionOwnership';
 import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
 
 /**
@@ -74,6 +78,7 @@ export async function runAgent(
     request.executionId ?? (generateExecutionId() as ExecutionId);
   const shouldRegister =
     registerExecutionOption ?? request.executionId === undefined;
+  const runSession = executeAgentOptions.session ?? defaultSession();
 
   // Only the "fix LaTeX" VS Code actions opt in (preferHelperModel); the agent
   // then runs on the configured helper model. A direct main-view launch keeps the
@@ -99,6 +104,7 @@ export async function runAgent(
   let runResult: AgentFlowResult | undefined;
   let runFailure: unknown;
   let hasRunFailure = false;
+  let artifactsDurable = false;
   const callerOnRun = executeAgentOptions.onRun;
   try {
     try {
@@ -124,12 +130,14 @@ export async function runAgent(
             flowRecord: 'delete',
           });
           if (finalization.status === 'failed') {
+            markOwnedExecutionLeaseUndurable(executionId);
             runFailure = new AggregateError(
               [error, finalization.error],
               `Execution ${executionId} failed before lifecycle startup and its error status could not be persisted`,
             );
           }
         } catch (finalizationError) {
+          markOwnedExecutionLeaseUndurable(executionId);
           runFailure = new AggregateError(
             [error, finalizationError],
             `Execution ${executionId} failed before lifecycle startup and its error status could not be persisted`,
@@ -138,17 +146,28 @@ export async function runAgent(
       }
     }
 
-    let artifactFailure: unknown;
-    let hasArtifactFailure = false;
+    const artifactFailures: unknown[] = [];
     try {
       await beforeLeaseRelease?.();
     } catch (error) {
-      hasArtifactFailure = true;
-      artifactFailure = error;
+      artifactFailures.push(error);
     }
+    try {
+      await flushOwnedExecutionArtifacts(runSession, executionId);
+    } catch (error) {
+      artifactFailures.push(error);
+    }
+    artifactsDurable = artifactFailures.length === 0;
+    const artifactFailure =
+      artifactFailures.length === 1
+        ? artifactFailures[0]
+        : new AggregateError(
+            artifactFailures,
+            `Execution ${executionId} has multiple final artifact failures`,
+          );
 
     if (hasRunFailure) {
-      if (hasArtifactFailure) {
+      if (artifactFailures.length > 0) {
         throw new AggregateError(
           [runFailure, artifactFailure],
           `Execution ${executionId} failed and its final artifacts could not be persisted`,
@@ -156,12 +175,16 @@ export async function runAgent(
       }
       throw runFailure;
     }
-    if (hasArtifactFailure) throw artifactFailure;
+    if (artifactFailures.length > 0) throw artifactFailure;
     if (!runResult) {
       throw new Error(`Execution ${executionId} finished without a result.`);
     }
     return runResult;
   } finally {
-    await releaseOwnedExecutionLeaseBestEffort(executionId);
+    if (artifactsDurable) {
+      await completeOwnedExecutionLease(executionId);
+    } else {
+      abandonOwnedExecutionLease(executionId);
+    }
   }
 }

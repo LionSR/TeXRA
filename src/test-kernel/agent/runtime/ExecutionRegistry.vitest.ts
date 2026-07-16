@@ -96,6 +96,33 @@ function createHandle(
 }
 
 describe('executionRegistry', () => {
+  it('does not persist a stopped waiting handle after lease loss', () => {
+    const streamStatus = new StreamStatusMachine();
+    const registry = new ExecutionRegistry({ streamStatus });
+    const executionId = 'exec-waiting-lease-lost' as ExecutionId;
+    const streamId = 'stream-waiting-lease-lost' as StreamTabId;
+    const handle = createHandle(
+      executionId,
+      streamId,
+      streamId,
+      createRecordingHost().host,
+    );
+    storageMocks.finalizeExecution.mockClear();
+
+    try {
+      registry.track(handle);
+      handle.registerWaitingCleanup(() => {});
+      handle.markExecutionLeaseLost();
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.WAITING);
+
+      expect(registry.kill(executionId)).toBe(true);
+      expect(storageMocks.finalizeExecution).not.toHaveBeenCalled();
+      expect(registry.getHandle(executionId)).toBeUndefined();
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it('observes the current handle, replacements, and removal in order', () => {
     const registry = new ExecutionRegistry();
     const executionId = 'exec-observe-handle';

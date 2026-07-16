@@ -2,18 +2,31 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  abandonOwnedExecutionLease: vi.fn(),
   buildAgentLaunchContext: vi.fn(),
   hasPersistedParent: vi.fn(),
   invokeModelOrTool: vi.fn(),
   runFlowWithLifecycle: vi.fn(),
   runToolUseFlow: vi.fn(),
   acquireResumedExecutionLease: vi.fn(),
+  runWithOwnedExecutionLease: vi.fn(
+    async (_executionId: ExecutionId, operation: () => Promise<unknown>) =>
+      operation(),
+  ),
+  runWithExecutionLeaseWriteFence: vi.fn(
+    async (_executionId: ExecutionId, operation: () => Promise<unknown>) =>
+      operation(),
+  ),
   releaseOwnedExecutionLeaseAfterFailure: vi.fn(),
   releaseOwnedExecutionLeaseBestEffort: vi.fn(),
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
+  abandonOwnedExecutionLease: mocks.abandonOwnedExecutionLease,
   acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
+  completeOwnedExecutionLease: mocks.releaseOwnedExecutionLeaseBestEffort,
+  runWithOwnedExecutionLease: mocks.runWithOwnedExecutionLease,
+  runWithExecutionLeaseWriteFence: mocks.runWithExecutionLeaseWriteFence,
   releaseOwnedExecutionLeaseAfterFailure:
     mocks.releaseOwnedExecutionLeaseAfterFailure,
   releaseOwnedExecutionLeaseBestEffort:
@@ -110,7 +123,7 @@ describe('resumeToolUseFromSnapshot cancellation handoff', () => {
       runScope: {
         executionId,
         streamId,
-        session: { status: {} },
+        session: { status: {}, flushArtifacts: vi.fn(async () => {}) },
       },
       config: { agent: 'test-agent', model: 'test-model' },
       attachedMemoryMisses: [],

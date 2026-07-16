@@ -36,6 +36,7 @@ import {
   ResultMetaSchema,
   type ResultMeta,
 } from './resultMeta';
+import { runWithExecutionLeaseWriteFence } from './executionLease';
 
 // ============================================================================
 // Key constants (implementation detail — not exported)
@@ -204,8 +205,22 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     super(resolveRunStoragePath(executionId), { throwOnErrors: true });
   }
 
+  override async write<T = unknown>(key: string, value: T): Promise<void> {
+    await runWithExecutionLeaseWriteFence(this.executionId, () =>
+      super.write(key, value),
+    );
+  }
+
+  override async delete(key: string): Promise<void> {
+    await runWithExecutionLeaseWriteFence(this.executionId, () =>
+      super.delete(key),
+    );
+  }
+
   async clear(): Promise<void> {
-    return this.deleteDir();
+    return runWithExecutionLeaseWriteFence(this.executionId, () =>
+      this.deleteDir(),
+    );
   }
 
   getExecutionId(): ExecutionId {

@@ -52,6 +52,7 @@ import {
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentKey } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { StorageFS } from '@utils/files';
 
 import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 
@@ -205,6 +206,51 @@ function lifecycleFixture(
 }
 
 describe('runFlowWithLifecycle', () => {
+  it('interrupts and suppresses terminal persistence after lease takeover', async () => {
+    vi.useFakeTimers();
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-lease-takeover',
+    );
+    storageMocks.finalizeExecution.mockClear();
+    await acquireResumedExecutionLease(executionId);
+
+    try {
+      const result = await runFlowWithLifecycle(ctx, async (handle) => {
+        await StorageFS.ensureDir('executionLeases');
+        await StorageFS.writeAtomic(
+          `executionLeases/${executionId}.json`,
+          JSON.stringify({
+            version: 1,
+            executionId,
+            ownerToken: '00000000-0000-4000-8000-000000000099',
+            acquiredAt: Date.now(),
+            heartbeatAt: Date.now(),
+          }),
+        );
+        await vi.advanceTimersByTimeAsync(15_000);
+
+        expect(handle.executionLeaseLost).toBe(true);
+        expect(handle.hasPendingInterrupt).toBe(true);
+        return {
+          category: 'toolUse',
+          outcome: RUN_OUTCOME.COMPLETED,
+          executionId,
+          streamId,
+        };
+      });
+
+      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      expect(storageMocks.finalizeExecution).not.toHaveBeenCalled();
+    } finally {
+      await releaseOwnedExecutionLease(executionId);
+      await StorageFS.delete(`executionLeases/${executionId}.json`).catch(
+        () => {},
+      );
+      clearStreamStatusForTest(streamStatus, streamId);
+      vi.useRealTimers();
+    }
+  });
+
   // A completed session marks first-run onboarding done, except for the
   // built-in setup agent, which must leave the flag untouched.
   const onboardingCases = [

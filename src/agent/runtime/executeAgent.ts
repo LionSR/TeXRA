@@ -26,9 +26,10 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { hasPersistedParent } from '@agent/storage/executionLifecycle';
 import {
+  abandonOwnedExecutionLease,
   acquireResumedExecutionLease,
+  completeOwnedExecutionLease,
   releaseOwnedExecutionLeaseAfterFailure,
-  releaseOwnedExecutionLeaseBestEffort,
 } from '@agent/storage/executionLease';
 import { AgentError, getSdkErrorMessage } from '@common/errors';
 import {
@@ -63,6 +64,7 @@ import {
 import { createInterruptCallbacks } from './InterruptManager';
 import { generateSessionDescription } from './sessionDescription';
 import { getProgressViewBridge } from './ProgressViewBridge';
+import { flushOwnedExecutionArtifacts } from './executionOwnership';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentExecutionHandle, AgentRunHandle } from './executionRegistry';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
@@ -602,13 +604,21 @@ export async function resumeToolUseFromSnapshot(
       },
     );
     if (!isWaitingFlowResult(result)) {
-      await releaseOwnedExecutionLeaseBestEffort(snapshot.executionId);
+      await flushOwnedExecutionArtifacts(runSession, snapshot.executionId);
+      await completeOwnedExecutionLease(snapshot.executionId);
     }
     return result;
   } catch (error) {
-    throw await releaseOwnedExecutionLeaseAfterFailure(
-      snapshot.executionId,
-      error,
-    );
+    try {
+      await flushOwnedExecutionArtifacts(runSession, snapshot.executionId);
+    } catch (artifactError) {
+      abandonOwnedExecutionLease(snapshot.executionId);
+      throw new AggregateError(
+        [error, artifactError],
+        `Execution ${snapshot.executionId} failed and its final artifacts could not be persisted`,
+      );
+    }
+    await completeOwnedExecutionLease(snapshot.executionId);
+    throw error;
   }
 }

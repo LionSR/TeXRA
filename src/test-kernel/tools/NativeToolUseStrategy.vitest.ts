@@ -47,6 +47,10 @@ vi.mock('@agent/storage', () => ({
   synchronizeAgentResultOutcome: mocks.synchronizeAgentResultOutcome,
 }));
 
+vi.mock('@agent/runtime/executionOwnership', () => ({
+  releaseExecutionLeaseAfterArtifacts: vi.fn(async () => {}),
+}));
+
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
   retrieveSessionResumeData: mocks.retrieveSessionResumeData,
 }));

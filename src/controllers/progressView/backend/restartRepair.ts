@@ -77,13 +77,15 @@ export interface RestartRepairResult {
 /** Owns the single delayed retry used to revisit leases left fresh by a crash. */
 export class RestartRepairRetryScheduler {
   private timer: ReturnType<typeof setTimeout> | undefined;
+  private disposed = false;
 
   schedule(nextLeaseCheckAt: number | undefined, retry: () => void): void {
     this.cancel();
-    if (nextLeaseCheckAt === undefined) return;
+    if (this.disposed || nextLeaseCheckAt === undefined) return;
     this.timer = setTimeout(
       () => {
         this.timer = undefined;
+        if (this.disposed) return;
         retry();
       },
       Math.max(0, nextLeaseCheckAt - Date.now()),
@@ -92,6 +94,7 @@ export class RestartRepairRetryScheduler {
   }
 
   dispose(): void {
+    this.disposed = true;
     this.cancel();
   }
 

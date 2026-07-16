@@ -1,6 +1,6 @@
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { tryPlatform } from '@platform/platform';
-import { flushPendingRunTraces, StreamSnapshotStore } from '@transcript';
+import { StreamSnapshotStore } from '@transcript';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -181,6 +181,9 @@ export async function executeCliRequest(
   const detachSnapshotEvents = snapshotStore.attachSessionEvents(
     session.events,
   );
+  const detachSnapshotFlusher = session.useArtifactFlusher(() =>
+    snapshotStore.flush(),
+  );
   const detachRunProgressRenderer = runtimeHost.attachRunProgressRenderer(
     session.events,
   );
@@ -227,10 +230,9 @@ export async function executeCliRequest(
         );
       })
     : undefined;
-  const streamLogStore = session.transcripts;
-  let runArtifactsFlushed: Promise<void> | undefined;
-  const flushRunArtifacts = (): Promise<void> => {
-    runArtifactsFlushed ??= (async () => {
+  let shutdownStatusFinalized: Promise<void> | undefined;
+  const finalizeShutdownStatus = (): Promise<void> => {
+    shutdownStatusFinalized ??= (async () => {
       if (shutdownInterrupted && ownedExecutionId) {
         await finalizeCliExecution(
           ownedExecutionId,
@@ -239,10 +241,8 @@ export async function executeCliRequest(
           reportShutdownFinalizationFailure,
         );
       }
-      flushPendingRunTraces();
-      await Promise.all([streamLogStore.flush(), snapshotStore.flush()]);
     })();
-    return runArtifactsFlushed;
+    return shutdownStatusFinalized;
   };
   const invoke = (): Promise<ExecuteAgentResult> =>
     runAgent(request, {
@@ -251,7 +251,7 @@ export async function executeCliRequest(
       enforceCategory: options.enforceCategory,
       registerExecution: options.registerExecution,
       openWorkflowOutput: options.openWorkflowOutput,
-      beforeLeaseRelease: flushRunArtifacts,
+      beforeLeaseRelease: finalizeShutdownStatus,
       stopAfterCycle: options.stopAfterCycle,
       approvalPromptsUnavailable: approvalPromptsUnavailable(runContext),
       runtimeUnavailableTools: [
@@ -293,9 +293,11 @@ export async function executeCliRequest(
     detachSessionProgressProjection();
     detachHostInteractions();
     try {
-      detachSnapshotEvents();
-      await flushRunArtifacts();
+      await finalizeShutdownStatus();
+      await session.flushArtifacts();
     } finally {
+      detachSnapshotFlusher();
+      detachSnapshotEvents();
       await interactionHost.close();
     }
   }

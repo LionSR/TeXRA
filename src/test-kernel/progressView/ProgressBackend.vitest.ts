@@ -1986,7 +1986,7 @@ describe('ProgressBackend', () => {
         if (executionId === failedExecution) {
           throw new Error('execution directory is locked');
         }
-        await options?.beforeDelete?.();
+        await options?.afterDelete?.();
         return { status: 'deleted', executionId };
       });
 
@@ -2149,12 +2149,11 @@ describe('ProgressBackend', () => {
 
       expect(warnSpy).toHaveBeenCalledWith(
         'SessionStores',
-        `Skipping orphaned stream cleanup for ${failingStream}; startup will continue.`,
-        { data: expect.any(Error) },
+        `Execution ${failingExecution} was deleted, but orphaned stream cleanup was incomplete: locked stream sidecar`,
       );
       expect(await StorageFS.exists(streamDataDir(failingStream))).toBe(true);
       expect(await StorageFS.exists(`executions/${failingExecution}`)).toBe(
-        true,
+        false,
       );
       expect(await StorageFS.exists(streamDataDir(sweptStream))).toBe(false);
       expect(await StorageFS.exists(`executions/${sweptExecution}`)).toBe(
@@ -2207,7 +2206,6 @@ describe('ProgressBackend', () => {
       .spyOn(stores, 'deleteExecution')
       .mockImplementation(async (executionId, options) => {
         if (executionId === failingExecution) {
-          await options?.beforeDelete?.();
           throw new Error('locked execution dir');
         }
         return originalDeleteExecution(executionId, options);
@@ -2221,7 +2219,7 @@ describe('ProgressBackend', () => {
         `Skipping orphaned execution cleanup for ${failingExecution}; startup will continue.`,
         { data: expect.any(Error) },
       );
-      expect(await StorageFS.exists(streamDataDir(failingStream))).toBe(false);
+      expect(await StorageFS.exists(streamDataDir(failingStream))).toBe(true);
       expect(await StorageFS.exists(`executions/${failingExecution}`)).toBe(
         true,
       );

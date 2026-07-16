@@ -10,8 +10,11 @@ import {
   getExecutionStore,
   registerExecution,
   releaseOwnedExecutionLeaseAfterFailure,
-  releaseOwnedExecutionLeaseBestEffort,
 } from '@agent/storage';
+import {
+  markOwnedExecutionLeaseUndurable,
+  onOwnedExecutionLeaseLost,
+} from '@agent/storage/executionLease';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   getCurrentToolContexts,
@@ -23,6 +26,7 @@ import {
   getRunContextWorkingDirectory,
 } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
+import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { type StreamTabId, type ExecutionId } from '@shared/schemas';
@@ -291,6 +295,12 @@ export class BashTool extends defineTool({
     // unregisters after the process ends, possibly outside the ALS.
     const runSession = currentSession();
     const session = new BashBackgroundSession();
+    const stopWatchingLease = onOwnedExecutionLeaseLost(executionId, () => {
+      logger.error('Execution lease was lost; stopping background command', {
+        data: { executionId, childStreamId },
+      });
+      session.interrupt();
+    });
     const detachInterruptHandler =
       runSession.executions
         .getAgentHandleByStream(childStreamId)
@@ -358,6 +368,10 @@ export class BashTool extends defineTool({
       logger.error(`Failed to ${action} background bash result`, {
         data: err,
       });
+    };
+    const logDurabilityFailure = (action: string, err: unknown): void => {
+      markOwnedExecutionLeaseUndurable(executionId);
+      logBackgroundFailure(action, err);
     };
 
     const enqueueParentFollowUp = async (
@@ -482,7 +496,7 @@ export class BashTool extends defineTool({
               command,
             });
           } catch (err: unknown) {
-            logBackgroundFailure('persist result metadata', err);
+            logDurabilityFailure('persist result metadata', err);
           }
           try {
             const finalization = await finalizeExecution({
@@ -492,12 +506,12 @@ export class BashTool extends defineTool({
             });
             if (finalization.status === 'failed') throw finalization.error;
           } catch (err: unknown) {
-            logBackgroundFailure('finalize execution', err);
+            logDurabilityFailure('finalize execution', err);
           }
           try {
             await store.writeReport(msg);
           } catch (err: unknown) {
-            logBackgroundFailure('persist report', err);
+            logDurabilityFailure('persist report', err);
           }
 
           await deliverAndFinalize(msg, { wallTimeMs, error, autoClose: true });
@@ -514,17 +528,25 @@ export class BashTool extends defineTool({
           });
           if (finalization.status === 'failed') throw finalization.error;
         } catch (err: unknown) {
-          logBackgroundFailure('finalize execution', err);
+          logDurabilityFailure('finalize execution', err);
         }
         try {
           await getExecutionStore(executionId).writeReport(msg);
         } catch (err: unknown) {
-          logBackgroundFailure('persist report', err);
+          logDurabilityFailure('persist report', err);
         }
 
         await deliverAndFinalize(msg, { error, autoClose: true });
+      } catch (err: unknown) {
+        logDurabilityFailure('complete', err);
       } finally {
-        await releaseOwnedExecutionLeaseBestEffort(executionId);
+        try {
+          await releaseExecutionLeaseAfterArtifacts(runSession, executionId);
+        } catch (err: unknown) {
+          logBackgroundFailure('persist final artifacts', err);
+        } finally {
+          stopWatchingLease();
+        }
       }
     })();
 

@@ -1,19 +1,33 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  abandonOwnedExecutionLease: vi.fn(),
+  runWithOwnedExecutionLease: vi.fn(
+    async (_executionId: ExecutionId, operation: () => Promise<unknown>) =>
+      operation(),
+  ),
   acquireResumedExecutionLease: vi.fn(),
   executeAgent: vi.fn(),
   finalizeExecution: vi.fn(),
+  markOwnedExecutionLeaseUndurable: vi.fn(),
   registerExecution: vi.fn(),
   releaseOwnedExecutionLeaseBestEffort: vi.fn(),
 }));
 
 vi.mock('@agent/storage', () => ({
+  abandonOwnedExecutionLease: mocks.abandonOwnedExecutionLease,
+  runWithOwnedExecutionLease: mocks.runWithOwnedExecutionLease,
   acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
+  completeOwnedExecutionLease: mocks.releaseOwnedExecutionLeaseBestEffort,
   finalizeExecution: mocks.finalizeExecution,
   registerExecution: mocks.registerExecution,
   releaseOwnedExecutionLeaseBestEffort:
     mocks.releaseOwnedExecutionLeaseBestEffort,
+}));
+
+vi.mock('@agent/storage/executionLease', () => ({
+  markOwnedExecutionLeaseUndurable: mocks.markOwnedExecutionLeaseUndurable,
+  runWithOwnedExecutionLease: mocks.runWithOwnedExecutionLease,
 }));
 
 vi.mock('@agent/runtime/executeAgent', () => ({
@@ -31,6 +45,8 @@ const CONFIG = AgentConfigSchema.parse({
   model: 'test-model',
 });
 const RUNTIME_HOST = { emit: vi.fn() } as never;
+const flushArtifacts = vi.fn();
+const SESSION = { flushArtifacts } as never;
 
 describe('runAgent execution ownership', () => {
   beforeEach(() => {
@@ -38,6 +54,7 @@ describe('runAgent execution ownership', () => {
     mocks.registerExecution.mockResolvedValue(undefined);
     mocks.acquireResumedExecutionLease.mockResolvedValue('acquired');
     mocks.releaseOwnedExecutionLeaseBestEffort.mockResolvedValue(undefined);
+    flushArtifacts.mockResolvedValue(undefined);
     mocks.finalizeExecution.mockResolvedValue({
       status: 'durable',
       terminalStatusPersisted: true,
@@ -54,7 +71,7 @@ describe('runAgent execution ownership', () => {
   it('registers and releases an explicitly identified fresh run', async () => {
     await runAgent(
       { config: CONFIG, executionId: EXECUTION_ID },
-      { runtimeHost: RUNTIME_HOST, registerExecution: true },
+      { runtimeHost: RUNTIME_HOST, session: SESSION, registerExecution: true },
     );
 
     expect(mocks.registerExecution).toHaveBeenCalledOnce();
@@ -67,7 +84,7 @@ describe('runAgent execution ownership', () => {
   it('acquires and releases ownership for an existing execution', async () => {
     await runAgent(
       { config: CONFIG, executionId: EXECUTION_ID },
-      { runtimeHost: RUNTIME_HOST },
+      { runtimeHost: RUNTIME_HOST, session: SESSION },
     );
 
     expect(mocks.registerExecution).not.toHaveBeenCalled();
@@ -96,11 +113,14 @@ describe('runAgent execution ownership', () => {
         order.push('release');
       },
     );
-
     await expect(
       runAgent(
         { config: CONFIG, executionId: EXECUTION_ID },
-        { runtimeHost: RUNTIME_HOST, registerExecution: true },
+        {
+          runtimeHost: RUNTIME_HOST,
+          session: SESSION,
+          registerExecution: true,
+        },
       ),
     ).rejects.toBe(launchError);
 
@@ -122,12 +142,42 @@ describe('runAgent execution ownership', () => {
     await expect(
       runAgent(
         { config: CONFIG, executionId: EXECUTION_ID },
-        { runtimeHost: RUNTIME_HOST, registerExecution: true },
+        {
+          runtimeHost: RUNTIME_HOST,
+          session: SESSION,
+          registerExecution: true,
+        },
       ),
     ).rejects.toBe(launchError);
 
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
     expect(mocks.releaseOwnedExecutionLeaseBestEffort).toHaveBeenCalledWith(
+      EXECUTION_ID,
+    );
+  });
+
+  it('marks an early terminal-persistence failure undurable', async () => {
+    const launchError = new Error('launch failed');
+    const persistenceError = new Error('terminal metadata failed');
+    mocks.executeAgent.mockRejectedValueOnce(launchError);
+    mocks.finalizeExecution.mockResolvedValueOnce({
+      status: 'failed',
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+      error: persistenceError,
+    });
+
+    const failure = await runAgent(
+      { config: CONFIG, executionId: EXECUTION_ID },
+      {
+        runtimeHost: RUNTIME_HOST,
+        session: SESSION,
+        registerExecution: true,
+      },
+    ).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect(mocks.markOwnedExecutionLeaseUndurable).toHaveBeenCalledWith(
       EXECUTION_ID,
     );
   });
@@ -148,11 +198,15 @@ describe('runAgent execution ownership', () => {
         order.push('release');
       },
     );
+    flushArtifacts.mockImplementationOnce(async () => {
+      order.push('session-artifacts');
+    });
 
     await runAgent(
       { config: CONFIG, executionId: EXECUTION_ID },
       {
         runtimeHost: RUNTIME_HOST,
+        session: SESSION,
         registerExecution: true,
         beforeLeaseRelease: async () => {
           order.push('artifacts');
@@ -160,7 +214,12 @@ describe('runAgent execution ownership', () => {
       },
     );
 
-    expect(order).toEqual(['execute', 'artifacts', 'release']);
+    expect(order).toEqual([
+      'execute',
+      'artifacts',
+      'session-artifacts',
+      'release',
+    ]);
   });
 
   it('preserves run and final-artifact failures before releasing ownership', async () => {
@@ -175,6 +234,7 @@ describe('runAgent execution ownership', () => {
       { config: CONFIG, executionId: EXECUTION_ID },
       {
         runtimeHost: RUNTIME_HOST,
+        session: SESSION,
         registerExecution: true,
         beforeLeaseRelease: async () => {
           throw artifactError;
@@ -187,8 +247,8 @@ describe('runAgent execution ownership', () => {
       runError,
       artifactError,
     ]);
-    expect(mocks.releaseOwnedExecutionLeaseBestEffort).toHaveBeenCalledWith(
-      EXECUTION_ID,
-    );
+    expect(mocks.releaseOwnedExecutionLeaseBestEffort).not.toHaveBeenCalled();
+    expect(mocks.abandonOwnedExecutionLease).toHaveBeenCalledWith(EXECUTION_ID);
+    expect(flushArtifacts).toHaveBeenCalledOnce();
   });
 });

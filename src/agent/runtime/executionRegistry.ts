@@ -7,10 +7,13 @@
 
 import {
   finalizeExecution,
-  releaseOwnedExecutionLeaseBestEffort,
   synchronizeAgentResultOutcome,
 } from '@agent/storage';
 import { createChannelTrace, type ResultEvent } from '@agent/trace';
+import {
+  completeOwnedExecutionLease,
+  markOwnedExecutionLeaseUndurable,
+} from '@agent/storage/executionLease';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/streamApprovalQueue';
@@ -23,6 +26,7 @@ import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
   type ActiveChildInfo,
+  type ExecutionId,
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
@@ -152,6 +156,8 @@ export class ExecutionRegistry {
    */
   private publishResult:
     ((event: ResultEvent, streamId: StreamTabId) => void) | undefined;
+  private releaseRootExecutionLease = (executionId: ExecutionId) =>
+    completeOwnedExecutionLease(executionId);
   // Persistent listeners stay attached across notifications (unlike one-shot
   // waiters in `changeCallbacks`). Used by the executions subscribe action.
   private readonly persistentListeners = new Map<
@@ -224,6 +230,13 @@ export class ExecutionRegistry {
   /** Bind the session-owned approval state used when a child is detached. */
   attachSessionApprovals(approvals: SessionApprovals): void {
     this.approvals = approvals;
+  }
+
+  /** Bind the owning session's durable-artifact boundary to root release. */
+  attachRootExecutionLeaseRelease(
+    release: (executionId: ExecutionId) => Promise<void>,
+  ): void {
+    this.releaseRootExecutionLease = release;
   }
 
   dispose(): void {
@@ -915,6 +928,14 @@ export class ExecutionRegistry {
       return false;
     }
     if (!handle.runWaitingCleanup()) return false;
+    if (handle.executionLeaseLost) {
+      logger.warn('Discarding a stopped waiting execution after lease loss', {
+        data: { executionId: handle.executionId },
+      });
+      this.untrackHandle(handle);
+      this.cancelStreamStatus(handle.childStreamId, handle);
+      return true;
+    }
     const cancelledResult: ResultEvent = {
       type: 'result',
       outcome: RUN_OUTCOME.CANCELLED,
@@ -937,9 +958,11 @@ export class ExecutionRegistry {
     // untracks the suspended one below. Align the interim envelope only after
     // durable terminal metadata exists. A turn that does continue will replace
     // it with its own result.
-    void finalization
-      .then((result) => {
+    void (async () => {
+      try {
+        const result = await finalization;
         if (result.status === 'failed') {
+          markOwnedExecutionLeaseUndurable(handle.executionId);
           logger.warn('Failed to finalize stopped waiting execution', {
             data: {
               executionId: handle.executionId,
@@ -950,22 +973,28 @@ export class ExecutionRegistry {
           });
         }
         if (result.terminalStatusPersisted) {
-          return synchronizeAgentResultOutcome(
+          await synchronizeAgentResultOutcome(
             handle.executionId,
             RUN_OUTCOME.CANCELLED,
           );
         }
-      })
-      .catch((error: unknown) => {
+      } catch (error) {
+        markOwnedExecutionLeaseUndurable(handle.executionId);
         logger.warn('Waiting-execution finalizer rejected unexpectedly', {
           data: { executionId: handle.executionId, error },
         });
-      })
-      .finally(() => {
+      } finally {
         if (!handle.isChildExecution) {
-          void releaseOwnedExecutionLeaseBestEffort(handle.executionId);
+          try {
+            await this.releaseRootExecutionLease(handle.executionId);
+          } catch (error) {
+            logger.warn('Waiting-execution artifact flush failed', {
+              data: { executionId: handle.executionId, error },
+            });
+          }
         }
-      });
+      }
+    })();
     this.untrackHandle(handle);
     this.cancelStreamStatus(handle.childStreamId, handle);
     return true;

@@ -38,6 +38,19 @@ export interface SessionStoresOptions {
   };
 }
 
+async function waitForAdjacentCleanup(
+  operations: readonly unknown[],
+): Promise<void> {
+  const results = await Promise.allSettled(operations);
+  const failures = results.flatMap((result) =>
+    result.status === 'rejected' ? [result.reason] : [],
+  );
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1) {
+    throw new AggregateError(failures, 'Multiple adjacent cleanups failed');
+  }
+}
+
 export interface DeleteAllStreamsResult {
   readonly active: ReadonlySet<StreamTabId>;
   readonly failed: ReadonlySet<StreamTabId>;
@@ -82,12 +95,26 @@ export class SessionStores {
     const executionId = await this.executionIdForStream(stream);
 
     if (!executionId) {
-      await this.deleteAdjacentStreamState(stream);
+      try {
+        await this.deleteAdjacentStreamState(stream);
+      } catch (error) {
+        logger.warn(
+          CHANNEL,
+          `Stream ${stream} was removed, but adjacent cleanup was incomplete: ${toErrorMessage(error)}`,
+          { data: error },
+        );
+      }
       return 'deleted';
     }
     const result = await this.deleteExecution(executionId, {
-      beforeDelete: () => this.deleteAdjacentStreamState(stream),
+      afterDelete: () => this.deleteAdjacentStreamState(stream),
     });
+    if (result.status !== 'active' && result.adjacentCleanupFailure) {
+      logger.warn(
+        CHANNEL,
+        `Execution ${executionId} was deleted, but adjacent stream cleanup was incomplete: ${result.adjacentCleanupFailure}`,
+      );
+    }
     return result.status === 'active' ? 'active' : 'deleted';
   }
 
@@ -143,7 +170,6 @@ export class SessionStores {
             `Failed to delete stream ${stream}: ${toErrorMessage(error)}`,
             { data: error },
           );
-          failed.add(stream);
         }
       }),
     );
@@ -151,10 +177,15 @@ export class SessionStores {
       [...streamsByExecution].map(async ([executionId, streams]) => {
         try {
           const result = await this.deleteExecution(executionId, {
-            beforeDelete: () => this.deleteAdjacentStreamStates(streams),
+            afterDelete: () => this.deleteAdjacentStreamStates(streams),
           });
           if (result.status === 'active') {
             for (const stream of streams) active.add(stream);
+          } else if (result.adjacentCleanupFailure) {
+            logger.warn(
+              CHANNEL,
+              `Execution ${executionId} was deleted, but adjacent stream cleanup was incomplete: ${result.adjacentCleanupFailure}`,
+            );
           }
         } catch (error) {
           logger.warn(
@@ -186,21 +217,12 @@ export class SessionStores {
             (await this.snapshots.readPersistedExecutionId(stream)) ??
             executionIdFromStream(stream);
           if (executionId) {
-            let adjacentCleanupFailed = false;
             let result: DeleteExecutionResult;
             try {
               result = await this.deleteExecution(executionId, {
-                beforeDelete: async () => {
-                  try {
-                    await this.deleteAdjacentStreamState(stream);
-                  } catch (error) {
-                    adjacentCleanupFailed = true;
-                    throw error;
-                  }
-                },
+                afterDelete: () => this.deleteAdjacentStreamState(stream),
               });
             } catch (error) {
-              if (adjacentCleanupFailed) throw error;
               logger.warn(
                 CHANNEL,
                 `Skipping orphaned execution cleanup for ${executionId}; startup will continue.`,
@@ -209,6 +231,13 @@ export class SessionStores {
               return;
             }
             if (result.status === 'active') return;
+            if (result.adjacentCleanupFailure) {
+              logger.warn(
+                CHANNEL,
+                `Execution ${executionId} was deleted, but orphaned stream cleanup was incomplete: ${result.adjacentCleanupFailure}`,
+              );
+              return;
+            }
             if (result.status === 'deleted') {
               sweptExecutionIds.push(executionId);
             }
@@ -229,7 +258,7 @@ export class SessionStores {
   }
 
   private async deleteAdjacentStreamState(stream: StreamTabId): Promise<void> {
-    await Promise.all([
+    await waitForAdjacentCleanup([
       this.streamLogs.delete(stream),
       this.snapshots.deleteStream(stream),
       this.goalEntries?.forget(stream),
@@ -239,7 +268,7 @@ export class SessionStores {
   private async deleteAdjacentStreamStates(
     streams: readonly StreamTabId[],
   ): Promise<void> {
-    await Promise.all([
+    await waitForAdjacentCleanup([
       ...streams.map((stream) => this.streamLogs.delete(stream)),
       ...streams.map((stream) => this.snapshots.deleteStream(stream)),
       this.goalEntries?.forgetMany(streams),

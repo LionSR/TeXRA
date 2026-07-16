@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 
@@ -46,6 +47,8 @@ interface OwnedExecutionLease {
   readonly storageRoot: string;
   readonly released: Promise<void>;
   readonly resolveReleased: () => void;
+  readonly lossListeners: Set<() => void>;
+  durabilityFailed: boolean;
 }
 
 export type ExecutionLeasePresence =
@@ -64,7 +67,16 @@ export class ExecutionLeaseActiveError extends Error {
   }
 }
 
+export class ExecutionLeaseLostError extends Error {
+  constructor(readonly executionId: ExecutionId) {
+    super(`Execution ${executionId} is no longer owned by this TeXRA process.`);
+    this.name = 'ExecutionLeaseLostError';
+  }
+}
+
 const ownedLeases = new Map<string, OwnedExecutionLease>();
+const fencedOwnershipKeys = new Set<string>();
+const maintenanceExecutions = new AsyncLocalStorage<ReadonlySet<string>>();
 let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
 function storageRoot(): string {
@@ -218,11 +230,27 @@ async function readPersistedExecutionLiveness(
   };
 }
 
-function forgetOwnedLease(lease: OwnedExecutionLease): void {
+function forgetOwnedLease(
+  lease: OwnedExecutionLease,
+  options: { notifyLoss?: boolean; fenceWrites?: boolean } = {},
+): void {
   const key = ownershipKey(lease.storageRoot, lease.executionId);
   if (ownedLeases.get(key) === lease) {
     ownedLeases.delete(key);
+    if (options.fenceWrites) fencedOwnershipKeys.add(key);
     lease.resolveReleased();
+    if (options.notifyLoss) {
+      for (const listener of lease.lossListeners) {
+        try {
+          listener();
+        } catch (error) {
+          logger.warn(CHANNEL, 'Execution lease-loss listener failed', {
+            data: { executionId: lease.executionId, error },
+          });
+        }
+      }
+    }
+    lease.lossListeners.clear();
   }
   if (ownedLeases.size === 0 && heartbeatTimer) {
     clearInterval(heartbeatTimer);
@@ -236,7 +264,7 @@ async function heartbeat(lease: OwnedExecutionLease): Promise<void> {
     async () => {
       const current = await readLease(lease.executionId, lease.storageRoot);
       if (current?.ownerToken !== lease.ownerToken) {
-        forgetOwnedLease(lease);
+        forgetOwnedLease(lease, { notifyLoss: true, fenceWrites: true });
         return;
       }
       await writeLease(
@@ -263,8 +291,11 @@ function rememberOwnership(
     storageRoot: root,
     released,
     resolveReleased,
+    lossListeners: new Set(),
+    durabilityFailed: false,
   };
   ownedLeases.set(ownershipKey(root, executionId), lease);
+  fencedOwnershipKeys.delete(ownershipKey(root, executionId));
   if (!heartbeatTimer) {
     heartbeatTimer = setInterval(() => {
       for (const owned of ownedLeases.values()) {
@@ -284,6 +315,72 @@ function rememberOwnership(
     }, EXECUTION_LEASE_HEARTBEAT_MS);
     heartbeatTimer.unref();
   }
+}
+
+/** Interrupt a live runtime if another process takes over this owned lease. */
+export function onOwnedExecutionLeaseLost(
+  executionId: ExecutionId,
+  listener: () => void,
+): () => void {
+  const leases = [...ownedLeases.values()].filter(
+    (lease) => lease.executionId === executionId,
+  );
+  for (const lease of leases) lease.lossListeners.add(listener);
+  return () => {
+    for (const lease of leases) lease.lossListeners.delete(listener);
+  };
+}
+
+/** Whether this process still owns the lease in the active storage root. */
+export function ownsExecutionLease(executionId: ExecutionId): boolean {
+  return ownedLeases.has(ownershipKey(storageRoot(), executionId));
+}
+
+async function runWithValidatedOwnership<T>(
+  lease: OwnedExecutionLease,
+  operation: () => Promise<T>,
+): Promise<T> {
+  return withLeaseLock(
+    lease.executionId,
+    async () => {
+      const current = await readLease(lease.executionId, lease.storageRoot);
+      if (current?.ownerToken !== lease.ownerToken) {
+        forgetOwnedLease(lease, { notifyLoss: true, fenceWrites: true });
+        throw new ExecutionLeaseLostError(lease.executionId);
+      }
+      return operation();
+    },
+    lease.storageRoot,
+  );
+}
+
+/** Hold the coordination lock while an owned execution commits artifacts. */
+export async function runWithOwnedExecutionLease<T>(
+  executionId: ExecutionId,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const lease = ownedLeases.get(ownershipKey(storageRoot(), executionId));
+  if (!lease) throw new ExecutionLeaseLostError(executionId);
+  return runWithValidatedOwnership(lease, operation);
+}
+
+/**
+ * Fence an execution-store mutation when this process claims ownership.
+ * Maintenance callers without local ownership already run under
+ * `runWithInactiveExecutionLease` and continue directly.
+ */
+export async function runWithExecutionLeaseWriteFence<T>(
+  executionId: ExecutionId,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const key = ownershipKey(storageRoot(), executionId);
+  if (maintenanceExecutions.getStore()?.has(key)) return operation();
+  const lease = ownedLeases.get(key);
+  if (lease) return runWithValidatedOwnership(lease, operation);
+  if (fencedOwnershipKeys.has(key)) {
+    throw new ExecutionLeaseLostError(executionId);
+  }
+  return operation();
 }
 
 async function acquireExecutionLease(
@@ -353,6 +450,37 @@ export async function releaseOwnedExecutionLease(
   await Promise.all(ownerships.map(releaseOwnership));
 }
 
+/**
+ * Stop renewing ownership without deleting its persisted lease. Used when
+ * terminal artifacts are not durable: peers remain blocked until the stale
+ * horizon, but a long-lived host cannot keep the failed lease fresh forever.
+ */
+export function abandonOwnedExecutionLease(executionId: ExecutionId): void {
+  const root = storageRoot();
+  const lease = ownedLeases.get(ownershipKey(root, executionId));
+  if (lease) forgetOwnedLease(lease, { fenceWrites: true });
+}
+
+/** Prevent release after a required execution artifact failed to persist. */
+export function markOwnedExecutionLeaseUndurable(
+  executionId: ExecutionId,
+): void {
+  const lease = ownedLeases.get(ownershipKey(storageRoot(), executionId));
+  if (lease) lease.durabilityFailed = true;
+}
+
+/** Release a durable execution; otherwise stop renewal and retain its record. */
+export async function completeOwnedExecutionLease(
+  executionId: ExecutionId,
+): Promise<void> {
+  const lease = ownedLeases.get(ownershipKey(storageRoot(), executionId));
+  if (lease?.durabilityFailed) {
+    abandonOwnedExecutionLease(executionId);
+    return;
+  }
+  await releaseOwnedExecutionLeaseBestEffort(executionId);
+}
+
 /** Release during rollback without allowing cleanup failure to mask the cause. */
 export async function releaseOwnedExecutionLeaseAfterFailure(
   executionId: ExecutionId,
@@ -383,7 +511,7 @@ export async function waitForOwnedExecutionLeaseRelease(
 }
 
 /** Release at a completed owner boundary without replacing its primary result. */
-export async function releaseOwnedExecutionLeaseBestEffort(
+async function releaseOwnedExecutionLeaseBestEffort(
   executionId: ExecutionId,
 ): Promise<void> {
   try {
@@ -400,12 +528,16 @@ export async function releaseOwnedExecutionLeaseBestEffort(
 async function releaseOwnership(ownership: OwnedExecutionLease): Promise<void> {
   const root = ownership.storageRoot;
   const { executionId } = ownership;
+  let ownershipLost = false;
   try {
     await withLeaseLock(
       executionId,
       async () => {
         const current = await readLease(executionId, root);
-        if (current?.ownerToken !== ownership.ownerToken) return;
+        if (current?.ownerToken !== ownership.ownerToken) {
+          ownershipLost = true;
+          return;
+        }
         await StorageFS.delete(leasePath(root, executionId));
       },
       root,
@@ -413,7 +545,7 @@ async function releaseOwnership(ownership: OwnedExecutionLease): Promise<void> {
   } catch (error) {
     if (!isFileNotFoundError(error)) throw error;
   } finally {
-    forgetOwnedLease(ownership);
+    forgetOwnedLease(ownership, { fenceWrites: ownershipLost });
   }
 }
 
@@ -462,10 +594,20 @@ export async function runWithInactiveExecutionLease<T>(
         root,
         Date.now(),
       );
+      const current = liveness.currentLease;
+      const local = ownedLeases.get(ownershipKey(root, executionId));
+      if (local && current?.ownerToken === local.ownerToken) {
+        return { status: 'active', heartbeatAt: current.heartbeatAt };
+      }
+      if (local) {
+        forgetOwnedLease(local, { notifyLoss: true, fenceWrites: true });
+      }
       if (liveness.status === 'active') {
         return { status: 'active', heartbeatAt: liveness.heartbeatAt };
       }
-      const value = await operation();
+      const maintenanceKeys = new Set(maintenanceExecutions.getStore());
+      maintenanceKeys.add(ownershipKey(root, executionId));
+      const value = await maintenanceExecutions.run(maintenanceKeys, operation);
       if (liveness.currentLease) {
         await StorageFS.delete(leasePath(root, executionId));
       }

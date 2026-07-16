@@ -72,6 +72,11 @@ describe('repairRestartedStreams', () => {
       scheduler.dispose();
       vi.advanceTimersByTime(10);
       expect(disposed).not.toHaveBeenCalled();
+
+      const rearmedAfterDispose = vi.fn();
+      scheduler.schedule(1_040, rearmedAfterDispose);
+      vi.advanceTimersByTime(10);
+      expect(rearmedAfterDispose).not.toHaveBeenCalled();
     } finally {
       scheduler.dispose();
       vi.useRealTimers();

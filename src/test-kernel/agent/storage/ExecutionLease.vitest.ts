@@ -14,8 +14,14 @@ import {
 import {
   EXECUTION_LEASE_STALE_MS,
   ExecutionLeaseActiveError,
+  ExecutionLeaseLostError,
+  abandonOwnedExecutionLease,
   acquireResumedExecutionLease,
+  completeOwnedExecutionLease,
   inspectExecutionLease,
+  markOwnedExecutionLeaseUndurable,
+  onOwnedExecutionLeaseLost,
+  ownsExecutionLease,
   releaseOwnedExecutionLease,
   runWithInactiveExecutionLease,
   waitForOwnedExecutionLeaseRelease,
@@ -191,6 +197,33 @@ describe('cross-process execution leases', () => {
     expect(settled).toBe(true);
   });
 
+  it('stops heartbeats but preserves the lease after durability failure', async () => {
+    const executionId = 'd86442' as ExecutionId;
+    await acquire(executionId);
+
+    abandonOwnedExecutionLease(executionId);
+    ownedExecutionIds.delete(executionId);
+
+    expect(ownsExecutionLease(executionId)).toBe(false);
+    await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
+      status: 'foreign',
+    });
+  });
+
+  it('abandons rather than releases an execution marked undurable', async () => {
+    const executionId = 'd86443' as ExecutionId;
+    await acquire(executionId);
+
+    markOwnedExecutionLeaseUndurable(executionId);
+    await completeOwnedExecutionLease(executionId);
+    ownedExecutionIds.delete(executionId);
+
+    expect(ownsExecutionLease(executionId)).toBe(false);
+    await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
+      status: 'foreign',
+    });
+  });
+
   it('releases only when the persisted owner still matches', async () => {
     const executionId = 'e8644e' as ExecutionId;
     await acquire(executionId);
@@ -206,6 +239,56 @@ describe('cross-process execution leases', () => {
     await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
       status: 'foreign',
     });
+  });
+
+  it('fences the former owner when a heartbeat observes takeover', async () => {
+    vi.useFakeTimers();
+    const executionId = 'e8644f' as ExecutionId;
+    try {
+      await acquire(executionId);
+      const onLeaseLost = vi.fn();
+      onOwnedExecutionLeaseLost(executionId, onLeaseLost);
+      await writeForeignLease(
+        executionId,
+        Date.now(),
+        '00000000-0000-4000-8000-000000000003',
+      );
+
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      expect(onLeaseLost).toHaveBeenCalledOnce();
+      expect(ownsExecutionLease(executionId)).toBe(false);
+      ownedExecutionIds.delete(executionId);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('fences an execution-store write immediately after takeover', async () => {
+    const executionId = 'e86440' as ExecutionId;
+    await acquire(executionId);
+    const onLeaseLost = vi.fn();
+    onOwnedExecutionLeaseLost(executionId, onLeaseLost);
+    await writeForeignLease(
+      executionId,
+      Date.now(),
+      '00000000-0000-4000-8000-000000000004',
+    );
+
+    await expect(
+      getExecutionStore(executionId).writeMeta({
+        timestamp: '2026-07-16T12:00:00.000Z',
+      }),
+    ).rejects.toBeInstanceOf(ExecutionLeaseLostError);
+
+    expect(onLeaseLost).toHaveBeenCalledOnce();
+    expect(ownsExecutionLease(executionId)).toBe(false);
+    await expect(
+      getExecutionStore(executionId).writeMeta({
+        timestamp: '2026-07-16T12:01:00.000Z',
+      }),
+    ).rejects.toBeInstanceOf(ExecutionLeaseLostError);
+    ownedExecutionIds.delete(executionId);
   });
 
   it('serializes deletion with a racing lease acquisition', async () => {
@@ -238,6 +321,42 @@ describe('cross-process execution leases', () => {
     await expect(inspectExecutionLease(executionId)).resolves.toMatchObject({
       status: 'owned',
     });
+  });
+
+  it('keeps locally owned execution active even when its heartbeat is old', async () => {
+    const executionId = 'f86440' as ExecutionId;
+    await acquire(executionId);
+    const persisted = JSON.parse(
+      await StorageFS.read(leasePath(executionId)),
+    ) as { ownerToken: string };
+    await writeForeignLease(
+      executionId,
+      Date.now() - EXECUTION_LEASE_STALE_MS - 1,
+      persisted.ownerToken,
+    );
+    const operation = vi.fn(async () => 'removed');
+
+    await expect(
+      runWithInactiveExecutionLease(executionId, operation),
+    ).resolves.toMatchObject({ status: 'active' });
+    expect(operation).not.toHaveBeenCalled();
+  });
+
+  it('lets locked maintenance clear a stale displaced local owner', async () => {
+    const executionId = 'f86441' as ExecutionId;
+    await writeExecution(executionId);
+    await acquire(executionId);
+    await writeForeignLease(
+      executionId,
+      Date.now() - EXECUTION_LEASE_STALE_MS - 1,
+      '00000000-0000-4000-8000-000000000005',
+    );
+
+    await expect(deleteExecution(executionId)).resolves.toMatchObject({
+      status: 'deleted',
+    });
+    expect(ownsExecutionLease(executionId)).toBe(false);
+    ownedExecutionIds.delete(executionId);
   });
 
   it('reports deleted, missing races, and protected IDs in bulk', async () => {

@@ -61,6 +61,19 @@ vi.mock('@agent/storage', () => ({
   releaseOwnedExecutionLeaseBestEffort: mocks.releaseOwnedExecutionLease,
 }));
 
+vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
+  markOwnedExecutionLeaseUndurable: vi.fn(),
+  ownsExecutionLease: vi.fn(() => true),
+}));
+
+vi.mock('@agent/runtime/executionOwnership', () => ({
+  releaseExecutionLeaseAfterArtifacts: vi.fn(
+    async (_session: unknown, executionId: ExecutionId) =>
+      mocks.releaseOwnedExecutionLease(executionId),
+  ),
+}));
+
 vi.mock('@model/computeModelOptions', () => ({
   computeModelOptionsData: mocks.computeModelOptionsData,
 }));

@@ -12,9 +12,12 @@ import {
   getExecutionStore,
   registerExecution,
   releaseOwnedExecutionLeaseAfterFailure,
-  releaseOwnedExecutionLeaseBestEffort,
   type ResultMeta,
 } from '@agent/storage';
+import {
+  markOwnedExecutionLeaseUndurable,
+  ownsExecutionLease,
+} from '@agent/storage/executionLease';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -27,6 +30,7 @@ import {
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { AgentRunHandle } from '@agent/runtime/executionRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import {
@@ -713,8 +717,16 @@ export async function executeStableSubagentInBand(
         executionId: completed.executionId,
         result: completed.built.result,
       };
+    } catch (error) {
+      markOwnedExecutionLeaseUndurable(executionId);
+      throw error;
     } finally {
-      await releaseOwnedExecutionLeaseBestEffort(executionId);
+      if (ownsExecutionLease(executionId)) {
+        await releaseExecutionLeaseAfterArtifacts(
+          prepared.session,
+          executionId,
+        );
+      }
     }
   });
 }
@@ -738,7 +750,12 @@ export async function executeSubagentForDeliveryInBand(
       result: completed.built.result,
       delivery: completed.delivery,
     };
+  } catch (error) {
+    markOwnedExecutionLeaseUndurable(executionId);
+    throw error;
   } finally {
-    await releaseOwnedExecutionLeaseBestEffort(executionId);
+    if (ownsExecutionLease(executionId)) {
+      await releaseExecutionLeaseAfterArtifacts(options.session, executionId);
+    }
   }
 }

@@ -69,4 +69,48 @@ describe('deleteExecution', () => {
     });
     expect(mocks.clear).toHaveBeenCalledTimes(1);
   });
+
+  it('removes execution storage before adjacent state', async () => {
+    mocks.exists.mockResolvedValue(true);
+    mocks.clear.mockResolvedValue(undefined);
+    const afterDelete = vi.fn(async () => {
+      expect(mocks.clear).toHaveBeenCalledOnce();
+    });
+
+    await expect(
+      deleteExecution('a73039a36eca' as ExecutionId, { afterDelete }),
+    ).resolves.toEqual({
+      status: 'deleted',
+      executionId: 'a73039a36eca',
+    });
+    expect(afterDelete).toHaveBeenCalledOnce();
+  });
+
+  it('leaves adjacent state untouched when execution deletion fails', async () => {
+    mocks.exists.mockResolvedValue(true);
+    mocks.clear.mockRejectedValue(new Error('permission denied'));
+    const afterDelete = vi.fn();
+
+    await expect(
+      deleteExecution('a73039a36ecb' as ExecutionId, { afterDelete }),
+    ).rejects.toThrow('permission denied');
+    expect(afterDelete).not.toHaveBeenCalled();
+  });
+
+  it('reports adjacent cleanup failure after execution deletion succeeds', async () => {
+    mocks.exists.mockResolvedValue(true);
+    mocks.clear.mockResolvedValue(undefined);
+
+    await expect(
+      deleteExecution('a73039a36ecc' as ExecutionId, {
+        afterDelete: async () => {
+          throw new Error('sidecar cleanup failed');
+        },
+      }),
+    ).resolves.toEqual({
+      status: 'deleted',
+      executionId: 'a73039a36ecc',
+      adjacentCleanupFailure: 'sidecar cleanup failed',
+    });
+  });
 });

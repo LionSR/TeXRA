@@ -49,6 +49,8 @@ export {
 export { resolveChildRunOutput } from './childRunOutput';
 export {
   acquireResumedExecutionLease,
+  abandonOwnedExecutionLease,
+  completeOwnedExecutionLease,
+  markOwnedExecutionLeaseUndurable,
   releaseOwnedExecutionLeaseAfterFailure,
-  releaseOwnedExecutionLeaseBestEffort,
 } from './executionLease';
