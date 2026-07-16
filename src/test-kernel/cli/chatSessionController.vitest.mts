@@ -671,6 +671,27 @@ describe('createChatSessionController', () => {
     });
   });
 
+  it('treats a manually resumed subagent returning to WAITING as a successful turn', async () => {
+    const session = makeSession({ runCompleted: true });
+    mocks.resumeToolUseFromSnapshot.mockResolvedValueOnce({
+      category: 'toolUse',
+      outcome: STREAM_PHASE.WAITING,
+      executionId: 'exec-resume',
+      streamId: 'stream-resume',
+    });
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    await ctrl.resume('exec-resume' as ExecutionId, makeResolvedResume());
+    await session.runPromise;
+
+    expect(session.runExitCode).toBe(CliExitCode.Success);
+    expect(mocks.projectStreamTranscript).toHaveBeenCalledWith(
+      'stream-resume',
+      { finalize: true },
+    );
+    expect(mocks.notify).not.toHaveBeenCalledWith({ kind: 'agentFinished' });
+  });
+
   it('manual resume supersedes stale interrupted recovery state', async () => {
     const session = makeSession({
       interruptedStreamId: 'stream-interrupted' as StreamTabId,
