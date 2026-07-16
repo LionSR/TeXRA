@@ -22,7 +22,7 @@ describe('CLI memory formatting', () => {
     const description = cliMemoryItemDescription(item);
 
     expect(description).toContain('pinned');
-    expect(description).toContain('2.0K');
+    expect(description).toContain('2 KiB');
     expect(description).toContain('by researcher');
   });
 
