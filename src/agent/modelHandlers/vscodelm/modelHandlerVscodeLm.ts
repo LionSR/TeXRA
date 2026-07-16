@@ -19,7 +19,7 @@ import type {
   ExtractResponseResult,
   TokenCountOptions,
   VscodeLmToolCall,
-} from '@agent/types/IModelHandler';
+} from '@agent/types/ModelHandlerContracts';
 import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 

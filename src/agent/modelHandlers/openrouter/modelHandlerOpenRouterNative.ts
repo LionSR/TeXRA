@@ -19,7 +19,7 @@ import type {
   CreateResponseResult,
   ExtractResponseResult,
   OpenRouterToolCall,
-} from '@agent/types/IModelHandler';
+} from '@agent/types/ModelHandlerContracts';
 import {
   detectStatusCode,
   handleStreamingFailure,

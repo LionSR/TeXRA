@@ -29,7 +29,7 @@ import type {
   ExtractResponseResult,
   GoogleToolCall,
   TokenCountOptions,
-} from '@agent/types/IModelHandler';
+} from '@agent/types/ModelHandlerContracts';
 import {
   handleStreamingFailure,
   takeTail,
