@@ -16,6 +16,104 @@ useLitComponentTestDom(() =>
 );
 
 describe('tool-use formatter', () => {
+  it('renders workflow-script delegation details without proposal or journal data', async () => {
+    const { formatToolUseTemplate } =
+      await import('@progressView/frontend/formatters/logFormatters/toolFormatters');
+    const { render } = await import('lit');
+    const script = `export const meta = {
+  name: 'Literature synthesis',
+  phases: [{ title: 'Collect' }, { title: 'Compare' }],
+};
+
+const papers = await parallel(
+  args.paperIds.map((paperId) => () =>
+    agent(\`Read and assess \${paperId}\`, { label: paperId }),
+  ),
+);
+return { papers, question: args.question };`;
+    const message: LogMessageData = {
+      id: 'workflow-script',
+      text: '',
+      level: LOG_LEVELS.INFO,
+      timestamp: 1,
+      messageType: 'toolUse',
+      data: {
+        toolName: 'delegate_workflow_script',
+        input: {
+          agent: 'research',
+          script,
+          args: {
+            paperIds: ['2401.00001', '2401.00002'],
+            question: 'Which assumptions differ?',
+          },
+        },
+        output: {
+          status: 'executed',
+          summary:
+            "Completed workflow script 'Literature synthesis' (2 agent calls)",
+          output: JSON.stringify({ compared: 2 }),
+        },
+      },
+    };
+
+    const container = document.createElement('div');
+    render(formatToolUseTemplate(message, { defaultOpen: true }), container);
+
+    const details = container.querySelector('wa-details.tool-use-details') as
+      (HTMLElement & { open: boolean }) | null;
+    const scriptBlock = container.querySelector(
+      '.code-block[data-language="javascript"]',
+    );
+    const argsBlock = container.querySelector(
+      '.code-block[data-language="json"]',
+    );
+    const labels = [...container.querySelectorAll('.tool-use-sublabel')].map(
+      (label) => label.textContent,
+    );
+
+    expect(details?.open).toBe(true);
+    expect(container.querySelector('wa-icon[name="list-tree"]')).not.toBeNull();
+    expect(labels).toEqual(['Agent:', 'Script:', 'Args:', 'Result:']);
+    expect(container.textContent).toContain('research');
+    expect(scriptBlock?.querySelector('code')?.textContent).toBe(script);
+    expect(scriptBlock?.textContent).toContain('JavaScript');
+    expect(argsBlock?.querySelector('code')?.textContent).toContain(
+      '"question": "Which assumptions differ?"',
+    );
+    expect(container.textContent).toContain('"compared":2');
+    expect(container.textContent).not.toContain('journal');
+    expect(container.querySelector('.proposal-banner-setup')).toBeNull();
+  });
+
+  it('shows explicit null workflow-script arguments as JSON', async () => {
+    const { formatToolUseTemplate } =
+      await import('@progressView/frontend/formatters/logFormatters/toolFormatters');
+    const { render } = await import('lit');
+    const message: LogMessageData = {
+      id: 'workflow-script-null-args',
+      text: '',
+      level: LOG_LEVELS.INFO,
+      timestamp: 1,
+      messageType: 'toolUse',
+      data: {
+        toolName: 'delegate_workflow_script',
+        input: {
+          agent: 'research',
+          script: 'export const meta = { name: "One call" };\nreturn null;',
+          args: null,
+        },
+      },
+    };
+
+    const container = document.createElement('div');
+    render(formatToolUseTemplate(message), container);
+
+    expect(
+      container.querySelector('.code-block[data-language="json"] code')
+        ?.textContent,
+    ).toBe('null');
+  });
+
   it('keeps streamed bash output out of the collapsed error summary', async () => {
     const { formatToolUseTemplate } =
       await import('@progressView/frontend/formatters/logFormatters/toolFormatters');

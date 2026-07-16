@@ -2,6 +2,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 // Type imports
+import type { AgentTrace } from '@agent/trace';
 import type {
   FileInteractionState,
   WorkPlanState,
@@ -35,6 +36,8 @@ export interface ToolCallHooks {
 export interface ToolCallContext {
   toolCallId?: string;
   tracker: FileInteractionState;
+  /** Parent trace used to project nested tool activity onto the same stream tree. */
+  trace?: AgentTrace;
   /** User instruction that led to this tool call, when available. */
   userInstruction?: string;
   /** Plan and todo progress state. Absent in contexts without work-plan support. */

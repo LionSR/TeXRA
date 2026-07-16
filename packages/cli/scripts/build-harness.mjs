@@ -27,7 +27,8 @@ try {
     // relative to `import.meta.url`, which esbuild bundling breaks.
     external: ['fsevents', 'clipboardy'],
     jsx: 'automatic',
-    loader: { '.tsx': 'tsx', '.ts': 'ts' },
+    // Keep the harness build graph faithful to the production CLI bundle.
+    loader: { '.tsx': 'tsx', '.ts': 'ts', '.wasm': 'binary' },
     alias: { 'react-devtools-core': reactDevtoolsStub },
     outfile,
     banner: {

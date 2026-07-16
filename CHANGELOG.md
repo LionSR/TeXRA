@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Shared (all surfaces)
+
+#### New Features
+
+- **Custom agents can run resumable multi-agent workflows** — agent authors can
+  opt into deterministic workflow scripts whose completed steps resume after
+  interruption and whose progress appears in the existing session view.
+
 ### CLI
 
 #### Bug Fixes
