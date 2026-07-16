@@ -6,7 +6,6 @@ import type {
   RetryPermission,
   StreamTabId,
   ToolEditPermission,
-  UserQuestionPermission,
 } from '@shared/schemas';
 
 /**
@@ -36,7 +35,6 @@ export interface RuntimeInteractionEventPayloads {
   showAgentProposal: AgentProposalPermission;
   showPlanApproval: PlanApprovalPermission;
   showExternalInquiry: ExternalInquiryPermission;
-  showUserQuestion: UserQuestionPermission;
 }
 
 export type RuntimeInteractionEvent = keyof RuntimeInteractionEventPayloads;
@@ -52,7 +50,6 @@ const RUNTIME_INTERACTION_EVENTS = [
   'showAgentProposal',
   'showPlanApproval',
   'showExternalInquiry',
-  'showUserQuestion',
 ] as const satisfies readonly RuntimeInteractionEvent[];
 
 const RuntimeInteractionEventSet: ReadonlySet<string> = new Set(

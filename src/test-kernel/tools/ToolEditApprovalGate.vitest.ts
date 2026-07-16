@@ -56,7 +56,6 @@ async function installPlatform(
       }
       return handler(request);
     },
-    resolve: () => false,
     cancel: () => undefined,
   });
 }

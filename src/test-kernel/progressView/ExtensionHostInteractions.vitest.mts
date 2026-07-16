@@ -159,9 +159,8 @@ describe('createExtensionHostInteractions', () => {
     expect(initiatingProposal).toBeDefined();
     expect(otherStream).toBeDefined();
     expect(
-      interactions.resolve('proposal-current', {
-        kind: 'proposal',
-        decision: { action: 'approve' },
+      interactions.submitProposalDecision('proposal-current', {
+        action: 'approve',
       }),
     ).toBe(true);
     const bashShow = handlers.bash.show as unknown as ReturnType<typeof vi.fn>;
@@ -174,9 +173,8 @@ describe('createExtensionHostInteractions', () => {
     expect(streamBRequestId).toBeDefined();
     expect(otherRequestId).not.toBe(streamBRequestId);
     expect(
-      interactions.resolve(streamBRequestId!, {
-        kind: 'bash',
-        decision: { action: 'reject' },
+      interactions.submitBashDecision(streamBRequestId!, {
+        action: 'reject',
       }),
     ).toBe(true);
     await expect(initiatingProposal).resolves.toEqual({ action: 'approve' });
@@ -231,9 +229,8 @@ describe('createExtensionHostInteractions', () => {
       plan: { objective: 'Prove the compactness lemma.' },
     });
     expect(
-      interactions.resolve('plan-a', {
-        kind: 'plan',
-        decision: { action: 'approve_and_goal' },
+      interactions.submitPlanDecision('plan-a', {
+        action: 'approve_and_goal',
       }),
     ).toBe(true);
 
@@ -243,10 +240,7 @@ describe('createExtensionHostInteractions', () => {
     expect(handlers.planApproval.resolve).toHaveBeenCalledWith('plan-a');
     // The request was settled first-wins: a second resolution finds nothing.
     expect(
-      interactions.resolve('plan-a', {
-        kind: 'plan',
-        decision: { action: 'approve' },
-      }),
+      interactions.submitPlanDecision('plan-a', { action: 'approve' }),
     ).toBe(false);
   });
 
@@ -305,9 +299,13 @@ describe('createExtensionHostInteractions', () => {
 
     await expect(first).resolves.toEqual({ action: 'cancel' });
     expect(
-      interactions.resolveRetry('stream-a' as StreamTabId, 'retry:first', {
-        action: 'retry',
-      }),
+      interactions.submitRetryDecision(
+        'stream-a' as StreamTabId,
+        'retry:first',
+        {
+          action: 'retry',
+        },
+      ),
     ).toBe(false);
     expect(
       interactions.isRetryPending(
@@ -316,7 +314,7 @@ describe('createExtensionHostInteractions', () => {
       ),
     ).toBe(true);
     expect(
-      interactions.resolveRetry(
+      interactions.submitRetryDecision(
         'stream-a' as StreamTabId,
         'retry:replacement',
         { action: 'retry' },
@@ -406,18 +404,12 @@ describe('createExtensionHostInteractions', () => {
     // bash approval as a plan action would (defends against a caller bug
     // resolving the wrong pending kind under a reused/misrouted requestId).
     expect(
-      interactions.resolve(requestId, {
-        kind: 'plan',
-        decision: { action: 'approve' },
-      }),
+      interactions.submitPlanDecision(requestId, { action: 'approve' }),
     ).toBe(false);
 
     // The correctly-kinded resolution still settles it.
     expect(
-      interactions.resolve(requestId, {
-        kind: 'bash',
-        decision: { action: 'approve' },
-      }),
+      interactions.submitBashDecision(requestId, { action: 'approve' }),
     ).toBe(true);
     await expect(resultPromise).resolves.toEqual({ accepted: true });
   });
@@ -456,10 +448,7 @@ describe('createExtensionHostInteractions', () => {
     // resolvable first-wins.
     expect(handlers.planApproval.resolve).not.toHaveBeenCalled();
     expect(
-      interactions.resolve('plan-a', {
-        kind: 'plan',
-        decision: { action: 'approve' },
-      }),
+      interactions.submitPlanDecision('plan-a', { action: 'approve' }),
     ).toBe(true);
     await expect(planPromise).resolves.toEqual({ action: 'approve' });
   });
@@ -492,9 +481,7 @@ describe('createExtensionHostInteractions', () => {
       streamId: 'stream-a',
       mode: 'new',
     });
-    expect(interactions.resolve('thread-a', { kind: 'externalInquiry' })).toBe(
-      true,
-    );
+    interactions.dismissExternalInquiry('thread-a');
     expect(handlers.externalInquiry.resolve).toHaveBeenCalledWith('thread-a');
   });
 
@@ -531,9 +518,9 @@ describe('createExtensionHostInteractions', () => {
     expect(handlers.userQuestion.resolve).toHaveBeenCalledWith('question-a');
     // The cancelled question was released: a later resolution finds nothing.
     expect(
-      interactions.resolve('question-a', {
-        kind: 'userQuestion',
-        decision: { action: 'submit', answers: { choice: 'unit volume' } },
+      interactions.submitUserQuestionDecision('question-a', {
+        action: 'submit',
+        answers: { choice: 'unit volume' },
       }),
     ).toBe(false);
   });
@@ -559,9 +546,9 @@ describe('createExtensionHostInteractions', () => {
     const answers = { normalization: 'unit volume' };
 
     expect(
-      interactions.resolve('question-submit', {
-        kind: 'userQuestion',
-        decision: { action: 'submit', answers },
+      interactions.submitUserQuestionDecision('question-submit', {
+        action: 'submit',
+        answers,
       }),
     ).toBe(true);
 

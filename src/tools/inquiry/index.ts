@@ -1,4 +1,5 @@
 export {
+  continueExternalInquiryAction,
   ExternalInquiryTool,
-  handleExternalInquiryAction,
+  persistExternalInquiryAction,
 } from './ExternalInquiryTool';

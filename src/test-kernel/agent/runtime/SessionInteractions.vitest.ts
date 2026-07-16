@@ -15,7 +15,10 @@ import {
   type PlanApprovalResult,
 } from '@agent/runtime/HostInteractions';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import { createDesktopHostInteractions } from '@desktop/main/desktopHostInteractions';
+import {
+  createDesktopHostInteractions,
+  type DesktopHostInteractions,
+} from '@desktop/main/desktopHostInteractions';
 import {
   AgentCategory,
   type AgentProposal,
@@ -94,7 +97,7 @@ function createPortSession(): {
   session: SessionHandle;
   uiEvents: UiEvent[];
   emitted: string[];
-  interactions: HostInteractions;
+  interactions: DesktopHostInteractions;
 } {
   const uiEvents: UiEvent[] = [];
   const emitted: string[] = [];
@@ -149,13 +152,6 @@ function createControllablePlanAdapter(
         }),
       );
     },
-    resolve(requestId, settlement) {
-      const entry = pending.get(requestId);
-      if (!entry || settlement.kind !== 'plan') return false;
-      pending.delete(requestId);
-      entry.settle(settlement.decision);
-      return true;
-    },
     cancel(selector = {}) {
       for (const [requestId, entry] of pending) {
         if (
@@ -175,7 +171,14 @@ function createControllablePlanAdapter(
     },
     dispose,
   };
-  return { interactions, requests, dispose };
+  const submit = (requestId: string, decision: PlanApprovalResult): boolean => {
+    const entry = pending.get(requestId);
+    if (!entry) return false;
+    pending.delete(requestId);
+    entry.settle(decision);
+    return true;
+  };
+  return { interactions, requests, submit, dispose };
 }
 
 describe('session.interactions request bookkeeping (coordinator fold)', () => {
@@ -245,12 +248,9 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
       cause: 'Session disposed.',
       cancellationScope: expect.any(Object),
     });
-    expect(
-      target.interactions.resolve('approval:target-owner', {
-        kind: 'plan',
-        decision: { action: 'approve' },
-      }),
-    ).toBe(true);
+    expect(adapter.submit('approval:target-owner', { action: 'approve' })).toBe(
+      true,
+    );
     await expect(targetPending).resolves.toEqual({ action: 'approve' });
     target.dispose();
   });
@@ -268,7 +268,6 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
           settle = resolve;
           source.dispose();
         }),
-      resolve: () => false,
       cancel,
     });
     source.useHostInteractions(target.interactions.createForwarder());
@@ -297,7 +296,6 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
     const session = createTestSession();
     const dispose = vi.fn();
     session.useHostInteractions({
-      resolve: () => false,
       cancel: () => {
         throw new Error('cancel failed');
       },
@@ -323,12 +321,9 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
 
       session.useHostInteractions(adapter.interactions);
       expect(adapter.requests).toHaveLength(1);
-      expect(
-        session.interactions.resolve('approval:unattached', {
-          kind: 'plan',
-          decision: { action: 'approve' },
-        }),
-      ).toBe(true);
+      expect(adapter.submit('approval:unattached', { action: 'approve' })).toBe(
+        true,
+      );
       await expect(pending).resolves.toEqual({ action: 'approve' });
     } finally {
       session.dispose();
@@ -353,12 +348,9 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
 
       session.useHostInteractions(second.interactions);
       expect(second.requests).toHaveLength(1);
-      expect(
-        session.interactions.resolve('approval:reattach', {
-          kind: 'plan',
-          decision: { action: 'approve' },
-        }),
-      ).toBe(true);
+      expect(second.submit('approval:reattach', { action: 'approve' })).toBe(
+        true,
+      );
       await expect(pending).resolves.toEqual({ action: 'approve' });
     } finally {
       session.dispose();
@@ -380,19 +372,9 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
       detach();
       session.useHostInteractions(second.interactions);
 
-      expect(
-        first.interactions.resolve('approval:stale', {
-          kind: 'plan',
-          decision: { action: 'reject' },
-        }),
-      ).toBe(true);
+      expect(first.submit('approval:stale', { action: 'reject' })).toBe(true);
       await Promise.resolve();
-      expect(
-        session.interactions.resolve('approval:stale', {
-          kind: 'plan',
-          decision: { action: 'approve' },
-        }),
-      ).toBe(true);
+      expect(second.submit('approval:stale', { action: 'approve' })).toBe(true);
       await expect(pending).resolves.toEqual({ action: 'approve' });
     } finally {
       session.dispose();
@@ -460,7 +442,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
   });
 
   it('resolves a plan approval first-wins through the session slot', async () => {
-    const { session, uiEvents, emitted } = createPortSession();
+    const { session, uiEvents, emitted, interactions } = createPortSession();
     try {
       const pending = session.interactions.requestPlanApproval({
         approvalId: 'approval:first-wins',
@@ -478,18 +460,16 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
       });
 
       expect(
-        session.interactions.resolve('approval:first-wins', {
-          kind: 'plan',
-          decision: { action: 'approve' },
+        interactions.submitPlanDecision('approval:first-wins', {
+          action: 'approve',
         }),
       ).toBe(true);
       await expect(pending).resolves.toEqual({ action: 'approve' });
 
       // First-wins: a second resolution finds nothing pending.
       expect(
-        session.interactions.resolve('approval:first-wins', {
-          kind: 'plan',
-          decision: { action: 'reject' },
+        interactions.submitPlanDecision('approval:first-wins', {
+          action: 'reject',
         }),
       ).toBe(false);
     } finally {
@@ -498,7 +478,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
   });
 
   it('rejects the stale request when the same id is re-requested (replacement)', async () => {
-    const { session, uiEvents } = createPortSession();
+    const { session, uiEvents, interactions } = createPortSession();
     try {
       const first = session.interactions.requestPlanApproval({
         approvalId: 'approval:replace',
@@ -519,9 +499,8 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
       ).toHaveLength(2);
 
       expect(
-        session.interactions.resolve('approval:replace', {
-          kind: 'plan',
-          decision: { action: 'approve' },
+        interactions.submitPlanDecision('approval:replace', {
+          action: 'approve',
         }),
       ).toBe(true);
       await expect(second).resolves.toEqual({ action: 'approve' });
@@ -531,7 +510,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
   });
 
   it('a stream-scoped cancel settles every pending request for that stream only', async () => {
-    const { session } = createPortSession();
+    const { session, interactions } = createPortSession();
     const otherStreamId = 'stream:interactions-other' as StreamTabId;
     try {
       const pendingPlan = session.interactions.requestPlanApproval({
@@ -559,23 +538,20 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
         action: 'reject',
       });
       expect(
-        session.interactions.resolve('approval:cleanup', {
-          kind: 'plan',
-          decision: { action: 'approve' },
+        interactions.submitPlanDecision('approval:cleanup', {
+          action: 'approve',
         }),
       ).toBe(false);
       expect(
-        session.interactions.resolve('proposal:cleanup', {
-          kind: 'proposal',
-          decision: { action: 'approve' },
+        interactions.submitProposalDecision('proposal:cleanup', {
+          action: 'approve',
         }),
       ).toBe(false);
 
       // The other stream's request is untouched and still resolvable.
       expect(
-        session.interactions.resolve('approval:survives', {
-          kind: 'plan',
-          decision: { action: 'approve' },
+        interactions.submitPlanDecision('approval:survives', {
+          action: 'approve',
         }),
       ).toBe(true);
       await expect(surviving).resolves.toEqual({ action: 'approve' });
@@ -585,7 +561,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
   });
 
   it('a kind-scoped cancel settles only that kind on the stream', async () => {
-    const { session } = createPortSession();
+    const { session, interactions } = createPortSession();
     try {
       const pendingPlan = session.interactions.requestPlanApproval({
         approvalId: 'approval:kind-scope',
@@ -609,9 +585,8 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
 
       // The proposal on the same stream is untouched and still resolvable.
       expect(
-        session.interactions.resolve('proposal:kind-scope', {
-          kind: 'proposal',
-          decision: { action: 'approve' },
+        interactions.submitProposalDecision('proposal:kind-scope', {
+          action: 'approve',
         }),
       ).toBe(true);
       await expect(pendingProposal).resolves.toMatchObject({

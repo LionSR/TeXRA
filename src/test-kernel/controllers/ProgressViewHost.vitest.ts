@@ -92,7 +92,9 @@ describe('ProgressViewHost', () => {
           handlePlanApprovalAction: vi.fn(),
           handleUserQuestionAction: vi.fn(),
         },
-        externalInquiry: {},
+        externalInquiry: {
+          dismiss: vi.fn(),
+        },
       },
     });
 

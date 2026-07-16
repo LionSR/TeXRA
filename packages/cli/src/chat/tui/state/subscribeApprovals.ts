@@ -26,6 +26,7 @@ import {
   type HostInteractionOptions,
   type HostInteractions,
   type HostRetryRequest,
+  type HostUserQuestionRequest,
   type HostUserQuestionResult,
   type PlanApprovalResult,
   type ProposalResult,
@@ -247,7 +248,6 @@ export function createTuiHostInteractions(
       return openExternalInquiryInteraction(request, context);
     },
     setApprovalBypassState: setTuiApprovalBypassState,
-    resolve: () => false,
     cancel(selector: HostInteractionCancelSelector = {}) {
       // Retry routes live outside the modal queue (the pre-queue auto-switch
       // lookup), so a retry-kind or unfiltered cancel must settle them too —
@@ -550,7 +550,7 @@ async function requestRetryInteraction(
 }
 
 async function requestUserQuestionInteraction(
-  payload: RuntimeInteractionEventPayloads['showUserQuestion'],
+  payload: HostUserQuestionRequest,
   context: CliContext,
 ): Promise<HostUserQuestionResult> {
   if (!approvalPromptAllowed(context)) {

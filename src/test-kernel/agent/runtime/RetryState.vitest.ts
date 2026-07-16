@@ -105,7 +105,6 @@ async function withRetryRunContext<T>(
       agentName: 'retry-test',
       session: sessionWithInteractions({
         requestRetry,
-        resolve: () => false,
         cancel: () => {},
       }),
     }),
@@ -271,9 +270,9 @@ describe('RetryState', () => {
       );
 
       expect(
-        session.interactions.resolve(streamId, {
-          kind: 'retry',
-          decision: { action: 'retry', feedback: 'try again' },
+        recording.decisions.submitRetry(streamId, {
+          action: 'retry',
+          feedback: 'try again',
         }),
       ).toBe(true);
 

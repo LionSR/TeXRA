@@ -51,7 +51,7 @@ async function installPlatform(flagOn: boolean): Promise<Platform> {
 }
 
 function startPlanUpdate(streamId: StreamTabId, objective: string) {
-  const { events, host, interactions } = createRecordingHost();
+  const { decisions, events, host, interactions } = createRecordingHost();
   const session = sessionWithInteractions(interactions);
   const workPlanState = new WorkPlanState();
   const tool = new PlanTool();
@@ -71,7 +71,7 @@ function startPlanUpdate(streamId: StreamTabId, objective: string) {
     () => tool.call({ command: 'update', objective }),
   );
 
-  return { resultPromise, events, host, session, workPlanState };
+  return { decisions, resultPromise, events, session, workPlanState };
 }
 
 function findPlanApproval(
@@ -85,7 +85,7 @@ function findPlanApproval(
 describe('PlanTool — update (plan approval)', () => {
   it('keeps an approved plan in displayed work-plan state and defers steps to the todo tool', async () => {
     await installPlatform(false);
-    const { resultPromise, events, host, workPlanState } = startPlanUpdate(
+    const { decisions, resultPromise, events, workPlanState } = startPlanUpdate(
       'stream:plan-approve' as StreamTabId,
       plan.objective,
     );
@@ -93,9 +93,9 @@ describe('PlanTool — update (plan approval)', () => {
     const approval = findPlanApproval(events);
     expect((approval.payload as { plan: Plan }).plan).toEqual(plan);
     expect(
-      host.interactions?.resolve(
+      decisions.submitPlan(
         (approval.payload as { approvalId: string }).approvalId,
-        { kind: 'plan', decision: { action: 'approve' } },
+        { action: 'approve' },
       ),
     ).toBe(true);
 
@@ -108,19 +108,16 @@ describe('PlanTool — update (plan approval)', () => {
 
   it('clears a rejected plan from displayed work-plan state', async () => {
     await installPlatform(false);
-    const { resultPromise, events, host, workPlanState } = startPlanUpdate(
+    const { decisions, resultPromise, events, workPlanState } = startPlanUpdate(
       'stream:plan-reject' as StreamTabId,
       plan.objective,
     );
 
     const approval = findPlanApproval(events);
     expect(
-      host.interactions?.resolve(
+      decisions.submitPlan(
         (approval.payload as { approvalId: string }).approvalId,
-        {
-          kind: 'plan',
-          decision: { action: 'reject', feedback: 'Too broad.' },
-        },
+        { action: 'reject', feedback: 'Too broad.' },
       ),
     ).toBe(true);
 
@@ -134,7 +131,7 @@ describe('PlanTool — update (plan approval)', () => {
     const streamId = 'stream:plan-goal' as StreamTabId;
     await installPlatform(true);
 
-    const { resultPromise, events, host, session } = startPlanUpdate(
+    const { decisions, resultPromise, events, session } = startPlanUpdate(
       streamId,
       plan.objective,
     );
@@ -144,9 +141,9 @@ describe('PlanTool — update (plan approval)', () => {
         true,
       );
       expect(
-        host.interactions?.resolve(
+        decisions.submitPlan(
           (approval.payload as { approvalId: string }).approvalId,
-          { kind: 'plan', decision: { action: 'approve_and_goal' } },
+          { action: 'approve_and_goal' },
         ),
       ).toBe(true);
 
@@ -171,16 +168,16 @@ describe('PlanTool — update (plan approval)', () => {
     await installPlatform(true);
 
     const existing = await GoalStore.start(streamId, 'Old objective');
-    const { resultPromise, events, host, session } = startPlanUpdate(
+    const { decisions, resultPromise, events, session } = startPlanUpdate(
       streamId,
       followUpPlan.objective,
     );
     try {
       const approval = findPlanApproval(events);
       expect(
-        host.interactions?.resolve(
+        decisions.submitPlan(
           (approval.payload as { approvalId: string }).approvalId,
-          { kind: 'plan', decision: { action: 'approve_and_goal' } },
+          { action: 'approve_and_goal' },
         ),
       ).toBe(true);
 
@@ -207,7 +204,7 @@ describe('PlanTool — update (plan approval)', () => {
     const platform = await installPlatform(true);
 
     try {
-      const { resultPromise, events, host } = startPlanUpdate(
+      const { decisions, resultPromise, events } = startPlanUpdate(
         streamId,
         plan.objective,
       );
@@ -219,9 +216,9 @@ describe('PlanTool — update (plan approval)', () => {
 
       (platform.config as FakeConfigProvider).set(GOAL_FEATURE_FLAG_KEY, false);
       expect(
-        host.interactions?.resolve(
+        decisions.submitPlan(
           (approval.payload as { approvalId: string }).approvalId,
-          { kind: 'plan', decision: { action: 'approve_and_goal' } },
+          { action: 'approve_and_goal' },
         ),
       ).toBe(true);
 
@@ -237,16 +234,16 @@ describe('PlanTool — update (plan approval)', () => {
 
   it('clears a timed-out plan from displayed work-plan state', async () => {
     await installPlatform(false);
-    const { resultPromise, events, host, workPlanState } = startPlanUpdate(
+    const { decisions, resultPromise, events, workPlanState } = startPlanUpdate(
       'stream:plan-timeout' as StreamTabId,
       plan.objective,
     );
 
     const approval = findPlanApproval(events);
     expect(
-      host.interactions?.resolve(
+      decisions.submitPlan(
         (approval.payload as { approvalId: string }).approvalId,
-        { kind: 'plan', decision: { action: 'timeout' } },
+        { action: 'timeout' },
       ),
     ).toBe(true);
 
