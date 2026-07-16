@@ -49,6 +49,8 @@ vi.mock('@agent/storage', async () => {
     listExecutions: mocks.listExecutions,
     deleteExecution: mocks.deleteExecution,
     deleteAllExecutions: mocks.deleteAllExecutions,
+    getExecutionLiveness: vi.fn(async () => ({ live: false })),
+    listLiveExecutionIds: vi.fn(async () => []),
   };
 });
 
@@ -1070,20 +1072,27 @@ describe('CLI history runtime', () => {
   });
 
   it('surfaces the bulk-delete count in the structured result', async () => {
-    mocks.deleteAllExecutions.mockResolvedValue(['a1', 'b2', 'c3', 'd4']);
+    mocks.deleteAllExecutions.mockResolvedValue({
+      deleted: ['a1', 'b2', 'c3', 'd4'],
+      skippedLive: [],
+    });
 
     await expect(deleteCliHistory({ all: true })).resolves.toEqual({
       deleted: 'all',
       count: 4,
+      skippedLive: 0,
     });
   });
 
   it('reuses the preflight count instead of re-listing', async () => {
-    mocks.deleteAllExecutions.mockResolvedValue(['a1']);
+    mocks.deleteAllExecutions.mockResolvedValue({
+      deleted: ['a1'],
+      skippedLive: [],
+    });
 
     await expect(
       deleteCliHistory({ all: true, preCountForAll: 7 }),
-    ).resolves.toEqual({ deleted: 'all', count: 7 });
+    ).resolves.toEqual({ deleted: 'all', count: 7, skippedLive: 0 });
 
     // listExecutions must not be called when the count was passed in.
     expect(mocks.listExecutions).not.toHaveBeenCalled();
@@ -1096,7 +1105,10 @@ describe('CLI history runtime', () => {
     await GoalStore.start(deletedA, 'delete a');
     await GoalStore.start(deletedB, 'delete b');
     await GoalStore.start(live, 'keep me');
-    mocks.deleteAllExecutions.mockResolvedValue(['a1', 'b2']);
+    mocks.deleteAllExecutions.mockResolvedValue({
+      deleted: ['a1', 'b2'],
+      skippedLive: [],
+    });
 
     await deleteCliHistory({ all: true });
 

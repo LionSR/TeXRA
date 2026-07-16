@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { defineCommand } from 'citty';
 
 import { assembleTrace, injectStandaloneTrace } from '@transcript';
+import { describeHeartbeatOwner } from '@agent/storage';
 import { formatChatAsMarkdown } from '@agent/export/chatExportFormatter';
 import { type ExecutionId } from '@shared/schemas';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -234,10 +235,27 @@ async function runHistoryDelete(
     writeTextStderr(formatCliHistoryNotFoundText(result.id, context.cwd));
     return CliExitCode.Usage;
   }
+  // Same split for a refused live deletion: structured consumers branch on
+  // `live: true`, text consumers get a stderr error and a failure exit.
+  if (
+    result.deleted === 'one' &&
+    result.live &&
+    context.outputFormat === 'text'
+  ) {
+    writeTextStderr(
+      `Cannot delete execution ${result.id}: it is running in ${describeHeartbeatOwner(result.liveHost)}.`,
+    );
+    return CliExitCode.AgentError;
+  }
 
   let text: string;
   if (result.deleted === 'all') {
     text = `Deleted ${formatResultCount(result.count, 'stored execution')}.`;
+    if (result.skippedLive > 0) {
+      text += ` Skipped ${formatResultCount(result.skippedLive, 'running execution')}.`;
+    }
+  } else if (result.live) {
+    text = '';
   } else if (result.found) {
     text = `Deleted execution ${result.id}.`;
   } else {
