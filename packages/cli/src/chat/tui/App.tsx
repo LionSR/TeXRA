@@ -128,7 +128,7 @@ export function App(props: AppProps): React.JSX.Element {
   const transcriptViewerOpen = transcriptViewerStreamId !== undefined;
   const { columns, rows } = useWindowSize();
   const { exit } = useApp();
-  const activeDraftRegistry = useMemo(createActiveDraftRegistry, []);
+  const activeDraftRegistry = useMemo(() => createActiveDraftRegistry(), []);
   const canStopActiveRun =
     props.canStopActiveRun ?? props.canInterruptActiveRun;
   const agentSelectionAvailable = rootRunStartAvailable;
