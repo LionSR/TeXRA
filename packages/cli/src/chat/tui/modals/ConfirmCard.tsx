@@ -150,7 +150,7 @@ export function ConfirmCard({
   const compactHintLayout = feedbackMode
     ? undefined
     : confirmCardCompactHintLayout({
-        title: pulsedTitle,
+        title,
         approveLabel,
         rejectLabel,
         alwaysAllowLabel: alwaysAllow?.label,

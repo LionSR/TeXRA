@@ -66,4 +66,18 @@ describe('CLI agent proposal approval layout', () => {
     expect(visible).toHaveLength(budget);
     expect(visible.at(-1)?.kind).toBe('overflow');
   });
+
+  it('includes the pulse prefix when a dynamic proposal title reaches the width boundary', () => {
+    const title = `Spawn ${'a'.repeat(57)}?`;
+    expect(title).toHaveLength(64);
+
+    expect(
+      scrollableModalTextRowsBudget({
+        availableRows: 16,
+        columns: 68,
+        extraFixedRows: 3,
+        title,
+      }),
+    ).toBe(4);
+  });
 });

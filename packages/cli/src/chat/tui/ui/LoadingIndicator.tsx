@@ -13,9 +13,9 @@ import { useLiveNowMs } from '../state/useLiveNowMs';
 // Plain ASCII spin cycle (not a braille cli-spinners frame set) — ticking at
 // 1 Hz off the shared clock reads as a slow rotation, not a smooth spin, so a
 // simple, always-safe frame set fits better than porting the 80ms glyph set.
-// Exported so other 1 Hz "this is live" indicators (e.g. the status bar's
-// running segment) share the same frame set instead of each declaring its own.
-export const LOADING_FRAMES = ['|', '/', '-', '\\'] as const;
+// Other 1 Hz "this is live" indicators share this frame set through
+// `loadingFrameAt` instead of each declaring its own.
+const LOADING_FRAMES = ['|', '/', '-', '\\'] as const;
 
 /** Current frame for a 1 Hz shared-clock rotation through `frames`, keyed off
  *  epoch ms from `useLiveNowMs` — the same computation `LoadingIndicator` and

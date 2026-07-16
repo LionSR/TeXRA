@@ -167,12 +167,16 @@ export function confirmCardCompactHintLayout({
   alwaysAllowLabel,
   extraActions,
 }: ConfirmCardCompactHintLayoutOptions): ConfirmCardCompactHintLayout {
+  const pulsedTitleColumns = textDisplayWidth(confirmCardPulsedTitle(0, title));
   const inlineHints = confirmCardKeyHintsForWidth({
     approveLabel,
     rejectLabel,
     alwaysAllowLabel,
     extraActions,
-    maxColumns: Math.max(0, columns - title.length - KEY_HINT_SEPARATOR.length),
+    maxColumns: Math.max(
+      0,
+      columns - pulsedTitleColumns - KEY_HINT_SEPARATOR.length,
+    ),
   });
   const stackedHints = confirmCardKeyHintsForWidth({
     approveLabel,

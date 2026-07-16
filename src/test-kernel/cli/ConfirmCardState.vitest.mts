@@ -13,16 +13,14 @@ import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 describe('confirmCardPulsedTitle', () => {
   it('alternates a solid/hollow dot ahead of the title every second', () => {
     expect(confirmCardPulsedTitle(0, 'Run command?')).toBe('● Run command?');
-    expect(confirmCardPulsedTitle(1000, 'Run command?')).toBe(
-      '○ Run command?',
-    );
-    expect(confirmCardPulsedTitle(2000, 'Run command?')).toBe(
-      '● Run command?',
-    );
+    expect(confirmCardPulsedTitle(1000, 'Run command?')).toBe('○ Run command?');
+    expect(confirmCardPulsedTitle(2000, 'Run command?')).toBe('● Run command?');
   });
 
   it('only advances once per whole second', () => {
-    expect(confirmCardPulsedTitle(999, 'x')).toBe(confirmCardPulsedTitle(0, 'x'));
+    expect(confirmCardPulsedTitle(999, 'x')).toBe(
+      confirmCardPulsedTitle(0, 'x'),
+    );
   });
 });
 
