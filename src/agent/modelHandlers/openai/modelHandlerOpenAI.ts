@@ -317,7 +317,7 @@ export class ModelHandlerOpenAI<
       baseParams.reasoning_effort = this.validateReasoningEffort(
         toOpenAIReasoningEffort(
           reasoningEffort,
-          getDeclaredMaxReasoningEffort(this.capabilities),
+          getDeclaredMaxReasoningEffort(this.config.capabilities),
         ),
       ) as ChatCompletionRequestBase['reasoning_effort'];
     }

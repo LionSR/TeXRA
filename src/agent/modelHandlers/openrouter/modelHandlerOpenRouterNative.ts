@@ -4,7 +4,7 @@ import {
   ConnectionError as OpenRouterConnectionError,
   RequestTimeoutError as OpenRouterRequestTimeoutError,
 } from '@openrouter/sdk/models/errors';
-import { ModelProvider } from 'llm-zoo';
+import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 // Local imports - agent
 import type { StreamHandle } from '@agent/trace';
@@ -225,7 +225,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       request.reasoning = {
         effort: toOpenRouterReasoningEffort(
           this.validateReasoningEffort(effort),
-          getDeclaredMaxReasoningEffort(this.capabilities) === 'max',
+          getDeclaredMaxReasoningEffort(this.config.capabilities) ===
+            ReasoningEffort.MAX,
         ),
       };
     }

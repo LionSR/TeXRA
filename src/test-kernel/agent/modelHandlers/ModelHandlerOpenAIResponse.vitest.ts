@@ -235,6 +235,39 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.equal(reasoning?.effort, 'max');
   });
 
+  it('does not mistake a user override for the model native ceiling', async () => {
+    const handler = createHandler({
+      name: 'reasoning-model',
+      fullName: 'reasoning-model',
+      capabilities: {
+        ...DEFAULT_MODEL_CAPABILITIES,
+        supportsReasoning: true,
+        supportsReasoningEffort: true,
+        reasoningEffort: ReasoningEffort.MEDIUM,
+      },
+    });
+    handler.capabilities.reasoningEffort = ReasoningEffort.MAX;
+    let request: Record<string, unknown> | undefined;
+
+    await handler.createResponse({
+      client: {
+        responses: {
+          create: async (params: Record<string, unknown>) => {
+            request = params;
+            return createResponse('resp-clamped-override', {
+              input_tokens: 12,
+            });
+          },
+        },
+      } as any,
+      messages: createMessages(1),
+      temperature: 0,
+    });
+
+    const reasoning = request?.reasoning as { effort?: string } | undefined;
+    assert.equal(reasoning?.effort, 'xhigh');
+  });
+
   it('enables parallel tool calls by default', async () => {
     const handler = createHandler();
     let request: Record<string, unknown> | undefined;

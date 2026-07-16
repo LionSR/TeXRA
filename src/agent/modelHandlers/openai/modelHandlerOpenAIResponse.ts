@@ -1660,7 +1660,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const reasoningEffort = rawEffort
       ? toOpenAIReasoningEffort(
           rawEffort,
-          getDeclaredMaxReasoningEffort(this.capabilities),
+          getDeclaredMaxReasoningEffort(this.config.capabilities),
         )
       : undefined;
     // Pro-mode registry entries (GPT-5.6 Pro) share the base model's wire id
