@@ -476,9 +476,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.left.map(statusBarSegmentText)).toContain(
-      '187k/1.1M (18%)',
-    );
+    expect(display.left.map(statusBarSegmentText)).toContain('187k/1.1M (18%)');
   });
 
   it('caps the context window to the subscription budget for chatgpt-subscription usage', () => {
@@ -497,9 +495,7 @@ describe('CLI StatusBar display model', () => {
 
     // gpt-5.6's Codex subscription budget caps to 500k
     // (CODEX_GPT56_SUBSCRIPTION_CONTEXT_WINDOW), not the raw 1.05M API window.
-    expect(display.left.map(statusBarSegmentText)).toContain(
-      '187k/500k (37%)',
-    );
+    expect(display.left.map(statusBarSegmentText)).toContain('187k/500k (37%)');
   });
 
   it('keeps critical controls visible in narrow subagent sessions', () => {
