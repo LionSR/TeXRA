@@ -52,6 +52,8 @@ const SINGLE_VALUE_KEYS = {
   CONVERSATION: 'conversation',
   WORKSPACE_FILES: 'workspace-files',
   RESULT_META: 'result-meta',
+  /** Cross-process liveness heartbeat; owned by executionLiveness.ts. */
+  HEARTBEAT: 'heartbeat',
 } as const;
 
 const KEYS = {

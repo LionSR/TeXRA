@@ -17,9 +17,10 @@ import {
 } from '@platform/defaults/nodeStorage';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { initPlatform, platform, tryPlatform } from '@platform/platform';
+import { UsageLogService } from '@telemetry/UsageLogService';
+import { setHeartbeatOwnerHost } from '@agent/storage';
 
 // Local imports - telemetry
-import { UsageLogService } from '@telemetry/UsageLogService';
 
 // Local imports - agent index
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
@@ -300,6 +301,7 @@ export async function initCliPlatform(
       channel: 'cli',
       customDirectoryStore: { get: () => undefined },
     });
+    setHeartbeatOwnerHost('cli');
     initPlatform(
       createNodePlatform({
         configStores: { workspace: configStore, global: globalConfigStore },

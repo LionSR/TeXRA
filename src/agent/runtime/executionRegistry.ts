@@ -6,8 +6,10 @@
  */
 
 import {
+  HEARTBEAT_INTERVAL_MS,
   finalizeExecution,
   synchronizeAgentResultOutcome,
+  touchExecutionHeartbeat,
 } from '@agent/storage';
 import { createChannelTrace, type ResultEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -17,6 +19,7 @@ import {
   StreamStatusMachine,
   type StreamStatusEmitOptions,
 } from '@agent/runtime/StreamStatusService';
+import type { ExecutionId } from '@shared/schemas';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -135,6 +138,7 @@ export type ManualCompactionRequestResult =
  */
 export class ExecutionRegistry {
   private readonly handles = new Map<string, ExecutionHandle>();
+  private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   private readonly activeChildRunLoops = new Set<StreamTabId>();
   private readonly changeCallbacks = new Map<string, Array<() => void>>();
   private readonly disposeStatusListener: () => void;
@@ -229,6 +233,7 @@ export class ExecutionRegistry {
     this.disposeStatusListener();
     const executionIds = [...this.handles.keys()];
     this.handles.clear();
+    this.stopHeartbeatTimerIfIdle();
     this.activeChildRunLoops.clear();
     this.processOutput.dispose();
     for (const executionId of executionIds) {
@@ -256,6 +261,10 @@ export class ExecutionRegistry {
   /** Register an execution handle. */
   track(handle: ExecutionHandle): void {
     this.handles.set(handle.executionId, handle);
+    this.ensureHeartbeatTimer();
+    void touchExecutionHeartbeat(handle.executionId as ExecutionId).catch(
+      () => {},
+    );
     if (handle instanceof AgentExecutionHandle) {
       if (handle.isChildExecution) {
         this.emitChildActivity(handle.parentStreamId, 'subagents');
@@ -339,8 +348,34 @@ export class ExecutionRegistry {
     return true;
   }
 
+  /**
+   * One shared timer refreshes every active execution's on-disk heartbeat so
+   * other processes sharing the `~/.texra` root can tell these runs are live
+   * (#8625). Started on first track, stopped when the last handle untracks;
+   * unref'd so it never keeps a headless CLI process alive.
+   */
+  private ensureHeartbeatTimer(): void {
+    if (this.heartbeatTimer) return;
+    const timer = setInterval(() => {
+      for (const executionId of this.handles.keys()) {
+        void touchExecutionHeartbeat(executionId as ExecutionId).catch(
+          () => {},
+        );
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+    timer.unref?.();
+    this.heartbeatTimer = timer;
+  }
+
+  private stopHeartbeatTimerIfIdle(): void {
+    if (this.handles.size > 0 || !this.heartbeatTimer) return;
+    clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = undefined;
+  }
+
   private untrackHandle(handle: ExecutionHandle): void {
     this.handles.delete(handle.executionId);
+    this.stopHeartbeatTimerIfIdle();
     this.notifyRegistrationListeners(handle.executionId, undefined);
     this.notifyWaiters(handle.executionId);
     if (handle instanceof AgentExecutionHandle && handle.isChildExecution) {

@@ -6,9 +6,11 @@ import {
   deleteAllExecutions,
   deleteExecution,
   deriveResumability,
+  getExecutionLiveness,
   getExecutionStore,
   isUserVisibleExecution,
   listExecutions,
+  listLiveExecutionIds,
   unwrapResultMeta,
   type ExecutionListingEntry,
   type ExecutionMeta,
@@ -106,11 +108,20 @@ export function userStartedCliHistoryEntries<
 }
 
 export type CliHistoryDeleteResult =
-  | { readonly deleted: 'all'; readonly count: number }
+  | {
+      readonly deleted: 'all';
+      readonly count: number;
+      /** Executions skipped because they are live in some process (#8625). */
+      readonly skippedLive: number;
+    }
   | {
       readonly deleted: 'one';
       readonly id: ExecutionId;
       readonly found: boolean;
+      /** True when deletion was refused because the run is live (#8625). */
+      readonly live?: boolean;
+      /** Host that owns the live run, when its heartbeat records one. */
+      readonly liveHost?: string;
     };
 
 export function parseCliHistoryId(raw: string): ExecutionId | undefined {
@@ -304,13 +315,30 @@ export async function deleteCliHistory(options: {
   preCountForAll?: number;
 }): Promise<CliHistoryDeleteResult> {
   if (options.all) {
-    const deletedExecutionIds = await deleteAllExecutions();
+    // Executions live in any host sharing ~/.texra survive a clear (#8625).
+    const liveIds = await listLiveExecutionIds();
+    const deletedExecutionIds = await deleteAllExecutions(new Set(liveIds));
     await GoalStore.forgetByExecutionIds(deletedExecutionIds);
-    const count = options.preCountForAll ?? deletedExecutionIds.length;
-    return { deleted: 'all', count };
+    // The preflight count was taken before live runs were excluded, so it
+    // overstates the deletion when any were skipped — report actuals then.
+    const count =
+      liveIds.length > 0
+        ? deletedExecutionIds.length
+        : (options.preCountForAll ?? deletedExecutionIds.length);
+    return { deleted: 'all', count, skippedLive: liveIds.length };
   }
   if (!options.id) {
     throw new Error('Expected an execution id, or --all.');
+  }
+  const liveness = await getExecutionLiveness(options.id);
+  if (liveness.live) {
+    return {
+      deleted: 'one',
+      id: options.id,
+      found: true,
+      live: true,
+      liveHost: liveness.ownerHost,
+    };
   }
   const found = await deleteExecution(options.id);
   if (found) {

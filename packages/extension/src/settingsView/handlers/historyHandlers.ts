@@ -22,6 +22,9 @@ import {
   getExecutionStore,
   deleteExecution,
   deleteAllExecutions,
+  describeHeartbeatOwner,
+  getExecutionLiveness,
+  listLiveExecutionIds,
 } from '@agent/storage';
 import {
   AgentConfigSchema,
@@ -106,6 +109,17 @@ export class HistoryHandlers {
         );
         return;
       }
+      // The shared ~/.texra root means the run may be live in another host
+      // (CLI or desktop) this process's registry cannot see (#8625).
+      const liveness = await getExecutionLiveness(
+        data.historyId as ExecutionId,
+      );
+      if (liveness.live) {
+        await vscode.window.showWarningMessage(
+          `Cannot delete: this execution is running in ${describeHeartbeatOwner(liveness.ownerHost)}`,
+        );
+        return;
+      }
       const deleted = await deleteExecution(data.historyId as ExecutionId);
       if (deleted) {
         await this.ctx.withActiveWebview((w) => this.sendHistoryData(w));
@@ -126,7 +140,10 @@ export class HistoryHandlers {
   async handleClearHistory(): Promise<void> {
     try {
       await deleteAllExecutions(
-        new Set(defaultSession().executions.getActiveIds()),
+        new Set([
+          ...defaultSession().executions.getActiveIds(),
+          ...(await listLiveExecutionIds()),
+        ]),
       );
       await vscode.window.showInformationMessage('Agent history cleared');
       await this.ctx.withActiveWebview(async (w) => {
