@@ -79,7 +79,7 @@ import {
 import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 import type { Disposable } from '@platform/interfaces';
 
-export const GITHUB_PR_POLLING_EMIT_CI_STARTED_CONFIG_KEY =
+const GITHUB_PR_POLLING_EMIT_CI_STARTED_CONFIG_KEY =
   'texra.git.emitPrCiStartedEvents';
 
 function shouldEmitCIStartedEvents(): boolean {

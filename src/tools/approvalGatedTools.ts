@@ -27,7 +27,7 @@ const APPROVAL_GATED_TOOL_NAME_LIST = [
   'write_file',
 ] as const satisfies readonly RegisteredToolName[];
 
-export const APPROVAL_GATED_TOOL_NAMES: ReadonlySet<string> = new Set(
+const APPROVAL_GATED_TOOL_NAMES: ReadonlySet<string> = new Set(
   APPROVAL_GATED_TOOL_NAME_LIST,
 );
 

@@ -61,11 +61,6 @@ function emitGoalStateChanged(
   });
 }
 
-function normalizeGoalRecord(raw: unknown): Goal | null {
-  const parsedGoal = GoalSchema.safeParse(raw);
-  return parsedGoal.success ? parsedGoal.data : null;
-}
-
 function readRaw(streamId: StreamTabId): Goal | null {
   // tryWorkspaceState — bootstrap-tolerant: read-only paths called before
   // initPlatform() (e.g. early-stream syncs in some tests) return null
@@ -73,7 +68,9 @@ function readRaw(streamId: StreamTabId): Goal | null {
   // does throw, surfacing the misuse.
   const state = tryWorkspaceState();
   if (!state) return null;
-  return normalizeGoalRecord(state.get<unknown>(streamKey(streamId)));
+  return GoalSchema.nullable()
+    .catch(null)
+    .parse(state.get<unknown>(streamKey(streamId)));
 }
 
 async function writeRaw(goal: Goal): Promise<void> {

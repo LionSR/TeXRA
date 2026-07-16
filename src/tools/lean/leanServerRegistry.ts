@@ -19,9 +19,9 @@ import {
 
 import { LEAN_SERVER_MODE_LABELS } from './leanConstants';
 
-export type LeanServerMode = keyof typeof LEAN_SERVER_MODE_LABELS;
+type LeanServerMode = keyof typeof LEAN_SERVER_MODE_LABELS;
 
-export type LeanServerStatus = 'starting' | 'running' | 'error' | 'stopped';
+type LeanServerStatus = 'starting' | 'running' | 'error' | 'stopped';
 
 export interface LeanServerInfo {
   readonly id: string;

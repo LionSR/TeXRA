@@ -61,7 +61,7 @@ const OpenInquiryTurnSchema = z.object({
   kind: z.literal('open'),
   draft: InquiryDraftSchema.nullish(),
 });
-export type OpenInquiryTurn = z.infer<typeof OpenInquiryTurnSchema>;
+type OpenInquiryTurn = z.infer<typeof OpenInquiryTurnSchema>;
 
 /** Answer recorded and available inline — the steady-state "done" shape. */
 const AnsweredInquiryTurnSchema = z.object({
@@ -72,7 +72,7 @@ const AnsweredInquiryTurnSchema = z.object({
   answerRelativePath: z.string().min(1),
   sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
 });
-export type AnsweredInquiryTurn = z.infer<typeof AnsweredInquiryTurnSchema>;
+type AnsweredInquiryTurn = z.infer<typeof AnsweredInquiryTurnSchema>;
 
 /**
  * Legacy single-shot turn whose answer text still lives only on disk
@@ -89,18 +89,13 @@ const AnsweredUnhydratedInquiryTurnSchema = z.object({
   answeredAt: z.string().nullish(),
   sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
 });
-export type AnsweredUnhydratedInquiryTurn = z.infer<
-  typeof AnsweredUnhydratedInquiryTurnSchema
->;
 
 const CanonicalTurnRecordSchema = z.discriminatedUnion('kind', [
   OpenInquiryTurnSchema,
   AnsweredInquiryTurnSchema,
   AnsweredUnhydratedInquiryTurnSchema,
 ]);
-export type ExternalInquiryTurnRecord = z.infer<
-  typeof CanonicalTurnRecordSchema
->;
+type ExternalInquiryTurnRecord = z.infer<typeof CanonicalTurnRecordSchema>;
 
 /**
  * Raw, untagged shape turns were persisted in prior to this discriminated
@@ -230,7 +225,7 @@ export type ExternalInquiryThreadManifest = z.infer<
 // Mirror types
 // ============================================================================
 
-export interface ExternalInquiryExecutionMirrorPaths {
+interface ExternalInquiryExecutionMirrorPaths {
   executionId: ExecutionId;
   manifestPath: string;
   questionPath: string;

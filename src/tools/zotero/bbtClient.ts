@@ -75,7 +75,7 @@ const CslDateSchema = z.object({
 });
 
 /** Zotero collection metadata returned by `user.groups(true)`. */
-export const BbtCollectionSchema = z.object({
+const BbtCollectionSchema = z.object({
   key: z.string(),
   name: z.string(),
   parentCollection: z.union([z.string(), z.literal(false)]).nullish(),

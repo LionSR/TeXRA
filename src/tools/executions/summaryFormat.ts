@@ -36,7 +36,7 @@ export interface ExecutionSummaryOptions {
  * calling stream — i.e. the caller already receives this subagent's report
  * automatically as a follow-up, so /executions/{id} shouldn't duplicate it.
  */
-export function isCallerParentOfToolUseSubagent(
+function isCallerParentOfToolUseSubagent(
   handle: unknown,
   callerStreamId: StreamTabId | undefined,
 ): boolean {

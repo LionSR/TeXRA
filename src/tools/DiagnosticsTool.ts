@@ -30,7 +30,7 @@ const DiagnosticsPathSchema = z
   .min(1)
   .describe('Workspace-relative or absolute file path.');
 
-export const DiagnosticsReadInputSchema = z.strictObject({
+const DiagnosticsReadInputSchema = z.strictObject({
   command: z
     .enum(['list', 'count'])
     .describe('Use "list" for full diagnostics or "count" for a summary.'),
