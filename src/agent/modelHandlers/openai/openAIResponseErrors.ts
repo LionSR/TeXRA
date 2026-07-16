@@ -6,11 +6,11 @@ import {
 } from '@common/errors/sdkErrorUtils';
 
 // Type imports
-import type { Response } from 'openai/resources/responses/responses';
 import type { ProviderError } from '@shared/schemas';
 
 // Local imports - model handlers
 import { tagOpenAISdkError } from './openAISdkError';
+import type { Response } from 'openai/resources/responses/responses';
 
 interface OpenAIBackgroundResumeError {
   providerError: ProviderError;
