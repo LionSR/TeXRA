@@ -115,7 +115,7 @@ function requireYamlValue(block, key, expectedValue) {
 }
 
 async function verifyPublishTarget() {
-  let configText = '';
+  let configText;
   try {
     configText = await readFile(electronBuilderConfigPath, 'utf8');
   } catch (error) {
