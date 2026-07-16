@@ -243,6 +243,21 @@ export function ConversationRegion({
             </Box>
           ) : null}
         </Box>
+        {tipRowVisible ? (
+          <TipRow
+            agentSelectionAvailable={agentSelectionAvailable}
+            hour={tipHour}
+            responseRunning={activeResponseRunning}
+          />
+        ) : null}
+        {queuedFollowUpPanelVisible ? (
+          <QueuedFollowUpsPanel
+            maxRows={queuedFollowUpPanelRows}
+            messages={queuedFollowUpMessages}
+            width={columns}
+          />
+        ) : null}
+        {renderFooterChrome(queuedFollowUpPanelVisible)}
         {bottomPanelBudget > 0 ? (
           <Box flexDirection="column" overflowY="hidden">
             <SubagentList
@@ -259,21 +274,6 @@ export function ConversationRegion({
             <TodosPlanPanel maxRows={todosPlanRows} />
           </Box>
         ) : null}
-        {tipRowVisible ? (
-          <TipRow
-            agentSelectionAvailable={agentSelectionAvailable}
-            hour={tipHour}
-            responseRunning={activeResponseRunning}
-          />
-        ) : null}
-        {queuedFollowUpPanelVisible ? (
-          <QueuedFollowUpsPanel
-            maxRows={queuedFollowUpPanelRows}
-            messages={queuedFollowUpMessages}
-            width={columns}
-          />
-        ) : null}
-        {renderFooterChrome(queuedFollowUpPanelVisible)}
       </Box>
     </>
   );

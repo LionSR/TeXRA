@@ -170,11 +170,17 @@ export function activeStreamTreeEntries(
 ): readonly ActiveStreamTreeEntry[] {
   const root = activeTreeRoot(init);
   if (!root) return [];
-  const ordered = orderedDescendantsFromTree({
-    parent: root,
-    childStreamEntries: init.childStreamEntries,
-    streams: init.streams,
-  });
+  // Newest-first: `orderedDescendantsFromTree` returns children oldest-first
+  // (retained order, then creation order), so the session list and its
+  // Alt+1..9 shortcuts read top-to-bottom from most to least recently
+  // started, keeping the row a user is most likely watching near the top.
+  const ordered = [
+    ...orderedDescendantsFromTree({
+      parent: root,
+      childStreamEntries: init.childStreamEntries,
+      streams: init.streams,
+    }),
+  ].reverse();
   const out: ActiveStreamTreeEntry[] = [];
   if (init.streams.has(root)) out.push({ id: root });
   for (const [index, id] of ordered.entries()) {
