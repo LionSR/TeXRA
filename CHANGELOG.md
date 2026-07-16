@@ -12,6 +12,12 @@ All notable changes to this project will be documented in this file.
   opt into deterministic workflow scripts whose completed steps resume after
   interruption and whose progress appears in the existing session view.
 
+#### Bug Fixes
+
+- **Application logs protect provider credentials by default** — extension and
+  SDK-provided log destinations now redact recognizable secrets before writing
+  them, while the local CLI terminal keeps its operator-readable output.
+
 ### CLI
 
 #### Bug Fixes

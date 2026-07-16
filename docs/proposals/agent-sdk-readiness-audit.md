@@ -196,13 +196,11 @@ be the highest-leverage addition to this surface.
 
 ### 2.4 Safety: make log redaction opt-out, not opt-in
 
-`redactSecrets` (`src/logger/redaction.ts:84`) is applied only by
-`desktopAppLog.ts`; the default/CLI sinks skip it by design. Any SDK consumer
-wiring a custom `setOutputChannelFactory` that persists logs inherits an
-un-enforced contract and can leak API keys. _Fix:_ make the default sink factory
-redact, with an explicit `{ trusted: true }` opt-out for the operator-terminal
-case. This is the one correctness item worth fixing before any external consumer
-wires a persistent log sink.
+`setOutputChannelFactory` now wraps sinks with `redactSecrets` by default, so an
+SDK consumer cannot accidentally persist provider credentials by omitting a
+host-side convention. The CLI's local operator terminal is the explicit
+`{ trusted: true }` exception; extension and default console sinks remain
+redacted.
 
 ---
 

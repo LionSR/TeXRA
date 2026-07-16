@@ -9,18 +9,12 @@
  * the VS Code extension provides a factory that returns VS Code
  * `OutputChannel`s, tests/CLI fall back to a console-backed sink.
  *
- * Secret redaction is a host responsibility, by design. This module does NOT
- * redact at emit time — the trade-off is cost/flexibility (most channel output
- * is product-internal and never persisted off-box). Hosts that persist or ship
- * logs off the machine MUST run text through {@link redactSecrets} in their sink
- * (see `desktopAppLog.ts` for the reference redacting wiring) before writing.
- * SDK consumers wiring a custom {@link setOutputChannelFactory} take on the same
- * contract; a sink that forgets it can leak API keys/paths into logs. (The CLI
- * stdout/stderr sinks in `logSinks.ts` are a deliberate non-redacting exception —
- * they target the operator's own terminal, not a persisted/exported artifact.)
+ * Sink output is secret-redacted by default. A host may opt out only for a
+ * trusted operator terminal whose output is neither persisted nor exported.
  */
 import { format } from 'date-fns';
 
+import { redactSecrets } from '@logger/redaction';
 import { LOG_LEVELS, type LogLevel } from '@shared/schemas';
 import { getConfig } from '@utils/config';
 import { serializeError } from '@utils/core';
@@ -43,9 +37,17 @@ interface OutputSink {
 
 type OutputChannelFactory = (name: string) => OutputSink;
 
+export interface OutputChannelFactoryOptions {
+  /** Preserve raw output only for a local operator-controlled terminal. */
+  readonly trusted?: boolean;
+}
+
 const channels = new Map<string, OutputSink>();
 let mainOutputChannel: OutputSink | null = null;
 let outputChannelFactory: OutputChannelFactory | null = null;
+let outputSinksTrusted = false;
+
+const redactingSinks = new WeakMap<OutputSink, OutputSink>();
 
 function getKey(channel: string, isAgent: boolean): string {
   return `${channel}::${isAgent ? 'agent' : 'shared'}`;
@@ -63,9 +65,26 @@ function createConsoleSink(channel: string): OutputSink {
   };
 }
 
+function createRedactingSink(sink: OutputSink): OutputSink {
+  const existing = redactingSinks.get(sink);
+  if (existing) return existing;
+
+  const redactingSink: OutputSink = {
+    appendLine(message) {
+      sink.appendLine(redactSecrets(message));
+    },
+    dispose() {
+      sink.dispose?.();
+    },
+  };
+  redactingSinks.set(sink, redactingSink);
+  return redactingSink;
+}
+
 function createOutputChannel(channel: string, isAgent: boolean): OutputSink {
   const name = isAgent ? `TeXRA ${channel}` : 'TeXRA';
-  return outputChannelFactory?.(name) ?? createConsoleSink(name);
+  const sink = outputChannelFactory?.(name) ?? createConsoleSink(name);
+  return outputSinksTrusted ? sink : createRedactingSink(sink);
 }
 
 function ensureChannel(channel: string, isAgent: boolean): OutputSink {
@@ -183,12 +202,14 @@ export function initialize(channel: string, isAgent = false): void {
 
 export function setOutputChannelFactory(
   factory: OutputChannelFactory | null,
+  options: OutputChannelFactoryOptions = {},
 ): void {
   const sinks = new Set<OutputSink>(channels.values());
   if (mainOutputChannel) sinks.add(mainOutputChannel);
   for (const sink of sinks) sink.dispose?.();
 
   outputChannelFactory = factory;
+  outputSinksTrusted = options.trusted === true;
   channels.clear();
   mainOutputChannel = null;
 }
