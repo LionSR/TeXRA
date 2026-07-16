@@ -13,33 +13,33 @@ const desktopPackageJsonPath = join(
 );
 const desktopRequire = createRequire(desktopPackageJsonPath);
 
+function fail(...lines) {
+  console.error('Desktop Electron binary check failed.');
+  for (const line of lines) console.error(line);
+  process.exit(1);
+}
+
 let electronBinaryPath;
 try {
   electronBinaryPath = desktopRequire('electron');
 } catch (error) {
-  console.error('Desktop Electron binary check failed.');
-  console.error(
+  fail(
     'The electron package did not install its platform binary. Run `corepack pnpm install --frozen-lockfile` with the root pnpm build-script policy applied.',
+    error instanceof Error ? error.message : String(error),
   );
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
 }
 
 if (typeof electronBinaryPath !== 'string' || electronBinaryPath.length === 0) {
-  console.error('Desktop Electron binary check failed.');
-  console.error('The electron package did not resolve to a binary path.');
-  process.exit(1);
+  fail('The electron package did not resolve to a binary path.');
 }
 
 try {
   await access(electronBinaryPath);
 } catch (error) {
-  console.error('Desktop Electron binary check failed.');
-  console.error(
+  fail(
     `Resolved Electron binary does not exist: ${electronBinaryPath}`,
+    error instanceof Error ? error.message : String(error),
   );
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
 }
 
 console.log(`Desktop Electron binary check passed: ${electronBinaryPath}`);
