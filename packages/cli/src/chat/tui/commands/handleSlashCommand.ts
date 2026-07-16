@@ -145,58 +145,59 @@ export async function handleTuiSlashCommand(
     case 'yolo':
       applyCliApprovalPolicySelection(rest || 'yolo', context);
       return true;
-    case 'status': {
-      const meta = sessionMeta.get();
-      const activeStreamId = activeStreamIdSignal.get();
-      const slice = activeStreamId
-        ? streams.get().get(activeStreamId)
-        : undefined;
-      const accessTarget = streamAccessTarget(slice, {
-        model: meta.model || context.initialModel,
-        category: meta.category,
-      });
-      const subscriptionActive =
-        accessTarget.category === undefined
-          ? false
-          : await isCodexSubscriptionActive(
-              accessTarget.model,
-              accessTarget.category,
-            );
-      appendLocalAssistantTranscript(
-        formatCliSessionStatus({
-          agent: meta.agent || context.initialAgent,
-          model: accessTarget.model,
-          teamName: meta.teamName,
-          modelAccess: resolveCliModelAccessRoute({
-            apiMode: meta.apiMode,
-            subscriptionActive,
-            usageRoute: slice?.usage?.usageRoute,
-          }),
-          approval: formatCliApprovalPolicy(context.getApprovalPolicy()),
-          approvalBypasses: slice?.bypass,
-          status: slice?.status ?? 'not started',
-          substate: slice?.substate,
-          goal: activeStreamId
-            ? GoalStore.getForStream(activeStreamId)
-            : undefined,
-          // Only surface the resume id once a stream exists — never next to
-          // a "not started" status.
-          sessionId:
-            slice && meta.transcriptMode === 'persistent'
-              ? context.session.executionId
+    case 'status':
+      await runGuardedSlashCommand(async () => {
+        const meta = sessionMeta.get();
+        const activeStreamId = activeStreamIdSignal.get();
+        const slice = activeStreamId
+          ? streams.get().get(activeStreamId)
+          : undefined;
+        const accessTarget = streamAccessTarget(slice, {
+          model: meta.model || context.initialModel,
+          category: meta.category,
+        });
+        const subscriptionActive =
+          accessTarget.category === undefined
+            ? false
+            : await isCodexSubscriptionActive(
+                accessTarget.model,
+                accessTarget.category,
+              );
+        appendLocalAssistantTranscript(
+          formatCliSessionStatus({
+            agent: meta.agent || context.initialAgent,
+            model: accessTarget.model,
+            teamName: meta.teamName,
+            modelAccess: resolveCliModelAccessRoute({
+              apiMode: meta.apiMode,
+              subscriptionActive,
+              usageRoute: slice?.usage?.usageRoute,
+            }),
+            approval: formatCliApprovalPolicy(context.getApprovalPolicy()),
+            approvalBypasses: slice?.bypass,
+            status: slice?.status ?? 'not started',
+            substate: slice?.substate,
+            goal: activeStreamId
+              ? GoalStore.getForStream(activeStreamId)
               : undefined,
-          commandName: context.commandName,
-          cwd: context.cwd,
-          processCwd: context.processCwd,
-          approvalPolicy: context.getApprovalPolicy(),
-          queuedFollowUpMessages:
-            activeStreamId === undefined
-              ? []
-              : defaultSession().followUps.getAll(activeStreamId),
-        }),
-      );
+            // Only surface the resume id once a stream exists — never next to
+            // a "not started" status.
+            sessionId:
+              slice && meta.transcriptMode === 'persistent'
+                ? context.session.executionId
+                : undefined,
+            commandName: context.commandName,
+            cwd: context.cwd,
+            processCwd: context.processCwd,
+            approvalPolicy: context.getApprovalPolicy(),
+            queuedFollowUpMessages:
+              activeStreamId === undefined
+                ? []
+                : defaultSession().followUps.getAll(activeStreamId),
+          }),
+        );
+      });
       return true;
-    }
     case 'goal':
       appendLocalAssistantTranscript(GOAL_MODE_HELP);
       return true;

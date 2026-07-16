@@ -289,6 +289,22 @@ describe('handleTuiSlashCommand', () => {
     expect(statusText).not.toContain('model access: ChatGPT subscription');
   });
 
+  it('surfaces status lookup failures without rejecting', async () => {
+    registerBuiltinSlashCommands();
+
+    const handled = await handleTuiSlashCommand(
+      '/status',
+      createContext(createSession(), {
+        getApprovalPolicy: () => {
+          throw new Error('Credential store unavailable');
+        },
+      }),
+    );
+
+    expect(handled).toBe(true);
+    expect(lastEntryText()).toBe('Credential store unavailable');
+  });
+
   it('does not advertise the current ephemeral session as resumable', async () => {
     registerBuiltinSlashCommands();
     const session = createSession();
