@@ -7,8 +7,6 @@ import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBui
 import {
   deleteAllExecutions,
   deleteExecution,
-  describeHeartbeatOwner,
-  getExecutionLiveness,
   getExecutionStore,
 } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -22,6 +20,7 @@ import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 // Local imports - IPC contracts
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ExecutionId } from '@shared/schemas';
+import { formatExecutionHistoryRetention } from '@shared/copy/executionHistory';
 
 // Local imports - controller types
 import type {
@@ -40,8 +39,6 @@ export interface DesktopHistoryOptions {
   readonly runExecution: (request: ValidatedExecutionRequest) => Promise<void>;
   /** Restore a persisted agent configuration into the main view. */
   readonly restoreTaskState: (taskState: TaskState) => Promise<boolean>;
-  /** Return execution ids that must be protected from history deletion. */
-  readonly getActiveExecutionIds: () => readonly string[];
   readonly postToRenderer: (message: unknown) => void;
   readonly openPath: (filePath: string) => Promise<void>;
   readonly showInfoMessage: (message: string) => Promise<void>;
@@ -83,24 +80,14 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
   }
 
   private async deleteItem(historyId: string): Promise<void> {
-    if (this.dependencies.getActiveExecutionIds().includes(historyId)) {
+    const result = await deleteExecution(historyId as ExecutionId);
+    if (result.status === 'active') {
       await this.dependencies.showInfoMessage(
-        'Cannot delete a running execution',
+        'Cannot delete an execution that is active in TeXRA',
       );
       return;
     }
-    // The shared ~/.texra root means the run may be live in another host
-    // (CLI or extension) this process's registry cannot see (#8625).
-    const liveness = await getExecutionLiveness(historyId as ExecutionId);
-    if (liveness.live) {
-      await this.dependencies.showInfoMessage(
-        `Cannot delete: this execution is running in ${describeHeartbeatOwner(liveness.ownerHost)}`,
-      );
-      return;
-    }
-
-    const deleted = await deleteExecution(historyId as ExecutionId);
-    if (!deleted) {
+    if (result.status === 'not-found') {
       await this.dependencies.showInfoMessage(
         `History item not found: ${historyId}`,
       );
@@ -110,14 +97,20 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
   }
 
   private async clear(): Promise<void> {
-    // deleteAllExecutions itself skips runs live in any host (#8625);
-    // this process's active ids are excluded up front as a cheap fast path.
-    await deleteAllExecutions(
-      new Set(this.dependencies.getActiveExecutionIds()),
+    const result = await deleteAllExecutions();
+    if (result.active.length === 0 && result.failed.length === 0) {
+      this.dependencies.postToRenderer({
+        command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
+      });
+      return;
+    }
+    await this.dependencies.showInfoMessage(
+      formatExecutionHistoryRetention(
+        result.active.length,
+        result.failed.length,
+      ),
     );
-    this.dependencies.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
-    });
+    await this.postHistoryData();
   }
 
   // readConfig() validates and returns null for missing and corrupt configs;

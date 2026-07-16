@@ -41,6 +41,54 @@ function trackAgent(
 }
 
 describe('SessionHandle', () => {
+  it('drains trace, transcript, and registered artifact writers together', async () => {
+    const session = createTestSession();
+    const order: string[] = [];
+    session.flushers.add(() => order.push('trace'));
+    vi.spyOn(session.transcripts, 'flush').mockImplementation(async () => {
+      order.push('transcript');
+    });
+    const detach = session.useArtifactFlusher(async () => {
+      order.push('snapshot');
+    });
+
+    try {
+      await session.flushArtifacts();
+      expect(order).toEqual(['trace', 'transcript', 'snapshot']);
+
+      order.length = 0;
+      detach();
+      await session.flushArtifacts();
+      expect(order).toEqual(['trace', 'transcript']);
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('waits for every artifact writer and reports all failures', async () => {
+    const session = createTestSession();
+    const transcriptError = new Error('transcript failed');
+    const snapshotError = new Error('snapshot failed');
+    const laterWriter = vi.fn();
+    vi.spyOn(session.transcripts, 'flush').mockRejectedValue(transcriptError);
+    session.useArtifactFlusher(() => {
+      throw snapshotError;
+    });
+    session.useArtifactFlusher(async () => laterWriter());
+
+    try {
+      const failure = await session.flushArtifacts().catch((error) => error);
+      expect(failure).toBeInstanceOf(AggregateError);
+      expect((failure as AggregateError).errors).toEqual([
+        transcriptError,
+        snapshotError,
+      ]);
+      expect(laterWriter).toHaveBeenCalledOnce();
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('rejects a read-only transcript store', async () => {
     const transcripts = await StreamLogStore.openReadOnly();
 

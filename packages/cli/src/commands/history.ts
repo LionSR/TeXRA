@@ -3,9 +3,9 @@ import * as path from 'node:path';
 import { defineCommand } from 'citty';
 
 import { assembleTrace, injectStandaloneTrace } from '@transcript';
-import { describeHeartbeatOwner } from '@agent/storage';
 import { formatChatAsMarkdown } from '@agent/export/chatExportFormatter';
 import { type ExecutionId } from '@shared/schemas';
+import { formatCliHistoryDeletionSummary } from '@shared/copy/executionHistory';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -201,7 +201,6 @@ async function runHistoryDelete(
 
   // `--all` is destructive and unrecoverable. Refuse it unless the caller
   // also passes `--yes`, and quote the count so the stakes are explicit.
-  let preCountForAll: number | undefined;
   if (options.all) {
     const preflight = await preflightCliHistoryDeleteAll({
       all: true,
@@ -213,12 +212,11 @@ async function runHistoryDelete(
       );
       return CliExitCode.Usage;
     }
-    preCountForAll = preflight.count;
   }
 
   let result: CliHistoryDeleteResult;
   try {
-    result = await deleteCliHistory({ ...options, preCountForAll });
+    result = await deleteCliHistory(options);
   } catch (error) {
     writeErrorStderr(error);
     return CliExitCode.Usage;
@@ -229,34 +227,31 @@ async function runHistoryDelete(
   // exit because the human-readable path can't render "not found" usefully.
   if (
     result.deleted === 'one' &&
-    !result.found &&
+    result.status === 'not-found' &&
     context.outputFormat === 'text'
   ) {
     writeTextStderr(formatCliHistoryNotFoundText(result.id, context.cwd));
     return CliExitCode.Usage;
   }
-  // Same split for a refused live deletion: structured consumers branch on
-  // `live: true`, text consumers get a stderr error and a failure exit.
   if (
     result.deleted === 'one' &&
-    result.live &&
+    result.status === 'active' &&
     context.outputFormat === 'text'
   ) {
     writeTextStderr(
-      `Cannot delete execution ${result.id}: it is running in ${describeHeartbeatOwner(result.liveHost)}.`,
+      `Execution ${result.id} is active in TeXRA and was not deleted.`,
     );
-    return CliExitCode.AgentError;
+    return CliExitCode.Usage;
   }
 
   let text: string;
   if (result.deleted === 'all') {
-    text = `Deleted ${formatResultCount(result.count, 'stored execution')}.`;
-    if (result.skippedLive > 0) {
-      text += ` Skipped ${formatResultCount(result.skippedLive, 'running execution')}.`;
-    }
-  } else if (result.live) {
-    text = '';
-  } else if (result.found) {
+    text = formatCliHistoryDeletionSummary({
+      deleted: result.count,
+      active: result.active.length,
+      failed: result.failed.length,
+    });
+  } else if (result.status === 'deleted') {
     text = `Deleted execution ${result.id}.`;
   } else {
     text = '';
@@ -267,7 +262,9 @@ async function runHistoryDelete(
     ndjson: { kind: 'history-delete', result },
     text,
   });
-  return CliExitCode.Success;
+  return result.deleted === 'all' && result.failed.length > 0
+    ? CliExitCode.Usage
+    : CliExitCode.Success;
 }
 
 const historyListCommand = defineCliCommand({
