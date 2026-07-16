@@ -37,7 +37,13 @@ import { TranscriptViewer } from './modals/TranscriptViewer';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
-import { currentApproval } from './state/approvalQueue';
+import {
+  currentApproval,
+  pendingApprovalSummaries,
+  promoteApprovalsForStream,
+  ROOT_APPROVAL_STREAM_KEY,
+  type PendingApprovalKind,
+} from './state/approvalQueue';
 import {
   isEscapeInput,
   metaChordInput,
@@ -125,6 +131,7 @@ export function App(props: AppProps): React.JSX.Element {
   const transcriptViewerStreamId = useSignal(transcriptViewerStreamIdSignal);
   const taskDetailExecutionId = useSignal(taskDetailExecutionIdSignal);
   const rootRunStartAvailable = useSignal(rootRunStartAvailableSignal);
+  const pendingSummaries = useSignal(pendingApprovalSummaries);
   const [childListSelection, dispatchChildListSelection] = useReducer(
     reduceChildListSelection,
     INITIAL_CHILD_LIST_SELECTION,
@@ -237,6 +244,24 @@ export function App(props: AppProps): React.JSX.Element {
       streams,
     ],
   );
+  // Group the flat FIFO summaries per row, folding stream-less (session-wide)
+  // approvals onto the root/main row. Grouping from the flat list keeps each
+  // row's first shown kind the first-to-present even when the root's own and
+  // session-wide items interleave in the global queue.
+  const pendingApprovalsForRows = useMemo(() => {
+    const grouped = new Map<string, PendingApprovalKind[]>();
+    for (const summary of pendingSummaries) {
+      const key =
+        summary.streamKey === ROOT_APPROVAL_STREAM_KEY
+          ? rootStreamId
+          : summary.streamKey;
+      if (key === undefined) continue;
+      const kinds = grouped.get(key);
+      if (kinds) kinds.push(summary.kind);
+      else grouped.set(key, [summary.kind]);
+    }
+    return grouped;
+  }, [pendingSummaries, rootStreamId]);
   const activeSubagentExecutionIds = useMemo(() => {
     const executionIds = new Map<StreamTabId, string>();
     const parentIds = new Set(
@@ -318,6 +343,12 @@ export function App(props: AppProps): React.JSX.Element {
   const focusSession = useCallback((streamId: StreamTabId) => {
     dispatchChildListSelection({ kind: 'focusStream', streamId });
     activeStreamIdSignal.set(streamId);
+    // Jump-to-waiting: surface the focused stream's pending approval right
+    // away instead of leaving it queued behind other streams' items. The root
+    // row also owns session-wide (stream-less) approvals.
+    promoteApprovalsForStream(streamId, {
+      includeSessionWide: streamId === rootStreamIdSignal.get(),
+    });
   }, []);
   const foregroundKind = foregroundSurfaceKind({
     activeFormOpen: activeForm !== undefined,
@@ -421,6 +452,9 @@ export function App(props: AppProps): React.JSX.Element {
       });
       if (!target) return false;
       activeStreamIdSignal.set(target);
+      promoteApprovalsForStream(target, {
+        includeSessionWide: target === rootStreamIdSignal.get(),
+      });
       return true;
     }
     return false;
@@ -594,6 +628,7 @@ export function App(props: AppProps): React.JSX.Element {
           streams,
           activeSubagentExecutionIds,
           childListTarget,
+          pendingApprovals: pendingApprovalsForRows,
           transcriptViewerStreamId,
         }}
         onCancelChildList={cancelChildList}
