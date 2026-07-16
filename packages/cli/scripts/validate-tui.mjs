@@ -1102,7 +1102,9 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
     frame: 'viewport',
     expect: ['✻ Working', '◆ running'],
-    expectPatterns: [/✻ Working\.{1,3}\s+(?:4[2-9]|[5-9]\d|\d{3,})s/],
+    expectPatterns: [
+      /✻ Working\.{1,3}[ \t]+(?:4[2-9]s|5\ds|[1-9]\d*(?:m|h|d)(?: [1-9]\d*(?:s|m|h))?)/,
+    ],
   },
   {
     name: 'tools-form',
