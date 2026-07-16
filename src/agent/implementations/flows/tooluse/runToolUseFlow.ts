@@ -71,6 +71,11 @@ export interface RunToolUseFlowInput<
   resumeSnapshot?: ToolUseSessionSnapshot | null;
   /** One batch already drained by an external child-turn owner. */
   drainedFollowUps?: readonly FollowUpQueueBatchItem[];
+  /**
+   * Take messages queued between the initial drain and live flow attachment.
+   * Called exactly once after attachment and before the persisted cursor runs.
+   */
+  takePendingFollowUps?: () => readonly FollowUpQueueBatchItem[];
   onFollowUpConsumed?: () => void;
   /** When true, delegation tools are filtered out to prevent nesting, and
    *  every completed model cycle suspends at WAITING (see `ToolUseWaitNode`)
@@ -312,13 +317,12 @@ export async function runToolUseFlow<C = unknown>(
     input.onModelChanged?.(nextHandler, model);
   };
 
-  // A resume's setupSession (see `resumeQueuedToolUseSnapshot`) re-appends
-  // its drained follow-up batch into `sessionLifecycle` from inside
-  // `onSetup` below, before the flow is interruptible. An async
-  // cancellation racing in during that window (through the recovery read,
-  // see the `checkInterruption()` guards below) must not erase that batch
-  // -- `flowContext.interrupt()` uses the queue-preserving variant for
-  // exactly this window, matching `preserveResumeRecord`'s finally guard.
+  // A resume completes its one-shot handoff immediately after `onSetup`
+  // attaches the live context, before the flow is interruptible. An async
+  // cancellation racing in during the recovery read must not erase follow-ups
+  // appended to the now-live session after attachment --
+  // `flowContext.interrupt()` uses the queue-preserving variant for exactly
+  // this window, matching `preserveResumeRecord`'s finally guard.
   // Cleared once the flow has passed both guards and moved into real work,
   // so a later mid-run cancellation keeps the normal destructive clear.
   let inResumeStartupWindow = input.resumeSnapshot !== undefined;
@@ -359,6 +363,7 @@ export async function runToolUseFlow<C = unknown>(
   let touchedFiles: string[] | undefined;
   let totalCostUsd: number | undefined;
   let teardownSetup: (() => void) | undefined;
+  let attachmentFollowUps: readonly FollowUpQueueBatchItem[] = [];
   let preserveResumeRecord = false;
   let persistenceRecoveryPending = false;
   let flowRunStarted = false;
@@ -375,6 +380,7 @@ export async function runToolUseFlow<C = unknown>(
 
   try {
     teardownSetup = onSetup?.(flowContext) ?? undefined;
+    attachmentFollowUps = input.takePendingFollowUps?.() ?? [];
     // A host can hand off a cancellation synchronously during setup. Observe
     // it before touching the persisted resume record.
     if (input.checkInterruption()) {
@@ -482,7 +488,11 @@ export async function runToolUseFlow<C = unknown>(
 
     const prepareNode = new ToolUsePrepareNode<C>();
     const cycleNode = new ToolUseCycleNode<C>();
-    const waitNode = new ToolUseWaitNode<C>(input.drainedFollowUps);
+    const resumedFollowUps = [
+      ...(input.drainedFollowUps ?? []),
+      ...attachmentFollowUps,
+    ];
+    const waitNode = new ToolUseWaitNode<C>(resumedFollowUps);
     prepareNode.next(cycleNode);
     cycleNode.next(waitNode);
     waitNode.on(FlowTransition.CONTINUE, cycleNode);

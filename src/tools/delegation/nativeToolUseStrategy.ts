@@ -208,7 +208,6 @@ export function createNativeToolUseStrategy(
             approvalPromptsUnavailable: params.approvalPromptsUnavailable,
             runtimeUnavailableTools: params.runtimeUnavailableTools,
             parentStreamId: params.orchestratorStreamId,
-            allowWaitingResult: true,
             // The loop's queue never admits synthetic goal continuations for
             // a subagent, but its batch type is shared with root flows. Keep
             // the existing defensive downgrade rather than silently dropping
