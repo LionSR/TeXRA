@@ -689,7 +689,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const agentEventDisposable = registerAgentEventListeners();
 
   // Surface curated research tools to VS Code's Language Model Tool API
-  // (Copilot Chat `#texra_*` references). No-op on hosts without the API.
+  // (Copilot Chat `#texra_*` references).
   registerLanguageModelTools(context);
 
   context.subscriptions.push(

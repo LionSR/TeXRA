@@ -27,7 +27,6 @@ const mocks = vi.hoisted(() => ({
   hasUsableApiKey: vi.fn<(provider: string) => Promise<boolean>>(),
   showWarningMessage: vi.fn<() => Promise<string | undefined>>(),
   showQuickPick: vi.fn<() => Promise<unknown>>(),
-  createQuickPick: vi.fn<(qp: unknown) => void>(),
   showInformationMessage: vi.fn<() => Promise<unknown>>(),
   showErrorMessage: vi.fn<() => Promise<unknown>>(),
   executeCommand: vi.fn<() => Promise<unknown>>(),
@@ -157,34 +156,6 @@ vi.mock('vscode', () => ({
   window: {
     showWarningMessage: mocks.showWarningMessage,
     showQuickPick: mocks.showQuickPick,
-    // The credential picker now uses the createQuickPick instance API so it
-    // can attach a persistent prompt hint (VS Code 1.108+). The fake records
-    // the created instance and auto-hides on show() so the awaiting promise
-    // resolves to `undefined` (user dismissed), preserving prior behavior.
-    createQuickPick: () => {
-      let onHide: (() => void) | undefined;
-      const qp = {
-        title: '',
-        placeholder: '',
-        items: [] as unknown[],
-        selectedItems: [] as unknown[],
-        activeItems: [] as unknown[],
-        buttons: [] as unknown[],
-        onDidAccept: () => ({ dispose: () => {} }),
-        onDidHide: (cb: () => void) => {
-          onHide = cb;
-          return { dispose: () => {} };
-        },
-        onDidTriggerButton: () => ({ dispose: () => {} }),
-        show: () => {
-          mocks.createQuickPick(qp);
-          queueMicrotask(() => onHide?.());
-        },
-        hide: () => {},
-        dispose: () => {},
-      };
-      return qp;
-    },
     showInformationMessage: mocks.showInformationMessage,
     showErrorMessage: mocks.showErrorMessage,
     createOutputChannel: () => ({
@@ -257,7 +228,6 @@ describe('setup assistant routing check ordering', () => {
     mocks.hasUsableApiKey.mockReset();
     mocks.showWarningMessage.mockReset();
     mocks.showQuickPick.mockReset();
-    mocks.createQuickPick.mockReset();
     mocks.showInformationMessage.mockReset();
     mocks.showErrorMessage.mockReset();
     mocks.executeCommand.mockReset();
@@ -293,7 +263,7 @@ describe('setup assistant routing check ordering', () => {
       expect.any(String),
       expect.any(String),
     );
-    expect(mocks.createQuickPick).not.toHaveBeenCalled();
+    expect(mocks.showQuickPick).not.toHaveBeenCalled();
   });
 
   it('proceeds to credential check when routing is correctly configured', async () => {
@@ -304,10 +274,10 @@ describe('setup assistant routing check ordering', () => {
     // Credential prompt shown (routing check passed first silently).
     expect(result).toBe('not-started');
     expect(mocks.showWarningMessage).not.toHaveBeenCalled();
-    expect(mocks.createQuickPick).toHaveBeenCalledWith(
+    expect(mocks.showQuickPick).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ id: 'chatgpt' })]),
       expect.objectContaining({
-        activeItems: [expect.objectContaining({ id: 'chatgpt' })],
-        placeholder: expect.stringContaining('credential'),
+        placeHolder: expect.stringContaining('credential'),
       }),
     );
   });
@@ -324,7 +294,6 @@ describe('setup assistant routing check ordering', () => {
 
     expect(mocks.showWarningMessage).not.toHaveBeenCalled();
     expect(mocks.showQuickPick).not.toHaveBeenCalled();
-    expect(mocks.createQuickPick).not.toHaveBeenCalled();
     expect(mocks.showErrorMessage).not.toHaveBeenCalled();
     expect(result).toBe('launched');
   });
