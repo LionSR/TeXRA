@@ -160,6 +160,7 @@ export function planToolTerminalAction(input: {
 export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
+  private executionsWatcher: vscode.FileSystemWatcher | undefined;
   private readonly handlerRegistry: SettingsViewInboundHandlerRegistry;
 
   // Domain-specific handler delegates
@@ -288,30 +289,49 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     // Cross-host history refresh (#8625): the shared ~/.texra executions dir
     // is written by the CLI and desktop too, so an open history tab re-lists
-    // when any host adds, finishes, or deletes a run. The dir lives outside
-    // the workspace, hence the RelativePattern base. heartbeat.json churn
-    // (touched every 10s per live run) is filtered out; the debounce
-    // coalesces the remaining launch/terminal write bursts.
+    // when any host adds, finishes, or deletes a run. Re-registered on
+    // workspace-folder changes because the storage path follows the current
+    // workspace.
+    void this.registerExecutionsWatcher();
+    context.subscriptions.push(
+      vscode.workspace.onDidChangeWorkspaceFolders(() => {
+        void this.registerExecutionsWatcher();
+      }),
+      { dispose: () => this.executionsWatcher?.dispose() },
+    );
+  }
+
+  /**
+   * Watch the shared executions directory (outside the workspace, hence the
+   * RelativePattern base) and re-send the history list to the active settings
+   * webview. heartbeat.json churn (touched every 10s per live run, #8652) is
+   * filtered out; the debounce coalesces launch/terminal write bursts.
+   */
+  private async registerExecutionsWatcher(): Promise<void> {
+    this.executionsWatcher?.dispose();
     const executionsDir = path.join(
       platform().storage.getStoragePath(),
       RUNS_STORAGE_DIR,
     );
+    // A watcher rooted at a not-yet-existing directory can silently never
+    // fire; the dir is cheap to create and always wanted.
+    await StorageFS.ensureDir(RUNS_STORAGE_DIR);
     const refreshHistory = debounce(
       () =>
         this.withActiveWebview((w) => this.historyHandlers.sendHistoryData(w)),
       DEBOUNCE_OPTIONS_MS,
     );
     const onExecutionsEvent = (uri: vscode.Uri) => {
-      if (uri.path.endsWith('heartbeat.json')) return;
+      if (uri.path.endsWith('/heartbeat.json')) return;
       void refreshHistory();
     };
-    const executionsWatcher = vscode.workspace.createFileSystemWatcher(
+    const watcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(vscode.Uri.file(executionsDir), '**'),
     );
-    executionsWatcher.onDidCreate(onExecutionsEvent);
-    executionsWatcher.onDidChange(onExecutionsEvent);
-    executionsWatcher.onDidDelete(onExecutionsEvent);
-    context.subscriptions.push(executionsWatcher);
+    watcher.onDidCreate(onExecutionsEvent);
+    watcher.onDidChange(onExecutionsEvent);
+    watcher.onDidDelete(onExecutionsEvent);
+    this.executionsWatcher = watcher;
   }
 
   private createHandlerRegistry(): SettingsViewInboundHandlerRegistry {

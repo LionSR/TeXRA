@@ -928,7 +928,14 @@ function createWindow(options: {
       executionsDir,
       { recursive: true },
       (_event, filename) => {
-        if (filename?.endsWith('heartbeat.json')) return;
+        // filename may be a Buffer (or null) per fs.watch's contract; the
+        // separator anchor avoids matching an unrelated *heartbeat.json name.
+        if (
+          filename != null &&
+          /(?:^|[\\/])heartbeat\.json$/.test(String(filename))
+        ) {
+          return;
+        }
         void debouncedHistoryRepost();
       },
     );
