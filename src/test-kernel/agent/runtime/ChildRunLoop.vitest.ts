@@ -241,12 +241,13 @@ describe('childRunLoop E2E fixtures', () => {
   it('delegate → complete → follow-up delivery: an interim turn delivers, then the loop picks up a queued follow-up for the next turn', async () => {
     const childStreamId = uniqueStreamId('complete-followup');
     const parentStreamId = 'parent' as StreamTabId;
-    const { strategy, resolveTurn } = createFakeStrategy();
+    const { strategy, callCount, resolveTurn } = createFakeStrategy();
     const onTurnSuccess = vi.fn();
     const parentWake = vi.fn();
+    const deliveryCompleted = pDefer<{ kind: 'delivered' }>();
     mocks.wakeChildRunFollowUp.mockImplementation(async () => {
       parentWake();
-      return { kind: 'delivered' };
+      return deliveryCompleted.promise;
     });
 
     startChildRunLoop({
@@ -270,9 +271,9 @@ describe('childRunLoop E2E fixtures', () => {
         }),
       );
     });
-    // An interim (non-terminal) turn wakes inline — no finalize is pending
-    // for it — so the wake for this delivery is expected right away, unlike
-    // the terminal delivery below (see the deferred-wake regression test).
+    // The loop starts delivery for turn N before reading the queue for turn
+    // N+1. Even input already queued during delivery must not begin another
+    // model turn until the parent has received this result.
     await vi.waitFor(() =>
       expect(mocks.wakeChildRunFollowUp).toHaveBeenCalled(),
     );
@@ -285,6 +286,10 @@ describe('childRunLoop E2E fixtures', () => {
     session.followUps
       .acquire(childStreamId)
       .enqueue({ text: 'keep going', origin: 'user' });
+    expect(callCount()).toBe(1);
+
+    deliveryCompleted.resolve({ kind: 'delivered' });
+    await vi.waitFor(() => expect(callCount()).toBe(2));
 
     // Waits for the loop to have actually invoked runTurn a second time —
     // NOT for the queue to read empty, which can happen synchronously on

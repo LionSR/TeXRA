@@ -72,8 +72,9 @@ export interface RunToolUseFlowInput<
   /** One batch already drained by an external child-turn owner. */
   drainedFollowUps?: readonly FollowUpQueueBatchItem[];
   /**
-   * Take messages queued between the initial drain and live flow attachment.
-   * Called exactly once after attachment and before the persisted cursor runs.
+   * Take messages queued at a resume ownership boundary. Called first after
+   * live-flow attachment and then after each WAITING suspension; a later call
+   * may decline ownership by returning an empty batch.
    */
   takePendingFollowUps?: () => readonly FollowUpQueueBatchItem[];
   onFollowUpConsumed?: () => void;
@@ -340,7 +341,10 @@ export async function runToolUseFlow<C = unknown>(
     interrupt(): void {
       onInterrupt?.();
       runSession.interactions.cancel({ streamId, cause: 'Run interrupted.' });
-      if (inResumeStartupWindow) {
+      if (
+        inResumeStartupWindow ||
+        (input.isSubagent === true && input.takePendingFollowUps !== undefined)
+      ) {
         sessionLifecycle.interruptPreservingQueue();
       } else {
         sessionLifecycle.interrupt();
@@ -486,51 +490,67 @@ export async function runToolUseFlow<C = unknown>(
     // confirmed or a present record passed its migration boundary.
     persistenceRecoveryPending = false;
 
-    const prepareNode = new ToolUsePrepareNode<C>();
-    const cycleNode = new ToolUseCycleNode<C>();
-    const resumedFollowUps = [
+    let resumedFollowUps = [
       ...(input.drainedFollowUps ?? []),
       ...attachmentFollowUps,
     ];
-    const waitNode = new ToolUseWaitNode<C>(resumedFollowUps);
-    prepareNode.next(cycleNode);
-    cycleNode.next(waitNode);
-    waitNode.on(FlowTransition.CONTINUE, cycleNode);
-    waitNode.on(FlowTransition.WAITING, waitNode);
-    const pf = new ToolUsePersistedFlow<C>(
-      prepareNode,
-      kv,
-      executionId,
-      ToolUseRunSharedCanonicalSchema,
-    );
-    activePersistedFlow = pf;
-    pf.setServices(services);
-    // Note: the flow record is the resume SSOT and the transcript sidecar
-    // owns completed-run display/export (#7246 Decision 1) — the old
-    // per-step `conversation.json`/`todos.json` projections are gone.
-    // Live-run todos still persist event-driven via `persistTodos` above.
-    pf.setProjection(async (s, store) => {
-      const currentTouchedFiles = extractTouchedFiles(s.stateSlices);
-      if (currentTouchedFiles.length) {
-        await store.writeWorkspaceFiles(currentTouchedFiles);
+    let finalAction: Awaited<ReturnType<ToolUsePersistedFlow<C>['run']>>;
+    do {
+      const prepareNode = new ToolUsePrepareNode<C>();
+      const cycleNode = new ToolUseCycleNode<C>();
+      const waitNode = new ToolUseWaitNode<C>(resumedFollowUps);
+      prepareNode.next(cycleNode);
+      cycleNode.next(waitNode);
+      waitNode.on(FlowTransition.CONTINUE, cycleNode);
+      waitNode.on(FlowTransition.WAITING, waitNode);
+      const pf = new ToolUsePersistedFlow<C>(
+        prepareNode,
+        kv,
+        executionId,
+        ToolUseRunSharedCanonicalSchema,
+      );
+      activePersistedFlow = pf;
+      pf.setServices(services);
+      // Note: the flow record is the resume SSOT and the transcript sidecar
+      // owns completed-run display/export (#7246 Decision 1) — the old
+      // per-step `conversation.json`/`todos.json` projections are gone.
+      // Live-run todos still persist event-driven via `persistTodos` above.
+      pf.setProjection(async (s, store) => {
+        const currentTouchedFiles = extractTouchedFiles(s.stateSlices);
+        if (currentTouchedFiles.length) {
+          await store.writeWorkspaceFiles(currentTouchedFiles);
+        }
+      });
+      flowRunStarted = true;
+      try {
+        finalAction = await pf.run(shared);
+      } catch (error: unknown) {
+        if (input.checkInterruption()) {
+          shared = (await pf.getShared()) ?? shared;
+          await pf.prepareForFollowUp(shared);
+        }
+        throw error;
       }
-    });
-    flowRunStarted = true;
-    let finalAction: Awaited<ReturnType<typeof pf.run>>;
-    try {
-      finalAction = await pf.run(shared);
-    } catch (error: unknown) {
-      if (input.checkInterruption()) {
-        shared = (await pf.getShared()) ?? shared;
-        await pf.prepareForFollowUp(shared);
+      // Re-read shared from the flow record — PersistedFlow deep-clones the
+      // initial shared via structuredClone, so nodes mutate the clone, not the
+      // original object. Without this, reads of lastError, messages, etc. below
+      // would always see the stale initial values.
+      shared = (await pf.getShared()) ?? shared;
+      if (finalAction !== FlowTransition.WAITING || input.checkInterruption()) {
+        break;
       }
-      throw error;
-    }
-    // Re-read shared from the flow record — PersistedFlow deep-clones the
-    // initial shared via structuredClone, so nodes mutate the clone, not the
-    // original object.  Without this, reads of lastError, messages, etc. below
-    // would always see the stale initial values.
-    shared = (await pf.getShared()) ?? shared;
+
+      // Close the live-flow admission boundary before the post-park drain.
+      // From this synchronous detach onward, sendFollowUp queues instead of
+      // reporting `sent`; the immediately following drain therefore cannot
+      // miss input in a gap between its empty check and final teardown.
+      teardownSetup?.();
+      teardownSetup = undefined;
+      resumedFollowUps = [...(input.takePendingFollowUps?.() ?? [])];
+      if (resumedFollowUps.length > 0) {
+        teardownSetup = onSetup?.(flowContext) ?? undefined;
+      }
+    } while (resumedFollowUps.length > 0);
 
     lastResponse =
       findLastAssistantText(shared.messages, (m) =>
@@ -558,7 +578,7 @@ export async function runToolUseFlow<C = unknown>(
       });
     }
     if (outcome === RUN_OUTCOME.CANCELLED && input.checkInterruption()) {
-      await pf.prepareForFollowUp(shared);
+      await activePersistedFlow?.prepareForFollowUp(shared);
     }
     if (shared.lastError) {
       // Re-throw so runFlowWithLifecycle logs the error and shows
