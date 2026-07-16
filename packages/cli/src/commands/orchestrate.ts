@@ -51,7 +51,7 @@ import {
   contextForCliModelAccess,
   readCliModelAccessStatus,
   selectCliModelAccessRoute,
-} from '../runtime/modelAccessRoutes';
+} from '../runtime/modelAccessSelection';
 import {
   chatGptSignOutPreferenceMessage,
   signOutCliChatGpt,

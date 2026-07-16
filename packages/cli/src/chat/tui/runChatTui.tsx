@@ -387,6 +387,7 @@ export async function runChat(
     : init.cliMultiAgentPresetId;
   sessionMetaSignal.set({
     agent,
+    category: AgentCategory.ToolUse,
     model,
     modelSource: defaults.modelSource,
     cwd: context.cwd,

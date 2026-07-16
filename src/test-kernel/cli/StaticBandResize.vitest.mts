@@ -24,7 +24,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 // Local imports
 import type { ConversationEntry } from '@cli/chat/tui/state/cliState';
-import type { StreamTabId } from '@shared/schemas';
+import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import { delay } from '@utils/core';
 
 const cliRequire = createRequire(
@@ -140,6 +140,7 @@ describe('Static band resize', () => {
 
     resetCliState({
       agent: 'research',
+      category: AgentCategory.ToolUse,
       model: 'test-model',
       modelSource: 'builtin-default',
       cwd: '/tmp/resize-proof',
@@ -243,6 +244,7 @@ describe('Static band resize', () => {
 
     resetCliState({
       agent: 'research',
+      category: AgentCategory.ToolUse,
       model: 'test-model',
       modelSource: 'builtin-default',
       cwd: '/tmp/listener-proof',

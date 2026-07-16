@@ -5,7 +5,13 @@ import {
   contextForCliModelAccess,
   readCliModelAccessStatus,
   selectCliModelAccessRoute,
-} from '@cli/runtime/modelAccessRoutes';
+} from '@cli/runtime/modelAccessSelection';
+import {
+  formatCliModelAccessRoute,
+  formatCliModelAccessRouteInline,
+  resolveCliModelAccessRoute,
+  shortCliModelAccessRoute,
+} from '@cli/runtime/modelAccessRoute';
 
 const mocks = vi.hoisted(() => ({
   getCodexStatus: vi.fn(),
@@ -60,6 +66,44 @@ beforeEach(() => {
 });
 
 describe('CLI model access routes', () => {
+  it('uses observed access before prospective access preferences', () => {
+    expect(
+      resolveCliModelAccessRoute({
+        apiMode: 'personal',
+        subscriptionActive: true,
+        usageRoute: 'relay',
+      }),
+    ).toBe('included');
+    expect(
+      resolveCliModelAccessRoute({
+        apiMode: 'included',
+        subscriptionActive: true,
+      }),
+    ).toBe('chatgpt');
+    expect(
+      resolveCliModelAccessRoute({
+        apiMode: 'personal',
+        subscriptionActive: false,
+      }),
+    ).toBe('personal');
+  });
+
+  it('formats the shared access routes for detailed and compact surfaces', () => {
+    expect(formatCliModelAccessRoute('chatgpt')).toBe('ChatGPT subscription');
+    expect(formatCliModelAccessRoute('included')).toBe('Included TeXRA access');
+    expect(formatCliModelAccessRoute('personal')).toBe('Personal API keys');
+    expect(formatCliModelAccessRouteInline('chatgpt')).toBe(
+      'ChatGPT subscription',
+    );
+    expect(formatCliModelAccessRouteInline('included')).toBe(
+      'included TeXRA access',
+    );
+    expect(formatCliModelAccessRouteInline('personal')).toBe(
+      'personal API keys',
+    );
+    expect(shortCliModelAccessRoute('chatgpt')).toBe('subscription');
+  });
+
   it('applies a launcher access choice to the launched session', () => {
     const explicitIncluded = { ...context, apiMode: 'included' as const };
 
@@ -101,7 +145,7 @@ describe('CLI model access routes', () => {
     expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
     expect(result).toEqual({
       apiMode: 'personal',
-      message: 'Model access set to personal API keys.',
+      message: 'Model access: Personal API keys.',
     });
   });
 

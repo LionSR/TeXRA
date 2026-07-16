@@ -15,7 +15,7 @@ describe('CLI session status formatter', () => {
       formatCliSessionStatus({
         agent: 'chat',
         model: 'harness-model',
-        api: 'personal',
+        modelAccess: 'personal',
         approval: 'ask',
         status: 'running',
         queuedFollowUpMessages: [
@@ -27,7 +27,7 @@ describe('CLI session status formatter', () => {
       [
         'agent: chat',
         'model: harness-model',
-        'api: personal',
+        'model access: Personal API keys',
         'approval: ask',
         'status: running',
         'queued follow-ups: 2',
@@ -41,7 +41,7 @@ describe('CLI session status formatter', () => {
     const status = formatCliSessionStatus({
       agent: 'chat',
       model: 'harness-model',
-      api: 'personal',
+      modelAccess: 'personal',
       approval: 'ask',
       status: 'running',
       queuedFollowUpMessages: [
@@ -61,7 +61,7 @@ describe('CLI session status formatter', () => {
     const status = formatCliSessionStatus({
       agent: 'chat',
       model: 'harness-model',
-      api: 'personal',
+      modelAccess: 'personal',
       approval: 'ask',
       status: 'running',
       queuedFollowUpMessages: [
@@ -78,7 +78,7 @@ describe('CLI session status formatter', () => {
     const status = formatCliSessionStatus({
       agent: 'chat',
       model: 'harness-model',
-      api: 'personal',
+      modelAccess: 'personal',
       approval: 'ask',
       status: 'running',
       queuedFollowUpMessages: [undefined as unknown as string],
@@ -92,7 +92,7 @@ describe('CLI session status formatter', () => {
     const status = formatCliSessionStatus({
       agent: 'chat',
       model: 'harness-model',
-      api: 'personal',
+      modelAccess: 'personal',
       approval: 'ask',
       status: 'running',
       sessionId: 'abc123',
@@ -107,7 +107,7 @@ describe('CLI session status formatter', () => {
     const status = formatCliSessionStatus({
       agent: 'chat',
       model: 'harness-model',
-      api: 'personal',
+      modelAccess: 'personal',
       approval: 'ask',
       status: 'running',
       sessionId: 'abc123',
@@ -122,7 +122,7 @@ describe('CLI session status formatter', () => {
     const status = formatCliSessionStatus({
       agent: 'chat',
       model: 'harness-model',
-      api: 'personal',
+      modelAccess: 'personal',
       approval: 'ask',
       status: 'running',
       sessionId: 'abc123',
@@ -141,7 +141,7 @@ describe('CLI session status formatter', () => {
     const status = formatCliSessionStatus({
       agent: 'chat',
       model: 'harness-model',
-      api: 'personal',
+      modelAccess: 'personal',
       approval: 'deny privileged actions',
       approvalPolicy: 'never',
       status: 'waiting',
@@ -159,7 +159,7 @@ describe('CLI session status formatter', () => {
     const status = formatCliSessionStatus({
       agent: 'chat',
       model: 'harness-model',
-      api: 'personal',
+      modelAccess: 'personal',
       approval: 'deny privileged actions',
       approvalPolicy: 'never',
       status: 'waiting',
@@ -179,7 +179,7 @@ describe('CLI session status formatter', () => {
     const status = formatCliSessionStatus({
       agent: 'chat',
       model: 'harness-model',
-      api: 'personal',
+      modelAccess: 'personal',
       approval: 'ask',
       status: 'not started',
       queuedFollowUpMessages: [],
@@ -194,7 +194,7 @@ describe('CLI session status formatter', () => {
       formatCliSessionStatus({
         agent: 'chat',
         model: 'harness-model',
-        api: 'personal',
+        modelAccess: 'personal',
         approval: 'ask',
         status: 'waiting',
         queuedFollowUpMessages: [],
@@ -206,7 +206,7 @@ describe('CLI session status formatter', () => {
     const status = formatCliSessionStatus({
       agent: 'chat',
       model: 'harness-model',
-      api: 'personal',
+      modelAccess: 'personal',
       approval: 'ask before privileged actions',
       approvalBypasses: { superYolo: true, bash: true, toolEdit: true },
       status: 'waiting',
@@ -223,7 +223,7 @@ describe('CLI session status formatter', () => {
     const status = formatCliSessionStatus({
       agent: 'chat',
       model: 'harness-model',
-      api: 'included TeXRA access',
+      modelAccess: 'included',
       approval: 'ask before privileged actions',
       status: 'stopped',
       goal: {
@@ -242,37 +242,32 @@ describe('CLI session status formatter', () => {
     );
   });
 
-  it('shows the subscription line after api when subscription routing is active', () => {
+  it('reports ChatGPT as the selected model access', () => {
     const status = formatCliSessionStatus({
       agent: 'chat',
       model: 'gpt55',
-      api: 'included TeXRA access',
-      subscription: true,
+      modelAccess: 'chatgpt',
       approval: 'ask',
       status: 'running',
       queuedFollowUpMessages: [],
     });
 
     expect(status).toContain(
-      [
-        'api: included TeXRA access',
-        'subscription: on (Codex models use your ChatGPT plan)',
-        'approval: ask',
-      ].join('\n'),
+      ['model access: ChatGPT subscription', 'approval: ask'].join('\n'),
     );
   });
 
-  it('omits the subscription line when subscription routing is inactive', () => {
+  it('reports included TeXRA model access without a subscription line', () => {
     const status = formatCliSessionStatus({
       agent: 'chat',
       model: 'gpt55',
-      api: 'included TeXRA access',
-      subscription: false,
+      modelAccess: 'included',
       approval: 'ask',
       status: 'running',
       queuedFollowUpMessages: [],
     });
 
+    expect(status).toContain('model access: Included TeXRA access');
     expect(status).not.toContain('subscription:');
   });
 
@@ -282,7 +277,7 @@ describe('CLI session status formatter', () => {
         agent: 'orchestrator',
         model: 'harness-model',
         teamName: 'Physicist',
-        api: 'personal',
+        modelAccess: 'personal',
         approval: 'ask',
         status: 'running',
         queuedFollowUpMessages: [],
@@ -296,7 +291,7 @@ describe('CLI session status formatter', () => {
       formatCliSessionStatus({
         agent: 'research',
         model: 'deepseekT',
-        api: 'included TeXRA access',
+        modelAccess: 'included',
         approval: 'ask before privileged actions',
         status: STREAM_PHASE.WAITING,
         queuedFollowUpMessages: [],

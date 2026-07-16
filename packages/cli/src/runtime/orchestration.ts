@@ -26,6 +26,11 @@ import {
   type CliModelAccess,
   type CliModelPickerItem,
 } from './modelAccess';
+import {
+  formatCliModelAccessRoute,
+  type CliModelAccessRoute,
+  type CliModelAccessStatus,
+} from './modelAccessRoute';
 import type { CliApiMode } from './apiAccessMode';
 
 export type CliOrchestrationAction =
@@ -82,7 +87,6 @@ export interface BuildCliOrchestrationItemsInput {
   readonly presetLaunchBlockReason?: CliPresetLaunchBlockReason;
 }
 
-export type CliModelAccessRoute = 'chatgpt' | 'included' | 'personal';
 type CliAccountProvider = 'chatgpt' | 'texra';
 type CliAccountOperation = 'sign-in' | 'switch' | 'sign-out';
 
@@ -92,13 +96,6 @@ export interface CliAccountStatus {
   readonly texraCredentialSource?: 'session' | 'relayToken';
   readonly chatGptSignedIn: boolean;
   readonly chatGptAccountLabel?: string;
-}
-
-export interface CliModelAccessStatus {
-  readonly active: CliModelAccessRoute;
-  readonly chatGptSignedIn: boolean;
-  readonly chatGptAccountLabel?: string;
-  readonly texraSignedIn?: boolean;
 }
 
 export interface CliModelAccessItem {
@@ -314,19 +311,8 @@ function modelAccessItem(status: CliModelAccessStatus): CliOrchestrationItem {
     description:
       status.active === 'chatgpt' && status.chatGptAccountLabel
         ? `ChatGPT subscription · ${status.chatGptAccountLabel}`
-        : modelAccessRouteLabel(status.active),
+        : formatCliModelAccessRoute(status.active),
   };
-}
-
-function modelAccessRouteLabel(route: CliModelAccessRoute): string {
-  switch (route) {
-    case 'chatgpt':
-      return 'ChatGPT subscription';
-    case 'included':
-      return 'Included TeXRA access';
-    case 'personal':
-      return 'Personal API keys';
-  }
 }
 
 export function buildModelAccessItems(
@@ -345,7 +331,7 @@ export function buildModelAccessItems(
     },
     {
       value: 'included',
-      label: modelAccessRouteLabel('included'),
+      label: formatCliModelAccessRoute('included'),
       description:
         status.texraSignedIn === false
           ? 'Sign in through Account to use included models'
@@ -353,7 +339,7 @@ export function buildModelAccessItems(
     },
     {
       value: 'personal',
-      label: modelAccessRouteLabel('personal'),
+      label: formatCliModelAccessRoute('personal'),
       description: 'Use keys configured on this computer',
     },
   ];
