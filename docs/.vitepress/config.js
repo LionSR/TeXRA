@@ -223,17 +223,7 @@ const baseConfig = {
   },
 };
 
-// Export the config wrapped with withMermaid, including optional configs
 export default withMermaid(baseConfig, {
-  // your existing vitepress config is passed above as baseConfig
-  // optionally, you can pass MermaidConfig
-  mermaid: {
-    // refer https://mermaid.js.org/config/setup/modules/mermaidAPI.html#mermaidapi-configuration-defaults for options
-    // Add any specific Mermaid options here, e.g.:
-    // theme: 'dark',
-  },
-  // optionally set additional config for plugin itself with MermaidPluginConfig
-  mermaidPlugin: {
-    class: 'mermaid', // Default class, you can add more like "my-class"
-  },
+  mermaid: {},
+  mermaidPlugin: { class: 'mermaid' },
 });
