@@ -1,6 +1,7 @@
 // Suites for packages/desktop protocol callbacks (registration lifecycle +
 // callback behavior).
 
+import { strict as assert } from 'node:assert';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createDesktopProtocolCallbackRouter,
@@ -9,7 +10,6 @@ import {
   installDesktopProtocolCallbackLifecycle,
   parseDesktopProtocolCallback,
 } from '@desktop/main/desktopProtocolCallbacks';
-import { strict as assert } from 'node:assert';
 
 // ---------------------------------------------------------------------------
 // DesktopProtocolCallbacks

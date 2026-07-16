@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { SettingsGoalController } from '@controllers/settingsView/SettingsGoalController';
-import type { Goal } from '@shared/schemas/settingsViewMessages';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import type { Goal } from '@shared/schemas/settingsViewMessages';
 
 const GOAL: Goal = {
   goalId: 'goal-1',

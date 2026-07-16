@@ -299,6 +299,37 @@ export class LaTeXTab extends LitElement {
     const detectedPaths = installed ? this.getDetectedPaths(dep) : [];
     const installCmd = !installed ? this.getInstallCommand(dep) : null;
 
+    let actionSlot: TemplateResult | typeof nothing;
+    if (installed) {
+      actionSlot = nothing;
+    } else if (dep.actionEvent) {
+      actionSlot = html`
+        <wa-button
+          appearance="outlined"
+          variant="neutral"
+          size="small"
+          title="${dep.actionLabel ?? 'Install'}"
+          @click=${() =>
+            this.dispatchEvent(
+              new CustomEvent(dep.actionEvent!, {
+                bubbles: true,
+                composed: true,
+              }),
+            )}
+        >
+          ${waIcon('cloud-download', { slot: 'start' })}
+          ${dep.actionLabel ?? 'Install'}
+        </wa-button>
+      `;
+    } else {
+      actionSlot = html`<wa-tag
+        class="setting-badge"
+        variant="neutral"
+        size="small"
+        >Not found</wa-tag
+      >`;
+    }
+
     return html`
       <div class="dependency-card">
         <div class="dependency-row">
@@ -314,35 +345,7 @@ export class LaTeXTab extends LitElement {
               (p) => html`<div class="dependency-path">${p}</div>`,
             )}
           </div>
-          ${
-            installed
-              ? nothing
-              : dep.actionEvent
-                ? html`
-                    <wa-button
-                      appearance="outlined"
-                      variant="neutral"
-                      size="small"
-                      title="${dep.actionLabel ?? 'Install'}"
-                      @click=${() =>
-                        this.dispatchEvent(
-                          new CustomEvent(dep.actionEvent!, {
-                            bubbles: true,
-                            composed: true,
-                          }),
-                        )}
-                    >
-                      ${waIcon('cloud-download', { slot: 'start' })}
-                      ${dep.actionLabel ?? 'Install'}
-                    </wa-button>
-                  `
-                : html`<wa-tag
-                    class="setting-badge"
-                    variant="neutral"
-                    size="small"
-                    >Not found</wa-tag
-                  >`
-          }
+          ${actionSlot}
         </div>
         ${
           !installed && installCmd

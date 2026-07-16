@@ -136,11 +136,14 @@ export async function runReflectionFlow<C = unknown>(
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
-  const requestCount = Array.isArray(prompt.userRequest)
-    ? prompt.userRequest.length
-    : prompt.userRequest
-      ? 1
-      : 0;
+  let requestCount: number;
+  if (Array.isArray(prompt.userRequest)) {
+    requestCount = prompt.userRequest.length;
+  } else if (prompt.userRequest) {
+    requestCount = 1;
+  } else {
+    requestCount = 0;
+  }
   const totalRounds = Math.max(setting.rounds ?? 2, requestCount);
 
   const getOutputFileLocation =

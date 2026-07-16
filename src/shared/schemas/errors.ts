@@ -93,14 +93,16 @@ function normalizeLegacyExhaustionFlags(value: unknown): unknown {
     isChatGptSubscriptionLimited,
     ...rest
   } = data;
-  const exhaustionReason: ExhaustionReason | undefined =
-    isChatGptSubscriptionLimited === true
-      ? 'chatgpt-subscription'
-      : isUpstreamCreditDepleted === true
-        ? 'upstream-credit'
-        : isCredentialExhausted === true
-          ? 'relay-limit'
-          : undefined;
+  let exhaustionReason: ExhaustionReason | undefined;
+  if (isChatGptSubscriptionLimited === true) {
+    exhaustionReason = 'chatgpt-subscription';
+  } else if (isUpstreamCreditDepleted === true) {
+    exhaustionReason = 'upstream-credit';
+  } else if (isCredentialExhausted === true) {
+    exhaustionReason = 'relay-limit';
+  } else {
+    exhaustionReason = undefined;
+  }
   return exhaustionReason === undefined ? rest : { ...rest, exhaustionReason };
 }
 

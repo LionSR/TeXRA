@@ -12,7 +12,6 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform } from '@platform/platform';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import * as logger from '@logger/logUtils';
 import {
   computeAgentOptionsData,
   getAgent,
@@ -25,6 +24,7 @@ import {
   refresh,
   resolveAgentKey,
 } from '@agent/index/agentRegistry';
+import * as logger from '@logger/logUtils';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { AgentDirectoriesPort } from '@platform/interfaces';
 

@@ -298,12 +298,14 @@ export class AgentRosterController<
   }
 
   private missingTeamId(selection: AgentRosterSelection): string | undefined {
-    const teamId =
-      selection.kind === 'inherit'
-        ? (this.getDefaultTeamId() ?? this.deps.fallbackTeamId)
-        : selection.kind === 'team'
-          ? selection.teamId
-          : undefined;
+    let teamId: string | null | undefined;
+    if (selection.kind === 'inherit') {
+      teamId = this.getDefaultTeamId() ?? this.deps.fallbackTeamId;
+    } else if (selection.kind === 'team') {
+      teamId = selection.teamId;
+    } else {
+      teamId = undefined;
+    }
     if (!teamId) return undefined;
     return allPresets(this.deps.getPresets?.() ?? []).some(
       (preset) => preset.id === teamId,

@@ -471,8 +471,9 @@ export default tseslint.config(
       eqeqeq: ['warn', 'always', { null: 'ignore' }],
       'no-throw-literal': 'warn',
       'local/prefer-alias-for-deep-relative-imports': 'error',
+      'no-nested-ternary': 'error',
       'import/order': [
-        'warn',
+        'error',
         {
           groups: [
             'builtin',
