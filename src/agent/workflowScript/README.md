@@ -111,14 +111,15 @@ return concat(sections, { separator: '\n\n' });
   which already resolves to `null` with its own `agent:end` event) is
   logged via a `log` event before the slot becomes `null`.
 
-## Not yet built (production integration)
+## Production integration
 
-- A `delegate_workflow_script` tool, which will invoke the existing production
-  runner and task-run file hand-off. Domain-specific structures travel as JSON
-  output files rather than per-call result schemas.
-- The durable progress adapter is implemented in
-  `src/tools/delegation/workflowScriptRun.ts`; the future tool must use it so
-  phases and script logs appear on the parent run's existing trace tree.
-- Completed journal-call costs can be validated and summed with
-  `sumCompletedWorkflowJournalCost`; the future tool must settle that scalar
-  once through the parent tool-call cost hook.
+The opt-in `delegate_workflow_script` tool composes the production in-band
+subagent runner, durable checkpoint store, task-run file hand-off, progress
+projection, parent cancellation, and completed-journal cost settlement. It is
+registered but absent from every default agent configuration; explicitly adding
+the tool to an agent is the consent boundary for automated workflow fan-out.
+
+Domain-specific structures should travel as JSON output files rather than
+per-call result schemas. Cost settlement covers completed logical calls retained
+in the journal; failed or cancelled attempts can consume additional quota before
+they become durable.

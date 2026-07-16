@@ -32,6 +32,8 @@ export interface SandboxOptions {
   /** Wall-clock cap for the whole (async) script run. */
   timeoutMs: number;
   filename: string;
+  /** Parent cancellation signal for immediate guest preemption. */
+  signal?: AbortSignal;
   /** Fired exactly once when the wall-clock timeout is first observed. */
   onTimeout?: () => void;
 }
@@ -239,7 +241,14 @@ interface GuestOutcome {
 type SandboxSettlement =
   | { readonly kind: 'outcome'; readonly outcome: GuestOutcome }
   | { readonly kind: 'host-failure'; readonly error: Error }
+  | { readonly kind: 'aborted'; readonly error: Error }
   | { readonly kind: 'timeout' };
+
+function abortError(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException('The operation was aborted', 'AbortError');
+}
 
 /**
  * Evaluates a workflow body in a fresh preemptible QuickJS runtime. The WASM
@@ -251,7 +260,9 @@ export async function runScriptInSandbox(
   bridge: SandboxHostBridge,
   options: SandboxOptions,
 ): Promise<unknown> {
+  if (options.signal?.aborted) throw abortError(options.signal);
   const quickJs = await getQuickJsModule();
+  if (options.signal?.aborted) throw abortError(options.signal);
   const deadline = performance.now() + options.timeoutMs;
   let active = true;
   let interruptRequested = false;
@@ -288,6 +299,13 @@ export async function runScriptInSandbox(
     }
     wake();
   };
+  const markAborted = () => {
+    interruptRequested = true;
+    if (settlement === undefined && options.signal) {
+      settlement = { kind: 'aborted', error: abortError(options.signal) };
+    }
+    wake();
+  };
 
   const runtime = quickJs.newRuntime({
     memoryLimitBytes: QUICKJS_MEMORY_LIMIT_BYTES,
@@ -309,6 +327,8 @@ export async function runScriptInSandbox(
   }
   const pendingHostPromises = new Set<QuickJSDeferredPromise>();
   const timeout = setTimeout(markTimedOut, options.timeoutMs);
+  options.signal?.addEventListener('abort', markAborted, { once: true });
+  if (options.signal?.aborted) markAborted();
 
   try {
     installHostBridge(
@@ -378,6 +398,8 @@ export async function runScriptInSandbox(
           return settlement.outcome.value;
         case 'host-failure':
           throw settlement.error;
+        case 'aborted':
+          throw settlement.error;
         case 'timeout':
           throw timeoutError(options);
         case undefined:
@@ -388,10 +410,12 @@ export async function runScriptInSandbox(
     }
   } catch (error) {
     if (settlement?.kind === 'timeout') throw timeoutError(options);
+    if (settlement?.kind === 'aborted') throw settlement.error;
     throw error;
   } finally {
     active = false;
     clearTimeout(timeout);
+    options.signal?.removeEventListener('abort', markAborted);
     wake();
     try {
       for (const deferred of pendingHostPromises) deferred.dispose();
