@@ -12,8 +12,10 @@ import {
   filterNotNullish,
   getBasename,
   getFileStem,
+  KeyedMutex,
   toNewestFirstByTimestamp,
 } from '@utils/core';
+import { deriveExecutionId } from '@utils/core/idHash';
 
 // ---------------------------------------------------------------------------
 // Comparators
@@ -174,6 +176,83 @@ describe('async utilities', () => {
     controller.abort();
 
     await expect(promise).rejects.toMatchObject({ name: 'AbortError' });
+  });
+});
+
+describe('KeyedMutex', () => {
+  it('serializes operations that use the same key', async () => {
+    const mutex = new KeyedMutex<string>();
+    const order: string[] = [];
+    let releaseFirst!: () => void;
+    const firstBlocked = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+
+    const first = mutex.runExclusive('shared', async () => {
+      order.push('first:start');
+      await firstBlocked;
+      order.push('first:end');
+    });
+    const second = mutex.runExclusive('shared', async () => {
+      order.push('second');
+    });
+
+    await vi.waitFor(() => expect(order).toEqual(['first:start']));
+    releaseFirst();
+    await Promise.all([first, second]);
+
+    expect(order).toEqual(['first:start', 'first:end', 'second']);
+  });
+
+  it('allows independent keys to run concurrently', async () => {
+    const mutex = new KeyedMutex<string>();
+    const started: string[] = [];
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const first = mutex.runExclusive('first', async () => {
+      started.push('first');
+      await blocked;
+    });
+    const second = mutex.runExclusive('second', async () => {
+      started.push('second');
+    });
+
+    await vi.waitFor(() => expect(started).toEqual(['first', 'second']));
+    release();
+    await Promise.all([first, second]);
+  });
+
+  it('releases a key when an operation rejects', async () => {
+    const mutex = new KeyedMutex<string>();
+
+    await expect(
+      mutex.runExclusive('shared', async () => {
+        throw new Error('operation failed');
+      }),
+    ).rejects.toThrow('operation failed');
+    await expect(
+      mutex.runExclusive('shared', async () => 'recovered'),
+    ).resolves.toBe('recovered');
+  });
+});
+
+describe('deriveExecutionId', () => {
+  it('is stable across identity field order', () => {
+    expect(deriveExecutionId({ parent: 'abc', attempt: 2 })).toBe(
+      deriveExecutionId({ attempt: 2, parent: 'abc' }),
+    );
+  });
+
+  it('returns distinct 24-hex ids for distinct identities', () => {
+    const first = deriveExecutionId({ parent: 'abc', attempt: 1 });
+    const second = deriveExecutionId({ parent: 'abc', attempt: 2 });
+
+    expect(first).toMatch(/^[a-f0-9]{24}$/);
+    expect(second).toMatch(/^[a-f0-9]{24}$/);
+    expect(first).not.toBe(second);
   });
 });
 
