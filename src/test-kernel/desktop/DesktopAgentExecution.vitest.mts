@@ -34,7 +34,6 @@ import {
   STREAM_PHASE,
   STREAM_STATUS,
   type ExecutionId,
-  type RunOutcome,
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
@@ -2430,7 +2429,7 @@ describe('DesktopProgressBridge', () => {
 
     it('delivers run facts and session facts only to the owning session’s hub subscribers', async () => {
       const pair = await createWindowPair();
-      const { windowA, windowB, registry } = pair;
+      const { windowA, windowB } = pair;
 
       const factKey = (event: SessionEvent): string =>
         event.scope === 'run'

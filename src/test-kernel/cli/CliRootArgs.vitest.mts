@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import stripAnsi from 'strip-ansi';
 
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   detectUnknownCliCommand,
@@ -1189,24 +1190,12 @@ describe('runCli usage output stream routing', () => {
     });
     stdout = '';
     stderr = '';
-    stdoutSpy = vi
-      .spyOn(process.stdout, 'write')
-      .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
-        stdout += String(chunk);
-        const cb = rest.find((arg) => typeof arg === 'function') as
-          ((err?: Error | null) => void) | undefined;
-        cb?.(null);
-        return true;
-      }) as unknown as ReturnType<typeof vi.spyOn>;
-    stderrSpy = vi
-      .spyOn(process.stderr, 'write')
-      .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
-        stderr += String(chunk);
-        const cb = rest.find((arg) => typeof arg === 'function') as
-          ((err?: Error | null) => void) | undefined;
-        cb?.(null);
-        return true;
-      }) as unknown as ReturnType<typeof vi.spyOn>;
+    stdoutSpy = spyOnStreamWrite(process.stdout, (chunk) => {
+      stdout += chunk;
+    });
+    stderrSpy = spyOnStreamWrite(process.stderr, (chunk) => {
+      stderr += chunk;
+    });
     // citty's showUsage writes via console.log; its errors via console.error.
     consoleLogSpy = vi
       .spyOn(console, 'log')

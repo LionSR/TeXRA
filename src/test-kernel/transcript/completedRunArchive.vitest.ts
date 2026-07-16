@@ -10,18 +10,16 @@
  * proves conversation display, chat export, and todos all read through the
  * facade.
  */
-import { mkdtemp, readdir, rm, utimes } from 'node:fs/promises';
-import * as os from 'node:os';
+import { readdir, utimes } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
-import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
-import { createFakePlatform } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
+import {
+  cleanupTempDirs,
+  createTempDirPlatform,
+} from '@test/support/tempDirPlatform';
 import {
   readCompletedRunConversation,
   readCompletedRunTodos,
@@ -44,21 +42,8 @@ import type { Platform } from '@platform/platform';
 
 const tempDirs: string[] = [];
 
-async function buildArchivePlatform(): Promise<Platform> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'texra-archive-'));
-  tempDirs.push(tempDir);
-  const workspaceDir = path.join(tempDir, 'workspace');
-  const storageRoot = path.join(tempDir, 'storage');
-  return createFakePlatform(
-    { workspacePath: workspaceDir },
-    {
-      fs: nodeFilesystem,
-      workspace: createNodeWorkspace(() => workspaceDir),
-      storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
-      globalState: new MemoryStateStore(),
-      workspaceState: new MemoryStateStore(),
-    },
-  );
+function buildArchivePlatform(): Promise<Platform> {
+  return createTempDirPlatform('texra-archive-', tempDirs);
 }
 
 function taskState(agent: string, model = 'deepseekproT'): TaskState {
@@ -184,11 +169,7 @@ describe('completedRunArchive facade', () => {
   });
 
   afterEach(async () => {
-    await Promise.all(
-      tempDirs
-        .splice(0)
-        .map((dir) => rm(dir, { recursive: true, force: true })),
-    );
+    await cleanupTempDirs(tempDirs);
   });
 
   it('serves conversation, chat export, and todos from the sidecars alone (projections gone)', async () => {
