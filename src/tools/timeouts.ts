@@ -53,8 +53,8 @@ export function isTimeoutError(error: unknown): boolean {
 /**
  * Whether an HTTP request error is transient (worth retrying).
  *
- * Transient = timeout, network-level failure (no response received), 429
- * rate limit, or 5xx server error.
+ * Transient = timeout, network-level failure (no response received), 408
+ * request timeout, 429 rate limit, or 5xx server error.
  * Permanent = other 4xx responses and non-network errors.
  *
  * Only safe to use for idempotent requests (GET / read-only RPC); retrying
@@ -63,7 +63,11 @@ export function isTimeoutError(error: unknown): boolean {
 export function isTransientHttpError(error: unknown): boolean {
   if (isTimeoutError(error)) return true;
   if (error instanceof HTTPError) {
-    return error.response.status === 429 || error.response.status >= 500;
+    return (
+      error.response.status === 408 ||
+      error.response.status === 429 ||
+      error.response.status >= 500
+    );
   }
   // Network-level failure from the underlying fetch — connection reset, DNS
   // hiccup, socket hang-up. `fetch` surfaces these as a `TypeError`, but a bare
