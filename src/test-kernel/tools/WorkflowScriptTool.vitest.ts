@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { TraceEmitter } from '@agent/trace';
-import { runPersistedWorkflowScript } from '@agent/workflowScript';
+import {
+  deriveWorkflowScriptCheckpointId,
+  runPersistedWorkflowScript,
+} from '@agent/workflowScript';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
@@ -49,8 +52,18 @@ function parentContext(): LaunchRunContext {
   };
 }
 
+/** The tool's durable identity for a script+args pair under the test parent. */
+function checkpointIdFor(scriptSource: string, args?: unknown): string {
+  return deriveWorkflowScriptCheckpointId({
+    script: scriptSource,
+    args,
+    defaultAgent: 'correct',
+    parentExecutionId: executionId,
+  });
+}
+
 async function callTool(options?: {
-  readonly checkpointId?: string;
+  readonly toolCallId?: string;
   readonly script?: string;
   readonly recordCost?: (cost: number) => void;
   readonly signal?: AbortSignal;
@@ -61,7 +74,7 @@ async function callTool(options?: {
     withToolFileInteractionContext(
       {
         tracker: {} as never,
-        toolCallId: options?.checkpointId ?? 'tool-call',
+        toolCallId: options?.toolCallId ?? 'tool-call',
         trace: options?.trace ?? new TraceEmitter(),
         signal: options?.signal,
         hooks: { recordSubagentCost: options?.recordCost ?? vi.fn() },
@@ -119,45 +132,57 @@ describe('WorkflowScriptTool', () => {
       status: 'error',
       error: expect.stringContaining('parent progress trace'),
     });
-
-    const missingCallId = await withRunContext(parentContext(), () =>
-      withToolFileInteractionContext(
-        { tracker: {} as never, trace: new TraceEmitter() },
-        () => new WorkflowScriptTool().call({ agent: 'correct', script }),
-      ),
-    );
-    expect(missingCallId).toMatchObject({
-      status: 'error',
-      error: expect.stringContaining('tool call id'),
-    });
   });
 
-  it('replays a checkpoint and settles completed child cost exactly once', async () => {
-    const checkpointId = 'replay-cost';
+  it('replays a content-keyed checkpoint across distinct tool-call ids', async () => {
     await runPersistedWorkflowScript({
       store: getExecutionStore(executionId),
-      checkpointId,
+      checkpointId: checkpointIdFor(script),
       script,
       runAgent: async () => finalResult,
     });
     clearStoreCache();
     const recordCost = vi.fn();
 
-    const result = await callTool({ checkpointId, recordCost });
+    const result = await callTool({ toolCallId: 'attempt-1', recordCost });
 
     expect(result).toMatchObject({
       status: 'executed',
       summary: "Completed workflow script 'tool-test' (1 agent call)",
     });
     expect(result.output).toContain('"category": "workflow"');
+    // Delta accounting: replayed entries were settled by the attempt that
+    // executed them, so a pure replay settles zero instead of double-billing.
     expect(recordCost).toHaveBeenCalledTimes(1);
-    expect(recordCost).toHaveBeenCalledWith(0.42);
+    expect(recordCost).toHaveBeenCalledWith(0);
+
+    // A retry mints a new tool-call id; identical content resumes the journal.
+    clearStoreCache();
+    const retryCost = vi.fn();
+    const retry = await callTool({
+      toolCallId: 'attempt-2',
+      recordCost: retryCost,
+    });
+    expect(retry).toMatchObject({ status: 'executed' });
+    expect(retryCost).toHaveBeenCalledWith(0);
+  });
+
+  it('derives distinct checkpoints when args presence or default agent differ', () => {
+    const base = checkpointIdFor(script);
+    expect(checkpointIdFor(script, null)).not.toBe(base);
+    expect(
+      deriveWorkflowScriptCheckpointId({
+        script,
+        args: undefined,
+        defaultAgent: 'merge',
+        parentExecutionId: executionId,
+      }),
+    ).not.toBe(base);
   });
 
   it('passes JSON arguments through and formats a zero-call result', async () => {
     const recordCost = vi.fn();
     const result = await callTool({
-      checkpointId: 'args-result',
       script: `export const meta = {
   name: 'arguments',
   description: 'returns its arguments',
@@ -177,7 +202,6 @@ return args`,
   });
 
   it('settles a retained journal when later script code fails', async () => {
-    const checkpointId = 'partial-failure';
     const failingScript = `export const meta = {
   name: 'tool-test',
   description: 'tests retained journal settlement',
@@ -187,7 +211,7 @@ throw new Error('script failed after replay')`;
     await expect(
       runPersistedWorkflowScript({
         store: getExecutionStore(executionId),
-        checkpointId,
+        checkpointId: checkpointIdFor(failingScript),
         script: failingScript,
         runAgent: async () => finalResult,
       }),
@@ -196,7 +220,6 @@ throw new Error('script failed after replay')`;
     const recordCost = vi.fn();
 
     const result = await callTool({
-      checkpointId,
       recordCost,
       script: failingScript,
     });
@@ -205,22 +228,28 @@ throw new Error('script failed after replay')`;
       status: 'error',
       error: expect.stringContaining('script failed after replay'),
     });
+    // The seeding attempt journaled the entry; this attempt only replays it.
     expect(recordCost).toHaveBeenCalledTimes(1);
-    expect(recordCost).toHaveBeenCalledWith(0.42);
+    expect(recordCost).toHaveBeenCalledWith(0);
   });
 
   it('fails closed on malformed journal costs without recording a scalar', async () => {
-    const checkpointId = 'malformed-cost';
+    // Distinct script so this journal cannot alias the replay test's content key.
+    const malformedScript = `export const meta = {
+  name: 'tool-test',
+  description: 'tests malformed journal cost settlement',
+}
+return await agent('saved call')`;
     await runPersistedWorkflowScript({
       store: getExecutionStore(executionId),
-      checkpointId,
-      script,
+      checkpointId: checkpointIdFor(malformedScript),
+      script: malformedScript,
       runAgent: async () => ({ not: 'an agent result' }),
     });
     clearStoreCache();
     const recordCost = vi.fn();
 
-    const result = await callTool({ checkpointId, recordCost });
+    const result = await callTool({ recordCost, script: malformedScript });
 
     expect(result).toMatchObject({
       status: 'error',

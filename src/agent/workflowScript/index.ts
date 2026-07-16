@@ -1,3 +1,4 @@
+export { deriveWorkflowScriptCheckpointId } from './checkpointKey';
 export { parseWorkflowScript, WorkflowScriptParseError } from './parseScript';
 export { runWorkflowScript, WorkflowRunAbortError } from './runWorkflowScript';
 export {
