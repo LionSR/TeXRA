@@ -14,6 +14,7 @@
  */
 // Third-party imports
 import { format } from 'date-fns';
+import safeStringify from 'safe-stable-stringify';
 
 // Local imports
 import { redactSecrets } from '@logger/redaction';
@@ -131,12 +132,7 @@ function writeLine(
   if (data === null || data === undefined) return;
   if (!isDebugModeEnabled()) return;
 
-  const normalizedData = normalizeLogData(data);
-  sink.appendLine(
-    typeof normalizedData === 'string'
-      ? normalizedData
-      : JSON.stringify(normalizedData, null, 2),
-  );
+  sink.appendLine(normalizeLogData(data));
 }
 
 export type ChannelWriter = (
@@ -158,34 +154,19 @@ export function createChannelWriter(
     writeLine(level, channel, isAgent, message, data);
 }
 
-/** Errors don't survive `JSON.stringify`, so flatten them before emit. */
-function normalizeLogData(
-  data: unknown,
-  seen = new WeakSet<object>(),
-): unknown {
-  if (data instanceof Error) return serializeError(data);
-  if (Array.isArray(data)) {
-    if (seen.has(data)) return '[Circular]';
-    seen.add(data);
-    const result = data.map((item) => normalizeLogData(item, seen));
-    seen.delete(data);
-    return result;
-  }
-  if (typeof data !== 'object' || data === null) return data;
-
-  const prototype = Object.getPrototypeOf(data);
-  if (prototype !== Object.prototype && prototype !== null) return data;
-  if (seen.has(data)) return '[Circular]';
-  seen.add(data);
-
-  const result = Object.fromEntries(
-    Object.entries(data).map(([key, value]) => [
-      key,
-      normalizeLogData(value, seen),
-    ]),
+/** Errors don't survive `JSON.stringify`, so flatten them before emit.
+ *  `safe-stable-stringify` already handles circular references (rendered as
+ *  `"[Circular]"`, matching the prior hand-rolled walker); this only adds the
+ *  Error → plain-object mapping on top via its replacer hook. */
+function normalizeLogData(data: unknown): string {
+  if (typeof data !== 'object' || data === null) return String(data);
+  return (
+    safeStringify(
+      data,
+      (_key, value) => (value instanceof Error ? serializeError(value) : value),
+      2,
+    ) ?? String(data)
   );
-  seen.delete(data);
-  return result;
 }
 
 function logAt(

@@ -43,8 +43,10 @@ export async function refreshApiKeyCaches(
   invalidateApiKeyCache();
   const commands = platform.commands;
   if (!commands) return;
-  await Promise.all([
-    commands.invoke('texra.refreshApiKeyStatus').catch(() => undefined),
-    commands.invoke('texra.refreshAllOptions').catch(() => undefined),
+  // Credential changes must remain successful when a host cannot refresh its
+  // status surfaces; the next ordinary refresh will reconcile stale UI.
+  await Promise.allSettled([
+    commands.invoke('texra.refreshApiKeyStatus'),
+    commands.invoke('texra.refreshAllOptions'),
   ]);
 }

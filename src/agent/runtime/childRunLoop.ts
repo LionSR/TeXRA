@@ -22,7 +22,8 @@ import type {
 } from '@agent/runtime/ExecutionHandle';
 import type { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
-import { classifyAgentError, isAbortError } from '@common/errors';
+import { classifyAgentError } from '@common/errors';
+import { isUserAbort } from '@common/errors/sdkErrorUtils';
 import {
   RUN_OUTCOME,
   type ExecutionId,
@@ -251,7 +252,7 @@ function isCleanInterruption(
   signal: AbortSignal,
   loop: ChildRunInterruptible,
 ): boolean {
-  return signal.aborted || loop.isInterrupted() || isAbortError(err);
+  return signal.aborted || loop.isInterrupted() || isUserAbort(err);
 }
 
 /** Log a turn summary (duration + token usage) to the child stream. */

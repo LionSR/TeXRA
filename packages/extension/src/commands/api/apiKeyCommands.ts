@@ -10,13 +10,13 @@ import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import { invalidateApiKeyCache } from '@model/apiProviders';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
 } from '@shared/constants/providers';
+import { refreshApiKeyCaches } from '@tools/setup/apiKeyHelpers';
+import { getSetupPlatform } from '@tools/setup/platform';
 import {
   getProviderDisplayName,
   getProviderKeyUrl,
@@ -29,13 +29,6 @@ export const apiKeyCommands = {
   setApiKey: 'texra.setApiKey',
   removeApiKey: 'texra.removeApiKey',
 };
-
-async function refreshApiKeyUI(): Promise<void> {
-  invalidateModelOptionsCache();
-  invalidateApiKeyCache();
-  await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
-  await vscode.commands.executeCommand('texra.refreshAllOptions');
-}
 
 /**
  * Delegates the write/delete/confirm/notify sequence to the same controller
@@ -60,7 +53,7 @@ function createProfileKeyController(): SettingsProfileKeyController {
     setSecret: (key, value) => SecretManager.set(key, value),
     deleteSecret: (key) => SecretManager.delete(key),
     refreshAfterKeyChange: async () => {
-      await refreshApiKeyUI();
+      await refreshApiKeyCaches(getSetupPlatform());
       const view = await getMainWebview();
       const anyKeyExists = await SecretManager.anyApiKeyExists();
       view?.webview.postMessage({

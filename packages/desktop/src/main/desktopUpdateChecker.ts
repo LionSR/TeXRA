@@ -1,6 +1,9 @@
-import { gt as semverGt, valid as semverValid } from 'semver';
-
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import {
+  DAILY_UPDATE_CHECK_INTERVAL_MS,
+  isNewerSemverVersion,
+  UPDATE_CHECK_SKIP_ENV,
+} from '@utils/system/semverUpdateCheck';
 import type { StateStore } from '@platform/interfaces';
 
 /**
@@ -27,27 +30,11 @@ export const DESKTOP_RELEASES_PAGE_URL =
 const GITHUB_USER_AGENT = 'TeXRA-Desktop';
 const FETCH_TIMEOUT_MS = 5000;
 /** Poll at most once per day so a normal multi-launch day makes one request. */
-const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
-const UPDATE_CHECK_SKIP_ENV = 'TEXRA_NO_UPDATE_CHECK';
+const CHECK_INTERVAL_MS = DAILY_UPDATE_CHECK_INTERVAL_MS;
 
 interface DesktopLatestRelease {
   /** Release version with any leading `v` stripped, e.g. `0.40.0`. */
   version: string;
-}
-
-/**
- * True when `latest` is strictly newer than `current` under semver
- * precedence. Unparseable input yields `false` so a malformed API response
- * can never trigger a bogus update notification.
- */
-export function isNewerDesktopVersion(
-  latest: string,
-  current: string,
-): boolean {
-  const a = semverValid(latest.trim(), { loose: true });
-  const b = semverValid(current.trim(), { loose: true });
-  if (!a || !b) return false;
-  return semverGt(a, b);
 }
 
 /** Fetch the latest release's version, or undefined on any failure. */
@@ -143,7 +130,7 @@ async function runDesktopUpdateCheck({
   // Notify at most once per release version; a matching-or-older release just
   // refreshes the throttle stamp below.
   if (
-    isNewerDesktopVersion(release.version, currentVersion) &&
+    isNewerSemverVersion(release.version, currentVersion) &&
     globalState.get<string>(
       GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_NOTIFIED_VERSION,
     ) !== release.version

@@ -10,7 +10,6 @@
  */
 export { formatError } from './errorFormatUtils';
 export {
-  isAbortError,
   isFileNotFoundError,
   isModuleNotFoundError,
   isNotADirectoryError,
