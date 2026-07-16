@@ -116,4 +116,6 @@ return concat(sections, { separator: '\n\n' });
 - A `delegate_workflow_script` tool, which will invoke the existing production
   runner and task-run file hand-off. Domain-specific structures travel as JSON
   output files rather than per-call result schemas.
-- Progress-event bridging onto the existing stream tree.
+- The durable progress adapter is implemented in
+  `src/tools/delegation/workflowScriptRun.ts`; the future tool must use it so
+  phases and script logs appear on the parent run's existing trace tree.
