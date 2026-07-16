@@ -105,11 +105,11 @@ import { subscribeStreamStatus } from '../src/chat/tui/state/subscribeStreamStat
 import { resolveLocalTranscriptStreamId } from '../src/chat/tui/state/transcript';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
 import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
+import { parseCliApiMode, type CliApiMode } from '../src/runtime/apiAccessMode';
 import {
-  formatCliApiMode,
-  parseCliApiMode,
-  type CliApiMode,
-} from '../src/runtime/apiAccessMode';
+  formatCliModelAccessRouteInline,
+  resolveCliModelAccessRoute,
+} from '../src/runtime/modelAccessRoute';
 import {
   formatCliApiStatusActionHint,
   formatCliAuthStatusLine,
@@ -510,7 +510,7 @@ function harnessOrchestrationStatusLines(): readonly string[] {
     accountLabel: authenticated ? 'harness@example.edu' : undefined,
   };
   return [
-    `api: ${formatCliApiMode(HARNESS_API_MODE)}`,
+    `api: ${formatCliModelAccessRouteInline(HARNESS_API_MODE)}`,
     formatCliAuthStatusLine(profile),
     formatCliApiStatusActionHint(HARNESS_API_MODE, profile),
   ];
@@ -1843,7 +1843,11 @@ function appendHarnessStatus(): void {
       agent: meta.agent,
       model: meta.model,
       teamName: meta.teamName,
-      api: meta.apiMode,
+      modelAccess: resolveCliModelAccessRoute({
+        apiMode: meta.apiMode,
+        subscriptionActive: false,
+        usageRoute: slice?.usage?.usageRoute,
+      }),
       approval: formatCliApprovalPolicy(harnessApprovalPolicy),
       approvalBypasses: slice?.bypass,
       status: slice?.status ?? 'not started',

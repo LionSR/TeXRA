@@ -38,6 +38,7 @@ import {
   type StateSettingEntry,
 } from '@shared/schemas/stateSettings';
 import { DEFAULT_GIT_AUTHOR_NAME } from '@shared/constants/git';
+import { AgentCategory } from '@shared/schemas/agent';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 
@@ -365,6 +366,7 @@ describe('/config slash command wiring', () => {
   it('switches to personal API mode when OpenRouter routing is enabled', async () => {
     resetCliState({
       agent: 'chat',
+      category: AgentCategory.ToolUse,
       model: 'deepseekT',
       modelSource: 'builtin-default',
       cwd: '/tmp/workspace',

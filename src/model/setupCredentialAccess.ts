@@ -3,6 +3,7 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import { API_PROVIDERS, lookupApiKey } from '@model/apiProviders';
 import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
+import { AgentCategory } from '@shared/schemas/agent';
 import { isNonEmptyString } from '@utils/core';
 import type { PlatformSecrets } from '@platform/secrets';
 
@@ -29,7 +30,11 @@ export async function hasAnyUsableProviderApiKey(
 export async function hasUsableSetupCredential(
   secrets: PlatformSecrets,
 ): Promise<boolean> {
-  if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) return true;
+  if (
+    await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL, AgentCategory.ToolUse)
+  ) {
+    return true;
+  }
   if (await hasAnyUsableProviderApiKey(secrets)) return true;
   return getServerSideKeyService().canUseServerSideKeys();
 }

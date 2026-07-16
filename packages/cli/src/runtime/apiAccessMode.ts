@@ -35,10 +35,6 @@ export function effectiveCliApiMode(source: {
   return source.apiMode ?? getCliApiMode();
 }
 
-export function formatCliApiMode(mode: CliApiMode): string {
-  return mode === 'included' ? 'included TeXRA access' : 'personal API keys';
-}
-
 export function shortCliApiMode(mode: CliApiMode): string {
   return mode === 'included' ? 'included' : 'personal';
 }
