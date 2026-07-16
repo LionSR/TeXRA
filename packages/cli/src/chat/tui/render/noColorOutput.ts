@@ -1,12 +1,5 @@
 import { ANSI_ESCAPE_START } from '@cli/runtime/ansiEscapes';
 
-const TUI_STDOUT_MAX_LISTENERS = 64;
-
-interface ListenerLimitStream {
-  getMaxListeners(): number;
-  setMaxListeners(n: number): unknown;
-}
-
 interface SgrStripState {
   pending: string;
 }
@@ -103,23 +96,4 @@ export function tuiOutputStreamForColor<T extends NodeJS.WriteStream>(
   colorEnabled: boolean,
 ): T {
   return colorEnabled ? stream : sgrStrippingWriteStream(stream);
-}
-
-export function installTuiStdoutListenerLimit(
-  stream: ListenerLimitStream,
-): () => void {
-  const previous = stream.getMaxListeners();
-  if (previous === 0 || previous >= TUI_STDOUT_MAX_LISTENERS) {
-    return () => undefined;
-  }
-
-  stream.setMaxListeners(TUI_STDOUT_MAX_LISTENERS);
-  let restored = false;
-  return () => {
-    if (restored) return;
-    restored = true;
-    if (stream.getMaxListeners() === TUI_STDOUT_MAX_LISTENERS) {
-      stream.setMaxListeners(previous);
-    }
-  };
 }

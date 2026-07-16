@@ -1,7 +1,7 @@
 // Third-party imports
 import { useMemo } from 'react';
 
-import { Box, Text, useWindowSize } from 'ink';
+import { Box, Text } from 'ink';
 
 // Local imports - shared schemas and utilities
 import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
@@ -113,7 +113,7 @@ export interface DisplayLineOptions {
 export interface ToolRenderer {
   readonly key: string;
   matches(toolUse: NormalizedToolUse): boolean;
-  render(toolUse: NormalizedToolUse): React.JSX.Element;
+  render(toolUse: NormalizedToolUse, width?: number): React.JSX.Element;
   /** Text geometry for budgeting and plain projections. Keep one line for
    *  every visually distinct row emitted by `render`. */
   displayLines(
@@ -374,15 +374,16 @@ const PATCH_PREVIEW_INDENT = 4;
 
 function PatchPreview({
   groups,
+  width,
 }: {
   readonly groups: readonly InlinePatchGroup[];
+  readonly width?: number;
 }): React.JSX.Element {
   // The diff sits under two nested `paddingLeft={2}` boxes; derive its width
   // from the real terminal so the full-row bands fill exactly the available
   // columns instead of padding to a fixed default and wrapping on narrow
   // terminals. `DiffView` floors this at its own minimum.
-  const { columns } = useWindowSize();
-  const diffWidth = columns - PATCH_PREVIEW_INDENT;
+  const diffWidth = (width ?? MAX_HEADER_PREVIEW) - PATCH_PREVIEW_INDENT;
   return (
     <Box flexDirection="column" paddingLeft={2}>
       {groups.map((group, index) => (
@@ -447,6 +448,7 @@ function CornerLine({
 
 interface ToolRowProps {
   readonly toolUse: NormalizedToolUse;
+  readonly width?: number;
   readonly displayName?: string;
   readonly fallbackName?: string;
   readonly previewColor?: typeof COLOR_HINT;
@@ -465,7 +467,7 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
     showExitCode = false,
     preferInputPreview = false,
   } = props;
-  const { columns } = useWindowSize();
+  const columns = props.width;
   const color = statusColor(toolUse);
   const name =
     (props.displayName ?? displayToolName(toolUse.toolName)) ||
@@ -508,7 +510,9 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
         ) : null}
       </Box>
       <OutputBlock lines={visibleOutput} />
-      {patchGroups ? <PatchPreview groups={patchGroups} /> : null}
+      {patchGroups ? (
+        <PatchPreview groups={patchGroups} width={columns} />
+      ) : null}
       {toolUse.isError && exitCode !== undefined ? (
         <CornerLine color={COLOR_ERROR}>{`exit ${exitCode}`}</CornerLine>
       ) : null}
@@ -529,10 +533,12 @@ export function UniversalToolRow({
   toolUse,
   displayName,
   showOutput,
+  width,
 }: {
   readonly toolUse: NormalizedToolUse;
   readonly displayName?: string;
   readonly showOutput?: boolean;
+  readonly width?: number;
 }): React.JSX.Element {
   return (
     <ToolRow
@@ -540,6 +546,7 @@ export function UniversalToolRow({
       displayName={displayName}
       showPatch={true}
       showOutput={showOutput}
+      width={width}
     />
   );
 }
@@ -558,7 +565,9 @@ function isMcpTool(toolUse: NormalizedToolUse): boolean {
 const editRenderer: ToolRenderer = {
   key: 'edit',
   matches: (toolUse) => toolUsePatchGroups(toolUse) !== undefined,
-  render: (toolUse) => <UniversalToolRow toolUse={toolUse} />,
+  render: (toolUse, width) => (
+    <UniversalToolRow toolUse={toolUse} width={width} />
+  ),
   displayLines: (toolUse, options) =>
     universalToolUseDisplayLines(toolUse, { elide: options?.elide }),
 };
@@ -566,7 +575,7 @@ const editRenderer: ToolRenderer = {
 const bashRenderer: ToolRenderer = {
   key: 'bash',
   matches: isBashTool,
-  render: (toolUse) => (
+  render: (toolUse, width) => (
     <ToolRow
       toolUse={toolUse}
       fallbackName="bash"
@@ -574,6 +583,7 @@ const bashRenderer: ToolRenderer = {
       showOutput={true}
       showExitCode={true}
       preferInputPreview={true}
+      width={width}
     />
   ),
   displayLines: (toolUse, options) =>
@@ -583,11 +593,12 @@ const bashRenderer: ToolRenderer = {
 const mcpRenderer: ToolRenderer = {
   key: 'mcp',
   matches: isMcpTool,
-  render: (toolUse) => (
+  render: (toolUse, width) => (
     <UniversalToolRow
       toolUse={toolUse}
       displayName={displayMcpToolName(toolUse.toolName)}
       showOutput={true}
+      width={width}
     />
   ),
   displayLines: (toolUse, options) =>
