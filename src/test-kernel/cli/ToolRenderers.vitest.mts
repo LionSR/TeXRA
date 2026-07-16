@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - shared schemas
 import {
-  pickToolRenderer,
   toolHeaderPreviewBudget,
   toolUseDisplayLines,
+  toolUseStyledLines,
 } from '@cli/chat/tui/panes/toolRenderers';
 import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
 
@@ -31,7 +31,47 @@ function toolUse(
   };
 }
 
-describe('CLI tool renderer registry', () => {
+describe('CLI tool display lines', () => {
+  it('carries semantic styles in the display model', () => {
+    const entry = toolUse(
+      'bash',
+      { command: 'npm test' },
+      { outputText: 'passed' },
+    );
+
+    expect(toolUseStyledLines(entry)).toEqual([
+      {
+        kind: 'row',
+        spans: [
+          { color: 'green', dim: false, text: '● ' },
+          { bold: true, text: 'bash' },
+          { color: 'cyan', dim: false, text: ' (npm test)' },
+        ],
+      },
+      {
+        kind: 'row',
+        spans: [{ dim: true, text: '⎿ ' }, { text: 'passed' }],
+      },
+    ]);
+    expect(Object.isFrozen(toolUseStyledLines(entry)[0])).toBe(true);
+    const firstLine = toolUseStyledLines(entry)[0];
+    if (firstLine?.kind !== 'row') throw new Error('expected a row');
+    expect(Object.isFrozen(firstLine.spans)).toBe(true);
+    expect(firstLine.spans.every(Object.isFrozen)).toBe(true);
+  });
+
+  it('counts wrapped patch rows at the rich terminal width', () => {
+    const entry = toolUse('Edit', {
+      path: 'paper.tex',
+      old_string: 'short\n',
+      new_string: `${'a long replacement '.repeat(8)}\n`,
+    });
+
+    expect(toolUseDisplayLines(entry, { width: 24 }).length).toBeGreaterThan(
+      toolUseDisplayLines(entry).length,
+    );
+  });
+
   it('registers edit patch rendering before the universal fallback', () => {
     const entry = toolUse('Edit', {
       path: 'paper.tex',
@@ -39,7 +79,6 @@ describe('CLI tool renderer registry', () => {
       new_string: 'We use a transformer.\n',
     });
 
-    expect(pickToolRenderer(entry)?.key).toBe('edit');
     expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
       [
         "● Edit (paper.tex)",
@@ -51,6 +90,27 @@ describe('CLI tool renderer registry', () => {
     `);
   });
 
+  it('keeps bash semantics ahead of generic MCP presentation', () => {
+    const entry = toolUse(
+      'mcp:terminal:bash',
+      { command: 'false' },
+      {
+        errorText: 'Command failed (exit 7)',
+        isError: true,
+        parsed: { exitCode: 7 },
+      },
+    );
+
+    expect(toolUseDisplayLines(entry)).toEqual([
+      '● terminal/bash (false)',
+      '⎿ exit 7',
+      '⎿ Command failed (exit 7)',
+    ]);
+    const header = toolUseStyledLines(entry)[0];
+    if (header?.kind !== 'row') throw new Error('expected a header row');
+    expect(header.spans.at(-1)).toMatchObject({ color: 'cyan' });
+  });
+
   it('renders TeXRA edit_file calls through the native diff row', () => {
     const entry = toolUse('edit_file', {
       path: 'paper.tex',
@@ -58,7 +118,6 @@ describe('CLI tool renderer registry', () => {
       new_str: 'We use a transformer.\n',
     });
 
-    expect(pickToolRenderer(entry)?.key).toBe('edit');
     expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
       [
         "● edit_file (paper.tex)",
@@ -83,7 +142,6 @@ describe('CLI tool renderer registry', () => {
       },
     );
 
-    expect(pickToolRenderer(entry)?.key).toBe('bash');
     expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
       [
         "● bash (npm run lint)",
@@ -225,7 +283,6 @@ describe('CLI tool renderer registry', () => {
       { outputText: 'sent' },
     );
 
-    expect(pickToolRenderer(entry)?.key).toBe('mcp');
     expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
       [
         "● slack/send ({"channel":"#drafts","text":"done"})",
@@ -237,7 +294,6 @@ describe('CLI tool renderer registry', () => {
   it('keeps unregistered tools on the universal renderer', () => {
     const entry = toolUse('CustomTool', { path: 'paper.tex' });
 
-    expect(pickToolRenderer(entry)).toBeUndefined();
     expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
       [
         "● CustomTool (paper.tex)",

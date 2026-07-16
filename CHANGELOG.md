@@ -41,6 +41,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Clipped tool output keeps its visual status cues** — tool rows that exceed
+  the available transcript space now retain their status, preview, and error
+  styling.
 - **A calmer footer with one home per hint** — the rotating tip line is gone
   (its shortcuts live in the status bar and `/help`), and queued follow-ups
   preview only in their dedicated panel instead of also scrolling through the

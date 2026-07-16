@@ -164,9 +164,7 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   readonly fillWidth?: boolean;
 }): React.JSX.Element {
   if (entry.role === 'tool') {
-    return (
-      <ToolUseRow fillWidth={fillWidth} toolUse={entry.toolUse} width={width} />
-    );
+    return <ToolUseRow toolUse={entry.toolUse} width={width} />;
   }
 
   const layout = transcriptEntryLayout(entry, {
@@ -221,6 +219,12 @@ export const BoundedTranscriptEntry = memo(function BoundedTranscriptEntry({
   readonly maxRows: number;
   readonly width?: number;
 }): React.JSX.Element {
+  if (entry.role === 'tool') {
+    return (
+      <ToolUseRow maxRows={maxRows} toolUse={entry.toolUse} width={width} />
+    );
+  }
+
   const layout = boundedTranscriptEntryLayout(
     transcriptEntryLayout(entry, {
       colorEnabled,
