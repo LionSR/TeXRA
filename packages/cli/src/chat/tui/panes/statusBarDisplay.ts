@@ -74,6 +74,11 @@ export interface StatusBarDisplayInput {
    *  `running`, the bar shows a live `Ns` segment so a long token-less
    *  "thinking" turn still reads as alive. Omitted in tests/headless. */
   readonly elapsedMs?: number;
+  /** Current 1 Hz spin-cycle character (see `ui/LoadingIndicator`'s
+   *  `loadingFrameAt`) shown ahead of the status label while a turn is
+   *  active, so "running" reads as alive rather than a static word. Omitted
+   *  in tests/headless, same as `elapsedMs`. */
+  readonly runningFrame?: string;
   readonly pendingExitHint: boolean;
   readonly pendingExitResumeId: string | undefined;
   readonly commandName?: string;
@@ -741,12 +746,17 @@ export function buildStatusBarDisplay(
       });
     }
   } else {
+    const statusLabel = formatCliStatusLabel(
+      input.status,
+      input.substate,
+      input.isChildStream,
+    );
+    const spinPrefix =
+      isActivePhase(input.status) && input.runningFrame
+        ? `${input.runningFrame} `
+        : '';
     left.push({
-      text: formatCliStatusLabel(
-        input.status,
-        input.substate,
-        input.isChildStream,
-      ),
+      text: `${spinPrefix}${statusLabel}`,
       color: 'dim',
     });
     if (isActivePhase(input.status) && input.elapsedMs !== undefined) {
