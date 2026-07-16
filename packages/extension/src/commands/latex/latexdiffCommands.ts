@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { showQuickPick } from '@commands/_shared/quickInputUtils';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import {
@@ -93,15 +92,11 @@ async function promptForLatexdiffMathMarkup(): Promise<
   ];
 
   type MarkupItem = vscode.QuickPickItem & { value: MathMarkupOption };
-  const pick = await showQuickPick<MarkupItem>({
+  const pick = await vscode.window.showQuickPick<MarkupItem>(prioritizedItems, {
     title: 'Latexdiff math markup',
-    placeholder: 'Select math markup granularity for this diff run',
+    placeHolder: 'Select math markup granularity for this diff run',
     ignoreFocusOut: true,
-    // VS Code 1.108+: show the saved default as a persistent hint below the
-    // input box so users know why one item is listed first. Older hosts
-    // (incl. Cursor 1.105) silently ignore the property.
     prompt: `Saved default: ${configuredMode} — press Enter to accept, or pick another`,
-    items: prioritizedItems,
   });
   return pick?.value;
 }

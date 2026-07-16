@@ -5,9 +5,8 @@
  *
  * Only context-free, read-only research tools are surfaced — they need no
  * agent runtime state and are safe to call from an arbitrary chat session.
- * The API is feature-detected: on hosts without it (incl. Cursor 1.105) this
- * is a no-op, so the manifest `languageModelTools` contribution is simply
- * ignored there.
+ * Registration is guarded at this multi-host boundary because compatible
+ * non-VS Code hosts can expose only part of the `vscode.lm` namespace.
  */
 
 import * as vscode from 'vscode';
@@ -35,17 +34,12 @@ function toResultText(result: ToolResult): string {
 
 /**
  * Register the curated TeXRA tools with the VS Code Language Model Tool API.
- * Safe to call unconditionally — it detects API availability and exits early
- * on unsupported hosts.
  */
 export function registerLanguageModelTools(
   context: vscode.ExtensionContext,
 ): void {
   const lm = (vscode as { lm?: Partial<typeof vscode.lm> }).lm;
-  if (typeof lm?.registerTool !== 'function') {
-    // Language Model Tool API not available (e.g. older Cursor builds); no-op.
-    return;
-  }
+  if (typeof lm?.registerTool !== 'function') return;
 
   const registry = getDefaultToolRegistry();
   for (const [lmName, toolName] of Object.entries(LM_TOOL_NAMES)) {
