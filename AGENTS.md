@@ -337,7 +337,7 @@ For good separation of concerns and platform independence, core business logic s
 - Define agents using `AgentDataclass` and `AgentConfig` (`src/agent/core/`) and compose them via the factories in `src/agent/runtime`.
 - Launch executions from host code (commands, frontend services, desktop IPC) via `runAgent` (`src/agent/runtime/runAgent.ts`) — it assigns an `executionId`, registers the run in storage, and opens workflow output. Only use the lower-level `executeAgent` when you already own the `executionId` (e.g. subagent dispatch in `DelegationTools.ts` or a resume path). Both functions require an explicit `runtimeHost`.
 - Resume a persisted tool-use session via `resumeToolUseFromSnapshot` (`src/agent/runtime/executeAgent.ts`), not `runAgent`.
-- Add new model handlers under `src/agent/modelHandlers/`, export them through the index, and register capabilities/pricing in `src/model/computeModelOptions.ts`.
+- Add new model handlers under `src/agent/modelHandlers/<provider>/` (no barrel — import via the `@agent/modelHandlers/<provider>/<File>` alias, per that directory's `README.md`), and register capabilities/pricing in `src/model/computeModelOptions.ts`.
 
 **PocketFlow architecture**
 
@@ -428,9 +428,9 @@ These rules were earned from a 2026-07 whole-repo simplification campaign, not d
 
 - **Exports are contracts; default to file-local.** A new export needs a consumer in the same PR. Across the 2026-07 campaign, five separate areas' main cleanup yield was deleting exports with zero outside consumers (20 in `src/tools` alone). Mechanical enforcement lives in the dead-export ratchet (being tightened in a separate PR); this is the principle behind it.
 
-- **No convenience barrels.** A barrel/index re-export file exists only for a documented public surface (for example, the trace events SDK contract, which declares its surface in its own docstring). Everything else imports the file that defines the symbol directly. The campaign deleted dead barrels in `workflowScript/`, `storage/`, and `index/` that no caller actually used.
+- **No convenience barrels.** A barrel/index re-export file exists only for a documented public surface (for example, the trace events SDK contract, which declares its surface in its own docstring). Everything else imports the file that defines the symbol directly — this includes model handlers (`src/agent/modelHandlers/`; see that directory's `README.md`), which have no barrel and no re-export shims. The campaign deleted dead barrels in `workflowScript/`, `storage/`, and `index/` that no caller actually used.
 
-- **Never hand out a shared mutable literal.** A module-level object that a function returns, or that crosses a module boundary, must be frozen (`as const` plus `Object.freeze`) or produced fresh by a factory that returns a new object each call; see CLAUDE.md's "Discouraged Factory Patterns" for when a factory is and isn't warranted. A campaign consolidation once replaced fresh no-retry result literals with a single shared constant; the resulting aliasing behavior change was caught only by a follow-up factory rewrite and a `notStrictEqual` regression test.
+- **Never hand out a shared mutable literal.** A module-level object that a function returns, or that crosses a module boundary, must be frozen (`as const` plus `Object.freeze`) or produced fresh by a factory that returns a new object each call; see CLAUDE.md's "Discouraged Factory Patterns" for when a factory is and isn't warranted. `Object.freeze` is shallow — for a literal with nested objects/arrays, or for a `Map`/`Set`, either deep-freeze it or use a factory, since a shallow freeze doesn't stop mutation of nested values or calls like `.set()`/`.add()`. A campaign consolidation once replaced fresh no-retry result literals with a single shared constant; the resulting aliasing behavior change was caught only by a follow-up factory rewrite and a `notStrictEqual` regression test.
 
 - **Global registration requires a global consumer.** Register something globally (components, commands, providers) only when an external surface actually references it; consumers that are internal-only import locally instead. The docs theme once globally registered two components that no markdown page used.
 
@@ -440,7 +440,7 @@ These rules were earned from a 2026-07 whole-repo simplification campaign, not d
 
 - **Fixture rule of three.** When the same literal setup block appears three or more times in one test file, extract it to a file-local helper. Setup shared across multiple suites gets promoted to `src/test-kernel/support/`. Five test lanes in the campaign removed about 860 lines that were almost entirely repeated literal setup; one file constructed the same handle inline 33 times.
 
-- **One fake per port.** Tests use the shared fakes in `src/test-kernel/support/` for platform ports. A local fake for a port that already has a shared fake requires a one-line comment naming the capability the shared fake deliberately lacks (precedent: `MemoryConfigStore` tracking global-vs-workspace write targets).
+- **One fake per port.** Tests use the shared fakes in `src/test-kernel/support/` for platform ports. A local fake for a port that already has a shared fake requires a one-line comment naming the capability the shared fake deliberately lacks.
 
 ## Documentation
 
