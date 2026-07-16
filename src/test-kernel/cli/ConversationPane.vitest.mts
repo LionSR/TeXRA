@@ -589,10 +589,7 @@ describe('CLI conversation transcript splitting', () => {
       'session-header',
       'u1',
     ]);
-    expect(staticItems[1]).toMatchObject({
-      kind: 'entry',
-      userBottomMarginRows: 0,
-    });
+    expect(staticItems[1]).toMatchObject({ kind: 'entry' });
   });
 
   it('keeps inquiry continuations on the finalized transcript path', () => {

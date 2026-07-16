@@ -22,6 +22,13 @@ All notable changes to this project will be documented in this file.
 
 ### CLI
 
+#### Improvements
+
+- **The chat transcript breathes and shows run activity** — a blank line now
+  always follows your message, and while the agent runs, an animated indicator
+  with elapsed time makes clear it is still working — not just while the model
+  is thinking.
+
 #### Bug Fixes
 
 - **Ctrl+C clears dialog text before stopping or exiting** — pressing Ctrl+C
