@@ -467,6 +467,37 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('Alt-1..9 focus');
   });
 
+  it('shows the raw registry context window for non-subscription usage', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_PHASE.RUNNING,
+        model: 'gpt56',
+        usage: { inputTokens: 187_000, outputTokens: 4_000, cost: 0 },
+      }),
+    );
+
+    expect(display.left.map(statusBarSegmentText)).toContain('187k/1.1M (18%)');
+  });
+
+  it('caps the context window to the subscription budget for chatgpt-subscription usage', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_PHASE.RUNNING,
+        model: 'gpt56',
+        usage: {
+          inputTokens: 187_000,
+          outputTokens: 4_000,
+          cost: 0,
+          usageRoute: 'chatgpt-subscription',
+        },
+      }),
+    );
+
+    // gpt-5.6's Codex subscription budget caps to 500k
+    // (CODEX_GPT56_SUBSCRIPTION_CONTEXT_WINDOW), not the raw 1.05M API window.
+    expect(display.left.map(statusBarSegmentText)).toContain('187k/500k (37%)');
+  });
+
   it('keeps critical controls visible in narrow subagent sessions', () => {
     const display = buildStatusBarDisplay(
       statusInput({
