@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Local imports - core flow primitives
 import { BaseCycleFieldsSchema } from '@agent/core/flows/CommonCycleTypes';
-import type { SdkToolCall } from '@agent/types/IModelHandler';
+import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import { NormalizedUsageSchema } from '@agent/types/NormalizedUsage';
 
 /**

@@ -4,7 +4,7 @@ import { logWebFetch, logWebSearch } from '@agent/trace';
 import { recordCycleMetrics } from '@agent/core/state/AgentState';
 import { extractModelResponse } from '@agent/core/flows/CommonCycleTypes';
 import { appendFollowUpAsUserMessage } from '@agent/followUp/followUpMessages';
-import type { SdkToolCall } from '@agent/types/IModelHandler';
+import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type { ServerToolContentBlock } from '@agent/types/ServerToolTypes';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';

@@ -1,32 +1,12 @@
 // Local imports - agent components
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas/toolResult';
 import type { ProviderMessage } from './ProviderMessage';
-import type { SdkToolCall } from './ModelHandlerContracts';
-
-// Re-exported for existing consumers of this module. These plain data
-// contracts live in `./ModelHandlerContracts` (not here) because
-// `ModelHandler.ts` needs them too, and importing them from this file would
-// recreate the ModelHandler.ts <-> IModelHandler.ts cycle this module exists
-// to avoid — see the note on `IModelHandler` below.
-export type {
-  TokenCountOptions,
-  CreateResponseOptions,
-  CreateResponseResult,
-  ExtractResponseResult,
-  OpenAIToolCall,
-  DeepSeekToolCall,
-  OpenAIResponseToolCall,
-  GoogleToolCall,
-  AnthropicToolCall,
-  OpenRouterToolCall,
-  VscodeLmToolCall,
-  SdkToolCall,
-} from './ModelHandlerContracts';
 
 /**
  * Common port implemented by all model handlers.

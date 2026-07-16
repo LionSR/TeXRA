@@ -601,13 +601,12 @@ export abstract class ModelHandler<
    * is a provider-wire-format fact (there's a reasoning channel to preserve
    * across the whole family's API), not a per-model reasoning toggle.
    * `ModelHandlerGLM` overrides it back to `false` even for its
-   * reasoning-capable variants (`glm45`, `glm52`). And Grok reasoning models
-   * (`grok43`, `grok3-`; see {@link isGrokReasoningModel}) never override this
-   * at all, staying at this `false` default, via `ModelHandlerXAI`. Folding
-   * this into `supportsReasoning` would wrongly force batching on
-   * non-reasoning DeepSeek/Kimi/MiniMax variants and wrongly skip it for
-   * reasoning Grok models. Stays an overridable getter: genuinely per-provider
-   * behavior, not a foldable predicate.
+   * reasoning-capable variants (`glm45`, `glm52`). Grok reasoning models
+   * (`grok43`, `grok3-`) likewise stay at this `false` default through
+   * `ModelHandlerXAI`. Folding this into `supportsReasoning` would wrongly
+   * force batching on non-reasoning DeepSeek/Kimi/MiniMax variants and wrongly
+   * skip it for reasoning Grok models. Stays an overridable getter: genuinely
+   * per-provider behavior, not a foldable predicate.
    */
   get requiresBatchedParallelToolResults(): boolean {
     return false;
@@ -733,15 +732,6 @@ export abstract class ModelHandler<
   get isOReasoningModel(): boolean {
     return (
       this.config.provider === ModelProvider.OPENAI &&
-      this.capabilities.supportsReasoning
-    );
-  }
-
-  /** Runtime combinator (provider identity × reasoning capability); see
-   * {@link isOReasoningModel}. */
-  get isGrokReasoningModel(): boolean {
-    return (
-      this.config.provider === ModelProvider.XAI &&
       this.capabilities.supportsReasoning
     );
   }

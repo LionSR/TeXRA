@@ -1,5 +1,6 @@
 import type { AgentTrace } from '@agent/trace';
-import type { IModelHandler, SdkToolCall } from '@agent/types/IModelHandler';
+import type { IModelHandler } from '@agent/types/IModelHandler';
+import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
