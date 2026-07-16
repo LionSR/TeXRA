@@ -12,6 +12,7 @@ import {
   getExecutionStore,
   registerExecution,
   releaseOwnedExecutionLease,
+  releaseOwnedExecutionLeaseBestEffort,
   type ResultMeta,
 } from '@agent/storage';
 import {
@@ -699,16 +700,20 @@ export async function executeStableSubagentInBand(
         `Prepared subagent ${executionId} changed its parent execution.`,
       );
     }
-    const completed = await executeInBand(
-      prepared,
-      'required-result',
-      executionId,
-      attempt,
-    );
-    return {
-      executionId: completed.executionId,
-      result: completed.built.result,
-    };
+    try {
+      const completed = await executeInBand(
+        prepared,
+        'required-result',
+        executionId,
+        attempt,
+      );
+      return {
+        executionId: completed.executionId,
+        result: completed.built.result,
+      };
+    } finally {
+      await releaseOwnedExecutionLeaseBestEffort(executionId);
+    }
   });
 }
 
@@ -716,17 +721,22 @@ export async function executeStableSubagentInBand(
 export async function executeSubagentForDeliveryInBand(
   options: InBandSubagentDeliveryOptions,
 ): Promise<InBandSubagentDeliveryResult> {
-  const completed = await executeInBand(
-    options,
-    'best-effort-delivery',
-    generateExecutionId() as ExecutionId,
-  );
-  if (completed.delivery === undefined) {
-    throw new Error('Subagent delivery was not constructed.');
+  const executionId = generateExecutionId() as ExecutionId;
+  try {
+    const completed = await executeInBand(
+      options,
+      'best-effort-delivery',
+      executionId,
+    );
+    if (completed.delivery === undefined) {
+      throw new Error('Subagent delivery was not constructed.');
+    }
+    return {
+      executionId: completed.executionId,
+      result: completed.built.result,
+      delivery: completed.delivery,
+    };
+  } finally {
+    await releaseOwnedExecutionLeaseBestEffort(executionId);
   }
-  return {
-    executionId: completed.executionId,
-    result: completed.built.result,
-    delivery: completed.delivery,
-  };
 }

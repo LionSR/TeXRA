@@ -10,6 +10,7 @@ import {
   getExecutionStore,
   registerExecution,
   releaseOwnedExecutionLease,
+  releaseOwnedExecutionLeaseBestEffort,
 } from '@agent/storage';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
@@ -429,67 +430,90 @@ export class BashTool extends defineTool({
     };
 
     void (async () => {
-      const outcome = await promise.then(
-        (result) => ({ ok: true as const, result }),
-        (error: unknown) => ({ ok: false as const, error }),
-      );
-
-      if (outcome.ok) {
-        const { result } = outcome;
-        const wallTimeMs = Date.now() - startedAt;
-        const error = result.success
-          ? undefined
-          : new ToolError(
-              `Background bash failed with exit code ${result.exitCode ?? 'unknown'}.`,
-            );
-
-        // Only surface the head when the tail actually dropped earlier
-        // content — otherwise the tail already holds the full stream and a
-        // separate head block would just repeat it. When it did, also
-        // report how many characters sit in the gap between head and tail,
-        // mirroring the foreground `checkToolResultTextLimit` elision note.
-        const stdoutTruncated = stdoutTotalChars > stdoutTail.length;
-        const stderrTruncated = stderrTotalChars > stderrTail.length;
-        const msg = formatBashDelivery(
-          executionId,
-          command,
-          wallTimeMs,
-          result,
-          stdoutTail,
-          stderrTail,
-          stdoutTruncated ? stdoutHead : '',
-          stderrTruncated ? stderrHead : '',
-          stdoutTruncated
-            ? Math.max(
-                0,
-                stdoutTotalChars - stdoutHead.length - stdoutTail.length,
-              )
-            : 0,
-          stderrTruncated
-            ? Math.max(
-                0,
-                stderrTotalChars - stderrHead.length - stderrTail.length,
-              )
-            : 0,
+      try {
+        const outcome = await promise.then(
+          (result) => ({ ok: true as const, result }),
+          (error: unknown) => ({ ok: false as const, error }),
         );
 
-        const store = getExecutionStore(executionId);
-        try {
-          await store.writeResultMeta({
-            producer: 'backgroundBash',
-            exitCode: result.exitCode ?? (result.success ? 0 : 1),
-            wallTimeMs,
-            success: result.success,
-            timedOut: result.timedOut ?? false,
+        if (outcome.ok) {
+          const { result } = outcome;
+          const wallTimeMs = Date.now() - startedAt;
+          const error = result.success
+            ? undefined
+            : new ToolError(
+                `Background bash failed with exit code ${result.exitCode ?? 'unknown'}.`,
+              );
+
+          // Only surface the head when the tail actually dropped earlier
+          // content — otherwise the tail already holds the full stream and a
+          // separate head block would just repeat it. When it did, also
+          // report how many characters sit in the gap between head and tail,
+          // mirroring the foreground `checkToolResultTextLimit` elision note.
+          const stdoutTruncated = stdoutTotalChars > stdoutTail.length;
+          const stderrTruncated = stderrTotalChars > stderrTail.length;
+          const msg = formatBashDelivery(
+            executionId,
             command,
-          });
-        } catch (err: unknown) {
-          logBackgroundFailure('persist result metadata', err);
+            wallTimeMs,
+            result,
+            stdoutTail,
+            stderrTail,
+            stdoutTruncated ? stdoutHead : '',
+            stderrTruncated ? stderrHead : '',
+            stdoutTruncated
+              ? Math.max(
+                  0,
+                  stdoutTotalChars - stdoutHead.length - stdoutTail.length,
+                )
+              : 0,
+            stderrTruncated
+              ? Math.max(
+                  0,
+                  stderrTotalChars - stderrHead.length - stderrTail.length,
+                )
+              : 0,
+          );
+
+          const store = getExecutionStore(executionId);
+          try {
+            await store.writeResultMeta({
+              producer: 'backgroundBash',
+              exitCode: result.exitCode ?? (result.success ? 0 : 1),
+              wallTimeMs,
+              success: result.success,
+              timedOut: result.timedOut ?? false,
+              command,
+            });
+          } catch (err: unknown) {
+            logBackgroundFailure('persist result metadata', err);
+          }
+          try {
+            const finalization = await finalizeExecution({
+              executionId,
+              terminalStatus: backgroundBashTerminalStatus(result.success),
+              flowRecord: 'delete',
+            });
+            if (finalization.status === 'failed') throw finalization.error;
+          } catch (err: unknown) {
+            logBackgroundFailure('finalize execution', err);
+          }
+          try {
+            await store.writeReport(msg);
+          } catch (err: unknown) {
+            logBackgroundFailure('persist report', err);
+          }
+
+          await deliverAndFinalize(msg, { wallTimeMs, error, autoClose: true });
+          return;
         }
+
+        const { error } = outcome;
+        const msg = formatBashError(executionId, command, error);
         try {
           const finalization = await finalizeExecution({
             executionId,
-            terminalStatus: backgroundBashTerminalStatus(result.success),
+            terminalStatus: backgroundBashTerminalStatus(false),
             flowRecord: 'delete',
           });
           if (finalization.status === 'failed') throw finalization.error;
@@ -497,34 +521,15 @@ export class BashTool extends defineTool({
           logBackgroundFailure('finalize execution', err);
         }
         try {
-          await store.writeReport(msg);
+          await getExecutionStore(executionId).writeReport(msg);
         } catch (err: unknown) {
           logBackgroundFailure('persist report', err);
         }
 
-        await deliverAndFinalize(msg, { wallTimeMs, error, autoClose: true });
-        return;
+        await deliverAndFinalize(msg, { error, autoClose: true });
+      } finally {
+        await releaseOwnedExecutionLeaseBestEffort(executionId);
       }
-
-      const { error } = outcome;
-      const msg = formatBashError(executionId, command, error);
-      try {
-        const finalization = await finalizeExecution({
-          executionId,
-          terminalStatus: backgroundBashTerminalStatus(false),
-          flowRecord: 'delete',
-        });
-        if (finalization.status === 'failed') throw finalization.error;
-      } catch (err: unknown) {
-        logBackgroundFailure('finalize execution', err);
-      }
-      try {
-        await getExecutionStore(executionId).writeReport(msg);
-      } catch (err: unknown) {
-        logBackgroundFailure('persist report', err);
-      }
-
-      await deliverAndFinalize(msg, { error, autoClose: true });
     })();
 
     return {

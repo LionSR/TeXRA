@@ -250,6 +250,21 @@ export async function releaseOwnedExecutionLease(
   await Promise.all(ownerships.map(releaseOwnership));
 }
 
+/** Release at a completed owner boundary without replacing its primary result. */
+export async function releaseOwnedExecutionLeaseBestEffort(
+  executionId: ExecutionId,
+): Promise<void> {
+  try {
+    await releaseOwnedExecutionLease(executionId);
+  } catch (error) {
+    logger.warn(
+      CHANNEL,
+      `Failed to release execution ${executionId}; its lease will expire after the stale horizon: ${toErrorMessage(error)}`,
+      { data: error },
+    );
+  }
+}
+
 async function releaseOwnership(ownership: OwnedExecutionLease): Promise<void> {
   const root = ownership.storageRoot;
   const { executionId } = ownership;

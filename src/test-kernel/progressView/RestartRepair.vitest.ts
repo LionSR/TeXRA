@@ -80,6 +80,33 @@ describe('repairRestartedStreams', () => {
     expect(finalizeExecution).not.toHaveBeenCalled();
   });
 
+  it('derives the lease identity when restart metadata has no execution mapping', async () => {
+    const executionId = 'a8644a' as ExecutionId;
+    const streamId = `tool@model#${executionId}` as StreamTabId;
+    const streamStatus = new StreamStatusMachine();
+    seedRunning(streamStatus, streamId);
+    const runWithInactiveExecutionLease = vi.fn(async () => ({
+      status: 'active' as const,
+      heartbeatAt: 123,
+    }));
+    const closeRunningGroups = vi.fn(async () => [] as StreamTabId[]);
+
+    await repairRestartedStreams({
+      streamStatus,
+      waitingStreams: new Set(),
+      executionIds: new Map(),
+      closeRunningGroups,
+      runWithInactiveExecutionLease,
+    });
+
+    expect(runWithInactiveExecutionLease).toHaveBeenCalledWith(
+      executionId,
+      expect.any(Function),
+    );
+    expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+    expect(closeRunningGroups).not.toHaveBeenCalled();
+  });
+
   it('repairs resumable running streams to WAITING with neutral group closure', async () => {
     const streamId = 'stream-waiting' as StreamTabId;
     const executionId = 'execution-waiting' as ExecutionId;

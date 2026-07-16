@@ -28,6 +28,7 @@ import { hasPersistedParent } from '@agent/storage/executionLifecycle';
 import {
   acquireResumedExecutionLease,
   releaseOwnedExecutionLease,
+  releaseOwnedExecutionLeaseBestEffort,
 } from '@agent/storage/executionLease';
 import { AgentError, getSdkErrorMessage } from '@common/errors';
 import {
@@ -381,98 +382,87 @@ export async function executeAgent(
   }
 
   const { runtimeHost } = options;
-  let ctx: AgentLaunchContext;
-  try {
-    ctx = await buildAgentLaunchContext({
-      configPayload,
-      executionId,
-      runtimeHost,
-      onBeforeActivation: options.onStreamResolved,
-      enforceCategory: options.enforceCategory,
-      suppressErrorNotification: options.isSubagent,
-      session: options.session,
-      modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
-    });
-  } catch (error) {
-    if (executionId) await releaseOwnedExecutionLease(executionId);
-    throw error;
-  }
+  const ctx = await buildAgentLaunchContext({
+    configPayload,
+    executionId,
+    runtimeHost,
+    onBeforeActivation: options.onStreamResolved,
+    enforceCategory: options.enforceCategory,
+    suppressErrorNotification: options.isSubagent,
+    session: options.session,
+    modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+  });
   const runContextOptions = {
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
     runtimeUnavailableTools: options.runtimeUnavailableTools,
     stopAfterCycle: options.stopAfterCycle,
   };
-  try {
-    return await withExecutionRunContext(ctx, runContextOptions, async () => {
-      const { setting, config } = ctx;
-      const {
-        streamId: runStreamId,
-        executionId: runExecutionId,
-        session: runSession,
-        runtimeHost: runRuntimeHost,
-      } = ctx.runScope;
-      const { isSubagent } = options;
+  return withExecutionRunContext(ctx, runContextOptions, async () => {
+    const { setting, config } = ctx;
+    const {
+      streamId: runStreamId,
+      executionId: runExecutionId,
+      session: runSession,
+      runtimeHost: runRuntimeHost,
+    } = ctx.runScope;
+    const { isSubagent } = options;
 
-      // Fire-and-forget: generate AI session description from the user's instruction.
-      // Triggered at the start so cancelled/errored sessions still get descriptions.
-      // Applies to tool-use agents, including subagents, so their progress tabs show
-      // meaningful descriptions in multi-agent pipelines. The callee owns its
-      // best-effort failure reporting and never rejects.
-      void generateSessionDescription(
-        runExecutionId,
-        runStreamId,
-        config,
-        runSession,
-      );
-      const result = await runFlowWithLifecycle(
-        ctx,
-        async (handle, lifecycle) => {
-          // Pre-execution UI setup (RUNNING is set by runFlowWithLifecycle)
-          if (executionId) await ensureRunDir(executionId);
-          logger.info(`Starting task execution (streamId: ${runStreamId})`);
-          logger.info(`Input file: ${config.inputFiles[0] ?? '(none)'}`);
-          logger.debug('Task execution details', {
-            data: {
-              streamId: runStreamId,
-              agent: config.agent,
-              model: config.model,
-            },
+    // Fire-and-forget: generate AI session description from the user's instruction.
+    // Triggered at the start so cancelled/errored sessions still get descriptions.
+    // Applies to tool-use agents, including subagents, so their progress tabs show
+    // meaningful descriptions in multi-agent pipelines. The callee owns its
+    // best-effort failure reporting and never rejects.
+    void generateSessionDescription(
+      runExecutionId,
+      runStreamId,
+      config,
+      runSession,
+    );
+    const result = await runFlowWithLifecycle(
+      ctx,
+      async (handle, lifecycle) => {
+        // Pre-execution UI setup (RUNNING is set by runFlowWithLifecycle)
+        if (executionId) await ensureRunDir(executionId);
+        logger.info(`Starting task execution (streamId: ${runStreamId})`);
+        logger.info(`Input file: ${config.inputFiles[0] ?? '(none)'}`);
+        logger.debug('Task execution details', {
+          data: {
+            streamId: runStreamId,
+            agent: config.agent,
+            model: config.model,
+          },
+        });
+        logger.debug(`Output files: ${config.outputFiles?.length ?? 0}`);
+        // Subagents don't need to force-open the progress board or show notifications —
+        // the orchestrator's stream is already visible.
+        if (!isSubagent && !getProgressViewBridge().isViewVisible()) {
+          runRuntimeHost.emit('requestEnsureProgressView', {
+            fallbackNotification: buildFallbackNotification(config),
           });
-          logger.debug(`Output files: ${config.outputFiles?.length ?? 0}`);
-          // Subagents don't need to force-open the progress board or show notifications —
-          // the orchestrator's stream is already visible.
-          if (!isSubagent && !getProgressViewBridge().isViewVisible()) {
-            runRuntimeHost.emit('requestEnsureProgressView', {
-              fallbackNotification: buildFallbackNotification(config),
-            });
-          }
-          logger.info('Executing agent', {
-            data: { agent: config.agent, model: config.model },
-          });
+        }
+        logger.info('Executing agent', {
+          data: { agent: config.agent, model: config.model },
+        });
 
-          if (setting.agentCategory === AgentCategory.ToolUse) {
-            return runToolUseAgent(ctx, handle, lifecycle, setting, options);
-          }
-          return runReflectionAgent(ctx, handle, setting);
-        },
-        {
-          isSubagent,
-          parentStreamId: options.parentStreamId,
-          onError: options.onRunError,
-          onRun: options.onRun,
-        },
+        if (setting.agentCategory === AgentCategory.ToolUse) {
+          return runToolUseAgent(ctx, handle, lifecycle, setting, options);
+        }
+        return runReflectionAgent(ctx, handle, setting);
+      },
+      {
+        isSubagent,
+        parentStreamId: options.parentStreamId,
+        onError: options.onRunError,
+        onRun: options.onRun,
+      },
+    );
+    if (isWaitingFlowResult(result) && options.allowWaitingResult !== true) {
+      throw new Error(
+        'executeAgent received a non-terminal WAITING result without allowWaitingResult.',
       );
-      if (isWaitingFlowResult(result) && options.allowWaitingResult !== true) {
-        throw new Error(
-          'executeAgent received a non-terminal WAITING result without allowWaitingResult.',
-        );
-      }
-      return result;
-    });
-  } catch (error) {
-    if (executionId) await releaseOwnedExecutionLease(executionId);
-    throw error;
-  }
+    }
+    return result;
+  });
 }
 
 export interface ResumeToolUseFromSnapshotOptions extends SubagentRunOptions {
@@ -548,65 +538,73 @@ export async function resumeToolUseFromSnapshot(
   } = ctx.runScope;
 
   try {
-    return await withExecutionRunContext(ctx, runContextOptions, async () => {
-      if (setting.agentCategory !== AgentCategory.ToolUse) {
-        throw new AgentError(
-          'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
-        );
-      }
+    const result = await withExecutionRunContext(
+      ctx,
+      runContextOptions,
+      async () => {
+        if (setting.agentCategory !== AgentCategory.ToolUse) {
+          throw new AgentError(
+            'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
+          );
+        }
 
-      const result = await runFlowWithLifecycle(
-        ctx,
-        async (handle, lifecycle) => {
-          const result = await runToolUseFlow(
-            {
-              ...ctx,
-              streamStatus: runSession.status,
-              ...createInterruptCallbacks(),
-              onRoundFinalized: createUsageRecordingCallback(ctx),
-              setting,
-              resumeSnapshot: snapshot,
-              drainedFollowUps: options.drainedFollowUps,
-              takePendingFollowUps: options.takePendingFollowUps,
-              // A persisted parent marks this execution as a subagent. Without
-              // this, the rebuilt system prompt would drop subagent-specific
-              // instructions (e.g. the shared /memories protocol) that the fresh
-              // run had included.
-              isSubagent,
-              onProgress: options.onProgress,
-              onFollowUpConsumed: wrapOnFollowUpConsumed(
-                ctx,
-                options.onFollowUpConsumed,
-              ),
-              onFlowRecordDisposition: (disposition) =>
-                lifecycle.setFlowRecordDisposition(disposition),
-            },
-            undefined,
-            (flowContext) => {
-              handle.attachToolUseFlow(flowContext);
-              if (options.isCancellationRequested?.()) {
-                options.onCancellationAtFlowAttachment?.();
-                flowContext.interrupt();
-              }
-              return () => handle.detachToolUseFlow(flowContext);
-            },
-          );
-          return buildToolUseFlowResult(
-            result,
-            runExecutionId,
-            runStreamId,
-            ctx.attachedMemoryMisses,
-          );
-        },
-        {
-          isSubagent,
-          parentStreamId: options.parentStreamId,
-          onError: options.onRunError,
-          onRun: options.onRun,
-        },
-      );
-      return result;
-    });
+        const result = await runFlowWithLifecycle(
+          ctx,
+          async (handle, lifecycle) => {
+            const result = await runToolUseFlow(
+              {
+                ...ctx,
+                streamStatus: runSession.status,
+                ...createInterruptCallbacks(),
+                onRoundFinalized: createUsageRecordingCallback(ctx),
+                setting,
+                resumeSnapshot: snapshot,
+                drainedFollowUps: options.drainedFollowUps,
+                takePendingFollowUps: options.takePendingFollowUps,
+                // A persisted parent marks this execution as a subagent. Without
+                // this, the rebuilt system prompt would drop subagent-specific
+                // instructions (e.g. the shared /memories protocol) that the fresh
+                // run had included.
+                isSubagent,
+                onProgress: options.onProgress,
+                onFollowUpConsumed: wrapOnFollowUpConsumed(
+                  ctx,
+                  options.onFollowUpConsumed,
+                ),
+                onFlowRecordDisposition: (disposition) =>
+                  lifecycle.setFlowRecordDisposition(disposition),
+              },
+              undefined,
+              (flowContext) => {
+                handle.attachToolUseFlow(flowContext);
+                if (options.isCancellationRequested?.()) {
+                  options.onCancellationAtFlowAttachment?.();
+                  flowContext.interrupt();
+                }
+                return () => handle.detachToolUseFlow(flowContext);
+              },
+            );
+            return buildToolUseFlowResult(
+              result,
+              runExecutionId,
+              runStreamId,
+              ctx.attachedMemoryMisses,
+            );
+          },
+          {
+            isSubagent,
+            parentStreamId: options.parentStreamId,
+            onError: options.onRunError,
+            onRun: options.onRun,
+          },
+        );
+        return result;
+      },
+    );
+    if (!isSubagent && !isWaitingFlowResult(result)) {
+      await releaseOwnedExecutionLeaseBestEffort(snapshot.executionId);
+    }
+    return result;
   } catch (error) {
     if (leaseAcquisition === 'acquired') {
       await releaseOwnedExecutionLease(snapshot.executionId);

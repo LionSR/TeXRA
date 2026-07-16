@@ -7,16 +7,13 @@ import {
   type DeleteExecutionOptions,
   type DeleteExecutionResult,
 } from '@agent/storage/executionListing';
+import { executionIdFromStream } from '@agent/storage/executionIdFromStream';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
 
 // Local imports - shared
-import {
-  ExecutionIdSchema,
-  type ExecutionId,
-  type StreamTabId,
-} from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 // Local imports - utils
 import { unique } from '@utils/core';
@@ -25,13 +22,6 @@ import { unique } from '@utils/core';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
 
 const CHANNEL = 'SessionStores';
-
-function executionIdFromStream(stream: StreamTabId): ExecutionId | undefined {
-  const separator = stream.lastIndexOf('#');
-  const candidate = separator >= 0 ? stream.slice(separator + 1) : stream;
-  const parsed = ExecutionIdSchema.safeParse(candidate);
-  return parsed.success ? parsed.data : undefined;
-}
 
 export interface SessionStoresOptions {
   streamLogs: StreamLogStore;
@@ -74,8 +64,8 @@ export class SessionStores {
     this.goalEntries = options.goalEntries;
   }
 
-  async deleteStream(stream: StreamTabId): Promise<void> {
-    if (!canUseStreamDataDir(stream)) return;
+  async deleteStream(stream: StreamTabId): Promise<'deleted' | 'active'> {
+    if (!canUseStreamDataDir(stream)) return 'deleted';
 
     const executionId =
       this.snapshots.getExecutionId(stream) ??
@@ -84,14 +74,15 @@ export class SessionStores {
 
     if (!executionId) {
       await this.deleteAdjacentStreamState(stream);
-      return;
+      return 'deleted';
     }
-    await this.deleteExecution(executionId, {
+    const result = await this.deleteExecution(executionId, {
       beforeDelete: () => this.deleteAdjacentStreamState(stream),
     });
+    return result.status === 'active' ? 'active' : 'deleted';
   }
 
-  async deleteAll(): Promise<void> {
+  async deleteAll(): Promise<ReadonlySet<StreamTabId>> {
     const persistedStreams = await this.snapshots.listPersistedStreams();
     const streamIds = unique([...persistedStreams, ...this.streamLogs.keys()]);
     const executionIdsByStream = new Map(this.snapshots.getExecutionIdMap());
@@ -102,6 +93,11 @@ export class SessionStores {
         const derived = executionIdFromStream(stream);
         if (derived) executionIdsByStream.set(stream, derived);
       }
+    }
+    for (const stream of streamIds) {
+      if (executionIdsByStream.has(stream)) continue;
+      const derived = executionIdFromStream(stream);
+      if (derived) executionIdsByStream.set(stream, derived);
     }
 
     const streamsByExecution = new Map<ExecutionId, StreamTabId[]>();
@@ -116,14 +112,19 @@ export class SessionStores {
       streams.push(stream);
       streamsByExecution.set(executionId, streams);
     }
+    const retainedStreams = new Set<StreamTabId>();
     await Promise.all([
       this.deleteAdjacentStreamStates(streamsWithoutExecution),
-      ...[...streamsByExecution].map(([executionId, streams]) =>
-        this.deleteExecution(executionId, {
+      ...[...streamsByExecution].map(async ([executionId, streams]) => {
+        const result = await this.deleteExecution(executionId, {
           beforeDelete: () => this.deleteAdjacentStreamStates(streams),
-        }),
-      ),
+        });
+        if (result.status === 'active') {
+          for (const stream of streams) retainedStreams.add(stream);
+        }
+      }),
     ]);
+    return retainedStreams;
   }
 
   async sweepOrphanedStreams(

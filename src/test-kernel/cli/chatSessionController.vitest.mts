@@ -43,6 +43,7 @@ vi.mock('@agent/storage', () => ({
   finalizeExecution: mocks.finalizeExecution,
   getExecutionStore: mocks.getExecutionStore,
   registerExecution: mocks.registerExecution,
+  releaseOwnedExecutionLeaseBestEffort: vi.fn(async () => {}),
 }));
 
 vi.mock('@agent/runtime/resolveAndResumeStream', () => ({

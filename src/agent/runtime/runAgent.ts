@@ -1,4 +1,7 @@
-import { registerExecution } from '@agent/storage';
+import {
+  registerExecution,
+  releaseOwnedExecutionLeaseBestEffort,
+} from '@agent/storage';
 
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import type { ExecutionId } from '@shared/schemas';
@@ -83,9 +86,15 @@ export async function runAgent(
     );
   }
 
-  const result = await executeAgent(config, executionId, executeAgentOptions);
-  if (result.category === 'workflow') {
-    await openWorkflowOutput?.(result);
+  try {
+    const result = await executeAgent(config, executionId, executeAgentOptions);
+    if (result.category === 'workflow') {
+      await openWorkflowOutput?.(result);
+    }
+    return result;
+  } finally {
+    if (shouldRegister) {
+      await releaseOwnedExecutionLeaseBestEffort(executionId);
+    }
   }
-  return result;
 }

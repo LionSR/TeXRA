@@ -119,6 +119,20 @@ describe('execution lifecycle', () => {
     });
   });
 
+  it('rolls back lease ownership when registration preparation throws', async () => {
+    const executionId = 'abc125' as ExecutionId;
+    mocks.getExecutionStore.mockImplementationOnce(() => {
+      throw new Error('store construction failed');
+    });
+
+    await expect(
+      registerExecution(executionId, baseConfig, 'chat'),
+    ).rejects.toThrow('store construction failed');
+    await expect(inspectExecutionLease(executionId)).resolves.toEqual({
+      status: 'missing',
+    });
+  });
+
   it('does not relabel a turn-owned result while persisting terminal metadata', async () => {
     const executionId = 'abc123' as ExecutionId;
     mocks.readMeta.mockResolvedValue({

@@ -5,6 +5,7 @@ import {
   type FinalizeExecutionResult,
 } from '@agent/storage/executionLifecycle';
 import { runWithInactiveExecutionLease as defaultRunWithInactiveExecutionLease } from '@agent/storage/executionLease';
+import { executionIdFromStream } from '@agent/storage/executionIdFromStream';
 import type {
   StreamStatusEmitOptions,
   StreamStatusMachine,
@@ -235,7 +236,8 @@ export async function repairRestartedStreams(
     options.streamStatus,
     options.repairStreams,
   )) {
-    const executionId = options.executionIds.get(streamId);
+    const executionId =
+      options.executionIds.get(streamId) ?? executionIdFromStream(streamId);
     let repairStarted = false;
     try {
       const repair = () => {

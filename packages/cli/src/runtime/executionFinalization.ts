@@ -1,4 +1,8 @@
-import { finalizeExecution, type FinalizeExecutionInput } from '@agent/storage';
+import {
+  finalizeExecution,
+  releaseOwnedExecutionLeaseBestEffort,
+  type FinalizeExecutionInput,
+} from '@agent/storage';
 import type { ExecutionStatus } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -50,6 +54,8 @@ export async function finalizeCliExecution(
       ),
     );
     return;
+  } finally {
+    await releaseOwnedExecutionLeaseBestEffort(executionId);
   }
   if (result.status === 'durable') return;
 

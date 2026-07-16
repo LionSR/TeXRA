@@ -40,6 +40,7 @@ export interface ProgressStreamLifecycleHarnessOptions {
   taskStateStreams?: StreamTabId[];
   inFlightStreams?: StreamTabId[];
   visibleStreams?: StreamTabId[];
+  protectedStreams?: StreamTabId[];
 }
 
 export interface ProgressStreamLifecycleHarness {
@@ -58,6 +59,7 @@ export function createProgressStreamLifecycleHarness(
   let activeStream = options.activeStream ?? streams[0] ?? '';
   const taskStateStreams = new Set(options.taskStateStreams ?? []);
   const inFlightStreams = new Set(options.inFlightStreams ?? []);
+  const protectedStreams = new Set(options.protectedStreams ?? []);
   const recorder = new ControllerCallRecorder<StreamTabId>();
   const syncCalls: Array<{ forceRebuild: boolean }> = [];
   const state: ProgressStreamLifecycleState = {
@@ -71,14 +73,17 @@ export function createProgressStreamLifecycleHarness(
     pickValidActiveStream: (availableStreams) => availableStreams[0] ?? '',
     clearStream: async (stream) => {
       recorder.record('clearStream', stream);
+      if (protectedStreams.has(stream)) return false;
       streams = streams.filter((candidate) => candidate !== stream);
       if (activeStream === stream) {
         activeStream = streams[0] ?? '';
       }
+      return true;
     },
     clearAll: async () => {
-      streams = [];
-      activeStream = '';
+      streams = streams.filter((stream) => protectedStreams.has(stream));
+      activeStream = streams[0] ?? '';
+      return new Set(protectedStreams);
     },
   };
   const host: ProgressStreamLifecycleHost = {

@@ -8,7 +8,11 @@
 //
 // Host-agnostic, VS Code-free.
 
-import { synchronizeAgentResultOutcome, type ResultMeta } from '@agent/storage';
+import {
+  releaseOwnedExecutionLeaseBestEffort,
+  synchronizeAgentResultOutcome,
+  type ResultMeta,
+} from '@agent/storage';
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
@@ -653,80 +657,84 @@ export function startChildRunLoop<TTurn>(
       unregisterChildRunLoop();
       runSession.followUps.release(childStreamId);
       releaseSessionOwnershipOnce();
-      params.recordCost?.(latestCostUsd);
-      // The shared terminal finalizer owns the single outcome derivation and
-      // its projections: persisted terminal status (before untrack notifies
-      // waiters), settled result, and terminal stream phase.
-      if (childStream) {
-        // Agent-CLI: ChildStream.finalize owns this handle for the loop's
-        // whole lifetime (one handle, tracked once by createChildStream).
-        await childStream.finalize({
-          failed: sawTurnFailure,
-          cancelled: loop.isInterrupted(),
-          stage: sessionStage,
-          persistence: { kind: 'finalize', flowRecord: 'delete' },
-        });
-      } else {
-        // Native: every GENUINE terminal turn already finalized its own
-        // handle inside runFlowWithLifecycle (the handle is untracked by the
-        // time this runs, so the lookup below finds nothing — a safe no-op).
-        // Two paths leave the most recently tracked handle for this stream
-        // dangling, never finalized by its own flow:
-        //   (1) the loop was interrupted between turns — ExecutionRegistry
-        //       .terminate() found this loop's own interrupt handler, called
-        //       .interrupt(), and transitioned the stream to CANCELLED, but
-        //       assumed a live flow would notice and self-finalize; nothing
-        //       is running here, the loop was just blocked on a queue wait.
-        //   (2) `runTurn` threw before ever reaching a new
-        //       runFlowWithLifecycle call (a resume pre-check failure, or a
-        //       failed resume per #7491) — the prior turn's suspended handle
-        //       was never touched by this attempt.
-        // `finalizeRunTerminal`'s atomic claim makes this call safe even if
-        // it races something else that already finalized the same handle.
-        const handle =
-          runSession.executions.getAgentHandleByStream(childStreamId);
-        if (handle) {
-          const outcome = deriveRunOutcome({
-            failed: sawTurnFailure && !loop.isInterrupted(),
+      try {
+        params.recordCost?.(latestCostUsd);
+        // The shared terminal finalizer owns the single outcome derivation and
+        // its projections: persisted terminal status (before untrack notifies
+        // waiters), settled result, and terminal stream phase.
+        if (childStream) {
+          // Agent-CLI: ChildStream.finalize owns this handle for the loop's
+          // whole lifetime (one handle, tracked once by createChildStream).
+          await childStream.finalize({
+            failed: sawTurnFailure,
             cancelled: loop.isInterrupted(),
+            stage: sessionStage,
+            persistence: { kind: 'finalize', flowRecord: 'delete' },
           });
-          const finalized = await finalizeRunTerminal({
-            handle,
-            executions: runSession.executions,
-            streamStatus: runSession.status,
-            outcome,
-            error:
-              sawTurnFailure && lastTurnErr !== undefined
-                ? {
-                    kind: classifyAgentError(lastTurnErr),
-                    message: toErrorMessage(lastTurnErr),
-                  }
-                : undefined,
-            isSubagent: true,
-            persistence: {
-              kind: 'finalize',
-              flowRecord:
-                outcome === RUN_OUTCOME.CANCELLED ? 'preserve' : 'delete',
-            },
-          });
-          // No turn result follows an interruption between turns. Only this
-          // path may relabel the latest interim envelope; ordinary terminal
-          // turns persist their own result after runFlowWithLifecycle returns.
-          if (finalized?.terminalStatusPersisted && loop.isInterrupted()) {
-            await synchronizeAgentResultOutcome(executionId, outcome);
+        } else {
+          // Native: every GENUINE terminal turn already finalized its own
+          // handle inside runFlowWithLifecycle (the handle is untracked by the
+          // time this runs, so the lookup below finds nothing — a safe no-op).
+          // Two paths leave the most recently tracked handle for this stream
+          // dangling, never finalized by its own flow:
+          //   (1) the loop was interrupted between turns — ExecutionRegistry
+          //       .terminate() found this loop's own interrupt handler, called
+          //       .interrupt(), and transitioned the stream to CANCELLED, but
+          //       assumed a live flow would notice and self-finalize; nothing
+          //       is running here, the loop was just blocked on a queue wait.
+          //   (2) `runTurn` threw before ever reaching a new
+          //       runFlowWithLifecycle call (a resume pre-check failure, or a
+          //       failed resume per #7491) — the prior turn's suspended handle
+          //       was never touched by this attempt.
+          // `finalizeRunTerminal`'s atomic claim makes this call safe even if
+          // it races something else that already finalized the same handle.
+          const handle =
+            runSession.executions.getAgentHandleByStream(childStreamId);
+          if (handle) {
+            const outcome = deriveRunOutcome({
+              failed: sawTurnFailure && !loop.isInterrupted(),
+              cancelled: loop.isInterrupted(),
+            });
+            const finalized = await finalizeRunTerminal({
+              handle,
+              executions: runSession.executions,
+              streamStatus: runSession.status,
+              outcome,
+              error:
+                sawTurnFailure && lastTurnErr !== undefined
+                  ? {
+                      kind: classifyAgentError(lastTurnErr),
+                      message: toErrorMessage(lastTurnErr),
+                    }
+                  : undefined,
+              isSubagent: true,
+              persistence: {
+                kind: 'finalize',
+                flowRecord:
+                  outcome === RUN_OUTCOME.CANCELLED ? 'preserve' : 'delete',
+              },
+            });
+            // No turn result follows an interruption between turns. Only this
+            // path may relabel the latest interim envelope; ordinary terminal
+            // turns persist their own result after runFlowWithLifecycle returns.
+            if (finalized?.terminalStatusPersisted && loop.isInterrupted()) {
+              await synchronizeAgentResultOutcome(executionId, outcome);
+            }
           }
         }
+        // Wake the parent only now — after this child's own finalize above —
+        // so a resumed parent turn that immediately waits on this execution
+        // (e.g. `executions` tool with `action=wait`) always observes it
+        // terminal instead of racing its own wake (#8093).
+        await wakePendingDelivery(
+          pendingDelivery,
+          runSession,
+          executionId,
+          logger,
+        );
+      } finally {
+        await releaseOwnedExecutionLeaseBestEffort(executionId);
       }
-      // Wake the parent only now — after this child's own finalize above —
-      // so a resumed parent turn that immediately waits on this execution
-      // (e.g. `executions` tool with `action=wait`) always observes it
-      // terminal instead of racing its own wake (#8093).
-      await wakePendingDelivery(
-        pendingDelivery,
-        runSession,
-        executionId,
-        logger,
-      );
     }
   })();
 }

@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { platform } from '@platform/platform';
 
 import {
   clearStoreCache,
@@ -128,6 +130,7 @@ describe('cross-process execution leases', () => {
       terminalStatus: EXECUTION_STATUS.COMPLETED,
       flowRecord: 'preserve',
     });
+    await releaseOwnedExecutionLease(executionId);
     ownedExecutionIds.delete(executionId);
 
     await expect(inspectExecutionLease(executionId)).resolves.toEqual({
@@ -195,6 +198,7 @@ describe('cross-process execution leases', () => {
       deleted: [deletedId],
       notFound: [],
       active: [activeId],
+      failed: [],
     });
   });
 
@@ -209,5 +213,33 @@ describe('cross-process execution leases', () => {
     await expect(deleteAllExecutions()).rejects.toThrow('Failed to parse JSON');
     expect(await StorageFS.exists(`executions/${validId}`)).toBe(true);
     expect(await StorageFS.exists(`executions/${malformedId}`)).toBe(true);
+  });
+
+  it('reports ordinary bulk deletion failures alongside successful ids', async () => {
+    const deletedId = 'a86444' as ExecutionId;
+    const failedId = 'a86445' as ExecutionId;
+    await writeExecution(deletedId);
+    await writeExecution(failedId);
+    const fs = platform().fs;
+    const originalDelete = fs.delete.bind(fs);
+    const deleteSpy = vi
+      .spyOn(fs, 'delete')
+      .mockImplementation((target, options) => {
+        if (target.includes(`executions/${failedId}`)) {
+          return Promise.reject(new Error('permission denied'));
+        }
+        return originalDelete(target, options);
+      });
+
+    try {
+      await expect(deleteAllExecutions()).resolves.toEqual({
+        deleted: [deletedId],
+        notFound: [],
+        active: [],
+        failed: [{ executionId: failedId, message: 'permission denied' }],
+      });
+    } finally {
+      deleteSpy.mockRestore();
+    }
   });
 });

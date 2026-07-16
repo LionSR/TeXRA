@@ -1924,6 +1924,35 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('retains a log-only stream during bulk cleanup when its execution is active', async () => {
+    const { backend, session } = createIsolatedRecordingBackend();
+    const stream = 'tool@deepseek#a6966d' as StreamTabId;
+    const executionId = 'a6966d' as ExecutionId;
+
+    try {
+      backend.state.streamLogs.ensureStream(stream);
+      await writeExecutionConfig(executionId);
+      await GoalStore.start(stream, 'preserve the log-only active execution');
+      await writeForeignExecutionLease(executionId);
+
+      const retained = await backend.state.clearAll();
+
+      expect(retained).toEqual(new Set([stream]));
+      expect(backend.state.streamLogs.has(stream)).toBe(true);
+      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
+      expect(GoalStore.getForStream(stream)).not.toBeNull();
+    } finally {
+      await StorageFS.delete(`executionLeases/${executionId}.json`).catch(
+        () => {},
+      );
+      await GoalStore.forget(stream);
+      await getExecutionStore(executionId).clear();
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('forgets goal entries when clearing never-registered streams', async () => {
     const stream = 'tool@deepseek#missing' as StreamTabId;
     const { backend, session } = createIsolatedRecordingBackend();

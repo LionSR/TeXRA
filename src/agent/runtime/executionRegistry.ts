@@ -8,6 +8,7 @@
 import {
   HEARTBEAT_INTERVAL_MS,
   finalizeExecution,
+  releaseOwnedExecutionLeaseBestEffort,
   synchronizeAgentResultOutcome,
   touchExecutionHeartbeat,
 } from '@agent/storage';
@@ -989,7 +990,7 @@ export class ExecutionRegistry {
           });
         }
         if (result.terminalStatusPersisted) {
-          void synchronizeAgentResultOutcome(
+          return synchronizeAgentResultOutcome(
             handle.executionId,
             RUN_OUTCOME.CANCELLED,
           );
@@ -999,6 +1000,11 @@ export class ExecutionRegistry {
         logger.warn('Waiting-execution finalizer rejected unexpectedly', {
           data: { executionId: handle.executionId, error },
         });
+      })
+      .finally(() => {
+        if (!handle.isChildExecution) {
+          void releaseOwnedExecutionLeaseBestEffort(handle.executionId);
+        }
       });
     this.untrackHandle(handle);
     this.cancelStreamStatus(handle.childStreamId, handle);

@@ -45,6 +45,7 @@ vi.mock('@agent/storage', () => ({
   HEARTBEAT_INTERVAL_MS: 10_000,
   touchExecutionHeartbeat: () => Promise.resolve(),
   getExecutionStore: vi.fn(() => ({ readConfig: mocks.readConfig })),
+  releaseOwnedExecutionLeaseBestEffort: vi.fn(async () => {}),
   synchronizeAgentResultOutcome: mocks.synchronizeAgentResultOutcome,
 }));
 

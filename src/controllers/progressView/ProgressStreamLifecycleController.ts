@@ -11,8 +11,8 @@ export interface ProgressStreamLifecycleState {
   hasTaskState(stream: StreamTabId): boolean;
   getStreamIds(): StreamTabId[];
   pickValidActiveStream(availableStreams: StreamTabId[]): StreamTabId | '';
-  clearStream(stream: StreamTabId): Promise<void>;
-  clearAll(): Promise<void>;
+  clearStream(stream: StreamTabId): Promise<boolean>;
+  clearAll(): Promise<ReadonlySet<StreamTabId>>;
 }
 
 export interface ProgressStreamLifecycleControllerDeps {
@@ -57,13 +57,13 @@ export class ProgressStreamLifecycleController {
       await this.deps.host.stopStream(stream);
     }
 
-    this.deps.host.cleanupDeletedStream(stream);
-
     // The wasActive snapshot must happen before the first await: callers may
     // switch streams synchronously after invoking deleteStream, and that
     // switch belongs to the post-deletion state, not this snapshot.
     const wasActive = this.deps.state.getActiveStream() === stream;
-    await this.deps.state.clearStream(stream);
+    const deleted = await this.deps.state.clearStream(stream);
+    if (!deleted) return;
+    this.deps.host.cleanupDeletedStream(stream);
 
     let shouldActivateStream = false;
     const activeAfterClear = this.deps.state.getActiveStream();
@@ -96,8 +96,9 @@ export class ProgressStreamLifecycleController {
       streamIds.map((stream) => this.deps.host.stopStream(stream)),
     );
 
-    this.deps.host.cleanupDeletedStreams(streamIds);
-    await this.deps.state.clearAll();
+    const retained = await this.deps.state.clearAll();
+    const deleted = streamIds.filter((stream) => !retained.has(stream));
+    this.deps.host.cleanupDeletedStreams(deleted);
     this.deps.host.rebuildRenderedStreams({ forceRebuild: true });
   }
 }
