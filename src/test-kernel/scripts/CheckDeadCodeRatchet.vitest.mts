@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  findRatchetViolations,
+  compareFindings,
+  countByCategory,
+  diffFindings,
+  extractFindings,
+  findingKey,
   parseKnipIssues,
-  summarizeKnipIssues,
+  readBaseline,
 } from '../../../scripts/check-dead-code-ratchet.mjs';
+import type { KnipFinding } from '../../../scripts/check-dead-code-ratchet.d.mts';
 
 // Captured verbatim from a real `knip --reporter json` run against this repo
 // (knip 6.24.0, `--include files,exports,types,duplicates`) and trimmed to a
@@ -65,8 +70,8 @@ const REAL_KNIP_STDOUT = JSON.stringify({
   ],
 });
 
-describe('check-dead-code-ratchet summarizeKnipIssues', () => {
-  it('sums files/exports/types/duplicates across all knip issue entries', () => {
+describe('check-dead-code-ratchet extractFindings', () => {
+  it('flattens files/exports/types/duplicates into one finding per symbol, keyed by (file, category, name)', () => {
     const issues = [
       {
         file: 'a.ts',
@@ -91,42 +96,54 @@ describe('check-dead-code-ratchet summarizeKnipIssues', () => {
       },
     ];
 
-    expect(summarizeKnipIssues(issues)).toEqual({
-      unusedFiles: 1,
-      unusedExports: 2,
-      unusedTypes: 1,
-      duplicateExports: 1,
-    });
+    expect(extractFindings(issues)).toEqual([
+      { file: 'a.ts', category: 'files', name: 'a.ts' },
+      { file: 'b.ts', category: 'exports', name: 'foo' },
+      { file: 'b.ts', category: 'exports', name: 'bar' },
+      { file: 'b.ts', category: 'types', name: 'Baz' },
+      { file: 'c.ts', category: 'duplicates', name: 'x,y' },
+    ]);
   });
 
-  it('treats missing per-metric arrays as zero, matching knip omitting empty keys', () => {
-    const issues = [{ file: 'a.ts' }];
+  it('never keys a finding by line number, only by (file, category, name)', () => {
+    const issue = {
+      file: 'a.ts',
+      files: [],
+      exports: [{ name: 'foo', line: 10, col: 1, pos: 99 }],
+      types: [],
+      duplicates: [],
+    };
 
-    expect(summarizeKnipIssues(issues)).toEqual({
-      unusedFiles: 0,
-      unusedExports: 0,
-      unusedTypes: 0,
-      duplicateExports: 0,
-    });
+    expect(extractFindings([issue])).toEqual([
+      { file: 'a.ts', category: 'exports', name: 'foo' },
+    ]);
   });
 
-  it('returns all-zero counts for an empty issue list', () => {
-    expect(summarizeKnipIssues([])).toEqual({
-      unusedFiles: 0,
-      unusedExports: 0,
-      unusedTypes: 0,
-      duplicateExports: 0,
-    });
+  it('sorts a duplicate group by member name so key order does not depend on knip emission order', () => {
+    const groupA = { duplicates: [[{ name: 'b' }, { name: 'a' }]] };
+    const groupB = { duplicates: [[{ name: 'a' }, { name: 'b' }]] };
+
+    expect(findingKey(extractFindings([{ file: 'x.ts', ...groupA }])[0])).toBe(
+      findingKey(extractFindings([{ file: 'x.ts', ...groupB }])[0]),
+    );
   });
 
-  it('sums counts correctly against real captured knip --reporter json output', () => {
+  it('treats missing per-category arrays as no findings, matching knip omitting empty keys', () => {
+    expect(extractFindings([{ file: 'a.ts' }])).toEqual([]);
+  });
+
+  it('returns no findings for an empty issue list', () => {
+    expect(extractFindings([])).toEqual([]);
+  });
+
+  it('extracts one finding per symbol from real captured knip --reporter json output', () => {
     const { issues } = JSON.parse(REAL_KNIP_STDOUT);
 
-    expect(summarizeKnipIssues(issues)).toEqual({
-      unusedFiles: 2,
-      unusedExports: 3,
-      unusedTypes: 2,
-      duplicateExports: 1,
+    expect(countByCategory(extractFindings(issues))).toEqual({
+      files: 2,
+      exports: 3,
+      types: 2,
+      duplicates: 1,
     });
   });
 });
@@ -166,41 +183,68 @@ describe('check-dead-code-ratchet parseKnipIssues', () => {
   });
 });
 
-describe('check-dead-code-ratchet findRatchetViolations', () => {
-  const baseline = {
-    unusedFiles: 2,
-    unusedExports: 385,
-    unusedTypes: 299,
-    duplicateExports: 3,
-  };
+describe('check-dead-code-ratchet readBaseline', () => {
+  it('returns the findings array from a well-formed baseline document', () => {
+    const findings = [{ file: 'a.ts', category: 'exports', name: 'foo' }];
 
-  it('reports no violations when counts stay at or below the baseline', () => {
-    expect(findRatchetViolations(baseline, baseline)).toEqual([]);
-    expect(
-      findRatchetViolations(
-        {
-          unusedFiles: 0,
-          unusedExports: 0,
-          unusedTypes: 0,
-          duplicateExports: 0,
-        },
-        baseline,
-      ),
-    ).toEqual([]);
+    expect(readBaseline(JSON.stringify({ semantics: 'x', findings }))).toEqual(
+      findings,
+    );
   });
 
-  it('flags only the metrics that increase past the baseline', () => {
-    const current = { ...baseline, unusedExports: 386, unusedTypes: 300 };
+  it('throws when the baseline document has no findings array', () => {
+    expect(() => readBaseline(JSON.stringify({ semantics: 'x' }))).toThrow(
+      /missing a "findings" array/,
+    );
+  });
+});
 
-    expect(findRatchetViolations(current, baseline)).toEqual([
-      { metric: 'unusedExports', currentCount: 386, baselineCount: 385 },
-      { metric: 'unusedTypes', currentCount: 300, baselineCount: 299 },
-    ]);
+describe('check-dead-code-ratchet diffFindings', () => {
+  const baseline: KnipFinding[] = [
+    { file: 'a.ts', category: 'exports', name: 'foo' },
+    { file: 'b.ts', category: 'types', name: 'Bar' },
+  ];
+
+  it('reports no new or resolved findings when current matches baseline exactly', () => {
+    expect(diffFindings(baseline, baseline)).toEqual({
+      newFindings: [],
+      resolvedFindings: [],
+    });
   });
 
-  it('does not flag a decrease below the baseline', () => {
-    const current = { ...baseline, unusedFiles: 1 };
+  it('flags a finding present in current but absent from the baseline as new, by identity not count', () => {
+    // Same total count as baseline (2), but a different export replaced
+    // `foo` -- a pure count comparison would miss this entirely.
+    const current: KnipFinding[] = [
+      { file: 'a.ts', category: 'exports', name: 'newlyUnused' },
+      { file: 'b.ts', category: 'types', name: 'Bar' },
+    ];
 
-    expect(findRatchetViolations(current, baseline)).toEqual([]);
+    expect(diffFindings(current, baseline)).toEqual({
+      newFindings: [{ file: 'a.ts', category: 'exports', name: 'newlyUnused' }],
+      resolvedFindings: [{ file: 'a.ts', category: 'exports', name: 'foo' }],
+    });
+  });
+
+  it('reports a baseline entry as resolved (but does not fail) when it disappears from current', () => {
+    const current: KnipFinding[] = [
+      { file: 'b.ts', category: 'types', name: 'Bar' },
+    ];
+
+    expect(diffFindings(current, baseline)).toEqual({
+      newFindings: [],
+      resolvedFindings: [{ file: 'a.ts', category: 'exports', name: 'foo' }],
+    });
+  });
+
+  it('sorts both new and resolved findings by file, then category, then name', () => {
+    const current: KnipFinding[] = [
+      { file: 'z.ts', category: 'exports', name: 'z' },
+      { file: 'a.ts', category: 'exports', name: 'a' },
+    ];
+
+    expect(diffFindings(current, []).newFindings).toEqual(
+      [...current].sort(compareFindings),
+    );
   });
 });
