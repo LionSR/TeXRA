@@ -121,6 +121,19 @@ function toVscodeMessage(
   );
 }
 
+function toVscodeToolMode(
+  toolMode: LanguageModelRequestOptions['toolMode'],
+): vscode.LanguageModelChatToolMode | undefined {
+  switch (toolMode) {
+    case undefined:
+      return undefined;
+    case 'required':
+      return vscode.LanguageModelChatToolMode.Required;
+    default:
+      return vscode.LanguageModelChatToolMode.Auto;
+  }
+}
+
 function toVscodeOptions(
   options: LanguageModelRequestOptions,
 ): vscode.LanguageModelChatRequestOptions {
@@ -131,12 +144,7 @@ function toVscodeOptions(
       description: tool.description,
       inputSchema: tool.inputSchema,
     })),
-    toolMode:
-      options.toolMode === undefined
-        ? undefined
-        : options.toolMode === 'required'
-          ? vscode.LanguageModelChatToolMode.Required
-          : vscode.LanguageModelChatToolMode.Auto,
+    toolMode: toVscodeToolMode(options.toolMode),
   };
 }
 
