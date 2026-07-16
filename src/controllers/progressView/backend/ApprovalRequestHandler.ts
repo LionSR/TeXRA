@@ -172,23 +172,23 @@ export class ApprovalRequestHandler<
    */
   releaseForStream(streamId: string): void {
     for (const [id, entry] of [...this.pending]) {
-      if (entry.item.streamId !== streamId) continue;
-      if (entry.mode === 'interaction') {
-        this.completeEntry(id, entry, entry.cancellationResult(), false);
-      } else {
-        this.removeEntry(id, entry, false);
-      }
+      if (entry.item.streamId === streamId) this.releaseSilently(id, entry);
     }
   }
 
   /** Silently release all pending items without orphaning interactions. */
   clear(): void {
     for (const [id, entry] of [...this.pending]) {
-      if (entry.mode === 'interaction') {
-        this.completeEntry(id, entry, entry.cancellationResult(), false);
-      } else {
-        this.removeEntry(id, entry, false);
-      }
+      this.releaseSilently(id, entry);
+    }
+  }
+
+  /** Release one entry without notifying the webview (dismiss/cancel cleanup). */
+  private releaseSilently(id: string, entry: PendingRequest<T, Result>): void {
+    if (entry.mode === 'interaction') {
+      this.completeEntry(id, entry, entry.cancellationResult(), false);
+    } else {
+      this.removeEntry(id, entry, false);
     }
   }
 
