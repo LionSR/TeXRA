@@ -36,6 +36,7 @@ import {
   type ToolEditPermission,
   type UserQuestionPermission,
 } from '@shared/schemas';
+import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 
 /**
@@ -197,6 +198,182 @@ function createControllablePlanAdapter(
   };
   return { interactions, requests, submit, dispose };
 }
+
+const diagnostic: GenericDiagnostic = {
+  severity: 1,
+  message: 'Check this step.',
+  range: {
+    start: { line: 2, character: 0 },
+    end: { line: 2, character: 4 },
+  },
+};
+
+const criticism = {
+  absolutePath: '/worktree/paper.tex',
+  line: 3,
+  message: 'Tighten this claim.',
+  severity: 4,
+  confidence: 5,
+};
+
+describe('session.interactions immediate capabilities', () => {
+  it('delegates immediate capabilities to the active adapter', async () => {
+    const session = createTestSession();
+    const diagnostics = [diagnostic];
+    const readDiagnostics = vi.fn(async (_path: string) => diagnostics);
+    const addCriticism = vi.fn((_input: typeof criticism) => ({
+      accepted: true,
+      resolvedPath: criticism.absolutePath,
+    }));
+    const notifyUnavailableTools = vi.fn();
+    session.useHostInteractions({
+      readDiagnostics,
+      addCriticism,
+      notifyUnavailableTools,
+      cancel: vi.fn(),
+    });
+
+    try {
+      expect(
+        await session.interactions.readDiagnostics?.(criticism.absolutePath),
+      ).toBe(diagnostics);
+      expect(session.interactions.addCriticism?.(criticism)).toEqual({
+        accepted: true,
+        resolvedPath: criticism.absolutePath,
+      });
+      session.interactions.notifyUnavailableTools?.(
+        'Lean tools are unavailable.',
+        'texra.showTools',
+        'Open Tools Dashboard',
+      );
+
+      expect(readDiagnostics).toHaveBeenCalledWith(criticism.absolutePath);
+      expect(addCriticism).toHaveBeenCalledWith(criticism);
+      expect(notifyUnavailableTools).toHaveBeenCalledWith(
+        'Lean tools are unavailable.',
+        'texra.showTools',
+        'Open Tools Dashboard',
+      );
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('does not expose or replay immediate capabilities while detached', () => {
+    const session = createTestSession();
+    const detach = session.useHostInteractions({
+      readDiagnostics: vi.fn(async () => [diagnostic]),
+      addCriticism: vi.fn(() => ({
+        accepted: true,
+        resolvedPath: criticism.absolutePath,
+      })),
+      notifyUnavailableTools: vi.fn(),
+      cancel: vi.fn(),
+    });
+    detach();
+
+    expect(session.interactions.readDiagnostics).toBeUndefined();
+    expect(session.interactions.addCriticism).toBeUndefined();
+    expect(session.interactions.notifyUnavailableTools).toBeUndefined();
+
+    const readDiagnostics = vi.fn(async () => [diagnostic]);
+    const addCriticism = vi.fn(() => ({
+      accepted: true,
+      resolvedPath: criticism.absolutePath,
+    }));
+    const notifyUnavailableTools = vi.fn();
+    session.useHostInteractions({
+      readDiagnostics,
+      addCriticism,
+      notifyUnavailableTools,
+      cancel: vi.fn(),
+    });
+
+    expect(readDiagnostics).not.toHaveBeenCalled();
+    expect(addCriticism).not.toHaveBeenCalled();
+    expect(notifyUnavailableTools).not.toHaveBeenCalled();
+    session.dispose();
+  });
+
+  it('forwards immediate capabilities to the target active adapter', async () => {
+    const source = createTestSession();
+    const target = createTestSession();
+    const readDiagnostics = vi.fn(async () => [diagnostic]);
+    const addCriticism = vi.fn(() => ({
+      accepted: false,
+      resolvedPath: '',
+    }));
+    const notifyUnavailableTools = vi.fn();
+    target.useHostInteractions({
+      readDiagnostics,
+      addCriticism,
+      notifyUnavailableTools,
+      cancel: vi.fn(),
+    });
+    source.useHostInteractions(target.interactions.createForwarder());
+
+    try {
+      expect(
+        await source.interactions.readDiagnostics?.(criticism.absolutePath),
+      ).toEqual([diagnostic]);
+      expect(source.interactions.addCriticism?.(criticism)).toEqual({
+        accepted: false,
+        resolvedPath: '',
+      });
+      source.interactions.notifyUnavailableTools?.(
+        'Lean tools are unavailable.',
+      );
+
+      expect(readDiagnostics).toHaveBeenCalledWith(criticism.absolutePath);
+      expect(addCriticism).toHaveBeenCalledWith(criticism);
+      expect(notifyUnavailableTools).toHaveBeenCalledWith(
+        'Lean tools are unavailable.',
+      );
+    } finally {
+      source.dispose();
+      target.dispose();
+    }
+  });
+
+  it('tracks target adapter replacement through a forwarder', async () => {
+    const source = createTestSession();
+    const target = createTestSession();
+    const firstRead = vi.fn(async () => [diagnostic]);
+    const firstNotify = vi.fn();
+    const secondRead = vi.fn(async () => []);
+    const secondNotify = vi.fn();
+    target.useHostInteractions({
+      readDiagnostics: firstRead,
+      notifyUnavailableTools: firstNotify,
+      cancel: vi.fn(),
+    });
+    source.useHostInteractions(target.interactions.createForwarder());
+    const detachSecond = target.useHostInteractions({
+      readDiagnostics: secondRead,
+      notifyUnavailableTools: secondNotify,
+      cancel: vi.fn(),
+    });
+
+    try {
+      await expect(
+        source.interactions.readDiagnostics?.(criticism.absolutePath),
+      ).resolves.toEqual([]);
+      source.interactions.notifyUnavailableTools?.('Second adapter');
+      expect(secondNotify).toHaveBeenCalledWith('Second adapter');
+
+      detachSecond();
+
+      await expect(
+        source.interactions.readDiagnostics?.(criticism.absolutePath),
+      ).resolves.toEqual([diagnostic]);
+      source.interactions.notifyUnavailableTools?.('First adapter');
+      expect(firstNotify).toHaveBeenCalledWith('First adapter');
+    } finally {
+      source.dispose();
+      target.dispose();
+    }
+  });
+});
 
 describe('session.interactions request bookkeeping (coordinator fold)', () => {
   it('disposes an adapter offered after terminal slot disposal', () => {

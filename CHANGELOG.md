@@ -17,6 +17,8 @@ All notable changes to this project will be documented in this file.
 - **Application logs protect provider credentials by default** — extension and
   SDK-provided log destinations now redact recognizable secrets before writing
   them, while the local CLI terminal keeps its operator-readable output.
+- **Unavailable-tool notices are scoped to each agent session** — one active
+  session no longer suppresses dependency guidance for another session.
 
 ### CLI
 

@@ -75,11 +75,7 @@ import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgent
 import * as leanVscodeIntegration from '@frontend/lean/VscodeIntegration';
 import { applyGitAuthorConfig } from '@frontend/git/gitAuthorSetup';
 import { resolveGitCommonRoot } from '@frontend/git/resolveGitRoot';
-import { getLinterMessages } from '@frontend/latex/linter';
-import {
-  pushManualCriticism,
-  registerInlineCriticism,
-} from '@frontend/latex/inlineCriticism';
+import { registerInlineCriticism } from '@frontend/latex/inlineCriticism';
 import {
   getInlineCommentProvider,
   registerInlineComments,
@@ -229,17 +225,6 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.extensions.getExtension(id) !== undefined,
     },
     languageModel,
-    linter: getLinterMessages,
-    addCriticismSink: (payload) => {
-      const accepted = pushManualCriticism({
-        absolutePath: payload.absolutePath,
-        line: payload.line,
-        message: payload.message,
-        severity: payload.severity,
-        confidence: payload.confidence,
-      });
-      return { accepted, resolvedPath: payload.absolutePath };
-    },
     toolMissingHandler: async (message, openDocsCommand) => {
       const actions = openDocsCommand ? ['View Installation Guide'] : [];
       logger.error('extension', message);
@@ -247,20 +232,6 @@ export async function activate(context: vscode.ExtensionContext) {
       if (choice === 'View Installation Guide' && openDocsCommand) {
         const [command, ...args] = openDocsCommand.split(',');
         void vscode.commands.executeCommand(command, ...args);
-      }
-    },
-    toolNotificationHandler: (message, actionCommand, actionLabel) => {
-      if (actionCommand) {
-        const label = actionLabel ?? 'Open Tools Dashboard';
-        void vscode.window
-          .showInformationMessage(message, label)
-          .then((choice) => {
-            if (choice === label) {
-              void vscode.commands.executeCommand(actionCommand);
-            }
-          });
-      } else {
-        void vscode.window.showInformationMessage(message);
       }
     },
   });

@@ -2,14 +2,17 @@
  * Notification for unavailable external tools.
  *
  * Separated from the tool-use flow so the flow runner stays decoupled from
- * the host UI layer. The notification handler is injected via `platform()`.
+ * the host UI layer. The active session supplies the presentation adapter.
  */
 
-import { tryPlatform } from '@platform/platform';
+import {
+  currentSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { mapToolNamesToGroups } from '@tools/toolAvailability';
 
 /** Groups already surfaced in a notification this session — avoids repeat popups. */
-const notifiedGroups = new Set<string>();
+const notifiedGroupsBySession = new WeakMap<SessionHandle, Set<string>>();
 
 const DEFAULT_ACTION_COMMAND = 'texra.showTools';
 const DEFAULT_ACTION_LABEL = 'Open Tools Dashboard';
@@ -34,7 +37,18 @@ const DEFAULT_ACTION_LABEL = 'Open Tools Dashboard';
  *
  * Each group is only notified once per session.
  */
-export function notifyUnavailableTools(excludedToolNames: string[]): void {
+export function notifyUnavailableTools(
+  excludedToolNames: string[],
+  session: SessionHandle = currentSession(),
+): void {
+  const notify = session.interactions.notifyUnavailableTools;
+  if (!notify) return;
+
+  let notifiedGroups = notifiedGroupsBySession.get(session);
+  if (!notifiedGroups) {
+    notifiedGroups = new Set<string>();
+    notifiedGroupsBySession.set(session, notifiedGroups);
+  }
   const groups = mapToolNamesToGroups(excludedToolNames);
   const fresh = groups.filter((g) => !notifiedGroups.has(g.name));
   if (fresh.length === 0) return;
@@ -44,9 +58,7 @@ export function notifyUnavailableTools(excludedToolNames: string[]): void {
   const hiddenGroups = fresh.filter((g) => g.hideFromDashboard);
   if (hiddenGroups.length > 0) {
     const label = formatGroupLabel(hiddenGroups.map((g) => g.name));
-    tryPlatform()?.toolNotificationHandler?.(
-      `${label} excluded — external dependencies not installed.`,
-    );
+    notify(`${label} excluded — external dependencies not installed.`);
   }
 
   // Coalesce dashboard-visible groups by their action target. Groups with
@@ -65,7 +77,7 @@ export function notifyUnavailableTools(excludedToolNames: string[]): void {
   for (const [bucketKey, bucket] of byAction) {
     const [cmd, label] = bucketKey.split('\0');
     const names = formatGroupLabel(bucket.map((g) => g.name));
-    tryPlatform()?.toolNotificationHandler?.(
+    notify(
       `${names} excluded — external dependencies not installed.`,
       cmd,
       label,
