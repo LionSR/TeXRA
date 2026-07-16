@@ -9,6 +9,7 @@ import { platform } from '@platform/platform';
 import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
 import { hasAnyUsableProviderApiKey } from '@model/setupCredentialAccess';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
+import { AgentCategory } from '@shared/schemas/agent';
 
 import { getCliAuthProfile } from './supabaseAuth';
 import type { CliApiMode } from './apiAccessMode';
@@ -23,6 +24,7 @@ export async function hasCliCredentialForApiMode(
 ): Promise<boolean> {
   const hasChatGptSubscription = await isCodexSubscriptionActive(
     CHATGPT_SETUP_MODEL,
+    AgentCategory.ToolUse,
   ).catch(() => false);
   if (hasChatGptSubscription) return true;
 

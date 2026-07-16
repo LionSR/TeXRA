@@ -155,10 +155,13 @@ export async function handleTuiSlashCommand(
         slice,
         meta.model || context.initialModel,
       );
-      const subscriptionActive = await isCodexSubscriptionActive(
-        accessTarget.model,
-        accessTarget.category,
-      );
+      const subscriptionActive =
+        accessTarget.category === undefined
+          ? false
+          : await isCodexSubscriptionActive(
+              accessTarget.model,
+              accessTarget.category,
+            );
       appendLocalAssistantTranscript(
         formatCliSessionStatus({
           agent: meta.agent || context.initialAgent,

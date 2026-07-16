@@ -14,6 +14,7 @@ import {
 import type { MainViewExecuteMessage } from '@shared/mainView';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { AgentCategory } from '@shared/schemas/agent';
 import { isNonEmptyString } from '@utils/core';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -30,7 +31,9 @@ export const SETUP_INSTRUCTION =
 export async function selectSetupCredentialModelExcludingOpenRouter(
   secrets: PlatformSecrets,
 ): Promise<string | null> {
-  if (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL)) {
+  if (
+    await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL, AgentCategory.ToolUse)
+  ) {
     return CHATGPT_SETUP_MODEL;
   }
 

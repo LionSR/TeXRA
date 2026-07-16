@@ -5,7 +5,7 @@ import {
   contextForCliModelAccess,
   readCliModelAccessStatus,
   selectCliModelAccessRoute,
-} from '@cli/runtime/modelAccessRoutes';
+} from '@cli/runtime/modelAccessSelection';
 import {
   formatCliModelAccessRoute,
   resolveCliModelAccessRoute,

@@ -61,7 +61,9 @@ describe('ChatGPT subscription model routing', () => {
     expect(
       resolveCodexSubscriptionCapabilities(MODEL_CONFIGS.gpt55, true),
     ).toBeNull();
-    await expect(isCodexSubscriptionActive('gpt55')).resolves.toBe(false);
+    await expect(
+      isCodexSubscriptionActive('gpt55', AgentCategory.ToolUse),
+    ).resolves.toBe(false);
   });
 
   it('routes an eligible direct OpenAI model through the preferred subscription', async () => {
@@ -107,20 +109,27 @@ describe('ChatGPT subscription model routing', () => {
   it('reports eligible models inactive while signed out', async () => {
     await installSubscriptionPlatform({ signedIn: false });
 
-    await expect(isCodexSubscriptionActive('gpt55')).resolves.toBe(false);
+    await expect(
+      isCodexSubscriptionActive('gpt55', AgentCategory.ToolUse),
+    ).resolves.toBe(false);
   });
 
   it('reports eligible models active for a signed-in preferred subscription', async () => {
     await installSubscriptionPlatform();
 
-    await expect(isCodexSubscriptionActive('gpt55')).resolves.toBe(true);
+    await expect(
+      isCodexSubscriptionActive('gpt55', AgentCategory.ToolUse),
+    ).resolves.toBe(true);
   });
 
   it('reports unknown model identifiers inactive', async () => {
     await installSubscriptionPlatform();
 
     await expect(
-      isCodexSubscriptionActive('unknown-subscription-model'),
+      isCodexSubscriptionActive(
+        'unknown-subscription-model',
+        AgentCategory.ToolUse,
+      ),
     ).resolves.toBe(false);
   });
 });
