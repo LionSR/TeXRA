@@ -258,11 +258,14 @@ function taskDetailScrollStateAtOffset(
     maxOffset,
     followOffset,
   );
-  const anchor = followsTail
-    ? undefined
-    : context
-      ? taskDetailScrollAnchorFromOffset(context, clampedOffset)
-      : state.anchor;
+  let anchor: TaskDetailScrollAnchor | undefined;
+  if (followsTail) {
+    anchor = undefined;
+  } else if (context) {
+    anchor = taskDetailScrollAnchorFromOffset(context, clampedOffset);
+  } else {
+    anchor = state.anchor;
+  }
   return {
     executionId: state.executionId,
     followsTail,

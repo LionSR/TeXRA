@@ -9,12 +9,14 @@ export function renderProgressBadgeContent(
   progress: ConversationProgress | undefined,
   roundStage: RoundStage | undefined,
 ): TemplateResult | typeof nothing {
-  const round =
-    roundStage !== undefined
-      ? roundStage.total !== undefined
-        ? `r${roundStage.index + 1}/${roundStage.total}`
-        : `r${roundStage.index + 1}`
-      : undefined;
+  let round: string | undefined;
+  if (roundStage === undefined) {
+    round = undefined;
+  } else if (roundStage.total !== undefined) {
+    round = `r${roundStage.index + 1}/${roundStage.total}`;
+  } else {
+    round = `r${roundStage.index + 1}`;
+  }
   const tools = progress?.toolCallCount ?? 0;
   if (!round && tools <= 0) return nothing;
   if (round && tools > 0) return html`${round}, ${tools} tool calls`;

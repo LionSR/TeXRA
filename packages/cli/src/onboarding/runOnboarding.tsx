@@ -571,16 +571,21 @@ function RelayProviderStep(props: {
     if (input.toLowerCase() === 'd') props.onDeviceCode();
   });
 
+  let subtitle: string;
+  if (props.noBrowser) {
+    subtitle =
+      'No-browser mode: we print the sign-in URL instead of opening it.';
+  } else if (isLikelyRemoteSession()) {
+    subtitle =
+      'Remote session detected — press d for device-code sign-in (no callback port needed).';
+  } else {
+    subtitle = 'Choose a provider to sign in with:';
+  }
+
   return (
     <OnboardingFrame
       title="Sign in · Researcher Access"
-      subtitle={
-        props.noBrowser
-          ? 'No-browser mode: we print the sign-in URL instead of opening it.'
-          : isLikelyRemoteSession()
-            ? 'Remote session detected — press d for device-code sign-in (no callback port needed).'
-            : 'Choose a provider to sign in with:'
-      }
+      subtitle={subtitle}
       error={props.error}
       hints={[
         { key: '↑/↓', action: 'navigate' },
