@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - shared schemas
 import {
-  pickToolRenderer,
   toolHeaderPreviewBudget,
   toolUseDisplayLines,
+  toolUseStyledLines,
 } from '@cli/chat/tui/panes/toolRenderers';
 import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
 
@@ -31,7 +31,30 @@ function toolUse(
   };
 }
 
-describe('CLI tool renderer registry', () => {
+describe('CLI tool display lines', () => {
+  it('carries semantic styles in the display model', () => {
+    const entry = toolUse(
+      'bash',
+      { command: 'npm test' },
+      { outputText: 'passed' },
+    );
+
+    expect(toolUseStyledLines(entry)).toEqual([
+      {
+        kind: 'row',
+        spans: [
+          { color: 'green', dim: false, text: '● ' },
+          { bold: true, text: 'bash' },
+          { color: 'cyan', dim: false, text: ' (npm test)' },
+        ],
+      },
+      {
+        kind: 'row',
+        spans: [{ dim: true, text: '⎿ ' }, { text: 'passed' }],
+      },
+    ]);
+  });
+
   it('registers edit patch rendering before the universal fallback', () => {
     const entry = toolUse('Edit', {
       path: 'paper.tex',
@@ -39,7 +62,6 @@ describe('CLI tool renderer registry', () => {
       new_string: 'We use a transformer.\n',
     });
 
-    expect(pickToolRenderer(entry)?.key).toBe('edit');
     expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
       [
         "● Edit (paper.tex)",
@@ -58,7 +80,6 @@ describe('CLI tool renderer registry', () => {
       new_str: 'We use a transformer.\n',
     });
 
-    expect(pickToolRenderer(entry)?.key).toBe('edit');
     expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
       [
         "● edit_file (paper.tex)",
@@ -83,7 +104,6 @@ describe('CLI tool renderer registry', () => {
       },
     );
 
-    expect(pickToolRenderer(entry)?.key).toBe('bash');
     expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
       [
         "● bash (npm run lint)",
@@ -225,7 +245,6 @@ describe('CLI tool renderer registry', () => {
       { outputText: 'sent' },
     );
 
-    expect(pickToolRenderer(entry)?.key).toBe('mcp');
     expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
       [
         "● slack/send ({"channel":"#drafts","text":"done"})",
@@ -237,7 +256,6 @@ describe('CLI tool renderer registry', () => {
   it('keeps unregistered tools on the universal renderer', () => {
     const entry = toolUse('CustomTool', { path: 'paper.tex' });
 
-    expect(pickToolRenderer(entry)).toBeUndefined();
     expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
       [
         "● CustomTool (paper.tex)",

@@ -151,7 +151,8 @@ const SCENARIOS = [
       '● grep (Found 12 matches for "theorem" in .)',
     ],
     maxBlankLinesBetween: [
-      { from: 'what is this repo about', to: '● grep', max: 0 },
+      // The user band always keeps one breathing row below the prompt.
+      { from: 'what is this repo about', to: '● grep', max: 1 },
     ],
   },
   {
@@ -173,7 +174,8 @@ const SCENARIOS = [
       {
         from: 'what is this repo about',
         to: '● grep (Found 12 matches for "theorem" in .)',
-        max: 0,
+        // The user band always keeps one breathing row below the prompt.
+        max: 1,
       },
       {
         from: '● grep (Found 12 matches for "theorem" in .)',

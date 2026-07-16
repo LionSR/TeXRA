@@ -1,7 +1,12 @@
-// Third-party imports
-import { useMemo } from 'react';
-
-import { Box, Text } from 'ink';
+// Tool-row rendering: one styled-line model is the single source of truth.
+//
+// `toolUseStyledLines` builds every visually distinct row of a tool card as
+// spans (text + color/dim/bold); the Ink painter in ToolUseRow renders those
+// spans, and `toolUseDisplayLines` projects the same lines to plain text for
+// the row-budget estimator, static row counting, and the ctrl+t transcript
+// viewer. The two presentations can no longer drift because there is nothing
+// to keep in sync by hand — the patch preview (DiffView) is the one rich
+// block that renders beyond its plain-text projection.
 
 // Local imports - shared schemas and utilities
 import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
@@ -14,7 +19,6 @@ import {
 
 // Local imports - CLI TUI rendering
 import {
-  DiffView,
   diffDisplayLines,
   editPatchGroups,
   type InlinePatchGroup,
@@ -25,6 +29,7 @@ import {
 } from '../render/terminalText';
 import { COLOR_ERROR, COLOR_HINT, COLOR_SUCCESS } from '../ui/colors';
 import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '../ui/glyphs';
+
 const MAX_HEADER_PREVIEW = 80;
 const MAX_ERROR_PREVIEW = 240;
 // Header chrome around the preview: `● ` plus ` (` and `)`.
@@ -80,8 +85,8 @@ function elideOutputLines(lines: readonly string[]): ElidedOutput {
     return { head: lines.map(capLine), tail: [], hiddenCount: 0 };
   }
   // Cap only the head/tail lines actually rendered, not every discarded line
-  // in between — this runs on every OutputBlock redraw while a tool streams,
-  // so truncating lines nobody sees would be wasted grapheme-segmentation work.
+  // in between — this runs while a tool streams, so truncating lines nobody
+  // sees would be wasted grapheme-segmentation work.
   return {
     head: lines.slice(0, OUTPUT_HEAD_LINES).map(capLine),
     tail: lines.slice(lines.length - OUTPUT_TAIL_LINES).map(capLine),
@@ -110,16 +115,32 @@ export interface DisplayLineOptions {
   readonly elide?: boolean;
 }
 
-export interface ToolRenderer {
-  readonly key: string;
-  matches(toolUse: NormalizedToolUse): boolean;
-  render(toolUse: NormalizedToolUse, width?: number): React.JSX.Element;
-  /** Text geometry for budgeting and plain projections. Keep one line for
-   *  every visually distinct row emitted by `render`. */
-  displayLines(
-    toolUse: NormalizedToolUse,
-    options?: DisplayLineOptions,
-  ): readonly string[];
+export interface StyledLineOptions extends DisplayLineOptions {
+  /** Terminal columns for the width-adaptive header preview. Omitted (plain
+   *  projections) keeps the historical fixed 80-column budget. */
+  readonly width?: number;
+}
+
+/** One styled fragment of a tool row. */
+interface ToolDisplaySpan {
+  readonly text: string;
+  readonly bold?: boolean;
+  readonly color?: string;
+  readonly dim?: boolean;
+}
+
+/** A tool card row: ordinary span rows, plus one rich patch block whose
+ *  plain-text projection is carried alongside its DiffView groups. */
+export type ToolDisplayLine =
+  | { readonly kind: 'row'; readonly spans: readonly ToolDisplaySpan[] }
+  | {
+      readonly kind: 'patch';
+      readonly groups: readonly InlinePatchGroup[];
+      readonly textLines: readonly string[];
+    };
+
+function row(spans: readonly ToolDisplaySpan[]): ToolDisplayLine {
+  return { kind: 'row', spans };
 }
 
 function lastSegmentToolName(toolName: string): string {
@@ -187,14 +208,9 @@ function toolUsePatchGroups(
   return editPatchGroups(toolUse.input);
 }
 
-export function toolUsePatchDisplayLines(
-  toolUse: NormalizedToolUse,
-): readonly string[] {
-  const groups = toolUsePatchGroups(toolUse);
-  if (!groups) return [];
+function patchTextLines(groups: readonly InlinePatchGroup[]): string[] {
   // Plain text only: the colored full-width bands come from the `DiffView`
-  // component (live cards + scrollback render through it); these lines feed the
-  // transcript viewer and stay uncolored.
+  // component; these lines feed row budgeting and the transcript viewer.
   return groups.flatMap((group) => [
     `${TOOL_OUTPUT_CORNER} ${group.fileLabel}`,
     ...diffDisplayLines(group.hunks).map((line) => `  ${line.text}`),
@@ -207,8 +223,8 @@ export function toolUsePatchDisplayLines(
  *  all other tools prefer the curated per-tool summary first. */
 function toolHeaderPreview(
   toolUse: NormalizedToolUse,
-  maxPreview = MAX_HEADER_PREVIEW,
-  preferInputPreview = false,
+  maxPreview: number,
+  preferInputPreview: boolean,
 ): string {
   if (maxPreview <= 0) return '';
   const sourceText = preferInputPreview
@@ -217,29 +233,8 @@ function toolHeaderPreview(
   return sourceText ? truncateSummaryToWidth(sourceText, maxPreview) : '';
 }
 
-function formatHeader(
-  toolUse: NormalizedToolUse,
-  displayName = displayToolName(toolUse.toolName) || 'tool',
-): string {
-  const preview = toolHeaderPreview(toolUse);
-  return `${STATUS_DOT} ${displayName}${preview ? ` (${preview})` : ''}`;
-}
-
 function errorTextForDisplay(toolUse: NormalizedToolUse): string {
   return toolUse.isError ? toolUse.errorText || '(error)' : '';
-}
-
-/** Single corner line with the collapsed, truncated error text, or none when
- *  the tool did not error. */
-function errorCornerLines(toolUse: NormalizedToolUse): readonly string[] {
-  const errorText = errorTextForDisplay(toolUse);
-  if (!errorText) return [];
-  return [
-    `${TOOL_OUTPUT_CORNER} ${truncateWithEllipsis(
-      collapseWhitespace(errorText),
-      MAX_ERROR_PREVIEW,
-    )}`,
-  ];
 }
 
 function errorPreviewWouldTruncate(toolUse: NormalizedToolUse): boolean {
@@ -268,12 +263,11 @@ function outputDuplicatesError(
 
 function visibleOutputLines(
   toolUse: NormalizedToolUse,
-  options: { readonly keepDuplicateWhenErrorPreviewTruncates?: boolean } = {},
+  elide: boolean,
 ): readonly string[] {
   if (
     outputDuplicatesError(toolUse, {
-      keepWhenErrorPreviewTruncates:
-        options.keepDuplicateWhenErrorPreviewTruncates,
+      keepWhenErrorPreviewTruncates: !elide,
     })
   ) {
     return [];
@@ -299,359 +293,204 @@ function extractExitCode(toolUse: NormalizedToolUse): number | undefined {
   return match ? Number(match[1]) : undefined;
 }
 
-function outputDisplayLines(
+const CORNER_PREFIX_SPAN: ToolDisplaySpan = {
+  text: `${TOOL_OUTPUT_CORNER} `,
+  dim: true,
+};
+const CONTINUATION_PREFIX_SPAN: ToolDisplaySpan = { text: '  ', dim: true };
+
+function outputRows(
   toolUse: NormalizedToolUse,
-  elide = true,
-): string[] {
-  const lines = visibleOutputLines(toolUse, {
-    keepDuplicateWhenErrorPreviewTruncates: !elide,
-  });
+  elide: boolean,
+): ToolDisplayLine[] {
+  const lines = visibleOutputLines(toolUse, elide);
   const sliced = elide
     ? elideOutputLines(lines)
     : { head: lines, tail: [] as readonly string[], hiddenCount: 0 };
-  const out = sliced.head.map((line, index) =>
-    index === 0 ? `${TOOL_OUTPUT_CORNER} ${line}` : `  ${line}`,
+  const rows = sliced.head.map((line, index) =>
+    row([
+      index === 0 ? CORNER_PREFIX_SPAN : CONTINUATION_PREFIX_SPAN,
+      { text: line },
+    ]),
   );
   if (sliced.hiddenCount > 0) {
-    out.push(`  ${elisionMarker(sliced.hiddenCount)}`);
+    rows.push(
+      row([
+        CONTINUATION_PREFIX_SPAN,
+        { text: elisionMarker(sliced.hiddenCount), dim: true },
+      ]),
+    );
   }
-  for (const line of sliced.tail) out.push(`  ${line}`);
-  return out;
+  for (const line of sliced.tail) {
+    rows.push(row([CONTINUATION_PREFIX_SPAN, { text: line }]));
+  }
+  return rows;
 }
 
-function universalToolUseDisplayLines(
+/** Per-kind presentation switches — the whole replacement for the old
+ *  matches/render/displayLines renderer registry, in the registry's
+ *  precedence order: edit-style (a parseable patch) wins over MCP and bash. */
+function toolRowOptions(
   toolUse: NormalizedToolUse,
-  options: {
-    readonly displayName?: string;
-    readonly showOutput?: boolean;
-    readonly elide?: boolean;
-  } = {},
-): readonly string[] {
-  const patchLines = toolUsePatchDisplayLines(toolUse);
-  const outputLines =
-    options.showOutput === true
-      ? outputDisplayLines(toolUse, options.elide ?? true)
-      : [];
-  const showNoOutput =
-    options.showOutput === true &&
-    toolUse.status === TOOL_USE_STATUS.COMPLETED &&
-    outputLines.length === 0 &&
-    patchLines.length === 0 &&
-    !toolUse.isError;
-
-  return [
-    formatHeader(toolUse, options.displayName),
-    ...outputLines,
-    ...patchLines,
-    ...errorCornerLines(toolUse),
-    ...(showNoOutput ? [`${TOOL_OUTPUT_CORNER} (no output)`] : []),
-  ];
+  hasPatch: boolean,
+): {
+  readonly displayName: string;
+  readonly preferInputPreview: boolean;
+  readonly previewColor: string | undefined;
+  readonly showExitCode: boolean;
+  readonly showOutput: boolean;
+} {
+  const plain = {
+    displayName: displayToolName(toolUse.toolName) || 'tool',
+    preferInputPreview: false,
+    previewColor: undefined,
+    showExitCode: false,
+    showOutput: false,
+  };
+  // Edit-like tools show their patch preview instead of raw output.
+  if (hasPatch) return plain;
+  if (displayMcpToolName(toolUse.toolName) !== undefined) {
+    return { ...plain, showOutput: true };
+  }
+  const isBash =
+    toolDisplayKind(lastSegmentToolName(toolUse.toolName).toLowerCase()) ===
+    'bash';
+  if (isBash) {
+    return {
+      displayName: displayToolName(toolUse.toolName) || 'bash',
+      preferInputPreview: true,
+      previewColor: COLOR_HINT,
+      showExitCode: true,
+      showOutput: true,
+    };
+  }
+  // Every other tool keeps the compact header-only row (plus error and
+  // no-output corners) so e.g. a read_file result never dumps file contents.
+  return plain;
 }
 
-function bashToolUseDisplayLines(
+function buildStyledLines(
   toolUse: NormalizedToolUse,
-  options: { readonly elide?: boolean } = {},
-): readonly string[] {
-  const exitCode = extractExitCode(toolUse);
-  const outputLines = outputDisplayLines(toolUse, options.elide ?? true);
-  return [
-    formatHeader(toolUse),
-    ...outputLines,
-    ...(toolUse.isError && exitCode !== undefined
-      ? [`${TOOL_OUTPUT_CORNER} exit ${exitCode}`]
-      : []),
-    ...errorCornerLines(toolUse),
-    ...(toolUse.status === TOOL_USE_STATUS.COMPLETED &&
-    !toolUse.isError &&
-    outputLines.length === 0
-      ? [`${TOOL_OUTPUT_CORNER} (no output)`]
-      : []),
-  ];
-}
-
-/** Combined left padding of the two nested boxes wrapping the patch diff. */
-const PATCH_PREVIEW_INDENT = 4;
-
-function PatchPreview({
-  groups,
-  width,
-}: {
-  readonly groups: readonly InlinePatchGroup[];
-  readonly width?: number;
-}): React.JSX.Element {
-  // The diff sits under two nested `paddingLeft={2}` boxes; derive its width
-  // from the real terminal so the full-row bands fill exactly the available
-  // columns instead of padding to a fixed default and wrapping on narrow
-  // terminals. `DiffView` floors this at its own minimum.
-  const diffWidth = (width ?? MAX_HEADER_PREVIEW) - PATCH_PREVIEW_INDENT;
-  return (
-    <Box flexDirection="column" paddingLeft={2}>
-      {groups.map((group, index) => (
-        <Box key={`${group.fileLabel}-${index}`} flexDirection="column">
-          <Text dimColor>{`${TOOL_OUTPUT_CORNER} ${group.fileLabel}`}</Text>
-          <Box flexDirection="column" paddingLeft={2}>
-            <DiffView hunks={group.hunks} width={diffWidth} />
-          </Box>
-        </Box>
-      ))}
-    </Box>
-  );
-}
-
-function OutputBlock({
-  lines,
-}: {
-  readonly lines: readonly string[];
-}): React.JSX.Element | null {
-  if (lines.length === 0) return null;
-  const { head, tail, hiddenCount } = elideOutputLines(lines);
-  return (
-    <Box flexDirection="column" paddingLeft={2}>
-      {head.map((line, index) => (
-        <Box key={`h${index}`} flexDirection="row" flexWrap="nowrap">
-          <Text dimColor>{index === 0 ? `${TOOL_OUTPUT_CORNER} ` : '  '}</Text>
-          <Text>{line}</Text>
-        </Box>
-      ))}
-      {hiddenCount > 0 && (
-        <Box flexDirection="row" flexWrap="nowrap">
-          <Text dimColor>{'  '}</Text>
-          <Text dimColor>{elisionMarker(hiddenCount)}</Text>
-        </Box>
-      )}
-      {tail.map((line, index) => (
-        <Box key={`t${index}`} flexDirection="row" flexWrap="nowrap">
-          <Text dimColor>{'  '}</Text>
-          <Text>{line}</Text>
-        </Box>
-      ))}
-    </Box>
-  );
-}
-
-function CornerLine({
-  color,
-  children,
-}: {
-  readonly color?: typeof COLOR_ERROR;
-  readonly children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <Box flexDirection="row" flexWrap="nowrap" paddingLeft={2}>
-      <Text dimColor>{`${TOOL_OUTPUT_CORNER} `}</Text>
-      <Text color={color} dimColor={!color}>
-        {children}
-      </Text>
-    </Box>
-  );
-}
-
-interface ToolRowProps {
-  readonly toolUse: NormalizedToolUse;
-  readonly width?: number;
-  readonly displayName?: string;
-  readonly fallbackName?: string;
-  readonly previewColor?: typeof COLOR_HINT;
-  readonly showPatch?: boolean;
-  readonly showOutput?: boolean;
-  readonly showExitCode?: boolean;
-  readonly preferInputPreview?: boolean;
-}
-
-function ToolRow(props: ToolRowProps): React.JSX.Element {
-  const {
-    toolUse,
-    previewColor,
-    showPatch = false,
-    showOutput = false,
-    showExitCode = false,
-    preferInputPreview = false,
-  } = props;
-  const columns = props.width;
+  options: StyledLineOptions,
+): readonly ToolDisplayLine[] {
+  const elide = options.elide !== false;
+  const patchGroups = toolUsePatchGroups(toolUse);
+  const opts = toolRowOptions(toolUse, patchGroups !== undefined);
   const color = statusColor(toolUse);
-  const name =
-    (props.displayName ?? displayToolName(toolUse.toolName)) ||
-    props.fallbackName ||
-    'tool';
-
-  const { patchGroups, preview, visibleOutput } = useMemo(
-    () => ({
-      patchGroups: showPatch ? toolUsePatchGroups(toolUse) : undefined,
-      preview: toolHeaderPreview(
-        toolUse,
-        toolHeaderPreviewBudget(columns, name),
-        preferInputPreview,
-      ),
-      visibleOutput: showOutput ? visibleOutputLines(toolUse) : [],
-    }),
-    [toolUse, showPatch, showOutput, preferInputPreview, columns, name],
+  const preview = toolHeaderPreview(
+    toolUse,
+    options.width === undefined
+      ? MAX_HEADER_PREVIEW
+      : toolHeaderPreviewBudget(options.width, opts.displayName),
+    opts.preferInputPreview,
   );
 
+  const output = opts.showOutput ? outputRows(toolUse, elide) : [];
+  const exitCode =
+    opts.showExitCode && toolUse.isError ? extractExitCode(toolUse) : undefined;
   const errorText = errorTextForDisplay(toolUse);
-  const exitCode = showExitCode ? extractExitCode(toolUse) : undefined;
   const showNoOutput =
-    showOutput &&
+    opts.showOutput &&
     toolUse.status === TOOL_USE_STATUS.COMPLETED &&
-    visibleOutput.length === 0 &&
+    output.length === 0 &&
     !patchGroups &&
     !toolUse.isError;
 
-  return (
-    <Box flexDirection="column" marginBottom={toolUseMarginBottomRows(toolUse)}>
-      <Box flexDirection="row" flexWrap="nowrap">
-        <Text color={color} dimColor={!color}>
-          {STATUS_DOT}{' '}
-        </Text>
-        <Text bold>{name}</Text>
-        {preview ? (
-          <Text color={previewColor} dimColor={!previewColor}>
-            {` (${preview})`}
-          </Text>
-        ) : null}
-      </Box>
-      <OutputBlock lines={visibleOutput} />
-      {patchGroups ? (
-        <PatchPreview groups={patchGroups} width={columns} />
-      ) : null}
-      {toolUse.isError && exitCode !== undefined ? (
-        <CornerLine color={COLOR_ERROR}>{`exit ${exitCode}`}</CornerLine>
-      ) : null}
-      {toolUse.isError ? (
-        <CornerLine color={COLOR_ERROR}>
-          {truncateWithEllipsis(
-            collapseWhitespace(errorText),
-            MAX_ERROR_PREVIEW,
-          )}
-        </CornerLine>
-      ) : null}
-      {showNoOutput ? <CornerLine>(no output)</CornerLine> : null}
-    </Box>
-  );
-}
-
-export function UniversalToolRow({
-  toolUse,
-  displayName,
-  showOutput,
-  width,
-}: {
-  readonly toolUse: NormalizedToolUse;
-  readonly displayName?: string;
-  readonly showOutput?: boolean;
-  readonly width?: number;
-}): React.JSX.Element {
-  return (
-    <ToolRow
-      toolUse={toolUse}
-      displayName={displayName}
-      showPatch={true}
-      showOutput={showOutput}
-      width={width}
-    />
-  );
-}
-
-function isBashTool(toolUse: NormalizedToolUse): boolean {
-  return (
-    toolDisplayKind(lastSegmentToolName(toolUse.toolName).toLowerCase()) ===
-    'bash'
-  );
-}
-
-function isMcpTool(toolUse: NormalizedToolUse): boolean {
-  return displayMcpToolName(toolUse.toolName) !== undefined;
-}
-
-const editRenderer: ToolRenderer = {
-  key: 'edit',
-  matches: (toolUse) => toolUsePatchGroups(toolUse) !== undefined,
-  render: (toolUse, width) => (
-    <UniversalToolRow toolUse={toolUse} width={width} />
-  ),
-  displayLines: (toolUse, options) =>
-    universalToolUseDisplayLines(toolUse, { elide: options?.elide }),
-};
-
-const bashRenderer: ToolRenderer = {
-  key: 'bash',
-  matches: isBashTool,
-  render: (toolUse, width) => (
-    <ToolRow
-      toolUse={toolUse}
-      fallbackName="bash"
-      previewColor={COLOR_HINT}
-      showOutput={true}
-      showExitCode={true}
-      preferInputPreview={true}
-      width={width}
-    />
-  ),
-  displayLines: (toolUse, options) =>
-    bashToolUseDisplayLines(toolUse, { elide: options?.elide }),
-};
-
-const mcpRenderer: ToolRenderer = {
-  key: 'mcp',
-  matches: isMcpTool,
-  render: (toolUse, width) => (
-    <UniversalToolRow
-      toolUse={toolUse}
-      displayName={displayMcpToolName(toolUse.toolName)}
-      showOutput={true}
-      width={width}
-    />
-  ),
-  displayLines: (toolUse, options) =>
-    universalToolUseDisplayLines(toolUse, {
-      displayName: displayMcpToolName(toolUse.toolName),
-      showOutput: true,
-      elide: options?.elide,
-    }),
-};
-
-const REGISTRY: readonly ToolRenderer[] = [
-  editRenderer,
-  bashRenderer,
-  mcpRenderer,
-];
-
-export function pickToolRenderer(
-  toolUse: NormalizedToolUse,
-): ToolRenderer | undefined {
-  return REGISTRY.find((renderer) => renderer.matches(toolUse));
+  return [
+    row([
+      { text: `${STATUS_DOT} `, color, dim: !color },
+      { text: opts.displayName, bold: true },
+      ...(preview
+        ? [
+            {
+              text: ` (${preview})`,
+              color: opts.previewColor,
+              dim: !opts.previewColor,
+            },
+          ]
+        : []),
+    ]),
+    ...output,
+    ...(patchGroups
+      ? [
+          {
+            kind: 'patch' as const,
+            groups: patchGroups,
+            textLines: patchTextLines(patchGroups),
+          },
+        ]
+      : []),
+    ...(exitCode !== undefined
+      ? [
+          row([
+            CORNER_PREFIX_SPAN,
+            { text: `exit ${exitCode}`, color: COLOR_ERROR },
+          ]),
+        ]
+      : []),
+    ...(errorText
+      ? [
+          row([
+            CORNER_PREFIX_SPAN,
+            {
+              text: truncateWithEllipsis(
+                collapseWhitespace(errorText),
+                MAX_ERROR_PREVIEW,
+              ),
+              color: COLOR_ERROR,
+            },
+          ]),
+        ]
+      : []),
+    ...(showNoOutput
+      ? [row([CORNER_PREFIX_SPAN, { text: '(no output)', dim: true }])]
+      : []),
+  ];
 }
 
 // Memoized per NormalizedToolUse object. `subscribeStreamLog` keeps the
 // toolUse reference stable across sync ticks unless its content changed, so
 // the derived lines (including diff hunks for edit tools) can be shared by
-// the live row estimator, the bounded renderer, and static row counting
-// instead of being recomputed for every visible tool row on every frame.
-interface ToolUseDisplayLinesCacheEntry {
-  elided?: readonly string[];
-  full?: readonly string[];
-}
-const displayLinesCache = new WeakMap<
+// the live painter, the row estimator, the bounded renderer, and static row
+// counting instead of being recomputed for every visible row on each frame.
+// The map key carries elision and the width-adaptive header budget.
+const styledLinesCache = new WeakMap<
   NormalizedToolUse,
-  ToolUseDisplayLinesCacheEntry
+  Map<string, readonly ToolDisplayLine[]>
 >();
 
+export function toolUseStyledLines(
+  toolUse: NormalizedToolUse,
+  options: StyledLineOptions = {},
+): readonly ToolDisplayLine[] {
+  const key = `${options.elide === false ? 'f' : 'e'}|${options.width ?? 'd'}`;
+  let cached = styledLinesCache.get(toolUse);
+  const hit = cached?.get(key);
+  if (hit) return hit;
+  const lines = buildStyledLines(toolUse, options);
+  if (!cached) {
+    cached = new Map();
+    styledLinesCache.set(toolUse, cached);
+  }
+  cached.set(key, lines);
+  return lines;
+}
+
+function lineText(line: ToolDisplayLine): readonly string[] {
+  return line.kind === 'patch'
+    ? line.textLines
+    : [line.spans.map((span) => span.text).join('')];
+}
+
+/** Plain-text projection of the same styled lines, for row budgeting, static
+ *  row counting, and the ctrl+t transcript viewer. */
 export function toolUseDisplayLines(
   toolUse: NormalizedToolUse,
   options?: DisplayLineOptions,
 ): readonly string[] {
-  const slot = options?.elide === false ? 'full' : 'elided';
-  let cached = displayLinesCache.get(toolUse);
-  const hit = cached?.[slot];
-  if (hit) return hit;
-  const lines =
-    pickToolRenderer(toolUse)?.displayLines(toolUse, options) ??
-    universalToolUseDisplayLines(toolUse, { elide: options?.elide });
-  if (!cached) {
-    cached = {};
-    displayLinesCache.set(toolUse, cached);
-  }
-  cached[slot] = lines;
-  return lines;
+  return toolUseStyledLines(toolUse, { elide: options?.elide }).flatMap(
+    lineText,
+  );
 }
 
 /** Tool detail rows are separated from the next conversation entry. Derive
