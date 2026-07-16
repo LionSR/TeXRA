@@ -666,9 +666,8 @@ const BYPASS_BADGES: ReadonlyArray<{
 ];
 
 // Which text occupies the bindings row is a priority order, not a single
-// condition: an active pending-exit prompt always wins, then the child
-// list, then any other foreground surface, and only then the normal chat
-// shortcuts.
+// condition: an active pending-exit prompt always wins, then a foreground
+// surface, then the child list, and only then the normal chat shortcuts.
 function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
   if (input.pendingExitHint && input.pendingExitResumeId) {
     return `Resume this session with: ${formatResumeCommand(
@@ -679,19 +678,19 @@ function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
   }
 
   const maxColumns = statusBarInnerWidth(input.width);
+  if (input.shortcutsActive === false) {
+    return foregroundBindingsText(
+      input.ctrlCAction ?? 'exit',
+      maxColumns,
+      input.foregroundEscapeAction,
+    );
+  }
   if (input.childListFocused) {
     return childListBindingsText(
       input.ctrlCAction ?? 'exit',
       input.childListSelectionKind,
       input.childListSelectionKillable ?? false,
       maxColumns,
-    );
-  }
-  if (input.shortcutsActive === false) {
-    return foregroundBindingsText(
-      input.ctrlCAction ?? 'exit',
-      maxColumns,
-      input.foregroundEscapeAction,
     );
   }
   return statusBarBindingsText(

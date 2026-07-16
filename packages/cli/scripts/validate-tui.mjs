@@ -10,7 +10,7 @@
 //
 // This is intentionally small: a handful of scenarios that exercise the
 // transcript, queued follow-ups, a slash command, an approval modal, the
-// subagent panel + task picker, and the Ctrl-C exit path. It is NOT a general
+// child list + process detail, and the Ctrl-C exit path. It is NOT a general
 // terminal-automation framework.
 //
 // Run:  node scripts/validate-tui.mjs        (from packages/cli)

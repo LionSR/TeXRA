@@ -37,6 +37,7 @@ type ChildListSelectionAction =
   | { readonly kind: 'focus' }
   | { readonly kind: 'focusStream'; readonly streamId: StreamTabId }
   | { readonly kind: 'highlight'; readonly value: ChildListValue }
+  | { readonly kind: 'syncActiveStream'; readonly streamId: StreamTabId }
   | {
       readonly kind: 'reconcile';
       readonly activeStreamId: StreamTabId | undefined;
@@ -78,6 +79,11 @@ export function reduceChildListSelection(
       };
     case 'highlight':
       return { ...state, selectedValue: action.value };
+    case 'syncActiveStream':
+      return {
+        ...state,
+        selectedValue: childStreamListValue(action.streamId),
+      };
     case 'reconcile': {
       if (action.values.length === 0) return state;
       const selectedValue = resolveChildSelectionValue(

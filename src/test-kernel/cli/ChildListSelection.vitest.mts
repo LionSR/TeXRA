@@ -76,6 +76,15 @@ describe('CLI child list selection', () => {
     expect(restored.selectedValue).toBe(strategyValue);
   });
 
+  it('selects the owner when lifecycle completion changes the active stream', () => {
+    const state = reduceChildListSelection(
+      { focused: true, selectedValue: strategyValue },
+      { kind: 'syncActiveStream', streamId: main },
+    );
+
+    expect(state).toEqual({ focused: true, selectedValue: mainValue });
+  });
+
   it('falls back to the active stream and then the first row', () => {
     let state = reconcileSelection(
       { focused: true, selectedValue: childProcessListValue('gone') },

@@ -225,6 +225,23 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('v transcript');
   });
 
+  it('shows foreground actions while a list-owned surface is open', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        childListFocused: true,
+        childListSelectionKind: 'stream',
+        childListSelectionKillable: true,
+        foregroundEscapeAction: 'close',
+        shortcutsActive: false,
+        width: 120,
+      }),
+    );
+
+    expect(display.bindings).toContain('Esc close');
+    expect(display.bindings).not.toContain('Up/Down select');
+    expect(display.bindings).not.toContain('v transcript');
+  });
+
   it('keeps the transcript shortcut in narrow stream views', () => {
     const display = buildStatusBarDisplay(
       statusInput({

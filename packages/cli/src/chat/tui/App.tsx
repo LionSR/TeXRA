@@ -129,6 +129,7 @@ export function App(props: AppProps): React.JSX.Element {
     reduceChildListSelection,
     INITIAL_CHILD_LIST_SELECTION,
   );
+  const childListActiveStreamRef = useRef(activeStreamId);
   const childListFocused = childListSelection.focused;
   const selectedChildValue = childListSelection.selectedValue;
   const transcriptViewerOpen = transcriptViewerStreamId !== undefined;
@@ -280,6 +281,19 @@ export function App(props: AppProps): React.JSX.Element {
       values: childListValues,
     });
   }, [activeStreamId, childListValues]);
+  // Stream focus can also move through lifecycle completion or a numeric
+  // accelerator. Align the selected row before the changed frame is painted;
+  // ordinary row reconciliation still preserves manual list selection.
+  useLayoutEffect(() => {
+    if (childListActiveStreamRef.current === activeStreamId) return;
+    childListActiveStreamRef.current = activeStreamId;
+    if (activeStreamId) {
+      dispatchChildListSelection({
+        kind: 'syncActiveStream',
+        streamId: activeStreamId,
+      });
+    }
+  }, [activeStreamId]);
   useEffect(() => {
     if (!childListAvailable && childListFocused) {
       dispatchChildListSelection({ kind: 'blur' });
