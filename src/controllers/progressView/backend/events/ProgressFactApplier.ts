@@ -111,7 +111,7 @@ type RunFactHandlers = {
   [K in RunFactType]: (
     streamId: StreamTabId,
     event: Extract<AgentEvent, { type: K }>,
-  ) => void;
+  ) => void | Promise<void>;
 };
 
 function getDefaultProgressStreamControls(): ProgressStreamControls {
@@ -312,22 +312,15 @@ export class ProgressFactApplier {
     >;
     const handler = handlers[event.type];
     if (!handler) return;
-    this.applyFact(this.runFactErrorContext(event), () =>
-      handler(streamId, event),
-    );
-  }
-
-  /**
-   * Error context for a run fact. Every type derives its context from
-   * `event.type`, except `child.activity` — the one fact whose failure context
-   * was historically keyed on `event.kind` (subagents vs processes), preserved
-   * here so those failures stay distinguishable in logs.
-   */
-  private runFactErrorContext(event: AgentEvent): string {
-    if (event.type === 'child.activity') {
-      return `failed to handle ${event.kind} activity fact`;
-    }
-    return `failed to handle ${event.type} fact`;
+    // Every type derives its context from `event.type`, except `child.activity`
+    // — the one fact whose failure context was historically keyed on
+    // `event.kind` (subagents vs processes), preserved so those failures stay
+    // distinguishable in logs.
+    const context =
+      event.type === 'child.activity'
+        ? `failed to handle ${event.kind} activity fact`
+        : `failed to handle ${event.type} fact`;
+    this.applyFact(context, () => handler(streamId, event));
   }
 
   private applyFact(context: string, handle: () => void | Promise<void>): void {
