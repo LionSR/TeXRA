@@ -127,6 +127,29 @@ describe('Tool edit approval gating', () => {
     assert.strictEqual(result.output, 'written');
   });
 
+  it('write_file reports the content adjusted during approval', async () => {
+    const tool = new WriteFileTool();
+    let writtenContent: string | undefined;
+
+    WorkspaceFS.exists = async () => true;
+    WorkspaceFS.read = async () => 'old content';
+    WorkspaceFS.write = async (_path: string, content: string) => {
+      writtenContent = content;
+    };
+    testApprovalHandler = async () => ({
+      accepted: true,
+      appliedContent: 'reviewed content',
+    });
+
+    const result = await tool.call({ path: 'doc.txt', content: 'new content' });
+
+    assert.strictEqual(writtenContent, 'reviewed content');
+    assert.match(result.output ?? '', /User adjustments to doc\.txt/);
+    assert.ok(result.userPatch);
+    assert.strictEqual(result.edits?.[0]?.path, 'doc.txt');
+    assert.strictEqual(result.edits?.[0]?.startLine, 1);
+  });
+
   it('write_file rejects when user denies approval', async () => {
     const tool = new WriteFileTool();
     let writeCalled = false;

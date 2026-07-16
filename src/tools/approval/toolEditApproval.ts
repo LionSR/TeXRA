@@ -370,7 +370,7 @@ export async function writeApprovedContent(
  * read-before-edit gate. Centralized because every call site paired these two
  * calls by hand and it's an easy one to forget.
  */
-export async function writeAndRecordApprovedEdit(
+async function writeAndRecordApprovedEdit(
   path: string,
   originalContent: string,
   finalContent: string,
@@ -437,7 +437,7 @@ export interface ApprovedEditContent {
  * tool so `sourceTool` is named once and the rejection message stays uniform.
  * Callers own the write/record/post-processing steps, which vary per tool.
  */
-export async function requestApprovedEditContent(request: {
+async function requestApprovedEditContent(request: {
   path: string;
   displayPath: string;
   originalContent: string;
@@ -478,10 +478,9 @@ interface WrittenApprovedEdit extends WriteApprovedContentResult {
  * Full approve-then-write handshake for a proposed edit: request approval,
  * then write the resolved content and record the file as read. Combines
  * `requestApprovedEditContent` + `writeAndRecordApprovedEdit`, the exact
- * pairing every straight-through edit call site (no work needed between
- * approval and write) previously hand-rolled. Callers that must do
- * something between approval and write (e.g. creating parent directories)
- * should compose the two primitives directly instead.
+ * pairing every straight-through edit call site previously hand-rolled.
+ * `beforeWrite` covers work that must happen only after acceptance, such as
+ * creating a new file's parent directory.
  */
 export async function requestAndWriteApprovedEdit(request: {
   path: string;
@@ -489,12 +488,15 @@ export async function requestAndWriteApprovedEdit(request: {
   originalContent: string;
   proposedContent: string;
   sourceTool: string;
+  beforeWrite?: () => void | Promise<void>;
 }): Promise<{ rejected: ToolResult } | WrittenApprovedEdit> {
   const outcome = await requestApprovedEditContent(request);
   if ('rejected' in outcome) {
     return outcome;
   }
   const { approval, finalContent } = outcome;
+
+  await request.beforeWrite?.();
 
   const written = await writeAndRecordApprovedEdit(
     request.path,

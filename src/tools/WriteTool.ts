@@ -1,21 +1,14 @@
-// Local imports - core
+// Third-party imports
 import { z } from 'zod';
 
-// Internal imports
+// Local imports - tools
 import { isTexFile } from '@common/files/fileTypeUtils';
 import replacementEngine from '@replacement/engine';
-import { ToolResult } from '@shared/schemas/toolResult';
-import { requireFileReadForEdit } from '@tools/fileInteractions';
+import type { ToolResult } from '@shared/schemas/toolResult';
 import {
-  assertWritable,
-  resolveAndFormat,
-  currentToolRoot,
-} from '@tools/pathResolution';
-import {
-  appendApprovalDiffNote,
-  requestAndWriteApprovedEdit,
-} from '@tools/approval/toolEditApproval';
-import { WorkspaceFS } from '@utils/files';
+  applyApprovedFileEdit,
+  resolveWritableTarget,
+} from '@tools/fileEditFlow';
 import { countLines } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -37,67 +30,37 @@ export class WriteFileTool extends defineTool({
   schema: WriteInputSchema,
 }) {
   protected async execute(input: WriteInput): Promise<ToolResult> {
-    const root = currentToolRoot();
-    const { path: resolved, display: displayPath } = resolveAndFormat(
-      input.path,
-      root,
-    );
-    assertWritable(resolved, displayPath);
-    const filePath = resolved.fsPath;
-
-    const exists = await WorkspaceFS.exists(filePath);
-    const readGate = requireFileReadForEdit(filePath, exists);
-    if (readGate) {
-      return readGate;
+    const prepared = await resolveWritableTarget(input.path, {
+      missing: 'allow',
+    });
+    if ('blocked' in prepared) {
+      return prepared.blocked;
     }
-
-    const originalContent = exists ? await WorkspaceFS.read(filePath) : '';
-
-    const proposedContent = isTexFile(filePath)
+    const { path, displayPath, exists, originalContent } = prepared.target;
+    const proposedContent = isTexFile(path)
       ? replacementEngine.applyAll(input.content)
       : input.content;
 
-    const outcome = await requestAndWriteApprovedEdit({
-      path: filePath,
+    return applyApprovedFileEdit({
+      path,
       displayPath,
       originalContent,
       proposedContent,
       sourceTool: 'write_file',
+      startLine: 'approval',
+      present: ({ appliedContent }) => {
+        const originalLineCount = countLines(originalContent);
+        const newLineCount = countLines(appliedContent);
+        const action = exists ? 'Overwrote' : 'Created';
+        return {
+          summary: `${action} ${displayPath} (${newLineCount} lines)`,
+          output: 'written',
+          userInstruction:
+            exists && originalLineCount > 0
+              ? `Replaced ${originalLineCount} lines with ${newLineCount} lines.`
+              : undefined,
+        };
+      },
     });
-    if ('rejected' in outcome) {
-      return outcome.rejected;
-    }
-    const { approval, appliedContent } = outcome;
-
-    const output = appendApprovalDiffNote(
-      'written',
-      displayPath,
-      proposedContent,
-      appliedContent,
-    );
-
-    const originalLineCount = countLines(originalContent);
-    const newLineCount = countLines(appliedContent);
-    const action = exists ? 'Overwrote' : 'Created';
-    const summary = `${action} ${displayPath} (${newLineCount} lines)`;
-    const userInstruction =
-      exists && originalLineCount > 0
-        ? `Replaced ${originalLineCount} lines with ${newLineCount} lines.`
-        : undefined;
-
-    return {
-      status: 'executed',
-      summary,
-      output,
-      userPatch: approval.userPatch,
-      edits: [
-        {
-          path: displayPath,
-          lineChanges: approval.lineChanges,
-          startLine: approval.startLine,
-        },
-      ],
-      ...(userInstruction && { userInstruction }),
-    };
   }
 }
