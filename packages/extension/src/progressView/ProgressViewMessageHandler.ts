@@ -519,10 +519,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
               stream,
               initiatingProposalId,
             ),
-          handleToolEditApprovalAction: async (message) => {
-            await handleProgressViewToolEditApprovalAction(message);
-            return true;
-          },
+          handleToolEditApprovalAction:
+            handleProgressViewToolEditApprovalAction,
           handleBashApprovalAction: (message) =>
             this.handleBashApprovalAction(message),
           handlePlanApprovalAction: (message) =>

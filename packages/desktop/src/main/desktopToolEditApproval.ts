@@ -52,7 +52,7 @@ export interface DesktopToolEditApprovalController {
     requestId: string;
     action: ToolEditApprovalAction;
     feedback?: string;
-  }): boolean;
+  }): void;
   requestApproval(
     request: ToolEditApprovalRequest,
     options?: HostInteractionOptions,
@@ -160,30 +160,30 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     requestId: string;
     action: ToolEditApprovalAction;
     feedback?: string;
-  }): boolean {
+  }): void {
     const entry = this.pending.get(payload.requestId);
-    if (!entry || entry.isSettled()) return true;
+    if (!entry || entry.isSettled()) return;
 
     switch (payload.action) {
       case 'approve':
         void this.runAction(payload.requestId, () =>
           this.approveProposedEdit(payload.requestId, entry),
         );
-        return true;
+        return;
       case 'reject':
         this.settle(payload.requestId, {
           accepted: false,
           userMessage: payload.feedback?.trim() || undefined,
         });
-        return true;
+        return;
       case 'openDiff':
         void this.runAction(payload.requestId, () => this.openDiffPatch(entry));
-        return true;
+        return;
       case 'previewProposed':
         void this.runAction(payload.requestId, () =>
           this.previewProposed(entry),
         );
-        return true;
+        return;
       case 'showLatexdiff':
         void this.runAction(payload.requestId, () =>
           runLatexdiff(entry, {
@@ -191,10 +191,9 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
             openBuildDisplay: this.options.ui.openBuildDisplay,
           }),
         );
-        return true;
-      default:
-        return false;
+        return;
     }
+    payload.action satisfies never;
   }
 
   async approvePendingForStream(streamId: StreamTabId): Promise<void> {
