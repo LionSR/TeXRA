@@ -14,28 +14,28 @@ one at a time.
 
 ## Status table
 
-| #   | Trajectory                                  | Status  | Backed by                                                                                   |
-| --- | ------------------------------------------- | ------- | ------------------------------------------------------------------------------------------- |
-| 1   | First launch, no workspace                  | Works   | `desktopOnboarding.ts`, `main.ts` empty-state factory                                       |
-| 2   | First launch, with workspace                | Works   | `--texra-workspace` arg, `DESKTOP_WORKSPACE_PATH_STATE_KEY`                                 |
-| 3   | Open Folder via chrome button               | Works   | `dialog.showOpenDialog` → `app.relaunch`                                                    |
-| 4   | Sign In via Researcher Access banner        | Works   | `desktopSupabaseAuth.ts` (full OAuth + protocol cb)                                         |
-| 5   | Manual API key entry (Models tab)           | Works   | `promptInRenderer` + `platform().secrets`                                                   |
-| 6   | API key persists across restart             | Works   | `electronSecrets.ts` (safeStorage + keychain)                                               |
-| 7   | Run an agent, stream to Progress            | Works   | `desktopAgentExecution.ts` + `runValidatedExecutionRequest`                                 |
-| 8   | Tool-edit / Bash / Plan approval dialog     | Works   | `desktopToolEditApproval.ts`, `progressView` IPC                                            |
-| 9   | Memory tab persistence                      | Works   | `@tools/memory` storage path resolved via platform                                          |
-| 10  | Settings: Multi-Agent / Models / Latex tabs | Works   | `desktopSettingsIpc.ts`                                                                     |
-| 11  | Logs view (Refresh / Copy / Export)         | Works   | `desktopAppLog.ts` + clipboard / save dialog                                                |
-| 12  | Command palette                             | Works   | `desktopCommandPalette.ts`                                                                  |
-| 13  | First-run walkthrough                       | Works   | `desktopOnboarding.ts`                                                                      |
-| 14  | Tool install via Settings → Tools           | Partial | Native dialog with copy/run command — no `code --install` automation                        |
-| 15  | Install LaTeX Workshop / VS Code extension  | Partial | Used to silently open MV marketplace; now an honest "this is a VS Code extension" dialog    |
-| 16  | Recent commits banner / Git tab             | Works   | `desktopGitHost.ts` shells out to `git log` (audit item A)                                  |
-| 17  | LaTeX preview / build                       | Partial | `desktopPreviewHost.openBuildDisplay` opens externally; no in-app PDF tab                   |
-| 18  | Diff view inside the desktop                | Partial | `desktopDiffHost` opens diff in external editor only                                        |
-| 19  | Cross-launch session restoration            | Works   | Auth + workspace + visual stream rail restore via `desktopStreamSnapshot.ts` (audit item D) |
-| 20  | Crash reporting opt-in flow                 | Works   | `desktopCrashReporting.ts`                                                                  |
+| #   | Trajectory                                  | Status  | Backed by                                                                                |
+| --- | ------------------------------------------- | ------- | ---------------------------------------------------------------------------------------- |
+| 1   | First launch, no workspace                  | Works   | `desktopOnboarding.ts`, `main.ts` empty-state factory                                    |
+| 2   | First launch, with workspace                | Works   | `--texra-workspace` arg, `DESKTOP_WORKSPACE_PATH_STATE_KEY`                              |
+| 3   | Open Folder via chrome button               | Works   | `dialog.showOpenDialog` → `app.relaunch`                                                 |
+| 4   | Sign In via Researcher Access banner        | Works   | `desktopSupabaseAuth.ts` (full OAuth + protocol cb)                                      |
+| 5   | Manual API key entry (Models tab)           | Works   | `promptInRenderer` + `platform().secrets`                                                |
+| 6   | API key persists across restart             | Works   | `electronSecrets.ts` (safeStorage + keychain)                                            |
+| 7   | Run an agent, stream to Progress            | Works   | `desktopAgentExecution.ts` + `runValidatedExecutionRequest`                              |
+| 8   | Tool-edit / Bash / Plan approval dialog     | Works   | `desktopToolEditApproval.ts`, `progressView` IPC                                         |
+| 9   | Memory tab persistence                      | Works   | `@tools/memory` storage path resolved via platform                                       |
+| 10  | Settings: Multi-Agent / Models / Latex tabs | Works   | `desktopSettingsIpc.ts`                                                                  |
+| 11  | Logs view (Refresh / Copy / Export)         | Works   | `desktopAppLog.ts` + clipboard / save dialog                                             |
+| 12  | Command palette                             | Works   | `desktopCommandPalette.ts`                                                               |
+| 13  | First-run walkthrough                       | Works   | `desktopOnboarding.ts`                                                                   |
+| 14  | Tool install via Settings → Tools           | Partial | Native dialog with copy/run command — no `code --install` automation                     |
+| 15  | Install LaTeX Workshop / VS Code extension  | Partial | Used to silently open MV marketplace; now an honest "this is a VS Code extension" dialog |
+| 16  | Recent commits banner / Git tab             | Works   | `desktopGitHost.ts` shells out to `git log` (audit item A)                               |
+| 17  | LaTeX preview / build                       | Partial | `desktopPreviewHost.openBuildDisplay` opens externally; no in-app PDF tab                |
+| 18  | Diff view inside the desktop                | Partial | `desktopDiffHost` opens diff in external editor only                                     |
+| 19  | Cross-launch session restoration            | Works   | Workspace transcripts and stream sidecars load through the shared progress backend       |
+| 20  | Crash reporting opt-in flow                 | Works   | `desktopCrashReporting.ts`                                                               |
 
 Legend: **Works** = end-to-end on the standalone build · **Partial** =
 shell exists, but the UX has a friction point or relies on a sibling
@@ -131,24 +131,17 @@ close it:
 - Notes: reuse `<texra-diff-view>` (already imported in `main.ts`); wire
   `desktopDiffHost.openDiff` to set a diff route + payload.
 
-### D. In-flight session restoration (closes #19) — shipped (visual)
+### D. In-flight session restoration (closes #19) — shipped
 
-- **Status:** Phase 1 (visual rail restoration) shipped. The desktop
-  persists a slim snapshot of the active stream rail to
-  `app.getPath('userData')/streams.json` whenever streams are
-  created/updated/deleted, and hydrates the snapshot on launch as
-  "ghost" entries on the Progress rail so the user can see the runs
-  they had going. See `packages/desktop/src/main/desktopStreamSnapshot.ts`
-  and the snapshot/syncStreams hook in `desktopAgentExecution.ts`.
-  Atomic writes (temp + rename) live in `platform/jsonStore.ts` so a
-  crash mid-flush leaves the previous file intact.
-- **Phase 2 (deferred):** live re-attach to in-flight runtimes is out
-  of scope for this PR. When the user clicks "Resume" on a ghost
-  stream we surface a clear "this run is from a previous session,
-  please start fresh" info dialog rather than silently no-op'ing.
-  Reviving the runtime would require restoring `taskState` + the
-  in-flight conversation from `RunStorageService` and re-attaching
-  PocketFlow handles — substantial work tracked separately.
+- **Status:** The desktop loads the same workspace-scoped transcripts,
+  stream sidecars, and execution mappings as the extension. Startup repair
+  derives unfinished work from transcript summaries, distinguishes resumable
+  executions through persisted flow records, and rebinds executions that are
+  still active in another desktop window.
+- The retired global `streams.json` file is read only by a temporary importer.
+  It migrates a stream identity only when the current workspace already has
+  transcript or sidecar evidence, then removes that row after canonical state
+  has loaded successfully. New desktop activity never writes this file.
 
 ### E. Multi-launch settings persistence test — shipped
 

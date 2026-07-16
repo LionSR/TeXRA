@@ -53,5 +53,4 @@ export * from './settingsViewMessages';
 
 // Layer 7: Composite schemas (depend on multiple layers)
 export * from './streamState';
-export * from './streamRestoration';
 export * from './streamSnapshot';

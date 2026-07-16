@@ -26,7 +26,6 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 // Local imports - desktop and progress schemas
 import { DESKTOP_SHELL_COMMANDS } from '@desktop/desktopShellMessages';
-import type { DesktopStreamSnapshotStore } from '@desktop/main/desktopStreamSnapshot';
 import {
   AgentCategory,
   LOG_LEVELS,
@@ -35,7 +34,6 @@ import {
   STREAM_PHASE,
   STREAM_STATUS,
   type ExecutionId,
-  type RestoredStreamSnapshot,
   type RunOutcome,
   type StreamPhase,
   type StreamTabId,
@@ -74,6 +72,7 @@ type TestableBridge = Bridge & {
       decision: PlanApprovalResult,
     ): boolean;
   };
+  waitUntilReady(): Promise<void>;
   runtimeHost: {
     interactions?: {
       requestPlanApproval?: (request: {
@@ -123,9 +122,14 @@ type TestableBridge = Bridge & {
     releaseEntries(streamId: StreamTabId): void;
     reload(): Promise<void>;
     ensureLoaded(streamId: StreamTabId): Promise<void>;
+    getUnfinishedStreamIds(): StreamTabId[];
     get(streamId: StreamTabId):
       | {
-          getRange(fromSeq: number): Array<{ text?: string }>;
+          getRange(fromSeq: number): Array<{
+            type?: string;
+            text?: string;
+            data?: unknown;
+          }>;
         }
       | undefined;
   };
@@ -175,9 +179,15 @@ type CreateBridgeOptions = {
   retrieveSessionResumeData?: ReturnType<typeof vi.fn>;
   resumeToolUseFromSnapshot?: ReturnType<typeof vi.fn>;
   runAgent?: RunExecutionRequest;
-  streamSnapshotStore?: DesktopStreamSnapshotStore;
-  configureProgressSnapshotStore?: (store: ProgressSnapshotStore) => void;
+  canonicalStreamIds?: readonly StreamTabId[];
+  configureTranscripts?: (store: StreamLogStore) => Promise<void> | void;
+  configureProgressSnapshotStore?: (
+    store: ProgressSnapshotStore,
+  ) => Promise<void> | void;
+  deferReady?: boolean;
+  afterCanonicalLoad?: () => Promise<void>;
   detectWaitingStreams?: ReturnType<typeof vi.fn>;
+  repairRestartedStreams?: ReturnType<typeof vi.fn>;
   activeExecutionIds?: readonly string[] | (() => readonly string[]);
   showErrorMessage?: (message: string) => Promise<void> | void;
   openPath?: (filePath: string, line?: number) => Promise<void>;
@@ -229,11 +239,11 @@ const SEARCH_TOOL_USE_AGENT_CONFIG = {
 async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   bridgeModule: DesktopAgentExecutionModule;
   openTranscripts(): Promise<StreamLogStore>;
-  ephemeralTranscripts(): StreamLogStore;
   createProgressSnapshotStore(): ProgressSnapshotStore;
   progressSnapshotStore: ProgressSnapshotStore;
 }> {
   vi.resetModules();
+  const kvStoreBacking = options.kvStoreBacking ?? new Map<string, unknown>();
   const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
     import('@platform/platform'),
     import('@test/support/FakePlatform'),
@@ -270,29 +280,36 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
     detectWaitingStreams:
       options.detectWaitingStreams ?? vi.fn(async () => new Set()),
   }));
+  vi.doMock('@controllers/progressView/backend/restartRepair', async () => {
+    const actual = await vi.importActual<
+      typeof import('@controllers/progressView/backend/restartRepair')
+    >('@controllers/progressView/backend/restartRepair');
+    return options.repairRestartedStreams
+      ? {
+          ...actual,
+          repairRestartedStreams: options.repairRestartedStreams,
+        }
+      : actual;
+  });
   vi.doMock('@common/storage/KVStore', () => ({
     KVStore: class {
       constructor(private readonly dir: string) {}
 
       async read(key: string): Promise<unknown> {
-        return (
-          options.kvRead?.(key) ?? options.kvStoreBacking?.get(this.key(key))
-        );
+        return options.kvRead?.(key) ?? kvStoreBacking.get(this.key(key));
       }
 
       async write(key: string, value: unknown): Promise<void> {
-        options.kvStoreBacking?.set(this.key(key), value);
+        kvStoreBacking.set(this.key(key), value);
       }
 
       async delete(key: string): Promise<void> {
-        options.kvStoreBacking?.delete(this.key(key));
+        kvStoreBacking.delete(this.key(key));
       }
 
       async deleteDir(): Promise<void> {
-        if (!options.kvStoreBacking) return;
-        for (const key of options.kvStoreBacking.keys()) {
-          if (key.startsWith(`${this.dir}/`))
-            options.kvStoreBacking.delete(key);
+        for (const key of kvStoreBacking.keys()) {
+          if (key.startsWith(`${this.dir}/`)) kvStoreBacking.delete(key);
         }
       }
 
@@ -311,9 +328,8 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
         if (options.transcriptOpenGate && this.dir === STREAM_LOGS_DIR) {
           await options.transcriptOpenGate;
         }
-        if (!options.kvStoreBacking) return [];
         const prefix = `${this.dir}/`;
-        return [...options.kvStoreBacking.keys()]
+        return [...kvStoreBacking.keys()]
           .filter((key) => key.startsWith(prefix))
           .map((key) => key.slice(prefix.length));
       }
@@ -394,11 +410,6 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   const createProgressSnapshotStore = (): ProgressSnapshotStore =>
     new StreamSnapshotStore();
   const progressSnapshotStore = createProgressSnapshotStore();
-  if (options.configureProgressSnapshotStore) {
-    await progressSnapshotStore.load([]);
-    options.configureProgressSnapshotStore(progressSnapshotStore);
-    await progressSnapshotStore.flush();
-  }
   const bridgeModule = (await import(
     moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
   )) as DesktopAgentExecutionModule;
@@ -411,7 +422,6 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
     bridgeModule,
     createProgressSnapshotStore,
     openTranscripts: () => StreamLogStore.open(),
-    ephemeralTranscripts: () => StreamLogStore.ephemeral('desktop bridge test'),
     progressSnapshotStore,
   };
 }
@@ -423,7 +433,17 @@ async function createBridge(
   const { bridgeModule, openTranscripts, progressSnapshotStore } =
     await loadBridgeModule(options);
   const transcripts = await openTranscripts();
-  return disposeAfterTest(
+  for (const streamId of options.canonicalStreamIds ?? []) {
+    transcripts.ensureStream(streamId);
+  }
+  await options.configureTranscripts?.(transcripts);
+  await transcripts.flush();
+  if (options.configureProgressSnapshotStore) {
+    await progressSnapshotStore.load(transcripts.keys());
+    await options.configureProgressSnapshotStore(progressSnapshotStore);
+    await progressSnapshotStore.flush();
+  }
+  const bridge = disposeAfterTest(
     new bridgeModule.DesktopProgressBridge(
       (message) => {
         messages.push(message);
@@ -433,8 +453,8 @@ async function createBridge(
         logger: options.loggerErrorSpy
           ? { ...noopTrace, error: options.loggerErrorSpy }
           : undefined,
-        streamSnapshotStore: options.streamSnapshotStore,
         progressSnapshotStore,
+        afterCanonicalLoad: options.afterCanonicalLoad,
         host: createStubDesktopAgentExecutionHost({
           ...(options.showErrorMessage
             ? { showErrorMessage: options.showErrorMessage }
@@ -444,6 +464,8 @@ async function createBridge(
       },
     ) as unknown as TestableBridge,
   );
+  if (!options.deferReady) await bridge.waitUntilReady();
+  return bridge;
 }
 
 function progressMessages(
@@ -480,41 +502,17 @@ function shownToolEditRequestId(messages: unknown[]): string | undefined {
   return undefined;
 }
 
-function restoredSnapshot(
-  overrides: Partial<RestoredStreamSnapshot> &
-    Pick<RestoredStreamSnapshot, 'streamId'>,
-): RestoredStreamSnapshot {
-  return {
-    label: overrides.streamId,
-    agentCategory: AgentCategory.Workflow,
-    lastKnownStatus: STREAM_PHASE.COMPLETED,
-    creationTimestamp: 1_000,
-    persistedAt: 2_000,
-    ...overrides,
-  };
-}
-
-function createStreamSnapshotStore(
-  hydrated: readonly RestoredStreamSnapshot[],
-): DesktopStreamSnapshotStore {
-  const live = new Map(
-    hydrated.map((snapshot) => [snapshot.streamId, snapshot]),
-  );
-  return {
-    hydrated,
-    upsert: vi.fn(async (snapshot: RestoredStreamSnapshot) => {
-      live.set(snapshot.streamId, snapshot);
-    }),
-    remove: vi.fn(async (streamId: StreamTabId) => {
-      live.delete(streamId);
-    }),
-    replaceAll: vi.fn(async (snapshots: RestoredStreamSnapshot[]) => {
-      live.clear();
-      for (const snapshot of snapshots) live.set(snapshot.streamId, snapshot);
-    }),
-    flush: vi.fn(async () => {}),
-    getAll: () => [...live.values()],
-  };
+function appendRunningGroup(
+  store: StreamLogStore,
+  streamId: StreamTabId,
+): void {
+  store.append(streamId, {
+    id: `${streamId}-running-group`,
+    type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+    level: LOG_LEVELS.INFO,
+    timestamp: 1_000,
+    data: { status: STREAM_PHASE.RUNNING },
+  });
 }
 
 function workflowTaskState(): WorkflowTaskState {
@@ -621,6 +619,7 @@ describe('DesktopProgressBridge', () => {
     vi.doUnmock('@agent/storage/detectWaitingStreams');
     vi.doUnmock('@common/storage/KVStore');
     vi.doUnmock('@controllers/mainView/MainViewExecutionController');
+    vi.doUnmock('@controllers/progressView/backend/restartRepair');
     vi.doUnmock('vscode');
     vi.restoreAllMocks();
   });
@@ -724,78 +723,6 @@ describe('DesktopProgressBridge', () => {
     await settleProgressEvents();
 
     expect(openPath).toHaveBeenCalledWith('/runs/exec-1/output/paper.pdf');
-  });
-
-  it('does not persist desktop snapshots from host-path stream facts', async () => {
-    const messages: unknown[] = [];
-    const streamSnapshotStore = createStreamSnapshotStore([]);
-    const bridge = (await createBridge(messages, {
-      streamSnapshotStore,
-    })) as BridgeWithSession;
-    const { hostChannel } = bridge.session;
-    expect(hostChannel).toBeDefined();
-
-    hostChannel?.emit('setTaskState', {
-      streamId: 'desktop-host-stream',
-      executionId: 'de57e0',
-      taskState: TaskStateSchema.parse(workflowTaskState()),
-    });
-    await settleProgressEvents();
-
-    expect(streamSnapshotStore.upsert).not.toHaveBeenCalled();
-  });
-
-  it('persists desktop stream snapshots from direct session and run facts', async () => {
-    const messages: unknown[] = [];
-    const streamSnapshotStore = createStreamSnapshotStore([]);
-    const bridge = (await createBridge(messages, {
-      streamSnapshotStore,
-    })) as BridgeWithSession;
-    const streamId = 'desktop-session-fact-stream' as StreamTabId;
-    const executionId = 'desktop-session-fact-exec' as ExecutionId;
-
-    bridge.session.events.emit({
-      scope: 'run',
-      streamId,
-      event: {
-        type: 'run.config',
-        streamId,
-        executionId,
-        config: TaskStateSchema.parse(workflowTaskState()).agentConfig,
-      },
-    });
-    bridge.session.events.emit({
-      scope: 'session',
-      event: {
-        type: 'updateStreamDescription',
-        payload: {
-          streamId,
-          description: 'Direct session fact description',
-        },
-      },
-    });
-    bridge.session.events.emit({
-      scope: 'run',
-      streamId,
-      event: {
-        type: 'status',
-        streamId,
-        phase: STREAM_PHASE.RUNNING,
-        previousPhase: STREAM_PHASE.WAITING,
-        cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
-      },
-    });
-
-    await vi.waitFor(() => {
-      expect(streamSnapshotStore.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          streamId,
-          executionId,
-          description: 'Direct session fact description',
-          lastKnownStatus: STREAM_PHASE.RUNNING,
-        }),
-      );
-    });
   });
 
   it('installs host interactions on the desktop runtime host', async () => {
@@ -1083,60 +1010,116 @@ describe('DesktopProgressBridge', () => {
     ).toMatchObject({ status: STREAM_STATUS.RUNNING });
   });
 
-  it('repairs restored running streams after desktop startup', async () => {
-    const messages: unknown[] = [];
+  it('detects waiting streams from canonical execution mappings', async () => {
+    const waitingStream = 'waiting-stream' as StreamTabId;
+    const crashedStream = 'crashed-stream' as StreamTabId;
     const detectWaitingStreams = vi.fn(
       async (executionIds: ReadonlyMap<StreamTabId, string>) => {
         expect([...executionIds.entries()].toSorted()).toEqual([
-          ['dead-stream', 'def456'],
-          ['waiting-stream', 'abc123'],
+          [crashedStream, 'def456'],
+          [waitingStream, 'abc123'],
         ]);
-        return new Set<StreamTabId>(['waiting-stream']);
+        return new Set([waitingStream]);
       },
     );
-    const bridge = await createBridge(messages, {
+    const bridge = await createBridge([], {
+      canonicalStreamIds: [waitingStream, crashedStream],
+      configureTranscripts: (store) => {
+        appendRunningGroup(store, waitingStream);
+        appendRunningGroup(store, crashedStream);
+      },
+      configureProgressSnapshotStore: (store) => {
+        const taskState = TaskStateSchema.parse(workflowTaskState());
+        store.setTaskState(waitingStream, taskState, 'abc123');
+        store.setTaskState(crashedStream, taskState, 'def456');
+      },
       detectWaitingStreams,
-      streamSnapshotStore: createStreamSnapshotStore([
-        restoredSnapshot({
-          streamId: 'waiting-stream',
-          executionId: 'abc123',
-          lastKnownStatus: STREAM_STATUS.RUNNING,
-        }),
-        restoredSnapshot({
-          streamId: 'dead-stream',
-          executionId: 'def456',
-          lastKnownStatus: STREAM_STATUS.RUNNING,
-        }),
-      ]),
     });
 
-    try {
-      await vi.waitFor(() => {
-        expect(detectWaitingStreams).toHaveBeenCalledOnce();
-        expect(bridgeStatus(bridge).get('waiting-stream')).toBe(
-          STREAM_STATUS.WAITING,
-        );
-        expect(bridgeStatus(bridge).get('dead-stream')).toBe(
-          STREAM_PHASE.FAILED,
-        );
-      });
+    expect(detectWaitingStreams).toHaveBeenCalledOnce();
+    expect(bridgeStatus(bridge).get(waitingStream)).toBe(STREAM_PHASE.WAITING);
+    expect(bridgeStatus(bridge).get(crashedStream)).toBeUndefined();
+    expect(
+      bridge.streamLogs.get(waitingStream)?.getRange(0).at(-1),
+    ).toMatchObject({
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+      data: { status: RUN_OUTCOME.CANCELLED },
+    });
+    expect(
+      bridge.streamLogs.get(crashedStream)?.getRange(0).at(-1),
+    ).toMatchObject({
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+      data: { status: RUN_OUTCOME.FAILED },
+    });
+  });
 
-      await vi.waitFor(() => {
-        const streamSync = progressMessages(
-          messages,
-          PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
-        ).at(-1);
-        expect(streamSync?.streamStates?.['waiting-stream']).toMatchObject({
-          status: STREAM_STATUS.WAITING,
-        });
-        expect(streamSync?.streamStates?.['dead-stream']).toMatchObject({
-          status: STREAM_PHASE.FAILED,
-        });
-      });
-    } finally {
-      bridgeStatus(bridge).clearStream('waiting-stream');
-      bridgeStatus(bridge).clearStream('dead-stream');
-    }
+  it('repairs a crashed unfinished canonical log without legacy metadata', async () => {
+    const streamId = 'unfinished-stream' as StreamTabId;
+    const bridge = await createBridge([], {
+      canonicalStreamIds: [streamId],
+      configureTranscripts: (store) => appendRunningGroup(store, streamId),
+    });
+
+    expect(bridge.streamLogs.getUnfinishedStreamIds()).toEqual([]);
+    expect(bridge.streamLogs.get(streamId)?.getRange(0).at(-1)).toMatchObject({
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+      data: { status: RUN_OUTCOME.FAILED },
+    });
+    expect(bridgeStatus(bridge).get(streamId)).toBeUndefined();
+  });
+
+  it('repairs only unmapped streams when waiting detection fails', async () => {
+    const unmappedStream = 'unmapped-stream' as StreamTabId;
+    const mappedStream = 'mapped-stream' as StreamTabId;
+    const executionId = 'ca110ad' as ExecutionId;
+    const detectionError = new Error('flow records unavailable');
+    const detectWaitingStreams = vi.fn(async () => {
+      throw detectionError;
+    });
+    const bridge = await createBridge([], {
+      canonicalStreamIds: [unmappedStream, mappedStream],
+      configureTranscripts: (store) => {
+        appendRunningGroup(store, unmappedStream);
+        appendRunningGroup(store, mappedStream);
+      },
+      configureProgressSnapshotStore: (store) => {
+        store.setTaskState(
+          mappedStream,
+          TaskStateSchema.parse(workflowTaskState()),
+          executionId,
+        );
+      },
+      detectWaitingStreams,
+    });
+
+    expect(detectWaitingStreams).toHaveBeenCalledOnce();
+    expect(bridge.streamLogs.getUnfinishedStreamIds()).toEqual([mappedStream]);
+    expect(
+      bridge.streamLogs.get(unmappedStream)?.getRange(0).at(-1),
+    ).toMatchObject({
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+      data: { status: RUN_OUTCOME.FAILED },
+    });
+    expect(
+      bridge.streamLogs.get(mappedStream)?.getRange(0).at(-1),
+    ).not.toMatchObject({ type: STREAM_LOG_ENTRY_TYPES.GROUP_END });
+  });
+
+  it('does not mask restart repair write failures as detection failures', async () => {
+    const streamId = 'write-failure-stream' as StreamTabId;
+    const repairError = new Error('restart repair write failed');
+    const repairRestartedStreams = vi.fn(async () => {
+      throw repairError;
+    });
+
+    await expect(
+      createBridge([], {
+        canonicalStreamIds: [streamId],
+        configureTranscripts: (store) => appendRunningGroup(store, streamId),
+        repairRestartedStreams,
+      }),
+    ).rejects.toBe(repairError);
+    expect(repairRestartedStreams).toHaveBeenCalledOnce();
   });
 
   it('waits for desktop startup repair before starting a run', async () => {
@@ -1149,6 +1132,7 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge([], {
       detectWaitingStreams,
       runAgent,
+      deferReady: true,
     });
     const taskState = workflowTaskState();
 
@@ -1174,6 +1158,7 @@ describe('DesktopProgressBridge', () => {
 
       finishRepair(new Set());
       await runPromise;
+      await bridge.waitUntilReady();
 
       expect(runAgent).toHaveBeenCalledOnce();
     } finally {
@@ -1211,38 +1196,6 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
-  it('marks restored running streams as errored when startup repair fails', async () => {
-    // The catch-fallback path also consults detectWaitingStreams() (see the
-    // regression test below), so when the persisted-record lookup itself is
-    // completely unavailable, it is invoked once from the primary try path
-    // and once again from the fallback -- both fail here, so there really is
-    // no way to know the stream is resumable and it correctly lands in FAILED.
-    const detectWaitingStreams = vi.fn(async () => {
-      throw new Error('flow store unavailable');
-    });
-    const bridge = await createBridge([], {
-      detectWaitingStreams,
-      streamSnapshotStore: createStreamSnapshotStore([
-        restoredSnapshot({
-          streamId: 'broken-stream',
-          executionId: 'abc123',
-          lastKnownStatus: STREAM_STATUS.RUNNING,
-        }),
-      ]),
-    });
-
-    try {
-      await vi.waitFor(() => {
-        expect(detectWaitingStreams).toHaveBeenCalledTimes(2);
-        expect(bridgeStatus(bridge).get('broken-stream')).toBe(
-          STREAM_PHASE.FAILED,
-        );
-      });
-    } finally {
-      bridgeStatus(bridge).clearStream('broken-stream');
-    }
-  });
-
   it('fails desktop bridge initialization when transcript opening fails', async () => {
     const detectWaitingStreams = vi.fn();
     const failure = new Error('stream log store unavailable');
@@ -1256,243 +1209,40 @@ describe('DesktopProgressBridge', () => {
     expect(detectWaitingStreams).not.toHaveBeenCalled();
   });
 
-  it('closes waiting groups from durable snapshots outside restored streams', async () => {
-    let finishDetection!: (value: Set<StreamTabId>) => void;
-    const detectionGate = new Promise<Set<StreamTabId>>((resolve) => {
-      finishDetection = resolve;
+  it('loads canonical sidecars before restart repair', async () => {
+    const streamId = 'canonical-stream' as StreamTabId;
+    const executionId = 'ca110ad' as ExecutionId;
+    let snapshots: ProgressSnapshotStore | undefined;
+    const detectWaitingStreams = vi.fn(async () => {
+      expect(snapshots?.getExecutionId(streamId)).toBe(executionId);
+      return new Set<StreamTabId>();
     });
-    const detectWaitingStreams = vi.fn(async () => detectionGate);
-    const bridge = await createBridge([], {
+
+    await createBridge([], {
+      canonicalStreamIds: [streamId],
       configureProgressSnapshotStore: (store) => {
+        snapshots = store;
         store.setTaskState(
-          'snapshot-waiting-stream',
+          streamId,
           TaskStateSchema.parse(workflowTaskState()),
-          'abc123',
+          executionId,
         );
+      },
+      afterCanonicalLoad: async () => {
+        expect(snapshots?.getExecutionId(streamId)).toBe(executionId);
+        expect(detectWaitingStreams).not.toHaveBeenCalled();
       },
       detectWaitingStreams,
     });
-    const restartRepair = (
-      bridge as unknown as { restartRepair: Promise<void> }
-    ).restartRepair;
-    const streamLogs = bridge.streamLogs as typeof bridge.streamLogs & {
-      endRunningGroupsForStreams: (
-        streamIds: readonly StreamTabId[],
-        now?: number,
-        status?: RunOutcome,
-      ) => Promise<StreamTabId[]>;
-    };
-    const closeSpy = vi.spyOn(streamLogs, 'endRunningGroupsForStreams');
 
-    try {
-      await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalled());
-      finishDetection(new Set<StreamTabId>(['snapshot-waiting-stream']));
-      await restartRepair;
-
-      expect(bridgeStatus(bridge).get('snapshot-waiting-stream')).toBe(
-        STREAM_STATUS.WAITING,
-      );
-      expect(closeSpy).toHaveBeenCalledWith(
-        ['snapshot-waiting-stream'],
-        expect.any(Number),
-        RUN_OUTCOME.CANCELLED,
-      );
-    } finally {
-      finishDetection(new Set());
-      bridgeStatus(bridge).clearStream('snapshot-waiting-stream');
-    }
-  });
-
-  it('rechecks active executions after a failed persisted-record lookup in the fallback path', async () => {
-    // Regression test for the "catch-within-catch" gap (issue #7160): the
-    // fallback path's own recheck (see the regression test above) only ran
-    // when detectRaceGuardedWaitingStreams() *resolved*. If
-    // detectWaitingStreams() itself throws on the fallback's second consult,
-    // the catch(detectError) block used to just log a warning and continue
-    // with the pre-existing in-memory waitingStreams -- even if the stream
-    // became active elsewhere while that failed lookup was in flight. It
-    // must still recheck against fresh active execution ids so an
-    // actively-resumed stream isn't handed to
-    // closeRunningTaskGroupsForStreams() below.
-    let activeExecutionIds: readonly string[] = [];
-    let detectCallCount = 0;
-    let rejectSecondDetect!: (error: Error) => void;
-    const secondDetectGate = new Promise<Set<StreamTabId>>((_, reject) => {
-      rejectSecondDetect = reject;
-    });
-    const detectWaitingStreams = vi.fn(async (): Promise<Set<StreamTabId>> => {
-      detectCallCount += 1;
-      if (detectCallCount === 1) {
-        // The primary try path's own consult -- fails immediately so the
-        // repair falls into the degraded catch-fallback path.
-        throw new Error('primary detect failed');
-      }
-      // The fallback's consult -- stays pending until the test simulates
-      // the race, then rejects (below).
-      return secondDetectGate;
-    });
-    const bridge = await createBridge([], {
-      activeExecutionIds: () => activeExecutionIds,
-      detectWaitingStreams,
-      streamSnapshotStore: createStreamSnapshotStore([
-        restoredSnapshot({
-          streamId: 'race-stream',
-          executionId: 'abc123',
-          lastKnownStatus: STREAM_PHASE.WAITING,
-        }),
-      ]),
-    });
-    // repairOrphanedStreamsAfterRestart() never emits an UPDATE_STREAMS sync
-    // in the fixed (fully-forgotten) outcome under test, so there is no
-    // message to poll for -- await the repair's own settle signal instead,
-    // which resolves only after its try/catch body (including any awaited
-    // closeRunningTaskGroupsForStreams call) has fully run.
-    const restartRepair = (
-      bridge as unknown as { restartRepair: Promise<void> }
-    ).restartRepair;
-    const streamLogs = bridge.streamLogs as typeof bridge.streamLogs & {
-      endRunningGroupsForStreams: (
-        streamIds: readonly StreamTabId[],
-        now?: number,
-        status?: RunOutcome,
-      ) => Promise<StreamTabId[]>;
-    };
-    const closeSpy = vi.spyOn(streamLogs, 'endRunningGroupsForStreams');
-
-    try {
-      await vi.waitFor(() =>
-        expect(detectWaitingStreams).toHaveBeenCalledTimes(2),
-      );
-      // Simulate the race: another window (or a headless run) resumes the
-      // stream while the fallback's persisted-record lookup is in flight,
-      // and that lookup then fails.
-      activeExecutionIds = ['abc123'];
-      rejectSecondDetect(new Error('fallback detect failed'));
-      await restartRepair;
-
-      expect(closeSpy).not.toHaveBeenCalled();
-    } finally {
-      rejectSecondDetect(new Error('cleanup'));
-      bridgeStatus(bridge).clearStream('race-stream');
-    }
-  });
-
-  it('marks restored waiting streams as failed when no waiting session remains', async () => {
-    const detectWaitingStreams = vi.fn(async () => new Set<StreamTabId>());
-    const bridge = await createBridge([], {
-      detectWaitingStreams,
-      streamSnapshotStore: createStreamSnapshotStore([
-        restoredSnapshot({
-          streamId: 'stale-waiting-stream',
-          executionId: 'abc123',
-          lastKnownStatus: STREAM_PHASE.WAITING,
-        }),
-      ]),
-    });
-
-    try {
-      await vi.waitFor(() => {
-        expect(detectWaitingStreams).toHaveBeenCalledOnce();
-        expect(bridgeStatus(bridge).get('stale-waiting-stream')).toBe(
-          STREAM_PHASE.FAILED,
-        );
-      });
-    } finally {
-      bridgeStatus(bridge).clearStream('stale-waiting-stream');
-    }
-  });
-
-  it('does not repair restored streams whose execution is active', async () => {
-    const detectWaitingStreams = vi.fn(
-      async (executionIds: ReadonlyMap<StreamTabId, string>) => {
-        expect([...executionIds.entries()]).toEqual([
-          ['dead-stream', 'def456'],
-        ]);
-        return new Set<StreamTabId>();
-      },
+    expect(detectWaitingStreams).toHaveBeenCalledWith(
+      new Map([[streamId, executionId]]),
     );
-    const bridge = await createBridge([], {
-      activeExecutionIds: ['abc123'],
-      detectWaitingStreams,
-      streamSnapshotStore: createStreamSnapshotStore([
-        restoredSnapshot({
-          streamId: 'active-stream',
-          executionId: 'abc123',
-          lastKnownStatus: STREAM_STATUS.RUNNING,
-        }),
-        restoredSnapshot({
-          streamId: 'dead-stream',
-          executionId: 'def456',
-          lastKnownStatus: STREAM_STATUS.RUNNING,
-        }),
-      ]),
-    });
-
-    try {
-      await vi.waitFor(() => {
-        expect(detectWaitingStreams).toHaveBeenCalledOnce();
-        expect(bridgeStatus(bridge).get('active-stream')).toBe(
-          STREAM_STATUS.RUNNING,
-        );
-        expect(bridgeStatus(bridge).get('dead-stream')).toBe(
-          STREAM_PHASE.FAILED,
-        );
-      });
-    } finally {
-      bridgeStatus(bridge).clearStream('active-stream');
-      bridgeStatus(bridge).clearStream('dead-stream');
-    }
   });
 
-  it('uses durable execution ids to keep active restored streams out of repair', async () => {
-    const detectWaitingStreams = vi.fn(
-      async (executionIds: ReadonlyMap<StreamTabId, string>) => {
-        expect([...executionIds.entries()]).toEqual([
-          ['dead-stream', 'def456'],
-        ]);
-        return new Set<StreamTabId>();
-      },
-    );
-    const bridge = await createBridge([], {
-      activeExecutionIds: ['abc123'],
-      configureProgressSnapshotStore: (store) => {
-        store.setTaskState(
-          'active-stream',
-          TaskStateSchema.parse(workflowTaskState()),
-          'abc123',
-        );
-      },
-      detectWaitingStreams,
-      streamSnapshotStore: createStreamSnapshotStore([
-        restoredSnapshot({
-          streamId: 'active-stream',
-          lastKnownStatus: STREAM_STATUS.RUNNING,
-        }),
-        restoredSnapshot({
-          streamId: 'dead-stream',
-          executionId: 'def456',
-          lastKnownStatus: STREAM_STATUS.RUNNING,
-        }),
-      ]),
-    });
-
-    try {
-      await vi.waitFor(() => {
-        expect(detectWaitingStreams).toHaveBeenCalledOnce();
-        expect(bridgeStatus(bridge).get('active-stream')).toBe(
-          STREAM_STATUS.RUNNING,
-        );
-        expect(bridgeStatus(bridge).get('dead-stream')).toBe(
-          STREAM_PHASE.FAILED,
-        );
-      });
-    } finally {
-      bridgeStatus(bridge).clearStream('active-stream');
-      bridgeStatus(bridge).clearStream('dead-stream');
-    }
-  });
-
-  it('rechecks active executions after waiting detection before resetting streams', async () => {
+  it('rechecks active executions after waiting detection before repairing logs', async () => {
+    const streamId = 'race-stream' as StreamTabId;
+    const executionId = 'abc123' as ExecutionId;
     let activeExecutionIds: readonly string[] = [];
     let finishDetection!: (value: Set<StreamTabId>) => void;
     const detectionGate = new Promise<Set<StreamTabId>>((resolve) => {
@@ -1502,142 +1252,28 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge([], {
       activeExecutionIds: () => activeExecutionIds,
       detectWaitingStreams,
-      streamSnapshotStore: createStreamSnapshotStore([
-        restoredSnapshot({
-          streamId: 'race-stream',
-          executionId: 'abc123',
-          lastKnownStatus: STREAM_STATUS.RUNNING,
-        }),
-      ]),
+      canonicalStreamIds: [streamId],
+      configureTranscripts: (store) => appendRunningGroup(store, streamId),
+      configureProgressSnapshotStore: (store) => {
+        store.setTaskState(
+          streamId,
+          TaskStateSchema.parse(workflowTaskState()),
+          executionId,
+        );
+      },
+      deferReady: true,
     });
 
     try {
       await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalled());
-      activeExecutionIds = ['abc123'];
-      finishDetection(new Set<StreamTabId>(['race-stream']));
+      activeExecutionIds = [executionId];
+      finishDetection(new Set([streamId]));
+      await bridge.waitUntilReady();
 
-      await vi.waitFor(() => {
-        expect(bridgeStatus(bridge).get('race-stream')).toBe(
-          STREAM_STATUS.RUNNING,
-        );
-      });
+      expect(bridge.streamLogs.getUnfinishedStreamIds()).toEqual([streamId]);
+      expect(bridgeStatus(bridge).get(streamId)).toBeUndefined();
     } finally {
       finishDetection(new Set());
-      bridgeStatus(bridge).clearStream('race-stream');
-    }
-  });
-
-  it('closes running transcript groups for streams repaired to waiting', async () => {
-    let finishDetection!: (value: Set<StreamTabId>) => void;
-    const detectionGate = new Promise<Set<StreamTabId>>((resolve) => {
-      finishDetection = resolve;
-    });
-    const detectWaitingStreams = vi.fn(async () => detectionGate);
-    const bridge = await createBridge([], {
-      detectWaitingStreams,
-      streamSnapshotStore: createStreamSnapshotStore([
-        restoredSnapshot({
-          streamId: 'waiting-stream',
-          executionId: 'abc123',
-          lastKnownStatus: STREAM_STATUS.RUNNING,
-        }),
-      ]),
-    });
-    const streamLogs = bridge.streamLogs as typeof bridge.streamLogs & {
-      endRunningGroupsForStreams: (
-        streamIds: readonly StreamTabId[],
-        now?: number,
-        status?: RunOutcome,
-      ) => Promise<StreamTabId[]>;
-    };
-    const closeSpy = vi.spyOn(streamLogs, 'endRunningGroupsForStreams');
-
-    try {
-      await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalled());
-      finishDetection(new Set<StreamTabId>(['waiting-stream']));
-
-      await vi.waitFor(() => {
-        expect(closeSpy).toHaveBeenCalledWith(
-          ['waiting-stream'],
-          expect.any(Number),
-          RUN_OUTCOME.CANCELLED,
-        );
-      });
-    } finally {
-      finishDetection(new Set());
-    }
-  });
-
-  it('keeps waiting repairs waiting when a later repair step fails', async () => {
-    let finishDetection!: (value: Set<StreamTabId>) => void;
-    const detectionGate = new Promise<Set<StreamTabId>>((resolve) => {
-      finishDetection = resolve;
-    });
-    const detectWaitingStreams = vi.fn(async () => detectionGate);
-    const bridge = await createBridge([], {
-      detectWaitingStreams,
-      streamSnapshotStore: createStreamSnapshotStore([
-        restoredSnapshot({
-          streamId: 'waiting-stream',
-          executionId: 'abc123',
-          lastKnownStatus: STREAM_STATUS.RUNNING,
-        }),
-      ]),
-    });
-    const streamLogs = bridge.streamLogs as typeof bridge.streamLogs & {
-      endRunningGroupsForStreams: (
-        streamIds: readonly StreamTabId[],
-        now?: number,
-        status?: RunOutcome,
-      ) => Promise<StreamTabId[]>;
-    };
-    const closeSpy = vi
-      .spyOn(streamLogs, 'endRunningGroupsForStreams')
-      .mockRejectedValueOnce(new Error('group close failed'))
-      .mockResolvedValueOnce(['waiting-stream']);
-
-    try {
-      await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalled());
-      finishDetection(new Set<StreamTabId>(['waiting-stream']));
-
-      await vi.waitFor(() => {
-        expect(bridgeStatus(bridge).get('waiting-stream')).toBe(
-          STREAM_STATUS.WAITING,
-        );
-        expect(closeSpy).toHaveBeenCalledTimes(2);
-        expect(closeSpy).toHaveBeenLastCalledWith(
-          ['waiting-stream'],
-          expect.any(Number),
-          RUN_OUTCOME.CANCELLED,
-        );
-      });
-    } finally {
-      finishDetection(new Set());
-      bridgeStatus(bridge).clearStream('waiting-stream');
-    }
-  });
-
-  it('marks restored running streams without execution ids as errored', async () => {
-    const detectWaitingStreams = vi.fn(async () => new Set<StreamTabId>());
-    const bridge = await createBridge([], {
-      detectWaitingStreams,
-      streamSnapshotStore: createStreamSnapshotStore([
-        restoredSnapshot({
-          streamId: 'no-execution-stream',
-          lastKnownStatus: STREAM_STATUS.RUNNING,
-        }),
-      ]),
-    });
-
-    try {
-      await vi.waitFor(() => {
-        expect(detectWaitingStreams).toHaveBeenCalledWith(new Map());
-        expect(bridgeStatus(bridge).get('no-execution-stream')).toBe(
-          STREAM_PHASE.FAILED,
-        );
-      });
-    } finally {
-      bridgeStatus(bridge).clearStream('no-execution-stream');
     }
   });
 
@@ -1645,7 +1281,7 @@ describe('DesktopProgressBridge', () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
 
-    bridge.setActiveStream('ghost-stream');
+    bridge.setActiveStream('missing-stream');
 
     expect(messages).toEqual([]);
   });
@@ -1697,19 +1333,25 @@ describe('DesktopProgressBridge', () => {
     expect(messages).toEqual([]);
   });
 
-  it('revealStream keeps a matching filter for a restored stream with no live session facts yet (issue #7851)', async () => {
+  it('revealStream keeps a matching filter for a canonical stream with no live session facts yet (issue #7851)', async () => {
     const messages: unknown[] = [];
-    // A goal-owned stream restored from persisted workspaceState at launch,
-    // via stream-snapshot hydration -- its category lives in persisted
-    // hints, not in any live session fact (none has been emitted yet this
-    // session, so `getStreamState(streamId)?.kind` is undefined).
+    const streamId = 'persisted-tool-use-stream' as StreamTabId;
+    const executionId = 'f00d123' as ExecutionId;
+    const taskState = TaskStateSchema.parse({
+      ...workflowTaskState(),
+      agentConfig: {
+        ...SEARCH_TOOL_USE_AGENT_CONFIG,
+        toolConfig: DEFAULT_TOOL_CONFIG,
+      },
+    });
     const bridge = await createBridge(messages, {
-      streamSnapshotStore: createStreamSnapshotStore([
-        restoredSnapshot({
-          streamId: 'ghost-tool-use-stream',
-          agentCategory: AgentCategory.ToolUse,
-        }),
+      canonicalStreamIds: [streamId],
+      kvStoreBacking: new Map<string, unknown>([
+        [`executions/${executionId}/config`, taskState.agentConfig],
       ]),
+      configureProgressSnapshotStore: (store) => {
+        store.setTaskState(streamId, taskState, executionId);
+      },
     });
 
     const filterStreams = assertSupported(
@@ -1721,12 +1363,12 @@ describe('DesktopProgressBridge', () => {
     });
     messages.length = 0;
 
-    await bridge.revealStream('ghost-tool-use-stream');
+    await bridge.revealStream(streamId);
 
     expect(
       progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(-1),
     ).toMatchObject({
-      activeStream: 'ghost-tool-use-stream',
+      activeStream: streamId,
       agentFilter: 'toolUse',
     });
   });
@@ -1780,333 +1422,6 @@ describe('DesktopProgressBridge', () => {
       finishTranscriptOpen();
       bridge?.dispose();
     }
-  });
-
-  it('restores a ghost stream display from shared streamData sidecars', async () => {
-    const messages: unknown[] = [];
-    const plan = {
-      objective: [
-        'Restore the prior display state.',
-        '',
-        'Load all durable progress-view sidecar fields.',
-      ].join('\n'),
-    };
-    const outputLocation = {
-      kind: 'workspace',
-      absolutePath: '/workspace/out/paper.pdf',
-      relativePath: 'out/paper.pdf',
-    };
-    const logLocation = {
-      kind: 'workspace',
-      absolutePath: '/workspace/out/paper.log',
-      relativePath: 'out/paper.log',
-    };
-    const sidecars: Record<string, unknown> = {
-      workPlan: {
-        todos: [
-          {
-            content: 'Persisted todo',
-            status: 'pending',
-            activeForm: 'Restoring persisted todo',
-          },
-        ],
-        plan,
-        planSummary: 'Restore the prior display state.',
-      },
-      usageStats: {
-        'run-1': {
-          inputTokens: 42,
-          outputTokens: 7,
-          cost: 0.12,
-        },
-      },
-      outputFiles: {
-        '1': [
-          {
-            source: 'paper.tex',
-            location: outputLocation,
-            round: 1,
-            lineage: null,
-            diff: null,
-          },
-        ],
-      },
-      missingOutputs: { '1': ['out/missing.pdf'] },
-      compileFailures: {
-        '1': [
-          {
-            round: 1,
-            displayName: 'paper.tex',
-            output: outputLocation,
-            log: logLocation,
-            logRelativePath: 'out/paper.log',
-          },
-        ],
-      },
-    };
-    const bridge = await createBridge(messages, {
-      kvRead: (key) => sidecars[key],
-      streamSnapshotStore: createStreamSnapshotStore([
-        restoredSnapshot({ streamId: 'ghost-stream' }),
-      ]),
-    });
-
-    bridge.setActiveStream('ghost-stream');
-    await settleProgressEvents();
-    const last = (command: string) =>
-      progressMessages(messages, command).at(-1);
-
-    expect(last(PROGRESS_VIEW_COMMANDS.UPDATE_TODOS)).toMatchObject({
-      stream: 'ghost-stream',
-      todos: [expect.objectContaining({ content: 'Persisted todo' })],
-    });
-    expect(last(PROGRESS_VIEW_COMMANDS.UPDATE_PLAN)).toMatchObject({
-      stream: 'ghost-stream',
-      plan,
-    });
-    expect(last(PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE)).toMatchObject({
-      stream: 'ghost-stream',
-      runId: 'run-1',
-      usage: { inputTokens: 42, outputTokens: 7, cost: 0.12 },
-    });
-    expect(last(PROGRESS_VIEW_COMMANDS.UPDATE_FILES)).toMatchObject({
-      stream: 'ghost-stream',
-      rounds: {
-        '1': [expect.objectContaining({ source: 'paper.tex', round: 1 })],
-      },
-    });
-    expect(last(PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS)).toMatchObject({
-      stream: 'ghost-stream',
-      rounds: { '1': ['out/missing.pdf'] },
-    });
-    expect(last(PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES)).toMatchObject({
-      stream: 'ghost-stream',
-      rounds: {
-        '1': [expect.objectContaining({ logRelativePath: 'out/paper.log' })],
-      },
-      reset: true,
-    });
-  });
-
-  it('restores ghost display from the backend snapshot store', async () => {
-    const messages: unknown[] = [];
-    const kvRead = vi.fn(async (key: string) => {
-      if (key === 'meta') return undefined;
-      throw new Error('unexpected sidecar disk read');
-    });
-    const detectWaitingStreams = vi.fn(async () => new Set<StreamTabId>());
-    const bridge = await createBridge(messages, {
-      kvRead,
-      detectWaitingStreams,
-      configureProgressSnapshotStore: (store) => {
-        store.setTodos('ghost-stream', [
-          {
-            content: 'Preloaded backend todo',
-            status: 'pending',
-            activeForm: 'Restoring from backend store',
-          },
-        ]);
-      },
-      streamSnapshotStore: createStreamSnapshotStore([
-        restoredSnapshot({ streamId: 'ghost-stream' }),
-      ]),
-    });
-
-    await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalled());
-    bridge.setActiveStream('ghost-stream');
-    await settleProgressEvents();
-
-    expect(
-      progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_TODOS).at(-1),
-    ).toMatchObject({
-      stream: 'ghost-stream',
-      todos: [
-        expect.objectContaining({
-          content: 'Preloaded backend todo',
-        }),
-      ],
-    });
-  });
-
-  it('retries ghost display restore after a durable read failure', async () => {
-    const messages: unknown[] = [];
-    let failed = false;
-    const kvRead = vi.fn(async (key: string) => {
-      if (!failed) {
-        failed = true;
-        throw new Error('temporary read failure');
-      }
-      if (key === 'workPlan') {
-        return {
-          todos: [
-            {
-              content: 'Persisted todo',
-              status: 'pending',
-              activeForm: 'Restoring persisted todo',
-            },
-          ],
-          plan: null,
-          planSummary: null,
-        };
-      }
-      return undefined;
-    });
-    const bridge = await createBridge(messages, {
-      kvRead,
-      streamSnapshotStore: createStreamSnapshotStore([
-        restoredSnapshot({ streamId: 'ghost-stream' }),
-      ]),
-    });
-
-    bridge.setActiveStream('ghost-stream');
-    await settleProgressEvents();
-    expect(
-      progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_TODOS),
-    ).toHaveLength(0);
-
-    messages.length = 0;
-    bridge.setActiveStream('ghost-stream');
-    await settleProgressEvents();
-
-    expect(kvRead).toHaveBeenCalledWith('workPlan');
-    expect(
-      progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_TODOS).at(-1),
-    ).toMatchObject({
-      stream: 'ghost-stream',
-      todos: [
-        expect.objectContaining({
-          content: 'Persisted todo',
-        }),
-      ],
-    });
-  });
-
-  it('deduplicates overlapping ghost display restores', async () => {
-    const messages: unknown[] = [];
-    let releaseRead: () => void = () => undefined;
-    const firstRead = new Promise<void>((resolve) => {
-      releaseRead = resolve;
-    });
-    let shouldDelayFirstWorkPlanRead = true;
-    const kvRead = vi.fn(async (key: string) => {
-      if (key === 'workPlan' && shouldDelayFirstWorkPlanRead) {
-        shouldDelayFirstWorkPlanRead = false;
-        await firstRead;
-      }
-      if (key === 'workPlan') {
-        return {
-          todos: [
-            {
-              content: 'Single restored todo',
-              status: 'pending',
-              activeForm: 'Restoring once',
-            },
-          ],
-          plan: null,
-          planSummary: null,
-        };
-      }
-      return undefined;
-    });
-    const bridge = await createBridge(messages, {
-      kvRead,
-      streamSnapshotStore: createStreamSnapshotStore([
-        restoredSnapshot({ streamId: 'ghost-stream' }),
-      ]),
-    });
-
-    bridge.setActiveStream('ghost-stream');
-    bridge.setActiveStream('ghost-stream');
-    await settleProgressEvents();
-    releaseRead();
-    await settleProgressEvents();
-
-    const todoUpdates = progressMessages(
-      messages,
-      PROGRESS_VIEW_COMMANDS.UPDATE_TODOS,
-    ).filter((message) => message.stream === 'ghost-stream');
-    expect(todoUpdates).toHaveLength(1);
-    expect(todoUpdates[0]).toMatchObject({
-      todos: [
-        expect.objectContaining({
-          content: 'Single restored todo',
-        }),
-      ],
-    });
-    expect(
-      kvRead.mock.calls.filter(([key]) => key === 'workPlan'),
-    ).toHaveLength(1);
-  });
-
-  it('retries ghost display restore after a stale async read', async () => {
-    const messages: unknown[] = [];
-    let releaseRead: () => void = () => undefined;
-    let markReadStarted: () => void = () => undefined;
-    const firstRead = new Promise<void>((resolve) => {
-      releaseRead = resolve;
-    });
-    const firstReadStarted = new Promise<void>((resolve) => {
-      markReadStarted = resolve;
-    });
-    let shouldDelayFirstWorkPlanRead = true;
-    const kvRead = vi.fn(async (key: string) => {
-      if (key === 'workPlan' && shouldDelayFirstWorkPlanRead) {
-        shouldDelayFirstWorkPlanRead = false;
-        markReadStarted();
-        await firstRead;
-      }
-      if (key === 'workPlan') {
-        return {
-          todos: [
-            {
-              content: 'Delayed todo',
-              status: 'pending',
-              activeForm: 'Restoring delayed todo',
-            },
-          ],
-          plan: null,
-          planSummary: null,
-        };
-      }
-      return undefined;
-    });
-    const bridge = await createBridge(messages, {
-      kvRead,
-      streamSnapshotStore: createStreamSnapshotStore([
-        restoredSnapshot({ streamId: 'ghost-one' }),
-        restoredSnapshot({
-          streamId: 'ghost-two',
-          creationTimestamp: 1_100,
-          persistedAt: 2_100,
-        }),
-      ]),
-    });
-
-    bridge.setActiveStream('ghost-one');
-    await firstReadStarted;
-    bridge.setActiveStream('ghost-two');
-    releaseRead();
-    await settleProgressEvents();
-    expect(
-      progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_TODOS).filter(
-        (message) => message.stream === 'ghost-one',
-      ),
-    ).toHaveLength(0);
-
-    messages.length = 0;
-    bridge.setActiveStream('ghost-one');
-    await settleProgressEvents();
-
-    expect(
-      progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_TODOS).at(-1),
-    ).toMatchObject({
-      stream: 'ghost-one',
-      todos: [
-        expect.objectContaining({
-          content: 'Delayed todo',
-        }),
-      ],
-    });
   });
 
   it('does not route to progress for suppressed background stream switches', async () => {
@@ -2263,10 +1578,7 @@ describe('DesktopProgressBridge', () => {
       },
     }));
     const bridge = await createBridge([], {
-      kvRead: vi.fn(async () => ({
-        executionId: 'ec1001',
-        taskState,
-      })),
+      canonicalStreamIds: ['stream-1'],
       retrieveSessionResumeData,
     });
 
@@ -2532,8 +1844,9 @@ describe('DesktopProgressBridge', () => {
     );
   });
 
-  it('resumes hydrated ghost streams using hinted execution ids', async () => {
+  it('resumes canonical streams using sidecar execution ids', async () => {
     const executionId = 'abc123';
+    const streamId = 'stream-1' as StreamTabId;
     const taskState = workflowTaskState();
     const retrieveSessionResumeData = vi.fn(async () => ({
       type: 'workflow',
@@ -2541,32 +1854,33 @@ describe('DesktopProgressBridge', () => {
       executionId,
     }));
     const runAgent = vi.fn(async () => {});
-    const kvRead = vi.fn(async (key: string) =>
-      key === 'meta'
-        ? {
-            taskState,
-            description: 'Persisted workflow',
-          }
-        : undefined,
-    );
+    let snapshots: ProgressSnapshotStore | undefined;
     const bridge = await createBridge([], {
-      kvRead,
       retrieveSessionResumeData,
       runAgent,
-      streamSnapshotStore: createStreamSnapshotStore([
-        restoredSnapshot({
-          streamId: 'stream-1',
-          label: 'proofreader',
-          agent: 'proofreader',
-          executionId,
-        }),
+      canonicalStreamIds: [streamId],
+      kvStoreBacking: new Map<string, unknown>([
+        [`executions/${executionId}/config`, taskState.agentConfig],
       ]),
+      configureProgressSnapshotStore: (store) => {
+        snapshots = store;
+        store.setTaskState(
+          streamId,
+          TaskStateSchema.parse(taskState),
+          executionId,
+        );
+        store.setDescription(streamId, 'Persisted workflow');
+      },
     });
 
     try {
-      await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(true);
+      expect(snapshots?.getExecutionId(streamId)).toBe(executionId);
+      expect(snapshots?.getRunConfig(streamId)).toMatchObject(
+        taskState.agentConfig,
+      );
+      await expect(bridge.tryResumeStream(streamId)).resolves.toBe(true);
       expect(retrieveSessionResumeData).toHaveBeenCalledWith(
-        'stream-1',
+        streamId,
         executionId,
         expect.objectContaining(taskState.agentConfig),
         { parentStreamId: undefined },
@@ -2956,7 +2270,6 @@ describe('DesktopProgressBridge', () => {
       /** Loosely-typed runtime-host emit, as runs use it (`runtimeHost.emit`). */
       emit: (event: string, payload: unknown) => void;
       messages: unknown[];
-      snapshots: DesktopStreamSnapshotStore;
     };
 
     type WindowPair = {
@@ -2975,26 +2288,22 @@ describe('DesktopProgressBridge', () => {
     };
 
     async function createWindowPair(): Promise<WindowPair> {
-      const {
-        bridgeModule,
-        createProgressSnapshotStore,
-        ephemeralTranscripts,
-      } = await loadBridgeModule();
+      const { bridgeModule, createProgressSnapshotStore, openTranscripts } =
+        await loadBridgeModule();
       // Same registry as the bridge module graph — identity comparisons
       // against process-wide defaults must use this instance, not a
       // statically imported copy from the pre-reset registry.
       const { defaultSession } = await import('@agent/runtime/SessionHandle');
-      const makeWindow = (): WindowFixture => {
+      const makeWindow = async (): Promise<WindowFixture> => {
         const messages: unknown[] = [];
-        const snapshots = createStreamSnapshotStore([]);
+        const transcripts = await openTranscripts();
         const bridge = new bridgeModule.DesktopProgressBridge(
           (message) => {
             messages.push(message);
           },
           {
-            transcripts: ephemeralTranscripts(),
+            transcripts,
             progressSnapshotStore: createProgressSnapshotStore(),
-            streamSnapshotStore: snapshots,
             host: createStubDesktopAgentExecutionHost(),
           },
         ) as unknown as TestableBridge;
@@ -3008,14 +2317,16 @@ describe('DesktopProgressBridge', () => {
           session,
           emit: (event, payload) => hostChannel.emit(event, payload),
           messages,
-          snapshots,
         };
       };
-      const windowA = makeWindow();
-      const windowB = makeWindow();
-      // Let both windows' startup repair settle, then start assertions from a
-      // clean renderer feed.
-      await settleProgressEvents();
+      const [windowA, windowB] = await Promise.all([
+        makeWindow(),
+        makeWindow(),
+      ]);
+      await Promise.all([
+        windowA.bridge.waitUntilReady(),
+        windowB.bridge.waitUntilReady(),
+      ]);
       windowA.messages.length = 0;
       windowB.messages.length = 0;
       return disposeAfterTest({
@@ -3109,18 +2420,12 @@ describe('DesktopProgressBridge', () => {
       ).toMatchObject({ activeStream: streamA });
       expect(windowB.bridge.streamLogs.get(streamB)).toBeDefined();
 
-      // ...and completely invisible to the sibling: no view-state entry, no
-      // renderer message (stream list, status, log delta, snapshot) at all.
+      // ...and completely invisible to the sibling: no view-state entry or
+      // renderer message (stream list, status, or log delta) at all.
       expect(windowB.bridge.streamLogs.get(streamA)).toBeUndefined();
       expect(windowA.bridge.streamLogs.get(streamB)).toBeUndefined();
       expect(messagesMentioning(windowB.messages, streamA)).toEqual([]);
       expect(messagesMentioning(windowA.messages, streamB)).toEqual([]);
-      expect(
-        windowA.snapshots.getAll().map((snapshot) => snapshot.streamId),
-      ).not.toContain(streamB);
-      expect(
-        windowB.snapshots.getAll().map((snapshot) => snapshot.streamId),
-      ).not.toContain(streamA);
     });
 
     it('delivers run facts and session facts only to the owning session’s hub subscribers', async () => {
@@ -3371,13 +2676,9 @@ describe('DesktopProgressBridge', () => {
     });
   });
 
-  // #8148: closing a desktop window deliberately keeps its active executions
-  // alive (`session.dispose({ keepActiveExecutions: true })`), but the old
-  // bridge's UI consumers are torn down at the same time. A newly created
-  // window's bridge used to just forget the ghost once it saw the execution
-  // id was still active (`forgetActiveRestoredStreams`), with nothing ever
-  // reattaching the run to the new window — so it kept running headless with
-  // no rail entry, no live progress, no cancel, and a stale on-disk snapshot.
+  // #8148: closing a desktop window deliberately keeps active executions
+  // alive while tearing down the old bridge's UI consumers. A replacement
+  // window must rebind canonical startup streams to those headless runs.
   describe('window recreation rebind (#8148)', () => {
     async function createReboundOwner({
       streamId,
@@ -3393,28 +2694,26 @@ describe('DesktopProgressBridge', () => {
       messages?: unknown[];
     }) {
       let activeExecutionIds: readonly string[] = [];
-      const {
-        bridgeModule,
-        createProgressSnapshotStore,
-        ephemeralTranscripts,
-      } = await loadBridgeModule({
-        activeExecutionIds: () => activeExecutionIds,
-      });
+      const { bridgeModule, createProgressSnapshotStore, openTranscripts } =
+        await loadBridgeModule({
+          activeExecutionIds: () => activeExecutionIds,
+        });
       const { AgentExecutionHandle, ProcessExecutionHandle } =
         await import('@agent/runtime/executionRegistry');
       const { noopAgentRuntimeHost } =
         await import('@agent/runtime/AgentRuntimeHost');
+      const transcriptsA = await openTranscripts();
       const bridgeA = new bridgeModule.DesktopProgressBridge(
         (message) => {
           messages.push(message);
         },
         {
-          transcripts: ephemeralTranscripts(),
+          transcripts: transcriptsA,
           progressSnapshotStore: createProgressSnapshotStore(),
           host: createStubDesktopAgentExecutionHost(),
         },
       ) as unknown as TestableBridge & { session: SessionHandle };
-      await settleProgressEvents();
+      await bridgeA.waitUntilReady();
       const createHandle = (
         options: {
           executionId?: ExecutionId;
@@ -3450,28 +2749,39 @@ describe('DesktopProgressBridge', () => {
         bridgeA.dispose();
       };
 
-      const reopen = (
-        lastKnownStatus: StreamPhase,
-        reopenedMessages: unknown[] = [],
-      ) => {
+      const reopen = async (reopenedMessages: unknown[] = []) => {
         close();
-        const streamSnapshotStore = createStreamSnapshotStore([
-          restoredSnapshot({ streamId, executionId, lastKnownStatus }),
-        ]);
+        const transcripts = await openTranscripts();
+        transcripts.ensureStream(streamId);
+        const progressSnapshotStore = createProgressSnapshotStore();
+        await progressSnapshotStore.load([streamId]);
+        const taskState = workflowTaskState();
+        progressSnapshotStore.setTaskState(
+          streamId,
+          TaskStateSchema.parse({
+            ...taskState,
+            agentConfig: {
+              ...taskState.agentConfig,
+              agent: agentName,
+              agentCategory: category,
+            },
+          }),
+          executionId,
+        );
         const bridgeB = new bridgeModule.DesktopProgressBridge(
           (message) => {
             reopenedMessages.push(message);
           },
           {
-            transcripts: ephemeralTranscripts(),
-            progressSnapshotStore: createProgressSnapshotStore(),
-            streamSnapshotStore,
+            transcripts,
+            progressSnapshotStore,
             host: createStubDesktopAgentExecutionHost(),
           },
         ) as unknown as TestableBridge & {
           session: SessionHandle;
         };
-        return { bridgeB, streamSnapshotStore };
+        await bridgeB.waitUntilReady();
+        return { bridgeB, progressSnapshotStore };
       };
 
       return {
@@ -3486,7 +2796,7 @@ describe('DesktopProgressBridge', () => {
       };
     }
 
-    it('seeds the rebound stream with the live owning session status, not a stale on-disk snapshot (codex P2)', async () => {
+    it('seeds the canonical rebound stream with the live owning session status', async () => {
       const streamId = 'rebound-stream-2' as StreamTabId;
       const executionId = 'ec00dd' as ExecutionId;
       const owner = await createReboundOwner({
@@ -3495,7 +2805,7 @@ describe('DesktopProgressBridge', () => {
       });
       owner.close();
 
-      // Owner status stays live while the persisted snapshot remains stale.
+      // Owner status stays live while the replacement window starts.
       expect(
         owner.bridgeA.session.status.transitionToWaiting(streamId, 'wait', {
           trace: owner.trace as unknown as AgentTrace,
@@ -3505,26 +2815,13 @@ describe('DesktopProgressBridge', () => {
         STREAM_PHASE.WAITING,
       );
 
-      // Window B's stale ghost still claims RUNNING.
-      const { bridgeB } = owner.reopen(STREAM_PHASE.RUNNING);
+      const { bridgeB } = await owner.reopen();
 
       try {
-        await (bridgeB as unknown as { restartRepair: Promise<void> })
-          .restartRepair;
-
         expect(bridgeB.session.executions.getHandle(executionId)).toBe(
           owner.handle,
         );
-        // The authoritative owner status wins over the ghost snapshot.
         expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
-        // The live binding replaces, rather than duplicates, the ghost.
-        expect(
-          (
-            bridgeB as unknown as {
-              sessionProgress: { hasRestoredStream(id: string): boolean };
-            }
-          ).sessionProgress.hasRestoredStream(streamId),
-        ).toBe(false);
       } finally {
         bridgeB.dispose();
       }
@@ -3540,11 +2837,10 @@ describe('DesktopProgressBridge', () => {
         messages: messagesA,
       });
       const messagesB: unknown[] = [];
-      const { bridgeB } = owner.reopen(STREAM_PHASE.RUNNING, messagesB);
+      const { bridgeB } = await owner.reopen(messagesB);
 
       try {
-        await (bridgeB as unknown as { restartRepair: Promise<void> })
-          .restartRepair;
+        await bridgeB.waitUntilReady();
 
         // The retained run still resolves interactions through window A.
         const planPromise =
@@ -3614,10 +2910,9 @@ describe('DesktopProgressBridge', () => {
       });
 
       const messagesB: unknown[] = [];
-      const { bridgeB } = owner.reopen(STREAM_PHASE.RUNNING, messagesB);
+      const { bridgeB } = await owner.reopen(messagesB);
       try {
-        await (bridgeB as unknown as { restartRepair: Promise<void> })
-          .restartRepair;
+        await bridgeB.waitUntilReady();
         let newRequestId = '';
         await vi.waitFor(() => {
           newRequestId = shownToolEditRequestId(messagesB) ?? '';
@@ -3651,9 +2946,8 @@ describe('DesktopProgressBridge', () => {
       const executionId = 'ec00ec' as ExecutionId;
       const owner = await createReboundOwner({ streamId, executionId });
       const messagesB: unknown[] = [];
-      const { bridgeB } = owner.reopen(STREAM_PHASE.RUNNING, messagesB);
-      await (bridgeB as unknown as { restartRepair: Promise<void> })
-        .restartRepair;
+      const { bridgeB } = await owner.reopen(messagesB);
+      await bridgeB.waitUntilReady();
 
       const approval =
         owner.bridgeA.runtimeHost.interactions?.requestPlanApproval?.({
@@ -3680,13 +2974,9 @@ describe('DesktopProgressBridge', () => {
 
       bridgeB.dispose();
       const messagesC: unknown[] = [];
-      const { bridgeB: bridgeC } = owner.reopen(
-        STREAM_PHASE.RUNNING,
-        messagesC,
-      );
+      const { bridgeB: bridgeC } = await owner.reopen(messagesC);
       try {
-        await (bridgeC as unknown as { restartRepair: Promise<void> })
-          .restartRepair;
+        await bridgeC.waitUntilReady();
         await vi.waitFor(() => {
           expect(
             progressMessages(
@@ -3759,10 +3049,9 @@ describe('DesktopProgressBridge', () => {
       expect(pendingWhileClosed).toBeDefined();
 
       const messagesB: unknown[] = [];
-      const { bridgeB } = owner.reopen(STREAM_PHASE.RUNNING, messagesB);
+      const { bridgeB } = await owner.reopen(messagesB);
       try {
-        await (bridgeB as unknown as { restartRepair: Promise<void> })
-          .restartRepair;
+        await bridgeB.waitUntilReady();
 
         const enableBypass = assertSupported(
           bridgeB.progressViewInboundHandlers[
@@ -3823,11 +3112,10 @@ describe('DesktopProgressBridge', () => {
       const executionId = 'ec00f9' as ExecutionId;
       const owner = await createReboundOwner({ streamId, executionId });
       const messagesB: unknown[] = [];
-      const { bridgeB } = owner.reopen(STREAM_PHASE.RUNNING, messagesB);
+      const { bridgeB } = await owner.reopen(messagesB);
 
       try {
-        await (bridgeB as unknown as { restartRepair: Promise<void> })
-          .restartRepair;
+        await bridgeB.waitUntilReady();
         const planPromise =
           owner.bridgeA.runtimeHost.interactions?.requestPlanApproval?.({
             approvalId: 'plan-rebound-delete',
@@ -3888,7 +3176,7 @@ describe('DesktopProgressBridge', () => {
       const rootInterrupt = vi.fn();
       owner.handle.attachInterruptHandler({ interrupt: rootInterrupt });
 
-      // Child handles have no persisted ghosts; only the owner knows them.
+      // Child handles have no canonical startup entry; only the owner knows them.
       const { handle: childHandle } = owner.createHandle({
         executionId: childExecutionId,
         childStreamId,
@@ -3905,11 +3193,10 @@ describe('DesktopProgressBridge', () => {
       );
       const childInterrupt = vi.fn();
       childHandle.attachInterruptHandler({ interrupt: childInterrupt });
-      const { bridgeB } = owner.reopen(STREAM_PHASE.RUNNING);
+      const { bridgeB } = await owner.reopen();
 
       try {
-        await (bridgeB as unknown as { restartRepair: Promise<void> })
-          .restartRepair;
+        await bridgeB.waitUntilReady();
         // Children launched after startup repair are observed for root life.
         owner.bridgeA.session.executions.trackAgentExecution(childHandle, {
           status: STREAM_PHASE.RUNNING,
@@ -3980,28 +3267,26 @@ describe('DesktopProgressBridge', () => {
       }
     });
 
-    it('overwrites a stale WAITING seed with live RUNNING and mirrors later transitions (#8230, #8231)', async () => {
+    it('seeds live RUNNING and mirrors later owner transitions (#8230, #8231)', async () => {
       const streamId = 'rebound-stream-5' as StreamTabId;
       const executionId = 'ec00f3' as ExecutionId;
       const owner = await createReboundOwner({
         streamId,
         executionId,
       });
-      // The owner is RUNNING while the persisted snapshot says WAITING.
-      const { bridgeB } = owner.reopen(STREAM_PHASE.WAITING);
+      const { bridgeB } = await owner.reopen();
       const resultsSeenByB: unknown[] = [];
       const detachResult = bridgeB.session.onResult((event) => {
         resultsSeenByB.push(event);
       });
 
       try {
-        await (bridgeB as unknown as { restartRepair: Promise<void> })
-          .restartRepair;
+        await bridgeB.waitUntilReady();
 
         expect(bridgeB.session.executions.getHandle(executionId)).toBe(
           owner.handle,
         );
-        // Rebind replays the missed resume rather than preserving WAITING.
+        // Rebind seeds the replacement window from the live owner.
         expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.RUNNING);
 
         // Later owner transitions continue mirroring into window B.
@@ -4063,9 +3348,8 @@ describe('DesktopProgressBridge', () => {
       const executionId = 'ec00f5' as ExecutionId;
       const processExecutionId = 'ec00f6' as ExecutionId;
       const owner = await createReboundOwner({ streamId, executionId });
-      const { bridgeB } = owner.reopen(STREAM_PHASE.RUNNING);
-      await (bridgeB as unknown as { restartRepair: Promise<void> })
-        .restartRepair;
+      const { bridgeB } = await owner.reopen();
+      await bridgeB.waitUntilReady();
 
       const processHandle = new owner.ProcessExecutionHandle(
         processExecutionId,
@@ -4111,11 +3395,10 @@ describe('DesktopProgressBridge', () => {
           trace: owner.trace as unknown as AgentTrace,
         }),
       ).toBe(true);
-      const { bridgeB } = owner.reopen(STREAM_PHASE.WAITING);
+      const { bridgeB } = await owner.reopen();
 
       try {
-        await (bridgeB as unknown as { restartRepair: Promise<void> })
-          .restartRepair;
+        await bridgeB.waitUntilReady();
         expect(bridgeB.session.executions.getHandle(executionId)).toBe(
           owner.handle,
         );
@@ -4164,9 +3447,7 @@ describe('DesktopProgressBridge', () => {
       const streamId = 'rebound-stream-7' as StreamTabId;
       const executionId = 'ec00f7' as ExecutionId;
       const owner = await createReboundOwner({ streamId, executionId });
-      const { bridgeB, streamSnapshotStore } = owner.reopen(
-        STREAM_PHASE.RUNNING,
-      );
+      const { bridgeB } = await owner.reopen();
       const facts: SessionFact[] = [];
       const detachFacts = bridgeB.session.events.subscribe(
         (event) => {
@@ -4176,11 +3457,10 @@ describe('DesktopProgressBridge', () => {
       );
 
       try {
-        await (bridgeB as unknown as { restartRepair: Promise<void> })
-          .restartRepair;
+        await bridgeB.waitUntilReady();
 
         // A bare owner-machine transition (no live trace) must still reach
-        // the reopened window's UI and snapshot store as a session fact.
+        // the reopened window's UI as a session fact.
         expect(
           owner.bridgeA.session.status.transitionToWaiting(streamId, 'wait'),
         ).toBe(true);
@@ -4192,13 +3472,6 @@ describe('DesktopProgressBridge', () => {
               streamId,
               status: STREAM_PHASE.WAITING,
             }),
-          }),
-        );
-        await settleProgressEvents();
-        expect(streamSnapshotStore.upsert).toHaveBeenCalledWith(
-          expect.objectContaining({
-            streamId,
-            lastKnownStatus: STREAM_PHASE.WAITING,
           }),
         );
       } finally {
@@ -4219,7 +3492,7 @@ describe('DesktopProgressBridge', () => {
         agentName: 'searcher',
         category: AgentCategory.ToolUse,
       });
-      const { bridgeB } = owner.reopen(STREAM_PHASE.RUNNING);
+      const { bridgeB } = await owner.reopen();
       const facts: SessionFact[] = [];
       const detachFacts = bridgeB.session.events.subscribe(
         (event) => {
@@ -4229,8 +3502,7 @@ describe('DesktopProgressBridge', () => {
       );
 
       try {
-        await (bridgeB as unknown as { restartRepair: Promise<void> })
-          .restartRepair;
+        await bridgeB.waitUntilReady();
         owner.bridgeA.session.executions.trackAgentExecution(childHandle, {
           status: STREAM_PHASE.RUNNING,
         });
@@ -4285,11 +3557,10 @@ describe('DesktopProgressBridge', () => {
       const streamId = 'rebound-stream-12' as StreamTabId;
       const executionId = 'ec00fe' as ExecutionId;
       const owner = await createReboundOwner({ streamId, executionId });
-      const { bridgeB } = owner.reopen(STREAM_PHASE.RUNNING);
+      const { bridgeB } = await owner.reopen();
 
       try {
-        await (bridgeB as unknown as { restartRepair: Promise<void> })
-          .restartRepair;
+        await bridgeB.waitUntilReady();
 
         // A target-local wait skews the machines: the target sits at WAITING
         // while the owner finishes from RUNNING. The terminal mirror must go
@@ -4319,9 +3590,7 @@ describe('DesktopProgressBridge', () => {
       const executionId = 'ec00fa' as ExecutionId;
       const childExecutionId = 'ec00fb' as ExecutionId;
       const owner = await createReboundOwner({ streamId, executionId });
-      const { bridgeB, streamSnapshotStore } = owner.reopen(
-        STREAM_PHASE.RUNNING,
-      );
+      const { bridgeB, progressSnapshotStore } = await owner.reopen();
       const childConfig = {
         agent: 'searcher',
         model: 'deepseekproT',
@@ -4334,8 +3603,7 @@ describe('DesktopProgressBridge', () => {
       });
 
       try {
-        await (bridgeB as unknown as { restartRepair: Promise<void> })
-          .restartRepair;
+        await bridgeB.waitUntilReady();
 
         // Spawn a child AFTER the root was rebound: its run.config and
         // description fired on the owner side before tracking, so only the
@@ -4378,13 +3646,14 @@ describe('DesktopProgressBridge', () => {
           }),
         );
         await settleProgressEvents();
-        expect(streamSnapshotStore.upsert).toHaveBeenCalledWith(
-          expect.objectContaining({
-            streamId: childStreamId,
-            agent: 'searcher',
-            description: 'Search the docs',
-            executionId: childExecutionId,
-          }),
+        expect(progressSnapshotStore.getExecutionId(childStreamId)).toBe(
+          childExecutionId,
+        );
+        expect(progressSnapshotStore.getRunConfig(childStreamId)?.agent).toBe(
+          'searcher',
+        );
+        expect(progressSnapshotStore.getDescription(childStreamId)).toBe(
+          'Search the docs',
         );
       } finally {
         detachEvents();
