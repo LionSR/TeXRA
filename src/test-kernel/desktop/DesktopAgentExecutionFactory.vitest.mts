@@ -139,6 +139,28 @@ async function readCanonicalStreamIds(): Promise<string[]> {
   return (await StreamLogStore.open()).keys();
 }
 
+async function readCanonicalDescription(
+  streamId: StreamTabId,
+): Promise<string | undefined> {
+  const { StreamSnapshotStore } = await import('@transcript');
+  const snapshots = new StreamSnapshotStore();
+  await snapshots.load([streamId]);
+  return snapshots.getDescription(streamId);
+}
+
+async function persistCanonicalTranscript(
+  platform: Platform,
+  streamId: StreamTabId,
+): Promise<void> {
+  vi.resetModules();
+  const { initPlatform } = await import('@platform/platform');
+  initPlatform(platform);
+  const { StreamLogStore } = await import('@transcript');
+  const transcripts = await StreamLogStore.open();
+  transcripts.ensureStream(streamId);
+  await transcripts.flush();
+}
+
 async function createExecution(options: {
   postToRenderer?: (message: unknown) => void;
   opener?: {
@@ -285,6 +307,44 @@ describe('createDesktopAgentExecution', () => {
       prepareMainViewExecutionRequest: vi.fn(),
     });
     expect(await readCanonicalStreamIds()).toContain(streamId);
+    expect(await readCanonicalDescription(streamId)).toBe(
+      'Sidecar registration evidence',
+    );
+  });
+
+  it('keeps canonical metadata for a stream also present in legacy state', async () => {
+    const streamId = 'proofreader@gpt#overlap8544' as StreamTabId;
+    const { legacyFilePath, platform } = await createPersistentHarness();
+    await persistCanonicalTranscript(platform, streamId);
+    await writeFile(
+      legacyFilePath,
+      serializeLegacyRows([
+        makeLegacyRow(streamId),
+        makeLegacyRow('other-workspace@gpt#overlap8544'),
+      ]),
+    );
+
+    await createExecution({
+      platform,
+      useRealStorage: true,
+      legacyStreamFilePath: legacyFilePath,
+      prepareSnapshotStore: (snapshots) =>
+        persistSidecarRegistration(snapshots, streamId),
+      prepareMainViewExecutionRequest: vi.fn(),
+    });
+
+    expect(
+      (await readCanonicalStreamIds()).filter((id) => id === streamId),
+    ).toHaveLength(1);
+    expect(await readCanonicalDescription(streamId)).toBe(
+      'Sidecar registration evidence',
+    );
+    const retained = JSON.parse(await readFile(legacyFilePath, 'utf8')) as {
+      restoredStreams: { streams: LegacyRow[] };
+    };
+    expect(retained.restoredStreams.streams.map((row) => row.streamId)).toEqual(
+      ['other-workspace@gpt#overlap8544'],
+    );
   });
 
   it('retains an unmatched global legacy row without importing it', async () => {
