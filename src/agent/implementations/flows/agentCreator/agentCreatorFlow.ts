@@ -163,7 +163,7 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
  * Tool groups whose keywords match `description`. `File Operations` is
  * always included as a safe baseline for any tool-use agent.
  */
-export function suggestToolGroups(description: string): string[] {
+function suggestToolGroups(description: string): string[] {
   const lower = description.toLowerCase();
   const suggested = new Set<string>(['File Operations']);
   for (const [name, group] of Object.entries(TOOL_GROUPS)) {

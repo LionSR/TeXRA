@@ -60,7 +60,7 @@ export interface RunFlowLifecycleOptions {
   onRun?: (handle: AgentRunHandle) => void | Promise<void>;
 }
 
-export type FlowRecordDisposition = FinalizeExecutionInput['flowRecord'];
+type FlowRecordDisposition = FinalizeExecutionInput['flowRecord'];
 
 /** Private control channel through which a flow reports its retention policy. */
 export interface FlowLifecycleControl {

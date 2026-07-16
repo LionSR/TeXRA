@@ -26,12 +26,10 @@ export {
 } from './executionWorkspaceFiles';
 export {
   finalizeExecution,
-  hasPersistedParent,
   registerExecution,
   synchronizeAgentResultOutcome,
   type FinalizeExecutionInput,
   type FinalizeExecutionResult,
-  writeTerminalStatus,
   writeSessionDescription,
 } from './executionLifecycle';
 export {
