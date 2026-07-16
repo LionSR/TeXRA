@@ -209,4 +209,88 @@ describe('Static band resize', () => {
       resetCliState();
     }
   });
+
+  it('keeps resize subscriptions constant as tool history grows', async () => {
+    const ink = (await import(cliRequire.resolve('ink'))) as any;
+    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const { createElement } = React;
+    const { StaticConversationTranscript } =
+      await import('@cli/chat/tui/panes/StaticConversationTranscript');
+    const { patchStream, resetCliState } =
+      await import('@cli/chat/tui/state/cliState');
+    const streamId = 'listener-count-stream' as StreamTabId;
+    const toolEntries: ConversationEntry[] = Array.from(
+      { length: 70 },
+      (_, index) => ({
+        id: `tool-${index}`,
+        role: 'tool' as const,
+        text: '',
+        finalized: true,
+        toolUse: {
+          parsed: {},
+          toolName: 'Bash',
+          errorText: '',
+          outputText: `result ${index}`,
+          userInstructionText: '',
+          input: { command: `printf ${index}` },
+          isError: false,
+          isUserFeedback: false,
+          headerSummary: '',
+          status: 'completed' as const,
+        },
+      }),
+    );
+
+    resetCliState({
+      agent: 'research',
+      model: 'test-model',
+      modelSource: 'builtin-default',
+      cwd: '/tmp/listener-proof',
+      apiMode: 'personal',
+      approvalPolicy: 'ask',
+      canDelegate: false,
+      transcriptMode: 'persistent',
+      version: '0.0.0-test',
+    });
+    patchStream(streamId, (slice) => ({ ...slice, entries: toolEntries }));
+
+    function App(): unknown {
+      const { columns } = ink.useWindowSize();
+      return createElement(StaticConversationTranscript, {
+        ownerKey: 'listener-owner',
+        scrollbackStreamId: streamId,
+        width: columns,
+      });
+    }
+
+    const out = new FakeStdout(80);
+    let peakResizeListeners = 0;
+    out.on('newListener', (event) => {
+      if (event === 'resize') {
+        peakResizeListeners = Math.max(
+          peakResizeListeners,
+          out.listenerCount('resize') + 1,
+        );
+      }
+    });
+    const inst = ink.render(createElement(App), {
+      stdout: out,
+      stdin: new FakeStdin(),
+      interactive: true,
+      exitOnCtrlC: false,
+      patchConsole: false,
+    });
+
+    try {
+      expect(await waitFor(() => out.buf.includes('result 69'), 5000)).toBe(
+        true,
+      );
+      // One listener belongs to Ink's renderer and one to the App-level
+      // useWindowSize subscription. Transcript length must not affect it.
+      expect(peakResizeListeners).toBe(2);
+    } finally {
+      inst.unmount();
+      resetCliState();
+    }
+  });
 });

@@ -92,10 +92,7 @@ import {
 } from '../src/chat/tui/state/focusedChildFollowUp';
 import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
 import { notify } from '../src/chat/tui/notifications/terminalNotifier';
-import {
-  installTuiStdoutListenerLimit,
-  tuiOutputStreamForColor,
-} from '../src/chat/tui/render/noColorOutput';
+import { tuiOutputStreamForColor } from '../src/chat/tui/render/noColorOutput';
 import { createTuiViewportController } from '../src/chat/tui/render/tuiViewportController';
 import {
   clearApprovals,
@@ -1979,9 +1976,6 @@ function handleHarnessCtrlC(): void {
   void exitHarness(0);
 }
 
-const restoreStdoutListenerLimit = installTuiStdoutListenerLimit(
-  process.stdout,
-);
 function renderHarnessApp(): React.JSX.Element {
   return (
     <App
@@ -2034,7 +2028,6 @@ async function exitHarness(exitCode: number): Promise<void> {
   try {
     await tryPlatform()?.lifecycle.runShutdown();
   } finally {
-    restoreStdoutListenerLimit();
     process.exit(exitCode);
   }
 }
