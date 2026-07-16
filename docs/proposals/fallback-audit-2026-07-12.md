@@ -289,9 +289,10 @@ Remove the success fallback.
 
 ### P0.2 Unavailable diagnostics are reported as an empty successful result
 
-**Pins.** `src/platform/platform.ts:50-72` makes the linter port optional.
-`src/tools/DiagnosticsTool.ts:127-160` evaluates
-`(await platform().linter?.(path)) ?? []`, then returns `status: 'executed'`.
+**Pins.** `src/agent/runtime/HostInteractions.ts` makes diagnostics an optional
+session capability. `src/tools/DiagnosticsTool.ts` requires the active
+session's `readDiagnostics` interaction and throws a capability error when it
+is absent instead of returning `status: 'executed'` with an empty list.
 The CLI deliberately keeps diagnostics `list` and `count` available while hiding
 only `diagnostics.add` (`packages/cli/src/runtime/unavailableTools.ts:25-36`).
 Desktop applies the same capability split in
@@ -313,8 +314,8 @@ return executed(count(messages));
 **After:**
 
 ```ts
-const linter = platform().linter;
-if (!linter) return unavailable('diagnostics.read');
+const linter = currentSession().interactions.readDiagnostics;
+if (!linter) throw unavailable('diagnostics.read');
 return executed(count(await linter(path)));
 ```
 
@@ -322,9 +323,10 @@ Either provide a host-neutral linter for CLI and desktop, or omit the read
 capability from their tool roster. `diagnostics.add` must likewise distinguish
 "unsupported" from "supported but disabled."
 
-**Disposition:** Resolved on main by [#8271](https://github.com/LionSR/TeXRA/pull/8271).
-Remove the empty-result fallback. This is a capability-model defect and blocks a
-truthful SDK surface (#7724).
+**Disposition:** Resolved on main by [#8271](https://github.com/LionSR/TeXRA/pull/8271);
+the capability subsequently moved from the process-wide Platform object to the
+active session interaction adapter in #8508. The empty-result fallback remains
+removed.
 
 ### P0.3 Durable JSON corruption is converted to an empty store
 

@@ -19,10 +19,10 @@ import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
  * The `inline_comment` tool is backed by VS Code's CommentController, which the
  * CLI has no equivalent for, so it is hidden too.
  *
- * The diagnostics tool requires a host linter for `list`/`count`. The CLI has
- * no linter integration, so the whole tool is hidden rather than returning a
- * successful empty result. Hosts with read support may instead hide only the
- * `diagnostics.add` command.
+ * The diagnostics tool requires a session diagnostics provider for
+ * `list`/`count`. The CLI has no diagnostics integration, so the whole tool is
+ * hidden rather than returning a successful empty result. Hosts with read
+ * support may instead hide only the `diagnostics.add` command.
  *
  * Subagents inherit these exclusions through `runtimeUnavailableTools` on the
  * run context.
