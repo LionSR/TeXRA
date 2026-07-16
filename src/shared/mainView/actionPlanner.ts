@@ -219,7 +219,14 @@ export function planLatexdiffVC(
 // LatexdiffVC Pack/Clean
 // ============================================================
 
-export type LatexdiffVCPackPayload = Omit<PackLatexdiffvcMessage, 'command'>;
+// `clean` is nullish on the schema (an incoming message may omit it), but this
+// planner always supplies a concrete boolean, so narrow it back here.
+export type LatexdiffVCPackPayload = Omit<
+  PackLatexdiffvcMessage,
+  'command' | 'clean'
+> & {
+  clean: boolean;
+};
 
 export function planLatexdiffVCPack(
   state: LatexdiffVCState,
