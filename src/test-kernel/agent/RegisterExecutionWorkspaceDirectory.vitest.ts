@@ -52,6 +52,21 @@ const baseConfig = {
   toolConfig: DEFAULT_TOOL_CONFIG,
 } as AgentConfig;
 
+function resultMeta(outcome: string, response: string) {
+  return {
+    producer: 'subagent',
+    agentName: 'reviewer',
+    wallTimeMs: 20,
+    result: {
+      category: 'toolUse',
+      outcome,
+      response,
+      files: [],
+      cost: 0.1,
+    },
+  };
+}
+
 describe('execution lifecycle', () => {
   setupPlatform({ workspacePath: '/workspace/root' });
 
@@ -96,18 +111,9 @@ describe('execution lifecycle', () => {
       terminalStatus: EXECUTION_STATUS.COMPLETED,
       outcome: 'completed',
     });
-    mocks.readResultMeta.mockResolvedValue({
-      producer: 'subagent',
-      agentName: 'reviewer',
-      wallTimeMs: 20,
-      result: {
-        category: 'toolUse',
-        outcome: 'completed',
-        response: 'Interim result.',
-        files: [],
-        cost: 0.1,
-      },
-    });
+    mocks.readResultMeta.mockResolvedValue(
+      resultMeta('completed', 'Interim result.'),
+    );
 
     await writeTerminalStatus(executionId, EXECUTION_STATUS.INTERRUPTED);
 
@@ -129,48 +135,21 @@ describe('execution lifecycle', () => {
       terminalStatus: EXECUTION_STATUS.INTERRUPTED,
       outcome: RUN_OUTCOME.CANCELLED,
     });
-    mocks.readResultMeta.mockResolvedValue({
-      producer: 'subagent',
-      agentName: 'reviewer',
-      wallTimeMs: 20,
-      result: {
-        category: 'toolUse',
-        outcome: RUN_OUTCOME.COMPLETED,
-        response: 'Interim result.',
-        files: [],
-        cost: 0.1,
-      },
-    });
+    mocks.readResultMeta.mockResolvedValue(
+      resultMeta(RUN_OUTCOME.COMPLETED, 'Interim result.'),
+    );
 
     await synchronizeAgentResultOutcome(executionId, RUN_OUTCOME.CANCELLED);
 
-    expect(mocks.writeResultMeta).toHaveBeenCalledWith({
-      producer: 'subagent',
-      agentName: 'reviewer',
-      wallTimeMs: 20,
-      result: {
-        category: 'toolUse',
-        outcome: RUN_OUTCOME.CANCELLED,
-        response: 'Interim result.',
-        files: [],
-        cost: 0.1,
-      },
-    });
+    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+      resultMeta(RUN_OUTCOME.CANCELLED, 'Interim result.'),
+    );
   });
 
   it('does not change the result outcome when execution metadata is missing', async () => {
-    mocks.readResultMeta.mockResolvedValue({
-      producer: 'subagent',
-      agentName: 'reviewer',
-      wallTimeMs: 20,
-      result: {
-        category: 'toolUse',
-        outcome: 'completed',
-        response: 'Finished.',
-        files: [],
-        cost: 0.1,
-      },
-    });
+    mocks.readResultMeta.mockResolvedValue(
+      resultMeta('completed', 'Finished.'),
+    );
 
     await synchronizeAgentResultOutcome(
       'missing-terminal-meta' as ExecutionId,
@@ -189,18 +168,9 @@ describe('execution lifecycle', () => {
       terminalStatus: EXECUTION_STATUS.COMPLETED,
       outcome: 'completed',
     });
-    mocks.readResultMeta.mockResolvedValue({
-      producer: 'subagent',
-      agentName: 'reviewer',
-      wallTimeMs: 20,
-      result: {
-        category: 'toolUse',
-        outcome: 'completed',
-        response: 'Finished.',
-        files: [],
-        cost: 0.1,
-      },
-    });
+    mocks.readResultMeta.mockResolvedValue(
+      resultMeta('completed', 'Finished.'),
+    );
     mocks.writeMeta.mockRejectedValueOnce(new Error('disk full'));
 
     const executionId = 'failed-terminal-write' as ExecutionId;
@@ -333,18 +303,9 @@ describe('execution lifecycle', () => {
       timestamp: '2026-07-10T00:00:00.000Z',
       outcome: RUN_OUTCOME.CANCELLED,
     });
-    mocks.readResultMeta.mockResolvedValue({
-      producer: 'subagent',
-      agentName: 'reviewer',
-      wallTimeMs: 20,
-      result: {
-        category: 'toolUse',
-        outcome: 'completed',
-        response: 'Interim result.',
-        files: [],
-        cost: 0.1,
-      },
-    });
+    mocks.readResultMeta.mockResolvedValue(
+      resultMeta('completed', 'Interim result.'),
+    );
     mocks.writeResultMeta.mockRejectedValueOnce(error);
 
     try {

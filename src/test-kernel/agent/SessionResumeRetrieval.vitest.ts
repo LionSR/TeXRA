@@ -82,6 +82,23 @@ const VALID_TOOL_USE_SHARED = {
 };
 type ToolUseSetupContext = Parameters<ToolUseFlowSetupCallback>[0];
 
+// Most flow-record fixtures below persist a fresh run/workspace snapshot
+// with only the current model and (occasionally) a transient override
+// varying between cases.
+function defaultStateSlices(
+  model = 'gpt54',
+  transient: Record<string, string> = {},
+) {
+  return {
+    runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
+    workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
+    userChannels: {
+      input: Object.freeze({ MODEL: model }),
+      transient,
+    },
+  };
+}
+
 function createTaggedModelHandler(
   compatibilityKey: ModelHandlerCompatibilityKey,
 ): RunToolUseFlowInput['modelHandler'] {
@@ -207,14 +224,7 @@ describe('retrieveSessionResumeData', () => {
       shared: {
         messages: [],
         shouldSkipCycle: false,
-        stateSlices: {
-          runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-          workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-          userChannels: {
-            input: Object.freeze({ MODEL: 'gpt54' }),
-            transient: { MODEL: 'gpt55' },
-          },
-        },
+        stateSlices: defaultStateSlices('gpt54', { MODEL: 'gpt55' }),
       },
       createdAt: new Date().toISOString(),
       nodes: [],
@@ -242,14 +252,7 @@ describe('retrieveSessionResumeData', () => {
       shared: {
         messages: [],
         shouldSkipCycle: false,
-        stateSlices: {
-          runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-          workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-          userChannels: {
-            input: Object.freeze({ MODEL: 'gpt54' }),
-            transient: {},
-          },
-        },
+        stateSlices: defaultStateSlices(),
       },
       createdAt: new Date().toISOString(),
       nodes: [],
@@ -281,14 +284,7 @@ describe('retrieveSessionResumeData', () => {
           },
         ],
         shouldSkipCycle: false,
-        stateSlices: {
-          runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-          workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-          userChannels: {
-            input: Object.freeze({ MODEL: 'gemini35f' }),
-            transient: {},
-          },
-        },
+        stateSlices: defaultStateSlices('gemini35f'),
       },
       createdAt: new Date().toISOString(),
       nodes: [],
@@ -322,14 +318,7 @@ describe('retrieveSessionResumeData', () => {
             },
           ],
           shouldSkipCycle: false,
-          stateSlices: {
-            runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-            workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-            userChannels: {
-              input: Object.freeze({ MODEL: 'gpt54' }),
-              transient: {},
-            },
-          },
+          stateSlices: defaultStateSlices(),
         },
       },
       createdAt: new Date().toISOString(),
@@ -367,14 +356,7 @@ describe('retrieveSessionResumeData', () => {
           { role: 'user', content: 'Continue the flat legacy conversation.' },
         ],
         shouldSkipCycle: false,
-        stateSlices: {
-          runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-          workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-          userChannels: {
-            input: Object.freeze({ MODEL: 'gpt54' }),
-            transient: {},
-          },
-        },
+        stateSlices: defaultStateSlices(),
       },
       createdAt: new Date().toISOString(),
       nodes: [],
@@ -403,14 +385,7 @@ describe('retrieveSessionResumeData', () => {
       shared: {
         messages: [],
         shouldSkipCycle: false,
-        stateSlices: {
-          runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-          workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-          userChannels: {
-            input: Object.freeze({ MODEL: 'gpt54' }),
-            transient: {},
-          },
-        },
+        stateSlices: defaultStateSlices(),
       },
       createdAt: new Date().toISOString(),
       nodes: [],
@@ -452,14 +427,7 @@ describe('retrieveSessionResumeData', () => {
       shared: {
         messages: [],
         shouldSkipCycle: false,
-        stateSlices: {
-          runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-          workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-          userChannels: {
-            input: Object.freeze({ MODEL: 'gpt54' }),
-            transient: {},
-          },
-        },
+        stateSlices: defaultStateSlices(),
       },
       createdAt: new Date().toISOString(),
       nodes: [],
@@ -939,14 +907,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         // Pass-through field the boundary's ToolUseSessionSnapshot contract
         // does not carry -- must survive the consumer's self-heal write.
         systemPrompt: 'You are a helpful assistant.',
-        stateSlices: {
-          runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-          workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-          userChannels: {
-            input: Object.freeze({ MODEL: 'gpt54' }),
-            transient: {},
-          },
-        },
+        stateSlices: defaultStateSlices(),
       },
     };
     await getExecutionStore(executionId).write(flowKey(executionId), {
@@ -1003,14 +964,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         messages: [{ role: 'user', content: 'Continue.' }],
         modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
         shouldSkipCycle: false,
-        stateSlices: {
-          runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-          workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-          userChannels: {
-            input: Object.freeze({ MODEL: 'gpt54' }),
-            transient: {},
-          },
-        },
+        stateSlices: defaultStateSlices(),
       },
       createdAt: new Date().toISOString(),
       cursor: { nextNodeId: WAIT_NODE_CURSOR },
@@ -1066,14 +1020,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         messages: [{ role: 'user', content: 'Continue.' }],
         modelHandlerCompatibilityKey: persistedCompatibilityKey,
         shouldSkipCycle: false,
-        stateSlices: {
-          runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-          workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-          userChannels: {
-            input: Object.freeze({ MODEL: 'gpt54' }),
-            transient: {},
-          },
-        },
+        stateSlices: defaultStateSlices(),
       },
       createdAt: new Date().toISOString(),
       cursor: { nextNodeId: WAIT_NODE_CURSOR },

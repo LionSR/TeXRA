@@ -90,6 +90,14 @@ function parentContext(): LaunchRunContext {
   };
 }
 
+function defaultRunner(): ReturnType<typeof createWorkflowScriptAgentRunner> {
+  return createWorkflowScriptAgentRunner(
+    parentContext(),
+    'correct',
+    'tool-call-7',
+  );
+}
+
 function invocation(
   options: WorkflowAgentInvocation['options'] = {},
 ): WorkflowAgentInvocation {
@@ -122,13 +130,8 @@ describe('createWorkflowScriptAgentRunner', () => {
   });
 
   it('uses delegation policy and executes a direct in-band child', async () => {
-    const parent = parentContext();
     const call = invocation({ inputFiles: ['paper.tex'] });
-    const runner = createWorkflowScriptAgentRunner(
-      parent,
-      'correct',
-      'tool-call-7',
-    );
+    const runner = defaultRunner();
 
     await expect(runner(call)).resolves.toBe(result);
     expect(mocks.requireVisibleAgent).toHaveBeenCalledWith(
@@ -191,11 +194,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       relativePath: 'r1/draft.tex',
       executionId: 'bbbbbb222222',
     });
-    const runner = createWorkflowScriptAgentRunner(
-      parentContext(),
-      'correct',
-      'tool-call-7',
-    );
+    const runner = defaultRunner();
 
     await runner(
       invocation({
@@ -227,11 +226,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       kind: 'runStorage',
     });
     mocks.resolveChildRunOutput.mockResolvedValue(undefined);
-    const runner = createWorkflowScriptAgentRunner(
-      parentContext(),
-      'correct',
-      'tool-call-7',
-    );
+    const runner = defaultRunner();
 
     await runner(invocation({ inputFiles: [placeholder] }));
 
@@ -243,11 +238,7 @@ describe('createWorkflowScriptAgentRunner', () => {
   });
 
   it('uses one stable child id per workflow call identity', async () => {
-    const runner = createWorkflowScriptAgentRunner(
-      parentContext(),
-      'correct',
-      'tool-call-7',
-    );
+    const runner = defaultRunner();
 
     await runner(invocation());
     await runner(invocation());
@@ -273,11 +264,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         cost: 0,
       },
     });
-    const runner = createWorkflowScriptAgentRunner(
-      parentContext(),
-      'correct',
-      'tool-call-7',
-    );
+    const runner = defaultRunner();
 
     await expect(runner(invocation())).rejects.toThrow(
       'Workflow subagent ended with cancelled outcome.',
@@ -288,11 +275,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.executeSubagentInBand.mockRejectedValueOnce(
       new SubagentReconciliationError('incomplete child state'),
     );
-    const runner = createWorkflowScriptAgentRunner(
-      parentContext(),
-      'correct',
-      'tool-call-7',
-    );
+    const runner = defaultRunner();
 
     await expect(runner(invocation())).rejects.toMatchObject({
       name: 'WorkflowRunAbortError',
@@ -306,11 +289,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       { cause: new Error('storage offline') },
     );
     mocks.executeSubagentInBand.mockRejectedValueOnce(durabilityError);
-    const runner = createWorkflowScriptAgentRunner(
-      parentContext(),
-      'correct',
-      'tool-call-7',
-    );
+    const runner = defaultRunner();
 
     await expect(runner(invocation())).rejects.toMatchObject({
       name: 'WorkflowRunAbortError',
