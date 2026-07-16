@@ -18,7 +18,7 @@ const MAX_INQUIRY_THREADS = 100;
 
 export interface ExternalInquiryRequestHandlerOptions {
   show: (permission: ExternalInquiryPermission) => void;
-  resolve: (requestId: string) => void;
+  dismiss: (requestId: string) => void;
   syncThreads: (threads: InquiryThreadUpdatedEvent[]) => void;
   canSend: () => boolean;
   logger?: Pick<AgentTrace, 'debug'>;
@@ -34,7 +34,7 @@ export class ExternalInquiryRequestHandler extends ApprovalRequestHandler<
   'requestId'
 > {
   constructor(private readonly options: ExternalInquiryRequestHandlerOptions) {
-    super('requestId', options.show, options.resolve, options.canSend);
+    super('requestId', options.show, options.dismiss, options.canSend);
   }
 
   override async replay(): Promise<void> {

@@ -280,7 +280,7 @@ export class DesktopProgressBridge {
           overrides: {
             retry: {
               show: () => undefined,
-              resolve: () => undefined,
+              dismiss: () => undefined,
             },
             agentProposal: {
               show: (p) =>
@@ -288,7 +288,7 @@ export class DesktopProgressBridge {
                   kind: PERMISSION_KIND.PROPOSAL,
                   data: p,
                 }),
-              resolve: (id) =>
+              dismiss: (id) =>
                 webviewUpdater.resolvePermission(PERMISSION_KIND.PROPOSAL, id),
             },
           },
@@ -657,9 +657,9 @@ export class DesktopProgressBridge {
   }
 
   private clearDesktopSessionMaps(): void {
-    // Drop every pending approval (and proposal payload) without notifying the
-    // webview — the "delete all"/teardown sweep already settles the underlying
-    // approvals through releaseStreamResources/cleanup helpers.
+    // Release every pending approval (and proposal payload) without notifying
+    // the webview. Each handler owns settlement as well as presentation state,
+    // so teardown cannot leave an interaction promise pending.
     for (const handler of Object.values(this.approvalHandlers)) {
       handler.clear();
     }

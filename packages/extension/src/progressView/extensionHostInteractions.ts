@@ -9,7 +9,6 @@ import {
   type HostBashApprovalResult,
   type HostInteractionCancelSelector,
   type HostInteractionOptions,
-  type HostInteractionResultByKind,
   type HostInteractions,
   type HostPlanApprovalRequest,
   type HostRetryRequest,
@@ -31,7 +30,6 @@ import {
   nativeRequestApproval,
 } from '@frontend/approval/nativeToolEditApproval';
 import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
-import { assertNever } from '@utils/core';
 import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 import type {
   ToolEditApprovalRequest,
@@ -66,28 +64,9 @@ export interface ExtensionHostInteractions extends HostInteractions {
   dismissExternalInquiry(requestId: string): void;
 }
 
-type PendingKind = keyof HostInteractionResultByKind;
-
-interface PendingExtensionRegistration<K extends PendingKind> {
-  readonly id: string;
-  readonly requestId?: string;
-  readonly kind: K;
-  readonly streamId?: StreamTabId;
-  readonly cancellationScope?: object;
-}
-
-type PendingExtensionInteraction<K extends PendingKind> =
-  PendingExtensionRegistration<K> & {
-    settle(value: HostInteractionResultByKind[K]): void;
-  };
-
-type AnyPendingExtensionInteraction = PendingExtensionInteraction<PendingKind>;
-
 export function createExtensionHostInteractions(
   options: ExtensionHostInteractionsOptions,
 ): ExtensionHostInteractions {
-  const pendingRequests = new Map<string, AnyPendingExtensionInteraction>();
-
   const handlers = () => options.getApprovalHandlers();
 
   // Interaction requests surface per-stream: the request panel is scoped to
@@ -111,133 +90,73 @@ export function createExtensionHostInteractions(
     }
   };
 
-  const showPending = <K extends PendingKind>(
-    pending: PendingExtensionRegistration<K>,
-    show: () => void,
-  ): Promise<HostInteractionResultByKind[K]> => {
-    // Replacement cancellation: a request re-issued under an id that is still
-    // pending dismisses the stale prompt (settling it as a rejection carrying
-    // the replacement cause) before the replacement is shown.
-    const replaced = pendingRequests.get(pending.id);
-    if (replaced) releasePending(replaced, 'Approval request was replaced.');
-    return new Promise<HostInteractionResultByKind[K]>((settle) => {
-      const interaction: PendingExtensionInteraction<K> = {
-        ...pending,
-        settle(value) {
-          settle(value);
-        },
-      };
-      pendingRequests.set(pending.id, interaction);
-      show();
-    });
-  };
-
-  const completePending = <K extends PendingKind>(
-    requestId: string,
-    expectedKind: K,
-    value: HostInteractionResultByKind[K],
-    resolveUi: () => void,
-  ): boolean => {
-    const pending = pendingRequests.get(requestId);
-    if (!pending || pending.kind !== expectedKind) return false;
-    pendingRequests.delete(requestId);
-    pending.settle(value);
-    resolveUi();
-    return true;
-  };
-
-  /** Release a pending interaction with its kind-specific rejection result. */
-  const releasePending = (
-    pending: AnyPendingExtensionInteraction,
-    cause?: string,
-  ): void => {
-    switch (pending.kind) {
-      case 'bash':
-        completePending(
-          pending.id,
-          'bash',
-          cancellationResultFor('bash', cause),
-          () => handlers().bash.resolve(pending.id),
-        );
-        return;
-      case 'plan':
-        completePending(
-          pending.id,
-          'plan',
-          cancellationResultFor('plan', cause),
-          () => handlers().planApproval.resolve(pending.id),
-        );
-        return;
-      case 'proposal':
-        completePending(
-          pending.id,
-          'proposal',
-          cancellationResultFor('proposal', cause),
-          () => handlers().agentProposal.resolve(pending.id),
-        );
-        return;
-      case 'retry':
-        completePending(
-          pending.id,
-          'retry',
-          cancellationResultFor('retry', cause),
-          () => handlers().retry.resolve(pending.id),
-        );
-        return;
-      case 'userQuestion':
-        completePending(
-          pending.id,
-          'userQuestion',
-          cancellationResultFor('userQuestion', cause),
-          () => handlers().userQuestion.resolve(pending.id),
-        );
-        return;
-    }
-    assertNever(pending.kind, 'Unhandled extension interaction kind');
-  };
-
   const cancel = (selector: HostInteractionCancelSelector = {}): void => {
     if (selector.kind == null || selector.kind === 'toolEdit') {
       cancelNativeToolEditApprovals(options.session, selector);
     }
-    for (const pending of [...pendingRequests.values()]) {
-      if (matchesCancelSelector(pending, selector)) {
-        releasePending(pending, selector.cause);
-      }
-    }
+    handlers().bash.cancelWhere(
+      (item, cancellationScope) =>
+        matchesCancelSelector(
+          {
+            kind: 'bash',
+            streamId: item.streamId || undefined,
+            cancellationScope,
+          },
+          selector,
+        ),
+      selector.cause,
+    );
+    handlers().planApproval.cancelWhere(
+      (item, cancellationScope) =>
+        matchesCancelSelector(
+          { kind: 'plan', streamId: item.streamId, cancellationScope },
+          selector,
+        ),
+      selector.cause,
+    );
+    handlers().agentProposal.cancelWhere(
+      (item, cancellationScope) =>
+        matchesCancelSelector(
+          { kind: 'proposal', streamId: item.streamId, cancellationScope },
+          selector,
+        ),
+      selector.cause,
+    );
+    handlers().retry.cancelWhere(
+      (item, cancellationScope) =>
+        matchesCancelSelector(
+          { kind: 'retry', streamId: item.streamId, cancellationScope },
+          selector,
+        ),
+      selector.cause,
+    );
+    handlers().userQuestion.cancelWhere(
+      (item, cancellationScope) =>
+        matchesCancelSelector(
+          {
+            kind: 'userQuestion',
+            streamId: item.streamId || undefined,
+            cancellationScope,
+          },
+          selector,
+        ),
+      selector.cause,
+    );
   };
 
   const approvePendingDelegatedWork = async (
     streamId: StreamTabId,
     initiatingProposalId: string,
   ): Promise<void> => {
-    for (const pending of [...pendingRequests.values()]) {
-      if (
-        pending.streamId !== streamId ||
-        (pending.kind === 'proposal' && pending.id === initiatingProposalId)
-      ) {
-        continue;
-      }
-      switch (pending.kind) {
-        case 'bash':
-          completePending(
-            pending.id,
-            'bash',
-            toBashApprovalResult({ action: 'approve' }),
-            () => handlers().bash.resolve(pending.id),
-          );
-          break;
-        case 'proposal':
-          completePending(pending.id, 'proposal', { action: 'approve' }, () =>
-            handlers().agentProposal.resolve(pending.id),
-          );
-          break;
-        case 'plan':
-        case 'retry':
-        case 'userQuestion':
-          break;
-      }
-    }
+    handlers().bash.completeWhere(
+      (item) => item.streamId === streamId,
+      toBashApprovalResult({ action: 'approve' }),
+    );
+    handlers().agentProposal.completeWhere(
+      (item) =>
+        item.streamId === streamId && item.proposalId !== initiatingProposalId,
+      { action: 'approve' },
+    );
     await approveNativeToolEditApprovals(options.session, streamId);
   };
 
@@ -245,8 +164,7 @@ export function createExtensionHostInteractions(
     streamId: StreamTabId,
     requestId: string,
   ): boolean => {
-    const pending = pendingRequests.get(streamId);
-    return pending?.kind === 'retry' && pending.requestId === requestId;
+    return handlers().retry.get(streamId)?.requestId === requestId;
   };
 
   const submitRetryDecision = (
@@ -255,45 +173,30 @@ export function createExtensionHostInteractions(
     decision: RetrySettlement,
   ): boolean => {
     if (!isRetryPending(streamId, requestId)) return false;
-    return completePending(streamId, 'retry', decision, () =>
-      handlers().retry.resolve(streamId),
-    );
+    return handlers().retry.complete(streamId, decision);
   };
 
   const submitBashDecision = (
     requestId: string,
     decision: BashSettlement,
   ): boolean =>
-    completePending(requestId, 'bash', toBashApprovalResult(decision), () =>
-      handlers().bash.resolve(requestId),
-    );
+    handlers().bash.complete(requestId, toBashApprovalResult(decision));
 
   const submitPlanDecision = (
     requestId: string,
     decision: PlanApprovalResult,
-  ): boolean =>
-    completePending(requestId, 'plan', decision, () =>
-      handlers().planApproval.resolve(requestId),
-    );
+  ): boolean => handlers().planApproval.complete(requestId, decision);
 
   const submitProposalDecision = (
     requestId: string,
     decision: ProposalResult,
-  ): boolean =>
-    completePending(requestId, 'proposal', decision, () =>
-      handlers().agentProposal.resolve(requestId),
-    );
+  ): boolean => handlers().agentProposal.complete(requestId, decision);
 
   const submitUserQuestionDecision = (
     requestId: string,
     decision: UserQuestionSettlement,
   ): boolean =>
-    completePending(
-      requestId,
-      'userQuestion',
-      toUserQuestionResult(decision),
-      () => handlers().userQuestion.resolve(requestId),
-    );
+    handlers().userQuestion.complete(requestId, toUserQuestionResult(decision));
 
   return {
     approvePendingDelegatedWork,
@@ -304,7 +207,7 @@ export function createExtensionHostInteractions(
     submitRetryDecision,
     submitUserQuestionDecision,
     dismissExternalInquiry: (requestId) =>
-      handlers().externalInquiry.resolve(requestId),
+      handlers().externalInquiry.dismiss(requestId),
     requestToolEditApproval(
       request: ToolEditApprovalRequest,
       interactionOptions?: HostInteractionOptions,
@@ -322,21 +225,18 @@ export function createExtensionHostInteractions(
       const requestId = `bash-${nanoid()}`;
       const streamId = request.streamId ?? '';
       revealStream(request.streamId);
-      return showPending(
+      return handlers().bash.request(
         {
-          id: requestId,
-          kind: 'bash',
+          requestId,
+          command: request.command,
+          ...(request.cwd ? { cwd: request.cwd } : {}),
+          allowBypass: true,
           streamId,
-          cancellationScope: interactionOptions?.cancellationScope,
         },
-        () =>
-          handlers().bash.show({
-            requestId,
-            command: request.command,
-            ...(request.cwd ? { cwd: request.cwd } : {}),
-            allowBypass: true,
-            streamId,
-          }),
+        {
+          cancellationScope: interactionOptions?.cancellationScope,
+          cancellationResult: (cause) => cancellationResultFor('bash', cause),
+        },
       );
     },
 
@@ -345,15 +245,10 @@ export function createExtensionHostInteractions(
       interactionOptions?: HostInteractionOptions,
     ): Promise<PlanApprovalResult> {
       revealStream(request.streamId);
-      return showPending(
-        {
-          id: request.approvalId,
-          kind: 'plan',
-          streamId: request.streamId,
-          cancellationScope: interactionOptions?.cancellationScope,
-        },
-        () => handlers().planApproval.show(request),
-      );
+      return handlers().planApproval.request(request, {
+        cancellationScope: interactionOptions?.cancellationScope,
+        cancellationResult: (cause) => cancellationResultFor('plan', cause),
+      });
     },
 
     requestAgentProposal(
@@ -361,15 +256,10 @@ export function createExtensionHostInteractions(
       interactionOptions?: HostInteractionOptions,
     ): Promise<ProposalResult> {
       revealStream(request.streamId);
-      return showPending(
-        {
-          id: request.proposalId,
-          kind: 'proposal',
-          streamId: request.streamId,
-          cancellationScope: interactionOptions?.cancellationScope,
-        },
-        () => handlers().agentProposal.show(request),
-      );
+      return handlers().agentProposal.request(request, {
+        cancellationScope: interactionOptions?.cancellationScope,
+        cancellationResult: (cause) => cancellationResultFor('proposal', cause),
+      });
     },
 
     requestRetry(
@@ -377,16 +267,10 @@ export function createExtensionHostInteractions(
       interactionOptions?: HostInteractionOptions,
     ): Promise<RetryResult> {
       revealStream(request.streamId);
-      return showPending(
-        {
-          id: request.streamId,
-          requestId: request.requestId,
-          kind: 'retry',
-          streamId: request.streamId,
-          cancellationScope: interactionOptions?.cancellationScope,
-        },
-        () => handlers().retry.show(request),
-      );
+      return handlers().retry.request(request, {
+        cancellationScope: interactionOptions?.cancellationScope,
+        cancellationResult: (cause) => cancellationResultFor('retry', cause),
+      });
     },
 
     askUserQuestion(
@@ -394,15 +278,11 @@ export function createExtensionHostInteractions(
       interactionOptions?: HostInteractionOptions,
     ): Promise<HostUserQuestionResult> {
       revealStream(request.streamId || undefined);
-      return showPending(
-        {
-          id: request.requestId,
-          kind: 'userQuestion',
-          streamId: request.streamId,
-          cancellationScope: interactionOptions?.cancellationScope,
-        },
-        () => handlers().userQuestion.show(request),
-      );
+      return handlers().userQuestion.request(request, {
+        cancellationScope: interactionOptions?.cancellationScope,
+        cancellationResult: (cause) =>
+          cancellationResultFor('userQuestion', cause),
+      });
     },
 
     async openExternalInquiry(request) {

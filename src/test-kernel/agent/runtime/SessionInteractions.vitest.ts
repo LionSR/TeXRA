@@ -8,11 +8,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
+  type HostBashApprovalResult,
   matchesCancelSelector,
   type HostInteractionOptions,
   HostInteractions,
   type HostPlanApprovalRequest,
+  type HostUserQuestionResult,
   type PlanApprovalResult,
+  type ProposalResult,
+  type RetryResult,
 } from '@agent/runtime/HostInteractions';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -59,37 +63,50 @@ interface UiEvent {
 }
 
 function createHandlerSet(events: UiEvent[]): ApprovalRequestHandlerSet {
-  const handler = <T extends { streamId: string }, K extends keyof T>(
+  const handler = <
+    T extends { streamId: string },
+    K extends keyof T,
+    Result = never,
+  >(
     kind: string,
     idField: K,
-  ): ApprovalRequestHandler<T, K> =>
-    new ApprovalRequestHandler<T, K>(
+  ): ApprovalRequestHandler<T, K, Result> =>
+    new ApprovalRequestHandler<T, K, Result>(
       idField,
       (item) =>
         events.push({ event: `show:${kind}`, id: String(item[idField]) }),
-      (id) => events.push({ event: `resolve:${kind}`, id }),
+      (id) => events.push({ event: `dismiss:${kind}`, id }),
       () => true,
     );
   return {
     toolEdit: handler<ToolEditPermission, 'requestId'>('toolEdit', 'requestId'),
-    bash: handler<BashPermission, 'requestId'>('bash', 'requestId'),
-    retry: handler<RetryPermission, 'streamId'>('retry', 'streamId'),
-    agentProposal: handler<AgentProposalPermission, 'proposalId'>(
-      'proposal',
+    bash: handler<BashPermission, 'requestId', HostBashApprovalResult>(
+      'bash',
+      'requestId',
+    ),
+    retry: handler<RetryPermission, 'streamId', RetryResult>(
+      'retry',
+      'streamId',
+    ),
+    agentProposal: handler<
+      AgentProposalPermission,
       'proposalId',
-    ),
-    planApproval: handler<PlanApprovalPermission, 'approvalId'>(
-      'plan',
+      ProposalResult
+    >('proposal', 'proposalId'),
+    planApproval: handler<
+      PlanApprovalPermission,
       'approvalId',
-    ),
+      PlanApprovalResult
+    >('plan', 'approvalId'),
     externalInquiry: handler<ExternalInquiryPermission, 'requestId'>(
       'externalInquiry',
       'requestId',
     ),
-    userQuestion: handler<UserQuestionPermission, 'requestId'>(
-      'userQuestion',
+    userQuestion: handler<
+      UserQuestionPermission,
       'requestId',
-    ),
+      HostUserQuestionResult
+    >('userQuestion', 'requestId'),
   };
 }
 
