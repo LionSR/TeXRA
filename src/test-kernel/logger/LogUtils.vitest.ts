@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as logger from '@logger/logUtils';
 import * as config from '@utils/config';
 
+const SECRET = 'sk-proj-redaction-example-1234567890abcdef';
+
 describe('logUtils', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -45,5 +47,69 @@ describe('logUtils', () => {
     expect(output).not.toContain('[Circular]');
     expect(output).toContain('"first"');
     expect(output).toContain('"second"');
+  });
+
+  it('redacts lines sent to an output sink by default', () => {
+    const lines: string[] = [];
+    logger.setOutputChannelFactory(() => ({
+      appendLine(message: string) {
+        lines.push(message);
+      },
+    }));
+
+    logger.info('test', `OPENAI_API_KEY=${SECRET}`);
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).not.toContain(SECRET);
+    expect(lines[0]).toContain('OPENAI_API_KEY=[redacted]');
+  });
+
+  it('preserves the raw line for an explicitly trusted sink', () => {
+    const lines: string[] = [];
+    logger.setOutputChannelFactory(
+      () => ({
+        appendLine(message: string) {
+          lines.push(message);
+        },
+      }),
+      { trusted: true },
+    );
+
+    const rawMessage = `OPENAI_API_KEY=${SECRET}`;
+    logger.info('test', rawMessage);
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain(rawMessage);
+    expect(lines[0]).not.toContain('[redacted]');
+  });
+
+  it('redacts lines sent through the default console fallback', () => {
+    const consoleInfo = vi.spyOn(console, 'info').mockImplementation(() => {});
+    logger.setOutputChannelFactory(null);
+
+    logger.warn('test', `Authorization: Bearer ${SECRET}`);
+
+    expect(consoleInfo).toHaveBeenCalledOnce();
+    const output = String(consoleInfo.mock.calls[0]?.[0]);
+    expect(output).not.toContain(SECRET);
+    expect(output).toContain('Authorization: Bearer [redacted]');
+  });
+
+  it('redacts serialized debug data before sending it to the sink', () => {
+    vi.spyOn(config, 'getConfig').mockReturnValue(true);
+    const lines: string[] = [];
+    logger.setOutputChannelFactory(() => ({
+      appendLine(message: string) {
+        lines.push(message);
+      },
+    }));
+
+    logger.debug('test', 'request metadata', {
+      data: { authorization: `Bearer ${SECRET}` },
+    });
+
+    expect(lines).toHaveLength(2);
+    expect(lines.join('\n')).not.toContain(SECRET);
+    expect(lines[1]).toContain('"authorization": "Bearer [redacted]"');
   });
 });
