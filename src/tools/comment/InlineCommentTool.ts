@@ -19,7 +19,7 @@ const CHANNEL = 'InlineCommentTool';
 logger.initialize(CHANNEL);
 
 /** A single comment within a thread, as seen by the agent. */
-export interface InlineCommentView {
+interface InlineCommentView {
   author: string;
   body: string;
 }
