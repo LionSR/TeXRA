@@ -15,12 +15,13 @@ import {
   toolUseDisplayLines,
   UniversalToolRow,
 } from './toolRenderers';
+import { transcriptColumns } from './transcriptEntryLayout';
 
 export function filledToolUseDisplayText(
   toolUse: NormalizedToolUse,
   width?: number,
 ): string {
-  const cols = Math.max(1, Math.floor(width ?? 80));
+  const cols = transcriptColumns(width);
   return fillRows(toolUseDisplayLines(toolUse).join('\n'), cols);
 }
 
