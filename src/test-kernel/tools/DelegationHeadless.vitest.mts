@@ -7,7 +7,11 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import {
+  createRunContext,
+  withRunContext,
+  type RunContext,
+} from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
@@ -25,6 +29,7 @@ import {
   executeStableSubagentInBand,
   SubagentDurabilityError,
   SubagentReconciliationError,
+  type InBandSubagentExecutionOptions,
 } from '@tools/delegation/inBandSubagentExecution';
 
 const mocks = vi.hoisted(() => ({
@@ -85,6 +90,24 @@ function sessionFor(host: AgentRuntimeHost): SessionHandle {
   return session;
 }
 
+/** The run context shared by nearly every case (host/stopAfterCycle/session vary). */
+function parentRunContext(
+  overrides: Partial<{
+    runtimeHost: AgentRuntimeHost;
+    streamId: StreamTabId;
+    stopAfterCycle: boolean;
+    session: SessionHandle;
+  }> = {},
+): RunContext {
+  return createRunContext({
+    runtimeHost: runtimeHost(),
+    streamId: 'parent-stream',
+    executionId: 'parent-exec',
+    model: 'deepseekT',
+    ...overrides,
+  });
+}
+
 /** The shared delegation call used by nearly every case (agent name varies). */
 function callDelegateReview(agent = 'review') {
   return new DelegateAgentTool().call({
@@ -95,6 +118,25 @@ function callDelegateReview(agent = 'review') {
     working_directory: null,
     execution_id: null,
   });
+}
+
+/** The in-band delegation options shared by nearly every case (fields vary). */
+function delegationOptions(
+  overrides: Partial<InBandSubagentExecutionOptions> = {},
+): InBandSubagentExecutionOptions {
+  return {
+    configPayload: {
+      agent: 'review',
+      agentCategory: AgentCategory.ToolUse,
+      model: 'deepseekT',
+    },
+    agentName: 'review',
+    parentExecutionId: 'parent-exec' as ExecutionId,
+    parentStreamId: 'parent-stream' as StreamTabId,
+    runtimeHost: runtimeHost(),
+    session: defaultSession(),
+    ...overrides,
+  };
 }
 
 /**
@@ -200,13 +242,7 @@ describe('headless delegation', () => {
 
   it('awaits child delegation during one-shot tool-use runs', async () => {
     const result = await withRunContext(
-      createRunContext({
-        runtimeHost: runtimeHost(),
-        streamId: 'parent-stream',
-        executionId: 'parent-exec',
-        model: 'deepseekT',
-        stopAfterCycle: true,
-      }),
+      parentRunContext({ stopAfterCycle: true }),
       () => callDelegateReview(),
     );
 
@@ -233,18 +269,7 @@ describe('headless delegation', () => {
   });
 
   it('returns and persists the typed final result for in-band consumers', async () => {
-    const result = await executeSubagentInBand({
-      configPayload: {
-        agent: 'review',
-        agentCategory: AgentCategory.ToolUse,
-        model: 'deepseekT',
-      },
-      agentName: 'review',
-      parentExecutionId: 'parent-exec' as ExecutionId,
-      parentStreamId: 'parent-stream' as StreamTabId,
-      runtimeHost: runtimeHost(),
-      session: defaultSession(),
-    });
+    const result = await executeSubagentInBand(delegationOptions());
 
     expect(result.result).toEqual({
       category: 'toolUse',
@@ -411,19 +436,12 @@ describe('headless delegation', () => {
     );
 
     await expect(
-      executeSubagentInBand({
-        executionId: logicalExecutionId,
-        configPayload: {
-          agent: 'review',
-          agentCategory: AgentCategory.ToolUse,
-          model: 'deepseekT',
-        },
-        agentName: 'review',
-        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
-        parentStreamId: 'parent-stream' as StreamTabId,
-        runtimeHost: runtimeHost(),
-        session: defaultSession(),
-      }),
+      executeSubagentInBand(
+        delegationOptions({
+          executionId: logicalExecutionId,
+          parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+        }),
+      ),
     ).rejects.toBeInstanceOf(SubagentReconciliationError);
     expect(mocks.registerExecution).not.toHaveBeenCalled();
     expect(mocks.executeAgent).not.toHaveBeenCalled();
@@ -461,19 +479,12 @@ describe('headless delegation', () => {
         return store;
       });
 
-      const completed = await executeSubagentInBand({
-        executionId: logicalExecutionId,
-        configPayload: {
-          agent: 'review',
-          agentCategory: AgentCategory.ToolUse,
-          model: 'deepseekT',
-        },
-        agentName: 'review',
-        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
-        parentStreamId: 'parent-stream' as StreamTabId,
-        runtimeHost: runtimeHost(),
-        session: defaultSession(),
-      });
+      const completed = await executeSubagentInBand(
+        delegationOptions({
+          executionId: logicalExecutionId,
+          parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+        }),
+      );
 
       expect(completed.executionId).not.toBe(logicalExecutionId);
       expect(mocks.executeAgent).toHaveBeenCalledOnce();
@@ -498,19 +509,10 @@ describe('headless delegation', () => {
     mocks.getExecutionStore.mockImplementation((executionId: ExecutionId) =>
       executionId === STABLE_PARENT_EXECUTION_ID ? sequenceStore : childStore,
     );
-    const options = {
+    const options = delegationOptions({
       executionId: logicalExecutionId,
-      configPayload: {
-        agent: 'review',
-        agentCategory: AgentCategory.ToolUse,
-        model: 'deepseekT',
-      },
-      agentName: 'review',
       parentExecutionId: STABLE_PARENT_EXECUTION_ID,
-      parentStreamId: 'parent-stream' as StreamTabId,
-      runtimeHost: runtimeHost(),
-      session: defaultSession(),
-    } as const;
+    });
 
     await expect(executeSubagentInBand(options)).rejects.toBeInstanceOf(
       SubagentDurabilityError,
@@ -528,11 +530,6 @@ describe('headless delegation', () => {
 
   it('uses a new durable attempt after failed and cancelled children', async () => {
     const logicalExecutionId = 'eeeeee555555' as ExecutionId;
-    const configPayload = {
-      agent: 'review',
-      agentCategory: AgentCategory.ToolUse,
-      model: 'deepseekT',
-    };
     const stores = new Map<ExecutionId, Record<string, unknown>>();
     const sequenceStore = stableSequenceStore(logicalExecutionId);
     const priorOutcomes = ['failed', 'cancelled'] as const;
@@ -572,15 +569,12 @@ describe('headless delegation', () => {
       return store;
     });
 
-    const completed = await executeSubagentInBand({
-      executionId: logicalExecutionId,
-      configPayload,
-      agentName: 'review',
-      parentExecutionId: STABLE_PARENT_EXECUTION_ID,
-      parentStreamId: 'parent-stream' as StreamTabId,
-      runtimeHost: runtimeHost(),
-      session: defaultSession(),
-    });
+    const completed = await executeSubagentInBand(
+      delegationOptions({
+        executionId: logicalExecutionId,
+        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+      }),
+    );
 
     expect(completed.executionId).not.toBe(logicalExecutionId);
     expect(stores.size).toBe(3);
@@ -597,18 +591,7 @@ describe('headless delegation', () => {
     mocks.writeResultMeta.mockRejectedValueOnce(new Error('storage offline'));
 
     await expect(
-      executeSubagentInBand({
-        configPayload: {
-          agent: 'review',
-          agentCategory: AgentCategory.ToolUse,
-          model: 'deepseekT',
-        },
-        agentName: 'review',
-        parentExecutionId: 'parent-exec' as ExecutionId,
-        parentStreamId: 'parent-stream' as StreamTabId,
-        runtimeHost: runtimeHost(),
-        session: defaultSession(),
-      }),
+      executeSubagentInBand(delegationOptions()),
     ).rejects.toBeInstanceOf(SubagentDurabilityError);
     expect(mocks.writeReport).not.toHaveBeenCalled();
   });
@@ -617,18 +600,7 @@ describe('headless delegation', () => {
     mocks.executeAgent.mockRejectedValueOnce(new Error('review model failed'));
     mocks.writeResultMeta.mockRejectedValueOnce(new Error('storage offline'));
 
-    const run = executeSubagentInBand({
-      configPayload: {
-        agent: 'review',
-        agentCategory: AgentCategory.ToolUse,
-        model: 'deepseekT',
-      },
-      agentName: 'review',
-      parentExecutionId: 'parent-exec' as ExecutionId,
-      parentStreamId: 'parent-stream' as StreamTabId,
-      runtimeHost: runtimeHost(),
-      session: defaultSession(),
-    });
+    const run = executeSubagentInBand(delegationOptions());
 
     await expect(run).rejects.toMatchObject({
       name: 'SubagentDurabilityError',
@@ -648,18 +620,7 @@ describe('headless delegation', () => {
       } as never),
     );
 
-    const run = executeSubagentInBand({
-      configPayload: {
-        agent: 'review',
-        agentCategory: AgentCategory.ToolUse,
-        model: 'deepseekT',
-      },
-      agentName: 'review',
-      parentExecutionId: 'parent-exec' as ExecutionId,
-      parentStreamId: 'parent-stream' as StreamTabId,
-      runtimeHost: runtimeHost(),
-      session: defaultSession(),
-    });
+    const run = executeSubagentInBand(delegationOptions());
 
     await expect(run).rejects.toMatchObject({
       name: 'SubagentDurabilityError',
@@ -678,20 +639,7 @@ describe('headless delegation', () => {
       touchedFiles: [42],
     });
 
-    await expect(
-      executeSubagentInBand({
-        configPayload: {
-          agent: 'review',
-          agentCategory: AgentCategory.ToolUse,
-          model: 'deepseekT',
-        },
-        agentName: 'review',
-        parentExecutionId: 'parent-exec' as ExecutionId,
-        parentStreamId: 'parent-stream' as StreamTabId,
-        runtimeHost: runtimeHost(),
-        session: defaultSession(),
-      }),
-    ).rejects.toThrow();
+    await expect(executeSubagentInBand(delegationOptions())).rejects.toThrow();
     expect(mocks.writeResultMeta).not.toHaveBeenCalled();
     expect(mocks.writeReport).not.toHaveBeenCalled();
   });
@@ -723,20 +671,9 @@ describe('headless delegation', () => {
       };
     });
 
-    const run = executeSubagentInBand({
-      configPayload: {
-        agent: 'review',
-        agentCategory: AgentCategory.ToolUse,
-        model: 'deepseekT',
-      },
-      agentName: 'review',
-      parentExecutionId: 'parent-exec' as ExecutionId,
-      parentStreamId: 'parent-stream' as StreamTabId,
-      runtimeHost: runtimeHost(),
-      session: defaultSession(),
-      signal: controller.signal,
-      onCost,
-    });
+    const run = executeSubagentInBand(
+      delegationOptions({ signal: controller.signal, onCost }),
+    );
     await ready;
     controller.abort(new Error('Workflow stopped.'));
 
@@ -760,19 +697,9 @@ describe('headless delegation', () => {
     });
     mocks.writeResultMeta.mockReturnValueOnce(persistencePending);
 
-    const run = executeSubagentInBand({
-      configPayload: {
-        agent: 'review',
-        agentCategory: AgentCategory.ToolUse,
-        model: 'deepseekT',
-      },
-      agentName: 'review',
-      parentExecutionId: 'parent-exec' as ExecutionId,
-      parentStreamId: 'parent-stream' as StreamTabId,
-      runtimeHost: runtimeHost(),
-      session: defaultSession(),
-      signal: controller.signal,
-    });
+    const run = executeSubagentInBand(
+      delegationOptions({ signal: controller.signal }),
+    );
     await vi.waitFor(() => {
       expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
     });
@@ -796,19 +723,7 @@ describe('headless delegation', () => {
     controller.abort(new Error('Workflow already stopped.'));
 
     await expect(
-      executeSubagentInBand({
-        configPayload: {
-          agent: 'review',
-          agentCategory: AgentCategory.ToolUse,
-          model: 'deepseekT',
-        },
-        agentName: 'review',
-        parentExecutionId: 'parent-exec' as ExecutionId,
-        parentStreamId: 'parent-stream' as StreamTabId,
-        runtimeHost: runtimeHost(),
-        session: defaultSession(),
-        signal: controller.signal,
-      }),
+      executeSubagentInBand(delegationOptions({ signal: controller.signal })),
     ).rejects.toThrow('Workflow already stopped.');
     expect(mocks.registerExecution).not.toHaveBeenCalled();
     expect(mocks.executeAgent).not.toHaveBeenCalled();
@@ -818,15 +733,8 @@ describe('headless delegation', () => {
     // The delegation validates via getVisibleAgent and must hand the resolved
     // entry's source to executeAgent, so getAgentPath resolves the exact
     // (source, name) key instead of re-resolving the ambiguous bare name.
-    await withRunContext(
-      createRunContext({
-        runtimeHost: runtimeHost(),
-        streamId: 'parent-stream',
-        executionId: 'parent-exec',
-        model: 'deepseekT',
-        stopAfterCycle: true,
-      }),
-      () => callDelegateReview(),
+    await withRunContext(parentRunContext({ stopAfterCycle: true }), () =>
+      callDelegateReview(),
     );
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
@@ -840,15 +748,7 @@ describe('headless delegation', () => {
   });
 
   it('adds a substantive handoff requirement to tool-use subagent instructions', async () => {
-    await withRunContext(
-      createRunContext({
-        runtimeHost: runtimeHost(),
-        streamId: 'parent-stream',
-        executionId: 'parent-exec',
-        model: 'deepseekT',
-      }),
-      () => callDelegateReview(),
-    );
+    await withRunContext(parentRunContext(), () => callDelegateReview());
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -896,16 +796,7 @@ describe('headless delegation', () => {
         tracker: {} as never,
         userInstruction: parentInstruction,
       },
-      () =>
-        withRunContext(
-          createRunContext({
-            runtimeHost: runtimeHost(),
-            streamId: 'parent-stream',
-            executionId: 'parent-exec',
-            model: 'deepseekT',
-          }),
-          () => callDelegateReview(),
-        ),
+      () => withRunContext(parentRunContext(), () => callDelegateReview()),
     );
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
@@ -951,15 +842,8 @@ describe('headless delegation', () => {
     const result = await withToolFileInteractionContext(
       { tracker: {} as never, hooks: { recordSubagentCost } },
       () =>
-        withRunContext(
-          createRunContext({
-            runtimeHost: runtimeHost(),
-            streamId: 'parent-stream',
-            executionId: 'parent-exec',
-            model: 'deepseekT',
-            stopAfterCycle: true,
-          }),
-          () => callDelegateReview(),
+        withRunContext(parentRunContext({ stopAfterCycle: true }), () =>
+          callDelegateReview(),
         ),
     );
 
@@ -991,15 +875,8 @@ describe('headless delegation', () => {
     const result = await withToolFileInteractionContext(
       { tracker: {} as never, hooks: { recordSubagentCost } },
       () =>
-        withRunContext(
-          createRunContext({
-            runtimeHost: runtimeHost(),
-            streamId: 'parent-stream',
-            executionId: 'parent-exec',
-            model: 'deepseekT',
-            stopAfterCycle: true,
-          }),
-          () => callDelegateReview(),
+        withRunContext(parentRunContext({ stopAfterCycle: true }), () =>
+          callDelegateReview(),
         ),
     );
 
@@ -1016,16 +893,7 @@ describe('headless delegation', () => {
 
     const result = await withToolFileInteractionContext(
       { tracker: {} as never, hooks: { recordSubagentCost } },
-      () =>
-        withRunContext(
-          createRunContext({
-            runtimeHost: runtimeHost(),
-            streamId: 'parent-stream',
-            executionId: 'parent-exec',
-            model: 'deepseekT',
-          }),
-          () => callDelegateReview(),
-        ),
+      () => withRunContext(parentRunContext(), () => callDelegateReview()),
     );
 
     expect(result.summary).toBe("Launched 'review' (async)");
@@ -1036,14 +904,8 @@ describe('headless delegation', () => {
   });
 
   it('keeps interactive delegations asynchronous', async () => {
-    const result = await withRunContext(
-      createRunContext({
-        runtimeHost: runtimeHost(),
-        streamId: 'parent-stream',
-        executionId: 'parent-exec',
-        model: 'deepseekT',
-      }),
-      () => callDelegateReview(),
+    const result = await withRunContext(parentRunContext(), () =>
+      callDelegateReview(),
     );
 
     expect(result.summary).toBe("Launched 'review' (async)");
@@ -1071,13 +933,7 @@ describe('headless delegation', () => {
 
     const session = sessionFor(host);
     const result = await withRunContext(
-      createRunContext({
-        runtimeHost: host,
-        streamId: 'parent-stream',
-        executionId: 'parent-exec',
-        model: 'deepseekT',
-        session,
-      }),
+      parentRunContext({ runtimeHost: host, session }),
       () => callDelegateReview(),
     );
     session.dispose();
@@ -1111,13 +967,7 @@ describe('headless delegation', () => {
 
     const session = sessionFor(host);
     const result = await withRunContext(
-      createRunContext({
-        runtimeHost: host,
-        streamId: 'parent-stream',
-        executionId: 'parent-exec',
-        model: 'deepseekT',
-        session,
-      }),
+      parentRunContext({ runtimeHost: host, session }),
       () => callDelegateReview(),
     );
     session.dispose();
@@ -1147,13 +997,7 @@ describe('headless delegation', () => {
 
     const session = sessionFor(host);
     const result = await withRunContext(
-      createRunContext({
-        runtimeHost: host,
-        streamId: 'parent-stream',
-        executionId: 'parent-exec',
-        model: 'deepseekT',
-        session,
-      }),
+      parentRunContext({ runtimeHost: host, session }),
       () => callDelegateReview(),
     );
     session.dispose();
@@ -1182,14 +1026,8 @@ describe('headless delegation', () => {
           : undefined,
     );
 
-    const result = await withRunContext(
-      createRunContext({
-        runtimeHost: runtimeHost(),
-        streamId: 'parent-stream',
-        executionId: 'parent-exec',
-        model: 'deepseekT',
-      }),
-      () => callDelegateReview('chat'),
+    const result = await withRunContext(parentRunContext(), () =>
+      callDelegateReview('chat'),
     );
 
     expect(result.summary).toBe("Launched 'assistant' (async)");
@@ -1240,12 +1078,7 @@ describe('headless delegation', () => {
     );
 
     await withRunContext(
-      createRunContext({
-        runtimeHost: host,
-        streamId: parentStreamId,
-        executionId: 'parent-exec',
-        model: 'deepseekT',
-      }),
+      parentRunContext({ runtimeHost: host, streamId: parentStreamId }),
       () => callDelegateReview(),
     );
 
@@ -1294,12 +1127,7 @@ describe('headless delegation', () => {
     );
 
     await withRunContext(
-      createRunContext({
-        runtimeHost: host,
-        streamId: parentStreamId,
-        executionId: 'parent-exec',
-        model: 'deepseekT',
-      }),
+      parentRunContext({ runtimeHost: host, streamId: parentStreamId }),
       () => callDelegateReview(),
     );
 

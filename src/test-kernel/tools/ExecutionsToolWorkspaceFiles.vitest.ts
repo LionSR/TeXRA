@@ -124,6 +124,15 @@ async function writeSidecarTodos(
   );
 }
 
+/** Mocks the storage reads for a completed, non-subagent toolUse execution. */
+function mockCompletedExecution(): void {
+  mocks.readMeta.mockResolvedValue({
+    timestamp: '2026-06-15T09:36:02.345Z',
+    category: 'toolUse',
+  });
+  mocks.readConfig.mockResolvedValue(config);
+}
+
 describe('ExecutionsTool', () => {
   setupPlatform({}, { fs: nodeFilesystem });
 
@@ -356,11 +365,7 @@ describe('ExecutionsTool', () => {
           activeForm: 'Reading the sidecar work plan',
         },
       ]);
-      mocks.readMeta.mockResolvedValue({
-        timestamp: '2026-06-15T09:36:02.345Z',
-        category: 'toolUse',
-      });
-      mocks.readConfig.mockResolvedValue(config);
+      mockCompletedExecution();
       mocks.readTodos.mockResolvedValue([
         { content: 'Read the old KV todo', status: 'pending' },
       ]);
@@ -377,11 +382,7 @@ describe('ExecutionsTool', () => {
 
   it('falls back to legacy KV todos when completed summary sidecars are absent', async () => {
     await withTempStorage(async () => {
-      mocks.readMeta.mockResolvedValue({
-        timestamp: '2026-06-15T09:36:02.345Z',
-        category: 'toolUse',
-      });
-      mocks.readConfig.mockResolvedValue(config);
+      mockCompletedExecution();
       mocks.readTodos.mockResolvedValue([
         { content: 'Read the old KV todo', status: 'pending' },
       ]);
@@ -437,11 +438,7 @@ describe('ExecutionsTool', () => {
           activeForm: 'Doing the stale sidecar todo',
         },
       ]);
-      mocks.readMeta.mockResolvedValue({
-        timestamp: '2026-06-15T09:36:02.345Z',
-        category: 'toolUse',
-      });
-      mocks.readConfig.mockResolvedValue(config);
+      mockCompletedExecution();
       mocks.readTodos.mockResolvedValue([
         { content: 'Fresher legacy todo', status: 'completed' },
       ]);
@@ -476,11 +473,7 @@ describe('ExecutionsTool', () => {
       const sidecarMtime = (
         await StorageFS.stat(`${streamDataDir(streamId)}/workPlan.json`)
       ).mtime;
-      mocks.readMeta.mockResolvedValue({
-        timestamp: '2026-06-15T09:36:02.345Z',
-        category: 'toolUse',
-      });
-      mocks.readConfig.mockResolvedValue(config);
+      mockCompletedExecution();
       mocks.readTodos.mockResolvedValue([
         { content: 'Fresher legacy todo', status: 'completed' },
       ]);
