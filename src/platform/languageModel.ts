@@ -33,6 +33,13 @@ export interface LanguageModelTextPart {
   readonly text: string;
 }
 
+/** Binary image input passed to an editor-supplied language model. */
+export interface LanguageModelDataPart {
+  readonly kind: 'data';
+  readonly data: Uint8Array;
+  readonly mimeType: string;
+}
+
 export interface LanguageModelToolCallPart {
   readonly kind: 'toolCall';
   readonly callId: string;
@@ -50,7 +57,9 @@ export type LanguageModelMessage =
   | {
       readonly role: 'user';
       readonly content: readonly (
-        LanguageModelTextPart | LanguageModelToolResultPart
+        | LanguageModelTextPart
+        | LanguageModelDataPart
+        | LanguageModelToolResultPart
       )[];
     }
   | {

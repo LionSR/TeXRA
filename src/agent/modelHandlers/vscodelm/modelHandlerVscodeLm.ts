@@ -2,6 +2,7 @@
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
   LanguageModelPortError,
+  type LanguageModelDataPart,
   type LanguageModelMessage,
   type LanguageModelPort,
   type LanguageModelTextPart,
@@ -39,6 +40,9 @@ import type {
   ToolResult,
 } from '@shared/schemas/toolResult';
 
+// Local imports - utilities
+import { getMimeType } from '@utils/files';
+
 // Local imports - model handlers
 import { ModelHandler } from '../ModelHandler';
 import { toVscodeLmTools } from '../toolConversion';
@@ -60,8 +64,10 @@ export interface VscodeLmResponse {
     typeof OPENAI_CHAT_FINISH.STOP | typeof OPENAI_CHAT_FINISH.TOOL_CALLS;
 }
 
-const TEXT_ONLY_ERROR =
-  'VS Code language models currently support text input only in TeXRA. Image, PDF, and audio attachments are not supported.';
+const VISION_UNSUPPORTED_ERROR =
+  'The selected VS Code language model does not support image input.';
+const IMAGE_INPUT_ONLY_ERROR =
+  'VS Code language models support image attachments in TeXRA, but audio and other native file inputs are not supported.';
 
 function joinText(...sections: Array<string | undefined>): string {
   return sections
@@ -153,8 +159,18 @@ function tagVscodeLmError(error: unknown, provider: string): void {
   });
 }
 
-function requireTextOnly(mediaFiles?: readonly FileLocation[]): void {
-  if (mediaFiles?.length) throw new Error(TEXT_ONLY_ERROR);
+function requireSupportedMedia(
+  mediaFiles: readonly FileLocation[] | undefined,
+  supportsVision: boolean,
+): void {
+  if (!mediaFiles?.length) return;
+  if (!supportsVision) throw new Error(VISION_UNSUPPORTED_ERROR);
+
+  const unsupported = mediaFiles.find(({ absolutePath }) => {
+    const mimeType = getMimeType(absolutePath);
+    return mimeType !== 'application/pdf' && !mimeType?.startsWith('image/');
+  });
+  if (unsupported) throw new Error(IMAGE_INPUT_ONLY_ERROR);
 }
 
 function requireLanguageModelPort(): LanguageModelPort {
@@ -175,12 +191,12 @@ export class ModelHandlerVscodeLm extends ModelHandler<
   VscodeLmToolCall,
   LanguageModelPort,
   VscodeLmResponse,
-  never
+  LanguageModelDataPart
 > {
   constructor(config: ModelConfig) {
     super(config);
-    this.capabilities.supportsVision = false;
     this.capabilities.supportsNativeAudio = false;
+    this.capabilities.supportsNativePdf = false;
     this.capabilities.supportsAssistantPrefill = false;
     this.capabilities.supportsTokenCounting = true;
   }
@@ -269,12 +285,15 @@ export class ModelHandlerVscodeLm extends ModelHandler<
     mediaFiles?: FileLocation[],
     systemPrompt?: string,
   ): Promise<LanguageModelMessage[]> {
-    requireTextOnly(mediaFiles);
+    requireSupportedMedia(mediaFiles, this.capabilities.supportsVision);
+    const media = mediaFiles?.length
+      ? await this.createMediaForRound(mediaFiles, 'initial')
+      : [];
     return foldSystemPromptIntoVscodeLmMessages(
       [
         {
           role: 'user',
-          content: [textPart(joinText(userPrefix, userRequest))],
+          content: [textPart(joinText(userPrefix, userRequest)), ...media],
         },
       ],
       systemPrompt,
@@ -286,13 +305,35 @@ export class ModelHandlerVscodeLm extends ModelHandler<
     userMessage: string,
     mediaFiles?: FileLocation[],
   ): Promise<LanguageModelMessage[]> {
-    requireTextOnly(mediaFiles);
-    return [...messages, { role: 'user', content: [textPart(userMessage)] }];
+    requireSupportedMedia(mediaFiles, this.capabilities.supportsVision);
+    const media = mediaFiles?.length
+      ? await this.createMediaForRound(mediaFiles, 'followUp')
+      : [];
+    return [
+      ...messages,
+      { role: 'user', content: [textPart(userMessage), ...media] },
+    ];
   }
 
-  createMediaContent(mediaMessage: MediaEntry[]): never[] {
-    if (mediaMessage.length) throw new Error(TEXT_ONLY_ERROR);
-    return [];
+  createMediaContent(mediaMessage: MediaEntry[]): LanguageModelDataPart[] {
+    return mediaMessage.flatMap((media) => {
+      if (
+        media.media_category !== 'image' ||
+        !media.media_type.startsWith('image/')
+      ) {
+        throw new Error(IMAGE_INPUT_ONLY_ERROR);
+      }
+      if (!media.binary_data) {
+        throw new Error(`Missing binary image data for ${media.file_name}.`);
+      }
+      return [
+        {
+          kind: 'data' as const,
+          data: media.binary_data,
+          mimeType: media.media_type,
+        },
+      ];
+    });
   }
 
   extractResponse(response: VscodeLmResponse): ExtractResponseResult {
@@ -457,11 +498,23 @@ export class ModelHandlerVscodeLm extends ModelHandler<
   }
 
   async addMediaToUserMessage(
-    _messages: LanguageModelMessage[],
+    messages: LanguageModelMessage[],
     mediaFiles: FileLocation[],
   ): Promise<MediaAttachmentKind[]> {
-    requireTextOnly(mediaFiles);
-    return [];
+    requireSupportedMedia(mediaFiles, this.capabilities.supportsVision);
+    if (!mediaFiles.length) return [];
+
+    const index = messages.findLastIndex((message) => message.role === 'user');
+    const message = messages[index];
+    if (message?.role !== 'user') return [];
+
+    const media = await this.createMediaForRound(mediaFiles, 'insert');
+    if (!media.length) return [];
+    messages[index] = {
+      role: 'user',
+      content: [...message.content, ...media],
+    };
+    return this.consumeInsertedAttachmentKinds('insert');
   }
 
   override async estimateTokenCount(
