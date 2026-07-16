@@ -5,17 +5,20 @@
  */
 import * as vscode from 'vscode';
 
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
+import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import type { WorkspaceProvider } from '@platform/interfaces';
 
 export class VscodeWorkspace implements WorkspaceProvider {
+  private readonly workspace = createNodeWorkspace(() =>
+    this.rawWorkspacePath(),
+  );
+
   private rawWorkspacePath(): string | undefined {
     return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   }
 
   getWorkspacePath(): string | undefined {
-    const workspacePath = this.rawWorkspacePath();
-    return workspacePath ? canonicalizeWorkspacePath(workspacePath) : undefined;
+    return this.workspace.getWorkspacePath();
   }
 
   getLegacyWorkspacePaths(): readonly string[] {
@@ -24,6 +27,6 @@ export class VscodeWorkspace implements WorkspaceProvider {
   }
 
   asRelativePath(filePath: string): string {
-    return vscode.workspace.asRelativePath(filePath, false);
+    return this.workspace.asRelativePath(filePath);
   }
 }
