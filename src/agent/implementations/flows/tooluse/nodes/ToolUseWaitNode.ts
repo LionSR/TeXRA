@@ -200,7 +200,6 @@ export class ToolUseWaitNode<C> extends Node<
     // must not emit updateQueuedFollowUps via the consume callback. They
     // also don't need to be replayed in the chat log.
     if (!execRes.synthetic) {
-      onFollowUpConsumed?.();
       const instruction = userFollowUpInstruction(execRes.followUps);
       if (instruction && shared.stateSlices) {
         shared.stateSlices.userChannels.transient.INSTRUCTION = instruction;
@@ -233,6 +232,14 @@ export class ToolUseWaitNode<C> extends Node<
           );
         }
       }
+    }
+
+    // Acknowledge consumption only after every item actually landed in
+    // `shared.messages`: an append failure (e.g. corrupt media) must leave
+    // the batch unacknowledged so the resume wrapper restores it for replay
+    // instead of treating the lost input as consumed.
+    if (!execRes.synthetic) {
+      onFollowUpConsumed?.();
     }
 
     return FlowTransition.CONTINUE;
