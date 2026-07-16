@@ -46,7 +46,15 @@ function PlainEntryRows({
   readonly fillWidth?: boolean;
   readonly layout: TranscriptEntryLayout;
 }): React.JSX.Element {
-  const lines = displayLines(layout, fillWidth);
+  const isInquiryContinuation =
+    entry.role === 'user' && isInquiryContinuationText(entry.text);
+  // User turns are full-width inverse bands in both static and live panes.
+  // Inquiry continuations remain ordinary prefixed rows and only fill when
+  // their bounded caller requests it.
+  const lines = displayLines(
+    layout,
+    fillWidth === true || (entry.role === 'user' && !isInquiryContinuation),
+  );
   const paddingX = layout.inset / 2;
   const boxProps = {
     flexDirection: 'column' as const,
@@ -55,7 +63,7 @@ function PlainEntryRows({
     paddingX,
   };
 
-  if (entry.role === 'user' && isInquiryContinuationText(entry.text)) {
+  if (isInquiryContinuation) {
     return (
       <Box {...boxProps}>
         {lines.map((line, index) => (
