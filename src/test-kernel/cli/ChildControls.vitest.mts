@@ -376,6 +376,102 @@ describe('CLI child execution controls', () => {
     ]);
   });
 
+  it('shows the subagent own final response as the picker summary', () => {
+    const { entries, streams } = childFixture('root', {
+      activeOnly: [
+        {
+          kind: 'subagent',
+          executionId: 'agent-1',
+          agentName: 'reviewer',
+          childStreamId: 'child-a',
+          status: STREAM_PHASE.WAITING,
+          elapsed: '20s',
+        },
+      ],
+      extraStreams: new Map([
+        [
+          'child-a',
+          slice({
+            streamId: 'child-a',
+            status: STREAM_PHASE.WAITING,
+            entries: [
+              {
+                id: 'entry-1',
+                role: 'user',
+                text: 'Review the introduction for clarity.',
+                finalized: true,
+              },
+              {
+                id: 'entry-2',
+                role: 'assistant',
+                text: 'Tightened the opening paragraph and fixed two typos.',
+                finalized: true,
+              },
+            ],
+          }),
+        ],
+      ]),
+    });
+
+    expect(
+      buildChildControlItems('root', entries, streams, 'subagents'),
+    ).toMatchObject([
+      {
+        executionId: 'agent-1',
+        description:
+          'waiting for you · 20s · Tightened the opening paragraph and fixed two typos.',
+      },
+    ]);
+  });
+
+  it('falls back to the first user instruction when no final response exists yet', () => {
+    const { entries, streams } = childFixture('root', {
+      activeOnly: [
+        {
+          kind: 'subagent',
+          executionId: 'agent-1',
+          agentName: 'reviewer',
+          childStreamId: 'child-a',
+          status: 'running',
+          elapsed: '3s',
+        },
+      ],
+      extraStreams: new Map([
+        [
+          'child-a',
+          slice({
+            streamId: 'child-a',
+            status: 'running',
+            entries: [
+              {
+                id: 'entry-1',
+                role: 'user',
+                text: `Review the introduction for clarity and tone. ${'x'.repeat(100)}`,
+                finalized: true,
+              },
+              {
+                id: 'entry-2',
+                role: 'assistant',
+                text: 'Still drafting a response',
+                finalized: false,
+              },
+            ],
+          }),
+        ],
+      ]),
+    });
+
+    const [item] = buildChildControlItems(
+      'root',
+      entries,
+      streams,
+      'subagents',
+    );
+    expect(item?.description).toBe(
+      `running · 3s · Review the introduction for clarity and tone. ${'x'.repeat(53)}…`,
+    );
+  });
+
   it('derives live elapsed text for running child executions', () => {
     const parentSlice = slice({
       activeProcesses: [
