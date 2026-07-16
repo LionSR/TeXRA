@@ -1,6 +1,8 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
+import { createRequire } from 'node:module';
+
 import { describe, expect, it } from 'vitest';
 
 import { buildChildStreamEntries } from '@test/support/childStreamEntries';
@@ -37,6 +39,7 @@ import {
   selectTranscriptEntriesForViewport,
 } from '@cli/chat/tui/panes/transcriptViewport';
 import {
+  activeStreamId,
   resetCliState,
   patchStream,
   streams,
@@ -60,6 +63,9 @@ import {
 } from '@shared/schemas';
 
 const STREAM_ID = 'cli-test-stream' as StreamTabId;
+const cliRequire = createRequire(
+  new URL('../../../packages/cli/package.json', import.meta.url),
+);
 const SESSION_META = {
   agent: 'research',
   model: 'deepseekT',
@@ -146,6 +152,83 @@ function processEntry(
     },
   };
 }
+
+async function renderConversationPane(maxRows = 2): Promise<string> {
+  const ink = (await import(cliRequire.resolve('ink'))) as any;
+  const React = ((await import(cliRequire.resolve('react'))) as any).default;
+  const { ConversationPane } =
+    await import('@cli/chat/tui/panes/ConversationPane');
+  return ink.renderToString(
+    React.createElement(ConversationPane, { maxRows, width: 80 }),
+  );
+}
+
+describe('CLI conversation pane liveness', () => {
+  it('renders working and thinking liveness labels for active runs', async () => {
+    resetCliState();
+    activeStreamId.set(STREAM_ID);
+    patchStream(STREAM_ID, (slice) => ({
+      ...slice,
+      status: STREAM_PHASE.RUNNING,
+      runStartedAt: Date.now() - 42_000,
+      thinkingActive: false,
+    }));
+
+    try {
+      const working = await renderConversationPane();
+      expect(working).toContain('Working');
+      expect(working).toMatch(/4[23]s/);
+
+      patchStream(STREAM_ID, (slice) => ({
+        ...slice,
+        thinkingActive: true,
+      }));
+      const thinking = await renderConversationPane();
+      expect(thinking).toContain('Thinking');
+      expect(thinking).not.toContain('Working');
+    } finally {
+      resetCliState();
+    }
+  });
+
+  it('omits elapsed time when an active run has no start timestamp', async () => {
+    resetCliState();
+    activeStreamId.set(STREAM_ID);
+    patchStream(STREAM_ID, (slice) => ({
+      ...slice,
+      status: STREAM_PHASE.RUNNING,
+      runStartedAt: undefined,
+    }));
+
+    try {
+      const output = await renderConversationPane();
+      expect(output).toContain('Working');
+      expect(output).not.toMatch(/\d+s/);
+    } finally {
+      resetCliState();
+    }
+  });
+
+  it('gives a single squeezed row to pending content instead of liveness', async () => {
+    resetCliState();
+    activeStreamId.set(STREAM_ID);
+    patchStream(STREAM_ID, (slice) => ({
+      ...slice,
+      status: STREAM_PHASE.RUNNING,
+      runStartedAt: Date.now() - 42_000,
+      entries: [toolEntry('tool', TOOL_USE_STATUS.IN_PROGRESS)],
+    }));
+
+    try {
+      const output = await renderConversationPane(1);
+      expect(output).toContain('Bash');
+      expect(output).not.toContain('Working');
+      expect(output).not.toContain('Thinking');
+    } finally {
+      resetCliState();
+    }
+  });
+});
 
 describe('CLI conversation transcript splitting', () => {
   it('keeps only explicit finalized entries in scrollback', () => {
