@@ -54,6 +54,7 @@ export const PREFERRED_DEFAULT_MODELS: readonly string[] = [
   'gpt56--',
   'deepseekproT',
   'kimi26T',
+  'kimi3',
 ];
 
 /**

@@ -21,6 +21,7 @@ import { AgentError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from '@model/codexSubscriptionRouting';
 import { isGpt5ModelName } from '@model/modelNames';
+import { isOpenRouterRoutingUnsupported } from '@model/openRouterRouting';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import type { AgentCategory } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -274,6 +275,9 @@ function applyShortModelNamePreference(
   preferShortModelNames: boolean,
 ): ModelConfig {
   if (!preferShortModelNames) return config;
+  // Mode-selected registry entries share another entry's wire id. Their
+  // display-oriented shortName is not an API model identifier.
+  if (config.capabilities.reasoningMode !== undefined) return config;
   const short = config.shortName;
   if (!short || short === config.fullName) return config;
   return { ...config, fullName: short };
@@ -466,6 +470,15 @@ async function createModelHandlerForResolvedCompatibilityKey(
     agentCategory: AgentCategory | undefined;
   },
 ): Promise<ModelHandler> {
+  if (
+    compatibilityKey !== 'ModelHandlerValidation' &&
+    isOpenRouterRoutingUnsupported(config, useOpenRouter)
+  ) {
+    throw new Error(
+      `Model ${config.name} requires reasoning mode ${config.capabilities.reasoningMode}, which OpenRouter does not support. Disable OpenRouter and use the provider API directly.`,
+    );
+  }
+
   // ChatGPT subscription (Codex backend via the user's OAuth session) — an
   // async, key-neutral override of the Responses path: these are OpenAI
   // Responses-shaped models the user has opted to drive through their
