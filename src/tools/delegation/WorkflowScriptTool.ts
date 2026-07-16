@@ -28,7 +28,7 @@ import {
   sumCompletedWorkflowJournalCost,
 } from './workflowScriptRun';
 
-export const WorkflowScriptToolInputSchema = z.strictObject({
+const WorkflowScriptToolInputSchema = z.strictObject({
   agent: z
     .string()
     .min(1)
@@ -45,9 +45,7 @@ export const WorkflowScriptToolInputSchema = z.strictObject({
     .describe('JSON arguments exposed to the script as the global args value.'),
 });
 
-export type WorkflowScriptToolInput = z.infer<
-  typeof WorkflowScriptToolInputSchema
->;
+type WorkflowScriptToolInput = z.infer<typeof WorkflowScriptToolInputSchema>;
 
 function formatWorkflowResult(result: unknown): string {
   if (typeof result === 'string') return result;

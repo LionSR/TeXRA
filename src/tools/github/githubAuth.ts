@@ -15,16 +15,14 @@ import type { PlatformSecrets } from '@platform/secrets';
 export const GITHUB_TOKEN_STORAGE_KEY = 'github.token';
 
 /** Environment variables accepted by GitHub tools, in precedence order. */
-export const GITHUB_TOKEN_ENV_VARS = ['GH_TOKEN', 'GITHUB_TOKEN'] as const;
+const GITHUB_TOKEN_ENV_VARS = ['GH_TOKEN', 'GITHUB_TOKEN'] as const;
 
-export function normalizeGitHubToken(
-  token: string | undefined,
-): string | undefined {
+function normalizeGitHubToken(token: string | undefined): string | undefined {
   const trimmed = token?.trim();
   return trimmed ? trimmed : undefined;
 }
 
-export function getGitHubEnvToken(): string | undefined {
+function getGitHubEnvToken(): string | undefined {
   for (const envVar of GITHUB_TOKEN_ENV_VARS) {
     const token = normalizeGitHubToken(process.env[envVar]);
     if (token) return token;
