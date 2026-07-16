@@ -26,6 +26,7 @@ interface CliRunResultMetadata {
 
 type CliRunResultFor<T extends ExecuteAgentResult> = T & CliRunResultMetadata;
 
+// Announced during v0.39; keep through v0.40 and remove in v0.41.
 type PublishedCliRunResultFor<T extends ExecuteAgentResult> = T & {
   /** @deprecated Use `outcome`; this is a frozen projection for JSON-output compatibility. */
   status: ExecutionStatus;
@@ -55,7 +56,7 @@ export function toolUseResultText(result: CliToolUseRunResult): string {
   );
 }
 
-/** Add the frozen v0.40 status fields at the CLI serialization boundary. */
+/** Add legacy status fields through the v0.40 compatibility window. */
 export function serializeCliRunResult<T extends ExecuteAgentResult>(
   result: CliRunResultFor<T>,
 ): T extends ExecuteAgentResult ? PublishedCliRunResultFor<T> : never {
