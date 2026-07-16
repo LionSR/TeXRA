@@ -1657,6 +1657,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const reasoningEffort = rawEffort
       ? toOpenAIReasoningEffort(rawEffort)
       : undefined;
+    // Pro-mode registry entries (GPT-5.6 Pro) share the base model's wire id
+    // and select pro execution via `reasoning.mode` on the request.
+    const reasoningMode = this.capabilities.reasoningMode;
+    const reasoning: Reasoning | undefined =
+      reasoningEffort || reasoningMode
+        ? {
+            ...(reasoningEffort && { effort: reasoningEffort }),
+            ...(reasoningMode && { mode: reasoningMode }),
+          }
+        : undefined;
 
     // Phase 1: BUILD - Construct provider-specific request parameters
     const baseParams = {
@@ -1668,7 +1678,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           previous_response_id: this.chainState.getPreviousResponseId(),
         }),
       ...(convertedTools?.length && { tools: convertedTools }),
-      ...(reasoningEffort && { reasoning: { effort: reasoningEffort } }),
+      ...(reasoning && { reasoning }),
     };
 
     let maxOutputTokens = this.getEffectiveMaxOutputTokens();

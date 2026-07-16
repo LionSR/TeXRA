@@ -10,6 +10,7 @@ import {
   DEFAULT_MODEL_CAPABILITIES,
   type ModelConfig,
   ModelProvider,
+  ReasoningEffort,
 } from 'llm-zoo';
 import { OpenAIError } from 'openai';
 
@@ -165,6 +166,43 @@ function createMessages(count: number): ResponseInputItem[] {
 }
 
 describe('ModelHandlerOpenAIResponse.createResponse', () => {
+  it('sends reasoning.mode for pro-mode registry entries (GPT-5.6 Pro)', async () => {
+    // GPT-5.6 Pro shares gpt-5.6-sol's wire id; pro execution is selected by
+    // the request's reasoning.mode, driven by the reasoningMode capability.
+    const handler = createHandler({
+      name: 'gpt56pro',
+      fullName: 'gpt-5.6-sol',
+      shortName: 'gpt-5.6-pro',
+      capabilities: {
+        ...DEFAULT_MODEL_CAPABILITIES,
+        supportsReasoning: true,
+        supportsReasoningEffort: true,
+        reasoningEffort: ReasoningEffort.MEDIUM,
+        reasoningMode: 'pro',
+      },
+    });
+    let request: Record<string, unknown> | undefined;
+    const client = {
+      responses: {
+        create: async (params: Record<string, unknown>) => {
+          request = params;
+          return createResponse('resp-pro-mode', { input_tokens: 12 });
+        },
+      },
+    };
+
+    await handler.createResponse({
+      client: client as any,
+      messages: createMessages(1),
+      temperature: 0,
+    });
+
+    const reasoning = request?.reasoning as
+      { effort?: string; mode?: string } | undefined;
+    assert.equal(reasoning?.mode, 'pro');
+    assert.equal(reasoning?.effort, 'medium');
+  });
+
   it('enables parallel tool calls by default', async () => {
     const handler = createHandler();
     let request: Record<string, unknown> | undefined;

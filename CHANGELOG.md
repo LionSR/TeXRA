@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - **One conversation history across TeXRA apps** — sessions created in the
   CLI, desktop app, or VS Code extension now appear in the same project
   history when that project is opened in another TeXRA app.
+- **Kimi K3** — Moonshot's new flagship model (1M-token context, vision, always-on
+  reasoning) is available and included in the default model list.
+- **GPT-5.6 Pro** — OpenAI's pro reasoning mode for GPT-5.6 is available as a
+  model choice for the hardest, latency-tolerant tasks.
 - **Custom agents can run resumable multi-agent workflows** — agent authors can
   opt into deterministic workflow scripts whose completed steps resume after
   interruption and whose progress appears in the existing session view.

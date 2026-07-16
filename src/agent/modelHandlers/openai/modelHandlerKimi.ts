@@ -42,8 +42,12 @@ const AMBIGUOUS_THINKING_DEFAULT_FULLNAMES: ReadonlySet<string> = (() => {
 })();
 
 interface FixedTemperatureRule {
-  /** Resolve the temperature Moonshot requires for this model family. */
-  readonly temperature: (supportsReasoning: boolean) => number;
+  /**
+   * Resolve the temperature Moonshot requires for this model family.
+   * `undefined` means the request must omit `temperature` entirely
+   * (Moonshot fixes sampling server-side and documents omitting the field).
+   */
+  readonly temperature: (supportsReasoning: boolean) => number | undefined;
   /** Whether compaction-summary calls must also drop `thinking` entirely. */
   readonly disableThinkingInCompactionSummary?: boolean;
 }
@@ -71,6 +75,10 @@ const FIXED_TEMPERATURE_BY_FULLNAME: ReadonlyMap<string, FixedTemperatureRule> =
       'kimi-k2.7-code',
       { temperature: () => 1, disableThinkingInCompactionSummary: true },
     ],
+    // kimi-k3 fixes temperature=1.0 server-side and its docs say to omit the
+    // field from requests (alongside top_p/n/penalties, which TeXRA never
+    // sends to Moonshot anyway).
+    ['kimi-k3', { temperature: () => undefined }],
   ]);
 
 /** Response from Kimi's token estimation API */
@@ -106,6 +114,16 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
   // Kimi K2.5 supports vision with standard OpenAI-style image_url format;
   // only stringify content for non-vision variants so image parts survive.
   protected override readonly convertContentToStringUnlessVision = true;
+
+  /**
+   * Kimi K3 is the only Moonshot model with `supportsReasoningEffort` (K2.x
+   * use the `thinking` parameter instead), and its `reasoning_effort` field
+   * currently accepts only `'max'` — which the shared OpenAI clamp lowers to
+   * `'xhigh'`, a value Moonshot rejects. Send Moonshot's own vocabulary.
+   */
+  protected override validateReasoningEffort(_effort: string): string {
+    return 'max';
+  }
 
   protected override getThinkingParameter():
     { type: 'enabled' | 'disabled' } | undefined {
@@ -154,11 +172,18 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
     const fixedTemperature = FIXED_TEMPERATURE_BY_FULLNAME.get(
       this.config.fullName,
     );
-    if (fixedTemperature?.disableThinkingInCompactionSummary) {
-      params.temperature = fixedTemperature.temperature(
+    if (fixedTemperature) {
+      const temperature = fixedTemperature.temperature(
         this.capabilities.supportsReasoning,
       );
-      delete params.thinking;
+      if (temperature === undefined) {
+        delete params.temperature;
+      } else if (fixedTemperature.disableThinkingInCompactionSummary) {
+        params.temperature = temperature;
+      }
+      if (fixedTemperature.disableThinkingInCompactionSummary) {
+        delete params.thinking;
+      }
     }
     return params;
   }

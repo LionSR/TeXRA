@@ -206,6 +206,39 @@ describe('OpenAI-compatible provider request params', () => {
     assert.equal(createCalls[0].thinking, undefined);
   });
 
+  it('omits temperature and sends reasoning_effort max for Kimi K3', async () => {
+    // Moonshot fixes K3 sampling server-side (docs say omit temperature), and
+    // its reasoning_effort field accepts only 'max' — the shared OpenAI clamp
+    // would otherwise lower our MAX tier to 'xhigh', which Moonshot rejects.
+    const handler = new ModelHandlerKimi(
+      buildConfig(ModelProvider.MOONSHOT, {
+        name: 'kimi3',
+        fullName: 'kimi-k3',
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: true,
+          supportsReasoningEffort: true,
+          reasoningEffort: ReasoningEffort.MAX,
+          supportsVision: true,
+        },
+      }),
+    );
+    handler.setLogger(createLoggerStub() as AgentTrace);
+    (handler as any).getStreamingConfig = () => false;
+    (handler as any).estimateTokenCount = async () => 100;
+
+    const { client, createCalls } = createClientStub();
+    await handler.createResponse({
+      client: client as any,
+      messages: [{ role: 'user', content: 'think' }],
+      temperature: 0,
+    });
+
+    assert.equal(createCalls[0].temperature, undefined);
+    assert.equal(createCalls[0].reasoning_effort, 'max');
+    assert.equal(createCalls[0].thinking, undefined);
+  });
+
   it('disables thinking for the Kimi K2.6 non-reasoning entry sharing a fullName with its thinking sibling (#7081)', async () => {
     // kimi26 and kimi26T both resolve to fullName 'kimi-k2.6' in the live
     // registry — the same shared-fullName ambiguity as K2.5 — but before
