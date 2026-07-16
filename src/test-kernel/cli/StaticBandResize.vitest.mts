@@ -244,6 +244,7 @@ describe('Static band resize', () => {
 
     resetCliState({
       agent: 'research',
+      category: AgentCategory.ToolUse,
       model: 'test-model',
       modelSource: 'builtin-default',
       cwd: '/tmp/listener-proof',
