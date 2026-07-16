@@ -50,6 +50,7 @@ import {
 interface InterruptibleFlowInput {
   checkInterruption(): boolean;
   onInterrupt?: () => void;
+  takePendingFollowUps?: () => readonly unknown[];
 }
 
 interface TestFlowContext {
@@ -130,6 +131,7 @@ describe('resumeToolUseFromSnapshot cancellation handoff', () => {
           },
         };
         const teardown = onSetup(flowContext);
+        input.takePendingFollowUps?.();
         if (!input.checkInterruption()) mocks.invokeModelOrTool();
         teardown?.();
         return {
@@ -148,16 +150,27 @@ describe('resumeToolUseFromSnapshot cancellation handoff', () => {
     } as unknown as ToolUseSessionSnapshot;
 
     const result = await resumeToolUseFromSnapshot(snapshot, runtimeHost, {
-      setupSession: () => order.push('setup'),
+      takePendingFollowUps: () => {
+        order.push('take');
+        return [];
+      },
       isCancellationRequested: () => {
         order.push('query');
         expect(attachedContext).toBeDefined();
         return true;
       },
+      onCancellationAtFlowAttachment: () => order.push('cancel'),
     });
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
     expect(mocks.invokeModelOrTool).not.toHaveBeenCalled();
-    expect(order).toEqual(['attach', 'setup', 'query', 'interrupt', 'detach']);
+    expect(order).toEqual([
+      'attach',
+      'query',
+      'cancel',
+      'interrupt',
+      'take',
+      'detach',
+    ]);
   });
 });

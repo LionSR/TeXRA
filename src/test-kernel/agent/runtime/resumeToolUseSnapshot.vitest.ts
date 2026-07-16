@@ -6,7 +6,9 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const resumeToolUseFromSnapshotMock = vi.hoisted(() => vi.fn(async () => {}));
+const resumeToolUseFromSnapshotMock = vi.hoisted(() =>
+  vi.fn(async (..._args: unknown[]): Promise<unknown> => undefined),
+);
 
 vi.mock('@agent/runtime/executeAgent', () => ({
   resumeToolUseFromSnapshot: resumeToolUseFromSnapshotMock,
@@ -21,7 +23,12 @@ import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse'
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
-import { STREAM_PHASE, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  STREAM_PHASE,
+  STREAM_STATUS,
+  type StreamTabId,
+} from '@shared/schemas';
 import { recordSessionEvents, sessionFactPayloads } from '../progressTestUtils';
 
 const STREAM = 'stream:tooluse-resume' as StreamTabId;
@@ -32,36 +39,37 @@ function snapshot(parentStreamId?: StreamTabId): ToolUseSessionSnapshot {
   return { streamId: STREAM, parentStreamId } as ToolUseSessionSnapshot;
 }
 
-function capturedResumeOptions(): {
+interface CapturedResumeOptions {
   parentStreamId?: StreamTabId;
   isCancellationRequested?: () => boolean;
-  setupSession: (session: {
-    appendFollowUp(item: FollowUpQueueInput): void;
-  }) => void;
-} {
-  const calls = resumeToolUseFromSnapshotMock.mock
-    .calls as unknown as unknown[][];
-  return calls.at(-1)?.[2] as {
-    parentStreamId?: StreamTabId;
-    isCancellationRequested?: () => boolean;
-    setupSession: (session: {
-      appendFollowUp(item: FollowUpQueueInput): void;
-    }) => void;
-  };
+  drainedFollowUps?: readonly FollowUpQueueInput[];
+  takePendingFollowUps: () => readonly FollowUpQueueInput[];
+  onFollowUpConsumed?: () => void;
+  onCancellationAtFlowAttachment?: () => void;
 }
 
-/** Capture the `setupSession` replay callback handed to the leaf resume. */
-function capturedSetupSession(): (session: {
-  appendFollowUp(item: FollowUpQueueInput): void;
-}) => void {
+function capturedResumeOptions(): CapturedResumeOptions {
+  const calls = resumeToolUseFromSnapshotMock.mock
+    .calls as unknown as unknown[][];
+  return calls.at(-1)?.[2] as CapturedResumeOptions;
+}
+
+/** Capture the callback that closes the queue gap at flow attachment. */
+function capturedTakePendingFollowUps(): () => readonly FollowUpQueueInput[] {
   const options = capturedResumeOptions();
-  return options.setupSession;
+  return options.takePendingFollowUps;
 }
 
 describe('resumeToolUseSnapshot', () => {
   beforeEach(() => {
     resumeToolUseFromSnapshotMock.mockReset();
-    resumeToolUseFromSnapshotMock.mockResolvedValue(undefined);
+    resumeToolUseFromSnapshotMock.mockImplementation(
+      async (...args: unknown[]) => {
+        const options = args[2] as CapturedResumeOptions;
+        options.onFollowUpConsumed?.();
+        return undefined;
+      },
+    );
     runtimeHost.emit.mockReset();
     recordedSession = recordSessionEvents(defaultSession().events, {
       scope: 'session',
@@ -75,7 +83,7 @@ describe('resumeToolUseSnapshot', () => {
     clearStreamStatusForTest(defaultSession().status, STREAM);
   });
 
-  it('drains queued follow-ups, replays them, and notifies the UI', async () => {
+  it('drains queued follow-ups, hands them to the flow, and notifies the UI', async () => {
     defaultSession().followUps.enqueue(
       STREAM,
       { text: 'queued one' },
@@ -86,12 +94,18 @@ describe('resumeToolUseSnapshot', () => {
       resumeToolUseSnapshot(snapshot(), { runtimeHost }),
     ).resolves.toBe(true);
 
-    const appendFollowUp = vi.fn();
-    capturedSetupSession()({ appendFollowUp });
-    expect(appendFollowUp).toHaveBeenCalledWith({
-      text: 'queued one',
-      origin: 'user',
-    });
+    // The initial batch travels via the direct drainedFollowUps handoff (a
+    // subagent's WAITING cursor never reads the stream queue). The attachment
+    // drain supplies any item that arrived before the live context existed.
+    expect(capturedResumeOptions().drainedFollowUps).toEqual([
+      {
+        text: 'queued one',
+        displayText: undefined,
+        mediaFiles: undefined,
+        origin: 'user',
+      },
+    ]);
+    expect(capturedTakePendingFollowUps()()).toEqual([]);
     expect(
       sessionFactPayloads(
         recordedSession?.events ?? [],
@@ -112,16 +126,9 @@ describe('resumeToolUseSnapshot', () => {
       explicitFollowUp: 'typed alongside resume',
     });
 
-    const appendFollowUp = vi.fn();
-    capturedSetupSession()({ appendFollowUp });
-    expect(appendFollowUp).toHaveBeenNthCalledWith(1, {
-      text: 'typed alongside resume',
-      origin: 'user',
-    });
-    expect(appendFollowUp).toHaveBeenNthCalledWith(2, {
-      text: 'queued one',
-      origin: 'user',
-    });
+    expect(
+      capturedResumeOptions().drainedFollowUps?.map((item) => item.text),
+    ).toEqual(['typed alongside resume', 'queued one']);
   });
 
   it('keeps ready-boundary and setup-race follow-ups in order', async () => {
@@ -130,6 +137,17 @@ describe('resumeToolUseSnapshot', () => {
         text: 'queued at the ready boundary',
       });
     });
+    let attachmentFollowUps: readonly FollowUpQueueInput[] = [];
+    resumeToolUseFromSnapshotMock.mockImplementationOnce(
+      async (...args: unknown[]) => {
+        const options = args[2] as ReturnType<typeof capturedResumeOptions>;
+        defaultSession().followUps.enqueue(STREAM, {
+          text: 'queued after the initial drain',
+        });
+        attachmentFollowUps = options.takePendingFollowUps();
+        options.onFollowUpConsumed?.();
+      },
+    );
 
     await resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
       onFollowUpQueueReady,
@@ -137,19 +155,15 @@ describe('resumeToolUseSnapshot', () => {
     });
 
     expect(onFollowUpQueueReady).toHaveBeenCalledOnce();
-    defaultSession().followUps.enqueue(STREAM, {
-      text: 'queued after the initial drain',
-    });
-    const appendFollowUp = vi.fn();
-    capturedSetupSession()({ appendFollowUp });
-    expect(appendFollowUp).toHaveBeenNthCalledWith(1, {
-      text: 'queued at the ready boundary',
-      origin: 'user',
-    });
-    expect(appendFollowUp).toHaveBeenNthCalledWith(2, {
-      text: 'queued after the initial drain',
-      origin: 'user',
-    });
+    expect(
+      [
+        ...(capturedResumeOptions().drainedFollowUps ?? []),
+        ...attachmentFollowUps,
+      ].map((item) => item.text),
+    ).toEqual([
+      'queued at the ready boundary',
+      'queued after the initial drain',
+    ]);
   });
 
   it('passes snapshot parent stream identity to the leaf resume', async () => {
@@ -184,7 +198,6 @@ describe('resumeToolUseSnapshot', () => {
       { force: true },
     );
     const isCancellationRequested = vi.fn(() => true);
-    const appendFollowUp = vi.fn();
     resumeToolUseFromSnapshotMock.mockImplementationOnce(
       async (...args: unknown[]) => {
         const options = args[2] as ReturnType<typeof capturedResumeOptions>;
@@ -194,7 +207,10 @@ describe('resumeToolUseSnapshot', () => {
           { text: 'queued during resume' },
           { force: true },
         );
-        options.setupSession({ appendFollowUp });
+        if (options.isCancellationRequested?.()) {
+          options.onCancellationAtFlowAttachment?.();
+        }
+        options.takePendingFollowUps();
         seedStreamStatusForTest(
           defaultSession().status,
           STREAM,
@@ -210,11 +226,45 @@ describe('resumeToolUseSnapshot', () => {
       }),
     ).resolves.toBe(false);
 
-    expect(appendFollowUp).not.toHaveBeenCalled();
     expect(defaultSession().followUps.getAll(STREAM)).toEqual([
       'queued one',
       'queued during resume',
     ]);
+    expect(defaultSession().status.get(STREAM)).toBe(STREAM_STATUS.WAITING);
+  });
+
+  it('restores an unconsumed batch when cancellation lands after attachment', async () => {
+    defaultSession().followUps.enqueue(
+      STREAM,
+      { text: 'queued one' },
+      { force: true },
+    );
+    resumeToolUseFromSnapshotMock.mockImplementationOnce(
+      async (...args: unknown[]) => {
+        const options = args[2] as ReturnType<typeof capturedResumeOptions>;
+        options.takePendingFollowUps();
+        seedStreamStatusForTest(
+          defaultSession().status,
+          STREAM,
+          STREAM_PHASE.CANCELLED,
+        );
+        return {
+          category: 'toolUse',
+          outcome: RUN_OUTCOME.CANCELLED,
+          executionId: 'exec-cancelled',
+          streamId: STREAM,
+        };
+      },
+    );
+
+    await expect(
+      resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+        isCancellationRequested: () => false,
+        onError: vi.fn(),
+      }),
+    ).resolves.toBe(false);
+
+    expect(defaultSession().followUps.getAll(STREAM)).toEqual(['queued one']);
     expect(defaultSession().status.get(STREAM)).toBe(STREAM_STATUS.WAITING);
   });
 
@@ -229,7 +279,7 @@ describe('resumeToolUseSnapshot', () => {
     resumeToolUseFromSnapshotMock.mockImplementationOnce(
       async (...args: unknown[]) => {
         const options = args[2] as ReturnType<typeof capturedResumeOptions>;
-        options.setupSession({ appendFollowUp: vi.fn() });
+        options.takePendingFollowUps();
       },
     );
 
@@ -253,7 +303,7 @@ describe('resumeToolUseSnapshot', () => {
     ).toHaveLength(2);
   });
 
-  it('does not duplicate a live batch when post-setup cancellation result handling throws', async () => {
+  it('does not restore a consumed batch when cancellation result handling throws', async () => {
     const failure = new Error('result callback failed');
     const reportFailure = vi.fn();
     let cancellationRequested = false;
@@ -266,10 +316,8 @@ describe('resumeToolUseSnapshot', () => {
     resumeToolUseFromSnapshotMock.mockImplementationOnce(
       async (...args: unknown[]) => {
         const options = args[2] as ReturnType<typeof capturedResumeOptions>;
-        const liveQueue = defaultSession().followUps.acquire(STREAM);
-        options.setupSession({
-          appendFollowUp: (item) => liveQueue.enqueue(item),
-        });
+        options.takePendingFollowUps();
+        options.onFollowUpConsumed?.();
         cancellationRequested = true;
         seedStreamStatusForTest(
           defaultSession().status,
@@ -289,7 +337,7 @@ describe('resumeToolUseSnapshot', () => {
       }),
     ).resolves.toBe(false);
 
-    expect(defaultSession().followUps.getAll(STREAM)).toEqual(['queued one']);
+    expect(defaultSession().followUps.getAll(STREAM)).toEqual([]);
     expect(reportFailure).toHaveBeenCalledWith(failure);
     expect(
       sessionFactPayloads(
@@ -297,6 +345,52 @@ describe('resumeToolUseSnapshot', () => {
         'updateQueuedFollowUps',
       ),
     ).toHaveLength(1);
+  });
+
+  it('treats a subagent parking back to WAITING as success without replaying follow-ups', async () => {
+    // Host-path resume of a WAITING subagent (e.g. a follow-up sent to a
+    // child stream from the progress view): the turn completes and the wait
+    // node parks the stream WAITING again. That is success — no failure
+    // surface, and the consumed follow-up must not be re-enqueued.
+    const reportFailure = vi.fn();
+    defaultSession().followUps.enqueue(
+      STREAM,
+      { text: 'queued one' },
+      { force: true },
+    );
+    resumeToolUseFromSnapshotMock.mockImplementationOnce(
+      async (...args: unknown[]) => {
+        const options = args[2] as ReturnType<typeof capturedResumeOptions>;
+        options.takePendingFollowUps();
+        options.onFollowUpConsumed?.();
+        seedStreamStatusForTest(
+          defaultSession().status,
+          STREAM,
+          STREAM_PHASE.WAITING,
+        );
+        return {
+          category: 'toolUse',
+          outcome: STREAM_PHASE.WAITING,
+          executionId: 'exec-waiting',
+          streamId: STREAM,
+        };
+      },
+    );
+
+    await expect(
+      resumeToolUseSnapshot(snapshot('stream:parent' as StreamTabId), {
+        runtimeHost,
+        explicitFollowUp: 'talk to the subagent',
+        reportFailure,
+      }),
+    ).resolves.toBe(true);
+
+    expect(
+      capturedResumeOptions().drainedFollowUps?.map((item) => item.text),
+    ).toEqual(['talk to the subagent', 'queued one']);
+    expect(reportFailure).not.toHaveBeenCalled();
+    expect(defaultSession().followUps.getAll(STREAM)).toEqual([]);
+    expect(defaultSession().status.get(STREAM)).toBe(STREAM_STATUS.WAITING);
   });
 
   it('re-enqueues follow-ups, settles to WAITING, and reports on failure', async () => {

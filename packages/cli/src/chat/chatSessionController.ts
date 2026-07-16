@@ -46,6 +46,7 @@ import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import { CLI_UNAVAILABLE_TOOLS } from '@cli/runtime/unavailableTools';
 import {
   EXECUTION_STATUS,
+  RUN_OUTCOME,
   STREAM_PHASE,
   type ExecutionId,
   type StreamTabId,
@@ -572,16 +573,7 @@ export function createChatSessionController(
             isCancellationRequested: () => session.stopRequested,
           }),
         )
-        .then((result) => {
-          if (session.streamId) {
-            projectStreamTranscript(session.streamId, { finalize: true });
-          }
-          session.runExitCode = runOutcomeExitCode(
-            result.outcome,
-            sessionContext,
-          );
-          notify({ kind: 'agentFinished' });
-        })
+        .then((result) => settleResumedTurn(result.outcome, sessionContext))
         .catch(reportRunFailure)
         .finally(finalize);
       // `session.runPromise` was already claimed synchronously above with
@@ -597,6 +589,25 @@ export function createChatSessionController(
       reportRunFailure(error);
       markChatTuiRunCompleted(session);
       resolveRunPromise();
+    }
+  };
+
+  /**
+   * One settlement site for a successfully resumed turn: finalize the
+   * transcript projection, map the outcome to the exit code, and announce
+   * completion. A subagent parking back to WAITING is a completed turn, not
+   * a finished agent, so it never fires `agentFinished`.
+   */
+  const settleResumedTurn = (
+    outcome: Parameters<typeof runOutcomeExitCode>[0],
+    sessionContext: CliContext,
+  ): void => {
+    if (session.streamId) {
+      projectStreamTranscript(session.streamId, { finalize: true });
+    }
+    session.runExitCode = runOutcomeExitCode(outcome, sessionContext);
+    if (outcome !== STREAM_PHASE.WAITING) {
+      notify({ kind: 'agentFinished' });
     }
   };
 
@@ -656,7 +667,8 @@ export function createChatSessionController(
         session.runExitCode = CliExitCode.Success;
         publishChatTuiRunState(session);
 
-        let resumedToWaiting = false;
+        let resumedOutcome: Parameters<typeof runOutcomeExitCode>[0] =
+          RUN_OUTCOME.COMPLETED;
         const resumed = await setCliHelperModel(currentModel).then(() =>
           resolveAndResumeStream(streamId, {
             runtimeHost,
@@ -672,7 +684,6 @@ export function createChatSessionController(
                 session: defaultSession(),
                 approvalPromptsUnavailable: approvalsUnavailable,
                 runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
-                allowWaitingResult: true,
                 extraFollowUps: options.extraFollowUps,
                 onFollowUpQueueReady: () => {
                   if (options.onFollowUpQueueReady) {
@@ -684,7 +695,7 @@ export function createChatSessionController(
                 },
                 isCancellationRequested: () => session.stopRequested,
                 onResult: (result) => {
-                  resumedToWaiting = result.outcome === STREAM_PHASE.WAITING;
+                  resumedOutcome = result.outcome;
                 },
                 onError: reportRunFailure,
               }),
@@ -704,13 +715,7 @@ export function createChatSessionController(
         );
 
         if (resumed) {
-          if (session.streamId) {
-            projectStreamTranscript(session.streamId, { finalize: true });
-          }
-          session.runExitCode = CliExitCode.Success;
-          if (!resumedToWaiting) {
-            notify({ kind: 'agentFinished' });
-          }
+          settleResumedTurn(resumedOutcome, sessionContext);
         } else if (session.stopRequested) {
           session.runExitCode = CliExitCode.Interrupted;
         }
