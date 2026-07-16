@@ -9,7 +9,7 @@ import {
   finalizeExecution,
   getExecutionStore,
   registerExecution,
-  releaseOwnedExecutionLease,
+  releaseOwnedExecutionLeaseAfterFailure,
   releaseOwnedExecutionLeaseBestEffort,
 } from '@agent/storage';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -279,8 +279,7 @@ export class BashTool extends defineTool({
         runtimeHost,
       });
     } catch (error) {
-      await releaseOwnedExecutionLease(executionId);
-      throw error;
+      throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
     }
     const { childStreamId, logger } = childStream;
     let stdoutTail = '';

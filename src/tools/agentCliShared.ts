@@ -1,7 +1,10 @@
 // Shared helpers for the agent-CLI tool modules (codex.ts, claudeAgent.ts).
 // Host-agnostic, VS Code-free.
 
-import { registerExecution, releaseOwnedExecutionLease } from '@agent/storage';
+import {
+  registerExecution,
+  releaseOwnedExecutionLeaseAfterFailure,
+} from '@agent/storage';
 import { type AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -198,8 +201,7 @@ export async function launchAgentCliSession(
     });
     await params.startLoop({ childStream, executionId });
   } catch (error) {
-    await releaseOwnedExecutionLease(executionId);
-    throw error;
+    throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
   }
 
   return {

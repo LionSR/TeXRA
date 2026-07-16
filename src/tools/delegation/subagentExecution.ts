@@ -8,7 +8,10 @@
  */
 
 // Local imports - agent
-import { registerExecution, releaseOwnedExecutionLease } from '@agent/storage';
+import {
+  registerExecution,
+  releaseOwnedExecutionLeaseAfterFailure,
+} from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -225,8 +228,7 @@ export async function executeSubagent(
       });
     }
   } catch (error) {
-    await releaseOwnedExecutionLease(executionId);
-    throw error;
+    throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
   }
 
   const meta = options?.approvalMeta;

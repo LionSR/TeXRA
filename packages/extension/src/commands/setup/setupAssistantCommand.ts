@@ -8,9 +8,8 @@ import {
 } from '@controllers/onboarding/setupLaunch';
 import { platform } from '@platform/platform';
 import { loadAgents } from '@agent/index';
-import { registerExecution } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { executeAgent } from '@agent/runtime/executeAgent';
+import { runAgent } from '@agent/runtime/runAgent';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
@@ -27,7 +26,6 @@ import {
 } from '@shared/copy/onboarding';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { agentName } from '@shared/schemas/agent';
-import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
@@ -259,11 +257,12 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
     await loadAgents();
 
     const launch = async () => {
-      const executionId = generateExecutionId();
-      await registerExecution(executionId, config, config.agent);
-      await executeAgent(config, executionId, {
-        runtimeHost: extensionAgentRuntimeHost,
-      });
+      await runAgent(
+        { config },
+        {
+          runtimeHost: extensionAgentRuntimeHost,
+        },
+      );
     };
 
     if (resolution.requiresOpenRouter) {

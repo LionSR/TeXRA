@@ -102,11 +102,6 @@
       "specifier": "@agent/index"
     },
     {
-      "file": "src/test-kernel/cli/RunChatRegistration.vitest.mts",
-      "form": "mock",
-      "specifier": "@agent/storage"
-    },
-    {
       "file": "src/test-kernel/cli/RunExecution.vitest.mts",
       "form": "mock",
       "specifier": "@agent/runtime/runAgent"

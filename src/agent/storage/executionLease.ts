@@ -186,6 +186,11 @@ function rememberOwnership(
     heartbeatTimer = setInterval(() => {
       for (const owned of ownedLeases.values()) {
         void heartbeat(owned).catch((error: unknown) => {
+          // A host that cannot renew the lease also cannot prove continued
+          // ownership to its peers. Ordinary execution persistence uses the
+          // same storage root and will normally fail on the same outage; keep
+          // the last lease record intact so peers remain fail-closed until the
+          // documented stale horizon rather than deleting it prematurely.
           logger.warn(
             CHANNEL,
             `Failed to heartbeat execution ${owned.executionId}: ${toErrorMessage(error)}`,
@@ -259,6 +264,22 @@ export async function releaseOwnedExecutionLease(
     (lease) => lease.executionId === executionId,
   );
   await Promise.all(ownerships.map(releaseOwnership));
+}
+
+/** Release during rollback without allowing cleanup failure to mask the cause. */
+export async function releaseOwnedExecutionLeaseAfterFailure(
+  executionId: ExecutionId,
+  primaryError: unknown,
+): Promise<unknown> {
+  try {
+    await releaseOwnedExecutionLease(executionId);
+    return primaryError;
+  } catch (releaseError) {
+    return new AggregateError(
+      [primaryError, releaseError],
+      `Execution ${executionId} failed and its lease could not be released`,
+    );
+  }
 }
 
 /**

@@ -8,7 +8,7 @@
 import PQueue from 'p-queue';
 
 import { StreamSnapshotStore } from '@transcript';
-import { getExecutionStore, registerExecution } from '@agent/storage';
+import { getExecutionStore } from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -16,10 +16,8 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import {
-  executeAgent,
-  resumeToolUseFromSnapshot,
-} from '@agent/runtime/executeAgent';
+import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
+import { runAgent } from '@agent/runtime/runAgent';
 import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
 import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
 import { defaultSession } from '@agent/runtime/SessionHandle';
@@ -27,10 +25,6 @@ import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import {
-  finalizeCliExecution,
-  type CliFinalizationFailureReporter,
-} from '@cli/runtime/executionFinalization';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
@@ -45,7 +39,6 @@ import {
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import { CLI_UNAVAILABLE_TOOLS } from '@cli/runtime/unavailableTools';
 import {
-  EXECUTION_STATUS,
   RUN_OUTCOME,
   STREAM_PHASE,
   type ExecutionId,
@@ -151,32 +144,6 @@ export function buildInitialChatAgentConfig({
     ...(cliMultiAgentPresetId ? { cliMultiAgentPresetId } : {}),
     ...(delegationAgentScope ? { delegationAgentScope } : {}),
   };
-}
-
-export async function registerFreshChatExecution(
-  executionId: ExecutionId,
-  configPayload: AgentConfigPayload,
-): Promise<AgentConfig> {
-  const config = AgentConfigSchema.parse(configPayload);
-  await registerExecution(executionId, config, config.agent);
-  return config;
-}
-
-export async function markRegisteredChatExecutionError(
-  executionId: ExecutionId,
-  options: {
-    readonly executionRegistered: boolean;
-    readonly lifecycleStarted: boolean;
-    readonly reportFinalizationFailure: CliFinalizationFailureReporter;
-  },
-): Promise<void> {
-  if (!options.executionRegistered || options.lifecycleStarted) return;
-  await finalizeCliExecution(
-    executionId,
-    EXECUTION_STATUS.ERROR,
-    'delete',
-    options.reportFinalizationFailure,
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -351,12 +318,6 @@ export function createChatSessionController(
       : CliExitCode.AgentError;
   };
 
-  // Durability failures remain visible even when the user intentionally
-  // stopped the run and the primary run error is therefore suppressed.
-  const reportFinalizationFailure = (error: Error): void => {
-    appendLocalErrorTranscript(toErrorMessage(error));
-  };
-
   // Build the runtime host shared by start and resume: attach the
   // terminal-result toast and the TUI approval pipeline, and return a
   // `finalize` teardown that both run promises invoke from their `.finally`.
@@ -411,52 +372,51 @@ export function createChatSessionController(
     const { runtimeHost, approvalsUnavailable, finalize } =
       setupRunHost(sessionContext);
     const executionId = generateExecutionId();
-    let executionRegistered = false;
-    let lifecycleStarted = false;
     session.executionId = executionId;
 
-    const runPromise = registerFreshChatExecution(executionId, config)
-      .then((registeredConfig) => {
-        executionRegistered = true;
-        return executeAgent(registeredConfig, executionId, {
-          runtimeHost,
-          enforceCategory: true,
-          approvalPromptsUnavailable: approvalsUnavailable,
-          runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
-          onRun: () => {
-            lifecycleStarted = true;
+    const runPromise = Promise.resolve()
+      .then(() => AgentConfigSchema.parse(config))
+      .then((registeredConfig) =>
+        runAgent(
+          { config: registeredConfig, executionId },
+          {
+            registerExecution: true,
+            runtimeHost,
+            enforceCategory: true,
+            approvalPromptsUnavailable: approvalsUnavailable,
+            runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
+            onStreamResolved: (resolvedStreamId) => {
+              // Each chat round mints a fresh root StreamTabId (new
+              // executionId), so bash/tool-edit/super-YOLO bypass — which is
+              // keyed per stream — would otherwise reset every round even
+              // though the user is continuing the same conversation. Link the
+              // new round's stream to the previous one so bypass resolution
+              // (see `registerStreamParent`) falls through to whatever the
+              // prior round had, unless this round sets its own explicit value.
+              const previousRootStreamId = rootStreamId.get();
+              if (
+                previousRootStreamId &&
+                previousRootStreamId !== resolvedStreamId
+              ) {
+                defaultSession().approvals.registerStreamParent(
+                  resolvedStreamId,
+                  previousRootStreamId,
+                );
+              }
+              session.streamId = resolvedStreamId;
+              publishChatTuiRunState(session);
+              rootStreamId.set(resolvedStreamId);
+              moveLocalTranscriptToStream(resolvedStreamId);
+              activeStreamId.set(resolvedStreamId);
+              if (session.stopRequested) interruptActiveRun();
+            },
+            onIdle: () => {
+              if (!session.streamId) return;
+              projectStreamTranscript(session.streamId, { finalize: true });
+            },
           },
-          onStreamResolved: (resolvedStreamId) => {
-            // Each chat round mints a fresh root StreamTabId (new
-            // executionId), so bash/tool-edit/super-YOLO bypass — which is
-            // keyed per stream — would otherwise reset every round even
-            // though the user is continuing the same conversation. Link the
-            // new round's stream to the previous one so bypass resolution
-            // (see `registerStreamParent`) falls through to whatever the
-            // prior round had, unless this round sets its own explicit value.
-            const previousRootStreamId = rootStreamId.get();
-            if (
-              previousRootStreamId &&
-              previousRootStreamId !== resolvedStreamId
-            ) {
-              defaultSession().approvals.registerStreamParent(
-                resolvedStreamId,
-                previousRootStreamId,
-              );
-            }
-            session.streamId = resolvedStreamId;
-            publishChatTuiRunState(session);
-            rootStreamId.set(resolvedStreamId);
-            moveLocalTranscriptToStream(resolvedStreamId);
-            activeStreamId.set(resolvedStreamId);
-            if (session.stopRequested) interruptActiveRun();
-          },
-          onIdle: () => {
-            if (!session.streamId) return;
-            projectStreamTranscript(session.streamId, { finalize: true });
-          },
-        });
-      })
+        ),
+      )
       .then((result) => {
         session.runExitCode = runOutcomeExitCode(
           result.outcome,
@@ -467,14 +427,7 @@ export function createChatSessionController(
         }
         notify({ kind: 'agentFinished' });
       })
-      .catch(async (error: unknown) => {
-        await markRegisteredChatExecutionError(executionId, {
-          executionRegistered,
-          lifecycleStarted,
-          reportFinalizationFailure,
-        });
-        reportRunFailure(error);
-      })
+      .catch(reportRunFailure)
       .finally(finalize);
     markChatTuiRunPending(session, runPromise, runtimeHost);
   };

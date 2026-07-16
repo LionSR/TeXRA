@@ -10,8 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   executeAgent: vi.fn(),
-  finalizeExecution: vi.fn(),
-  registerExecution: vi.fn(),
+  runAgent: vi.fn(),
   stopAgentStream: vi.fn(),
   workspaceGet: vi.fn(),
   getExecutionStore: vi.fn(),
@@ -40,10 +39,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/storage', () => ({
-  finalizeExecution: mocks.finalizeExecution,
   getExecutionStore: mocks.getExecutionStore,
-  registerExecution: mocks.registerExecution,
-  releaseOwnedExecutionLeaseBestEffort: vi.fn(async () => {}),
 }));
 
 vi.mock('@agent/runtime/resolveAndResumeStream', () => ({
@@ -57,6 +53,10 @@ vi.mock('@agent/runtime/resumeQueuedToolUse', () => ({
 vi.mock('@agent/runtime/executeAgent', () => ({
   executeAgent: mocks.executeAgent,
   resumeToolUseFromSnapshot: mocks.resumeToolUseFromSnapshot,
+}));
+
+vi.mock('@agent/runtime/runAgent', () => ({
+  runAgent: mocks.runAgent,
 }));
 
 vi.mock('@agent/runtime/SessionHandle', () => ({
@@ -400,14 +400,15 @@ describe('createChatSessionController', () => {
       outcome: RUN_OUTCOME.COMPLETED,
       streamId: 'stream-start',
     });
-    mocks.finalizeExecution.mockReset();
-    mocks.finalizeExecution.mockResolvedValue({
-      status: 'durable',
-      terminalStatusPersisted: true,
-      flowRecord: 'deleted',
-    });
-    mocks.registerExecution.mockReset();
-    mocks.registerExecution.mockResolvedValue(undefined);
+    mocks.runAgent.mockReset();
+    mocks.runAgent.mockImplementation(
+      async (
+        request: { config: unknown; executionId: ExecutionId },
+        options: object,
+      ) => {
+        return mocks.executeAgent(request.config, request.executionId, options);
+      },
+    );
     mocks.stopAgentStream.mockReset();
     mocks.workspaceGet.mockReset();
     mocks.workspaceGet.mockReturnValue(false);
@@ -481,16 +482,10 @@ describe('createChatSessionController', () => {
     expect(typeof ctrl.canStartRootRun).toBe('function');
   });
 
-  it('shows durability failures without turning an intentional stop into an error', async () => {
+  it('does not surface an intentional stop as an error', async () => {
     const run = pDefer<never>();
     const session = makeSession();
     mocks.executeAgent.mockReturnValueOnce(run.promise);
-    mocks.finalizeExecution.mockResolvedValueOnce({
-      status: 'failed',
-      error: new Error('terminal metadata disk full'),
-      stage: 'terminal-status',
-      terminalStatusPersisted: false,
-    });
     const ctrl = createChatSessionController(makeInit({ session }));
 
     ctrl.startRootRun({
@@ -505,11 +500,7 @@ describe('createChatSessionController', () => {
     run.reject(new Error('run stopped'));
     await session.runPromise;
 
-    expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledExactlyOnceWith(
-      expect.stringMatching(
-        /^Failed to persist error status for execution .+: terminal metadata disk full$/,
-      ),
-    );
+    expect(mocks.appendLocalErrorTranscript).not.toHaveBeenCalled();
     expect(session.runExitCode).toBe(CliExitCode.Success);
   });
 
@@ -536,7 +527,6 @@ describe('createChatSessionController', () => {
     });
     await session.runPromise;
 
-    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
     expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
       'recovery remains resumable',
     );

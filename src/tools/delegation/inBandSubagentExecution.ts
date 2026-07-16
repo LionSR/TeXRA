@@ -11,7 +11,7 @@
 import {
   getExecutionStore,
   registerExecution,
-  releaseOwnedExecutionLease,
+  releaseOwnedExecutionLeaseAfterFailure,
   releaseOwnedExecutionLeaseBestEffort,
   type ResultMeta,
 } from '@agent/storage';
@@ -445,10 +445,12 @@ async function executeInBand(
         phase: 'launched',
       });
     } catch (cause) {
-      await releaseOwnedExecutionLease(executionId);
-      throw new SubagentDurabilityError(
-        `Failed to mark subagent ${executionId} as launched.`,
-        { cause },
+      throw await releaseOwnedExecutionLeaseAfterFailure(
+        executionId,
+        new SubagentDurabilityError(
+          `Failed to mark subagent ${executionId} as launched.`,
+          { cause },
+        ),
       );
     }
   }

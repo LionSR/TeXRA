@@ -55,7 +55,6 @@ export {
 } from './resumability';
 export { resolveChildRunOutput } from './childRunOutput';
 export {
-  releaseOwnedExecutionLease,
+  releaseOwnedExecutionLeaseAfterFailure,
   releaseOwnedExecutionLeaseBestEffort,
-  waitForOwnedExecutionLeaseRelease,
 } from './executionLease';

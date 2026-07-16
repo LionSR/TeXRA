@@ -1,10 +1,11 @@
 import {
+  finalizeExecution,
   registerExecution,
   releaseOwnedExecutionLeaseBestEffort,
 } from '@agent/storage';
 
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
-import type { ExecutionId } from '@shared/schemas';
+import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
@@ -25,6 +26,8 @@ export interface RunAgentOptions extends Pick<
   | 'session'
   | 'modelHandlerCompatibilityKey'
   | 'onRun'
+  | 'onStreamResolved'
+  | 'onIdle'
 > {
   openWorkflowOutput?: (result: WorkflowFlowResult) => Promise<void>;
   registerExecution?: boolean;
@@ -86,12 +89,35 @@ export async function runAgent(
     );
   }
 
+  let lifecycleStarted = false;
+  const callerOnRun = executeAgentOptions.onRun;
   try {
-    const result = await executeAgent(config, executionId, executeAgentOptions);
+    const result = await executeAgent(config, executionId, {
+      ...executeAgentOptions,
+      onRun: async (handle) => {
+        lifecycleStarted = true;
+        await callerOnRun?.(handle);
+      },
+    });
     if (result.category === 'workflow') {
       await openWorkflowOutput?.(result);
     }
     return result;
+  } catch (error) {
+    if (shouldRegister && !lifecycleStarted) {
+      const finalization = await finalizeExecution({
+        executionId,
+        terminalStatus: EXECUTION_STATUS.ERROR,
+        flowRecord: 'delete',
+      });
+      if (finalization.status === 'failed') {
+        throw new AggregateError(
+          [error, finalization.error],
+          `Execution ${executionId} failed before lifecycle startup and its error status could not be persisted`,
+        );
+      }
+    }
+    throw error;
   } finally {
     if (shouldRegister) {
       await releaseOwnedExecutionLeaseBestEffort(executionId);

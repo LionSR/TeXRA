@@ -27,7 +27,7 @@ import {
 import { hasPersistedParent } from '@agent/storage/executionLifecycle';
 import {
   acquireResumedExecutionLease,
-  releaseOwnedExecutionLease,
+  releaseOwnedExecutionLeaseAfterFailure,
   releaseOwnedExecutionLeaseBestEffort,
 } from '@agent/storage/executionLease';
 import { AgentError, getSdkErrorMessage } from '@common/errors';
@@ -522,7 +522,10 @@ export async function resumeToolUseFromSnapshot(
     });
   } catch (error) {
     if (leaseAcquisition === 'acquired') {
-      await releaseOwnedExecutionLease(snapshot.executionId);
+      throw await releaseOwnedExecutionLeaseAfterFailure(
+        snapshot.executionId,
+        error,
+      );
     }
     throw error;
   }
@@ -607,7 +610,10 @@ export async function resumeToolUseFromSnapshot(
     return result;
   } catch (error) {
     if (leaseAcquisition === 'acquired') {
-      await releaseOwnedExecutionLease(snapshot.executionId);
+      throw await releaseOwnedExecutionLeaseAfterFailure(
+        snapshot.executionId,
+        error,
+      );
     }
     throw error;
   }
