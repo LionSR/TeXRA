@@ -46,12 +46,6 @@ export type CliToolUseRunResult = Extract<
   { category: 'toolUse' }
 >;
 
-export type PublishedCliRunResult = ExecuteAgentResult extends infer T
-  ? T extends ExecuteAgentResult
-    ? PublishedCliRunResultFor<T>
-    : never
-  : never;
-
 /** Display text for a finished tool-use run: the last response if present,
  *  otherwise a terse status/execution-id summary. */
 export function toolUseResultText(result: CliToolUseRunResult): string {
