@@ -1,8 +1,11 @@
 // Standard library imports
 import * as path from 'node:path';
 
-// Local imports - shared schemas
+// Local imports - platform and errors
 import { platform } from '@platform/platform';
+import { isFileNotFoundError } from '@common/errors';
+
+// Local imports - shared schemas
 import type {
   ExecutionId,
   FileLocation,
@@ -74,17 +77,25 @@ async function copyArtifactFile(
 ): Promise<void> {
   const fs = platform().fs;
   await fs.createDirectory(path.dirname(destination));
-  await fs.delete(destination, { recursive: true }).catch(() => {});
+  try {
+    await fs.delete(destination, { recursive: true });
+  } catch (error) {
+    if (!isFileNotFoundError(error)) throw error;
+  }
   await fs.copy(source, destination, { overwrite: true });
 }
 
 export async function publishCompiledPdfArtifact(
   options: PublishCompiledPdfOptions,
 ): Promise<CompiledPdfArtifact | null> {
-  const stats = await platform()
-    .fs.stat(options.compiledPdfPath)
-    .catch(() => null);
-  if (!stats || !isFile(stats.type)) return null;
+  let stats;
+  try {
+    stats = await platform().fs.stat(options.compiledPdfPath);
+  } catch (error) {
+    if (isFileNotFoundError(error)) return null;
+    throw error;
+  }
+  if (!isFile(stats.type)) return null;
 
   const pdfRelativePath = toPdfRelativePath(options);
   const roundRelativePath = path.join(

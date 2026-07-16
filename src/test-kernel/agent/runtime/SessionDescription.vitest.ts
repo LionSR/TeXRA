@@ -10,6 +10,7 @@ import {
   getSessionDescriptionInstruction,
 } from '@agent/runtime/sessionDescription';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
+import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
@@ -42,6 +43,7 @@ function configFor(category: AgentCategory) {
 
 describe('session description helpers', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     vi.clearAllMocks();
   });
 
@@ -82,6 +84,49 @@ describe('session description helpers', () => {
     expect(mocks.createHelperModelKit).not.toHaveBeenCalled();
     expect(mocks.writeSessionDescription).not.toHaveBeenCalled();
     expect(events).toEqual([]);
+  });
+
+  it('logs helper-model failures without rejecting the fire-and-forget call', async () => {
+    const session = createTestSession();
+    const helperError = new Error('helper unavailable');
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    mocks.getAgent.mockReturnValue({ description: 'General chat assistant' });
+    mocks.createHelperModelKit.mockRejectedValueOnce(helperError);
+
+    await expect(
+      generateSessionDescription(
+        'exec-failure' as ExecutionId,
+        'stream-failure' as StreamTabId,
+        configFor(AgentCategory.ToolUse),
+        session,
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith(
+      'SessionDescription',
+      expect.stringContaining('helper unavailable'),
+    );
+  });
+
+  it('does not reject when the diagnostic sink also fails', async () => {
+    const session = createTestSession();
+    mocks.getAgent.mockReturnValue({ description: 'General chat assistant' });
+    mocks.createHelperModelKit.mockRejectedValueOnce(
+      new Error('helper unavailable'),
+    );
+    vi.spyOn(logger, 'warn').mockImplementation(() => {
+      throw new Error('log sink unavailable');
+    });
+
+    await expect(
+      generateSessionDescription(
+        'exec-log-failure' as ExecutionId,
+        'stream-log-failure' as StreamTabId,
+        configFor(AgentCategory.ToolUse),
+        session,
+      ),
+    ).resolves.toBeUndefined();
   });
 
   it('keeps generating compact descriptions for tool-use runs', async () => {
