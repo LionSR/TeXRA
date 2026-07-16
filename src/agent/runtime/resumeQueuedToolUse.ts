@@ -81,8 +81,8 @@ export async function resumeQueuedToolUseSnapshot(
 
   const seed = options.extraFollowUps ?? [];
   let followUps: readonly FollowUpQueueInput[] = seed;
+  let followUpBoundaryReached = false;
   let cancelledAtFlowAttachment = false;
-  let followUpsConsumed = false;
   let followUpsRestored = false;
   let resumeError: { error: unknown } | undefined;
   const restoreFollowUps = (): void => {
@@ -125,7 +125,7 @@ export async function resumeQueuedToolUseSnapshot(
       parentStreamId:
         options.parentStreamId ?? snapshot.parentStreamId ?? undefined,
       onFollowUpConsumed: () => {
-        followUpsConsumed = true;
+        followUps = [];
         options.onFollowUpConsumed?.();
       },
       onProgress: options.onProgress,
@@ -136,23 +136,33 @@ export async function resumeQueuedToolUseSnapshot(
         cancelledAtFlowAttachment = true;
       },
       drainedFollowUps: followUps.map(toFollowUpBatchItem),
-      // The live context is attached before this second drain. Items arriving
-      // later therefore target that context directly; this callback owns the
-      // only queue gap between the initial drain and attachment.
+      // The first call closes the gap between the initial drain and live-flow
+      // attachment. Later calls occur after a subagent parks at WAITING. A
+      // native child loop owns that queue boundary when registered; otherwise
+      // this host resume must claim the late batch so input accepted by the
+      // live context cannot remain dormant.
       takePendingFollowUps: () => {
+        const isPostParkClaim = followUpBoundaryReached;
+        followUpBoundaryReached = true;
+        if (
+          isPostParkClaim &&
+          session.executions.isChildRunLoopActive(streamId)
+        ) {
+          return [];
+        }
         const raced = followUpsQueue.drainItems(streamId);
         followUps = [...followUps, ...raced];
         return raced.map(toFollowUpBatchItem);
       },
     });
-    if (followUps.length > 0 && !followUpsConsumed) restoreFollowUps();
+    if (followUps.length > 0) restoreFollowUps();
     options.onResult?.(result);
   } catch (error) {
     resumeError = { error };
     // A rejection before the wait node acknowledges consumption must replay
     // the drained batch. A callback failure after that acknowledgement must
     // not enqueue the same user input again.
-    if (!followUpsConsumed) restoreFollowUps();
+    if (followUps.length > 0) restoreFollowUps();
   } finally {
     // Early failures leave the stream RESUMING. Startup cancellation can
     // instead reach lifecycle terminalization before the queue owner regains

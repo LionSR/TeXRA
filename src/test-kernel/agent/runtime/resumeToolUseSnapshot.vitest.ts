@@ -166,6 +166,112 @@ describe('resumeToolUseSnapshot', () => {
     ]);
   });
 
+  it('claims a follow-up queued during an orphaned host-resumed subagent turn after it parks', async () => {
+    let postParkFollowUps: readonly FollowUpQueueInput[] = [];
+    resumeToolUseFromSnapshotMock.mockImplementationOnce(
+      async (...args: unknown[]) => {
+        const options = args[2] as ReturnType<typeof capturedResumeOptions>;
+        expect(options.takePendingFollowUps()).toEqual([]);
+
+        defaultSession().followUps.enqueue(STREAM, {
+          text: 'queued during the active turn',
+        });
+        postParkFollowUps = options.takePendingFollowUps();
+        options.onFollowUpConsumed?.();
+        return {
+          category: 'toolUse',
+          outcome: STREAM_PHASE.WAITING,
+          executionId: 'exec-orphan-waiting',
+          streamId: STREAM,
+        };
+      },
+    );
+
+    await expect(
+      resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+        onError: vi.fn(),
+      }),
+    ).resolves.toBe(true);
+
+    expect(postParkFollowUps.map((item) => item.text)).toEqual([
+      'queued during the active turn',
+    ]);
+    expect(defaultSession().followUps.getAll(STREAM)).toEqual([]);
+  });
+
+  it('restores a post-park batch exactly once when cancellation wins before consumption', async () => {
+    resumeToolUseFromSnapshotMock.mockImplementationOnce(
+      async (...args: unknown[]) => {
+        const options = args[2] as ReturnType<typeof capturedResumeOptions>;
+        expect(options.takePendingFollowUps()).toEqual([]);
+
+        defaultSession().followUps.enqueue(STREAM, {
+          text: 'late input before cancellation',
+        });
+        expect(options.takePendingFollowUps().map((item) => item.text)).toEqual(
+          ['late input before cancellation'],
+        );
+        seedStreamStatusForTest(
+          defaultSession().status,
+          STREAM,
+          STREAM_PHASE.CANCELLED,
+        );
+        return {
+          category: 'toolUse',
+          outcome: RUN_OUTCOME.CANCELLED,
+          executionId: 'exec-orphan-cancelled',
+          streamId: STREAM,
+        };
+      },
+    );
+
+    await expect(
+      resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+        onError: vi.fn(),
+      }),
+    ).resolves.toBe(false);
+
+    expect(defaultSession().followUps.getAll(STREAM)).toEqual([
+      'late input before cancellation',
+    ]);
+  });
+
+  it('leaves post-park input to a registered child loop', async () => {
+    const unregisterChildRunLoop =
+      defaultSession().executions.registerChildRunLoop(STREAM);
+    try {
+      resumeToolUseFromSnapshotMock.mockImplementationOnce(
+        async (...args: unknown[]) => {
+          const options = args[2] as ReturnType<typeof capturedResumeOptions>;
+          expect(options.takePendingFollowUps()).toEqual([]);
+
+          defaultSession().followUps.enqueue(STREAM, {
+            text: 'next loop-backed turn',
+          });
+          expect(options.takePendingFollowUps()).toEqual([]);
+          return {
+            category: 'toolUse',
+            outcome: STREAM_PHASE.WAITING,
+            executionId: 'exec-loop-waiting',
+            streamId: STREAM,
+          };
+        },
+      );
+
+      await expect(
+        resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+          onError: vi.fn(),
+        }),
+      ).resolves.toBe(true);
+
+      expect(defaultSession().followUps.getAll(STREAM)).toEqual([
+        'next loop-backed turn',
+      ]);
+    } finally {
+      unregisterChildRunLoop();
+    }
+  });
+
   it('passes snapshot parent stream identity to the leaf resume', async () => {
     const parentStreamId = 'stream:parent' as StreamTabId;
 

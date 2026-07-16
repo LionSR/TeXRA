@@ -131,11 +131,12 @@ async function runPersistedFlow(
   executionId: ExecutionId,
   streamId: StreamTabId,
   snapshot: ToolUseSessionSnapshot | undefined,
-  onSetup?: (context: ToolUseSetupContext) => void,
+  onSetup?: ToolUseFlowSetupCallback,
   session: SessionHandle = createTestSession(),
   options: {
     readonly isSubagent?: boolean;
     readonly onIdle?: () => void;
+    readonly takePendingFollowUps?: RunToolUseFlowInput['takePendingFollowUps'];
     readonly onFlowRecordDisposition?: (
       disposition: 'preserve' | 'delete',
     ) => void;
@@ -178,6 +179,7 @@ async function runPersistedFlow(
           ...(snapshot !== undefined && { resumeSnapshot: snapshot }),
           isSubagent: options.isSubagent ?? true,
           onIdle: options.onIdle,
+          takePendingFollowUps: options.takePendingFollowUps,
           onFlowRecordDisposition: options.onFlowRecordDisposition,
           toolInjections: new ToolInjectionRegistry(),
         },
@@ -531,6 +533,33 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         },
       },
     );
+  });
+
+  it('offers queue ownership again after a resumed subagent parks', async () => {
+    const executionId = 'abc-flow-post-park-owner' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-flow-post-park-owner' as StreamTabId;
+    const snapshot = buildToolUseSnapshot(executionId, streamId);
+    const boundaryEvents: string[] = [];
+    const takePendingFollowUps = vi.fn(() => {
+      boundaryEvents.push('take');
+      return [];
+    });
+
+    const result = await runPersistedFlow(
+      executionId,
+      streamId,
+      snapshot,
+      () => {
+        boundaryEvents.push('attach');
+        return () => boundaryEvents.push('detach');
+      },
+      undefined,
+      { takePendingFollowUps },
+    );
+
+    expect(result.outcome).toBe(STREAM_PHASE.WAITING);
+    expect(takePendingFollowUps).toHaveBeenCalledTimes(2);
+    expect(boundaryEvents).toEqual(['attach', 'take', 'detach', 'take']);
   });
 
   it('releases follow-ups while preserving the record after a persistence read failure', async () => {
@@ -891,6 +920,56 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       ]);
     } finally {
       readSpy.mockRestore();
+      session.followUps.release(streamId);
+    }
+  });
+
+  it('preserves late input when an orphaned host-resumed subagent is cancelled mid-turn', async () => {
+    const executionId = 'abc-cancel-active-followup' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-cancel-active-followup' as StreamTabId;
+    const snapshot = buildToolUseSnapshot(executionId, streamId);
+    const session = createTestSession();
+    await getExecutionStore(executionId).write(flowKey(executionId), {
+      flowName: 'texra',
+      params: {},
+      shared: {
+        ...VALID_TOOL_USE_SHARED,
+        modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
+      },
+      createdAt: new Date().toISOString(),
+      nodes: [],
+    });
+    let flowContext: ToolUseSetupContext | undefined;
+    const abortError = new DOMException(
+      'This operation was aborted',
+      'AbortError',
+    );
+    const runSpy = vi
+      .spyOn(PersistedFlow.prototype, 'run')
+      .mockImplementationOnce(async () => {
+        flowContext?.session.appendFollowUp({ text: 'late active-turn input' });
+        flowContext?.interrupt();
+        throw abortError;
+      });
+
+    try {
+      await expect(
+        runPersistedFlow(
+          executionId,
+          streamId,
+          snapshot,
+          (context) => {
+            flowContext = context;
+          },
+          session,
+          { takePendingFollowUps: () => [] },
+        ),
+      ).rejects.toBe(abortError);
+      expect(session.followUps.getAll(streamId)).toEqual([
+        'late active-turn input',
+      ]);
+    } finally {
+      runSpy.mockRestore();
       session.followUps.release(streamId);
     }
   });

@@ -22,7 +22,8 @@ All notable changes to this project will be documented in this file.
   them, while the local CLI terminal keeps its operator-readable output.
 - **Unavailable-tool notices are scoped to each agent session** — one active
   session no longer suppresses dependency guidance for another session.
-- **Follow-ups to waiting subagents resume once without a false failure** — a
+- **Follow-ups to waiting or resumed subagents are delivered exactly once** —
+  messages sent during an active resumed turn no longer remain dormant, and a
   completed follow-up is no longer reported as failed or repeated later.
 - **Delegated agents follow live auto-approval changes** — enabling or
   disabling file and command auto-approval on a parent now updates its running
