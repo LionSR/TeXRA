@@ -28,8 +28,9 @@ which are thin by design rather than redundant.
 
 Before posting new feedback, read existing inline review threads and PR comments.
 Avoid re-raising issues that are already discussed, acknowledged, or fixed. On
-`synchronize` events, resolve previous unresolved bot review threads only when
-the new commits actually address them; never resolve human review threads.
+re-review runs (triggered by the `re-review` label), resolve previous unresolved
+bot review threads only when the new commits actually address them; never
+resolve human review threads.
 
 For each concrete issue, post an inline comment on the relevant line. At the end,
 post a concise PR-level summary in the format required by the local review skill,
