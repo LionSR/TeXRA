@@ -8,6 +8,7 @@
 import { Buffer } from 'node:buffer';
 import * as path from 'node:path';
 
+import { dataUriToBuffer } from 'data-uri-to-buffer';
 import OpenAI, {
   APIConnectionTimeoutError,
   APIError as OpenAIAPIError,
@@ -21,7 +22,7 @@ import { isNonEmptyString } from '@utils/core';
 import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 
 import { loadAttachmentBuffer, wipeBuffer } from '../utils/toolAttachmentUtils';
-import { parseDataUrl, toDataUrl } from '../support/dataUrl';
+import { toDataUrl } from '../support/dataUrl';
 import { reportMediaAttachmentFailure } from '../support/mediaAttachmentPolicy';
 import { isInputFileContent, isMessageItem } from './openAIResponseContent';
 import type {
@@ -105,10 +106,10 @@ async function replaceFileDataWithUpload(
   let buffer: Buffer | undefined;
 
   try {
-    const parsed = parseDataUrl(fileData);
-    const payload = parsed ? parsed.base64Data : fileData;
-
-    buffer = Buffer.from(payload, 'base64');
+    buffer =
+      fileData.slice(0, 5).toLowerCase() === 'data:'
+        ? Buffer.from(dataUriToBuffer(fileData).buffer)
+        : Buffer.from(fileData, 'base64');
     const uploadedFile = await client.files.create({
       file: await toFile(buffer!, filename),
       purpose: 'assistants',
