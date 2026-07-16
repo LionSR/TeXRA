@@ -1,10 +1,10 @@
 import { getExecutionStore } from '@agent/storage';
 import { runAgent } from '@agent/runtime/runAgent';
+import type { AgentRuntimeFlowResult } from '@agent/runtime/AgentFlowResult';
 import {
   type ExecutionStatus,
   RUN_OUTCOME,
   type RunOutcome,
-  STREAM_PHASE,
 } from '@shared/schemas';
 import {
   legacyEndGroupStatusForOutcome,
@@ -85,7 +85,7 @@ export function serializeCliRunResult<T extends ExecuteAgentResult>(
  *  approval-denied error distinctly from a generic agent error. A resumed
  *  subagent that parks back to WAITING is a successfully completed turn. */
 export function runOutcomeExitCode(
-  outcome: RunOutcome | typeof STREAM_PHASE.WAITING,
+  outcome: AgentRuntimeFlowResult['outcome'],
   context: CliContext,
 ): CliExitCode {
   if (outcome === RUN_OUTCOME.FAILED) {

@@ -15,6 +15,7 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { AgentRuntimeFlowResult } from '@agent/runtime/AgentFlowResult';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import {
   executeAgent,
@@ -599,7 +600,7 @@ export function createChatSessionController(
    * a finished agent, so it never fires `agentFinished`.
    */
   const settleResumedTurn = (
-    outcome: Parameters<typeof runOutcomeExitCode>[0],
+    outcome: AgentRuntimeFlowResult['outcome'],
     sessionContext: CliContext,
   ): void => {
     if (session.streamId) {
@@ -667,7 +668,7 @@ export function createChatSessionController(
         session.runExitCode = CliExitCode.Success;
         publishChatTuiRunState(session);
 
-        let resumedOutcome: Parameters<typeof runOutcomeExitCode>[0] =
+        let resumedOutcome: AgentRuntimeFlowResult['outcome'] =
           RUN_OUTCOME.COMPLETED;
         const resumed = await setCliHelperModel(currentModel).then(() =>
           resolveAndResumeStream(streamId, {
