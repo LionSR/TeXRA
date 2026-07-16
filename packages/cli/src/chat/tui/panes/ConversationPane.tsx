@@ -3,6 +3,9 @@
 
 import { Box, Text } from 'ink';
 
+import { isActivePhase } from '@shared/streams/streamStatus';
+import { formatCompactDuration } from '@utils/core';
+
 import {
   activeStreamId as activeStreamIdSignal,
   streams as streamsSignal,
@@ -27,23 +30,39 @@ import {
 
 const DEFAULT_TRANSCRIPT_ROWS = 24;
 const MIN_PENDING_ROWS = 1;
-const THINKING_DOTS = ['.', '..', '...'] as const;
+// Padded to a fixed width so the elapsed time doesn't jiggle as dots cycle.
+const LIVENESS_DOTS = ['.  ', '.. ', '...'] as const;
 
 /**
- * Liveness row for the hidden reasoning phase: the model is working but
- * nothing streams into the transcript, so the pane shows that thinking is
- * happening (never the thinking text itself). Animated off the shared 1 Hz
- * ticker — an autonomous 80 ms spinner would repaint the whole live region
- * at ~12 Hz during exactly the phase where nothing else is streaming, while
- * the shared tick batches with the StatusBar's elapsed-seconds render.
+ * Liveness row shown for the whole active run, not just the hidden reasoning
+ * phase: long tool calls and provider latency also stream nothing into the
+ * transcript, and the pane must still answer "working or stalled?". The
+ * label distinguishes hidden reasoning ("Thinking") from everything else
+ * ("Working") and never shows the reasoning text itself; the ticking elapsed
+ * time is the stall signal. Animated off the shared 1 Hz ticker — an
+ * autonomous 80 ms spinner would repaint the whole live region at ~12 Hz
+ * during exactly the phase where nothing else is streaming, while the shared
+ * tick batches with the StatusBar's elapsed-seconds render.
  */
-function ThinkingRow(): React.JSX.Element {
-  const now = useLiveNowMs(true);
-  const dots = THINKING_DOTS[Math.floor(now / 1000) % THINKING_DOTS.length];
+function LivenessRow({
+  startedAtMs,
+  thinking,
+}: {
+  readonly startedAtMs: number | undefined;
+  readonly thinking: boolean;
+}): React.JSX.Element {
+  const now = useLiveNowMs(true, startedAtMs);
+  const dots = LIVENESS_DOTS[Math.floor(now / 1000) % LIVENESS_DOTS.length];
+  const elapsed =
+    startedAtMs === undefined
+      ? ''
+      : ` ${formatCompactDuration(now - startedAtMs)}`;
   return (
     <Box>
       <Text dimColor>
-        {THINKING_MARKER} Thinking{dots}
+        {THINKING_MARKER} {thinking ? 'Thinking' : 'Working'}
+        {dots}
+        {elapsed}
       </Text>
     </Box>
   );
@@ -126,22 +145,28 @@ export function ConversationPane(
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const entries = slice?.entries ?? [];
   const displayEntries = splitTranscriptEntries(entries, slice?.status).pending;
-  const showThinking = thinkingIndicatorVisible(slice);
+  const showLiveness = isActivePhase(slice?.status);
 
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
-  // The thinking liveness row is budgeted like any other live content: it
-  // takes one row off the entry viewport so the pane's explicit height never
-  // exceeds maxRows (an overflow would leak live rows into scrollback).
-  const thinkingRows = showThinking ? 1 : 0;
+  // The liveness row is budgeted like any other live content: it takes one
+  // row off the entry viewport so the pane's explicit height never exceeds
+  // maxRows (an overflow would leak live rows into scrollback). Content
+  // outranks it: when a foreground panel squeezes the pane to a single row,
+  // pending entries keep that row and the StatusBar's running/elapsed
+  // segment carries liveness alone.
+  const livenessRows =
+    showLiveness && (maxRows > MIN_PENDING_ROWS || displayEntries.length === 0)
+      ? 1
+      : 0;
   const visibleEntries = selectTranscriptEntriesForViewport(
     displayEntries,
-    maxRows - thinkingRows,
+    maxRows - livenessRows,
     props.width,
   );
   const visibleRows =
     (visibleEntries.entries.length > 0
       ? Math.max(MIN_PENDING_ROWS, visibleEntries.usedRows)
-      : 0) + thinkingRows;
+      : 0) + livenessRows;
 
   // Keep stream order intact so in-flight text stays interleaved with tool rows.
   // The explicit height keeps the input bar pinned and prevents bursts from
@@ -156,7 +181,12 @@ export function ConversationPane(
           width: props.width,
         }),
       )}
-      {showThinking ? <ThinkingRow /> : null}
+      {livenessRows > 0 ? (
+        <LivenessRow
+          startedAtMs={slice?.runStartedAt}
+          thinking={thinkingIndicatorVisible(slice)}
+        />
+      ) : null}
     </Box>
   );
 }

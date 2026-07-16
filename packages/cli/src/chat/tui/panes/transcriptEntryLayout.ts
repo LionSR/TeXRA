@@ -15,7 +15,7 @@ import type { ConversationEntry } from '../state/cliState';
 
 const DEFAULT_TRANSCRIPT_COLUMNS = 80;
 const USER_ENTRY_MARGIN_TOP_ROWS = 1;
-export const USER_ENTRY_MARGIN_BOTTOM_ROWS = 1;
+const USER_ENTRY_MARGIN_BOTTOM_ROWS = 1;
 const ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS = 0;
 const PROCESS_ENTRY_MARGIN_BOTTOM_ROWS = 1;
 export const LIVE_TAIL_ROWS = 24;
@@ -212,13 +212,11 @@ export function transcriptEntryLayout(
     colorEnabled,
     maxRows,
     mode = 'scrollback',
-    userBottomMarginRows,
     width,
   }: {
     readonly colorEnabled?: boolean;
     readonly maxRows?: number;
     readonly mode?: TranscriptEntryLayoutMode;
-    readonly userBottomMarginRows?: number;
     readonly width?: number;
   } = {},
 ): TranscriptEntryLayout {
@@ -234,9 +232,7 @@ export function transcriptEntryLayout(
       ? toolUseMarginBottomRows(entry.toolUse)
       : isInquiryContinuation
         ? 0
-        : entry.role === 'user'
-          ? (userBottomMarginRows ?? base.marginBottomRows)
-          : base.marginBottomRows;
+        : base.marginBottomRows;
   // The ctrl+t viewer is a full-width text projection with no Ink padding;
   // its lines still share role prefixes and wrapping rules with the layout.
   const columns = transcriptColumns(width, mode === 'viewer' ? 0 : inset);
