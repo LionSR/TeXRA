@@ -124,6 +124,61 @@ return await agent('Read', { phase: 'Review' })`;
     );
   });
 
+  it('renders the running total on live finish lines only', async () => {
+    const store = getExecutionStore(executionId);
+    const script = `${meta}
+await agent('First')
+return await agent('Second')`;
+    const { trace, events } = recordingTrace();
+    let liveCostUsd = 0;
+    await runPersistedWorkflowScriptWithProgress(trace, {
+      store,
+      checkpointId: 'live-cost',
+      script,
+      runAgent: async () => {
+        liveCostUsd += 0.05;
+        return 'done';
+      },
+      getLiveCostUsd: () => liveCostUsd,
+    });
+
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'log',
+        message: 'Finished: First ($0.050 total)',
+      }),
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'log',
+        message: 'Finished: Second ($0.100 total)',
+      }),
+    );
+
+    clearStoreCache();
+    const replay = recordingTrace();
+    await runPersistedWorkflowScriptWithProgress(replay.trace, {
+      store: getExecutionStore(executionId),
+      checkpointId: 'live-cost',
+      script,
+      runAgent: vi.fn(() => Promise.reject(new Error('must not run'))),
+      getLiveCostUsd: () => 0,
+    });
+
+    expect(replay.events).toContainEqual(
+      expect.objectContaining({
+        type: 'log',
+        message: 'Using saved result: First',
+      }),
+    );
+    expect(replay.events).not.toContainEqual(
+      expect.objectContaining({
+        type: 'log',
+        message: expect.stringContaining('total)'),
+      }),
+    );
+  });
+
   it('marks a phase failed when an agent call fails', async () => {
     const { trace, events } = recordingTrace();
     await runPersistedWorkflowScriptWithProgress(trace, {
