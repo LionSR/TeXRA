@@ -30,10 +30,6 @@ export const apiKeyCommands = {
   removeApiKey: 'texra.removeApiKey',
 };
 
-function refreshApiKeyUI(): Promise<void> {
-  return refreshApiKeyCaches(getSetupPlatform());
-}
-
 /**
  * Delegates the write/delete/confirm/notify sequence to the same controller
  * settingsView's Profile tab uses, so the two surfaces can't drift apart on
@@ -57,7 +53,7 @@ function createProfileKeyController(): SettingsProfileKeyController {
     setSecret: (key, value) => SecretManager.set(key, value),
     deleteSecret: (key) => SecretManager.delete(key),
     refreshAfterKeyChange: async () => {
-      await refreshApiKeyUI();
+      await refreshApiKeyCaches(getSetupPlatform());
       const view = await getMainWebview();
       const anyKeyExists = await SecretManager.anyApiKeyExists();
       view?.webview.postMessage({
