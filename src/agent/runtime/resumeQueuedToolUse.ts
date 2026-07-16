@@ -112,7 +112,6 @@ export async function resumeQueuedToolUseSnapshot(
       runtimeUnavailableTools: options.runtimeUnavailableTools,
       parentStreamId:
         options.parentStreamId ?? snapshot.parentStreamId ?? undefined,
-      allowWaitingResult: options.allowWaitingResult,
       onFollowUpConsumed: options.onFollowUpConsumed,
       onProgress: options.onProgress,
       onRunError: options.onRunError,

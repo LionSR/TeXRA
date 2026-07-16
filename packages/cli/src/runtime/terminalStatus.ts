@@ -4,6 +4,7 @@ import {
   type ExecutionStatus,
   RUN_OUTCOME,
   type RunOutcome,
+  STREAM_PHASE,
 } from '@shared/schemas';
 import {
   legacyEndGroupStatusForOutcome,
@@ -81,9 +82,10 @@ export function serializeCliRunResult<T extends ExecuteAgentResult>(
 }
 
 /** Map a run outcome to the CLI process exit code, treating an
- *  approval-denied error distinctly from a generic agent error. */
+ *  approval-denied error distinctly from a generic agent error. A resumed
+ *  subagent that parks back to WAITING is a successfully completed turn. */
 export function runOutcomeExitCode(
-  outcome: RunOutcome,
+  outcome: RunOutcome | typeof STREAM_PHASE.WAITING,
   context: CliContext,
 ): CliExitCode {
   if (outcome === RUN_OUTCOME.FAILED) {

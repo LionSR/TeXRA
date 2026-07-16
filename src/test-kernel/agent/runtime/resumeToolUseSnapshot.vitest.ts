@@ -299,6 +299,48 @@ describe('resumeToolUseSnapshot', () => {
     ).toHaveLength(1);
   });
 
+  it('treats a subagent parking back to WAITING as success without replaying follow-ups', async () => {
+    // Host-path resume of a WAITING subagent (e.g. a follow-up sent to a
+    // child stream from the progress view): the turn completes and the wait
+    // node parks the stream WAITING again. That is success — no failure
+    // surface, and the consumed follow-up must not be re-enqueued.
+    const reportFailure = vi.fn();
+    defaultSession().followUps.enqueue(
+      STREAM,
+      { text: 'queued one' },
+      { force: true },
+    );
+    resumeToolUseFromSnapshotMock.mockImplementationOnce(
+      async (...args: unknown[]) => {
+        const options = args[2] as ReturnType<typeof capturedResumeOptions>;
+        options.setupSession({ appendFollowUp: vi.fn() });
+        seedStreamStatusForTest(
+          defaultSession().status,
+          STREAM,
+          STREAM_PHASE.WAITING,
+        );
+        return {
+          category: 'toolUse',
+          outcome: STREAM_PHASE.WAITING,
+          executionId: 'exec-waiting',
+          streamId: STREAM,
+        };
+      },
+    );
+
+    await expect(
+      resumeToolUseSnapshot(snapshot('stream:parent' as StreamTabId), {
+        runtimeHost,
+        explicitFollowUp: 'talk to the subagent',
+        reportFailure,
+      }),
+    ).resolves.toBe(true);
+
+    expect(reportFailure).not.toHaveBeenCalled();
+    expect(defaultSession().followUps.getAll(STREAM)).toEqual([]);
+    expect(defaultSession().status.get(STREAM)).toBe(STREAM_STATUS.WAITING);
+  });
+
   it('re-enqueues follow-ups, settles to WAITING, and reports on failure', async () => {
     const failure = new Error('resume blew up');
     resumeToolUseFromSnapshotMock.mockRejectedValue(failure);

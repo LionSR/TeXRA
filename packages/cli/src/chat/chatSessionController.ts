@@ -672,7 +672,6 @@ export function createChatSessionController(
                 session: defaultSession(),
                 approvalPromptsUnavailable: approvalsUnavailable,
                 runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
-                allowWaitingResult: true,
                 extraFollowUps: options.extraFollowUps,
                 onFollowUpQueueReady: () => {
                   if (options.onFollowUpQueueReady) {

@@ -129,18 +129,6 @@ function wrapOnFollowUpConsumed(
   };
 }
 
-function assertAllowedWaitingResult(
-  result: AgentRuntimeFlowResult,
-  allowWaitingResult: boolean | undefined,
-  callerName: string,
-): void {
-  if (isWaitingFlowResult(result) && allowWaitingResult !== true) {
-    throw new Error(
-      `${callerName} received a non-terminal WAITING result without allowWaitingResult.`,
-    );
-  }
-}
-
 /**
  * Run the tool-use flow for a single agent execution.
  *
@@ -311,12 +299,6 @@ export interface SubagentRunOptions {
   onFollowUpConsumed?: () => void;
   /** Fires on meaningful progress: todo changes and tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
-  /**
-   * Allow the promise to resolve with the non-terminal WAITING result. This is
-   * reserved for native subagent drivers that keep the execution handle and
-   * delivery state alive across conversational turns.
-   */
-  allowWaitingResult?: boolean;
   /** Hide tools whose approval prompts cannot be answered in this host mode. */
   approvalPromptsUnavailable?: boolean;
   /** Hide tools unavailable because the current host/runtime cannot support them. */
@@ -356,6 +338,15 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   onIdle?: (lastResponse: string | undefined) => void;
   /** Stop a tool-use execution after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
+  /**
+   * Allow the promise to resolve with the non-terminal WAITING result. Only
+   * a fresh launch of a persistent native subagent (`isSubagent` without
+   * `stopAfterCycle`) can produce one, so only such drivers opt in. Resume
+   * paths have no equivalent flag: whether a resumed run is a subagent comes
+   * from persisted lineage, so `resumeToolUseFromSnapshot` always admits
+   * WAITING and callers narrow with `isWaitingFlowResult`.
+   */
+  allowWaitingResult?: boolean;
   /** Resume using this persisted provider-message format instead of today's default route. */
   modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
 }
@@ -461,11 +452,11 @@ export async function executeAgent(
         onRun: options.onRun,
       },
     );
-    assertAllowedWaitingResult(
-      result,
-      options.allowWaitingResult,
-      'executeAgent',
-    );
+    if (isWaitingFlowResult(result) && options.allowWaitingResult !== true) {
+      throw new Error(
+        'executeAgent received a non-terminal WAITING result without allowWaitingResult.',
+      );
+    }
     return result;
   });
 }
@@ -483,24 +474,11 @@ export interface ResumeToolUseFromSnapshotOptions extends SubagentRunOptions {
   readonly drainedFollowUps?: readonly FollowUpQueueBatchItem[];
 }
 
-export function resumeToolUseFromSnapshot(
-  snapshot: ToolUseSessionSnapshot,
-  runtimeHost: AgentRuntimeHost,
-  options: ResumeToolUseFromSnapshotOptions & { allowWaitingResult: true },
-): Promise<AgentFlowResult | WaitingToolUseFlowResult>;
-export function resumeToolUseFromSnapshot(
-  snapshot: ToolUseSessionSnapshot,
-  runtimeHost: AgentRuntimeHost,
-  options?: ResumeToolUseFromSnapshotOptions & {
-    allowWaitingResult?: false | undefined;
-  },
-): Promise<AgentFlowResult>;
-export function resumeToolUseFromSnapshot(
-  snapshot: ToolUseSessionSnapshot,
-  runtimeHost: AgentRuntimeHost,
-  options: ResumeToolUseFromSnapshotOptions,
-): Promise<AgentRuntimeFlowResult>;
-
+/**
+ * Resume a persisted tool-use session at its WAITING cursor. Whether the run
+ * is a subagent — and can therefore legitimately resolve WAITING again — comes
+ * from persisted lineage (`hasPersistedParent`), never from the caller.
+ */
 export async function resumeToolUseFromSnapshot(
   snapshot: ToolUseSessionSnapshot,
   runtimeHost: AgentRuntimeHost,
@@ -593,11 +571,6 @@ export async function resumeToolUseFromSnapshot(
         onError: options.onRunError,
         onRun: options.onRun,
       },
-    );
-    assertAllowedWaitingResult(
-      result,
-      options.allowWaitingResult,
-      'resumeToolUseFromSnapshot',
     );
     return result;
   });

@@ -979,7 +979,6 @@ describe('createChatSessionController', () => {
       { version: 2 },
       expect.any(Object),
       expect.objectContaining({
-        allowWaitingResult: true,
         isCancellationRequested: expect.any(Function),
       }),
     );

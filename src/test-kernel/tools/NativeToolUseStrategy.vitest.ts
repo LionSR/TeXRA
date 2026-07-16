@@ -277,7 +277,6 @@ describe('NativeToolUseStrategy', () => {
       snapshot,
       params.runtimeHost,
       expect.objectContaining({
-        allowWaitingResult: true,
         approvalPromptsUnavailable: true,
         parentStreamId: params.orchestratorStreamId,
         drainedFollowUps: [
