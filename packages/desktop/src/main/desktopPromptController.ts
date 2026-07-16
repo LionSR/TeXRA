@@ -1,0 +1,72 @@
+import { randomUUID } from 'node:crypto';
+
+import {
+  buildDesktopShowPromptMessage,
+  DesktopSettlePromptMessageSchema,
+} from '../desktopPromptMessages.js';
+import type {
+  DesktopCommandMessage,
+  DesktopMessageHandler,
+} from './desktopIpcTypes.js';
+
+export interface DesktopPromptInput {
+  title: string;
+  prompt: string;
+  password?: boolean;
+}
+
+interface DesktopPromptRenderer {
+  postToRenderer(message: unknown): boolean;
+}
+
+interface PendingPrompt {
+  resolve(value: string | undefined): void;
+}
+
+export interface DesktopPromptIpc extends DesktopMessageHandler {
+  request(input: DesktopPromptInput): Promise<string | undefined>;
+  dispose(): void;
+}
+
+/** Owns correlated desktop prompt requests and their exact settlement. */
+export class DesktopPromptController implements DesktopPromptIpc {
+  private readonly pending = new Map<string, PendingPrompt>();
+
+  constructor(private readonly renderer: DesktopPromptRenderer) {}
+
+  request(input: DesktopPromptInput): Promise<string | undefined> {
+    const requestId = randomUUID();
+    return new Promise((resolve) => {
+      this.pending.set(requestId, { resolve });
+      const delivered = this.renderer.postToRenderer(
+        buildDesktopShowPromptMessage({
+          requestId,
+          title: input.title,
+          prompt: input.prompt,
+          password: input.password ?? false,
+        }),
+      );
+      if (!delivered) this.settle(requestId, undefined);
+    });
+  }
+
+  handleMessage(message: DesktopCommandMessage): boolean {
+    const parsed = DesktopSettlePromptMessageSchema.safeParse(message);
+    if (!parsed.success) return false;
+    this.settle(parsed.data.requestId, parsed.data.value ?? undefined);
+    return true;
+  }
+
+  dispose(): void {
+    for (const requestId of this.pending.keys()) {
+      this.settle(requestId, undefined);
+    }
+  }
+
+  private settle(requestId: string, value: string | undefined): void {
+    const pending = this.pending.get(requestId);
+    if (!pending) return;
+    this.pending.delete(requestId);
+    pending.resolve(value);
+  }
+}
