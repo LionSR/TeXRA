@@ -66,6 +66,8 @@ export async function runPersistedWorkflowScriptWithProgress(
         break;
       }
       case 'agent:end': {
+        // A recorded undefined means the live call started outside any phase;
+        // only cached end-only events may use the phase active at replay time.
         const phaseTitle = callPhases.has(event.index)
           ? callPhases.get(event.index)
           : (event.phase ?? currentPhase);
