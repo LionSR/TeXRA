@@ -24,7 +24,7 @@ import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { HostBashApprovalResult } from './HostInteractions';
 
 /** Progress events that announce per-stream approval-bypass changes. */
-export type ApprovalBypassEvent =
+type ApprovalBypassEvent =
   | 'updateToolEditApprovalBypassState'
   | 'updateBashApprovalBypassState'
   | 'updateSuperYoloBypassState';
@@ -70,7 +70,7 @@ export interface StreamApprovalBypass {
   clearAll(): void;
 }
 
-export function createStreamApprovalBypass(
+function createStreamApprovalBypass(
   event: ApprovalBypassEvent,
   resolveParent: (streamId: StreamTabId) => StreamTabId | undefined,
 ): StreamApprovalBypass {
@@ -121,13 +121,13 @@ export function createStreamApprovalBypass(
   };
 }
 
-export interface PendingApproval<R extends { accepted: boolean }> {
+interface PendingApproval<R extends { accepted: boolean }> {
   streamId?: StreamTabId;
   isSettled: () => boolean;
   settle: (result: R) => void;
 }
 
-export interface StreamApprovalController<R extends { accepted: boolean }> {
+interface StreamApprovalController<R extends { accepted: boolean }> {
   registerPending(id: string, entry: PendingApproval<R>): void;
   unregisterPending(id: string): void;
   bypass: StreamApprovalBypass;
@@ -145,15 +145,13 @@ export interface StreamApprovalController<R extends { accepted: boolean }> {
   rejectAllPending(): void;
 }
 
-export interface StreamApprovalControllerOptions<
-  R extends { accepted: boolean },
-> {
+interface StreamApprovalControllerOptions<R extends { accepted: boolean }> {
   rejectionResult: () => R;
   bypassEvent: ApprovalBypassEvent;
   resolveParent: (streamId: StreamTabId) => StreamTabId | undefined;
 }
 
-export function createStreamApprovalController<R extends { accepted: boolean }>(
+function createStreamApprovalController<R extends { accepted: boolean }>(
   options: StreamApprovalControllerOptions<R>,
 ): StreamApprovalController<R> {
   const pending = new Map<string, PendingApproval<R>>();

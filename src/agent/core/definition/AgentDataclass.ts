@@ -30,7 +30,7 @@ const filePatternsContainEntryFields = {
   varName: z.string(),
 };
 
-export const AgentSettingBaseSchema = z.strictObject({
+const AgentSettingBaseSchema = z.strictObject({
   temperature: temperatureField.prefault(1.0),
   requiredFiles: requiredFilesField.prefault({}),
   requiredFilesInternal: requiredFilesField.prefault({}),
@@ -150,7 +150,7 @@ const RawAgentSettingInputSchema = z.strictObject({
  * Raw YAML settings. This schema validates field shapes without materialising
  * defaults, so inherited child blocks only override fields the author wrote.
  */
-export const AgentSettingInputSchema = z.preprocess(
+const AgentSettingInputSchema = z.preprocess(
   stripLegacySettingFields,
   RawAgentSettingInputSchema,
 );
@@ -171,7 +171,7 @@ export const AgentPromptSchema = z.strictObject({
 export type AgentPrompt = z.infer<typeof AgentPromptSchema>;
 
 /** Partial prompts as they appear in YAML before inheritance and defaults. */
-export const AgentPromptInputSchema = z.strictObject({
+const AgentPromptInputSchema = z.strictObject({
   systemPrompt: z.string().optional(),
   userPrefix: z.string().optional(),
   userRequest: z.union([z.string(), z.array(z.string())]).optional(),
