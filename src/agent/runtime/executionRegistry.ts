@@ -262,6 +262,10 @@ export class ExecutionRegistry {
   track(handle: ExecutionHandle): void {
     this.handles.set(handle.executionId, handle);
     this.ensureHeartbeatTimer();
+    // Best-effort: a failed touch only shortens this run's cross-host delete
+    // protection (guards fail open to pre-#8625 behavior). The run itself
+    // writes the same executions/ tree constantly, so a persistent disk
+    // failure surfaces loudly through the run, not through this touch.
     void touchExecutionHeartbeat(handle.executionId as ExecutionId).catch(
       () => {},
     );
@@ -358,6 +362,7 @@ export class ExecutionRegistry {
     if (this.heartbeatTimer) return;
     const timer = setInterval(() => {
       for (const executionId of this.handles.keys()) {
+        // Best-effort, same rationale as the touch in track().
         void touchExecutionHeartbeat(executionId as ExecutionId).catch(
           () => {},
         );

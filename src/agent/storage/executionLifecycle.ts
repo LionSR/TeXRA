@@ -27,6 +27,7 @@ import {
   type ExecutionMetaInput,
   getExecutionStore,
 } from './ExecutionKVStore';
+import { touchExecutionHeartbeat } from './executionLiveness';
 import { ResultMetaSchema } from './resultMeta';
 
 /**
@@ -145,6 +146,10 @@ export async function registerExecution(
     );
   }
 
+  // The first heartbeat lands with the launch writes so there is no window
+  // where the run exists on disk as non-terminal but unprotected (#8625);
+  // the registry's interval takes over refreshing it.
+  writes.push(touchExecutionHeartbeat(executionId));
   await Promise.all(writes);
 }
 

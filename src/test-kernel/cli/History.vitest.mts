@@ -49,6 +49,8 @@ vi.mock('@agent/storage', async () => {
     listExecutions: mocks.listExecutions,
     deleteExecution: mocks.deleteExecution,
     deleteAllExecutions: mocks.deleteAllExecutions,
+    getExecutionLiveness: vi.fn(async () => ({ live: false })),
+    listLiveExecutionIds: vi.fn(async () => []),
   };
 });
 
@@ -1075,6 +1077,7 @@ describe('CLI history runtime', () => {
     await expect(deleteCliHistory({ all: true })).resolves.toEqual({
       deleted: 'all',
       count: 4,
+      skippedLive: 0,
     });
   });
 
@@ -1083,7 +1086,7 @@ describe('CLI history runtime', () => {
 
     await expect(
       deleteCliHistory({ all: true, preCountForAll: 7 }),
-    ).resolves.toEqual({ deleted: 'all', count: 7 });
+    ).resolves.toEqual({ deleted: 'all', count: 7, skippedLive: 0 });
 
     // listExecutions must not be called when the count was passed in.
     expect(mocks.listExecutions).not.toHaveBeenCalled();

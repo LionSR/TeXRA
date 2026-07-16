@@ -43,7 +43,6 @@ export {
   HEARTBEAT_INTERVAL_MS,
   describeHeartbeatOwner,
   getExecutionLiveness,
-  isExecutionLiveOnDisk,
   listLiveExecutionIds,
   setHeartbeatOwnerHost,
   touchExecutionHeartbeat,

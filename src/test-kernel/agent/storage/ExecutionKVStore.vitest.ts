@@ -39,6 +39,7 @@ describe('isReservedKvKeyName', () => {
     'conversation',
     'workspace-files',
     'result-meta',
+    'heartbeat',
   ])('recognizes the reserved single-value key %s', (key) => {
     expect(isReservedKvKeyName(key)).toBe(true);
   });

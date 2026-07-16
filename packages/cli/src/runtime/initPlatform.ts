@@ -17,12 +17,12 @@ import {
 } from '@platform/defaults/nodeStorage';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { initPlatform, platform, tryPlatform } from '@platform/platform';
-import { UsageLogService } from '@telemetry/UsageLogService';
-import { setHeartbeatOwnerHost } from '@agent/storage';
 
 // Local imports - telemetry
+import { UsageLogService } from '@telemetry/UsageLogService';
 
-// Local imports - agent index
+// Local imports - agent
+import { setHeartbeatOwnerHost } from '@agent/storage';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 
 // Local imports - auth

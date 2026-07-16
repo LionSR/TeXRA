@@ -6,7 +6,6 @@ import {
   clearStoreCache,
   getExecutionLiveness,
   getExecutionStore,
-  isExecutionLiveOnDisk,
   listLiveExecutionIds,
   setHeartbeatOwnerHost,
   touchExecutionHeartbeat,
@@ -53,14 +52,18 @@ describe('execution liveness heartbeat (#8625)', () => {
       Date.now() + 6 * HEARTBEAT_INTERVAL_MS,
     );
 
-    await expect(isExecutionLiveOnDisk(id)).resolves.toBe(false);
+    await expect(getExecutionLiveness(id).then((l) => l.live)).resolves.toBe(
+      false,
+    );
   });
 
   it('is not live without a heartbeat file (pre-heartbeat executions)', async () => {
     const id = 'ab1003' as ExecutionId;
     await writeRunningExecution(id);
 
-    await expect(isExecutionLiveOnDisk(id)).resolves.toBe(false);
+    await expect(getExecutionLiveness(id).then((l) => l.live)).resolves.toBe(
+      false,
+    );
   });
 
   it('is not live once a terminal status is persisted, even with a fresh heartbeat', async () => {
@@ -71,13 +74,15 @@ describe('execution liveness heartbeat (#8625)', () => {
     });
     await touchExecutionHeartbeat(id);
 
-    await expect(isExecutionLiveOnDisk(id)).resolves.toBe(false);
+    await expect(getExecutionLiveness(id).then((l) => l.live)).resolves.toBe(
+      false,
+    );
   });
 
   it('is not live for an unknown execution id', async () => {
-    await expect(isExecutionLiveOnDisk('ab1005' as ExecutionId)).resolves.toBe(
-      false,
-    );
+    await expect(
+      getExecutionLiveness('ab1005' as ExecutionId).then((l) => l.live),
+    ).resolves.toBe(false);
   });
 
   it('lists only the live executions', async () => {

@@ -37,7 +37,7 @@ export const HEARTBEAT_INTERVAL_MS = 10_000;
  * one missed touch (event-loop stall, slow disk) never flags a live run as
  * dead, while a crashed run becomes deletable within half a minute.
  */
-export const HEARTBEAT_FRESH_MS = 3 * HEARTBEAT_INTERVAL_MS;
+const HEARTBEAT_FRESH_MS = 3 * HEARTBEAT_INTERVAL_MS;
 
 const HEARTBEAT_KEY_FILE = 'heartbeat.json';
 
@@ -114,6 +114,9 @@ export async function getExecutionLiveness(
   if (mtime == null || Date.now() - mtime >= HEARTBEAT_FRESH_MS) {
     return { live: false };
   }
+  // Best-effort owner read: liveness is already settled by the mtime check
+  // above, so a torn read racing the owner's next write or a schema mismatch
+  // only degrades the guard message to "another TeXRA host".
   const heartbeat = await StorageFS.readJson(
     heartbeatPath(executionId),
     HeartbeatSchema,
@@ -123,13 +126,6 @@ export async function getExecutionLiveness(
     ownerHost: heartbeat?.host,
     ownerPid: heartbeat?.pid,
   };
-}
-
-/** True when `executionId` is live in any process sharing the storage root. */
-export async function isExecutionLiveOnDisk(
-  executionId: ExecutionId,
-): Promise<boolean> {
-  return (await getExecutionLiveness(executionId)).live;
 }
 
 /** Human label for where a live run is running, for guard messages. */
@@ -155,10 +151,17 @@ export async function listLiveExecutionIds(): Promise<ExecutionId[]> {
   const candidates = entries.filter((entry) => !entry.terminalStatus);
   const results = await Promise.all(
     candidates.map(async (entry) => {
-      const mtime = await heartbeatMtime(entry.id).catch(() => null);
-      return mtime != null && Date.now() - mtime < HEARTBEAT_FRESH_MS
-        ? entry.id
-        : null;
+      try {
+        const mtime = await heartbeatMtime(entry.id);
+        return mtime != null && Date.now() - mtime < HEARTBEAT_FRESH_MS
+          ? entry.id
+          : null;
+      } catch {
+        // Fail safe for an irreversible operation: an unreadable heartbeat
+        // (EACCES, EIO) cannot prove the run is dead, so keep the execution
+        // out of bulk deletion as if it were live.
+        return entry.id;
+      }
     }),
   );
   return results.filter((id): id is ExecutionId => id != null);
