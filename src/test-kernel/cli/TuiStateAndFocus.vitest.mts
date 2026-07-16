@@ -564,6 +564,7 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({
       bottomPanelRows: 1,
       sessionPanelRows: 1,
+      spacerRows: 0,
       todosPlanRows: 0,
     });
   });
@@ -578,8 +579,10 @@ describe('CLI TUI row allocation', () => {
         transcriptRows: 6,
       }),
     ).toEqual({
-      bottomPanelRows: 2,
+      // Content rows plus the breathing row above the panel.
+      bottomPanelRows: 3,
       sessionPanelRows: 2,
+      spacerRows: 1,
       todosPlanRows: 0,
     });
   });
@@ -596,6 +599,7 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({
       bottomPanelRows: 0,
       sessionPanelRows: 0,
+      spacerRows: 0,
       todosPlanRows: 0,
     });
   });

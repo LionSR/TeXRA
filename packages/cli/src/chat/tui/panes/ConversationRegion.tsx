@@ -170,6 +170,7 @@ export function ConversationRegion({
   const {
     bottomPanelRows: bottomPanelBudget,
     sessionPanelRows: subagentRows,
+    spacerRows,
     todosPlanRows,
   } = allocateConversationBottomPanelRows({
     maxRows: BOTTOM_PANEL_MAX_ROWS,
@@ -236,6 +237,7 @@ export function ConversationRegion({
         {renderFooterChrome()}
         {bottomPanelBudget > 0 ? (
           <Box flexDirection="column" overflowY="hidden">
+            {spacerRows > 0 ? <Box height={spacerRows} /> : null}
             <SubagentList
               keyboardActive={snapshot.sessionListFocused && sessionListVisible}
               maxRows={subagentRows}

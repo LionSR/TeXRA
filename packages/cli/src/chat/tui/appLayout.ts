@@ -163,6 +163,10 @@ export function allocateConversationBottomPanelRows({
 }): {
   readonly bottomPanelRows: number;
   readonly sessionPanelRows: number;
+  /** One blank row rendered above the panel so it doesn't sit flush against
+   *  the footer chrome. Counted inside `bottomPanelRows` so the input bar
+   *  can never be pushed off-screen by the spacer. */
+  readonly spacerRows: number;
   readonly todosPlanRows: number;
 } {
   const sessionPanelContentRows = sessionCount + processCount;
@@ -179,26 +183,32 @@ export function allocateConversationBottomPanelRows({
       Math.floor(availableTranscriptRows / 2),
     );
   }
-  const bottomPanelRows = Math.min(
+  const contentPanelRows = Math.min(
     maxRows,
     sessionPanelContentRows + todosPlanContentRows,
     panelTranscriptLimit,
   );
+  // The breathing row is spent only when the panel has content AND the
+  // transcript limit leaves room beyond the content itself — a tight budget
+  // keeps every row for real content.
+  const spacerRows =
+    contentPanelRows > 0 && panelTranscriptLimit > contentPanelRows ? 1 : 0;
   const allocated = allocateSidePanelRows({
     subagentContentRows: sessionPanelContentRows,
     todosPlanContentRows,
-    rows: bottomPanelRows,
+    rows: contentPanelRows,
   });
   const sessionPanelRows =
     (sessionCount > 1 || sessionListFocused) &&
     sessionPanelContentRows > 0 &&
-    bottomPanelRows > 0
+    contentPanelRows > 0
       ? Math.max(1, allocated.subagentRows)
       : allocated.subagentRows;
   return {
-    bottomPanelRows,
+    bottomPanelRows: contentPanelRows + spacerRows,
     sessionPanelRows,
-    todosPlanRows: bottomPanelRows - sessionPanelRows,
+    spacerRows,
+    todosPlanRows: contentPanelRows - sessionPanelRows,
   };
 }
 
