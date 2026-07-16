@@ -26,9 +26,9 @@ All notable changes to this project will be documented in this file.
 
 - **Structured run results are moving to one outcome field** — scripts reading
   final result objects from `--output-format json` or `ndjson` should use
-  `outcome`. The legacy `status`, `terminalStatus`, and `endGroupStatus` fields
-  remain available through v0.40 and will be removed in v0.41. Status fields on
-  streamed progress records are unaffected.
+  `outcome`. Current v0.39 releases and all v0.40 releases continue to emit the
+  legacy `status`, `terminalStatus`, and `endGroupStatus` fields; v0.41 removes
+  them. Status fields on streamed progress records are unaffected.
 
 #### Bug Fixes
 

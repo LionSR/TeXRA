@@ -86,9 +86,9 @@ filesystem copy was written, and report the completed run's canonical
 `outcome`.
 
 For final run result objects, `status`, `terminalStatus`, and `endGroupStatus`
-are deprecated compatibility fields. They remain available through v0.40 and
-will be removed in v0.41; use `outcome` instead. This removal does not apply to
-status fields on streamed NDJSON progress records.
+are deprecated compatibility fields. Current v0.39 releases and all v0.40
+releases continue to emit them; v0.41 removes them. Use `outcome` instead. This
+removal does not apply to status fields on streamed NDJSON progress records.
 
 ## Authentication
 
