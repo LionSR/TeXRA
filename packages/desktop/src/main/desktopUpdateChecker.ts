@@ -30,7 +30,7 @@ const FETCH_TIMEOUT_MS = 5000;
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const UPDATE_CHECK_SKIP_ENV = 'TEXRA_NO_UPDATE_CHECK';
 
-export interface DesktopLatestRelease {
+interface DesktopLatestRelease {
   /** Release version with any leading `v` stripped, e.g. `0.40.0`. */
   version: string;
 }

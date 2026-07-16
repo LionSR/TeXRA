@@ -8,6 +8,6 @@ export function getRendererPlatform(view: Window | null): NodeJS.Platform {
 }
 
 /** Returns the host platform when the browser navigator is inconclusive. */
-export function getDefaultPlatform(): NodeJS.Platform {
+function getDefaultPlatform(): NodeJS.Platform {
   return typeof process === 'undefined' ? 'linux' : process.platform;
 }
