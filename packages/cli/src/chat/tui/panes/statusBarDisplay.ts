@@ -6,6 +6,8 @@ import {
   metaChordLabel,
 } from '@cli/runtime/shortcutLabels';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+import { resolveProviderCapabilities } from '@model/providerCapabilities';
+import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import {
   type RoundStage,
   type StreamPhase,
@@ -130,6 +132,28 @@ interface StatusBarDisplay {
   readonly bindings: string;
 }
 
+// ChatGPT/Codex-subscription turns run under a smaller enforced context
+// window than the model's raw API contextWindow (see providerCapabilities.ts).
+// `usage.usageRoute` is stamped by the handler that produced this specific
+// snapshot, so it's ground truth for *this* usage regardless of what the CLI
+// is currently configured to use — and resolveProviderCapabilities() only
+// ever stamps 'chatgpt-subscription' when useOpenRouter was false for that
+// turn, so passing `false` here isn't an assumption, it's already implied.
+function effectiveContextWindow(
+  usage: TokenUsageStats,
+  model: string,
+): number | undefined {
+  if (usage.usageRoute === 'chatgpt-subscription') {
+    const config = getRuntimeModelConfig(model);
+    const capped = config
+      ? resolveProviderCapabilities({ model: config, useOpenRouter: false })
+          ?.contextWindow
+      : undefined;
+    if (capped) return capped;
+  }
+  return MODEL_CONFIGS[model]?.contextWindow;
+}
+
 function formatUsage(
   usage: TokenUsageStats | undefined,
   model: string,
@@ -144,7 +168,7 @@ function formatUsage(
   if (used <= 0) return undefined;
 
   const base = { compactPriority: STATUS_BAR_COMPACT_PRIORITY.usage };
-  const contextWindow = MODEL_CONFIGS[model]?.contextWindow;
+  const contextWindow = effectiveContextWindow(usage, model);
   if (!contextWindow || contextWindow <= 0) {
     return { ...base, text: formatCompactTokenCount(used), color: 'dim' };
   }
