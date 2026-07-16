@@ -8,6 +8,7 @@ import { Box, Text } from 'ink';
 import { type NormalizedToolUse } from '@shared/schemas';
 
 import { DiffView } from '../render/DiffView';
+import { clipToWidth } from '../render/terminalText';
 import { TOOL_OUTPUT_CORNER } from '../ui/glyphs';
 import {
   toolUseMarginBottomRows,
@@ -34,6 +35,7 @@ function PatchPreview({
   // terminals. `DiffView` floors this at its own minimum.
   const diffWidth =
     (width ?? PATCH_PREVIEW_FALLBACK_WIDTH) - PATCH_PREVIEW_INDENT;
+  const labelWidth = (width ?? PATCH_PREVIEW_FALLBACK_WIDTH) - 2;
   return (
     <Box
       flexDirection="column"
@@ -43,7 +45,12 @@ function PatchPreview({
     >
       {groups.map((group, index) => (
         <Box key={`${group.fileLabel}-${index}`} flexDirection="column">
-          <Text dimColor>{`${TOOL_OUTPUT_CORNER} ${group.fileLabel}`}</Text>
+          <Text dimColor>
+            {clipToWidth(
+              `${TOOL_OUTPUT_CORNER} ${group.fileLabel}`,
+              labelWidth,
+            )}
+          </Text>
           <Box flexDirection="column" paddingLeft={2}>
             <DiffView
               hunks={group.hunks}

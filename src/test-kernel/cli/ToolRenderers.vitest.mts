@@ -55,6 +55,18 @@ describe('CLI tool display lines', () => {
     ]);
   });
 
+  it('counts wrapped patch rows at the rich terminal width', () => {
+    const entry = toolUse('Edit', {
+      path: 'paper.tex',
+      old_string: 'short\n',
+      new_string: `${'a long replacement '.repeat(8)}\n`,
+    });
+
+    expect(toolUseDisplayLines(entry, { width: 24 }).length).toBeGreaterThan(
+      toolUseDisplayLines(entry).length,
+    );
+  });
+
   it('registers edit patch rendering before the universal fallback', () => {
     const entry = toolUse('Edit', {
       path: 'paper.tex',

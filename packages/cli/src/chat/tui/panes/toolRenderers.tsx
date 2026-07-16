@@ -22,6 +22,7 @@ import {
   diffDisplayLines,
   editPatchGroups,
   type InlinePatchGroup,
+  wrappedDiffDisplayLines,
 } from '../render/DiffView';
 import {
   textDisplayWidth,
@@ -113,13 +114,11 @@ export interface DisplayLineOptions {
   /** When false, emit the full output instead of the head+tail slice.
    *  The transcript viewer (ctrl+t) sets this to show everything. */
   readonly elide?: boolean;
-}
-
-export interface StyledLineOptions extends DisplayLineOptions {
-  /** Terminal columns for the width-adaptive header preview. Omitted (plain
-   *  projections) keeps the historical fixed 80-column budget. */
+  /** Terminal columns when the projection must match rich rendered rows. */
   readonly width?: number;
 }
+
+export type StyledLineOptions = DisplayLineOptions;
 
 /** One styled fragment of a tool row. */
 interface ToolDisplaySpan {
@@ -208,12 +207,19 @@ function toolUsePatchGroups(
   return editPatchGroups(toolUse.input);
 }
 
-function patchTextLines(groups: readonly InlinePatchGroup[]): string[] {
+function patchTextLines(
+  groups: readonly InlinePatchGroup[],
+  width?: number,
+): string[] {
   // Plain text only: the colored full-width bands come from the `DiffView`
   // component; these lines feed row budgeting and the transcript viewer.
+  const diffWidth = width === undefined ? undefined : width - 4;
   return groups.flatMap((group) => [
     `${TOOL_OUTPUT_CORNER} ${group.fileLabel}`,
-    ...diffDisplayLines(group.hunks).map((line) => `  ${line.text}`),
+    ...(diffWidth === undefined
+      ? diffDisplayLines(group.hunks)
+      : wrappedDiffDisplayLines(group.hunks, diffWidth)
+    ).map((line) => `  ${line.text}`),
   ]);
 }
 
@@ -416,7 +422,7 @@ function buildStyledLines(
           {
             kind: 'patch' as const,
             groups: patchGroups,
-            textLines: patchTextLines(patchGroups),
+            textLines: patchTextLines(patchGroups, options.width),
           },
         ]
       : []),
@@ -488,9 +494,7 @@ export function toolUseDisplayLines(
   toolUse: NormalizedToolUse,
   options?: DisplayLineOptions,
 ): readonly string[] {
-  return toolUseStyledLines(toolUse, { elide: options?.elide }).flatMap(
-    lineText,
-  );
+  return toolUseStyledLines(toolUse, options).flatMap(lineText);
 }
 
 /** Tool detail rows are separated from the next conversation entry. Derive
