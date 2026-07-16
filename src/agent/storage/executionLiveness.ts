@@ -25,7 +25,6 @@ import { StorageFS } from '@utils/files/storageFS';
 
 // Local imports - storage
 import { getExecutionStore } from './ExecutionKVStore';
-import { listExecutions } from './executionListing';
 
 // Type imports
 
@@ -112,7 +111,10 @@ export async function getExecutionLiveness(
   executionId: ExecutionId,
 ): Promise<ExecutionLiveness> {
   const meta = await getExecutionStore(executionId).readMeta();
-  if (!meta || meta.terminalStatus) return { live: false };
+  if (meta?.terminalStatus) return { live: false };
+  // No meta + fresh heartbeat = a launching run: registerExecution lands the
+  // heartbeat before its other writes, so mid-launch state reads as live
+  // instead of as deletable debris.
   const mtime = await heartbeatMtime(executionId);
   if (mtime == null || Date.now() - mtime >= HEARTBEAT_FRESH_MS) {
     return { live: false };
@@ -143,29 +145,4 @@ export function describeHeartbeatOwner(ownerHost: string | undefined): string {
     default:
       return 'another TeXRA host';
   }
-}
-
-/**
- * Ids of every execution currently live in any process. Only non-terminal
- * listing entries pay the heartbeat stat.
- */
-export async function listLiveExecutionIds(): Promise<ExecutionId[]> {
-  const entries = await listExecutions();
-  const candidates = entries.filter((entry) => !entry.terminalStatus);
-  const results = await Promise.all(
-    candidates.map(async (entry) => {
-      try {
-        const mtime = await heartbeatMtime(entry.id);
-        return mtime != null && Date.now() - mtime < HEARTBEAT_FRESH_MS
-          ? entry.id
-          : null;
-      } catch {
-        // Fail safe for an irreversible operation: an unreadable heartbeat
-        // (EACCES, EIO) cannot prove the run is dead, so keep the execution
-        // out of bulk deletion as if it were live.
-        return entry.id;
-      }
-    }),
-  );
-  return results.filter((id): id is ExecutionId => id != null);
 }

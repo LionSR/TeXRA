@@ -122,6 +122,11 @@ export async function registerExecution(
   parentExecutionId?: ExecutionId,
   category?: string,
 ): Promise<void> {
+  // The heartbeat lands before every other launch write so a concurrent
+  // clear-all never observes a partially-written execution as dead (#8625):
+  // liveness reads a fresh heartbeat without meta as a launching run, and
+  // the registry's interval takes over refreshing it.
+  await touchExecutionHeartbeat(executionId);
   const timestamp = new Date().toISOString();
   const store = getExecutionStore(executionId);
 
@@ -146,10 +151,6 @@ export async function registerExecution(
     );
   }
 
-  // The first heartbeat lands with the launch writes so there is no window
-  // where the run exists on disk as non-terminal but unprotected (#8625);
-  // the registry's interval takes over refreshing it.
-  writes.push(touchExecutionHeartbeat(executionId));
   await Promise.all(writes);
 }
 

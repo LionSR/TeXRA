@@ -10,7 +10,6 @@ import {
   getExecutionStore,
   isUserVisibleExecution,
   listExecutions,
-  listLiveExecutionIds,
   unwrapResultMeta,
   type ExecutionListingEntry,
   type ExecutionMeta,
@@ -315,17 +314,17 @@ export async function deleteCliHistory(options: {
   preCountForAll?: number;
 }): Promise<CliHistoryDeleteResult> {
   if (options.all) {
-    // Executions live in any host sharing ~/.texra survive a clear (#8625).
-    const liveIds = await listLiveExecutionIds();
-    const deletedExecutionIds = await deleteAllExecutions(new Set(liveIds));
-    await GoalStore.forgetByExecutionIds(deletedExecutionIds);
+    // deleteAllExecutions skips runs live in any host sharing ~/.texra,
+    // checking liveness per id at delete time (#8625).
+    const { deleted, skippedLive } = await deleteAllExecutions();
+    await GoalStore.forgetByExecutionIds(deleted);
     // The preflight count was taken before live runs were excluded, so it
     // overstates the deletion when any were skipped — report actuals then.
     const count =
-      liveIds.length > 0
-        ? deletedExecutionIds.length
-        : (options.preCountForAll ?? deletedExecutionIds.length);
-    return { deleted: 'all', count, skippedLive: liveIds.length };
+      skippedLive.length > 0
+        ? deleted.length
+        : (options.preCountForAll ?? deleted.length);
+    return { deleted: 'all', count, skippedLive: skippedLive.length };
   }
   if (!options.id) {
     throw new Error('Expected an execution id, or --all.');

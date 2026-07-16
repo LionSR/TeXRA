@@ -26,6 +26,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory } from '@utils/files/fsEntryType';
 
 import { getExecutionStore } from './ExecutionKVStore';
+import { getExecutionLiveness } from './executionLiveness';
 
 const CHANNEL = 'ExecutionListing';
 const INDEX_PATH = `${RUNS_STORAGE_DIR}/index.json`;
@@ -222,22 +223,52 @@ export async function deleteExecution(
   }
 }
 
+export interface DeleteAllExecutionsResult {
+  /** Ids whose storage was cleared, for adjacent per-execution cleanup. */
+  readonly deleted: ExecutionId[];
+  /** Ids skipped because they are live in some process (#8625). */
+  readonly skippedLive: ExecutionId[];
+}
+
 /**
- * Delete all executions, optionally excluding a set of IDs (e.g. active runs).
- * Returns the execution ids selected for deletion so callers can clean up
- * adjacent per-execution state without re-scanning storage.
+ * Delete all executions, optionally excluding a set of IDs (e.g. this
+ * process's active runs). Executions live in ANY process sharing the storage
+ * root are skipped: liveness is checked per id at delete time, because a
+ * batch-level scan goes stale against runs launched while the wipe is in
+ * progress.
  */
 export async function deleteAllExecutions(
   exclude?: ReadonlySet<string>,
-): Promise<ExecutionId[]> {
+): Promise<DeleteAllExecutionsResult> {
   const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
   const executionDirs = listExecutionDirs(entries, exclude);
 
-  await pMap(executionDirs, (id) => getExecutionStore(id).clear(), {
-    concurrency: EXECUTION_STORAGE_CONCURRENCY,
-    stopOnError: false,
-  });
-  return executionDirs;
+  const deleted: ExecutionId[] = [];
+  const skippedLive: ExecutionId[] = [];
+  await pMap(
+    executionDirs,
+    async (id) => {
+      let live: boolean;
+      try {
+        live = (await getExecutionLiveness(id)).live;
+      } catch {
+        // Fail safe for an irreversible operation: an unreadable heartbeat
+        // (EACCES, EIO) cannot prove the run is dead, so keep the execution.
+        live = true;
+      }
+      if (live) {
+        skippedLive.push(id);
+        return;
+      }
+      await getExecutionStore(id).clear();
+      deleted.push(id);
+    },
+    {
+      concurrency: EXECUTION_STORAGE_CONCURRENCY,
+      stopOnError: false,
+    },
+  );
+  return { deleted, skippedLive };
 }
 
 // ============================================================================

@@ -24,7 +24,6 @@ import {
   deleteAllExecutions,
   describeHeartbeatOwner,
   getExecutionLiveness,
-  listLiveExecutionIds,
 } from '@agent/storage';
 import {
   AgentConfigSchema,
@@ -139,11 +138,10 @@ export class HistoryHandlers {
 
   async handleClearHistory(): Promise<void> {
     try {
+      // deleteAllExecutions itself skips runs live in any host (#8625);
+      // this process's active ids are excluded up front as a cheap fast path.
       await deleteAllExecutions(
-        new Set([
-          ...defaultSession().executions.getActiveIds(),
-          ...(await listLiveExecutionIds()),
-        ]),
+        new Set(defaultSession().executions.getActiveIds()),
       );
       await vscode.window.showInformationMessage('Agent history cleared');
       await this.ctx.withActiveWebview(async (w) => {

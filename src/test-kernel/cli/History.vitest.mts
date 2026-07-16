@@ -1072,7 +1072,10 @@ describe('CLI history runtime', () => {
   });
 
   it('surfaces the bulk-delete count in the structured result', async () => {
-    mocks.deleteAllExecutions.mockResolvedValue(['a1', 'b2', 'c3', 'd4']);
+    mocks.deleteAllExecutions.mockResolvedValue({
+      deleted: ['a1', 'b2', 'c3', 'd4'],
+      skippedLive: [],
+    });
 
     await expect(deleteCliHistory({ all: true })).resolves.toEqual({
       deleted: 'all',
@@ -1082,7 +1085,10 @@ describe('CLI history runtime', () => {
   });
 
   it('reuses the preflight count instead of re-listing', async () => {
-    mocks.deleteAllExecutions.mockResolvedValue(['a1']);
+    mocks.deleteAllExecutions.mockResolvedValue({
+      deleted: ['a1'],
+      skippedLive: [],
+    });
 
     await expect(
       deleteCliHistory({ all: true, preCountForAll: 7 }),
@@ -1099,7 +1105,10 @@ describe('CLI history runtime', () => {
     await GoalStore.start(deletedA, 'delete a');
     await GoalStore.start(deletedB, 'delete b');
     await GoalStore.start(live, 'keep me');
-    mocks.deleteAllExecutions.mockResolvedValue(['a1', 'b2']);
+    mocks.deleteAllExecutions.mockResolvedValue({
+      deleted: ['a1', 'b2'],
+      skippedLive: [],
+    });
 
     await deleteCliHistory({ all: true });
 

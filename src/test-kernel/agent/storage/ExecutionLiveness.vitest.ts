@@ -4,9 +4,9 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import {
   HEARTBEAT_INTERVAL_MS,
   clearStoreCache,
+  deleteAllExecutions,
   getExecutionLiveness,
   getExecutionStore,
-  listLiveExecutionIds,
   setHeartbeatOwnerHost,
   touchExecutionHeartbeat,
 } from '@agent/storage';
@@ -85,7 +85,16 @@ describe('execution liveness heartbeat (#8625)', () => {
     ).resolves.toBe(false);
   });
 
-  it('lists only the live executions', async () => {
+  it('treats a fresh heartbeat without meta as a launching (live) run', async () => {
+    const id = 'ab3001' as ExecutionId;
+    await touchExecutionHeartbeat(id);
+
+    await expect(getExecutionLiveness(id).then((l) => l.live)).resolves.toBe(
+      true,
+    );
+  });
+
+  it('clear-all deletes finished and crashed runs but skips live ones', async () => {
     const live = 'ab2001' as ExecutionId;
     const finished = 'ab2002' as ExecutionId;
     const crashed = 'ab2003' as ExecutionId;
@@ -97,6 +106,12 @@ describe('execution liveness heartbeat (#8625)', () => {
     });
     await writeRunningExecution(crashed);
 
-    await expect(listLiveExecutionIds()).resolves.toEqual([live]);
+    const result = await deleteAllExecutions();
+
+    expect(result.skippedLive).toEqual([live]);
+    expect([...result.deleted].sort()).toEqual([finished, crashed]);
+    await expect(getExecutionLiveness(live).then((l) => l.live)).resolves.toBe(
+      true,
+    );
   });
 });

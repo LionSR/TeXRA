@@ -10,7 +10,6 @@ import {
   describeHeartbeatOwner,
   getExecutionLiveness,
   getExecutionStore,
-  listLiveExecutionIds,
 } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
@@ -111,11 +110,10 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
   }
 
   private async clear(): Promise<void> {
+    // deleteAllExecutions itself skips runs live in any host (#8625);
+    // this process's active ids are excluded up front as a cheap fast path.
     await deleteAllExecutions(
-      new Set([
-        ...this.dependencies.getActiveExecutionIds(),
-        ...(await listLiveExecutionIds()),
-      ]),
+      new Set(this.dependencies.getActiveExecutionIds()),
     );
     this.dependencies.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
