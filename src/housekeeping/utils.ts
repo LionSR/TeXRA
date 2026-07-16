@@ -5,13 +5,13 @@ import * as path from 'node:path';
 import { sync as globSync } from 'glob';
 
 // Local imports
-import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
-import * as logger from '@logger/logUtils';
 import {
   legacyWorkflowOutputStem,
   midEraWorkflowOutputStem,
   normalizeLegacyModel,
 } from '@shared/constants/legacyWorkflowOutput';
+import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
+import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 
