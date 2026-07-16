@@ -68,6 +68,7 @@ import {
   formatFileView,
   paginateToolListing,
   formatPaginationHint,
+  ViewRangeSchema,
 } from './formatting';
 import {
   applyViewRange,
@@ -112,16 +113,9 @@ const ExecutionsToolInputSchema = z.strictObject({
     ),
 
   /** Optional line range [start, end] for large outputs (action="view" only). */
-  view_range: z
-    .array(z.int().min(1))
-    .length(2)
-    .refine(([start, end]) => end >= start, {
-      error: 'view_range[1] must be >= view_range[0]',
-    })
-    .nullish()
-    .describe(
-      'Line range [start, end] for paginating large outputs (action="view" only).',
-    ),
+  view_range: ViewRangeSchema.nullish().describe(
+    'Line range [start, end] for paginating large outputs (action="view" only).',
+  ),
 
   /** Execution IDs to wait on (action="wait" with /executions only). */
   ids: z

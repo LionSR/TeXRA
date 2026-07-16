@@ -14,16 +14,11 @@ import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
 import { ToolResult, ToolError } from '@shared/schemas/toolResult';
 import {
-  recordToolFileRead,
-  requireFileReadForEdit,
-} from '@tools/fileInteractions';
-import {
-  appendApprovalDiffNote,
-  requestApprovedEditContent,
-  requestAndWriteApprovedEdit,
-  writeAndRecordApprovedEdit,
-  type ToolEditApprovalResult,
-} from '@tools/approval/toolEditApproval';
+  applyApprovedFileEdit,
+  loadEditableFile,
+  replaceLiteralMatches,
+} from '@tools/fileEditFlow';
+import { recordToolFileRead } from '@tools/fileInteractions';
 import { assertNever } from '@utils/core';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -32,17 +27,13 @@ import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
-import {
-  findOccurrenceLineNumbers,
-  replaceFirstLiteral,
-} from './editPrimitives';
 import { formatFileView, formatLinesWithNumbers } from './formatting';
 import {
   assertWritable,
   resolveAndFormat,
   currentToolRoot,
 } from './pathResolution';
-import { countOccurrences, requireField } from './utils';
+import { requireField } from './utils';
 
 // Constants
 const CHANNEL = 'TextEditorTool';
@@ -303,104 +294,26 @@ export class TextEditorTool extends defineTool({
       const proposedContent = isTexFile(filePath)
         ? replacementEngine.applyAll(content)
         : content;
-      const outcome = await requestApprovedEditContent({
+      return applyApprovedFileEdit({
         path: filePath,
         displayPath,
         originalContent: '',
         proposedContent,
         sourceTool: 'text_editor:create',
+        beforeWrite: async () => {
+          const dirPath = path.dirname(filePath);
+          if (dirPath !== '.') {
+            await WorkspaceFS.ensureDir(dirPath);
+          }
+        },
+        present: () => ({
+          summary: `Created file ${displayPath}`,
+          output: `File created successfully at: ${displayPath}`,
+        }),
       });
-      if ('rejected' in outcome) {
-        return outcome.rejected;
-      }
-      const { approval, finalContent } = outcome;
-
-      // Create parent directories if they don't exist
-      const dirPath = path.dirname(filePath);
-      if (dirPath !== '.') {
-        await WorkspaceFS.ensureDir(dirPath);
-      }
-
-      const { appliedContent } = await writeAndRecordApprovedEdit(
-        filePath,
-        '',
-        finalContent,
-      );
-
-      const output = appendApprovalDiffNote(
-        `File created successfully at: ${displayPath}`,
-        displayPath,
-        proposedContent,
-        appliedContent,
-      );
-
-      return {
-        status: 'executed',
-        summary: `Created file ${displayPath}`,
-        output,
-        userPatch: approval.userPatch,
-        edits: [{ path: displayPath, lineChanges: approval.lineChanges }],
-      };
     } catch (error) {
       rethrowWithContext(error, `Error creating file ${displayPath}`);
     }
-  }
-
-  /**
-   * Shared edit prelude for strReplace/insert: gate on read-before-edit, then
-   * read and tab-expand the file. Returns the read-gate ToolResult when the
-   * edit must be blocked, otherwise the file content and its tab-expanded form.
-   */
-  private async prepareEditContent(
-    filePath: string,
-  ): Promise<
-    | { readGate: ToolResult }
-    | { fileContent: string; expandedFileContent: string }
-  > {
-    const exists = await WorkspaceFS.exists(filePath);
-    const readGate = requireFileReadForEdit(filePath, exists);
-    if (readGate) {
-      return { readGate };
-    }
-    const fileContent = await WorkspaceFS.read(filePath);
-    // Expand tabs to 4 spaces for consistent display
-    const expandedFileContent = fileContent.replaceAll('\t', '    ');
-    return { fileContent, expandedFileContent };
-  }
-
-  /**
-   * Shared write tail for strReplace/insert: request approval for the proposed
-   * content, write it, push the prior content onto the undo stack when it
-   * actually changed, and mark the file as read. Returns the rejection
-   * ToolResult when the user declines, otherwise the approval plus the content
-   * landed on disk.
-   */
-  private async approveAndWriteEdit(
-    filePath: string,
-    displayPath: string,
-    fileContent: string,
-    newFileContent: string,
-    sourceTool: 'text_editor:str_replace' | 'text_editor:insert',
-  ): Promise<
-    | { rejected: ToolResult }
-    | { approval: ToolEditApprovalResult; appliedContent: string }
-  > {
-    const outcome = await requestAndWriteApprovedEdit({
-      path: filePath,
-      displayPath,
-      originalContent: fileContent,
-      proposedContent: newFileContent,
-      sourceTool,
-    });
-    if ('rejected' in outcome) {
-      return outcome;
-    }
-    const { approval, appliedContent, baseContent } = outcome;
-    if (appliedContent !== baseContent) {
-      this.addToHistory(filePath, baseContent);
-    }
-
-    return { approval, appliedContent };
   }
 
   private async strReplace(
@@ -410,11 +323,12 @@ export class TextEditorTool extends defineTool({
     newStr: string,
   ): Promise<ToolResult> {
     try {
-      const prepared = await this.prepareEditContent(filePath);
-      if ('readGate' in prepared) {
-        return prepared.readGate;
+      const loaded = await loadEditableFile(filePath);
+      if ('blocked' in loaded) {
+        return loaded.blocked;
       }
-      const { fileContent, expandedFileContent } = prepared;
+      const fileContent = loaded.originalContent;
+      const expandedFileContent = fileContent.replaceAll('\t', '    ');
 
       const expandedOldStr = oldStr.replaceAll('\t', '    ');
       const expandedNewStr = newStr.replaceAll('\t', '    ');
@@ -425,72 +339,51 @@ export class TextEditorTool extends defineTool({
         );
       }
 
-      const occurrences = countOccurrences(expandedFileContent, expandedOldStr);
-
-      if (occurrences === 0) {
-        throw new ToolError(
+      const replacement = replaceLiteralMatches({
+        content: expandedFileContent,
+        search: expandedOldStr,
+        replacement: expandedNewStr,
+        mode: 'unique',
+        notFoundError: () =>
           `No replacement was performed, old_str \`${oldStr}\` did not appear verbatim in ${displayPath}.`,
-        );
-      }
-
-      if (occurrences > 1) {
-        const lineNumbers = findOccurrenceLineNumbers(
-          expandedFileContent,
-          expandedOldStr,
-        );
-
-        throw new ToolError(
+        multipleMatchesError: ({ lineNumbers }) =>
           `No replacement was performed. Multiple occurrences of old_str \`${oldStr}\` in lines ${lineNumbers.join(', ')}. Please ensure it is unique`,
-        );
-      }
+      });
 
       // Literal replacement (String.replace would interpret $$, $&, $', `$\``
       // patterns and corrupt LaTeX/code); see editPrimitives.
-      const newFileContent = replaceFirstLiteral(
-        expandedFileContent,
-        expandedOldStr,
-        expandedNewStr,
-      );
+      const newFileContent = replacement.content;
 
-      const edit = await this.approveAndWriteEdit(
-        filePath,
-        displayPath,
-        fileContent,
-        newFileContent,
-        'text_editor:str_replace',
-      );
-      if ('rejected' in edit) {
-        return edit.rejected;
-      }
-      const { approval, appliedContent } = edit;
-
-      const textBeforeReplacement =
-        expandedFileContent.split(expandedOldStr)[0];
-      const replacementLine =
-        (textBeforeReplacement.match(/\n/g) ?? []).length + 1;
+      const replacementLine = replacement.lineNumbers[0] ?? 1;
       const startLine = Math.max(1, replacementLine - SNIPPET_LINES);
       const endLine =
         replacementLine + SNIPPET_LINES + (newStr.match(/\n/g) ?? []).length;
 
-      const newFileLines = appliedContent.split('\n');
-      const snippet = newFileLines.slice(startLine - 1, endLine).join('\n');
-
-      const output = this.formatEditOutput(
+      return applyApprovedFileEdit({
+        path: filePath,
         displayPath,
-        snippet,
-        startLine,
-        newFileContent,
-        appliedContent,
-        'Review the changes and make sure they are as expected. Edit the file again if necessary.',
-      );
-
-      return {
-        status: 'executed',
-        summary: `Updated ${displayPath}`,
-        output,
-        userPatch: approval.userPatch,
-        edits: [{ path: displayPath, lineChanges: approval.lineChanges }],
-      };
+        originalContent: fileContent,
+        proposedContent: newFileContent,
+        sourceTool: 'text_editor:str_replace',
+        afterWrite: ({ appliedContent, baseContent }) => {
+          if (appliedContent !== baseContent) {
+            this.addToHistory(filePath, baseContent);
+          }
+        },
+        present: ({ appliedContent }) => {
+          const snippet = appliedContent
+            .split('\n')
+            .slice(startLine - 1, endLine)
+            .join('\n');
+          return {
+            summary: `Updated ${displayPath}`,
+            output:
+              `The file ${displayPath} has been edited. ` +
+              this.makeOutput(snippet, startLine) +
+              'Review the changes and make sure they are as expected. Edit the file again if necessary.',
+          };
+        },
+      });
     } catch (error) {
       rethrowWithContext(error, `Error replacing text in ${displayPath}`);
     }
@@ -503,11 +396,12 @@ export class TextEditorTool extends defineTool({
     newStr: string,
   ): Promise<ToolResult> {
     try {
-      const prepared = await this.prepareEditContent(filePath);
-      if ('readGate' in prepared) {
-        return prepared.readGate;
+      const loaded = await loadEditableFile(filePath);
+      if ('blocked' in loaded) {
+        return loaded.blocked;
       }
-      const { fileContent, expandedFileContent } = prepared;
+      const fileContent = loaded.originalContent;
+      const expandedFileContent = fileContent.replaceAll('\t', '    ');
 
       const expandedNewStr = newStr.replaceAll('\t', '    ');
 
@@ -528,46 +422,38 @@ export class TextEditorTool extends defineTool({
       ];
       const newFileContent = newFileLines.join('\n');
 
-      const edit = await this.approveAndWriteEdit(
-        filePath,
+      return applyApprovedFileEdit({
+        path: filePath,
         displayPath,
-        fileContent,
-        newFileContent,
-        'text_editor:insert',
-      );
-      if ('rejected' in edit) {
-        return edit.rejected;
-      }
-      const { approval, appliedContent } = edit;
-
-      const previewLines = appliedContent.split('\n');
-      const insertIndex = insertLine - 1;
-      const snippetStart = Math.max(0, insertIndex - SNIPPET_LINES);
-      const snippetEnd = Math.min(
-        previewLines.length,
-        insertIndex + newStrLines.length + SNIPPET_LINES,
-      );
-      const snippetText = previewLines
-        .slice(snippetStart, snippetEnd)
-        .join('\n');
-      const startLine = snippetStart + 1;
-
-      const output = this.formatEditOutput(
-        displayPath,
-        snippetText,
-        startLine,
-        newFileContent,
-        appliedContent,
-        'Review the changes and make sure they are as expected (correct indentation, no duplicate lines, etc). Edit the file again if necessary.',
-      );
-
-      return {
-        status: 'executed',
-        summary: `Inserted text into ${displayPath}`,
-        output,
-        userPatch: approval.userPatch,
-        edits: [{ path: displayPath, lineChanges: approval.lineChanges }],
-      };
+        originalContent: fileContent,
+        proposedContent: newFileContent,
+        sourceTool: 'text_editor:insert',
+        afterWrite: ({ appliedContent, baseContent }) => {
+          if (appliedContent !== baseContent) {
+            this.addToHistory(filePath, baseContent);
+          }
+        },
+        present: ({ appliedContent }) => {
+          const previewLines = appliedContent.split('\n');
+          const insertIndex = insertLine - 1;
+          const snippetStart = Math.max(0, insertIndex - SNIPPET_LINES);
+          const snippetEnd = Math.min(
+            previewLines.length,
+            insertIndex + newStrLines.length + SNIPPET_LINES,
+          );
+          const snippetText = previewLines
+            .slice(snippetStart, snippetEnd)
+            .join('\n');
+          const startLine = snippetStart + 1;
+          return {
+            summary: `Inserted text into ${displayPath}`,
+            output:
+              `The file ${displayPath} has been edited. ` +
+              this.makeOutput(snippetText, startLine) +
+              'Review the changes and make sure they are as expected (correct indentation, no duplicate lines, etc). Edit the file again if necessary.',
+          };
+        },
+      });
     } catch (error) {
       rethrowWithContext(error, `Error inserting text in ${displayPath}`);
     }
@@ -584,71 +470,33 @@ export class TextEditorTool extends defineTool({
         throw new ToolError(`No edit history found for ${displayPath}.`);
       }
 
-      const exists = await WorkspaceFS.exists(filePath);
-      const readGate = requireFileReadForEdit(filePath, exists);
-      if (readGate) {
-        return readGate;
+      const loaded = await loadEditableFile(filePath);
+      if ('blocked' in loaded) {
+        return loaded.blocked;
       }
 
       const previousContent = history.at(-1)!;
-      const currentContent = await WorkspaceFS.read(filePath);
-
-      const outcome = await requestAndWriteApprovedEdit({
+      return applyApprovedFileEdit({
         path: filePath,
         displayPath,
-        originalContent: currentContent,
+        originalContent: loaded.originalContent,
         proposedContent: previousContent,
         sourceTool: 'text_editor:undo_edit',
+        diffSeparator: '\n',
+        afterWrite: () => {
+          history.pop();
+          if (history.length === 0) {
+            this.fileHistory.delete(key);
+          }
+        },
+        present: ({ appliedContent }) => ({
+          summary: `Undid edit on ${displayPath}`,
+          output: `Last edit to ${displayPath} undone successfully. ${this.makeOutput(appliedContent)}`,
+        }),
       });
-      if ('rejected' in outcome) {
-        return outcome.rejected;
-      }
-      const { approval, appliedContent } = outcome;
-      history.pop();
-
-      if (history.length === 0) {
-        this.fileHistory.delete(key);
-      }
-
-      const baseOutput = `Last edit to ${displayPath} undone successfully. ${this.makeOutput(appliedContent)}`;
-      const output = appendApprovalDiffNote(
-        baseOutput,
-        displayPath,
-        previousContent,
-        appliedContent,
-        '\n',
-      );
-
-      return {
-        status: 'executed',
-        summary: `Undid edit on ${displayPath}`,
-        output,
-        userPatch: approval.userPatch,
-        edits: [{ path: displayPath, lineChanges: approval.lineChanges }],
-      };
     } catch (error) {
       rethrowWithContext(error, `Error undoing edit to ${displayPath}`);
     }
-  }
-
-  /** Build the output message for str_replace/insert commands. */
-  private formatEditOutput(
-    filePath: string,
-    snippetText: string,
-    startLine: number,
-    proposedContent: string,
-    appliedContent: string,
-    reviewNote: string,
-  ): string {
-    const successIntro = `The file ${filePath} has been edited.`;
-    const snippetOutput = this.makeOutput(snippetText, startLine);
-    const baseMsg = `${successIntro} ${snippetOutput}${reviewNote}`;
-    return appendApprovalDiffNote(
-      baseMsg,
-      filePath,
-      proposedContent,
-      appliedContent,
-    );
   }
 
   /**

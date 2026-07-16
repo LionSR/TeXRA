@@ -14,16 +14,13 @@ import {
 import { debug } from '@logger/logUtils';
 import { formatBytes, formatRelativeTime } from '@shared/utils/string';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { replaceLiteralMatches } from '@tools/fileEditFlow';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local imports - tool core
 import { defineTool } from '../core/define';
-import {
-  findOccurrenceLineNumbers,
-  replaceFirstLiteral,
-} from '../editPrimitives';
 import {
   recordToolFileRead,
   requireFileReadForEdit,
@@ -33,8 +30,9 @@ import {
   formatLinesWithNumbers,
   formatPaginationHint,
   paginateToolListing,
+  ViewRangeSchema,
 } from '../formatting';
-import { countOccurrences, requireField } from '../utils';
+import { requireField } from '../utils';
 
 // Local imports - shared memory constants and utilities
 import {
@@ -67,12 +65,7 @@ const MemoryToolInputSchema = z.strictObject({
   ]),
   path: z.string().nullish(),
   file_text: z.string().nullish(),
-  view_range: z
-    .tuple([z.int().min(1), z.int().min(1)])
-    .refine(([start, end]) => end >= start, {
-      error: 'view_range[1] must be greater than or equal to view_range[0]',
-    })
-    .nullish(),
+  view_range: ViewRangeSchema.nullish(),
   old_str: z.string().nullish(),
   new_str: z.string().nullish(),
   insert_line: z.int().min(0).nullish(),
@@ -355,23 +348,20 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     if (readGate) return readGate;
 
     const { content, meta } = await this.readMemoryFile(resolvedPath);
-    const occurrences = countOccurrences(content, oldStr);
-    if (occurrences === 0) {
-      throw new ToolError(
+    const replacement = replaceLiteralMatches({
+      content,
+      search: oldStr,
+      replacement: newStr,
+      mode: 'unique',
+      notFoundError: () =>
         `The provided old_str was not found in ${inputPath}. Ensure it matches the file content exactly.`,
-      );
-    }
-
-    if (occurrences > 1) {
-      const lineNumbers = findOccurrenceLineNumbers(content, oldStr);
-      throw new ToolError(
+      multipleMatchesError: ({ lineNumbers }) =>
         `old_str is not unique within ${inputPath} (found in lines ${lineNumbers.join(', ')}). Include more surrounding context to make it unique.`,
-      );
-    }
+    });
 
     // Literal replacement (String.replace would interpret $$, $&, $', `$\``
     // patterns and corrupt LaTeX/content); see editPrimitives.
-    const updated = replaceFirstLiteral(content, oldStr, newStr);
+    const updated = replacement.content;
     await this.writeMemoryFile(resolvedPath, updated, meta);
     recordToolFileRead(inputPath);
 
