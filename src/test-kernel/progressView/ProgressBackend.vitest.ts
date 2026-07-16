@@ -2023,6 +2023,42 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('retains sidecar state for a durably registered empty stream', async () => {
+    const stream = 'tool@deepseek#empty01' as StreamTabId;
+    const executionId = 'e6966e' as ExecutionId;
+    const first = await createPersistentRecordingBackend();
+
+    try {
+      first.backend.state.streamLogs.ensureStream(stream);
+      first.backend.state.setStreamTaskState(
+        stream,
+        toolUseTaskState('search', 'deepseekproT'),
+        executionId,
+      );
+      await writeExecutionConfig(executionId);
+      await first.backend.state.flush();
+    } finally {
+      first.backend.dispose();
+      first.session.dispose();
+    }
+
+    const second = await createPersistentRecordingBackend();
+    try {
+      await second.backend.state.load();
+
+      expect(second.backend.state.streamLogs.has(stream)).toBe(true);
+      expect(second.backend.state.snapshots.getExecutionId(stream)).toBe(
+        executionId,
+      );
+      expect(await StorageFS.exists(streamDataDir(stream))).toBe(true);
+      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
+    } finally {
+      await second.backend.state.clearAll();
+      second.backend.dispose();
+      second.session.dispose();
+    }
+  });
+
   // Workflow tabs created before the one-run-per-tab refactor (#3061,
   // 2026-04-19) may only have their initial user message recorded in the
   // archived `legacyInstructions.json` / `runInstructions.json` sidecar, not
