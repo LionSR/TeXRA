@@ -855,6 +855,43 @@ return await agent('two')`,
     expect(sawAbort).toBe(true);
   });
 
+  it('honors meta.timeoutMs when no run option is given', async () => {
+    await expect(
+      runWorkflowScript({
+        script: `export const meta = {
+  name: 'engine-test',
+  description: 'meta-declared wall clock',
+  timeoutMs: 1000,
+}
+return await agent('one')`,
+        runAgent: async () => {
+          await delay(2_500);
+          return 'late';
+        },
+      }),
+    ).rejects.toThrow(/timed out/);
+  });
+
+  it('lets an explicit run option override meta.timeoutMs', async () => {
+    const startedAt = Date.now();
+    await expect(
+      runWorkflowScript({
+        script: `export const meta = {
+  name: 'engine-test',
+  description: 'run option beats meta',
+  timeoutMs: 3600000,
+}
+return await agent('one')`,
+        runAgent: async () => {
+          await delay(300);
+          return 'late';
+        },
+        timeoutMs: 40,
+      }),
+    ).rejects.toThrow(/timed out/);
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+  });
+
   it('preempts a CPU loop reached after an agent await', async () => {
     const startedAt = Date.now();
     await expect(
