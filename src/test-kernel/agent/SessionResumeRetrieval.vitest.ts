@@ -131,7 +131,7 @@ async function runPersistedFlow(
   executionId: ExecutionId,
   streamId: StreamTabId,
   snapshot: ToolUseSessionSnapshot | undefined,
-  onSetup?: (context: ToolUseSetupContext) => void,
+  onSetup?: ToolUseFlowSetupCallback,
   session: SessionHandle = createTestSession(),
   options: {
     readonly isSubagent?: boolean;
@@ -539,19 +539,27 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const executionId = 'abc-flow-post-park-owner' as ExecutionId;
     const streamId = 'chat@gpt54#abc-flow-post-park-owner' as StreamTabId;
     const snapshot = buildToolUseSnapshot(executionId, streamId);
-    const takePendingFollowUps = vi.fn(() => []);
+    const boundaryEvents: string[] = [];
+    const takePendingFollowUps = vi.fn(() => {
+      boundaryEvents.push('take');
+      return [];
+    });
 
     const result = await runPersistedFlow(
       executionId,
       streamId,
       snapshot,
-      undefined,
+      () => {
+        boundaryEvents.push('attach');
+        return () => boundaryEvents.push('detach');
+      },
       undefined,
       { takePendingFollowUps },
     );
 
     expect(result.outcome).toBe(STREAM_PHASE.WAITING);
     expect(takePendingFollowUps).toHaveBeenCalledTimes(2);
+    expect(boundaryEvents).toEqual(['attach', 'take', 'detach', 'take']);
   });
 
   it('releases follow-ups while preserving the record after a persistence read failure', async () => {

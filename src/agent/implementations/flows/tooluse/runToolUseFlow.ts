@@ -539,7 +539,17 @@ export async function runToolUseFlow<C = unknown>(
       if (finalAction !== FlowTransition.WAITING || input.checkInterruption()) {
         break;
       }
+
+      // Close the live-flow admission boundary before the post-park drain.
+      // From this synchronous detach onward, sendFollowUp queues instead of
+      // reporting `sent`; the immediately following drain therefore cannot
+      // miss input in a gap between its empty check and final teardown.
+      teardownSetup?.();
+      teardownSetup = undefined;
       resumedFollowUps = [...(input.takePendingFollowUps?.() ?? [])];
+      if (resumedFollowUps.length > 0) {
+        teardownSetup = onSetup?.(flowContext) ?? undefined;
+      }
     } while (resumedFollowUps.length > 0);
 
     lastResponse =
