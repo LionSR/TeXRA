@@ -4,21 +4,39 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
+// Local imports - progress backend
+import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
+
 // Local imports - runtime
 import type {
   BashSettlement,
+  HostBashApprovalResult,
+  HostUserQuestionResult,
   PlanApprovalResult,
   ProposalResult,
+  RetryResult,
   UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 
 // Local imports - shared
-import type { StreamTabId } from '@shared/schemas';
+import type {
+  AgentProposalPermission,
+  BashPermission,
+  ExternalInquiryPermission,
+  PlanApprovalPermission,
+  RetryPermission,
+  StreamTabId,
+  ToolEditPermission,
+  UserQuestionPermission,
+} from '@shared/schemas';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+
+// Local type imports - progress backend
+import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 
 interface DesktopHostInteractions {
   approvePendingDelegatedWork(
@@ -62,7 +80,7 @@ interface DesktopHostInteractionsModule {
   createDesktopHostInteractions(options: {
     runtimeHost: { emit: (event: string, payload: unknown) => void };
     session: SessionHandle;
-    getApprovalHandlers(): unknown;
+    getApprovalHandlers(): ApprovalRequestHandlerSet;
     getToolEditApprovals(): {
       approvePendingForStream: ReturnType<typeof vi.fn>;
       cancel: ReturnType<typeof vi.fn>;
@@ -71,24 +89,93 @@ interface DesktopHostInteractionsModule {
   }): DesktopHostInteractions;
 }
 
-interface RecordingApprovalHandler {
-  readonly show: ReturnType<typeof vi.fn>;
-  readonly resolve: ReturnType<typeof vi.fn>;
+type ShowSpy<T> = ReturnType<typeof vi.fn<(item: T) => void>>;
+type DismissSpy = ReturnType<typeof vi.fn<(id: string) => void>>;
+
+interface RecordingTransport<T> {
+  readonly show: ShowSpy<T>;
+  readonly dismiss: DismissSpy;
 }
 
-function handler(): RecordingApprovalHandler {
-  return { show: vi.fn(), resolve: vi.fn() };
+interface RecordingApprovalHandlerSet extends ApprovalRequestHandlerSet {
+  readonly transport: {
+    toolEdit: RecordingTransport<ToolEditPermission>;
+    bash: RecordingTransport<BashPermission>;
+    retry: RecordingTransport<RetryPermission>;
+    agentProposal: RecordingTransport<AgentProposalPermission>;
+    planApproval: RecordingTransport<PlanApprovalPermission>;
+    externalInquiry: RecordingTransport<ExternalInquiryPermission>;
+    userQuestion: RecordingTransport<UserQuestionPermission>;
+  };
 }
 
-function createHandlers() {
+function handler<
+  T extends { streamId: string },
+  K extends keyof T,
+  Result = never,
+>(
+  idField: K,
+): {
+  handler: ApprovalRequestHandler<T, K, Result>;
+  transport: RecordingTransport<T>;
+} {
+  const transport = {
+    show: vi.fn<(item: T) => void>(),
+    dismiss: vi.fn<(id: string) => void>(),
+  };
   return {
-    toolEdit: handler(),
-    bash: handler(),
-    retry: handler(),
-    agentProposal: handler(),
-    planApproval: handler(),
-    externalInquiry: handler(),
-    userQuestion: handler(),
+    handler: new ApprovalRequestHandler<T, K, Result>(
+      idField,
+      transport.show,
+      transport.dismiss,
+      () => true,
+    ),
+    transport,
+  };
+}
+
+function createHandlers(): RecordingApprovalHandlerSet {
+  const toolEdit = handler<ToolEditPermission, 'requestId'>('requestId');
+  const bash = handler<BashPermission, 'requestId', HostBashApprovalResult>(
+    'requestId',
+  );
+  const retry = handler<RetryPermission, 'streamId', RetryResult>('streamId');
+  const agentProposal = handler<
+    AgentProposalPermission,
+    'proposalId',
+    ProposalResult
+  >('proposalId');
+  const planApproval = handler<
+    PlanApprovalPermission,
+    'approvalId',
+    PlanApprovalResult
+  >('approvalId');
+  const externalInquiry = handler<ExternalInquiryPermission, 'requestId'>(
+    'requestId',
+  );
+  const userQuestion = handler<
+    UserQuestionPermission,
+    'requestId',
+    HostUserQuestionResult
+  >('requestId');
+
+  return {
+    toolEdit: toolEdit.handler,
+    bash: bash.handler,
+    retry: retry.handler,
+    agentProposal: agentProposal.handler,
+    planApproval: planApproval.handler,
+    externalInquiry: externalInquiry.handler,
+    userQuestion: userQuestion.handler,
+    transport: {
+      toolEdit: toolEdit.transport,
+      bash: bash.transport,
+      retry: retry.transport,
+      agentProposal: agentProposal.transport,
+      planApproval: planApproval.transport,
+      externalInquiry: externalInquiry.transport,
+      userQuestion: userQuestion.transport,
+    },
   };
 }
 
@@ -182,7 +269,7 @@ describe('createDesktopHostInteractions', () => {
       accepted: true,
       userMessage: undefined,
     });
-    expect(handlers.agentProposal.resolve).toHaveBeenCalledWith(
+    expect(handlers.transport.agentProposal.dismiss).toHaveBeenCalledWith(
       'proposal-parallel',
     );
 
@@ -192,7 +279,7 @@ describe('createDesktopHostInteractions', () => {
       }),
     ).toBe(true);
     const streamBRequestId = (
-      handlers.bash.show.mock.calls.find(
+      handlers.transport.bash.show.mock.calls.find(
         ([request]) => request.streamId === 'stream-b',
       )?.[0] as { requestId?: string } | undefined
     )?.requestId;
@@ -236,7 +323,7 @@ describe('createDesktopHostInteractions', () => {
       command: 'echo hi',
       streamId: 'stream-a' as StreamTabId,
     });
-    const requestId = firstShowRequestId(handlers.bash.show);
+    const requestId = firstShowRequestId(handlers.transport.bash.show);
 
     expect(
       interactions.submitPlanDecision(requestId, { action: 'approve' }),
@@ -288,7 +375,7 @@ describe('createDesktopHostInteractions', () => {
       accepted: false,
       userMessage: 'Stream resources released.',
     });
-    expect(handlers.bash.resolve).toHaveBeenCalled();
+    expect(handlers.transport.bash.dismiss).toHaveBeenCalled();
     expect(toolEditApprovals.cancel).toHaveBeenCalledWith({
       streamId: 'stream-a',
       cause: 'Stream resources released.',
@@ -298,7 +385,7 @@ describe('createDesktopHostInteractions', () => {
   it('can cancel synchronously while presenting a request', async () => {
     const handlers = createHandlers();
     const { interactions } = await createInteractions(handlers);
-    handlers.bash.show.mockImplementation(() => {
+    handlers.transport.bash.show.mockImplementation(() => {
       interactions.cancel({
         kind: 'bash',
         streamId: 'stream-sync' as StreamTabId,
@@ -341,7 +428,7 @@ describe('createDesktopHostInteractions', () => {
       command: 'sleep 10',
       streamId: 'stream-a' as StreamTabId,
     });
-    const requestId = firstShowRequestId(handlers.bash.show);
+    const requestId = firstShowRequestId(handlers.transport.bash.show);
 
     expect(
       interactions.submitBashDecision(requestId, { action: 'timeout' }),
@@ -351,7 +438,7 @@ describe('createDesktopHostInteractions', () => {
       accepted: false,
       timedOut: true,
     });
-    expect(handlers.bash.resolve).toHaveBeenCalledWith(requestId);
+    expect(handlers.transport.bash.dismiss).toHaveBeenCalledWith(requestId);
   });
 
   it('preserves typed proposal approval overrides', async () => {
@@ -378,7 +465,9 @@ describe('createDesktopHostInteractions', () => {
       model: 'openai:gpt-5',
       agent: 'configured-agent',
     });
-    expect(handlers.agentProposal.resolve).toHaveBeenCalledWith('proposal-a');
+    expect(handlers.transport.agentProposal.dismiss).toHaveBeenCalledWith(
+      'proposal-a',
+    );
   });
 
   it('cancels all pending requests on dispose with a stable cause', async () => {
@@ -406,7 +495,7 @@ describe('createDesktopHostInteractions', () => {
       action: 'reject',
       feedback: 'Desktop session disposed.',
     });
-    expect(handlers.bash.resolve).toHaveBeenCalled();
-    expect(handlers.planApproval.resolve).toHaveBeenCalled();
+    expect(handlers.transport.bash.dismiss).toHaveBeenCalled();
+    expect(handlers.transport.planApproval.dismiss).toHaveBeenCalled();
   });
 });

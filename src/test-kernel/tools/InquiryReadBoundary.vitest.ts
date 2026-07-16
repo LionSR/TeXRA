@@ -119,7 +119,7 @@ function createProgressProviderShell(): {
   const syncThreads = vi.fn();
   const handler = new ExternalInquiryRequestHandler({
     show,
-    resolve: vi.fn(),
+    dismiss: vi.fn(),
     syncThreads,
     canSend: () => true,
     logger: { debug: vi.fn() },
@@ -138,7 +138,7 @@ function createReplayShellWithPendingInquiry(): {
   const show = vi.fn<(permission: ExternalInquiryPermission) => void>();
   const handler = new ExternalInquiryRequestHandler({
     show,
-    resolve: vi.fn(),
+    dismiss: vi.fn(),
     syncThreads: vi.fn(),
     canSend: () => true,
     logger: { debug: vi.fn() },
