@@ -74,6 +74,28 @@ function repairCandidates(
     .map(([streamId]) => streamId);
 }
 
+/** Repair one stream back to WAITING, logging the outcome. */
+function repairToWaiting(
+  streamStatus: StreamStatusMachine,
+  streamId: StreamTabId,
+  statusEmitOptions: StreamStatusEmitOptions | undefined,
+  logger: RestartRepairLogger | undefined,
+): boolean {
+  if (
+    streamStatus.transition(
+      streamId,
+      STREAM_PHASE.WAITING,
+      STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
+      statusEmitOptions,
+    )
+  ) {
+    logger?.debug(`Stream ${streamId} restored to WAITING after restart`);
+    return true;
+  }
+  logger?.warn(`Failed to repair stream ${streamId} to WAITING after restart`);
+  return false;
+}
+
 function transitionToFailedForRestart(
   streamStatus: StreamStatusMachine,
   streamId: StreamTabId,
@@ -207,21 +229,14 @@ export async function repairRestartedStreams(
       if (isWaitingStream) {
         waitingGroupStreams.push(streamId);
         if (
-          options.streamStatus.transition(
+          repairToWaiting(
+            options.streamStatus,
             streamId,
-            STREAM_PHASE.WAITING,
-            STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
             options.statusEmitOptions,
+            options.logger,
           )
         ) {
           waitingStreams.push(streamId);
-          options.logger?.debug(
-            `Stream ${streamId} restored to WAITING after restart`,
-          );
-        } else {
-          options.logger?.warn(
-            `Failed to repair stream ${streamId} to WAITING after restart`,
-          );
         }
       } else {
         orphanedGroupStreams.push(streamId);
@@ -248,21 +263,14 @@ export async function repairRestartedStreams(
     if (isWaitingStream) {
       waitingGroupStreams.push(streamId);
       if (
-        options.streamStatus.transition(
+        repairToWaiting(
+          options.streamStatus,
           streamId,
-          STREAM_PHASE.WAITING,
-          STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
           options.statusEmitOptions,
+          options.logger,
         )
       ) {
         waitingStreams.push(streamId);
-        options.logger?.debug(
-          `Stream ${streamId} restored to WAITING after restart`,
-        );
-      } else {
-        options.logger?.warn(
-          `Failed to repair stream ${streamId} to WAITING after restart`,
-        );
       }
       continue;
     }
