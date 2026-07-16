@@ -24,7 +24,6 @@ import {
   buildBashApprovalRejectedResult,
 } from '@tools/approval/bashApproval';
 import { generateExecutionId } from '@utils/core';
-import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import { createChildStream, type ChildStream } from './childStream';
@@ -175,7 +174,6 @@ export async function launchAgentCliSession(
   params: AgentCliLaunchParams,
 ): Promise<ToolResult> {
   const executionId = generateExecutionId();
-  await ensureRunDir(executionId);
 
   try {
     await registerExecution(

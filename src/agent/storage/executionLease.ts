@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 import { z } from 'zod';
 
+import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { platform } from '@platform/platform';
 import { isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
@@ -15,6 +16,9 @@ const CHANNEL = 'ExecutionLease';
 /** A host that misses eight heartbeats is no longer considered live. */
 export const EXECUTION_LEASE_STALE_MS = 120_000;
 const EXECUTION_LEASE_HEARTBEAT_MS = 15_000;
+/** Compatibility horizon used by the heartbeat protocol shipped before leases. */
+const LEGACY_HEARTBEAT_STALE_MS = 30_000;
+const LEGACY_HEARTBEAT_FILE = 'heartbeat.json';
 
 const LeaseExecutionIdSchema = z
   .string()
@@ -80,6 +84,16 @@ function leasePath(root: string, executionId: ExecutionId): string {
   return path.join(root, leaseRelativePath(executionId));
 }
 
+function legacyHeartbeatPath(root: string, executionId: ExecutionId): string {
+  const safeExecutionId = LeaseExecutionIdSchema.parse(executionId);
+  return path.join(
+    root,
+    RUNS_STORAGE_DIR,
+    safeExecutionId,
+    LEGACY_HEARTBEAT_FILE,
+  );
+}
+
 function coordinationPath(root: string, executionId: ExecutionId): string {
   const safeExecutionId = LeaseExecutionIdSchema.parse(executionId);
   return path.join(
@@ -137,6 +151,71 @@ async function withLeaseLock<T>(
 
 function isFresh(record: ExecutionLeaseRecord, now: number): boolean {
   return now - record.heartbeatAt <= EXECUTION_LEASE_STALE_MS;
+}
+
+async function readLegacyHeartbeatAt(
+  executionId: ExecutionId,
+  root: string,
+): Promise<number | undefined> {
+  try {
+    return (await StorageFS.stat(legacyHeartbeatPath(root, executionId))).mtime;
+  } catch (error) {
+    if (isFileNotFoundError(error)) return undefined;
+    throw error;
+  }
+}
+
+function isLegacyHeartbeatFresh(
+  heartbeatAt: number | undefined,
+  now: number,
+): heartbeatAt is number {
+  return (
+    heartbeatAt !== undefined && now - heartbeatAt < LEGACY_HEARTBEAT_STALE_MS
+  );
+}
+
+type PersistedExecutionLiveness =
+  | {
+      readonly status: 'active';
+      readonly source: 'lease' | 'legacy-heartbeat';
+      readonly heartbeatAt: number;
+      readonly currentLease: ExecutionLeaseRecord | undefined;
+    }
+  | {
+      readonly status: 'inactive';
+      readonly staleHeartbeatAt: number | undefined;
+      readonly currentLease: ExecutionLeaseRecord | undefined;
+    };
+
+/** Read both the current lease protocol and its one-release compatibility seam. */
+async function readPersistedExecutionLiveness(
+  executionId: ExecutionId,
+  root: string,
+  now: number,
+): Promise<PersistedExecutionLiveness> {
+  const currentLease = await readLease(executionId, root);
+  if (currentLease && isFresh(currentLease, now)) {
+    return {
+      status: 'active',
+      source: 'lease',
+      heartbeatAt: currentLease.heartbeatAt,
+      currentLease,
+    };
+  }
+  const legacyHeartbeatAt = await readLegacyHeartbeatAt(executionId, root);
+  if (isLegacyHeartbeatFresh(legacyHeartbeatAt, now)) {
+    return {
+      status: 'active',
+      source: 'legacy-heartbeat',
+      heartbeatAt: legacyHeartbeatAt,
+      currentLease,
+    };
+  }
+  return {
+    status: 'inactive',
+    staleHeartbeatAt: currentLease?.heartbeatAt ?? legacyHeartbeatAt,
+    currentLease,
+  };
 }
 
 function forgetOwnedLease(lease: OwnedExecutionLease): void {
@@ -223,9 +302,13 @@ async function acquireExecutionLease(
     executionId,
     async () => {
       const now = Date.now();
-      const current = await readLease(executionId, root);
-      if (current && isFresh(current, now)) {
-        throw new ExecutionLeaseActiveError(executionId, current.heartbeatAt);
+      const liveness = await readPersistedExecutionLiveness(
+        executionId,
+        root,
+        now,
+      );
+      if (liveness.status === 'active') {
+        throw new ExecutionLeaseActiveError(executionId, liveness.heartbeatAt);
       }
       const ownerToken = randomUUID();
       if (existingOwnership) forgetOwnedLease(existingOwnership);
@@ -340,16 +423,23 @@ export async function inspectExecutionLease(
   now: number = Date.now(),
 ): Promise<ExecutionLeasePresence> {
   const root = storageRoot();
-  const current = await readLease(executionId, root);
-  if (!current) return { status: 'missing' };
-  if (!isFresh(current, now)) {
-    return { status: 'stale', heartbeatAt: current.heartbeatAt };
+  const liveness = await readPersistedExecutionLiveness(executionId, root, now);
+  if (liveness.status === 'active' && liveness.source === 'lease') {
+    const local = ownedLeases.get(ownershipKey(root, executionId));
+    return {
+      status:
+        local?.ownerToken === liveness.currentLease?.ownerToken
+          ? 'owned'
+          : 'foreign',
+      heartbeatAt: liveness.heartbeatAt,
+    };
   }
-  const local = ownedLeases.get(ownershipKey(root, executionId));
-  return {
-    status: local?.ownerToken === current.ownerToken ? 'owned' : 'foreign',
-    heartbeatAt: current.heartbeatAt,
-  };
+  if (liveness.status === 'active') {
+    return { status: 'foreign', heartbeatAt: liveness.heartbeatAt };
+  }
+  return liveness.staleHeartbeatAt === undefined
+    ? { status: 'missing' }
+    : { status: 'stale', heartbeatAt: liveness.staleHeartbeatAt };
 }
 
 /**
@@ -367,12 +457,18 @@ export async function runWithInactiveExecutionLease<T>(
   return withLeaseLock(
     executionId,
     async () => {
-      const current = await readLease(executionId, root);
-      if (current && isFresh(current, Date.now())) {
-        return { status: 'active', heartbeatAt: current.heartbeatAt };
+      const liveness = await readPersistedExecutionLiveness(
+        executionId,
+        root,
+        Date.now(),
+      );
+      if (liveness.status === 'active') {
+        return { status: 'active', heartbeatAt: liveness.heartbeatAt };
       }
       const value = await operation();
-      if (current) await StorageFS.delete(leasePath(root, executionId));
+      if (liveness.currentLease) {
+        await StorageFS.delete(leasePath(root, executionId));
+      }
       return { status: 'performed', value };
     },
     root,

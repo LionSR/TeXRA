@@ -48,7 +48,6 @@ import {
 
 // Local imports - utils
 import { formatDuration, generateExecutionId } from '@utils/core';
-import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { appendHead, appendTail } from '@utils/strings/appendTail';
 import { executeCommand, signalProcessGroup } from '@utils/system/execUtils';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -248,8 +247,6 @@ export class BashTool extends defineTool({
     cwd?: string,
   ): Promise<ToolResult> {
     const executionId = generateExecutionId();
-
-    await ensureRunDir(executionId);
 
     const preview = truncateWithEllipsis(command, 60);
 
