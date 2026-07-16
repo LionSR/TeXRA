@@ -151,7 +151,7 @@ describe('rewriteCodexRequestBody', () => {
     expect(body).toEqual(snapshot);
   });
 
-  it.each(['high', 'xhigh'])(
+  it.each(['high', 'xhigh', 'max'])(
     'clamps %s reasoning effort down to medium (no background mode to absorb a long synchronous turn)',
     (effort) => {
       const out = rewriteCodexRequestBody({

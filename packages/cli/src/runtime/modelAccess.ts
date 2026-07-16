@@ -118,6 +118,7 @@ const INCLUDED_ACCESS_STATUS_BY_AVAILABILITY = {
   'copilot-access': 'copilot: unavailable in CLI',
   'copilot-consent-required': 'copilot: unavailable in CLI',
   'copilot-unavailable': 'copilot: unavailable in CLI',
+  'provider-unavailable': 'unavailable through selected provider',
   retired: 'retired',
 } satisfies Record<ModelAvailabilityKind, string>;
 
@@ -494,6 +495,8 @@ function formatCliModelRecovery(
         : `${startSentence(configureKeyAction)}, then ${personalModeAction}.`;
     case 'retired':
       return 'Choose an active model.';
+    case 'provider-unavailable':
+      return 'Choose a supported provider route or another model.';
     default:
       return undefined;
   }

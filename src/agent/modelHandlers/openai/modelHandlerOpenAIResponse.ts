@@ -61,7 +61,10 @@ import { computeUtilizationPercent } from '../support/contextUtilization';
 import { logCompactionEvent } from '../support/compactionLogging';
 import { toDataUrl } from '../support/dataUrl';
 import { shouldUseOpenRouter } from '../support/ProxyConfigResolver';
-import { toOpenAIReasoningEffort } from '../support/reasoningEffort';
+import {
+  getDeclaredMaxReasoningEffort,
+  toOpenAIReasoningEffort,
+} from '../support/reasoningEffort';
 import {
   computeOpenAIResponsePrice,
   normalizeOpenAIResponseUsage,
@@ -1655,8 +1658,21 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       ? this.getEffectiveReasoningEffort()
       : undefined;
     const reasoningEffort = rawEffort
-      ? toOpenAIReasoningEffort(rawEffort)
+      ? toOpenAIReasoningEffort(
+          rawEffort,
+          getDeclaredMaxReasoningEffort(this.config.capabilities),
+        )
       : undefined;
+    // Pro-mode registry entries (GPT-5.6 Pro) share the base model's wire id
+    // and select pro execution via `reasoning.mode` on the request.
+    const reasoningMode = this.capabilities.reasoningMode;
+    const reasoning: Reasoning | undefined =
+      reasoningEffort || reasoningMode
+        ? {
+            ...(reasoningEffort && { effort: reasoningEffort }),
+            ...(reasoningMode && { mode: reasoningMode }),
+          }
+        : undefined;
 
     // Phase 1: BUILD - Construct provider-specific request parameters
     const baseParams = {
@@ -1668,7 +1684,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           previous_response_id: this.chainState.getPreviousResponseId(),
         }),
       ...(convertedTools?.length && { tools: convertedTools }),
-      ...(reasoningEffort && { reasoning: { effort: reasoningEffort } }),
+      ...(reasoning && { reasoning }),
     };
 
     let maxOutputTokens = this.getEffectiveMaxOutputTokens();
