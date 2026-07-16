@@ -1665,7 +1665,7 @@ describe('ProgressBackend', () => {
     }
   });
 
-  it('keeps task-state metadata canonical across filtering, rendering, and sync content', async () => {
+  it('keeps task-state metadata canonical across filtering, rendering, and sync content', () => {
     const { backend, messages } = createRecordingBackend();
     const stream = 'search@deepseek#de5711c' as StreamTabId;
     const executionId = 'de5711c' as ExecutionId;
