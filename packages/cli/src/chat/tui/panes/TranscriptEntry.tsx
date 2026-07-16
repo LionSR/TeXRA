@@ -229,6 +229,7 @@ export const BoundedTranscriptEntry = memo(function BoundedTranscriptEntry({
   const layout = boundedTranscriptEntryLayout(
     transcriptEntryLayout(entry, {
       colorEnabled,
+      maxRows,
       mode: 'bounded',
       width,
     }),

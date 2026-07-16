@@ -379,6 +379,16 @@ describe('CLI conversation transcript splitting', () => {
     expect(finalizedTail).toContain('bold tail marker');
     expect(finalizedTail).not.toContain('**bold tail marker**');
     expect(streamingTail).toContain('**bold tail marker**');
+
+    const cappedStreamingTail = boundedTranscriptEntryLayout(
+      transcriptEntryLayout(entry('tail', 'assistant', 'x'.repeat(25), false), {
+        maxRows: 1,
+        mode: 'bounded',
+        width: 10,
+      }),
+      1,
+    );
+    expect(cappedStreamingTail.lines).toEqual(['x'.repeat(10)]);
   });
 
   it('budgets live assistant display-math rows with the live renderer', () => {

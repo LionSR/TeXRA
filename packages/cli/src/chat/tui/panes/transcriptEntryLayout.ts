@@ -156,12 +156,16 @@ function entryLines(
   mode: TranscriptEntryLayoutMode,
   columns: number,
   colorEnabled: boolean | undefined,
+  maxRows: number | undefined,
 ): readonly string[] {
   switch (entry.role) {
     case 'assistant':
       if (mode === 'live' || (mode === 'bounded' && !entry.finalized)) {
         return liveAssistantDisplayLines({
-          rows: LIVE_TAIL_ROWS,
+          rows:
+            mode === 'bounded' && maxRows !== undefined
+              ? Math.max(1, maxRows)
+              : LIVE_TAIL_ROWS,
           text: entry.text,
           width: columns,
         });
@@ -202,11 +206,13 @@ export function transcriptEntryLayout(
   entry: ConversationEntry,
   {
     colorEnabled,
+    maxRows,
     mode = 'scrollback',
     userBottomMarginRows,
     width,
   }: {
     readonly colorEnabled?: boolean;
+    readonly maxRows?: number;
     readonly mode?: TranscriptEntryLayoutMode;
     readonly userBottomMarginRows?: number;
     readonly width?: number;
@@ -233,7 +239,7 @@ export function transcriptEntryLayout(
   return {
     ...base,
     columns,
-    lines: entryLines(entry, mode, columns, colorEnabled),
+    lines: entryLines(entry, mode, columns, colorEnabled, maxRows),
     inset,
     marginBottomRows,
     marginTopRows,
