@@ -266,7 +266,7 @@ describe('OpenAI-compatible provider request params', () => {
       temperature: 0,
     });
 
-    assert.equal(createCalls[0].temperature, undefined);
+    assert.equal('temperature' in createCalls[0], false);
     assert.equal(createCalls[0].reasoning_effort, 'max');
     assert.equal(createCalls[0].thinking, undefined);
   });
@@ -303,7 +303,7 @@ describe('OpenAI-compatible provider request params', () => {
     });
 
     assert.equal(createCalls.length, 2);
-    assert.equal(createCalls[0].temperature, undefined);
+    assert.equal('temperature' in createCalls[0], false);
     assert.equal(createCalls[0].thinking, undefined);
   });
 

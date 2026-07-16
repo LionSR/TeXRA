@@ -113,13 +113,17 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
     const temperature = requestParameters
       ? requestParameters.temperature
       : _temperature;
-    return super.buildChatBaseParams(
+    const params = super.buildChatBaseParams(
       messages,
       temperature,
       systemPrompt,
       endTag,
       tools,
     );
+    if (requestParameters && temperature === undefined) {
+      delete params.temperature;
+    }
+    return params;
   }
 
   protected override buildCompactionSummaryParams(
