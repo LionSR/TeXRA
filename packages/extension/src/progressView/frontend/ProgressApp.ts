@@ -68,6 +68,7 @@ import {
   sendFollowupCommand,
 } from './eventHandlers';
 import { dispatchMessage } from './messageDispatcher';
+import type { PermissionActionDetail } from './events';
 import type {
   FrontendEventHandlerContext,
   MessageHandlerContext,
@@ -372,7 +373,7 @@ export class ProgressApp extends ProgressAppBase {
     handleStreamSwitch(e, this.getEventHandlerContext());
   private onStreamDelete = (e: CustomEvent): void =>
     handleStreamDelete(e, this.getEventHandlerContext());
-  private onPermissionAction = (e: CustomEvent): void =>
+  private onPermissionAction = (e: CustomEvent<PermissionActionDetail>): void =>
     handlePermissionAction(e, this.createMessageHandlerContext());
 
   // Event handlers requiring context
