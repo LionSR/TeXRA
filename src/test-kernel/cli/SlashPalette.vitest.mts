@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   slashPaletteCommandLabelWidth,
-  slashPaletteOwnsArrows,
   slashPaletteEnterHintAction,
+  slashPaletteOwnsArrows,
   slashPaletteWindow,
 } from '@cli/chat/tui/commands/SlashPalette';
 import { nextWrappingHighlightIndex } from '@cli/chat/tui/ui/Select';
