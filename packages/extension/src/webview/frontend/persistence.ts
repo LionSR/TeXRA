@@ -16,6 +16,7 @@
 import { type ZodError } from 'zod';
 
 // Local imports - shared state and schemas
+import { hostBridge } from '@shared/hostBridge';
 import { createWebviewStorage, PersistedState } from '@shared/state';
 import {
   MainViewPersistedStateSchema,
@@ -45,7 +46,6 @@ import {
   workflowAgent$,
   workflowInstruction$,
 } from './mainViewState';
-import { hostBridge } from '@shared/hostBridge';
 
 /**
  * Shared webview storage singleton for the main view.
