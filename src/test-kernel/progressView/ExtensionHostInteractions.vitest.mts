@@ -2,6 +2,7 @@
 import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as vscode from 'vscode';
 
 import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -30,12 +31,22 @@ const mocks = vi.hoisted(() => ({
   approveNativeToolEditApprovals: vi.fn(async () => undefined),
   cancelNativeToolEditApprovals: vi.fn(),
   nativeRequestApproval: vi.fn(),
+  getLinterMessages: vi.fn(async () => []),
+  pushManualCriticism: vi.fn(() => true),
 }));
 
 vi.mock('@frontend/approval/nativeToolEditApproval', () => ({
   approveNativeToolEditApprovals: mocks.approveNativeToolEditApprovals,
   cancelNativeToolEditApprovals: mocks.cancelNativeToolEditApprovals,
   nativeRequestApproval: mocks.nativeRequestApproval,
+}));
+
+vi.mock('@frontend/latex/linter', () => ({
+  getLinterMessages: mocks.getLinterMessages,
+}));
+
+vi.mock('@frontend/latex/inlineCriticism', () => ({
+  pushManualCriticism: mocks.pushManualCriticism,
 }));
 
 type ShowSpy<T> = ReturnType<typeof vi.fn<(item: T) => void>>;
@@ -174,6 +185,79 @@ function recordSessionEvents(session: SessionHandle): SessionEvent[] {
 }
 
 describe('createExtensionHostInteractions', () => {
+  it('provides diagnostics and notification capabilities', async () => {
+    const session = createTestSession();
+    const interactions = createInteractions({ session });
+    const showInformationMessage = vi
+      .spyOn(vscode.window, 'showInformationMessage')
+      .mockResolvedValue(undefined);
+
+    try {
+      await expect(
+        interactions.readDiagnostics?.('/workspace/paper.tex'),
+      ).resolves.toEqual([]);
+      expect(
+        interactions.addCriticism?.({
+          absolutePath: '/workspace/paper.tex',
+          line: 2,
+          message: 'Tighten this step.',
+          severity: 3,
+          confidence: 4,
+        }),
+      ).toEqual({
+        accepted: true,
+        resolvedPath: '/workspace/paper.tex',
+      });
+      interactions.notifyUnavailableTools?.('Lean tools are unavailable.');
+
+      expect(mocks.getLinterMessages).toHaveBeenCalledWith(
+        '/workspace/paper.tex',
+      );
+      expect(mocks.pushManualCriticism).toHaveBeenCalledWith({
+        absolutePath: '/workspace/paper.tex',
+        line: 2,
+        message: 'Tighten this step.',
+        severity: 3,
+        confidence: 4,
+      });
+      expect(showInformationMessage).toHaveBeenCalledWith(
+        'Lean tools are unavailable.',
+      );
+    } finally {
+      showInformationMessage.mockRestore();
+    }
+  });
+
+  it('runs the selected unavailable-tool notification action', async () => {
+    const session = createTestSession();
+    const interactions = createInteractions({ session });
+    const showInformationMessage = vi
+      .spyOn(vscode.window, 'showInformationMessage')
+      .mockResolvedValue('Open Lean Setup' as never);
+    const executeCommand = vi
+      .spyOn(vscode.commands, 'executeCommand')
+      .mockResolvedValue(undefined);
+
+    try {
+      interactions.notifyUnavailableTools?.(
+        'Lean tools are unavailable.',
+        'texra.showLeanSetup',
+        'Open Lean Setup',
+      );
+
+      await vi.waitFor(() => {
+        expect(executeCommand).toHaveBeenCalledWith('texra.showLeanSetup');
+      });
+      expect(showInformationMessage).toHaveBeenCalledWith(
+        'Lean tools are unavailable.',
+        'Open Lean Setup',
+      );
+    } finally {
+      showInformationMessage.mockRestore();
+      executeCommand.mockRestore();
+    }
+  });
+
   it('approves already-pending delegated work only in the selected stream', async () => {
     const handlers = createHandlers();
     const session = createTestSession();

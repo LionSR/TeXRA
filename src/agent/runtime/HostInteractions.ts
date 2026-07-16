@@ -7,10 +7,36 @@ import type {
   ExternalInquiryPermission,
   UserQuestionPermission,
 } from '@shared/schemas';
+import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
 } from '@platform/interfaces';
+
+export type DiagnosticsReader = (path: string) => Promise<GenericDiagnostic[]>;
+
+export interface ManualCriticismEntry {
+  /** Absolute path resolved by the diagnostics tool. */
+  readonly absolutePath: string;
+  /** 1-based line number. */
+  readonly line: number;
+  readonly message: string;
+  /** 0-5; mapped to DiagnosticSeverity by the host. */
+  readonly severity: number;
+  /** 1-5; appended to the message as `(S/C)`. */
+  readonly confidence: number;
+}
+
+export type AddCriticismSink = (input: ManualCriticismEntry) => {
+  readonly accepted: boolean;
+  readonly resolvedPath: string;
+};
+
+export type ToolNotificationHandler = (
+  message: string,
+  actionCommand?: string,
+  actionLabel?: string,
+) => void;
 
 export interface HostInteractionOptions {
   readonly timeoutMs?: number;
@@ -243,6 +269,12 @@ export function matchesCancelSelector(
  * adapters own presentation, request-id resolution, and local disposal.
  */
 export interface HostInteractions {
+  /** Read diagnostics from the active host integration. */
+  readonly readDiagnostics?: DiagnosticsReader;
+  /** Add one manual criticism to the active host diagnostics surface. */
+  readonly addCriticism?: AddCriticismSink;
+  /** Surface unavailable tool groups through the active host UI. */
+  readonly notifyUnavailableTools?: ToolNotificationHandler;
   requestToolEditApproval?(
     request: ToolEditApprovalRequest,
     options?: HostInteractionOptions,
@@ -324,6 +356,18 @@ export class SessionHostInteractions implements HostInteractions {
       if (wasActive) this.activateCurrentAttachment();
       interactions.dispose?.();
     };
+  }
+
+  get readDiagnostics(): DiagnosticsReader | undefined {
+    return this.activeAttachment?.interactions.readDiagnostics;
+  }
+
+  get addCriticism(): AddCriticismSink | undefined {
+    return this.activeAttachment?.interactions.addCriticism;
+  }
+
+  get notifyUnavailableTools(): ToolNotificationHandler | undefined {
+    return this.activeAttachment?.interactions.notifyUnavailableTools;
   }
 
   requestToolEditApproval(
@@ -605,6 +649,15 @@ function createHostInteractionsForwarder(
   };
 
   return {
+    get readDiagnostics() {
+      return target()?.readDiagnostics;
+    },
+    get addCriticism() {
+      return target()?.addCriticism;
+    },
+    get notifyUnavailableTools() {
+      return target()?.notifyUnavailableTools;
+    },
     requestToolEditApproval: (request, options) =>
       forward(
         'toolEdit',

@@ -109,11 +109,8 @@ export function createNodePlatform(services: NodePlatformServices): Platform {
       ...NO_TOOL_AVAILABILITY_HOST,
       ...services.toolAvailability,
     },
-    // Neither Node host has a UI surface for these yet (linter diagnostics,
-    // inline criticism, tool-missing/unavailable toasts). These four Platform
-    // ports are optional and single-implementer (VS Code only); core call
-    // sites already treat an absent port as a no-op, so omitting them here is
-    // enough — no per-host stub needed.
+    // Missing-tool reporting remains an optional process-host capability.
+    // Neither Node host has a corresponding UI, so omission is the no-op.
   };
 }
 
