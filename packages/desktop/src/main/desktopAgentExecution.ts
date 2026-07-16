@@ -503,14 +503,6 @@ export class DesktopProgressBridge {
             ),
           handleToolEditApprovalAction: (message) =>
             this.toolEditApprovals.handleAction(message),
-          onUnsupportedToolEditApproval: (message) => {
-            this.logger.warn('Unsupported desktop tool-edit approval action', {
-              data: {
-                requestId: message.requestId,
-                action: message.action,
-              },
-            });
-          },
           handleBashApprovalAction: (message) =>
             void this.session.interactions.resolve(message.requestId, {
               kind: 'bash',

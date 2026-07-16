@@ -90,8 +90,7 @@ function createActions(
     },
     approval: {
       approvePendingDelegatedWork: vi.fn(async () => undefined),
-      handleToolEditApprovalAction: vi.fn().mockReturnValue(true),
-      onUnsupportedToolEditApproval: vi.fn(),
+      handleToolEditApprovalAction: vi.fn(),
       handleBashApprovalAction: vi.fn(),
       handlePlanApprovalAction: vi.fn(),
       handleUserQuestionAction: vi.fn(),
@@ -684,90 +683,6 @@ describe('createProgressViewCommandHandlers - approvals', () => {
       agent: 'review',
       model: 'deepseek',
     });
-    expect(
-      actions.approval.onUnsupportedToolEditApproval,
-    ).not.toHaveBeenCalled();
-  });
-
-  it('reports unsupported tool-edit approval actions when the host returns false', async () => {
-    const actions = createActions();
-    actions.approval.handleToolEditApprovalAction = vi.fn(() => false);
-    const handlers = createProgressViewCommandHandlers(actions);
-
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
-          requestId: 'edit-2',
-          action: 'openDiff',
-        },
-        handlers,
-      ),
-    ).toBe(true);
-
-    await Promise.resolve();
-
-    expect(actions.approval.onUnsupportedToolEditApproval).toHaveBeenCalledWith(
-      {
-        command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
-        requestId: 'edit-2',
-        action: 'openDiff',
-      },
-    );
-  });
-
-  it('reports unsupported tool-edit approval actions from async host results', async () => {
-    const actions = createActions();
-    actions.approval.handleToolEditApprovalAction = vi.fn(() =>
-      Promise.resolve(false),
-    );
-    const handlers = createProgressViewCommandHandlers(actions);
-
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
-          requestId: 'edit-3',
-          action: 'approve',
-        },
-        handlers,
-      ),
-    ).toBe(true);
-
-    await Promise.resolve();
-
-    expect(actions.approval.onUnsupportedToolEditApproval).toHaveBeenCalledWith(
-      {
-        command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
-        requestId: 'edit-3',
-        action: 'approve',
-      },
-    );
-  });
-
-  it('does not report unsupported tool-edit approval actions from async handled results', async () => {
-    const actions = createActions();
-    actions.approval.handleToolEditApprovalAction = vi.fn(() =>
-      Promise.resolve(true),
-    );
-    const handlers = createProgressViewCommandHandlers(actions);
-
-    expect(
-      dispatchProgressViewInbound(
-        {
-          command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
-          requestId: 'edit-4',
-          action: 'reject',
-        },
-        handlers,
-      ),
-    ).toBe(true);
-
-    await Promise.resolve();
-
-    expect(
-      actions.approval.onUnsupportedToolEditApproval,
-    ).not.toHaveBeenCalled();
   });
 });
 
