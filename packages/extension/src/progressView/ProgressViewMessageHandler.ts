@@ -321,6 +321,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         getStreamIds: () => this.provider.state.streamLogs.keys(),
         pickValidActiveStream: (streams) =>
           this.provider.state.pickValidActiveStream(streams),
+        waitForOwnedExecutionRelease: (stream) =>
+          this.provider.state.waitForOwnedExecutionRelease(stream),
         clearStream: (stream) => this.provider.state.clearStream(stream),
         clearAll: () => this.provider.state.clearAll(),
       },

@@ -39,17 +39,17 @@
     {
       "file": "src/test-kernel/cli/chatSessionController.vitest.mts",
       "form": "mock",
-      "specifier": "@agent/runtime/executionRegistry"
-    },
-    {
-      "file": "src/test-kernel/cli/chatSessionController.vitest.mts",
-      "form": "mock",
       "specifier": "@agent/runtime/resolveAndResumeStream"
     },
     {
       "file": "src/test-kernel/cli/chatSessionController.vitest.mts",
       "form": "mock",
       "specifier": "@agent/runtime/resumeQueuedToolUse"
+    },
+    {
+      "file": "src/test-kernel/cli/chatSessionController.vitest.mts",
+      "form": "mock",
+      "specifier": "@agent/runtime/runAgent"
     },
     {
       "file": "src/test-kernel/cli/chatSessionController.vitest.mts",
@@ -70,6 +70,11 @@
       "file": "src/test-kernel/cli/CliInitPlatform.vitest.mts",
       "form": "mock",
       "specifier": "@agent/index/platformAgentDirectories"
+    },
+    {
+      "file": "src/test-kernel/cli/CliSupabaseAuth.vitest.mts",
+      "form": "mock",
+      "specifier": "@agent/index"
     },
     {
       "file": "src/test-kernel/cli/History.vitest.mts",
@@ -100,11 +105,6 @@
       "file": "src/test-kernel/cli/RunChatConfig.vitest.mts",
       "form": "mock",
       "specifier": "@agent/index"
-    },
-    {
-      "file": "src/test-kernel/cli/RunChatRegistration.vitest.mts",
-      "form": "mock",
-      "specifier": "@agent/storage"
     },
     {
       "file": "src/test-kernel/cli/RunExecution.vitest.mts",

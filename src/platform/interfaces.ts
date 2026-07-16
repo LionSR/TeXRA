@@ -169,6 +169,15 @@ export interface StorageProvider {
 }
 
 // ---------------------------------------------------------------------------
+// Cross-process file locks
+// ---------------------------------------------------------------------------
+
+/** Serialize work by a canonical absolute path shared by every host process. */
+export interface FileLockProvider {
+  runExclusive<T>(path: string, operation: () => Promise<T>): Promise<T>;
+}
+
+// ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
 

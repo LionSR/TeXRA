@@ -49,8 +49,6 @@ vi.mock('@agent/storage', async () => {
     listExecutions: mocks.listExecutions,
     deleteExecution: mocks.deleteExecution,
     deleteAllExecutions: mocks.deleteAllExecutions,
-    getExecutionLiveness: vi.fn(async () => ({ live: false })),
-    listLiveExecutionIds: vi.fn(async () => []),
   };
 });
 
@@ -1009,7 +1007,10 @@ describe('CLI history runtime', () => {
   });
 
   it('reports not-found deletion through the structured result', async () => {
-    mocks.deleteExecution.mockResolvedValue(false);
+    mocks.deleteExecution.mockResolvedValue({
+      status: 'not-found',
+      executionId: 'abc123',
+    });
 
     await expect(
       deleteCliHistory({ id: 'abc123' as ExecutionId }),
@@ -1017,13 +1018,17 @@ describe('CLI history runtime', () => {
       deleted: 'one',
       id: 'abc123',
       found: false,
+      status: 'not-found',
     });
   });
 
   it('drops the goal owned by a deleted execution', async () => {
     const streamId = 'chat@deepseek#a1' as StreamTabId;
     await GoalStore.start(streamId, 'finish the cleanup');
-    mocks.deleteExecution.mockResolvedValue(true);
+    mocks.deleteExecution.mockResolvedValue({
+      status: 'deleted',
+      executionId: 'a1',
+    });
 
     await expect(
       deleteCliHistory({ id: 'a1' as ExecutionId }),
@@ -1031,6 +1036,7 @@ describe('CLI history runtime', () => {
       deleted: 'one',
       id: 'a1',
       found: true,
+      status: 'deleted',
     });
 
     expect(GoalStore.getForStream(streamId)).toBeNull();
@@ -1074,25 +1080,33 @@ describe('CLI history runtime', () => {
   it('surfaces the bulk-delete count in the structured result', async () => {
     mocks.deleteAllExecutions.mockResolvedValue({
       deleted: ['a1', 'b2', 'c3', 'd4'],
-      skippedLive: [],
+      notFound: [],
+      active: [],
+      failed: [],
     });
 
     await expect(deleteCliHistory({ all: true })).resolves.toEqual({
       deleted: 'all',
       count: 4,
-      skippedLive: 0,
+      active: [],
+      failed: [],
     });
   });
 
-  it('reuses the preflight count instead of re-listing', async () => {
+  it('uses the authoritative deleted count without re-listing', async () => {
     mocks.deleteAllExecutions.mockResolvedValue({
       deleted: ['a1'],
-      skippedLive: [],
+      notFound: [],
+      active: [],
+      failed: [],
     });
 
-    await expect(
-      deleteCliHistory({ all: true, preCountForAll: 7 }),
-    ).resolves.toEqual({ deleted: 'all', count: 7, skippedLive: 0 });
+    await expect(deleteCliHistory({ all: true })).resolves.toEqual({
+      deleted: 'all',
+      count: 1,
+      active: [],
+      failed: [],
+    });
 
     // listExecutions must not be called when the count was passed in.
     expect(mocks.listExecutions).not.toHaveBeenCalled();
@@ -1107,7 +1121,9 @@ describe('CLI history runtime', () => {
     await GoalStore.start(live, 'keep me');
     mocks.deleteAllExecutions.mockResolvedValue({
       deleted: ['a1', 'b2'],
-      skippedLive: [],
+      notFound: [],
+      active: [],
+      failed: [],
     });
 
     await deleteCliHistory({ all: true });

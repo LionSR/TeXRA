@@ -6,7 +6,6 @@ import {
   deleteAllExecutions,
   deleteExecution,
   deriveResumability,
-  getExecutionLiveness,
   getExecutionStore,
   isUserVisibleExecution,
   listExecutions,
@@ -110,17 +109,17 @@ export type CliHistoryDeleteResult =
   | {
       readonly deleted: 'all';
       readonly count: number;
-      /** Executions skipped because they are live in some process (#8625). */
-      readonly skippedLive: number;
+      readonly active: readonly ExecutionId[];
+      readonly failed: readonly {
+        readonly executionId: ExecutionId;
+        readonly message: string;
+      }[];
     }
   | {
       readonly deleted: 'one';
       readonly id: ExecutionId;
       readonly found: boolean;
-      /** True when deletion was refused because the run is live (#8625). */
-      readonly live?: boolean;
-      /** Host that owns the live run, when its heartbeat records one. */
-      readonly liveHost?: string;
+      readonly status: 'deleted' | 'not-found' | 'active';
     };
 
 export function parseCliHistoryId(raw: string): ExecutionId | undefined {
@@ -309,44 +308,29 @@ export async function stageCliHistoryTraceViewerAssets(params: {
 export async function deleteCliHistory(options: {
   id?: ExecutionId;
   all?: boolean;
-  /** Pre-computed entry count from `preflightCliHistoryDeleteAll`, surfaced in
-   *  the `'all'` result so structured callers can report what was removed. */
-  preCountForAll?: number;
 }): Promise<CliHistoryDeleteResult> {
   if (options.all) {
-    // deleteAllExecutions skips runs live in any host sharing ~/.texra,
-    // checking liveness per id at delete time (#8625).
-    const { deleted, skippedLive } = await deleteAllExecutions();
-    await GoalStore.forgetByExecutionIds(deleted);
-    // The preflight count was taken before live runs were excluded, so it
-    // overstates the deletion when any were skipped — report actuals then.
-    const count =
-      skippedLive.length > 0
-        ? deleted.length
-        : (options.preCountForAll ?? deleted.length);
-    return { deleted: 'all', count, skippedLive: skippedLive.length };
+    const result = await deleteAllExecutions();
+    await GoalStore.forgetByExecutionIds(result.deleted);
+    return {
+      deleted: 'all',
+      count: result.deleted.length,
+      active: result.active,
+      failed: result.failed,
+    };
   }
   if (!options.id) {
     throw new Error('Expected an execution id, or --all.');
   }
-  const liveness = await getExecutionLiveness(options.id);
-  if (liveness.live) {
-    return {
-      deleted: 'one',
-      id: options.id,
-      found: true,
-      live: true,
-      liveHost: liveness.ownerHost,
-    };
-  }
-  const found = await deleteExecution(options.id);
-  if (found) {
+  const result = await deleteExecution(options.id);
+  if (result.status === 'deleted') {
     await GoalStore.forgetByExecutionIds([options.id]);
   }
   return {
     deleted: 'one',
     id: options.id,
-    found,
+    found: result.status !== 'not-found',
+    status: result.status,
   };
 }
 
@@ -354,7 +338,7 @@ export async function deleteCliHistory(options: {
  * `texra history delete --all` is destructive and unrecoverable. The command
  * handler must call this first: if `--all` is set without `--yes`, it should
  * refuse and quote the count back to the user; otherwise it can pass `count`
- * into `deleteCliHistory` so the success report covers what was removed.
+ * into the confirmation message before deletion.
  */
 export interface CliHistoryDeleteAllPreflight {
   readonly proceed: boolean;

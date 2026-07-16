@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - platform
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import { nodeFileLocks } from '@platform/defaults/fileLocks';
 import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
@@ -131,6 +132,7 @@ describe('desktop agent directory bootstrap', () => {
       fs: nodeFilesystem,
       workspace: createNodeWorkspace(() => workspacePath),
       storage,
+      fileLocks: nodeFileLocks,
       secrets: new FakeSecrets(),
       lifecycle: createLifecycleHost(),
       agentResume: { tryResumeStream: async () => false },

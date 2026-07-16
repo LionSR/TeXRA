@@ -1,7 +1,10 @@
 // Shared helpers for the agent-CLI tool modules (codex.ts, claudeAgent.ts).
 // Host-agnostic, VS Code-free.
 
-import { registerExecution } from '@agent/storage';
+import {
+  registerExecution,
+  releaseOwnedExecutionLeaseAfterFailure,
+} from '@agent/storage';
 import { type AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -21,7 +24,6 @@ import {
   buildBashApprovalRejectedResult,
 } from '@tools/approval/bashApproval';
 import { generateExecutionId } from '@utils/core';
-import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import { createChildStream, type ChildStream } from './childStream';
@@ -172,7 +174,6 @@ export async function launchAgentCliSession(
   params: AgentCliLaunchParams,
 ): Promise<ToolResult> {
   const executionId = generateExecutionId();
-  await ensureRunDir(executionId);
 
   try {
     await registerExecution(
@@ -185,17 +186,21 @@ export async function launchAgentCliSession(
     throw new ToolError(params.registerFailedMessage);
   }
 
-  const childStream = createChildStream(executionId, params.parentStreamId, {
-    streamPrefix: params.streamPrefix,
-    streamCategory: AgentCategory.ToolUse,
-    agentName: params.agentName,
-    description: params.description,
-    config: params.config,
-    toolName: params.agentName,
-    runtimeHost: params.runtimeHost,
-  });
-
-  await params.startLoop({ childStream, executionId });
+  let childStream: ChildStream;
+  try {
+    childStream = createChildStream(executionId, params.parentStreamId, {
+      streamPrefix: params.streamPrefix,
+      streamCategory: AgentCategory.ToolUse,
+      agentName: params.agentName,
+      description: params.description,
+      config: params.config,
+      toolName: params.agentName,
+      runtimeHost: params.runtimeHost,
+    });
+    await params.startLoop({ childStream, executionId });
+  } catch (error) {
+    throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
+  }
 
   return {
     status: 'executed',

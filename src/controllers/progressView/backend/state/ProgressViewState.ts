@@ -34,7 +34,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { GoalStore } from '@tools/goal';
 import { clamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { SessionStores } from './SessionStores';
+import { SessionStores, type DeleteAllStreamsResult } from './SessionStores';
 import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 
 /** Bounded fan-out for the one-time legacy-instruction backfill at load(),
@@ -399,33 +399,51 @@ export class ProgressViewState {
 
   // -- Lifecycle --------------------------------------------------------------
 
-  async clearStream(stream: StreamTabId): Promise<void> {
-    // Clear in-memory state
+  waitForOwnedExecutionRelease(stream: StreamTabId): Promise<void> {
+    return this.stores.waitForOwnedExecutionRelease(stream);
+  }
+
+  async clearStream(stream: StreamTabId): Promise<boolean> {
+    const deletion = await this.stores.deleteStream(stream);
+    if (deletion === 'active') return false;
+
     this.streamStatus.clearStream(stream);
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
-
-    await this.stores.deleteStream(stream);
 
     // Update active stream *after* deletion so keys() no longer includes it.
     if (this._prefs.get('activeStream') === stream) {
       this._prefs.update({ activeStream: this.topmostStreamTab() });
     }
+    return true;
   }
 
-  async clearAll(): Promise<void> {
+  async clearAll(): Promise<DeleteAllStreamsResult> {
     this.logger.warn(
       '[Persistence] clearAll() called - this will delete all persisted data!',
       { data: { stack: new Error().stack } },
     );
 
-    // Clear in-memory state
-    this.streamStatus.clearAll();
-    this._sessionState.clear();
-    this._streamStates.clear();
-    this._prefs.reset();
-
-    await this.stores.deleteAll();
+    const knownStreams = new Set<StreamTabId>([
+      ...this.streamLogs.keys(),
+      ...this._sessionState.keys(),
+      ...this._streamStates.keys(),
+      ...[...this.streamStatus.entries()].map(([stream]) => stream),
+    ]);
+    const deletion = await this.stores.deleteAll();
+    const retainedStreams = new Set([...deletion.active, ...deletion.failed]);
+    for (const stream of knownStreams) {
+      if (retainedStreams.has(stream)) continue;
+      this.streamStatus.clearStream(stream);
+      this._sessionState.delete(stream);
+      this._streamStates.delete(stream);
+    }
+    if (retainedStreams.size === 0) {
+      this._prefs.reset();
+    } else if (!retainedStreams.has(this._prefs.get('activeStream'))) {
+      this._prefs.update({ activeStream: this.topmostStreamTab() });
+    }
+    return deletion;
   }
 
   async load(): Promise<void> {
