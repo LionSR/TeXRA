@@ -6,7 +6,11 @@ import { consume } from '@lit/context';
 import { property } from 'lit/decorators.js';
 
 // Local imports - progress view events
-import { ProgressEvents } from '../events';
+import {
+  ProgressEvents,
+  type PermissionDecision,
+  type PermissionKind,
+} from '../events';
 
 // Local imports - progress view contexts
 import { archivedContext } from '../contexts/streamContexts';
@@ -15,7 +19,7 @@ import { archivedContext } from '../contexts/streamContexts';
 import type { PermissionState } from '../permissionState';
 
 export abstract class BaseRequestPanel<
-  K extends PermissionState['kind'] = PermissionState['kind'],
+  K extends PermissionKind = PermissionKind,
 > extends LitElement {
   @property({ attribute: false }) permission!: Extract<
     PermissionState,
@@ -35,21 +39,10 @@ export abstract class BaseRequestPanel<
   /** Handle keyboard shortcut from container. Returns true if handled. */
   abstract handleKeyboardShortcut(key: string): boolean;
 
-  protected emitAction(
-    action: string,
-    feedback?: string,
-    modelOverride?: string,
-    agentOverride?: string,
-  ): void {
+  protected emitAction(decision: PermissionDecision<K>): void {
     if (this.archived) return;
     this.dispatchEvent(
-      ProgressEvents.permissionAction({
-        permission: this.permission,
-        action,
-        feedback,
-        modelOverride,
-        agentOverride,
-      }),
+      ProgressEvents.permissionAction(this.permission, decision),
     );
   }
 }
