@@ -7,8 +7,7 @@ import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
-import { runAgent } from '@agent/runtime/runAgent';
-import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
+import { runAgent, type RunAgentOptions } from '@agent/runtime/runAgent';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { AgentError } from '@common/errors';
 import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
@@ -39,7 +38,7 @@ export interface CliExecuteOptions {
   readonly stopAfterCycle?: boolean;
   /** Additional tools unavailable in this CLI runtime. */
   readonly runtimeUnavailableTools?: readonly string[];
-  readonly openWorkflowOutput?: (result: WorkflowFlowResult) => Promise<void>;
+  readonly openWorkflowOutput?: RunAgentOptions['openWorkflowOutput'];
   /** Wrap the run (e.g. multi-agent preset visibility) without leaking the
    *  runtime-host lifecycle into the caller. */
   readonly wrap?: (

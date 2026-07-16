@@ -6,9 +6,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { CliContext } from '@cli/runtime/cliContext';
-import type { CliConfigExecuteResult } from '@cli/runtime/runExecution';
+import type {
+  CliConfigExecuteOptions,
+  CliConfigExecuteResult,
+} from '@cli/runtime/runExecution';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
 
@@ -111,9 +113,7 @@ function mockWorkflowExecution(
     _config: unknown,
     _context: unknown,
     options: {
-      readonly openWorkflowOutput?: (
-        result: WorkflowFlowResult,
-      ) => Promise<void>;
+      readonly openWorkflowOutput?: CliConfigExecuteOptions['openWorkflowOutput'];
     },
   ) => {
     if (result.ok) await options.openWorkflowOutput?.(result.result);
