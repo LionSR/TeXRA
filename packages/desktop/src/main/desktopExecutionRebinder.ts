@@ -17,7 +17,6 @@ import {
 import {
   STREAM_PHASE,
   type ExecutionId,
-  type RestoredStreamSnapshot,
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
@@ -61,11 +60,11 @@ export class DesktopExecutionRebinder {
   rebind(
     activeExecutionIds: ReadonlySet<string>,
     allExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>,
-    restoredStreams: ReadonlyMap<StreamTabId, RestoredStreamSnapshot>,
+    startupStreamIds: ReadonlySet<StreamTabId>,
   ): void {
     const reboundRoots = new Map(this.rootOwners);
-    for (const [streamId, snapshot] of restoredStreams) {
-      const executionId = snapshot.executionId ?? allExecutionIds.get(streamId);
+    for (const streamId of startupStreamIds) {
+      const executionId = allExecutionIds.get(streamId);
       if (!executionId || !activeExecutionIds.has(executionId)) continue;
       let binding = this.agentBindings.get(executionId);
       if (!binding) {

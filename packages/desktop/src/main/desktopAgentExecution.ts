@@ -21,10 +21,7 @@ import {
   replayApprovalRequestHandlers,
   type ApprovalRequestHandlerSet,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
-import {
-  repairRestartedStreams,
-  RESTART_REPAIR_PHASES,
-} from '@controllers/progressView/backend/restartRepair';
+import { repairRestartedStreams } from '@controllers/progressView/backend/restartRepair';
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
@@ -67,7 +64,6 @@ import {
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import type { MainViewExecuteMessage } from '@shared/mainView';
 import {
-  STREAM_PHASE,
   type RunOutcome,
   type AgentCategoryFilter,
   type MainViewPersistedState,
@@ -111,10 +107,13 @@ import {
   type DesktopPresentationPayloads,
   type DesktopSessionProgressBridge,
 } from './desktopSessionProgressBridge.js';
+import {
+  prepareDesktopLegacyStreamImport,
+  type DesktopLegacyStreamImport,
+} from './desktopLegacyStreamImporter.js';
 import type { DesktopProgressInboundHandlerRegistry } from './desktopProgressIpc.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
-import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
 
 const DESKTOP_UNAVAILABLE_TOOLS: readonly RegisteredToolName[] = [
   ...SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
@@ -124,14 +123,9 @@ const DESKTOP_UNAVAILABLE_TOOLS: readonly RegisteredToolName[] = [
 export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): boolean | void;
   host: DesktopAgentExecutionHost;
-  /**
-   * Optional snapshot store wired by the desktop entrypoint. When
-   * provided, the bridge persists a slim snapshot of the rail on each
-   * stream change (audit item D / trajectory #19) and surfaces
-   * previously-persisted "ghost" streams in the rail at launch.
-   */
-  streamSnapshotStore?: DesktopStreamSnapshotStore;
   progressSnapshotStore: StreamSnapshotStore;
+  /** Primary-process path to the retired global desktop stream file. */
+  legacyStreamFilePath?: string;
 }
 
 export interface DesktopAgentExecution {
@@ -155,8 +149,9 @@ export interface DesktopProgressBridgeOptions {
   transcripts: StreamLogStore;
   logger?: AgentTrace;
   host: DesktopAgentExecutionHost;
-  streamSnapshotStore?: DesktopStreamSnapshotStore;
   progressSnapshotStore: StreamSnapshotStore;
+  /** Runs after canonical state is loaded and before restart repair begins. */
+  afterCanonicalLoad?: () => Promise<void>;
 }
 
 class MemoryProgressStorage implements MementoStorage {
@@ -197,13 +192,10 @@ export class DesktopProgressBridge {
   private readonly toolEditApprovals: DesktopToolEditApprovalController;
   private readonly hostInteractions: DesktopHostInteractions;
   private readonly fileActions: DesktopProgressFileActions;
-  /**
-   * Extracted session-progress bridge that owns ghost-stream hydration,
-   * stream-snapshot persistence, restored-display sending, session/run facts,
-   * and window-local presentation requests.  See #6329.
-   */
+  /** Desktop-local presentation effects not owned by the shared backend. */
   private readonly sessionProgress: DesktopSessionProgressBridge;
-  private readonly restartRepair: Promise<void>;
+  private restartRepair: Promise<void> = Promise.resolve();
+  private startupStreamIds: ReadonlySet<StreamTabId> = new Set();
 
   readonly runtimeHost: AgentRuntimeHost;
   readonly progressViewInboundHandlers: DesktopProgressInboundHandlerRegistry;
@@ -302,16 +294,9 @@ export class DesktopProgressBridge {
     });
     this.state = this.backend.state;
     this.streamLogs = this.state.streamLogs;
-    // Compose the extracted session-progress bridge for ghost-stream hydration,
-    // stream-snapshot persistence, restored-display sending, session/run facts,
-    // and window-local presentation requests.  See #6329.
     this.sessionProgress = createDesktopSessionProgressBridge({
       state: this.state,
-      streamStatus: this.session.status,
-      streamSnapshotStore: options.streamSnapshotStore,
       sendMessage: (message) => this.send(message),
-      logger: this.logger,
-      getActiveStream: () => this.state.activeStream,
       routeToProgress: () => this.routeToProgress(),
       onGoalStateChanged: (streamId, active, goalOpts) => {
         this.backend.webviewUpdater.updateGoalActive(
@@ -326,14 +311,13 @@ export class DesktopProgressBridge {
     });
     const backendSubscription = this.backend.setupEventListeners();
     const detachSessionProgressFacts = this.session.events.subscribe(
-      (event) => this.sessionProgress.handleSessionEvent(event),
+      (event) => {
+        if (event.scope === 'session') {
+          this.sessionProgress.handleSessionFact(event.event);
+        }
+      },
       { scope: 'session' },
     );
-    const detachRunProgressFacts = this.session.events.subscribe(
-      (event) => this.sessionProgress.handleSessionEvent(event),
-      { scope: 'run', types: ['run.config', 'status'] },
-    );
-    this.restartRepair = this.repairOrphanedStreamsAfterRestart();
     // Onboarding funnel (PRD: agent-native onboarding): a completed run ends
     // State 1. `AgentRunLifecycle` persists `firstRunDone` BEFORE it emits the
     // terminal `result` event, so by the time this listener fires the funnel
@@ -346,7 +330,6 @@ export class DesktopProgressBridge {
       }
     });
     this.unsubscribe = () => {
-      detachRunProgressFacts();
       detachSessionProgressFacts();
       backendSubscription.dispose();
       this.sessionProgress.dispose();
@@ -367,6 +350,19 @@ export class DesktopProgressBridge {
     this.workflowFileActions = this.progressHost.workflowFileActionsController;
     this.agentProposalController = this.progressHost.agentProposalController;
     this.progressViewInboundHandlers = this.createProgressViewInboundHandlers();
+    this.restartRepair = this.initializeCanonicalState();
+  }
+
+  /** Wait until canonical state and restart repair are ready for use. */
+  async waitUntilReady(): Promise<void> {
+    await this.restartRepair;
+  }
+
+  private async initializeCanonicalState(): Promise<void> {
+    await this.backend.load();
+    await this.options.afterCanonicalLoad?.();
+    this.startupStreamIds = new Set(this.streamLogs.keys());
+    await this.repairOrphanedStreamsAfterRestart();
   }
 
   private createProgressViewHost(): ProgressViewHost {
@@ -663,8 +659,6 @@ export class DesktopProgressBridge {
     for (const handler of Object.values(this.approvalHandlers)) {
       handler.clear();
     }
-    // Ghost-stream state is owned by the extracted sessionProgress bridge;
-    // onAllStreamsDeleted handles clearing it.
   }
 
   private send(message: ProgressViewOutboundMessage): void {
@@ -678,41 +672,19 @@ export class DesktopProgressBridge {
     );
   }
 
-  private getRestartRepairExecutionIdMap(): ReadonlyMap<
-    StreamTabId,
-    ExecutionId
-  > {
-    const executionIds = new Map(this.state.snapshots.getExecutionIdMap());
-    for (const [streamId, snapshot] of this.sessionProgress.restoredStreams) {
-      if (snapshot.executionId && !executionIds.has(streamId)) {
-        executionIds.set(streamId, snapshot.executionId);
-      }
-    }
-    return executionIds;
-  }
-
   private refreshActiveExecutionIds(): {
     activeExecutionIds: Set<string>;
     allExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>;
   } {
     const activeExecutionIds = new Set(getAllActiveExecutionIds());
-    const allExecutionIds = this.getRestartRepairExecutionIdMap();
-    // Rebind BEFORE forgetting the ghost: a restored stream's executionId
-    // being "active" only means some live session still owns it -- possibly
-    // a previous window's session, retained post-dispose so headless runs
-    // stay visible to process-wide guards (`keepActiveExecutions`, #6329).
-    // Without this, forgetting the ghost here (below) leaves the run with no
-    // rail entry owner at all: the old window's bridge already stopped
-    // forwarding events (disposed), and nothing else ever subscribed this
-    // window to them. See #8148.
+    const allExecutionIds = this.state.snapshots.getExecutionIdMap();
+    // A replacement window may need to mirror a still-running execution from
+    // the prior window. Canonical startup membership and execution mappings
+    // are sufficient; no persisted liveness or restoration object is needed.
     this.executionRebinder.rebind(
       activeExecutionIds,
       allExecutionIds,
-      this.sessionProgress.restoredStreams,
-    );
-    this.sessionProgress.forgetActiveRestoredStreams(
-      activeExecutionIds,
-      allExecutionIds,
+      this.startupStreamIds,
     );
     return { activeExecutionIds, allExecutionIds };
   }
@@ -740,29 +712,17 @@ export class DesktopProgressBridge {
   }
 
   private getRestartRepairStreamSet(
-    executionIdMap: ReadonlyMap<StreamTabId, ExecutionId>,
     allExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>,
     activeExecutionIds: ReadonlySet<string>,
     waitingStreams: ReadonlySet<StreamTabId>,
   ): Set<StreamTabId> {
-    const repairStreams = new Set(waitingStreams);
-    for (const streamId of executionIdMap.keys()) {
-      const currentStatus = this.session.status.get(streamId);
-      if (currentStatus != null && RESTART_REPAIR_PHASES.has(currentStatus)) {
-        repairStreams.add(streamId);
-      }
-    }
-    for (const [streamId, snapshot] of this.sessionProgress.restoredStreams) {
-      const executionId = snapshot.executionId ?? allExecutionIds.get(streamId);
+    const repairStreams = new Set([
+      ...this.streamLogs.getUnfinishedStreamIds(),
+      ...waitingStreams,
+    ]);
+    for (const [streamId, executionId] of allExecutionIds) {
       if (executionId && activeExecutionIds.has(executionId)) {
-        continue;
-      }
-      const currentStatus = this.session.status.get(streamId);
-      if (
-        RESTART_REPAIR_PHASES.has(snapshot.lastKnownStatus) ||
-        (currentStatus != null && RESTART_REPAIR_PHASES.has(currentStatus))
-      ) {
-        repairStreams.add(streamId);
+        repairStreams.delete(streamId);
       }
     }
     return repairStreams;
@@ -780,14 +740,13 @@ export class DesktopProgressBridge {
       status,
     );
     if (closedGroups.length > 0) {
-      await this.state.streamLogs.save();
+      await this.state.streamLogs.flush();
     }
     return closedGroups;
   }
 
   private async repairOrphanedStreamsAfterRestart(): Promise<void> {
     try {
-      this.sessionProgress.hydrateRestoredStreams();
       const { activeExecutionIds, allExecutionIds } =
         this.refreshActiveExecutionIds();
       const executionIdMap = new Map(
@@ -800,13 +759,7 @@ export class DesktopProgressBridge {
         activeExecutionIds: repairActiveExecutionIds,
         allExecutionIds: repairAllExecutionIds,
       } = await this.detectRaceGuardedWaitingStreams(executionIdMap);
-      const repairExecutionIdMap = new Map(
-        [...repairAllExecutionIds].filter(
-          ([, executionId]) => !repairActiveExecutionIds.has(executionId),
-        ),
-      );
       const repairStreams = this.getRestartRepairStreamSet(
-        repairExecutionIdMap,
         repairAllExecutionIds,
         repairActiveExecutionIds,
         waitingStreams,
@@ -827,121 +780,11 @@ export class DesktopProgressBridge {
         repairResult.waitingStreams.length > 0 ||
         repairResult.failedStreams.length > 0 ||
         repairResult.closedWaitingGroups.length > 0 ||
-        repairResult.closedFailedGroups.length > 0 ||
-        this.sessionProgress.restoredStreams.size > 0
+        repairResult.closedFailedGroups.length > 0
       ) {
         this.syncFullView();
       }
     } catch (error) {
-      const waitingStreams = new Set<StreamTabId>();
-      for (const [streamId, status] of this.session.status.entries()) {
-        if (status === STREAM_PHASE.WAITING) {
-          waitingStreams.add(streamId);
-        }
-      }
-      this.sessionProgress.hydrateRestoredStreams();
-      const { activeExecutionIds, allExecutionIds } =
-        this.refreshActiveExecutionIds();
-      let repairExecutionIds = allExecutionIds;
-      // The in-memory scan above only catches streams whose CURRENT status
-      // already happens to be WAITING. It misses a stream that was RUNNING
-      // at crash time but has a valid persisted flow record -- ground truth
-      // that only detectWaitingStreams() (KV-store backed) can see. Without
-      // this, restart repair would wrongly demote such a
-      // stream to FAILED instead of restoring it to WAITING.
-      try {
-        const executionIdMap = new Map(
-          [...allExecutionIds].filter(
-            ([, executionId]) => !activeExecutionIds.has(executionId),
-          ),
-        );
-        const {
-          waitingStreams: persistedWaitingStreams,
-          activeExecutionIds: postDetectActiveExecutionIds,
-          allExecutionIds: postDetectAllExecutionIds,
-        } = await this.detectRaceGuardedWaitingStreams(executionIdMap);
-        for (const streamId of persistedWaitingStreams) {
-          waitingStreams.add(streamId);
-        }
-        repairExecutionIds = postDetectAllExecutionIds;
-        // The helper only race-guards its own (persisted-record) result.
-        // waitingStreams also carries the pre-existing in-memory-scan
-        // entries from above, which predate the KV read and so never got
-        // checked against activity that happened during it -- recheck them
-        // here too, or an actively-resumed stream could still be handed to
-        // closeRunningTaskGroupsForStreams() below.
-        for (const [streamId, executionId] of postDetectAllExecutionIds) {
-          if (postDetectActiveExecutionIds.has(executionId)) {
-            waitingStreams.delete(streamId);
-          }
-        }
-      } catch (detectError) {
-        // Keep going with whatever the in-memory scan already found -- a
-        // failure here must not block the rest of this already-degraded
-        // fallback path.
-        this.logger.warn(
-          'Failed to consult persisted flow records during desktop restart-repair fallback',
-          {
-            data: toLogData(detectError),
-          },
-        );
-        // detectRaceGuardedWaitingStreams() throwing only means the
-        // KV-store-backed lookup itself failed -- it does not mean no time
-        // passed. A stream could still have become active elsewhere while
-        // that (failed) await was in flight, so re-fetch active execution
-        // ids here too and recheck waitingStreams against them, or an
-        // actively-resumed stream could be handed to
-        // closeRunningTaskGroupsForStreams() below just because detection
-        // happened to fail. This mirrors the recheck the success branch
-        // above performs with its own (persisted-record) result, and also
-        // re-runs forgetActiveRestoredStreams() so a now-active stream is
-        // dropped from repairStreams entirely rather than being marked
-        // FAILED.
-        const {
-          activeExecutionIds: postDetectErrorActiveExecutionIds,
-          allExecutionIds: postDetectErrorAllExecutionIds,
-        } = this.refreshActiveExecutionIds();
-        repairExecutionIds = postDetectErrorAllExecutionIds;
-        for (const [streamId, executionId] of postDetectErrorAllExecutionIds) {
-          if (postDetectErrorActiveExecutionIds.has(executionId)) {
-            waitingStreams.delete(streamId);
-          }
-        }
-      }
-      try {
-        const fallbackRepairStreams = new Set([
-          ...this.sessionProgress.restoredStreams.keys(),
-          ...waitingStreams,
-        ]);
-        const repairResult = await repairRestartedStreams({
-          streamStatus: this.session.status,
-          waitingStreams,
-          executionIds: repairExecutionIds,
-          repairStreams: fallbackRepairStreams,
-          retryFailedStreams: true,
-          closeRunningGroups: (streamIds, status, now) =>
-            this.closeRunningTaskGroupsForStreams(streamIds, status, now),
-          statusEmitOptions: {
-            trace: this.logger,
-          },
-          logger: this.logger,
-        });
-        if (
-          repairResult.waitingStreams.length > 0 ||
-          repairResult.failedStreams.length > 0 ||
-          repairResult.closedWaitingGroups.length > 0 ||
-          repairResult.closedFailedGroups.length > 0
-        ) {
-          this.syncFullView();
-        }
-      } catch (repairError) {
-        this.logger.warn(
-          'Failed to apply desktop stream repair fallback writes',
-          {
-            data: toLogData(repairError),
-          },
-        );
-      }
       this.logger.warn('Failed to repair desktop streams after restart', {
         data: toLogData(error),
       });
@@ -1016,9 +859,8 @@ export class DesktopProgressBridge {
 
   /**
    * Owns the Progress webview's readiness sequence. Restored streams are
-   * folded into `session.status` by `restartRepair`; transcript persistence is
-   * already open before this bridge can be constructed. Painting the rail
-   * before repair settles would omit restored status from the first paint.
+   * folded into `session.status` by `restartRepair`. Painting the rail before
+   * repair settles would omit canonical restart status from the first paint.
    * Gating the whole sequence here makes the ordering uniform for every
    * `webviewReady` caller.
    */
@@ -1073,12 +915,7 @@ export class DesktopProgressBridge {
   }
 
   async deleteStream(streamId: StreamTabId): Promise<void> {
-    if (
-      !this.streamLogs.has(streamId) &&
-      !this.sessionProgress.hasRestoredStream(streamId)
-    ) {
-      return;
-    }
+    if (!this.streamLogs.has(streamId)) return;
     const ownerSession = this.sessionForStream(streamId);
     this.deletedStreams.add(streamId);
 
@@ -1086,8 +923,6 @@ export class DesktopProgressBridge {
     // requests) and the follow-up queue for this stream. Do this before the
     // deletion event releases the rebound binding that identifies the owner.
     releaseStreamResources(streamId, ownerSession);
-    this.sessionProgress.onStreamDeleted(streamId);
-
     this.releaseApprovalsForStream(streamId);
     this.workflowFileActions.clearStreamBackups(streamId);
     await this.state.clearStream(streamId);
@@ -1099,10 +934,7 @@ export class DesktopProgressBridge {
   }
 
   async deleteAllStreams(): Promise<void> {
-    const streamIds = new Set<StreamTabId>([
-      ...this.streamLogs.keys(),
-      ...this.sessionProgress.restoredStreams.keys(),
-    ]);
+    const streamIds = new Set(this.streamLogs.keys());
     // Approval cleanup (incl. retry/proposal/plan pending state) is scoped
     // to THIS window's streams via the per-stream helper. Approval state is
     // session-owned, so none of this can touch another window's pending
@@ -1121,11 +953,6 @@ export class DesktopProgressBridge {
     // interactions after the visible per-stream sweep. This is session-scoped
     // and does not touch sibling windows.
     this.session.interactions.cancel({ cause: 'All streams deleted.' });
-    // Drop persisted ghosts too: a "delete all" should leave nothing
-    // for the next launch to hydrate, otherwise users would see the
-    // ghosts come back zombie-style after relaunch.
-    await this.sessionProgress.onAllStreamsDeleted();
-
     await this.state.clearAll();
     this.clearDesktopSessionMaps();
     this.workflowFileActions.clearAllBackups();
@@ -1146,7 +973,6 @@ export class DesktopProgressBridge {
         this.backend.factApplier.syncStreamContent(streamId, {
           includeActiveState: true,
         });
-        this.sessionProgress.sendRestoredDisplay(streamId);
       })
       .catch((error: unknown) => {
         this.logger.error(`Failed to load desktop transcript ${streamId}`, {
@@ -1514,12 +1340,53 @@ export async function createDesktopAgentExecution(
   options: DesktopAgentExecutionOptions,
 ): Promise<DesktopAgentExecution> {
   const transcripts = await StreamLogStore.open();
+  let legacyImport: DesktopLegacyStreamImport | undefined;
+  if (options.legacyStreamFilePath) {
+    try {
+      legacyImport = await prepareDesktopLegacyStreamImport(
+        options.legacyStreamFilePath,
+        {
+          transcriptStreamIds: transcripts.keys(),
+          sidecarStreamIds:
+            await options.progressSnapshotStore.listPersistedStreams(),
+        },
+      );
+    } catch (error) {
+      createChannelTrace('DesktopLegacyStreamImporter').warn(
+        'Retaining unreadable legacy desktop stream state for retry',
+        { data: toLogData(error) },
+      );
+    }
+  }
+  for (const streamId of legacyImport?.claims ?? []) {
+    transcripts.ensureStream(streamId);
+  }
+  if ((legacyImport?.claims.length ?? 0) > 0) {
+    await transcripts.flush();
+  }
   const progress = new DesktopProgressBridge(options.postToRenderer, {
     transcripts,
     host: options.host,
-    streamSnapshotStore: options.streamSnapshotStore,
     progressSnapshotStore: options.progressSnapshotStore,
+    afterCanonicalLoad: legacyImport
+      ? async () => {
+          try {
+            await legacyImport.commit(legacyImport.claims);
+          } catch (error) {
+            createChannelTrace('DesktopLegacyStreamImporter').warn(
+              'Retaining legacy desktop stream state after cleanup failed',
+              { data: toLogData(error) },
+            );
+          }
+        }
+      : undefined,
   });
+  try {
+    await progress.waitUntilReady();
+  } catch (error) {
+    progress.dispose();
+    throw error;
+  }
 
   return {
     progress,
