@@ -26,7 +26,6 @@ import {
   type ChildStreamEntries,
 } from '../state/childExecutions';
 import { streamViewForId } from '../state/streamViews';
-import { transcriptEntryLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
 import { COLOR_HINT } from '../ui/colors';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
@@ -36,13 +35,13 @@ import {
   nextRenderableTranscriptEntry,
   userPromptAwaitsLiveContinuation,
 } from './transcriptEntries';
+import { TranscriptEntry } from './TranscriptEntry';
 import {
-  ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS,
-  PROCESS_ENTRY_MARGIN_BOTTOM_ROWS,
-  TranscriptEntry,
   USER_ENTRY_MARGIN_BOTTOM_ROWS,
-  USER_ENTRY_MARGIN_TOP_ROWS,
-} from './TranscriptEntry';
+  transcriptColumns,
+  transcriptEntryLayout,
+  transcriptEntryLayoutRows,
+} from './transcriptEntryLayout';
 
 export type StaticTranscriptItem =
   | {
@@ -118,7 +117,7 @@ function SessionHeaderBlock({
   readonly meta: SessionMeta;
   readonly width?: number;
 }): React.JSX.Element {
-  const columns = Math.max(1, Math.floor(width ?? 80));
+  const columns = transcriptColumns(width);
   if (compact) {
     return (
       <Box paddingX={1}>
@@ -195,31 +194,12 @@ function staticTranscriptItemRowCount(
       ? COMPACT_SESSION_HEADER_ROWS
       : FULL_SESSION_HEADER_ROWS;
   }
-  // Compact budgeting can over-count tool rows because the transcript viewer
-  // keeps full tool output while the static scrollback renderer elides it.
-  const cols = Math.max(1, Math.floor(width ?? 80));
-  const isUserBand =
-    item.entry.role === 'user' && !isInquiryContinuationText(item.entry.text);
-  const isPaddedPrefixRow =
-    item.entry.role === 'user' || item.entry.role === 'error';
-  // Pass cols-2 for user/error entries: transcriptEntryLines subtracts the
-  // 2-char prefix internally, so the effective wrap width is cols-4,
-  // matching the paddingX={1} + prefix geometry of the renderer.
-  const lines = transcriptEntryLines(
-    item.entry,
-    isPaddedPrefixRow ? Math.max(1, cols - 2) : cols,
-  ).length;
-  let marginRows = 0;
-  if (isUserBand) {
-    marginRows =
-      USER_ENTRY_MARGIN_TOP_ROWS +
-      (item.userBottomMarginRows ?? USER_ENTRY_MARGIN_BOTTOM_ROWS);
-  } else if (item.entry.role === 'assistant') {
-    marginRows = ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS;
-  } else if (item.entry.role === 'process') {
-    marginRows = PROCESS_ENTRY_MARGIN_BOTTOM_ROWS;
-  }
-  return lines + marginRows;
+  return transcriptEntryLayoutRows(
+    transcriptEntryLayout(item.entry, {
+      userBottomMarginRows: item.userBottomMarginRows,
+      width,
+    }),
+  );
 }
 
 function staticUserBottomMarginRows({
@@ -346,7 +326,7 @@ export function StaticConversationTranscript({
   readonly scrollbackStreamId: StreamTabId | undefined;
   readonly width?: number;
 }): React.JSX.Element {
-  const normalizedWidth = Math.max(1, Math.floor(width ?? 80));
+  const normalizedWidth = transcriptColumns(width);
   const streams = useSignal(streamsSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
   const parentStream = useSignal(parentStreamSignal);

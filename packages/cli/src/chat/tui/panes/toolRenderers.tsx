@@ -478,14 +478,9 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
     visibleOutput.length === 0 &&
     !patchGroups &&
     !toolUse.isError;
-  const hasDetails =
-    visibleOutput.length > 0 ||
-    (patchGroups?.length ?? 0) > 0 ||
-    toolUse.isError ||
-    showNoOutput;
 
   return (
-    <Box flexDirection="column" marginBottom={hasDetails ? 1 : 0}>
+    <Box flexDirection="column" marginBottom={toolUseMarginBottomRows(toolUse)}>
       <Box flexDirection="row" flexWrap="nowrap">
         <Text color={color} dimColor={!color}>
           {STATUS_DOT}{' '}
@@ -631,4 +626,10 @@ export function toolUseDisplayLines(
   }
   cached[slot] = lines;
   return lines;
+}
+
+/** Tool detail rows are separated from the next conversation entry. Derive
+ *  that geometry from the same display-line model used by row budgeting. */
+export function toolUseMarginBottomRows(toolUse: NormalizedToolUse): 0 | 1 {
+  return toolUseDisplayLines(toolUse).length > 1 ? 1 : 0;
 }

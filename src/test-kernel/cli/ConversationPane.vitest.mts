@@ -7,10 +7,11 @@ import { buildChildStreamEntries } from '@test/support/childStreamEntries';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   LIVE_TAIL_ROWS,
-  boundedAssistantDisplayLines,
-  compactPrefixedDisplayRows,
+  boundedTranscriptEntryLayout,
   liveAssistantDisplayLines,
-} from '@cli/chat/tui/panes/TranscriptEntry';
+  transcriptEntryLayout,
+  transcriptEntryLayoutRows,
+} from '@cli/chat/tui/panes/transcriptEntryLayout';
 import { formatRenderError } from '@cli/chat/tui/panes/EntryErrorBoundary';
 import {
   isInquiryContinuationText,
@@ -352,20 +353,28 @@ describe('CLI conversation transcript splitting', () => {
       '\n',
     );
 
-    const finalizedTail = boundedAssistantDisplayLines({
-      colorEnabled: false,
-      finalized: true,
-      rows: 1,
+    const assistant = (finalized: boolean): ConversationEntry => ({
+      finalized,
+      id: finalized ? 'finalized' : 'streaming',
+      role: 'assistant',
       text,
-      width: 80,
-    }).join('\n');
-    const streamingTail = boundedAssistantDisplayLines({
-      colorEnabled: false,
-      finalized: false,
-      rows: 1,
-      text,
-      width: 80,
-    }).join('\n');
+    });
+    const finalizedTail = boundedTranscriptEntryLayout(
+      transcriptEntryLayout(assistant(true), {
+        colorEnabled: false,
+        mode: 'bounded',
+        width: 80,
+      }),
+      1,
+    ).lines.join('\n');
+    const streamingTail = boundedTranscriptEntryLayout(
+      transcriptEntryLayout(assistant(false), {
+        colorEnabled: false,
+        mode: 'bounded',
+        width: 80,
+      }),
+      1,
+    ).lines.join('\n');
 
     expect(finalizedTail).toContain('bold tail marker');
     expect(finalizedTail).not.toContain('**bold tail marker**');
@@ -399,24 +408,34 @@ describe('CLI conversation transcript splitting', () => {
     expect(selected.rowLimits.has('a1')).toBe(false);
   });
 
-  it('pads compact prefixed rows to the viewport width', () => {
-    expect(
-      compactPrefixedDisplayRows({
-        fillWidth: true,
-        prefix: '! ',
-        text: 'bad',
-        width: 8,
-      }),
-    ).toBe('! bad   ');
-    expect(
-      compactPrefixedDisplayRows({
-        fillWidth: true,
-        maxRows: 1,
-        prefix: '! ',
-        text: 'abcdef',
-        width: 6,
-      }),
-    ).toBe('  ef  ');
+  it('derives prefixes, insets, margins, and row counts from one layout', () => {
+    const user = entry('u1', 'user', 'x'.repeat(77), true);
+    const userLayout = transcriptEntryLayout(user, { width: 80 });
+    expect(userLayout).toMatchObject({
+      columns: 78,
+      continuationPrefix: '  ',
+      firstPrefix: '› ',
+      inset: 2,
+      marginBottomRows: 1,
+      marginTopRows: 1,
+    });
+    expect(userLayout.lines).toHaveLength(2);
+    expect(transcriptEntryLayoutRows(userLayout)).toBe(4);
+    expect(estimateTranscriptEntryRows(user, 80)).toBe(
+      transcriptEntryLayoutRows(userLayout),
+    );
+
+    const tool = toolEntry('t1', TOOL_USE_STATUS.COMPLETED, 'one\ntwo');
+    const toolLayout = transcriptEntryLayout(tool, { width: 80 });
+    expect(toolLayout).toMatchObject({
+      columns: 80,
+      inset: 0,
+      marginBottomRows: 1,
+      marginTopRows: 0,
+    });
+    expect(estimateTranscriptEntryRows(tool, 80)).toBe(
+      transcriptEntryLayoutRows(toolLayout),
+    );
   });
 
   it('budgets live user prompt bands with their margin rows', () => {
