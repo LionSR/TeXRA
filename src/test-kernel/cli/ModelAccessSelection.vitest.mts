@@ -135,7 +135,7 @@ describe('CLI model access routes', () => {
     expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
     expect(result).toEqual({
       apiMode: 'personal',
-      message: 'Model access set to personal API keys.',
+      message: 'Model access: Personal API keys.',
     });
   });
 

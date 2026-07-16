@@ -17,11 +17,12 @@ import {
   setCliApiMode,
   type CliApiMode,
 } from './apiAccessMode';
-import type { CliContext } from './cliContext';
-import type {
-  CliModelAccessRoute,
-  CliModelAccessStatus,
+import {
+  formatCliModelAccessRoute,
+  type CliModelAccessRoute,
+  type CliModelAccessStatus,
 } from './modelAccessRoute';
+import type { CliContext } from './cliContext';
 
 export interface CliModelAccessSelectionResult {
   /** API fallback retained beneath subscription-based access. */
@@ -61,7 +62,7 @@ export async function selectCliModelAccessRoute(
       apiMode: route,
       message: update.effective
         ? `Model access remains on ChatGPT subscription because a more specific setting overrides ${update.target} config.`
-        : `Model access set to ${route === 'included' ? 'included TeXRA access' : 'personal API keys'}.`,
+        : `Model access: ${formatCliModelAccessRoute(route)}.`,
     };
   }
 
