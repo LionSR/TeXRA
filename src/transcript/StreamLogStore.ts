@@ -249,6 +249,13 @@ export class StreamLogStore {
     return [...this.summaries.keys()];
   }
 
+  /** Return known streams whose summary records unfinished output. */
+  getUnfinishedStreamIds(): StreamTabId[] {
+    return [...this.summaries]
+      .filter(([, summary]) => hasSomethingRunning(summary))
+      .map(([streamId]) => streamId);
+  }
+
   ensureStream(streamId: StreamTabId): void {
     this.assertWritableStore('ensure a transcript stream');
     // No-op if the stream is already known — either resident in `logs` or
@@ -260,6 +267,10 @@ export class StreamLogStore {
     this.logs.set(streamId, logInstance);
     this.summaries.set(streamId, {});
     this.stateRevision += 1;
+    if (this.mode.kind === 'persistent') {
+      this.markDirty(streamId);
+      void this.save();
+    }
   }
 
   /**
@@ -803,16 +814,17 @@ export class StreamLogStore {
     }
 
     const raw = await this.kv.read<unknown[]>(streamId);
+    // `listKeys()` found the stream, but it may have been deleted before the
+    // read completed. Only an existing authoritative `[]` is registration
+    // evidence; KVStore's missing-file `undefined` is not.
+    if (raw === undefined) return null;
     const entries = this.parsePersistedEntries(streamId, raw);
-    if (
-      entries.entries.length === 0 &&
-      entries.preservedRawEntries.length === 0
-    ) {
-      return null;
-    }
-
     const summary = this.summarizeEntries(entries.entries);
-    await this.maintainSummaryCache(streamId, summary);
+    // Empty transcripts have no timestamps, so their authoritative log file,
+    // rather than the optional summary cache, remains the registration marker.
+    if (entries.entries.length > 0 || entries.preservedRawEntries.length > 0) {
+      await this.maintainSummaryCache(streamId, summary);
+    }
     return { streamId, summary };
   }
 
