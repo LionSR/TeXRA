@@ -1,9 +1,12 @@
+// Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Local imports
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
 import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
+import { setOutputChannelFactory } from '@logger/logUtils';
 import type { StreamTabId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getSetupPlatform } from '@tools/setup/platform';
@@ -265,6 +268,16 @@ describe('CLI platform init', () => {
     expect(vi.mocked(UsageLogService.dispose)).not.toHaveBeenCalled();
     for (const handler of mocks.shutdownHandlers) await handler();
     expect(vi.mocked(UsageLogService.dispose)).toHaveBeenCalled();
+  });
+
+  it('marks the operator-terminal console sink as trusted', async () => {
+    mocks.authProvider.isAuthenticated.mockResolvedValue(false);
+
+    await initCliPlatform(cliContext({ quietLogs: false }));
+
+    expect(vi.mocked(setOutputChannelFactory)).toHaveBeenCalledWith(null, {
+      trusted: true,
+    });
   });
 
   it('installs a CLI agent resume port that delegates to the active handler', async () => {

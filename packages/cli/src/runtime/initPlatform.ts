@@ -262,6 +262,7 @@ export async function initCliPlatform(
   quietPlatformLogs = context.quietLogs;
   setOutputChannelFactory(
     quietPlatformLogs ? () => ({ appendLine: () => undefined }) : null,
+    { trusted: true },
   );
 
   if (!tryPlatform()) {
