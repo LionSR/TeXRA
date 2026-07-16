@@ -32,6 +32,7 @@ export function cleanupApprovalsForStream(
   toolEdit.bypass.clearForStream(streamId);
   bash.bypass.clearForStream(streamId);
   proposal.clearForStream(streamId);
+  session.approvals.forgetStreamAncestry(streamId);
   session.interactions.cancel({
     streamId,
     cause: 'Stream resources released.',

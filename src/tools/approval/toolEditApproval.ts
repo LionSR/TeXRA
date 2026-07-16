@@ -507,23 +507,32 @@ export async function requestAndWriteApprovedEdit(request: {
 }
 
 /**
- * Mirror the parent stream's bash-approval bypass onto a freshly resolved child
- * subagent stream, independent of any tool-edit auto-approval.
+ * Link a freshly resolved child subagent stream to its parent for bash-bypass
+ * resolution, independent of any tool-edit auto-approval.
  *
- * A child delegated by a parent that auto-runs bash should auto-run bash too. If
- * the parent's bash is still gated this is a no-op — fresh child streams default
- * to gated — so the child matches the parent either way. Kept separate from the
- * tool-edit YOLO flag to respect the CLI's distinct AUTO-BASH / AUTO-APPROVE
- * grants: a parent with AUTO-BASH but edits still gated still propagates bash.
+ * A child delegated by a parent that auto-runs bash should auto-run bash too —
+ * and should keep doing so even if the parent's bash bypass is toggled on
+ * *after* the child stream already started, since this registers a live
+ * ancestry link rather than copying the parent's bypass value once at child
+ * creation (see `registerStreamParent`). If the parent's bash is still gated
+ * the child stays gated too — fresh streams default to gated either way.
+ * Kept separate from the tool-edit YOLO flag to respect the CLI's distinct
+ * AUTO-BASH / AUTO-APPROVE grants: a parent with AUTO-BASH but edits still
+ * gated still propagates bash.
  */
 export function inheritBashBypassOnChildStream(
   childStreamId: StreamTabId,
   parentStreamId?: StreamTabId,
   session: SessionHandle = currentSession(),
 ): void {
-  const bashBypass = session.approvals.bash.bypass;
-  if (parentStreamId && bashBypass.isBypassed(parentStreamId)) {
-    bashBypass.setBypass(childStreamId, true);
+  if (parentStreamId) {
+    // Scoped to 'bash' only — ancestry is tracked per bypass kind, so this
+    // cannot also let the child inherit tool-edit or super-YOLO bypass from
+    // the parent. Those are granted separately and explicitly (see
+    // `enableYoloOnChildStream`) when a delegation asks for them.
+    session.approvals.registerStreamParent(childStreamId, parentStreamId, [
+      'bash',
+    ]);
   }
 }
 
