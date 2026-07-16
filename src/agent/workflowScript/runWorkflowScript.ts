@@ -193,10 +193,10 @@ export async function runWorkflowScript(
 ): Promise<WorkflowScriptRunResult> {
   const { runAgent, onEvent, onJournalEntry } = options;
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxAgentCalls = options.maxAgentCalls ?? DEFAULT_MAX_AGENT_CALLS;
 
   const { meta, body } = parseWorkflowScript(options.script);
+  const timeoutMs = options.timeoutMs ?? meta.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const priorEntries = new Map<number, WorkflowJournalEntry>(
     (options.journal ?? []).map((entry) => [entry.index, entry]),
   );

@@ -4,6 +4,7 @@ import { z } from 'zod';
 // Local imports - agent runtime
 import { getExecutionStore } from '@agent/storage';
 import {
+  deriveWorkflowScriptCheckpointId,
   readWorkflowScriptCheckpoint,
   type WorkflowJournalEntry,
   type WorkflowScriptRunResult,
@@ -59,7 +60,9 @@ export class WorkflowScriptTool extends defineTool({
 
 Available agents: loaded from the active roster at runtime.
 
-The agent field is the default for agent() calls; a call may select another visible workflow agent with options.agentName. Model selection follows the active model access mode automatically. Tool inclusion is the opt-in boundary: do not add this tool to a default agent configuration.`,
+The agent field is the default for agent() calls; a call may select another visible workflow agent with options.agentName. Model selection follows the active model access mode automatically. Tool inclusion is the opt-in boundary: do not add this tool to a default agent configuration.
+
+Durable resume is content-keyed: re-running the identical script and args in this session replays already-completed agent() calls from the saved journal instead of re-executing them, so retry a timed-out or interrupted call with the SAME script and args to keep its completed work. To force a fresh run instead, change the content (e.g. add a nonce field to args). meta.timeoutMs (1s to 60min) overrides the default 10-minute whole-run wall clock.`,
   schema: WorkflowScriptToolInputSchema,
 }) {
   protected async execute(input: WorkflowScriptToolInput): Promise<ToolResult> {
@@ -70,12 +73,14 @@ The agent field is the default for agent() calls; a call may select another visi
       );
     }
     const { runContext: parent, callContext } = contexts;
-    const checkpointId = callContext.toolCallId;
-    if (!checkpointId) {
-      throw new Error(
-        'delegate_workflow_script requires a tool call id for durable resume.',
-      );
-    }
+    // Content-keyed, not toolCallId-keyed: an LLM retry after a timeout or
+    // interruption mints a new tool-call id, and keying on it would orphan
+    // the journal and every derived child identity (#8647).
+    const checkpointId = deriveWorkflowScriptCheckpointId({
+      script: input.script,
+      args: input.args,
+      parentExecutionId: parent.runScope.executionId,
+    });
     if (!callContext.trace) {
       throw new Error(
         'delegate_workflow_script requires the parent progress trace.',
