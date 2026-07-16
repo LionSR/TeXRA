@@ -62,7 +62,7 @@ import {
   type DesktopOnboardingIpc,
 } from './desktopOnboardingIpc.js';
 import { refreshDesktopModelListStateIfNeeded } from './desktopModelListRefresh.js';
-import { promptInRenderer } from './desktopPrompt.js';
+import { createDesktopPromptIpc } from './desktopPromptIpc.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { DefaultDesktopAgentSettingsController } from './desktopAgentSettingsController.js';
 import { DefaultDesktopCrashReportingSettingsController } from './desktopCrashReportingSettingsController.js';
@@ -437,6 +437,9 @@ function createWindow(options: {
     ipc.postToRenderer(message);
     return true;
   };
+  const promptIpc = createDesktopPromptIpc({
+    postToRenderer: postToRendererIfAlive,
+  });
   const previewHost = createDesktopPreviewHost({
     shell,
     showErrorMessage,
@@ -701,7 +704,7 @@ function createWindow(options: {
       postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     },
     prompts: {
-      promptText: (input) => promptInRenderer(window, input),
+      promptText: (input) => promptIpc.input(input),
       chooseTeamAvailability: async ({ presetName, unavailableNames }) => {
         const result = await dialog.showMessageBox(window, {
           type: 'warning',
@@ -735,12 +738,7 @@ function createWindow(options: {
         postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
       },
       prompt: {
-        input: (input) =>
-          promptInRenderer(window, {
-            title: input.title ?? input.prompt ?? 'Set API key',
-            prompt: input.prompt ?? 'Enter API key',
-            password: input.password,
-          }),
+        input: (input) => promptIpc.input(input),
         confirm: async (message, promptOptions) => {
           const result = await dialog.showMessageBox(window, {
             type: 'warning',
@@ -850,8 +848,7 @@ function createWindow(options: {
         postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
       },
       prompt: {
-        input: (input) =>
-          promptInRenderer(window, { ...input, password: true }),
+        input: (input) => promptIpc.input({ ...input, password: true }),
       },
       initialization: { initialize: options.initializeCrashReporting },
     });
@@ -1072,6 +1069,7 @@ function createWindow(options: {
     fileSelection,
     settings: settingsIpc,
     progress: progressIpc,
+    prompt: promptIpc,
     onboarding: onboardingIpc,
     logs: {
       readLog: () =>

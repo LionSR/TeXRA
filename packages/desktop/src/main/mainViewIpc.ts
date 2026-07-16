@@ -18,10 +18,15 @@ import {
   createDesktopViewStateIpc,
   type DesktopTheme,
 } from './desktopViewStateIpc.js';
-import type { BrowserWindow } from 'electron';
+import type {
+  BrowserWindow,
+  Event as ElectronEvent,
+  WebContentsDidStartNavigationEventParams,
+} from 'electron';
 import type { DesktopProgressIpc } from './desktopProgressIpc.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
+import type { DesktopPromptIpc } from './desktopPromptIpc.js';
 import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
 import type { MainViewStartupOptions } from '@controllers/mainView/MainViewStartupController';
 
@@ -31,6 +36,7 @@ export interface DesktopMainViewIpcOptions {
   fileSelection: DesktopFileSelection;
   settings: DesktopSettingsIpc;
   progress: DesktopProgressIpc;
+  prompt: DesktopPromptIpc;
   onboarding: DesktopMessageHandler;
   logs: DesktopLogIpcOptions;
   shellActions: DesktopShellActions;
@@ -52,6 +58,7 @@ export function installDesktopMainViewIpc(
 ): DesktopMainViewIpc {
   let disposed = false;
   let messageHandlers: DesktopMessageHandler[] = [];
+  const webContents = window.webContents;
 
   function handleRendererMessage(message: unknown) {
     if (!isDesktopCommandMessage(message)) return;
@@ -88,17 +95,37 @@ export function installDesktopMainViewIpc(
     options.fileSelection,
     options.settings,
     options.progress,
+    options.prompt,
     options.onboarding,
     viewState,
     logs,
     shell,
     execution,
   ];
+  const cancelPromptsAfterRendererExit = () => options.prompt.cancelPending();
+  const cancelPromptsBeforeMainFrameNavigation = (
+    event: ElectronEvent<WebContentsDidStartNavigationEventParams>,
+  ) => {
+    if (event.isMainFrame && !event.isSameDocument) {
+      options.prompt.cancelPending();
+    }
+  };
+  webContents.on('render-process-gone', cancelPromptsAfterRendererExit);
+  webContents.on(
+    'did-start-navigation',
+    cancelPromptsBeforeMainFrameNavigation,
+  );
 
   function dispose(): void {
     if (disposed) return;
     disposed = true;
     viewState.dispose();
+    webContents.off('render-process-gone', cancelPromptsAfterRendererExit);
+    webContents.off(
+      'did-start-navigation',
+      cancelPromptsBeforeMainFrameNavigation,
+    );
+    options.prompt.dispose();
     bridge.dispose();
   }
   window.once('closed', dispose);

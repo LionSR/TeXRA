@@ -92,6 +92,7 @@ import {
   DesktopShowPdfMessageSchema,
   DesktopClosePdfMessageSchema,
 } from '../desktopPdfMessages';
+import { DesktopShowPromptMessageSchema } from '../desktopPromptMessages';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
 import { createFirstRunWalkthrough } from './desktopOnboarding';
 import { getRendererPlatform } from './rendererPlatform';
@@ -99,6 +100,7 @@ import { createPdfOverlay } from './pdfOverlay';
 import { createDiffOverlay } from './diffOverlay';
 import { createLogsDrawer } from './logsDrawer';
 import { createOverlayDialog } from './overlayDialog';
+import { createDesktopPromptOverlay } from './desktopPromptOverlay';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 
 const root = document.querySelector<HTMLElement>('#app');
@@ -492,6 +494,13 @@ if (bootstrapFailed) {
   });
 }
 
+// Imperative overlays must be appended after Lit establishes its root part;
+// otherwise the initial shell render removes them from the document.
+const promptOverlay = createDesktopPromptOverlay({
+  appRoot,
+  submit: (message) => postMessage(message.command, message),
+});
+
 // =============================================================================
 // Settings overlay
 // =============================================================================
@@ -680,6 +689,11 @@ window.addEventListener('message', (event) => {
   }
   if (DesktopClosePdfMessageSchema.safeParse(event.data).success) {
     pdfOverlay.close();
+    return;
+  }
+  const promptParsed = DesktopShowPromptMessageSchema.safeParse(event.data);
+  if (promptParsed.success) {
+    promptOverlay.open(promptParsed.data);
     return;
   }
   // Progress view messages: dispatch directly into the shared messageDispatcher

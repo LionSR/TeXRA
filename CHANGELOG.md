@@ -28,6 +28,14 @@ All notable changes to this project will be documented in this file.
   with text in a foreground dialog now clears that text; pressing it again
   keeps the existing response-stop or exit behavior.
 
+### Desktop
+
+#### Bug Fixes
+
+- **Text and password prompts use the app's accessible dialog system** — input
+  requests now retain focus and queue cleanly instead of replacing an existing
+  prompt.
+
 ## [0.39.5] - 2026-07-15
 
 ### Shared (all surfaces)

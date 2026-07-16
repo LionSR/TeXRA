@@ -464,6 +464,37 @@ wa-input.desktop-command-palette-input::part(base) {
   border-radius: 0;
 }
 
+/* =====================================================================
+   Text and password prompts
+   --------------------------------------------------------------------- */
+
+wa-dialog.desktop-prompt-overlay {
+  --width: min(520px, calc(100vw - var(--wa-space-m) * 2));
+}
+
+wa-dialog.desktop-prompt-overlay::part(dialog) {
+  max-height: min(420px, calc(100vh - var(--wa-space-l) * 2));
+}
+
+wa-dialog.desktop-prompt-overlay::part(body) {
+  padding: var(--wa-space-l);
+}
+
+.desktop-prompt-form {
+  display: grid;
+  gap: var(--wa-space-m);
+}
+
+.desktop-prompt-input {
+  width: 100%;
+}
+
+.desktop-prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--wa-space-xs);
+}
+
 .desktop-command-palette-list {
   max-height: min(420px, 58vh);
   overflow: auto;

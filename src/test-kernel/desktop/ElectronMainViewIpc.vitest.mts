@@ -37,6 +37,8 @@ interface MainViewIpcModule {
       webContents: {
         isDestroyed(): boolean;
         send(channel: string, message: unknown): void;
+        on(event: string, listener: (...args: never[]) => void): void;
+        off(event: string, listener: (...args: never[]) => void): void;
       };
     },
     options: {
@@ -45,6 +47,11 @@ interface MainViewIpcModule {
       fileSelection: { handleMessage(message: { command: string }): boolean };
       settings: { handleMessage(message: { command: string }): boolean };
       progress: { handleMessage(message: { command: string }): boolean };
+      prompt: {
+        handleMessage(message: { command: string }): boolean;
+        cancelPending(): void;
+        dispose(): void;
+      };
       onboarding: { handleMessage(message: { command: string }): boolean };
       shellActions: TestDesktopShellActions;
       modelListRefresh?: PromiseLike<void>;
@@ -159,6 +166,8 @@ function createWindowMock(
     send: vi.fn((channel: string, message: unknown) =>
       sends.push({ channel, message }),
     ),
+    on: vi.fn(),
+    off: vi.fn(),
   };
   const window = {
     isDestroyed: () => false,
@@ -196,6 +205,11 @@ function createMainViewCommandCapabilities() {
     fileSelection: createUnhandledCapability(),
     settings: createUnhandledCapability(),
     progress: createUnhandledCapability(),
+    prompt: {
+      ...createUnhandledCapability(),
+      cancelPending: vi.fn(),
+      dispose: vi.fn(),
+    },
     onboarding: createUnhandledCapability(),
     logs: {
       readLog: () => ({ path: undefined, text: '', truncated: false }),
@@ -457,11 +471,36 @@ describe('desktop main-view IPC', () => {
       message: { command: 'customPush' },
     });
 
+    const rendererGoneListener = webContents.on.mock.calls.find(
+      ([event]) => event === 'render-process-gone',
+    )?.[1] as (() => void) | undefined;
+    const navigationListener = webContents.on.mock.calls.find(
+      ([event]) => event === 'did-start-navigation',
+    )?.[1] as
+      | ((event: { isMainFrame: boolean; isSameDocument: boolean }) => void)
+      | undefined;
+    navigationListener?.({ isMainFrame: false, isSameDocument: false });
+    navigationListener?.({ isMainFrame: true, isSameDocument: true });
+    expect(capabilities.prompt.cancelPending).not.toHaveBeenCalled();
+    navigationListener?.({ isMainFrame: true, isSameDocument: false });
+    rendererGoneListener?.();
+    expect(capabilities.prompt.cancelPending).toHaveBeenCalledTimes(2);
+
     ipc.dispose();
     expect(nativeTheme.off).toHaveBeenCalledWith('updated', themeListener);
     expect(ipcMain.off).toHaveBeenCalledTimes(1);
+    expect(capabilities.prompt.dispose).toHaveBeenCalledOnce();
+    expect(webContents.off).toHaveBeenCalledWith(
+      'render-process-gone',
+      expect.any(Function),
+    );
+    expect(webContents.off).toHaveBeenCalledWith(
+      'did-start-navigation',
+      expect.any(Function),
+    );
     closedListeners.forEach((listener) => listener());
     expect(ipcMain.off).toHaveBeenCalledTimes(1);
+    expect(capabilities.prompt.dispose).toHaveBeenCalledOnce();
   });
 
   it('uses desktop auth status when posting main-view startup login state', async () => {

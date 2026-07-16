@@ -15,7 +15,7 @@ function createDialogCloseButton(
   const close = document.createElement('wa-button');
   close.classList.add(className);
   close.setAttribute('appearance', 'plain');
-  close.setAttribute('size', 'small');
+  close.setAttribute('size', 's');
   close.setAttribute('aria-label', label);
   close.setAttribute('title', label);
   render(waIcon('xmark'), close);
@@ -44,6 +44,8 @@ export interface OverlayDialogOptions {
   content: HTMLElement;
   /** When set, wraps `content` in a titled `<section>` header shell. */
   title?: string;
+  /** Use Web Awesome's accessible header and built-in close control. */
+  nativeHeader?: boolean;
   /** Extra attributes to set on the dialog (e.g. `data-route-button`). */
   attributes?: Record<string, string>;
 }
@@ -62,7 +64,8 @@ export function createOverlayDialog(
   const { prefix } = options;
   const dialog = document.createElement('wa-dialog') as WaDialog;
   dialog.classList.add(`${prefix}-overlay`);
-  dialog.withoutHeader = true;
+  dialog.withoutHeader = options.nativeHeader !== true;
+  dialog.label = options.title ?? options.ariaLabel;
   dialog.lightDismiss = false;
   dialog.setAttribute('aria-label', options.ariaLabel);
   for (const [name, value] of Object.entries(options.attributes ?? {})) {
@@ -71,7 +74,7 @@ export function createOverlayDialog(
 
   let titleEl: HTMLElement | undefined;
   let subtitleEl: HTMLElement | undefined;
-  if (options.title == null) {
+  if (options.title == null || options.nativeHeader) {
     dialog.append(options.content);
   } else {
     const body = document.createElement('section');
@@ -88,11 +91,13 @@ export function createOverlayDialog(
     dialog.append(body);
   }
 
-  dialog.append(
-    createDialogCloseButton(`${prefix}-close`, options.closeLabel, () => {
-      dialog.open = false;
-    }),
-  );
+  if (!options.nativeHeader) {
+    dialog.append(
+      createDialogCloseButton(`${prefix}-close`, options.closeLabel, () => {
+        dialog.open = false;
+      }),
+    );
+  }
   options.appRoot.append(dialog);
   return { dialog, titleEl, subtitleEl };
 }
