@@ -20,10 +20,10 @@ import { fillRows } from '../render/terminalText';
 import { KeyHints } from '../ui/KeyHints';
 import { useScrollableOffset } from '../state/useScrollableOffset';
 
-export type ModalTextDisplayLine = ScrollableDisplayLine<'text'>;
+type ModalTextDisplayLine = ScrollableDisplayLine<'text'>;
 
 const DEFAULT_MODAL_TEXT_ROWS = 12;
-export const COMPACT_MODAL_TEXT_ROWS = 3;
+const COMPACT_MODAL_TEXT_ROWS = 3;
 const SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 7;
 const COMPACT_FIXED_ROWS_EXCLUDING_TITLE = 5;
 
@@ -127,7 +127,7 @@ export function boundedModalTextLines({
   });
 }
 
-export interface ScrollableModalTextProps {
+interface ScrollableModalTextProps {
   readonly continuationPrefix?: string;
   readonly firstLinePrefix?: string;
   /** Qualifies single-row overflow markers (e.g. `prompt rows`). */
@@ -176,6 +176,7 @@ export function ScrollableModalText(
     scrollOffset,
     width,
   });
+  const contentWidth = clampModalWidth(width);
 
   return (
     <>
@@ -189,7 +190,7 @@ export function ScrollableModalText(
       >
         {displayLines.map((line, index) => (
           <Text key={index} dimColor={line.kind === 'overflow'}>
-            {fillRows(line.text, clampModalWidth(width))}
+            {fillRows(line.text, contentWidth)}
           </Text>
         ))}
       </Box>

@@ -6,7 +6,11 @@ import {
   modalTextDisplayLines,
   scrollableModalTextRowsBudget,
 } from '@cli/chat/tui/modals/ScrollableModalText';
-import { AgentCategory, agentProposalCategoryLabel } from '@shared/schemas';
+import {
+  AgentCategory,
+  agentProposalCategoryLabel,
+  type AgentProposalPermission,
+} from '@shared/schemas';
 
 const LONG_AGENT_PROMPT = [
   'Review the mathematical proof in triangular_square_mod5.tex for correctness, completeness, and rigor.',
@@ -35,7 +39,7 @@ describe('CLI agent proposal approval layout', () => {
         agentCategory: AgentCategory.ToolUse,
         instruction: LONG_AGENT_PROMPT,
         model: 'deepseekT',
-      } as unknown as import('@shared/schemas').AgentProposalPermission,
+      } as unknown as AgentProposalPermission,
       width: 76,
     });
     const budget = scrollableModalTextRowsBudget({
