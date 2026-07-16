@@ -209,7 +209,7 @@ describe('CLI child execution controls', () => {
         streams,
         zeroBasedIndex: 0,
       }),
-    ).toBe('child-c');
+    ).toBe('child-b');
     expect(
       numericFocusTargetForActiveStream({
         activeStreamId: 'root',
@@ -218,7 +218,7 @@ describe('CLI child execution controls', () => {
         streams,
         zeroBasedIndex: 1,
       }),
-    ).toBe('child-b');
+    ).toBe('child-c');
     expect(
       numericFocusTargetForActiveStream({
         activeStreamId: 'root',
@@ -270,7 +270,7 @@ describe('CLI child execution controls', () => {
         streams,
         zeroBasedIndex: 0,
       }),
-    ).toBe('child-b');
+    ).toBe('child-a');
     expect(
       numericFocusTargetForActiveStream({
         activeStreamId: 'child-a',
@@ -279,7 +279,7 @@ describe('CLI child execution controls', () => {
         streams,
         zeroBasedIndex: 1,
       }),
-    ).toBe('child-a');
+    ).toBe('child-b');
   });
 
   it('builds subagent and process picker items with stable labels and tails', () => {
