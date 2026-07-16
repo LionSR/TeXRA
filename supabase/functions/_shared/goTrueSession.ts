@@ -39,3 +39,27 @@ export async function mintGoTrueSession(
 
   return data.session;
 }
+
+/**
+ * Session payload shared by GoTrue-session-minting auth endpoints
+ * (auth-github /exchange, /refresh and auth-device /token). Returns a plain
+ * object type (not a named interface) so it stays structurally assignable to
+ * the `Record<string, unknown>` body param of `versionedJsonResponse`.
+ */
+export function sessionResponseBody(session: Session) {
+  return {
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+    expires_at: session.expires_at,
+    expires_in: session.expires_in,
+    token_type: session.token_type,
+    user: {
+      id: session.user.id,
+      email: session.user.email,
+      user_metadata: {
+        avatar_url: session.user.user_metadata?.avatar_url,
+        user_name: session.user.user_metadata?.user_name,
+      },
+    },
+  };
+}

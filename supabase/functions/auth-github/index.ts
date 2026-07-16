@@ -22,17 +22,17 @@
  */
 
 import { Hono, type Context as HonoContext } from '@hono/hono';
-import {
-  createClient,
-  type Session,
-  type SupabaseClient,
-} from '@supabase/supabase-js';
+import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { handleCors } from '../_shared/cors.ts';
+import { createEdgeClient } from '../_shared/edgeClients.ts';
 import {
   checkEmailDomain,
   checkGitHubAccountAge,
 } from '../_shared/emailPolicy.ts';
-import { mintGoTrueSession } from '../_shared/goTrueSession.ts';
+import {
+  mintGoTrueSession,
+  sessionResponseBody,
+} from '../_shared/goTrueSession.ts';
 import { versionedJsonResponse } from '../_shared/responses.ts';
 
 // =============================================================================
@@ -49,19 +49,8 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
 
-const adminSupabase =
-  supabaseUrl && supabaseServiceKey
-    ? createClient<any>(supabaseUrl, supabaseServiceKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-      })
-    : null;
-
-const anonSupabase =
-  supabaseUrl && supabaseAnonKey
-    ? createClient<any>(supabaseUrl, supabaseAnonKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-      })
-    : null;
+const adminSupabase = createEdgeClient(supabaseUrl, supabaseServiceKey);
+const anonSupabase = createEdgeClient(supabaseUrl, supabaseAnonKey);
 
 // =============================================================================
 // Types
@@ -131,21 +120,7 @@ function sessionResponse(c: Context, session: Session) {
   return versionedJsonResponse(
     c.req.raw,
     VERSION,
-    {
-      access_token: session.access_token,
-      refresh_token: session.refresh_token,
-      expires_at: session.expires_at,
-      expires_in: session.expires_in,
-      token_type: session.token_type,
-      user: {
-        id: session.user.id,
-        email: session.user.email,
-        user_metadata: {
-          avatar_url: session.user.user_metadata?.avatar_url,
-          user_name: session.user.user_metadata?.user_name,
-        },
-      },
-    },
+    sessionResponseBody(session),
     200,
   );
 }
