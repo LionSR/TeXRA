@@ -46,7 +46,6 @@ export {
   listLiveExecutionIds,
   setHeartbeatOwnerHost,
   touchExecutionHeartbeat,
-  type HeartbeatOwnerHost,
 } from './executionLiveness';
 export {
   RESUMABILITY_CAUSE,
