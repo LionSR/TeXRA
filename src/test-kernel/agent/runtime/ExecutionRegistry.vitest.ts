@@ -6,12 +6,14 @@ import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { getExecutionStore } from '@agent/storage';
 import type { AgentTrace } from '@agent/trace';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AgentExecutionHandle,
   ExecutionRegistry,
   ProcessExecutionHandle,
   type LiveToolUseFlowContext,
 } from '@agent/runtime/executionRegistry';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { ProcessOutputPoller } from '@agent/runtime/ProcessOutputPoller';
 import {
   SessionEventHub,
@@ -69,26 +71,47 @@ vi.mock('@agent/trace', async (importOriginal) => {
 
 setupPlatform({ workspacePath: '/workspace' });
 
+/** Builds an `AgentExecutionHandle` for a toolUse test-subagent, the shape most tests need. */
+function createHandle(
+  executionId: string,
+  parentStreamId: StreamTabId,
+  childStreamId: StreamTabId,
+  runtimeHost: AgentRuntimeHost,
+  overrides: {
+    agentName?: string;
+    category?: AgentCategory;
+    trace?: AgentTrace;
+  } = {},
+): AgentExecutionHandle {
+  return new AgentExecutionHandle(
+    executionId,
+    parentStreamId,
+    childStreamId,
+    overrides.agentName ?? 'test-subagent',
+    overrides.category ?? AgentCategory.ToolUse,
+    runtimeHost,
+    overrides.trace,
+  );
+}
+
 describe('executionRegistry', () => {
   it('observes the current handle, replacements, and removal in order', () => {
     const registry = new ExecutionRegistry();
     const executionId = 'exec-observe-handle';
     const streamId = 'stream-observe-handle' as StreamTabId;
-    const first = new AgentExecutionHandle(
+    const first = createHandle(
       executionId,
       streamId,
       streamId,
-      'first',
-      'workflow',
       createRecordingHost().host,
+      { agentName: 'first', category: AgentCategory.Workflow },
     );
-    const second = new AgentExecutionHandle(
+    const second = createHandle(
       executionId,
       streamId,
       streamId,
-      'second',
-      'workflow',
       createRecordingHost().host,
+      { agentName: 'second', category: AgentCategory.Workflow },
     );
     const registrations: unknown[] = [];
     const detachRegistrations = registry.addRegistrationListener(
@@ -163,13 +186,12 @@ describe('executionRegistry', () => {
     try {
       // Background bash: an AgentExecutionHandle whose attached interrupt
       // handler owns a live OS process (mirrors BashBackgroundSession).
-      const bashHandle = new AgentExecutionHandle(
+      const bashHandle = createHandle(
         bashExecutionId,
         bashParentStreamId,
         bashChildStreamId,
-        'bash',
-        'toolUse',
         explicit.host,
+        { agentName: 'bash' },
       );
       bashHandle.attachInterruptHandler({
         interrupt: bashInterrupt,
@@ -182,12 +204,10 @@ describe('executionRegistry', () => {
       // Ordinary agent execution (e.g. a native-subagent loop's own
       // loop-level interrupt handler): no ownsBackgroundProcess flag, so
       // shutdown drain must leave it alone for restart recovery.
-      const agentHandle = new AgentExecutionHandle(
+      const agentHandle = createHandle(
         agentExecutionId,
         agentParentStreamId,
         agentChildStreamId,
-        'test-subagent',
-        'toolUse',
         explicit.host,
       );
       agentHandle.attachInterruptHandler({ interrupt: agentInterrupt });
@@ -233,12 +253,10 @@ describe('executionRegistry', () => {
     const interrupt = vi.fn();
 
     try {
-      const handle = new AgentExecutionHandle(
+      const handle = createHandle(
         executionId,
         parentStreamId,
         childStreamId,
-        'test-subagent',
-        'toolUse',
         explicit.host,
       );
       handle.attachInterruptHandler({ interrupt });
@@ -268,12 +286,10 @@ describe('executionRegistry', () => {
     const cleanup = vi.fn();
 
     try {
-      const handle = new AgentExecutionHandle(
+      const handle = createHandle(
         executionId,
         parentStreamId,
         childStreamId,
-        'test-subagent',
-        'toolUse',
         explicit.host,
       );
       registry.track(handle);
@@ -322,14 +338,12 @@ describe('executionRegistry', () => {
     const trace: AgentTrace = { emit: vi.fn() } as unknown as AgentTrace;
 
     try {
-      const handle = new AgentExecutionHandle(
+      const handle = createHandle(
         executionId,
         parentStreamId,
         childStreamId,
-        'test-subagent',
-        'toolUse',
         createRecordingHost().host,
-        trace,
+        { trace },
       );
       registry.track(handle);
       handle.registerWaitingCleanup(() => {});
@@ -389,12 +403,10 @@ describe('executionRegistry', () => {
     channelTraceMocks.warn.mockClear();
 
     try {
-      const handle = new AgentExecutionHandle(
+      const handle = createHandle(
         executionId,
         parentStreamId,
         childStreamId,
-        'test-subagent',
-        'toolUse',
         createRecordingHost().host,
       );
       registry.track(handle);
@@ -453,12 +465,10 @@ describe('executionRegistry', () => {
     channelTraceMocks.warn.mockClear();
 
     try {
-      const handle = new AgentExecutionHandle(
+      const handle = createHandle(
         executionId,
         parentStreamId,
         childStreamId,
-        'test-subagent',
-        'toolUse',
         createRecordingHost().host,
       );
       registry.track(handle);
@@ -505,12 +515,10 @@ describe('executionRegistry', () => {
     const childStreamId = 'child-no-cleanup-kill-test' as StreamTabId;
 
     try {
-      const handle = new AgentExecutionHandle(
+      const handle = createHandle(
         executionId,
         parentStreamId,
         childStreamId,
-        'test-subagent',
-        'toolUse',
         createRecordingHost().host,
       );
       registry.track(handle);
@@ -545,12 +553,10 @@ describe('executionRegistry', () => {
     const cleanup = vi.fn();
 
     try {
-      const handle = new AgentExecutionHandle(
+      const handle = createHandle(
         executionId,
         parentStreamId,
         childStreamId,
-        'test-subagent',
-        'toolUse',
         createRecordingHost().host,
       );
       registry.track(handle);
@@ -601,12 +607,10 @@ describe('executionRegistry', () => {
           cost: 0,
         },
       });
-      const handle = new AgentExecutionHandle(
+      const handle = createHandle(
         executionId,
         parentStreamId,
         childStreamId,
-        'test-subagent',
-        'toolUse',
         createRecordingHost().host,
       );
       registry.track(handle);
@@ -654,22 +658,19 @@ describe('executionRegistry', () => {
     const childInterrupt = vi.fn();
 
     try {
-      const rootHandle = new AgentExecutionHandle(
+      const rootHandle = createHandle(
         'exec-root-stop-policy-test',
         rootStreamId,
         rootStreamId,
-        'test-root',
-        'toolUse',
         explicit.host,
+        { agentName: 'test-root' },
       );
       rootHandle.attachInterruptHandler({ interrupt: rootInterrupt });
       registry.track(rootHandle);
-      const childHandle = new AgentExecutionHandle(
+      const childHandle = createHandle(
         'exec-child-stop-policy-test',
         rootStreamId,
         childStreamId,
-        'test-subagent',
-        'toolUse',
         explicit.host,
       );
       childHandle.attachInterruptHandler({ interrupt: childInterrupt });
@@ -715,23 +716,20 @@ describe('executionRegistry', () => {
     const grandchildInterrupt = vi.fn();
 
     try {
-      const childHandle = new AgentExecutionHandle(
+      const childHandle = createHandle(
         'exec-child-cascade-test',
         rootStreamId,
         childStreamId,
-        'test-subagent',
-        'toolUse',
         explicit.host,
       );
       childHandle.attachInterruptHandler({ interrupt: childInterrupt });
       registry.track(childHandle);
-      const grandchildHandle = new AgentExecutionHandle(
+      const grandchildHandle = createHandle(
         'exec-grandchild-cascade-test',
         childStreamId,
         grandchildStreamId,
-        'test-grandchild',
-        'toolUse',
         explicit.host,
+        { agentName: 'test-grandchild' },
       );
       grandchildHandle.attachInterruptHandler({
         interrupt: grandchildInterrupt,
@@ -765,23 +763,20 @@ describe('executionRegistry', () => {
     const grandchildInterrupt = vi.fn();
 
     try {
-      const childHandle = new AgentExecutionHandle(
+      const childHandle = createHandle(
         'exec-child-detach-kill-test',
         rootStreamId,
         childStreamId,
-        'test-subagent',
-        'toolUse',
         explicit.host,
       );
       childHandle.attachInterruptHandler({ interrupt: childInterrupt });
       registry.track(childHandle);
-      const grandchildHandle = new AgentExecutionHandle(
+      const grandchildHandle = createHandle(
         'exec-grandchild-detach-kill-test',
         childStreamId,
         grandchildStreamId,
-        'test-grandchild',
-        'toolUse',
         explicit.host,
+        { agentName: 'test-grandchild' },
       );
       grandchildHandle.attachInterruptHandler({
         interrupt: grandchildInterrupt,
@@ -831,33 +826,29 @@ describe('executionRegistry', () => {
     const grandchildInterrupt = vi.fn();
 
     try {
-      const rootHandle = new AgentExecutionHandle(
+      const rootHandle = createHandle(
         'exec-root-detach-stop-policy-test',
         rootStreamId,
         rootStreamId,
-        'test-root',
-        'toolUse',
         explicit.host,
+        { agentName: 'test-root' },
       );
       rootHandle.attachInterruptHandler({ interrupt: rootInterrupt });
       registry.track(rootHandle);
-      const childHandle = new AgentExecutionHandle(
+      const childHandle = createHandle(
         'exec-child-detach-stop-policy-test',
         rootStreamId,
         childStreamId,
-        'test-subagent',
-        'toolUse',
         explicit.host,
       );
       childHandle.attachInterruptHandler({ interrupt: childInterrupt });
       registry.track(childHandle);
-      const grandchildHandle = new AgentExecutionHandle(
+      const grandchildHandle = createHandle(
         'exec-grandchild-detach-stop-policy-test',
         childStreamId,
         grandchildStreamId,
-        'test-grandchild',
-        'toolUse',
         explicit.host,
+        { agentName: 'test-grandchild' },
       );
       grandchildHandle.attachInterruptHandler({
         interrupt: grandchildInterrupt,
@@ -967,14 +958,7 @@ describe('executionRegistry', () => {
         STREAM_STATUS.WAITING,
       );
       registry.track(
-        new AgentExecutionHandle(
-          executionId,
-          parentStreamId,
-          childStreamId,
-          'test-subagent',
-          'toolUse',
-          explicit.host,
-        ),
+        createHandle(executionId, parentStreamId, childStreamId, explicit.host),
       );
 
       expect(registry.getActiveChildren(parentStreamId).subagents).toEqual([
@@ -998,14 +982,7 @@ describe('executionRegistry', () => {
 
     try {
       registry.trackAgentExecution(
-        new AgentExecutionHandle(
-          executionId,
-          parentStreamId,
-          childStreamId,
-          'test-subagent',
-          'toolUse',
-          explicit.host,
-        ),
+        createHandle(executionId, parentStreamId, childStreamId, explicit.host),
         { status: STREAM_STATUS.RUNNING },
       );
 
@@ -1028,12 +1005,10 @@ describe('executionRegistry', () => {
     const parentStreamId = 'parent-update-agent-status-test' as StreamTabId;
     const childStreamId = 'child-update-agent-status-test' as StreamTabId;
     const executionId = 'exec-update-agent-status-test';
-    const handle = new AgentExecutionHandle(
+    const handle = createHandle(
       executionId,
       parentStreamId,
       childStreamId,
-      'test-subagent',
-      'toolUse',
       explicit.host,
     );
 
@@ -1105,12 +1080,10 @@ describe('executionRegistry', () => {
     const childStreamId = 'child-handle-runtime-host-test' as StreamTabId;
 
     try {
-      const handle = new AgentExecutionHandle(
+      const handle = createHandle(
         executionId,
         parentStreamId,
         childStreamId,
-        'test-subagent',
-        'toolUse',
         explicit.host,
       );
 
@@ -1157,12 +1130,10 @@ describe('executionRegistry', () => {
     const childStreamId = 'child-session-parent-link-test' as StreamTabId;
 
     try {
-      const handle = new AgentExecutionHandle(
+      const handle = createHandle(
         executionId,
         parentStreamId,
         childStreamId,
-        'test-subagent',
-        'toolUse',
         explicit.host,
       );
 
@@ -1205,13 +1176,12 @@ describe('executionRegistry', () => {
     };
 
     try {
-      const handle = new AgentExecutionHandle(
+      const handle = createHandle(
         executionId,
         streamId,
         streamId,
-        'test-tool-use',
-        'toolUse',
         explicit.host,
+        { agentName: 'test-tool-use' },
       );
 
       handle.attachToolUseFlow(context);
@@ -1267,24 +1237,22 @@ describe('executionRegistry', () => {
         streamId,
       });
 
-      const handle = new AgentExecutionHandle(
+      const handle = createHandle(
         'exec-manual-compaction-test',
         streamId,
         streamId,
-        'test-tool-use',
-        'toolUse',
         explicit.host,
+        { agentName: 'test-tool-use' },
       );
       handle.attachToolUseFlow(context);
       registry.track(handle);
 
-      const unsupportedHandle = new AgentExecutionHandle(
+      const unsupportedHandle = createHandle(
         'exec-manual-compaction-unsupported-test',
         unsupportedStreamId,
         unsupportedStreamId,
-        'test-tool-use',
-        'toolUse',
         explicit.host,
+        { agentName: 'test-tool-use' },
       );
       unsupportedHandle.attachToolUseFlow(unsupportedContext);
       registry.track(unsupportedHandle);
@@ -1333,13 +1301,12 @@ describe('executionRegistry', () => {
     };
 
     try {
-      const activeHandle = new AgentExecutionHandle(
+      const activeHandle = createHandle(
         'exec-follow-up-active-test',
         activeStreamId,
         activeStreamId,
-        'test-tool-use',
-        'toolUse',
         explicit.host,
+        { agentName: 'test-tool-use' },
       );
       activeHandle.attachToolUseFlow(context);
       registry.track(activeHandle);
@@ -1390,12 +1357,10 @@ describe('executionRegistry', () => {
         STREAM_PHASE.CANCELLED,
       );
       registry.track(
-        new AgentExecutionHandle(
+        createHandle(
           'exec-follow-up-child-test',
           parentStreamId,
           childStreamId,
-          'test-subagent',
-          'toolUse',
           explicit.host,
         ),
       );
@@ -1418,12 +1383,10 @@ describe('executionRegistry', () => {
     const childStreamId = 'child-detach-runtime-host-test' as StreamTabId;
 
     try {
-      const handle = new AgentExecutionHandle(
+      const handle = createHandle(
         executionId,
         parentStreamId,
         childStreamId,
-        'test-subagent',
-        'toolUse',
         explicit.host,
       );
 
@@ -1464,12 +1427,10 @@ describe('executionRegistry', () => {
       'child-detach-session-parent-link-test' as StreamTabId;
 
     try {
-      const handle = new AgentExecutionHandle(
+      const handle = createHandle(
         executionId,
         parentStreamId,
         childStreamId,
-        'test-subagent',
-        'toolUse',
         explicit.host,
       );
 
@@ -1501,12 +1462,10 @@ describe('executionRegistry', () => {
     const parentStreamId = 'parent-dispose-runtime-host-test' as StreamTabId;
     const childStreamId = 'child-dispose-runtime-host-test' as StreamTabId;
 
-    const handle = new AgentExecutionHandle(
+    const handle = createHandle(
       executionId,
       parentStreamId,
       childStreamId,
-      'test-subagent',
-      'toolUse',
       explicit.host,
     );
 

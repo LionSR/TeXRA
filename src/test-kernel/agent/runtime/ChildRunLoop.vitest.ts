@@ -48,6 +48,7 @@ import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
 import {
   STREAM_PHASE,
   type ExecutionId,
+  type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
 
@@ -62,6 +63,7 @@ function trackChildHandle(
   executionId: ExecutionId,
   parentStreamId: StreamTabId,
   childStreamId: StreamTabId,
+  status: StreamPhase = STREAM_PHASE.RUNNING,
 ): AgentExecutionHandle {
   const handle = new AgentExecutionHandle(
     executionId,
@@ -71,9 +73,7 @@ function trackChildHandle(
     'toolUse',
     { emit: vi.fn() } as never,
   );
-  session.executions.trackAgentExecution(handle, {
-    status: STREAM_PHASE.RUNNING,
-  });
+  session.executions.trackAgentExecution(handle, { status });
   trackedExecutionIds.add(executionId);
   return handle;
 }
@@ -410,17 +410,12 @@ describe('childRunLoop E2E fixtures', () => {
     // Mirrors what a real native turn's runFlowWithLifecycle does: track a
     // fresh handle for this executionId/childStreamId, WAITING, once the
     // turn suspends.
-    const handle = new AgentExecutionHandle(
+    const handle = trackChildHandle(
       executionId,
       parentStreamId,
       childStreamId,
-      'fake',
-      'toolUse',
-      { emit: vi.fn() } as never,
+      STREAM_PHASE.WAITING,
     );
-    session.executions.trackAgentExecution(handle, {
-      status: STREAM_PHASE.WAITING,
-    });
 
     await resolveTurn(1, { kind: 'interim', value: 'first' });
     await vi.waitFor(() =>
@@ -636,17 +631,12 @@ describe('childRunLoop E2E fixtures', () => {
       expect(isChildRunLoopActive(childStreamId)).toBe(true),
     );
 
-    const handle = new AgentExecutionHandle(
+    const handle = trackChildHandle(
       executionId,
       parentStreamId,
       childStreamId,
-      'fake',
-      'toolUse',
-      { emit: vi.fn() } as never,
+      STREAM_PHASE.WAITING,
     );
-    session.executions.trackAgentExecution(handle, {
-      status: STREAM_PHASE.WAITING,
-    });
 
     await resolveTurn(1, { kind: 'error-turn', value: 'oops' });
 

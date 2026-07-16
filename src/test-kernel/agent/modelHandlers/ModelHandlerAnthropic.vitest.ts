@@ -106,6 +106,16 @@ function createAnthropicHandler(
   return new ModelHandlerAnthropic(buildAnthropicConfig(capabilityOverrides));
 }
 
+/** A minimal single-turn "hello" user message, the shape most tests need. */
+function helloMessages(): MessageParam[] {
+  return [
+    {
+      role: 'user',
+      content: [{ type: 'text', text: 'hello', citations: null }],
+    },
+  ];
+}
+
 type TextBlock = Extract<ContentBlock, { type: 'text' }>;
 
 function assertSingleTextBlock(content: ContentBlock[]): TextBlock {
@@ -929,12 +939,7 @@ describe('ModelHandlerAnthropic message guards', () => {
 
     stubHandlerForTest(handler);
 
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: [{ type: 'text', text: 'hello', citations: null }],
-      },
-    ];
+    const messages = helloMessages();
     const { client, messageOptions } =
       createCapturingAnthropicClient('claude-opus-4-6');
 
@@ -978,12 +983,7 @@ describe('ModelHandlerAnthropic message guards', () => {
 
     stubHandlerForTest(handler);
 
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: [{ type: 'text', text: 'hello', citations: null }],
-      },
-    ];
+    const messages = helloMessages();
     const { client, messageOptions } =
       createCapturingAnthropicClient('claude-opus-4-8');
 
@@ -1019,12 +1019,7 @@ describe('ModelHandlerAnthropic message guards', () => {
 
     stubHandlerForTest(handler);
 
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: [{ type: 'text', text: 'hello', citations: null }],
-      },
-    ];
+    const messages = helloMessages();
     const { client, messageOptions } =
       createCapturingAnthropicClient('claude-opus-4-8');
 
@@ -1053,12 +1048,7 @@ describe('ModelHandlerAnthropic message guards', () => {
 
     stubHandlerForTest(handler);
 
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: [{ type: 'text', text: 'hello', citations: null }],
-      },
-    ];
+    const messages = helloMessages();
     const { client, messageOptions } =
       createCapturingAnthropicClient('claude-opus-4-8');
 
@@ -1083,12 +1073,7 @@ describe('ModelHandlerAnthropic message guards', () => {
 
     stubHandlerForTest(handler);
 
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: [{ type: 'text', text: 'hello', citations: null }],
-      },
-    ];
+    const messages = helloMessages();
     const { client, messageOptions } =
       createCapturingAnthropicClient('claude-opus-4-6');
 
@@ -1123,12 +1108,7 @@ describe('ModelHandlerAnthropic message guards', () => {
 
     stubHandlerForTest(handler);
 
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: [{ type: 'text', text: 'hello', citations: null }],
-      },
-    ];
+    const messages = helloMessages();
     const { client, messageOptions } =
       createCapturingAnthropicClient('claude-sonnet-4-5');
 
@@ -1528,12 +1508,7 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
       },
     } as any;
 
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: [{ type: 'text', text: 'hello', citations: null }],
-      },
-    ];
+    const messages = helloMessages();
 
     await assert.rejects(
       handler.createResponse({ client, messages, temperature: 0 }),
@@ -1600,12 +1575,7 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
       },
     } as any;
 
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: [{ type: 'text', text: 'hello', citations: null }],
-      },
-    ];
+    const messages = helloMessages();
 
     await assert.rejects(
       handler.createResponse({ client, messages, temperature: 0 }),
