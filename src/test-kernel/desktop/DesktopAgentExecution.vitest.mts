@@ -180,6 +180,8 @@ type CreateBridgeOptions = {
 
 type ProgressMessage = {
   command?: string;
+  action?: string;
+  kind?: string;
   activeStream?: string;
   stream?: string;
   streamId?: string;
@@ -193,6 +195,13 @@ type ProgressMessage = {
   streams?: Array<{ name: string; creationTimestamp: number }>;
   streamStates?: Record<string, unknown>;
   streamState?: unknown;
+  runUsage?: Record<string, unknown>;
+  outputs?: {
+    files: Record<string, unknown>;
+    missing: Record<string, unknown>;
+    compileFailures: Record<string, unknown>;
+  };
+  activeState?: unknown;
 };
 
 /** Shared fixture for the tool-use "search" agentConfig used across several
@@ -2158,6 +2167,25 @@ describe('DesktopProgressBridge', () => {
     expect(messages[1]).toMatchObject({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
       activeStream: 'first',
+    });
+    expect(messages[2]).toMatchObject({
+      command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+      action: 'render',
+      stream: 'first',
+      kind: AgentCategory.Workflow,
+      runUsage: {},
+      outputs: { files: {}, missing: {}, compileFailures: {} },
+      activeState: {
+        conversationProgress: { toolCallCount: 0 },
+        roundStage: null,
+        badges: {
+          activeSubagents: [],
+          finishedSubagentCount: 0,
+          activeProcesses: [],
+          finishedProcessCount: 0,
+        },
+        parentStreamId: null,
+      },
     });
     expect(messages[3]).toMatchObject({
       command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,

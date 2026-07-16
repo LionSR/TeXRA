@@ -120,6 +120,55 @@ function legacyTrace(
 }
 
 describe('replayTrace legacy-status fallback (issue #7188)', () => {
+  it('replays workflow content without tool-use state', () => {
+    const { ctx, getState } = createContext(createInitialState());
+    const trace = legacyTrace(undefined);
+
+    replayTrace(trace, ctx);
+
+    const replayed = getState().streamStates.get(trace.streamId);
+    expect(replayed).toMatchObject({
+      kind: AgentCategory.Workflow,
+      files: {},
+      missingOutputs: {},
+      compileFailures: {},
+    });
+    expect(replayed).not.toHaveProperty('todos');
+  });
+
+  it('replays tool-use content without workflow output state', () => {
+    const { ctx, getState } = createContext(createInitialState());
+    const workflow = legacyTrace(undefined);
+    const trace: TraceDocument = {
+      ...workflow,
+      config: AgentConfigSchema.parse({
+        agent: 'correct',
+        model: 'gemini35f',
+        agentCategory: AgentCategory.ToolUse,
+      }),
+      snapshot: StreamSnapshotSchema.parse({
+        streamId: workflow.streamId,
+        todos: [
+          {
+            content: 'Replay the plan',
+            status: 'pending',
+            activeForm: 'Replaying the plan',
+          },
+        ],
+      }),
+    };
+
+    replayTrace(trace, ctx);
+
+    const replayed = getState().streamStates.get(trace.streamId);
+    expect(replayed).toMatchObject({
+      kind: AgentCategory.ToolUse,
+      todos: [{ content: 'Replay the plan' }],
+      plan: null,
+    });
+    expect(replayed).not.toHaveProperty('files');
+  });
+
   it('derives failed status from a real exported legacy trace without snapshot.status', async () => {
     const executionId = 'abc124' as ExecutionId;
     const config = AgentConfigSchema.parse({
