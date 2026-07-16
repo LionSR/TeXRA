@@ -13,12 +13,15 @@ export function useScrollableOffset({
   active = true,
   maxScrollOffset,
   pageRows,
+  resetKey,
 }: {
   /** Release the key bindings while another surface owns ↑/↓ (e.g. a
    *  feedback text input); the offset itself is retained. */
   readonly active?: boolean;
   readonly maxScrollOffset: number;
   readonly pageRows: number;
+  /** Snap back to the top whenever this changes (e.g. new content). */
+  readonly resetKey?: unknown;
 }): { scrollOffset: number; scrollable: boolean } {
   const [scrollOffset, setScrollOffset] = useState(0);
   const scrollable = maxScrollOffset > 0;
@@ -30,6 +33,10 @@ export function useScrollableOffset({
   useEffect(() => {
     setScrollOffset((current) => clamp(current, 0, maxScrollOffset));
   }, [maxScrollOffset]);
+
+  useEffect(() => {
+    setScrollOffset(0);
+  }, [resetKey]);
 
   useInput(
     (_input, key) => {
