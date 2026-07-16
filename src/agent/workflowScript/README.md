@@ -119,3 +119,6 @@ return concat(sections, { separator: '\n\n' });
 - The durable progress adapter is implemented in
   `src/tools/delegation/workflowScriptRun.ts`; the future tool must use it so
   phases and script logs appear on the parent run's existing trace tree.
+- Completed journal-call costs can be validated and summed with
+  `sumCompletedWorkflowJournalCost`; the future tool must settle that scalar
+  once through the parent tool-call cost hook.
