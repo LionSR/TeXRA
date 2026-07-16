@@ -83,7 +83,10 @@ import {
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { VscodeFileSystem } from '@frontend/vscode/vscodeFileSystem';
 import { VscodeWorkspace } from '@frontend/vscode/vscodeWorkspace';
-import { VscodeStorage } from '@frontend/vscode/vscodeStorage';
+import {
+  createSharedStorageProvider,
+  migrateLegacyVscodeStorage,
+} from '@frontend/vscode/sharedStorageRoot';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { VscodeConfigProvider } from '@frontend/vscode/vscodeConfig';
 import * as logger from '@logger/logUtils';
@@ -211,13 +214,18 @@ export async function activate(context: vscode.ExtensionContext) {
   });
   lifecycleHost = lifecycle;
   const languageModel = createLanguageModelPort(context);
+  // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
+  // #8622). Legacy `storageUri` data must finish moving before initPlatform()
+  // makes the shared root reachable to readers.
+  const storage = createSharedStorageProvider();
+  await migrateLegacyVscodeStorage(context, storage);
   initPlatform({
     config: new VscodeConfigProvider(),
     globalState: context.globalState,
     workspaceState: workspaceSM,
     fs: new VscodeFileSystem(),
     workspace: new VscodeWorkspace(),
-    storage: new VscodeStorage(context),
+    storage,
     secrets: new VscodeSecrets(context),
     lifecycle,
     agentDirectories,

@@ -8,6 +8,7 @@
  */
 import {
   getExecutionStore,
+  invalidateListingCache,
   isUserVisibleExecution,
   listExecutions,
 } from '@agent/storage';
@@ -18,6 +19,10 @@ import type {
 } from '@shared/schemas/historyViewMessages';
 
 export async function buildHistoryMessage(): Promise<UpdateHistoryMessage> {
+  // The in-process listing cache only sees this host's writes, but the shared
+  // `~/.texra` root is also written by the other hosts (CLI/desktop/extension,
+  // #8622) — rescan on every explicit history refresh so their runs appear.
+  invalidateListingCache();
   const entries = await listExecutions();
   const visibleEntries = entries.filter(isUserVisibleExecution);
   const historyItems = await Promise.all(
