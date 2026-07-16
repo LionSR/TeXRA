@@ -41,7 +41,7 @@ import {
   formatChildRunError,
 } from './deliveryEnvelope';
 
-type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
+export type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
 
 // ============================================================================
 // Formatting helpers

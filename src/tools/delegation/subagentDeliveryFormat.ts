@@ -4,7 +4,6 @@
  * XML formatting is a separate boundary operation over that same result.
  */
 
-import type { ResultMeta } from '@agent/storage';
 import {
   buildAgentFinalResult,
   type AgentFinalResult,
@@ -20,11 +19,11 @@ import {
 import {
   buildSubagentResultMeta,
   formatSubagentDelivery,
+  type SubagentResultMeta,
 } from '@tools/subagentResults';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const LOG_CHANNEL = 'subagentDelivery';
-type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
 
 export interface BuiltSubagentResult {
   readonly result: AgentFinalResult;
