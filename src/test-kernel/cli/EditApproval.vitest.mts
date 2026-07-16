@@ -21,6 +21,19 @@ describe('CLI edit approval layout', () => {
     ).toBe(6);
   });
 
+  it('includes the pulse prefix when a dynamic edit title reaches the width boundary', () => {
+    const title = `Apply edit to ${'x'.repeat(31)}?`;
+    expect(title).toHaveLength(46);
+
+    expect(
+      editApprovalDiffRowsBudget({
+        availableRows: 16,
+        columns: 50,
+        title,
+      }),
+    ).toBe(6);
+  });
+
   it('reserves feedback input rows while collecting a rejection note', () => {
     expect(
       editApprovalDiffRowsBudget({

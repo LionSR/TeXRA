@@ -421,6 +421,24 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('Alt-1..9 focus');
   });
 
+  it('prefixes the running label with the current spin frame', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({ status: STREAM_PHASE.RUNNING, runningFrame: '/' }),
+    );
+
+    expect(display.left.map(statusBarSegmentText)).toContain('/ running');
+  });
+
+  it('omits the spin prefix outside active phases', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({ status: STREAM_PHASE.WAITING, runningFrame: '/' }),
+    );
+
+    expect(
+      display.left.map(statusBarSegmentText).some((text) => text.includes('/')),
+    ).toBe(false);
+  });
+
   it.each(['relay', 'api-key'] as const)(
     'shows the raw registry context window for %s usage',
     (usageRoute) => {
@@ -436,7 +454,6 @@ describe('CLI StatusBar display model', () => {
           },
         }),
       );
-
       expect(display.left.map(statusBarSegmentText)).toContain(
         '187k/1.1M (18%)',
       );
