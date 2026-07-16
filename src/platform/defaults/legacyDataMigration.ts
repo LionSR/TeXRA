@@ -26,6 +26,9 @@ import {
 } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
+// Local imports - storage layout
+import { WORKSPACE_STORAGE_COLLECTIONS_MERGED_PER_CHILD } from '@platform/defaults/workspaceStorage';
+
 // Local imports - utils
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -182,4 +185,16 @@ export async function mergeLegacyStorageBucket(
       );
     }
   }
+}
+
+/** Merge a legacy workspace bucket using the shared on-disk layout policy. */
+export async function mergeLegacyWorkspaceStorageBucket(
+  legacyBucket: string,
+  targetBucket: string,
+  options: Omit<MergeLegacyStorageBucketOptions, 'mergePerChild'>,
+): Promise<void> {
+  await mergeLegacyStorageBucket(legacyBucket, targetBucket, {
+    ...options,
+    mergePerChild: WORKSPACE_STORAGE_COLLECTIONS_MERGED_PER_CHILD,
+  });
 }

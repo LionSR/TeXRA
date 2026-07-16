@@ -3,12 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   mergeLegacyStorageBucket: vi.fn(),
+  mergeLegacyWorkspaceStorageBucket: vi.fn(),
   warn: vi.fn(),
 }));
 
 vi.mock('vscode', () => ({}));
 vi.mock('@platform/defaults/legacyDataMigration', () => ({
   mergeLegacyStorageBucket: mocks.mergeLegacyStorageBucket,
+  mergeLegacyWorkspaceStorageBucket: mocks.mergeLegacyWorkspaceStorageBucket,
 }));
 vi.mock('@logger/logUtils', () => ({
   info: vi.fn(),
@@ -30,6 +32,7 @@ describe('VS Code shared-storage migration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.mergeLegacyStorageBucket.mockResolvedValue(undefined);
+    mocks.mergeLegacyWorkspaceStorageBucket.mockResolvedValue(undefined);
   });
 
   it('still migrates global storage when workspace target resolution fails', async () => {
@@ -71,17 +74,12 @@ describe('VS Code shared-storage migration', () => {
       migrateLegacyVscodeStorage(context, storage),
     ).resolves.toBeUndefined();
 
-    expect(mocks.mergeLegacyStorageBucket).toHaveBeenCalledTimes(1);
-    expect(mocks.mergeLegacyStorageBucket).toHaveBeenCalledWith(
+    expect(mocks.mergeLegacyWorkspaceStorageBucket).toHaveBeenCalledTimes(1);
+    expect(mocks.mergeLegacyWorkspaceStorageBucket).toHaveBeenCalledWith(
       '/legacy/workspace',
       '/shared/workspace',
       expect.objectContaining({
         label: 'vscode-workspace-storage',
-        mergePerChild: expect.arrayContaining([
-          'executions',
-          'memories',
-          'streamLogs',
-        ]),
       }),
     );
     expect(mocks.warn).toHaveBeenCalledWith(

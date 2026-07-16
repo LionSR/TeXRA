@@ -13,37 +13,30 @@
 import * as vscode from 'vscode';
 
 // Local imports - platform
-import { mergeLegacyStorageBucket } from '@platform/defaults/legacyDataMigration';
+import {
+  mergeLegacyStorageBucket,
+  mergeLegacyWorkspaceStorageBucket,
+} from '@platform/defaults/legacyDataMigration';
 import {
   CUSTOM_AGENTS_STORAGE_DIR,
   EXTERNAL_INQUIRY_THREADS_DIR,
 } from '@platform/defaults/globalStorage';
-import {
-  LEGACY_RUNS_STORAGE_DIR,
-  MEMORY_STORAGE_DIR,
-  RUNS_STORAGE_DIR,
-} from '@platform/defaults/workspaceStorage';
-import { STREAM_LOGS_DIR } from '@transcript/StreamLogStore';
-import { STREAM_DATA_DIR } from '@transcript/streamDataPaths';
 import * as logger from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Type imports
+import type { LegacyDataMigrationLogger } from '@platform/defaults/legacyDataMigration';
 import type { StorageProvider } from '@platform/interfaces';
 
-/**
- * Collections merged one child at a time when the shared bucket already holds
- * data written by the CLI or desktop: run/stream directories are keyed by
- * globally unique ids, and memory files merge safely too because children are
- * never overwritten. Everything else moves only if absent, never clobbering.
- */
-const WORKSPACE_MERGE_PER_CHILD = [
-  RUNS_STORAGE_DIR,
-  LEGACY_RUNS_STORAGE_DIR,
-  STREAM_DATA_DIR,
-  STREAM_LOGS_DIR,
-  MEMORY_STORAGE_DIR,
-] as const;
+type BucketMigration = (
+  sourcePath: string,
+  targetPath: string,
+  options: {
+    readonly label: string;
+    readonly logger: LegacyDataMigrationLogger;
+  },
+) => Promise<void>;
+
 const GLOBAL_MERGE_PER_CHILD = [
   CUSTOM_AGENTS_STORAGE_DIR,
   EXTERNAL_INQUIRY_THREADS_DIR,
@@ -67,12 +60,11 @@ export async function migrateLegacyVscodeStorage(
     sourcePath: string | undefined,
     getTargetPath: () => string,
     label: string,
-    mergePerChild: readonly string[],
+    migrate: BucketMigration,
   ): Promise<void> {
     if (!sourcePath) return;
     try {
-      await mergeLegacyStorageBucket(sourcePath, getTargetPath(), {
-        mergePerChild,
+      await migrate(sourcePath, getTargetPath(), {
         label,
         logger: migrationLogger,
       });
@@ -89,12 +81,16 @@ export async function migrateLegacyVscodeStorage(
     context.storageUri?.fsPath,
     () => storage.getStoragePath(),
     'vscode-workspace-storage',
-    WORKSPACE_MERGE_PER_CHILD,
+    mergeLegacyWorkspaceStorageBucket,
   );
   await migrateBucket(
     context.globalStorageUri?.fsPath,
     () => storage.getGlobalStoragePath(),
     'vscode-global-storage',
-    GLOBAL_MERGE_PER_CHILD,
+    (sourcePath, targetPath, options) =>
+      mergeLegacyStorageBucket(sourcePath, targetPath, {
+        ...options,
+        mergePerChild: GLOBAL_MERGE_PER_CHILD,
+      }),
   );
 }

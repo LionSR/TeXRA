@@ -4,18 +4,11 @@ import { join } from 'node:path';
 
 // Local imports - platform
 import {
-  mergeLegacyStorageBucket,
+  mergeLegacyWorkspaceStorageBucket,
   moveEntryIfAbsent,
   readLegacyDirEntries,
 } from '@platform/defaults/legacyDataMigration';
-import {
-  LEGACY_RUNS_STORAGE_DIR,
-  MEMORY_STORAGE_DIR,
-  resolveWorkspaceStoragePath,
-  RUNS_STORAGE_DIR,
-} from '@platform/defaults/workspaceStorage';
-import { STREAM_LOGS_DIR } from '@transcript/StreamLogStore';
-import { STREAM_DATA_DIR } from '@transcript/streamDataPaths';
+import { resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
 
 // Type imports - platform
 import type { LegacyDataMigrationLogger } from '@platform/defaults/legacyDataMigration';
@@ -24,13 +17,6 @@ export type DesktopDataRootMigrationLogger = LegacyDataMigrationLogger;
 
 const GLOBAL_STORAGE_DIR = 'global-storage';
 const WORKSPACE_STORAGE_DIR = 'workspace-storage';
-const WORKSPACE_MERGE_PER_CHILD = [
-  RUNS_STORAGE_DIR,
-  LEGACY_RUNS_STORAGE_DIR,
-  STREAM_DATA_DIR,
-  STREAM_LOGS_DIR,
-  MEMORY_STORAGE_DIR,
-] as const;
 
 function desktopPrefixed(
   logger: DesktopDataRootMigrationLogger,
@@ -101,11 +87,10 @@ export async function migrateLegacyDesktopWorkspaceBucket(
   logger: DesktopDataRootMigrationLogger = console,
 ): Promise<void> {
   if (!legacyWorkspacePath || !workspacePath) return;
-  await mergeLegacyStorageBucket(
+  await mergeLegacyWorkspaceStorageBucket(
     resolveWorkspaceStoragePath(dataRoot, legacyWorkspacePath),
     resolveWorkspaceStoragePath(dataRoot, workspacePath),
     {
-      mergePerChild: WORKSPACE_MERGE_PER_CHILD,
       label: 'desktop-workspace-alias',
       logger: desktopPrefixed(logger),
     },

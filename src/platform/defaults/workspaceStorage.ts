@@ -17,12 +17,23 @@ const STORAGE_LAYOUT = {
   memory: 'memories',
   runs: 'executions',
   legacyRuns: 'taskRuns',
+  streamData: 'streamData',
+  streamLogs: 'streamLogs',
   original: 'original',
 } as const;
 
 export const MEMORY_STORAGE_DIR = STORAGE_LAYOUT.memory;
 export const RUNS_STORAGE_DIR = STORAGE_LAYOUT.runs;
 export const LEGACY_RUNS_STORAGE_DIR = STORAGE_LAYOUT.legacyRuns;
+export const STREAM_DATA_STORAGE_DIR = STORAGE_LAYOUT.streamData;
+export const STREAM_LOGS_STORAGE_DIR = STORAGE_LAYOUT.streamLogs;
+export const WORKSPACE_STORAGE_COLLECTIONS_MERGED_PER_CHILD = [
+  RUNS_STORAGE_DIR,
+  LEGACY_RUNS_STORAGE_DIR,
+  STREAM_DATA_STORAGE_DIR,
+  STREAM_LOGS_STORAGE_DIR,
+  MEMORY_STORAGE_DIR,
+] as const;
 
 type WorkspacePathSource = string | undefined | (() => string | undefined);
 

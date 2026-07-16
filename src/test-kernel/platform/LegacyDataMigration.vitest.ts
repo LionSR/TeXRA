@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 // Local imports - platform
 import {
   mergeLegacyStorageBucket,
+  mergeLegacyWorkspaceStorageBucket,
   moveEntryIfAbsent,
 } from '@platform/defaults/legacyDataMigration';
 
@@ -151,6 +152,45 @@ describe('mergeLegacyStorageBucket (#8622 vscode → ~/.texra migration)', () =>
       readFile(join(legacy, 'memories', 'note.md'), 'utf8'),
     ).resolves.toBe('legacy');
     expect(logger.warnMessages).toHaveLength(1);
+  });
+});
+
+describe('mergeLegacyWorkspaceStorageBucket', () => {
+  it('merges every shared workspace collection per child', async () => {
+    const legacy = await makeTempDir('texra-workspace-legacy-');
+    const target = await makeTempDir('texra-workspace-target-');
+    const logger = fakeLogger();
+    const collections = [
+      'executions',
+      'taskRuns',
+      'streamData',
+      'streamLogs',
+      'memories',
+    ];
+
+    for (const collection of collections) {
+      await mkdir(join(legacy, collection, 'legacy-child'), {
+        recursive: true,
+      });
+      await mkdir(join(target, collection, 'shared-child'), {
+        recursive: true,
+      });
+    }
+
+    await mergeLegacyWorkspaceStorageBucket(legacy, target, {
+      label: 'workspace-test',
+      logger,
+    });
+
+    for (const collection of collections) {
+      await expect(
+        pathExists(join(target, collection, 'legacy-child')),
+      ).resolves.toBe(true);
+      await expect(
+        pathExists(join(target, collection, 'shared-child')),
+      ).resolves.toBe(true);
+    }
+    expect(logger.warnMessages).toEqual([]);
   });
 });
 
