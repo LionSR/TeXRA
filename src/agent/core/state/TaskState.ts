@@ -9,8 +9,6 @@ import { AgentCategory } from '../definition/AgentDataclass';
 import {
   ToolUseAgentConfigSchema,
   WorkflowAgentConfigSchema,
-  type ToolUseAgentConfig,
-  type WorkflowAgentConfig,
 } from '../definition/AgentConfig';
 
 const ActiveFilesSchema = z
@@ -23,30 +21,22 @@ const ActiveFilesSchema = z
     return complete;
   });
 
-export interface WorkflowTaskState {
-  agentConfig: WorkflowAgentConfig;
-  activeFiles: Record<MultipleDocumentFileType, boolean>;
-}
-
-export interface ToolUseTaskState {
-  agentConfig: ToolUseAgentConfig;
-}
-
-export type TaskState = WorkflowTaskState | ToolUseTaskState;
-
 const WorkflowTaskStateSchema = z.object({
   agentConfig: WorkflowAgentConfigSchema,
   activeFiles: ActiveFilesSchema,
-}) satisfies z.ZodType<WorkflowTaskState>;
+});
+export type WorkflowTaskState = z.infer<typeof WorkflowTaskStateSchema>;
 
 const ToolUseTaskStateSchema = z.object({
   agentConfig: ToolUseAgentConfigSchema,
-}) satisfies z.ZodType<ToolUseTaskState>;
+});
+export type ToolUseTaskState = z.infer<typeof ToolUseTaskStateSchema>;
 
 export const TaskStateSchema = z.union([
   WorkflowTaskStateSchema,
   ToolUseTaskStateSchema,
-]) satisfies z.ZodType<TaskState>;
+]);
+export type TaskState = z.infer<typeof TaskStateSchema>;
 
 export function isWorkflowTaskState(
   taskState: TaskState,
