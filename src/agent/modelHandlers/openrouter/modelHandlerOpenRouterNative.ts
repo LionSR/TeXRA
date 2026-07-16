@@ -64,11 +64,7 @@ import {
   toOpenRouterReasoningEffort,
 } from './openRouterStreaming';
 import { ModelHandler } from '../ModelHandler';
-import {
-  CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
-  COMPACTION_SUMMARY_PREFIX,
-  COMPACTION_SYSTEM_PROMPT,
-} from '../contextManagementConstants';
+import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
 import type {
   ChatResult,
   ChatUsage,
@@ -197,22 +193,15 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       tools,
     } = options;
 
-    // Phase 0: COMPACT - Check if conversation should be compacted
-    let updatedMessages: ChatMessages[] | undefined;
-    let messagesToUse = rawMessages;
-
-    if (this.shouldCompactByInputTokens(this.lastKnownInputTokens)) {
-      this.compactionRequested = false;
-      const { compactedMessages, didCompact } = await this.compactConversation(
-        client,
+    // Phase 0: COMPACT - Apply the shared trigger before building the request.
+    const { compactedMessages, didCompact } =
+      await this.maybeCompactByInputTokens(
         rawMessages,
-        signal,
+        this.lastKnownInputTokens,
+        () => this.compactConversation(client, rawMessages, signal),
       );
-      if (didCompact) {
-        messagesToUse = compactedMessages;
-        updatedMessages = compactedMessages;
-      }
-    }
+    const messagesToUse = didCompact ? compactedMessages : rawMessages;
+    const updatedMessages = didCompact ? compactedMessages : undefined;
 
     const useStreaming = this.getStreamingConfig();
 
@@ -344,13 +333,13 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     return this.runClientCompaction(
       messages,
       this.lastKnownInputTokens,
-      async (conversationMessages) => {
+      async (conversationMessages, compactionSystemPrompt) => {
         const summaryRequest: ChatRequest & { stream: false } = {
           model: this.config.openrouterFullName,
           messages: [
             {
               role: 'system',
-              content: COMPACTION_SYSTEM_PROMPT,
+              content: compactionSystemPrompt,
             },
             ...conversationMessages,
           ],
@@ -375,7 +364,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       },
       (summary) => ({
         role: 'user',
-        content: `${COMPACTION_SUMMARY_PREFIX}${summary}`,
+        content: summary,
       }),
     );
   }

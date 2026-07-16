@@ -140,8 +140,12 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
 
   protected override buildCompactionSummaryParams(
     conversationMessages: ChatCompletionMessageParam[],
+    systemPrompt: string,
   ) {
-    const params = super.buildCompactionSummaryParams(conversationMessages);
+    const params = super.buildCompactionSummaryParams(
+      conversationMessages,
+      systemPrompt,
+    );
     const fixedTemperature = FIXED_TEMPERATURE_BY_FULLNAME.get(
       this.config.fullName,
     );
