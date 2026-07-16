@@ -288,13 +288,22 @@ function statusBarSegmentsWidth(segments: readonly StatusBarSegment[]): number {
   );
 }
 
+// Shared by every width-aware layout below: the row width minus the status
+// bar's fixed horizontal padding, or undefined when the width itself is
+// unknown (tests/headless runs).
+function statusBarInnerWidth(width: number | undefined): number | undefined {
+  return width === undefined
+    ? undefined
+    : Math.max(0, width - STATUS_BAR_HORIZONTAL_PADDING);
+}
+
 function fitPendingExitStatusBarLeftSegments(
   segments: readonly StatusBarSegment[],
   width: number | undefined,
 ): readonly StatusBarSegment[] {
-  if (width === undefined) return segments;
+  const innerWidth = statusBarInnerWidth(width);
+  if (innerWidth === undefined) return segments;
 
-  const innerWidth = Math.max(0, width - STATUS_BAR_HORIZONTAL_PADDING);
   const fitted = [...segments];
   while (fitted.length > 2 && statusBarSegmentsWidth(fitted) > innerWidth) {
     fitted.pop();
@@ -320,8 +329,8 @@ function rightStatusBudget(
   segments: readonly StatusBarSegment[],
   width: number | undefined,
 ): number | undefined {
-  if (width === undefined) return undefined;
-  const innerWidth = Math.max(0, width - STATUS_BAR_HORIZONTAL_PADDING);
+  const innerWidth = statusBarInnerWidth(width);
+  if (innerWidth === undefined) return undefined;
   return Math.max(
     0,
     innerWidth -
@@ -334,9 +343,13 @@ function fitStatusBarLeftSegments(
   segments: readonly StatusBarSegment[],
   width: number | undefined,
 ): readonly StatusBarSegment[] {
-  if (width === undefined) return segments;
-  const innerWidth = Math.max(0, width - STATUS_BAR_HORIZONTAL_PADDING);
-  if (statusBarSegmentsWidth(segments) <= innerWidth) return segments;
+  const innerWidth = statusBarInnerWidth(width);
+  if (
+    innerWidth === undefined ||
+    statusBarSegmentsWidth(segments) <= innerWidth
+  ) {
+    return segments;
+  }
 
   const compacted = [...segments];
   const priorities = [
@@ -704,6 +717,43 @@ const BYPASS_BADGES: ReadonlyArray<{
   { field: 'toolEdit', text: 'AUTO-EDIT', badgeColor: COLOR_WARNING },
 ];
 
+// Which text occupies the bindings row is a priority order, not a single
+// condition: an active pending-exit prompt always wins, then the session
+// list, then any other foreground surface, and only then the normal chat
+// shortcuts.
+function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
+  if (input.pendingExitHint && input.pendingExitResumeId) {
+    return `Resume this session with: ${formatResumeCommand(
+      input.commandName,
+      input.pendingExitResumeId,
+      { approvalPolicy: input.approvalPolicy },
+    )}`;
+  }
+
+  const maxColumns = statusBarInnerWidth(input.width);
+  if (input.sessionListFocused) {
+    return sessionListBindingsText(input.ctrlCAction ?? 'exit', maxColumns);
+  }
+  if (input.shortcutsActive === false) {
+    return foregroundBindingsText(
+      input.ctrlCAction ?? 'exit',
+      maxColumns,
+      input.foregroundEscapeAction,
+    );
+  }
+  return statusBarBindingsText(
+    input.taskControlsAvailable ?? true,
+    input.agentSelectionAvailable ?? false,
+    input.subagentControlsAvailable,
+    input.sessionNavigationAvailable,
+    input.shortcutModifierLabel,
+    input.shiftEnterNewline,
+    input.transcriptAvailable,
+    input.ctrlCAction,
+    maxColumns,
+  );
+}
+
 export function buildStatusBarDisplay(
   input: StatusBarDisplayInput,
 ): StatusBarDisplay {
@@ -824,40 +874,6 @@ export function buildStatusBarDisplay(
           rightStatusBudget(fittedLeft, input.width),
         )
       : undefined,
-    bindings:
-      input.pendingExitHint && input.pendingExitResumeId
-        ? `Resume this session with: ${formatResumeCommand(
-            input.commandName,
-            input.pendingExitResumeId,
-            { approvalPolicy: input.approvalPolicy },
-          )}`
-        : input.sessionListFocused
-          ? sessionListBindingsText(
-              input.ctrlCAction ?? 'exit',
-              input.width === undefined
-                ? undefined
-                : Math.max(0, input.width - STATUS_BAR_HORIZONTAL_PADDING),
-            )
-          : input.shortcutsActive === false
-            ? foregroundBindingsText(
-                input.ctrlCAction ?? 'exit',
-                input.width === undefined
-                  ? undefined
-                  : Math.max(0, input.width - STATUS_BAR_HORIZONTAL_PADDING),
-                input.foregroundEscapeAction,
-              )
-            : statusBarBindingsText(
-                input.taskControlsAvailable ?? true,
-                input.agentSelectionAvailable ?? false,
-                input.subagentControlsAvailable,
-                input.sessionNavigationAvailable,
-                input.shortcutModifierLabel,
-                input.shiftEnterNewline,
-                input.transcriptAvailable,
-                input.ctrlCAction,
-                input.width === undefined
-                  ? undefined
-                  : Math.max(0, input.width - STATUS_BAR_HORIZONTAL_PADDING),
-              ),
+    bindings: resolveStatusBarBindings(input),
   };
 }

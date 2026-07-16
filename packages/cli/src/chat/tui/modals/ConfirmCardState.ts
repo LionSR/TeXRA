@@ -1,7 +1,8 @@
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 
-import { KEY_HINT_SEPARATOR } from '../ui/KeyHints';
+import { KEY_HINT_SEPARATOR, keyHintText } from '../ui/KeyHints';
 import { isEscapeInput } from '../input/inputKeys';
+import { textDisplayWidth } from '../render/terminalText';
 
 export type ConfirmCardKeyAction =
   'approve' | 'reject' | 'approveAlways' | 'feedback' | 'ignore';
@@ -89,16 +90,10 @@ export function confirmCardFeedbackHints(): ConfirmCardHintAction[] {
   ];
 }
 
+// Reuses the canonical `keyHintText` projection (see its doc comment) so this
+// measures exactly what KeyHints renders, instead of re-deriving the format.
 function hintColumns(hints: readonly ConfirmCardHintAction[]): number {
-  return hints.reduce(
-    (width, hint, index) =>
-      width +
-      (index === 0 ? 0 : KEY_HINT_SEPARATOR.length) +
-      hint.key.length +
-      1 +
-      hint.action.length,
-    0,
-  );
+  return textDisplayWidth(hints.map(keyHintText).join(KEY_HINT_SEPARATOR));
 }
 
 function hintsFit(
