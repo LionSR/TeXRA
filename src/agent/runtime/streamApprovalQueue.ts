@@ -279,9 +279,10 @@ export function createSessionApprovals(): SessionApprovals {
     },
     forgetStreamAncestry(streamId) {
       parentOf.delete(streamId);
-      for (const [child, parent] of parentOf) {
-        if (parent === streamId) parentOf.delete(child);
-      }
+      const orphaned = [...parentOf]
+        .filter(([, parent]) => parent === streamId)
+        .map(([child]) => child);
+      for (const child of orphaned) parentOf.delete(child);
     },
     rejectAndClearAll() {
       toolEdit.rejectAllPending();
