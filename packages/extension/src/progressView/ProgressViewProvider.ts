@@ -118,7 +118,7 @@ export class ProgressViewProvider
             retry: {
               show: (p) =>
                 u.showPermission({ kind: PERMISSION_KIND.RETRY, data: p }),
-              resolve: (id) => u.resolvePermission(PERMISSION_KIND.RETRY, id),
+              dismiss: (id) => u.resolvePermission(PERMISSION_KIND.RETRY, id),
             },
             agentProposal: {
               show: (p) => {
@@ -129,7 +129,7 @@ export class ProgressViewProvider
                 });
                 void this.sendProposalModelOptions(p);
               },
-              resolve: (id) =>
+              dismiss: (id) =>
                 u.resolvePermission(PERMISSION_KIND.PROPOSAL, id),
             },
           },
