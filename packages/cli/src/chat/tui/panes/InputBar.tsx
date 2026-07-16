@@ -22,7 +22,7 @@ import {
 import { ReverseSearch } from '../input/ReverseSearch';
 import { isCtrlInput } from '../input/inputKeys';
 import { openRegisteredCliSlashForm } from '../commands/slashForms';
-import { SlashPalette } from '../commands/SlashPalette';
+import { SlashPalette, slashPaletteOwnsArrows } from '../commands/SlashPalette';
 import { COLOR_BORDER, COLOR_HINT } from '../ui/colors';
 import { POINTER } from '../ui/glyphs';
 import {
@@ -331,15 +331,20 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   const parsed = parseSlashInput(value);
   const isTypingSlashCommandName =
     parsed !== undefined && !/\s/.test(value.slice(1));
-  const hasPaletteMatches =
-    parsed !== undefined && matchSlashCommands(parsed.name).length > 0;
+  const paletteMatchCount =
+    parsed !== undefined ? matchSlashCommands(parsed.name).length : 0;
   const showPalette =
     parsed !== undefined &&
     isTypingSlashCommandName &&
-    hasPaletteMatches &&
+    paletteMatchCount > 0 &&
     !reverseSearchOpen &&
     !disabled &&
     keyboardActive;
+  // The palette owns ↑/↓ only while it presents a real choice (2+ matches);
+  // with a single match — e.g. a fully typed command name — the arrows keep
+  // recalling input history.
+  const paletteOwnsArrows =
+    showPalette && slashPaletteOwnsArrows(paletteMatchCount);
 
   useEffect(() => {
     // Auto-close the reverse-search overlay when the input is disabled —
@@ -404,10 +409,14 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
             value={value}
             focus={keyboardActive && !disabled && !reverseSearchOpen}
             onChange={setValue}
-            // While the slash palette is open it owns ↑/↓ for row selection;
-            // history recall would clobber the draft mid-navigation.
-            onHistoryUp={showPalette ? undefined : () => browseHistory(-1)}
-            onHistoryDown={showPalette ? undefined : () => browseHistory(1)}
+            // While the palette shows multiple rows it owns ↑/↓ for row
+            // selection; history recall would clobber the draft mid-navigation.
+            onHistoryUp={
+              paletteOwnsArrows ? undefined : () => browseHistory(-1)
+            }
+            onHistoryDown={
+              paletteOwnsArrows ? undefined : () => browseHistory(1)
+            }
             imagePasteQueue={imagePasteQueue}
             readLatestValue={() => draftValueRef.current}
             prepareInputChunk={
