@@ -150,6 +150,20 @@ describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
       assert.equal(handler.supportsReasoningLevelOverride, expected);
     },
   );
+
+  it('preserves xhigh for xAI models routed through OpenRouter', () => {
+    class TestableHandler extends ModelHandlerOpenRouterNative {
+      validateReasoningEffortForTest(effort: string): string {
+        return this.validateReasoningEffort(effort);
+      }
+    }
+
+    const handler = new TestableHandler(
+      buildConfig({ provider: ModelProvider.XAI }),
+    );
+
+    assert.equal(handler.validateReasoningEffortForTest('xhigh'), 'xhigh');
+  });
 });
 
 describe('ModelHandlerOpenRouterNative retry ownership', () => {
