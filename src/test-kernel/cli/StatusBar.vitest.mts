@@ -541,6 +541,25 @@ describe('CLI StatusBar display model', () => {
     expect(display.left.map(statusBarSegmentText)).toContain('187k/400k (47%)');
   });
 
+  it('does not substitute a raw context window for unknown subscription models', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_PHASE.RUNNING,
+        model: 'unknown-subscription-model',
+        usage: {
+          inputTokens: 187_000,
+          outputTokens: 4_000,
+          cost: 0,
+          usageRoute: 'chatgpt-subscription',
+        },
+      }),
+    );
+
+    const labels = display.left.map(statusBarSegmentText);
+    expect(labels).toContain('187k');
+    expect(labels.some((label) => label.startsWith('187k/'))).toBe(false);
+  });
+
   it('shows the route that produced usage instead of a stale access preference', () => {
     const accessLabel = (
       usageRoute: 'chatgpt-subscription' | 'relay' | 'api-key',
