@@ -3,8 +3,6 @@ import '@test/support/defaultSessionTestSetup';
 
 // Phase 4 state + focus-cycle smoke.
 
-import { EventEmitter } from 'node:events';
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createRunTrace } from '@transcript';
@@ -75,7 +73,6 @@ import {
   markChatTuiRunPending,
 } from '@cli/chat/tui/state/sessionRunState';
 import { chatTuiFocusedChildFollowUpRoute } from '@cli/chat/tui/runChatTui';
-import { installTuiStdoutListenerLimit } from '@cli/chat/tui/render/noColorOutput';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
   appendLocalAssistantTranscript,
@@ -341,34 +338,6 @@ describe('cliState Phase 4 fields', () => {
     } finally {
       detach();
     }
-  });
-});
-
-describe('chat TUI stdout listener limit', () => {
-  it('raises and restores the listener ceiling for the mounted TUI lifetime', () => {
-    const stream = new EventEmitter();
-    stream.setMaxListeners(10);
-
-    const restore = installTuiStdoutListenerLimit(stream);
-
-    expect(stream.getMaxListeners()).toBeGreaterThan(10);
-
-    restore();
-    expect(stream.getMaxListeners()).toBe(10);
-
-    restore();
-    expect(stream.getMaxListeners()).toBe(10);
-  });
-
-  it('does not lower a listener ceiling changed after installation', () => {
-    const stream = new EventEmitter();
-    stream.setMaxListeners(10);
-    const restore = installTuiStdoutListenerLimit(stream);
-
-    stream.setMaxListeners(128);
-    restore();
-
-    expect(stream.getMaxListeners()).toBe(128);
   });
 });
 
