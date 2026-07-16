@@ -76,8 +76,6 @@ vi.mock('@agent/storage', () => ({
   finalizeExecution: storageMocks.finalizeExecution,
   releaseOwnedExecutionLeaseBestEffort: vi.fn(async () => {}),
   synchronizeAgentResultOutcome: storageMocks.synchronizeAgentResultOutcome,
-  HEARTBEAT_INTERVAL_MS: 10_000,
-  touchExecutionHeartbeat: () => Promise.resolve(),
 }));
 
 vi.mock('@agent/trace', async (importOriginal) => {
