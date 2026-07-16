@@ -3,6 +3,7 @@ import { basename } from 'node:path';
 // Third-party imports
 import {
   Anthropic,
+  APIError as AnthropicAPIError,
   APIUserAbortError as AnthropicUserAbortError,
 } from '@anthropic-ai/sdk';
 
@@ -34,7 +35,9 @@ import type {
   TokenCountOptions,
 } from '@agent/types/ModelHandlerContracts';
 import {
+  attachStreamDiagnostics,
   handleStreamingFailure,
+  isUserAbort,
   trackStreamConnect,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
@@ -42,7 +45,11 @@ import {
 import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
-import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
+import type {
+  FileLocation,
+  MediaAttachmentKind,
+  StreamDiagnostics,
+} from '@shared/schemas';
 import type {
   ToolFileAttachment,
   ToolResult,
@@ -104,7 +111,6 @@ import {
   buildAnthropicAssistantContent,
   extractAnthropicServerToolData,
 } from './anthropicServerTools';
-import { decorateAnthropicStreamError } from './anthropicStreamError';
 
 // Type imports
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
@@ -132,6 +138,8 @@ import type {
   ThinkingBlockParam,
   RedactedThinkingBlockParam,
 } from '@anthropic-ai/sdk/resources/messages';
+
+type ErrorWithRequestId = Error & { request_id?: string };
 
 /**
  * Extracts the tail of text content from a (possibly partial) BetaMessage.
@@ -355,6 +363,51 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return tagAnthropicSdkError;
   }
 
+  /** Enriches an Anthropic stream failure without hiding SDK or abort identity. */
+  private decorateStreamError(
+    error: unknown,
+    partialText: string,
+    diagnostics: StreamDiagnostics,
+    requestId?: string,
+  ): unknown {
+    tagAnthropicSdkError(error, this.config.provider);
+
+    const isAbort = isUserAbort(error);
+    const enrichedError =
+      !diagnostics.messageStartReceived &&
+      error instanceof Error &&
+      !(error instanceof AnthropicAPIError) &&
+      !isAbort
+        ? new Error(
+            `Stream closed before message_start after ${diagnostics.elapsedSecs}s ` +
+              `(${diagnostics.eventsProcessed} events). ` +
+              'Likely connection dropped before the API responded.',
+            { cause: error },
+          )
+        : error;
+
+    // detectRequestId() reads request_id from the thrown object.
+    if (requestId && enrichedError instanceof Error) {
+      (enrichedError as ErrorWithRequestId).request_id = requestId;
+    }
+
+    // The retry node owns user-facing failure reporting. Diagnostics stay on
+    // the debug channel so the same failure does not produce a visible row.
+    this.logger.debug(`Stream ${isAbort ? 'aborted' : 'failed'}`, {
+      data: {
+        isUsingRelay: this.shouldUseServerSideKeys(),
+        baseUrl: this.getBaseUrl() ?? 'default',
+        model: this.config.fullName,
+        streamDiagnostics: diagnostics,
+        partialTextLength: partialText.length,
+        error: enrichedError,
+      },
+    });
+
+    attachStreamDiagnostics(enrichedError, diagnostics);
+    return enrichedError;
+  }
+
   /** Executes Anthropic's event-emitter stream and preserves its SDK-specific lifecycle. */
   private async executeStreamingResponse(
     client: Anthropic,
@@ -410,15 +463,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
           extractPartialTextTail(stream.currentMessage, PARTIAL_TEXT_TAIL_MAX),
         retryEligible: (tail) => connect.isConnected() || tail.length > 0,
         decorateError: (error, partialText) =>
-          decorateAnthropicStreamError(error, partialText, {
-            diagnostics: streamHandler.getDiagnostics(),
-            requestId: stream.request_id ?? undefined,
-            provider: this.config.provider,
-            model: this.config.fullName,
-            isUsingRelay: this.shouldUseServerSideKeys(),
-            baseUrl: this.getBaseUrl() ?? 'default',
-            logger: this.logger,
-          }),
+          this.decorateStreamError(
+            error,
+            partialText,
+            streamHandler.getDiagnostics(),
+            stream.request_id ?? undefined,
+          ),
       });
     } finally {
       streamHandler.finalize();
