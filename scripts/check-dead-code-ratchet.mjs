@@ -1,8 +1,18 @@
 #!/usr/bin/env node
-// Ratchets knip's dead-code counts: fails CI only when a PR *increases* the
-// number of unused files/exports/types or duplicate exports past the
-// checked-in baseline (config/ratchets/knip-baseline.json), rather than blocking on the
-// existing debt. Burning the baseline down is a separate, scheduled sweep.
+// Ratchets knip's dead-code findings: fails CI when a PR introduces a newly
+// unused file/export/type/duplicate-export group that isn't already recorded
+// in the checked-in baseline (config/ratchets/knip-baseline.json), rather
+// than blocking on the existing debt. Burning the baseline down is a
+// separate, scheduled sweep.
+//
+// Each finding is identified by (file, category, name) -- deliberately never
+// by line number, so an unrelated edit that shifts lines above a dead export
+// does not spuriously "resolve" it in the baseline. This mirrors the
+// by-identity ratchet pattern used elsewhere (see
+// src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts) rather than
+// this script's previous count-based threshold, which let any new unused
+// export land silently as long as some other unused export was deleted in
+// the same PR.
 
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -21,38 +31,75 @@ const baselinePath = path.join(
   'knip-baseline.json',
 );
 
-const METRICS = /** @type {const} */ ([
-  ['unusedFiles', 'files'],
-  ['unusedExports', 'exports'],
-  ['unusedTypes', 'types'],
-  ['duplicateExports', 'duplicates'],
-]);
+const EMPTY_COUNTS = { files: 0, exports: 0, types: 0, duplicates: 0 };
 
-export function summarizeKnipIssues(issues) {
-  const counts = {
-    unusedFiles: 0,
-    unusedExports: 0,
-    unusedTypes: 0,
-    duplicateExports: 0,
-  };
+// Flattens knip's per-issue-file shape (`{ file, files, exports, types,
+// duplicates }`) into one finding per unused symbol, keyed by (file,
+// category, name). A `duplicates` entry is a group of co-exported names that
+// alias the same declaration; the group's own identity is the sorted,
+// comma-joined member names, since knip doesn't give the group itself a name.
+export function extractFindings(issues) {
+  const findings = [];
   for (const issue of issues) {
-    for (const [countKey, issueKey] of METRICS) {
-      counts[countKey] += (issue[issueKey] ?? []).length;
+    for (const entry of issue.files ?? []) {
+      findings.push({ file: issue.file, category: 'files', name: entry.name });
+    }
+    for (const entry of issue.exports ?? []) {
+      findings.push({
+        file: issue.file,
+        category: 'exports',
+        name: entry.name,
+      });
+    }
+    for (const entry of issue.types ?? []) {
+      findings.push({ file: issue.file, category: 'types', name: entry.name });
+    }
+    for (const group of issue.duplicates ?? []) {
+      const name = group
+        .map((entry) => entry.name)
+        .sort()
+        .join(',');
+      findings.push({ file: issue.file, category: 'duplicates', name });
     }
   }
-  return counts;
+  return findings;
 }
 
-export function findRatchetViolations(current, baseline) {
-  const violations = [];
-  for (const [countKey] of METRICS) {
-    const currentCount = current[countKey];
-    const baselineCount = baseline[countKey];
-    if (currentCount > baselineCount) {
-      violations.push({ metric: countKey, currentCount, baselineCount });
-    }
+export function findingKey(finding) {
+  return `${finding.file} ${finding.category} ${finding.name}`;
+}
+
+export function compareFindings(a, b) {
+  return (
+    a.file.localeCompare(b.file) ||
+    a.category.localeCompare(b.category) ||
+    a.name.localeCompare(b.name)
+  );
+}
+
+// Diffs by identity, not by count: a finding is "new" only if no baseline
+// entry shares its (file, category, name), and a baseline entry is
+// "resolved" only if nothing in the current run matches it. Both lists come
+// back sorted for stable, readable CLI output.
+export function diffFindings(current, baseline) {
+  const baselineKeys = new Set(baseline.map(findingKey));
+  const currentKeys = new Set(current.map(findingKey));
+  return {
+    newFindings: current
+      .filter((finding) => !baselineKeys.has(findingKey(finding)))
+      .toSorted(compareFindings),
+    resolvedFindings: baseline
+      .filter((finding) => !currentKeys.has(findingKey(finding)))
+      .toSorted(compareFindings),
+  };
+}
+
+export function countByCategory(findings) {
+  const counts = { ...EMPTY_COUNTS };
+  for (const { category } of findings) {
+    counts[category] += 1;
   }
-  return violations;
+  return counts;
 }
 
 // Parses and validates the `--reporter json` stdout produced by `knip`.
@@ -94,40 +141,62 @@ function runKnip() {
     throw result.error;
   }
   // knip exits 1 whenever it finds any issue at all, which is expected here
-  // (the whole point is to count existing issues), so a non-zero status is
-  // only a real failure if it didn't produce parseable JSON.
+  // (the whole point is to enumerate existing issues), so a non-zero status
+  // is only a real failure if it didn't produce parseable JSON.
   return parseKnipIssues(result.stdout, result.stderr);
 }
 
+export function readBaseline(rawJson) {
+  const data = JSON.parse(rawJson);
+  if (!Array.isArray(data.findings)) {
+    throw new Error(
+      `${baselinePath} is missing a "findings" array; regenerate it (see scripts/check-dead-code-ratchet.mjs)`,
+    );
+  }
+  return data.findings;
+}
+
+function formatFinding(finding) {
+  return `[${finding.category}] ${finding.file}: ${finding.name}`;
+}
+
 function main() {
-  const baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
-  const current = summarizeKnipIssues(runKnip());
-  const violations = findRatchetViolations(current, baseline);
+  const baseline = readBaseline(readFileSync(baselinePath, 'utf8'));
+  const current = extractFindings(runKnip());
+  const { newFindings, resolvedFindings } = diffFindings(current, baseline);
+  const counts = countByCategory(current);
 
   console.log(
-    `knip dead-code counts: unusedFiles=${current.unusedFiles} (baseline ${baseline.unusedFiles}), ` +
-      `unusedExports=${current.unusedExports} (baseline ${baseline.unusedExports}), ` +
-      `unusedTypes=${current.unusedTypes} (baseline ${baseline.unusedTypes}), ` +
-      `duplicateExports=${current.duplicateExports} (baseline ${baseline.duplicateExports})`,
+    `knip dead-code findings: ${current.length} current (unusedFiles=${counts.files}, ` +
+      `unusedExports=${counts.exports}, unusedTypes=${counts.types}, ` +
+      `duplicateExports=${counts.duplicates}) vs ${baseline.length} baselined`,
   );
 
-  if (violations.length > 0) {
+  if (newFindings.length > 0) {
     console.error(
-      '\nDead-code ratchet failed: this PR increases knip counts above the baseline.',
+      `\nDead-code ratchet failed: this PR introduces ${newFindings.length} unused file(s)/export(s)/type(s) not in the baseline.`,
     );
-    for (const { metric, currentCount, baselineCount } of violations) {
-      console.error(
-        `  - ${metric}: ${currentCount} > baseline ${baselineCount}`,
-      );
+    for (const finding of newFindings) {
+      console.error(`  - ${formatFinding(finding)}`);
     }
     console.error(
       '\nRun `npm run check:dead-code` to see the newly introduced dead code, then either ' +
-        'remove it or, if the increase is intentional, update config/ratchets/knip-baseline.json in this PR.',
+        'remove it or, if the addition is intentional, add it to config/ratchets/knip-baseline.json in this PR ' +
+        '(keep the "findings" array sorted by file, then category, then name).',
     );
     process.exit(1);
   }
 
-  console.log('Dead-code ratchet OK: counts are at or below the baseline.');
+  console.log('Dead-code ratchet OK: no new unused files/exports/types found.');
+  if (resolvedFindings.length > 0) {
+    console.log(
+      `\n${resolvedFindings.length} baseline entries are no longer found (fixed!). Remove them from ` +
+        'config/ratchets/knip-baseline.json to shrink the baseline:',
+    );
+    for (const finding of resolvedFindings) {
+      console.log(`  - ${formatFinding(finding)}`);
+    }
+  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
