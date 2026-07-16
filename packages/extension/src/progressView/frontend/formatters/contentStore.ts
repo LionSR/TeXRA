@@ -32,6 +32,11 @@ export function createContentStore<T extends NonNullable<unknown>>(options: {
         const serialized = options.serialize(value);
         id = `${options.prefix}:${serialized.length}:${hashString(serialized)}`;
       }
+      // Reference equality is sufficient: for object values re-derived from a
+      // hash-based id (e.g. AgentProposal), each re-parse is a new object, so
+      // this always re-sets and refreshes the LRU position — harmless, since
+      // the content is unchanged. It only skips the write when the exact same
+      // object instance is re-registered under its own explicit id.
       if (store.get(id) !== value) {
         store.set(id, value);
       }
