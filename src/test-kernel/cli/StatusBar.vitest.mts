@@ -19,11 +19,6 @@ import {
 import { AgentCategory, STREAM_PHASE, STREAM_SUBSTATE } from '@shared/schemas';
 
 const PERSONAL_API_MODE_LABEL = shortCliApiMode('personal');
-const COMPLETED_REVIEW_FOLLOWUP =
-  '<orchestrator-followup><subagent-result id="child-q" agent="review" category="toolUse" status="completed"><response>All good &lt;ok&gt;</response></subagent-result></orchestrator-followup>';
-const PROGRESS_REVIEW_FOLLOWUP =
-  '<orchestrator-followup><subagent-progress id="child-q" agent="review" category="toolUse" type="todos" completed="6" active="0" pending="0"/></orchestrator-followup>';
-
 // Idle single-stream baseline; each test overrides only the fields it exercises.
 function statusInput(
   overrides: Partial<StatusBarDisplayInput> = {},
@@ -634,7 +629,7 @@ describe('CLI StatusBar display model', () => {
     ]);
   });
 
-  it('keeps queued follow-up previews aligned with visible queued counts', () => {
+  it('drops the queued count segment before durable status on narrow bars', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
