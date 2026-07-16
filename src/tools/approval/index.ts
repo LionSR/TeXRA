@@ -8,15 +8,54 @@
  */
 
 import {
+  currentSession,
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 
-export {
-  enableYoloOnChildStream,
-  inheritBashBypassOnChildStream,
-} from './toolEditApproval';
+/**
+ * Link a freshly resolved child subagent stream to its parent for bash and
+ * tool-edit bypass resolution.
+ *
+ * A child delegated by a parent that auto-runs bash or auto-approves edits
+ * should do the same — and should keep following the parent when either
+ * bypass is toggled *after* the child stream already started, since this
+ * registers live ancestry links rather than copying the parent's values once
+ * at child creation (see `registerStreamParent`). Ancestry is tracked per
+ * bypass kind, so the CLI's distinct AUTO-BASH / AUTO-APPROVE grants are
+ * respected: a parent with AUTO-BASH but edits still gated propagates only
+ * bash, and fresh streams default to gated either way. Delegation-proposal
+ * (super-YOLO) bypass is deliberately NOT linked — a child's own delegations
+ * still prompt unless granted on the child explicitly (and
+ * `setDelegatedWorkApprovalBypasses` pins the child's own explicit entries,
+ * so that grant survives the parent later re-gating).
+ */
+export type DelegatedChildApprovalPolicy = 'inherit' | 'auto-approved';
+
+export function configureDelegatedChildApprovals(
+  childStreamId: StreamTabId,
+  parentStreamId?: StreamTabId,
+  policy: DelegatedChildApprovalPolicy = 'inherit',
+  session: SessionHandle = currentSession(),
+): void {
+  if (parentStreamId) {
+    session.approvals.registerStreamParent(childStreamId, parentStreamId, [
+      'bash',
+      'toolEdit',
+    ]);
+  }
+  if (policy === 'auto-approved') {
+    session.approvals.toolEdit.bypass.setBypass(
+      childStreamId,
+      true,
+      undefined,
+      {
+        silent: true,
+      },
+    );
+  }
+}
 
 /**
  * Clean up all approval state for a deleted stream in the owning session.
@@ -29,10 +68,10 @@ export function cleanupApprovalsForStream(
   const { toolEdit, bash, proposal } = session.approvals;
   toolEdit.rejectPendingForStream(streamId);
   bash.rejectPendingForStream(streamId);
+  session.approvals.forgetStreamAncestry(streamId);
   toolEdit.bypass.clearForStream(streamId);
   bash.bypass.clearForStream(streamId);
   proposal.clearForStream(streamId);
-  session.approvals.forgetStreamAncestry(streamId);
   session.interactions.cancel({
     streamId,
     cause: 'Stream resources released.',

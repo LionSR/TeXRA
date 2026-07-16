@@ -12,6 +12,7 @@ import {
 import { createChannelTrace, type ResultEvent } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import {
   StreamStatusMachine,
   type StreamStatusEmitOptions,
@@ -140,6 +141,7 @@ export class ExecutionRegistry {
   private readonly processOutput: ProcessOutputPoller;
   private readonly streamStatus: StreamStatusMachine;
   private events: SessionEventHub | undefined;
+  private approvals: SessionApprovals | undefined;
   /**
    * Publishes a synthesized terminal `result` event to the owning session's
    * `onResult` channel — the same forwarding `SessionHandle.attachRunTrace`
@@ -216,6 +218,11 @@ export class ExecutionRegistry {
         },
       });
     });
+  }
+
+  /** Bind the session-owned approval state used when a child is detached. */
+  attachSessionApprovals(approvals: SessionApprovals): void {
+    this.approvals = approvals;
   }
 
   dispose(): void {
@@ -602,6 +609,7 @@ export class ExecutionRegistry {
     for (const handle of this.handles.values()) {
       if (!isChildExecution(handle, parentStreamId)) continue;
       if (handle instanceof AgentExecutionHandle) {
+        this.approvals?.detachStreamFromParent(handle.childStreamId);
         handle.detach();
         this.emitParentStreamUpdate({
           childStreamId: handle.childStreamId,
