@@ -1601,6 +1601,50 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('propagates async fact-handler promises to the error wrapper', async () => {
+    const { backend } = createRecordingBackend();
+    const stream = 'tool-stream' as StreamTabId;
+
+    // A tracking thenable: `withEventErrorHandling` does
+    // `Promise.resolve(result).catch(...)`, which adopts (calls `.then` on) the
+    // handler's result only when the dispatch wrapper actually RETURNED it. A
+    // block-bodied handler that discarded the promise would hand
+    // `withEventErrorHandling` `undefined`, leaving this untouched — and a
+    // post-await rejection would then escape logging as an unhandled rejection.
+    // Both `setStreamStatus` callers (the run-fact `status` path and the
+    // session-fact `updateStreamStatus` path) are covered.
+    let adopted = 0;
+    const tracking: PromiseLike<void> = {
+      then(onFulfilled, onRejected) {
+        adopted += 1;
+        return Promise.resolve().then(onFulfilled, onRejected);
+      },
+    };
+    vi.spyOn(backend.factApplier, 'setStreamStatus').mockReturnValue(
+      tracking as Promise<void>,
+    );
+
+    try {
+      backend.factApplier.handleRunFact(stream, {
+        type: 'status',
+        streamId: stream,
+        phase: STREAM_PHASE.RUNNING,
+        cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+      });
+      backend.factApplier.handleSessionFact({
+        type: 'updateStreamStatus',
+        payload: { streamId: stream, status: STREAM_PHASE.RUNNING },
+      });
+
+      // Thenable adoption runs on a microtask; flush before asserting.
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(adopted).toBe(2);
+    } finally {
+      backend.dispose();
+    }
+  });
+
   it('revalidates and syncs the active stream when status registration changes the filter', async () => {
     const { backend, messages } = createRecordingBackend();
 
