@@ -4,6 +4,24 @@ import { isObject, isString } from '@utils/core';
 
 import { pickStatus } from './sdkErrorKinds';
 
+/** Pick a non-blank string field off an error-body object. Shared by the
+ *  relay/ChatGPT-subscription/credit-depletion body detectors, which all read
+ *  loosely-typed provider JSON. */
+export function pickStringField(v: unknown, key: string): string | undefined {
+  if (!isObject(v)) return undefined;
+  const value = (v as Record<string, unknown>)[key];
+  return isString(value) && value.trim().length > 0 ? value : undefined;
+}
+
+/** Pick a finite-number field off an error-body object. See {@link pickStringField}. */
+export function pickNumberField(v: unknown, key: string): number | undefined {
+  if (!isObject(v)) return undefined;
+  const value = (v as Record<string, unknown>)[key];
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
 /** Get reason phrase, returning undefined for unknown codes (getReasonPhrase throws). */
 export function safeGetReasonPhrase(statusCode: number): string | undefined {
   try {

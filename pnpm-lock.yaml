@@ -337,6 +337,9 @@ importers:
       '@types/proper-lockfile':
         specifier: ^4.1.4
         version: 4.1.4
+      '@types/semver':
+        specifier: ^7.7.1
+        version: 7.7.1
       '@types/shell-quote':
         specifier: ^1.7.5
         version: 1.7.5

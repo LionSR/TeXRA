@@ -10,13 +10,13 @@ import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import { invalidateApiKeyCache } from '@model/apiProviders';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
 } from '@shared/constants/providers';
+import { refreshApiKeyCaches } from '@tools/setup/apiKeyHelpers';
+import { getSetupPlatform } from '@tools/setup/platform';
 import {
   getProviderDisplayName,
   getProviderKeyUrl,
@@ -30,11 +30,8 @@ export const apiKeyCommands = {
   removeApiKey: 'texra.removeApiKey',
 };
 
-async function refreshApiKeyUI(): Promise<void> {
-  invalidateModelOptionsCache();
-  invalidateApiKeyCache();
-  await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
-  await vscode.commands.executeCommand('texra.refreshAllOptions');
+function refreshApiKeyUI(): Promise<void> {
+  return refreshApiKeyCaches(getSetupPlatform());
 }
 
 /**

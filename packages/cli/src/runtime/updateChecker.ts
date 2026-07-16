@@ -2,7 +2,6 @@ import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { gt as semverGt, valid as semverValid } from 'semver';
 import { z } from 'zod';
 
 import { JsonStore } from '@platform/defaults/jsonStore';
@@ -10,6 +9,11 @@ import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { executeCommand } from '@utils/system/execUtils';
+import {
+  DAILY_UPDATE_CHECK_INTERVAL_MS,
+  isNewerSemverVersion,
+  UPDATE_CHECK_SKIP_ENV,
+} from '@utils/system/semverUpdateCheck';
 
 import {
   cliEnvValue,
@@ -35,30 +39,14 @@ const CLI_HOMEBREW_FORMULA = 'texra';
 const DEFAULT_REGISTRY = 'https://registry.npmjs.org';
 const DEFAULT_TIMEOUT_MS = 2500;
 const HOMEBREW_COMMAND_TIMEOUT_MS = 10000;
-const UPDATE_CHECK_SKIP_ENV = 'TEXRA_NO_UPDATE_CHECK';
 /**
  * Check for a new release at most once per day, matching the desktop update
- * checker's cadence (see `desktopUpdateChecker.ts`'s `CHECK_INTERVAL_MS`).
+ * checker's cadence (see `desktopUpdateChecker.ts`).
  */
-const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const CHECK_INTERVAL_MS = DAILY_UPDATE_CHECK_INTERVAL_MS;
 
 /** Package manager the running binary was installed with. */
 export type InstallMethod = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'brew';
-
-/**
- * True when `latest` is strictly newer than `current`, using full semver
- * precedence (a plain release outranks any prerelease of the same `x.y.z`, and
- * prereleases compare numerically — so `1.2.0-rc.10` correctly beats
- * `1.2.0-rc.2`). Unparseable inputs yield `false` so a malformed registry
- * response can never push a bogus update prompt. The leading `v` some tags
- * carry is tolerated by `semver`.
- */
-export function isNewerVersion(latest: string, current: string): boolean {
-  const a = semverValid(latest.trim(), { loose: true });
-  const b = semverValid(current.trim(), { loose: true });
-  if (!a || !b) return false;
-  return semverGt(a, b);
-}
 
 /**
  * Guess the package manager from the path the binary runs out of. Homebrew and
@@ -352,7 +340,7 @@ export async function checkCliUpdateAvailable({
 
   const { version, refreshed } = await fetchLatest();
   const latest =
-    version !== undefined && isNewerVersion(version, currentVersion)
+    version !== undefined && isNewerSemverVersion(version, currentVersion)
       ? version
       : undefined;
   if (latest !== undefined) await notify(latest);
