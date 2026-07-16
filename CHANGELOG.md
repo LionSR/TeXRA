@@ -19,6 +19,8 @@ All notable changes to this project will be documented in this file.
   them, while the local CLI terminal keeps its operator-readable output.
 - **Unavailable-tool notices are scoped to each agent session** — one active
   session no longer suppresses dependency guidance for another session.
+- **Follow-ups to waiting subagents resume once without a false failure** — a
+  completed follow-up is no longer reported as failed or repeated later.
 
 ### CLI
 
