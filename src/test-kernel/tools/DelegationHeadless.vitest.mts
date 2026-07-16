@@ -25,7 +25,6 @@ import {
 } from '@shared/schemas';
 import { DelegateAgentTool } from '@tools/DelegationTools';
 import {
-  executeSubagentInBand,
   executeStableSubagentInBand,
   SubagentDurabilityError,
   SubagentReconciliationError,
@@ -118,6 +117,9 @@ function callDelegateReview(agent = 'review') {
   });
 }
 
+const STABLE_PARENT_EXECUTION_ID = 'abcdef123456' as ExecutionId;
+const IN_BAND_LOGICAL_EXECUTION_ID = 'aaaaaa111111' as ExecutionId;
+
 /** The in-band delegation options shared by nearly every case (fields vary). */
 function delegationOptions(
   overrides: Partial<InBandSubagentExecutionOptions> = {},
@@ -129,12 +131,25 @@ function delegationOptions(
       model: 'deepseekT',
     },
     agentName: 'review',
-    parentExecutionId: 'parent-exec' as ExecutionId,
+    parentExecutionId: STABLE_PARENT_EXECUTION_ID,
     parentStreamId: 'parent-stream' as StreamTabId,
     runtimeHost: runtimeHost(),
     session: defaultSession(),
     ...overrides,
   };
+}
+
+/** Run the typed required-result path the way production callers reach it. */
+function runInBand(
+  options: InBandSubagentExecutionOptions,
+  executionId: ExecutionId = IN_BAND_LOGICAL_EXECUTION_ID,
+) {
+  return executeStableSubagentInBand({
+    executionId,
+    parentExecutionId: options.parentExecutionId,
+    signal: options.signal,
+    prepare: async () => options,
+  });
 }
 
 /**
@@ -155,8 +170,6 @@ function mockExecuteAgentErrorOnce(totalCostUsd: number): void {
   });
 }
 
-const STABLE_PARENT_EXECUTION_ID = 'abcdef123456' as ExecutionId;
-
 function stableAttempt(
   logicalExecutionId: ExecutionId,
   phase: 'reserved' | 'launched' | 'retryable' = 'launched',
@@ -167,6 +180,21 @@ function stableAttempt(
     parentExecutionId: STABLE_PARENT_EXECUTION_ID,
     phase,
   } as const;
+}
+
+/** In-memory execution KV store: enough surface for the stable attempt path. */
+function memoryExecutionStore() {
+  const kv = new Map<string, unknown>();
+  return {
+    listKeys: vi.fn(async () => [...kv.keys()]),
+    read: vi.fn(async (key: string) => kv.get(key)),
+    write: vi.fn(async (key: string, value: unknown) => {
+      kv.set(key, value);
+    }),
+    readResultMeta: vi.fn(async () => null),
+    writeReport: mocks.writeReport,
+    writeResultMeta: mocks.writeResultMeta,
+  };
 }
 
 function stableSequenceStore(logicalExecutionId: ExecutionId, nextAttempt = 0) {
@@ -216,9 +244,17 @@ describe('headless delegation', () => {
     mocks.registerExecution.mockResolvedValue(undefined);
     mocks.writeReport.mockResolvedValue(undefined);
     mocks.writeResultMeta.mockResolvedValue(undefined);
-    mocks.getExecutionStore.mockReturnValue({
-      writeReport: mocks.writeReport,
-      writeResultMeta: mocks.writeResultMeta,
+    const memoryStores = new Map<
+      ExecutionId,
+      ReturnType<typeof memoryExecutionStore>
+    >();
+    mocks.getExecutionStore.mockImplementation((executionId: ExecutionId) => {
+      let store = memoryStores.get(executionId);
+      if (!store) {
+        store = memoryExecutionStore();
+        memoryStores.set(executionId, store);
+      }
+      return store;
     });
     mocks.executeAgent.mockResolvedValue({
       category: 'toolUse',
@@ -267,7 +303,7 @@ describe('headless delegation', () => {
   });
 
   it('returns and persists the typed final result for in-band consumers', async () => {
-    const result = await executeSubagentInBand(delegationOptions());
+    const result = await runInBand(delegationOptions());
 
     expect(result.result).toEqual({
       category: 'toolUse',
@@ -281,12 +317,12 @@ describe('headless delegation', () => {
       result.executionId,
       expect.objectContaining({ agent: 'review' }),
       'review',
-      'parent-exec',
+      STABLE_PARENT_EXECUTION_ID,
     );
     expect(mocks.writeResultMeta).toHaveBeenCalledWith({
       producer: 'subagent',
       agentName: 'review',
-      parentExecutionId: 'parent-exec',
+      parentExecutionId: STABLE_PARENT_EXECUTION_ID,
       wallTimeMs: expect.any(Number),
       result: result.result,
     });
@@ -434,12 +470,7 @@ describe('headless delegation', () => {
     );
 
     await expect(
-      executeSubagentInBand(
-        delegationOptions({
-          executionId: logicalExecutionId,
-          parentExecutionId: STABLE_PARENT_EXECUTION_ID,
-        }),
-      ),
+      runInBand(delegationOptions(), logicalExecutionId),
     ).rejects.toBeInstanceOf(SubagentReconciliationError);
     expect(mocks.registerExecution).not.toHaveBeenCalled();
     expect(mocks.executeAgent).not.toHaveBeenCalled();
@@ -477,11 +508,9 @@ describe('headless delegation', () => {
         return store;
       });
 
-      const completed = await executeSubagentInBand(
-        delegationOptions({
-          executionId: logicalExecutionId,
-          parentExecutionId: STABLE_PARENT_EXECUTION_ID,
-        }),
+      const completed = await runInBand(
+        delegationOptions(),
+        logicalExecutionId,
       );
 
       expect(completed.executionId).not.toBe(logicalExecutionId);
@@ -507,12 +536,9 @@ describe('headless delegation', () => {
     mocks.getExecutionStore.mockImplementation((executionId: ExecutionId) =>
       executionId === STABLE_PARENT_EXECUTION_ID ? sequenceStore : childStore,
     );
-    const options = delegationOptions({
-      executionId: logicalExecutionId,
-      parentExecutionId: STABLE_PARENT_EXECUTION_ID,
-    });
+    const options = delegationOptions();
 
-    await expect(executeSubagentInBand(options)).rejects.toBeInstanceOf(
+    await expect(runInBand(options, logicalExecutionId)).rejects.toBeInstanceOf(
       SubagentDurabilityError,
     );
 
@@ -520,7 +546,7 @@ describe('headless delegation', () => {
       'stable-subagent-attempt',
       expect.objectContaining({ phase: 'launched' }),
     );
-    await expect(executeSubagentInBand(options)).rejects.toBeInstanceOf(
+    await expect(runInBand(options, logicalExecutionId)).rejects.toBeInstanceOf(
       SubagentReconciliationError,
     );
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
@@ -567,12 +593,7 @@ describe('headless delegation', () => {
       return store;
     });
 
-    const completed = await executeSubagentInBand(
-      delegationOptions({
-        executionId: logicalExecutionId,
-        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
-      }),
-    );
+    const completed = await runInBand(delegationOptions(), logicalExecutionId);
 
     expect(completed.executionId).not.toBe(logicalExecutionId);
     expect(stores.size).toBe(3);
@@ -588,9 +609,9 @@ describe('headless delegation', () => {
   it('does not return a typed result when its durable manifest cannot be written', async () => {
     mocks.writeResultMeta.mockRejectedValueOnce(new Error('storage offline'));
 
-    await expect(
-      executeSubagentInBand(delegationOptions()),
-    ).rejects.toBeInstanceOf(SubagentDurabilityError);
+    await expect(runInBand(delegationOptions())).rejects.toBeInstanceOf(
+      SubagentDurabilityError,
+    );
     expect(mocks.writeReport).not.toHaveBeenCalled();
   });
 
@@ -598,7 +619,7 @@ describe('headless delegation', () => {
     mocks.executeAgent.mockRejectedValueOnce(new Error('review model failed'));
     mocks.writeResultMeta.mockRejectedValueOnce(new Error('storage offline'));
 
-    const run = executeSubagentInBand(delegationOptions());
+    const run = runInBand(delegationOptions());
 
     await expect(run).rejects.toMatchObject({
       name: 'SubagentDurabilityError',
@@ -618,7 +639,7 @@ describe('headless delegation', () => {
       } as never),
     );
 
-    const run = executeSubagentInBand(delegationOptions());
+    const run = runInBand(delegationOptions());
 
     await expect(run).rejects.toMatchObject({
       name: 'SubagentDurabilityError',
@@ -637,7 +658,7 @@ describe('headless delegation', () => {
       touchedFiles: [42],
     });
 
-    await expect(executeSubagentInBand(delegationOptions())).rejects.toThrow();
+    await expect(runInBand(delegationOptions())).rejects.toThrow();
     expect(mocks.writeResultMeta).not.toHaveBeenCalled();
     expect(mocks.writeReport).not.toHaveBeenCalled();
   });
@@ -669,7 +690,7 @@ describe('headless delegation', () => {
       };
     });
 
-    const run = executeSubagentInBand(
+    const run = runInBand(
       delegationOptions({ signal: controller.signal, onCost }),
     );
     await ready;
@@ -695,9 +716,7 @@ describe('headless delegation', () => {
     });
     mocks.writeResultMeta.mockReturnValueOnce(persistencePending);
 
-    const run = executeSubagentInBand(
-      delegationOptions({ signal: controller.signal }),
-    );
+    const run = runInBand(delegationOptions({ signal: controller.signal }));
     await vi.waitFor(() => {
       expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
     });
@@ -721,7 +740,7 @@ describe('headless delegation', () => {
     controller.abort(new Error('Workflow already stopped.'));
 
     await expect(
-      executeSubagentInBand(delegationOptions({ signal: controller.signal })),
+      runInBand(delegationOptions({ signal: controller.signal })),
     ).rejects.toThrow('Workflow already stopped.');
     expect(mocks.registerExecution).not.toHaveBeenCalled();
     expect(mocks.executeAgent).not.toHaveBeenCalled();
