@@ -67,6 +67,18 @@ export function createStreamApprovalBypass(
 ): StreamApprovalBypass {
   const byStream = new Map<StreamTabId, boolean>();
 
+  function resolve(streamId: StreamTabId): boolean {
+    const seen = new Set<StreamTabId>();
+    let current: StreamTabId | undefined = streamId;
+    while (current && !seen.has(current)) {
+      const explicit = byStream.get(current);
+      if (explicit !== undefined) return explicit;
+      seen.add(current);
+      current = resolveParent(current);
+    }
+    return false;
+  }
+
   const setBypass: StreamApprovalBypass['setBypass'] = (
     streamId,
     enabled,
@@ -80,20 +92,14 @@ export function createStreamApprovalBypass(
   };
 
   return {
-    isBypassed(streamId) {
-      const seen = new Set<StreamTabId>();
-      let current: StreamTabId | undefined = streamId;
-      while (current && !seen.has(current)) {
-        const explicit = byStream.get(current);
-        if (explicit !== undefined) return explicit;
-        seen.add(current);
-        current = resolveParent(current);
-      }
-      return false;
-    },
+    isBypassed: resolve,
     setBypass,
     toggleBypass(streamId, runtimeHost) {
-      const next = !byStream.get(streamId);
+      // Flip the *resolved* (ancestry-aware) state, not just this stream's
+      // own explicit entry — otherwise a stream inheriting `true` from a
+      // parent would toggle to an explicit `true` on the first press (no
+      // visible change) instead of turning bypass off.
+      const next = !resolve(streamId);
       setBypass(streamId, next, runtimeHost);
       return next;
     },
@@ -229,6 +235,15 @@ export interface SessionApprovals {
     parentStreamId: StreamTabId,
   ): void;
   /**
+   * Drop `streamId` from the ancestry graph: both its own parent link and
+   * any child that named it as parent. Called on per-stream teardown
+   * (`cleanupApprovalsForStream`) so a torn-down stream can't linger as a
+   * live ancestor — without this, a still-running child would keep
+   * resolving its bypass through a parent whose own bypass state was just
+   * cleared, silently changing the child's effective bypass.
+   */
+  forgetStreamAncestry(streamId: StreamTabId): void;
+  /**
    * Reject every pending approval and clear all bypass + proposal state for
    * this session. Used by session teardown and the session-wide
    * `cleanupAllApprovals` sweep.
@@ -261,6 +276,12 @@ export function createSessionApprovals(): SessionApprovals {
     proposal,
     registerStreamParent(childStreamId, parentStreamId) {
       parentOf.set(childStreamId, parentStreamId);
+    },
+    forgetStreamAncestry(streamId) {
+      parentOf.delete(streamId);
+      for (const [child, parent] of parentOf) {
+        if (parent === streamId) parentOf.delete(child);
+      }
     },
     rejectAndClearAll() {
       toolEdit.rejectAllPending();

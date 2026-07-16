@@ -8,11 +8,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { StreamTabId } from '@shared/schemas';
 import {
   cleanupAllApprovals,
+  cleanupApprovalsForStream,
   enableYoloOnChildStream,
   inheritBashBypassOnChildStream,
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
   setBashApprovalSessionBypass,
+  toggleBashApprovalSessionBypass,
 } from '@tools/approval';
 import { currentSession } from '@agent/runtime/SessionHandle';
 
@@ -105,5 +107,39 @@ describe('child subagent stream approval inheritance', () => {
     setBashApprovalSessionBypass(roundTwo, false, host, { silent: true });
     expect(isBashApprovalBypassedForStream(roundTwo)).toBe(false);
     expect(isBashApprovalBypassedForStream(roundOne)).toBe(true);
+  });
+
+  it('toggling a stream that only inherits bypass turns it off on the first press', () => {
+    // Bugbot #9555956b: toggle used to flip the stream's own (unset) explicit
+    // entry — `!undefined` — landing on an explicit `true` that looked like
+    // no-op to the user. It must flip the *resolved* state instead.
+    const { host } = createRecordingHost();
+    const parent = 'stream:parent-toggle' as StreamTabId;
+    const child = 'stream:child-toggle' as StreamTabId;
+    setBashApprovalSessionBypass(parent, true, host, { silent: true });
+    inheritBashBypassOnChildStream(child, parent);
+    expect(isBashApprovalBypassedForStream(child)).toBe(true);
+
+    const first = toggleBashApprovalSessionBypass(child, host);
+    expect(first).toBe(false);
+    expect(isBashApprovalBypassedForStream(child)).toBe(false);
+    // The parent's own bypass is untouched by the child's toggle.
+    expect(isBashApprovalBypassedForStream(parent)).toBe(true);
+  });
+
+  it('detaches a child from a torn-down parent instead of leaving it inheriting through a dead stream', () => {
+    // Bugbot #9df28eca: per-stream cleanup used to clear only the parent's
+    // own bypass entries, leaving the ancestry link intact so a live child
+    // silently changed effective bypass the moment the parent's tab closed.
+    const { host } = createRecordingHost();
+    const parent = 'stream:parent-torn-down' as StreamTabId;
+    const child = 'stream:child-survives-parent' as StreamTabId;
+    setBashApprovalSessionBypass(parent, true, host, { silent: true });
+    inheritBashBypassOnChildStream(child, parent);
+    expect(isBashApprovalBypassedForStream(child)).toBe(true);
+
+    cleanupApprovalsForStream(parent);
+
+    expect(isBashApprovalBypassedForStream(child)).toBe(false);
   });
 });
