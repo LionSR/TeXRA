@@ -133,6 +133,7 @@ import {
   clearTerminalScrollback,
   installTerminalRestoreOnExit,
   restoreTuiInputModes,
+  setTerminalTitle,
   supportsTerminalJobControl,
 } from './terminalCleanup';
 import {
@@ -437,6 +438,10 @@ export async function runChat(
   // (uncaught exception, stray process.exit), still restore the terminal so
   // the user's shell isn't left in raw/kitty/mouse mode with a hidden cursor.
   disposers.push(installTerminalRestoreOnExit({ clearItermProgress }));
+  // Cosmetic, but "texra-local" (a local dev binary's own name) or a bare
+  // shell prompt in every tab makes a multi-session workflow hard to
+  // navigate — name the tab after the project instead.
+  setTerminalTitle(context.cwd);
   disposers.push(subscribeStreamLog());
   disposers.push(subscribeStreamStatus());
 
