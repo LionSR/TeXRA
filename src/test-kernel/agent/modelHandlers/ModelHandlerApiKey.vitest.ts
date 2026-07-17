@@ -16,6 +16,7 @@ import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import type { DirectModelRoutingConfig } from '@model/openRouterRouting';
 
 // Local imports - modules stubbed by these tests
+import * as configUtilsModule from '@utils/config/configUtils';
 import * as providerConfigModule from '@utils/config/providerConfig';
 
 class ExposedKeyHandler extends ModelHandlerOpenRouterNative {
@@ -147,6 +148,12 @@ describe('ModelHandler.getApiKey resolution', () => {
       [apiKeySecretName('kimiCode')]: 'kimi-code-key',
     });
     vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(true);
+    vi.spyOn(configUtilsModule, 'getConfig').mockImplementation(
+      <T>(path: string, defaultValue?: T) =>
+        (path === 'texra.model.useImprovedConnection'
+          ? true
+          : defaultValue) as T,
+    );
     const { canUseServerSideKeys } = stubServerSideKeyService({
       useIncludedAccess: true,
       hasServerAccess: true,
@@ -169,6 +176,7 @@ describe('ModelHandler.getApiKey resolution', () => {
       }),
     );
 
+    assert.equal(handler.getBaseUrl(), 'https://api.kimi.com/coding/v1');
     assert.equal(await handler.exposeGetApiKey(), 'kimi-code-key');
     assert.equal(canUseServerSideKeys.mock.calls.length, 0);
     assert.equal(relayToken.mock.calls.length, 0);
