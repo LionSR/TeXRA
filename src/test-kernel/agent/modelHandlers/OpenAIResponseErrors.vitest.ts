@@ -136,7 +136,7 @@ describe('OpenAI Responses error normalization', () => {
     expect(providerError.userRetryable).toBe(true);
   });
 
-  it('keeps terminal background statuses retryable without HTTP metadata', () => {
+  it('infers retryable server status for terminal background responses', () => {
     const wrapped = createOpenAIBackgroundTerminalError(
       {
         id: 'resp_failed',
@@ -153,7 +153,7 @@ describe('OpenAI Responses error normalization', () => {
     const providerError = formatProviderHttpError(wrapped);
 
     expect(providerError.provider).toBe('openai');
-    expect(providerError.statusCode).toBeUndefined();
+    expect(providerError.statusCode).toBe(500);
     expect(providerError.userRetryable).toBe(true);
     expect(providerError.message).toContain('resp_failed');
     expect(requiresFlowAutoRetry(wrapped)).toBe(true);

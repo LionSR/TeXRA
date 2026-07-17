@@ -4,11 +4,11 @@ import { isObject, isString } from '@utils/core';
 import { pickStringField } from './errorInspection';
 
 /**
- * Maps Anthropic error type strings to their corresponding HTTP status codes.
- * Used to recover the status code when SDK error objects lose it
- * (e.g., streaming SSE errors that produce generic APIError instances).
+ * Maps provider error type/code strings to their corresponding HTTP status
+ * codes. Used to recover the status code when SDK error objects lose it
+ * (e.g., streaming errors that produce generic APIError instances).
  */
-const ANTHROPIC_ERROR_TYPE_TO_STATUS: Record<string, number> = {
+const ERROR_TYPE_OR_CODE_TO_STATUS: Record<string, number> = {
   invalid_request_error: StatusCodes.BAD_REQUEST, // 400
   authentication_error: StatusCodes.UNAUTHORIZED, // 401
   permission_error: StatusCodes.FORBIDDEN, // 403
@@ -16,14 +16,16 @@ const ANTHROPIC_ERROR_TYPE_TO_STATUS: Record<string, number> = {
   request_too_large: StatusCodes.REQUEST_TOO_LONG, // 413
   rate_limit_error: StatusCodes.TOO_MANY_REQUESTS, // 429
   api_error: StatusCodes.INTERNAL_SERVER_ERROR, // 500
+  server_error: StatusCodes.INTERNAL_SERVER_ERROR, // 500
   timeout_error: StatusCodes.REQUEST_TIMEOUT, // 408
   overloaded_error: 529,
 };
 
 /**
- * Infers an HTTP status code from the Anthropic error type in the raw error body.
- * Handles both the envelope format `{ type: "error", error: { type: "api_error" } }`
- * and the direct format `{ type: "api_error" }`.
+ * Infers an HTTP status code from a provider error type/code in the raw body.
+ * Handles both enveloped errors such as
+ * `{ type: "error", error: { type: "api_error" } }` and direct errors such as
+ * `{ type: "server_error", code: "server_error" }`.
  *
  * The nested path is checked first because Anthropic's canonical envelope uses
  * `type: "error"` at the top level (not a real error type), with the actual
@@ -35,16 +37,18 @@ export function inferStatusCodeFromBody(
   if (!isObject(rawErrorBody)) {
     return undefined;
   }
-  const body = rawErrorBody as { type?: unknown; error?: { type?: unknown } };
-  // Nested first: { type: "error", error: { type: "api_error" } }
-  const nestedType =
-    isObject(body.error) && isString(body.error.type)
-      ? body.error.type
-      : undefined;
-  // Direct fallback: { type: "api_error" }
-  const directType = isString(body.type) ? body.type : undefined;
-  const errorType = nestedType ?? directType;
-  return errorType ? ANTHROPIC_ERROR_TYPE_TO_STATUS[errorType] : undefined;
+  const body = rawErrorBody as { error?: unknown };
+  const candidates = [body.error, rawErrorBody];
+  for (const candidate of candidates) {
+    if (!isObject(candidate)) continue;
+    for (const field of ['type', 'code'] as const) {
+      const value = candidate[field];
+      if (!isString(value)) continue;
+      const statusCode = ERROR_TYPE_OR_CODE_TO_STATUS[value];
+      if (statusCode !== undefined) return statusCode;
+    }
+  }
+  return undefined;
 }
 
 export function isRelayError(rawErrorBody: unknown): boolean {
