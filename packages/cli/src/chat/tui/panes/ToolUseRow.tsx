@@ -120,14 +120,25 @@ function toolDisplayViewport(
 // re-rendering every settled tool row in the live region.
 export const ToolUseRow = memo(function ToolUseRow({
   maxRows,
+  neutralStatus,
+  omitHeader,
+  showOutput,
   toolUse,
   width,
 }: {
   readonly maxRows?: number;
+  readonly neutralStatus?: boolean;
+  readonly omitHeader?: boolean;
+  readonly showOutput?: boolean;
   readonly toolUse: NormalizedToolUse;
   readonly width?: number;
 }): React.JSX.Element {
-  const lines = toolUseStyledLines(toolUse, { width });
+  const allLines = toolUseStyledLines(toolUse, {
+    neutralStatus,
+    showOutput,
+    width,
+  });
+  const lines = omitHeader === true ? allLines.slice(1) : allLines;
   const viewport = toolDisplayViewport(lines, maxRows);
   return (
     <Box
@@ -149,7 +160,7 @@ export const ToolUseRow = memo(function ToolUseRow({
             key={index}
             flexDirection="row"
             flexWrap="nowrap"
-            paddingLeft={index === 0 ? 0 : 2}
+            paddingLeft={omitHeader === true || index !== 0 ? 2 : 0}
           >
             {line.spans.map((span, spanIndex) => (
               <Text key={spanIndex} {...toolDisplaySpanTextProps(span)}>

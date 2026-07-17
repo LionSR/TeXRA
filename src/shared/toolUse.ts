@@ -3,12 +3,16 @@
 // Both the VS Code progress view and the CLI TUI read the same
 // `ToolUseLog` payload off `StreamLogStore.data` and need a flat,
 // renderer-friendly view: tool name, derived output text, error/summary
-// strings, and the in-progress vs completed status. This module is the
+// strings, and the runtime tool status. This module is the
 // single entry point for that derivation so hosts don't drift.
 
 import yaml from 'yaml';
 
-import { ToolUseLogSchema, type NormalizedToolUse } from '@shared/schemas';
+import {
+  TOOL_USE_STATUS,
+  ToolUseLogSchema,
+  type NormalizedToolUse,
+} from '@shared/schemas';
 import { isObject } from '@utils/core';
 
 function trimmedOrNull(value: unknown): string | null {
@@ -69,6 +73,12 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
 
   const toolName = trimmedOrNull(validated.toolName) ?? '';
   const isUserFeedback = userInstructionText.length > 0;
+  const isError = Boolean(
+    validated.status === TOOL_USE_STATUS.FAILED ||
+    validated.isError ||
+    nested.isError ||
+    errorText,
+  );
 
   // Preserve unknown fields stripped by the schema for fallback rendering.
   const parsed: Record<string, unknown> = isObject(data)
@@ -82,9 +92,12 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
     outputText,
     userInstructionText,
     input: validated.input,
-    isError: Boolean(validated.isError || nested.isError || errorText),
+    isError,
     isUserFeedback,
     headerSummary: summaryText || (isUserFeedback ? '' : errorText),
-    status: validated.status,
+    status:
+      isError && validated.status === TOOL_USE_STATUS.COMPLETED
+        ? TOOL_USE_STATUS.FAILED
+        : validated.status,
   };
 }

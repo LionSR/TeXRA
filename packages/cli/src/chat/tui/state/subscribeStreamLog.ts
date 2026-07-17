@@ -29,9 +29,12 @@ import {
 } from '../panes/transcriptEntries';
 import {
   activeStreamId,
+  getCliStateGeneration,
+  isCliStreamRetired,
   patchStream,
   type ConversationEntry,
 } from './cliState';
+import { isChildStreamRemoved } from './childExecutions';
 import { isFinalTranscriptStatus } from './transcript';
 
 const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
@@ -145,7 +148,11 @@ function entriesEqual(
     return false;
   }
   if (prev.role === 'tool' && next.role === 'tool') {
-    return toolUseEqual(prev.toolUse, next.toolUse);
+    return (
+      prev.workflowScriptFacts === next.workflowScriptFacts &&
+      prev.workflowScriptOutcome === next.workflowScriptOutcome &&
+      toolUseEqual(prev.toolUse, next.toolUse)
+    );
   }
   if (prev.role === 'process' && next.role === 'process') {
     return prev.process === next.process;
@@ -205,6 +212,12 @@ function renderLogEntry(
       ...(entry.messageType ? { messageType: entry.messageType } : {}),
       finalized: prev?.finalized ?? false,
       toolUse,
+      ...(prev?.role === 'tool' && prev.workflowScriptFacts
+        ? { workflowScriptFacts: prev.workflowScriptFacts }
+        : {}),
+      ...(prev?.role === 'tool' && prev.workflowScriptOutcome
+        ? { workflowScriptOutcome: prev.workflowScriptOutcome }
+        : {}),
     };
     if (prev && entriesEqual(prev, next)) {
       // Same content under a fresh `data` reference: refresh the cache
@@ -261,7 +274,13 @@ function isSettledEntry(
     case 'process':
       return true;
     case 'tool':
-      return entry.toolUse.status === TOOL_USE_STATUS.COMPLETED;
+      return (
+        entry.toolUse.status === TOOL_USE_STATUS.COMPLETED ||
+        entry.toolUse.status === TOOL_USE_STATUS.FAILED ||
+        // An empty array deliberately anchors a neutral immutable owner row
+        // before the first append-only workflow fact arrives.
+        entry.workflowScriptFacts !== undefined
+      );
     case 'assistant':
       return (
         !entry.pendingEmbeddedSubagentFollowup && index < entries.length - 1
@@ -343,7 +362,7 @@ function sortTranscriptCandidatesIfNeeded(
 
 export function subscribeStreamLog(): () => void {
   const store = defaultSession().transcripts;
-  const pendingStreams = new Set<StreamTabId>();
+  const pendingStreams = new Map<StreamTabId, number>();
 
   // One trailing timer shared by every stream: during a multi-subagent burst
   // the root and each child emit within the same window, and per-stream
@@ -353,11 +372,14 @@ export function subscribeStreamLog(): () => void {
   const syncDebounce = createFlushableDebounce(() => {
     const streamIds = [...pendingStreams];
     pendingStreams.clear();
-    for (const id of streamIds) syncStreamLog(id);
+    for (const [id, generation] of streamIds) {
+      if (generation === getCliStateGeneration()) syncStreamLog(id);
+    }
   }, STREAM_SYNC_THROTTLE_MS);
 
   const dispose = store.onChange((streamId) => {
-    pendingStreams.add(streamId);
+    if (isCliStreamRetired(streamId)) return;
+    pendingStreams.set(streamId, getCliStateGeneration());
     // Only start the window on its first tick — later ticks in the same
     // window join the batch without resetting the countdown (`pending`
     // guard), unlike a classic debounce that would restart on every call.
@@ -375,6 +397,7 @@ export function subscribeStreamLog(): () => void {
 }
 
 export function syncStreamLog(streamId: StreamTabId): void {
+  if (isChildStreamRemoved(streamId)) return;
   // AgentTrace throttles MODEL_RESPONSE chunks into the store via a 50ms
   // timer. If we read before that timer fires (e.g. the stream finalized
   // between two TUI sync ticks), the assistant text is still sitting in
