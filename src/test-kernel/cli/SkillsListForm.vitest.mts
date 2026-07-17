@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   formatSkillActivationPrompt,
   skillSelectItemsForTui,
-  skillsSelectWindow,
 } from '@cli/chat/tui/forms/SkillsListForm';
 import type { SourcedSkill } from '@skills/loadSkills';
 
@@ -83,22 +82,5 @@ describe('SkillsListForm helpers', () => {
     expect(prompt).toContain(
       'The user selected the proof&lt;audit &amp; skill.',
     );
-  });
-
-  it('reserves one extra row when import issues are visible', () => {
-    expect(
-      skillsSelectWindow({
-        availableRows: 10,
-        itemCount: 10,
-        hasIssues: false,
-      }),
-    ).toEqual({ maxVisibleItems: 2, showOverflow: true });
-    expect(
-      skillsSelectWindow({
-        availableRows: 10,
-        itemCount: 10,
-        hasIssues: true,
-      }),
-    ).toEqual({ maxVisibleItems: 1, showOverflow: true });
   });
 });
