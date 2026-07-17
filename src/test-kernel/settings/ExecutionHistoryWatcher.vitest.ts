@@ -12,6 +12,8 @@ describe('settings execution history watcher', () => {
     const failure = new Error('permission denied');
     vi.spyOn(StorageFS, 'ensureDir').mockRejectedValue(failure);
     const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    // The full constructor requires a live ExtensionContext; this method reaches
+    // only the explicitly initialized watcher and logging fields in this path.
     const handler = Object.create(SettingsViewMessageHandler.prototype);
     Reflect.set(handler, 'channel', 'SettingsViewMessageHandler');
     const registerWatcher = Reflect.get(

@@ -82,9 +82,8 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
-- **Live history refresh setup failures stay contained** — an inaccessible
-  executions directory now disables automatic refresh without producing an
-  unhandled extension-host failure.
+- **Extension history remains usable when live refresh cannot start** — manual
+  refresh continues to work without disrupting the extension.
 
 ### Desktop
 
