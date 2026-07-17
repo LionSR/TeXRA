@@ -36,6 +36,7 @@ import {
 } from '@utils/files';
 
 import { getConfig } from '@utils/config';
+import { getFileStem } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { BaseWebviewManager } from './BaseWebviewManager';
@@ -120,9 +121,7 @@ export class FileManager extends BaseWebviewManager {
     message: RequestEditedFileMessage,
   ): Promise<void> {
     const files = message.baseFile
-      ? await getFileLister().listEditedFiles(
-          path.basename(message.baseFile, path.extname(message.baseFile)),
-        )
+      ? await getFileLister().listEditedFiles(getFileStem(message.baseFile))
       : [];
     this.postFileUpdate('Edited', files, {
       notifyWhenEmpty: Boolean(message.notifyWhenEmpty),

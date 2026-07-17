@@ -20,7 +20,7 @@ import {
   registerResumeAgentCommand,
 } from '@commands/agent';
 import { registerMainViewCommands } from '@commands/system';
-import { registerStateRestoreCommand } from '@commands/history';
+import { registerStateRestoreCommand } from '@commands/taskFormState';
 import {
   registerSettingsViewCommands,
   initializeSettingsViewProvider,

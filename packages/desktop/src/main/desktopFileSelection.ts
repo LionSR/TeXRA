@@ -13,6 +13,7 @@ import {
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { normalizeFilePath } from '@utils/core';
+import { isPathWithin } from '@utils/core/pathCore';
 import { getConfig } from '@utils/config/configUtils';
 
 import type {
@@ -74,10 +75,9 @@ function resolveWorkspaceFile(workspacePath: string, filePath: string): string {
 
 function toWorkspaceRelative(workspacePath: string, filePath: string): string {
   const absolutePath = resolveWorkspaceFile(workspacePath, filePath);
-  const relativePath = relative(workspacePath, absolutePath);
-  return relativePath.startsWith('..') || isAbsolute(relativePath)
-    ? normalizeFilePath(absolutePath)
-    : normalizeFilePath(relativePath);
+  return isPathWithin(workspacePath, absolutePath)
+    ? normalizeFilePath(relative(workspacePath, absolutePath))
+    : normalizeFilePath(absolutePath);
 }
 
 export function createDesktopFileSelection(
