@@ -4,6 +4,9 @@ import { z } from 'zod';
 export const CHATGPT_TOOL_USE_ONLY_DESCRIPTION =
   'Use your ChatGPT subscription for tool-use agents while workflow agents continue through your OpenAI API key or relay.';
 
+export const KIMI_CODE_TOOL_USE_ONLY_DESCRIPTION =
+  'Use your Kimi Code subscription for tool-use agents while workflow agents fall back to your Kimi Code console API key. Without a console key, workflow agents on these models fail.';
+
 /**
  * Core (host-neutral) TeXRA settings.
  *
@@ -94,6 +97,10 @@ export const DEFAULT_CORE_SETTINGS = {
     },
   },
   chatgptCodex: {
+    preferSubscription: false,
+    subscriptionToolUseOnly: false,
+  },
+  kimiCode: {
     preferSubscription: false,
     subscriptionToolUseOnly: false,
   },
@@ -416,6 +423,18 @@ export const CoreSettingsShape = {
       ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.chatgptCodex),
+  kimiCode: z
+    .strictObject({
+      preferSubscription: boolField(
+        DEFAULT_CORE_SETTINGS.kimiCode.preferSubscription,
+        'Prefer your signed-in Kimi Code subscription for Kimi models instead of API-key routing. Experimental.',
+      ),
+      subscriptionToolUseOnly: boolField(
+        DEFAULT_CORE_SETTINGS.kimiCode.subscriptionToolUseOnly,
+        KIMI_CODE_TOOL_USE_ONLY_DESCRIPTION,
+      ),
+    })
+    .prefault(DEFAULT_CORE_SETTINGS.kimiCode),
   files: z
     .strictObject({
       included: z
@@ -731,6 +750,8 @@ export const CORE_SETTING_PATHS = [
   'model.retry.backoffMs',
   'chatgptCodex.preferSubscription',
   'chatgptCodex.subscriptionToolUseOnly',
+  'kimiCode.preferSubscription',
+  'kimiCode.subscriptionToolUseOnly',
   'files.included.mediaExtensions',
   'files.included.inputExtensions',
   'files.included.contextExtensions',

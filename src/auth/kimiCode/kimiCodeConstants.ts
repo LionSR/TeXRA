@@ -7,7 +7,7 @@
  */
 
 /** Kimi Code OAuth issuer. */
-export const KIMI_CODE_OAUTH_HOST = 'https://auth.kimi.com';
+const KIMI_CODE_OAUTH_HOST = 'https://auth.kimi.com';
 
 /**
  * Borrowed OAuth client id (the Kimi Code CLI's own registration).
@@ -31,9 +31,6 @@ export const KIMI_CODE_DEVICE_AUTHORIZATION_URL = `${KIMI_CODE_OAUTH_HOST}/api/o
 
 /** OAuth token endpoint (device-code exchange + refresh). */
 export const KIMI_CODE_TOKEN_URL = `${KIMI_CODE_OAUTH_HOST}/api/oauth/token`;
-
-/** Default interval between device-token polls, in seconds. */
-export const KIMI_CODE_DEFAULT_POLL_INTERVAL_SECONDS = 5;
 
 /** Default wall-clock budget for a device-code login, in milliseconds. */
 export const KIMI_CODE_DEVICE_TIMEOUT_MS = 15 * 60 * 1000;

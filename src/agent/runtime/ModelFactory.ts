@@ -17,10 +17,10 @@ import {
   formatCodexAuthUnavailableMessage,
   isCodexSessionRoutable,
 } from '@auth/codex';
+import { isPreferKimiCodeSubscription } from '@auth/kimiCode';
 import { AgentError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from '@model/codexSubscriptionRouting';
-import { isPreferKimiCodeSubscription } from '@auth/kimiCode';
 import {
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,

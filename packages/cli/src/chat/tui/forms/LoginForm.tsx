@@ -4,7 +4,11 @@ import { ListForm } from './_shared/ListForm';
 import type { SelectItem } from '../ui/Select';
 
 export type LoginFormValue =
-  'texra' | 'chatgpt' | 'texra --device' | 'chatgpt --device';
+  | 'texra'
+  | 'chatgpt'
+  | 'kimi'
+  | 'texra --device'
+  | 'chatgpt --device';
 
 export interface LoginFormProps {
   readonly availableRows?: number;
@@ -17,6 +21,11 @@ export const LOGIN_FORM_ITEMS = [
     value: 'chatgpt',
     label: 'ChatGPT subscription',
     description: 'Codex via ChatGPT Plus/Pro/Team',
+  },
+  {
+    value: 'kimi',
+    label: 'Kimi Code subscription',
+    description: 'Kimi models via a Moonshot membership (device code)',
   },
   {
     value: 'texra',

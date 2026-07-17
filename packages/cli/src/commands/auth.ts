@@ -43,6 +43,7 @@ import { withUsageSections } from './_helpers/dispatch';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import { chatgptAuthCommand } from './chatgptAuth';
+import { kimiAuthCommand } from './kimiAuth';
 import { authTokenCommand } from './relayTokens';
 import {
   CliUsageError,
@@ -399,6 +400,7 @@ const AUTH_SUBCOMMANDS = {
   usage: usageCommand,
   token: authTokenCommand,
   chatgpt: chatgptAuthCommand,
+  kimi: kimiAuthCommand,
 } as const;
 
 export const AUTH_SUBCOMMAND_NAMES = Object.keys(AUTH_SUBCOMMANDS);

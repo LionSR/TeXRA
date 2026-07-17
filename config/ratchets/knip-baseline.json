@@ -74,16 +74,6 @@
     {
       "file": "packages/desktop/src/main/platform/electronSecrets.ts",
       "category": "exports",
-      "name": "__resetKeychainStateForTests"
-    },
-    {
-      "file": "packages/desktop/src/main/platform/electronSecrets.ts",
-      "category": "exports",
-      "name": "getSecretStorageMode"
-    },
-    {
-      "file": "packages/desktop/src/main/platform/electronSecrets.ts",
-      "category": "exports",
       "name": "KEYCHAIN_DENIED_WARNING_MESSAGE"
     },
     {
@@ -92,14 +82,19 @@
       "name": "LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE"
     },
     {
+      "file": "packages/desktop/src/main/platform/electronSecrets.ts",
+      "category": "exports",
+      "name": "__resetKeychainStateForTests"
+    },
+    {
+      "file": "packages/desktop/src/main/platform/electronSecrets.ts",
+      "category": "exports",
+      "name": "getSecretStorageMode"
+    },
+    {
       "file": "packages/desktop/src/main/platform/secretStorageWarningDialog.ts",
       "category": "exports",
       "name": "getSecretStorageWarningParentWindow"
-    },
-    {
-      "file": "packages/desktop/src/preload/hostBridge.ts",
-      "category": "exports",
-      "name": "createElectronHostBridge"
     },
     {
       "file": "packages/desktop/src/preload/hostBridge.ts",
@@ -110,6 +105,11 @@
       "file": "packages/desktop/src/preload/hostBridge.ts",
       "category": "exports",
       "name": "ELECTRON_WEBVIEW_PUSH_CHANNEL"
+    },
+    {
+      "file": "packages/desktop/src/preload/hostBridge.ts",
+      "category": "exports",
+      "name": "createElectronHostBridge"
     },
     {
       "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",
@@ -267,14 +267,14 @@
       "name": "LogEvent"
     },
     {
-      "file": "src/controllers/progressView/backend/restartRepair.ts",
-      "category": "exports",
-      "name": "RESTART_REPAIR_PHASES"
-    },
-    {
       "file": "src/controllers/progressView/ProgressViewHost.ts",
       "category": "types",
       "name": "ProgressViewHostCommandOptions"
+    },
+    {
+      "file": "src/controllers/progressView/backend/restartRepair.ts",
+      "category": "exports",
+      "name": "RESTART_REPAIR_PHASES"
     },
     {
       "file": "src/controllers/settingsView/LatexToolingController.ts",
@@ -479,12 +479,12 @@
     {
       "file": "src/shared/schemas/mainView/outbound.ts",
       "category": "exports",
-      "name": "InstructionTextPolishedMessageSchema"
+      "name": "InstructionTextPolishErrorMessageSchema"
     },
     {
       "file": "src/shared/schemas/mainView/outbound.ts",
       "category": "exports",
-      "name": "InstructionTextPolishErrorMessageSchema"
+      "name": "InstructionTextPolishedMessageSchema"
     },
     {
       "file": "src/shared/schemas/mainView/outbound.ts",
@@ -774,12 +774,12 @@
     {
       "file": "src/shared/schemas/progressView/outbound.ts",
       "category": "exports",
-      "name": "UpdateStreamsMessageSchema"
+      "name": "UpdateStreamStatusMessageSchema"
     },
     {
       "file": "src/shared/schemas/progressView/outbound.ts",
       "category": "exports",
-      "name": "UpdateStreamStatusMessageSchema"
+      "name": "UpdateStreamsMessageSchema"
     },
     {
       "file": "src/shared/schemas/progressView/outbound.ts",
@@ -804,7 +804,7 @@
     {
       "file": "src/shared/schemas/settingsView/data.ts",
       "category": "exports",
-      "name": "LatexdiffMathMarkupSchema"
+      "name": "KimiCodeAuthStatusSchema"
     },
     {
       "file": "src/shared/schemas/settingsView/data.ts",
@@ -815,6 +815,11 @@
       "file": "src/shared/schemas/settingsView/data.ts",
       "category": "exports",
       "name": "LatexSettingsStatusSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
+      "name": "LatexdiffMathMarkupSchema"
     },
     {
       "file": "src/shared/schemas/settingsView/data.ts",
@@ -839,12 +844,12 @@
     {
       "file": "src/shared/schemas/settingsView/data.ts",
       "category": "exports",
-      "name": "SettingsViewOutboundMessageSchema"
+      "name": "SetUnsupportedCommandsMessageSchema"
     },
     {
       "file": "src/shared/schemas/settingsView/data.ts",
       "category": "exports",
-      "name": "SetUnsupportedCommandsMessageSchema"
+      "name": "SettingsViewOutboundMessageSchema"
     },
     {
       "file": "src/shared/schemas/settingsView/data.ts",
@@ -919,6 +924,11 @@
     {
       "file": "src/shared/schemas/settingsView/data.ts",
       "category": "exports",
+      "name": "UpdateKimiCodeAuthStatusMessageSchema"
+    },
+    {
+      "file": "src/shared/schemas/settingsView/data.ts",
+      "category": "exports",
       "name": "UpdateLatexConfigValuesMessageSchema"
     },
     {
@@ -949,12 +959,12 @@
     {
       "file": "src/shared/schemas/settingsView/data.ts",
       "category": "types",
-      "name": "SettingsViewOutboundMessage"
+      "name": "SetUnsupportedCommandsMessage"
     },
     {
       "file": "src/shared/schemas/settingsView/data.ts",
       "category": "types",
-      "name": "SetUnsupportedCommandsMessage"
+      "name": "SettingsViewOutboundMessage"
     },
     {
       "file": "src/shared/schemas/stream.ts",
@@ -1029,12 +1039,12 @@
     {
       "file": "src/shared/schemas/toolResult.ts",
       "category": "exports",
-      "name": "EditedFileRecordSchema"
+      "name": "EditRecordSchema"
     },
     {
       "file": "src/shared/schemas/toolResult.ts",
       "category": "exports",
-      "name": "EditRecordSchema"
+      "name": "EditedFileRecordSchema"
     },
     {
       "file": "src/shared/schemas/toolResult.ts",

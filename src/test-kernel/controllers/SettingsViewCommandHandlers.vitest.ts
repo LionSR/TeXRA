@@ -12,6 +12,7 @@ const unsupportedReason = 'not available in this host';
 const NON_INBOUND_SETTINGS_COMMANDS = new Set<string>([
   SETTINGS_VIEW_CMD.SET_TAB,
   SETTINGS_VIEW_CMD.UPDATE_CHATGPT_AUTH_STATUS,
+  SETTINGS_VIEW_CMD.UPDATE_KIMI_CODE_AUTH_STATUS,
   SETTINGS_VIEW_CMD.UPDATE_DESKTOP_CRASH_REPORTING,
   SETTINGS_VIEW_CMD.UPDATE_GITHUB_TOKEN_STATUS,
   SETTINGS_VIEW_CMD.UPDATE_PR_SUBSCRIPTIONS,
@@ -102,6 +103,12 @@ function createActions(): SettingsViewCommandActions {
       openSubscriptionStream: action(),
     },
     chatGpt: {
+      signIn: action(),
+      signOut: action(),
+      setPreferSubscription: action(),
+      setSubscriptionToolUseOnly: action(),
+    },
+    kimiCode: {
       signIn: action(),
       signOut: action(),
       setPreferSubscription: action(),

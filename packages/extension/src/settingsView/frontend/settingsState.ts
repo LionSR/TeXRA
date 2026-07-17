@@ -38,6 +38,7 @@ import {
   type PRSubscriptionEntry,
   type ToolDashboardItem,
   type ChatGptAuthStatus,
+  type KimiCodeAuthStatus,
   DEFAULT_LATEX_SETTINGS_STATUS,
 } from '@shared/schemas/settingsViewMessages';
 import {
@@ -57,6 +58,12 @@ export interface ProviderKeyModalTarget {
 }
 
 const DEFAULT_CHATGPT_AUTH: ChatGptAuthStatus = {
+  signedIn: false,
+  preferSubscription: false,
+  subscriptionToolUseOnly: false,
+};
+
+const DEFAULT_KIMI_CODE_AUTH: KimiCodeAuthStatus = {
   signedIn: false,
   preferSubscription: false,
   subscriptionToolUseOnly: false,
@@ -153,6 +160,9 @@ export const githubTokenStatus = signal<'secret' | 'env' | 'none'>('none');
 export const chatgptAuth = signal<ChatGptAuthStatus>({
   ...DEFAULT_CHATGPT_AUTH,
 });
+export const kimiCodeAuth = signal<KimiCodeAuthStatus>({
+  ...DEFAULT_KIMI_CODE_AUTH,
+});
 export const desktopCrashReportingEnabled = signal(false);
 export const desktopCrashReportingConfigured = signal(false);
 export const prSubscriptions = signal<readonly PRSubscriptionEntry[]>([]);
@@ -242,6 +252,7 @@ export function resetSettingsState(): void {
   gitSettingsLoaded.set(false);
   githubTokenStatus.set('none');
   chatgptAuth.set({ ...DEFAULT_CHATGPT_AUTH });
+  kimiCodeAuth.set({ ...DEFAULT_KIMI_CODE_AUTH });
   desktopCrashReportingEnabled.set(false);
   desktopCrashReportingConfigured.set(false);
   prSubscriptions.set([]);

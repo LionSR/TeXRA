@@ -285,6 +285,16 @@ const SetChatGptSubscriptionToolUseOnlyMessageSchema = enabledFlag(
   CMD.SET_CHATGPT_SUBSCRIPTION_TOOL_USE_ONLY,
 );
 
+// Kimi Code subscription sign-in messages
+const SignInKimiCodeMessageSchema = commandOnly(CMD.SIGN_IN_KIMI_CODE);
+const SignOutKimiCodeMessageSchema = commandOnly(CMD.SIGN_OUT_KIMI_CODE);
+const SetKimiCodePreferSubscriptionMessageSchema = enabledFlag(
+  CMD.SET_KIMI_CODE_PREFER_SUBSCRIPTION,
+);
+const SetKimiCodeSubscriptionToolUseOnlyMessageSchema = enabledFlag(
+  CMD.SET_KIMI_CODE_SUBSCRIPTION_TOOL_USE_ONLY,
+);
+
 const GetDesktopCrashReportingMessageSchema = commandOnly(
   CMD.GET_DESKTOP_CRASH_REPORTING,
 );
@@ -485,6 +495,11 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SignOutChatGptMessageSchema,
     SetChatGptPreferSubscriptionMessageSchema,
     SetChatGptSubscriptionToolUseOnlyMessageSchema,
+    // Kimi Code subscription sign-in messages
+    SignInKimiCodeMessageSchema,
+    SignOutKimiCodeMessageSchema,
+    SetKimiCodePreferSubscriptionMessageSchema,
+    SetKimiCodeSubscriptionToolUseOnlyMessageSchema,
     GetDesktopCrashReportingMessageSchema,
     SetDesktopCrashReportingEnabledMessageSchema,
     SetDesktopCrashReportingDsnMessageSchema,

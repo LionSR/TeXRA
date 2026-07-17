@@ -45,6 +45,8 @@ export const CliNdjsonRecordSchema = z.discriminatedUnion('kind', [
   z.looseObject({ kind: z.literal('init-config'), init: payload }),
   z.looseObject({ kind: z.literal('chatgpt-auth') }),
   z.looseObject({ kind: z.literal('chatgpt-auth-status') }),
+  z.looseObject({ kind: z.literal('kimi-code-auth') }),
+  z.looseObject({ kind: z.literal('kimi-code-auth-status') }),
   z.looseObject({ kind: z.literal('relay-usage') }),
   z.looseObject({ kind: z.literal('relay-token') }),
   z.looseObject({ kind: z.literal('relay-token-info') }),

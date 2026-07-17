@@ -369,6 +369,23 @@ export type UpdateChatGptAuthStatusMessage = z.infer<
   typeof UpdateChatGptAuthStatusMessageSchema
 >;
 
+/** Outbound: backend → frontend Kimi Code subscription sign-in status. */
+export const KimiCodeAuthStatusSchema = z.object({
+  signedIn: z.boolean(),
+  accountId: z.string().nullish(),
+  preferSubscription: z.boolean(),
+  subscriptionToolUseOnly: z.boolean(),
+});
+export type KimiCodeAuthStatus = z.infer<typeof KimiCodeAuthStatusSchema>;
+
+export const UpdateKimiCodeAuthStatusMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_KIMI_CODE_AUTH_STATUS),
+  status: KimiCodeAuthStatusSchema,
+});
+export type UpdateKimiCodeAuthStatusMessage = z.infer<
+  typeof UpdateKimiCodeAuthStatusMessageSchema
+>;
+
 /** Outbound: backend → frontend desktop crash reporting status. */
 export const UpdateDesktopCrashReportingMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING),
@@ -539,6 +556,7 @@ export const SettingsViewOutboundMessageSchema = z.discriminatedUnion(
     UpdateGitAuthorSettingsMessageSchema,
     UpdateGitHubTokenStatusMessageSchema,
     UpdateChatGptAuthStatusMessageSchema,
+    UpdateKimiCodeAuthStatusMessageSchema,
     UpdateDesktopCrashReportingMessageSchema,
     UpdatePRSubscriptionsMessageSchema,
     UpdateLatexSettingsStatusMessageSchema,

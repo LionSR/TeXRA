@@ -18,7 +18,7 @@ import {
   requestDeviceUserCode,
 } from './kimiCodeOAuthClient';
 
-export interface KimiCodeDevicePrompt {
+interface KimiCodeDevicePrompt {
   /** The one-time code the user confirms at the verification URL. */
   userCode: string;
   /** Where the user approves — prefer this (usually embeds the code). */

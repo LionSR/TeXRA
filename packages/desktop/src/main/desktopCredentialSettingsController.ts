@@ -14,6 +14,13 @@ import {
   setCodexSubscriptionToolUseOnly,
   setPreferCodexSubscription,
 } from '@auth/codex';
+import {
+  getKimiCodeAuthStatus,
+  kimiCodeCoordinator,
+  loginWithKimiCodeDeviceCode,
+  setKimiCodeSubscriptionToolUseOnly,
+  setPreferKimiCodeSubscription,
+} from '@auth/kimiCode';
 import type { ExternalOpener, PromptHost } from '@hosts/uiHosts';
 import {
   API_PROVIDERS,
@@ -35,7 +42,10 @@ import {
 } from '@shared/constants/providers';
 import { AgentCategory } from '@shared/schemas/agent';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
-import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
+import {
+  buildChatGptAuthStatusMessage,
+  buildKimiCodeAuthStatusMessage,
+} from '@shared/settingsView/handlers/chatGptHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { unsupported } from '@shared/utils/dispatcher';
 
@@ -79,6 +89,10 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
   readonly prompt: Pick<PromptHost, 'input' | 'confirm'>;
   readonly externalOpener: Pick<ExternalOpener, 'openExternal'> & {
     presentChatGptSignInUrl(url: string): void | Promise<void>;
+    presentKimiCodeSignInPrompt(
+      userCode: string,
+      url: string,
+    ): void | Promise<void>;
   };
   readonly notifications: DesktopCredentialNotificationPort;
   readonly auth: DesktopCredentialAuthPort;
@@ -91,6 +105,7 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
 export interface DesktopCredentialSettingsController {
   readonly profileActions: SettingsViewCommandActions['profile'];
   readonly chatGptActions: SettingsViewCommandActions['chatGpt'];
+  readonly kimiCodeActions: SettingsViewCommandActions['kimiCode'];
   readonly modelSelectionController: SettingsModelSelectionController;
   prepareModelSelectionData(): Promise<void>;
   postMainModelOptionsData(): Promise<void>;
@@ -103,6 +118,7 @@ export interface DesktopCredentialSettingsController {
 export class DefaultDesktopCredentialSettingsController implements DesktopCredentialSettingsController {
   readonly profileActions: SettingsViewCommandActions['profile'];
   readonly chatGptActions: SettingsViewCommandActions['chatGpt'];
+  readonly kimiCodeActions: SettingsViewCommandActions['kimiCode'];
   readonly modelSelectionController: SettingsModelSelectionController;
 
   private readonly profileController: SettingsProfileController;
@@ -181,6 +197,14 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       setSubscriptionToolUseOnly: (enabled) =>
         this.setChatGptSubscriptionToolUseOnly(enabled),
     };
+    this.kimiCodeActions = {
+      signIn: () => this.signInKimiCode(),
+      signOut: () => this.signOutKimiCode(),
+      setPreferSubscription: (enabled) =>
+        this.setKimiCodePreferSubscription(enabled),
+      setSubscriptionToolUseOnly: (enabled) =>
+        this.setKimiCodeSubscriptionToolUseOnly(enabled),
+    };
   }
 
   async prepareModelSelectionData(): Promise<void> {
@@ -188,7 +212,11 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   }
 
   async postStartupData(): Promise<void> {
-    await Promise.all([this.postProfileData(), this.postChatGptAuthStatus()]);
+    await Promise.all([
+      this.postProfileData(),
+      this.postChatGptAuthStatus(),
+      this.postKimiCodeAuthStatus(),
+    ]);
   }
 
   async postMainModelOptionsData(): Promise<void> {
@@ -326,6 +354,103 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     await this.options.onCredentialChanged();
   }
 
+  private async refreshAfterKimiCodeAuthChange(): Promise<void> {
+    invalidateModelOptionsCache();
+    await Promise.all([
+      this.postKimiCodeAuthStatus(),
+      this.postModelSelectionData(),
+      this.postMainModelOptionsData(),
+    ]);
+    await this.options.onCredentialChanged();
+  }
+
+  private async signInKimiCode(): Promise<void> {
+    try {
+      const session = await loginWithKimiCodeDeviceCode({
+        coordinator: kimiCodeCoordinator(),
+        onPrompt: ({ userCode, verificationUrl }) => {
+          void Promise.resolve(
+            this.options.externalOpener.openExternal(verificationUrl),
+          ).catch(this.options.onError);
+          // This dialog is informational. The device-code poll runs while it
+          // stays open, so approving in the browser completes sign-in even if
+          // the user never dismisses the dialog.
+          void Promise.resolve(
+            this.options.externalOpener.presentKimiCodeSignInPrompt(
+              userCode,
+              verificationUrl,
+            ),
+          ).catch(this.options.onError);
+        },
+      });
+      await setPreferKimiCodeSubscription(true);
+      await this.options.notifications.showInfoMessage(
+        `Signed in with Kimi Code as ${session.accountId ?? 'your account'}.`,
+      );
+    } catch (error) {
+      await this.options.notifications.showErrorMessage(
+        `Kimi Code sign-in failed: ${toErrorMessage(error)}`,
+      );
+      this.options.onError(error);
+    } finally {
+      await this.refreshAfterKimiCodeAuthChange();
+    }
+  }
+
+  private async signOutKimiCode(): Promise<void> {
+    try {
+      await kimiCodeCoordinator().signOut();
+      await this.options.notifications.showInfoMessage(
+        'Signed out of Kimi Code.',
+      );
+    } catch (error) {
+      await this.options.notifications.showErrorMessage(
+        `Kimi Code sign-out failed: ${toErrorMessage(error)}`,
+      );
+      this.options.onError(error);
+    } finally {
+      await this.refreshAfterKimiCodeAuthChange();
+    }
+  }
+
+  private async setKimiCodePreferSubscription(enabled: boolean): Promise<void> {
+    try {
+      const update = await setPreferKimiCodeSubscription(enabled);
+      if (update.effective !== enabled) {
+        await this.options.notifications.showInfoMessage(
+          `A more specific setting still keeps Kimi Code subscription ${update.effective ? 'enabled' : 'disabled'}.`,
+        );
+      }
+    } catch (error) {
+      await this.options.notifications.showErrorMessage(
+        `Kimi Code subscription preference update failed: ${toErrorMessage(error)}`,
+      );
+      this.options.onError(error);
+    } finally {
+      await this.refreshAfterKimiCodeAuthChange();
+    }
+  }
+
+  private async setKimiCodeSubscriptionToolUseOnly(
+    enabled: boolean,
+  ): Promise<void> {
+    try {
+      const update = await setKimiCodeSubscriptionToolUseOnly(enabled);
+      if (update.effective !== enabled) {
+        await this.options.notifications.showInfoMessage(
+          `The effective "subscription for tool-use only" setting remains ${update.effective ? 'enabled' : 'disabled'}.`,
+        );
+      }
+    } catch (error) {
+      await this.options.notifications.showErrorMessage(
+        `Kimi Code subscription scope update failed: ${toErrorMessage(error)}`,
+      );
+      this.options.onError(error);
+    } finally {
+      await this.refreshAfterKimiCodeAuthChange();
+    }
+  }
+
   private async signOutChatGpt(): Promise<void> {
     try {
       await codexCoordinator().signOut();
@@ -389,6 +514,12 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   private async postChatGptAuthStatus(): Promise<void> {
     this.options.renderer.postToRenderer(
       await buildChatGptAuthStatusMessage(getChatGptAuthStatus),
+    );
+  }
+
+  private async postKimiCodeAuthStatus(): Promise<void> {
+    this.options.renderer.postToRenderer(
+      await buildKimiCodeAuthStatusMessage(getKimiCodeAuthStatus),
     );
   }
 

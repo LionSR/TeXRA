@@ -11,6 +11,7 @@ import {
   getProviderEndpoint,
   getDashScopeUseChina,
   getMiniMaxUseChina,
+  getMoonshotUseChina,
   getGLMUseChina,
   getGLMCodingPlan,
   getUseOpenRouter,
@@ -45,7 +46,7 @@ const BASE_URLS: Record<ModelProvider, string | null> = {
   [ModelProvider.ANTHROPIC]: null,
   [ModelProvider.DEEPSEEK]: 'https://api.deepseek.com',
   [ModelProvider.XAI]: 'https://api.x.ai/v1',
-  [ModelProvider.MOONSHOT]: 'https://api.moonshot.cn/v1',
+  [ModelProvider.MOONSHOT]: null, // Resolved dynamically (China/international toggle)
   [ModelProvider.DASHSCOPE]: null, // Resolved dynamically (China/international toggle)
   [ModelProvider.MINIMAX]: null, // Resolved dynamically (China/international toggle)
   [ModelProvider.GLM]: null, // Resolved dynamically (China/international toggle)
@@ -197,6 +198,15 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
       const domain = getMiniMaxUseChina()
         ? 'api.minimaxi.com'
         : 'api.minimax.io';
+      return `https://${domain}/v1`;
+    }
+    case ModelProvider.MOONSHOT: {
+      // China: api.moonshot.cn, International: api.moonshot.ai. Keys are
+      // platform-specific. Kimi Code models never reach this switch — their
+      // registry baseUrl wins as customBaseUrl at the top of this resolver.
+      const domain = getMoonshotUseChina()
+        ? 'api.moonshot.cn'
+        : 'api.moonshot.ai';
       return `https://${domain}/v1`;
     }
     case ModelProvider.GLM: {

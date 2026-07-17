@@ -140,6 +140,12 @@ export function createStubDesktopCredentialSettingsController(
       setPreferSubscription: noOp,
       setSubscriptionToolUseOnly: noOp,
     },
+    kimiCodeActions: {
+      signIn: noOp,
+      signOut: noOp,
+      setPreferSubscription: noOp,
+      setSubscriptionToolUseOnly: noOp,
+    },
     modelSelectionController: createModelSelectionController(state),
     prepareModelSelectionData: noOp,
     postMainModelOptionsData: noOp,

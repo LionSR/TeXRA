@@ -18,6 +18,7 @@
  */
 import OpenAI from 'openai';
 
+import type { StandardPricingConfig } from '@agent/utils/priceUtils';
 import {
   KIMI_CODE_BASE_URL,
   KimiCodeAuthError,
@@ -26,6 +27,7 @@ import {
   kimiCodeClientHeaders,
   kimiCodeCoordinator,
 } from '@auth/kimiCode';
+import type { ToolDefinition } from '@model';
 import {
   KIMI_CODE_SUBSCRIPTION_CONTEXT_WINDOW,
   isKimiCodeExclusiveModel,
@@ -34,8 +36,6 @@ import {
 } from '@model/kimiCodeSubscriptionRouting';
 
 import { ModelHandlerKimi } from './modelHandlerKimi';
-import type { StandardPricingConfig } from '@agent/utils/priceUtils';
-import type { ToolDefinition } from '@model';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 export class ModelHandlerKimiCode extends ModelHandlerKimi {

@@ -13,7 +13,10 @@ import {
 } from '@extensionSchemas/texraSettings';
 import { PROVIDER_VSCODE_SETTINGS } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { getGLMUseChina } from '@utils/config/providerConfig';
+import {
+  getGLMUseChina,
+  getMoonshotUseChina,
+} from '@utils/config/providerConfig';
 
 interface PackageConfigurationProperty {
   default?: unknown;
@@ -94,6 +97,7 @@ describe('TexraSettingsSchema', () => {
     const settingsDefaults = flattenTexraSettings();
     const globalStateDefaults: Record<string, boolean> = {
       [GlobalStateKey.GLM_USE_CHINA]: getGLMUseChina(),
+      [GlobalStateKey.MOONSHOT_USE_CHINA]: getMoonshotUseChina(),
     };
 
     for (const setting of Object.values(PROVIDER_VSCODE_SETTINGS).flat()) {

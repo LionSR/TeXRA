@@ -11,43 +11,23 @@ export * from './kimiCodeConstants';
 export {
   KimiCodeAuthError,
   formatKimiCodeAuthUnavailableMessage,
-  KimiCodeSessionSchema,
-  KimiCodeTokenResponseSchema,
-  KimiCodeDeviceUserCodeSchema,
   type KimiCodeSession,
   type KimiCodeTokenResponse,
-  type KimiCodeDeviceUserCode,
-  type KimiCodeAuthErrorKind,
 } from './kimiCodeSessionTypes';
 export {
   requestDeviceUserCode,
   pollDeviceToken,
   refreshTokens,
-  type KimiCodePollResult,
 } from './kimiCodeOAuthClient';
-export {
-  getKimiCodeDeviceId,
-  kimiCodeClientHeaders,
-} from './kimiCodeDeviceIdentity';
+export { kimiCodeClientHeaders } from './kimiCodeDeviceIdentity';
 export {
   KimiCodeSessionCoordinator,
-  type KimiCodeSessionCoordinatorInit,
   type KimiCodeSessionStorage,
   type KimiCodeOAuthRefreshClient,
-  type KimiCodeSessionStatus,
-  type KimiCodeLogger,
 } from './KimiCodeSessionCoordinator';
 export {
-  createKimiCodeAuthCoordinator,
-  type KimiCodeAuthCoordinatorInit,
-  type KimiCodeSecretStore,
-} from './KimiCodeAuthCoordinator';
-export {
   kimiCodeCoordinator,
-  resetKimiCodeCoordinator,
-  getKimiCodeStatus,
   getKimiCodeAuthStatus,
-  isKimiCodeSessionRoutable,
   isKimiCodeSignedIn,
 } from './kimiCodeAuthAccess';
 export {
@@ -57,8 +37,4 @@ export {
   setKimiCodeSubscriptionToolUseOnly,
   type KimiCodeSubscriptionPreferenceUpdate,
 } from './kimiCodePreference';
-export {
-  loginWithKimiCodeDeviceCode,
-  type KimiCodeDeviceLoginOptions,
-  type KimiCodeDevicePrompt,
-} from './kimiCodeDeviceLogin';
+export { loginWithKimiCodeDeviceCode } from './kimiCodeDeviceLogin';

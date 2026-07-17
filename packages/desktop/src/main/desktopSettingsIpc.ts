@@ -367,6 +367,7 @@ export function createDesktopSettingsIpc(
       ),
     },
     chatGpt: options.credentialSettingsController.chatGptActions,
+    kimiCode: options.credentialSettingsController.kimiCodeActions,
     approval: {
       setBashApprovalEnabled: (enabled) => updateBashApprovalEnabled(enabled),
       setCodexSandboxMode: (mode) =>

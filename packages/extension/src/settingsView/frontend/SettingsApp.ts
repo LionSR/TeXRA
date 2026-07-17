@@ -85,6 +85,7 @@ import {
   helperModel,
   historyItems,
   inlineCriticismEnabled,
+  kimiCodeAuth,
   latexConfigValues,
   latexConfigValuesLoaded,
   latexSettingsLoaded,
@@ -566,6 +567,23 @@ export class SettingsApp extends SettingsAppBase {
     SETTINGS_VIEW_COMMANDS.SET_CHATGPT_SUBSCRIPTION_TOOL_USE_ONLY,
   );
 
+  // Kimi Code subscription sign-in handlers
+  private handleKimiCodeSignIn = forwardCommand(
+    SETTINGS_VIEW_COMMANDS.SIGN_IN_KIMI_CODE,
+  );
+
+  private handleKimiCodeSignOut = forwardCommand(
+    SETTINGS_VIEW_COMMANDS.SIGN_OUT_KIMI_CODE,
+  );
+
+  private handleSetKimiCodePreferSubscription = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_KIMI_CODE_PREFER_SUBSCRIPTION,
+  );
+
+  private handleSetKimiCodeSubscriptionToolUseOnly = forwardDetail(
+    SETTINGS_VIEW_COMMANDS.SET_KIMI_CODE_SUBSCRIPTION_TOOL_USE_ONLY,
+  );
+
   private handleDesktopCrashReportingToggle = forwardDetail(
     SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_ENABLED,
   );
@@ -792,6 +810,7 @@ export class SettingsApp extends SettingsAppBase {
               .quotaAutoSwitched=${quotaAutoSwitched.get()}
               .providerKeyStatuses=${providerKeyStatuses.get()}
               .chatgptAuth=${chatgptAuth.get()}
+              .kimiCodeAuth=${kimiCodeAuth.get()}
               .globalStreamingDefault=${globalStreamingDefault.get()}
               .modelSelectionItems=${modelSelectionItems.get()}
               .reliabilitySettings=${reliabilitySettings.get()}
@@ -822,6 +841,14 @@ export class SettingsApp extends SettingsAppBase {
               }
               @chatgpt-subscription-tool-use-only-set=${
                 this.handleSetChatGptSubscriptionToolUseOnly
+              }
+              @kimi-code-sign-in=${this.handleKimiCodeSignIn}
+              @kimi-code-sign-out=${this.handleKimiCodeSignOut}
+              @kimi-code-prefer-subscription-set=${
+                this.handleSetKimiCodePreferSubscription
+              }
+              @kimi-code-subscription-tool-use-only-set=${
+                this.handleSetKimiCodeSubscriptionToolUseOnly
               }
             ></models-tab>
           </wa-tab-panel>

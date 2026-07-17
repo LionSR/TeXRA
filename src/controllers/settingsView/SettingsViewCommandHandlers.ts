@@ -162,6 +162,12 @@ export interface SettingsViewCommandActions {
     readonly setPreferSubscription: EnabledAction;
     readonly setSubscriptionToolUseOnly: EnabledAction;
   };
+  readonly kimiCode: {
+    readonly signIn: HandlerOrUnsupported;
+    readonly signOut: HandlerOrUnsupported;
+    readonly setPreferSubscription: EnabledAction;
+    readonly setSubscriptionToolUseOnly: EnabledAction;
+  };
   readonly approval: {
     readonly setBashApprovalEnabled: EnabledAction;
     readonly setCodexSandboxMode: StringAction;
@@ -410,6 +416,17 @@ export function createSettingsViewCommandHandlers(
     ),
     setChatGptSubscriptionToolUseOnly: mapAction(
       actions.chatGpt.setSubscriptionToolUseOnly,
+      (data) => [data.enabled],
+    ),
+
+    signInKimiCode: actions.kimiCode.signIn,
+    signOutKimiCode: actions.kimiCode.signOut,
+    setKimiCodePreferSubscription: mapAction(
+      actions.kimiCode.setPreferSubscription,
+      (data) => [data.enabled],
+    ),
+    setKimiCodeSubscriptionToolUseOnly: mapAction(
+      actions.kimiCode.setSubscriptionToolUseOnly,
       (data) => [data.enabled],
     ),
 

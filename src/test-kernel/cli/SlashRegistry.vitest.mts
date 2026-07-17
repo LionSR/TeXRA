@@ -172,6 +172,7 @@ describe('slashRegistry', () => {
   it('keeps ChatGPT subscription first in the login picker', () => {
     expect(LOGIN_FORM_ITEMS.map((item) => item.value)).toEqual([
       'chatgpt',
+      'kimi',
       'texra',
       'chatgpt --device',
       'texra --device',

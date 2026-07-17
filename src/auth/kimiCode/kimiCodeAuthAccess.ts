@@ -39,13 +39,8 @@ export function kimiCodeCoordinator(): KimiCodeSessionCoordinator {
   return singleton;
 }
 
-/** Test seam: drop the cached coordinator. */
-export function resetKimiCodeCoordinator(): void {
-  singleton = null;
-}
-
 /** Signed-in status, safe to call before platform init (returns signed-out). */
-export async function getKimiCodeStatus(): Promise<KimiCodeSessionStatus> {
+async function getKimiCodeStatus(): Promise<KimiCodeSessionStatus> {
   if (!tryPlatform()) return { signedIn: false };
   try {
     return await kimiCodeCoordinator().getStatus();
@@ -63,55 +58,6 @@ export async function getKimiCodeStatus(): Promise<KimiCodeSessionStatus> {
 /** Whether a Kimi Code session is currently signed in (no network, no throw). */
 export async function isKimiCodeSignedIn(): Promise<boolean> {
   return (await getKimiCodeStatus()).signedIn;
-}
-
-/**
- * Whether subscription routing should use the stored session. Expiring
- * sessions are refreshed by the coordinator; absent/dead sessions return false
- * after its re-auth path clears them. If a re-auth error leaves a session in
- * storage, the refresh was superseded and the error propagates rather than
- * misrouting the newer session. Retryable errors likewise propagate so callers
- * do not silently spend fallback quota or immediately retry the same refresh.
- */
-export async function isKimiCodeSessionRoutable(): Promise<boolean> {
-  if (!tryPlatform()) return false;
-  const coordinator = kimiCodeCoordinator();
-  try {
-    await coordinator.getFreshAccessToken();
-    return true;
-  } catch (error) {
-    if (!(error instanceof KimiCodeAuthError)) {
-      throw new KimiCodeAuthError(
-        `Could not access Kimi Code session: ${toErrorMessage(error)}`,
-        'transient',
-        undefined,
-        { cause: error },
-      );
-    }
-    if (error.needsReauth) {
-      let storedSession;
-      try {
-        storedSession = await coordinator.loadSession();
-      } catch (readError) {
-        throw new KimiCodeAuthError(
-          `Could not verify Kimi Code session: ${toErrorMessage(readError)}`,
-          'transient',
-          undefined,
-          { cause: readError },
-        );
-      }
-      if (storedSession) {
-        throw new KimiCodeAuthError(
-          'Kimi Code session changed while refreshing.',
-          'transient',
-          error.status,
-          { cause: error },
-        );
-      }
-      return false;
-    }
-    throw error;
-  }
 }
 
 /**

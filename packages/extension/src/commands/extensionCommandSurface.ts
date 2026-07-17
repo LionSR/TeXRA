@@ -59,6 +59,7 @@ import { handleParseYaml as sysParseYaml } from '@commands/system/yamlCommands';
 import { handleTestTextEditor as sysTestTextEditor } from '@commands/system/textEditorCommands';
 import { SIDEBAR_VIEWS, getActiveSidebarView } from '@common/webview';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
+import { signInWithKimiCodeSubscription } from '@frontend/auth/kimiCodeSubscriptionSignIn';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { runCleanBuild, runCleanOutput } from '@housekeeping';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
@@ -74,6 +75,7 @@ import {
 
 const RESET_CHANNEL = 'mainViewCommands';
 const CHATGPT_SIGN_IN_CHANNEL = 'ChatGptSubscription';
+const KIMI_CODE_SIGN_IN_CHANNEL = 'KimiCodeSubscription';
 
 export function createExtensionCommandActions(
   context: vscode.ExtensionContext,
@@ -110,6 +112,16 @@ export function createExtensionCommandActions(
     async signInChatGpt() {
       const signedIn = await signInWithChatGptSubscription(
         CHATGPT_SIGN_IN_CHANNEL,
+      );
+      await Promise.all([
+        vscode.commands.executeCommand('texra.refreshApiKeyStatus'),
+        vscode.commands.executeCommand('texra.refreshAllOptions'),
+      ]);
+      return signedIn;
+    },
+    async signInKimiCode() {
+      const signedIn = await signInWithKimiCodeSubscription(
+        KIMI_CODE_SIGN_IN_CHANNEL,
       );
       await Promise.all([
         vscode.commands.executeCommand('texra.refreshApiKeyStatus'),

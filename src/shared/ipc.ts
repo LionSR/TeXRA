@@ -365,6 +365,12 @@ export const SETTINGS_VIEW_CMD = {
   SIGN_OUT_CHATGPT: 'signOutChatGpt',
   SET_CHATGPT_PREFER_SUBSCRIPTION: 'setChatGptPreferSubscription',
   SET_CHATGPT_SUBSCRIPTION_TOOL_USE_ONLY: 'setChatGptSubscriptionToolUseOnly',
+  // Kimi Code subscription sign-in commands
+  UPDATE_KIMI_CODE_AUTH_STATUS: 'updateKimiCodeAuthStatus',
+  SIGN_IN_KIMI_CODE: 'signInKimiCode',
+  SIGN_OUT_KIMI_CODE: 'signOutKimiCode',
+  SET_KIMI_CODE_PREFER_SUBSCRIPTION: 'setKimiCodePreferSubscription',
+  SET_KIMI_CODE_SUBSCRIPTION_TOOL_USE_ONLY: 'setKimiCodeSubscriptionToolUseOnly',
   GET_DESKTOP_CRASH_REPORTING: 'getDesktopCrashReporting',
   UPDATE_DESKTOP_CRASH_REPORTING: 'updateDesktopCrashReporting',
   SET_DESKTOP_CRASH_REPORTING_ENABLED: 'setDesktopCrashReportingEnabled',

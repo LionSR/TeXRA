@@ -28,6 +28,15 @@ export const ChatGptAuthEvents = {
     createEvent('chatgpt-subscription-tool-use-only-set', detail),
 } as const;
 
+export const KimiCodeAuthEvents = {
+  signIn: () => createEvent('kimi-code-sign-in', {}),
+  signOut: () => createEvent('kimi-code-sign-out', {}),
+  setPreferSubscription: (detail: { enabled: boolean }) =>
+    createEvent('kimi-code-prefer-subscription-set', detail),
+  setSubscriptionToolUseOnly: (detail: { enabled: boolean }) =>
+    createEvent('kimi-code-subscription-tool-use-only-set', detail),
+} as const;
+
 export const ProviderKeyEvents = {
   setKey: (detail: { provider: string }) =>
     createEvent('provider-key-set', detail),

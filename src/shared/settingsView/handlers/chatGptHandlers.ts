@@ -9,7 +9,9 @@
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   ChatGptAuthStatus,
+  KimiCodeAuthStatus,
   UpdateChatGptAuthStatusMessage,
+  UpdateKimiCodeAuthStatusMessage,
 } from '@shared/schemas/settingsViewMessages';
 
 export async function buildChatGptAuthStatusMessage(
@@ -17,6 +19,15 @@ export async function buildChatGptAuthStatusMessage(
 ): Promise<UpdateChatGptAuthStatusMessage> {
   return {
     command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
+    status: await getStatus(),
+  };
+}
+
+export async function buildKimiCodeAuthStatusMessage(
+  getStatus: () => Promise<KimiCodeAuthStatus>,
+): Promise<UpdateKimiCodeAuthStatusMessage> {
+  return {
+    command: SETTINGS_VIEW_COMMANDS.UPDATE_KIMI_CODE_AUTH_STATUS,
     status: await getStatus(),
   };
 }

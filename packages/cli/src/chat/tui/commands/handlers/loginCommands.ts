@@ -5,12 +5,21 @@ import {
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
 import {
+  refreshKimiCodePreferenceViews,
+  setCliKimiCodeSubscription,
+} from '@cli/chat/tui/state/kimiCodeSubscription';
+import {
   chatGptAccountLabel,
   chatGptSignOutPreferenceMessage,
   shouldUseChatGptDeviceCode,
   signInCliChatGpt,
   signOutCliChatGpt,
 } from '@cli/runtime/chatgptLogin';
+import {
+  kimiCodeSignOutPreferenceMessage,
+  signInCliKimiCode,
+  signOutCliKimiCode,
+} from '@cli/runtime/kimiCodeLogin';
 import { type CliContext } from '@cli/runtime/cliContext';
 import {
   githubSelectAccountWarning,
@@ -35,9 +44,13 @@ import { setCliSessionApiMode } from './apiModeCommands';
 const CHAT_LOGIN_USAGE = [
   'Usage: /login [texra [github | google]] [--no-browser] [--device] [--select-account] [--login-hint <account>]',
   '       /login chatgpt [--no-browser] [--device]',
+  '       /login kimi',
 ].join('\n');
 
 function loginStartMessage(args: CliLoginSlashArgs): string {
+  if (args.target === 'kimi') {
+    return 'Starting Kimi Code device-code sign-in.';
+  }
   if (args.target === 'chatgpt') {
     if (args.device) return 'Starting ChatGPT device-code sign-in.';
     if (args.noBrowser) return 'Starting ChatGPT sign-in.';
@@ -62,6 +75,22 @@ async function loginToChatGptSubscription(
       update.effective
         ? 'ChatGPT subscription enabled for Codex models.'
         : `ChatGPT subscription preference is still disabled because a more specific setting overrides ${update.target} config.`,
+    ].join('\n'),
+  );
+}
+
+async function loginToKimiCodeSubscription(): Promise<void> {
+  await signInCliKimiCode({
+    writeProgress: appendLocalAssistantTranscript,
+  });
+  const update = await setCliKimiCodeSubscription(true);
+
+  appendLocalAssistantTranscript(
+    [
+      'Signed in with Kimi Code.',
+      update.effective
+        ? 'Kimi Code subscription enabled for Kimi models.'
+        : `Kimi Code subscription preference is still disabled because a more specific setting overrides ${update.target} config.`,
     ].join('\n'),
   );
 }
@@ -113,7 +142,8 @@ export async function loginFromChat(
 
   // Match the CLI `login` guard: reject `--device` + `--no-browser` from the
   // user's parsed flags before the ChatGPT path can auto-resolve `device`.
-  if (hasLoginTransportConflict(args)) {
+  // The Kimi Code target carries no transport flags (device-code only).
+  if (args.target !== 'kimi' && hasLoginTransportConflict(args)) {
     appendLocalAssistantTranscript(LOGIN_TRANSPORT_CONFLICT_MESSAGE);
     return;
   }
@@ -125,6 +155,10 @@ export async function loginFromChat(
   appendLocalAssistantTranscript(loginStartMessage(loginArgs));
 
   try {
+    if (loginArgs.target === 'kimi') {
+      await loginToKimiCodeSubscription();
+      return;
+    }
     if (loginArgs.target === 'chatgpt') {
       await loginToChatGptSubscription(loginArgs);
       return;
@@ -152,6 +186,14 @@ export async function logoutFromChat(): Promise<void> {
     lines.push(chatGptSignOutPreferenceMessage(chatGptUpdate));
   } catch (error: unknown) {
     lines.push(`ChatGPT sign-out failed: ${toErrorMessage(error)}`);
+  }
+
+  try {
+    const kimiCodeUpdate = await signOutCliKimiCode();
+    refreshKimiCodePreferenceViews();
+    lines.push(kimiCodeSignOutPreferenceMessage(kimiCodeUpdate));
+  } catch (error: unknown) {
+    lines.push(`Kimi Code sign-out failed: ${toErrorMessage(error)}`);
   }
 
   if (texraSignedOut) {

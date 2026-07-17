@@ -19,13 +19,14 @@
  *    (`kimi-k3` → `k3`, see {@link kimiCodeWireModelId}).
  */
 
+import { ModelProvider, type ModelConfig } from 'llm-zoo';
+
 import {
   KIMI_CODE_BASE_URL,
   isKimiCodeSubscriptionToolUseOnly,
   isPreferKimiCodeSubscription,
 } from '@auth/kimiCode';
 import { AgentCategory } from '@shared/schemas/agent';
-import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import type { ProviderCapabilityProfile } from './providerCapabilities';
 

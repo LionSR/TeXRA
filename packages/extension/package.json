@@ -317,6 +317,18 @@
             "default": false,
             "description": "Use your ChatGPT subscription for tool-use agents while workflow agents continue through your OpenAI API key or relay.",
             "scope": "resource"
+          },
+          "texra.kimiCode.preferSubscription": {
+            "type": "boolean",
+            "default": false,
+            "description": "Prefer your signed-in Kimi Code subscription for Kimi models instead of API-key routing. Experimental.",
+            "scope": "resource"
+          },
+          "texra.kimiCode.subscriptionToolUseOnly": {
+            "type": "boolean",
+            "default": false,
+            "description": "Use your Kimi Code subscription for tool-use agents while workflow agents fall back to your Kimi Code console API key. Without a console key, workflow agents on these models fail.",
+            "scope": "resource"
           }
         }
       },
@@ -1100,6 +1112,12 @@
         "icon": "$(comment-discussion)"
       },
       {
+        "command": "texra.auth.kimiCode.signIn",
+        "title": "Sign In with Kimi Code",
+        "category": "TeXRA",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "command": "texra.auth.signOut",
         "title": "Sign Out",
         "category": "TeXRA",
@@ -1744,6 +1762,10 @@
         },
         {
           "command": "texra.auth.chatgpt.signIn",
+          "when": "texra.activated"
+        },
+        {
+          "command": "texra.auth.kimiCode.signIn",
           "when": "texra.activated"
         },
         {

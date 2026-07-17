@@ -15,12 +15,16 @@ import '@awesome.me/webawesome/dist/components/switch/switch.js';
 // Local imports - shared schemas
 import type {
   ChatGptAuthStatus,
+  KimiCodeAuthStatus,
   ModelSelectionItem,
   NumberVscodeSetting,
   ProviderKeyStatus,
 } from '@shared/schemas/settingsViewMessages';
 import type { SpendingStatus } from '@shared/schemas/spendingStatus';
-import { CHATGPT_TOOL_USE_ONLY_DESCRIPTION } from '@shared/schemas/coreSettings';
+import {
+  CHATGPT_TOOL_USE_ONLY_DESCRIPTION,
+  KIMI_CODE_TOOL_USE_ONLY_DESCRIPTION,
+} from '@shared/schemas/coreSettings';
 
 // Local imports - utilities
 import { pluralize } from '@utils/text/stringUtils';
@@ -33,6 +37,7 @@ import '../components/profile/ModelSelectionList';
 import '../components/profile/ReliabilitySettingsSection';
 import {
   ChatGptAuthEvents,
+  KimiCodeAuthEvents,
   ModelSelectionEvents,
 } from '../components/profile/events';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
@@ -112,6 +117,8 @@ export class ModelsTab extends LitElement {
   @property({ type: Boolean }) quotaAutoSwitched = false;
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
   @property({ attribute: false }) chatgptAuth: ChatGptAuthStatus | null = null;
+  @property({ attribute: false }) kimiCodeAuth: KimiCodeAuthStatus | null =
+    null;
   @property({ attribute: false }) globalStreamingDefault = true;
   @property({ attribute: false }) modelSelectionItems: ModelSelectionItem[] =
     [];
@@ -153,6 +160,22 @@ export class ModelsTab extends LitElement {
     const enabled = (event.target as WaSwitch).checked;
     this.dispatchEvent(
       ChatGptAuthEvents.setSubscriptionToolUseOnly({ enabled }),
+    );
+  };
+
+  private readonly handleKimiCodePreferSubscriptionChange = (
+    event: Event,
+  ): void => {
+    const enabled = (event.target as WaSwitch).checked;
+    this.dispatchEvent(KimiCodeAuthEvents.setPreferSubscription({ enabled }));
+  };
+
+  private readonly handleKimiCodeSubscriptionToolUseOnlyChange = (
+    event: Event,
+  ): void => {
+    const enabled = (event.target as WaSwitch).checked;
+    this.dispatchEvent(
+      KimiCodeAuthEvents.setSubscriptionToolUseOnly({ enabled }),
     );
   };
 
@@ -237,7 +260,8 @@ export class ModelsTab extends LitElement {
     return html`
       <div class="models-container tab-content-container">
         ${this.renderTabHint()} ${apiAccessSection} ${quotaMeter}
-        ${this.renderChatGptSection()} ${this.renderCopilotSection()}
+        ${this.renderChatGptSection()} ${this.renderKimiCodeSection()}
+        ${this.renderCopilotSection()}
         <provider-key-list
           .providerKeyStatuses=${this.providerKeyStatuses}
           .apiAccessMode=${this.apiAccessMode}
@@ -323,6 +347,83 @@ export class ModelsTab extends LitElement {
                 @click=${() => this.dispatchEvent(ChatGptAuthEvents.signIn())}
               >
                 Sign in with ChatGPT
+              </wa-button>`
+        }
+      </section>
+    `;
+  }
+
+  /**
+   * Experimental "Sign in with Kimi Code" control. After sign-in, Kimi models
+   * run on the user's Moonshot coding subscription (when
+   * `kimiCode.preferSubscription` is enabled) instead of an API key.
+   */
+  private renderKimiCodeSection(): TemplateResult {
+    const signedIn = this.kimiCodeAuth?.signedIn ?? false;
+    const preferSubscription = this.kimiCodeAuth?.preferSubscription ?? false;
+    const subscriptionToolUseOnly =
+      this.kimiCodeAuth?.subscriptionToolUseOnly ?? false;
+    const account = this.kimiCodeAuth?.accountId ?? 'your account';
+    return html`
+      <section id="kimi-code-subscription" class="keyless-source">
+        <div class="keyless-source__header">
+          <span class="keyless-source__title">Kimi Code subscription</span>
+          <span class="keyless-source__badge">experimental</span>
+        </div>
+        <p class="keyless-source__hint">
+          Use Kimi models through your Kimi Code coding subscription. No API
+          key is needed.
+        </p>
+        <p class="keyless-source__limit">
+          ${waIcon('circle-info')}
+          <span>
+            A
+            <a href="https://www.kimi.com/code/console">
+              Kimi Code console API key
+            </a>
+            works as an alternative — set it on the Kimi Code row under API
+            Configuration below.
+          </span>
+        </p>
+        <div class="keyless-source__setting">
+          <wa-switch
+            ?checked=${preferSubscription}
+            @change=${this.handleKimiCodePreferSubscriptionChange}
+          >
+            Prefer Kimi Code subscription
+          </wa-switch>
+        </div>
+        <div class="keyless-source__setting">
+          <wa-switch
+            ?checked=${subscriptionToolUseOnly}
+            ?disabled=${!preferSubscription}
+            hint=${KIMI_CODE_TOOL_USE_ONLY_DESCRIPTION}
+            @change=${this.handleKimiCodeSubscriptionToolUseOnlyChange}
+          >
+            Use subscription for tool-use agents only
+          </wa-switch>
+        </div>
+        ${
+          signedIn
+            ? html`<div class="keyless-source__row">
+                <span class="keyless-source__account">
+                  ${waIcon('circle-check')} Signed in as ${account}
+                </span>
+                <wa-button
+                  appearance="outlined"
+                  size="s"
+                  @click=${() =>
+                    this.dispatchEvent(KimiCodeAuthEvents.signOut())}
+                >
+                  Sign out
+                </wa-button>
+              </div>`
+            : html`<wa-button
+                variant="brand"
+                size="small"
+                @click=${() => this.dispatchEvent(KimiCodeAuthEvents.signIn())}
+              >
+                Sign in with Kimi Code
               </wa-button>`
         }
       </section>

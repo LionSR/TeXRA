@@ -18,7 +18,7 @@ import { KIMI_CODE_CLIENT_VERSION } from './kimiCodeConstants';
 let ephemeralDeviceId: string | null = null;
 
 /** The persisted device UUID, generated once per installation. */
-export async function getKimiCodeDeviceId(): Promise<string> {
+async function getKimiCodeDeviceId(): Promise<string> {
   const state = tryGlobalState();
   if (!state) {
     ephemeralDeviceId ??= crypto.randomUUID();
@@ -33,8 +33,7 @@ export async function getKimiCodeDeviceId(): Promise<string> {
 
 /** Header values must be ASCII; strip anything else (hostnames can be UTF-8). */
 function asciiHeaderValue(value: string): string {
-  // eslint-disable-next-line no-control-regex
-  const cleaned = value.replace(/[^\x20-\x7e]/g, '');
+  const cleaned = value.replaceAll(/[^\x20-\x7e]/g, '');
   return cleaned.length > 0 ? cleaned : 'unknown';
 }
 

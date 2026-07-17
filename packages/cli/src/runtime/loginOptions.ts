@@ -28,10 +28,17 @@ interface CliChatGptLoginSlashArgs {
   readonly device: boolean;
 }
 
+interface CliKimiCodeLoginSlashArgs {
+  readonly target: 'kimi';
+}
+
 export type CliLoginSlashArgs =
-  CliTexraLoginSlashArgs | CliChatGptLoginSlashArgs;
+  | CliTexraLoginSlashArgs
+  | CliChatGptLoginSlashArgs
+  | CliKimiCodeLoginSlashArgs;
 
 const CHATGPT_LOGIN_TARGETS = new Set(['chatgpt', 'codex', 'subscription']);
+const KIMI_CODE_LOGIN_TARGETS = new Set(['kimi', 'kimicode', 'kimi-code']);
 
 export function resolveLoginProvider(
   positional: string | undefined,
@@ -125,6 +132,23 @@ export function parseChatLoginSlashArgs(
   } else if (positionals[0] && CHATGPT_LOGIN_TARGETS.has(positionals[0])) {
     target = 'chatgpt';
     positionals.shift();
+  } else if (positionals[0] && KIMI_CODE_LOGIN_TARGETS.has(positionals[0])) {
+    target = 'kimi';
+    positionals.shift();
+  }
+
+  if (target === 'kimi') {
+    // Kimi Code has only the device-code flow — no transport flags apply.
+    if (
+      positionals.length > 0 ||
+      noBrowser ||
+      device ||
+      selectAccount ||
+      loginHint !== undefined
+    ) {
+      return undefined;
+    }
+    return { target };
   }
 
   if (target === 'chatgpt') {

@@ -783,6 +783,23 @@ function createWindow(options: {
             clipboard.writeText(url);
           }
         },
+        presentKimiCodeSignInPrompt: async (userCode, url) => {
+          const result = await dialog.showMessageBox(window, {
+            type: 'info',
+            message: 'Signing in with Kimi Code',
+            detail:
+              'Opened your default browser. Approve the sign-in there and ' +
+              `confirm this one-time code if asked: ${userCode}\n\n` +
+              'Using a different browser? Open this link there instead:\n\n' +
+              `${url}`,
+            buttons: ['Copy Sign-in Link', 'Close'],
+            defaultId: 0,
+            cancelId: 1,
+          });
+          if (result.response === 0) {
+            clipboard.writeText(url);
+          }
+        },
       },
       notifications: { showInfoMessage, showErrorMessage },
       auth: {

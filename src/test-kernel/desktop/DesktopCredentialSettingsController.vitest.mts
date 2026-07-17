@@ -135,6 +135,7 @@ async function createFixture(
     externalOpener: {
       openExternal: async () => undefined,
       presentChatGptSignInUrl: () => undefined,
+      presentKimiCodeSignInPrompt: () => undefined,
     },
     notifications: {
       showInfoMessage: async (message) => {

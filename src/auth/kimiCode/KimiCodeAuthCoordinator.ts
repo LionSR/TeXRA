@@ -12,7 +12,7 @@ import {
 } from './KimiCodeSessionCoordinator';
 
 /** The minimal secret-store surface the coordinator needs (= PlatformSecrets). */
-export interface KimiCodeSecretStore {
+interface KimiCodeSecretStore {
   get(key: string): Promise<string | undefined>;
   set(key: string, value: string): Promise<void>;
   delete(key: string): Promise<void>;

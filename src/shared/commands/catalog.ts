@@ -283,6 +283,13 @@ export const commandCatalog = [
     icon: '$(comment-discussion)',
   },
   {
+    id: 'texra.auth.kimiCode.signIn',
+    extensionRegistry: true,
+    title: 'Sign In with Kimi Code',
+    category: 'TeXRA',
+    icon: '$(comment-discussion)',
+  },
+  {
     id: 'texra.auth.signOut',
     extensionRegistry: true,
     title: 'Sign Out',

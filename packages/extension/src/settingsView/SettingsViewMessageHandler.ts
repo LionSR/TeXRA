@@ -116,6 +116,7 @@ import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import { HistoryHandlers } from './handlers/historyHandlers';
 import { GitHubSubscriptionHandlers } from './handlers/githubSubscriptionHandlers';
 import { ChatGptSubscriptionHandlers } from './handlers/chatgptSubscriptionHandlers';
+import { KimiCodeSubscriptionHandlers } from './handlers/kimiCodeSubscriptionHandlers';
 import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
 
 // Re-use the shared type helper for extracting specific message types.
@@ -171,6 +172,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly historyHandlers: HistoryHandlers;
   private readonly githubHandlers: GitHubSubscriptionHandlers;
   private readonly chatgptHandlers: ChatGptSubscriptionHandlers;
+  private readonly kimiCodeHandlers: KimiCodeSubscriptionHandlers;
   private readonly settingsHost: SettingsProfileHost;
   private readonly goalController: SettingsGoalController;
 
@@ -255,7 +257,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.historyHandlers = new HistoryHandlers(ctx);
     this.githubHandlers = new GitHubSubscriptionHandlers(ctx);
     this.chatgptHandlers = new ChatGptSubscriptionHandlers(ctx, () =>
-      this.refreshAfterChatGptAuthChange(),
+      this.refreshAfterSubscriptionAuthChange(),
+    );
+    this.kimiCodeHandlers = new KimiCodeSubscriptionHandlers(ctx, () =>
+      this.refreshAfterSubscriptionAuthChange(),
     );
     this.goalController = new SettingsGoalController({
       listGoals: () => GoalStore.list(),
@@ -564,6 +569,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         setSubscriptionToolUseOnly: (enabled) =>
           this.chatgptHandlers.handleSetSubscriptionToolUseOnly(enabled),
       },
+      kimiCode: {
+        signIn: () => this.kimiCodeHandlers.handleSignInKimiCode(),
+        signOut: () => this.kimiCodeHandlers.handleSignOutKimiCode(),
+        setPreferSubscription: (enabled) =>
+          this.kimiCodeHandlers.handleSetPreferSubscription(enabled),
+        setSubscriptionToolUseOnly: (enabled) =>
+          this.kimiCodeHandlers.handleSetSubscriptionToolUseOnly(enabled),
+      },
       approval: {
         setBashApprovalEnabled: (enabled) =>
           this.handleSetApprovalEnabled(enabled),
@@ -703,6 +716,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendGitAuthorSettings(webview),
       this.githubHandlers.sendGitHubTokenStatus(webview),
       this.chatgptHandlers.sendChatGptAuthStatus(webview),
+      this.kimiCodeHandlers.sendKimiCodeAuthStatus(webview),
       this.githubHandlers.sendPRSubscriptions(webview),
       this.sendApprovalSettings(webview),
       this.latexHandlers.sendLatexSettingsStatus(webview),
@@ -1041,11 +1055,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     ]);
   }
 
-  private async refreshAfterChatGptAuthChange(): Promise<void> {
+  private async refreshAfterSubscriptionAuthChange(): Promise<void> {
     invalidateModelOptionsCache();
     await Promise.all([
-      // ChatGPT subscription is now a setup credential, so reuse the same
-      // host refresh path as API-key changes to update the welcome card.
+      // Subscription sign-ins (ChatGPT, Kimi Code) are setup credentials, so
+      // reuse the same host refresh path as API-key changes to update the
+      // welcome card.
       safeExecuteCommand('texra.refreshApiKeyStatus', [], this.viewName),
       safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
       this.withActiveWebview((w) => this.sendModelSelectionData(w)),

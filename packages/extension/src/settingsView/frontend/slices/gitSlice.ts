@@ -9,6 +9,7 @@ import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 
 import {
   chatgptAuth,
+  kimiCodeAuth,
   desktopCrashReportingConfigured,
   desktopCrashReportingEnabled,
   gitAuthorEmail,
@@ -41,6 +42,10 @@ export const gitHandlers = {
 
   [SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS]: (data) => {
     chatgptAuth.set(data.status);
+  },
+
+  [SETTINGS_VIEW_COMMANDS.UPDATE_KIMI_CODE_AUTH_STATUS]: (data) => {
+    kimiCodeAuth.set(data.status);
   },
 
   [SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING]: (data) => {
