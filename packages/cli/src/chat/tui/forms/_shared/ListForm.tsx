@@ -218,15 +218,28 @@ export interface AsyncListFormProps<TData, TValue> extends Omit<
 export function AsyncListForm<TData, TValue>(
   props: AsyncListFormProps<TData, TValue>,
 ): React.JSX.Element {
+  const {
+    loadingLabel,
+    load,
+    items: itemsFor,
+    isEmpty,
+    showTransientCloseHint,
+    descriptionFor,
+    detailFor,
+    detailRowsFor,
+    compactDetailFor,
+    onSelect,
+    ...listProps
+  } = props;
   const { data, loading, error, pendingInput, clearPendingInput, setData } =
     useAsyncListForm<TData>({
-      load: props.load,
-      onClose: props.onCancel,
-      isEmpty: props.isEmpty ?? ((loaded) => props.items(loaded).length === 0),
+      load,
+      onClose: listProps.onCancel,
+      isEmpty: isEmpty ?? ((loaded) => itemsFor(loaded).length === 0),
     });
-  const items = data === undefined ? [] : props.items(data);
+  const items = data === undefined ? [] : itemsFor(data);
   const handleSelect = (value: TValue): void => {
-    if (data !== undefined) props.onSelect(value, { data, setData });
+    if (data !== undefined) onSelect(value, { data, setData });
   };
   usePendingListFormSelection({
     loading,
@@ -240,23 +253,23 @@ export function AsyncListForm<TData, TValue>(
   const transient = renderAsyncListFormTransient({
     loading,
     error,
-    title: props.title,
-    loadingLabel: props.loadingLabel,
-    showCloseHint: props.showTransientCloseHint,
+    title: listProps.title,
+    loadingLabel,
+    showCloseHint: showTransientCloseHint,
   });
   if (transient) return transient;
   if (data === undefined) {
-    throw new Error(`${props.title} list finished loading without data.`);
+    throw new Error(`${listProps.title} list finished loading without data.`);
   }
 
   return (
     <ListForm
-      {...props}
+      {...listProps}
       items={items}
-      description={props.descriptionFor?.(data) ?? props.description}
-      detail={props.detailFor?.(data) ?? props.detail}
-      detailRows={props.detailRowsFor?.(data) ?? props.detailRows}
-      compactDetail={props.compactDetailFor?.(data) ?? props.compactDetail}
+      description={descriptionFor?.(data) ?? listProps.description}
+      detail={detailFor?.(data) ?? listProps.detail}
+      detailRows={detailRowsFor?.(data) ?? listProps.detailRows}
+      compactDetail={compactDetailFor?.(data) ?? listProps.compactDetail}
       onSelect={handleSelect}
     />
   );
