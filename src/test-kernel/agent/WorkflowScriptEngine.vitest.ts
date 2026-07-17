@@ -648,6 +648,21 @@ return results[0]`,
     ).rejects.toThrow(/not JSON-serializable/i);
   });
 
+  it('carries guest stack frames on script errors', async () => {
+    // The classic un-awaited fan-out mistake: destructuring the Promise that
+    // parallel() returns. The bare QuickJS message ("value is not iterable")
+    // is useless without the frame locating it inside the script.
+    await expect(
+      runWorkflowScript({
+        script: `${META}
+const [a, b] = parallel([() => agent('x'), () => agent('y')])
+return a`,
+        runAgent: echoRunner,
+        timeoutMs: 5_000,
+      }),
+    ).rejects.toThrow(/is not iterable[\s\S]*at .*test-flow\.workflow\.js:\d+/);
+  });
+
   it('cannot forge a result by overriding Promise.prototype.then', async () => {
     // then/catch/finally are locked non-writable before the body runs, so a
     // script that tries to reassign then (to invoke the kickoff's delivery

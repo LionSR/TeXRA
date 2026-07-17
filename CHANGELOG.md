@@ -35,6 +35,10 @@ All notable changes to this project will be documented in this file.
 - **Delegated agents follow live auto-approval changes** — enabling or
   disabling file and command auto-approval on a parent now updates its running
   delegated agents and their visible status.
+- **Resumable workflows are easier for agents to use and repair** — workflow
+  scripts now explain their file-passing contract, report useful source
+  locations and recent activity after failures, reject missing file inputs,
+  and retain completed steps when a retry revises the script.
 
 ### CLI
 

@@ -17,6 +17,12 @@ type WorkflowScriptRunWithProgressOptions = Omit<
 > & {
   /** Cumulative live spend across this run's children, for progress lines. */
   readonly getLiveCostUsd?: () => number;
+  /**
+   * Receives every progress line also written to the trace (phases, script
+   * log() output, per-call outcomes) so the caller can hand the run log back
+   * to the invoking model, which otherwise cannot see any of it.
+   */
+  readonly onActivity?: (line: string) => void;
 };
 
 interface PhaseStage {
@@ -75,7 +81,7 @@ export async function runPersistedWorkflowScriptWithProgress(
   trace: AgentTrace,
   options: WorkflowScriptRunWithProgressOptions,
 ): Promise<WorkflowScriptRunResult> {
-  const { getLiveCostUsd, ...runOptions } = options;
+  const { getLiveCostUsd, onActivity, ...runOptions } = options;
   const parentStageId = trace.activeStageId();
   const phases = new Map<string, PhaseStage>();
   const callPhases = new Map<number, string | undefined>();
@@ -100,15 +106,25 @@ export async function runPersistedWorkflowScriptWithProgress(
   const stageIdFor = (phase: string | undefined): string | undefined =>
     phase ? phaseFor(phase).handle.id : parentStageId;
 
+  const info = (message: string, stageId: string | undefined): void => {
+    trace.info(message, { stageId });
+    onActivity?.(message);
+  };
+  const error = (message: string, stageId: string | undefined): void => {
+    trace.error(message, { stageId });
+    onActivity?.(message);
+  };
+
   const project = (event: WorkflowScriptEvent): void => {
     if (closed) return;
     switch (event.type) {
       case 'phase':
         currentPhase = event.title;
         phaseFor(event.title);
+        onActivity?.(`Phase: ${event.title}`);
         break;
       case 'log':
-        trace.info(event.message, { stageId: stageIdFor(currentPhase) });
+        info(event.message, stageIdFor(currentPhase));
         break;
       case 'agent:start': {
         const phaseTitle = event.phase ?? currentPhase;
@@ -133,13 +149,11 @@ export async function runPersistedWorkflowScriptWithProgress(
           spent === undefined ? '' : ` (${formatCostUsd(spent)} total)`;
         if (event.error) {
           if (phaseTitle) phaseFor(phaseTitle).failed = true;
-          trace.error(`Failed: ${event.label} - ${event.error}${total}`, {
-            stageId,
-          });
+          error(`Failed: ${event.label} - ${event.error}${total}`, stageId);
         } else if (event.cached) {
-          trace.info(`Using saved result: ${event.label}`, { stageId });
+          info(`Using saved result: ${event.label}`, stageId);
         } else {
-          trace.info(`Finished: ${event.label}${total}`, { stageId });
+          info(`Finished: ${event.label}${total}`, stageId);
         }
         break;
       }
