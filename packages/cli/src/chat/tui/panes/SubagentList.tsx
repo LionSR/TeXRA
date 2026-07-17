@@ -1,7 +1,7 @@
 // Persistent heterogeneous child-session and process list.
 
 // Third-party imports
-import { Box, Text, useInput } from 'ink';
+import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useMemo } from 'react';
 
 // Local imports - shared stream state
@@ -35,7 +35,9 @@ import { COLOR_HINT } from '../ui/colors';
 import { POINTER, TICK } from '../ui/glyphs';
 import { Select, visibleSelectRange } from '../ui/Select';
 import {
+  CHILD_ROW_METADATA_MIN_COLUMNS,
   CHILD_STATUS_MARKER,
+  childRowMetadataText,
   childStatusColor,
   pendingApprovalRowSuffix,
 } from './SubagentListDisplay';
@@ -56,13 +58,16 @@ export function compactChildRowText({
   child,
   nowMs,
   tail,
+  omitElapsed = false,
 }: {
   readonly child: ActiveChildInfo;
   readonly nowMs: number;
   readonly tail?: ProcessOutputTail;
+  /** When the row shows elapsed in a trailing metadata column instead. */
+  readonly omitElapsed?: boolean;
 }): string {
   const tailSummary = processTailLines(tail).at(-1);
-  const elapsed = childElapsed(child, nowMs);
+  const elapsed = omitElapsed ? undefined : childElapsed(child, nowMs);
   const label = childExecutionLabel(child);
   const statusLabel = childStatusLabel(child.status);
   return [
@@ -86,6 +91,25 @@ function HiddenRowSummary({
   ) : null;
 }
 
+/** Right-aligned `elapsed · ↓tokens` column, pushed to the terminal edge so
+ *  the figures line up across rows. Non-shrinking: the summary segment yields
+ *  first; rows drop the column entirely on narrow terminals (see
+ *  `CHILD_ROW_METADATA_MIN_COLUMNS`). */
+function RowMetadata({
+  text,
+}: {
+  readonly text: string | undefined;
+}): React.JSX.Element | null {
+  return text ? (
+    <>
+      <Box flexGrow={1} />
+      <Box flexShrink={0}>
+        <Text dimColor>{`  ${text}`}</Text>
+      </Box>
+    </>
+  ) : null;
+}
+
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
 
 function SessionRow({
@@ -93,6 +117,7 @@ function SessionRow({
   focused,
   hiddenRowSummary,
   isListRoot,
+  metadataColumn,
   nowMs,
   pendingKinds,
   session,
@@ -101,6 +126,7 @@ function SessionRow({
   readonly focused: boolean;
   readonly hiddenRowSummary: string | undefined;
   readonly isListRoot: boolean;
+  readonly metadataColumn: boolean;
   readonly nowMs: number;
   readonly pendingKinds: readonly PendingApprovalKind[] | undefined;
   readonly session: StreamView;
@@ -118,10 +144,18 @@ function SessionRow({
     },
     nowMs,
   );
-  // Significance order — truncate-end sheds elapsed first, then the round,
-  // then the pending-approval kind.
+  // Significance order — the summary segment sheds first (flexShrink 2), then
+  // this truncate-end text sheds inline elapsed (narrow mode only), the round,
+  // and last the pending-approval kind. The metadata column never shrinks.
   const approvalSuffix = pendingApprovalRowSuffix(pendingKinds);
   const roundLabel = formatRoundStageLabel(session.slice?.roundStage);
+  const metadata = metadataColumn
+    ? childRowMetadataText({
+        elapsed,
+        outputTokens: (session.slice?.cumulativeUsage ?? session.slice?.usage)
+          ?.outputTokens,
+      })
+    : undefined;
   // Child rows summarize what the subagent last said; the list-root row is
   // the conversation itself — echoing its own last exchange there is noise
   // (and the root can itself be a nested subagent when focus is scoped).
@@ -129,7 +163,13 @@ function SessionRow({
     ? undefined
     : latestChildResponseSummary(session.slice?.entries);
   return (
-    <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
+    <Box
+      flexDirection="row"
+      flexGrow={1}
+      height={1}
+      minWidth={0}
+      overflowY="hidden"
+    >
       <Text color={focused ? COLOR_HINT : undefined}>
         {focused ? POINTER : ' '}
       </Text>
@@ -143,7 +183,7 @@ function SessionRow({
           {statusLabel ? ` ${statusLabel}` : ''}
           {approvalSuffix ? ` · ${approvalSuffix}` : ''}
           {roundLabel ? ` · ${roundLabel}` : ''}
-          {elapsed ? ` · ${elapsed}` : ''}
+          {!metadataColumn && elapsed ? ` · ${elapsed}` : ''}
         </Text>
       </Box>
       {summary ? (
@@ -154,6 +194,7 @@ function SessionRow({
         </Box>
       ) : null}
       {focused ? <HiddenRowSummary text={hiddenRowSummary} /> : null}
+      <RowMetadata text={metadata} />
     </Box>
   );
 }
@@ -162,17 +203,34 @@ function ProcessRow({
   child,
   focused,
   hiddenRowSummary,
+  metadataColumn,
   nowMs,
   tail,
 }: {
   readonly child: ProcessChildInfo;
   readonly focused: boolean;
   readonly hiddenRowSummary: string | undefined;
+  readonly metadataColumn: boolean;
   readonly nowMs: number;
   readonly tail?: ProcessOutputTail;
 }): React.JSX.Element {
+  // Raw processes report no token usage, so their metadata column is elapsed
+  // only. Adding usage would need the runtime to stamp it onto the roster
+  // entry (`ActiveChildInfo`).
+  const metadata = metadataColumn
+    ? childRowMetadataText({
+        elapsed: childElapsed(child, nowMs),
+        outputTokens: undefined,
+      })
+    : undefined;
   return (
-    <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
+    <Box
+      flexDirection="row"
+      flexGrow={1}
+      height={1}
+      minWidth={0}
+      overflowY="hidden"
+    >
       <Text color={focused ? COLOR_HINT : undefined}>
         {focused ? POINTER : ' '}
       </Text>
@@ -180,10 +238,16 @@ function ProcessRow({
       <Text color={childStatusColor(child.status)}>{CHILD_STATUS_MARKER}</Text>
       <Box minWidth={0} flexShrink={1}>
         <Text wrap="truncate-end">
-          {compactChildRowText({ child, nowMs, tail })}
+          {compactChildRowText({
+            child,
+            nowMs,
+            tail,
+            omitElapsed: metadataColumn,
+          })}
         </Text>
       </Box>
       {focused ? <HiddenRowSummary text={hiddenRowSummary} /> : null}
+      <RowMetadata text={metadata} />
     </Box>
   );
 }
@@ -265,6 +329,8 @@ export function SubagentList(
     [activeProcesses],
   );
   const nowMs = useLiveNowMs(liveElapsedKey !== undefined, liveElapsedKey);
+  const { columns } = useWindowSize();
+  const metadataColumn = columns >= CHILD_ROW_METADATA_MIN_COLUMNS;
   const contentRows =
     props.maxRows === undefined ? undefined : Math.max(0, props.maxRows - 1);
   const selectedIndex = Math.max(
@@ -330,6 +396,9 @@ export function SubagentList(
       marginTop={1}
       overflowY={contentRows === undefined ? undefined : 'hidden'}
       paddingX={1}
+      // Pin the panel to the terminal width so rows stretch and the trailing
+      // metadata column right-aligns; without it the panel is content-sized.
+      width={metadataColumn ? columns : undefined}
     >
       <Select
         activeValue={
@@ -360,6 +429,7 @@ export function SubagentList(
                 active={state.active}
                 focused={state.focused}
                 hiddenRowSummary={hiddenRowSummary || undefined}
+                metadataColumn={metadataColumn}
                 nowMs={nowMs}
                 pendingKinds={props.pendingApprovals?.get(session.id)}
                 session={session}
@@ -372,6 +442,7 @@ export function SubagentList(
               child={process}
               focused={state.focused}
               hiddenRowSummary={hiddenRowSummary || undefined}
+              metadataColumn={metadataColumn}
               nowMs={nowMs}
               tail={processOutput?.get(process.executionId)}
             />

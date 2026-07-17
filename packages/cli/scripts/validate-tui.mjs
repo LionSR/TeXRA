@@ -2080,6 +2080,8 @@ const SCENARIOS = [
       // Child rows summarize the subagent's latest instruction/response.
       '· Please handle the harness-child-review',
       'main.tex: Proof sketch',
+      // Right-aligned metadata column: generated tokens for a child with usage.
+      '↓40k',
       '3 sub',
       'Tab children',
     ],
