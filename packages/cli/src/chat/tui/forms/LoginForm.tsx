@@ -1,9 +1,7 @@
-import { Box, Text } from 'ink';
+import { Text } from 'ink';
 
-import { KeyHints } from '../ui/KeyHints';
-import { Select, type SelectItem } from '../ui/Select';
-import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
-import { isCompactFormRows } from './_shared/selectWindow';
+import { ListForm } from './_shared/ListForm';
+import type { SelectItem } from '../ui/Select';
 
 export type LoginFormValue =
   'texra' | 'chatgpt' | 'texra --device' | 'chatgpt --device';
@@ -38,45 +36,20 @@ export const LOGIN_FORM_ITEMS = [
 ] as const satisfies ReadonlyArray<SelectItem<LoginFormValue>>;
 
 export function LoginForm(props: LoginFormProps): React.JSX.Element {
-  if (isCompactFormRows(props.availableRows)) {
-    return (
-      <FormFrame title="/login" showCloseHint={false}>
-        <Select
-          items={LOGIN_FORM_ITEMS}
-          maxVisibleItems={LOGIN_FORM_ITEMS.length}
-          showOverflow={false}
-          onSelect={props.onSelect}
-          onCancel={props.onCancel}
-        />
-        <CompactFormKeyHints
-          primary={{ key: '1-4/Enter', action: 'select' }}
-          escapeAction="cancel"
-        />
-      </FormFrame>
-    );
-  }
-
   return (
-    <FormFrame title="/login" showCloseHint={false}>
-      <Text dimColor>Choose how TeXRA should authenticate model calls.</Text>
-      <Box marginTop={1} flexDirection="column">
-        <Select
-          items={LOGIN_FORM_ITEMS}
-          onSelect={props.onSelect}
-          onCancel={props.onCancel}
-        />
-      </Box>
-      <Box marginTop={1}>
-        <KeyHints
-          hints={[
-            { key: '↑/↓', action: 'navigate' },
-            { key: '1-4', action: 'select now' },
-            { key: 'Enter', action: 'select highlighted' },
-            { key: 'Esc', action: 'cancel' },
-          ]}
-          confirmCancel={false}
-        />
-      </Box>
-    </FormFrame>
+    <ListForm
+      title="/login"
+      availableRows={props.availableRows}
+      items={LOGIN_FORM_ITEMS}
+      compactVisibleItems={LOGIN_FORM_ITEMS.length}
+      description={
+        <Text dimColor>Choose how TeXRA should authenticate model calls.</Text>
+      }
+      selectMarginTop={1}
+      action="select"
+      escapeAction="cancel"
+      onSelect={props.onSelect}
+      onCancel={props.onCancel}
+    />
   );
 }

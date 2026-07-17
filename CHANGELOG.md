@@ -93,6 +93,10 @@ All notable changes to this project will be documented in this file.
 - **Ctrl+C clears dialog text before stopping or exiting** — pressing Ctrl+C
   with text in a foreground dialog now clears that text; pressing it again
   keeps the existing response-stop or exit behavior.
+- **Slash-command pickers behave consistently on small terminals** — memory,
+  resume, model, agent, skill, tool, login, access, and approval lists now use
+  the same navigation hints and compact layout, and a shortcut typed while an
+  asynchronous list is loading is applied when its choices appear.
 
 ### Extension (VS Code)
 

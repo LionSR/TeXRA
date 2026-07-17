@@ -5,7 +5,6 @@ import {
   cliMemoryStoragePathFromInput,
   formatCliMemoryList,
 } from '@cli/runtime/memory';
-import { memorySelectWindow } from '@cli/chat/tui/forms/MemoryListForm';
 import type { MemoryViewItem } from '@shared/schemas';
 
 const item: MemoryViewItem = {
@@ -74,18 +73,5 @@ describe('CLI memory formatting', () => {
     expect(() =>
       cliMemoryStoragePathFromInput('/memories/../outside.md'),
     ).toThrow('Invalid memory path: /memories/../outside.md');
-  });
-});
-
-describe('memorySelectWindow', () => {
-  it('keeps overflow markers only when there is room for them', () => {
-    expect(memorySelectWindow({ availableRows: 4, itemCount: 10 })).toEqual({
-      maxVisibleItems: 1,
-      showOverflow: false,
-    });
-    expect(memorySelectWindow({ availableRows: 12, itemCount: 10 })).toEqual({
-      maxVisibleItems: 3,
-      showOverflow: true,
-    });
   });
 });

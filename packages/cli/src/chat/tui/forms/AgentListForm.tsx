@@ -19,6 +19,7 @@ import {
   isCompactFormRows,
 } from './_shared/selectWindow';
 import { useAsyncListForm } from './_shared/useAsyncListForm';
+import { usePendingListFormSelection } from './_shared/ListForm';
 
 export interface AgentListFormProps {
   readonly currentAgent: string;
@@ -146,21 +147,14 @@ export function agentSelectWindow({
 }
 
 export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
-  const { data, loading, error } = useAsyncListForm<AgentGroups>({
-    load: async () => {
-      const options = await computeAgentOptionsData();
-      return { toolUse: options.toolUse, workflow: options.workflow };
-    },
-    onClose: props.onClose,
-  });
-
-  const transient = renderAsyncListFormTransient({
-    loading,
-    error,
-    title: '/agent',
-    loadingLabel: 'Loading agent registry...',
-  });
-  if (transient) return transient;
+  const { data, loading, error, pendingInput, clearPendingInput } =
+    useAsyncListForm<AgentGroups>({
+      load: async () => {
+        const options = await computeAgentOptionsData();
+        return { toolUse: options.toolUse, workflow: options.workflow };
+      },
+      onClose: props.onClose,
+    });
 
   const agents: AgentGroups = data ?? { toolUse: [], workflow: [] };
   const primarySectionTitle = agentPickerPrimarySectionTitle(agents.toolUse);
@@ -198,6 +192,23 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     }
     props.onClose();
   };
+  usePendingListFormSelection({
+    loading,
+    error,
+    pendingInput,
+    clearPendingInput,
+    items,
+    enabled: props.selectable,
+    onSelect: handleSelectItem,
+  });
+
+  const transient = renderAsyncListFormTransient({
+    loading,
+    error,
+    title: '/agent',
+    loadingLabel: 'Loading agent registry...',
+  });
+  if (transient) return transient;
 
   if (isCompactFormRows(props.availableRows)) {
     return (
