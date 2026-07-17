@@ -3,6 +3,7 @@
 // region, this renders every tool-output line.
 
 import stripAnsi from 'strip-ansi';
+import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 import { isRenderableTranscriptEntry } from '../panes/transcriptEntries';
 import { fullTranscriptEntryLayout } from '../panes/transcriptEntryLayout';
@@ -39,23 +40,31 @@ export function createTranscriptPrintRequest({
 // frame (terminal transcript, static row budget, task-detail panel), so keep
 // the width dimension inside the entry cache instead of letting callers thrash
 // a single slot.
+const EMPTY_EXECUTION_LABELS: ExecutionLabels = new Map();
 const entryLinesCache = new WeakMap<
   ConversationEntry,
-  Map<number, readonly string[]>
+  WeakMap<ExecutionLabels, Map<number, readonly string[]>>
 >();
 
 function transcriptEntryLines(
   entry: ConversationEntry,
   cols: number,
+  executionLabels: ExecutionLabels,
 ): readonly string[] {
-  const cachedByCols = entryLinesCache.get(entry);
+  const cachedByLabels = entryLinesCache.get(entry);
+  const cachedByCols = cachedByLabels?.get(executionLabels);
   const cached = cachedByCols?.get(cols);
   if (cached) return cached;
-  const lines = computeTranscriptEntryLines(entry, cols);
+  const lines = computeTranscriptEntryLines(entry, cols, executionLabels);
   if (cachedByCols) {
     cachedByCols.set(cols, lines);
+  } else if (cachedByLabels) {
+    cachedByLabels.set(executionLabels, new Map([[cols, lines]]));
   } else {
-    entryLinesCache.set(entry, new Map([[cols, lines]]));
+    entryLinesCache.set(
+      entry,
+      new WeakMap([[executionLabels, new Map([[cols, lines]])]]),
+    );
   }
   return lines;
 }
@@ -63,8 +72,9 @@ function transcriptEntryLines(
 function computeTranscriptEntryLines(
   entry: ConversationEntry,
   cols: number,
+  executionLabels: ExecutionLabels,
 ): readonly string[] {
-  return fullTranscriptEntryLayout(entry, cols).lines;
+  return fullTranscriptEntryLayout(entry, cols, executionLabels).lines;
 }
 
 function isCompactToolEntry(
@@ -106,6 +116,7 @@ function shouldSeparateEntries({
 export function transcriptToLines(
   slice: StreamSlice | undefined,
   cols: number,
+  executionLabels: ExecutionLabels = EMPTY_EXECUTION_LABELS,
 ): readonly string[] {
   if (!slice) return [];
   const out: string[] = [];
@@ -113,7 +124,7 @@ export function transcriptToLines(
   let previousLines: readonly string[] = [];
   for (const entry of slice.entries) {
     if (!isRenderableTranscriptEntry(entry)) continue;
-    const lines = transcriptEntryLines(entry, cols);
+    const lines = transcriptEntryLines(entry, cols, executionLabels);
     if (lines.length === 0) continue;
     if (
       out.length > 0 &&
@@ -148,16 +159,18 @@ function safeTerminalText(text: string): string {
 /** Format one immutable request for the terminal's static scrollback. */
 export function formatTranscriptForScrollback({
   cols,
+  executionLabels = EMPTY_EXECUTION_LABELS,
   request,
 }: {
   readonly cols: number;
+  readonly executionLabels?: ExecutionLabels;
   readonly request: TranscriptPrintRequest;
 }): string {
   const heading = safeTerminalText(request.title ?? '')
     .replaceAll('\n', ' ')
     .trim();
   const body = safeTerminalText(
-    transcriptToLines(request.slice, cols).join('\n'),
+    transcriptToLines(request.slice, cols, executionLabels).join('\n'),
   );
   const label = heading ? `Full output: ${heading}` : 'Full output';
   return `\n[${label}]\n${body.trimEnd() || '(no output yet)'}\n`;

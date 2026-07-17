@@ -17,6 +17,8 @@ import {
   type LogMessageData,
   type TaskGroup,
 } from '@shared/schemas';
+import { designTokens } from '@shared/styles';
+import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 // Side-effect imports - register WA icon and spinner components
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -24,7 +26,6 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 
-import { designTokens } from '@shared/styles';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
@@ -119,6 +120,10 @@ export class TaskGroupList extends LitElement {
    * Reflected to the host attribute so scoped CSS can target it.
    */
   @property({ type: Boolean, reflect: true }) terminal = false;
+
+  /** Retained subagent identities used by executions tool cards. */
+  @property({ attribute: false })
+  subagentExecutionLabels: ExecutionLabels = new Map();
 
   /** Track previous group statuses to detect completion (not rendered — no @state needed) */
   private previousStatuses = new Map<string, string>();
@@ -385,7 +390,12 @@ export class TaskGroupList extends LitElement {
     }${repeat(
       visibleMessages,
       (m) => m.id,
-      (m) => guard([m], () => formatLogEntry(m)),
+      (m) =>
+        guard([m, this.subagentExecutionLabels], () =>
+          formatLogEntry(m, {
+            executionLabels: this.subagentExecutionLabels,
+          }),
+        ),
     )}`;
   }
 
@@ -706,7 +716,11 @@ export class TaskGroupList extends LitElement {
           (item) => item.key,
           (item) =>
             'msg' in item
-              ? guard([item.msg], () => formatLogEntry(item.msg))
+              ? guard([item.msg, this.subagentExecutionLabels], () =>
+                  formatLogEntry(item.msg, {
+                    executionLabels: this.subagentExecutionLabels,
+                  }),
+                )
               : this.renderGroupNode(item.tree, true),
         )}
       </div>

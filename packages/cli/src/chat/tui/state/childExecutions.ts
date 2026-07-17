@@ -58,6 +58,21 @@ export const childStreamEntries: Signal.Computed<ChildStreamEntries> = computed(
   () => CHILD_STREAMS.get(),
 );
 
+/** Retained execution-id → human label projection for executions tool rows. */
+export const subagentExecutionLabels: Signal.Computed<
+  ReadonlyMap<string, string>
+> = computed(() => {
+  const labels = new Map<string, string>();
+  for (const entry of CHILD_STREAMS.get().values()) {
+    if (entry.removed || !entry.summary) continue;
+    const label = childExecutionLabel(entry.summary);
+    if (label !== entry.summary.executionId) {
+      labels.set(entry.summary.executionId, label);
+    }
+  }
+  return labels;
+});
+
 function candidateParent(
   entry: ChildStreamEntry,
 ): StreamTabId | null | undefined {
@@ -424,7 +439,9 @@ export function childExecutionKey(child: ActiveChildInfo): string {
   return child.kind === 'subagent' ? child.childStreamId : child.executionId;
 }
 
-export function childExecutionLabel(child: ActiveChildInfo): string {
+export function childExecutionLabel(
+  child: Pick<ActiveChildInfo, 'agentName' | 'executionId' | 'toolName'>,
+): string {
   // The agent name is always set by the runtime (for both kinds), so it's the
   // label; toolName/executionId are just defensive fallbacks for a malformed
   // entry. `kind` isn't needed here — it's `childExecutionKey` that actually
