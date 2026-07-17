@@ -29,9 +29,12 @@ import {
 } from '../panes/transcriptEntries';
 import {
   activeStreamId,
+  getCliStateGeneration,
   patchStream,
+  streams,
   type ConversationEntry,
 } from './cliState';
+import { isChildStreamRemoved } from './childExecutions';
 import { isFinalTranscriptStatus } from './transcript';
 
 const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
@@ -359,7 +362,7 @@ function sortTranscriptCandidatesIfNeeded(
 
 export function subscribeStreamLog(): () => void {
   const store = defaultSession().transcripts;
-  const pendingStreams = new Set<StreamTabId>();
+  const pendingStreams = new Map<StreamTabId, number>();
 
   // One trailing timer shared by every stream: during a multi-subagent burst
   // the root and each child emit within the same window, and per-stream
@@ -369,11 +372,14 @@ export function subscribeStreamLog(): () => void {
   const syncDebounce = createFlushableDebounce(() => {
     const streamIds = [...pendingStreams];
     pendingStreams.clear();
-    for (const id of streamIds) syncStreamLog(id);
+    for (const [id, generation] of streamIds) {
+      if (generation === getCliStateGeneration()) syncStreamLog(id);
+    }
   }, STREAM_SYNC_THROTTLE_MS);
 
   const dispose = store.onChange((streamId) => {
-    pendingStreams.add(streamId);
+    if (!streams.get().has(streamId)) return;
+    pendingStreams.set(streamId, getCliStateGeneration());
     // Only start the window on its first tick — later ticks in the same
     // window join the batch without resetting the countdown (`pending`
     // guard), unlike a classic debounce that would restart on every call.
@@ -391,6 +397,7 @@ export function subscribeStreamLog(): () => void {
 }
 
 export function syncStreamLog(streamId: StreamTabId): void {
+  if (isChildStreamRemoved(streamId)) return;
   // AgentTrace throttles MODEL_RESPONSE chunks into the store via a 50ms
   // timer. If we read before that timer fires (e.g. the stream finalized
   // between two TUI sync ticks), the assistant text is still sitting in

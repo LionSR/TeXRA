@@ -262,6 +262,7 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
 // re-render on an actual change.
 
 const STREAMS = signal<ReadonlyMap<StreamTabId, StreamSlice>>(new Map());
+const RETIRED_STREAMS = new Set<StreamTabId>();
 
 /** Per-stream state map, keyed by `StreamTabId`. */
 export const streams = STREAMS;
@@ -270,6 +271,7 @@ export function patchStream(
   streamId: StreamTabId,
   update: (slice: StreamSlice) => StreamSlice,
 ): void {
+  RETIRED_STREAMS.delete(streamId);
   const current = STREAMS.get();
   const slice = current.get(streamId) ?? emptySlice(streamId);
   const next = update(slice);
@@ -319,8 +321,10 @@ export function setStreamStatusInCliState({
   readonly status: StreamPhase;
   readonly substate?: StreamSubstate;
   readonly streamId: StreamTabId;
-}): void {
-  if (isChildStreamRemoved(streamId)) return;
+}): boolean {
+  if (isChildStreamRemoved(streamId) || RETIRED_STREAMS.has(streamId)) {
+    return false;
+  }
   const current = STREAMS.get();
   const existingSlice = current.get(streamId);
   const targetSlice = streamSliceWithStatus(
@@ -329,10 +333,11 @@ export function setStreamStatusInCliState({
     substate,
     nowMs,
   );
-  if (targetSlice === existingSlice) return;
+  if (targetSlice === existingSlice) return true;
   const out = new Map(current);
   out.set(streamId, targetSlice);
   STREAMS.set(out);
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -513,6 +518,12 @@ export function removeStream(streamId: StreamTabId): void {
 // registry other state modules use to reset their own signals in step.
 
 const RESET_HOOKS = new Set<() => void>();
+let CLI_STATE_GENERATION = 0;
+
+/** Identity of the current signal-state lifetime for asynchronous subscribers. */
+export function getCliStateGeneration(): number {
+  return CLI_STATE_GENERATION;
+}
 
 export function registerCliStateResetHook(resetHook: () => void): void {
   RESET_HOOKS.add(resetHook);
@@ -521,6 +532,8 @@ export function registerCliStateResetHook(resetHook: () => void): void {
 export function resetCliState(
   nextSessionMeta: SessionMeta = defaultSessionMeta(),
 ): void {
+  CLI_STATE_GENERATION += 1;
+  for (const streamId of streams.get().keys()) RETIRED_STREAMS.add(streamId);
   sessionMeta.set(nextSessionMeta);
   activeStreamId.set(undefined);
   rootStreamId.set(undefined);

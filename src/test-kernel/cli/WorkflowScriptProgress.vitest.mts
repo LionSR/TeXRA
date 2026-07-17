@@ -1,8 +1,10 @@
 import { createRequire } from 'node:module';
+import { setTimeout as sleep } from 'node:timers/promises';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import '@test/support/defaultSessionTestSetup';
+import { clearAllStreamStatusesForTest } from '@test/helpers/streamStatusTestUtils';
 
 import { createRunTrace } from '@transcript';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
@@ -20,8 +22,16 @@ import {
   type WorkflowScriptProgressFact,
 } from '@cli/chat/tui/state/cliState';
 import { attachTuiRunFactSubscription } from '@cli/chat/tui/state/subscribeRuntimeHost';
-import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
-import { TOOL_USE_STATUS, type StreamTabId } from '@shared/schemas';
+import {
+  subscribeStreamLog,
+  syncStreamLog,
+} from '@cli/chat/tui/state/subscribeStreamLog';
+import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
+import {
+  STREAM_PHASE,
+  TOOL_USE_STATUS,
+  type StreamTabId,
+} from '@shared/schemas';
 import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 
 const STREAM_ID = 'workflow-script-progress' as StreamTabId;
@@ -79,6 +89,7 @@ async function renderStaticTranscript(): Promise<string> {
 
 beforeEach(async () => {
   resetCliState();
+  clearAllStreamStatusesForTest(defaultSession().status);
   await defaultSession().transcripts.clear();
   patchStream(STREAM_ID, (slice) => ({ ...slice }));
 });
@@ -377,6 +388,7 @@ describe('CLI workflow-script progress', () => {
     (retirement) => {
       const events = new SessionEventHub();
       const detachTui = attachTuiRunFactSubscription(events);
+      const detachStatus = subscribeStreamStatus();
       const runTrace = createRunTrace(STREAM_ID, defaultSession().transcripts);
       const detachHub = runTrace.trace.subscribe((event) =>
         events.emit({ scope: 'run', streamId: STREAM_ID, event }),
@@ -397,6 +409,22 @@ describe('CLI workflow-script progress', () => {
 
         if (retirement === 'remove') removeStream(STREAM_ID);
         else resetCliState();
+
+        if (retirement === 'remove') syncStreamLog(STREAM_ID);
+        defaultSession().status.transition(
+          STREAM_ID,
+          STREAM_PHASE.RUNNING,
+          'restart-repair',
+        );
+        events.emit({
+          scope: 'run',
+          streamId: STREAM_ID,
+          event: {
+            type: 'updateTodos',
+            streamId: STREAM_ID,
+            todos: [],
+          },
+        });
 
         events.emit({
           scope: 'run',
@@ -446,10 +474,27 @@ describe('CLI workflow-script progress', () => {
       } finally {
         detachHub();
         runTrace.dispose();
+        detachStatus();
         detachTui();
       }
     },
   );
+
+  it('drops transcript synchronization queued before a reset', async () => {
+    const detachLog = subscribeStreamLog();
+    const runTrace = createRunTrace(STREAM_ID, defaultSession().transcripts);
+
+    try {
+      runTrace.trace.info('queued before reset');
+      resetCliState();
+      await sleep(100);
+
+      expect(streams.get().has(STREAM_ID)).toBe(false);
+    } finally {
+      runTrace.dispose();
+      detachLog();
+    }
+  });
 
   it('renders dim Static facts verbatim without interpreting child costs', async () => {
     patchStream(STREAM_ID, (slice) => ({

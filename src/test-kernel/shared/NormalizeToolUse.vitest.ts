@@ -89,6 +89,18 @@ describe('normalizeToolUseData', () => {
     });
   });
 
+  it('treats a status-only runtime failure as an error', () => {
+    const normalized = normalizeToolUseData({
+      toolName: 'Bash',
+      status: 'failed',
+    });
+
+    expect(normalized).toMatchObject({
+      isError: true,
+      status: 'failed',
+    });
+  });
+
   // Backward compat: streams persisted by older versions stored the tool name
   // under the legacy `tool` key. `ToolUseLogSchema` folds it into `toolName` so
   // resumed/replayed cards keep tool-specific headers, icons, and file links.

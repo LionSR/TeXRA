@@ -73,7 +73,12 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
 
   const toolName = trimmedOrNull(validated.toolName) ?? '';
   const isUserFeedback = userInstructionText.length > 0;
-  const isError = Boolean(validated.isError || nested.isError || errorText);
+  const isError = Boolean(
+    validated.status === TOOL_USE_STATUS.FAILED ||
+    validated.isError ||
+    nested.isError ||
+    errorText,
+  );
 
   // Preserve unknown fields stripped by the schema for fallback rendering.
   const parsed: Record<string, unknown> = isObject(data)

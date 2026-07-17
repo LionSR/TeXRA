@@ -25,6 +25,7 @@ import { assertNever } from '@utils/core';
 
 import {
   activeStreamId,
+  getCliStateGeneration,
   removeStream,
   patchStream,
   type StreamSlice,
@@ -302,8 +303,10 @@ function applyStreamMeta(
 export function attachTuiRunFactSubscription(
   events: SessionEventHub,
 ): () => void {
+  const generation = getCliStateGeneration();
   const detachSessionFacts = events.subscribe(
     (sessionEvent) => {
+      if (generation !== getCliStateGeneration()) return;
       if (sessionEvent.scope !== 'session') return;
       const fact = sessionEvent.event;
       switch (fact.type) {
@@ -345,7 +348,9 @@ export function attachTuiRunFactSubscription(
   );
   const detachRunFacts = events.subscribe(
     (sessionEvent) => {
+      if (generation !== getCliStateGeneration()) return;
       if (sessionEvent.scope !== 'run') return;
+      if (isChildStreamRemoved(sessionEvent.streamId)) return;
       const { event } = sessionEvent;
       if (applyDirectTuiRunEvent(event, sessionEvent.streamId)) {
         return;
