@@ -5,11 +5,13 @@ import {
   STREAMING_TEXT_MESSAGE_TYPES,
   type LogMessageData,
 } from '@shared/schemas';
+import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export type FormatOptions = {
   preservedOpen?: boolean;
   defaultOpen?: boolean;
+  executionLabels?: ExecutionLabels;
 };
 
 function isRunningData(data: unknown): boolean {

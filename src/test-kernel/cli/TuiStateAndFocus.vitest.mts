@@ -38,6 +38,7 @@ import {
   parentStream,
   retainedChildStreamsFor,
   setParentStream,
+  subagentExecutionLabels,
   visibleSubagentRows,
 } from '@cli/chat/tui/state/childExecutions';
 import {
@@ -220,6 +221,8 @@ describe('cliState Phase 4 fields', () => {
       // A later, empty roster clears active membership; the retained row
       // survives and its status is read live from the child's own slice.
       applySubagentRoster(root, []);
+
+      expect(subagentExecutionLabels.get().get('agent-1')).toBe('codex');
 
       defaultSession().status.transition(
         child1,

@@ -1,6 +1,7 @@
 // Declarative conversation-entry geometry shared by Ink renderers, viewport
 // budgeting, static scrollback, and print-once full output.
 
+import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
@@ -157,6 +158,7 @@ function entryLines(
   columns: number,
   colorEnabled: boolean | undefined,
   maxRows: number | undefined,
+  executionLabels: ExecutionLabels | undefined,
 ): readonly string[] {
   switch (entry.role) {
     case 'assistant':
@@ -183,6 +185,7 @@ function entryLines(
         mode === 'live' || mode === 'bounded' || mode === 'scrollback-budget';
       const lines = toolUseDisplayLines(entry.toolUse, {
         elide: mode !== 'scrollback-budget',
+        executionLabels,
         ...(richProjection ? { width: columns } : {}),
       });
       // Rich rows and their bounded fallback keep each display line on one
@@ -213,11 +216,13 @@ export function transcriptEntryLayout(
     colorEnabled,
     maxRows,
     mode = 'scrollback',
+    executionLabels,
     width,
   }: {
     readonly colorEnabled?: boolean;
     readonly maxRows?: number;
     readonly mode?: TranscriptEntryLayoutMode;
+    readonly executionLabels?: ExecutionLabels;
     readonly width?: number;
   } = {},
 ): TranscriptEntryLayout {
@@ -238,7 +243,14 @@ export function transcriptEntryLayout(
   return {
     ...base,
     columns,
-    lines: entryLines(entry, mode, columns, colorEnabled, maxRows),
+    lines: entryLines(
+      entry,
+      mode,
+      columns,
+      colorEnabled,
+      maxRows,
+      executionLabels,
+    ),
     inset,
     marginBottomRows,
     marginTopRows,
@@ -250,19 +262,24 @@ export function transcriptEntryLayout(
 export function fullTranscriptEntryLayout(
   entry: ConversationEntry,
   width: number,
+  executionLabels?: ExecutionLabels,
 ): TranscriptEntryLayout {
   // Ordinary Ink rows spend this inset as paddingX. Printed text has no Box
   // padding, so add it back before the shared layout subtracts it.
   const printWidth = width + ROLE_GEOMETRY[entry.role].inset;
   const layout = transcriptEntryLayout(entry, {
     mode: 'scrollback-budget',
+    executionLabels,
     width: printWidth,
   });
   if (entry.role !== 'tool') return layout;
   return {
     ...layout,
     lines: wrapDisplayLines(
-      toolUseDisplayLines(entry.toolUse, { elide: false }),
+      toolUseDisplayLines(entry.toolUse, {
+        elide: false,
+        executionLabels,
+      }),
       layout.columns,
     ),
   };

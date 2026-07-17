@@ -6,6 +6,7 @@ import { memo } from 'react';
 import { Box, Text } from 'ink';
 
 import { type NormalizedToolUse } from '@shared/schemas';
+import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 import { DiffView } from '../render/DiffView';
 import { clipToWidth } from '../render/terminalText';
@@ -123,6 +124,7 @@ export const ToolUseRow = memo(function ToolUseRow({
   neutralStatus,
   omitHeader,
   showOutput,
+  subagentExecutionLabels,
   toolUse,
   width,
 }: {
@@ -130,10 +132,12 @@ export const ToolUseRow = memo(function ToolUseRow({
   readonly neutralStatus?: boolean;
   readonly omitHeader?: boolean;
   readonly showOutput?: boolean;
+  readonly subagentExecutionLabels?: ExecutionLabels;
   readonly toolUse: NormalizedToolUse;
   readonly width?: number;
 }): React.JSX.Element {
   const allLines = toolUseStyledLines(toolUse, {
+    executionLabels: subagentExecutionLabels,
     neutralStatus,
     showOutput,
     width,

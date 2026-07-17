@@ -4,6 +4,7 @@
 import { Box, Text } from 'ink';
 
 import { isActivePhase } from '@shared/streams/streamStatus';
+import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { formatCompactDuration } from '@utils/core';
 
 import {
@@ -73,17 +74,20 @@ export interface ConversationPaneProps {
   readonly width?: number;
   readonly maxRows?: number;
   readonly colorEnabled?: boolean;
+  readonly subagentExecutionLabels?: ExecutionLabels;
 }
 
 function renderConversationPaneEntry({
   colorEnabled,
   entry,
   rowLimit,
+  subagentExecutionLabels,
   width,
 }: {
   readonly colorEnabled?: boolean;
   readonly entry: ConversationEntry;
   readonly rowLimit?: number;
+  readonly subagentExecutionLabels?: ExecutionLabels;
   readonly width?: number;
 }): React.JSX.Element | null {
   // When the newest entry alone overflows the pane, the bounded renderer is the
@@ -96,12 +100,19 @@ function renderConversationPaneEntry({
           colorEnabled={colorEnabled}
           entry={entry}
           maxRows={rowLimit}
+          subagentExecutionLabels={subagentExecutionLabels}
           width={width}
         />
       );
     }
     if (entry.role === 'tool') {
-      return <ToolUseRow toolUse={entry.toolUse} width={width} />;
+      return (
+        <ToolUseRow
+          subagentExecutionLabels={subagentExecutionLabels}
+          toolUse={entry.toolUse}
+          width={width}
+        />
+      );
     }
     if (entry.role === 'assistant') {
       return <LiveTranscriptEntry entry={entry} width={width} />;
@@ -121,7 +132,11 @@ function renderConversationPaneEntry({
         <BoundedTranscriptEntry
           colorEnabled={colorEnabled}
           entry={entry}
-          maxRows={estimateTranscriptEntryRows(entry, width)}
+          maxRows={estimateTranscriptEntryRows(
+            entry,
+            width,
+            subagentExecutionLabels,
+          )}
           width={width}
         />
       );
@@ -163,6 +178,7 @@ export function ConversationPane(
     displayEntries,
     maxRows - livenessRows,
     props.width,
+    props.subagentExecutionLabels,
   );
   const visibleRows =
     (visibleEntries.entries.length > 0
@@ -179,6 +195,7 @@ export function ConversationPane(
           colorEnabled: props.colorEnabled,
           entry,
           rowLimit: visibleEntries.rowLimits.get(entry.id),
+          subagentExecutionLabels: props.subagentExecutionLabels,
           width: props.width,
         }),
       )}
