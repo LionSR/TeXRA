@@ -32,11 +32,14 @@ export function isOpenRouterRoutingUnsupported(
 
 /** API-key owner for the route ModelFactory will use for this model. */
 export function resolveModelApiKeyProvider(
-  config: OpenRouterRoutingConfig,
+  config: OpenRouterRoutingConfig & { apiKeyProvider?: ApiProvider },
   useOpenRouter: boolean,
 ): ApiProvider | undefined {
   if (shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
     return 'openRouter';
+  }
+  if (config.apiKeyProvider) {
+    return config.apiKeyProvider;
   }
   return config.provider && isApiProvider(config.provider)
     ? config.provider

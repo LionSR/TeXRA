@@ -14,6 +14,7 @@ import { FREE_TIER, MAX_TIER } from '@auth/sharedConfig';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { isGpt5ModelName } from '@model/modelNames';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
+import { KIMI_CODE_MODEL_CONFIGS } from '@model/kimiCodeModels';
 import { discoveredRuntimeModelConfigEntries } from '@model/runtimeModelRegistry';
 import type { ModelOptionData } from '@shared/schemas';
 import {
@@ -156,6 +157,7 @@ export class SettingsModelSelectionController {
     )();
     const configs = new Map<string, ModelConfig>([
       ...Object.entries(MODEL_CONFIGS),
+      ...Object.entries(KIMI_CODE_MODEL_CONFIGS),
       ...runtimeEntries,
     ]);
     const candidates = [
@@ -165,6 +167,9 @@ export class SettingsModelSelectionController {
             config.provider !== ModelProvider.COPILOT &&
             this.modelSources.has(config.provider),
         )
+        .map(([name]) => name),
+      ...Object.entries(KIMI_CODE_MODEL_CONFIGS)
+        .filter(([, config]) => this.modelSources.has(config.provider))
         .map(([name]) => name),
       ...runtimeEntries
         .filter(([, config]) => this.modelSources.has(config.provider))

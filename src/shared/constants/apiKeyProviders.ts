@@ -13,6 +13,7 @@ export const API_KEY_PROVIDER_IDS = [
   'xai',
   'deepseek',
   'moonshot',
+  'kimiCode',
   'dashscope',
   'minimax',
   'glm',

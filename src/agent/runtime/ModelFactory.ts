@@ -312,6 +312,17 @@ export function modelHandlerCompatibilityKey(
   if (config.openRouterOnly || useOpenRouter) {
     return 'ModelHandlerOpenRouterNative';
   }
+
+  // Kimi Code Anthropic-compatible entries share the Moonshot provider slot
+  // but use the Anthropic handler, so their conversation-format key must
+  // match the handler that will actually serve them.
+  if (
+    config.provider === ModelProvider.MOONSHOT &&
+    (config as { kimiCodeProtocol?: string }).kimiCodeProtocol === 'anthropic'
+  ) {
+    return 'ModelHandlerAnthropic';
+  }
+
   return PROVIDER_HANDLER_ROUTES[config.provider].compatibilityKey ?? undefined;
 }
 
@@ -580,6 +591,24 @@ async function createModelHandlerForResolvedCompatibilityKey(
     default: {
       // Direct provider handler. The key is the provider's registered route key.
       assertGoogleInteractionsRoutable(config, useOpenRouter);
+
+      // Kimi Code models ride the Moonshot provider slot but may request the
+      // Anthropic-compatible endpoint. Route those to the Anthropic handler
+      // with a Kimi Code credential override.
+      const kimiCodeProtocol = (config as { kimiCodeProtocol?: string })
+        .kimiCodeProtocol;
+      if (
+        config.provider === ModelProvider.MOONSHOT &&
+        kimiCodeProtocol === 'anthropic'
+      ) {
+        const { ModelHandlerKimiCodeAnthropic } =
+          await import('@agent/modelHandlers/anthropic/modelHandlerKimiCodeAnthropic');
+        return finalizeModelHandler(
+          new ModelHandlerKimiCodeAnthropic(config),
+          'ModelHandlerAnthropic',
+        );
+      }
+
       const route = PROVIDER_HANDLER_ROUTES[config.provider];
       if (!route.load || !route.compatibilityKey) {
         throw new Error(`Unsupported model provider: ${config.provider}`);

@@ -1,5 +1,6 @@
 import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
 
+import { getRuntimeModelConfig } from './runtimeModelRegistry';
 import { isCodexSubscriptionEligible } from './providerCapabilities';
 
 /**
@@ -22,6 +23,7 @@ const PREFERRED_SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
   openRouter: 'sonnet46T',
   xai: 'grok4',
   moonshot: 'kimi25T',
+  kimiCode: 'kimiCodeK3',
   dashscope: 'qwen3max',
   minimax: 'minimax01',
   glm: 'glm5',
@@ -42,6 +44,7 @@ const FALLBACK_MODEL_PROVIDER: Readonly<Record<string, ModelProvider>> = {
   openRouter: ModelProvider.ANTHROPIC,
   xai: ModelProvider.XAI,
   moonshot: ModelProvider.MOONSHOT,
+  kimiCode: ModelProvider.MOONSHOT,
   dashscope: ModelProvider.DASHSCOPE,
   minimax: ModelProvider.MINIMAX,
   glm: ModelProvider.GLM,
@@ -95,7 +98,12 @@ function resolveWithPreferred(
   setupProvider: string,
   preferred: string,
 ): string {
-  if (isUsableSetupModel(MODEL_CONFIGS[preferred], setupProvider)) {
+  if (
+    isUsableSetupModel(
+      getRuntimeModelConfig(preferred) ?? MODEL_CONFIGS[preferred],
+      setupProvider,
+    )
+  ) {
     return preferred;
   }
   return fallbackSetupModel(setupProvider) ?? preferred;
