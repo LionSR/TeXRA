@@ -52,6 +52,10 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
+- **Child rows show what each subagent last said** — the session list
+  summarizes every subagent's latest response (or its current instruction
+  while a turn is running) inline on its row, so you can triage children
+  without focusing them.
 - **Workflow round progress shows per agent** — session rows and the status
   bar display each running agent's round (for example `r2/3`), so a
   multi-agent workflow's delegated agents show where they are without
