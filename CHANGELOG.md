@@ -50,6 +50,18 @@ All notable changes to this project will be documented in this file.
   legacy `status`, `terminalStatus`, and `endGroupStatus` fields; v0.41 removes
   them. Status fields on streamed progress records are unaffected.
 
+#### New Features
+
+- **Workflow round progress shows per agent** — session rows and the status
+  bar display each running agent's round (for example `r2/3`), so a
+  multi-agent workflow's delegated agents show where they are without
+  focusing each one.
+- **Waiting agents say what they are waiting on** — a session row that needs
+  your input shows the kind of request (command approval, edit, question,
+  and so on) and how many more are queued behind it. Selecting that session
+  brings its request forward immediately instead of leaving it behind other
+  sessions' prompts.
+
 #### Bug Fixes
 
 - **Workflow-script progress is visible in the CLI** — delegated workflow
