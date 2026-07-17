@@ -7,9 +7,9 @@ import {
 } from '@agent/workflowScript';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
+import { formatError } from '@common/errors';
 import { AgentCategory } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
-import { filterNotNullish } from '@utils/core';
 import { deriveExecutionId } from '@utils/core/idHash';
 import { runStorageLocationFromAnyAbsolutePath } from '@utils/files/taskRunStorage';
 
@@ -49,11 +49,28 @@ async function resolveInvocationInputFiles(
   const resolved = await Promise.all(
     references.map(async ({ file, runStorage }) => {
       if (!runStorage) return file;
-      return (await resolveChildRunOutput(parentExecutionId, file))
-        ?.absolutePath;
+      let output: Awaited<ReturnType<typeof resolveChildRunOutput>>;
+      try {
+        output = await resolveChildRunOutput(parentExecutionId, file);
+      } catch (error) {
+        throw new WorkflowRunAbortError(
+          formatError(
+            `Workflow run-storage input could not be resolved: ${file}`,
+            error,
+          ),
+          { cause: error },
+        );
+      }
+      if (!output) {
+        throw new WorkflowRunAbortError(
+          `Workflow run-storage input could not be resolved: ${file}; ` +
+            'pass options.inputFiles with files that still exist.',
+        );
+      }
+      return output.absolutePath;
     }),
   );
-  return resolved.filter(filterNotNullish);
+  return resolved;
 }
 
 /** Build the production `agent()` adapter for one workflow-script run. */
