@@ -88,7 +88,7 @@ function createProgressViewProvider(): ProgressViewProviderFake {
       snapshots,
       pickValidActiveStream: vi.fn(() => ''),
       waitForOwnedExecutionRelease: vi.fn(async () => undefined),
-      clearStream: vi.fn(async () => true),
+      clearStream: vi.fn(async () => 'deleted' as const),
       clearAll: vi.fn(async () => ({
         active: new Set<StreamTabId>(),
         failed: new Set<StreamTabId>(),

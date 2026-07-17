@@ -206,7 +206,6 @@ export type DeleteExecutionResult =
   | {
       readonly status: 'deleted' | 'not-found';
       readonly executionId: ExecutionId;
-      readonly adjacentCleanupFailure?: string;
     }
   | {
       readonly status: 'active';
@@ -225,8 +224,8 @@ export interface DeleteAllExecutionsResult {
 }
 
 export interface DeleteExecutionOptions {
-  /** Adjacent cleanup run under the lock only after execution storage is gone. */
-  readonly afterDelete?: () => Promise<void>;
+  /** Cleanup that must succeed under the inactive lease before storage removal. */
+  readonly beforeDelete?: () => Promise<void>;
 }
 
 export async function deleteExecution(
@@ -239,6 +238,7 @@ export async function deleteExecution(
       const existed = await StorageFS.exists(
         `${RUNS_STORAGE_DIR}/${executionId}`,
       );
+      await options.beforeDelete?.();
       let status: 'deleted' | 'not-found' = 'not-found';
       if (existed) {
         try {
@@ -248,16 +248,7 @@ export async function deleteExecution(
           if (!isFileNotFoundError(error)) throw error;
         }
       }
-      try {
-        await options.afterDelete?.();
-        return { status, executionId };
-      } catch (error) {
-        return {
-          status,
-          executionId,
-          adjacentCleanupFailure: toErrorMessage(error),
-        };
-      }
+      return { status, executionId };
     },
   );
   if (guarded.status === 'active') {
