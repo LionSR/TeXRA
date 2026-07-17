@@ -27,7 +27,7 @@ const PREFERRED_SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
   openRouter: 'sonnet46T',
   xai: 'grok4',
   moonshot: 'kimi25T',
-  kimiCode: 'kimiCodeCoding',
+  kimiCode: 'kimiCoding',
   dashscope: 'qwen3max',
   minimax: 'minimax01',
   glm: 'glm5',

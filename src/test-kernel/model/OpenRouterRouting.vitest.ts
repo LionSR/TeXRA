@@ -29,11 +29,9 @@ describe('shouldRouteModelThroughOpenRouter', () => {
       name: 'does not override a managed direct route',
       config: {
         openRouterOnly: false,
-        directAccess: {
-          source: 'kimiCode',
-          credential: 'kimiCode' as const,
-          baseUrl: 'https://api.kimi.com/coding/v1',
-        },
+        provider: 'moonshot',
+        kimiSubscription: true,
+        baseUrl: 'https://api.kimi.com/coding/v1',
       },
       useOpenRouter: true,
       expected: false,
