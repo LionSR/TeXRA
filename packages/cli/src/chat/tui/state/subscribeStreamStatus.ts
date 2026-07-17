@@ -18,8 +18,10 @@ export function subscribeStreamStatus(): () => void {
     // carrying `WAITING` from the previous turn would otherwise finalize
     // the next run's first chunks early, shoving partial text into
     // `<Static>` before it finished streaming.
-    applyStreamStatusChange(change);
-    projectStreamTranscriptForStatus(change.streamId, change.status);
+    const recognized = applyStreamStatusChange(change);
+    if (recognized) {
+      projectStreamTranscriptForStatus(change.streamId, change.status);
+    }
 
     // A lifecycle-owned child completion returns manual focus to that child's
     // immediate owner. WAITING, repair events, unrelated streams, and detached
