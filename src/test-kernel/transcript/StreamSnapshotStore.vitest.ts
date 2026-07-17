@@ -1187,7 +1187,7 @@ describe('StreamSnapshotStore', () => {
     await store.deleteStream(STREAM);
   });
 
-  it('settles staging after setup fails with buffered writes', async () => {
+  it('settles staging and retains writes when setup recovery fails', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);
     store.setPlan(STREAM, PLAN);
@@ -1197,6 +1197,10 @@ describe('StreamSnapshotStore', () => {
     const statError = Object.assign(new Error('snapshot directory is locked'), {
       code: 'EACCES',
     });
+    const writeError = new Error('snapshot disk is full');
+    const writeSpy = vi
+      .spyOn(StorageFS, 'writeAtomic')
+      .mockRejectedValueOnce(writeError);
     const statSpy = vi
       .spyOn(StorageFS, 'stat')
       .mockImplementation(async (target) => {
@@ -1207,9 +1211,13 @@ describe('StreamSnapshotStore', () => {
         return stat(target);
       });
 
-    await expect(store.stageDeleteStream(STREAM)).rejects.toBe(statError);
+    const error = await store.stageDeleteStream(STREAM).catch((cause) => cause);
+
+    expect(error).toBeInstanceOf(AggregateError);
+    expect((error as AggregateError).errors).toEqual([statError, writeError]);
 
     statSpy.mockRestore();
+    writeSpy.mockRestore();
     const retry = await store.stageDeleteStream(STREAM);
     await retry.rollback();
     const reloaded = new StreamSnapshotStore();

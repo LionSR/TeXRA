@@ -1142,7 +1142,10 @@ export class StreamSnapshotStore {
         await this.replayStagedWrites(stream, state);
       } catch (replayError) {
         this.failedRollbacks.set(stream, state);
-        throw replayError;
+        throw new AggregateError(
+          [error, replayError],
+          `Failed to stage snapshot deletion for ${stream} and restore buffered writes`,
+        );
       } finally {
         this.settleStagedDeletion(stream, state);
       }
