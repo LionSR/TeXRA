@@ -82,7 +82,8 @@ async function callTool(options?: {
         new WorkflowScriptTool().call({
           agent: 'correct',
           script: options?.script ?? script,
-          ...(options?.args !== undefined && { args: options.args }),
+          ...(options &&
+            Object.hasOwn(options, 'args') && { args: options.args }),
         }),
     ),
   );
@@ -205,7 +206,7 @@ return args`,
     expect(recordCost).toHaveBeenCalledWith(0);
   });
 
-  it('retains checkpoint arguments when a retry omits them', async () => {
+  it('retains checkpoint arguments for null retries and replaces explicit values', async () => {
     const argsScript = `export const meta = {
   name: 'retained-arguments',
   description: 'retains omitted retry arguments',
@@ -222,11 +223,23 @@ return args`;
 
     const result = await callTool({
       script: `${argsScript}\n// revised retry`,
+      args: null,
     });
 
     expect(result).toMatchObject({
       status: 'executed',
       output: expect.stringContaining('"topic": "geometry"'),
+    });
+
+    clearStoreCache();
+    const replacement = await callTool({
+      script: `${argsScript}\n// retry with replacement arguments`,
+      args: { topic: 'analysis' },
+    });
+
+    expect(replacement).toMatchObject({
+      status: 'executed',
+      output: expect.stringContaining('"topic": "analysis"'),
     });
   });
 
