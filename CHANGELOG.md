@@ -78,6 +78,13 @@ All notable changes to this project will be documented in this file.
   with text in a foreground dialog now clears that text; pressing it again
   keeps the existing response-stop or exit behavior.
 
+### Desktop
+
+#### Bug Fixes
+
+- **Desktop history remains usable when live refresh fails** — manual refresh
+  continues to work without the app closing unexpectedly.
+
 ## [0.39.5] - 2026-07-15
 
 ### Shared (all surfaces)
