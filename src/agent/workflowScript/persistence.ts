@@ -1,6 +1,5 @@
 // Third-party imports
 import { z } from 'zod';
-import stableStringify from 'fast-json-stable-stringify';
 
 // Local imports - storage
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
@@ -108,13 +107,6 @@ function decodeJsonValue(value: PersistedJsonValue): unknown {
   return value.kind === 'undefined' ? undefined : value.value;
 }
 
-function persistedValuesEqual(
-  left: PersistedJsonValue,
-  right: PersistedJsonValue,
-): boolean {
-  return stableStringify(left) === stableStringify(right);
-}
-
 function encodeJournalEntry(
   entry: WorkflowJournalEntry,
 ): PersistedWorkflowJournalEntry {
@@ -215,16 +207,13 @@ async function runPersistedWorkflowScriptLocked(
     ...runOptions
   } = options;
   const prior = await readWorkflowScriptCheckpoint(store, checkpointId);
-  if (
-    prior !== null &&
-    requestedScript !== undefined &&
-    requestedScript !== prior.script
-  ) {
-    throw new WorkflowScriptPersistenceError(
-      `Workflow checkpoint ${checkpointId} belongs to different script text.`,
-    );
-  }
-  const script = prior?.script ?? requestedScript;
+  // A named checkpoint outlives one tool call, and callers legitimately
+  // evolve the script between attempts (a model retrying after a timeout
+  // rarely reproduces its source byte-for-byte). Adopt the requested script
+  // and args, keep the journal: an entry replays only on a matching call
+  // index and prompt/options hash, so drifted calls re-execute while
+  // unchanged ones stay free.
+  const script = requestedScript ?? prior?.script;
   if (script === undefined) {
     throw new WorkflowScriptPersistenceError(
       `Workflow checkpoint ${checkpointId} does not exist; a script is required for the first run.`,
@@ -241,17 +230,10 @@ async function runPersistedWorkflowScriptLocked(
       { cause: error },
     );
   }
-  if (
-    prior !== null &&
-    Object.hasOwn(options, 'args') &&
-    !persistedValuesEqual(encodedRequestedArgs, encodeJsonValue(prior.args))
-  ) {
-    throw new WorkflowScriptPersistenceError(
-      `Workflow checkpoint ${checkpointId} belongs to different arguments.`,
-    );
-  }
   const args =
-    prior !== null ? prior.args : decodeJsonValue(encodedRequestedArgs);
+    Object.hasOwn(options, 'args') || prior === null
+      ? decodeJsonValue(encodedRequestedArgs)
+      : prior.args;
 
   const journalByIndex = new Map(
     (prior?.journal ?? []).map((entry) => [entry.index, entry]),
