@@ -22,6 +22,7 @@ import {
 import { getVisibleModels } from './modelOptionsState';
 import {
   isOpenRouterRoutingUnsupported,
+  resolveModelApiKeyProvider,
   shouldRouteModelThroughOpenRouter,
 } from './openRouterRouting';
 import {
@@ -150,8 +151,8 @@ async function getPersonalAccessKindForModel(
   config: ModelConfig,
   ctx: ModelAvailabilityContext,
 ): Promise<PersonalModelAccessKind | null> {
-  const { provider } = config;
-  if (!isApiProvider(provider)) {
+  const provider = resolveModelApiKeyProvider(config, ctx.useOpenRouter);
+  if (!provider) {
     return null;
   }
 
@@ -164,7 +165,9 @@ async function getPersonalAccessKindForModel(
     // fallback below when this model has an OpenRouter route.
   }
 
-  return config.openrouterFullName && ctx.hasOpenRouter
+  return !(config as { apiKeyProvider?: ApiProvider }).apiKeyProvider &&
+    config.openrouterFullName &&
+    ctx.hasOpenRouter
     ? 'openrouter-key'
     : null;
 }
@@ -247,6 +250,15 @@ async function resolveModelAvailability(
   if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
     return ctx.hasOpenRouter
       ? availabilityStatus('openrouter-key')
+      : availabilityStatus('missing-key');
+  }
+
+  // An explicit key owner is a direct-route contract. Included access, relay
+  // quota, and provider-tier checks must not mask that credential path.
+  if ((config as { apiKeyProvider?: ApiProvider }).apiKeyProvider) {
+    const personalAccess = await getPersonalAccessKindForModel(config, ctx);
+    return personalAccess
+      ? availabilityStatus(personalAccess)
       : availabilityStatus('missing-key');
   }
 
@@ -379,10 +391,15 @@ export async function getModelUnavailableReason(
   }
 
   // Personal key mode or unauthenticated — missing key or keyless provider.
-  const providerName =
-    PROVIDER_DISPLAY_NAMES[config.provider] ?? config.provider;
-  if (!isApiProvider(config.provider)) {
+  const apiKeyProvider = resolveModelApiKeyProvider(config, ctx.useOpenRouter);
+  const providerName = apiKeyProvider
+    ? (PROVIDER_DISPLAY_NAMES[apiKeyProvider] ?? apiKeyProvider)
+    : (PROVIDER_DISPLAY_NAMES[config.provider] ?? config.provider);
+  if (!apiKeyProvider) {
     return `Model "${model}" is provided by ${providerName}, which does not use provider API keys. Use a host that supports ${providerName} models or choose another model.`;
+  }
+  if ((config as { apiKeyProvider?: ApiProvider }).apiKeyProvider) {
+    return `Model "${model}" requires your ${providerName} API key. Provide it to continue.`;
   }
   return `Model "${model}" requires your ${providerName} API key. Provide it, or enable included access.`;
 }

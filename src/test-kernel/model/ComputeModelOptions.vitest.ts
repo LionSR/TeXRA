@@ -158,6 +158,46 @@ describe('computeModelOptionsData relay quota state', () => {
     expect(model.disabled).toBe(false);
   });
 
+  it('uses the explicit Kimi Code key independently of relay and OpenRouter state', async () => {
+    const access = {
+      ...createModelOptionsAccess(
+        {
+          useIncludedAccess: true,
+          canUseServerSideKeys: true,
+          canUseModelSync: true,
+          relayQuotaExceeded: true,
+          quotaAutoSwitched: true,
+        },
+        { [apiKeySecretName('kimiCode')]: 'kimi-code-key' },
+      ),
+      useOpenRouter: true,
+    };
+
+    const [model] = await computeModelOptionsData(['kimiCodeK3'], access);
+    const reason = await getModelUnavailableReason('kimiCodeK3', access);
+
+    expect(model.availability).toBe('provider-key');
+    expect(model.disabled).toBe(false);
+    expect(reason).toBeNull();
+  });
+
+  it('names the explicit provider when its key is missing', async () => {
+    const access = createModelOptionsAccess(
+      {
+        useIncludedAccess: false,
+        relayQuotaExceeded: false,
+        quotaAutoSwitched: false,
+      },
+      {},
+    );
+
+    const reason = await getModelUnavailableReason('kimiCodeK3', access);
+
+    expect(reason).toBe(
+      'Model "kimiCodeK3" requires your Kimi Code API key. Provide it to continue.',
+    );
+  });
+
   it('does not treat non-API providers as personal API-key access', async () => {
     const access = createModelOptionsAccess({
       useIncludedAccess: false,
