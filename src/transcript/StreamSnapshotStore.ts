@@ -294,10 +294,18 @@ interface StreamRecord {
 
   // -- Cached KVStore handle for this stream's sidecar directory. ----------
   kv: KVStore | undefined;
+  writeKv: KVStore | undefined;
 }
+
+type StagedDeletionPhase = 'live' | 'transitioning' | 'staged' | 'unavailable';
+type StagedRecoveryOutcome = 'discarded' | 'restored' | 'unchanged';
 
 interface StagedDeletionState {
   writes: Map<string, unknown>;
+  /** Namespace authority and whether failed ownership may mirror writes. */
+  phase: StagedDeletionPhase;
+  /** One recovery owns namespace repair and buffered-write replay at a time. */
+  recovery?: Promise<StagedRecoveryOutcome>;
   settled: Promise<void>;
   resolveSettled: () => void;
 }
@@ -346,6 +354,7 @@ export class StreamSnapshotStore {
         compileFailuresOverlay: undefined,
         usageOverlay: undefined,
         kv: undefined,
+        writeKv: undefined,
       };
       this.records.set(stream, record);
     }
@@ -358,6 +367,17 @@ export class StreamSnapshotStore {
       record.kv = new KVStore(streamDataDir(streamId));
     }
     return record.kv;
+  }
+
+  /** Strict write handle; read callers retain the KV store's fallback policy. */
+  private writeKv(streamId: StreamTabId): KVStore {
+    const record = this.getOrCreateRecord(streamId);
+    if (!record.writeKv) {
+      record.writeKv = new KVStore(streamDataDir(streamId), {
+        throwOnErrors: true,
+      });
+    }
+    return record.writeKv;
   }
 
   private async listStreamsUnder(root: string): Promise<StreamTabId[]> {
@@ -933,9 +953,10 @@ export class StreamSnapshotStore {
       entries = await StorageFS.readDir(STREAM_DATA_DELETION_DIR);
     } catch (error) {
       if (isFileNotFoundError(error)) {
-        return { restored: [], pendingCleanup: [], discarded: [] };
+        entries = [];
+      } else {
+        throw error;
       }
-      throw error;
     }
 
     const restored: StreamTabId[] = [];
@@ -961,28 +982,43 @@ export class StreamSnapshotStore {
         const stagedDir = stagedStreamDataDir(stream);
         const liveDir = streamDataDir(stream);
         const failedWrites = this.failedRollbacks.get(stream);
-        if (!(await storagePathExists(liveDir))) {
+        if (failedWrites) {
+          const outcome = await this.recoverFailedRollback(
+            stream,
+            failedWrites,
+          );
+          if (outcome === 'discarded') discarded.push(stream);
+          else if (outcome === 'restored' && liveStreams.has(stream)) {
+            restored.push(stream);
+          } else if (outcome === 'restored') {
+            pendingCleanup.push(stream);
+          }
+          return;
+        }
+        const hasLiveData = await storagePathExists(liveDir);
+        if (!hasLiveData) {
           await StorageFS.ensureDir(STREAM_DATA_DIR);
           await StorageFS.rename(stagedDir, liveDir);
           const record = this.records.get(stream);
-          if (record) record.kv = undefined;
-          if (liveStreams.has(stream) && failedWrites) {
-            this.replayStagedWrites(stream, failedWrites);
-            await this.flushWritesForStream(stream);
+          if (record) {
+            record.kv = undefined;
+            record.writeKv = undefined;
           }
-          this.failedRollbacks.delete(stream);
           if (liveStreams.has(stream)) restored.push(stream);
           else pendingCleanup.push(stream);
           return;
         }
 
         await StorageFS.delete(stagedDir, { recursive: true });
-        if (liveStreams.has(stream) && failedWrites) {
-          this.replayStagedWrites(stream, failedWrites);
-          await this.flushWritesForStream(stream);
-        }
-        this.failedRollbacks.delete(stream);
         discarded.push(stream);
+      },
+      { concurrency: SEED_IO_CONCURRENCY },
+    );
+    await pMap(
+      [...this.failedRollbacks],
+      async ([stream, state]) => {
+        if (!liveStreams.has(stream)) return;
+        await this.recoverFailedRollback(stream, state);
       },
       { concurrency: SEED_IO_CONCURRENCY },
     );
@@ -990,30 +1026,135 @@ export class StreamSnapshotStore {
   }
 
   /** Restore writes buffered behind a staging attempt after live data returns. */
-  private replayStagedWrites(
+  private async replayStagedWrites(
+    stream: StreamTabId,
+    state: StagedDeletionState,
+  ): Promise<void> {
+    while (state.writes.size > 0) {
+      const writes = [...state.writes];
+      state.writes.clear();
+      try {
+        await Promise.all(
+          writes.map(([key, value]) => this.queueWrite(stream, key, value)),
+        );
+      } catch (error) {
+        for (const [key, value] of writes) {
+          if (!state.writes.has(key)) state.writes.set(key, value);
+        }
+        throw error;
+      }
+    }
+  }
+
+  /** Drain buffered writes and release every owner without an await-sized gap. */
+  private async drainStagedWrites(
+    stream: StreamTabId,
+    state: StagedDeletionState,
+  ): Promise<void> {
+    while (true) {
+      await this.replayStagedWrites(stream, state);
+      if (state.writes.size > 0) continue;
+      this.releaseStagedOwnership(stream, state, state.recovery);
+      return;
+    }
+  }
+
+  private releaseStagedOwnership(
+    stream: StreamTabId,
+    state: StagedDeletionState,
+    expectedRecovery: Promise<StagedRecoveryOutcome> | undefined = undefined,
+  ): void {
+    if (state.writes.size > 0 || state.recovery !== expectedRecovery) {
+      return;
+    }
+    if (this.failedRollbacks.get(stream) === state) {
+      this.failedRollbacks.delete(stream);
+    }
+    if (this.stagedDeletions.get(stream) === state) {
+      this.stagedDeletions.delete(stream);
+      state.resolveSettled();
+    }
+  }
+
+  private runStagedRecovery(
+    state: StagedDeletionState,
+    recover: () => Promise<StagedRecoveryOutcome>,
+  ): Promise<StagedRecoveryOutcome> {
+    if (state.recovery) return state.recovery;
+    const recovery = recover();
+    const trackedRecovery = recovery.finally(() => {
+      if (state.recovery === trackedRecovery) {
+        state.recovery = undefined;
+      }
+    });
+    state.recovery = trackedRecovery;
+    return trackedRecovery;
+  }
+
+  /**
+   * Repair a failed rollback exactly once, then release its write buffer only
+   * after the namespace is live and no buffered values remain.
+   */
+  private recoverFailedRollback(
+    stream: StreamTabId,
+    state: StagedDeletionState,
+  ): Promise<StagedRecoveryOutcome> {
+    if (this.failedRollbacks.get(stream) !== state) {
+      return Promise.resolve('unchanged');
+    }
+    return this.runStagedRecovery(state, async () => {
+      let outcome: StagedRecoveryOutcome = 'unchanged';
+      if (canUseStreamDataDir(stream)) {
+        const stagedDir = stagedStreamDataDir(stream);
+        const liveDir = streamDataDir(stream);
+        const liveWasAuthoritative = state.phase === 'live';
+        const [hasLiveData, hasStagedData] = await Promise.all([
+          storagePathExists(liveDir),
+          storagePathExists(stagedDir),
+        ]);
+
+        if (liveWasAuthoritative) {
+          if (hasStagedData) {
+            await StorageFS.delete(stagedDir, { recursive: true });
+            outcome = 'discarded';
+          }
+        } else if (hasStagedData) {
+          state.phase = 'staged';
+          if (hasLiveData) {
+            await StorageFS.delete(liveDir, { recursive: true });
+          }
+          await StorageFS.ensureDir(STREAM_DATA_DIR);
+          state.phase = 'transitioning';
+          await StorageFS.rename(stagedDir, liveDir);
+          outcome = 'restored';
+          const record = this.records.get(stream);
+          if (record) {
+            record.kv = undefined;
+            record.writeKv = undefined;
+          }
+        }
+        if (!hasLiveData && (liveWasAuthoritative || !hasStagedData)) {
+          await StorageFS.ensureDir(liveDir);
+        }
+      }
+
+      // If neither namespace remains, buffered values are the only recoverable
+      // state; replay recreates the live directory instead of wedging ownership.
+      state.phase = 'live';
+      await this.drainStagedWrites(stream, state);
+      return outcome;
+    });
+  }
+
+  /** Release ownership of a stream after its staged transaction finishes. */
+  private settleStagedDeletion(
     stream: StreamTabId,
     state: StagedDeletionState,
   ): void {
     if (this.stagedDeletions.get(stream) === state) {
       this.stagedDeletions.delete(stream);
     }
-    for (const [key, value] of state.writes) {
-      this.write(stream, key, value);
-    }
     state.resolveSettled();
-  }
-
-  /** Persist a failed rollback's buffered values before staging its retry. */
-  private replayFailedRollbackWrites(
-    stream: StreamTabId,
-    failedState: StagedDeletionState,
-    retryState: StagedDeletionState,
-  ): void {
-    for (const [key, value] of failedState.writes) {
-      retryState.writes.set(key, value);
-      this.writeUnbuffered(stream, key, value);
-    }
-    failedState.resolveSettled();
   }
 
   /**
@@ -1029,41 +1170,35 @@ export class StreamSnapshotStore {
       await activeDeletion.settled;
       return this.stageDeleteStream(stream);
     }
+    const failedRollback = this.failedRollbacks.get(stream);
+    if (failedRollback) {
+      await this.recoverFailedRollback(stream, failedRollback);
+      return this.stageDeleteStream(stream);
+    }
     let resolveSettled = () => {};
     const settlement = new Promise<void>((resolve) => {
       resolveSettled = resolve;
     });
     const state: StagedDeletionState = {
       writes: new Map(),
+      phase: 'live',
       settled: settlement,
       resolveSettled,
     };
     this.stagedDeletions.set(stream, state);
 
     try {
-      const failedState = this.failedRollbacks.get(stream);
-      if (failedState) {
-        const stagedDir = stagedStreamDataDir(stream);
-        const liveDir = streamDataDir(stream);
-        if (await storagePathExists(stagedDir)) {
-          if (await storagePathExists(liveDir)) {
-            throw new Error(
-              `Cannot retry snapshot deletion for ${stream}; both live and staged directories exist`,
-            );
-          }
-          await StorageFS.rename(stagedDir, liveDir);
-        }
-        this.failedRollbacks.delete(stream);
-        this.replayFailedRollbackWrites(stream, failedState, state);
-        await this.flushWritesForStream(stream);
-      }
-      if (
-        canUseStreamDataDir(stream) &&
-        (await storagePathExists(stagedStreamDataDir(stream)))
-      ) {
-        throw new Error(
-          `Stream ${stream} has an unreconciled snapshot deletion`,
+      if (canUseStreamDataDir(stream)) {
+        const hasStagedData = await storagePathExists(
+          stagedStreamDataDir(stream),
         );
+        if (hasStagedData) {
+          state.phase = 'staged';
+          throw new Error(
+            `Stream ${stream} has an unreconciled snapshot deletion`,
+          );
+        }
+        state.phase = 'live';
       }
       // Let hydration finish before staging. A record with `seeded === false`
       // may already contain sidecars while execution-config hydration is still
@@ -1084,11 +1219,13 @@ export class StreamSnapshotStore {
       const canStage = canUseStreamDataDir(stream);
       const liveDir = canStage ? streamDataDir(stream) : undefined;
       const stagedDir = canStage ? stagedStreamDataDir(stream) : undefined;
-      let staged = false;
-      if (liveDir && stagedDir && (await storagePathExists(liveDir))) {
+      const hasLiveData =
+        !liveDir || !stagedDir || (await storagePathExists(liveDir));
+      if (liveDir && stagedDir && hasLiveData) {
         await StorageFS.ensureDir(STREAM_DATA_DELETION_DIR);
+        state.phase = 'transitioning';
         await StorageFS.rename(liveDir, stagedDir);
-        staged = true;
+        state.phase = 'staged';
       }
 
       let settled = false;
@@ -1096,10 +1233,9 @@ export class StreamSnapshotStore {
         commit: async () => {
           if (settled) return;
           settled = true;
-          this.failedRollbacks.delete(stream);
           this.evict(stream);
           try {
-            if (staged && stagedDir) {
+            if (state.phase === 'staged' && stagedDir) {
               try {
                 await StorageFS.delete(stagedDir, { recursive: true });
               } catch (error) {
@@ -1111,33 +1247,70 @@ export class StreamSnapshotStore {
               }
             }
           } finally {
-            if (this.stagedDeletions.get(stream) === state) {
-              this.stagedDeletions.delete(stream);
-            }
-            state.resolveSettled();
+            this.settleStagedDeletion(stream, state);
           }
         },
         rollback: async () => {
           if (settled) return;
           settled = true;
           try {
-            if (staged && stagedDir && liveDir) {
+            if (state.phase === 'staged' && stagedDir && liveDir) {
+              state.phase = 'transitioning';
               await StorageFS.rename(stagedDir, liveDir);
+              state.phase = 'live';
             }
-            this.replayStagedWrites(stream, state);
+            await this.drainStagedWrites(stream, state);
           } catch (error) {
+            const failures: unknown[] = [error];
+            if (state.phase !== 'live' && canUseStreamDataDir(stream)) {
+              try {
+                const [hasLiveData, hasStagedData] = await Promise.all([
+                  storagePathExists(streamDataDir(stream)),
+                  storagePathExists(stagedStreamDataDir(stream)),
+                ]);
+                if (hasStagedData) state.phase = 'staged';
+                else if (hasLiveData) state.phase = 'live';
+                else state.phase = 'unavailable';
+              } catch (recoveryError) {
+                failures.push(recoveryError);
+              }
+            }
             this.failedRollbacks.set(stream, state);
+            if (failures.length > 1) {
+              throw new AggregateError(
+                failures,
+                `Failed to roll back snapshot deletion for ${stream} and inspect its namespace`,
+              );
+            }
             throw error;
           } finally {
-            if (this.stagedDeletions.get(stream) === state) {
-              this.stagedDeletions.delete(stream);
-            }
-            state.resolveSettled();
+            this.settleStagedDeletion(stream, state);
           }
         },
       };
     } catch (error) {
-      this.replayStagedWrites(stream, state);
+      const failures: unknown[] = [error];
+      this.failedRollbacks.set(stream, state);
+      try {
+        if (state.phase === 'live') {
+          await this.runStagedRecovery(state, async () => {
+            await this.drainStagedWrites(stream, state);
+            return 'unchanged';
+          });
+        } else if (state.phase === 'transitioning') {
+          await this.recoverFailedRollback(stream, state);
+        }
+      } catch (recoveryError) {
+        failures.push(recoveryError);
+      } finally {
+        this.settleStagedDeletion(stream, state);
+      }
+      if (failures.length > 1) {
+        throw new AggregateError(
+          failures,
+          `Failed to stage snapshot deletion for ${stream} and restore buffered writes`,
+        );
+      }
       throw error;
     }
   }
@@ -1421,6 +1594,30 @@ export class StreamSnapshotStore {
       stagedDeletion.writes.set(key, value);
       return;
     }
+    const failedRollback = this.failedRollbacks.get(stream);
+    if (failedRollback) {
+      failedRollback.writes.set(key, value);
+      if (failedRollback.phase === 'live' && !failedRollback.recovery) {
+        void this.queueWrite(stream, key, value)
+          .then(() => {
+            if (
+              this.failedRollbacks.get(stream) === failedRollback &&
+              failedRollback.writes.get(key) === value
+            ) {
+              failedRollback.writes.delete(key);
+              this.releaseStagedOwnership(stream, failedRollback);
+            }
+          })
+          .catch((err: unknown) =>
+            logger.warn(
+              CHANNEL,
+              `Failed to persist ${key}.json for stream ${stream}; sidecar remains buffered.`,
+              { data: err },
+            ),
+          );
+      }
+      return;
+    }
     this.writeUnbuffered(stream, key, value);
   }
 
@@ -1429,28 +1626,33 @@ export class StreamSnapshotStore {
     key: string,
     value: unknown,
   ): void {
+    void this.queueWrite(stream, key, value).catch((err: unknown) =>
+      logger.warn(
+        CHANNEL,
+        `Failed to persist ${key}.json for stream ${stream}; sidecar may be stale.`,
+        { data: err },
+      ),
+    );
+  }
+
+  /** Queue a sidecar write and expose its completion to transactional callers. */
+  private queueWrite(
+    stream: StreamTabId,
+    key: string,
+    value: unknown,
+  ): Promise<void> {
     const chainKey = `${stream}::${key}`;
     const version = this.streamVersion(stream);
     const mutex = this.writeMutexes.get(chainKey) ?? new Mutex();
     this.writeMutexes.set(chainKey, mutex);
-    // Best-effort: a failed sidecar write must not break the lock, but it is
-    // logged so silent data loss (disk full, permission denied) is diagnosable.
-    void mutex
-      .runExclusive(() => {
-        // Eviction guard: `evict()`/`deleteStream()` drop this chain key. A
-        // write queued before that must NOT fire afterward, or a late `kv()`
-        // would re-create the `streamData/{id}/` dir `deleteDir()` just removed.
-        if (!this.writeMutexes.has(chainKey)) return;
-        if (this.streamVersion(stream) !== version) return;
-        return this.kv(stream).write(key, value);
-      })
-      .catch((err: unknown) =>
-        logger.warn(
-          CHANNEL,
-          `Failed to persist ${key}.json for stream ${stream}; sidecar may be stale.`,
-          { data: err },
-        ),
-      );
+    return mutex.runExclusive(() => {
+      // Eviction guard: `evict()`/`deleteStream()` drop this chain key. A
+      // write queued before that must NOT fire afterward, or a late `kv()`
+      // would re-create the `streamData/{id}/` dir `deleteDir()` just removed.
+      if (!this.writeMutexes.has(chainKey)) return;
+      if (this.streamVersion(stream) !== version) return;
+      return this.writeKv(stream).write(key, value);
+    });
   }
 
   private async flushWritesForStream(stream: StreamTabId): Promise<void> {
@@ -1480,9 +1682,17 @@ export class StreamSnapshotStore {
         .map((record) => record.seedChain)
         .filter((chain): chain is Promise<void> => chain !== undefined),
     );
-    await Promise.all(
-      [...this.writeMutexes.values()].map((mutex) => mutex.waitForUnlock()),
-    );
+    try {
+      await pMap(
+        [...this.failedRollbacks],
+        ([stream, state]) => this.recoverFailedRollback(stream, state),
+        { concurrency: SEED_IO_CONCURRENCY },
+      );
+    } finally {
+      await Promise.all(
+        [...this.writeMutexes.values()].map((mutex) => mutex.waitForUnlock()),
+      );
+    }
   }
 
   // ==========================================================================
@@ -1599,7 +1809,10 @@ export class StreamSnapshotStore {
       await this.flushWritesForStream(stream);
       if (this.streamVersion(stream) !== version) return;
       const record = this.records.get(stream);
-      if (record) record.kv = undefined;
+      if (record) {
+        record.kv = undefined;
+        record.writeKv = undefined;
+      }
       const data = await readStreamData(this.kv(stream));
       if (this.streamVersion(stream) !== version) return;
       await this.applyStreamData(stream, data);
