@@ -82,8 +82,8 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
-- **Live history refresh failures stay contained** — a filesystem refresh error
-  no longer becomes an unhandled desktop process failure.
+- **Desktop history remains usable when live refresh fails** — manual refresh
+  continues to work without the app closing unexpectedly.
 
 ## [0.39.5] - 2026-07-15
 
