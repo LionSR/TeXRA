@@ -40,35 +40,35 @@ type SkillSelectHandler = (value: SkillActivation) => void | Promise<void>;
 type ErrorHandler = (error: unknown) => void | Promise<void>;
 type SelectionCompletion = 'afterAction' | 'beforeAction';
 
-/** Run a form selection handler with consistent completion and error routing. */
-function runFormSelection<T>({
+/** Build a form selection handler with consistent completion and errors. */
+function formSelectionHandler<T>({
   action,
-  value,
   onDone,
   onError,
   completion = 'afterAction',
 }: {
-  readonly action: () => void | Promise<void>;
-  readonly value: T;
+  readonly action: (value: T) => void | Promise<void>;
   readonly onDone: (value: T) => void;
   readonly onError?: ErrorHandler;
   readonly completion?: SelectionCompletion;
-}): void {
-  if (completion === 'beforeAction') {
-    onDone(value);
-  }
+}): (value: T) => void {
+  return (value) => {
+    if (completion === 'beforeAction') {
+      onDone(value);
+    }
 
-  const runAction = async (): Promise<void> => {
-    await action();
+    const runAction = async (): Promise<void> => {
+      await action(value);
+    };
+
+    void runAction()
+      .catch((error: unknown) => onError?.(error))
+      .finally(() => {
+        if (completion === 'afterAction') {
+          onDone(value);
+        }
+      });
   };
-
-  void runAction()
-    .catch((error: unknown) => onError?.(error))
-    .finally(() => {
-      if (completion === 'afterAction') {
-        onDone(value);
-      }
-    });
 }
 
 export function registerBuiltinSlashCommands(options?: {
@@ -122,18 +122,15 @@ export function registerBuiltinSlashCommands(options?: {
         currentAgent={current}
         availableRows={props.availableRows}
         selectable={selectable}
-        onSelect={(value) => {
+        onSelect={formSelectionHandler<string>({
+          action: onAgentSelect,
           // Chain into the model picker only while still choosing the root
-          // (before the first message) and model selection is available.
-          const advanceToModel = selectable && canSelectModel();
-          runFormSelection({
-            action: () => onAgentSelect(value),
-            value,
-            onDone: advanceToModel
+          // and model selection is available.
+          onDone:
+            selectable && canSelectModel()
               ? () => openModelSelectionForm()
               : props.onDone,
-          });
-        }}
+        })}
         onClose={() => props.onDone(undefined)}
       />
     );
@@ -145,14 +142,11 @@ export function registerBuiltinSlashCommands(options?: {
       <ApiModeForm
         currentMode={current}
         availableRows={props.availableRows}
-        onSelect={(value) =>
-          runFormSelection({
-            action: () => onApiModeSelect(value),
-            value,
-            onDone: props.onDone,
-            onError: options?.onError,
-          })
-        }
+        onSelect={formSelectionHandler<CliApiMode>({
+          action: onApiModeSelect,
+          onDone: props.onDone,
+          onError: options?.onError,
+        })}
         onCancel={() => props.onDone(undefined)}
       />
     );
@@ -164,14 +158,11 @@ export function registerBuiltinSlashCommands(options?: {
       <ApprovalPolicyForm
         availableRows={props.availableRows}
         currentPolicy={current}
-        onSelect={(value) =>
-          runFormSelection({
-            action: () => options?.onApprovalPolicySelect?.(value),
-            value,
-            onDone: props.onDone,
-            completion: 'beforeAction',
-          })
-        }
+        onSelect={formSelectionHandler<CliApprovalPolicy>({
+          action: (value) => options?.onApprovalPolicySelect?.(value),
+          onDone: props.onDone,
+          completion: 'beforeAction',
+        })}
         onCancel={() => props.onDone(undefined)}
       />
     );
@@ -181,15 +172,12 @@ export function registerBuiltinSlashCommands(options?: {
     return (
       <LoginForm
         availableRows={props.availableRows}
-        onSelect={(value) =>
-          runFormSelection({
-            action: () => onLoginSelect(value),
-            value,
-            onDone: props.onDone,
-            onError: options?.onError,
-            completion: 'beforeAction',
-          })
-        }
+        onSelect={formSelectionHandler<LoginFormValue>({
+          action: onLoginSelect,
+          onDone: props.onDone,
+          onError: options?.onError,
+          completion: 'beforeAction',
+        })}
         onCancel={() => props.onDone(undefined)}
       />
     );
@@ -206,14 +194,11 @@ export function registerBuiltinSlashCommands(options?: {
         availableRows={props.availableRows}
         selectable={selectable}
         getModelSwitchDisabledReason={options?.getModelSwitchDisabledReason}
-        onSelect={(value) =>
-          runFormSelection({
-            action: () => onModelSelect(value),
-            value,
-            onDone: props.onDone,
-            onError: options?.onError,
-          })
-        }
+        onSelect={formSelectionHandler<string>({
+          action: onModelSelect,
+          onDone: props.onDone,
+          onError: options?.onError,
+        })}
         onClose={() => props.onDone(undefined)}
       />
     );
@@ -223,15 +208,12 @@ export function registerBuiltinSlashCommands(options?: {
     return (
       <MemoryListForm
         availableRows={props.availableRows}
-        onSelect={(value) =>
-          runFormSelection({
-            action: () => options?.onMemorySelect?.(value),
-            value,
-            onDone: props.onDone,
-            onError: options?.onError,
-            completion: 'beforeAction',
-          })
-        }
+        onSelect={formSelectionHandler<string>({
+          action: (value) => options?.onMemorySelect?.(value),
+          onDone: props.onDone,
+          onError: options?.onError,
+          completion: 'beforeAction',
+        })}
         onClose={() => props.onDone(undefined)}
       />
     );
@@ -241,15 +223,12 @@ export function registerBuiltinSlashCommands(options?: {
     return (
       <ResumeListForm
         availableRows={props.availableRows}
-        onSelect={(id) =>
-          runFormSelection({
-            action: () => options?.onResumeSelect?.(id),
-            value: id,
-            onDone: props.onDone,
-            onError: options?.onError,
-            completion: 'beforeAction',
-          })
-        }
+        onSelect={formSelectionHandler<ExecutionId>({
+          action: (id) => options?.onResumeSelect?.(id),
+          onDone: props.onDone,
+          onError: options?.onError,
+          completion: 'beforeAction',
+        })}
         onClose={() => props.onDone(undefined)}
       />
     );
@@ -268,15 +247,12 @@ export function registerBuiltinSlashCommands(options?: {
     return (
       <SkillsListForm
         availableRows={props.availableRows}
-        onSelect={(value) =>
-          runFormSelection({
-            action: () => options?.onSkillSelect?.(value),
-            value,
-            onDone: props.onDone,
-            onError: options?.onError,
-            completion: 'beforeAction',
-          })
-        }
+        onSelect={formSelectionHandler<SkillActivation>({
+          action: (value) => options?.onSkillSelect?.(value),
+          onDone: props.onDone,
+          onError: options?.onError,
+          completion: 'beforeAction',
+        })}
         onClose={() => props.onDone(undefined)}
       />
     );

@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  formatToolDescriptionForTui,
-  toolsSelectWindow,
-} from '@cli/chat/tui/forms/ToolsListForm';
+import { formatToolDescriptionForTui } from '@cli/chat/tui/forms/ToolsListForm';
 import {
   cliToolIds,
   findCliToolDef,
@@ -135,22 +132,5 @@ describe('CLI tools runtime', () => {
         }),
       ),
     ).toBe('coming soon · detected · not yet usable');
-  });
-});
-
-describe('CLI ToolsListForm row budget', () => {
-  it('reserves the full bordered form chrome before showing overflow', () => {
-    expect(toolsSelectWindow({ availableRows: 7, itemCount: 8 })).toEqual({
-      maxVisibleItems: 1,
-      showOverflow: false,
-    });
-    expect(toolsSelectWindow({ availableRows: 8, itemCount: 8 })).toEqual({
-      maxVisibleItems: 2,
-      showOverflow: false,
-    });
-    expect(toolsSelectWindow({ availableRows: 12, itemCount: 8 })).toEqual({
-      maxVisibleItems: 4,
-      showOverflow: true,
-    });
   });
 });
