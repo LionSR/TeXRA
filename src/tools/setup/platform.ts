@@ -85,7 +85,7 @@ export interface SetupAuthAdapter {
 }
 
 /** Subscription access reported separately from provider API keys. */
-export interface SetupModelAccessAdapter {
+interface SetupModelAccessAdapter {
   getChatGptSubscriptionStatus(): Promise<{
     signedIn: boolean;
     enabled: boolean;
