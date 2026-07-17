@@ -948,9 +948,10 @@ export class StreamSnapshotStore {
       entries = await StorageFS.readDir(STREAM_DATA_DELETION_DIR);
     } catch (error) {
       if (isFileNotFoundError(error)) {
-        return { restored: [], pendingCleanup: [], discarded: [] };
+        entries = [];
+      } else {
+        throw error;
       }
-      throw error;
     }
 
     const restored: StreamTabId[] = [];
@@ -1001,6 +1002,17 @@ export class StreamSnapshotStore {
         }
         this.failedRollbacks.delete(stream);
         discarded.push(stream);
+      },
+      { concurrency: SEED_IO_CONCURRENCY },
+    );
+    await pMap(
+      [...this.failedRollbacks],
+      async ([stream, state]) => {
+        if (!liveStreams.has(stream) || !state.liveStorageAvailable) return;
+        await this.replayStagedWrites(stream, state);
+        if (this.failedRollbacks.get(stream) === state) {
+          this.failedRollbacks.delete(stream);
+        }
       },
       { concurrency: SEED_IO_CONCURRENCY },
     );

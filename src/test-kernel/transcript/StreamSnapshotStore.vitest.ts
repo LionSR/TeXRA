@@ -1246,6 +1246,43 @@ describe('StreamSnapshotStore', () => {
     await store.deleteStream(STREAM);
   });
 
+  it('retries buffered writes after staged-directory reconciliation', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    store.setPlan(STREAM, PLAN);
+    await store.flush();
+    const deletion = await store.stageDeleteStream(STREAM);
+    store.setPlan(STREAM, null);
+    const rollbackError = new Error('snapshot directory is still locked');
+    const renameSpy = vi
+      .spyOn(StorageFS, 'rename')
+      .mockRejectedValueOnce(rollbackError);
+
+    await expect(deletion.rollback()).rejects.toBe(rollbackError);
+
+    renameSpy.mockRestore();
+    const writeError = new Error('snapshot disk is full');
+    const writeSpy = vi
+      .spyOn(StorageFS, 'writeAtomic')
+      .mockRejectedValueOnce(writeError);
+    await expect(
+      store.reconcileStagedDeletions(new Set([STREAM])),
+    ).rejects.toBe(writeError);
+
+    writeSpy.mockRestore();
+    await expect(
+      store.reconcileStagedDeletions(new Set([STREAM])),
+    ).resolves.toEqual({
+      restored: [],
+      pendingCleanup: [],
+      discarded: [],
+    });
+    const reloaded = new StreamSnapshotStore();
+    await reloaded.load([STREAM]);
+    expect(reloaded.getWorkPlan(STREAM).plan).toBeNull();
+    await store.deleteStream(STREAM);
+  });
+
   it('restores committed residue for complete orphan cleanup', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);
