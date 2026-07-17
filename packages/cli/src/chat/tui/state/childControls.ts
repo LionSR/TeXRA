@@ -24,9 +24,7 @@ import {
 import {
   activeStreamTreeEntries,
   nearestActiveStreamAncestor,
-  streamDisplayLabel,
 } from './streamViews';
-import { transcriptEntryLines } from './transcriptLines';
 import type {
   ConversationEntry,
   ProcessOutputTail,
