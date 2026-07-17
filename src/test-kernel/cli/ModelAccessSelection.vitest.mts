@@ -4,6 +4,7 @@ import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import {
   contextForCliModelAccess,
   readCliModelAccessStatus,
+  selectCliApiModelAccessRoute,
   selectCliModelAccessRoute,
 } from '@cli/runtime/modelAccessSelection';
 import {
@@ -147,6 +148,30 @@ describe('CLI model access routes', () => {
       apiMode: 'personal',
       message: 'Model access: Personal API keys.',
     });
+  });
+
+  it('reports when a more specific setting keeps ChatGPT active', async () => {
+    mocks.setPreferCodexSubscription.mockResolvedValue({
+      effective: true,
+      target: 'workspace',
+    });
+
+    const result = await selectCliApiModelAccessRoute('personal');
+
+    expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
+    expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
+    expect(result.message).toContain(
+      'remains on ChatGPT subscription because a more specific setting overrides workspace config',
+    );
+  });
+
+  it('does not report an API route as selected when persistence fails', async () => {
+    mocks.setCliApiMode.mockRejectedValue(new Error('Config write failed'));
+
+    await expect(selectCliApiModelAccessRoute('included')).rejects.toThrow(
+      'Config write failed',
+    );
+    expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
   });
 
   it('signs in when needed and enables ChatGPT without an API key', async () => {

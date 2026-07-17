@@ -50,20 +50,27 @@ export async function readCliModelAccessStatus(
   };
 }
 
+/** Select an API-backed route and stop preferring ChatGPT subscription use. */
+export async function selectCliApiModelAccessRoute(
+  route: CliApiMode,
+): Promise<CliModelAccessSelectionResult> {
+  const update = await setPreferCodexSubscription(false);
+  await setCliApiMode(route);
+  return {
+    apiMode: route,
+    message: update.effective
+      ? `Model access remains on ChatGPT subscription because a more specific setting overrides ${update.target} config.`
+      : `Model access: ${formatCliModelAccessRoute(route)}.`,
+  };
+}
+
 export async function selectCliModelAccessRoute(
   context: CliContext,
   route: CliModelAccessRoute,
   options: { readonly writeProgress: (message: string) => void },
 ): Promise<CliModelAccessSelectionResult> {
   if (route !== 'chatgpt') {
-    const update = await setPreferCodexSubscription(false);
-    await setCliApiMode(route);
-    return {
-      apiMode: route,
-      message: update.effective
-        ? `Model access remains on ChatGPT subscription because a more specific setting overrides ${update.target} config.`
-        : `Model access: ${formatCliModelAccessRoute(route)}.`,
-    };
+    return selectCliApiModelAccessRoute(route);
   }
 
   const status = await getCodexStatus();

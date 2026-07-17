@@ -20,6 +20,14 @@ function installChatGptOnlySetupPlatform(): void {
         return true;
       },
     },
+    modelAccess: {
+      async getChatGptSubscriptionStatus() {
+        return {
+          signedIn: true,
+          enabled: true,
+        };
+      },
+    },
   });
 }
 
@@ -54,15 +62,91 @@ async function assertAuthPrecedesCredentialProbe(
 }
 
 describe('setup credential reporting', () => {
+  it('reports the active host and provider-key origin without secret values', async () => {
+    const platform = createFakeSetupPlatform({ host: 'cli' });
+    setSetupPlatform({
+      ...platform,
+      secrets: {
+        ...platform.secrets,
+        providers: ['deepseek'],
+        async apiKeyOrigin() {
+          return 'env';
+        },
+      },
+    });
+
+    const result = await new ProbeEnvironmentTool().call({});
+
+    assert.match(result.output ?? '', /"host": "cli"/);
+    assert.match(result.output ?? '', /"provider": "deepseek"/);
+    assert.match(result.output ?? '', /"origin": "env"/);
+    assert.match(result.output ?? '', /provider API key in environment/);
+    assert.doesNotMatch(result.output ?? '', /private-test-value/);
+  });
+
   it('reports a usable non-API-key credential in the environment probe headline', async () => {
     installChatGptOnlySetupPlatform();
 
     const result = await new ProbeEnvironmentTool().call({});
 
     assert.equal(result.status, 'executed');
-    assert.match(result.output ?? '', /credentials: usable credential/);
+    assert.match(
+      result.output ?? '',
+      /credentials: ChatGPT subscription enabled/,
+    );
+    assert.doesNotMatch(
+      result.output ?? '',
+      /ChatGPT subscription enabled \+ usable credential/,
+    );
     assert.match(result.output ?? '', /"hasAnyUsableCredential": true/);
     assert.match(result.output ?? '', /"anyApiKeySet": false/);
+    assert.match(result.output ?? '', /"chatGptSubscription"/);
+    assert.match(result.output ?? '', /"enabled": true/);
+    assert.doesNotMatch(result.output ?? '', /researcher@example\.com/);
+  });
+
+  it('keeps probing when one provider key origin is unavailable', async () => {
+    const platform = createFakeSetupPlatform({ host: 'cli' });
+    setSetupPlatform({
+      ...platform,
+      secrets: {
+        ...platform.secrets,
+        providers: ['openai'],
+        async apiKeyOrigin() {
+          throw new Error('Keychain unavailable');
+        },
+        async anyUsableCredentialExists() {
+          throw new Error('Credential scan unavailable');
+        },
+      },
+    });
+
+    const result = await new ProbeEnvironmentTool().call({});
+
+    assert.equal(result.status, 'executed');
+    assert.match(result.output ?? '', /"origin": "unknown"/);
+    assert.match(result.output ?? '', /provider API key status unavailable/);
+    assert.match(result.output ?? '', /"anyApiKeySet": false/);
+    assert.match(result.output ?? '', /"usableCredentialStatus": "unknown"/);
+  });
+
+  it('reports when aggregate credential readiness is unavailable', async () => {
+    const platform = createFakeSetupPlatform({ host: 'cli' });
+    setSetupPlatform({
+      ...platform,
+      secrets: {
+        ...platform.secrets,
+        async anyUsableCredentialExists() {
+          throw new Error('Credential scan unavailable');
+        },
+      },
+    });
+
+    const result = await new ProbeEnvironmentTool().call({});
+
+    assert.equal(result.status, 'executed');
+    assert.match(result.output ?? '', /overall credential status unavailable/);
+    assert.match(result.output ?? '', /"usableCredentialStatus": "unknown"/);
   });
 
   it('reports a usable non-API-key credential in setup verification', async () => {

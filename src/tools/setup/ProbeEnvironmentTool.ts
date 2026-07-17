@@ -7,8 +7,7 @@ import { z } from 'zod';
 
 // Local imports
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { type ToolResult } from '@shared/schemas/toolResult';
 import { detectPackageManager } from '@utils/system/toolUtils';
 import { extendEnvPath, safeHomedir } from '@utils/system/platformPaths';
 
@@ -47,13 +46,13 @@ async function checkTool(name: string): Promise<ToolStatus> {
  * Read-only probe of the host environment.
  *
  * Returns a single structured JSON document covering OS, PATH, package
- * manager, core TeXRA dependencies, LaTeX Workshop extension, literal API-key
- * presence, broader usable credential status, and Researcher Access status.
+ * manager, core TeXRA dependencies, LaTeX Workshop extension, usable API-key
+ * origins, broader usable credential status, and Researcher Access status.
  * No approval gate — purely read-only, akin to `ls` / `glob`.
  */
 export class ProbeEnvironmentTool extends defineTool({
   name: 'probe_environment',
-  description: `Probe the host environment and return a structured JSON summary covering OS, shell, PATH, detected package manager (brew/apt/scoop), installation status of TeXRA's core LaTeX dependencies (pdflatex, latexmk, latexindent, perl, gs, gm/magick, texcount, latexdiff), the LaTeX Workshop VS Code extension, per-provider API-key presence (names only — secrets are never read), broader usable credential status, and Researcher Access sign-in status. Read-only, no approval required. Call this first in any setup session to decide what to do next.`,
+  description: `Probe the active host and environment and return a structured JSON summary covering host kind, OS, shell, PATH, detected package manager (brew/apt/scoop), installation status of TeXRA's core LaTeX dependencies (pdflatex, latexmk, latexindent, perl, gs, gm/magick, texcount, latexdiff), the LaTeX Workshop VS Code extension, each provider API key's origin (TeXRA secrets, environment, or absent; values are never returned), ChatGPT subscription state, broader usable credential status, and Researcher Access sign-in status. Read-only, no approval required. Call this first in any setup session to decide what to do next.`,
   schema: ProbeEnvironmentInputSchema,
 }) {
   protected async execute(_input: ProbeInput): Promise<ToolResult> {
@@ -75,30 +74,29 @@ export class ProbeEnvironmentTool extends defineTool({
       coreTools,
       optionalTools,
       apiKeys,
-      hasUsableCredential,
+      credentialReadiness,
       githubToken,
+      chatGptStatus,
     ] = await Promise.all([
       Promise.all(PROBED_CORE_TOOLS.map(checkTool)),
       Promise.all(OPTIONAL_TOOLS.map(checkTool)),
       Promise.all(
-        // Use `hasUsableApiKey` so the per-provider report matches
-        // what the setup-launch path considers a working credential —
-        // a stale `PROVIDER_API_KEY=""` env var must not surface as
-        // `hasKey: true` and mislead the agent's credential planning.
-        platform.secrets.providers.map(async (provider) => ({
-          provider,
-          hasKey: await platform.secrets
-            .hasUsableApiKey(provider)
-            .catch(() => false),
-        })),
+        platform.secrets.providers.map(async (provider) => {
+          const origin = await platform.secrets
+            .apiKeyOrigin(provider)
+            .catch(() => 'unknown' as const);
+          return { provider, origin };
+        }),
       ),
-      platform.secrets.anyUsableCredentialExists().catch((err) => {
-        throw new ToolError(
-          `Failed to probe credential status: ${toErrorMessage(err)}`,
-          { cause: err },
-        );
-      }),
+      platform.secrets
+        .anyUsableCredentialExists()
+        .then((available) => ({ available, status: 'known' as const }))
+        .catch(() => ({ available: false, status: 'unknown' as const })),
       platform.secrets.gitHubTokenExists().catch(() => 'none' as const),
+      platform.modelAccess.getChatGptSubscriptionStatus().catch(() => ({
+        signedIn: false,
+        enabled: false,
+      })),
     ]);
 
     const missingCore = coreTools
@@ -114,6 +112,7 @@ export class ProbeEnvironmentTool extends defineTool({
     );
 
     const summary = {
+      host: platform.host,
       os: {
         platform: process.platform,
         arch: process.arch,
@@ -138,18 +137,22 @@ export class ProbeEnvironmentTool extends defineTool({
         // had this come out true under the previous adapter-backed
         // check, which contradicted the per-provider detail and
         // misled credential planning.
-        anyApiKeySet: apiKeys.some((k) => k.hasKey),
+        anyApiKeySet: apiKeys.some(
+          (key) => key.origin === 'secret' || key.origin === 'env',
+        ),
         // `hasAnyUsableCredential` is the broader "can setup launch a
         // model right now" signal — direct key, ChatGPT subscription,
         // or server-side Researcher Access. Kept as a separate field
         // so the agent can reason about API keys separately.
-        hasAnyUsableCredential: hasUsableCredential,
+        hasAnyUsableCredential: credentialReadiness.available,
+        usableCredentialStatus: credentialReadiness.status,
         apiKeys,
         researcherAccess: {
           authenticated: auth.authenticated,
           email: auth.authenticated ? auth.email : undefined,
           tier: auth.authenticated ? auth.tier : undefined,
         },
+        chatGptSubscription: chatGptStatus,
         githubToken,
       },
     };
@@ -176,7 +179,10 @@ function buildHeadline(summary: {
   credentials: {
     anyApiKeySet: boolean;
     hasAnyUsableCredential: boolean;
+    apiKeys: Array<{ origin: 'secret' | 'env' | 'none' | 'unknown' }>;
     researcherAccess: { authenticated: boolean };
+    chatGptSubscription: { enabled: boolean };
+    usableCredentialStatus: 'known' | 'unknown';
   };
 }): string {
   const parts: string[] = [
@@ -190,13 +196,23 @@ function buildHeadline(summary: {
       : 'LaTeX Workshop: not applicable',
   ];
   const creds: string[] = [];
-  if (summary.credentials.anyApiKeySet) creds.push('API key set');
+  const origins = new Set(summary.credentials.apiKeys.map((key) => key.origin));
+  if (origins.has('secret')) creds.push('provider API key saved');
+  if (origins.has('env')) creds.push('provider API key in environment');
+  if (origins.has('unknown')) creds.push('provider API key status unavailable');
+  if (summary.credentials.usableCredentialStatus === 'unknown') {
+    creds.push('overall credential status unavailable');
+  }
+  if (summary.credentials.chatGptSubscription.enabled) {
+    creds.push('ChatGPT subscription enabled');
+  }
   if (summary.credentials.researcherAccess.authenticated)
     creds.push('signed in');
   if (
     summary.credentials.hasAnyUsableCredential &&
     !summary.credentials.anyApiKeySet &&
-    !summary.credentials.researcherAccess.authenticated
+    !summary.credentials.researcherAccess.authenticated &&
+    !summary.credentials.chatGptSubscription.enabled
   ) {
     creds.push('usable credential');
   }

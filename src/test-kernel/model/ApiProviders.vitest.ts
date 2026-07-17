@@ -10,8 +10,8 @@ import {
   invalidateApiKeyCache,
   loadApiKeyStatusMap,
   lookupApiKeyOrigin,
+  type ApiProvider,
 } from '@model/apiProviders';
-import { SetApiKeyTool } from '@tools/setup/SetApiKeyTool';
 import { UnsetApiKeyTool } from '@tools/setup/UnsetApiKeyTool';
 import { setSetupPlatform, type SetupPlatform } from '@tools/setup/platform';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -60,27 +60,30 @@ function createDeferred<T>(): {
   return { promise, resolve };
 }
 
-function setupApiKeyToolPlatform(store: Map<string, string>): void {
-  function keyName(provider: string): string {
-    if (provider !== 'openai')
-      throw new Error(`Unexpected provider ${provider}`);
+function setupApiKeyToolPlatform(
+  store: Map<string, string>,
+  envProviders: ReadonlySet<ApiProvider> = new Set(),
+): void {
+  function keyName(provider: ApiProvider): string {
     return apiKeySecretName(provider);
   }
 
   const platform: SetupPlatform = {
+    host: 'cli',
     secrets: {
-      providers: ['openai'],
-      async setApiKey(provider, key) {
-        store.set(keyName(provider), key);
-      },
+      providers: ['openai', 'kimiCode'],
       async deleteApiKey(provider) {
         store.delete(keyName(provider));
       },
-      async apiKeyExists(provider) {
-        return store.has(keyName(provider));
-      },
       async hasUsableApiKey(provider) {
-        return (store.get(keyName(provider))?.trim().length ?? 0) > 0;
+        return (
+          (store.get(keyName(provider))?.trim().length ?? 0) > 0 ||
+          envProviders.has(provider)
+        );
+      },
+      async apiKeyOrigin(provider) {
+        if (store.has(keyName(provider))) return 'secret';
+        return envProviders.has(provider) ? 'env' : 'none';
       },
       async storedApiKeyExists(provider) {
         return store.has(keyName(provider));
@@ -110,6 +113,11 @@ function setupApiKeyToolPlatform(store: Map<string, string>): void {
           authenticated: false,
           remoteAgentCatalogAvailable: false,
         };
+      },
+    },
+    modelAccess: {
+      async getChatGptSubscriptionStatus() {
+        return { signedIn: false, enabled: false };
       },
     },
     config: {
@@ -165,28 +173,24 @@ describe('API provider key caches', () => {
     await expect(apiKeyExistsUncached(secrets, 'openai')).resolves.toBe(false);
   });
 
-  it('checks usable keys through the canonical resolver', async () => {
+  it('falls through blank stored values to a usable environment key', async () => {
     const { secrets } = createSecrets(
       { [apiKeySecretName('openai')]: '   ' },
-      { OPENAI_API_KEY: 'from-env' },
+      { OPENAI_API_KEY: '  from-env  ' },
     );
 
-    await expect(hasUsableApiKey(secrets, 'openai')).resolves.toBe(false);
-
-    invalidateApiKeyCache();
-    await secrets.delete(apiKeySecretName('openai'));
-
+    await expect(lookupApiKeyOrigin(secrets, 'openai')).resolves.toBe('env');
     await expect(hasUsableApiKey(secrets, 'openai')).resolves.toBe(true);
   });
 
-  it('set_api_key invalidates stale missing-key lookups', async () => {
-    const { secrets, store } = createSecrets();
-    setupApiKeyToolPlatform(store);
+  it('reports blank stored and environment values as absent', async () => {
+    const { secrets } = createSecrets(
+      { [apiKeySecretName('openai')]: '   ' },
+      { OPENAI_API_KEY: '\t' },
+    );
 
     await expect(lookupApiKeyOrigin(secrets, 'openai')).resolves.toBe('none');
-    await new SetApiKeyTool().call({ provider: 'openai', key: 'sk-real-key' });
-
-    await expect(lookupApiKeyOrigin(secrets, 'openai')).resolves.toBe('secret');
+    await expect(hasUsableApiKey(secrets, 'openai')).resolves.toBe(false);
   });
 
   it('does not let in-flight stale lookups repopulate the cache after invalidation', async () => {
@@ -235,5 +239,15 @@ describe('API provider key caches', () => {
     await new UnsetApiKeyTool().call({ provider: 'openai' });
 
     await expect(lookupApiKeyOrigin(secrets, 'openai')).resolves.toBe('none');
+  });
+
+  it('reports the canonical Kimi Code environment variable when unsetting', async () => {
+    setupApiKeyToolPlatform(new Map(), new Set<ApiProvider>(['kimiCode']));
+
+    const result = await new UnsetApiKeyTool().call({ provider: 'kimiCode' });
+
+    expect(result.status).toBe('executed');
+    expect(result.output).toContain('KIMI_CODE_API_KEY');
+    expect(result.output).not.toContain('KIMICODE_API_KEY');
   });
 });

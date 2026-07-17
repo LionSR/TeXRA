@@ -27,7 +27,7 @@ type ListApiKeysInput = z.infer<typeof ListApiKeysInputSchema>;
  */
 export class ListApiKeysTool extends defineTool({
   name: 'list_api_keys',
-  description: `Audit TeXRA's persisted credential store without reading secret values. Known provider keys are shown by provider name (e.g. \`anthropic\`); unrecognised \`apiKey.*\` entries are shown by raw key name to help identify stale secrets; other secret key names are counted but redacted because they may contain user-derived identifiers. Use this to check which providers have a key configured and to detect stale API-key entries. Recognised providers can be managed with set_api_key / unset_api_key; unrecognised apiKey.* entries (e.g. from renamed providers) must be removed through the current host's credential-management surface. Prefer probe_environment for a fuller overview that also covers tool installations and auth status.`,
+  description: `Audit only TeXRA's persisted credential store without reading secret values. Environment-backed provider keys are deliberately excluded and are reported by probe_environment instead. Known persisted provider keys are shown by provider name (e.g. \`anthropic\`); unrecognised \`apiKey.*\` entries are shown by raw key name to help identify stale secrets; other secret key names are counted but redacted because they may contain user-derived identifiers. Use this to detect persisted provider keys and stale API-key entries. Recognised providers can be removed with unset_api_key; other entries must be removed through the current host's credential-management surface.`,
   schema: ListApiKeysInputSchema,
 }) {
   protected async execute(_input: ListApiKeysInput): Promise<ToolResult> {
@@ -74,11 +74,14 @@ export class ListApiKeysTool extends defineTool({
       lines.push('', 'Provider API keys stored:');
       for (const p of providerKeys) lines.push(`  ${p}`);
     } else {
-      lines.push('', 'No provider API keys stored.');
+      lines.push('', 'No provider API keys persisted in TeXRA secrets.');
     }
 
     if (missingProviders.length > 0) {
-      lines.push('', 'Providers without a stored key:');
+      lines.push(
+        '',
+        'Providers without a key in TeXRA secrets (environment not checked here):',
+      );
       for (const p of missingProviders) lines.push(`  ${p}`);
     }
 
@@ -103,8 +106,8 @@ export class ListApiKeysTool extends defineTool({
 
     const providerSummary =
       providerKeys.length === 0
-        ? 'no provider keys'
-        : `${providerKeys.length}/${providers.length} provider keys`;
+        ? 'no persisted provider API keys'
+        : `${providerKeys.length}/${providers.length} persisted provider API keys`;
 
     return {
       status: 'executed',

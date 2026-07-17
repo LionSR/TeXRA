@@ -459,6 +459,7 @@ describe('CLI platform init', () => {
 
     await initCliPlatform(cliContext());
 
+    expect(getSetupPlatform().host).toBe('cli');
     await expect(getSetupPlatform().auth.signIn?.()).resolves.toBe(true);
     expect(mocks.signInCliSupabase).toHaveBeenCalledOnce();
     expect(mocks.signInCliSupabase).toHaveBeenCalledWith({ openBrowser: true });

@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 // Local imports
+import { apiKeyEnvName } from '@model/apiProviders';
 import { type ToolResult } from '@shared/schemas/toolResult';
 
 // Local file imports
@@ -26,7 +27,7 @@ export class UnsetApiKeyTool extends defineTool({
   protected async execute(input: UnsetApiKeyInput): Promise<ToolResult> {
     const platform = getSetupPlatform();
     const provider = requireApiProvider(input.provider);
-    const envVar = `${provider.toUpperCase()}_API_KEY`;
+    const envVar = apiKeyEnvName(provider);
 
     const storedExists = await platform.secrets.storedApiKeyExists(provider);
     if (!storedExists) {
