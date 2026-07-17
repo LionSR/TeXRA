@@ -188,7 +188,6 @@ const INTERACTIVE_CONTEXT: CliContext = createTestCliContext({
   stderrIsTty: true,
   stdoutColorEnabled: false,
   stderrColorEnabled: false,
-  colorEnabled: false,
   commandName: 'texra',
   version: '0.0.0',
   resourcesPath: '/tmp/resources',

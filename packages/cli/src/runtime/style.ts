@@ -6,7 +6,7 @@ import pico from 'picocolors';
  *
  * The gate is a per-stream color boolean from `CliContext`:
  * `stdoutColorEnabled` for stdout-bound output (e.g. `doctor`'s success
- * report), `stderrColorEnabled` (= `colorEnabled`) for stderr-bound output
+ * report), `stderrColorEnabled` for stderr-bound output
  * (progress, update checker). Both are computed in `readCliAmbientState`
  * honoring TTY, `NO_COLOR`,
  * `FORCE_COLOR`, `TERM=dumb`, and `--no-color`. When the gate is false,

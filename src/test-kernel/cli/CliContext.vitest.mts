@@ -29,7 +29,6 @@ const ambient = {
   stderrIsTty: false,
   stdoutColorEnabled: false,
   stderrColorEnabled: false,
-  colorEnabled: false,
 };
 
 function ttyAmbient(overrides: Partial<CliAmbientState> = {}): CliAmbientState {
@@ -40,7 +39,6 @@ function ttyAmbient(overrides: Partial<CliAmbientState> = {}): CliAmbientState {
     stderrIsTty: true,
     stdoutColorEnabled: true,
     stderrColorEnabled: true,
-    colorEnabled: true,
     ...overrides,
   };
 }
@@ -437,8 +435,6 @@ describe('CLI color/no-input flag wiring', () => {
     });
     expect(context.stdoutColorEnabled).toBe(true);
     expect(context.stderrColorEnabled).toBe(false);
-    // Back-compat alias still mirrors the stderr gate.
-    expect(context.colorEnabled).toBe(false);
   });
 
   it('--no-color force-disables both stream gates', async () => {
@@ -449,7 +445,6 @@ describe('CLI color/no-input flag wiring', () => {
     });
     expect(context.stdoutColorEnabled).toBe(false);
     expect(context.stderrColorEnabled).toBe(false);
-    expect(context.colorEnabled).toBe(false);
   });
 
   it('--no-input forces headless mode and defaults approval policy to never', async () => {
