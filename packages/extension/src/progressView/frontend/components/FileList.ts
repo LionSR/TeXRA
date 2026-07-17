@@ -28,7 +28,7 @@ import {
   type TeXRAIconName,
   waIcon,
 } from '@shared/wa/webAwesomeIcons';
-import { getBasename, normalizeFilePath } from '@utils/core';
+import { normalizeFilePath } from '@utils/core';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement } from '../utils';
@@ -95,7 +95,7 @@ function parsePath(path: string): ParsedPath {
   const lastSlash = normalized.lastIndexOf('/');
   return {
     dir: lastSlash >= 0 ? normalized.slice(0, lastSlash + 1) : '',
-    basename: getBasename(normalized),
+    basename: lastSlash >= 0 ? normalized.slice(lastSlash + 1) : normalized,
   };
 }
 
