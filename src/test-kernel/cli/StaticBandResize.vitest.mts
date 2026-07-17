@@ -23,6 +23,7 @@ import stripAnsi from 'strip-ansi';
 import { afterAll, describe, expect, it } from 'vitest';
 
 // Local imports
+import type { TuiRepaintOptions } from '@cli/chat/tui/render/tuiViewportController';
 import type { ConversationEntry } from '@cli/chat/tui/state/cliState';
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import { delay } from '@utils/core';
@@ -296,12 +297,17 @@ describe('Static band resize', () => {
       entries: [executionEntry],
     }));
 
-    let inst: any;
+    const inkRef: {
+      current?: { repaint(options: TuiRepaintOptions): void };
+    } = {};
     function App({ labels }: { labels: ReadonlyMap<string, string> }): unknown {
       const renderKey = JSON.stringify([...labels]);
       return createElement(StaticConversationTranscript, {
         onRenderKeyChange: () => {
-          inst.repaint({ clearScrollback: true, preserveStatic: false });
+          inkRef.current?.repaint({
+            clearScrollback: true,
+            preserveStatic: false,
+          });
         },
         ownerKey: 'execution-label-owner',
         renderKey,
@@ -312,13 +318,14 @@ describe('Static band resize', () => {
     }
 
     const out = new FakeStdout(80);
-    inst = ink.render(createElement(App, { labels: new Map() }), {
+    const inst = ink.render(createElement(App, { labels: new Map() }), {
       stdout: out,
       stdin: new FakeStdin(),
       interactive: true,
       exitOnCtrlC: false,
       patchConsole: false,
     });
+    inkRef.current = inst;
 
     try {
       expect(await waitFor(() => out.buf.includes(executionPath), 5000)).toBe(
