@@ -196,13 +196,7 @@ function renderLogEntry(
     const toolUse = normalizeToolUseData(entry.data);
     // Drop malformed tool entries rather than crash. The progress view
     // does the same — a bad payload shouldn't take down the transcript.
-    // A failed tool.end status is outside ToolUseLogSchema's historical
-    // in_progress/completed vocabulary. The direct runtime subscription has
-    // already projected that terminal workflow result into `prev`; retain it
-    // when the canonical log update therefore cannot be normalized.
-    if (!toolUse) {
-      return prev?.role === 'tool' && prev.workflowScriptOutcome ? prev : null;
-    }
+    if (!toolUse) return null;
     // Never finalize here. `finalizeSettledPrefix` promotes a tool row only
     // once it completes AND every entry before it has promoted, so a
     // fast tool can't jump ahead of still-streaming assistant text in
@@ -279,6 +273,7 @@ function isSettledEntry(
     case 'tool':
       return (
         entry.toolUse.status === TOOL_USE_STATUS.COMPLETED ||
+        entry.toolUse.status === TOOL_USE_STATUS.FAILED ||
         // An empty array deliberately anchors a neutral immutable owner row
         // before the first append-only workflow fact arrives.
         entry.workflowScriptFacts !== undefined

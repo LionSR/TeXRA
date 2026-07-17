@@ -296,15 +296,27 @@ describe('CLI workflow-script progress', () => {
   });
 
   it.each([
-    ['failed', { error: 'Writer agent failed' }, 'Writer agent failed'],
+    [
+      'failed',
+      'failed',
+      { error: 'Writer agent failed' },
+      'Writer agent failed',
+    ],
     [
       'cancelled',
+      'failed',
       { output: 'Tool execution cancelled by user.' },
       'Tool execution cancelled by user.',
     ],
-  ])(
+    [
+      'completed error result',
+      'completed',
+      { error: 'Workflow validation failed', isError: true },
+      'Workflow validation failed',
+    ],
+  ] as const)(
     'renders a terminal failure for a %s workflow',
-    async (_caseName, result, expectedMessage) => {
+    async (_caseName, status, result, expectedMessage) => {
       const events = new SessionEventHub();
       const detachTui = attachTuiRunFactSubscription(events);
       const runTrace = createRunTrace(STREAM_ID, defaultSession().transcripts);
@@ -324,7 +336,7 @@ describe('CLI workflow-script progress', () => {
         runTrace.trace.toolEnd(
           {
             logId: 'workflow-tool',
-            status: 'failed',
+            status,
             result: {
               toolName: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
               input: { agent: 'writer' },
@@ -346,7 +358,7 @@ describe('CLI workflow-script progress', () => {
         });
         if (entry?.role !== 'tool')
           throw new Error('missing workflow tool row');
-        expect(entry.toolUse.status).toBe(TOOL_USE_STATUS.COMPLETED);
+        expect(entry.toolUse.status).toBe(TOOL_USE_STATUS.FAILED);
         expect(entry.toolUse.isError).toBe(true);
 
         const output = await renderStaticTranscript();

@@ -79,11 +79,11 @@ function activeWorkflowScript(
   return streams.get().get(streamId)?.activeWorkflowScript;
 }
 
-function terminalWorkflowScriptToolUse(
+function terminalWorkflowScriptState(
   entry: ToolConversationEntry,
-  outcome: 'completed' | 'failed',
+  status: 'completed' | 'failed',
   result: unknown,
-): ToolConversationEntry['toolUse'] {
+): Pick<ToolConversationEntry, 'toolUse' | 'workflowScriptOutcome'> {
   let resultData: Record<string, unknown>;
   if (isObject(result)) resultData = result;
   else if (result === undefined) resultData = {};
@@ -91,30 +91,37 @@ function terminalWorkflowScriptToolUse(
   const normalized = normalizeToolUseData({
     ...entry.toolUse.parsed,
     ...resultData,
-    status: TOOL_USE_STATUS.COMPLETED,
+    status,
   });
   const terminal = normalized ?? {
     ...entry.toolUse,
-    status: TOOL_USE_STATUS.COMPLETED,
+    status,
   };
-  if (outcome === 'completed') return terminal;
+  const failed = status === 'failed' || terminal.isError;
+  if (!failed) {
+    return { toolUse: terminal, workflowScriptOutcome: 'completed' };
+  }
 
   const failureText =
     (typeof resultData.error === 'string' && resultData.error.trim()) ||
     (typeof resultData.output === 'string' && resultData.output.trim()) ||
     'Workflow script failed.';
   return {
-    ...terminal,
-    errorText: terminal.errorText || failureText,
-    headerSummary: terminal.headerSummary || failureText,
-    isError: true,
+    toolUse: {
+      ...terminal,
+      status: TOOL_USE_STATUS.FAILED,
+      errorText: terminal.errorText || failureText,
+      headerSummary: terminal.headerSummary || failureText,
+      isError: true,
+    },
+    workflowScriptOutcome: 'failed',
   };
 }
 
 function finishWorkflowScriptOwnership(
   streamId: StreamTabId,
   invocation: ActiveWorkflowScriptInvocation,
-  outcome: 'completed' | 'failed',
+  status: 'completed' | 'failed',
   result: unknown,
 ): void {
   patchStream(streamId, (slice) => {
@@ -126,10 +133,10 @@ function finishWorkflowScriptOwnership(
     if (index < 0 || entry?.role !== 'tool') return slice;
 
     const entries = [...slice.entries];
+    const terminal = terminalWorkflowScriptState(entry, status, result);
     entries[index] = {
       ...entry,
-      toolUse: terminalWorkflowScriptToolUse(entry, outcome, result),
-      workflowScriptOutcome: outcome,
+      ...terminal,
     };
     const { activeWorkflowScript: _finished, ...rest } = slice;
     return { ...rest, entries };
