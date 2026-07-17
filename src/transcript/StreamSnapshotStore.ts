@@ -1072,6 +1072,21 @@ export class StreamSnapshotStore {
     }
   }
 
+  private runStagedRecovery(
+    state: StagedDeletionState,
+    recover: () => Promise<void>,
+  ): Promise<void> {
+    if (state.recovery) return state.recovery;
+    const recovery = recover();
+    const trackedRecovery = recovery.finally(() => {
+      if (state.recovery === trackedRecovery) {
+        state.recovery = undefined;
+      }
+    });
+    state.recovery = trackedRecovery;
+    return trackedRecovery;
+  }
+
   /**
    * Repair a failed rollback exactly once, then release its write buffer only
    * after the namespace is live and no buffered values remain.
@@ -1079,13 +1094,10 @@ export class StreamSnapshotStore {
   private recoverFailedRollback(
     stream: StreamTabId,
     state: StagedDeletionState,
-    namespace: 'inspect' | 'known-live' = 'inspect',
   ): Promise<void> {
     if (this.failedRollbacks.get(stream) !== state) return Promise.resolve();
-    if (state.recovery) return state.recovery;
-
-    const recovery = (async () => {
-      if (namespace === 'inspect' && canUseStreamDataDir(stream)) {
+    return this.runStagedRecovery(state, async () => {
+      if (canUseStreamDataDir(stream)) {
         const stagedDir = stagedStreamDataDir(stream);
         const liveDir = streamDataDir(stream);
         const liveWasAuthoritative = state.phase === 'live';
@@ -1121,14 +1133,7 @@ export class StreamSnapshotStore {
       // state; replay recreates the live directory instead of wedging ownership.
       state.phase = 'live';
       await this.drainStagedWrites(stream, state);
-    })();
-    const trackedRecovery = recovery.finally(() => {
-      if (state.recovery === trackedRecovery) {
-        state.recovery = undefined;
-      }
     });
-    state.recovery = trackedRecovery;
-    return trackedRecovery;
   }
 
   /** Release ownership of a stream after its staged transaction finishes. */
@@ -1278,7 +1283,9 @@ export class StreamSnapshotStore {
       this.failedRollbacks.set(stream, state);
       try {
         if (state.phase === 'live') {
-          await this.recoverFailedRollback(stream, state, 'known-live');
+          await this.runStagedRecovery(state, () =>
+            this.drainStagedWrites(stream, state),
+          );
         } else if (state.phase === 'transitioning') {
           await this.recoverFailedRollback(stream, state);
         }

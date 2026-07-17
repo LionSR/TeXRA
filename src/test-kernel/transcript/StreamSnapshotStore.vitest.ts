@@ -1738,61 +1738,55 @@ describe('StreamSnapshotStore', () => {
     await store.deleteStream(STREAM);
   });
 
-  it('serializes setup-failure replay as the failed recovery owner', async () => {
+  it('serializes setup recovery before another staging attempt can cancel its writes', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);
+    const streamPlanPath = path.join(streamDataDir(STREAM), 'workPlan.json');
+    let releaseInitialWrite = () => {};
+    const initialWriteGate = new Promise<void>((resolve) => {
+      releaseInitialWrite = resolve;
+    });
+    let initialWriteStarted = () => {};
+    const initialWriteStart = new Promise<void>((resolve) => {
+      initialWriteStarted = resolve;
+    });
+    const writeAtomic = StorageFS.writeAtomic.bind(StorageFS);
+    vi.spyOn(StorageFS, 'writeAtomic').mockImplementation(
+      async (target, contents) => {
+        if (target === streamPlanPath) {
+          initialWriteStarted();
+          await initialWriteGate;
+        }
+        return writeAtomic(target, contents);
+      },
+    );
+
     store.setPlan(STREAM, PLAN);
-    await store.flush();
-    const setupError = new Error('staging directory is locked');
-    const ensureDir = StorageFS.ensureDir.bind(StorageFS);
-    const ensureDirSpy = vi
-      .spyOn(StorageFS, 'ensureDir')
+    await initialWriteStart;
+    const setupError = new Error('cannot inspect staged snapshot');
+    const stat = StorageFS.stat.bind(StorageFS);
+    const statSpy = vi
+      .spyOn(StorageFS, 'stat')
       .mockImplementationOnce(async () => {
         store.setPlan(STREAM, null);
         throw setupError;
       })
-      .mockImplementation(ensureDir);
-    type RecoveryHarness = {
-      replayStagedWrites: (
-        stream: StreamTabId,
-        state: unknown,
-      ) => Promise<void>;
-      failedRollbacks: Map<StreamTabId, { recovery?: Promise<void> }>;
-    };
-    const recoveryHarness = store as unknown as RecoveryHarness;
-    const replay = recoveryHarness.replayStagedWrites.bind(recoveryHarness);
-    let replayStarted = () => {};
-    const replayStart = new Promise<void>((resolve) => {
-      replayStarted = resolve;
-    });
-    let releaseReplay = () => {};
-    const replayGate = new Promise<void>((resolve) => {
-      releaseReplay = resolve;
-    });
-    const replaySpy = vi
-      .spyOn(recoveryHarness, 'replayStagedWrites')
-      .mockImplementationOnce(async (stream, state) => {
-        await replay(stream, state);
-        replayStarted();
-        await replayGate;
-      })
-      .mockImplementation(replay);
+      .mockImplementation(stat);
 
     const staging = store.stageDeleteStream(STREAM);
-    await replayStart;
-
-    const failedState = recoveryHarness.failedRollbacks.get(STREAM);
-    expect(failedState?.recovery).toBeInstanceOf(Promise);
+    await new Promise<void>((resolve) => setImmediate(resolve));
     const flushing = store.flush();
-    expect(replaySpy).toHaveBeenCalledTimes(1);
+    const retrying = store.stageDeleteStream(STREAM);
+    await new Promise<void>((resolve) => setImmediate(resolve));
 
-    releaseReplay();
+    expect(statSpy).toHaveBeenCalledTimes(1);
+
+    releaseInitialWrite();
     await expect(staging).rejects.toBe(setupError);
-    await expect(flushing).resolves.toBeUndefined();
-    expect(recoveryHarness.failedRollbacks.has(STREAM)).toBe(false);
+    await flushing;
+    const retry = await retrying;
+    await retry.rollback();
 
-    ensureDirSpy.mockRestore();
-    replaySpy.mockRestore();
     const reloaded = new StreamSnapshotStore();
     await reloaded.load([STREAM]);
     expect(reloaded.getWorkPlan(STREAM).plan).toBeNull();
