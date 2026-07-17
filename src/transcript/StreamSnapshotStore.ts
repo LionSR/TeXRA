@@ -1571,9 +1571,8 @@ export class StreamSnapshotStore {
               failedRollback.writes.get(key) === value
             ) {
               failedRollback.writes.delete(key);
-              if (failedRollback.writes.size === 0) {
-                this.failedRollbacks.delete(stream);
-              }
+              // Recovery owns release even when this mirrored write drained
+              // the last value, so namespace repair cannot lose its owner.
             }
           })
           .catch((err: unknown) =>
