@@ -1173,6 +1173,62 @@ describe('StreamSnapshotStore', () => {
     await store.deleteStream(STREAM);
   });
 
+  it('waits unrelated writes before flush reports a recovery failure', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    store.setPlan(STREAM, PLAN);
+    await store.flush();
+    const deletion = await store.stageDeleteStream(STREAM);
+    store.setPlan(STREAM, null);
+    const initialWriteError = new Error('snapshot disk is full');
+    const initialWriteSpy = vi
+      .spyOn(StorageFS, 'writeAtomic')
+      .mockRejectedValueOnce(initialWriteError);
+    await expect(deletion.rollback()).rejects.toBe(initialWriteError);
+    initialWriteSpy.mockRestore();
+
+    let releaseUnrelatedWrite = () => {};
+    const unrelatedWriteGate = new Promise<void>((resolve) => {
+      releaseUnrelatedWrite = resolve;
+    });
+    const recoveryError = new Error('snapshot disk remains full');
+    const writeAtomic = StorageFS.writeAtomic.bind(StorageFS);
+    const streamPlanPath = path.join(streamDataDir(STREAM), 'workPlan.json');
+    const otherPlanPath = path.join(
+      streamDataDir(OTHER_STREAM),
+      'workPlan.json',
+    );
+    const writeSpy = vi
+      .spyOn(StorageFS, 'writeAtomic')
+      .mockImplementation(async (target, data) => {
+        if (target === streamPlanPath) throw recoveryError;
+        if (target === otherPlanPath) await unrelatedWriteGate;
+        return writeAtomic(target, data);
+      });
+    store.setPlan(OTHER_STREAM, PLAN);
+    let flushSettled = false;
+    const flushing = store.flush().finally(() => {
+      flushSettled = true;
+    });
+    void flushing.catch(() => undefined);
+
+    await vi.waitFor(() =>
+      expect(writeSpy).toHaveBeenCalledWith(streamPlanPath, expect.any(String)),
+    );
+    expect(flushSettled).toBe(false);
+
+    releaseUnrelatedWrite();
+    await expect(flushing).rejects.toBe(recoveryError);
+    writeSpy.mockRestore();
+    const reloaded = new StreamSnapshotStore();
+    await reloaded.load([OTHER_STREAM]);
+    expect(reloaded.getWorkPlan(OTHER_STREAM).plan).toEqual(PLAN);
+
+    await store.flush();
+    await store.deleteStream(STREAM);
+    await store.deleteStream(OTHER_STREAM);
+  });
+
   it('does not recreate live storage while setup residue is staged', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);

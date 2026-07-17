@@ -1646,14 +1646,17 @@ export class StreamSnapshotStore {
         .map((record) => record.seedChain)
         .filter((chain): chain is Promise<void> => chain !== undefined),
     );
-    await pMap(
-      [...this.failedRollbacks],
-      ([stream, state]) => this.recoverFailedRollback(stream, state),
-      { concurrency: SEED_IO_CONCURRENCY },
-    );
-    await Promise.all(
-      [...this.writeMutexes.values()].map((mutex) => mutex.waitForUnlock()),
-    );
+    try {
+      await pMap(
+        [...this.failedRollbacks],
+        ([stream, state]) => this.recoverFailedRollback(stream, state),
+        { concurrency: SEED_IO_CONCURRENCY },
+      );
+    } finally {
+      await Promise.all(
+        [...this.writeMutexes.values()].map((mutex) => mutex.waitForUnlock()),
+      );
+    }
   }
 
   // ==========================================================================
