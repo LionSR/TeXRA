@@ -23,6 +23,11 @@ import {
 } from '@shared/constants/delegationTools';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { toolDisplayKind } from '@shared/tools/toolKind';
+import {
+  EXECUTIONS_DEFAULT_ACTION,
+  executionsSubagentSummary,
+  type ExecutionLabels,
+} from '@shared/tools/executionsDisplay';
 import { isObject } from '@utils/core';
 import { truncateSummary } from '@utils/text/stringUtils';
 
@@ -56,7 +61,6 @@ import {
   getToolTimeoutMs,
   joinWithSeparator,
   truncateHeaderSummary,
-  EXECUTIONS_DEFAULT_ACTION,
 } from './toolFormatters/helpers';
 import { dispatchToolSections } from './toolFormatters/toolSections';
 
@@ -68,7 +72,10 @@ export {
 /** Format tool use log entry as TemplateResult. */
 export function formatToolUseTemplate(
   message: LogMessageData,
-  options?: { defaultOpen?: boolean },
+  options?: {
+    defaultOpen?: boolean;
+    executionLabels?: ExecutionLabels;
+  },
 ): FormatResult {
   const { timestamp, data } = message;
   const normalizedToolLog = normalizeToolUseData(data);
@@ -103,6 +110,13 @@ export function formatToolUseTemplate(
 
   // Surface action + path for executions tool so it's visible without expanding
   let headerSummary = normalizedToolLog.headerSummary || '';
+  const labeledExecutionSummary =
+    toolName === 'executions' && options?.executionLabels
+      ? executionsSubagentSummary(input, options.executionLabels)
+      : undefined;
+  if (labeledExecutionSummary) {
+    headerSummary = labeledExecutionSummary;
+  }
   if (!headerSummary) {
     if (toolName === 'executions' && isObject(input)) {
       headerSummary =

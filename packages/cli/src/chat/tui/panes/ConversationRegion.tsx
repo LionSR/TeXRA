@@ -8,6 +8,7 @@ import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
 import { type StreamTabId } from '@shared/schemas';
+import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { clamp } from '@utils/core';
 
 // Local imports - conversation panes and layout
@@ -57,6 +58,7 @@ interface ConversationRegionSnapshot {
   readonly childListFocused: boolean;
   readonly sessionViews: readonly StreamView[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+  readonly subagentExecutionLabels: ExecutionLabels;
   readonly activeSubagentExecutionIds: ReadonlyMap<StreamTabId, string>;
   readonly childListTarget: ChildListTarget;
   readonly pendingApprovals: ReadonlyMap<
@@ -216,6 +218,7 @@ export function ConversationRegion({
         ownerKey={scrollbackTarget.ownerKey}
         printRequests={ownerPrintRequests}
         scrollbackStreamId={scrollbackTarget.streamId}
+        subagentExecutionLabels={snapshot.subagentExecutionLabels}
         width={transcriptWidth}
       />
       <Box flexDirection="column">
@@ -225,6 +228,7 @@ export function ConversationRegion({
               colorEnabled={colorEnabled}
               width={transcriptWidth}
               maxRows={conversationRows}
+              subagentExecutionLabels={snapshot.subagentExecutionLabels}
             />
           ) : null}
           {foregroundSurface ? (

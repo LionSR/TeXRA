@@ -73,6 +73,7 @@ import {
   activeSubagentsFor,
   childStreamEntries as childStreamEntriesSignal,
   parentStream as parentStreamSignal,
+  subagentExecutionLabels as subagentExecutionLabelsSignal,
 } from './state/childExecutions';
 import { focusedChildInputDisabledMessage } from './state/focusedChildFollowUp';
 import {
@@ -140,6 +141,7 @@ export function App(props: AppProps): React.JSX.Element {
   const streams = useSignal(streamsSignal);
   const parentStream = useSignal(parentStreamSignal);
   const childStreamEntries = useSignal(childStreamEntriesSignal);
+  const subagentExecutionLabels = useSignal(subagentExecutionLabelsSignal);
   const activeForm = useSignal(activeFormSignal);
   const slashPaletteOpen = useSignal(slashPaletteOpenSignal);
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
@@ -650,6 +652,7 @@ export function App(props: AppProps): React.JSX.Element {
           sessionViews,
           selectedChildValue,
           streams,
+          subagentExecutionLabels,
           activeSubagentExecutionIds,
           childListTarget,
           pendingApprovals: pendingApprovalsForRows,

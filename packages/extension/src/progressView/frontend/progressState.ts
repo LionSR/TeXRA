@@ -24,6 +24,7 @@ import {
   type StreamTabInfo,
   type TaskGroup,
 } from '@shared/schemas';
+import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { toNewestFirstByTimestamp } from '@utils/core';
 
 import { setsEqual } from './utils';
@@ -263,6 +264,21 @@ const activeIsToolUse$ = new Signal.Computed(() => {
   return state ? isToolUseState(state) : false;
 });
 
+/** Session-wide identity projection; ordinary log ticks do not rebuild it. */
+const subagentExecutionLabels$ = new Signal.Computed((): ExecutionLabels => {
+  const labels = new Map<string, string>();
+  for (const child of streamById$.get().values()) {
+    if (child.kind !== 'agent' || !child.parentStreamId || !child.executionId) {
+      continue;
+    }
+    const label = (child.agent ?? child.label).trim();
+    if (label && label !== child.executionId) {
+      labels.set(child.executionId, label);
+    }
+  }
+  return labels;
+});
+
 /** Stream context derived from active stream + state. */
 export const streamContext$ = new Signal.Computed((): StreamContextValue => {
   const activeStreamInfo = activeStreamInfo$.get();
@@ -307,6 +323,7 @@ export const logContext$ = new Signal.Computed((): StreamLogContextValue => {
     hasStreams,
     streamName: activeStreamInfo.name,
     streamStatus: activeStreamState$.get()?.status ?? null,
+    subagentExecutionLabels: subagentExecutionLabels$.get(),
     // Process agents emit raw stdout/stderr; render them terminal-style
     // (monospace, no timestamps, tight spacing) rather than logger entries.
     terminalMode: activeStreamInfo.kind === 'process',

@@ -111,6 +111,36 @@ describe('CLI tool display lines', () => {
     expect(header.spans.at(-1)).toMatchObject({ color: 'cyan' });
   });
 
+  it('renders executions targets with retained subagent labels', () => {
+    const entry = toolUse('executions', {
+      action: 'wait',
+      path: '/executions',
+      ids: ['sub-1', 'sub-2'],
+    });
+
+    expect(
+      toolUseDisplayLines(entry, {
+        executionLabels: new Map([
+          ['sub-1', 'reviewer'],
+          ['sub-2', 'leanSolver'],
+        ]),
+      }),
+    ).toEqual(['● executions (wait: reviewer, leanSolver)']);
+  });
+
+  it('keeps the existing executions path for a background process', () => {
+    const entry = toolUse('executions', {
+      action: 'view',
+      path: '/executions/process-1',
+    });
+
+    expect(
+      toolUseDisplayLines(entry, {
+        executionLabels: new Map([['sub-1', 'reviewer']]),
+      }),
+    ).toEqual(['● executions (/executions/process-1)']);
+  });
+
   it('renders TeXRA edit_file calls through the native diff row', () => {
     const entry = toolUse('edit_file', {
       path: 'paper.tex',

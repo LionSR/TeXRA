@@ -11,6 +11,7 @@ import { Box, Static, Text } from 'ink';
 
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import type { StreamTabId } from '@shared/schemas';
+import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import { wrapAnsiToWidth } from '../render/ansiWrap';
@@ -214,6 +215,7 @@ function childHeaderIdentityPending({
 function staticTranscriptItemRowCount(
   item: StaticTranscriptItem,
   width?: number,
+  executionLabels?: ExecutionLabels,
 ): number {
   if (item.kind === 'header') {
     return item.compact
@@ -223,6 +225,7 @@ function staticTranscriptItemRowCount(
   if (item.kind === 'printedTranscript') {
     return formatTranscriptForScrollback({
       cols: transcriptColumns(width),
+      executionLabels,
       request: item.request,
     }).split('\n').length;
   }
@@ -235,6 +238,7 @@ function staticTranscriptItemRowCount(
     return (
       1 +
       toolUseDisplayLines(item.entry.toolUse, {
+        executionLabels,
         showOutput: true,
         width: transcriptColumns(width, 2),
       }).slice(1).length +
@@ -243,6 +247,7 @@ function staticTranscriptItemRowCount(
   }
   return transcriptEntryLayoutRows(
     transcriptEntryLayout(item.entry, {
+      executionLabels,
       mode: 'scrollback-budget',
       width,
     }),
@@ -251,10 +256,12 @@ function staticTranscriptItemRowCount(
 
 function StaticTranscriptItemContent({
   colorEnabled,
+  executionLabels,
   item,
   width,
 }: {
   readonly colorEnabled?: boolean;
+  readonly executionLabels?: ExecutionLabels;
   readonly item: StaticTranscriptItem;
   readonly width: number;
 }): React.JSX.Element {
@@ -279,6 +286,7 @@ function StaticTranscriptItemContent({
           <EntryErrorBoundary label="workflow script">
             <ToolUseRow
               neutralStatus
+              subagentExecutionLabels={executionLabels}
               toolUse={item.entry.toolUse}
               width={width}
             />
@@ -289,6 +297,7 @@ function StaticTranscriptItemContent({
         <EntryErrorBoundary label={item.entry.role}>
           <TranscriptEntry
             entry={item.entry}
+            subagentExecutionLabels={executionLabels}
             width={width}
             colorEnabled={colorEnabled}
           />
@@ -300,6 +309,7 @@ function StaticTranscriptItemContent({
           <Text>
             {formatTranscriptForScrollback({
               cols: width,
+              executionLabels,
               request: item.request,
             })}
           </Text>
@@ -331,6 +341,7 @@ function StaticTranscriptItemContent({
             <ToolUseRow
               omitHeader
               showOutput
+              subagentExecutionLabels={executionLabels}
               toolUse={item.entry.toolUse}
               width={transcriptColumns(width, 2)}
             />
@@ -344,6 +355,7 @@ export function appendStaticTranscriptItems({
   currentItems,
   streams,
   childStreamEntries = new Map(),
+  executionLabels,
   meta,
   maxRows,
   parentStream = new Map(),
@@ -354,6 +366,7 @@ export function appendStaticTranscriptItems({
   readonly currentItems: readonly StaticTranscriptItem[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly childStreamEntries?: ChildStreamEntries;
+  readonly executionLabels?: ExecutionLabels;
   readonly meta: SessionMeta;
   readonly maxRows?: number;
   readonly parentStream?: ReadonlyMap<StreamTabId, StreamTabId>;
@@ -389,8 +402,9 @@ export function appendStaticTranscriptItems({
     const fitsBudget =
       maxRows === undefined ||
       currentItems.reduce(
-        (total, item) => total + staticTranscriptItemRowCount(item, width),
-        staticTranscriptItemRowCount(header, width),
+        (total, item) =>
+          total + staticTranscriptItemRowCount(item, width, executionLabels),
+        staticTranscriptItemRowCount(header, width, executionLabels),
       ) <= maxRows;
     if (fitsBudget) {
       nextItems = [...currentItems];
@@ -478,6 +492,7 @@ export function StaticConversationTranscript({
   ownerKey,
   printRequests = [],
   scrollbackStreamId,
+  subagentExecutionLabels,
   width,
 }: {
   readonly colorEnabled?: boolean;
@@ -485,6 +500,7 @@ export function StaticConversationTranscript({
   readonly ownerKey: string;
   readonly printRequests?: readonly TranscriptPrintRequest[];
   readonly scrollbackStreamId: StreamTabId | undefined;
+  readonly subagentExecutionLabels?: ExecutionLabels;
   readonly width?: number;
 }): React.JSX.Element {
   const normalizedWidth = transcriptColumns(width);
@@ -498,6 +514,7 @@ export function StaticConversationTranscript({
       currentItems: [],
       streams,
       childStreamEntries,
+      executionLabels: subagentExecutionLabels,
       meta: sessionMeta,
       maxRows,
       parentStream,
@@ -514,6 +531,7 @@ export function StaticConversationTranscript({
           currentItems: [],
           streams,
           childStreamEntries,
+          executionLabels: subagentExecutionLabels,
           meta: sessionMeta,
           maxRows,
           parentStream,
@@ -535,6 +553,7 @@ export function StaticConversationTranscript({
         currentItems: isHardReset || ownerChanged ? [] : current.items,
         streams,
         childStreamEntries,
+        executionLabels: subagentExecutionLabels,
         meta: sessionMeta,
         maxRows,
         parentStream,
@@ -556,6 +575,7 @@ export function StaticConversationTranscript({
     scrollbackStreamId,
     sessionMeta,
     streams,
+    subagentExecutionLabels,
     normalizedWidth,
   ]);
 
@@ -574,6 +594,7 @@ export function StaticConversationTranscript({
         <Box key={item.id} flexDirection="column">
           <StaticTranscriptItemContent
             colorEnabled={colorEnabled}
+            executionLabels={subagentExecutionLabels}
             item={item}
             width={normalizedWidth}
           />

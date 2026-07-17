@@ -53,9 +53,6 @@ const TIMEOUT_GATED_BY_ACTION: Record<string, string> = {
   executions: 'wait',
 };
 
-/** Default action for the executions tool when the model omits it. */
-export const EXECUTIONS_DEFAULT_ACTION = 'view';
-
 export function getExecutionsWaitTimeoutSeconds(timeout: unknown): number {
   return typeof timeout === 'number' && Number.isFinite(timeout)
     ? Math.min(
