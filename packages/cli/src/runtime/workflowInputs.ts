@@ -10,8 +10,12 @@ import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { unique } from '@utils/core';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe at both call sites below since the input is always a relative
-// path already validated by isContainedRelativePath or path.relative.
-import { toPosixPath } from '@utils/core/pathCore';
+// path already validated by isStrictlyWithin or path.relative.
+import {
+  isPathWithin,
+  isStrictlyWithin,
+  toPosixPath,
+} from '@utils/core/pathCore';
 import type { Disposable } from '@platform/interfaces';
 import type { Stats } from 'node:fs';
 
@@ -28,28 +32,15 @@ function resolveAgainstCwd(candidate: string, cwd: string): string {
     : path.resolve(cwd, candidate);
 }
 
-// A relative path stays inside cwd when it is non-empty, does not climb out
-// with `..`, and did not fall back to an absolute path (different drive/root).
-function isContainedRelativePath(relativePath: string): boolean {
-  return (
-    !!relativePath &&
-    !relativePath.startsWith('..') &&
-    !path.isAbsolute(relativePath)
-  );
-}
-
 function normalizeCliInputPath(candidate: string, cwd: string): string {
   const absolutePath = resolveAgainstCwd(candidate, cwd);
-  const relativePath = path.relative(cwd, absolutePath);
-  return isContainedRelativePath(relativePath)
-    ? toPosixPath(relativePath)
+  return isStrictlyWithin(cwd, absolutePath)
+    ? toPosixPath(path.relative(cwd, absolutePath))
     : absolutePath;
 }
 
 function isPathInsideCwd(candidate: string, cwd: string): boolean {
-  const absolutePath = resolveAgainstCwd(candidate, cwd);
-  const relativePath = path.relative(cwd, absolutePath);
-  return relativePath === '' || isContainedRelativePath(relativePath);
+  return isPathWithin(cwd, resolveAgainstCwd(candidate, cwd));
 }
 
 function normalizeCliInputPathForRun(
