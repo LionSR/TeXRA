@@ -19,6 +19,7 @@ import {
 } from '@model/apiProviders';
 
 // Local imports - modules stubbed by these tests
+import * as configUtilsModule from '@utils/config/configUtils';
 import * as providerConfigModule from '@utils/config/providerConfig';
 
 class ExposedKeyHandler extends ModelHandlerOpenRouterNative {
@@ -129,6 +130,23 @@ describe('ModelHandler.getApiKey resolution', () => {
     assert.equal(await handler.exposeGetApiKey(), 'kimi-code-key');
     assert.equal(canUseServerSideKeys.mock.calls.length, 0);
     assert.equal(relayToken.mock.calls.length, 0);
+  });
+
+  it('keeps an explicit direct-key provider off global transport routes', () => {
+    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(true);
+    vi.spyOn(configUtilsModule, 'getConfig').mockImplementation(
+      <T>(path: string, defaultValue?: T) =>
+        (path === 'texra.model.useImprovedConnection'
+          ? true
+          : defaultValue) as T,
+    );
+    stubServerSideKeyService({ shouldUseServerSideKeys: true });
+
+    const handler = new ExposedKeyHandler(
+      buildConfig({ apiKeyProvider: 'kimiCode' }),
+    );
+
+    assert.equal(handler.getBaseUrl(), null);
   });
 
   it('blocks relay quota exhaustion before reading any key', async () => {

@@ -53,14 +53,37 @@ const BASE_URLS: Record<ModelProvider, string | null> = {
   [ModelProvider.OTHERS]: null,
 };
 
-interface ProxyConfig {
+interface ProxyConfig extends OpenRouterRoutingConfig {
   provider: ModelProvider;
-  openRouterOnly: boolean;
   customBaseUrl?: string; // Per-model custom base URL (overrides provider default)
-  requiresResponsesAPI?: boolean; // Models requiring direct API access (bypasses OpenRouter)
-  forceDirectProvider?: boolean; // Runtime replay override that bypasses OpenRouter
   useServerSideKeys?: boolean; // Pre-computed by caller to avoid duplicated checks
   logger?: { debug: (message: string) => void };
+}
+
+function getDefaultBaseUrl(provider: ModelProvider): string | null {
+  switch (provider) {
+    case ModelProvider.DASHSCOPE: {
+      const domain = getDashScopeUseChina()
+        ? 'dashscope.aliyuncs.com'
+        : 'dashscope-intl.aliyuncs.com';
+      return `https://${domain}/compatible-mode/v1`;
+    }
+    case ModelProvider.MINIMAX: {
+      // China: api.minimaxi.com (note the extra 'i'), International: api.minimax.io
+      const domain = getMiniMaxUseChina()
+        ? 'api.minimaxi.com'
+        : 'api.minimax.io';
+      return `https://${domain}/v1`;
+    }
+    case ModelProvider.GLM: {
+      // China: open.bigmodel.cn, International: api.z.ai
+      const domain = getGLMUseChina() ? 'open.bigmodel.cn' : 'api.z.ai';
+      const path = getGLMCodingPlan() ? '/api/coding/paas/v4' : '/api/paas/v4';
+      return `https://${domain}${path}`;
+    }
+    default:
+      return BASE_URLS[provider];
+  }
 }
 
 /**
@@ -105,11 +128,12 @@ export function usesServerSideKeysRoute(
  *
  * Priority order (mutually exclusive):
  * 1. Custom base URL (per-model override)
- * 2. Server-side keys relay (experimental, for Ultra users)
- * 3. Improved connection proxy (proxy.texra.ai)
- * 4. OpenRouter
- * 5. Per-provider custom endpoint (dashboard settings)
- * 6. Provider default URLs
+ * 2. Explicit direct-key route (provider default, without global transports)
+ * 3. Server-side keys relay (experimental, for Ultra users)
+ * 4. Improved connection proxy (proxy.texra.ai)
+ * 5. OpenRouter
+ * 6. Per-provider custom endpoint (dashboard settings)
+ * 7. Provider default URLs
  *
  * Note: Server-side keys and proxy.texra.ai are MUTUALLY EXCLUSIVE.
  * When server-side keys are enabled, the relay handles everything
@@ -122,6 +146,14 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
       `Using custom base URL for model: ${config.customBaseUrl}`,
     );
     return config.customBaseUrl;
+  }
+
+  // An explicit key owner is a direct-route contract, not just a credential
+  // lookup hint. Do not send that key to relay, proxy, OpenRouter, or a global
+  // provider endpoint. Cross-provider compatible models must provide their own
+  // customBaseUrl above; same-provider models fall back to the SDK default.
+  if (config.apiKeyProvider) {
+    return getDefaultBaseUrl(config.provider);
   }
 
   // Server-side keys via relay (experimental feature for Ultra users)
@@ -182,28 +214,5 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
     return `https://${normalizeUrl(customUrl)}`;
   }
 
-  // Providers with dynamic region-based URLs
-  switch (config.provider) {
-    case ModelProvider.DASHSCOPE: {
-      const domain = getDashScopeUseChina()
-        ? 'dashscope.aliyuncs.com'
-        : 'dashscope-intl.aliyuncs.com';
-      return `https://${domain}/compatible-mode/v1`;
-    }
-    case ModelProvider.MINIMAX: {
-      // China: api.minimaxi.com (note the extra 'i'), International: api.minimax.io
-      const domain = getMiniMaxUseChina()
-        ? 'api.minimaxi.com'
-        : 'api.minimax.io';
-      return `https://${domain}/v1`;
-    }
-    case ModelProvider.GLM: {
-      // China: open.bigmodel.cn, International: api.z.ai
-      const domain = getGLMUseChina() ? 'open.bigmodel.cn' : 'api.z.ai';
-      const path = getGLMCodingPlan() ? '/api/coding/paas/v4' : '/api/paas/v4';
-      return `https://${domain}${path}`;
-    }
-    default:
-      return BASE_URLS[config.provider];
-  }
+  return getDefaultBaseUrl(config.provider);
 }

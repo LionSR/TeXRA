@@ -583,6 +583,8 @@ export abstract class ModelHandler<
     return resolveBaseUrl({
       provider: this.config.provider,
       openRouterOnly: this.config.openRouterOnly,
+      apiKeyProvider: (this.config as { apiKeyProvider?: ApiProvider })
+        .apiKeyProvider,
       customBaseUrl: this.config.baseUrl,
       requiresResponsesAPI: this.config.requiresResponsesAPI,
       forceDirectProvider: (this.config as { forceDirectProvider?: boolean })
