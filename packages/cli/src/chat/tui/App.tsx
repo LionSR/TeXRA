@@ -9,6 +9,7 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
 } from 'react';
 
 // Local imports - shared runtime
@@ -33,10 +34,13 @@ import {
 } from './appInteractionPolicy';
 import { ApprovalModal } from './modals/ApprovalModal';
 import { TaskDetailView } from './modals/TaskDetailView';
-import { TranscriptViewer } from './modals/TranscriptViewer';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
+import {
+  isRenderableTranscriptEntry,
+  userPromptAwaitsLiveContinuation,
+} from './panes/transcriptEntries';
 import {
   currentApproval,
   pendingApprovalSummaries,
@@ -65,8 +69,8 @@ import {
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen as slashPaletteOpenSignal,
   taskDetailExecutionId as taskDetailExecutionIdSignal,
-  transcriptViewerStreamId as transcriptViewerStreamIdSignal,
   streams as streamsSignal,
+  type StreamSlice,
 } from './state/cliState';
 import {
   activeSubagentsFor,
@@ -74,6 +78,10 @@ import {
   parentStream as parentStreamSignal,
 } from './state/childExecutions';
 import { focusedChildInputDisabledMessage } from './state/focusedChildFollowUp';
+import {
+  createTranscriptPrintRequest,
+  type TranscriptPrintRequest,
+} from './state/transcriptLines';
 import {
   childListProcessId,
   childListStreamId,
@@ -85,7 +93,10 @@ import {
 } from './state/childListSelection';
 import { streamDisplayLabel, streamTreeViews } from './state/streamViews';
 import { useSignal } from './state/useSignal';
-import type { TranscriptViewportChange } from './state/transcriptViewportMode';
+import {
+  transcriptViewportKey,
+  type TranscriptViewportChange,
+} from './state/transcriptViewportMode';
 import type { InputHistory } from './history/inputHistory';
 
 // Narrow subset of Ink's internal stdin emitter used to synthesize Enter.
@@ -96,6 +107,16 @@ interface InputEventEmitterLike {
 }
 
 type ProcessChildInfo = Extract<ActiveChildInfo, { kind: 'process' }>;
+const NO_TRANSCRIPT_PRINTS: readonly TranscriptPrintRequest[] = [];
+
+function lastStaticEntryId(slice: StreamSlice | undefined): string | undefined {
+  return slice?.entries.findLast(
+    (entry, index, entries) =>
+      entry.finalized &&
+      isRenderableTranscriptEntry(entry) &&
+      !userPromptAwaitsLiveContinuation(entries, index, slice.status),
+  )?.id;
+}
 
 export interface AppProps {
   readonly onSubmit: (line: string, mediaFiles?: readonly string[]) => void;
@@ -128,7 +149,6 @@ export function App(props: AppProps): React.JSX.Element {
   const activeForm = useSignal(activeFormSignal);
   const slashPaletteOpen = useSignal(slashPaletteOpenSignal);
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
-  const transcriptViewerStreamId = useSignal(transcriptViewerStreamIdSignal);
   const taskDetailExecutionId = useSignal(taskDetailExecutionIdSignal);
   const rootRunStartAvailable = useSignal(rootRunStartAvailableSignal);
   const pendingSummaries = useSignal(pendingApprovalSummaries);
@@ -139,9 +159,12 @@ export function App(props: AppProps): React.JSX.Element {
   const childListActiveStreamRef = useRef(activeStreamId);
   const childListFocused = childListSelection.focused;
   const selectedChildValue = childListSelection.selectedValue;
-  const transcriptViewerOpen = transcriptViewerStreamId !== undefined;
   const { columns, rows } = useWindowSize();
   const { exit } = useApp();
+  const [transcriptPrints, setTranscriptPrints] = useState<
+    readonly TranscriptPrintRequest[]
+  >([]);
+  const nextTranscriptPrintId = useRef(0);
   const activeDraftRegistry = useMemo(() => createActiveDraftRegistry(), []);
   const canStopActiveRun =
     props.canStopActiveRun ?? props.canInterruptActiveRun;
@@ -168,8 +191,7 @@ export function App(props: AppProps): React.JSX.Element {
   const foregroundOpen =
     activeApprovalVisible ||
     activeForm !== undefined ||
-    taskDetailExecutionId !== undefined ||
-    transcriptViewerOpen;
+    taskDetailExecutionId !== undefined;
   const childInputDisabledMessage = focusedChildInputDisabledMessage({
     activeStreamId,
     parentStream,
@@ -227,6 +249,18 @@ export function App(props: AppProps): React.JSX.Element {
   }, [inputDisabled, stdin]);
 
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
+  const transcriptOwnerKey = transcriptViewportKey({
+    activeStreamId,
+    parentStream,
+  });
+  const sessionEmpty = rootStreamId === undefined && streams.size === 0;
+  const visibleTranscriptPrints = sessionEmpty
+    ? NO_TRANSCRIPT_PRINTS
+    : transcriptPrints;
+  useEffect(() => {
+    if (!sessionEmpty) return;
+    setTranscriptPrints((current) => (current.length > 0 ? [] : current));
+  }, [sessionEmpty]);
   const sessionViews = useMemo(
     () =>
       streamTreeViews({
@@ -354,7 +388,6 @@ export function App(props: AppProps): React.JSX.Element {
     activeFormOpen: activeForm !== undefined,
     pendingApproval: activeApprovalVisible,
     taskDetailOpen: taskDetailProcess !== undefined,
-    transcriptViewerOpen,
   });
   const approvalKind =
     foregroundKind === 'approval' ? pending?.payload.kind : undefined;
@@ -362,30 +395,8 @@ export function App(props: AppProps): React.JSX.Element {
     approvalKind,
     kind: foregroundKind,
   });
-  function renderForegroundSurface(
-    availableRows: number,
-    transcriptWidth: number,
-  ): React.ReactNode {
+  function renderForegroundSurface(availableRows: number): React.ReactNode {
     switch (foregroundKind) {
-      case 'transcript': {
-        // foregroundKind is 'transcript' only while transcriptViewerOpen, so
-        // transcriptViewerStreamId is set here — guard once to narrow it.
-        if (!transcriptViewerStreamId) return null;
-        return (
-          <TranscriptViewer
-            availableRows={availableRows}
-            onClose={() => transcriptViewerStreamIdSignal.set(undefined)}
-            slice={streams.get(transcriptViewerStreamId)}
-            title={streamDisplayLabel({
-              childStreamEntries,
-              parentStream,
-              streamId: transcriptViewerStreamId,
-              streams,
-            })}
-            width={transcriptWidth}
-          />
-        );
-      }
       case 'taskDetail': {
         if (!taskDetailProcess) return null;
         return (
@@ -460,6 +471,25 @@ export function App(props: AppProps): React.JSX.Element {
     return false;
   };
 
+  const printStreamOutput = (streamId: StreamTabId): void => {
+    nextTranscriptPrintId.current += 1;
+    setTranscriptPrints((current) => [
+      ...current,
+      createTranscriptPrintRequest({
+        afterEntryId: lastStaticEntryId(activeSlice),
+        id: `printed-transcript:${nextTranscriptPrintId.current}`,
+        ownerKey: transcriptOwnerKey,
+        slice: streams.get(streamId),
+        title: streamDisplayLabel({
+          childStreamEntries,
+          parentStream,
+          streamId,
+          streams,
+        }),
+      }),
+    ]);
+  };
+
   const scheduleEscapeInterrupt = () => {
     clearPendingEscapeInterrupt();
     pendingEscapeInterruptTimer.current = setTimeout(() => {
@@ -528,7 +558,7 @@ export function App(props: AppProps): React.JSX.Element {
     if (!focusShortcutsActive) return;
 
     if (key.ctrl && input.toLowerCase() === 't') {
-      if (activeStreamId) transcriptViewerStreamIdSignal.set(activeStreamId);
+      if (activeStreamId) printStreamOutput(activeStreamId);
       return;
     }
 
@@ -629,7 +659,7 @@ export function App(props: AppProps): React.JSX.Element {
           activeSubagentExecutionIds,
           childListTarget,
           pendingApprovals: pendingApprovalsForRows,
-          transcriptViewerStreamId,
+          transcriptPrints: visibleTranscriptPrints,
         }}
         onCancelChildList={cancelChildList}
         onFocusSession={focusSession}
@@ -637,9 +667,7 @@ export function App(props: AppProps): React.JSX.Element {
         onOpenProcessDetail={(executionId) =>
           taskDetailExecutionIdSignal.set(executionId)
         }
-        onViewStream={(streamId) =>
-          transcriptViewerStreamIdSignal.set(streamId)
-        }
+        onPrintStream={printStreamOutput}
         onChildSelectionChange={(value) =>
           dispatchChildListSelection({ kind: 'highlight', value })
         }

@@ -138,21 +138,17 @@ export function digitFromMetaShortcut(value: string): number | undefined {
   return /^[1-9]$/.test(value) ? Number.parseInt(value, 10) : undefined;
 }
 
-export type ForegroundSurfaceKind =
-  'transcript' | 'taskDetail' | 'form' | 'approval';
+export type ForegroundSurfaceKind = 'taskDetail' | 'form' | 'approval';
 
 export function foregroundSurfaceKind({
   activeFormOpen,
   pendingApproval,
   taskDetailOpen,
-  transcriptViewerOpen,
 }: {
   readonly activeFormOpen: boolean;
   readonly pendingApproval: boolean;
   readonly taskDetailOpen: boolean;
-  readonly transcriptViewerOpen: boolean;
 }): ForegroundSurfaceKind | undefined {
-  if (transcriptViewerOpen) return 'transcript';
   if (taskDetailOpen) return 'taskDetail';
   if (activeFormOpen) return 'form';
   if (pendingApproval) return 'approval';
@@ -187,8 +183,6 @@ export function foregroundEscapeAction({
       return activeFormEscapeAction ?? 'close';
     case 'taskDetail':
       return 'back';
-    case 'transcript':
-      return 'close';
     case 'approval':
       return approvalKind === 'externalInquiry' ||
         approvalKind === 'userQuestion'
@@ -231,7 +225,6 @@ export function foregroundMaxRowsForKind({
       return FORM_FOREGROUND_MAX_ROWS;
     case 'approval':
       return approvalForegroundMaxRows(approvalKind);
-    case 'transcript':
     case undefined:
       return undefined;
   }

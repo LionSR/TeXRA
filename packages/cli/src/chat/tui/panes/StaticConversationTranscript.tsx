@@ -26,6 +26,10 @@ import {
   type ChildStreamEntries,
 } from '../state/childExecutions';
 import { streamViewForId } from '../state/streamViews';
+import {
+  formatTranscriptForScrollback,
+  type TranscriptPrintRequest,
+} from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
 import { COLOR_HINT } from '../ui/colors';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
@@ -52,6 +56,11 @@ export type StaticTranscriptItem =
       readonly id: string;
       readonly kind: 'entry';
       readonly entry: ConversationEntry;
+    }
+  | {
+      readonly id: string;
+      readonly kind: 'printedTranscript';
+      readonly request: TranscriptPrintRequest;
     };
 
 interface StaticTranscriptState {
@@ -190,12 +199,63 @@ function staticTranscriptItemRowCount(
       ? COMPACT_SESSION_HEADER_ROWS
       : FULL_SESSION_HEADER_ROWS;
   }
+  if (item.kind === 'printedTranscript') {
+    return formatTranscriptForScrollback({
+      cols: transcriptColumns(width),
+      request: item.request,
+    }).split('\n').length;
+  }
   return transcriptEntryLayoutRows(
     transcriptEntryLayout(item.entry, {
       mode: 'scrollback-budget',
       width,
     }),
   );
+}
+
+function StaticTranscriptItemContent({
+  colorEnabled,
+  item,
+  width,
+}: {
+  readonly colorEnabled?: boolean;
+  readonly item: StaticTranscriptItem;
+  readonly width: number;
+}): React.JSX.Element {
+  switch (item.kind) {
+    case 'header':
+      return (
+        <EntryErrorBoundary label="session header">
+          <SessionHeaderBlock
+            compact={item.compact}
+            identityLine={item.identityLine}
+            meta={item.meta}
+            width={width}
+          />
+        </EntryErrorBoundary>
+      );
+    case 'entry':
+      return (
+        <EntryErrorBoundary label={item.entry.role}>
+          <TranscriptEntry
+            entry={item.entry}
+            width={width}
+            colorEnabled={colorEnabled}
+          />
+        </EntryErrorBoundary>
+      );
+    case 'printedTranscript':
+      return (
+        <EntryErrorBoundary label="full output">
+          <Text>
+            {formatTranscriptForScrollback({
+              cols: width,
+              request: item.request,
+            })}
+          </Text>
+        </EntryErrorBoundary>
+      );
+  }
 }
 
 export function appendStaticTranscriptItems({
@@ -205,6 +265,7 @@ export function appendStaticTranscriptItems({
   meta,
   maxRows,
   parentStream = new Map(),
+  printRequests = [],
   scrollbackStreamId,
   width,
 }: {
@@ -214,6 +275,7 @@ export function appendStaticTranscriptItems({
   readonly meta: SessionMeta;
   readonly maxRows?: number;
   readonly parentStream?: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly printRequests?: readonly TranscriptPrintRequest[];
   readonly scrollbackStreamId: StreamTabId | undefined;
   readonly width?: number;
 }): readonly StaticTranscriptItem[] {
@@ -251,7 +313,7 @@ export function appendStaticTranscriptItems({
     if (fitsBudget) {
       nextItems = [...currentItems];
       const firstEntryIndex = nextItems.findIndex(
-        (item) => item.kind === 'entry',
+        (item) => item.kind !== 'header',
       );
       nextItems.splice(
         firstEntryIndex < 0 ? nextItems.length : firstEntryIndex,
@@ -264,21 +326,52 @@ export function appendStaticTranscriptItems({
 
   // Only the selected scrollback owner feeds `<Static>` output. Root focus owns
   // root history; child focus owns that child's history. Other streams stay
-  // available through their own focus or the transcript viewer.
+  // available through their own focus or print-once full output.
   const slice = scrollbackStreamId
     ? streams.get(scrollbackStreamId)
     : undefined;
   const entries = slice?.entries ?? [];
-  for (const [index, entry] of entries.entries()) {
-    if (!isRenderableTranscriptEntry(entry)) continue;
-    if (userPromptAwaitsLiveContinuation(entries, index, slice?.status)) {
+  const finalizedEntries = entries.filter(
+    (entry, index) =>
+      entry.finalized &&
+      isRenderableTranscriptEntry(entry) &&
+      !userPromptAwaitsLiveContinuation(entries, index, slice?.status) &&
+      !seen.has(entry.id),
+  );
+  const unseenRequests = printRequests.filter(
+    (request) => !seen.has(request.id),
+  );
+  const requestsByUnseenAnchor = new Map<string, TranscriptPrintRequest[]>();
+  const appendItem = (item: StaticTranscriptItem): void => {
+    nextItems ??= [...currentItems];
+    nextItems.push(item);
+    seen.add(item.id);
+  };
+
+  // Requests carry the last static entry visible when the user invoked the
+  // command. Interleave against that anchor so an owner round trip rebuilds
+  // exactly the same chronology as incremental append-only rendering.
+  for (const request of unseenRequests) {
+    if (request.afterEntryId === undefined || seen.has(request.afterEntryId)) {
+      appendItem({ id: request.id, kind: 'printedTranscript', request });
       continue;
     }
-    if (!entry.finalized) continue;
-    if (seen.has(entry.id)) continue;
-    nextItems ??= [...currentItems];
-    nextItems.push({ id: entry.id, kind: 'entry', entry });
-    seen.add(entry.id);
+    const anchored = requestsByUnseenAnchor.get(request.afterEntryId);
+    if (anchored) anchored.push(request);
+    else requestsByUnseenAnchor.set(request.afterEntryId, [request]);
+  }
+  for (const entry of finalizedEntries) {
+    appendItem({ id: entry.id, kind: 'entry', entry });
+    for (const request of requestsByUnseenAnchor.get(entry.id) ?? []) {
+      appendItem({ id: request.id, kind: 'printedTranscript', request });
+    }
+  }
+  // A legacy or externally restored request may name an entry no longer in
+  // the owner transcript. Keep the output rather than dropping it silently.
+  for (const request of unseenRequests) {
+    if (!seen.has(request.id)) {
+      appendItem({ id: request.id, kind: 'printedTranscript', request });
+    }
   }
   // Same reference when nothing was appended so the `setItems` functional
   // update doesn't schedule a re-render on every stream-sync tick.
@@ -289,12 +382,14 @@ export function StaticConversationTranscript({
   colorEnabled,
   maxRows,
   ownerKey,
+  printRequests = [],
   scrollbackStreamId,
   width,
 }: {
   readonly colorEnabled?: boolean;
   readonly maxRows?: number;
   readonly ownerKey: string;
+  readonly printRequests?: readonly TranscriptPrintRequest[];
   readonly scrollbackStreamId: StreamTabId | undefined;
   readonly width?: number;
 }): React.JSX.Element {
@@ -312,6 +407,7 @@ export function StaticConversationTranscript({
       meta: sessionMeta,
       maxRows,
       parentStream,
+      printRequests,
       scrollbackStreamId,
       width: normalizedWidth,
     }),
@@ -327,6 +423,7 @@ export function StaticConversationTranscript({
           meta: sessionMeta,
           maxRows,
           parentStream,
+          printRequests,
           scrollbackStreamId,
           width: normalizedWidth,
         });
@@ -347,6 +444,7 @@ export function StaticConversationTranscript({
         meta: sessionMeta,
         maxRows,
         parentStream,
+        printRequests,
         scrollbackStreamId,
         width: normalizedWidth,
       });
@@ -360,6 +458,7 @@ export function StaticConversationTranscript({
     maxRows,
     ownerKey,
     parentStream,
+    printRequests,
     scrollbackStreamId,
     sessionMeta,
     streams,
@@ -379,24 +478,11 @@ export function StaticConversationTranscript({
     >
       {(item: StaticTranscriptItem) => (
         <Box key={item.id} flexDirection="column">
-          {item.kind === 'header' ? (
-            <EntryErrorBoundary label="session header">
-              <SessionHeaderBlock
-                compact={item.compact}
-                identityLine={item.identityLine}
-                meta={item.meta}
-                width={normalizedWidth}
-              />
-            </EntryErrorBoundary>
-          ) : (
-            <EntryErrorBoundary label={item.entry.role}>
-              <TranscriptEntry
-                entry={item.entry}
-                width={normalizedWidth}
-                colorEnabled={colorEnabled}
-              />
-            </EntryErrorBoundary>
-          )}
+          <StaticTranscriptItemContent
+            colorEnabled={colorEnabled}
+            item={item}
+            width={normalizedWidth}
+          />
         </Box>
       )}
     </Static>

@@ -58,8 +58,15 @@ export const chatCommand = withUsageSections(
         ['/status', 'show session state'],
         ['/goal', 'explain autonomous goal mode and approved-plan startup'],
         ['/login, /logout', 'sign in or out of ChatGPT or Researcher Access'],
-        ['Ctrl-T', 'open the transcript viewer'],
+        [
+          'Ctrl-T',
+          "print the focused stream's full output once into terminal scrollback",
+        ],
         ['Tab', 'select a visible child session or process'],
+        [
+          'v (child list)',
+          "print the selected stream's full output once into terminal scrollback",
+        ],
         [
           focusShortcut,
           `focus a visible stream by number (${alternateFocusShortcut} when configured)`,

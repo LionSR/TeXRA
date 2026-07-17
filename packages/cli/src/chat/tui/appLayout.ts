@@ -52,7 +52,6 @@ export function allocateMiddleRows({
   inputVisible = true,
   queuedFollowUpPanelRows = 0,
   reverseSearchOpen,
-  reserveTranscriptRows = true,
   rows,
   slashPaletteOpen,
   staticTranscriptRows = 0,
@@ -62,7 +61,6 @@ export function allocateMiddleRows({
   readonly inputVisible?: boolean;
   readonly queuedFollowUpPanelRows?: number;
   readonly reverseSearchOpen: boolean;
-  readonly reserveTranscriptRows?: boolean;
   readonly rows: number;
   readonly slashPaletteOpen: boolean;
   readonly staticTranscriptRows?: number;
@@ -92,7 +90,6 @@ export function allocateMiddleRows({
   }
 
   const transcriptRows =
-    reserveTranscriptRows &&
     availableRows >= MIN_FOREGROUND_ROWS_WITH_TRANSCRIPT
       ? Math.min(FOREGROUND_TRANSCRIPT_ROWS, availableRows - 1)
       : 0;

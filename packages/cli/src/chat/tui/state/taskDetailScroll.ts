@@ -1,10 +1,8 @@
 // Scroll/tail state machine for TaskDetailView.
 //
-// This parallels `useScrollableOffset.ts` (bounded modal scrolling) and
-// `transcriptScroll.ts` (follow-tail line scrolling) but can't reuse either
-// directly: task-detail output wraps each tail line to the available columns,
-// so the visible window is expressed in wrapped-row units while a resize or
-// column-width change reflows line->row counts out from under a raw offset.
+// This can't reuse `useScrollableOffset.ts`: task-detail output wraps each tail
+// line to the available columns, so the visible window is expressed in wrapped
+// rows while a resize reflows line-to-row counts underneath a raw offset.
 // The `anchor` (logical line index + wrapped-row-within-line) is what lets a
 // mid-scroll position survive that reflow instead of drifting.
 

@@ -1,5 +1,5 @@
 // Declarative conversation-entry geometry shared by Ink renderers, viewport
-// budgeting, static scrollback, and the plain-text transcript viewer.
+// budgeting, static scrollback, and print-once full output.
 
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
@@ -22,7 +22,7 @@ export const LIVE_TAIL_ROWS = 24;
 
 type TranscriptEntryRole = ConversationEntry['role'];
 type TranscriptEntryLayoutMode =
-  'bounded' | 'live' | 'scrollback' | 'scrollback-budget' | 'viewer';
+  'bounded' | 'live' | 'scrollback' | 'scrollback-budget';
 
 interface RoleGeometry {
   readonly firstPrefix: string;
@@ -182,7 +182,7 @@ function entryLines(
       const richProjection =
         mode === 'live' || mode === 'bounded' || mode === 'scrollback-budget';
       const lines = toolUseDisplayLines(entry.toolUse, {
-        elide: mode !== 'viewer' && mode !== 'scrollback-budget',
+        elide: mode !== 'scrollback-budget',
         ...(richProjection ? { width: columns } : {}),
       });
       // Rich rows and their bounded fallback keep each display line on one
@@ -234,9 +234,7 @@ export function transcriptEntryLayout(
   } else {
     marginBottomRows = base.marginBottomRows;
   }
-  // The ctrl+t viewer is a full-width text projection with no Ink padding;
-  // its lines still share role prefixes and wrapping rules with the layout.
-  const columns = transcriptColumns(width, mode === 'viewer' ? 0 : inset);
+  const columns = transcriptColumns(width, inset);
   return {
     ...base,
     columns,
@@ -245,6 +243,25 @@ export function transcriptEntryLayout(
     marginBottomRows,
     marginTopRows,
     role: entry.role,
+  };
+}
+
+/** Full-fidelity text layout for a transcript snapshot printed to scrollback. */
+export function fullTranscriptEntryLayout(
+  entry: ConversationEntry,
+  width: number,
+): TranscriptEntryLayout {
+  const layout = transcriptEntryLayout(entry, {
+    mode: 'scrollback-budget',
+    width,
+  });
+  if (entry.role !== 'tool') return layout;
+  return {
+    ...layout,
+    lines: wrapDisplayLines(
+      toolUseDisplayLines(entry.toolUse, { elide: false }),
+      layout.columns,
+    ),
   };
 }
 

@@ -106,7 +106,7 @@ export interface StatusBarDisplayInput {
   /** Advertise Shift+Enter for newline when the Kitty keyboard protocol is
    *  active; otherwise the universal Ctrl-J is the only reliable binding. */
   readonly shiftEnterNewline?: boolean;
-  /** True when the focused stream has transcript entries. */
+  /** True when the focused stream has output that can be printed in full. */
   readonly transcriptAvailable?: boolean;
   /** Terminal width in columns. */
   readonly width?: number;
@@ -114,9 +114,9 @@ export interface StatusBarDisplayInput {
   /** True when `status` belongs to a focused child/subagent stream rather
    *  than the root session — see `statusBarStreamTarget`. */
   readonly isChildStream?: boolean;
-  /** False while a foreground surface (approval, detail, form, transcript,
-   *  slash palette, or reverse search) owns input and global chat shortcuts are
-   *  intentionally inactive. */
+  /** False while a foreground surface (approval, detail, form, slash palette,
+   *  or reverse search) owns input and global chat shortcuts are intentionally
+   *  inactive. */
   readonly shortcutsActive?: boolean;
   /** Label for the foreground surface's Escape action while shortcutsActive is
    *  false. */
@@ -416,8 +416,8 @@ function statusBarBindingsText(
         action: 'focus',
       })
     : undefined;
-  const transcript = transcriptAvailable
-    ? keyHintText({ key: 'Ctrl-T', action: 'transcript' })
+  const fullOutput = transcriptAvailable
+    ? keyHintText({ key: 'Ctrl-T', action: 'full output' })
     : undefined;
   const agent = agentSelectionAvailable
     ? keyHintText({ key: '/agent', action: 'agents' })
@@ -438,7 +438,7 @@ function statusBarBindingsText(
     statusBarBindingRow([
       childList,
       streamFocus,
-      transcript,
+      fullOutput,
       status,
       agent,
       model,
@@ -447,16 +447,16 @@ function statusBarBindingsText(
       ctrlC,
     ]),
     setupControlsOnly &&
-      statusBarBindingRow([transcript, agent, model, api, newline, ctrlC]),
+      statusBarBindingRow([fullOutput, agent, model, api, newline, ctrlC]),
     setupControlsOnly && statusBarBindingRow([agent, model, api, ctrlC]),
-    statusBarBindingRow([childList, transcript, agent, status, ctrlC]),
-    statusBarBindingRow([childList, transcript, agent, ctrlC]),
+    statusBarBindingRow([childList, fullOutput, agent, status, ctrlC]),
+    statusBarBindingRow([childList, fullOutput, agent, ctrlC]),
     (childNavigationAvailable || agentSelectionAvailable) &&
       statusBarBindingRow([childList, agent, ctrlC]),
     childNavigationAvailable &&
-      statusBarBindingRow([childList, transcript, ctrlC]),
-    transcriptAvailable && statusBarBindingRow([childList, transcript, ctrlC]),
-    transcriptAvailable && statusBarBindingRow([transcript, ctrlC]),
+      statusBarBindingRow([childList, fullOutput, ctrlC]),
+    transcriptAvailable && statusBarBindingRow([childList, fullOutput, ctrlC]),
+    transcriptAvailable && statusBarBindingRow([fullOutput, ctrlC]),
   ];
 
   const text =
@@ -505,9 +505,9 @@ function childListBindingsText(
     key: 'Enter',
     action: selectionKind === 'process' ? 'details' : 'focus',
   });
-  const transcriptBinding =
+  const fullOutputBinding =
     selectionKind === 'stream'
-      ? keyHintText({ key: 'v', action: 'transcript' })
+      ? keyHintText({ key: 'v', action: 'full output' })
       : undefined;
   const killBinding = selectionKillable
     ? keyHintText({ key: 'k', action: 'kill' })
@@ -516,7 +516,7 @@ function childListBindingsText(
     statusBarBindingRow([
       keyHintText({ key: 'Up/Down', action: 'select' }),
       enterBinding,
-      transcriptBinding,
+      fullOutputBinding,
       killBinding,
       keyHintText({ key: 'Tab', action: 'input' }),
       keyHintText({ key: 'Esc', action: 'input' }),

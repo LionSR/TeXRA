@@ -3,8 +3,8 @@
 // `toolUseStyledLines` builds every visually distinct row of a tool card as
 // spans (text + color/dim/bold); the Ink painter in ToolUseRow renders those
 // spans, and `toolUseDisplayLines` projects the same lines to plain text for
-// the row-budget estimator, static row counting, and the ctrl+t transcript
-// viewer. The two presentations can no longer drift because there is nothing
+// the row-budget estimator, static row counting, and ctrl+t full-output
+// printing. The two presentations can no longer drift because there is nothing
 // to keep in sync by hand — the patch preview (DiffView) is the one rich
 // block that renders beyond its plain-text projection.
 
@@ -56,7 +56,7 @@ export function toolHeaderPreviewBudget(
 // Tool output can be arbitrarily large (a 50 KB bash dump, a long grep). The
 // finalized `<Static>` scrollback and the live region show a head+tail slice
 // with a `… +N lines` marker; the full text stays on `toolUse.outputText` and
-// is reachable via the ctrl+t transcript viewer. Tune head/tail here.
+// can be printed into terminal scrollback with ctrl+t. Tune head/tail here.
 const OUTPUT_HEAD_LINES = 6;
 const OUTPUT_TAIL_LINES = 3;
 const OUTPUT_MARKER_LINES = 1;
@@ -96,7 +96,7 @@ function elideOutputLines(lines: readonly string[]): ElidedOutput {
 }
 
 function elisionMarker(hiddenCount: number): string {
-  return `… +${hiddenCount} lines (ctrl + t to view transcript)`;
+  return `… +${hiddenCount} lines (ctrl + t to print full output)`;
 }
 
 // Tool inputs vary in shape; show whichever of these "primary" fields
@@ -112,7 +112,7 @@ const PRIMARY_INPUT_KEYS = [
 
 export interface DisplayLineOptions {
   /** When false, emit the full output instead of the head+tail slice.
-   *  The transcript viewer (ctrl+t) sets this to show everything. */
+   *  The ctrl+t print path sets this to include everything. */
   readonly elide?: boolean;
   /** Terminal columns when the projection must match rich rendered rows. */
   readonly width?: number;
@@ -215,7 +215,7 @@ function patchTextLines(
   width?: number,
 ): string[] {
   // Plain text only: the colored full-width bands come from the `DiffView`
-  // component; these lines feed row budgeting and the transcript viewer.
+  // component; these lines feed row budgeting and full-output printing.
   const diffWidth = width === undefined ? undefined : width - 4;
   return groups.flatMap((group) => [
     `${TOOL_OUTPUT_CORNER} ${group.fileLabel}`,
@@ -495,7 +495,7 @@ function lineText(line: ToolDisplayLine): readonly string[] {
 }
 
 /** Plain-text projection of the same styled lines, for row budgeting, static
- *  row counting, and the ctrl+t transcript viewer. */
+ *  row counting, and ctrl+t full-output printing. */
 export function toolUseDisplayLines(
   toolUse: NormalizedToolUse,
   options?: DisplayLineOptions,
