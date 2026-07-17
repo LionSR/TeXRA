@@ -80,6 +80,7 @@ async function renderStaticTranscript(): Promise<string> {
 beforeEach(async () => {
   resetCliState();
   await defaultSession().transcripts.clear();
+  patchStream(STREAM_ID, (slice) => ({ ...slice }));
 });
 
 afterEach(() => {
@@ -385,6 +386,17 @@ describe('CLI workflow-script progress', () => {
         if (retirement === 'remove') removeStream(STREAM_ID);
         else resetCliState();
 
+        events.emit({
+          scope: 'run',
+          streamId: STREAM_ID,
+          event: {
+            type: 'tool.start',
+            logId: 'late-workflow-tool',
+            toolName: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+            input: { agent: 'writer', script: '...' },
+            stageId: 'round-1',
+          },
+        });
         events.emit({
           scope: 'run',
           streamId: STREAM_ID,

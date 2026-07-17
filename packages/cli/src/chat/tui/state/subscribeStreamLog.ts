@@ -279,6 +279,8 @@ function isSettledEntry(
     case 'tool':
       return (
         entry.toolUse.status === TOOL_USE_STATUS.COMPLETED ||
+        // An empty array deliberately anchors a neutral immutable owner row
+        // before the first append-only workflow fact arrives.
         entry.workflowScriptFacts !== undefined
       );
     case 'assistant':

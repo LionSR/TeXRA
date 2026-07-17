@@ -116,6 +116,8 @@ export interface DisplayLineOptions {
   readonly elide?: boolean;
   /** Include raw output for a caller with an explicit result surface. */
   readonly showOutput?: boolean;
+  /** Render the status marker without active or terminal state color. */
+  readonly neutralStatus?: boolean;
   /** Terminal columns when the projection must match rich rendered rows. */
   readonly width?: number;
 }
@@ -390,7 +392,8 @@ function buildStyledLines(
   const elide = options.elide !== false;
   const patchGroups = toolUsePatchGroups(toolUse);
   const opts = toolRowOptions(toolUse, patchGroups !== undefined);
-  const color = statusColor(toolUse);
+  const color =
+    options.neutralStatus === true ? undefined : statusColor(toolUse);
   const preview = toolHeaderPreview(
     toolUse,
     options.width === undefined
@@ -478,7 +481,7 @@ export function toolUseStyledLines(
   toolUse: NormalizedToolUse,
   options: StyledLineOptions = {},
 ): readonly ToolDisplayLine[] {
-  const key = `${options.elide === false ? 'f' : 'e'}|${options.showOutput === true ? 'o' : 'h'}|${options.width ?? 'd'}`;
+  const key = `${options.elide === false ? 'f' : 'e'}|${options.showOutput === true ? 'o' : 'h'}|${options.neutralStatus === true ? 'n' : 's'}|${options.width ?? 'd'}`;
   let cached = styledLinesCache.get(toolUse);
   const hit = cached?.get(key);
   if (hit) return hit;

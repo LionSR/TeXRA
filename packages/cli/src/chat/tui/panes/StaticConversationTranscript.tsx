@@ -271,6 +271,20 @@ function StaticTranscriptItemContent({
         </EntryErrorBoundary>
       );
     case 'entry':
+      if (
+        item.entry.role === 'tool' &&
+        item.entry.workflowScriptFacts !== undefined
+      ) {
+        return (
+          <EntryErrorBoundary label="workflow script">
+            <ToolUseRow
+              neutralStatus
+              toolUse={item.entry.toolUse}
+              width={width}
+            />
+          </EntryErrorBoundary>
+        );
+      }
       return (
         <EntryErrorBoundary label={item.entry.role}>
           <TranscriptEntry

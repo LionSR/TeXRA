@@ -194,6 +194,7 @@ export function applyWorkflowScriptProgressEvent(
     }
     case 'tool.start':
       if (event.toolName !== DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME) return false;
+      if (!streams.get().has(streamId)) return false;
       // The recorder runs before this bridge, so the canonical tool row is
       // available before synchronous workflow phase and log events arrive.
       syncStreamLog(streamId);
