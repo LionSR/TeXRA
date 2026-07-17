@@ -30,8 +30,8 @@ import {
 import {
   activeStreamId,
   getCliStateGeneration,
+  isCliStreamRetired,
   patchStream,
-  streams,
   type ConversationEntry,
 } from './cliState';
 import { isChildStreamRemoved } from './childExecutions';
@@ -378,7 +378,7 @@ export function subscribeStreamLog(): () => void {
   }, STREAM_SYNC_THROTTLE_MS);
 
   const dispose = store.onChange((streamId) => {
-    if (!streams.get().has(streamId)) return;
+    if (isCliStreamRetired(streamId)) return;
     pendingStreams.set(streamId, getCliStateGeneration());
     // Only start the window on its first tick — later ticks in the same
     // window join the batch without resetting the countdown (`pending`

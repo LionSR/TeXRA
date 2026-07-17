@@ -267,6 +267,11 @@ const RETIRED_STREAMS = new Set<StreamTabId>();
 /** Per-stream state map, keyed by `StreamTabId`. */
 export const streams = STREAMS;
 
+/** Whether reset retired this stream identity from the current state lifetime. */
+export function isCliStreamRetired(streamId: StreamTabId): boolean {
+  return RETIRED_STREAMS.has(streamId);
+}
+
 export function patchStream(
   streamId: StreamTabId,
   update: (slice: StreamSlice) => StreamSlice,
@@ -533,6 +538,7 @@ export function resetCliState(
   nextSessionMeta: SessionMeta = defaultSessionMeta(),
 ): void {
   CLI_STATE_GENERATION += 1;
+  RETIRED_STREAMS.clear();
   for (const streamId of streams.get().keys()) RETIRED_STREAMS.add(streamId);
   sessionMeta.set(nextSessionMeta);
   activeStreamId.set(undefined);
