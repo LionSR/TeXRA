@@ -1160,6 +1160,37 @@ describe('StreamSnapshotStore', () => {
     await store.deleteStream(STREAM);
   });
 
+  it('settles staging after setup fails with buffered writes', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    store.setPlan(STREAM, PLAN);
+    await store.flush();
+    const liveDir = streamDataDir(STREAM);
+    const stat = StorageFS.stat.bind(StorageFS);
+    const statError = Object.assign(new Error('snapshot directory is locked'), {
+      code: 'EACCES',
+    });
+    const statSpy = vi
+      .spyOn(StorageFS, 'stat')
+      .mockImplementation(async (target) => {
+        if (target === liveDir) {
+          store.setPlan(STREAM, null);
+          throw statError;
+        }
+        return stat(target);
+      });
+
+    await expect(store.stageDeleteStream(STREAM)).rejects.toBe(statError);
+
+    statSpy.mockRestore();
+    const retry = await store.stageDeleteStream(STREAM);
+    await retry.rollback();
+    const reloaded = new StreamSnapshotStore();
+    await reloaded.load([STREAM]);
+    expect(reloaded.getWorkPlan(STREAM).plan).toBeNull();
+    await store.deleteStream(STREAM);
+  });
+
   it('waits for active hydration before staging deletion', async () => {
     await installPlatform();
     const executionId = 'feedface' as ExecutionId;

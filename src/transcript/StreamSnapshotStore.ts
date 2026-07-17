@@ -995,14 +995,21 @@ export class StreamSnapshotStore {
     while (state.writes.size > 0) {
       const writes = [...state.writes];
       state.writes.clear();
-      for (const [key, value] of writes) {
-        this.writeUnbuffered(stream, key, value);
+      try {
+        for (const [key, value] of writes) {
+          this.writeUnbuffered(stream, key, value);
+        }
+        await this.flushWritesForStream(stream);
+      } catch (error) {
+        for (const [key, value] of writes) {
+          if (!state.writes.has(key)) state.writes.set(key, value);
+        }
+        throw error;
       }
-      await this.flushWritesForStream(stream);
     }
   }
 
-  /** Release deletion waiters after every terminal transaction path. */
+  /** Release ownership of a stream after its staged transaction finishes. */
   private settleStagedDeletion(
     stream: StreamTabId,
     state: StagedDeletionState,
@@ -1143,6 +1150,9 @@ export class StreamSnapshotStore {
     } catch (error) {
       try {
         await this.replayStagedWrites(stream, state);
+      } catch (replayError) {
+        this.failedRollbacks.set(stream, state);
+        throw replayError;
       } finally {
         this.settleStagedDeletion(stream, state);
       }
