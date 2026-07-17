@@ -47,6 +47,7 @@
       "@auth/*": ["src/auth/*"],
       "@platform/*": ["src/platform/*"],
       "turndown-plugin-gfm": ["src/types/ambient.d.ts"],
+      "data-uri-to-buffer": ["node_modules/data-uri-to-buffer/dist/node.d.ts"],
       "@openrouter/sdk": ["node_modules/@openrouter/sdk/esm/index.d.ts"],
       "@openrouter/sdk/models": [
         "node_modules/@openrouter/sdk/esm/models/index.d.ts"
