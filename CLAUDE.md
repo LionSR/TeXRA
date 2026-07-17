@@ -194,7 +194,8 @@ mouse-scroll for finalized history, so don't reinvent them.
   streaming tail, spinners, side panels, input bar, and the active approval
   modal. In child focus, the same live region renders only the focused child's
   pending entries through the bounded row-budgeted path; full child history
-  belongs to that child's Static scrollback owner and Ctrl-T transcript viewer.
+  belongs to that child's Static scrollback owner. Ctrl-T appends a full-output
+  snapshot through that same owner rather than opening a second viewport.
   Cap root panels (`BOTTOM_PANEL_MAX_ROWS`) so chrome never pushes the input
   off-screen. Don't park finalized content in the live region "for now."
 - **Stateless renderers.** Tool / diff / markdown components are props-in → JSX-out (the render-time workarounds ban from "UI anti-patterns", applied to the TUI). No `Date.now()`, synthetic ids, or dedup at render time. Any view-level toggle (collapse/expand, focus) belongs in shared signal state (`state/cliState.ts`), not per-component local state.

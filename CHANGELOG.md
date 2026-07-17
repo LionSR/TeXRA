@@ -48,6 +48,10 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Full tool output stays in terminal scrollback** — press Ctrl-T to print the
+  focused session's complete output once without leaving the chat, or press v
+  on a selected child session. Long output remains searchable and available to
+  ordinary terminal scrolling without a separate transcript screen.
 - **Child navigation now uses one persistent list** — press Tab to select
   child sessions and background processes together, then use Enter to focus a
   session or inspect process output. Finished sessions remain available, and a

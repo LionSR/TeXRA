@@ -117,8 +117,10 @@ describe('Static band resize', () => {
     const { createElement } = React;
     const { StaticConversationTranscript } =
       await import('@cli/chat/tui/panes/StaticConversationTranscript');
-    const { patchStream, resetCliState } =
+    const { patchStream, resetCliState, streams } =
       await import('@cli/chat/tui/state/cliState');
+    const { createTranscriptPrintRequest } =
+      await import('@cli/chat/tui/state/transcriptLines');
     const inkRequire = createRequire(cliRequire.resolve('ink'));
     const { clearTerminal } = inkRequire('ansi-escapes') as {
       readonly clearTerminal: string;
@@ -137,6 +139,27 @@ describe('Static band resize', () => {
       text: 'working',
       finalized: false,
     };
+    const hiddenPrintLine = 'full-output-middle-line';
+    const tool: ConversationEntry = {
+      id: 'full-output-tool',
+      role: 'tool',
+      text: '',
+      finalized: false,
+      toolUse: {
+        parsed: {},
+        toolName: 'Bash',
+        errorText: '',
+        outputText: Array.from({ length: 15 }, (_, index) =>
+          index === 7 ? hiddenPrintLine : `tool line ${index}`,
+        ).join('\n'),
+        userInstructionText: '',
+        input: { command: 'long-command' },
+        isError: false,
+        isUserFeedback: false,
+        headerSummary: '',
+        status: 'completed',
+      },
+    };
 
     resetCliState({
       agent: 'research',
@@ -152,14 +175,22 @@ describe('Static band resize', () => {
     });
     patchStream(streamId, (slice) => ({
       ...slice,
-      entries: [finalizedUser, liveAssistant],
+      entries: [finalizedUser, liveAssistant, tool],
     }));
+    const printRequest = createTranscriptPrintRequest({
+      afterEntryId: finalizedUser.id,
+      id: 'printed-transcript:resize',
+      ownerKey: 'resize-owner',
+      slice: streams.get().get(streamId),
+      title: 'assistant',
+    });
 
     function App(): unknown {
       const { columns } = ink.useWindowSize();
       return createElement(StaticConversationTranscript, {
         colorEnabled: true,
         ownerKey: 'resize-owner',
+        printRequests: [printRequest],
         scrollbackStreamId: streamId,
         width: columns,
       });
@@ -179,7 +210,8 @@ describe('Static band resize', () => {
         await waitFor(
           () =>
             horizontalRuleWidths(out.buf).includes(40) &&
-            inverseBandWidths(out.buf, prompt).includes(38),
+            inverseBandWidths(out.buf, prompt).includes(38) &&
+            out.buf.includes(hiddenPrintLine),
           5000,
         ),
       ).toBe(true);
@@ -204,7 +236,9 @@ describe('Static band resize', () => {
       expect(bandWidths).toEqual([78]);
       expect(bandWidths).not.toContain(38);
       expect(occurrences(visibleFrame, '{ T } TeXRA')).toBe(1);
-      expect(occurrences(visibleFrame, `› ${prompt}`)).toBe(1);
+      expect(occurrences(visibleFrame, `› ${prompt}`)).toBe(2);
+      expect(occurrences(visibleFrame, hiddenPrintLine)).toBe(1);
+      expect(occurrences(visibleFrame, '[Full output: assistant]')).toBe(1);
     } finally {
       inst.unmount();
       resetCliState();
@@ -294,5 +328,6 @@ describe('Static band resize', () => {
       inst.unmount();
       resetCliState();
     }
+    expect(out.listenerCount('resize')).toBe(0);
   });
 });
