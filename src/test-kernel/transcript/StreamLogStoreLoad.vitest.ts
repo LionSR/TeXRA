@@ -36,6 +36,7 @@ interface MockStorageOptions {
   summaryWriteError?: Error;
   summaryDeleteError?: Error;
   logWriteError?: Error;
+  logDeleteError?: Error;
   logMtimes?: Record<string, number>;
   summaryMtimes?: Record<string, number>;
   onLogRead?: (key: string) => Promise<void> | void;
@@ -124,6 +125,7 @@ function mockStorage({
   summaryWriteError,
   summaryDeleteError,
   logWriteError,
+  logDeleteError,
   logMtimes = {},
   summaryMtimes = {},
   onLogRead,
@@ -241,6 +243,9 @@ function mockStorage({
   vi.spyOn(StorageFS, 'write').mockImplementation(recordWrite);
   vi.spyOn(StorageFS, 'writeAtomic').mockImplementation(recordWrite);
   vi.spyOn(StorageFS, 'delete').mockImplementation(async (target) => {
+    if (logDeleteError && target.startsWith(`${STREAM_LOGS_DIR}${path.sep}`)) {
+      throw logDeleteError;
+    }
     if (
       summaryDeleteError &&
       (target === STREAM_LOG_SUMMARIES_DIR ||
@@ -434,6 +439,22 @@ describe('StreamLogStore load', () => {
         'Failed to delete transcript summary cache for alpha',
       ),
     );
+  });
+
+  it('retains the stream registry when authoritative log deletion fails', async () => {
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 200)] },
+      summaries: {
+        alpha: { firstTimestamp: 200, lastTimestamp: 200 },
+      },
+      logDeleteError: new Error('log delete denied'),
+    });
+    const store = await StreamLogStore.open();
+
+    await expect(store.delete('alpha')).rejects.toThrow('log delete denied');
+
+    expect(store.keys()).toEqual(['alpha']);
+    expect(store.has('alpha')).toBe(true);
   });
 
   it('clears authoritative logs when summary cache clearing fails', async () => {

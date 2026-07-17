@@ -142,6 +142,34 @@ const MAX_STABLE_ATTEMPTS = 1_024;
 // within that owner while durable manifests handle later restart recovery.
 const stableExecutionMutex = new KeyedMutex<ExecutionId>();
 
+interface InBandExecutionFailure {
+  readonly error: unknown;
+}
+
+/** Release final ownership without letting cleanup replace the run failure. */
+async function releaseInBandExecutionLease(
+  session: SessionHandle,
+  executionId: ExecutionId,
+  executionFailure?: InBandExecutionFailure,
+): Promise<void> {
+  if (!ownsExecutionLease(executionId)) return;
+  try {
+    await releaseExecutionLeaseAfterArtifacts(session, executionId);
+  } catch (releaseError) {
+    if (!executionFailure) throw releaseError;
+    logger.warn(
+      LOG_CHANNEL,
+      `Failed to persist final artifacts for failed subagent ${executionId}: ${toErrorMessage(releaseError)}`,
+      {
+        data: {
+          executionError: executionFailure.error,
+          releaseError,
+        },
+      },
+    );
+  }
+}
+
 function stableAttemptExecutionId(
   logicalExecutionId: ExecutionId,
   attempt: number,
@@ -706,6 +734,7 @@ export async function executeStableSubagentInBand(
         `Prepared subagent ${executionId} changed its parent execution.`,
       );
     }
+    let executionFailure: InBandExecutionFailure | undefined;
     try {
       const completed = await executeInBand(
         prepared,
@@ -719,14 +748,14 @@ export async function executeStableSubagentInBand(
       };
     } catch (error) {
       markOwnedExecutionLeaseUndurable(executionId);
+      executionFailure = { error };
       throw error;
     } finally {
-      if (ownsExecutionLease(executionId)) {
-        await releaseExecutionLeaseAfterArtifacts(
-          prepared.session,
-          executionId,
-        );
-      }
+      await releaseInBandExecutionLease(
+        prepared.session,
+        executionId,
+        executionFailure,
+      );
     }
   });
 }
@@ -736,6 +765,7 @@ export async function executeSubagentForDeliveryInBand(
   options: InBandSubagentDeliveryOptions,
 ): Promise<InBandSubagentDeliveryResult> {
   const executionId = generateExecutionId() as ExecutionId;
+  let executionFailure: InBandExecutionFailure | undefined;
   try {
     const completed = await executeInBand(
       options,
@@ -752,10 +782,13 @@ export async function executeSubagentForDeliveryInBand(
     };
   } catch (error) {
     markOwnedExecutionLeaseUndurable(executionId);
+    executionFailure = { error };
     throw error;
   } finally {
-    if (ownsExecutionLease(executionId)) {
-      await releaseExecutionLeaseAfterArtifacts(options.session, executionId);
-    }
+    await releaseInBandExecutionLease(
+      options.session,
+      executionId,
+      executionFailure,
+    );
   }
 }

@@ -42,6 +42,7 @@ export interface ProgressStreamLifecycleHarnessOptions {
   locallyOwnedStreams?: StreamTabId[];
   visibleStreams?: StreamTabId[];
   protectedStreams?: StreamTabId[];
+  failedStreams?: StreamTabId[];
   releaseProtectedOnWaitStreams?: StreamTabId[];
 }
 
@@ -63,6 +64,7 @@ export function createProgressStreamLifecycleHarness(
   const inFlightStreams = new Set(options.inFlightStreams ?? []);
   const locallyOwnedStreams = new Set(options.locallyOwnedStreams ?? []);
   const protectedStreams = new Set(options.protectedStreams ?? []);
+  const failedStreams = new Set(options.failedStreams ?? []);
   const releaseProtectedOnWaitStreams = new Set(
     options.releaseProtectedOnWaitStreams ?? [],
   );
@@ -85,17 +87,23 @@ export function createProgressStreamLifecycleHarness(
     },
     clearStream: async (stream) => {
       recorder.record('clearStream', stream);
-      if (protectedStreams.has(stream)) return false;
+      if (protectedStreams.has(stream)) return 'active';
+      if (failedStreams.has(stream)) return 'failed';
       streams = streams.filter((candidate) => candidate !== stream);
       if (activeStream === stream) {
         activeStream = streams[0] ?? '';
       }
-      return true;
+      return 'deleted';
     },
     clearAll: async () => {
-      streams = streams.filter((stream) => protectedStreams.has(stream));
+      streams = streams.filter(
+        (stream) => protectedStreams.has(stream) || failedStreams.has(stream),
+      );
       activeStream = streams[0] ?? '';
-      return { active: new Set(protectedStreams), failed: new Set() };
+      return {
+        active: new Set(protectedStreams),
+        failed: new Set(failedStreams),
+      };
     },
   };
   const host: ProgressStreamLifecycleHost = {

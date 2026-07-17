@@ -3,7 +3,10 @@ import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 
 // Local imports - shared
 import type { StreamTabId } from '@shared/schemas';
-import type { DeleteAllStreamsResult } from './backend/state/SessionStores';
+import type {
+  DeleteAllStreamsResult,
+  DeleteStreamResult,
+} from './backend/state/SessionStores';
 
 export interface ProgressStreamLifecycleState {
   getActiveStream(): StreamTabId | '';
@@ -13,7 +16,7 @@ export interface ProgressStreamLifecycleState {
   getStreamIds(): StreamTabId[];
   pickValidActiveStream(availableStreams: StreamTabId[]): StreamTabId | '';
   waitForOwnedExecutionRelease(stream: StreamTabId): Promise<void>;
-  clearStream(stream: StreamTabId): Promise<boolean>;
+  clearStream(stream: StreamTabId): Promise<DeleteStreamResult>;
   clearAll(): Promise<DeleteAllStreamsResult>;
 }
 
@@ -57,8 +60,13 @@ export class ProgressStreamLifecycleController {
     const hasStream =
       this.deps.state.hasStream(stream) || this.deps.state.hasTaskState(stream);
     if (!hasStream) {
-      const deleted = await this.deps.state.clearStream(stream);
-      if (!deleted) await this.deps.host.notifyDeletionRetained(1);
+      const deletion = await this.deps.state.clearStream(stream);
+      if (deletion !== 'deleted') {
+        await this.deps.host.notifyDeletionRetained(
+          deletion === 'active' ? 1 : 0,
+          deletion === 'failed' ? 1 : 0,
+        );
+      }
       return;
     }
 
@@ -74,10 +82,13 @@ export class ProgressStreamLifecycleController {
     if (ownedLocally)
       await this.deps.state.waitForOwnedExecutionRelease(stream);
 
-    const deleted = await this.deps.state.clearStream(stream);
-    if (!deleted) {
+    const deletion = await this.deps.state.clearStream(stream);
+    if (deletion !== 'deleted') {
       this.deps.host.rebuildRenderedStreams({ forceRebuild: true });
-      await this.deps.host.notifyDeletionRetained(1);
+      await this.deps.host.notifyDeletionRetained(
+        deletion === 'active' ? 1 : 0,
+        deletion === 'failed' ? 1 : 0,
+      );
       return;
     }
     this.deps.host.cleanupDeletedStream(stream);

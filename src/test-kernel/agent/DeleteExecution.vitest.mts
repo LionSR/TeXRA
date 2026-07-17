@@ -70,47 +70,34 @@ describe('deleteExecution', () => {
     expect(mocks.clear).toHaveBeenCalledTimes(1);
   });
 
-  it('removes execution storage before adjacent state', async () => {
+  it('runs required cleanup before removing execution storage', async () => {
     mocks.exists.mockResolvedValue(true);
     mocks.clear.mockResolvedValue(undefined);
-    const afterDelete = vi.fn(async () => {
-      expect(mocks.clear).toHaveBeenCalledOnce();
+    const beforeDelete = vi.fn(async () => {
+      expect(mocks.clear).not.toHaveBeenCalled();
     });
 
     await expect(
-      deleteExecution('a73039a36eca' as ExecutionId, { afterDelete }),
+      deleteExecution('a73039a36ec8' as ExecutionId, { beforeDelete }),
     ).resolves.toEqual({
       status: 'deleted',
-      executionId: 'a73039a36eca',
+      executionId: 'a73039a36ec8',
     });
-    expect(afterDelete).toHaveBeenCalledOnce();
+    expect(beforeDelete).toHaveBeenCalledOnce();
+    expect(mocks.clear).toHaveBeenCalledOnce();
   });
 
-  it('leaves adjacent state untouched when execution deletion fails', async () => {
-    mocks.exists.mockResolvedValue(true);
-    mocks.clear.mockRejectedValue(new Error('permission denied'));
-    const afterDelete = vi.fn();
-
-    await expect(
-      deleteExecution('a73039a36ecb' as ExecutionId, { afterDelete }),
-    ).rejects.toThrow('permission denied');
-    expect(afterDelete).not.toHaveBeenCalled();
-  });
-
-  it('reports adjacent cleanup failure after execution deletion succeeds', async () => {
+  it('preserves execution storage when required cleanup fails', async () => {
     mocks.exists.mockResolvedValue(true);
     mocks.clear.mockResolvedValue(undefined);
 
     await expect(
-      deleteExecution('a73039a36ecc' as ExecutionId, {
-        afterDelete: async () => {
+      deleteExecution('a73039a36ec7' as ExecutionId, {
+        beforeDelete: async () => {
           throw new Error('sidecar cleanup failed');
         },
       }),
-    ).resolves.toEqual({
-      status: 'deleted',
-      executionId: 'a73039a36ecc',
-      adjacentCleanupFailure: 'sidecar cleanup failed',
-    });
+    ).rejects.toThrow('sidecar cleanup failed');
+    expect(mocks.clear).not.toHaveBeenCalled();
   });
 });

@@ -1515,6 +1515,38 @@ describe('DesktopProgressBridge', () => {
     });
   });
 
+  it('resyncs a stream retained after durable cleanup fails', async () => {
+    const stream = 'retained-stream' as StreamTabId;
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages, {
+      canonicalStreamIds: [stream],
+      configureProgressSnapshotStore: (store) => {
+        vi.spyOn(store, 'stageDeleteStream').mockRejectedValueOnce(
+          new Error('snapshot directory is locked'),
+        );
+      },
+    });
+    emitSessionFact(bridge, 'setActiveStream', {
+      streamId: stream,
+      agentCategory: AgentCategory.Workflow,
+    });
+    await settleProgressEvents();
+    messages.length = 0;
+
+    await bridge.deleteStream(stream);
+    await settleProgressEvents();
+
+    expect(
+      progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(-1),
+    ).toMatchObject({ activeStream: stream });
+    expect(
+      progressMessages(messages, PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT),
+    ).toContainEqual(expect.objectContaining({ stream }));
+    expect(
+      progressMessages(messages, PROGRESS_VIEW_COMMANDS.DELETE_STREAM),
+    ).toEqual([]);
+  });
+
   it('cancels a pending plan approval instead of hanging when its stream is deleted', async () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
@@ -1736,6 +1768,38 @@ describe('DesktopProgressBridge', () => {
       streamStates: {},
     });
     expect(cancel).toHaveBeenCalledWith({ cause: 'All streams deleted.' });
+  });
+
+  it('syncs an inactive stream retained by bulk deletion', async () => {
+    const deletedStream = 'deleted-stream' as StreamTabId;
+    const retainedStream = 'retained-stream' as StreamTabId;
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages, {
+      canonicalStreamIds: [deletedStream, retainedStream],
+      configureProgressSnapshotStore: (store) => {
+        const stageSnapshotDelete = store.stageDeleteStream.bind(store);
+        vi.spyOn(store, 'stageDeleteStream').mockImplementation(
+          async (stream) => {
+            if (stream === retainedStream) {
+              throw new Error('snapshot directory is locked');
+            }
+            return stageSnapshotDelete(stream);
+          },
+        );
+      },
+    });
+    bridge.setActiveStream(deletedStream);
+    messages.length = 0;
+
+    await bridge.deleteAllStreams();
+    await settleProgressEvents();
+
+    expect(
+      progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(-1),
+    ).toMatchObject({ activeStream: retainedStream });
+    expect(
+      progressMessages(messages, PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT),
+    ).toContainEqual(expect.objectContaining({ stream: retainedStream }));
   });
 
   it('cancels a pending bash approval instead of hanging when all streams are deleted', async () => {

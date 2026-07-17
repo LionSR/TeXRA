@@ -25,6 +25,11 @@ import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 
 /** Root directory (relative to the platform storage root) for per-stream sidecar data. */
 export const STREAM_DATA_DIR = WORKSPACE_STORAGE_LAYOUT.streamData;
+/**
+ * Reversible staging area for snapshot directories while transcript deletion
+ * decides whether a stream removal commits.
+ */
+export const STREAM_DATA_DELETION_DIR = `${STREAM_DATA_DIR}.deleting`;
 
 /**
  * Per-category file keys within a stream's `streamData/{id}/` directory.
@@ -78,4 +83,9 @@ export function decodeStreamId(encoded: string): string | undefined {
 /** Build the relative directory path for a stream's sidecar data: `streamData/{encoded}`. */
 export function streamDataDir(streamId: string): string {
   return path.join(STREAM_DATA_DIR, encodeStreamId(streamId));
+}
+
+/** Build the reversible staging path for one stream's snapshot directory. */
+export function stagedStreamDataDir(streamId: string): string {
+  return path.join(STREAM_DATA_DELETION_DIR, encodeStreamId(streamId));
 }
