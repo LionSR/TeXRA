@@ -2002,7 +2002,7 @@
     "deepmerge": "^4.3.1",
     "diff-match-patch": "^1.0.5",
     "dotenv": "^17.4.2",
-    "execa": "^9.6.1",
+    "execa": "^10.0.0",
     "fast-json-stable-stringify": "^2.1.0",
     "fast-xml-parser": "^5.10.1",
     "fs-extra": "^11.3.6",

@@ -7,6 +7,7 @@ import {
   type Options,
   type ResultPromise,
   ExecaError,
+  type StdoutStderrOption,
   type SyncOptions,
 } from 'execa';
 import { quote as shellQuote } from 'shell-quote';
@@ -23,12 +24,12 @@ import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
 const CHANNEL = 'execUtils';
 logger.initialize(CHANNEL);
 
-/**
- * execa's accepted `encoding` values, derived from its own option type.
- * Narrower than Node's BufferEncoding, so callers passing BufferEncoding are
- * normalized through {@link normalizeEncoding}.
- */
-type ExecaEncodingOption = NonNullable<Options['encoding']>;
+type ExecaTextEncoding = Extract<
+  NonNullable<Options['encoding']>,
+  'utf8' | 'utf16le'
+>;
+type ExecEncoding = ExecaTextEncoding | 'utf-8';
+type ExecOutput = Extract<StdoutStderrOption, string>;
 
 const MAX_OUTPUT_LENGTH = 150;
 const FORCE_KILL_DELAY_MS = 5_000;
@@ -38,9 +39,8 @@ function normalizeOutput(text: string | null | undefined): string | null {
 }
 
 /** Normalize Node's 'utf-8' alias to execa's 'utf8' encoding option. */
-function normalizeEncoding(encoding?: BufferEncoding): ExecaEncodingOption {
-  const raw = encoding ?? 'utf8';
-  return raw.toLowerCase() === 'utf-8' ? 'utf8' : (raw as ExecaEncodingOption);
+function normalizeEncoding(encoding: ExecEncoding = 'utf8'): ExecaTextEncoding {
+  return encoding === 'utf-8' ? 'utf8' : encoding;
 }
 
 function commandEnv(
@@ -166,7 +166,7 @@ export async function executeCommand(
   command: string | string[],
   options: {
     outputFile?: string;
-    encoding?: BufferEncoding;
+    encoding?: ExecEncoding;
     channel?: string;
     truncate?: boolean;
     env?: Record<string, string>;
@@ -181,8 +181,8 @@ export async function executeCommand(
     onPid?: (pid: number) => void;
     /** Set to false to skip buffering stdout/stderr in memory (use with onStdout/onStderr). */
     buffer?: boolean;
-    stdout?: Options['stdout'];
-    stderr?: Options['stderr'];
+    stdout?: ExecOutput;
+    stderr?: ExecOutput;
     /** Abort signal used to terminate the subprocess and any shell children. */
     signal?: AbortSignal;
     /** Skip wrapper logging (pre-platform CLI callers whose sink is the console). */
@@ -409,7 +409,7 @@ export async function executeCommand(
 export function executeCommandSync(
   command: readonly [string, ...string[]],
   options: {
-    encoding?: BufferEncoding;
+    encoding?: ExecEncoding;
     channel?: string;
     truncate?: boolean;
     env?: Record<string, string>;
