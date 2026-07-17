@@ -297,13 +297,14 @@ interface StreamRecord {
   writeKv: KVStore | undefined;
 }
 
-type StagedDeletionPhase =
-  'live' | 'transitioning' | 'staged' | 'unavailable' | 'replaying-recovery';
+type StagedDeletionPhase = 'live' | 'transitioning' | 'staged' | 'unavailable';
 
 interface StagedDeletionState {
   writes: Map<string, unknown>;
   /** Namespace authority and whether failed ownership may mirror writes. */
   phase: StagedDeletionPhase;
+  /** One recovery owns namespace repair and buffered-write replay at a time. */
+  recovery?: Promise<void>;
   settled: Promise<void>;
   resolveSettled: () => void;
 }
@@ -979,33 +980,25 @@ export class StreamSnapshotStore {
 
         const stagedDir = stagedStreamDataDir(stream);
         const liveDir = streamDataDir(stream);
-        const hasLiveData = await storagePathExists(liveDir);
         const failedWrites = this.failedRollbacks.get(stream);
-        const stagedIsAuthoritative =
-          failedWrites !== undefined && failedWrites.phase !== 'live';
-        if (!hasLiveData || stagedIsAuthoritative) {
-          if (failedWrites) failedWrites.phase = 'staged';
-          if (hasLiveData) {
-            // A failed rollback owner makes the staged tree the complete base;
-            // its buffered writes are the newer delta applied below.
-            await StorageFS.delete(liveDir, { recursive: true });
-          }
+        if (failedWrites) {
+          const hasLiveData = await storagePathExists(liveDir);
+          const liveWasAuthoritative =
+            failedWrites.phase === 'live' && hasLiveData;
+          await this.recoverFailedRollback(stream, failedWrites);
+          if (liveWasAuthoritative) discarded.push(stream);
+          else if (liveStreams.has(stream)) restored.push(stream);
+          else pendingCleanup.push(stream);
+          return;
+        }
+        const hasLiveData = await storagePathExists(liveDir);
+        if (!hasLiveData) {
           await StorageFS.ensureDir(STREAM_DATA_DIR);
-          if (failedWrites) failedWrites.phase = 'transitioning';
           await StorageFS.rename(stagedDir, liveDir);
           const record = this.records.get(stream);
           if (record) {
             record.kv = undefined;
             record.writeKv = undefined;
-          }
-          if (failedWrites) {
-            failedWrites.phase = 'live';
-            if (liveStreams.has(stream)) {
-              await this.replayFailedRollbackWrites(stream, failedWrites);
-            } else {
-              failedWrites.writes.clear();
-              this.releaseFailedRollbackOwnership(stream, failedWrites);
-            }
           }
           if (liveStreams.has(stream)) restored.push(stream);
           else pendingCleanup.push(stream);
@@ -1013,15 +1006,6 @@ export class StreamSnapshotStore {
         }
 
         await StorageFS.delete(stagedDir, { recursive: true });
-        if (failedWrites) {
-          failedWrites.phase = 'live';
-          if (liveStreams.has(stream)) {
-            await this.replayFailedRollbackWrites(stream, failedWrites);
-          } else {
-            failedWrites.writes.clear();
-            this.releaseFailedRollbackOwnership(stream, failedWrites);
-          }
-        }
         discarded.push(stream);
       },
       { concurrency: SEED_IO_CONCURRENCY },
@@ -1030,7 +1014,7 @@ export class StreamSnapshotStore {
       [...this.failedRollbacks],
       async ([stream, state]) => {
         if (!liveStreams.has(stream)) return;
-        await this.replayFailedRollbackWrites(stream, state);
+        await this.recoverFailedRollback(stream, state);
       },
       { concurrency: SEED_IO_CONCURRENCY },
     );
@@ -1058,26 +1042,75 @@ export class StreamSnapshotStore {
     }
   }
 
-  private async replayFailedRollbackWrites(
+  /** Drain a failed owner's buffer and release it without an await-sized gap. */
+  private async drainFailedRollbackWrites(
     stream: StreamTabId,
     state: StagedDeletionState,
   ): Promise<void> {
-    if (state.phase !== 'live') return;
-    await this.replayStagedWrites(stream, state);
-    this.releaseFailedRollbackOwnership(stream, state);
+    while (true) {
+      await this.replayStagedWrites(stream, state);
+      if (state.writes.size > 0) continue;
+      if (this.failedRollbacks.get(stream) === state) {
+        this.failedRollbacks.delete(stream);
+      }
+      return;
+    }
   }
 
-  private releaseFailedRollbackOwnership(
+  /**
+   * Repair a failed rollback exactly once, then release its write buffer only
+   * after the namespace is live and no buffered values remain.
+   */
+  private recoverFailedRollback(
     stream: StreamTabId,
-    state: StagedDeletionState | undefined,
-  ): void {
-    if (
-      state &&
-      state.writes.size === 0 &&
-      this.failedRollbacks.get(stream) === state
-    ) {
-      this.failedRollbacks.delete(stream);
-    }
+    state: StagedDeletionState,
+  ): Promise<void> {
+    if (this.failedRollbacks.get(stream) !== state) return Promise.resolve();
+    if (state.recovery) return state.recovery;
+
+    const recovery = (async () => {
+      if (canUseStreamDataDir(stream)) {
+        const stagedDir = stagedStreamDataDir(stream);
+        const liveDir = streamDataDir(stream);
+        const liveWasAuthoritative = state.phase === 'live';
+        const [hasLiveData, hasStagedData] = await Promise.all([
+          storagePathExists(liveDir),
+          storagePathExists(stagedDir),
+        ]);
+
+        if (liveWasAuthoritative && hasLiveData) {
+          if (hasStagedData) {
+            await StorageFS.delete(stagedDir, { recursive: true });
+          }
+        } else if (hasStagedData) {
+          state.phase = 'staged';
+          if (hasLiveData) {
+            await StorageFS.delete(liveDir, { recursive: true });
+          }
+          await StorageFS.ensureDir(STREAM_DATA_DIR);
+          state.phase = 'transitioning';
+          await StorageFS.rename(stagedDir, liveDir);
+          const record = this.records.get(stream);
+          if (record) {
+            record.kv = undefined;
+            record.writeKv = undefined;
+          }
+        } else if (!hasLiveData && !liveWasAuthoritative) {
+          state.phase = 'unavailable';
+          throw new Error(
+            `Stream ${stream} has no snapshot namespace to recover`,
+          );
+        }
+      }
+
+      state.phase = 'live';
+      await this.drainFailedRollbackWrites(stream, state);
+    })();
+    const trackedRecovery = recovery.finally(() => {
+      if (state.recovery === trackedRecovery) state.recovery = undefined;
+    });
+    state.recovery = trackedRecovery;
+    return trackedRecovery;
   }
 
   /** Release ownership of a stream after its staged transaction finishes. */
@@ -1104,6 +1137,11 @@ export class StreamSnapshotStore {
       await activeDeletion.settled;
       return this.stageDeleteStream(stream);
     }
+    const failedRollback = this.failedRollbacks.get(stream);
+    if (failedRollback) {
+      await this.recoverFailedRollback(stream, failedRollback);
+      return this.stageDeleteStream(stream);
+    }
     let resolveSettled = () => {};
     const settlement = new Promise<void>((resolve) => {
       resolveSettled = resolve;
@@ -1117,34 +1155,6 @@ export class StreamSnapshotStore {
     this.stagedDeletions.set(stream, state);
 
     try {
-      const failedState = this.failedRollbacks.get(stream);
-      if (failedState) {
-        // Transfer ownership before the first await so new writes cannot slip
-        // between the failed transaction and its retry.
-        for (const [key, value] of failedState.writes) {
-          if (!state.writes.has(key)) state.writes.set(key, value);
-        }
-        this.failedRollbacks.delete(stream);
-        state.phase = failedState.phase;
-        const stagedDir = stagedStreamDataDir(stream);
-        const liveDir = streamDataDir(stream);
-        if (await storagePathExists(stagedDir)) {
-          state.phase = 'staged';
-          if (await storagePathExists(liveDir)) {
-            // Writes after the failure stayed buffered, so the staged tree is
-            // the last complete on-disk snapshot and remains authoritative.
-            await StorageFS.delete(liveDir, { recursive: true });
-          }
-          state.phase = 'transitioning';
-          await StorageFS.rename(stagedDir, liveDir);
-          state.phase = 'live';
-        } else {
-          state.phase = 'live';
-        }
-        state.phase = 'replaying-recovery';
-        await this.replayStagedWrites(stream, state);
-        state.phase = 'live';
-      }
       if (canUseStreamDataDir(stream)) {
         const hasStagedData = await storagePathExists(
           stagedStreamDataDir(stream),
@@ -1190,7 +1200,6 @@ export class StreamSnapshotStore {
         commit: async () => {
           if (settled) return;
           settled = true;
-          this.releaseFailedRollbackOwnership(stream, state);
           this.evict(stream);
           try {
             if (state.phase === 'staged' && stagedDir) {
@@ -1219,7 +1228,27 @@ export class StreamSnapshotStore {
             }
             await this.replayStagedWrites(stream, state);
           } catch (error) {
+            const failures: unknown[] = [error];
+            if (state.phase !== 'live' && canUseStreamDataDir(stream)) {
+              try {
+                const [hasLiveData, hasStagedData] = await Promise.all([
+                  storagePathExists(streamDataDir(stream)),
+                  storagePathExists(stagedStreamDataDir(stream)),
+                ]);
+                if (hasStagedData) state.phase = 'staged';
+                else if (hasLiveData) state.phase = 'live';
+                else state.phase = 'unavailable';
+              } catch (recoveryError) {
+                failures.push(recoveryError);
+              }
+            }
             this.failedRollbacks.set(stream, state);
+            if (failures.length > 1) {
+              throw new AggregateError(
+                failures,
+                `Failed to roll back snapshot deletion for ${stream} and inspect its namespace`,
+              );
+            }
             throw error;
           } finally {
             this.settleStagedDeletion(stream, state);
@@ -1228,29 +1257,12 @@ export class StreamSnapshotStore {
       };
     } catch (error) {
       const failures: unknown[] = [error];
+      this.failedRollbacks.set(stream, state);
       try {
-        if (state.phase === 'replaying-recovery') {
-          state.phase = 'live';
-          this.failedRollbacks.set(stream, state);
-        } else {
-          if (state.phase !== 'live' && canUseStreamDataDir(stream)) {
-            state.phase = 'transitioning';
-            const [hasLiveData, hasStagedData] = await Promise.all([
-              storagePathExists(streamDataDir(stream)),
-              storagePathExists(stagedStreamDataDir(stream)),
-            ]);
-            if (hasStagedData) state.phase = 'staged';
-            else if (hasLiveData) state.phase = 'live';
-            else state.phase = 'unavailable';
-          }
-          if (state.phase === 'live') {
-            await this.replayStagedWrites(stream, state);
-          } else {
-            this.failedRollbacks.set(stream, state);
-          }
+        if (state.phase === 'live') {
+          await this.drainFailedRollbackWrites(stream, state);
         }
       } catch (recoveryError) {
-        this.failedRollbacks.set(stream, state);
         failures.push(recoveryError);
       } finally {
         this.settleStagedDeletion(stream, state);
@@ -1547,7 +1559,7 @@ export class StreamSnapshotStore {
     const failedRollback = this.failedRollbacks.get(stream);
     if (failedRollback) {
       failedRollback.writes.set(key, value);
-      if (failedRollback.phase === 'live') {
+      if (failedRollback.phase === 'live' && !failedRollback.recovery) {
         void this.queueWrite(stream, key, value)
           .then(() => {
             if (
@@ -1555,7 +1567,9 @@ export class StreamSnapshotStore {
               failedRollback.writes.get(key) === value
             ) {
               failedRollback.writes.delete(key);
-              this.releaseFailedRollbackOwnership(stream, failedRollback);
+              if (failedRollback.writes.size === 0) {
+                this.failedRollbacks.delete(stream);
+              }
             }
           })
           .catch((err: unknown) =>
@@ -1634,7 +1648,7 @@ export class StreamSnapshotStore {
     );
     await pMap(
       [...this.failedRollbacks],
-      ([stream, state]) => this.replayFailedRollbackWrites(stream, state),
+      ([stream, state]) => this.recoverFailedRollback(stream, state),
       { concurrency: SEED_IO_CONCURRENCY },
     );
     await Promise.all(
