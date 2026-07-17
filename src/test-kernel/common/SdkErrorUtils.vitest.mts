@@ -9,6 +9,7 @@ import { ApiError as GoogleApiError } from '@google/genai';
 import {
   APIConnectionError as OpenAIAPIConnectionError,
   APIConnectionTimeoutError as OpenAIAPIConnectionTimeoutError,
+  APIError as OpenAIAPIError,
   APIUserAbortError as OpenAIAPIUserAbortError,
   AuthenticationError as OpenAIAuthenticationError,
   BadRequestError as OpenAIBadRequestError,
@@ -333,6 +334,40 @@ describe('formatProviderHttpError', () => {
     expect(formatted.userRetryable).toBe(true);
   });
 
+  it('infers a retryable 500 from a status-less OpenAI server_error body', () => {
+    const body = {
+      type: 'server_error',
+      code: 'server_error',
+      message:
+        'An error occurred while processing your request. You can retry your request, or contact us through our help center at help.openai.com if the error persists. Please include the request ID 988f71d8-3453-46f1-a466-529d2a967244 in your message.',
+      param: null,
+    };
+    const error = new OpenAIAPIError(undefined, body, body.message, undefined);
+    tagOpenAISdkError(error, 'openai');
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted.provider).toBe('openai');
+    expect(formatted.statusCode).toBe(500);
+    expect(formatted.userRetryable).toBe(true);
+    expect(formatted.rawErrorBody).toEqual(body);
+  });
+
+  it('keeps unknown status-less OpenAI API errors non-retryable', () => {
+    const body = {
+      type: 'unexpected_error',
+      code: 'unexpected_error',
+      message: 'Unexpected provider failure.',
+    };
+    const error = new OpenAIAPIError(undefined, body, body.message, undefined);
+    tagOpenAISdkError(error, 'openai');
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted.statusCode).toBeUndefined();
+    expect(formatted.userRetryable).toBe(false);
+  });
+
   it('formats tagged OpenAI HTTP errors with status metadata', () => {
     const error = new OpenAIBadRequestError(
       400,
@@ -412,7 +447,7 @@ describe('formatProviderHttpError', () => {
     expect(formatted.userRetryable).toBe(true);
   });
 
-  it('keeps provider-attributed background failures retryable without a status code', () => {
+  it('infers a retryable status for provider-attributed background server errors', () => {
     const error = new Error('background response failed') as Error & {
       error: unknown;
       provider: string;
@@ -426,7 +461,7 @@ describe('formatProviderHttpError', () => {
     const formatted = formatProviderHttpError(error);
 
     expect(formatted.provider).toBe('openai');
-    expect(formatted.statusCode).toBeUndefined();
+    expect(formatted.statusCode).toBe(500);
     expect(formatted.exhaustionReason).toBeUndefined();
     expect(formatted.userRetryable).toBe(true);
   });
