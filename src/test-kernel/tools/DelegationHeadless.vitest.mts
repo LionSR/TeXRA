@@ -634,6 +634,26 @@ describe('headless delegation', () => {
     expect(mocks.writeReport).not.toHaveBeenCalled();
   });
 
+  it('preserves the child failure when final lease cleanup also fails', async () => {
+    const childFailure = new Error('review model failed');
+    mocks.executeAgent.mockRejectedValueOnce(childFailure);
+    mocks.releaseOwnedExecutionLease.mockRejectedValueOnce(
+      new Error('artifact flush failed'),
+    );
+
+    await expect(runInBand(delegationOptions())).rejects.toBe(childFailure);
+  });
+
+  it('surfaces final lease cleanup failure after a successful child', async () => {
+    mocks.releaseOwnedExecutionLease.mockRejectedValueOnce(
+      new Error('artifact flush failed'),
+    );
+
+    await expect(runInBand(delegationOptions())).rejects.toThrow(
+      'artifact flush failed',
+    );
+  });
+
   it('preserves the child failure when its failure manifest cannot be written', async () => {
     mocks.executeAgent.mockRejectedValueOnce(new Error('review model failed'));
     mocks.writeResultMeta.mockRejectedValueOnce(new Error('storage offline'));
