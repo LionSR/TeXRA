@@ -125,6 +125,10 @@ export function getMiniMaxUseChina(): boolean {
   return regionSet('minimax') ?? false;
 }
 
+export function getMoonshotUseChina(): boolean {
+  return regionSet('moonshot') ?? true;
+}
+
 export function getGLMUseChina(): boolean {
   return regionSet('glm') ?? true;
 }
