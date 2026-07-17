@@ -105,8 +105,8 @@
     "zod-v3-to-v4": "^1.21.3"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.211",
-    "@anthropic-ai/sdk": "^0.111.0",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.212",
+    "@anthropic-ai/sdk": "^0.112.1",
     "@awesome.me/webawesome": "^3.10.0",
     "@cantoo/pdf-lib": "^2.7.4",
     "@fortawesome/free-solid-svg-icons": "^7.3.1",
@@ -120,7 +120,7 @@
     "@octokit/request": "^10.0.11",
     "@octokit/request-error": "^7.1.0",
     "@openai/codex-sdk": "^0.144.5",
-    "@openrouter/sdk": "^0.13.58",
+    "@openrouter/sdk": "^0.13.60",
     "@supabase/supabase-js": "2.110.7",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
@@ -155,7 +155,7 @@
     "keyv": "^5.6.0",
     "ky": "^2.0.2",
     "lit": "^3.3.3",
-    "llm-zoo": "^1.18.0",
+    "llm-zoo": "^1.19.1",
     "lru-cache": "^11.5.2",
     "mark.js": "^8.11.1",
     "markdown-it": "^14.3.0",
