@@ -10,9 +10,13 @@ import {
   resetRelayTokenTierCacheForTests,
 } from '@auth/relayToken';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import * as codexAuth from '@auth/codex';
+import * as codexSubscription from '@model/codexSubscriptionActive';
 import {
   __resetSetupPlatformForTests,
+  createDefaultSetupPlatform,
   getSetupPlatform,
+  setSetupPlatform,
 } from '@tools/setup/platform';
 
 setupPlatform({
@@ -32,12 +36,14 @@ afterEach(() => {
 
 beforeEach(() => {
   __resetSetupPlatformForTests();
+  setSetupPlatform(createDefaultSetupPlatform('extension'));
 });
 
 describe('default setup platform', () => {
   it('derives credential and configuration operations from platform ports', async () => {
     const setup = getSetupPlatform();
 
+    expect(setup.host).toBe('extension');
     expect(setup.commands).toBeUndefined();
     expect(setup.extensions).toBeUndefined();
     expect(setup.terminal).toBeUndefined();
@@ -138,5 +144,35 @@ describe('default setup platform', () => {
       authenticated: false,
       remoteAgentCatalogAvailable: false,
     });
+  });
+
+  it('does not expose ChatGPT account identifiers through setup tools', async () => {
+    vi.spyOn(codexAuth, 'getCodexStatus').mockResolvedValue({
+      signedIn: true,
+      email: 'researcher@example.com',
+      accountId: 'account-private-id',
+    });
+
+    const status =
+      await getSetupPlatform().modelAccess.getChatGptSubscriptionStatus();
+
+    expect(status.signedIn).toBe(true);
+    expect(status).not.toHaveProperty('account');
+    expect(JSON.stringify(status)).not.toContain('researcher@example.com');
+    expect(JSON.stringify(status)).not.toContain('account-private-id');
+  });
+
+  it('reports ChatGPT as disabled when runtime routing cannot use it', async () => {
+    vi.spyOn(codexAuth, 'getCodexStatus').mockResolvedValue({
+      signedIn: true,
+      email: 'researcher@example.com',
+    });
+    vi.spyOn(codexSubscription, 'isCodexSubscriptionActive').mockResolvedValue(
+      false,
+    );
+
+    await expect(
+      getSetupPlatform().modelAccess.getChatGptSubscriptionStatus(),
+    ).resolves.toEqual({ signedIn: true, enabled: false });
   });
 });

@@ -59,10 +59,10 @@ function shouldEmit(level: LogLevel, messageType: MessageType): boolean {
 
 /**
  * Redact secrets from a tool's recorded input before it is persisted. The
- * set_api_key tool masks its own user-facing result, but tool.start/tool.end can
- * carry the raw input — which would write the cleartext provider key to the
- * on-disk transcript (and reload it via history/restorable state). Keep this in
- * sync with SetApiKeyTool.name; new secret-bearing tool inputs must extend this
+ * Older sessions may replay `set_api_key` events whose tool.start/tool.end
+ * payload carries the raw input. The tool is no longer registered, but this
+ * redaction remains so imported or resumed history cannot write a legacy key
+ * into the current transcript. New secret-bearing tool inputs must extend this
  * guard.
  */
 function redactToolInputForLog(toolName: string, input: unknown): unknown {

@@ -12,9 +12,14 @@ import {
 import { triggerAppCtrlC } from '@cli/chat/tui/appInteractionPolicy';
 import {
   InputBar,
+  shouldPersistInputHistory,
   submitSlashCommandWhenReady,
   type InputBarHandle,
 } from '@cli/chat/tui/panes/InputBar';
+import {
+  registerSlashCommand,
+  unregisterSlashCommand,
+} from '@cli/chat/tui/commands/slashRegistry';
 
 const clipboardMock = vi.hoisted(() => ({
   attachClipboardImage: vi.fn(),
@@ -105,6 +110,24 @@ beforeEach(() => clipboardMock.attachClipboardImage.mockReset());
 afterEach(() => vi.clearAllMocks());
 
 describe('InputBar slash submit', () => {
+  it('does not persist commands whose input may contain a credential', () => {
+    registerSlashCommand({
+      name: 'key',
+      aliases: ['keys'],
+      description: 'Add an API key',
+      redactInput: true,
+    });
+
+    try {
+      expect(shouldPersistInputHistory('/key private-value')).toBe(false);
+      expect(shouldPersistInputHistory('/keys private-value')).toBe(false);
+      expect(shouldPersistInputHistory('/model openai')).toBe(true);
+      expect(shouldPersistInputHistory('ordinary message')).toBe(true);
+    } finally {
+      unregisterSlashCommand('key');
+    }
+  });
+
   it('waits for pending image pastes and submits the latest draft', async () => {
     const imagePasteQueue = new ImagePasteQueue();
     const paste = deferred();

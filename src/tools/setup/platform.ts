@@ -11,6 +11,7 @@
 // Local imports
 import { platform as currentPlatform } from '@platform/platform';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { getCodexStatus } from '@auth/codex';
 import {
   fetchRelayTokenStatus,
   getConfiguredRelayToken,
@@ -18,19 +19,21 @@ import {
 import type { TerminalRunResult, TerminalRunner } from '@hosts/uiHosts';
 import {
   API_PROVIDERS,
-  apiKeyExists,
   apiKeySecretName,
   hasUsableApiKey,
+  lookupApiKeyOrigin,
+  type ApiKeyOrigin,
   type ApiProvider,
 } from '@model/apiProviders';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
+import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
+import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
+import { AgentCategory } from '@shared/schemas/agent';
 import { resolveGitHubTokenSource } from '@tools/github/githubAuth';
 
 /** Per-provider API key surface. */
 export interface SetupSecretsAdapter {
-  setApiKey(provider: ApiProvider, key: string): Promise<void>;
   deleteApiKey(provider: ApiProvider): Promise<void>;
-  apiKeyExists(provider: ApiProvider): Promise<boolean>;
   /**
    * Like `apiKeyExists` but rejects empty values. A stale
    * `PROVIDER_API_KEY=""` env var is "present" but unusable at launch,
@@ -38,6 +41,8 @@ export interface SetupSecretsAdapter {
    * `apiKeyExists` to avoid misleading the agent (and the user).
    */
   hasUsableApiKey(provider: ApiProvider): Promise<boolean>;
+  /** Whether a usable key comes from TeXRA secrets, the environment, or neither. */
+  apiKeyOrigin(provider: ApiProvider): Promise<ApiKeyOrigin>;
   /**
    * Like `apiKeyExists` but only reports persisted entries — ignores
    * environment-variable-backed keys. Needed by `unset_api_key` so the
@@ -79,6 +84,14 @@ export interface SetupAuthAdapter {
   signIn?: () => Promise<boolean>;
 }
 
+/** Subscription access reported separately from provider API keys. */
+export interface SetupModelAccessAdapter {
+  getChatGptSubscriptionStatus(): Promise<{
+    signedIn: boolean;
+    enabled: boolean;
+  }>;
+}
+
 /** Configuration-value surface. Reads/writes scoped to `texra.*` keys. */
 export interface SetupConfigAdapter {
   /** Read the effective value of a `texra.*` setting. */
@@ -107,10 +120,15 @@ export interface SetupConfigAdapter {
 export type SetupTerminalAdapter = TerminalRunner;
 export type { TerminalRunResult };
 
+export type SetupHost = 'cli' | 'desktop' | 'extension';
+
 /** Aggregated setup platform. */
 export interface SetupPlatform {
+  /** Product surface currently running the shared setup agent. */
+  host: SetupHost;
   secrets: SetupSecretsAdapter;
   auth: SetupAuthAdapter;
+  modelAccess: SetupModelAccessAdapter;
   config: SetupConfigAdapter;
   /** VS Code-only command invocation. */
   commands?: SetupCommandAdapter;
@@ -171,18 +189,17 @@ async function defaultAuthStatus(): Promise<{
  * ports. This is the sole owner of the common setup wiring; hosts add only
  * capabilities that cannot exist outside VS Code.
  */
-export function createDefaultSetupPlatform(): SetupPlatform {
+export function createDefaultSetupPlatform(host: SetupHost): SetupPlatform {
   const services = currentPlatform();
   const { secrets, config } = services;
 
   return {
+    host,
     secrets: {
       providers: API_PROVIDERS,
-      setApiKey: (provider, key) =>
-        secrets.set(apiKeySecretName(provider), key),
       deleteApiKey: (provider) => secrets.delete(apiKeySecretName(provider)),
-      apiKeyExists: (provider) => apiKeyExists(secrets, provider),
       hasUsableApiKey: (provider) => hasUsableApiKey(secrets, provider),
+      apiKeyOrigin: (provider) => lookupApiKeyOrigin(secrets, provider),
       storedApiKeyExists: async (provider) =>
         (await secrets.listStoredKeys()).includes(apiKeySecretName(provider)),
       anyUsableCredentialExists: () => hasUsableSetupCredential(secrets),
@@ -190,6 +207,20 @@ export function createDefaultSetupPlatform(): SetupPlatform {
       listStoredKeys: () => secrets.listStoredKeys(),
     },
     auth: { getStatus: defaultAuthStatus },
+    modelAccess: {
+      getChatGptSubscriptionStatus: async () => {
+        const status = await getCodexStatus();
+        return {
+          signedIn: status.signedIn,
+          enabled:
+            status.signedIn &&
+            (await isCodexSubscriptionActive(
+              CHATGPT_SETUP_MODEL,
+              AgentCategory.ToolUse,
+            )),
+        };
+      },
+    },
     config: {
       get: (key) => {
         assertTexraScopedKey(key);
@@ -214,9 +245,10 @@ export function setSetupPlatform(impl: SetupPlatform): void {
   override = impl;
 }
 
-/** Get host overrides when present, otherwise derive the common default. */
+/** Get the setup platform installed by the active host composition root. */
 export function getSetupPlatform(): SetupPlatform {
-  return override ?? createDefaultSetupPlatform();
+  if (!override) throw new Error('Setup platform has not been initialized.');
+  return override;
 }
 
 /** Test support for exercising the host-neutral default after an override. */

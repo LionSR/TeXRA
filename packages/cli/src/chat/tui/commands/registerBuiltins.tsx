@@ -2,8 +2,11 @@
 
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
+import { saveProviderApiKey } from '@cli/runtime/providerApiKey';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+import type { ApiProvider } from '@model/apiProviders';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
+import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 
 import { ApiModeForm } from '../forms/ApiModeForm';
@@ -14,6 +17,7 @@ import { createCliConfigFormProps } from '../forms/CliConfigForm';
 import { LoginForm, type LoginFormValue } from '../forms/LoginForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
 import { ModelListForm } from '../forms/ModelListForm';
+import { ProviderApiKeyForm } from '../forms/ProviderApiKeyForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
 import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
 import { ToolsListForm } from '../forms/ToolsListForm';
@@ -23,6 +27,7 @@ import {
   sessionMeta,
   setCliSessionModelOverride,
 } from '../state/cliState';
+import { appendLocalAssistantTranscript } from '../state/transcript';
 import { loginFromChat } from './handlers/loginCommands';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 import { openCliSlashCommandForm } from './slashForms';
@@ -33,6 +38,10 @@ type ApprovalPolicySelectHandler = (
 ) => void | Promise<void>;
 type ModelSelectHandler = (value: string) => void | Promise<void>;
 type ApiModeSelectHandler = (value: CliApiMode) => void | Promise<void>;
+type ApiKeySaveHandler = (
+  provider: ApiProvider,
+  key: string,
+) => void | Promise<void>;
 type LoginSelectHandler = (value: LoginFormValue) => void | Promise<void>;
 type MemorySelectHandler = (storagePath: string) => void | Promise<void>;
 type ResumeSelectHandler = (id: ExecutionId) => void | Promise<void>;
@@ -80,6 +89,7 @@ export function registerBuiltinSlashCommands(options?: {
   canSelectModel?: () => boolean;
   getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
   onApiModeSelect?: ApiModeSelectHandler;
+  onApiKeySave?: ApiKeySaveHandler;
   onLoginSelect?: LoginSelectHandler;
   onMemorySelect?: MemorySelectHandler;
   onResumeSelect?: ResumeSelectHandler;
@@ -93,6 +103,12 @@ export function registerBuiltinSlashCommands(options?: {
     options?.onModelSelect ?? setCliSessionModelOverride;
   const onApiModeSelect: ApiModeSelectHandler =
     options?.onApiModeSelect ?? ((apiMode) => patchSessionMeta({ apiMode }));
+  const onApiKeySave: ApiKeySaveHandler =
+    options?.onApiKeySave ??
+    (async (provider, key) => {
+      await saveProviderApiKey(provider, key);
+      patchSessionMeta({ apiMode: 'personal' });
+    });
   const onLoginSelect: LoginSelectHandler =
     options?.onLoginSelect ?? loginFromChat;
   const canSelectAgent = options?.canSelectAgent ?? (() => true);
@@ -163,6 +179,23 @@ export function registerBuiltinSlashCommands(options?: {
           onDone: props.onDone,
           completion: 'beforeAction',
         })}
+        onCancel={() => props.onDone(undefined)}
+      />
+    );
+  }
+
+  function ProviderApiKeyFormAdapter(props: SlashFormProps): React.JSX.Element {
+    return (
+      <ProviderApiKeyForm
+        availableRows={props.availableRows}
+        onSave={(provider, key) => Promise.resolve(onApiKeySave(provider, key))}
+        onDone={(provider) => {
+          const label = PROVIDER_DISPLAY_NAMES[provider] ?? provider;
+          appendLocalAssistantTranscript(
+            `Saved the ${label} API key. Personal API-key access is active.`,
+          );
+          props.onDone(provider);
+        }}
         onCancel={() => props.onDone(undefined)}
       />
     );
@@ -287,6 +320,15 @@ export function registerBuiltinSlashCommands(options?: {
     description: 'Choose included TeXRA access or personal API keys',
     category: 'configuration',
     formComponent: ApiModeFormAdapter,
+  });
+  registerSlashCommand({
+    name: 'key',
+    description: 'Add a provider API key with masked input',
+    aliases: ['keys'],
+    category: 'configuration',
+    formComponent: ProviderApiKeyFormAdapter,
+    formEscapeAction: 'back',
+    redactInput: true,
   });
   registerSlashCommand({
     name: 'subscription',

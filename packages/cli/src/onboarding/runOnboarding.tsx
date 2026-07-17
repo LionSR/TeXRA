@@ -52,6 +52,7 @@ import { type CliApiMode } from '../runtime/apiAccessMode';
 import { chatGptAccountLabel, signInCliChatGpt } from '../runtime/chatgptLogin';
 import { resolveCliStdoutColorEnabled } from '../runtime/cliContext';
 import { hasCliCredentialForApiMode } from '../runtime/credentialStatus';
+import { saveProviderApiKey } from '../runtime/providerApiKey';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { CLI_OAUTH_PROVIDER_ITEMS } from '../runtime/oauthProviderDisplay';
 import { isLikelyRemoteSession } from '../runtime/remoteSession';
@@ -67,7 +68,7 @@ import {
 } from '../runtime/supabaseAuthDeviceCode';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
-import { saveProviderApiKey } from './applyOnboardingResult';
+import { describeSavedKeyLocation } from './onboardingState';
 
 export interface CliOnboardingResult {
   /**
@@ -403,7 +404,8 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
           setSaving(true);
           void (async () => {
             try {
-              const where = await saveProviderApiKey(keyProvider, key);
+              await saveProviderApiKey(keyProvider, key);
+              const where = describeSavedKeyLocation(keyProvider);
               finish({
                 configured: true,
                 declined: false,

@@ -44,6 +44,7 @@ function workspaceRoster(): {
 
 async function clearOnboardingState(): Promise<void> {
   __resetSetupPlatformForTests();
+  setSetupPlatform(createFakeSetupPlatform());
   await platform().workspaceState.update(
     WorkspaceStateKey.ENABLED_AGENTS,
     undefined,

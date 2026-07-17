@@ -26,6 +26,7 @@ import { SlashPalette, slashPaletteOwnsArrows } from '../commands/SlashPalette';
 import { COLOR_BORDER, COLOR_HINT } from '../ui/colors';
 import { POINTER } from '../ui/glyphs';
 import {
+  findSlashCommand,
   matchSlashCommands,
   parseSlashInput,
   prefixSlashCommands,
@@ -65,6 +66,14 @@ export interface InputBarProps {
 
 export interface InputBarHandle {
   readonly discardDraft: () => boolean;
+}
+
+/** Whether a submitted line is safe to retain in persistent input history. */
+export function shouldPersistInputHistory(input: string): boolean {
+  const parsed = parseSlashInput(input);
+  return (
+    parsed === undefined || findSlashCommand(parsed.name)?.redactInput !== true
+  );
 }
 
 function slashSubmitText(
@@ -260,7 +269,9 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       // ENOSPC) must not block the submit. Surface the failure through the
       // shared log sink so it isn't completely silent.
       const historyPersist =
-        historyText.length > 0 ? historyRef.current?.push(historyText) : null;
+        historyText.length > 0 && shouldPersistInputHistory(historyText)
+          ? historyRef.current?.push(historyText)
+          : null;
       historyPersist?.catch((err: unknown) => {
         writeTextStderr(
           `texra: failed to persist input history: ${String(err)}`,

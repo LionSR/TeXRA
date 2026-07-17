@@ -122,6 +122,35 @@ describe('handleTuiSlashCommand', () => {
     expect(activeForm.get()?.commandName).toBe('login');
   });
 
+  it('opens the masked provider-key form through /key and /keys', async () => {
+    registerBuiltinSlashCommands();
+    const context = createContext(createSession());
+
+    expect(await handleTuiSlashCommand('/key', context)).toBe(true);
+    expect(activeForm.get()?.commandName).toBe('key');
+
+    activeForm.set(undefined);
+    expect(await handleTuiSlashCommand('/keys', context)).toBe(true);
+    expect(activeForm.get()?.commandName).toBe('key');
+  });
+
+  it('discards inline key arguments without recording the secret', async () => {
+    registerBuiltinSlashCommands();
+    const secret = 'sk-private-test-value';
+
+    expect(
+      await handleTuiSlashCommand(
+        `/keys ${secret}`,
+        createContext(createSession()),
+      ),
+    ).toBe(true);
+
+    expect(activeForm.get()?.commandName).toBe('key');
+    expect(JSON.stringify(activeForm.get())).not.toContain(secret);
+    expect(lastEntryText()).toContain('does not accept a key as an argument');
+    expect(JSON.stringify([...streams.get().values()])).not.toContain(secret);
+  });
+
   it('uses ChatGPT device-code login from a likely remote shell', async () => {
     registerBuiltinSlashCommands();
     vi.stubEnv('SSH_TTY', '/dev/pts/3');

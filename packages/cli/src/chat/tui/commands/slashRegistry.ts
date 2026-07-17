@@ -42,6 +42,12 @@ export interface SlashCommand {
    */
   readonly formEscapeAction?: string;
   /**
+   * Keep the raw command line out of transcripts and persistent input history.
+   * Use for commands whose remainder could contain a credential even when the
+   * command normally collects that value through a structured form.
+   */
+  readonly redactInput?: boolean;
+  /**
    * Set for commands that take a free-text inline argument (e.g. `/foo bar`).
    * When true, Enter in the palette *completes* the command into the input
    * (with a trailing space) so the user can type the argument, rather than

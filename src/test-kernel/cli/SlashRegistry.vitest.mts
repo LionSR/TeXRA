@@ -100,6 +100,7 @@ describe('slashRegistry', () => {
         'agent',
         'model',
         'api',
+        'key',
         'auth',
         'login',
         'logout',
@@ -433,6 +434,34 @@ describe('slashRegistry', () => {
     await settleFormSelection();
 
     expect(apiNode.isClosed()).toBe(true);
+  });
+
+  it('keeps provider API keys inside the masked local form', async () => {
+    resetCliState(INCLUDED_CHAT_SESSION);
+    const saves: Array<{ provider: string; key: string }> = [];
+    registerBuiltinSlashCommands({
+      onApiKeySave: async (provider, key) => {
+        saves.push({ provider, key });
+      },
+    });
+    const keyCommand = findSlashCommand('keys');
+
+    if (!keyCommand) throw new Error('Expected /key to be registered');
+
+    expect(openRegisteredCliSlashForm(keyCommand, '')).toBe(true);
+    const keyNode = renderOpenForm<{
+      onSave?: (provider: 'moonshot', key: string) => Promise<void>;
+      onCancel?: () => void;
+    }>();
+
+    await keyNode.props?.onSave?.('moonshot', 'private-test-value');
+    expect(saves).toEqual([
+      { provider: 'moonshot', key: 'private-test-value' },
+    ]);
+    expect(keyNode.isClosed()).toBe(false);
+
+    keyNode.props?.onCancel?.();
+    expect(keyNode.isClosed()).toBe(true);
   });
 
   it('closes the login picker before running the selected login path', async () => {

@@ -73,9 +73,13 @@ async function resolveApiKeyUncached(
   provider: ApiProvider,
 ): Promise<ResolvedApiKey> {
   const stored = await secrets.get(apiKeySecretName(provider));
-  if (stored) return { value: stored, origin: 'secret' };
+  if (isNonEmptyString(stored)) {
+    return { value: stored.trim(), origin: 'secret' };
+  }
   const envValue = secrets.getEnv(apiKeyEnvName(provider));
-  if (envValue) return { value: envValue, origin: 'env' };
+  if (isNonEmptyString(envValue)) {
+    return { value: envValue.trim(), origin: 'env' };
+  }
   return { value: undefined, origin: 'none' };
 }
 

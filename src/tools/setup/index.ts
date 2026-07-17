@@ -4,7 +4,7 @@
  * Each tool has one responsibility:
  *   - probe_environment — read-only environment snapshot
  *   - verify_setup — re-check dependencies
- *   - set_api_key / unset_api_key — persisted credential writes
+ *   - unset_api_key — remove a persisted provider credential
  *   - list_api_keys — enumerate stored secret key names for auditing
  *   - invoke_command — bridge to allowlisted VS Code commands
  *   - install_vscode_extension — install LaTeX Workshop / Lean 4
@@ -22,7 +22,6 @@
  */
 export { ProbeEnvironmentTool } from './ProbeEnvironmentTool';
 export { VerifySetupTool } from './VerifySetupTool';
-export { SetApiKeyTool } from './SetApiKeyTool';
 export { UnsetApiKeyTool } from './UnsetApiKeyTool';
 export { ListApiKeysTool } from './ListApiKeysTool';
 export { InvokeCommandTool } from './InvokeCommandTool';

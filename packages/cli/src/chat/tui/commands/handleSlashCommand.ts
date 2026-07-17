@@ -75,7 +75,11 @@ export async function handleTuiSlashCommand(
   // exit commands (the TUI is tearing down); /clear still echoes because
   // resetSessionForClear refuses while a run is active and surfaces an
   // error — without the echo the user wouldn't see what triggered it.
-  if (canonicalCommand !== 'exit' && canonicalCommand !== 'login') {
+  if (
+    canonicalCommand !== 'exit' &&
+    canonicalCommand !== 'login' &&
+    registered?.redactInput !== true
+  ) {
     appendLocalUserTranscript(line.trim());
   }
   switch (canonicalCommand) {
@@ -118,6 +122,14 @@ export async function handleTuiSlashCommand(
       await runGuardedSlashCommand(() =>
         applyCliApiModeSelection(rest, context),
       );
+      return true;
+    case 'key':
+      if (rest) {
+        appendLocalAssistantTranscript(
+          'For safety, `/key` does not accept a key as an argument. Enter it in the masked form.',
+        );
+      }
+      openCanonicalSlashForm('key', registered, '');
       return true;
     case 'subscription':
       await runGuardedSlashCommand(() => applyCliSubscriptionToggle(rest));

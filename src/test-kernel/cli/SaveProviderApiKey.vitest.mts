@@ -19,8 +19,7 @@ vi.mock('@cli/runtime/apiAccessMode', () => ({
   setCliApiMode: mocks.setCliApiMode,
 }));
 
-const { saveProviderApiKey } =
-  await import('@cli/onboarding/applyOnboardingResult');
+const { saveProviderApiKey } = await import('@cli/runtime/providerApiKey');
 
 describe('saveProviderApiKey', () => {
   beforeEach(() => {
@@ -30,12 +29,11 @@ describe('saveProviderApiKey', () => {
   });
 
   it('stores the trimmed key, drops the key cache, and switches to personal mode', async () => {
-    const message = await saveProviderApiKey('anthropic', '  sk-ant-secret  ');
+    await saveProviderApiKey('anthropic', '  sk-ant-secret  ');
     expect(mocks.set).toHaveBeenCalledWith('apiKey.anthropic', 'sk-ant-secret');
     expect(mocks.invalidateApiKeyCache).toHaveBeenCalledOnce();
     // Model-options invalidation is setCliApiMode's responsibility, not ours.
     expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
-    expect(message).toContain('apiKey.anthropic');
   });
 
   it('rejects an empty key without writing a secret or changing mode', async () => {
@@ -46,9 +44,10 @@ describe('saveProviderApiKey', () => {
     expect(mocks.setCliApiMode).not.toHaveBeenCalled();
   });
 
-  it('never echoes the raw key in the returned message', async () => {
-    const message = await saveProviderApiKey('openai', 'sk-super-secret-value');
-    expect(message).not.toContain('sk-super-secret-value');
+  it('returns no credential-derived text', async () => {
+    await expect(
+      saveProviderApiKey('openai', 'sk-super-secret-value'),
+    ).resolves.toBeUndefined();
   });
 
   it('writes the secret before invalidating the key cache', async () => {
