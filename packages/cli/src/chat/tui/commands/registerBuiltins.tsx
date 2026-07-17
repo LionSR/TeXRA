@@ -2,7 +2,6 @@
 
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
-import { saveProviderApiKey } from '@cli/runtime/providerApiKey';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import type { ApiProvider } from '@model/apiProviders';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
@@ -28,6 +27,7 @@ import {
   setCliSessionModelOverride,
 } from '../state/cliState';
 import { appendLocalAssistantTranscript } from '../state/transcript';
+import { applyCliProviderApiKey } from './handlers/apiModeCommands';
 import { loginFromChat } from './handlers/loginCommands';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 import { openCliSlashCommandForm } from './slashForms';
@@ -41,7 +41,7 @@ type ApiModeSelectHandler = (value: CliApiMode) => void | Promise<void>;
 type ApiKeySaveHandler = (
   provider: ApiProvider,
   key: string,
-) => void | Promise<void>;
+) => string | void | Promise<string | void>;
 type LoginSelectHandler = (value: LoginFormValue) => void | Promise<void>;
 type MemorySelectHandler = (storagePath: string) => void | Promise<void>;
 type ResumeSelectHandler = (id: ExecutionId) => void | Promise<void>;
@@ -104,11 +104,7 @@ export function registerBuiltinSlashCommands(options?: {
   const onApiModeSelect: ApiModeSelectHandler =
     options?.onApiModeSelect ?? ((apiMode) => patchSessionMeta({ apiMode }));
   const onApiKeySave: ApiKeySaveHandler =
-    options?.onApiKeySave ??
-    (async (provider, key) => {
-      await saveProviderApiKey(provider, key);
-      patchSessionMeta({ apiMode: 'personal' });
-    });
+    options?.onApiKeySave ?? applyCliProviderApiKey;
   const onLoginSelect: LoginSelectHandler =
     options?.onLoginSelect ?? loginFromChat;
   const canSelectAgent = options?.canSelectAgent ?? (() => true);
@@ -189,10 +185,13 @@ export function registerBuiltinSlashCommands(options?: {
       <ProviderApiKeyForm
         availableRows={props.availableRows}
         onSave={(provider, key) => Promise.resolve(onApiKeySave(provider, key))}
-        onDone={(provider) => {
+        onDone={(provider, modelNotice) => {
           const label = PROVIDER_DISPLAY_NAMES[provider] ?? provider;
           appendLocalAssistantTranscript(
-            `Saved the ${label} API key. Personal API-key access is active.`,
+            [
+              `Saved the ${label} API key.`,
+              ...(modelNotice ? [modelNotice] : []),
+            ].join('\n'),
           );
           props.onDone(provider);
         }}
@@ -327,7 +326,7 @@ export function registerBuiltinSlashCommands(options?: {
     aliases: ['keys'],
     category: 'configuration',
     formComponent: ProviderApiKeyFormAdapter,
-    formEscapeAction: 'back',
+    formEscapeAction: 'close',
     redactInput: true,
   });
   registerSlashCommand({

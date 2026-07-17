@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   set: vi.fn(),
   invalidateApiKeyCache: vi.fn(),
-  setCliApiMode: vi.fn(),
 }));
 
 vi.mock('@platform/platform', () => ({
@@ -15,25 +14,18 @@ vi.mock('@model/apiProviders', async (importOriginal) => {
   return { ...actual, invalidateApiKeyCache: mocks.invalidateApiKeyCache };
 });
 
-vi.mock('@cli/runtime/apiAccessMode', () => ({
-  setCliApiMode: mocks.setCliApiMode,
-}));
-
 const { saveProviderApiKey } = await import('@cli/runtime/providerApiKey');
 
 describe('saveProviderApiKey', () => {
   beforeEach(() => {
     mocks.set.mockReset().mockResolvedValue(undefined);
     mocks.invalidateApiKeyCache.mockReset();
-    mocks.setCliApiMode.mockReset().mockResolvedValue(undefined);
   });
 
-  it('stores the trimmed key, drops the key cache, and switches to personal mode', async () => {
+  it('stores the trimmed key and drops the key cache', async () => {
     await saveProviderApiKey('anthropic', '  sk-ant-secret  ');
     expect(mocks.set).toHaveBeenCalledWith('apiKey.anthropic', 'sk-ant-secret');
     expect(mocks.invalidateApiKeyCache).toHaveBeenCalledOnce();
-    // Model-options invalidation is setCliApiMode's responsibility, not ours.
-    expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
   });
 
   it('rejects an empty key without writing a secret or changing mode', async () => {
@@ -41,8 +33,26 @@ describe('saveProviderApiKey', () => {
       'empty',
     );
     expect(mocks.set).not.toHaveBeenCalled();
-    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
   });
+
+  it.each([
+    'sk-xxx',
+    '<your-key>',
+    'your-api-key',
+    'your_api_key',
+    'YOUR_API_KEY_HERE',
+    'api-key-here',
+    'placeholder',
+    'example',
+  ])(
+    'rejects the placeholder %s without changing credentials',
+    async (placeholder) => {
+      await expect(
+        saveProviderApiKey('anthropic', placeholder),
+      ).rejects.toThrow('placeholder');
+      expect(mocks.set).not.toHaveBeenCalled();
+    },
+  );
 
   it('returns no credential-derived text', async () => {
     await expect(
@@ -53,8 +63,7 @@ describe('saveProviderApiKey', () => {
   it('writes the secret before invalidating the key cache', async () => {
     // The only correctness-critical ordering: the secret must be written before
     // the key cache is dropped, or a concurrent read could repopulate a stale
-    // "no key" entry for the 5s TTL. The position of setCliApiMode relative to
-    // these is NOT load-bearing, so it is intentionally not asserted.
+    // "no key" entry for the 5s TTL.
     const order: string[] = [];
     mocks.set.mockImplementation(async () => {
       order.push('set');

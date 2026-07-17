@@ -30,6 +30,7 @@ import {
   matchSlashCommands,
   parseSlashInput,
   prefixSlashCommands,
+  shouldRedactSlashInput,
   slashPickIntent,
   type SlashCommand,
   type SlashPickIntent,
@@ -70,10 +71,7 @@ export interface InputBarHandle {
 
 /** Whether a submitted line is safe to retain in persistent input history. */
 export function shouldPersistInputHistory(input: string): boolean {
-  const parsed = parseSlashInput(input);
-  return (
-    parsed === undefined || findSlashCommand(parsed.name)?.redactInput !== true
-  );
+  return !shouldRedactSlashInput(input);
 }
 
 function slashSubmitText(

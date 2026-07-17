@@ -1,20 +1,18 @@
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import {
-  parseCliApiMode,
-  setCliApiMode,
-  type CliApiMode,
-} from '@cli/runtime/apiAccessMode';
+import { parseCliApiMode, type CliApiMode } from '@cli/runtime/apiAccessMode';
 import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
-import { formatCliModelAccessRouteInline } from '@cli/runtime/modelAccessRoute';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
 } from '@cli/runtime/modelAccess';
+import { saveProviderApiKey } from '@cli/runtime/providerApiKey';
+import { selectCliApiModelAccessRoute } from '@cli/runtime/modelAccessSelection';
 
 import { patchSessionMeta, sessionMeta } from '@cli/chat/tui/state/cliState';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
+import type { ApiProvider } from '@model/apiProviders';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,
@@ -27,7 +25,10 @@ async function reconcileRootModelAfterApiModeChange(
   context: SlashCommandContext | undefined,
   apiMode: CliApiMode,
 ): Promise<string | undefined> {
-  if (!context || !chatTuiCanStartRootRun(context.session)) return undefined;
+  if (!context) return undefined;
+  if (!chatTuiCanStartRootRun(context.session)) {
+    return 'This model access setting applies to new chats. The current chat keeps its existing model connection.';
+  }
 
   const { model: currentModel, modelSource } = sessionMeta.get();
   const selection = await selectCliRunnableModel(currentModel, {
@@ -44,6 +45,27 @@ async function reconcileRootModelAfterApiModeChange(
 
   patchSessionMeta({ model: selection.model });
   return selection.notice;
+}
+
+/** Save a provider key, select personal access, and reconcile the root model. */
+export async function applyCliProviderApiKey(
+  provider: ApiProvider,
+  key: string,
+  context?: SlashCommandContext,
+): Promise<string | undefined> {
+  await saveProviderApiKey(provider, key);
+  const access = await selectCliApiModelAccessRoute('personal');
+  setCliSessionApiMode(access.apiMode);
+  let modelNotice: string | undefined;
+  try {
+    modelNotice = await reconcileRootModelAfterApiModeChange(
+      context,
+      access.apiMode,
+    );
+  } catch (error: unknown) {
+    modelNotice = toErrorMessage(error);
+  }
+  return [access.message, modelNotice].filter(Boolean).join('\n');
 }
 
 /** Set the chat session's api-mode without touching the persisted global. */
@@ -67,22 +89,19 @@ export async function applyCliApiModeSelection(
 
   const apiMode = parseCliApiMode(normalized);
   if (apiMode) {
-    await setCliApiMode(apiMode);
-    setCliSessionApiMode(apiMode);
+    const access = await selectCliApiModelAccessRoute(apiMode);
+    setCliSessionApiMode(access.apiMode);
     let modelNotice: string | undefined;
     try {
       modelNotice = await reconcileRootModelAfterApiModeChange(
         context,
-        apiMode,
+        access.apiMode,
       );
     } catch (error: unknown) {
       modelNotice = toErrorMessage(error);
     }
     appendLocalAssistantTranscript(
-      [
-        `API mode set to ${formatCliModelAccessRouteInline(apiMode)}.`,
-        ...(modelNotice ? [modelNotice] : []),
-      ].join('\n'),
+      [access.message, ...(modelNotice ? [modelNotice] : [])].join('\n'),
     );
     return;
   }

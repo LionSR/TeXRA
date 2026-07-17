@@ -117,14 +117,32 @@ describe('InputBar slash submit', () => {
       description: 'Add an API key',
       redactInput: true,
     });
+    registerSlashCommand({
+      name: 'model',
+      description: 'Choose a model',
+    });
 
     try {
       expect(shouldPersistInputHistory('/key private-value')).toBe(false);
       expect(shouldPersistInputHistory('/keys private-value')).toBe(false);
+      expect(shouldPersistInputHistory('/key=private-value')).toBe(false);
+      expect(shouldPersistInputHistory('/key:private-value')).toBe(false);
+      expect(shouldPersistInputHistory('/key/private-value')).toBe(false);
+      expect(shouldPersistInputHistory('/keysk-private-value')).toBe(false);
+      expect(shouldPersistInputHistory('/ky private-value')).toBe(false);
+      expect(shouldPersistInputHistory('/kye:sk-private-value')).toBe(false);
+      expect(shouldPersistInputHistory('/apikey private-value')).toBe(false);
+      expect(shouldPersistInputHistory('/unknown')).toBe(true);
+      expect(shouldPersistInputHistory('/unknown private-value')).toBe(false);
+      expect(shouldPersistInputHistory('/unknown=value')).toBe(true);
+      expect(shouldPersistInputHistory('/tmp=backup')).toBe(true);
+      expect(shouldPersistInputHistory('/keyboard shortcuts')).toBe(false);
+      expect(shouldPersistInputHistory('/keynote.tex')).toBe(true);
       expect(shouldPersistInputHistory('/model openai')).toBe(true);
       expect(shouldPersistInputHistory('ordinary message')).toBe(true);
     } finally {
       unregisterSlashCommand('key');
+      unregisterSlashCommand('model');
     }
   });
 

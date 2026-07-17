@@ -7,8 +7,7 @@ import { z } from 'zod';
 
 // Local imports
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { type ToolResult } from '@shared/schemas/toolResult';
 import { detectPackageManager } from '@utils/system/toolUtils';
 import { extendEnvPath, safeHomedir } from '@utils/system/platformPaths';
 
@@ -75,24 +74,24 @@ export class ProbeEnvironmentTool extends defineTool({
       coreTools,
       optionalTools,
       apiKeys,
-      hasUsableCredential,
+      credentialReadiness,
       githubToken,
       chatGptStatus,
     ] = await Promise.all([
       Promise.all(PROBED_CORE_TOOLS.map(checkTool)),
       Promise.all(OPTIONAL_TOOLS.map(checkTool)),
       Promise.all(
-        platform.secrets.providers.map(async (provider) => ({
-          provider,
-          origin: await platform.secrets.apiKeyOrigin(provider),
-        })),
+        platform.secrets.providers.map(async (provider) => {
+          const origin = await platform.secrets
+            .apiKeyOrigin(provider)
+            .catch(() => 'unknown' as const);
+          return { provider, origin };
+        }),
       ),
-      platform.secrets.anyUsableCredentialExists().catch((err) => {
-        throw new ToolError(
-          `Failed to probe credential status: ${toErrorMessage(err)}`,
-          { cause: err },
-        );
-      }),
+      platform.secrets
+        .anyUsableCredentialExists()
+        .then((available) => ({ available, status: 'known' as const }))
+        .catch(() => ({ available: false, status: 'unknown' as const })),
       platform.secrets.gitHubTokenExists().catch(() => 'none' as const),
       platform.modelAccess.getChatGptSubscriptionStatus().catch(() => ({
         signedIn: false,
@@ -138,12 +137,15 @@ export class ProbeEnvironmentTool extends defineTool({
         // had this come out true under the previous adapter-backed
         // check, which contradicted the per-provider detail and
         // misled credential planning.
-        anyApiKeySet: apiKeys.some((key) => key.origin !== 'none'),
+        anyApiKeySet: apiKeys.some(
+          (key) => key.origin === 'secret' || key.origin === 'env',
+        ),
         // `hasAnyUsableCredential` is the broader "can setup launch a
         // model right now" signal — direct key, ChatGPT subscription,
         // or server-side Researcher Access. Kept as a separate field
         // so the agent can reason about API keys separately.
-        hasAnyUsableCredential: hasUsableCredential,
+        hasAnyUsableCredential: credentialReadiness.available,
+        usableCredentialStatus: credentialReadiness.status,
         apiKeys,
         researcherAccess: {
           authenticated: auth.authenticated,
@@ -177,9 +179,10 @@ function buildHeadline(summary: {
   credentials: {
     anyApiKeySet: boolean;
     hasAnyUsableCredential: boolean;
-    apiKeys: Array<{ origin: 'secret' | 'env' | 'none' }>;
+    apiKeys: Array<{ origin: 'secret' | 'env' | 'none' | 'unknown' }>;
     researcherAccess: { authenticated: boolean };
     chatGptSubscription: { enabled: boolean };
+    usableCredentialStatus: 'known' | 'unknown';
   };
 }): string {
   const parts: string[] = [
@@ -196,6 +199,10 @@ function buildHeadline(summary: {
   const origins = new Set(summary.credentials.apiKeys.map((key) => key.origin));
   if (origins.has('secret')) creds.push('provider API key saved');
   if (origins.has('env')) creds.push('provider API key in environment');
+  if (origins.has('unknown')) creds.push('provider API key status unavailable');
+  if (summary.credentials.usableCredentialStatus === 'unknown') {
+    creds.push('overall credential status unavailable');
+  }
   if (summary.credentials.chatGptSubscription.enabled) {
     creds.push('ChatGPT subscription enabled');
   }

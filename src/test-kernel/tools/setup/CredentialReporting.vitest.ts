@@ -105,6 +105,50 @@ describe('setup credential reporting', () => {
     assert.doesNotMatch(result.output ?? '', /researcher@example\.com/);
   });
 
+  it('keeps probing when one provider key origin is unavailable', async () => {
+    const platform = createFakeSetupPlatform({ host: 'cli' });
+    setSetupPlatform({
+      ...platform,
+      secrets: {
+        ...platform.secrets,
+        providers: ['openai'],
+        async apiKeyOrigin() {
+          throw new Error('Keychain unavailable');
+        },
+        async anyUsableCredentialExists() {
+          throw new Error('Credential scan unavailable');
+        },
+      },
+    });
+
+    const result = await new ProbeEnvironmentTool().call({});
+
+    assert.equal(result.status, 'executed');
+    assert.match(result.output ?? '', /"origin": "unknown"/);
+    assert.match(result.output ?? '', /provider API key status unavailable/);
+    assert.match(result.output ?? '', /"anyApiKeySet": false/);
+    assert.match(result.output ?? '', /"usableCredentialStatus": "unknown"/);
+  });
+
+  it('reports when aggregate credential readiness is unavailable', async () => {
+    const platform = createFakeSetupPlatform({ host: 'cli' });
+    setSetupPlatform({
+      ...platform,
+      secrets: {
+        ...platform.secrets,
+        async anyUsableCredentialExists() {
+          throw new Error('Credential scan unavailable');
+        },
+      },
+    });
+
+    const result = await new ProbeEnvironmentTool().call({});
+
+    assert.equal(result.status, 'executed');
+    assert.match(result.output ?? '', /overall credential status unavailable/);
+    assert.match(result.output ?? '', /"usableCredentialStatus": "unknown"/);
+  });
+
   it('reports a usable non-API-key credential in setup verification', async () => {
     installChatGptOnlySetupPlatform();
 

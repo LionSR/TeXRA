@@ -52,6 +52,7 @@ import { type CliApiMode } from '../runtime/apiAccessMode';
 import { chatGptAccountLabel, signInCliChatGpt } from '../runtime/chatgptLogin';
 import { resolveCliStdoutColorEnabled } from '../runtime/cliContext';
 import { hasCliCredentialForApiMode } from '../runtime/credentialStatus';
+import { selectCliApiModelAccessRoute } from '../runtime/modelAccessSelection';
 import { saveProviderApiKey } from '../runtime/providerApiKey';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { CLI_OAUTH_PROVIDER_ITEMS } from '../runtime/oauthProviderDisplay';
@@ -405,6 +406,7 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
           void (async () => {
             try {
               await saveProviderApiKey(keyProvider, key);
+              await selectCliApiModelAccessRoute('personal');
               const where = describeSavedKeyLocation(keyProvider);
               finish({
                 configured: true,

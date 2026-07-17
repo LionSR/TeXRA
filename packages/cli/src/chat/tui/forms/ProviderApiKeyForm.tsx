@@ -13,8 +13,11 @@ import { ListForm } from './_shared/ListForm';
 
 export interface ProviderApiKeyFormProps {
   readonly availableRows?: number;
-  readonly onSave: (provider: ApiProvider, key: string) => Promise<void>;
-  readonly onDone: (provider: ApiProvider) => void;
+  readonly onSave: (
+    provider: ApiProvider,
+    key: string,
+  ) => Promise<string | void>;
+  readonly onDone: (provider: ApiProvider, modelNotice?: string) => void;
   readonly onCancel: () => void;
 }
 
@@ -62,7 +65,9 @@ export function ProviderApiKeyForm(
         setSaving(true);
         void props
           .onSave(provider, key)
-          .then(() => props.onDone(provider))
+          .then((modelNotice) =>
+            props.onDone(provider, modelNotice || undefined),
+          )
           .catch((saveError: unknown) => {
             setSaving(false);
             setError(toErrorMessage(saveError));

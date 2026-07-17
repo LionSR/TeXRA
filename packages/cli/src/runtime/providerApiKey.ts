@@ -5,19 +5,33 @@ import {
   type ApiProvider,
 } from '@model/apiProviders';
 
-import { setCliApiMode } from './apiAccessMode';
+const PLACEHOLDER_PATTERNS: readonly RegExp[] = [
+  /^(sk-?)?(x{3,}|\*{3,}|\.{3,}|<.*>|your[- _]?(?:api[- _]?)?key)/i,
+  /^(?:api[- _]?)?key[- _]?here$/i,
+  /^placeholder$/i,
+  /^example$/i,
+];
 
-/** Persist a provider key and make personal API-key access active. */
+function looksLikePlaceholder(key: string): boolean {
+  if (key.length < 8) return true;
+  return PLACEHOLDER_PATTERNS.some((pattern) => pattern.test(key));
+}
+
+/** Persist a provider key without exposing it outside the credential store. */
 export async function saveProviderApiKey(
   provider: ApiProvider,
   key: string,
 ): Promise<void> {
   const trimmed = key.trim();
   if (!trimmed) throw new Error('API key is empty.');
+  if (looksLikePlaceholder(trimmed)) {
+    throw new Error(
+      `This looks like a placeholder rather than a ${provider} API key. Enter the key issued by the provider.`,
+    );
+  }
 
   // Write before invalidating so a concurrent lookup cannot restore a stale
   // missing-key cache entry after the credential has been saved.
   await platform().secrets.set(apiKeySecretName(provider), trimmed);
   invalidateApiKeyCache();
-  await setCliApiMode('personal');
 }

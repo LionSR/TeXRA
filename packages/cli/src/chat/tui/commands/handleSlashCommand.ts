@@ -42,8 +42,10 @@ import { applyCliSubscriptionToggle } from './handlers/subscriptionCommand';
 import { openRegisteredCliSlashForm } from './slashForms';
 import {
   findSlashCommand,
+  findRedactedSlashCommandInput,
   listSlashCommands,
   parseSlashInput,
+  shouldRedactSlashInput,
   suggestSlashCommand,
 } from './slashRegistry';
 
@@ -62,12 +64,24 @@ export async function handleTuiSlashCommand(
   line: string,
   context: SlashCommandContext,
 ): Promise<boolean> {
+  const redactedIntent = findRedactedSlashCommandInput(line);
   const parsed = parseSlashInput(line);
-  if (!parsed) return false;
+  if (!parsed) {
+    if (!redactedIntent) return false;
+    appendLocalAssistantTranscript(
+      `For safety, /${redactedIntent.name} accepts credentials only through its masked form.`,
+    );
+    if (!openRegisteredCliSlashForm(redactedIntent, '')) {
+      appendLocalAssistantTranscript(
+        `/${redactedIntent.name} is not available in this CLI view yet.`,
+      );
+    }
+    return true;
+  }
 
   const command = parsed.name.toLowerCase();
   const rest = parsed.remainder.trim();
-  const registered = findSlashCommand(command);
+  const registered = findSlashCommand(command) ?? redactedIntent;
   const canonicalCommand = registered?.name ?? command;
   // Echo the slash input into the transcript so the user can see what they
   // typed. Slash commands don't go through the agent run, so the usual
@@ -78,7 +92,7 @@ export async function handleTuiSlashCommand(
   if (
     canonicalCommand !== 'exit' &&
     canonicalCommand !== 'login' &&
-    registered?.redactInput !== true
+    !shouldRedactSlashInput(line)
   ) {
     appendLocalUserTranscript(line.trim());
   }

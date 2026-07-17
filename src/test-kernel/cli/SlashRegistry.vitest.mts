@@ -447,6 +447,7 @@ describe('slashRegistry', () => {
     const keyCommand = findSlashCommand('keys');
 
     if (!keyCommand) throw new Error('Expected /key to be registered');
+    expect(keyCommand.formEscapeAction).toBe('close');
 
     expect(openRegisteredCliSlashForm(keyCommand, '')).toBe(true);
     const keyNode = renderOpenForm<{

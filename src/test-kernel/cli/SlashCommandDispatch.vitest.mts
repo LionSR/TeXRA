@@ -151,6 +151,70 @@ describe('handleTuiSlashCommand', () => {
     expect(JSON.stringify([...streams.get().values()])).not.toContain(secret);
   });
 
+  it('keeps malformed and mistyped key commands out of the transcript', async () => {
+    registerBuiltinSlashCommands();
+    const context = createContext(createSession());
+    const malformedSecrets = [
+      'sk-equals-private-value',
+      'sk-colon-private-value',
+      'sk-slash-private-value',
+      'sk-concatenated-private-value',
+      'sk-transposed-private-value',
+    ];
+    const typoSecret = 'sk-typo-private-value';
+
+    for (const line of [
+      `/key=${malformedSecrets[0]}`,
+      `/key:${malformedSecrets[1]}`,
+      `/key/${malformedSecrets[2]}`,
+      `/key${malformedSecrets[3]}`,
+      `/kye:${malformedSecrets[4]}`,
+    ]) {
+      expect(await handleTuiSlashCommand(line, context)).toBe(true);
+      expect(activeForm.get()?.commandName).toBe('key');
+      activeForm.set(undefined);
+    }
+
+    expect(await handleTuiSlashCommand(`/ky ${typoSecret}`, context)).toBe(
+      true,
+    );
+    expect(activeForm.get()?.commandName).toBe('key');
+    const transcript = JSON.stringify([...streams.get().values()]);
+    for (const secret of [...malformedSecrets, typoSecret]) {
+      expect(transcript).not.toContain(secret);
+    }
+  });
+
+  it('leaves path-like equals input for the agent', async () => {
+    registerBuiltinSlashCommands();
+
+    expect(
+      await handleTuiSlashCommand(
+        '/tmp=backup',
+        createContext(createSession()),
+      ),
+    ).toBe(false);
+    expect(
+      await handleTuiSlashCommand(
+        '/keynote.tex',
+        createContext(createSession()),
+      ),
+    ).toBe(false);
+  });
+
+  it('does not mistake ordinary key-prefixed commands for credential input', async () => {
+    registerBuiltinSlashCommands();
+
+    expect(
+      await handleTuiSlashCommand(
+        '/keyboard shortcuts',
+        createContext(createSession()),
+      ),
+    ).toBe(true);
+    expect(activeForm.get()).toBeUndefined();
+    expect(lastEntryText()).toContain('Unknown command: /keyboard');
+  });
+
   it('uses ChatGPT device-code login from a likely remote shell', async () => {
     registerBuiltinSlashCommands();
     vi.stubEnv('SSH_TTY', '/dev/pts/3');
