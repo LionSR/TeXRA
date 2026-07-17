@@ -1136,8 +1136,13 @@ describe('StreamSnapshotStore', () => {
     await expect(deletion.rollback()).rejects.toBe(writeError);
 
     const revisedPlan: Plan = { objective: 'Use the recovered draft' };
-    store.setPlan(STREAM, revisedPlan);
     writeSpy.mockRestore();
+    store.setPlan(STREAM, revisedPlan);
+    await store.flush();
+    const beforeRetry = new StreamSnapshotStore();
+    await beforeRetry.load([STREAM]);
+    expect(beforeRetry.getWorkPlan(STREAM).plan).toEqual(revisedPlan);
+
     const retry = await store.stageDeleteStream(STREAM);
     await retry.rollback();
     const reloaded = new StreamSnapshotStore();
