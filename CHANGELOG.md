@@ -78,6 +78,14 @@ All notable changes to this project will be documented in this file.
   with text in a foreground dialog now clears that text; pressing it again
   keeps the existing response-stop or exit behavior.
 
+### Extension (VS Code)
+
+#### Bug Fixes
+
+- **Live history refresh setup failures stay contained** — an inaccessible
+  executions directory now disables automatic refresh without producing an
+  unhandled extension-host failure.
+
 ### Desktop
 
 #### Bug Fixes
@@ -225,9 +233,6 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
-- **Live history refresh setup failures stay contained** — an inaccessible
-  executions directory now disables automatic refresh without producing an
-  unhandled extension-host failure.
 - **Lean project commands wait for the Lean extension to become ready** — cache
   fetching and other project actions no longer fail with a missing-command
   error while the Lean client is still activating.
