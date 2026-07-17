@@ -128,6 +128,18 @@ describe('selectSetupCredentialModelExcludingOpenRouter', () => {
     );
   });
 
+  it('keeps managed direct credentials available when OpenRouter is enabled', async () => {
+    mocks.lookupApiKey.mockImplementation(async (_secrets, provider) =>
+      provider === 'kimiCode' ? 'kimi-code-test' : undefined,
+    );
+
+    await expect(
+      selectSetupCredentialModelExcludingOpenRouter({} as never, true),
+    ).resolves.toBe(SETUP_MODEL_BY_PROVIDER.kimiCode);
+    expect(mocks.isCodexSubscriptionActive).not.toHaveBeenCalled();
+    expect(mocks.canUseServerSideKeys).not.toHaveBeenCalled();
+  });
+
   it('returns null when no credential resolves to a runnable model', async () => {
     await expect(
       selectSetupCredentialModelExcludingOpenRouter({} as never),
@@ -162,6 +174,17 @@ describe('selectDesktopSetupModel', () => {
 
     await expect(selectDesktopSetupModel()).resolves.toBeNull();
     expect(mocks.isCodexSubscriptionActive).not.toHaveBeenCalled();
+  });
+
+  it('uses a managed direct key when the OpenRouter flag is on without a key', async () => {
+    mocks.getUseOpenRouter.mockReturnValue(true);
+    mocks.lookupApiKey.mockImplementation(async (_secrets, provider) =>
+      provider === 'kimiCode' ? 'kimi-code-test' : undefined,
+    );
+
+    await expect(selectDesktopSetupModel()).resolves.toBe(
+      SETUP_MODEL_BY_PROVIDER.kimiCode,
+    );
   });
 
   it('delegates to the shared credential scan when the flag is off', async () => {

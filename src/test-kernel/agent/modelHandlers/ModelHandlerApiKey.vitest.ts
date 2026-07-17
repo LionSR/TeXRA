@@ -13,8 +13,10 @@ import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/mo
 import { SupabaseClient } from '@auth/SupabaseClient';
 import * as serverKeysModule from '@auth/serverKeys';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
+import type { DirectModelRoutingConfig } from '@model/openRouterRouting';
 
 // Local imports - modules stubbed by these tests
+import * as configUtilsModule from '@utils/config/configUtils';
 import * as providerConfigModule from '@utils/config/providerConfig';
 
 class ExposedKeyHandler extends ModelHandlerOpenRouterNative {
@@ -23,7 +25,11 @@ class ExposedKeyHandler extends ModelHandlerOpenRouterNative {
   }
 }
 
-function buildConfig(overrides: Partial<ModelConfig> = {}): ModelConfig {
+type TestModelConfig = ModelConfig & DirectModelRoutingConfig;
+
+function buildConfig(
+  overrides: Partial<TestModelConfig> = {},
+): TestModelConfig {
   return {
     name: 'gpt-5.5',
     label: 'GPT-5.5',
@@ -135,6 +141,42 @@ describe('ModelHandler.getApiKey resolution', () => {
     );
 
     assert.equal(await handler.exposeGetApiKey(), 'openrouter-key');
+  });
+
+  it('uses a managed direct key without consulting relay state', async () => {
+    await initFakePlatform({
+      [apiKeySecretName('kimiCode')]: 'kimi-code-key',
+    });
+    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(true);
+    vi.spyOn(configUtilsModule, 'getConfig').mockImplementation(
+      <T>(path: string, defaultValue?: T) =>
+        (path === 'texra.model.useImprovedConnection'
+          ? true
+          : defaultValue) as T,
+    );
+    const { canUseServerSideKeys } = stubServerSideKeyService({
+      useIncludedAccess: true,
+      hasServerAccess: true,
+      shouldUseServerSideKeys: true,
+      quotaAutoSwitched: true,
+    });
+    const relayToken = vi
+      .spyOn(SupabaseClient, 'getRelayAccessToken')
+      .mockResolvedValue('relay-token');
+    const handler = new ExposedKeyHandler(
+      buildConfig({
+        directAccess: {
+          source: 'kimiCode',
+          credential: 'kimiCode',
+          baseUrl: 'https://api.kimi.com/coding/v1',
+        },
+      }),
+    );
+
+    assert.equal(handler.getBaseUrl(), 'https://api.kimi.com/coding/v1');
+    assert.equal(await handler.exposeGetApiKey(), 'kimi-code-key');
+    assert.equal(canUseServerSideKeys.mock.calls.length, 0);
+    assert.equal(relayToken.mock.calls.length, 0);
   });
 
   it('rejects tier-mismatched included access instead of falling back to personal keys', async () => {

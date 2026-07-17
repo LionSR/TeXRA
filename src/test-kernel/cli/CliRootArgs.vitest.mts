@@ -1136,6 +1136,18 @@ describe('CLI model flag validation contract', () => {
     expect(resolveKnownCliModelId('copilot4o')).toBeUndefined();
     expect(resolveKnownCliModelId('Copilot GPT-4o')).toBeUndefined();
   });
+
+  it('recognizes Kimi Code membership models', () => {
+    expect(knownCliModelIds()).toEqual(
+      expect.arrayContaining([
+        'kimiCodeK3',
+        'kimiCodeCoding',
+        'kimiCodeCodingFast',
+      ]),
+    );
+    expect(resolveKnownCliModelId('kimi-for-coding')).toBe('kimiCodeCoding');
+    expect(resolveKnownCliModelId('Kimi Code K3')).toBe('kimiCodeK3');
+  });
 });
 
 describe('CLI login arguments', () => {

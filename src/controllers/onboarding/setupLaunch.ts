@@ -11,6 +11,8 @@ import {
   CHATGPT_SETUP_MODEL,
   SETUP_MODEL_BY_PROVIDER,
 } from '@model/setupModelDefaults';
+import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
+import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { MainViewExecuteMessage } from '@shared/mainView';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
@@ -30,21 +32,29 @@ export const SETUP_INSTRUCTION =
  */
 export async function selectSetupCredentialModelExcludingOpenRouter(
   secrets: PlatformSecrets,
+  useOpenRouter = false,
 ): Promise<string | null> {
-  if (
-    await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL, AgentCategory.ToolUse)
-  ) {
-    return CHATGPT_SETUP_MODEL;
-  }
+  // Subscription and relay routes follow the global OpenRouter selection.
+  // When it is enabled, only managed direct credentials can bypass it.
+  if (!useOpenRouter) {
+    if (
+      await isCodexSubscriptionActive(
+        CHATGPT_SETUP_MODEL,
+        AgentCategory.ToolUse,
+      )
+    ) {
+      return CHATGPT_SETUP_MODEL;
+    }
 
-  const serverKeys = getServerSideKeyService();
-  if (await serverKeys.canUseServerSideKeysForModel(DEFAULT_AGENT_MODEL)) {
-    return DEFAULT_AGENT_MODEL;
-  }
-  if (await serverKeys.canUseServerSideKeys()) {
-    for (const [provider, model] of Object.entries(SETUP_MODEL_BY_PROVIDER)) {
-      if (provider === 'openRouter') continue;
-      if (serverKeys.canUseModelSync(model)) return model;
+    const serverKeys = getServerSideKeyService();
+    if (await serverKeys.canUseServerSideKeysForModel(DEFAULT_AGENT_MODEL)) {
+      return DEFAULT_AGENT_MODEL;
+    }
+    if (await serverKeys.canUseServerSideKeys()) {
+      for (const [provider, model] of Object.entries(SETUP_MODEL_BY_PROVIDER)) {
+        if (provider === 'openRouter') continue;
+        if (serverKeys.canUseModelSync(model)) return model;
+      }
     }
   }
 
@@ -52,6 +62,10 @@ export async function selectSetupCredentialModelExcludingOpenRouter(
     if (provider === 'openRouter') continue;
     const model = SETUP_MODEL_BY_PROVIDER[provider];
     if (!model) continue;
+    const config = getRuntimeModelConfig(model);
+    if (!config || shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
+      continue;
+    }
     if (isNonEmptyString(await lookupApiKey(secrets, provider))) {
       return model;
     }
@@ -83,6 +97,13 @@ export async function resolveSetupLaunchModel(
   )
     ? SETUP_MODEL_BY_PROVIDER.openRouter
     : null;
+  const credentialModel =
+    useOpenRouter && openRouterModel
+      ? null
+      : await selectSetupCredentialModelExcludingOpenRouter(
+          secrets,
+          useOpenRouter,
+        );
 
   const candidates: RunModelCandidate[] = [
     {
@@ -90,9 +111,7 @@ export async function resolveSetupLaunchModel(
       reason: 'router-config',
     },
     {
-      model: useOpenRouter
-        ? null
-        : await selectSetupCredentialModelExcludingOpenRouter(secrets),
+      model: credentialModel,
       reason: 'credential',
     },
   ];

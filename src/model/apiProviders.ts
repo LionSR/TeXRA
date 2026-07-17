@@ -14,6 +14,10 @@ export const API_PROVIDERS = API_KEY_PROVIDER_IDS;
 
 export type ApiProvider = (typeof API_PROVIDERS)[number];
 
+const API_KEY_ENV_NAME_OVERRIDES: Partial<Record<ApiProvider, string>> = {
+  kimiCode: 'KIMI_CODE_API_KEY',
+};
+
 /** Runtime-checked narrowing for provider strings. */
 export function isApiProvider(provider: string): provider is ApiProvider {
   return (API_PROVIDERS as readonly string[]).includes(provider);
@@ -26,7 +30,9 @@ export function apiKeySecretName(provider: ApiProvider): string {
 
 /** Environment variable name for a provider's API key. */
 export function apiKeyEnvName(provider: ApiProvider): string {
-  return `${provider.toUpperCase()}_API_KEY`;
+  return (
+    API_KEY_ENV_NAME_OVERRIDES[provider] ?? `${provider.toUpperCase()}_API_KEY`
+  );
 }
 
 /** Where a resolved API key came from. */
