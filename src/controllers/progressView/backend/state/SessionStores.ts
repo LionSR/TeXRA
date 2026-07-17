@@ -141,7 +141,24 @@ export class SessionStores {
     );
   }
 
+  private async reconcileStagedDeletions(
+    liveStreams: ReadonlySet<StreamTabId>,
+  ): Promise<void> {
+    const reconciliation =
+      await this.snapshots.reconcileStagedDeletions(liveStreams);
+    if (
+      reconciliation.restored.length > 0 ||
+      reconciliation.pendingCleanup.length > 0 ||
+      reconciliation.discarded.length > 0
+    ) {
+      logger.info(CHANNEL, 'Reconciled interrupted stream deletions', {
+        data: reconciliation,
+      });
+    }
+  }
+
   async deleteAll(): Promise<DeleteAllStreamsResult> {
+    await this.reconcileStagedDeletions(new Set(this.streamLogs.keys()));
     const [persistedStreams, stagedDeletions] = await Promise.all([
       this.snapshots.listPersistedStreams(),
       this.snapshots.listStagedDeletions(),
@@ -235,6 +252,7 @@ export class SessionStores {
   async sweepOrphanedStreams(
     liveStreams: ReadonlySet<StreamTabId>,
   ): Promise<{ streams: StreamTabId[]; executionIds: ExecutionId[] }> {
+    await this.reconcileStagedDeletions(liveStreams);
     const [persistedStreams, stagedDeletions] = await Promise.all([
       this.snapshots.listPersistedStreams(),
       this.snapshots.listStagedDeletions(),
