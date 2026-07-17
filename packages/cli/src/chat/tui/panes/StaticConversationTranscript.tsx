@@ -39,7 +39,7 @@ import { EntryErrorBoundary } from './EntryErrorBoundary';
 import { isStaticTranscriptEntryAt } from './transcriptEntries';
 import { TranscriptEntry } from './TranscriptEntry';
 import { ToolUseRow } from './ToolUseRow';
-import { toolUseDisplayLines } from './toolRenderers';
+import { toolUseDisplayLines, toolUseMarginBottomRows } from './toolRenderers';
 import {
   transcriptColumns,
   transcriptEntryLayout,
@@ -236,8 +236,9 @@ function staticTranscriptItemRowCount(
       1 +
       toolUseDisplayLines(item.entry.toolUse, {
         showOutput: true,
-        width,
-      }).slice(1).length
+        width: transcriptColumns(width, 2),
+      }).slice(1).length +
+      toolUseMarginBottomRows(item.entry.toolUse)
     );
   }
   return transcriptEntryLayoutRows(
@@ -301,21 +302,23 @@ function StaticTranscriptItemContent({
     case 'workflowScriptCompletion':
       return (
         <EntryErrorBoundary label="workflow script result">
-          <Box flexDirection="column" paddingLeft={2}>
-            <Text
-              color={
-                item.entry.workflowScriptOutcome === 'failed'
-                  ? COLOR_ERROR
-                  : COLOR_SUCCESS
-              }
-            >
-              {`${TOOL_OUTPUT_CORNER} ${item.entry.workflowScriptOutcome === 'failed' ? 'Workflow script failed' : 'Workflow script completed'}`}
-            </Text>
+          <Box flexDirection="column">
+            <Box paddingLeft={2}>
+              <Text
+                color={
+                  item.entry.workflowScriptOutcome === 'failed'
+                    ? COLOR_ERROR
+                    : COLOR_SUCCESS
+                }
+              >
+                {`${TOOL_OUTPUT_CORNER} ${item.entry.workflowScriptOutcome === 'failed' ? 'Workflow script failed' : 'Workflow script completed'}`}
+              </Text>
+            </Box>
             <ToolUseRow
               omitHeader
               showOutput
               toolUse={item.entry.toolUse}
-              width={width}
+              width={transcriptColumns(width, 2)}
             />
           </Box>
         </EntryErrorBoundary>
