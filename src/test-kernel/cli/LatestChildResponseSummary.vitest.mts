@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { latestChildResponseSummary } from '@cli/chat/tui/state/childControls';
-import { MESSAGE_TYPES } from '@shared/schemas';
 import type { ConversationEntry } from '@cli/chat/tui/state/cliState';
+import { MESSAGE_TYPES } from '@shared/schemas';
 
 function user(text: string): ConversationEntry {
   return { id: `u-${text}`, role: 'user', text, finalized: true };
