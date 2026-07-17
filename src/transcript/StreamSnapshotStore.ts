@@ -297,16 +297,16 @@ interface StreamRecord {
   writeKv: KVStore | undefined;
 }
 
+type StagedDeletionPhase =
+  'live' | 'transitioning' | 'staged' | 'unavailable' | 'replaying-recovery';
+
 interface StagedDeletionState {
   writes: Map<string, unknown>;
-  /** Whether failed ownership may safely mirror new writes to the live tree. */
-  liveStorageAvailable: boolean;
+  /** Namespace authority and whether failed ownership may mirror writes. */
+  phase: StagedDeletionPhase;
   settled: Promise<void>;
   resolveSettled: () => void;
 }
-
-type StagedDeletionSetupPhase =
-  'preparing' | 'changing-namespace' | 'replaying-recovery';
 
 export class StreamSnapshotStore {
   private readonly records = new Map<StreamTabId, StreamRecord>();
@@ -982,12 +982,14 @@ export class StreamSnapshotStore {
         const hasLiveData = await storagePathExists(liveDir);
         const failedWrites = this.failedRollbacks.get(stream);
         if (!hasLiveData || failedWrites) {
+          if (failedWrites) failedWrites.phase = 'staged';
           if (hasLiveData) {
             // A failed rollback owner makes the staged tree the complete base;
             // its buffered writes are the newer delta applied below.
             await StorageFS.delete(liveDir, { recursive: true });
           }
           await StorageFS.ensureDir(STREAM_DATA_DIR);
+          if (failedWrites) failedWrites.phase = 'transitioning';
           await StorageFS.rename(stagedDir, liveDir);
           const record = this.records.get(stream);
           if (record) {
@@ -995,10 +997,15 @@ export class StreamSnapshotStore {
             record.writeKv = undefined;
           }
           if (liveStreams.has(stream) && failedWrites) {
-            failedWrites.liveStorageAvailable = true;
+            failedWrites.phase = 'live';
             await this.replayStagedWrites(stream, failedWrites);
           }
-          this.releaseFailedRollbackOwnership(stream, failedWrites);
+          if (
+            failedWrites &&
+            this.failedRollbacks.get(stream) === failedWrites
+          ) {
+            this.failedRollbacks.delete(stream);
+          }
           if (liveStreams.has(stream)) restored.push(stream);
           else pendingCleanup.push(stream);
           return;
@@ -1012,9 +1019,11 @@ export class StreamSnapshotStore {
     await pMap(
       [...this.failedRollbacks],
       async ([stream, state]) => {
-        if (!liveStreams.has(stream) || !state.liveStorageAvailable) return;
+        if (!liveStreams.has(stream) || state.phase !== 'live') return;
         await this.replayStagedWrites(stream, state);
-        this.releaseFailedRollbackOwnership(stream, state);
+        if (this.failedRollbacks.get(stream) === state) {
+          this.failedRollbacks.delete(stream);
+        }
       },
       { concurrency: SEED_IO_CONCURRENCY },
     );
@@ -1039,15 +1048,6 @@ export class StreamSnapshotStore {
         }
         throw error;
       }
-    }
-  }
-
-  private releaseFailedRollbackOwnership(
-    stream: StreamTabId,
-    state: StagedDeletionState | undefined,
-  ): void {
-    if (state && this.failedRollbacks.get(stream) === state) {
-      this.failedRollbacks.delete(stream);
     }
   }
 
@@ -1081,12 +1081,11 @@ export class StreamSnapshotStore {
     });
     const state: StagedDeletionState = {
       writes: new Map(),
-      liveStorageAvailable: true,
+      phase: 'live',
       settled: settlement,
       resolveSettled,
     };
     this.stagedDeletions.set(stream, state);
-    let setupPhase: StagedDeletionSetupPhase = 'preparing';
 
     try {
       const failedState = this.failedRollbacks.get(stream);
@@ -1097,37 +1096,37 @@ export class StreamSnapshotStore {
           if (!state.writes.has(key)) state.writes.set(key, value);
         }
         this.failedRollbacks.delete(stream);
-        setupPhase = 'changing-namespace';
+        state.phase = failedState.phase;
         const stagedDir = stagedStreamDataDir(stream);
         const liveDir = streamDataDir(stream);
         if (await storagePathExists(stagedDir)) {
-          state.liveStorageAvailable = false;
+          state.phase = 'staged';
           if (await storagePathExists(liveDir)) {
             // Writes after the failure stayed buffered, so the staged tree is
             // the last complete on-disk snapshot and remains authoritative.
             await StorageFS.delete(liveDir, { recursive: true });
           }
+          state.phase = 'transitioning';
           await StorageFS.rename(stagedDir, liveDir);
-          state.liveStorageAvailable = true;
+          state.phase = 'live';
         } else {
-          state.liveStorageAvailable = true;
+          state.phase = 'live';
         }
-        setupPhase = 'replaying-recovery';
+        state.phase = 'replaying-recovery';
         await this.replayStagedWrites(stream, state);
-        setupPhase = 'preparing';
+        state.phase = 'live';
       }
       if (canUseStreamDataDir(stream)) {
         const hasStagedData = await storagePathExists(
           stagedStreamDataDir(stream),
         );
         if (hasStagedData) {
-          setupPhase = 'changing-namespace';
-          state.liveStorageAvailable = false;
+          state.phase = 'staged';
           throw new Error(
             `Stream ${stream} has an unreconciled snapshot deletion`,
           );
         }
-        state.liveStorageAvailable = true;
+        state.phase = 'live';
       }
       // Let hydration finish before staging. A record with `seeded === false`
       // may already contain sidecars while execution-config hydration is still
@@ -1148,15 +1147,13 @@ export class StreamSnapshotStore {
       const canStage = canUseStreamDataDir(stream);
       const liveDir = canStage ? streamDataDir(stream) : undefined;
       const stagedDir = canStage ? stagedStreamDataDir(stream) : undefined;
-      let staged = false;
       const hasLiveData =
         !liveDir || !stagedDir || (await storagePathExists(liveDir));
       if (liveDir && stagedDir && hasLiveData) {
         await StorageFS.ensureDir(STREAM_DATA_DELETION_DIR);
-        state.liveStorageAvailable = false;
-        setupPhase = 'changing-namespace';
+        state.phase = 'transitioning';
         await StorageFS.rename(liveDir, stagedDir);
-        staged = true;
+        state.phase = 'staged';
       }
 
       let settled = false;
@@ -1164,10 +1161,12 @@ export class StreamSnapshotStore {
         commit: async () => {
           if (settled) return;
           settled = true;
-          this.failedRollbacks.delete(stream);
+          if (this.failedRollbacks.get(stream) === state) {
+            this.failedRollbacks.delete(stream);
+          }
           this.evict(stream);
           try {
-            if (staged && stagedDir) {
+            if (state.phase === 'staged' && stagedDir) {
               try {
                 await StorageFS.delete(stagedDir, { recursive: true });
               } catch (error) {
@@ -1186,9 +1185,10 @@ export class StreamSnapshotStore {
           if (settled) return;
           settled = true;
           try {
-            if (staged && stagedDir && liveDir) {
+            if (state.phase === 'staged' && stagedDir && liveDir) {
+              state.phase = 'transitioning';
               await StorageFS.rename(stagedDir, liveDir);
-              state.liveStorageAvailable = true;
+              state.phase = 'live';
             }
             await this.replayStagedWrites(stream, state);
           } catch (error) {
@@ -1202,26 +1202,25 @@ export class StreamSnapshotStore {
     } catch (error) {
       const failures: unknown[] = [error];
       try {
-        let canReplay = setupPhase !== 'replaying-recovery';
-        if (
-          canReplay &&
-          setupPhase === 'changing-namespace' &&
-          canUseStreamDataDir(stream)
-        ) {
-          state.liveStorageAvailable = false;
-          const [hasLiveData, hasStagedData] = await Promise.all([
-            storagePathExists(streamDataDir(stream)),
-            storagePathExists(stagedStreamDataDir(stream)),
-          ]);
-          canReplay = hasLiveData && !hasStagedData;
-          state.liveStorageAvailable = canReplay;
-        } else if (canReplay) {
-          state.liveStorageAvailable = true;
-        }
-        if (canReplay) {
-          await this.replayStagedWrites(stream, state);
-        } else {
+        if (state.phase === 'replaying-recovery') {
+          state.phase = 'live';
           this.failedRollbacks.set(stream, state);
+        } else {
+          if (state.phase !== 'live' && canUseStreamDataDir(stream)) {
+            state.phase = 'transitioning';
+            const [hasLiveData, hasStagedData] = await Promise.all([
+              storagePathExists(streamDataDir(stream)),
+              storagePathExists(stagedStreamDataDir(stream)),
+            ]);
+            if (hasStagedData) state.phase = 'staged';
+            else if (hasLiveData) state.phase = 'live';
+            else state.phase = 'unavailable';
+          }
+          if (state.phase === 'live') {
+            await this.replayStagedWrites(stream, state);
+          } else {
+            this.failedRollbacks.set(stream, state);
+          }
         }
       } catch (recoveryError) {
         this.failedRollbacks.set(stream, state);
@@ -1521,7 +1520,7 @@ export class StreamSnapshotStore {
     const failedRollback = this.failedRollbacks.get(stream);
     if (failedRollback) {
       failedRollback.writes.set(key, value);
-      if (failedRollback.liveStorageAvailable) {
+      if (failedRollback.phase === 'live') {
         void this.queueWrite(stream, key, value)
           .then(() => {
             if (
