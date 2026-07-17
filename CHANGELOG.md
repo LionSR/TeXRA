@@ -82,8 +82,8 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
-- **Extension history remains usable when live refresh cannot start** — manual
-  refresh continues to work without disrupting the extension.
+- **Extension history stays available if automatic updates cannot start** —
+  reopening Settings refreshes the list without disrupting the extension.
 
 ### Desktop
 
