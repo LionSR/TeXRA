@@ -190,7 +190,6 @@ describe('computeModelOptionsData relay quota state', () => {
     );
   });
 
-
   it('falls back to personal keys when included access is disabled without quota auto-switch', async () => {
     const access = createModelOptionsAccess({
       useIncludedAccess: false,
@@ -499,7 +498,10 @@ describe('computeModelOptionsData Kimi Code routing (dual-backend kimi3)', () =>
     secrets: Record<string, string>,
   ): Promise<ModelOptionData> {
     await installPlatform({
-      globalState: { [GlobalStateKey.ENABLED_MODELS]: ['kimi3'], ...globalState },
+      globalState: {
+        [GlobalStateKey.ENABLED_MODELS]: ['kimi3'],
+        ...globalState,
+      },
       secrets,
     });
     const [model] = await computeModelOptionsData(['kimi3']);

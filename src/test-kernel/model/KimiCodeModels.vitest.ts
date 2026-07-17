@@ -27,18 +27,21 @@ describe('Kimi Code model registry', () => {
   it.each([
     ['kimiCoding', 'kimi-for-coding'],
     ['kimiCodingFast', 'kimi-for-coding-highspeed'],
-  ])('registers exclusive plan alias %s with wire id %s', (texraId, fullName) => {
-    const config = MODEL_CONFIGS[texraId];
-    expect(config).toBeDefined();
-    expect(config.fullName).toBe(fullName);
-    expect(config.provider).toBe(ModelProvider.MOONSHOT);
-    expect(config.contextWindow).toBe(262_144);
-    expect(config.baseUrl).toBe('https://api.kimi.com/coding/v1');
-    expect(isKimiCodeExclusiveModel(config)).toBe(true);
-    expect(resolveModelSource(config)).toBe('kimiCode');
-    // Plan aliases already use the wire id as fullName — no rename.
-    expect(kimiCodeWireModelId(config)).toBe(fullName);
-  });
+  ])(
+    'registers exclusive plan alias %s with wire id %s',
+    (texraId, fullName) => {
+      const config = MODEL_CONFIGS[texraId];
+      expect(config).toBeDefined();
+      expect(config.fullName).toBe(fullName);
+      expect(config.provider).toBe(ModelProvider.MOONSHOT);
+      expect(config.contextWindow).toBe(262_144);
+      expect(config.baseUrl).toBe('https://api.kimi.com/coding/v1');
+      expect(isKimiCodeExclusiveModel(config)).toBe(true);
+      expect(resolveModelSource(config)).toBe('kimiCode');
+      // Plan aliases already use the wire id as fullName — no rename.
+      expect(kimiCodeWireModelId(config)).toBe(fullName);
+    },
+  );
 
   it('flags kimi3 as dual-backend (subscription-eligible, not exclusive)', () => {
     const config = MODEL_CONFIGS.kimi3;

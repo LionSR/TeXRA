@@ -36,7 +36,10 @@ import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import type { AgentCategory } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getConfig } from '@utils/config/configUtils';
-import { getPreferKimiCode, getUseOpenRouter } from '@utils/config/providerConfig';
+import {
+  getPreferKimiCode,
+  getUseOpenRouter,
+} from '@utils/config/providerConfig';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 const CHANNEL = 'ModelFactory';
