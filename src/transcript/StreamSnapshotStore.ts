@@ -1021,30 +1021,6 @@ export class StreamSnapshotStore {
     state.resolveSettled();
   }
 
-  /** Restore buffered writes and release ownership after setup fails. */
-  private async failStagedDeletionSetup(
-    stream: StreamTabId,
-    state: StagedDeletionState,
-    setupError: unknown,
-  ): Promise<never> {
-    const failures: unknown[] = [setupError];
-    try {
-      await this.replayStagedWrites(stream, state);
-    } catch (error) {
-      this.failedRollbacks.set(stream, state);
-      failures.push(error);
-    } finally {
-      this.settleStagedDeletion(stream, state);
-    }
-    if (failures.length > 1) {
-      throw new AggregateError(
-        failures,
-        `Snapshot staging and rollback both failed for ${stream}`,
-      );
-    }
-    throw setupError;
-  }
-
   /**
    * Atomically move a stream's sidecars out of the live namespace while
    * keeping its in-memory record available until the transcript registry
@@ -1162,7 +1138,18 @@ export class StreamSnapshotStore {
         },
       };
     } catch (error) {
-      return this.failStagedDeletionSetup(stream, state, error);
+      try {
+        await this.replayStagedWrites(stream, state);
+      } catch (replayError) {
+        this.failedRollbacks.set(stream, state);
+        throw new AggregateError(
+          [error, replayError],
+          `Failed to stage snapshot deletion for ${stream} and restore buffered writes`,
+        );
+      } finally {
+        this.settleStagedDeletion(stream, state);
+      }
+      throw error;
     }
   }
 
