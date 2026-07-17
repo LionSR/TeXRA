@@ -4,7 +4,7 @@
 
 // Third-party imports
 import { Box } from 'ink';
-import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
+import { useLayoutEffect, useMemo, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
 import { type StreamTabId } from '@shared/schemas';
@@ -22,9 +22,7 @@ import {
 } from '../appLayout';
 import {
   isScopedTranscriptViewport,
-  transcriptViewportChange,
   transcriptViewportKey,
-  type TranscriptViewportChange,
 } from '../state/transcriptViewportMode';
 import { clampModalWidth } from '../ui/theme';
 import { ConversationPane } from './ConversationPane';
@@ -71,9 +69,7 @@ interface ConversationRegionSnapshot {
 interface ConversationRegionProps {
   readonly colorEnabled?: boolean;
   readonly columns: number;
-  readonly onTranscriptViewportChange?: (
-    change: TranscriptViewportChange,
-  ) => void;
+  readonly onStaticTranscriptChange?: () => void;
   readonly renderForegroundSurface: (availableRows: number) => ReactNode;
   readonly renderFooterChrome: () => ReactNode;
   readonly rows: number;
@@ -95,7 +91,7 @@ export function ConversationRegion({
   onKillExecution,
   onOpenProcessDetail,
   onPrintStream,
-  onTranscriptViewportChange,
+  onStaticTranscriptChange,
   renderFooterChrome,
   renderForegroundSurface,
   rows,
@@ -120,17 +116,11 @@ export function ConversationRegion({
     rootStreamId: snapshot.rootStreamId,
     scopedTranscript,
   });
-  const previousViewportKey = useRef<string | undefined>(undefined);
-
-  useLayoutEffect(() => {
-    const previous = previousViewportKey.current;
-    previousViewportKey.current = viewportKey;
-    const change = transcriptViewportChange({
-      previousViewportKey: previous,
-      nextViewportKey: viewportKey,
-    });
-    if (change) onTranscriptViewportChange?.(change);
-  }, [onTranscriptViewportChange, viewportKey]);
+  const executionLabelsKey = useMemo(
+    () => JSON.stringify([...snapshot.subagentExecutionLabels]),
+    [snapshot.subagentExecutionLabels],
+  );
+  const staticTranscriptKey = `${scrollbackTarget.ownerKey}:${executionLabelsKey}`;
 
   const activeSlice = snapshot.activeStreamId
     ? snapshot.streams.get(snapshot.activeStreamId)
@@ -216,6 +206,8 @@ export function ConversationRegion({
         colorEnabled={colorEnabled}
         maxRows={staticTranscriptRows}
         ownerKey={scrollbackTarget.ownerKey}
+        onRenderKeyChange={onStaticTranscriptChange}
+        renderKey={staticTranscriptKey}
         printRequests={ownerPrintRequests}
         scrollbackStreamId={scrollbackTarget.streamId}
         subagentExecutionLabels={snapshot.subagentExecutionLabels}

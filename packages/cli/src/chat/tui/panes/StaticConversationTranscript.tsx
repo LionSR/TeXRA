@@ -6,7 +6,7 @@
 
 import path from 'node:path';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Box, Static, Text } from 'ink';
 
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
@@ -489,7 +489,9 @@ export function appendStaticTranscriptItems({
 export function StaticConversationTranscript({
   colorEnabled,
   maxRows,
+  onRenderKeyChange,
   ownerKey,
+  renderKey = ownerKey,
   printRequests = [],
   scrollbackStreamId,
   subagentExecutionLabels,
@@ -497,13 +499,23 @@ export function StaticConversationTranscript({
 }: {
   readonly colorEnabled?: boolean;
   readonly maxRows?: number;
+  readonly onRenderKeyChange?: () => void;
   readonly ownerKey: string;
+  readonly renderKey?: string;
   readonly printRequests?: readonly TranscriptPrintRequest[];
   readonly scrollbackStreamId: StreamTabId | undefined;
   readonly subagentExecutionLabels?: ExecutionLabels;
   readonly width?: number;
 }): React.JSX.Element {
   const normalizedWidth = transcriptColumns(width);
+  const previousRenderKey = useRef<string | undefined>(undefined);
+  useLayoutEffect(() => {
+    const previous = previousRenderKey.current;
+    previousRenderKey.current = renderKey;
+    if (previous !== undefined && previous !== renderKey) {
+      onRenderKeyChange?.();
+    }
+  }, [onRenderKeyChange, renderKey]);
   const streams = useSignal(streamsSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
   const parentStream = useSignal(parentStreamSignal);
@@ -587,7 +599,7 @@ export function StaticConversationTranscript({
 
   return (
     <Static
-      key={`transcript:${ownerKey}:${normalizedWidth}`}
+      key={`transcript:${renderKey}:${normalizedWidth}`}
       items={staticItems}
     >
       {(item: StaticTranscriptItem) => (

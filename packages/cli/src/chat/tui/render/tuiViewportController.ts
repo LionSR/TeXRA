@@ -1,5 +1,3 @@
-import type { TranscriptViewportChange } from '../state/transcriptViewportMode';
-
 export interface TuiRepaintOptions {
   readonly clearScrollback?: boolean;
   readonly preserveStatic?: boolean;
@@ -19,9 +17,7 @@ const TERMINAL_RESUME_REPAINT_OPTIONS = {
 } satisfies TuiRepaintOptions;
 
 export interface TuiViewportController {
-  readonly handleTranscriptViewportChange: (
-    change: TranscriptViewportChange,
-  ) => void;
+  readonly repaintTranscript: () => void;
   readonly repaintAfterTerminalResume: () => void;
 }
 
@@ -29,7 +25,7 @@ export function createTuiViewportController(inkRef: {
   readonly current?: TuiRepaintTarget;
 }): TuiViewportController {
   return {
-    handleTranscriptViewportChange(): void {
+    repaintTranscript(): void {
       inkRef.current?.repaint(TRANSCRIPT_VIEWPORT_REPAINT_OPTIONS);
     },
     repaintAfterTerminalResume(): void {

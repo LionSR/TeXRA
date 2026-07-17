@@ -91,10 +91,7 @@ import {
 } from './state/childListSelection';
 import { streamDisplayLabel, streamTreeViews } from './state/streamViews';
 import { useSignal } from './state/useSignal';
-import {
-  transcriptViewportKey,
-  type TranscriptViewportChange,
-} from './state/transcriptViewportMode';
+import { transcriptViewportKey } from './state/transcriptViewportMode';
 import type { InputHistory } from './history/inputHistory';
 
 // Narrow subset of Ink's internal stdin emitter used to synthesize Enter.
@@ -121,9 +118,7 @@ export interface AppProps {
   readonly colorEnabled?: boolean;
   readonly commandName?: string;
   readonly onInterruptActive: () => void;
-  readonly onTranscriptViewportChange?: (
-    change: TranscriptViewportChange,
-  ) => void;
+  readonly onStaticTranscriptChange?: () => void;
   readonly onCtrlC?: () => void;
   /** Suspend the process (Ctrl-Z). Raw mode swallows the tty driver's own
    *  ^Z→SIGTSTP translation, so the parsed key must be routed explicitly. */
@@ -605,7 +600,7 @@ export function App(props: AppProps): React.JSX.Element {
       <ConversationRegion
         colorEnabled={props.colorEnabled}
         columns={columns}
-        onTranscriptViewportChange={props.onTranscriptViewportChange}
+        onStaticTranscriptChange={props.onStaticTranscriptChange}
         renderFooterChrome={() => (
           <>
             <InputBar

@@ -245,6 +245,106 @@ describe('Static band resize', () => {
     }
   });
 
+  it('replaces finalized execution rows when subagent labels arrive', async () => {
+    const ink = (await import(cliRequire.resolve('ink'))) as any;
+    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const { createElement } = React;
+    const { StaticConversationTranscript } =
+      await import('@cli/chat/tui/panes/StaticConversationTranscript');
+    const { patchStream, resetCliState } =
+      await import('@cli/chat/tui/state/cliState');
+    const inkRequire = createRequire(cliRequire.resolve('ink'));
+    const { clearTerminal } = inkRequire('ansi-escapes') as {
+      readonly clearTerminal: string;
+    };
+    const streamId = 'execution-label-stream' as StreamTabId;
+    const executionId = 'late-subagent-id';
+    const executionPath = `/executions/${executionId}/report`;
+    const executionEntry: ConversationEntry = {
+      id: 'execution-view',
+      role: 'tool',
+      text: '',
+      finalized: true,
+      toolUse: {
+        parsed: {},
+        toolName: 'executions',
+        errorText: '',
+        outputText: 'report',
+        userInstructionText: '',
+        input: { path: executionPath },
+        isError: false,
+        isUserFeedback: false,
+        headerSummary: '',
+        status: 'completed',
+      },
+    };
+
+    resetCliState({
+      agent: 'research',
+      category: AgentCategory.ToolUse,
+      model: 'test-model',
+      modelSource: 'builtin-default',
+      cwd: '/tmp/execution-label-proof',
+      apiMode: 'personal',
+      approvalPolicy: 'ask',
+      canDelegate: false,
+      transcriptMode: 'persistent',
+      version: '0.0.0-test',
+    });
+    patchStream(streamId, (slice) => ({
+      ...slice,
+      entries: [executionEntry],
+    }));
+
+    let inst: any;
+    function App({ labels }: { labels: ReadonlyMap<string, string> }): unknown {
+      const renderKey = JSON.stringify([...labels]);
+      return createElement(StaticConversationTranscript, {
+        onRenderKeyChange: () => {
+          inst.repaint({ clearScrollback: true, preserveStatic: false });
+        },
+        ownerKey: 'execution-label-owner',
+        renderKey,
+        scrollbackStreamId: streamId,
+        subagentExecutionLabels: labels,
+        width: 80,
+      });
+    }
+
+    const out = new FakeStdout(80);
+    inst = ink.render(createElement(App, { labels: new Map() }), {
+      stdout: out,
+      stdin: new FakeStdin(),
+      interactive: true,
+      exitOnCtrlC: false,
+      patchConsole: false,
+    });
+
+    try {
+      expect(await waitFor(() => out.buf.includes(executionPath), 5000)).toBe(
+        true,
+      );
+
+      out.buf = '';
+      inst.rerender(
+        createElement(App, {
+          labels: new Map([[executionId, 'reviewer']]),
+        }),
+      );
+
+      expect(await waitFor(() => out.buf.includes(clearTerminal), 5000)).toBe(
+        true,
+      );
+      const frame = stripAnsi(latestRepaintFrame(out.buf, clearTerminal));
+      expect(frame).toContain('executions (view: reviewer/report)');
+      expect(frame).not.toContain(executionPath);
+      expect(occurrences(frame, 'executions (view: reviewer/report)')).toBe(1);
+    } finally {
+      inst.unmount();
+      resetCliState();
+    }
+  });
+
   it('keeps resize subscriptions constant as tool history grows', async () => {
     const ink = (await import(cliRequire.resolve('ink'))) as any;
     const React = ((await import(cliRequire.resolve('react'))) as any).default;
