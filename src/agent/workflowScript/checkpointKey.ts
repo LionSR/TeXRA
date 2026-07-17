@@ -7,30 +7,26 @@ import stableStringify from 'fast-json-stable-stringify';
 const WORKFLOW_SCRIPT_CHECKPOINT_KEY_PREFIX = 'workflow-script-';
 
 /**
- * Content-derived checkpoint identity: the same script, args, and default
- * agent under the same parent execution resume the same durable journal, so
- * an LLM retry after a timeout or interruption (which mints a new tool-call
- * id) replays completed work instead of orphaning it. Same-content
- * semantics: a script that must re-execute from scratch needs different
- * content (e.g. a nonce field in args).
- *
- * Omitted args and explicit null args hash differently (stableStringify
- * drops undefined properties), matching the persistence layer, which
- * stores them as distinct values and fails loudly on a mismatch.
+ * Named checkpoint identity: `meta.name` plus the default agent under one
+ * parent execution owns one durable journal. A retry after a timeout or
+ * interruption resumes that journal even when the model rewrites the script
+ * (models rarely reproduce source byte-for-byte); safety lives in the journal
+ * itself, whose entries replay only on a matching call index and prompt/
+ * options hash — a changed call re-executes, an unchanged one is free.
+ * A script that must re-execute everything from scratch needs a new
+ * meta.name.
  */
 export function deriveWorkflowScriptCheckpointId(identity: {
-  readonly script: string;
-  readonly args: unknown;
+  readonly name: string;
   readonly defaultAgent: string;
   readonly parentExecutionId: string;
 }): string {
   return createHash('sha256')
     .update(
       stableStringify({
-        args: identity.args,
         defaultAgent: identity.defaultAgent,
+        name: identity.name,
         parentExecutionId: identity.parentExecutionId,
-        script: identity.script,
       }),
     )
     .digest('hex')
