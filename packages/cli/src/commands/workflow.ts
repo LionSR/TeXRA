@@ -168,12 +168,10 @@ export async function runWorkflowAgent(
 
       const { result } = execution;
       if (workflowOutputError !== undefined) {
-        if (result.outcome === RUN_OUTCOME.CANCELLED) {
-          writeErrorStderr(workflowOutputError);
-          return CliExitCode.Interrupted;
-        }
         writeErrorStderr(workflowOutputError);
-        return CliExitCode.AgentError;
+        return result.outcome === RUN_OUTCOME.CANCELLED
+          ? CliExitCode.Interrupted
+          : CliExitCode.AgentError;
       }
       if (!workflowResult) {
         throw new Error(

@@ -110,39 +110,27 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   });
 
   useEffect(() => {
-    const agentCategory = accessTarget.category;
-    if (agentCategory === undefined) {
+    let cancelled = false;
+    const resolve = (active: boolean): void => {
+      if (cancelled) return;
       setSubscriptionResolution({
         ...accessTarget,
         preferenceVersion: codexPreferenceVersion,
-        active: false,
+        active,
       });
+    };
+    const agentCategory = accessTarget.category;
+    if (agentCategory === undefined) {
+      resolve(false);
       return;
     }
-    let cancelled = false;
     let inFlight = false;
     const refresh = (): void => {
       if (inFlight) return; // Skip if the previous read has not resolved.
       inFlight = true;
       void isCodexSubscriptionActive(accessTarget.model, agentCategory)
-        .then((active) => {
-          if (!cancelled) {
-            setSubscriptionResolution({
-              ...accessTarget,
-              preferenceVersion: codexPreferenceVersion,
-              active,
-            });
-          }
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setSubscriptionResolution({
-              ...accessTarget,
-              preferenceVersion: codexPreferenceVersion,
-              active: false,
-            });
-          }
-        })
+        .then(resolve)
+        .catch(() => resolve(false))
         .finally(() => {
           inFlight = false;
         });

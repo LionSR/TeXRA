@@ -1,4 +1,4 @@
-import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
+import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import {
   getRuntimeModelConfig,

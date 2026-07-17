@@ -5,10 +5,23 @@ import { describe, it } from 'vitest';
 // Local imports
 import { ProbeEnvironmentTool } from '@tools/setup/ProbeEnvironmentTool';
 import { VerifySetupTool } from '@tools/setup/VerifySetupTool';
-import { setSetupPlatform } from '@tools/setup/platform';
+import {
+  setSetupPlatform,
+  type SetupSecretsAdapter,
+} from '@tools/setup/platform';
 
 // Local file imports
 import { createFakeSetupPlatform } from './fixtures';
+
+function installSetupPlatformWithSecrets(
+  secretsOverrides: Partial<SetupSecretsAdapter>,
+): void {
+  const platform = createFakeSetupPlatform();
+  setSetupPlatform({
+    ...platform,
+    secrets: { ...platform.secrets, ...secretsOverrides },
+  });
+}
 
 function installChatGptOnlySetupPlatform(): void {
   const platform = createFakeSetupPlatform();
@@ -63,15 +76,10 @@ async function assertAuthPrecedesCredentialProbe(
 
 describe('setup credential reporting', () => {
   it('reports the active host and provider-key origin without secret values', async () => {
-    const platform = createFakeSetupPlatform({ host: 'cli' });
-    setSetupPlatform({
-      ...platform,
-      secrets: {
-        ...platform.secrets,
-        providers: ['deepseek'],
-        async apiKeyOrigin() {
-          return 'env';
-        },
+    installSetupPlatformWithSecrets({
+      providers: ['deepseek'],
+      async apiKeyOrigin() {
+        return 'env';
       },
     });
 
@@ -106,18 +114,13 @@ describe('setup credential reporting', () => {
   });
 
   it('keeps probing when one provider key origin is unavailable', async () => {
-    const platform = createFakeSetupPlatform({ host: 'cli' });
-    setSetupPlatform({
-      ...platform,
-      secrets: {
-        ...platform.secrets,
-        providers: ['openai'],
-        async apiKeyOrigin() {
-          throw new Error('Keychain unavailable');
-        },
-        async anyUsableCredentialExists() {
-          throw new Error('Credential scan unavailable');
-        },
+    installSetupPlatformWithSecrets({
+      providers: ['openai'],
+      async apiKeyOrigin() {
+        throw new Error('Keychain unavailable');
+      },
+      async anyUsableCredentialExists() {
+        throw new Error('Credential scan unavailable');
       },
     });
 
@@ -131,14 +134,9 @@ describe('setup credential reporting', () => {
   });
 
   it('reports when aggregate credential readiness is unavailable', async () => {
-    const platform = createFakeSetupPlatform({ host: 'cli' });
-    setSetupPlatform({
-      ...platform,
-      secrets: {
-        ...platform.secrets,
-        async anyUsableCredentialExists() {
-          throw new Error('Credential scan unavailable');
-        },
+    installSetupPlatformWithSecrets({
+      async anyUsableCredentialExists() {
+        throw new Error('Credential scan unavailable');
       },
     });
 

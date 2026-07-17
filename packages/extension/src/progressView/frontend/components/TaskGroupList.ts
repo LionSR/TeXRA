@@ -390,13 +390,20 @@ export class TaskGroupList extends LitElement {
     }${repeat(
       visibleMessages,
       (m) => m.id,
-      (m) =>
-        guard([m, this.subagentExecutionLabels], () =>
-          formatLogEntry(m, {
-            executionLabels: this.subagentExecutionLabels,
-          }),
-        ),
+      (m) => this.renderLogEntry(m),
     )}`;
+  }
+
+  /**
+   * Format one log message, guarded against re-render while it and the
+   * current subagent labels stay the same.
+   */
+  private renderLogEntry(message: LogMessageData) {
+    return guard([message, this.subagentExecutionLabels], () =>
+      formatLogEntry(message, {
+        executionLabels: this.subagentExecutionLabels,
+      }),
+    );
   }
 
   private handleRevealOlderRows(event: Event): void {
@@ -716,11 +723,7 @@ export class TaskGroupList extends LitElement {
           (item) => item.key,
           (item) =>
             'msg' in item
-              ? guard([item.msg, this.subagentExecutionLabels], () =>
-                  formatLogEntry(item.msg, {
-                    executionLabels: this.subagentExecutionLabels,
-                  }),
-                )
+              ? this.renderLogEntry(item.msg)
               : this.renderGroupNode(item.tree, true),
         )}
       </div>

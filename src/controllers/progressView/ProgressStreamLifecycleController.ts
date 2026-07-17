@@ -54,6 +54,15 @@ export class ProgressStreamLifecycleController {
     await this.deps.host.stopStream(stream, { clearRetryRequest: true });
   }
 
+  private async notifyDeletionRetained(
+    deletion: Exclude<DeleteStreamResult, 'deleted'>,
+  ): Promise<void> {
+    await this.deps.host.notifyDeletionRetained(
+      deletion === 'active' ? 1 : 0,
+      deletion === 'failed' ? 1 : 0,
+    );
+  }
+
   async deleteStream(stream: StreamTabId): Promise<void> {
     if (!canUseStreamDataDir(stream)) return;
 
@@ -61,12 +70,7 @@ export class ProgressStreamLifecycleController {
       this.deps.state.hasStream(stream) || this.deps.state.hasTaskState(stream);
     if (!hasStream) {
       const deletion = await this.deps.state.clearStream(stream);
-      if (deletion !== 'deleted') {
-        await this.deps.host.notifyDeletionRetained(
-          deletion === 'active' ? 1 : 0,
-          deletion === 'failed' ? 1 : 0,
-        );
-      }
+      if (deletion !== 'deleted') await this.notifyDeletionRetained(deletion);
       return;
     }
 
@@ -85,10 +89,7 @@ export class ProgressStreamLifecycleController {
     const deletion = await this.deps.state.clearStream(stream);
     if (deletion !== 'deleted') {
       this.deps.host.rebuildRenderedStreams({ forceRebuild: true });
-      await this.deps.host.notifyDeletionRetained(
-        deletion === 'active' ? 1 : 0,
-        deletion === 'failed' ? 1 : 0,
-      );
+      await this.notifyDeletionRetained(deletion);
       return;
     }
     this.deps.host.cleanupDeletedStream(stream);

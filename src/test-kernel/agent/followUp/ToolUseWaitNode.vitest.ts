@@ -810,9 +810,7 @@ describe('ToolUseWaitNode', () => {
   });
 
   it('appends queued subagent results and user follow-ups as separate turns', async () => {
-    const shared: ToolUseRunShared = {
-      messages: [],
-      shouldSkipCycle: false,
+    const shared: ToolUseRunShared = toolUseRunShared({
       stateSlices: {
         runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
         workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
@@ -821,7 +819,7 @@ describe('ToolUseWaitNode', () => {
           transient: { INSTRUCTION: 'initial request' },
         },
       },
-    };
+    });
     const createUserFollowUpMessages = vi.fn(
       async (
         messages: ProviderMessage[],

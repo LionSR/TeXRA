@@ -100,8 +100,6 @@ function normalizeLegacyExhaustionFlags(value: unknown): unknown {
     exhaustionReason = 'upstream-credit';
   } else if (isCredentialExhausted === true) {
     exhaustionReason = 'relay-limit';
-  } else {
-    exhaustionReason = undefined;
   }
   return exhaustionReason === undefined ? rest : { ...rest, exhaustionReason };
 }

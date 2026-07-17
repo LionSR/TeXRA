@@ -87,13 +87,13 @@ function ownershipKey(root: string, executionId: ExecutionId): string {
   return `${root}\0${executionId}`;
 }
 
-function leaseRelativePath(executionId: ExecutionId): string {
-  const safeExecutionId = LeaseExecutionIdSchema.parse(executionId);
-  return `${WORKSPACE_STORAGE_LAYOUT.executionLeases}/${safeExecutionId}.json`;
-}
-
 function leasePath(root: string, executionId: ExecutionId): string {
-  return path.join(root, leaseRelativePath(executionId));
+  const safeExecutionId = LeaseExecutionIdSchema.parse(executionId);
+  return path.join(
+    root,
+    WORKSPACE_STORAGE_LAYOUT.executionLeases,
+    `${safeExecutionId}.json`,
+  );
 }
 
 function legacyHeartbeatPath(root: string, executionId: ExecutionId): string {
@@ -478,7 +478,15 @@ export async function completeOwnedExecutionLease(
     abandonOwnedExecutionLease(executionId);
     return;
   }
-  await releaseOwnedExecutionLeaseBestEffort(executionId);
+  try {
+    await releaseOwnedExecutionLease(executionId);
+  } catch (error) {
+    logger.warn(
+      CHANNEL,
+      `Failed to release execution ${executionId}; its lease will expire after the stale horizon: ${toErrorMessage(error)}`,
+      { data: error },
+    );
+  }
 }
 
 /** Release during rollback without allowing cleanup failure to mask the cause. */
@@ -508,21 +516,6 @@ export async function waitForOwnedExecutionLeaseRelease(
     .filter((lease) => lease.executionId === executionId)
     .map((lease) => lease.released);
   await Promise.all(releases);
-}
-
-/** Release at a completed owner boundary without replacing its primary result. */
-async function releaseOwnedExecutionLeaseBestEffort(
-  executionId: ExecutionId,
-): Promise<void> {
-  try {
-    await releaseOwnedExecutionLease(executionId);
-  } catch (error) {
-    logger.warn(
-      CHANNEL,
-      `Failed to release execution ${executionId}; its lease will expire after the stale horizon: ${toErrorMessage(error)}`,
-      { data: error },
-    );
-  }
 }
 
 async function releaseOwnership(ownership: OwnedExecutionLease): Promise<void> {

@@ -1,12 +1,5 @@
 // Node imports
-import {
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  stat,
-  writeFile,
-} from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -19,6 +12,7 @@ import {
   mergeLegacyWorkspaceStorageBucket,
   moveEntryIfAbsent,
 } from '@platform/defaults/legacyDataMigration';
+import { cleanupTempDirs } from '@test/support/tempDirPlatform';
 
 // Type imports - platform
 import type { LegacyDataMigrationLogger } from '@platform/defaults/legacyDataMigration';
@@ -56,9 +50,7 @@ async function makeTempDir(prefix: string): Promise<string> {
 }
 
 afterEach(async () => {
-  await Promise.all(
-    tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
-  );
+  await cleanupTempDirs(tempDirs);
 });
 
 describe('mergeLegacyStorageBucket (#8622 vscode → ~/.texra migration)', () => {

@@ -25,14 +25,6 @@ import {
 } from './proposalFlow';
 import { assertWorkflowFilesExist } from './workflowFileValidation';
 
-function workflowChildExecutionId(
-  parentExecutionId: LaunchRunContext['runScope']['executionId'],
-  checkpointId: string,
-  key: string,
-): LaunchRunContext['runScope']['executionId'] {
-  return deriveExecutionId({ checkpointId, key, parentExecutionId });
-}
-
 async function resolveInvocationInputFiles(
   parentExecutionId: LaunchRunContext['runScope']['executionId'],
   files: readonly string[],
@@ -107,11 +99,11 @@ export function createWorkflowScriptAgentRunner(
   return async (invocation) => {
     try {
       const { result } = await executeStableSubagentInBand({
-        executionId: workflowChildExecutionId(
-          run.executionId,
+        executionId: deriveExecutionId({
           checkpointId,
-          invocation.key,
-        ),
+          key: invocation.key,
+          parentExecutionId: run.executionId,
+        }),
         parentExecutionId: run.executionId,
         signal: invocation.signal,
         prepare: async () => {

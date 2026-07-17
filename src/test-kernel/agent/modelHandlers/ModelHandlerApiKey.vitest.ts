@@ -24,11 +24,7 @@ class ExposedKeyHandler extends ModelHandlerOpenRouterNative {
   }
 }
 
-type TestModelConfig = ModelConfig;
-
-function buildConfig(
-  overrides: Partial<TestModelConfig> = {},
-): TestModelConfig {
+function buildConfig(overrides: Partial<ModelConfig> = {}): ModelConfig {
   return {
     name: 'gpt-5.5',
     label: 'GPT-5.5',

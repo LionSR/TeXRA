@@ -56,6 +56,15 @@ function loopbackSession() {
   };
 }
 
+async function loginByOpeningBrowser({
+  openBrowser,
+}: {
+  openBrowser: (url: string) => Promise<void>;
+}) {
+  await openBrowser('https://auth.openai.com/authorize?x=1');
+  return loopbackSession();
+}
+
 describe('signInWithChatGptSubscription', () => {
   beforeEach(() => {
     mocks.withProgress.mockImplementation((_options, task) => task());
@@ -122,10 +131,7 @@ describe('signInWithChatGptSubscription', () => {
       effective: true,
       target: 'global',
     });
-    mocks.loginWithLoopback.mockImplementation(async ({ openBrowser }) => {
-      await openBrowser('https://auth.openai.com/authorize?x=1');
-      return loopbackSession();
-    });
+    mocks.loginWithLoopback.mockImplementation(loginByOpeningBrowser);
 
     await signInWithChatGptSubscription('TestChannel');
 
@@ -145,10 +151,7 @@ describe('signInWithChatGptSubscription', () => {
       effective: true,
       target: 'global',
     });
-    mocks.loginWithLoopback.mockImplementation(async ({ openBrowser }) => {
-      await openBrowser('https://auth.openai.com/authorize?x=1');
-      return loopbackSession();
-    });
+    mocks.loginWithLoopback.mockImplementation(loginByOpeningBrowser);
 
     await signInWithChatGptSubscription('TestChannel');
 
@@ -160,10 +163,7 @@ describe('signInWithChatGptSubscription', () => {
 
   it('cancels sign-in without logging an error when the dialog is dismissed', async () => {
     mocks.showInformationMessage.mockResolvedValue(undefined);
-    mocks.loginWithLoopback.mockImplementation(async ({ openBrowser }) => {
-      await openBrowser('https://auth.openai.com/authorize?x=1');
-      return loopbackSession();
-    });
+    mocks.loginWithLoopback.mockImplementation(loginByOpeningBrowser);
 
     const signedIn = await signInWithChatGptSubscription('TestChannel');
 

@@ -323,19 +323,14 @@ function StaticTranscriptItemContent({
           </Box>
         </EntryErrorBoundary>
       );
-    case 'workflowScriptCompletion':
+    case 'workflowScriptCompletion': {
+      const failed = item.entry.workflowScriptOutcome === 'failed';
       return (
         <EntryErrorBoundary label="workflow script result">
           <Box flexDirection="column">
             <Box paddingLeft={2}>
-              <Text
-                color={
-                  item.entry.workflowScriptOutcome === 'failed'
-                    ? COLOR_ERROR
-                    : COLOR_SUCCESS
-                }
-              >
-                {`${TOOL_OUTPUT_CORNER} ${item.entry.workflowScriptOutcome === 'failed' ? 'Workflow script failed' : 'Workflow script completed'}`}
+              <Text color={failed ? COLOR_ERROR : COLOR_SUCCESS}>
+                {`${TOOL_OUTPUT_CORNER} ${failed ? 'Workflow script failed' : 'Workflow script completed'}`}
               </Text>
             </Box>
             <ToolUseRow
@@ -348,6 +343,7 @@ function StaticTranscriptItemContent({
           </Box>
         </EntryErrorBoundary>
       );
+    }
   }
 }
 

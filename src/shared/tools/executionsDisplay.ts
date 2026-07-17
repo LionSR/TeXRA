@@ -57,9 +57,8 @@ export function executionsSubagentSummary(
   });
   if (!matchedSubagent) return undefined;
 
-  const action =
-    typeof input.action === 'string' && input.action.trim()
-      ? input.action.trim()
-      : EXECUTIONS_DEFAULT_ACTION;
+  const trimmedAction =
+    typeof input.action === 'string' ? input.action.trim() : '';
+  const action = trimmedAction || EXECUTIONS_DEFAULT_ACTION;
   return `${action}: ${displayTargets.join(', ')}`;
 }
