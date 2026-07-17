@@ -539,6 +539,15 @@ async function createModelHandlerForResolvedCompatibilityKey(
   // Dual-backend `kimi3` is rerouted only while the "Prefer Kimi Code" switch
   // is on and a key is stored, by swapping in a synthesized runtime config that
   // the normal ModelHandlerKimi switch below then builds.
+  //
+  // On the resume path `useOpenRouter` is derived from the compatibility key
+  // (false unless it's `ModelHandlerOpenRouterNative`), not the live global
+  // toggle — and that is correct here: `kimi3` carries an `openrouterFullName`,
+  // so an OpenRouter-routed session persists as `ModelHandlerOpenRouterNative`,
+  // never `ModelHandlerKimi`. Reaching this branch therefore means the session
+  // was a *direct* Kimi session, for which OpenRouter is irrelevant; honoring
+  // the current Prefer-Kimi-Code + key on resume keeps a Kimi-Code-only user's
+  // resumed sessions runnable (they have no Moonshot key to fall back to).
   if (
     compatibilityKey === 'ModelHandlerKimi' &&
     isKimiSubscriptionEligible(config)

@@ -79,6 +79,21 @@ describe('Kimi Code routing', () => {
     ).toBe('ModelHandlerKimi');
   });
 
+  it('routes dual-backend kimi3 through OpenRouter when the toggle is on', () => {
+    // The factory's Kimi Code reroute is guarded on compat key
+    // 'ModelHandlerKimi'. Because kimi3 carries an openrouterFullName, an
+    // OpenRouter-enabled session persists as 'ModelHandlerOpenRouterNative'
+    // instead — so a resumed 'ModelHandlerKimi' kimi3 was, by construction, a
+    // direct (non-OpenRouter) session, which is why the resume path's
+    // useOpenRouter=false is correct.
+    expect(
+      modelHandlerCompatibilityKey(MODEL_CONFIGS.kimi3, false, false),
+    ).toBe('ModelHandlerKimi');
+    expect(modelHandlerCompatibilityKey(MODEL_CONFIGS.kimi3, true, false)).toBe(
+      'ModelHandlerOpenRouterNative',
+    );
+  });
+
   it('never sends managed-service credentials through the TeXRA relay', () => {
     expect(allowsModelRelay(MODEL_CONFIGS.kimiCoding)).toBe(false);
     expect(allowsModelRelay(MODEL_CONFIGS.kimiCodingFast)).toBe(false);
