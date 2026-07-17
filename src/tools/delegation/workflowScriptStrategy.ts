@@ -21,6 +21,16 @@ import type { AgentTrace } from '@agent/trace';
 import type { ExecutionKVStore } from '@agent/storage';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 
+// Local imports - shared
+import { DELIVERY_TAG } from '@shared/deliveryTags';
+import type { ExecutionId } from '@shared/schemas';
+
+// Local imports - tools
+import {
+  formatChildRunDelivery,
+  formatChildRunError,
+} from '@tools/deliveryEnvelope';
+
 // Local imports - utilities
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateSummary } from '@utils/text/stringUtils';
@@ -69,6 +79,8 @@ function formatWorkflowResult(result: unknown): string {
 }
 
 export interface WorkflowScriptStrategyParams {
+  /** The detached run's execution id — echoed on the delivery envelope. */
+  readonly executionId: ExecutionId;
   /** The run's child-stream trace — where phase/log progress projects. */
   readonly logger: AgentTrace;
   /** Orchestrator store that owns the durable journal (checkpoint anchor). */
@@ -165,10 +177,27 @@ export function createWorkflowScriptStrategy(
 
     isTerminal: () => true,
 
+    // Wrap the free-form result in the shared child-run envelope so the async
+    // follow-up carries the run's executionId, like every other detached
+    // delivery — the invoking model correlates and can resume by that id.
     formatDelivery: (turn) =>
-      `${formatWorkflowResult(turn.result)}${runLog.format()}`,
+      formatChildRunDelivery(
+        {
+          tag: DELIVERY_TAG.workflowScriptResult,
+          executionId: params.executionId,
+        },
+        { response: `${formatWorkflowResult(turn.result)}${runLog.format()}` },
+      ),
 
     formatError: (_turn, err) =>
-      `${toErrorMessage(err)}${runLog.format()}\n\nCompleted agent() calls are journaled under meta.name '${params.name}': call delegate_workflow_script again with the same meta.name to resume without repeating them.`,
+      formatChildRunError(
+        {
+          tag: DELIVERY_TAG.workflowScriptError,
+          executionId: params.executionId,
+        },
+        {
+          message: `${toErrorMessage(err)}${runLog.format()}\n\nCompleted agent() calls are journaled under meta.name '${params.name}': call delegate_workflow_script again with the same meta.name to resume without repeating them.`,
+        },
+      ),
   };
 }

@@ -69,8 +69,13 @@ So the async conversion is a **new strategy**, not new runtime:
   `WorkflowScriptTool.execute`), uses `ports.recordCost` for the final total
   and `ports.notify` for interim phase/log progress, `isTerminal: () => true`,
   no `runTurn`. `formatDelivery` → result + run log; `formatError` → error +
-  run log + "resume with same meta.name" hint; `buildResultMeta` → the
-  structured result envelope so `/executions/{id}/result` chaining works.
+  run log + "resume with same meta.name" hint, both wrapped in the shared
+  child-run delivery envelope so the async follow-up carries the run's
+  executionId. `buildResultMeta` is intentionally omitted (matching the
+  agent-CLI strategies): the script's return value is free-form and does not
+  map onto the `AgentFinalResult`-shaped `ResultMeta`; the prose result is
+  delivered and persisted as the report, and each `agent()` grandchild still
+  persists its own chainable manifest.
 - **Split** `WorkflowScriptTool.execute` into a launch half (mint/derive the
   run executionId, capture `recordSubagentCost` +
   `approvalPromptsUnavailable`/`runtimeUnavailableTools` up front, call

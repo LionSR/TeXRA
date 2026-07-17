@@ -20,7 +20,7 @@ import { startChildRunLoop } from '@agent/runtime/childRunLoop';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
 
 // Local imports - shared schemas
-import { AgentCategory } from '@shared/schemas';
+import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
@@ -162,17 +162,23 @@ Tool inclusion is the opt-in boundary: do not add this tool to a default agent c
       );
     }
 
-    const childStream = createChildStream(runExecutionId, runScope.streamId, {
-      streamPrefix: STREAM_PREFIX,
-      streamCategory: AgentCategory.Workflow,
-      agentName: meta.name,
-      description: meta.description,
-      config: runConfig,
-      toolName: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
-      runtimeHost: runScope.runtimeHost,
-    });
-    const runChildStreamId = childStream.childStreamId;
+    // createChildStream is inside the lease-protected try: it runs after the
+    // deterministic run lease is held, so a throw here (missing subscribers,
+    // duplicate stream tab) must release the lease — otherwise the lease
+    // survives to its heartbeat timeout and a prompt relaunch is refused.
+    let runChildStreamId: StreamTabId;
     try {
+      const childStream = createChildStream(runExecutionId, runScope.streamId, {
+        streamPrefix: STREAM_PREFIX,
+        streamCategory: AgentCategory.Workflow,
+        agentName: meta.name,
+        description: meta.description,
+        config: runConfig,
+        toolName: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+        runtimeHost: runScope.runtimeHost,
+      });
+      runChildStreamId = childStream.childStreamId;
+
       // The run's own stream inherits the orchestrator's bypass so grandchild
       // agent() calls, which link to this stream, still resolve it transitively.
       configureDelegatedChildApprovals(
@@ -189,6 +195,7 @@ Tool inclusion is the opt-in boundary: do not add this tool to a default agent c
         executionId: runExecutionId,
         agentName: meta.name,
         strategy: createWorkflowScriptStrategy({
+          executionId: runExecutionId,
           logger: childStream.logger,
           store,
           checkpointId,
