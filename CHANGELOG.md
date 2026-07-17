@@ -78,6 +78,13 @@ All notable changes to this project will be documented in this file.
   with text in a foreground dialog now clears that text; pressing it again
   keeps the existing response-stop or exit behavior.
 
+### Desktop
+
+#### Bug Fixes
+
+- **Live history refresh failures stay contained** — a filesystem refresh error
+  no longer becomes an unhandled desktop process failure.
+
 ## [0.39.5] - 2026-07-15
 
 ### Shared (all surfaces)
@@ -237,8 +244,6 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
-- **Live history refresh failures stay contained** — a filesystem refresh error
-  no longer becomes an unhandled desktop process failure.
 - **Running sessions stay connected after reopening the desktop window** —
   active runs, later turns, subagents, status updates, and pending interactions
   are rebound to the replacement window instead of continuing without visible
