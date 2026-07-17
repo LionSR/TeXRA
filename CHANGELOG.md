@@ -78,6 +78,13 @@ All notable changes to this project will be documented in this file.
   with text in a foreground dialog now clears that text; pressing it again
   keeps the existing response-stop or exit behavior.
 
+### Extension (VS Code)
+
+#### Bug Fixes
+
+- **Extension history stays available if automatic updates cannot start** —
+  reopening Settings refreshes the list without disrupting the extension.
+
 ### Desktop
 
 #### Bug Fixes

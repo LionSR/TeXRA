@@ -37,6 +37,7 @@ import { WorkspaceStateKey, globalSM, workspaceSM } from '@common/state';
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import {
+  logErrorMessage,
   showLoggedErrorMessage,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
@@ -307,29 +308,40 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
    * webview. The debounce coalesces launch and terminal write bursts.
    */
   private async registerExecutionsWatcher(): Promise<void> {
-    this.executionsWatcher?.dispose();
-    const executionsDir = path.join(
-      platform().storage.getStoragePath(),
-      RUNS_STORAGE_DIR,
-    );
-    // A watcher rooted at a not-yet-existing directory can silently never
-    // fire; the dir is cheap to create and always wanted.
-    await StorageFS.ensureDir(RUNS_STORAGE_DIR);
-    const refreshHistory = debounce(
-      () =>
-        this.withActiveWebview((w) => this.historyHandlers.sendHistoryData(w)),
-      DEBOUNCE_OPTIONS_MS,
-    );
-    const onExecutionsEvent = () => {
-      void refreshHistory();
-    };
-    const watcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(vscode.Uri.file(executionsDir), '**'),
-    );
-    watcher.onDidCreate(onExecutionsEvent);
-    watcher.onDidChange(onExecutionsEvent);
-    watcher.onDidDelete(onExecutionsEvent);
-    this.executionsWatcher = watcher;
+    try {
+      this.executionsWatcher?.dispose();
+      this.executionsWatcher = undefined;
+      const executionsDir = path.join(
+        platform().storage.getStoragePath(),
+        RUNS_STORAGE_DIR,
+      );
+      // A watcher rooted at a not-yet-existing directory can silently never
+      // fire; the dir is cheap to create and always wanted.
+      await StorageFS.ensureDir(RUNS_STORAGE_DIR);
+      const refreshHistory = debounce(
+        () =>
+          this.withActiveWebview((w) =>
+            this.historyHandlers.sendHistoryData(w),
+          ),
+        DEBOUNCE_OPTIONS_MS,
+      );
+      const onExecutionsEvent = () => {
+        void refreshHistory();
+      };
+      const watcher = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(vscode.Uri.file(executionsDir), '**'),
+      );
+      watcher.onDidCreate(onExecutionsEvent);
+      watcher.onDidChange(onExecutionsEvent);
+      watcher.onDidDelete(onExecutionsEvent);
+      this.executionsWatcher = watcher;
+    } catch (error) {
+      logErrorMessage(
+        this.channel,
+        'Failed to register execution history watcher',
+        error,
+      );
+    }
   }
 
   private createHandlerRegistry(): SettingsViewInboundHandlerRegistry {
