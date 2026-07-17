@@ -818,9 +818,7 @@ export async function runChat(
       colorEnabled={stdoutColorEnabled}
       commandName={context.commandName}
       onInterruptActive={interruptActive}
-      onTranscriptViewportChange={
-        viewportController.handleTranscriptViewportChange
-      }
+      onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={() => handleSigint()}
       onSuspend={() => handleSigtstp()}
       onKillExecution={(executionId) => {

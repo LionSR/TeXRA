@@ -33,6 +33,7 @@ import type { LogMessageData, TaskGroup } from '@shared/schemas';
 import { PersistedState } from '@shared/state';
 import { designTokens } from '@shared/styles';
 import { postMessage } from '@shared/hostBridge';
+import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { copyWithFeedback } from '@shared/utils/clipboard';
 import { webviewStorage } from '../webviewStorage';
@@ -75,6 +76,7 @@ interface CachedStream {
   isToolUse: boolean;
   /** Whether to render this stream's logs in terminal style. */
   terminalMode: boolean;
+  subagentExecutionLabels: ExecutionLabels;
 }
 
 @customElement('log-list')
@@ -138,6 +140,8 @@ export class LogList extends LitElement {
       entry.status = this.streamContext.streamStatus;
       entry.isToolUse = this.streamContext.isToolUse;
       entry.terminalMode = this.streamContext.terminalMode;
+      entry.subagentExecutionLabels =
+        this.streamContext.subagentExecutionLabels ?? new Map();
     }
   }
 
@@ -166,6 +170,7 @@ export class LogList extends LitElement {
           .streamStatus=${data.status}
           .isToolUse=${data.isToolUse}
           .toggleStates=${data.toggleStates}
+          .subagentExecutionLabels=${data.subagentExecutionLabels}
           ?terminal=${data.terminalMode}
         ></task-group-list>
       `,
@@ -235,6 +240,7 @@ export class LogList extends LitElement {
       status: null,
       isToolUse: false,
       terminalMode: false,
+      subagentExecutionLabels: new Map(),
     };
     this.streamCache.set(streamId, createdEntry);
     return createdEntry;

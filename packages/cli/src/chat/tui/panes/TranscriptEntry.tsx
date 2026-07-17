@@ -5,6 +5,7 @@
 // Third-party imports
 import { memo } from 'react';
 import { Box, Text } from 'ink';
+import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 // Local imports - CLI TUI rendering
 import { Markdown } from '../render/Markdown';
@@ -157,14 +158,22 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   width,
   colorEnabled,
   fillWidth,
+  subagentExecutionLabels,
 }: {
   readonly entry: ConversationEntry;
   readonly width?: number;
   readonly colorEnabled?: boolean;
   readonly fillWidth?: boolean;
+  readonly subagentExecutionLabels?: ExecutionLabels;
 }): React.JSX.Element {
   if (entry.role === 'tool') {
-    return <ToolUseRow toolUse={entry.toolUse} width={width} />;
+    return (
+      <ToolUseRow
+        subagentExecutionLabels={subagentExecutionLabels}
+        toolUse={entry.toolUse}
+        width={width}
+      />
+    );
   }
 
   const layout = transcriptEntryLayout(entry, {
@@ -212,16 +221,23 @@ export const BoundedTranscriptEntry = memo(function BoundedTranscriptEntry({
   colorEnabled,
   entry,
   maxRows,
+  subagentExecutionLabels,
   width,
 }: {
   readonly colorEnabled?: boolean;
   readonly entry: ConversationEntry;
   readonly maxRows: number;
+  readonly subagentExecutionLabels?: ExecutionLabels;
   readonly width?: number;
 }): React.JSX.Element {
   if (entry.role === 'tool') {
     return (
-      <ToolUseRow maxRows={maxRows} toolUse={entry.toolUse} width={width} />
+      <ToolUseRow
+        maxRows={maxRows}
+        subagentExecutionLabels={subagentExecutionLabels}
+        toolUse={entry.toolUse}
+        width={width}
+      />
     );
   }
 

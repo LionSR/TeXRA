@@ -42,6 +42,7 @@ import {
   DELEGATION_TOOLS,
 } from '@shared/constants/delegationTools';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { EXECUTIONS_DEFAULT_ACTION } from '@shared/tools/executionsDisplay';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
 import type { EditInput } from '@tools/EditTool';
@@ -62,7 +63,6 @@ import {
   getOutputEdits,
   getExecutionsWaitTimeoutSeconds,
   isMcpTextBlock,
-  EXECUTIONS_DEFAULT_ACTION,
 } from './helpers';
 
 type SpecializedToolRenderer = (

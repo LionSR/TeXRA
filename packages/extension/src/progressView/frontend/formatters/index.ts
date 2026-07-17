@@ -41,7 +41,7 @@ export { isStreamingTextLogMessage } from './baseLogFormatter';
 
 type TemplateFormatterFn = (
   message: LogMessageData,
-  options?: { defaultOpen?: boolean; isRunning?: boolean },
+  options?: FormatOptions & { isRunning?: boolean },
 ) => FormatResult;
 
 /** Message types that auto-expand when defaultOpen is set. */
@@ -69,7 +69,7 @@ function formatRenderError(label: string, errorMsg: string): TemplateResult {
 function wrapWithErrorHandling(
   fn: (
     m: LogMessageData,
-    opts?: { defaultOpen?: boolean; isRunning?: boolean },
+    opts?: FormatOptions & { isRunning?: boolean },
   ) => FormatResult,
   label: string,
 ): TemplateFormatterFn {
@@ -169,6 +169,7 @@ export function formatLogEntry(
   // logs until the stream finalizes (#7276).
   const templateOptions = {
     defaultOpen: isOpen,
+    executionLabels: options.executionLabels,
     isRunning: isStreamingTextLogMessage(logMessage),
   };
 
