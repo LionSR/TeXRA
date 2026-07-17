@@ -922,7 +922,7 @@ function createWindow(options: {
   try {
     mkdirSync(executionsDir, { recursive: true });
     executionsWatcher = watch(executionsDir, { recursive: true }, () => {
-      void debouncedHistoryRepost();
+      void debouncedHistoryRepost().catch(reportAsyncError);
     });
   } catch (error) {
     reportAsyncError(error);

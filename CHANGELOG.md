@@ -237,6 +237,8 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Live history refresh failures stay contained** — a filesystem refresh error
+  no longer becomes an unhandled desktop process failure.
 - **Running sessions stay connected after reopening the desktop window** —
   active runs, later turns, subagents, status updates, and pending interactions
   are rebound to the replacement window instead of continuing without visible
