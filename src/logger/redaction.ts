@@ -54,11 +54,6 @@ export const PROVIDER_KEY_REDACTION_RULES = {
     examples: ['sk-kimi-redaction-example-1234567890abcdef'],
     patterns: [OPENAI_COMPATIBLE_API_KEY_PATTERN],
   },
-  // Kimi Code console keys share Moonshot's sk- shape.
-  kimiCode: {
-    examples: ['sk-kimicode-redaction-example-1234567890abcdef'],
-    patterns: [OPENAI_COMPATIBLE_API_KEY_PATTERN],
-  },
   dashscope: {
     examples: [
       'sk-redaction-example-1234567890abcdef',

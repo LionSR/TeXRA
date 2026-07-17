@@ -156,11 +156,11 @@ describe('computeModelOptionsData relay quota state', () => {
       { [apiKeySecretName('kimiCode')]: 'sk-kimi-code' },
     );
 
-    const [model] = await computeModelOptionsData(['kimiCodeCoding'], access);
+    const [model] = await computeModelOptionsData(['kimiCoding'], access);
 
     expect(model).toMatchObject({
       provider: 'kimiCode',
-      availability: 'provider-key',
+      availability: 'kimi-code-access',
       disabled: false,
     });
   });
@@ -176,8 +176,8 @@ describe('computeModelOptionsData relay quota state', () => {
       { [apiKeySecretName('moonshot')]: 'sk-moonshot' },
     );
 
-    const [model] = await computeModelOptionsData(['kimiCodeCoding'], access);
-    const reason = await getModelUnavailableReason('kimiCodeCoding', access);
+    const [model] = await computeModelOptionsData(['kimiCoding'], access);
+    const reason = await getModelUnavailableReason('kimiCoding', access);
 
     expect(model).toMatchObject({
       provider: 'kimiCode',
@@ -185,7 +185,7 @@ describe('computeModelOptionsData relay quota state', () => {
       disabled: true,
     });
     expect(reason).toBe(
-      'Model "kimiCodeCoding" requires your Kimi Code API key. Provide it to continue.',
+      'Model "kimiCoding" requires Kimi Code. Sign in with your Kimi membership or provide your Kimi Code console API key.',
     );
   });
 

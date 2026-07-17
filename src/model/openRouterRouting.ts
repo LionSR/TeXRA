@@ -1,4 +1,5 @@
 import { isApiProvider, type ApiProvider } from './apiProviders';
+import { isKimiCodeExclusiveModel } from './kimiCodeSubscriptionRouting';
 
 import type { ModelConfig } from 'llm-zoo';
 
@@ -11,26 +12,24 @@ interface OpenRouterRoutingConfig {
 }
 
 /**
- * Atomic managed-route metadata layered over llm-zoo's provider-family data.
- * Its credential and endpoint stay paired, so managed routes always bypass
- * OpenRouter and the included-access relay.
+ * Managed-route facts read straight off the llm-zoo registry entry: a model
+ * whose `kimiSubscription` flag pairs with a pinned Kimi Code `baseUrl` is
+ * served ONLY by that managed endpoint (see
+ * {@link isKimiCodeExclusiveModel}), so its credential and endpoint stay
+ * paired and it always bypasses OpenRouter and the included-access relay.
  */
-export interface DirectModelRoutingConfig {
-  readonly directAccess?: {
-    readonly source: string;
-    readonly credential: ApiProvider;
-    readonly baseUrl: string;
-  };
+interface ManagedRouteFields {
+  kimiSubscription?: boolean;
+  baseUrl?: string;
 }
 
-export type ModelRoutingConfig = OpenRouterRoutingConfig &
-  DirectModelRoutingConfig;
+export type ModelRoutingConfig = OpenRouterRoutingConfig & ManagedRouteFields;
 
 /** Whether a registry entry owns an atomic managed-service route. */
 export function hasManagedDirectRoute(
-  config: Pick<ModelRoutingConfig, 'directAccess' | 'provider'>,
+  config: Pick<ModelRoutingConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
 ): boolean {
-  return config.directAccess !== undefined;
+  return isKimiCodeExclusiveModel(config);
 }
 
 function isOpenRouterAccessSelected(
@@ -68,9 +67,9 @@ export function resolveModelApiKeyProvider(
 
 /** API-key owner for the direct route, independent of the global OpenRouter choice. */
 export function resolveDirectModelApiKeyProvider(
-  config: Pick<ModelRoutingConfig, 'directAccess' | 'provider'>,
+  config: Pick<ModelRoutingConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
 ): ApiProvider | undefined {
-  if (config.directAccess) return config.directAccess.credential;
+  if (hasManagedDirectRoute(config)) return 'kimiCode';
   return config.provider && isApiProvider(config.provider)
     ? config.provider
     : undefined;
@@ -78,21 +77,14 @@ export function resolveDirectModelApiKeyProvider(
 
 /** Product-facing model source; direct managed services own their own group. */
 export function resolveModelSource(
-  config: Pick<ModelRoutingConfig, 'directAccess' | 'provider'>,
+  config: Pick<ModelRoutingConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
 ): string | undefined {
-  return config.directAccess?.source ?? config.provider;
-}
-
-/** Fixed base URL for a managed direct route. */
-export function resolveDirectModelBaseUrl(
-  config: Pick<ModelRoutingConfig, 'directAccess' | 'provider'>,
-): string | undefined {
-  return config.directAccess?.baseUrl;
+  return hasManagedDirectRoute(config) ? 'kimiCode' : config.provider;
 }
 
 /** Whether a model may be sent through TeXRA's included-access relay. */
 export function allowsModelRelay(
-  config: Pick<ModelRoutingConfig, 'directAccess' | 'provider'>,
+  config: Pick<ModelRoutingConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
 ): boolean {
   return !hasManagedDirectRoute(config);
 }

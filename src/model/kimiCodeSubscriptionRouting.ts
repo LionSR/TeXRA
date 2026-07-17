@@ -53,6 +53,17 @@ export function kimiCodeWireModelId(config: {
 }
 
 /**
+ * The registry facts the eligibility predicates read. Structural (not the full
+ * `ModelConfig`) so routing call sites and test fixtures can pass partial
+ * configs.
+ */
+export interface KimiSubscriptionModelFields {
+  readonly provider?: string;
+  readonly kimiSubscription?: boolean;
+  readonly baseUrl?: string;
+}
+
+/**
  * Whether `model` is eligible to route through the Kimi Code subscription
  * endpoint. Read directly from the llm-zoo `kimiSubscription` registry flag
  * (added in llm-zoo 1.19.x) — serving status is a fact about the Kimi Code
@@ -60,7 +71,9 @@ export function kimiCodeWireModelId(config: {
  * `provider === ModelProvider.MOONSHOT`, asserted here since this function is
  * exported and a non-Moonshot config must never resolve eligible.
  */
-export function isKimiSubscriptionEligible(model: ModelConfig): boolean {
+export function isKimiSubscriptionEligible(
+  model: KimiSubscriptionModelFields,
+): boolean {
   if (model.provider !== ModelProvider.MOONSHOT) return false;
   return model.kimiSubscription === true;
 }
@@ -70,7 +83,9 @@ export function isKimiSubscriptionEligible(model: ModelConfig): boolean {
  * OpenRouter route exists). Derived from the registry's pinned `baseUrl` — the
  * pin is what makes the model unreachable anywhere else.
  */
-export function isKimiCodeExclusiveModel(model: ModelConfig): boolean {
+export function isKimiCodeExclusiveModel(
+  model: KimiSubscriptionModelFields,
+): boolean {
   return isKimiSubscriptionEligible(model) && model.baseUrl === KIMI_CODE_BASE_URL;
 }
 

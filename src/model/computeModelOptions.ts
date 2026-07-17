@@ -432,6 +432,10 @@ export async function getModelUnavailableReason(
     return `Model "${model}" is currently unavailable through Copilot in VS Code.`;
   }
 
+  if (isKimiCodeExclusiveModel(config)) {
+    return `Model "${model}" requires Kimi Code. Sign in with your Kimi membership or provide your Kimi Code console API key.`;
+  }
+
   // Personal key mode or unauthenticated — missing key or keyless provider.
   const directProvider = resolveDirectModelApiKeyProvider(config);
   const modelSource = resolveModelSource(config) ?? config.provider;

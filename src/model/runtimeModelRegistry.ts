@@ -9,7 +9,6 @@ import { platform } from '@platform/platform';
 import type { ApiProvider } from '@model/apiProviders';
 import { resolveModelApiKeyProvider } from '@model/openRouterRouting';
 
-import { KIMI_CODE_MODEL_CONFIGS } from './kimiCodeModels';
 
 import type {
   LanguageModelAccessState,
@@ -167,7 +166,6 @@ export function invalidateRuntimeModelRegistry(): void {
 export function getRuntimeModelConfig(model: string): ModelConfig | undefined {
   return (
     runtimeModels.get(model)?.config ??
-    KIMI_CODE_MODEL_CONFIGS[model] ??
     MODEL_CONFIGS[model]
   );
 }
@@ -177,17 +175,14 @@ export function staticModelConfigEntries(): readonly (readonly [
   string,
   ModelConfig,
 ])[] {
-  return [
-    ...Object.entries(MODEL_CONFIGS),
-    ...Object.entries(KIMI_CODE_MODEL_CONFIGS),
-  ];
+  return [...Object.entries(MODEL_CONFIGS)];
 }
 
 /** Resolve a model after ensuring native discovery has run in this host. */
 export async function resolveRuntimeModelConfig(
   model: string,
 ): Promise<ModelConfig | undefined> {
-  const staticConfig = KIMI_CODE_MODEL_CONFIGS[model] ?? MODEL_CONFIGS[model];
+  const staticConfig = MODEL_CONFIGS[model];
   if (staticConfig) return staticConfig;
 
   await refreshRuntimeModelRegistry();
