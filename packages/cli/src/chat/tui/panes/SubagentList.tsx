@@ -15,6 +15,7 @@ import { formatResultCount } from '@utils/text/stringUtils';
 // Local imports - TUI state and controls
 import {
   childElapsed,
+  latestChildResponseSummary,
   liveChildExecutionElapsedKey,
   processTailLines,
 } from '../state/childControls';
@@ -26,6 +27,7 @@ import {
   childStreamListValue,
   type ChildListValue,
 } from '../state/childListSelection';
+import { truncateSummaryToWidth } from '../render/terminalText';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { COLOR_HINT } from '../ui/colors';
 import { POINTER, TICK } from '../ui/glyphs';
@@ -82,6 +84,8 @@ function HiddenRowSummary({
   ) : null;
 }
 
+const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
+
 function SessionRow({
   active,
   focused,
@@ -114,6 +118,12 @@ function SessionRow({
   // then the pending-approval kind.
   const approvalSuffix = pendingApprovalRowSuffix(pendingKinds);
   const roundLabel = formatRoundStageLabel(session.slice?.roundStage);
+  // Child rows summarize what the subagent last said; the root row is the
+  // conversation itself — echoing your own last message there is noise.
+  const summary =
+    session.parentId !== undefined
+      ? latestChildResponseSummary(session.slice?.entries)
+      : undefined;
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
       <Text color={focused ? COLOR_HINT : undefined}>
@@ -132,6 +142,13 @@ function SessionRow({
           {elapsed ? ` · ${elapsed}` : ''}
         </Text>
       </Box>
+      {summary ? (
+        <Box minWidth={0} flexShrink={2}>
+          <Text dimColor wrap="truncate-end">
+            {` · ${truncateSummaryToWidth(summary, SUBAGENT_SUMMARY_MAX_COLUMNS)}`}
+          </Text>
+        </Box>
+      ) : null}
       {focused ? <HiddenRowSummary text={hiddenRowSummary} /> : null}
     </Box>
   );

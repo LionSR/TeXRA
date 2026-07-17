@@ -2014,6 +2014,8 @@ const SCENARIOS = [
       'strategy',
       'leanSolver',
       'reviewer',
+      // Child rows summarize the subagent's latest instruction/response.
+      '· Please handle the harness-child-review',
       'main.tex: Proof sketch',
       '3 sub',
       'Tab children',
