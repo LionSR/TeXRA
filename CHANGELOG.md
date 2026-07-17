@@ -52,6 +52,9 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
+- **The todo checklist gets breathing room** — a blank separator row now sits
+  above the todos/plan panel, so the checklist no longer merges visually with
+  the session list or the footer.
 - **Child rows show what each subagent last said** — the session list
   summarizes every subagent's latest response (or its current instruction
   while a turn is running) inline on its row, so you can triage children

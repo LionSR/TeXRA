@@ -183,10 +183,13 @@ export function TodosPlanPanel(
   if (!slice) return null;
   const { todos, plan } = slice;
   if (todos.length === 0 && !plan) return null;
+  // Like the child list above it, the panel owns one blank separator row so
+  // the todo checklist never sits flush against its neighbor. If the gap and
+  // one content row do not both fit, render nothing.
   const rowBudget =
     props.maxRows === undefined
       ? undefined
-      : Math.max(0, Math.floor(props.maxRows));
+      : Math.max(0, Math.floor(props.maxRows)) - 1;
   if (rowBudget !== undefined && rowBudget <= 0) return null;
 
   if (rowBudget !== undefined) {
@@ -199,6 +202,7 @@ export function TodosPlanPanel(
       <Box
         flexDirection="column"
         height={rowBudget}
+        marginTop={1}
         overflowY="hidden"
         paddingX={1}
       >

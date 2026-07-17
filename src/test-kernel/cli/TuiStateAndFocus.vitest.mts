@@ -553,6 +553,31 @@ describe('CLI TUI row allocation', () => {
     });
   });
 
+  it('reserves a separator row above the todos panel', () => {
+    // 2 todos + separator = 3 rows when the transcript allows it.
+    expect(
+      allocateConversationBottomPanelRows({
+        maxRows: 10,
+        sessionCount: 0,
+        childListFocused: false,
+        todosPlanContentRows: 2,
+        transcriptRows: 8,
+      }),
+    ).toMatchObject({ bottomPanelRows: 3, todosPlanRows: 3 });
+  });
+
+  it('hands a lone todos row back instead of rendering a dead separator', () => {
+    // The grant would be exactly one row — too small for separator + content.
+    const allocation = allocateConversationBottomPanelRows({
+      maxRows: 10,
+      sessionCount: 0,
+      childListFocused: false,
+      todosPlanContentRows: 4,
+      transcriptRows: 2,
+    });
+    expect(allocation.todosPlanRows).not.toBe(1);
+  });
+
   it('does not allocate session rows without transcript space', () => {
     expect(
       allocateConversationBottomPanelRows({
