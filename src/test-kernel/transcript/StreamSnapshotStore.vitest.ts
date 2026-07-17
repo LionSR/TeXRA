@@ -974,15 +974,27 @@ describe('StreamSnapshotStore', () => {
     store.setTodos(STREAM, [TODO]);
     store.setPlan(STREAM, PLAN);
     await store.flush();
+    const deleteStorage = StorageFS.delete.bind(StorageFS);
     const deleteSpy = vi
       .spyOn(StorageFS, 'delete')
-      .mockRejectedValueOnce(new Error('stream data directory is locked'));
+      .mockImplementationOnce(async () => {
+        await deleteStorage(path.join(streamDataDir(STREAM), 'workPlan.json'));
+        throw new Error('stream data directory is locked');
+      });
 
     await expect(store.deleteStream(STREAM)).rejects.toThrow(
       'stream data directory is locked',
     );
 
     expect(store.getWorkPlan(STREAM)).toEqual({
+      todos: [TODO],
+      plan: PLAN,
+      planSummary: PLAN_SUMMARY,
+    });
+
+    const reloaded = new StreamSnapshotStore();
+    await reloaded.load([STREAM]);
+    expect(reloaded.getWorkPlan(STREAM)).toMatchObject({
       todos: [TODO],
       plan: PLAN,
       planSummary: PLAN_SUMMARY,

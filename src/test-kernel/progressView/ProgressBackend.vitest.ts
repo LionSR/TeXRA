@@ -1858,7 +1858,7 @@ describe('ProgressBackend', () => {
     }
   });
 
-  it('retains stream state when adjacent cleanup fails after execution deletion', async () => {
+  it('retains stream state and execution config when adjacent cleanup fails', async () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const stream = 'tool@deepseek#a6966f' as StreamTabId;
     const executionId = 'a6966f' as ExecutionId;
@@ -1880,9 +1880,53 @@ describe('ProgressBackend', () => {
 
       expect(backend.state.streamLogs.has(stream)).toBe(true);
       expect(backend.state.snapshots.getExecutionId(stream)).toBe(executionId);
-      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(false);
+      expect(backend.state.snapshots.getTaskState(stream)).toEqual(
+        toolUseTaskState('search', 'deepseekproT'),
+      );
+      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
     } finally {
       snapshotDeleteSpy.mockRestore();
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('commits stream deletion when only final execution cleanup fails', async () => {
+    const { backend, session } = createIsolatedRecordingBackend();
+    const stream = 'tool@deepseek#a6966e' as StreamTabId;
+    const executionId = 'a6966e' as ExecutionId;
+    const stores = backend.state.stores as unknown as {
+      deleteExecution(
+        id: ExecutionId,
+        options?: DeleteExecutionOptions,
+      ): Promise<DeleteExecutionResult>;
+    };
+    const deleteExecutionSpy = vi
+      .spyOn(stores, 'deleteExecution')
+      .mockImplementation(async (_id, options) => {
+        await options?.beforeDelete?.();
+        throw new Error('execution directory is locked');
+      });
+
+    try {
+      backend.state.streamLogs.ensureStream(stream);
+      backend.state.setStreamTaskState(
+        stream,
+        toolUseTaskState('search', 'deepseekproT'),
+        executionId,
+      );
+      await writeExecutionConfig(executionId);
+      await backend.state.flush();
+
+      await expect(backend.state.clearStream(stream)).resolves.toBe('deleted');
+
+      expect(backend.state.streamLogs.has(stream)).toBe(false);
+      expect(backend.state.snapshots.getTaskState(stream)).toBeUndefined();
+      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
+    } finally {
+      deleteExecutionSpy.mockRestore();
+      await getExecutionStore(executionId).clear();
       await backend.state.clearAll();
       backend.dispose();
       session.dispose();
@@ -1987,16 +2031,16 @@ describe('ProgressBackend', () => {
     }
   });
 
-  it('reconciles successful and failed execution deletions independently', async () => {
+  it('reconciles required cleanup and final execution cleanup independently', async () => {
     const failedStream = 'tool@deepseek#fa11ed6966' as StreamTabId;
-    const partialStream = 'tool@deepseek#faded6966' as StreamTabId;
+    const incompleteStream = 'tool@deepseek#faded6966' as StreamTabId;
     const deletedStream = 'tool@deepseek#de1e7ed6966' as StreamTabId;
     const failedExecution = 'fa11ed6966' as ExecutionId;
-    const partialExecution = 'faded6966' as ExecutionId;
+    const incompleteExecution = 'faded6966' as ExecutionId;
     const deletedExecution = 'de1e7ed6966' as ExecutionId;
     const { backend, session } = createIsolatedRecordingBackend();
     backend.state.streamLogs.ensureStream(failedStream);
-    backend.state.streamLogs.ensureStream(partialStream);
+    backend.state.streamLogs.ensureStream(incompleteStream);
     backend.state.streamLogs.ensureStream(deletedStream);
     backend.state.snapshots.setTaskState(
       failedStream,
@@ -2004,9 +2048,9 @@ describe('ProgressBackend', () => {
       failedExecution,
     );
     backend.state.snapshots.setTaskState(
-      partialStream,
+      incompleteStream,
       toolUseTaskState('search', 'deepseekproT'),
-      partialExecution,
+      incompleteExecution,
     );
     backend.state.snapshots.setTaskState(
       deletedStream,
@@ -2025,14 +2069,10 @@ describe('ProgressBackend', () => {
         if (executionId === failedExecution) {
           throw new Error('execution directory is locked');
         }
-        if (executionId === partialExecution) {
-          return {
-            status: 'deleted',
-            executionId,
-            adjacentCleanupFailure: 'snapshot directory is locked',
-          };
+        await options?.beforeDelete?.();
+        if (executionId === incompleteExecution) {
+          throw new Error('execution directory is locked');
         }
-        await options?.afterDelete?.();
         return { status: 'deleted', executionId };
       });
 
@@ -2041,10 +2081,10 @@ describe('ProgressBackend', () => {
 
       expect(result).toEqual({
         active: new Set(),
-        failed: new Set([failedStream, partialStream]),
+        failed: new Set([failedStream]),
       });
       expect(backend.state.streamLogs.has(failedStream)).toBe(true);
-      expect(backend.state.streamLogs.has(partialStream)).toBe(true);
+      expect(backend.state.streamLogs.has(incompleteStream)).toBe(false);
       expect(backend.state.streamLogs.has(deletedStream)).toBe(false);
     } finally {
       deleteExecutionSpy.mockRestore();
@@ -2243,11 +2283,12 @@ describe('ProgressBackend', () => {
 
       expect(warnSpy).toHaveBeenCalledWith(
         'SessionStores',
-        `Execution ${failingExecution} was deleted, but orphaned stream cleanup was incomplete: locked stream sidecar`,
+        `Skipping orphaned execution cleanup for ${failingExecution}; startup will continue.`,
+        { data: expect.any(Error) },
       );
       expect(await StorageFS.exists(streamDataDir(failingStream))).toBe(true);
       expect(await StorageFS.exists(`executions/${failingExecution}`)).toBe(
-        false,
+        true,
       );
       expect(await StorageFS.exists(streamDataDir(sweptStream))).toBe(false);
       expect(await StorageFS.exists(`executions/${sweptExecution}`)).toBe(

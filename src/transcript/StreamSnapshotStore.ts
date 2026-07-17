@@ -873,6 +873,8 @@ export class StreamSnapshotStore {
 
   /** Delete a stream's on-disk sidecar directory + in-memory state. */
   async deleteStream(stream: StreamTabId): Promise<void> {
+    const record = this.records.get(stream);
+    const wasSeeded = record?.seeded ?? false;
     const pending = this.cancelPendingWritesForStream(stream);
     // Invalidate in-flight hydration/writes immediately, but keep the record
     // readable until durable deletion commits. If deleteDir() fails, callers
@@ -891,16 +893,33 @@ export class StreamSnapshotStore {
         throwOnErrors: true,
       }).deleteDir();
     } catch (error) {
-      // A version bump can interrupt hydration as well as writes. Chain a
-      // fresh seed behind that interrupted work so the retained record returns
-      // to a current, mutable state once the still-durable sidecars are read.
-      void this.refreshSeed(stream).catch((seedError: unknown) =>
-        logger.warn(
-          CHANNEL,
-          `Failed to restore snapshot state after retaining stream ${stream}`,
-          { data: seedError },
-        ),
-      );
+      if (wasSeeded && record) {
+        // Recursive removal may have deleted only some sidecars before failing.
+        // Restore every durable field from the authoritative resident record;
+        // reseeding here would replace complete memory with disk fragments.
+        if (record.meta) this.writeMeta(stream, record.meta);
+        this.writeOutputFiles(stream);
+        this.write(stream, STREAM_DATA_KEYS.MISSING_OUTPUTS, {
+          ...record.missingOutputs,
+        });
+        this.write(stream, STREAM_DATA_KEYS.COMPILE_FAILURES, {
+          ...record.compileFailures,
+        });
+        this.writeUsage(stream);
+        this.writeWorkPlan(stream, record.workPlan);
+        await this.flushWritesForStream(stream);
+      } else {
+        // A version bump can interrupt hydration as well as writes. Chain a
+        // fresh seed behind that interrupted work so the retained record
+        // becomes current and mutable once its durable sidecars are read.
+        void this.refreshSeed(stream).catch((seedError: unknown) =>
+          logger.warn(
+            CHANNEL,
+            `Failed to restore snapshot state after retaining stream ${stream}`,
+            { data: seedError },
+          ),
+        );
+      }
       throw error;
     }
     this.records.delete(stream);
