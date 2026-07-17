@@ -16,6 +16,7 @@ import {
   type UpdateRoundStagePayload,
   type UpdateStreamUsagePayload,
 } from '@shared/schemas';
+import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import {
   reduceStreamMeta,
@@ -27,7 +28,9 @@ import {
   activeStreamId,
   removeStream,
   patchStream,
+  type ConversationEntry,
   type StreamSlice,
+  type WorkflowScriptProgressFact,
 } from './cliState';
 import {
   applySubagentRoster,
@@ -36,6 +39,7 @@ import {
 } from './childExecutions';
 import { appendCompletedProcessEntries } from './completedProcessTranscript';
 import { sumResumeUsageStats } from './resumeHint';
+import { syncStreamLog } from './subscribeStreamLog';
 import { appendLocalAssistantTranscript } from './transcript';
 
 const GOAL_PAUSED_TRANSCRIPT_NOTICE =
@@ -176,9 +180,60 @@ function applyParentStream(payload: {
   setParentStream(payload.childStreamId, payload.parentStreamId);
 }
 
+interface ActiveWorkflowScriptInvocation {
+  readonly logId: string;
+  readonly parentStageId: string | undefined;
+  readonly phaseIds: Set<string>;
+  nextFactIndex: number;
+}
+
+type ToolConversationEntry = Extract<ConversationEntry, { role: 'tool' }>;
+
+function patchWorkflowScriptOwner(
+  streamId: StreamTabId,
+  logId: string,
+  update: (entry: ToolConversationEntry) => ToolConversationEntry,
+): void {
+  patchStream(streamId, (slice) => {
+    const index = slice.entries.findIndex(
+      (entry) => entry.role === 'tool' && entry.id === logId,
+    );
+    const entry = slice.entries[index];
+    if (index < 0 || entry?.role !== 'tool') return slice;
+
+    const entries = [...slice.entries];
+    entries[index] = update(entry);
+    return { ...slice, entries };
+  });
+}
+
+function appendWorkflowScriptFact(
+  streamId: StreamTabId,
+  logId: string,
+  fact: WorkflowScriptProgressFact,
+): void {
+  patchWorkflowScriptOwner(streamId, logId, (entry) => ({
+    ...entry,
+    workflowScriptFacts: [...(entry.workflowScriptFacts ?? []), fact],
+  }));
+}
+
+/** Move the immutable invocation header to Static before progress arrives. */
+function finalizeWorkflowScriptOwner(
+  streamId: StreamTabId,
+  logId: string,
+): void {
+  patchWorkflowScriptOwner(streamId, logId, (entry) => ({
+    ...entry,
+    finalized: true,
+    workflowScriptFacts: entry.workflowScriptFacts ?? [],
+  }));
+}
+
 function applyDirectTuiRunEvent(
   event: AgentEvent,
   fallbackStreamId: StreamTabId,
+  activeWorkflowScripts: Map<StreamTabId, ActiveWorkflowScriptInvocation>,
 ): boolean {
   switch (event.type) {
     case 'run.config':
@@ -215,7 +270,21 @@ function applyDirectTuiRunEvent(
     case 'updateMissingOutputs':
     case 'updateCompileFailures':
       return false;
-    case 'stage.start':
+    case 'stage.start': {
+      if (event.kind === 'phase') {
+        const invocation = activeWorkflowScripts.get(fallbackStreamId);
+        if (!invocation || event.parentId !== invocation.parentStageId) {
+          return false;
+        }
+        invocation.phaseIds.add(event.id);
+        appendWorkflowScriptFact(fallbackStreamId, invocation.logId, {
+          type: 'phase',
+          id: `${invocation.logId}:phase:${event.id}`,
+          stageId: event.id,
+          label: event.label,
+        });
+        return true;
+      }
       if (event.kind !== 'round') return false;
       applyRoundStage({
         streamId: fallbackStreamId,
@@ -227,6 +296,42 @@ function applyDirectTuiRunEvent(
         },
       });
       return true;
+    }
+    case 'log': {
+      const invocation = activeWorkflowScripts.get(fallbackStreamId);
+      if (!invocation || event.stageId === undefined) return false;
+      const inPhase = invocation.phaseIds.has(event.stageId);
+      if (!inPhase && event.stageId !== invocation.parentStageId) return false;
+      appendWorkflowScriptFact(fallbackStreamId, invocation.logId, {
+        type: 'log',
+        id: `${invocation.logId}:log:${invocation.nextFactIndex++}`,
+        level: event.level,
+        message: event.message,
+        ...(inPhase ? { phaseId: event.stageId } : {}),
+      });
+      return true;
+    }
+    case 'tool.start':
+      if (event.toolName !== DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME) return false;
+      // The transcript recorder runs before the SessionEventHub bridge, so a
+      // direct sync materializes the canonical tool row before synchronous
+      // script phase/log events can follow in the same turn.
+      syncStreamLog(fallbackStreamId);
+      finalizeWorkflowScriptOwner(fallbackStreamId, event.logId);
+      activeWorkflowScripts.set(fallbackStreamId, {
+        logId: event.logId,
+        parentStageId: event.stageId,
+        phaseIds: new Set(),
+        nextFactIndex: 0,
+      });
+      return true;
+    case 'tool.end': {
+      const invocation = activeWorkflowScripts.get(fallbackStreamId);
+      if (!invocation || invocation.logId !== event.logId) return false;
+      activeWorkflowScripts.delete(fallbackStreamId);
+      syncStreamLog(fallbackStreamId);
+      return true;
+    }
     case 'child.activity':
       if (event.kind === 'subagents') {
         applyActiveSubagents({
@@ -300,6 +405,10 @@ function applyStreamMeta(
 export function attachTuiRunFactSubscription(
   events: SessionEventHub,
 ): () => void {
+  const activeWorkflowScripts = new Map<
+    StreamTabId,
+    ActiveWorkflowScriptInvocation
+  >();
   const detachSessionFacts = events.subscribe(
     (sessionEvent) => {
       if (sessionEvent.scope !== 'session') return;
@@ -345,7 +454,13 @@ export function attachTuiRunFactSubscription(
     (sessionEvent) => {
       if (sessionEvent.scope !== 'run') return;
       const { event } = sessionEvent;
-      if (applyDirectTuiRunEvent(event, sessionEvent.streamId)) {
+      if (
+        applyDirectTuiRunEvent(
+          event,
+          sessionEvent.streamId,
+          activeWorkflowScripts,
+        )
+      ) {
         return;
       }
     },
@@ -361,7 +476,10 @@ export function attachTuiRunFactSubscription(
         'goalPaused',
         'run.config',
         'usage',
+        'log',
         'stage.start',
+        'tool.start',
+        'tool.end',
         'child.activity',
         'process.output',
       ],

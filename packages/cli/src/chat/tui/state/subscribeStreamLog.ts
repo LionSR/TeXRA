@@ -145,7 +145,10 @@ function entriesEqual(
     return false;
   }
   if (prev.role === 'tool' && next.role === 'tool') {
-    return toolUseEqual(prev.toolUse, next.toolUse);
+    return (
+      prev.workflowScriptFacts === next.workflowScriptFacts &&
+      toolUseEqual(prev.toolUse, next.toolUse)
+    );
   }
   if (prev.role === 'process' && next.role === 'process') {
     return prev.process === next.process;
@@ -205,6 +208,9 @@ function renderLogEntry(
       ...(entry.messageType ? { messageType: entry.messageType } : {}),
       finalized: prev?.finalized ?? false,
       toolUse,
+      ...(prev?.role === 'tool' && prev.workflowScriptFacts
+        ? { workflowScriptFacts: prev.workflowScriptFacts }
+        : {}),
     };
     if (prev && entriesEqual(prev, next)) {
       // Same content under a fresh `data` reference: refresh the cache

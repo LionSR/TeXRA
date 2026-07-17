@@ -73,6 +73,8 @@ export type ConversationEntry =
   | (ConversationEntryBase & {
       readonly role: 'tool';
       readonly toolUse: NormalizedToolUse;
+      /** Finalized progress emitted by one delegate_workflow_script call. */
+      readonly workflowScriptFacts?: readonly WorkflowScriptProgressFact[];
     })
   | (ConversationEntryBase & {
       readonly role: 'process';
@@ -87,6 +89,22 @@ export interface CompletedProcessTranscript {
   readonly isError: boolean;
   readonly tailLines: readonly string[];
 }
+
+/** Immutable workflow-script fact appended once to terminal scrollback. */
+export type WorkflowScriptProgressFact =
+  | {
+      readonly type: 'phase';
+      readonly id: string;
+      readonly stageId: string;
+      readonly label: string;
+    }
+  | {
+      readonly type: 'log';
+      readonly id: string;
+      readonly level: 'debug' | 'info' | 'warn' | 'error';
+      readonly message: string;
+      readonly phaseId?: string;
+    };
 
 export interface SessionMeta {
   readonly agent: string;

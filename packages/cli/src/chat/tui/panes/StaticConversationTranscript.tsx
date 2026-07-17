@@ -10,15 +10,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { Box, Static, Text } from 'ink';
 
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
-import type { StreamTabId } from '@shared/schemas';
+import { TOOL_USE_STATUS, type StreamTabId } from '@shared/schemas';
 import { safeHomedir } from '@utils/system/platformPaths';
 
+import { wrapAnsiToWidth } from '../render/ansiWrap';
 import {
   sessionMeta as sessionMetaSignal,
   streams as streamsSignal,
   type ConversationEntry,
   type SessionMeta,
   type StreamSlice,
+  type WorkflowScriptProgressFact,
 } from '../state/cliState';
 import {
   childStreamEntries as childStreamEntriesSignal,
@@ -32,14 +34,26 @@ import {
 } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
 import { COLOR_HINT } from '../ui/colors';
+import { TOOL_OUTPUT_CORNER } from '../ui/glyphs';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import { isStaticTranscriptEntryAt } from './transcriptEntries';
 import { TranscriptEntry } from './TranscriptEntry';
+import { ToolUseRow } from './ToolUseRow';
+import { toolUseDisplayLines } from './toolRenderers';
 import {
   transcriptColumns,
   transcriptEntryLayout,
   transcriptEntryLayoutRows,
 } from './transcriptEntryLayout';
+
+type WorkflowScriptToolEntry = Extract<ConversationEntry, { role: 'tool' }>;
+
+function workflowScriptFactDisplayLine(
+  fact: WorkflowScriptProgressFact,
+): string {
+  if (fact.type === 'phase') return `${TOOL_OUTPUT_CORNER} ${fact.label}`;
+  return `${fact.phaseId ? '  ' : `${TOOL_OUTPUT_CORNER} `}${fact.message}`;
+}
 
 export type StaticTranscriptItem =
   | {
@@ -58,6 +72,16 @@ export type StaticTranscriptItem =
       readonly id: string;
       readonly kind: 'printedTranscript';
       readonly request: TranscriptPrintRequest;
+    }
+  | {
+      readonly id: string;
+      readonly kind: 'workflowScriptFact';
+      readonly fact: WorkflowScriptProgressFact;
+    }
+  | {
+      readonly id: string;
+      readonly kind: 'workflowScriptCompletion';
+      readonly entry: WorkflowScriptToolEntry;
     };
 
 interface StaticTranscriptState {
@@ -202,6 +226,17 @@ function staticTranscriptItemRowCount(
       request: item.request,
     }).split('\n').length;
   }
+  if (item.kind === 'workflowScriptFact') {
+    const line = workflowScriptFactDisplayLine(item.fact);
+    return wrapAnsiToWidth(line, transcriptColumns(width, 2)).split('\n')
+      .length;
+  }
+  if (item.kind === 'workflowScriptCompletion') {
+    return Math.max(
+      1,
+      toolUseDisplayLines(item.entry.toolUse, { width }).slice(1).length,
+    );
+  }
   return transcriptEntryLayoutRows(
     transcriptEntryLayout(item.entry, {
       mode: 'scrollback-budget',
@@ -250,6 +285,20 @@ function StaticTranscriptItemContent({
               request: item.request,
             })}
           </Text>
+        </EntryErrorBoundary>
+      );
+    case 'workflowScriptFact':
+      return (
+        <EntryErrorBoundary label="workflow script progress">
+          <Box paddingLeft={2}>
+            <Text dimColor>{workflowScriptFactDisplayLine(item.fact)}</Text>
+          </Box>
+        </EntryErrorBoundary>
+      );
+    case 'workflowScriptCompletion':
+      return (
+        <EntryErrorBoundary label="workflow script result">
+          <ToolUseRow omitHeader toolUse={item.entry.toolUse} width={width} />
         </EntryErrorBoundary>
       );
   }
@@ -328,10 +377,8 @@ export function appendStaticTranscriptItems({
     ? streams.get(scrollbackStreamId)
     : undefined;
   const entries = slice?.entries ?? [];
-  const finalizedEntries = entries.filter(
-    (entry, index) =>
-      isStaticTranscriptEntryAt(entries, index, slice?.status) &&
-      !seen.has(entry.id),
+  const staticEntries = entries.filter((entry, index) =>
+    isStaticTranscriptEntryAt(entries, index, slice?.status),
   );
   const unseenRequests = printRequests.filter(
     (request) => !seen.has(request.id),
@@ -355,10 +402,29 @@ export function appendStaticTranscriptItems({
     if (anchored) anchored.push(request);
     else requestsByUnseenAnchor.set(request.afterEntryId, [request]);
   }
-  for (const entry of finalizedEntries) {
-    appendItem({ id: entry.id, kind: 'entry', entry });
+  for (const entry of staticEntries) {
+    if (!seen.has(entry.id)) {
+      appendItem({ id: entry.id, kind: 'entry', entry });
+    }
     for (const request of requestsByUnseenAnchor.get(entry.id) ?? []) {
       appendItem({ id: request.id, kind: 'printedTranscript', request });
+    }
+    if (entry.role !== 'tool' || !entry.workflowScriptFacts) continue;
+    for (const fact of entry.workflowScriptFacts) {
+      if (!seen.has(fact.id)) {
+        appendItem({ id: fact.id, kind: 'workflowScriptFact', fact });
+      }
+    }
+    const completionId = `${entry.id}:completion`;
+    if (
+      entry.toolUse.status === TOOL_USE_STATUS.COMPLETED &&
+      !seen.has(completionId)
+    ) {
+      appendItem({
+        id: completionId,
+        kind: 'workflowScriptCompletion',
+        entry,
+      });
     }
   }
   // A legacy or externally restored request may name an entry no longer in
