@@ -133,6 +133,7 @@ export enum GlobalStateKey {
 
   // Coding plan settings
   GLM_CODING_PLAN = 'texra.glm.codingPlan',
+  KIMI_CODE_PREFER = 'texra.kimiCode.prefer',
 
   // Routing settings
   USE_OPENROUTER = 'texra.useOpenRouter',

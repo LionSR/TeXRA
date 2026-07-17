@@ -8,8 +8,11 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
-- **Kimi Code membership models** — Kimi Code members can use K3, K2.7, and
-  K2.7 HighSpeed with their Kimi Code API key in the CLI and VS Code extension.
+- **Kimi Code membership models** — Kimi Code members can use their Kimi Code
+  API key for Kimi for Coding and Kimi for Coding (High-Speed) in the CLI and
+  VS Code extension. A "Prefer Kimi Code" switch additionally routes Kimi K3
+  through the Kimi Code coding endpoint when a Kimi Code key is set, so K3
+  appears once in the picker instead of as a separate duplicate entry.
 - **One conversation history across TeXRA apps** — sessions created in the
   CLI, desktop app, or VS Code extension now appear in the same project
   history when that project is opened in another TeXRA app.
