@@ -91,9 +91,10 @@ class FakeInput extends EventEmitter {
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
     if (predicate()) return;
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    await new Promise((resolve) => setTimeout(resolve, 10));
   }
   throw new Error('Timed out waiting for onboarding interaction');
 }
@@ -158,7 +159,14 @@ describe('provider-key onboarding flow', () => {
     const { runCliOnboarding } = await import('@cli/onboarding/runOnboarding');
     const resultPromise = runCliOnboarding(false);
 
-    await waitFor(() => stdin.listenerCount('readable') > 0);
+    // Ink attaches its input stream before the active Select handler has
+    // necessarily committed. Wait for both input attachment and the rendered
+    // picker so the shortcut cannot be discarded during a loaded CI run.
+    await waitFor(
+      () =>
+        stdin.listenerCount('readable') > 0 &&
+        stdout.output.includes('Choose how to power model calls'),
+    );
     stdin.write('3');
     await waitFor(() => stdout.output.includes('Choose your provider:'));
     stdin.write('\r');
@@ -184,5 +192,5 @@ describe('provider-key onboarding flow', () => {
       expect.stringContaining(providerKey),
     );
     expect(stdout.output).not.toContain(providerKey);
-  });
+  }, 30_000);
 });
