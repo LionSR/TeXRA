@@ -211,7 +211,14 @@ const BRIDGE_PRELUDE = `
     delivered = true;
     if (isError) {
       const err = toRealmError(value);
-      hostDeliver(undefined, stringifyJson({ name: err.name, message: err.message }));
+      const stack =
+        value && typeof value === 'object' && 'stack' in value && value.stack
+          ? String(value.stack)
+          : undefined;
+      hostDeliver(
+        undefined,
+        stringifyJson({ name: err.name, message: err.message, stack }),
+      );
       return;
     }
     let payload;
@@ -655,8 +662,22 @@ function parseOutcome(payload?: string, errorJson?: string): GuestOutcome {
         ),
       };
     }
-    const record = parsed as { name: string; message: string };
-    const error = new Error(record.message);
+    const record = parsed as { name: string; message: string; stack?: string };
+    // Guest stack frames locate the failure inside the script (the only
+    // context a caller has for a sandboxed error), so fold them into the
+    // message the tool result carries.
+    const frames =
+      typeof record.stack === 'string'
+        ? record.stack
+            .split('\n')
+            .filter((line) => line.trim().startsWith('at '))
+            .slice(0, 3)
+        : [];
+    const error = new Error(
+      frames.length > 0
+        ? `${record.message}\n${frames.join('\n')}`
+        : record.message,
+    );
     error.name = record.name;
     return { error };
   }

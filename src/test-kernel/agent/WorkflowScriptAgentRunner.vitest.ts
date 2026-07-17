@@ -103,8 +103,11 @@ function defaultRunner(): ReturnType<typeof createWorkflowScriptAgentRunner> {
   );
 }
 
+// Default options carry inputFiles: workflow agents without input files (and
+// without declared default outputs) fail fast by design; the dedicated test
+// below covers that path.
 function invocation(
-  options: WorkflowAgentInvocation['options'] = {},
+  options: WorkflowAgentInvocation['options'] = { inputFiles: ['draft.tex'] },
 ): WorkflowAgentInvocation {
   return {
     index: 0,
@@ -225,7 +228,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     );
   });
 
-  it('omits declared symlink placeholders from the next child input', async () => {
+  it('rejects a run-storage input that no longer resolves', async () => {
     const placeholder = '/storage/executions/bbbbbb222222/r1/unchanged.tex';
     mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue({
       kind: 'runStorage',
@@ -233,13 +236,10 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.resolveChildRunOutput.mockResolvedValue(undefined);
     const runner = defaultRunner();
 
-    await runner(invocation({ inputFiles: [placeholder] }));
-
-    expect(mocks.preparedOptions[0]).toEqual(
-      expect.objectContaining({
-        configPayload: expect.objectContaining({ inputFiles: [] }),
-      }),
-    );
+    await expect(
+      runner(invocation({ inputFiles: [placeholder] })),
+    ).rejects.toThrow(/pass options\.inputFiles with files that still exist/);
+    expect(mocks.preparedOptions).toHaveLength(0);
   });
 
   it('links child approval ancestry to the parent stream on resolve', async () => {
@@ -298,6 +298,27 @@ describe('createWorkflowScriptAgentRunner', () => {
     await runner({ ...invocation(), index: 3 });
 
     expect(onCost).not.toHaveBeenCalled();
+  });
+
+  it('fails fast when a file-editing agent gets no input files', async () => {
+    const runner = defaultRunner();
+
+    await expect(runner(invocation({}))).rejects.toThrow(
+      /pass options\.inputFiles with files that still exist/,
+    );
+  });
+
+  it('allows empty input files when the agent declares default outputs', async () => {
+    mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
+      name,
+      source: 'builtInWorkflow',
+      category: 'workflow',
+      path: `/agents/${name}.yml`,
+      defaultOutputFiles: ['generated.tex'],
+    }));
+    const runner = defaultRunner();
+
+    await expect(runner(invocation({}))).resolves.toBe(result);
   });
 
   it('uses one stable child id per workflow call identity', async () => {

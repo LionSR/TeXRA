@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { getExecutionStore } from '@agent/storage';
 import {
   deriveWorkflowScriptCheckpointId,
+  parseWorkflowScript,
   readWorkflowScriptCheckpoint,
   type WorkflowJournalEntry,
   type WorkflowScriptRunResult,
@@ -20,7 +21,7 @@ import { defineTool } from '@tools/core/define';
 
 // Local imports - utilities
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { formatResultCount } from '@utils/text/stringUtils';
+import { formatResultCount, truncateSummary } from '@utils/text/stringUtils';
 
 // Local imports - delegation
 import { createWorkflowScriptAgentRunner } from './workflowScriptAgentRunner';
@@ -54,16 +55,59 @@ function formatWorkflowResult(result: unknown): string {
   return JSON.stringify(result, null, 2) ?? 'undefined';
 }
 
+const RUN_LOG_MAX_LINES = 80;
+const RUN_LOG_MAX_LINE_LENGTH = 500;
+
+interface RunLogCollector {
+  readonly add: (line: string) => void;
+  readonly format: () => string;
+}
+
+/** Retain a small, single-line tail for the invoking model. */
+function createRunLogCollector(): RunLogCollector {
+  const lines: string[] = [];
+  let omitted = 0;
+  return {
+    add: (line) => {
+      lines.push(truncateSummary(line, RUN_LOG_MAX_LINE_LENGTH));
+      if (lines.length > RUN_LOG_MAX_LINES) {
+        lines.shift();
+        omitted += 1;
+      }
+    },
+    format: () => {
+      if (lines.length === 0) return '';
+      const header =
+        omitted > 0
+          ? `=== Run log (last ${lines.length} lines; ${omitted} earlier lines omitted) ===`
+          : '=== Run log ===';
+      return `\n\n${header}\n${lines.join('\n')}`;
+    },
+  };
+}
+
 /** Execute a durable, deterministic workflow script from an opted-in agent. */
 export class WorkflowScriptTool extends defineTool({
   name: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
-  description: `Run a deterministic JavaScript workflow that coordinates one or more workflow agents. Use this when the complete fan-out, pipeline, and join structure is known in advance and should resume safely after interruption. The script must start with export const meta = { name, description } and may call agent(prompt, options), phase(title), log(message), parallel(thunks), pipeline(items, ...stages), and concat(parts, options). Its final return value is delivered as this tool's result.
+  description: `Run a deterministic JavaScript workflow that coordinates workflow agents. Workflow agents edit or produce FILES: each agent() call resolves to a result envelope { category: 'workflow', outcome, outputs, diffs, compileFailures, cost } listing the files it produced, never prose. Use this when the complete fan-out, pipeline, and join structure is known in advance and should resume safely after interruption.
 
-Available agents: loaded from the active roster at runtime.
+Script rules: start with export const meta = { name, description }; no imports or require (only the injected primitives exist: agent, phase, log, parallel, pipeline, concat, and the args global). agent(), parallel(), and pipeline() return Promises: ALWAYS await them. agent(prompt, options) options: inputFiles (REQUIRED for file-editing agents; workspace paths, or a previous call's output paths to chain stages), agentName (another visible workflow agent; defaults to this tool's agent field), id (distinguish otherwise-identical calls), label, phase. A failed call inside parallel()/pipeline() resolves to null; filter with .filter(Boolean). The script's return value is this tool's result, followed by the run log (phases, log() lines, per-call outcomes with cost).
 
-The agent field is the default for agent() calls; a call may select another visible workflow agent with options.agentName. Model selection follows the active model access mode automatically. Tool inclusion is the opt-in boundary: do not add this tool to a default agent configuration.
+Example:
+export const meta = { name: 'fix-drafts', description: 'Fix typos in two drafts', timeoutMs: 1800000 }
+phase('Fix')
+const results = await parallel([
+  () => agent('Fix spelling errors only.', { inputFiles: ['draft1.tex'] }),
+  () => agent('Fix spelling errors only.', { inputFiles: ['draft2.tex'] }),
+])
+const correctedFiles = results
+  .filter(Boolean)
+  .flatMap((result) => result.outputs.map((output) => output.absolutePath))
+return await agent('Merge the corrected drafts.', { inputFiles: correctedFiles })
 
-Durable resume is content-keyed: re-running the identical script and args in this session replays already-completed agent() calls from the saved journal instead of re-executing them, so retry a timed-out or interrupted call with the SAME script and args to keep its completed work. To force a fresh run instead, change the content (e.g. add a nonce field to args). meta.timeoutMs (1s to 60min) overrides the default 10-minute whole-run wall clock.`,
+Durability: the journal is keyed by meta.name within this session. If the run times out or is interrupted, call this tool again with the SAME meta.name: completed agent() calls replay for free (the script may be revised; only changed or unfinished calls execute). Use a new meta.name to start over. The default whole-run wall clock is 10 minutes; set meta.timeoutMs (1s to 60min) for longer runs.
+
+Tool inclusion is the opt-in boundary: do not add this tool to a default agent configuration.`,
   schema: WorkflowScriptToolInputSchema,
 }) {
   protected async execute(input: WorkflowScriptToolInput): Promise<ToolResult> {
@@ -74,12 +118,14 @@ Durable resume is content-keyed: re-running the identical script and args in thi
       );
     }
     const { runContext: parent, callContext } = contexts;
-    // Content-keyed, not toolCallId-keyed: an LLM retry after a timeout or
-    // interruption mints a new tool-call id, and keying on it would orphan
-    // the journal and every derived child identity (#8647).
+    // Named checkpoint, not content- or toolCallId-keyed: a retrying model
+    // rewrites its script, so any key derived from call identity or source
+    // text orphans the journal exactly when resume matters (#8666). meta.name
+    // is the durable identity; per-entry prompt/options hashes in the journal
+    // keep replays honest when the script evolves.
+    const { meta } = parseWorkflowScript(input.script);
     const checkpointId = deriveWorkflowScriptCheckpointId({
-      script: input.script,
-      args: input.args,
+      name: meta.name,
       defaultAgent: input.agent,
       parentExecutionId: parent.runScope.executionId,
     });
@@ -107,13 +153,14 @@ Durable resume is content-keyed: re-running the identical script and args in thi
     // live children (cached replays spend nothing). Boundary settlement below
     // stays journal-based so resumed runs still roll up replayed spend.
     let liveCostUsd = 0;
+    const runLog = createRunLogCollector();
     let run: WorkflowScriptRunResult;
     try {
       run = await runPersistedWorkflowScriptWithProgress(callContext.trace, {
         store,
         checkpointId,
         script: input.script,
-        args: input.args,
+        ...(input.args !== undefined && { args: input.args }),
         signal: callContext.signal,
         runAgent: createWorkflowScriptAgentRunner(
           parent,
@@ -127,6 +174,7 @@ Durable resume is content-keyed: re-running the identical script and args in thi
           },
         ),
         getLiveCostUsd: () => liveCostUsd,
+        onActivity: runLog.add,
       });
     } catch (runError) {
       try {
@@ -141,14 +189,20 @@ Durable resume is content-keyed: re-running the identical script and args in thi
           `Workflow script failed: ${toErrorMessage(runError)} Cost settlement also failed: ${toErrorMessage(settlementError)}`,
         );
       }
-      throw runError;
+      // The run log is the model's only view into what executed before the
+      // failure; without it a timeout reads as total loss instead of
+      // resumable progress.
+      throw new Error(
+        `${toErrorMessage(runError)}${runLog.format()}\n\nCompleted agent() calls are journaled under meta.name '${meta.name}': call this tool again with the same meta.name to resume without repeating them.`,
+        { cause: runError },
+      );
     }
 
     settleCost(run.journal);
     return {
       status: 'executed',
       summary: `Completed workflow script '${run.meta.name}' (${formatResultCount(run.agentCalls, 'agent call')})`,
-      output: formatWorkflowResult(run.result),
+      output: `${formatWorkflowResult(run.result)}${runLog.format()}`,
     };
   }
 }

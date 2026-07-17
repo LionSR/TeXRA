@@ -99,23 +99,39 @@ describe('workflow-script persistence', () => {
     ).rejects.toBeInstanceOf(WorkflowScriptPersistenceError);
   });
 
-  it('rejects script drift for an existing tool call id', async () => {
+  it('accepts script drift: unchanged calls replay, changed calls re-run', async () => {
     const store = getExecutionStore(executionId);
     await runPersistedWorkflowScript({
       store,
       checkpointId: 'stable-call',
       script,
-      runAgent: async () => 'done',
+      runAgent: async ({ prompt }) => `v1:${prompt}`,
     });
 
+    clearStoreCache();
+    const retryRunner = vi.fn(
+      async ({ prompt }: { prompt: string }) => `v2:${prompt}`,
+    );
+    const evolved = await runPersistedWorkflowScript({
+      store: getExecutionStore(executionId),
+      checkpointId: 'stable-call',
+      script: script.replace(`agent('second')`, `agent('changed')`),
+      runAgent: retryRunner,
+    });
+
+    // 'first' is unchanged (same index + prompt hash) so it replays free;
+    // only the drifted second call executes live, and the evolved script
+    // becomes the stored one.
+    expect(retryRunner).toHaveBeenCalledTimes(1);
+    expect(evolved.result).toEqual(['v1:first', 'v2:changed']);
     await expect(
-      runPersistedWorkflowScript({
-        store,
-        checkpointId: 'stable-call',
-        script: script.replace('second', 'changed'),
-        runAgent: async () => 'changed',
-      }),
-    ).rejects.toThrow(/different script text/i);
+      readWorkflowScriptCheckpoint(
+        getExecutionStore(executionId),
+        'stable-call',
+      ),
+    ).resolves.toMatchObject({
+      script: expect.stringContaining(`agent('changed')`),
+    });
   });
 
   it('round-trips an undefined agent result explicitly', async () => {
@@ -212,24 +228,35 @@ return await agent(args.topic)`;
     ).resolves.toMatchObject({ args: { topic: 'geometry' } });
   });
 
-  it('rejects argument drift for an existing tool call id', async () => {
+  it('adopts new arguments on resume and keeps the journal', async () => {
     const store = getExecutionStore(executionId);
+    const argsScript = `export const meta = {
+  name: 'args-evolve',
+  description: 'adopts evolved arguments',
+}
+const first = await agent('first')
+return [first, args.topic]`;
     await runPersistedWorkflowScript({
       store,
       checkpointId: 'stable-args',
-      script,
+      script: argsScript,
       args: { topic: 'geometry' },
-      runAgent: async () => 'done',
+      runAgent: async ({ prompt }) => `v1:${prompt}`,
     });
 
-    await expect(
-      runPersistedWorkflowScript({
-        store,
-        checkpointId: 'stable-args',
-        args: { topic: 'analysis' },
-        runAgent: async () => 'changed',
-      }),
-    ).rejects.toThrow(/different arguments/i);
+    clearStoreCache();
+    const retryRunner = vi.fn(() => Promise.reject(new Error('live run')));
+    const evolved = await runPersistedWorkflowScript({
+      store: getExecutionStore(executionId),
+      checkpointId: 'stable-args',
+      script: argsScript,
+      args: { topic: 'analysis' },
+      runAgent: retryRunner,
+    });
+
+    // The unchanged agent() call replays; the script sees the new args.
+    expect(retryRunner).not.toHaveBeenCalled();
+    expect(evolved.result).toEqual(['v1:first', 'analysis']);
   });
 
   it('validates arguments before creating a checkpoint or launching an agent', async () => {

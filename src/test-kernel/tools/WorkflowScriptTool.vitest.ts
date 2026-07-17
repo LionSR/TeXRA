@@ -52,11 +52,10 @@ function parentContext(): LaunchRunContext {
   };
 }
 
-/** The tool's durable identity for a script+args pair under the test parent. */
-function checkpointIdFor(scriptSource: string, args?: unknown): string {
+/** The tool's durable identity for one meta.name under the test parent. */
+function checkpointIdFor(name: string): string {
   return deriveWorkflowScriptCheckpointId({
-    script: scriptSource,
-    args,
+    name,
     defaultAgent: 'correct',
     parentExecutionId: executionId,
   });
@@ -83,7 +82,7 @@ async function callTool(options?: {
         new WorkflowScriptTool().call({
           agent: 'correct',
           script: options?.script ?? script,
-          args: options?.args,
+          ...(options?.args !== undefined && { args: options.args }),
         }),
     ),
   );
@@ -134,10 +133,10 @@ describe('WorkflowScriptTool', () => {
     });
   });
 
-  it('replays a content-keyed checkpoint across distinct tool-call ids', async () => {
+  it('resumes a named checkpoint even when the retry rewrites the script', async () => {
     await runPersistedWorkflowScript({
       store: getExecutionStore(executionId),
-      checkpointId: checkpointIdFor(script),
+      checkpointId: checkpointIdFor('tool-test'),
       script,
       runAgent: async () => finalResult,
     });
@@ -151,29 +150,34 @@ describe('WorkflowScriptTool', () => {
       summary: "Completed workflow script 'tool-test' (1 agent call)",
     });
     expect(result.output).toContain('"category": "workflow"');
+    // The run log rides along so the invoking model sees what executed.
+    expect(result.output).toContain('=== Run log ===');
+    expect(result.output).toContain('Using saved result');
     // Delta accounting: replayed entries were settled by the attempt that
     // executed them, so a pure replay settles zero instead of double-billing.
     expect(recordCost).toHaveBeenCalledTimes(1);
     expect(recordCost).toHaveBeenCalledWith(0);
 
-    // A retry mints a new tool-call id; identical content resumes the journal.
+    // A retrying model rewrites its source; same meta.name still resumes,
+    // and the unchanged agent() call replays instead of re-executing.
     clearStoreCache();
     const retryCost = vi.fn();
     const retry = await callTool({
       toolCallId: 'attempt-2',
       recordCost: retryCost,
+      script: `${script}\n// retry rewrote me`,
     });
     expect(retry).toMatchObject({ status: 'executed' });
+    expect(retry.output).toContain('Using saved result');
     expect(retryCost).toHaveBeenCalledWith(0);
   });
 
-  it('derives distinct checkpoints when args presence or default agent differ', () => {
-    const base = checkpointIdFor(script);
-    expect(checkpointIdFor(script, null)).not.toBe(base);
+  it('derives distinct checkpoints when name or default agent differ', () => {
+    const base = checkpointIdFor('tool-test');
+    expect(checkpointIdFor('other-name')).not.toBe(base);
     expect(
       deriveWorkflowScriptCheckpointId({
-        script,
-        args: undefined,
+        name: 'tool-test',
         defaultAgent: 'merge',
         parentExecutionId: executionId,
       }),
@@ -201,9 +205,56 @@ return args`,
     expect(recordCost).toHaveBeenCalledWith(0);
   });
 
+  it('retains checkpoint arguments when a retry omits them', async () => {
+    const argsScript = `export const meta = {
+  name: 'retained-arguments',
+  description: 'retains omitted retry arguments',
+}
+return args`;
+    await runPersistedWorkflowScript({
+      store: getExecutionStore(executionId),
+      checkpointId: checkpointIdFor('retained-arguments'),
+      script: argsScript,
+      args: { topic: 'geometry' },
+      runAgent: async () => finalResult,
+    });
+    clearStoreCache();
+
+    const result = await callTool({
+      script: `${argsScript}\n// revised retry`,
+    });
+
+    expect(result).toMatchObject({
+      status: 'executed',
+      output: expect.stringContaining('"topic": "geometry"'),
+    });
+  });
+
+  it('bounds and normalizes the model-visible run log', async () => {
+    const result = await callTool({
+      script: `export const meta = {
+  name: 'bounded-log',
+  description: 'bounds model-visible activity',
+}
+for (let index = 0; index < 100; index += 1) log('line-' + index)
+log('oversized\\n' + 'x'.repeat(2_000))
+return 'done'`,
+    });
+
+    expect(result).toMatchObject({ status: 'executed' });
+    expect(result.output).toContain(
+      '=== Run log (last 80 lines; 21 earlier lines omitted) ===',
+    );
+    expect(result.output).not.toContain('line-20\n');
+    expect(result.output).toContain('line-21\n');
+    expect(result.output).toContain('oversized x');
+    expect(result.output).not.toContain('oversized\n');
+    expect(result.output?.length).toBeLessThan(42_000);
+  });
+
   it('settles a retained journal when later script code fails', async () => {
     const failingScript = `export const meta = {
-  name: 'tool-test',
+  name: 'retained-settlement',
   description: 'tests retained journal settlement',
 }
 await agent('saved call')
@@ -211,7 +262,7 @@ throw new Error('script failed after replay')`;
     await expect(
       runPersistedWorkflowScript({
         store: getExecutionStore(executionId),
-        checkpointId: checkpointIdFor(failingScript),
+        checkpointId: checkpointIdFor('retained-settlement'),
         script: failingScript,
         runAgent: async () => finalResult,
       }),
@@ -228,21 +279,25 @@ throw new Error('script failed after replay')`;
       status: 'error',
       error: expect.stringContaining('script failed after replay'),
     });
+    // Failures carry the run log and the resume hint back to the model.
+    expect(result.error).toContain(
+      "journaled under meta.name 'retained-settlement'",
+    );
     // The seeding attempt journaled the entry; this attempt only replays it.
     expect(recordCost).toHaveBeenCalledTimes(1);
     expect(recordCost).toHaveBeenCalledWith(0);
   });
 
   it('fails closed on malformed journal costs without recording a scalar', async () => {
-    // Distinct script so this journal cannot alias the replay test's content key.
+    // Distinct meta.name so this journal cannot alias the replay test's key.
     const malformedScript = `export const meta = {
-  name: 'tool-test',
+  name: 'malformed-cost',
   description: 'tests malformed journal cost settlement',
 }
 return await agent('saved call')`;
     await runPersistedWorkflowScript({
       store: getExecutionStore(executionId),
-      checkpointId: checkpointIdFor(malformedScript),
+      checkpointId: checkpointIdFor('malformed-cost'),
       script: malformedScript,
       runAgent: async () => ({ not: 'an agent result' }),
     });
