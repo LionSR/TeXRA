@@ -1076,7 +1076,7 @@ export class StreamSnapshotStore {
     };
     this.stagedDeletions.set(stream, state);
     let namespaceTransitionStarted = false;
-    let replayAttempted = false;
+    let recoveryReplayInProgress = false;
 
     try {
       const failedState = this.failedRollbacks.get(stream);
@@ -1102,8 +1102,9 @@ export class StreamSnapshotStore {
         } else {
           state.liveStorageAvailable = true;
         }
-        replayAttempted = true;
+        recoveryReplayInProgress = true;
         await this.replayStagedWrites(stream, state);
+        recoveryReplayInProgress = false;
       }
       if (canUseStreamDataDir(stream)) {
         const hasStagedData = await storagePathExists(
@@ -1191,7 +1192,7 @@ export class StreamSnapshotStore {
     } catch (error) {
       const failures: unknown[] = [error];
       try {
-        let canReplay = !replayAttempted;
+        let canReplay = !recoveryReplayInProgress;
         if (
           canReplay &&
           namespaceTransitionStarted &&

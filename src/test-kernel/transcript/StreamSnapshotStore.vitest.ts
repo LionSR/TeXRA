@@ -1246,6 +1246,41 @@ describe('StreamSnapshotStore', () => {
     await store.deleteStream(STREAM);
   });
 
+  it('revalidates live storage after recovery before retaining writes', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    store.setPlan(STREAM, PLAN);
+    await store.flush();
+    const deletion = await store.stageDeleteStream(STREAM);
+    store.setPlan(STREAM, null);
+    const writeError = new Error('snapshot disk is full');
+    const writeSpy = vi
+      .spyOn(StorageFS, 'writeAtomic')
+      .mockRejectedValueOnce(writeError);
+
+    await expect(deletion.rollback()).rejects.toBe(writeError);
+
+    writeSpy.mockRestore();
+    const renameError = new Error('snapshot directory is still locked');
+    const renameSpy = vi
+      .spyOn(StorageFS, 'rename')
+      .mockImplementationOnce(async () => {
+        store.setTodos(STREAM, [TODO]);
+        throw renameError;
+      });
+    await expect(store.stageDeleteStream(STREAM)).rejects.toBe(renameError);
+
+    renameSpy.mockRestore();
+    await store.flush();
+    const reloaded = new StreamSnapshotStore();
+    await reloaded.load([STREAM]);
+    expect(reloaded.getWorkPlan(STREAM)).toMatchObject({
+      plan: null,
+      todos: [TODO],
+    });
+    await store.deleteStream(STREAM);
+  });
+
   it('retries buffered writes after staged-directory reconciliation', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);
