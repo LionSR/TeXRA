@@ -1000,12 +1000,7 @@ export class StreamSnapshotStore {
             failedWrites.phase = 'live';
             await this.replayStagedWrites(stream, failedWrites);
           }
-          if (
-            failedWrites &&
-            this.failedRollbacks.get(stream) === failedWrites
-          ) {
-            this.failedRollbacks.delete(stream);
-          }
+          this.releaseFailedRollbackOwnership(stream, failedWrites);
           if (liveStreams.has(stream)) restored.push(stream);
           else pendingCleanup.push(stream);
           return;
@@ -1021,9 +1016,7 @@ export class StreamSnapshotStore {
       async ([stream, state]) => {
         if (!liveStreams.has(stream) || state.phase !== 'live') return;
         await this.replayStagedWrites(stream, state);
-        if (this.failedRollbacks.get(stream) === state) {
-          this.failedRollbacks.delete(stream);
-        }
+        this.releaseFailedRollbackOwnership(stream, state);
       },
       { concurrency: SEED_IO_CONCURRENCY },
     );
@@ -1048,6 +1041,15 @@ export class StreamSnapshotStore {
         }
         throw error;
       }
+    }
+  }
+
+  private releaseFailedRollbackOwnership(
+    stream: StreamTabId,
+    state: StagedDeletionState | undefined,
+  ): void {
+    if (state && this.failedRollbacks.get(stream) === state) {
+      this.failedRollbacks.delete(stream);
     }
   }
 
@@ -1161,9 +1163,7 @@ export class StreamSnapshotStore {
         commit: async () => {
           if (settled) return;
           settled = true;
-          if (this.failedRollbacks.get(stream) === state) {
-            this.failedRollbacks.delete(stream);
-          }
+          this.releaseFailedRollbackOwnership(stream, state);
           this.evict(stream);
           try {
             if (state.phase === 'staged' && stagedDir) {
