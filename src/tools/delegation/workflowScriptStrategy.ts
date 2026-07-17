@@ -24,6 +24,7 @@ import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 // Local imports - shared
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import type { ExecutionId } from '@shared/schemas';
+import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 
 // Local imports - tools
 import {
@@ -196,7 +197,7 @@ export function createWorkflowScriptStrategy(
           executionId: params.executionId,
         },
         {
-          message: `${toErrorMessage(err)}${runLog.format()}\n\nCompleted agent() calls are journaled under meta.name '${params.name}': call delegate_workflow_script again with the same meta.name to resume without repeating them.`,
+          message: `${toErrorMessage(err)}${runLog.format()}\n\nCompleted agent() calls are journaled under meta.name '${params.name}': call ${DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME} again with the same meta.name to resume without repeating them.`,
         },
       ),
   };

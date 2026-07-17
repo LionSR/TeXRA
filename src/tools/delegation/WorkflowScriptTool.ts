@@ -151,9 +151,9 @@ Tool inclusion is the opt-in boundary: do not add this tool to a default agent c
           status: 'executed',
           summary: `Workflow script '${meta.name}' is already running`,
           output: [
-            `A workflow script run for meta.name '${meta.name}' is already in progress; its result will arrive as a follow-up.`,
+            `A workflow script run for meta.name '${meta.name}' is already in progress (or finishing); its result arrives as a follow-up. Do not launch a competing run — wait for it, then resume with the same meta.name if it did not complete.`,
             `Execution ID: ${runExecutionId}`,
-            `To check progress: executions tool with path=/executions/${runExecutionId} and action=wait.`,
+            `To check progress or collect the result: executions tool with path=/executions/${runExecutionId} and action=wait (returns immediately if it already finished).`,
           ].join('\n'),
         };
       }
