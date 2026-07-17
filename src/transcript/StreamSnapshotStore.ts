@@ -886,9 +886,23 @@ export class StreamSnapshotStore {
       return;
     }
 
-    await new KVStore(streamDataDir(stream), {
-      throwOnErrors: true,
-    }).deleteDir();
+    try {
+      await new KVStore(streamDataDir(stream), {
+        throwOnErrors: true,
+      }).deleteDir();
+    } catch (error) {
+      // A version bump can interrupt hydration as well as writes. Chain a
+      // fresh seed behind that interrupted work so the retained record returns
+      // to a current, mutable state once the still-durable sidecars are read.
+      void this.refreshSeed(stream).catch((seedError: unknown) =>
+        logger.warn(
+          CHANNEL,
+          `Failed to restore snapshot state after retaining stream ${stream}`,
+          { data: seedError },
+        ),
+      );
+      throw error;
+    }
     this.records.delete(stream);
   }
 

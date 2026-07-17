@@ -992,6 +992,46 @@ describe('StreamSnapshotStore', () => {
     await store.deleteStream(STREAM);
   });
 
+  it('restarts hydration when deletion fails during an active seed', async () => {
+    await installPlatform();
+    const executionId = 'feedface' as ExecutionId;
+    const writer = new StreamSnapshotStore();
+    await writer.load([]);
+    writer.setTaskState(STREAM, toolUseTaskState(), executionId);
+    writer.setPlan(STREAM, PLAN);
+    await writer.flush();
+    await getExecutionStore(executionId).writeConfig(
+      toolUseTaskState().agentConfig,
+    );
+
+    const store = new StreamSnapshotStore();
+    const deletionError = new Error('stream data directory is locked');
+    vi.spyOn(StorageFS, 'delete').mockRejectedValueOnce(deletionError);
+    let deletion: Promise<void> | undefined;
+    const wasDeleteInjected = injectDuringExecutionConfigHydration(
+      executionId,
+      () => {
+        deletion = store.deleteStream(STREAM);
+        void deletion.catch(() => undefined);
+      },
+    );
+
+    await store.load([STREAM]);
+    if (!deletion) throw new Error('Deletion was not injected');
+    await expect(deletion).rejects.toBe(deletionError);
+    await store.flush();
+
+    expect(wasDeleteInjected).toHaveBeenCalledOnce();
+    expect(store.getWorkPlan(STREAM).plan).toEqual(PLAN);
+    store.setTodos(STREAM, [TODO]);
+    expect(store.getWorkPlan(STREAM).todos).toEqual([TODO]);
+    await store.flush();
+
+    const reloaded = new StreamSnapshotStore();
+    await reloaded.load([STREAM]);
+    expect(reloaded.getWorkPlan(STREAM).todos).toEqual([TODO]);
+  });
+
   it('does not resurrect a deleted sidecar dir when deleteStream lands during hydration', async () => {
     // Regression for #8226: applyStreamData awaits execution-config hydration
     // mid-seed. If the stream is deleted during that await, the continuation
