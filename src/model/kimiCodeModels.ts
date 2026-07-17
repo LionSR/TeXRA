@@ -52,7 +52,20 @@ function buildKimiCodeModelConfig(
   label: string,
   contextWindow: number,
 ): KimiCodeModelConfig {
-  return {
+  const directAccess = Object.freeze({
+    source: 'kimiCode',
+    credential: 'kimiCode' as const,
+    baseUrl: KIMI_CODE_OPENAI_BASE_URL,
+  });
+  const capabilities = Object.freeze({
+    ...DEFAULT_MODEL_CAPABILITIES,
+    supportsReasoning: true,
+    supportsFunctionCalling: true,
+    supportsVision: true,
+    supportsTokenCounting: false,
+  });
+
+  return Object.freeze({
     name: texraId,
     fullName: modelId,
     shortName: modelId,
@@ -63,20 +76,9 @@ function buildKimiCodeModelConfig(
     inputPrice: 0,
     outputPrice: 0,
     openRouterOnly: false,
-    directAccess: {
-      source: 'kimiCode',
-      credential: 'kimiCode',
-      baseUrl: KIMI_CODE_OPENAI_BASE_URL,
-      handlerProfile: 'openai-reasoning',
-    },
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsReasoning: true,
-      supportsFunctionCalling: true,
-      supportsVision: true,
-      supportsTokenCounting: false,
-    },
-  } satisfies KimiCodeModelConfig;
+    directAccess,
+    capabilities,
+  } satisfies KimiCodeModelConfig);
 }
 
 /**
@@ -85,7 +87,7 @@ function buildKimiCodeModelConfig(
  */
 export const KIMI_CODE_MODEL_CONFIGS: Readonly<
   Record<string, KimiCodeModelConfig>
-> = {
+> = Object.freeze({
   kimiCodeK3: buildKimiCodeModelConfig(
     'kimiCodeK3',
     'k3',
@@ -104,4 +106,4 @@ export const KIMI_CODE_MODEL_CONFIGS: Readonly<
     'Kimi Code K2.7 HighSpeed',
     KIMI_CODE_CONTEXT_WINDOW,
   ),
-};
+});

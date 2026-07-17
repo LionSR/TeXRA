@@ -57,6 +57,14 @@ describe('Kimi Code model registry', () => {
   it('keeps ordinary static registry lookups unchanged', () => {
     expect(getRuntimeModelConfig('kimi25T')).toBe(MODEL_CONFIGS.kimi25T);
   });
+
+  it('exports immutable registry entries', () => {
+    const config = KIMI_CODE_MODEL_CONFIGS.kimiCodeK3;
+    expect(Object.isFrozen(KIMI_CODE_MODEL_CONFIGS)).toBe(true);
+    expect(Object.isFrozen(config)).toBe(true);
+    expect(Object.isFrozen(config.directAccess)).toBe(true);
+    expect(Object.isFrozen(config.capabilities)).toBe(true);
+  });
 });
 
 describe('Kimi Code routing', () => {
@@ -75,14 +83,14 @@ describe('Kimi Code routing', () => {
     ).toBe(false);
   });
 
-  it('uses the shared OpenAI reasoning handler', () => {
+  it('uses the shared Kimi handler', () => {
     expect(
       modelHandlerCompatibilityKey(
         KIMI_CODE_MODEL_CONFIGS.kimiCodeK3,
         false,
         false,
       ),
-    ).toBe('ModelHandlerOpenAIReasoning');
+    ).toBe('ModelHandlerKimi');
   });
 
   it('never sends managed-service credentials through the TeXRA relay', () => {

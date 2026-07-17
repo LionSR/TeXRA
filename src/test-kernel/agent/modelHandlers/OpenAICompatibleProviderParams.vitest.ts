@@ -93,66 +93,72 @@ function createClientStub() {
 }
 
 describe('OpenAI-compatible provider request params', () => {
-  it('keeps Kimi K2.7 Code chat requests on Moonshot-required defaults', async () => {
-    const handler = new ModelHandlerKimi(
-      buildConfig(ModelProvider.MOONSHOT, {
-        name: 'kimi27codeT',
-        fullName: 'kimi-k2.7-code',
-        capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
-          supportsReasoning: true,
-          supportsVision: true,
-        },
-      }),
-    );
-    handler.setLogger(createLoggerStub() as AgentTrace);
-    (handler as any).getStreamingConfig = () => false;
-    (handler as any).estimateTokenCount = async () => 100;
+  it.each(['kimi-k2.7-code', 'kimi-for-coding', 'kimi-for-coding-highspeed'])(
+    'keeps Kimi K2.7 Code alias %s on required defaults',
+    async (fullName) => {
+      const handler = new ModelHandlerKimi(
+        buildConfig(ModelProvider.MOONSHOT, {
+          name: 'kimi27codeT',
+          fullName,
+          capabilities: {
+            ...DEFAULT_MODEL_CAPABILITIES,
+            supportsReasoning: true,
+            supportsVision: true,
+          },
+        }),
+      );
+      handler.setLogger(createLoggerStub() as AgentTrace);
+      (handler as any).getStreamingConfig = () => false;
+      (handler as any).estimateTokenCount = async () => 100;
 
-    const { client, createCalls } = createClientStub();
-    await handler.createResponse({
-      client: client as any,
-      messages: [{ role: 'user', content: 'think' }],
-      temperature: 0,
-    });
+      const { client, createCalls } = createClientStub();
+      await handler.createResponse({
+        client: client as any,
+        messages: [{ role: 'user', content: 'think' }],
+        temperature: 0,
+      });
 
-    assert.equal(createCalls[0].temperature, 1);
-    assert.equal(createCalls[0].thinking, undefined);
-  });
+      assert.equal(createCalls[0].temperature, 1);
+      assert.equal(createCalls[0].thinking, undefined);
+    },
+  );
 
-  it('does not disable Kimi K2.7 thinking during client-side compaction', async () => {
-    const handler = new ModelHandlerKimi(
-      buildConfig(ModelProvider.MOONSHOT, {
-        name: 'kimi27codeT',
-        fullName: 'kimi-k2.7-code',
-        capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
-          supportsReasoning: true,
-          supportsVision: true,
-        },
-      }),
-    );
-    handler.setLogger(createLoggerStub() as AgentTrace);
-    handler.setAgentCategory(AgentCategory.ToolUse);
-    handler.requestCompaction();
-    (handler as any).getStreamingConfig = () => false;
-    (handler as any).estimateTokenCount = async () => 100;
+  it.each(['kimi-k2.7-code', 'kimi-for-coding', 'kimi-for-coding-highspeed'])(
+    'does not disable Kimi K2.7 alias %s during compaction',
+    async (fullName) => {
+      const handler = new ModelHandlerKimi(
+        buildConfig(ModelProvider.MOONSHOT, {
+          name: 'kimi27codeT',
+          fullName,
+          capabilities: {
+            ...DEFAULT_MODEL_CAPABILITIES,
+            supportsReasoning: true,
+            supportsVision: true,
+          },
+        }),
+      );
+      handler.setLogger(createLoggerStub() as AgentTrace);
+      handler.setAgentCategory(AgentCategory.ToolUse);
+      handler.requestCompaction();
+      (handler as any).getStreamingConfig = () => false;
+      (handler as any).estimateTokenCount = async () => 100;
 
-    const { client, createCalls } = createClientStub();
-    await handler.createResponse({
-      client: client as any,
-      messages: [
-        { role: 'user', content: 'first' },
-        { role: 'assistant', content: 'second' },
-        { role: 'user', content: 'third' },
-      ],
-      temperature: 0,
-    });
+      const { client, createCalls } = createClientStub();
+      await handler.createResponse({
+        client: client as any,
+        messages: [
+          { role: 'user', content: 'first' },
+          { role: 'assistant', content: 'second' },
+          { role: 'user', content: 'third' },
+        ],
+        temperature: 0,
+      });
 
-    assert.equal(createCalls.length, 2);
-    assert.equal(createCalls[0].temperature, 1);
-    assert.equal(createCalls[0].thinking, undefined);
-  });
+      assert.equal(createCalls.length, 2);
+      assert.equal(createCalls[0].temperature, 1);
+      assert.equal(createCalls[0].thinking, undefined);
+    },
+  );
 
   it('uses the fixed Kimi K2.5 temperature during client-side compaction', async () => {
     const handler = new ModelHandlerKimi(
@@ -238,74 +244,80 @@ describe('OpenAI-compatible provider request params', () => {
     assert.equal(createCalls[0].thinking, undefined);
   });
 
-  it('omits temperature and sends reasoning_effort max for Kimi K3', async () => {
-    // Moonshot fixes K3 sampling server-side (docs say omit temperature), and
-    // its reasoning_effort field accepts only 'max' — the shared OpenAI clamp
-    // would otherwise lower our MAX tier to 'xhigh', which Moonshot rejects.
-    const handler = new ModelHandlerKimi(
-      buildConfig(ModelProvider.MOONSHOT, {
-        name: 'kimi3',
-        fullName: 'kimi-k3',
-        capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
-          supportsReasoning: true,
-          supportsReasoningEffort: true,
-          reasoningEffort: ReasoningEffort.MAX,
-          supportsVision: true,
-        },
-      }),
-    );
-    handler.setLogger(createLoggerStub() as AgentTrace);
-    (handler as any).getStreamingConfig = () => false;
-    (handler as any).estimateTokenCount = async () => 100;
+  it.each(['kimi-k3', 'k3'])(
+    'omits temperature and sends reasoning_effort max for Kimi K3 alias %s',
+    async (fullName) => {
+      // Moonshot fixes K3 sampling server-side (docs say omit temperature), and
+      // its reasoning_effort field accepts only 'max' — the shared OpenAI clamp
+      // would otherwise lower our MAX tier to 'xhigh', which Moonshot rejects.
+      const handler = new ModelHandlerKimi(
+        buildConfig(ModelProvider.MOONSHOT, {
+          name: 'kimi3',
+          fullName,
+          capabilities: {
+            ...DEFAULT_MODEL_CAPABILITIES,
+            supportsReasoning: true,
+            supportsReasoningEffort: true,
+            reasoningEffort: ReasoningEffort.MAX,
+            supportsVision: true,
+          },
+        }),
+      );
+      handler.setLogger(createLoggerStub() as AgentTrace);
+      (handler as any).getStreamingConfig = () => false;
+      (handler as any).estimateTokenCount = async () => 100;
 
-    const { client, createCalls } = createClientStub();
-    await handler.createResponse({
-      client: client as any,
-      messages: [{ role: 'user', content: 'think' }],
-      temperature: 0,
-    });
+      const { client, createCalls } = createClientStub();
+      await handler.createResponse({
+        client: client as any,
+        messages: [{ role: 'user', content: 'think' }],
+        temperature: 0,
+      });
 
-    assert.equal('temperature' in createCalls[0], false);
-    assert.equal(createCalls[0].reasoning_effort, 'max');
-    assert.equal(createCalls[0].thinking, undefined);
-  });
+      assert.equal('temperature' in createCalls[0], false);
+      assert.equal(createCalls[0].reasoning_effort, 'max');
+      assert.equal(createCalls[0].thinking, undefined);
+    },
+  );
 
-  it('omits temperature and thinking from Kimi K3 compaction summaries', async () => {
-    const handler = new ModelHandlerKimi(
-      buildConfig(ModelProvider.MOONSHOT, {
-        name: 'kimi3',
-        fullName: 'kimi-k3',
-        capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
-          supportsReasoning: true,
-          supportsReasoningEffort: true,
-          reasoningEffort: ReasoningEffort.MAX,
-          supportsVision: true,
-        },
-      }),
-    );
-    handler.setLogger(createLoggerStub() as AgentTrace);
-    handler.setAgentCategory(AgentCategory.ToolUse);
-    handler.requestCompaction();
-    (handler as any).getStreamingConfig = () => false;
-    (handler as any).estimateTokenCount = async () => 100;
+  it.each(['kimi-k3', 'k3'])(
+    'preserves thinking in Kimi K3 alias %s compaction summaries',
+    async (fullName) => {
+      const handler = new ModelHandlerKimi(
+        buildConfig(ModelProvider.MOONSHOT, {
+          name: 'kimi3',
+          fullName,
+          capabilities: {
+            ...DEFAULT_MODEL_CAPABILITIES,
+            supportsReasoning: true,
+            supportsReasoningEffort: true,
+            reasoningEffort: ReasoningEffort.MAX,
+            supportsVision: true,
+          },
+        }),
+      );
+      handler.setLogger(createLoggerStub() as AgentTrace);
+      handler.setAgentCategory(AgentCategory.ToolUse);
+      handler.requestCompaction();
+      (handler as any).getStreamingConfig = () => false;
+      (handler as any).estimateTokenCount = async () => 100;
 
-    const { client, createCalls } = createClientStub();
-    await handler.createResponse({
-      client: client as any,
-      messages: [
-        { role: 'user', content: 'first' },
-        { role: 'assistant', content: 'second' },
-        { role: 'user', content: 'third' },
-      ],
-      temperature: 0,
-    });
+      const { client, createCalls } = createClientStub();
+      await handler.createResponse({
+        client: client as any,
+        messages: [
+          { role: 'user', content: 'first' },
+          { role: 'assistant', content: 'second' },
+          { role: 'user', content: 'third' },
+        ],
+        temperature: 0,
+      });
 
-    assert.equal(createCalls.length, 2);
-    assert.equal('temperature' in createCalls[0], false);
-    assert.equal(createCalls[0].thinking, undefined);
-  });
+      assert.equal(createCalls.length, 2);
+      assert.equal('temperature' in createCalls[0], false);
+      assert.equal(createCalls[0].thinking, undefined);
+    },
+  );
 
   it('disables thinking for the Kimi K2.6 non-reasoning entry sharing a fullName with its thinking sibling (#7081)', async () => {
     // kimi26 and kimi26T both resolve to fullName 'kimi-k2.6' in the live

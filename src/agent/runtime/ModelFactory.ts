@@ -23,7 +23,6 @@ import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from '@model/cod
 import { isGpt5ModelName } from '@model/modelNames';
 import {
   isOpenRouterRoutingUnsupported,
-  resolveDirectModelHandlerProfile,
   shouldRouteModelThroughOpenRouter,
 } from '@model/openRouterRouting';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
@@ -316,13 +315,6 @@ export function modelHandlerCompatibilityKey(
   if (shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
     return 'ModelHandlerOpenRouterNative';
   }
-  switch (resolveDirectModelHandlerProfile(config)) {
-    case 'openai-reasoning':
-      return 'ModelHandlerOpenAIReasoning';
-    case undefined:
-      break;
-  }
-
   return PROVIDER_HANDLER_ROUTES[config.provider].compatibilityKey ?? undefined;
 }
 

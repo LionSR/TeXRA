@@ -33,7 +33,6 @@ describe('shouldRouteModelThroughOpenRouter', () => {
           source: 'kimiCode',
           credential: 'kimiCode' as const,
           baseUrl: 'https://api.kimi.com/coding/v1',
-          handlerProfile: 'openai-reasoning' as const,
         },
       },
       useOpenRouter: true,

@@ -20,23 +20,25 @@ export interface DirectModelRoutingConfig {
     readonly source: string;
     readonly credential: ApiProvider;
     readonly baseUrl: string;
-    readonly handlerProfile: 'openai-reasoning';
   };
 }
 
-type DirectModelHandlerProfile = NonNullable<
-  DirectModelRoutingConfig['directAccess']
->['handlerProfile'];
-
 export type ModelRoutingConfig = OpenRouterRoutingConfig &
   DirectModelRoutingConfig;
+
+/** Whether a registry entry owns an atomic managed-service route. */
+export function hasManagedDirectRoute(
+  config: Pick<ModelRoutingConfig, 'directAccess' | 'provider'>,
+): boolean {
+  return config.directAccess !== undefined;
+}
 
 function isOpenRouterAccessSelected(
   config: ModelRoutingConfig,
   useOpenRouter: boolean,
 ): boolean {
   return (
-    !config.directAccess &&
+    !hasManagedDirectRoute(config) &&
     !config.forceDirectProvider &&
     (config.openRouterOnly || useOpenRouter)
   );
@@ -81,13 +83,6 @@ export function resolveModelSource(
   return config.directAccess?.source ?? config.provider;
 }
 
-/** Handler profile explicitly selected by a direct managed-service entry. */
-export function resolveDirectModelHandlerProfile(
-  config: Pick<ModelRoutingConfig, 'directAccess' | 'provider'>,
-): DirectModelHandlerProfile | undefined {
-  return config.directAccess?.handlerProfile;
-}
-
 /** Fixed base URL for a managed direct route. */
 export function resolveDirectModelBaseUrl(
   config: Pick<ModelRoutingConfig, 'directAccess' | 'provider'>,
@@ -99,7 +94,7 @@ export function resolveDirectModelBaseUrl(
 export function allowsModelRelay(
   config: Pick<ModelRoutingConfig, 'directAccess' | 'provider'>,
 ): boolean {
-  return !config.directAccess;
+  return !hasManagedDirectRoute(config);
 }
 
 /** Return whether this model request should be routed through OpenRouter. */

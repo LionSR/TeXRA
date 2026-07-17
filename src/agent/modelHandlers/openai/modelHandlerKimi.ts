@@ -5,6 +5,7 @@ import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { TokenCountOptions } from '@agent/types/ModelHandlerContracts';
 import type { ToolDefinition } from '@model';
+import { hasManagedDirectRoute } from '@model/openRouterRouting';
 import { resolveMoonshotRequestParameters } from '../support/moonshotRequestParameters';
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
 
@@ -146,7 +147,13 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
    * Kimi provides a token estimation API for accurate pre-flight counts.
    */
   override get supportsTokenCounting(): boolean {
-    return true;
+    // Moonshot's native endpoint supports token estimation. Managed services
+    // may expose only the configured chat endpoint, so they must opt in via
+    // capabilities before this handler calls the auxiliary tokenizer route.
+    return (
+      !hasManagedDirectRoute(this.config) ||
+      this.capabilities.supportsTokenCounting
+    );
   }
 
   /**
