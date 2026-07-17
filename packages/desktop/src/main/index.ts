@@ -915,8 +915,12 @@ function createWindow(options: {
     RUNS_STORAGE_DIR,
   );
   const debouncedHistoryRepost = debounce(async () => {
-    if (windowClosed) return;
-    await historySettingsController.postHistoryData();
+    try {
+      if (windowClosed) return;
+      await historySettingsController.postHistoryData();
+    } catch (error) {
+      reportAsyncError(error);
+    }
   }, DEBOUNCE_OPTIONS_MS);
   let executionsWatcher: FSWatcher | undefined;
   try {
