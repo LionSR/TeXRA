@@ -1318,6 +1318,40 @@ describe('StreamSnapshotStore', () => {
     await store.deleteStream(STREAM);
   });
 
+  it('keeps the staged base when failed rollback data also has live residue', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    store.setPlan(STREAM, PLAN);
+    void store.addUsage(STREAM, RUN, usage(100, 20, 0.5));
+    await store.flush();
+    const deletion = await store.stageDeleteStream(STREAM);
+    store.setPlan(STREAM, null);
+    const rollbackError = new Error('snapshot directory is still locked');
+    const renameSpy = vi
+      .spyOn(StorageFS, 'rename')
+      .mockRejectedValueOnce(rollbackError);
+
+    await expect(deletion.rollback()).rejects.toBe(rollbackError);
+
+    renameSpy.mockRestore();
+    await StorageFS.ensureDir(streamDataDir(STREAM));
+    await expect(
+      store.reconcileStagedDeletions(new Set([STREAM])),
+    ).resolves.toEqual({
+      restored: [STREAM],
+      pendingCleanup: [],
+      discarded: [],
+    });
+    const reloaded = await new StreamSnapshotStore().read(STREAM);
+    expect(reloaded.plan).toBeNull();
+    expect(reloaded.runUsage[RUN]).toMatchObject({
+      inputTokens: 100,
+      outputTokens: 20,
+      cost: 0.5,
+    });
+    await store.deleteStream(STREAM);
+  });
+
   it('restores committed residue for complete orphan cleanup', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);

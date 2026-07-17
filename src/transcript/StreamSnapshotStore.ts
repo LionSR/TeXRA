@@ -305,6 +305,9 @@ interface StagedDeletionState {
   resolveSettled: () => void;
 }
 
+type StagedDeletionSetupPhase =
+  'preparing' | 'changing-namespace' | 'replaying-recovery';
+
 export class StreamSnapshotStore {
   private readonly records = new Map<StreamTabId, StreamRecord>();
   /**
@@ -976,8 +979,14 @@ export class StreamSnapshotStore {
 
         const stagedDir = stagedStreamDataDir(stream);
         const liveDir = streamDataDir(stream);
+        const hasLiveData = await storagePathExists(liveDir);
         const failedWrites = this.failedRollbacks.get(stream);
-        if (!(await storagePathExists(liveDir))) {
+        if (!hasLiveData || failedWrites) {
+          if (hasLiveData) {
+            // A failed rollback owner makes the staged tree the complete base;
+            // its buffered writes are the newer delta applied below.
+            await StorageFS.delete(liveDir, { recursive: true });
+          }
           await StorageFS.ensureDir(STREAM_DATA_DIR);
           await StorageFS.rename(stagedDir, liveDir);
           const record = this.records.get(stream);
@@ -989,18 +998,13 @@ export class StreamSnapshotStore {
             failedWrites.liveStorageAvailable = true;
             await this.replayStagedWrites(stream, failedWrites);
           }
-          this.failedRollbacks.delete(stream);
+          this.releaseFailedRollbackOwnership(stream, failedWrites);
           if (liveStreams.has(stream)) restored.push(stream);
           else pendingCleanup.push(stream);
           return;
         }
 
         await StorageFS.delete(stagedDir, { recursive: true });
-        if (liveStreams.has(stream) && failedWrites) {
-          failedWrites.liveStorageAvailable = true;
-          await this.replayStagedWrites(stream, failedWrites);
-        }
-        this.failedRollbacks.delete(stream);
         discarded.push(stream);
       },
       { concurrency: SEED_IO_CONCURRENCY },
@@ -1010,9 +1014,7 @@ export class StreamSnapshotStore {
       async ([stream, state]) => {
         if (!liveStreams.has(stream) || !state.liveStorageAvailable) return;
         await this.replayStagedWrites(stream, state);
-        if (this.failedRollbacks.get(stream) === state) {
-          this.failedRollbacks.delete(stream);
-        }
+        this.releaseFailedRollbackOwnership(stream, state);
       },
       { concurrency: SEED_IO_CONCURRENCY },
     );
@@ -1037,6 +1039,15 @@ export class StreamSnapshotStore {
         }
         throw error;
       }
+    }
+  }
+
+  private releaseFailedRollbackOwnership(
+    stream: StreamTabId,
+    state: StagedDeletionState | undefined,
+  ): void {
+    if (state && this.failedRollbacks.get(stream) === state) {
+      this.failedRollbacks.delete(stream);
     }
   }
 
@@ -1075,8 +1086,7 @@ export class StreamSnapshotStore {
       resolveSettled,
     };
     this.stagedDeletions.set(stream, state);
-    let namespaceTransitionStarted = false;
-    let recoveryReplayInProgress = false;
+    let setupPhase: StagedDeletionSetupPhase = 'preparing';
 
     try {
       const failedState = this.failedRollbacks.get(stream);
@@ -1087,7 +1097,7 @@ export class StreamSnapshotStore {
           if (!state.writes.has(key)) state.writes.set(key, value);
         }
         this.failedRollbacks.delete(stream);
-        namespaceTransitionStarted = true;
+        setupPhase = 'changing-namespace';
         const stagedDir = stagedStreamDataDir(stream);
         const liveDir = streamDataDir(stream);
         if (await storagePathExists(stagedDir)) {
@@ -1102,16 +1112,16 @@ export class StreamSnapshotStore {
         } else {
           state.liveStorageAvailable = true;
         }
-        recoveryReplayInProgress = true;
+        setupPhase = 'replaying-recovery';
         await this.replayStagedWrites(stream, state);
-        recoveryReplayInProgress = false;
+        setupPhase = 'preparing';
       }
       if (canUseStreamDataDir(stream)) {
         const hasStagedData = await storagePathExists(
           stagedStreamDataDir(stream),
         );
         if (hasStagedData) {
-          namespaceTransitionStarted = true;
+          setupPhase = 'changing-namespace';
           state.liveStorageAvailable = false;
           throw new Error(
             `Stream ${stream} has an unreconciled snapshot deletion`,
@@ -1144,7 +1154,7 @@ export class StreamSnapshotStore {
       if (liveDir && stagedDir && hasLiveData) {
         await StorageFS.ensureDir(STREAM_DATA_DELETION_DIR);
         state.liveStorageAvailable = false;
-        namespaceTransitionStarted = true;
+        setupPhase = 'changing-namespace';
         await StorageFS.rename(liveDir, stagedDir);
         staged = true;
       }
@@ -1192,10 +1202,10 @@ export class StreamSnapshotStore {
     } catch (error) {
       const failures: unknown[] = [error];
       try {
-        let canReplay = !recoveryReplayInProgress;
+        let canReplay = setupPhase !== 'replaying-recovery';
         if (
           canReplay &&
-          namespaceTransitionStarted &&
+          setupPhase === 'changing-namespace' &&
           canUseStreamDataDir(stream)
         ) {
           state.liveStorageAvailable = false;
