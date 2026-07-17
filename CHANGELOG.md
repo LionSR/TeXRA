@@ -21,6 +21,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Relay failures can be traced without exposing request content** — relay
+  responses now include a correlation identifier that support can use to
+  investigate failures before or during a model response.
 - **Running sessions are protected across TeXRA apps** — clearing history or
   progress in one app no longer removes or marks failed a session that is
   still active in the CLI, desktop app, or VS Code extension.
@@ -123,19 +126,27 @@ All notable changes to this project will be documented in this file.
 
 ### Shared (all surfaces)
 
-#### Breaking Changes
+#### Bug Fixes
 
-- **Built-in access to OpenAI, Anthropic, and Google now requires Ultra** —
-  Free and Max users can continue using these providers with their own API
-  keys. Built-in access to other supported providers is unchanged.
+- **OpenAI-compatible streams accept response metadata** — conversations no
+  longer stop when a provider sends harmless metadata during a response.
+- **Stored conversation inspection retains provider-native content** — Google
+  message parts and OpenAI tool calls no longer disappear from conversation
+  output, and long entries remain bounded for readability.
+- **Run completion storage failures are no longer hidden** — if TeXRA cannot
+  save a completed or failed run safely, it reports the problem and avoids
+  offering stale work as an ordinary resumable session.
+
+### Extension (VS Code) and Desktop
 
 #### Bug Fixes
 
-- **OpenAI-compatible conversations no longer stop unexpectedly** — valid
-  answers now continue to completion instead of being interrupted.
-- **Relay failures can be traced without exposing request content** — relay
-  responses now include a correlation identifier that support can use to
-  investigate failures before or during a model response.
+- **Approve-all settles queued delegated work** — approving the rest of a
+  delegated session now resolves its waiting tasks, file edits, and commands,
+  and the menu explains the full scope before applying it.
+- **Pending external inquiries restore reliably** — reopening or moving the
+  progress view reloads every open inquiry and its thread before the view is
+  ready, even when another request was already visible.
 
 ### Extension (VS Code)
 
@@ -146,23 +157,17 @@ All notable changes to this project will be documented in this file.
   Models tab without adding a provider API key. If Copilot usage is
   exhausted, TeXRA can retry with a saved key for the same provider.
 
-#### Bug Fixes
-
-- **Delegated approval choices are clearer** — proposal menus now explain when
-  one choice will approve the remaining tasks, file changes, and commands for
-  the current delegated session.
-
 ### CLI
 
 #### New Features
 
-- **Manage agents and teams from one place** — `texra config`, the launcher's
-  Settings screen, and `/config` now provide the same controls for choosing
-  available agents, a default team, and a default chat agent. Scripts can use
-  `texra config agents` without opening the interactive interface.
-- **Approve the rest of a delegated session at once** — press `a` to approve
-  the current task and avoid repeated approval prompts for its remaining file
-  changes and commands.
+- **Configure agents and defaults from one place** — `texra config`, the
+  launcher's Settings screen, and `/config` now provide the same controls for
+  the available-agent roster, default team, and default chat agent. Scripts
+  can use `texra config agents` without opening the interactive interface.
+- **Approve all remaining delegated work at once** — press `a` to approve the
+  current task and avoid further task, file-change, and command prompts for
+  that delegated session.
 
 #### Bug Fixes
 
