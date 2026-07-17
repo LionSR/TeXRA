@@ -7,12 +7,11 @@
  * don't see it after the first run.
  */
 
-import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 
 import { renderIconActionButton } from '@shared/wa/actionButtons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { renderBannerFrame } from '@shared/wa/bannerFrame';
 
 import { webviewStorage } from '../webviewStorage';
 
@@ -36,7 +35,10 @@ export class WorkflowHintBanner extends LitElement {
       margin-block-start: 0.2em;
       padding-inline-end: var(--wa-space-2xs);
     }
-    .banner-row {
+    /* Named .hint-row (not .banner-row) — this is a multi-line, flex-start
+       layout distinct from the single-line, space-between .banner-row that
+       bannerFrame.ts callers use. */
+    .hint-row {
       display: flex;
       align-items: flex-start;
       gap: var(--wa-space-2xs);
@@ -61,14 +63,14 @@ export class WorkflowHintBanner extends LitElement {
 
   override render(): TemplateResult | typeof nothing {
     if (this.dismissed) return nothing;
-    return html`
-      <wa-callout
-        variant="brand"
-        role="note"
-        aria-label="Workflow mode reminder"
-      >
-        ${waIcon('info', { slot: 'icon' })}
-        <div class="banner-row">
+    return renderBannerFrame({
+      id: 'workflowHintBanner',
+      variant: 'brand',
+      icon: 'info',
+      role: 'note',
+      ariaLabel: 'Workflow mode reminder',
+      body: html`
+        <div class="hint-row">
           <div class="text">
             <span class="title">Workflow mode thinks across rounds.</span>
             It reduces hallucinations and cuts fluff, so expect 10–30 minutes
@@ -83,7 +85,7 @@ export class WorkflowHintBanner extends LitElement {
             onClick: this.handleDismiss,
           })}
         </div>
-      </wa-callout>
-    `;
+      `,
+    });
   }
 }
