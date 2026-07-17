@@ -158,6 +158,7 @@ const PROVIDER_REGISTRY = [
 /** Providers not in the main registry (no server-side keys, no model selection). */
 const EXTRA_DISPLAY_NAMES: Record<string, string> = {
   openRouter: 'OpenRouter',
+  kimiCode: 'Kimi Code',
   [ModelProvider.COPILOT]: 'Copilot',
   [ModelProvider.OTHERS]: 'Others',
 };
@@ -201,6 +202,7 @@ export const PROVIDER_URLS: Record<string, string> = {
     PROVIDER_REGISTRY.flatMap((p) => (p.keyUrl ? [[p.id, p.keyUrl]] : [])),
   ),
   openRouter: 'https://openrouter.ai/keys',
+  kimiCode: 'https://code.kimi.com/',
 };
 
 export const PROVIDER_STATE_ENTRIES: readonly ProviderStateEntry[] = [

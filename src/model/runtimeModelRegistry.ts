@@ -8,6 +8,9 @@ import {
 import { platform } from '@platform/platform';
 import type { ApiProvider } from '@model/apiProviders';
 import { resolveModelApiKeyProvider } from '@model/openRouterRouting';
+
+import { KIMI_CODE_MODEL_CONFIGS } from './kimiCodeModels';
+
 import type {
   LanguageModelAccessState,
   LanguageModelInfo,
@@ -162,14 +165,18 @@ export function invalidateRuntimeModelRegistry(): void {
 
 /** Resolve a static or editor-discovered model config by its persisted id. */
 export function getRuntimeModelConfig(model: string): ModelConfig | undefined {
-  return runtimeModels.get(model)?.config ?? MODEL_CONFIGS[model];
+  return (
+    runtimeModels.get(model)?.config ??
+    KIMI_CODE_MODEL_CONFIGS[model] ??
+    MODEL_CONFIGS[model]
+  );
 }
 
 /** Resolve a model after ensuring native discovery has run in this host. */
 export async function resolveRuntimeModelConfig(
   model: string,
 ): Promise<ModelConfig | undefined> {
-  const staticConfig = MODEL_CONFIGS[model];
+  const staticConfig = KIMI_CODE_MODEL_CONFIGS[model] ?? MODEL_CONFIGS[model];
   if (staticConfig) return staticConfig;
 
   await refreshRuntimeModelRegistry();
@@ -265,6 +272,7 @@ export function runtimeModelConfigEntries(): readonly (readonly [
 ])[] {
   return [
     ...Object.entries(MODEL_CONFIGS),
+    ...Object.entries(KIMI_CODE_MODEL_CONFIGS),
     ...[...runtimeModels].map(([id, entry]) => [id, entry.config] as const),
   ];
 }

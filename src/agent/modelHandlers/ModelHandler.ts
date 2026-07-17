@@ -449,7 +449,7 @@ export abstract class ModelHandler<
   }
 
   /** Fetch an API key for the given provider, throwing `errorMessage` on failure. */
-  private async fetchApiKeyOrThrow(
+  protected async fetchApiKeyOrThrow(
     provider: ApiProvider,
     errorMessage: string,
   ): Promise<string> {
@@ -544,11 +544,15 @@ export abstract class ModelHandler<
       {
         reason: 'Personal-key mode uses the configured provider key.',
         matches: () => true,
-        resolve: () =>
-          this.fetchApiKeyOrThrow(
-            this.config.provider.toLowerCase() as ApiProvider,
-            `Missing API key for ${this.config.provider}. Set your ${this.config.provider} API key to continue.`,
-          ),
+        resolve: () => {
+          const directProvider =
+            (this.config as { apiKeyProvider?: ApiProvider }).apiKeyProvider ??
+            (this.config.provider.toLowerCase() as ApiProvider);
+          return this.fetchApiKeyOrThrow(
+            directProvider,
+            `Missing API key for ${directProvider}. Set your ${directProvider} API key to continue.`,
+          );
+        },
       },
     ];
 
