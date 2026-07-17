@@ -1,9 +1,8 @@
 /**
- * Shared helpers for the `set_api_key` / `unset_api_key` tools.
+ * Shared helpers for the `unset_api_key` tool.
  *
- * Both tools validate the provider name the same way and, after mutating
- * credential store, refresh the same caches and status surfaces. Centralising
- * keeps the validation message and the refresh ordering identical across both.
+ * Provider validation and credential-cache refresh remain here so the tool's
+ * execution path stays focused on the single delete operation.
  */
 
 import {

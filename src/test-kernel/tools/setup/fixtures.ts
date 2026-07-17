@@ -12,14 +12,14 @@ export function createFakeSetupPlatform(
   overrides: Partial<SetupPlatform> = {},
 ): SetupPlatform {
   return {
+    host: overrides.host ?? 'cli',
     secrets: {
-      async setApiKey() {},
       async deleteApiKey() {},
-      async apiKeyExists() {
-        return false;
-      },
       async hasUsableApiKey() {
         return false;
+      },
+      async apiKeyOrigin() {
+        return 'none';
       },
       async storedApiKeyExists() {
         return false;
@@ -55,6 +55,12 @@ export function createFakeSetupPlatform(
         };
       },
       ...overrides.auth,
+    },
+    modelAccess: {
+      async getChatGptSubscriptionStatus() {
+        return { signedIn: false, enabled: false };
+      },
+      ...overrides.modelAccess,
     },
     config: {
       get() {

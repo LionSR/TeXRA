@@ -42,6 +42,12 @@ export interface SlashCommand {
    */
   readonly formEscapeAction?: string;
   /**
+   * Keep the raw command line out of transcripts and persistent input history.
+   * Use for commands whose remainder could contain a credential even when the
+   * command normally collects that value through a structured form.
+   */
+  readonly redactInput?: boolean;
+  /**
    * Set for commands that take a free-text inline argument (e.g. `/foo bar`).
    * When true, Enter in the palette *completes* the command into the input
    * (with a trailing space) so the user can type the argument, rather than
@@ -79,6 +85,86 @@ export function findSlashCommand(
   const lower = nameOrAlias.toLowerCase();
   return listSlashCommands().find((cmd) =>
     commandCandidates(cmd).includes(lower),
+  );
+}
+
+function redactedCommandForToken(token: string): SlashCommand | undefined {
+  const exact = findSlashCommand(token);
+  if (exact !== undefined)
+    return exact.redactInput === true ? exact : undefined;
+
+  const suggestion = suggestSlashCommand(token);
+  if (suggestion?.redactInput === true) return suggestion;
+
+  const normalized = token.replace(/^(?:api|set)-?/u, '');
+  const variants = normalized === token ? [token] : [token, normalized];
+  return listSlashCommands().find(
+    (command) =>
+      command.redactInput === true &&
+      commandCandidates(command).some((candidate) =>
+        variants.some(
+          (variant) =>
+            variant === candidate ||
+            isAdjacentTransposition(variant, candidate) ||
+            hasConcatenatedCredentialPrefix(variant, candidate),
+        ),
+      ),
+  );
+}
+
+function isAdjacentTransposition(left: string, right: string): boolean {
+  if (left.length !== right.length) return false;
+  const mismatches = [...left].flatMap((character, index) =>
+    character === right[index] ? [] : [index],
+  );
+  if (mismatches.length !== 2) return false;
+  const [first, second] = mismatches;
+  return (
+    second === first + 1 &&
+    left[first] === right[second] &&
+    left[second] === right[first]
+  );
+}
+
+function hasConcatenatedCredentialPrefix(
+  token: string,
+  commandName: string,
+): boolean {
+  if (!token.startsWith(commandName)) return false;
+  const remainder = token.slice(commandName.length);
+  return /^(?:sk[-_]|gh[pousr]_|AIza|xai-)/iu.test(remainder);
+}
+
+/** Recognize a protected command even when punctuation makes parsing fail. */
+export function findRedactedSlashCommandInput(
+  text: string,
+): SlashCommand | undefined {
+  const token = /^\/([\w-]+)/u.exec(text)?.[1]?.toLowerCase();
+  return token ? redactedCommandForToken(token) : undefined;
+}
+
+/**
+ * Whether a slash-shaped input may contain data that must not be retained.
+ * Unknown commands with arguments fail closed: a misspelled secret-bearing
+ * command must not place its argument in the transcript or input history.
+ */
+export function shouldRedactSlashInput(text: string): boolean {
+  if (findRedactedSlashCommandInput(text) !== undefined) return true;
+
+  const parsed = parseSlashInput(text);
+  if (parsed === undefined) return false;
+
+  const registered = findSlashCommand(parsed.name);
+  if (registered !== undefined) return registered.redactInput === true;
+  if (parsed.remainder.trim().length > 0) return true;
+  return listSlashCommands().some(
+    (command) =>
+      command.redactInput === true &&
+      commandCandidates(command).some(
+        (candidate) =>
+          parsed.name.length > candidate.length &&
+          parsed.name.toLowerCase().startsWith(candidate),
+      ),
   );
 }
 

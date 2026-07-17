@@ -42,8 +42,10 @@ import { applyCliSubscriptionToggle } from './handlers/subscriptionCommand';
 import { openRegisteredCliSlashForm } from './slashForms';
 import {
   findSlashCommand,
+  findRedactedSlashCommandInput,
   listSlashCommands,
   parseSlashInput,
+  shouldRedactSlashInput,
   suggestSlashCommand,
 } from './slashRegistry';
 
@@ -62,12 +64,24 @@ export async function handleTuiSlashCommand(
   line: string,
   context: SlashCommandContext,
 ): Promise<boolean> {
+  const redactedIntent = findRedactedSlashCommandInput(line);
   const parsed = parseSlashInput(line);
-  if (!parsed) return false;
+  if (!parsed) {
+    if (!redactedIntent) return false;
+    appendLocalAssistantTranscript(
+      `For safety, /${redactedIntent.name} accepts credentials only through its masked form.`,
+    );
+    if (!openRegisteredCliSlashForm(redactedIntent, '')) {
+      appendLocalAssistantTranscript(
+        `/${redactedIntent.name} is not available in this CLI view yet.`,
+      );
+    }
+    return true;
+  }
 
   const command = parsed.name.toLowerCase();
   const rest = parsed.remainder.trim();
-  const registered = findSlashCommand(command);
+  const registered = findSlashCommand(command) ?? redactedIntent;
   const canonicalCommand = registered?.name ?? command;
   // Echo the slash input into the transcript so the user can see what they
   // typed. Slash commands don't go through the agent run, so the usual
@@ -75,7 +89,11 @@ export async function handleTuiSlashCommand(
   // exit commands (the TUI is tearing down); /clear still echoes because
   // resetSessionForClear refuses while a run is active and surfaces an
   // error — without the echo the user wouldn't see what triggered it.
-  if (canonicalCommand !== 'exit' && canonicalCommand !== 'login') {
+  if (
+    canonicalCommand !== 'exit' &&
+    canonicalCommand !== 'login' &&
+    !shouldRedactSlashInput(line)
+  ) {
     appendLocalUserTranscript(line.trim());
   }
   switch (canonicalCommand) {
@@ -118,6 +136,14 @@ export async function handleTuiSlashCommand(
       await runGuardedSlashCommand(() =>
         applyCliApiModeSelection(rest, context),
       );
+      return true;
+    case 'key':
+      if (rest) {
+        appendLocalAssistantTranscript(
+          'For safety, `/key` does not accept a key as an argument. Enter it in the masked form.',
+        );
+      }
+      openCanonicalSlashForm('key', registered, '');
       return true;
     case 'subscription':
       await runGuardedSlashCommand(() => applyCliSubscriptionToggle(rest));
@@ -248,7 +274,9 @@ export async function handleTuiSlashCommand(
           ? ` Did you mean /${suggestion.name}?`
           : '';
         appendLocalAssistantTranscript(
-          `Unknown command: /${parsed.name}.${didYouMean} Type /help to list commands.`,
+          shouldRedactSlashInput(line)
+            ? 'Unknown command with protected input. Type /help to list commands.'
+            : `Unknown command: /${parsed.name}.${didYouMean} Type /help to list commands.`,
         );
       }
       return true;

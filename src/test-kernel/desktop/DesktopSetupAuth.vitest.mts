@@ -12,6 +12,7 @@ describe('desktop setup auth adapter', () => {
     initializeDesktopSetupAuth();
     registerDesktopSetupSignIn(signIn);
 
+    expect(getSetupPlatform().host).toBe('desktop');
     await expect(getSetupPlatform().auth.signIn?.()).resolves.toBe(true);
     expect(signIn).toHaveBeenCalledOnce();
   });
