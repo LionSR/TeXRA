@@ -166,6 +166,9 @@ export function allocateConversationBottomPanelRows({
   // The persistent child list owns one blank separator row above its Select.
   const sessionPanelContentRows =
     childListRowCount > 0 ? childListRowCount + 1 : 0;
+  // The todos/plan panel likewise owns a separator row above its checklist.
+  const todosPanelContentRows =
+    todosPlanContentRows > 0 ? todosPlanContentRows + 1 : 0;
   const minimumSessionRows = childListRowCount > 0 ? 2 : 0;
   const availableTranscriptRows = Math.max(0, transcriptRows);
   let panelTranscriptLimit: number;
@@ -182,7 +185,7 @@ export function allocateConversationBottomPanelRows({
   }
   if (
     sessionPanelContentRows > 0 &&
-    todosPlanContentRows === 0 &&
+    todosPanelContentRows === 0 &&
     panelTranscriptLimit < minimumSessionRows
   ) {
     return {
@@ -193,12 +196,12 @@ export function allocateConversationBottomPanelRows({
   }
   const bottomPanelRows = Math.min(
     maxRows,
-    sessionPanelContentRows + todosPlanContentRows,
+    sessionPanelContentRows + todosPanelContentRows,
     panelTranscriptLimit,
   );
   const allocated = allocateSidePanelRows({
     subagentContentRows: sessionPanelContentRows,
-    todosPlanContentRows,
+    todosPlanContentRows: todosPanelContentRows,
     rows: bottomPanelRows,
   });
   const sessionPanelRows =
@@ -208,10 +211,29 @@ export function allocateConversationBottomPanelRows({
     sessionPanelContentRows > 0
       ? Math.max(minimumSessionRows, allocated.subagentRows)
       : 0;
+  const todosPlanRows = bottomPanelRows - sessionPanelRows;
+  // A lone row cannot hold the separator plus content; hand it back instead
+  // of rendering a dead blank line under the child list. When the child list
+  // has rows above its own minimum, transfer one first so both panels remain
+  // useful under a proportional split.
+  if (todosPanelContentRows > 0 && todosPlanRows === 1) {
+    if (sessionPanelRows > minimumSessionRows) {
+      return {
+        bottomPanelRows,
+        sessionPanelRows: sessionPanelRows - 1,
+        todosPlanRows: 2,
+      };
+    }
+    return {
+      bottomPanelRows: bottomPanelRows - 1,
+      sessionPanelRows,
+      todosPlanRows: 0,
+    };
+  }
   return {
     bottomPanelRows,
     sessionPanelRows,
-    todosPlanRows: bottomPanelRows - sessionPanelRows,
+    todosPlanRows,
   };
 }
 

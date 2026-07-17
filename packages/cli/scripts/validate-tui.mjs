@@ -2914,6 +2914,7 @@ const SCENARIOS = [
       'Split theorem into algebraic and analytic checks',
       'Coordinate a small math proof through nested CLI work.',
     ],
+    expectPatterns: [/\n\n ☑ Split theorem into algebraic and analytic checks/],
   },
   {
     name: 'completed-todos-hidden-while-running',
