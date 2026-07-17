@@ -11,8 +11,12 @@ export { selectStyles, compactFormControlStyles } from './selectStyles';
 export { requestPanelSharedStyles, sp } from './requestPanelSharedStyles';
 export { viewTabStyles, waTabThemeTokenStyles } from './viewTabStyles';
 
-// Shared list-view styles: search highlighting
-export { searchHighlightStyles } from './badgeStyles';
+// Shared list-view styles: search highlighting; app-wide compact status chips
+export { searchHighlightStyles, compactBadgeStyles } from './badgeStyles';
+
+// Shared inline wa-callout banner chrome (agent-config, api-key, dependency,
+// login, getting-started, workflow-hint banners)
+export { bannerStyles } from './bannerStyles';
 
 // History/search styles
 export {
