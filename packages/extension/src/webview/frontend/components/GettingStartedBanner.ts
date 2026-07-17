@@ -2,12 +2,11 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import { designTokens, commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles, bannerStyles } from '@shared/styles';
 import type { GettingStartedAction } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
-import { bannerStyles } from '../styles/bannerStyles';
-import { renderBannerFrame } from './bannerFrame';
+import { renderBannerFrame } from '@shared/wa/bannerFrame';
 import { MainViewEvents } from '../events';
 
 /** Slim project-bootstrap row shown when the workspace has no LaTeX files. */

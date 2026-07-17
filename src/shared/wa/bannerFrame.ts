@@ -21,6 +21,8 @@ export function renderBannerFrame(options: {
   readonly variant: 'warning' | 'brand';
   readonly icon?: TeXRAIconName;
   readonly calloutClassName?: string;
+  readonly role?: string;
+  readonly ariaLabel?: string;
   readonly body: TemplateResult;
 }): TemplateResult {
   return html`
@@ -29,6 +31,8 @@ export function renderBannerFrame(options: {
         id=${options.id}
         class=${ifDefined(options.calloutClassName)}
         variant=${options.variant}
+        role=${ifDefined(options.role)}
+        aria-label=${ifDefined(options.ariaLabel)}
       >
         ${options.icon ? waIcon(options.icon, { slot: 'icon' }) : nothing}
         ${options.body}
