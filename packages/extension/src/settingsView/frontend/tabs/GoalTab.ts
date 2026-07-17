@@ -4,7 +4,11 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import { designTokens, commonViewStyles } from '@shared/styles';
+import {
+  designTokens,
+  commonViewStyles,
+  compactBadgeStyles,
+} from '@shared/styles';
 import {
   formatGoalTime,
   isGoalInFlight,
@@ -31,6 +35,7 @@ export class GoalTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    compactBadgeStyles,
     metaStripStyles,
     css`
       :host {
@@ -63,10 +68,10 @@ export class GoalTab extends LitElement {
         background: var(--wa-color-surface-raised);
       }
 
-      /* Native wa-badge (variant per status, quiet 'filled' appearance),
-         compacted to the prior 2px chip padding. */
+      /* Compact padding/gap/font-size come from the shared .badge-compact
+         class (compactBadgeStyles); semibold weight is this component's own
+         (the other compact badges use medium). */
       .status-chip::part(base) {
-        padding: var(--wa-space-3xs) var(--wa-space-2xs);
         font-weight: var(--wa-font-weight-semibold);
       }
 
@@ -154,7 +159,7 @@ export class GoalTab extends LitElement {
         tabindex=${inFlight ? 0 : -1}
       >
         <wa-badge
-          class="status-chip"
+          class="status-chip badge-compact"
           variant=${statusVariant(item.status)}
           appearance="filled"
           >${capitalize(item.status)}</wa-badge

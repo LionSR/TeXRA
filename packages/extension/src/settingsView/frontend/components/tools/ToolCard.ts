@@ -11,7 +11,11 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
+import {
+  commonViewStyles,
+  designTokens,
+  compactBadgeStyles,
+} from '@shared/styles';
 import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
@@ -28,6 +32,7 @@ export class ToolCard extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    compactBadgeStyles,
     css`
       :host {
         display: block;
@@ -100,9 +105,10 @@ export class ToolCard extends LitElement {
         margin-bottom: var(--wa-space-2xs);
       }
 
+      /* Monospace font for the tool identifier; compact padding/gap/font-size
+         come from the shared .badge-compact class (compactBadgeStyles). */
       wa-badge.tool-id-tag::part(base) {
         font-family: var(--wa-font-family-mono, monospace), monospace;
-        font-size: var(--font-size-xs);
       }
 
       .tool-guide {
@@ -448,7 +454,7 @@ export class ToolCard extends LitElement {
                     const badgeId = `tool-id-badge-${this.item.id}-${index}`;
                     return html`<wa-badge
                         id=${badgeId}
-                        class="tool-id-tag"
+                        class="tool-id-tag badge-compact"
                         variant="neutral"
                         appearance="filled"
                         >${tool.name}</wa-badge

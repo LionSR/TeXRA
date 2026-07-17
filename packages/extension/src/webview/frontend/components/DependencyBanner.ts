@@ -4,11 +4,10 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
-import { designTokens, commonViewStyles } from '@shared/styles';
+import { designTokens, commonViewStyles, bannerStyles } from '@shared/styles';
 import type { DependencyBannerState } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { bannerStyles } from '../styles/bannerStyles';
-import { renderWarningBanner } from './bannerFrame';
+import { renderWarningBanner } from '@shared/wa/bannerFrame';
 import { StateVisibleBanner } from './StateVisibleBanner';
 import { MainViewEvents } from '../events';
 
