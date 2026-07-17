@@ -5,13 +5,13 @@ import type { CliLogoutTarget } from '@cli/runtime/loginOptions';
 import { ListForm } from './_shared/ListForm';
 import type { SelectItem } from '../ui/Select';
 
-export interface LogoutFormProps {
+interface LogoutFormProps {
   readonly availableRows?: number;
   readonly onSelect: (value: CliLogoutTarget) => void;
   readonly onCancel: () => void;
 }
 
-export const LOGOUT_FORM_ITEMS = [
+const LOGOUT_FORM_ITEMS = [
   {
     value: 'chatgpt',
     label: 'ChatGPT',

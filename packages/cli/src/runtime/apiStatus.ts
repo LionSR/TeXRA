@@ -49,15 +49,15 @@ export interface CliModelAccessOverview {
   readonly lines: readonly string[];
 }
 
-export function formatCliModelAccessOverview(
-  access: CliModelAccessStatus,
-  profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel' | 'note'>,
-  apiMode: CliApiMode,
-): CliModelAccessOverview {
-  const completeAccess = {
-    ...access,
-    texraSignedIn: profile.authenticated,
-  };
+/** Read both account sessions and the effective model-access route. */
+export async function loadCliModelAccessOverview(
+  options: { readonly apiMode?: CliApiMode } = {},
+): Promise<CliModelAccessOverview> {
+  const apiMode = options.apiMode ?? getCliApiMode();
+  const [access, profile] = await Promise.all([
+    readCliModelAccessStatus(apiMode),
+    getCliAuthProfile(),
+  ]);
   const lines = [
     `model access: ${formatCliModelAccessRoute(access.active)}`,
     formatAccountStatusLine(
@@ -75,19 +75,10 @@ export function formatCliModelAccessOverview(
     lines.push(`API fallback: ${formatCliModelAccessRoute(apiMode)}`);
   }
   if (profile.note) lines.push(profile.note);
-  return { access: completeAccess, lines };
-}
-
-/** Read both account sessions and the effective model-access route. */
-export async function loadCliModelAccessOverview(
-  options: { readonly apiMode?: CliApiMode } = {},
-): Promise<CliModelAccessOverview> {
-  const apiMode = options.apiMode ?? getCliApiMode();
-  const [access, profile] = await Promise.all([
-    readCliModelAccessStatus(apiMode),
-    getCliAuthProfile(),
-  ]);
-  return formatCliModelAccessOverview(access, profile, apiMode);
+  return {
+    access: { ...access, texraSignedIn: profile.authenticated },
+    lines,
+  };
 }
 
 /**

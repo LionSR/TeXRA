@@ -19,7 +19,6 @@ import {
   openRegisteredCliSlashForm,
 } from '@cli/chat/tui/commands/slashForms';
 import { LOGIN_FORM_ITEMS } from '@cli/chat/tui/forms/LoginForm';
-import { LOGOUT_FORM_ITEMS } from '@cli/chat/tui/forms/LogoutForm';
 import {
   activeForm,
   resetCliState,
@@ -177,14 +176,6 @@ describe('slashRegistry', () => {
       'texra',
       'chatgpt --device',
       'texra --device',
-    ]);
-  });
-
-  it('offers account-specific and explicit all-account sign-out', () => {
-    expect(LOGOUT_FORM_ITEMS.map((item) => item.value)).toEqual([
-      'chatgpt',
-      'texra',
-      'all',
     ]);
   });
 

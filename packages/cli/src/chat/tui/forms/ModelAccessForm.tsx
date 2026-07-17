@@ -15,7 +15,7 @@ import { useCancellableEffect } from '../state/useCancellableEffect';
 import { LoadingIndicator } from '../ui/LoadingIndicator';
 import { ListForm } from './_shared/ListForm';
 
-export interface ModelAccessFormProps {
+interface ModelAccessFormProps {
   readonly apiMode: CliApiMode;
   readonly availableRows?: number;
   readonly onSelect: (value: CliModelAccessRoute) => void;

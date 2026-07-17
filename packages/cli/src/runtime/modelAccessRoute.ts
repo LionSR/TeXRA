@@ -11,7 +11,7 @@ export interface CliModelAccessStatus {
   readonly texraSignedIn?: boolean;
 }
 
-export interface CliModelAccessItem {
+interface CliModelAccessItem {
   readonly value: CliModelAccessRoute;
   readonly label: string;
   readonly description: string;
