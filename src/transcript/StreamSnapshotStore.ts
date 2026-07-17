@@ -294,6 +294,7 @@ interface StreamRecord {
 
   // -- Cached KVStore handle for this stream's sidecar directory. ----------
   kv: KVStore | undefined;
+  writeKv: KVStore | undefined;
 }
 
 interface StagedDeletionState {
@@ -346,6 +347,7 @@ export class StreamSnapshotStore {
         compileFailuresOverlay: undefined,
         usageOverlay: undefined,
         kv: undefined,
+        writeKv: undefined,
       };
       this.records.set(stream, record);
     }
@@ -355,11 +357,20 @@ export class StreamSnapshotStore {
   private kv(streamId: StreamTabId): KVStore {
     const record = this.getOrCreateRecord(streamId);
     if (!record.kv) {
-      record.kv = new KVStore(streamDataDir(streamId), {
+      record.kv = new KVStore(streamDataDir(streamId));
+    }
+    return record.kv;
+  }
+
+  /** Strict write handle; read callers retain the KV store's fallback policy. */
+  private writeKv(streamId: StreamTabId): KVStore {
+    const record = this.getOrCreateRecord(streamId);
+    if (!record.writeKv) {
+      record.writeKv = new KVStore(streamDataDir(streamId), {
         throwOnErrors: true,
       });
     }
-    return record.kv;
+    return record.writeKv;
   }
 
   private async listStreamsUnder(root: string): Promise<StreamTabId[]> {
@@ -967,7 +978,10 @@ export class StreamSnapshotStore {
           await StorageFS.ensureDir(STREAM_DATA_DIR);
           await StorageFS.rename(stagedDir, liveDir);
           const record = this.records.get(stream);
-          if (record) record.kv = undefined;
+          if (record) {
+            record.kv = undefined;
+            record.writeKv = undefined;
+          }
           if (liveStreams.has(stream) && failedWrites) {
             await this.replayStagedWrites(stream, failedWrites);
           }
@@ -1465,7 +1479,7 @@ export class StreamSnapshotStore {
       // would re-create the `streamData/{id}/` dir `deleteDir()` just removed.
       if (!this.writeMutexes.has(chainKey)) return;
       if (this.streamVersion(stream) !== version) return;
-      return this.kv(stream).write(key, value);
+      return this.writeKv(stream).write(key, value);
     });
   }
 
