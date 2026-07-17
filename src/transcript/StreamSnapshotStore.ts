@@ -967,8 +967,7 @@ export class StreamSnapshotStore {
           const record = this.records.get(stream);
           if (record) record.kv = undefined;
           if (liveStreams.has(stream) && failedWrites) {
-            this.replayStagedWrites(stream, failedWrites);
-            await this.flushWritesForStream(stream);
+            await this.replayStagedWrites(stream, failedWrites);
           }
           this.failedRollbacks.delete(stream);
           if (liveStreams.has(stream)) restored.push(stream);
@@ -978,8 +977,7 @@ export class StreamSnapshotStore {
 
         await StorageFS.delete(stagedDir, { recursive: true });
         if (liveStreams.has(stream) && failedWrites) {
-          this.replayStagedWrites(stream, failedWrites);
-          await this.flushWritesForStream(stream);
+          await this.replayStagedWrites(stream, failedWrites);
         }
         this.failedRollbacks.delete(stream);
         discarded.push(stream);
@@ -990,15 +988,20 @@ export class StreamSnapshotStore {
   }
 
   /** Restore writes buffered behind a staging attempt after live data returns. */
-  private replayStagedWrites(
+  private async replayStagedWrites(
     stream: StreamTabId,
     state: StagedDeletionState,
-  ): void {
+  ): Promise<void> {
+    while (state.writes.size > 0) {
+      const writes = [...state.writes];
+      state.writes.clear();
+      for (const [key, value] of writes) {
+        this.writeUnbuffered(stream, key, value);
+      }
+      await this.flushWritesForStream(stream);
+    }
     if (this.stagedDeletions.get(stream) === state) {
       this.stagedDeletions.delete(stream);
-    }
-    for (const [key, value] of state.writes) {
-      this.write(stream, key, value);
     }
     state.resolveSettled();
   }
@@ -1124,7 +1127,7 @@ export class StreamSnapshotStore {
             if (staged && stagedDir && liveDir) {
               await StorageFS.rename(stagedDir, liveDir);
             }
-            this.replayStagedWrites(stream, state);
+            await this.replayStagedWrites(stream, state);
           } catch (error) {
             this.failedRollbacks.set(stream, state);
             throw error;
@@ -1137,7 +1140,7 @@ export class StreamSnapshotStore {
         },
       };
     } catch (error) {
-      this.replayStagedWrites(stream, state);
+      await this.replayStagedWrites(stream, state);
       throw error;
     }
   }

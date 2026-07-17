@@ -1067,6 +1067,7 @@ describe('StreamSnapshotStore', () => {
     await store.flush();
 
     const firstDeletion = await store.stageDeleteStream(STREAM);
+    store.setPlan(STREAM, null);
     let secondStarted = false;
     const secondDeletion = store.stageDeleteStream(STREAM).then((deletion) => {
       secondStarted = true;
@@ -1079,8 +1080,14 @@ describe('StreamSnapshotStore', () => {
     await firstDeletion.rollback();
     const deletion = await secondDeletion;
     expect(secondStarted).toBe(true);
-    await deletion.commit();
-    expect(await StorageFS.exists(streamDataDir(STREAM))).toBe(false);
+    await deletion.rollback();
+
+    const reloaded = new StreamSnapshotStore();
+    await reloaded.load([STREAM]);
+    expect(reloaded.getWorkPlan(STREAM)).toMatchObject({
+      plan: null,
+      planSummary: null,
+    });
   });
 
   it('allows retry after staged rollback fails', async () => {
