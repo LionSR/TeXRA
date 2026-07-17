@@ -28,7 +28,7 @@ import {
   type TeXRAIconName,
   waIcon,
 } from '@shared/wa/webAwesomeIcons';
-import { normalizeFilePath } from '@utils/core';
+import { getBasename, normalizeFilePath } from '@utils/core';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement } from '../utils';
@@ -92,10 +92,11 @@ interface ParsedPath {
 /** Parse a path into directory and basename components */
 function parsePath(path: string): ParsedPath {
   const normalized = normalizeFilePath(path);
-  const lastSlash = normalized.lastIndexOf('/');
+  const basename = getBasename(normalized);
+  const dirLength = normalized.length - basename.length;
   return {
-    dir: lastSlash >= 0 ? normalized.slice(0, lastSlash + 1) : '',
-    basename: lastSlash >= 0 ? normalized.slice(lastSlash + 1) : normalized,
+    dir: dirLength > 0 ? normalized.slice(0, dirLength) : '',
+    basename,
   };
 }
 

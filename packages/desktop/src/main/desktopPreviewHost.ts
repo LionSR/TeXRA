@@ -5,6 +5,7 @@ import { isLatexFile } from '@common/files/fileTypeUtils';
 import type { ExternalOpener } from '@hosts/uiHosts';
 import type { FileLocation } from '@shared/schemas';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
+import { getFileStem } from '@utils/core';
 import { createExternalLocation } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -124,7 +125,7 @@ export function createDesktopPreviewHost(
     const outputDirectory = path.dirname(sourcePath);
     const pdfPath = path.join(
       outputDirectory,
-      `${path.basename(sourcePath, path.extname(sourcePath))}.pdf`,
+      `${getFileStem(sourcePath)}.pdf`,
     );
     const { hasLatexCompiler } = await import('@latex/latexToolchain');
     if (!(await hasLatexCompiler())) {
