@@ -2317,6 +2317,41 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('finishes a staged deletion whose transcript committed before a crash', async () => {
+    const stream = 'tool@deepseek#c69660' as StreamTabId;
+    const executionId = 'c69660' as ExecutionId;
+    const seed = new StreamSnapshotStore();
+    await seed.load([]);
+    seed.setTaskState(
+      stream,
+      toolUseTaskState('search', 'deepseekproT'),
+      executionId,
+    );
+    await writeExecutionConfig(executionId);
+    await seed.flush();
+    await GoalStore.start(stream, 'finish this interrupted deletion');
+    await seed.stageDeleteStream(stream);
+
+    const { backend, session } = await createPersistentRecordingBackend();
+    try {
+      expect(await StorageFS.exists(streamDataDir(stream))).toBe(false);
+      expect(await seed.listStagedDeletions()).toContain(stream);
+
+      await backend.state.load();
+
+      expect(await backend.state.snapshots.listStagedDeletions()).not.toContain(
+        stream,
+      );
+      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(false);
+      expect(GoalStore.getForStream(stream)).toBeNull();
+    } finally {
+      await GoalStore.forget(stream);
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('continues sweeping streamData orphans when one orphan cleanup fails', async () => {
     const failingStream = 'tool@deepseek#d6966d' as StreamTabId;
     const sweptStream = 'tool@deepseek#e6966e' as StreamTabId;

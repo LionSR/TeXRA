@@ -331,9 +331,13 @@ export class StreamSnapshotStore {
     return record.kv;
   }
 
-  private async readPersistedStreamDirs(): Promise<[string, number][]> {
+  private async listStreamsUnder(root: string): Promise<StreamTabId[]> {
     try {
-      return await StorageFS.readDir(STREAM_DATA_DIR);
+      const entries = await StorageFS.readDir(root);
+      return entries
+        .filter(([, type]) => isDirectory(type))
+        .map(([encoded]) => decodeStreamId(encoded))
+        .filter((stream): stream is StreamTabId => stream !== undefined);
     } catch (error) {
       if (isFileNotFoundError(error)) return [];
       throw error;
@@ -969,11 +973,14 @@ export class StreamSnapshotStore {
         },
         rollback: async () => {
           if (settled) return;
-          if (staged && stagedDir && liveDir) {
-            await StorageFS.rename(stagedDir, liveDir);
-          }
-          this.stagedDeletions.delete(stream);
           settled = true;
+          try {
+            if (staged && stagedDir && liveDir) {
+              await StorageFS.rename(stagedDir, liveDir);
+            }
+          } finally {
+            this.stagedDeletions.delete(stream);
+          }
         },
       };
     } catch (error) {
@@ -1134,11 +1141,12 @@ export class StreamSnapshotStore {
 
   /** Streams with persisted sidecars under `streamData/`. */
   async listPersistedStreams(): Promise<StreamTabId[]> {
-    const entries = await this.readPersistedStreamDirs();
-    return entries
-      .filter(([, type]) => isDirectory(type))
-      .map(([encoded]) => decodeStreamId(encoded))
-      .filter((stream): stream is StreamTabId => stream !== undefined);
+    return this.listStreamsUnder(STREAM_DATA_DIR);
+  }
+
+  /** Streams left in reversible staging by an interrupted deletion. */
+  async listStagedDeletions(): Promise<StreamTabId[]> {
+    return this.listStreamsUnder(STREAM_DATA_DELETION_DIR);
   }
 
   /**

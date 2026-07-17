@@ -1026,6 +1026,24 @@ describe('StreamSnapshotStore', () => {
     await recovered.deleteStream(STREAM);
   });
 
+  it('allows retry after staged rollback fails', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    store.setPlan(STREAM, PLAN);
+    await store.flush();
+    const deletion = await store.stageDeleteStream(STREAM);
+    const rollbackError = new Error('snapshot directory is still locked');
+    const renameSpy = vi
+      .spyOn(StorageFS, 'rename')
+      .mockRejectedValueOnce(rollbackError);
+
+    await expect(deletion.rollback()).rejects.toBe(rollbackError);
+
+    renameSpy.mockRestore();
+    await expect(store.deleteStream(STREAM)).resolves.toBeUndefined();
+    expect(await StorageFS.exists(streamDataDir(STREAM))).toBe(false);
+  });
+
   it('waits for active hydration before staging deletion', async () => {
     await installPlatform();
     const executionId = 'feedface' as ExecutionId;

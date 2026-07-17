@@ -231,10 +231,14 @@ export class SessionStores {
   async sweepOrphanedStreams(
     liveStreams: ReadonlySet<StreamTabId>,
   ): Promise<{ streams: StreamTabId[]; executionIds: ExecutionId[] }> {
-    const persistedStreams = await this.snapshots.listPersistedStreams();
-    const orphanedStreams = persistedStreams.filter(
-      (stream) => !liveStreams.has(stream),
-    );
+    const [persistedStreams, stagedDeletions] = await Promise.all([
+      this.snapshots.listPersistedStreams(),
+      this.snapshots.listStagedDeletions(),
+    ]);
+    const orphanedStreams = unique([
+      ...persistedStreams,
+      ...stagedDeletions,
+    ]).filter((stream) => !liveStreams.has(stream));
     const sweptStreams: StreamTabId[] = [];
     const sweptExecutionIds: ExecutionId[] = [];
 
