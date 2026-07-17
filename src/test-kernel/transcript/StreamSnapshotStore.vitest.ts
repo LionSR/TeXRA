@@ -1050,6 +1050,29 @@ describe('StreamSnapshotStore', () => {
     });
   });
 
+  it('serializes overlapping staged deletions for one stream', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    store.setPlan(STREAM, PLAN);
+    await store.flush();
+
+    const firstDeletion = await store.stageDeleteStream(STREAM);
+    let secondStarted = false;
+    const secondDeletion = store.stageDeleteStream(STREAM).then((deletion) => {
+      secondStarted = true;
+      return deletion;
+    });
+    await Promise.resolve();
+
+    expect(secondStarted).toBe(false);
+
+    await firstDeletion.rollback();
+    const deletion = await secondDeletion;
+    expect(secondStarted).toBe(true);
+    await deletion.commit();
+    expect(await StorageFS.exists(streamDataDir(STREAM))).toBe(false);
+  });
+
   it('allows retry after staged rollback fails', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);

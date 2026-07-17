@@ -286,6 +286,12 @@ interface StreamRecord {
   kv: KVStore | undefined;
 }
 
+interface StagedDeletionState {
+  writes: Map<string, unknown>;
+  settled: Promise<void>;
+  resolveSettled: () => void;
+}
+
 export class StreamSnapshotStore {
   private readonly records = new Map<StreamTabId, StreamRecord>();
   /**
@@ -296,7 +302,7 @@ export class StreamSnapshotStore {
    */
   private readonly stagedDeletions = new Map<
     StreamTabId,
-    Map<string, unknown>
+    StagedDeletionState
   >();
 
   // -- Per (stream, category) serialized write locks -------------------------
@@ -892,13 +898,22 @@ export class StreamSnapshotStore {
     for (const stream of this.records.keys()) this.bumpStreamVersion(stream);
     this.records.clear();
     this.writeMutexes.clear();
+    for (const state of this.stagedDeletions.values()) state.resolveSettled();
     this.stagedDeletions.clear();
   }
 
   /** Restore a crash-interrupted pre-commit rename before reading the stream. */
-  private async recoverStagedDeletion(stream: StreamTabId): Promise<void> {
-    if (this.stagedDeletions.has(stream) || !canUseStreamDataDir(stream))
+  private async recoverStagedDeletion(
+    stream: StreamTabId,
+    owner?: StagedDeletionState,
+  ): Promise<void> {
+    const activeDeletion = this.stagedDeletions.get(stream);
+    if (
+      (activeDeletion && activeDeletion !== owner) ||
+      !canUseStreamDataDir(stream)
+    ) {
       return;
+    }
     const stagedDir = stagedStreamDataDir(stream);
     if (!(await StorageFS.exists(stagedDir))) return;
 
@@ -917,12 +932,15 @@ export class StreamSnapshotStore {
   /** Restore writes buffered behind a staging attempt after live data returns. */
   private replayStagedWrites(
     stream: StreamTabId,
-    stagedWrites: ReadonlyMap<string, unknown>,
+    state: StagedDeletionState,
   ): void {
-    this.stagedDeletions.delete(stream);
-    for (const [key, value] of stagedWrites) {
+    if (this.stagedDeletions.get(stream) === state) {
+      this.stagedDeletions.delete(stream);
+    }
+    for (const [key, value] of state.writes) {
       this.write(stream, key, value);
     }
+    state.resolveSettled();
   }
 
   /**
@@ -933,21 +951,24 @@ export class StreamSnapshotStore {
   async stageDeleteStream(
     stream: StreamTabId,
   ): Promise<StagedStreamSnapshotDeletion> {
-    if (this.stagedDeletions.has(stream)) {
-      throw new Error(
-        `Snapshot deletion is already staged for stream ${stream}`,
-      );
+    const activeDeletion = this.stagedDeletions.get(stream);
+    if (activeDeletion) {
+      await activeDeletion.settled;
+      return this.stageDeleteStream(stream);
     }
-    await this.recoverStagedDeletion(stream);
-    if (this.stagedDeletions.has(stream)) {
-      throw new Error(
-        `Snapshot deletion is already staged for stream ${stream}`,
-      );
-    }
-    const stagedWrites = new Map<string, unknown>();
-    this.stagedDeletions.set(stream, stagedWrites);
+    let resolveSettled = () => {};
+    const settlement = new Promise<void>((resolve) => {
+      resolveSettled = resolve;
+    });
+    const state: StagedDeletionState = {
+      writes: new Map(),
+      settled: settlement,
+      resolveSettled,
+    };
+    this.stagedDeletions.set(stream, state);
 
     try {
+      await this.recoverStagedDeletion(stream, state);
       // Let hydration finish before staging. A record with `seeded === false`
       // may already contain sidecars while execution-config hydration is still
       // in flight, so invalidating that seed would make neither disk nor memory
@@ -979,17 +1000,24 @@ export class StreamSnapshotStore {
         commit: async () => {
           if (settled) return;
           settled = true;
-          this.stagedDeletions.delete(stream);
           this.evict(stream);
-          if (!staged || !stagedDir) return;
           try {
-            await StorageFS.delete(stagedDir, { recursive: true });
-          } catch (error) {
-            logger.warn(
-              CHANNEL,
-              `Stream ${stream} was deleted, but staged snapshot cleanup was incomplete.`,
-              { data: error },
-            );
+            if (staged && stagedDir) {
+              try {
+                await StorageFS.delete(stagedDir, { recursive: true });
+              } catch (error) {
+                logger.warn(
+                  CHANNEL,
+                  `Stream ${stream} was deleted, but staged snapshot cleanup was incomplete.`,
+                  { data: error },
+                );
+              }
+            }
+          } finally {
+            if (this.stagedDeletions.get(stream) === state) {
+              this.stagedDeletions.delete(stream);
+            }
+            state.resolveSettled();
           }
         },
         rollback: async () => {
@@ -999,14 +1027,17 @@ export class StreamSnapshotStore {
             if (staged && stagedDir && liveDir) {
               await StorageFS.rename(stagedDir, liveDir);
             }
-            this.replayStagedWrites(stream, stagedWrites);
+            this.replayStagedWrites(stream, state);
           } finally {
-            this.stagedDeletions.delete(stream);
+            if (this.stagedDeletions.get(stream) === state) {
+              this.stagedDeletions.delete(stream);
+            }
+            state.resolveSettled();
           }
         },
       };
     } catch (error) {
-      this.replayStagedWrites(stream, stagedWrites);
+      this.replayStagedWrites(stream, state);
       throw error;
     }
   }
@@ -1288,9 +1319,9 @@ export class StreamSnapshotStore {
   }
 
   private write(stream: StreamTabId, key: string, value: unknown): void {
-    const stagedWrites = this.stagedDeletions.get(stream);
-    if (stagedWrites) {
-      stagedWrites.set(key, value);
+    const stagedDeletion = this.stagedDeletions.get(stream);
+    if (stagedDeletion) {
+      stagedDeletion.writes.set(key, value);
       return;
     }
     const chainKey = `${stream}::${key}`;
