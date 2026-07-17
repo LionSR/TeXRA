@@ -20,6 +20,11 @@ import {
 import { AgentError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from '@model/codexSubscriptionRouting';
+import { isPreferKimiCodeSubscription } from '@auth/kimiCode';
+import {
+  isKimiCodeExclusiveModel,
+  isKimiSubscriptionEligible,
+} from '@model/kimiCodeSubscriptionRouting';
 import { isGpt5ModelName } from '@model/modelNames';
 import {
   isOpenRouterRoutingUnsupported,
@@ -517,6 +522,28 @@ async function createModelHandlerForResolvedCompatibilityKey(
         'ModelHandlerOpenAIResponse',
       );
     }
+  }
+
+  // Kimi Code (Moonshot coding subscription) — a key-neutral override of the
+  // Kimi chat-completions path (same conversation format, so the persisted
+  // compatibility key stays 'ModelHandlerKimi' and resume paths are
+  // unaffected). Exclusive plan aliases always take the subscription handler:
+  // the coding endpoint is their only backend and the handler owns the
+  // per-request OAuth-vs-console-key choice. Dual-backend `kimi3` swaps in
+  // only while the "prefer Kimi Code subscription" switch reroutes it; the
+  // handler re-reads the switch per request for mid-run fallback.
+  if (
+    compatibilityKey === 'ModelHandlerKimi' &&
+    isKimiSubscriptionEligible(config) &&
+    (isKimiCodeExclusiveModel(config) || isPreferKimiCodeSubscription())
+  ) {
+    logger.debug(CHANNEL, 'Using Kimi Code subscription handler');
+    const { ModelHandlerKimiCode } =
+      await import('@agent/modelHandlers/openai/modelHandlerKimiCode');
+    return finalizeModelHandler(
+      new ModelHandlerKimiCode(config),
+      'ModelHandlerKimi',
+    );
   }
 
   if (
