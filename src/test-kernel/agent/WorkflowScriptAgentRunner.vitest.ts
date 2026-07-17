@@ -300,12 +300,17 @@ describe('createWorkflowScriptAgentRunner', () => {
     expect(onCost).not.toHaveBeenCalled();
   });
 
-  it('fails fast when a file-editing agent gets no input files', async () => {
+  it('aborts the run when a file-editing agent gets no input files', async () => {
     const runner = defaultRunner();
 
-    await expect(runner(invocation({}))).rejects.toThrow(
-      /pass options\.inputFiles with files that still exist/,
-    );
+    // Run-fatal (WorkflowRunAbortError), not a per-call failure: a plain
+    // error would resolve to null inside parallel() and be silently filtered.
+    await expect(runner(invocation({}))).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: expect.stringMatching(
+        /pass options\.inputFiles with files that still exist/,
+      ),
+    });
   });
 
   it('allows empty input files when the agent declares default outputs', async () => {
