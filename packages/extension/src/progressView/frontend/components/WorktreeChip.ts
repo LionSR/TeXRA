@@ -9,7 +9,7 @@ import {
   type WorktreePRState,
   type WorktreeCIState,
 } from '@shared/schemas';
-import { designTokens, compactBadgeStyles } from '@shared/styles';
+import { designTokens } from '@shared/styles';
 import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
 
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -58,7 +58,6 @@ const CI_LABEL: Record<WorktreeCIState, string> = {
 export class WorktreeChip extends LitElement {
   static override styles = [
     designTokens,
-    compactBadgeStyles,
     css`
       :host {
         display: inline-flex;
@@ -70,11 +69,15 @@ export class WorktreeChip extends LitElement {
         max-width: 100%;
       }
 
-      /* Native wa-badge per PR state (quiet 'filled' appearance); compact
-         padding/gap come from the shared .badge-compact class
-         (compactBadgeStyles). Colour comes from the variant. */
+      /* Native wa-badge per PR state (quiet 'filled' appearance); compacted to
+         the prior pill padding. Colour comes from the variant. */
       .pill {
         flex-shrink: 0;
+      }
+
+      .pill::part(base) {
+        gap: var(--wa-space-3xs);
+        padding: 0 var(--wa-space-2xs);
       }
 
       .branch {
@@ -179,7 +182,7 @@ export class WorktreeChip extends LitElement {
 
   private renderPRPill(state: WorktreePRState): TemplateResult {
     return html`<wa-badge
-      class="pill badge-compact"
+      class="pill"
       variant=${PR_STATE_VARIANT[state]}
       appearance="filled"
       title=${`PR ${PR_STATE_LABEL[state]}`}
