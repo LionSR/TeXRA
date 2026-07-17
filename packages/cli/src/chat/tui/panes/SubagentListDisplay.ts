@@ -1,5 +1,5 @@
 // Local imports - shared formatting
-import { formatCompactTokenCount } from '@utils/text/stringUtils';
+import { formatCompactTokenCount } from '@utils/core';
 
 // Local imports - TUI state and presentation
 import { isChildExecutionErrorStatus } from '../state/childExecutionStatus';
@@ -46,7 +46,7 @@ const PENDING_APPROVAL_ROW_LABELS: Record<PendingApprovalKind, string> = {
 export const CHILD_ROW_METADATA_MIN_COLUMNS = 60;
 
 /** Right-aligned metadata column for a child row: elapsed time plus the
- *  child's generated tokens so far (e.g. `2m 30s · ↓9.4k`). Output tokens are
+ *  child's generated tokens so far (e.g. `2m 30s · ↓40k`). Output tokens are
  *  the "work produced" figure — deliberately not the context-fill number the
  *  status bar reports for the focused stream. */
 export function childRowMetadataText({
