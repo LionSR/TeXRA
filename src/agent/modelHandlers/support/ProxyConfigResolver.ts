@@ -1,8 +1,9 @@
 import { ModelProvider } from 'llm-zoo';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import {
+  allowsModelRelay,
   shouldRouteModelThroughOpenRouter,
-  type OpenRouterRoutingConfig,
+  type ModelRoutingConfig,
 } from '@model/openRouterRouting';
 import { tryParseUrl } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
@@ -67,7 +68,7 @@ interface ProxyConfig {
  * Determines whether OpenRouter should be used for API routing.
  * Models with requiresResponsesAPI bypass OpenRouter even if globally enabled.
  */
-export function shouldUseOpenRouter(config: OpenRouterRoutingConfig): boolean {
+export function shouldUseOpenRouter(config: ModelRoutingConfig): boolean {
   return shouldRouteModelThroughOpenRouter(config, getUseOpenRouter());
 }
 
@@ -86,11 +87,12 @@ export function shouldUseOpenRouter(config: OpenRouterRoutingConfig): boolean {
  * independently and risking drift.
  */
 export function usesServerSideKeysRoute(
-  config: OpenRouterRoutingConfig & {
+  config: ModelRoutingConfig & {
     provider: ModelProvider;
     name: string;
   },
 ): boolean {
+  if (!allowsModelRelay(config)) return false;
   if (shouldUseOpenRouter(config)) {
     return false;
   }

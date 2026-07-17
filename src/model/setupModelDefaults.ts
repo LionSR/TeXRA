@@ -1,5 +1,10 @@
 import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
 
+import {
+  getRuntimeModelConfig,
+  staticModelConfigEntries,
+} from './runtimeModelRegistry';
+import { resolveModelSource } from './openRouterRouting';
 import { isCodexSubscriptionEligible } from './providerCapabilities';
 
 /**
@@ -22,6 +27,7 @@ const PREFERRED_SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
   openRouter: 'sonnet46T',
   xai: 'grok4',
   moonshot: 'kimi25T',
+  kimiCode: 'kimiCodeCoding',
   dashscope: 'qwen3max',
   minimax: 'minimax01',
   glm: 'glm5',
@@ -29,12 +35,11 @@ const PREFERRED_SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
 };
 
 /**
- * The llm-zoo `ModelProvider` each setup-provider key's fallback pool is
- * drawn from. `openRouter` has no direct llm-zoo provider of its own — its
- * preferred pick routes an Anthropic model through OpenRouter, so it falls
- * back within Anthropic's live models too.
+ * Model source each setup credential may probe. `openRouter` has no static
+ * source of its own, so its preferred Anthropic model falls back within that
+ * family; managed direct services such as Kimi Code retain their own source.
  */
-const FALLBACK_MODEL_PROVIDER: Readonly<Record<string, ModelProvider>> = {
+const FALLBACK_MODEL_SOURCE: Readonly<Record<string, string>> = {
   anthropic: ModelProvider.ANTHROPIC,
   openai: ModelProvider.OPENAI,
   google: ModelProvider.GOOGLE,
@@ -42,6 +47,7 @@ const FALLBACK_MODEL_PROVIDER: Readonly<Record<string, ModelProvider>> = {
   openRouter: ModelProvider.ANTHROPIC,
   xai: ModelProvider.XAI,
   moonshot: ModelProvider.MOONSHOT,
+  kimiCode: 'kimiCode',
   dashscope: ModelProvider.DASHSCOPE,
   minimax: ModelProvider.MINIMAX,
   glm: ModelProvider.GLM,
@@ -67,18 +73,20 @@ function isUsableSetupModel(
 
 /**
  * A still-usable model for `setupProvider`, preferring a non-deprecated one.
- * `MODEL_CONFIGS` iteration order is llm-zoo's own (not a recency contract),
- * so this is "some live model," not necessarily the newest release.
+ * Static registry order is not a recency contract, so this is "some live
+ * model," not necessarily the newest release.
  */
 function fallbackSetupModel(setupProvider: string): string | undefined {
-  const modelProvider = FALLBACK_MODEL_PROVIDER[setupProvider];
-  if (!modelProvider) return undefined;
+  const modelSource = FALLBACK_MODEL_SOURCE[setupProvider];
+  if (!modelSource) return undefined;
 
-  const candidates = Object.values(MODEL_CONFIGS).filter(
-    (config) =>
-      config.provider === modelProvider &&
-      isUsableSetupModel(config, setupProvider),
-  );
+  const candidates = staticModelConfigEntries()
+    .map(([, config]) => config)
+    .filter(
+      (config) =>
+        resolveModelSource(config) === modelSource &&
+        isUsableSetupModel(config, setupProvider),
+    );
   const preferNonDeprecated = candidates.find((config) => !config.deprecated);
   return (preferNonDeprecated ?? candidates[0])?.name;
 }
@@ -95,7 +103,7 @@ function resolveWithPreferred(
   setupProvider: string,
   preferred: string,
 ): string {
-  if (isUsableSetupModel(MODEL_CONFIGS[preferred], setupProvider)) {
+  if (isUsableSetupModel(getRuntimeModelConfig(preferred), setupProvider)) {
     return preferred;
   }
   return fallbackSetupModel(setupProvider) ?? preferred;

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import {
+  apiKeyEnvName,
   apiKeyExistsUncached,
   apiKeySecretName,
   hasUsableApiKey,
@@ -133,6 +134,10 @@ describe('API provider key caches', () => {
 
   afterEach(() => {
     invalidateApiKeyCache();
+  });
+
+  it('uses the documented Kimi Code environment variable', () => {
+    expect(apiKeyEnvName('kimiCode')).toBe('KIMI_CODE_API_KEY');
   });
 
   it('derives provider status from the canonical API-key origin cache', async () => {

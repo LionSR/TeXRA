@@ -21,7 +21,10 @@ import { AgentError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from '@model/codexSubscriptionRouting';
 import { isGpt5ModelName } from '@model/modelNames';
-import { isOpenRouterRoutingUnsupported } from '@model/openRouterRouting';
+import {
+  isOpenRouterRoutingUnsupported,
+  shouldRouteModelThroughOpenRouter,
+} from '@model/openRouterRouting';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import type { AgentCategory } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -309,7 +312,7 @@ export function modelHandlerCompatibilityKey(
   if (shouldUseGoogleInteractionsAPI(config, useOpenRouter)) {
     return 'ModelHandlerGoogleInteractions';
   }
-  if (config.openRouterOnly || useOpenRouter) {
+  if (shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
     return 'ModelHandlerOpenRouterNative';
   }
   return PROVIDER_HANDLER_ROUTES[config.provider].compatibilityKey ?? undefined;
@@ -550,6 +553,16 @@ async function createModelHandlerForResolvedCompatibilityKey(
       return finalizeModelHandler(
         new ModelHandlerOpenAIResponse(config),
         'ModelHandlerOpenAIResponse',
+      );
+    }
+
+    case 'ModelHandlerOpenAIReasoning': {
+      logger.debug(CHANNEL, 'Using OpenAI-compatible reasoning handler');
+      const { ReasoningModelHandlerOpenAI } =
+        await import('@agent/modelHandlers/openai/reasoningModelHandlerOpenAI');
+      return finalizeModelHandler(
+        new ReasoningModelHandlerOpenAI(config),
+        'ModelHandlerOpenAIReasoning',
       );
     }
 
