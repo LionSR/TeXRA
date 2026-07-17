@@ -71,7 +71,6 @@ import { isGpt5ModelName } from '@model/modelNames';
 import {
   allowsModelRelay,
   resolveDirectModelApiKeyProvider,
-  resolveDirectModelBaseUrl,
   resolveModelSource,
 } from '@model/openRouterRouting';
 
@@ -588,8 +587,7 @@ export abstract class ModelHandler<
     return resolveBaseUrl({
       provider: this.config.provider,
       openRouterOnly: this.config.openRouterOnly,
-      customBaseUrl:
-        resolveDirectModelBaseUrl(this.config) ?? this.config.baseUrl,
+      customBaseUrl: this.config.baseUrl,
       requiresResponsesAPI: this.config.requiresResponsesAPI,
       forceDirectProvider: (this.config as { forceDirectProvider?: boolean })
         .forceDirectProvider,
