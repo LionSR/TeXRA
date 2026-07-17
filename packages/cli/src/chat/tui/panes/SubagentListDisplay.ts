@@ -1,3 +1,6 @@
+// Local imports - shared formatting
+import { formatCompactTokenCount } from '@utils/core';
+
 // Local imports - TUI state and presentation
 import { isChildExecutionErrorStatus } from '../state/childExecutionStatus';
 import {
@@ -6,7 +9,7 @@ import {
   COLOR_SUCCESS,
   COLOR_WARNING,
 } from '../ui/colors';
-import { STATUS_DOT } from '../ui/glyphs';
+import { STATUS_DOT, TOKENS_GENERATED } from '../ui/glyphs';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
 export function childStatusColor(status: string | undefined): string {
@@ -37,6 +40,29 @@ const PENDING_APPROVAL_ROW_LABELS: Record<PendingApprovalKind, string> = {
   externalInquiry: 'inquiry',
   userQuestion: 'question',
 };
+
+/** Terminal width below which the right-aligned metadata column is dropped
+ *  and rows keep their inline elapsed, so identity is not crowded out. */
+export const CHILD_ROW_METADATA_MIN_COLUMNS = 60;
+
+/** Right-aligned metadata column for a child row: elapsed time plus the
+ *  child's generated tokens so far (e.g. `2m 30s · ↓40k`). Output tokens are
+ *  the "work produced" figure — deliberately not the context-fill number the
+ *  status bar reports for the focused stream. */
+export function childRowMetadataText({
+  elapsed,
+  outputTokens,
+}: {
+  readonly elapsed: string | null | undefined;
+  readonly outputTokens: number | undefined;
+}): string | undefined {
+  const tokens =
+    outputTokens !== undefined && outputTokens > 0
+      ? `${TOKENS_GENERATED}${formatCompactTokenCount(outputTokens)}`
+      : undefined;
+  const parts = [elapsed, tokens].filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : undefined;
+}
 
 /** One-word "waiting on what" suffix for a session row: the row's first
  *  pending approval kind, plus a `+N` overflow when more are queued. */

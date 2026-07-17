@@ -1468,6 +1468,12 @@ if (SHOW_CHILDREN) {
       entries: makeChildEntries(child.agentName, child.executionId),
       runStartedAt:
         child.status === STREAM_STATUS.RUNNING ? child.startedAt : undefined,
+      // One child carries usage so scenarios pin the row metadata column's
+      // generated-token figure (`↓40k`).
+      cumulativeUsage:
+        child.agentName === 'reviewer'
+          ? { inputTokens: 52_000, outputTokens: 39_900, cost: 0.12 }
+          : slice.cumulativeUsage,
     }));
   }
   if (SHOW_NESTED_CHILDREN) {

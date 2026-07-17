@@ -57,6 +57,11 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
+- **Subagent rows show elapsed time and generated tokens** — each row in the
+  child list gains a right-aligned metadata column with the subagent's
+  elapsed time and how many tokens it has generated so far, so a glance shows
+  which children are working and how much they have produced. Narrow
+  terminals keep the compact inline form.
 - **The todo checklist gets breathing room** — a blank separator row now sits
   above the todos/plan panel, so the checklist no longer merges visually with
   the session list or the footer.

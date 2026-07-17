@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CHILD_STATUS_MARKER,
+  childRowMetadataText,
   childStatusColor,
   pendingApprovalRowSuffix,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
@@ -137,5 +138,37 @@ describe('CLI child list display model', () => {
     ).toBe(
       'latex build running · 19sec · main.tex: Proof sketch needs one missing reference',
     );
+  });
+
+  it('drops elapsed from the compact row text when the metadata column owns it', () => {
+    expect(
+      compactChildRowText({
+        child: {
+          kind: 'process',
+          executionId: 'latexmk',
+          agentName: 'latex build',
+          status: 'running',
+          elapsed: '19sec',
+        },
+        nowMs: Date.now(),
+        omitElapsed: true,
+      }),
+    ).toBe('latex build running');
+  });
+
+  it('formats the row metadata column from elapsed and generated tokens', () => {
+    expect(
+      childRowMetadataText({ elapsed: '2m 30s', outputTokens: 39_900 }),
+    ).toBe('2m 30s · ↓40k');
+    expect(
+      childRowMetadataText({ elapsed: '45s', outputTokens: undefined }),
+    ).toBe('45s');
+    expect(
+      childRowMetadataText({ elapsed: undefined, outputTokens: 512 }),
+    ).toBe('↓512');
+    // Zero tokens is "nothing generated yet", not a datum worth a column.
+    expect(
+      childRowMetadataText({ elapsed: null, outputTokens: 0 }),
+    ).toBeUndefined();
   });
 });
