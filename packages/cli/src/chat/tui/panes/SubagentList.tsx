@@ -12,6 +12,9 @@ import {
 } from '@shared/streams/streamStatusDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
 
+// Local imports - TUI rendering
+import { truncateSummaryToWidth } from '../render/terminalText';
+
 // Local imports - TUI state and controls
 import {
   childElapsed,
@@ -27,7 +30,6 @@ import {
   childStreamListValue,
   type ChildListValue,
 } from '../state/childListSelection';
-import { truncateSummaryToWidth } from '../render/terminalText';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { COLOR_HINT } from '../ui/colors';
 import { POINTER, TICK } from '../ui/glyphs';
@@ -90,6 +92,7 @@ function SessionRow({
   active,
   focused,
   hiddenRowSummary,
+  isListRoot,
   nowMs,
   pendingKinds,
   session,
@@ -97,6 +100,7 @@ function SessionRow({
   readonly active: boolean;
   readonly focused: boolean;
   readonly hiddenRowSummary: string | undefined;
+  readonly isListRoot: boolean;
   readonly nowMs: number;
   readonly pendingKinds: readonly PendingApprovalKind[] | undefined;
   readonly session: StreamView;
@@ -118,12 +122,12 @@ function SessionRow({
   // then the pending-approval kind.
   const approvalSuffix = pendingApprovalRowSuffix(pendingKinds);
   const roundLabel = formatRoundStageLabel(session.slice?.roundStage);
-  // Child rows summarize what the subagent last said; the root row is the
-  // conversation itself — echoing your own last message there is noise.
-  const summary =
-    session.parentId !== undefined
-      ? latestChildResponseSummary(session.slice?.entries)
-      : undefined;
+  // Child rows summarize what the subagent last said; the list-root row is
+  // the conversation itself — echoing its own last exchange there is noise
+  // (and the root can itself be a nested subagent when focus is scoped).
+  const summary = isListRoot
+    ? undefined
+    : latestChildResponseSummary(session.slice?.entries);
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
       <Text color={focused ? COLOR_HINT : undefined}>
@@ -201,6 +205,8 @@ export interface SubagentListProps {
   >;
   readonly selectedValue?: ChildListValue;
   readonly sessions?: readonly StreamView[];
+  /** Stream the list is rooted on — its row never shows a summary. */
+  readonly listRootStreamId?: StreamTabId;
   readonly activeProcesses?: readonly ActiveChildInfo[];
   readonly activeSubagentExecutionIds?: ReadonlyMap<StreamTabId, string>;
   readonly processOutput?: ReadonlyMap<string, ProcessOutputTail>;
@@ -350,6 +356,7 @@ export function SubagentList(
           if (session) {
             return (
               <SessionRow
+                isListRoot={session.id === props.listRootStreamId}
                 active={state.active}
                 focused={state.focused}
                 hiddenRowSummary={hiddenRowSummary || undefined}
