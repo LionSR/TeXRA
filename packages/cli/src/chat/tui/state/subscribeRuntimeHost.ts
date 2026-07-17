@@ -6,7 +6,6 @@ import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
-  TOOL_USE_STATUS,
   type ActiveChildInfo,
   type GoalPausedPayload,
   type SetActiveStreamPayload,
@@ -17,24 +16,18 @@ import {
   type UpdateRoundStagePayload,
   type UpdateStreamUsagePayload,
 } from '@shared/schemas';
-import { normalizeToolUseData } from '@shared/toolUse';
-import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import {
   reduceStreamMeta,
   type StreamMetaCommand,
 } from '@shared/streams/streamMetaReducer';
-import { assertNever, isObject } from '@utils/core';
+import { assertNever } from '@utils/core';
 
 import {
   activeStreamId,
   removeStream,
   patchStream,
-  streams,
-  type ActiveWorkflowScriptInvocation,
-  type ConversationEntry,
   type StreamSlice,
-  type WorkflowScriptProgressFact,
 } from './cliState';
 import {
   applySubagentRoster,
@@ -43,8 +36,8 @@ import {
 } from './childExecutions';
 import { appendCompletedProcessEntries } from './completedProcessTranscript';
 import { sumResumeUsageStats } from './resumeHint';
-import { syncStreamLog } from './subscribeStreamLog';
 import { appendLocalAssistantTranscript } from './transcript';
+import { applyWorkflowScriptProgressEvent } from './workflowScriptProgress';
 
 const GOAL_PAUSED_TRANSCRIPT_NOTICE =
   'Goal paused after a failed cycle. Review the error before starting a new goal.';
@@ -184,133 +177,11 @@ function applyParentStream(payload: {
   setParentStream(payload.childStreamId, payload.parentStreamId);
 }
 
-type ToolConversationEntry = Extract<ConversationEntry, { role: 'tool' }>;
-
-function patchWorkflowScriptOwner(
-  streamId: StreamTabId,
-  logId: string,
-  update: (entry: ToolConversationEntry) => ToolConversationEntry,
-): void {
-  patchStream(streamId, (slice) => {
-    const index = slice.entries.findIndex(
-      (entry) => entry.role === 'tool' && entry.id === logId,
-    );
-    const entry = slice.entries[index];
-    if (index < 0 || entry?.role !== 'tool') return slice;
-
-    const entries = [...slice.entries];
-    entries[index] = update(entry);
-    return { ...slice, entries };
-  });
-}
-
-function appendWorkflowScriptFact(
-  streamId: StreamTabId,
-  logId: string,
-  fact: WorkflowScriptProgressFact,
-): void {
-  patchWorkflowScriptOwner(streamId, logId, (entry) => ({
-    ...entry,
-    workflowScriptFacts: [...(entry.workflowScriptFacts ?? []), fact],
-  }));
-}
-
-function startWorkflowScriptOwnership(
-  streamId: StreamTabId,
-  logId: string,
-  parentStageId: string | undefined,
-): void {
-  patchStream(streamId, (slice) => {
-    const index = slice.entries.findIndex(
-      (entry) => entry.role === 'tool' && entry.id === logId,
-    );
-    const entry = slice.entries[index];
-    if (index < 0 || entry?.role !== 'tool') return slice;
-    const entries = [...slice.entries];
-    entries[index] = {
-      ...entry,
-      workflowScriptFacts: entry.workflowScriptFacts ?? [],
-    };
-    return {
-      ...slice,
-      entries,
-      activeWorkflowScript: {
-        logId,
-        parentStageId,
-        phaseIds: new Set(),
-        nextFactIndex: 0,
-      },
-    };
-  });
-}
-
-function activeWorkflowScript(
-  streamId: StreamTabId,
-): ActiveWorkflowScriptInvocation | undefined {
-  return streams.get().get(streamId)?.activeWorkflowScript;
-}
-
-function terminalWorkflowScriptToolUse(
-  entry: ToolConversationEntry,
-  outcome: 'completed' | 'failed',
-  result: unknown,
-): ToolConversationEntry['toolUse'] {
-  let resultData: Record<string, unknown>;
-  if (isObject(result)) resultData = result;
-  else if (result === undefined) resultData = {};
-  else resultData = { output: result };
-  const normalized = normalizeToolUseData({
-    ...entry.toolUse.parsed,
-    ...resultData,
-    status: TOOL_USE_STATUS.COMPLETED,
-  });
-  const terminal = normalized ?? {
-    ...entry.toolUse,
-    status: TOOL_USE_STATUS.COMPLETED,
-  };
-  if (outcome === 'completed') return terminal;
-
-  const failureText =
-    (typeof resultData.error === 'string' && resultData.error.trim()) ||
-    (typeof resultData.output === 'string' && resultData.output.trim()) ||
-    'Workflow script failed.';
-  return {
-    ...terminal,
-    errorText: terminal.errorText || failureText,
-    headerSummary: terminal.headerSummary || failureText,
-    isError: true,
-  };
-}
-
-function finishWorkflowScriptOwnership(
-  streamId: StreamTabId,
-  invocation: ActiveWorkflowScriptInvocation,
-  outcome: 'completed' | 'failed',
-  result: unknown,
-): void {
-  patchStream(streamId, (slice) => {
-    if (slice.activeWorkflowScript !== invocation) return slice;
-    const index = slice.entries.findIndex(
-      (entry) => entry.role === 'tool' && entry.id === invocation.logId,
-    );
-    const entry = slice.entries[index];
-    if (index < 0 || entry?.role !== 'tool') return slice;
-
-    const entries = [...slice.entries];
-    entries[index] = {
-      ...entry,
-      toolUse: terminalWorkflowScriptToolUse(entry, outcome, result),
-      workflowScriptOutcome: outcome,
-    };
-    const { activeWorkflowScript: _finished, ...rest } = slice;
-    return { ...rest, entries };
-  });
-}
-
 function applyDirectTuiRunEvent(
   event: AgentEvent,
   fallbackStreamId: StreamTabId,
 ): boolean {
+  if (applyWorkflowScriptProgressEvent(event, fallbackStreamId)) return true;
   switch (event.type) {
     case 'run.config':
       applyRunConfig(event.streamId, event.config);
@@ -346,31 +217,7 @@ function applyDirectTuiRunEvent(
     case 'updateMissingOutputs':
     case 'updateCompileFailures':
       return false;
-    case 'stage.start': {
-      if (event.kind === 'phase') {
-        const invocation = activeWorkflowScript(fallbackStreamId);
-        if (!invocation || event.parentId !== invocation.parentStageId) {
-          return false;
-        }
-        appendWorkflowScriptFact(fallbackStreamId, invocation.logId, {
-          type: 'phase',
-          id: `${invocation.logId}:phase:${event.id}`,
-          stageId: event.id,
-          label: event.label,
-        });
-        patchStream(fallbackStreamId, (slice) =>
-          slice.activeWorkflowScript === invocation
-            ? {
-                ...slice,
-                activeWorkflowScript: {
-                  ...invocation,
-                  phaseIds: new Set([...invocation.phaseIds, event.id]),
-                },
-              }
-            : slice,
-        );
-        return true;
-      }
+    case 'stage.start':
       if (event.kind !== 'round') return false;
       applyRoundStage({
         streamId: fallbackStreamId,
@@ -382,64 +229,6 @@ function applyDirectTuiRunEvent(
         },
       });
       return true;
-    }
-    case 'log': {
-      const invocation = activeWorkflowScript(fallbackStreamId);
-      if (!invocation || event.stageId === undefined) return false;
-      const inPhase = invocation.phaseIds.has(event.stageId);
-      if (!inPhase && event.stageId !== invocation.parentStageId) return false;
-      appendWorkflowScriptFact(fallbackStreamId, invocation.logId, {
-        type: 'log',
-        id: `${invocation.logId}:log:${invocation.nextFactIndex}`,
-        level: event.level,
-        message: event.message,
-        ...(inPhase ? { phaseId: event.stageId } : {}),
-      });
-      patchStream(fallbackStreamId, (slice) =>
-        slice.activeWorkflowScript === invocation
-          ? {
-              ...slice,
-              activeWorkflowScript: {
-                ...invocation,
-                nextFactIndex: invocation.nextFactIndex + 1,
-              },
-            }
-          : slice,
-      );
-      return true;
-    }
-    case 'tool.start':
-      if (event.toolName !== DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME) return false;
-      // The transcript recorder runs before the SessionEventHub bridge, so a
-      // direct sync materializes the canonical tool row before synchronous
-      // script phase/log events can follow in the same turn.
-      syncStreamLog(fallbackStreamId);
-      startWorkflowScriptOwnership(
-        fallbackStreamId,
-        event.logId,
-        event.stageId,
-      );
-      // Re-run ordered finalization after attaching workflow ownership. This
-      // promotes the header only when every preceding transcript row is also
-      // settled; progress facts remain attached until that condition holds.
-      syncStreamLog(fallbackStreamId);
-      return true;
-    case 'tool.end': {
-      const invocation = activeWorkflowScript(fallbackStreamId);
-      if (!invocation || invocation.logId !== event.logId) return false;
-      if (event.status === 'in_progress') {
-        syncStreamLog(fallbackStreamId);
-        return true;
-      }
-      finishWorkflowScriptOwnership(
-        fallbackStreamId,
-        invocation,
-        event.status,
-        event.result,
-      );
-      syncStreamLog(fallbackStreamId);
-      return true;
-    }
     case 'child.activity':
       if (event.kind === 'subagents') {
         applyActiveSubagents({
