@@ -92,11 +92,10 @@ interface ParsedPath {
 /** Parse a path into directory and basename components */
 function parsePath(path: string): ParsedPath {
   const normalized = normalizeFilePath(path);
-  const basename = getBasename(normalized);
-  const dirLength = normalized.length - basename.length;
+  const lastSlash = normalized.lastIndexOf('/');
   return {
-    dir: dirLength > 0 ? normalized.slice(0, dirLength) : '',
-    basename,
+    dir: lastSlash >= 0 ? normalized.slice(0, lastSlash + 1) : '',
+    basename: getBasename(normalized),
   };
 }
 
