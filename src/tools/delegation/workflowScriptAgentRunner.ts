@@ -99,6 +99,19 @@ export function createWorkflowScriptAgentRunner(
               invocation.options.inputFiles ?? [],
             ),
           ]);
+          // Run-storage references can disappear during recovery. Validate
+          // the resolved inputs, not merely the paths supplied by the script,
+          // so a stale reference cannot launch a useless empty-envelope run.
+          if (
+            inputFiles.length === 0 &&
+            (agent.defaultOutputFiles ?? []).length === 0
+          ) {
+            throw new Error(
+              `Workflow agent '${agent.name}' edits files: pass options.inputFiles ` +
+                `with files that still exist (its result carries output files and ` +
+                `diffs, not response text).`,
+            );
+          }
           const configPayload: AgentConfigPayload = {
             agent: agent.name,
             agentSource: agent.source,
