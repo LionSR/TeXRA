@@ -81,7 +81,7 @@ export function nextRenderableTranscriptEntry(
   return entries.slice(index + 1).find(isRenderableTranscriptEntry);
 }
 
-export function userPromptAwaitsLiveContinuation(
+function userPromptAwaitsLiveContinuation(
   entries: readonly ConversationEntry[],
   index: number,
   status: StreamPhase | undefined,
