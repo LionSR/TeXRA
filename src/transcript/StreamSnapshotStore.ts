@@ -1279,6 +1279,8 @@ export class StreamSnapshotStore {
       try {
         if (state.phase === 'live') {
           await this.recoverFailedRollback(stream, state, 'known-live');
+        } else if (state.phase === 'transitioning') {
+          await this.recoverFailedRollback(stream, state);
         }
       } catch (recoveryError) {
         failures.push(recoveryError);

@@ -1396,7 +1396,7 @@ describe('StreamSnapshotStore', () => {
     await store.deleteStream(STREAM);
   });
 
-  it('revalidates live storage after recovery before retaining writes', async () => {
+  it('revalidates storage during setup recovery before returning', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);
     store.setPlan(STREAM, PLAN);
@@ -1421,7 +1421,6 @@ describe('StreamSnapshotStore', () => {
     await expect(store.stageDeleteStream(STREAM)).rejects.toBe(renameError);
 
     renameSpy.mockRestore();
-    await store.flush();
     const reloaded = new StreamSnapshotStore();
     await reloaded.load([STREAM]);
     expect(reloaded.getWorkPlan(STREAM)).toMatchObject({
