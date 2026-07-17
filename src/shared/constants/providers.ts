@@ -418,7 +418,10 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
       globalStateKey: GlobalStateKey.GLM_CODING_PLAN,
     },
   ],
-  kimiCode: [
+  // Keyed lowercase: getProviderVscodeSettings looks these up by
+  // `provider.toLowerCase()`, so the camelCase `kimiCode` provider id resolves
+  // here as `kimicode`. (The other entries' ids are already lowercase.)
+  kimicode: [
     {
       key: GlobalStateKey.KIMI_CODE_PREFER,
       label: 'Prefer Kimi Code',

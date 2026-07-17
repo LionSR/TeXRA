@@ -371,7 +371,16 @@ function applyModelOptionsComputationOptions(
   return { ...access, agentCategory: options.agentCategory };
 }
 
-/** Build synchronous fallback options from the current host-visible model list. */
+/**
+ * Build synchronous fallback options from the current host-visible model list.
+ *
+ * Secret-free by design (no key reads), so it cannot resolve credential-
+ * dependent routing: a dual-backend model like `kimi3` shows its canonical
+ * provider home (Moonshot), and the async {@link computeModelOptionsData}
+ * refines it to Kimi Code when "Prefer Kimi Code" plus a stored key actually
+ * reroute it. Exclusive Kimi Code models still show `kimiCode` here because
+ * that is a pure registry fact needing no secret.
+ */
 export function buildVisibleBasicModelOptionsData(
   visibleModels: readonly string[] = getVisibleModels(platform().globalState),
 ): ModelOptionData[] {

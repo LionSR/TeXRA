@@ -34,6 +34,15 @@ const providerVscodeSettings = {
       globalStateKey: GlobalStateKey.USE_OPENROUTER,
     },
   ],
+  kimicode: [
+    {
+      key: GlobalStateKey.KIMI_CODE_PREFER,
+      label: 'Prefer Kimi Code',
+      description: 'Route dual-backend Kimi models through Kimi Code',
+      defaultValue: false,
+      globalStateKey: GlobalStateKey.KIMI_CODE_PREFER,
+    },
+  ],
 } satisfies Record<string, readonly ProviderVscodeSettingDef[]>;
 
 function createState(initial: Record<string, unknown> = {}): StateStore & {
@@ -165,6 +174,24 @@ describe('SettingsProfileController', () => {
       affectsModelAvailability: true,
     });
     expect(state.get(GlobalStateKey.USE_OPENROUTER, false)).toBe(true);
+    expect(invalidations.count).toBe(1);
+  });
+
+  it('recomputes model options when Prefer Kimi Code is toggled', async () => {
+    const state = createState();
+    const { controller, invalidations } = createController({ state });
+
+    const updated = await controller.setProviderVscodeSetting({
+      key: GlobalStateKey.KIMI_CODE_PREFER,
+      value: true,
+    });
+
+    // Toggling the reroute must refresh the picker, mirroring OpenRouter.
+    expect(updated).toEqual({
+      kind: 'updated',
+      affectsModelAvailability: true,
+    });
+    expect(state.get(GlobalStateKey.KIMI_CODE_PREFER, false)).toBe(true);
     expect(invalidations.count).toBe(1);
   });
 

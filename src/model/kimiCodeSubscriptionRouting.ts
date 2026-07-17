@@ -103,11 +103,22 @@ export function resolveKimiCodeRoute(
 }
 
 /**
+ * Conservative context budget on the coding endpoint: the Moderato tier serves
+ * 256K; only Allegretto+ unlocks 1M on `k3`. The open-platform registry entry
+ * advertises the full 1M, so cap it here — overstating the window breaks
+ * compaction budgets for Moderato members.
+ */
+const KIMI_CODE_SUBSCRIPTION_CONTEXT_WINDOW = 262_144;
+
+/**
  * Synthesize the runtime config for a dual-backend model routed through the
- * coding endpoint: pin the coding `baseUrl` and swap the display `fullName`/
- * `shortName` for the coding wire id. Exclusive models already carry the pinned
- * `baseUrl` and wire id from the registry, so this is a no-op-equivalent for
- * them, but is only applied to dual-backend routes in practice.
+ * coding endpoint: pin the coding `baseUrl`, swap the display `fullName`/
+ * `shortName` for the coding wire id, and align pricing/context with the
+ * membership endpoint — usage is covered by the membership (zero per-token
+ * price), and the context budget is the conservative tier cap rather than the
+ * open platform's advertised 1M. Exclusive models already carry the pinned
+ * `baseUrl`, zero price, and 256K window from the registry, so this is only
+ * applied to dual-backend routes in practice.
  */
 export function kimiCodeRuntimeConfig(config: ModelConfig): ModelConfig {
   const wireId = kimiCodeWireModelId(config);
@@ -116,5 +127,11 @@ export function kimiCodeRuntimeConfig(config: ModelConfig): ModelConfig {
     fullName: wireId,
     shortName: wireId,
     baseUrl: KIMI_CODE_BASE_URL,
+    inputPrice: 0,
+    outputPrice: 0,
+    contextWindow: Math.min(
+      KIMI_CODE_SUBSCRIPTION_CONTEXT_WINDOW,
+      config.contextWindow,
+    ),
   };
 }

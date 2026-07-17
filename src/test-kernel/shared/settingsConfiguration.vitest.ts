@@ -127,6 +127,23 @@ describe('TexraSettingsSchema', () => {
     }
   });
 
+  it('keys every provider dashboard group by its lowercased provider id', () => {
+    // getProviderVscodeSettings looks these up by `provider.toLowerCase()`, so a
+    // camelCase key (e.g. the `kimiCode` provider id) would silently never
+    // render its toggles. Enforce the lowercase convention every entry relies
+    // on, and confirm the Kimi Code provider resolves to its Prefer switch.
+    for (const key of Object.keys(PROVIDER_VSCODE_SETTINGS)) {
+      assert.equal(key, key.toLowerCase(), key);
+    }
+    const kimiCode = (
+      PROVIDER_VSCODE_SETTINGS as Record<string, { key: string }[]>
+    )['kimiCode'.toLowerCase()];
+    assert.ok(
+      kimiCode?.some((s) => s.key === GlobalStateKey.KIMI_CODE_PREFER),
+      'kimiCode provider must expose the Prefer Kimi Code toggle',
+    );
+  });
+
   it('returns isolated flattened setting defaults', () => {
     const defaults = flattenTexraSettings();
     const mediaExtensions = defaults[

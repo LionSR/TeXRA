@@ -529,11 +529,14 @@ describe('computeModelOptionsData Kimi Code routing (dual-backend kimi3)', () =>
       { [apiKeySecretName('kimiCode')]: 'sk-kimi-code' },
     );
     // Picker must show the Kimi Code route the factory will actually take,
-    // even with no Moonshot key present.
+    // even with no Moonshot key present — with membership (zero) pricing and
+    // the conservative tier context cap, not the open platform's 1M / paid rate.
     expect(model).toMatchObject({
       provider: 'kimiCode',
       availability: 'provider-key',
       disabled: false,
+      cost: '$0.000/$0.000',
+      context: '262K',
     });
   });
 
