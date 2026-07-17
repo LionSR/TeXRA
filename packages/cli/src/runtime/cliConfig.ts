@@ -7,6 +7,7 @@ import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { isFileNotFoundError } from '@common/errors';
 import { safeParseJson } from '@common/parsing/safeParseJson';
+import { KIMI_CODE_MODEL_CONFIGS } from '@model/kimiCodeModels';
 import { configKeyVariants } from '@shared/config/configKeys';
 import { isObject } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -41,12 +42,15 @@ export interface LoadedCliConfig {
 }
 
 export function isCliSupportedModelId(model: string): boolean {
-  const config = MODEL_CONFIGS[model];
+  const config = MODEL_CONFIGS[model] ?? KIMI_CODE_MODEL_CONFIGS[model];
   return config != null && config.provider !== ModelProvider.COPILOT;
 }
 
 export function knownCliModelIds(): string[] {
-  return Object.keys(MODEL_CONFIGS).filter(isCliSupportedModelId);
+  return [
+    ...Object.keys(MODEL_CONFIGS),
+    ...Object.keys(KIMI_CODE_MODEL_CONFIGS),
+  ].filter(isCliSupportedModelId);
 }
 
 function normalizeCliModelLookupKey(value: string): string {
@@ -57,7 +61,7 @@ function normalizeCliModelLookupKey(value: string): string {
 }
 
 function modelLookupKeys(id: string): string[] {
-  const config = MODEL_CONFIGS[id];
+  const config = MODEL_CONFIGS[id] ?? KIMI_CODE_MODEL_CONFIGS[id];
   return [id, config?.name, config?.fullName, config?.label].filter(
     (value): value is string => typeof value === 'string' && value.length > 0,
   );

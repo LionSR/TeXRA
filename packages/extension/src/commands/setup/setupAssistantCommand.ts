@@ -14,7 +14,6 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { GlobalStateKey, globalSM } from '@common/state';
-import { SecretManager } from '@frontend/secretManager';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
 import * as logger from '@logger/logUtils';
@@ -144,26 +143,25 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
   return false;
 }
 
-// Routing is fine unless "Use OpenRouter" is on without an OpenRouter key.
+// Routing is fine when the current configuration resolves any setup model.
+// A managed direct route can remain runnable even when global OpenRouter is
+// enabled without an OpenRouter key.
 async function isRoutingConfigured(): Promise<boolean> {
   if (!getUseOpenRouter()) return true;
-  return SecretManager.hasUsableApiKey('openRouter');
+  return (await resolveSetupLaunchModel(platform().secrets, false)) !== null;
 }
 
 /**
- * Refuse launch if "Use OpenRouter" is globally on but the user has no
- * OpenRouter key. In that configuration, every model call routes through
- * OpenRouter regardless of provider, and the setup agent (like any other
- * agent) will fail on a missing OR key. We ask the user to resolve the
- * misconfiguration explicitly — we deliberately don't flip the global
- * flag off for them, because a user who enabled OpenRouter did so on
- * purpose and may have concurrent OR-routed agents running.
+ * Refuse launch if "Use OpenRouter" is globally on but neither an OpenRouter
+ * key nor a managed direct setup credential can run. We ask the user to
+ * resolve the misconfiguration explicitly rather than flipping the global
+ * flag, because concurrent OpenRouter-routed agents may rely on it.
  */
 async function ensureRoutingConfigured(): Promise<boolean> {
   if (await isRoutingConfigured()) return true;
 
   const choice = await vscode.window.showWarningMessage(
-    '"Use OpenRouter" is enabled in settings, but no OpenRouter key is set. Every model call routes through OpenRouter and will fail. Add an OpenRouter key, or disable "Use OpenRouter" in the Models tab, then retry.',
+    '"Use OpenRouter" is enabled in settings, but no runnable OpenRouter or managed direct setup credential is configured. Add an OpenRouter key, configure a managed direct provider, or disable "Use OpenRouter" in the Models tab, then retry.',
     { modal: true },
     'Open Models tab',
     'Add OpenRouter key',

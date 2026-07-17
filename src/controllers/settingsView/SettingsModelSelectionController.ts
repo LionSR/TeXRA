@@ -1,9 +1,4 @@
-import {
-  MODEL_CONFIGS,
-  ModelProvider,
-  ReasoningEffort,
-  type ModelConfig,
-} from 'llm-zoo';
+import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
 import {
   hasConfigurableReasoningEffort,
@@ -14,7 +9,11 @@ import { FREE_TIER, MAX_TIER } from '@auth/sharedConfig';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { isGpt5ModelName } from '@model/modelNames';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
-import { discoveredRuntimeModelConfigEntries } from '@model/runtimeModelRegistry';
+import {
+  discoveredRuntimeModelConfigEntries,
+  staticModelConfigEntries,
+} from '@model/runtimeModelRegistry';
+import { resolveModelSource } from '@model/openRouterRouting';
 import type { ModelOptionData } from '@shared/schemas';
 import {
   DEFAULT_HELPER_MODEL,
@@ -154,20 +153,25 @@ export class SettingsModelSelectionController {
     const runtimeEntries = await (
       this.deps.getRuntimeModelEntries ?? discoveredRuntimeModelConfigEntries
     )();
+    const staticEntries = staticModelConfigEntries();
     const configs = new Map<string, ModelConfig>([
-      ...Object.entries(MODEL_CONFIGS),
+      ...staticEntries,
       ...runtimeEntries,
     ]);
     const candidates = [
-      ...Object.entries(MODEL_CONFIGS)
+      ...staticEntries
         .filter(
           ([, config]) =>
             config.provider !== ModelProvider.COPILOT &&
-            this.modelSources.has(config.provider),
+            this.modelSources.has(
+              resolveModelSource(config) ?? config.provider,
+            ),
         )
         .map(([name]) => name),
       ...runtimeEntries
-        .filter(([, config]) => this.modelSources.has(config.provider))
+        .filter(([, config]) =>
+          this.modelSources.has(resolveModelSource(config) ?? config.provider),
+        )
         .map(([name]) => name),
     ];
     const resolveModelOptions =

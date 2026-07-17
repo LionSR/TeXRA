@@ -20,6 +20,7 @@ const MOCK_API_PROVIDERS = vi.hoisted(() => [
   'openai',
   'anthropic',
   'google',
+  'kimiCode',
 ]);
 
 const mocks = vi.hoisted(() => ({
@@ -31,7 +32,7 @@ const mocks = vi.hoisted(() => ({
   showErrorMessage: vi.fn<() => Promise<unknown>>(),
   executeCommand: vi.fn<() => Promise<unknown>>(),
   selectSetupCredentialModelExcludingOpenRouter:
-    vi.fn<() => Promise<string | null>>(),
+    vi.fn<(useOpenRouter?: boolean) => Promise<string | null>>(),
   logError: vi.fn(),
 }));
 
@@ -56,9 +57,12 @@ async function resolveSetupModelMock(
     : null;
 
   if (useOpenRouter) {
-    return openRouterModel
-      ? { model: openRouterModel, reason: 'router-config' }
-      : null;
+    if (openRouterModel) {
+      return { model: openRouterModel, reason: 'router-config' };
+    }
+    const directModel =
+      await mocks.selectSetupCredentialModelExcludingOpenRouter(true);
+    return directModel ? { model: directModel, reason: 'credential' } : null;
   }
 
   const credentialModel =
@@ -292,6 +296,22 @@ describe('setup assistant routing check ordering', () => {
     expect(mocks.showQuickPick).not.toHaveBeenCalled();
     expect(mocks.showErrorMessage).not.toHaveBeenCalled();
     expect(result).toBe('launched');
+  });
+
+  it('passes routing check for a managed direct credential when OpenRouter has no key', async () => {
+    mocks.getUseOpenRouter.mockReturnValue(true);
+    mocks.hasUsableApiKey.mockImplementation(
+      async (provider: string) => provider === 'kimiCode',
+    );
+    mocks.selectSetupCredentialModelExcludingOpenRouter.mockResolvedValue(
+      'kimiCodeCoding',
+    );
+
+    const result = await launchSetupAssistant();
+
+    expect(result).toBe('launched');
+    expect(mocks.showWarningMessage).not.toHaveBeenCalled();
+    expect(mocks.showQuickPick).not.toHaveBeenCalled();
   });
 
   it('does not scan non-OpenRouter credentials when OpenRouter routing is already on', async () => {
