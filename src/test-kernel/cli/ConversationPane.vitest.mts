@@ -10,6 +10,7 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   LIVE_TAIL_ROWS,
   boundedTranscriptEntryLayout,
+  fullTranscriptEntryLayout,
   liveAssistantDisplayLines,
   transcriptEntryLayout,
   transcriptEntryLayoutRows,
@@ -47,7 +48,11 @@ import {
   type ConversationEntry,
   type StreamSlice,
 } from '@cli/chat/tui/state/cliState';
-import { transcriptToLines } from '@cli/chat/tui/state/transcriptLines';
+import {
+  createTranscriptPrintRequest,
+  formatTranscriptForScrollback,
+  transcriptToLines,
+} from '@cli/chat/tui/state/transcriptLines';
 import {
   CLI_LOCAL_STREAM_ID,
   finalizeAssistantTranscriptEntries,
@@ -769,6 +774,112 @@ describe('CLI conversation transcript splitting', () => {
     expect(second.slice(1).map((item) => item.id)).toEqual(['u1', 'a1']);
   });
 
+  it('appends each print request once in transcript order', () => {
+    const user = entry('u1', 'user', 'Print the derivation.', true);
+    const assistant = entry('a1', 'assistant', 'Later result.', true);
+    const request = createTranscriptPrintRequest({
+      afterEntryId: 'u1',
+      id: 'printed-transcript:1',
+      ownerKey: 'root-scrollback',
+      slice: sliceWithEntries(STREAM_ID, [
+        user,
+        toolEntry('t1', TOOL_USE_STATUS.COMPLETED, 'complete result'),
+      ]),
+      title: 'assistant',
+    });
+    const beforePrint = appendStaticTranscriptItems({
+      currentItems: [],
+      meta: SESSION_META,
+      scrollbackStreamId: STREAM_ID,
+      streams: streamsFromEntries(STREAM_ID, [user]),
+    });
+    const first = appendStaticTranscriptItems({
+      currentItems: beforePrint,
+      meta: SESSION_META,
+      printRequests: [request],
+      scrollbackStreamId: STREAM_ID,
+      streams: streamsFromEntries(STREAM_ID, [user, assistant]),
+    });
+
+    expect(first.map((item) => item.id)).toEqual([
+      'session-header',
+      'u1',
+      'printed-transcript:1',
+      'a1',
+    ]);
+    expect(first.at(-2)).toMatchObject({
+      kind: 'printedTranscript',
+      request: { title: 'assistant' },
+    });
+    expect(
+      appendStaticTranscriptItems({
+        currentItems: first,
+        meta: SESSION_META,
+        printRequests: [request],
+        scrollbackStreamId: STREAM_ID,
+        streams: streamsFromEntries(STREAM_ID, [user, assistant]),
+      }),
+    ).toBe(first);
+  });
+
+  it('rebuilds owner-scoped print history with the header first', () => {
+    const user = entry('u1', 'user', 'Before printing.', true);
+    const assistant = entry('a1', 'assistant', 'After printing.', true);
+    const request = createTranscriptPrintRequest({
+      afterEntryId: 'u1',
+      id: 'printed-transcript:root',
+      ownerKey: 'root-scrollback',
+      slice: sliceWithEntries(STREAM_ID, [
+        toolEntry('t1', TOOL_USE_STATUS.COMPLETED, 'complete result'),
+      ]),
+      title: 'assistant',
+    });
+    const compact = appendStaticTranscriptItems({
+      currentItems: [],
+      maxRows: 0,
+      meta: SESSION_META,
+      printRequests: [request],
+      scrollbackStreamId: STREAM_ID,
+      streams: streamsFromEntries(STREAM_ID, [user, assistant]),
+      width: 80,
+    });
+    expect(compact.map((item) => item.id)).toEqual([
+      'u1',
+      'printed-transcript:root',
+      'a1',
+    ]);
+
+    const restored = appendStaticTranscriptItems({
+      currentItems: [],
+      meta: SESSION_META,
+      printRequests: [request],
+      scrollbackStreamId: STREAM_ID,
+      streams: streamsFromEntries(STREAM_ID, [user, assistant]),
+      width: 80,
+    });
+    expect(restored.map((item) => item.id)).toEqual([
+      'session-header',
+      'u1',
+      'printed-transcript:root',
+      'a1',
+    ]);
+
+    const expanded = appendStaticTranscriptItems({
+      currentItems: compact,
+      meta: SESSION_META,
+      printRequests: [request],
+      scrollbackStreamId: STREAM_ID,
+      streams: streamsFromEntries(STREAM_ID, [user, assistant]),
+      width: 80,
+    });
+    expect(expanded.map((item) => item.id)).toEqual([
+      'session-header',
+      'u1',
+      'printed-transcript:root',
+      'a1',
+    ]);
+  });
+
   it('shows the session header exactly once', () => {
     const first = appendStaticTranscriptItems({
       scrollbackStreamId: undefined,
@@ -1411,7 +1522,7 @@ describe('CLI conversation transcript splitting', () => {
     expect(isInquiryContinuationText('Run the analysis')).toBe(false);
   });
 
-  it('compacts adjacent one-line tool rows in the transcript viewer', () => {
+  it('compacts adjacent one-line tool rows in full output', () => {
     const lines = transcriptToLines(
       sliceWithEntries(STREAM_ID, [
         compactExecutionsEntry('t1', '/executions/3a780a389327/report'),
@@ -1426,7 +1537,7 @@ describe('CLI conversation transcript splitting', () => {
     ]);
   });
 
-  it('keeps transcript viewer separators around prose and detailed tool rows', () => {
+  it('keeps full-output separators around prose and detailed tool rows', () => {
     const lines = transcriptToLines(
       sliceWithEntries(STREAM_ID, [
         compactExecutionsEntry('t1', '/executions/3a780a389327/report'),
@@ -1446,7 +1557,7 @@ describe('CLI conversation transcript splitting', () => {
     ]);
   });
 
-  it('wraps wide tool output lines in the transcript viewer', () => {
+  it('wraps wide tool output lines for terminal printing', () => {
     const lines = transcriptToLines(
       sliceWithEntries(STREAM_ID, [
         toolEntry('t1', 'completed', `wide-output ${'segment '.repeat(12)}`),
@@ -1458,6 +1569,64 @@ describe('CLI conversation transcript splitting', () => {
     expect(lines.some((line) => line.includes('⎿ wide-output'))).toBe(true);
     expect(lines.some((line) => line.includes('segment segment'))).toBe(true);
     expect(lines.some((line) => line.length > 40)).toBe(false);
+  });
+
+  it('uses the full print width without Ink-only role padding', () => {
+    const entries = [
+      entry('u1', 'user', 'user text', true),
+      entry('e1', 'error', 'error text', true),
+      processEntry('p1'),
+    ];
+
+    for (const transcriptEntry of entries) {
+      const normal = transcriptEntryLayout(transcriptEntry, {
+        mode: 'scrollback-budget',
+        width: 20,
+      });
+      const printed = fullTranscriptEntryLayout(transcriptEntry, 20);
+      expect(normal.columns).toBe(18);
+      expect(printed.columns).toBe(20);
+      expect(printed.lines.every((line) => line.length <= 20)).toBe(true);
+    }
+  });
+
+  it('prints full output as one control-safe terminal block', () => {
+    const text = formatTranscriptForScrollback({
+      cols: 80,
+      request: createTranscriptPrintRequest({
+        id: 'printed-transcript:1',
+        ownerKey: 'root-scrollback',
+        slice: sliceWithEntries(STREAM_ID, [
+          entry(
+            'a1',
+            'assistant',
+            '\u0000\u001b[31manswer\u001b[0m\u001b[2J\u0007\b\u007f',
+            true,
+          ),
+          toolEntry(
+            't1',
+            'completed',
+            'first\rsecond\tindented\u001b]0;unsafe\u001b\\\u009b2J\u009dtitle\u009c',
+          ),
+        ]),
+        title: 'assistant\nrenamed\u0007',
+      }),
+    });
+
+    expect(text).toContain('[Full output: assistant renamed]');
+    expect(text).toContain('answer');
+    expect(text).toContain('first');
+    expect(text).toContain('second');
+    expect(text).toContain('  indented');
+    expect(text).not.toContain('\u001b');
+    expect(text).not.toContain('\u0007');
+    expect(
+      [...text].every((char) => {
+        const code = char.charCodeAt(0);
+        return code === 10 || (code >= 32 && (code < 127 || code > 159));
+      }),
+    ).toBe(true);
+    expect(text.endsWith('\n')).toBe(true);
   });
 });
 

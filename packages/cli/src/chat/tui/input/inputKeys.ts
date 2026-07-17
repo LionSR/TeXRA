@@ -48,7 +48,7 @@ export function isEscapeInput(
 }
 
 // Vim-style "jump to top/bottom" bindings, shared by the scrollable modals
-// that implement them (child-control picker task detail, transcript viewer —
+// that implement them (child-control picker task detail —
 // not every scrollable modal wires these up, e.g. ExternalInquiry doesn't).
 export function isJumpToTopInput(input: string): boolean {
   return input === 'g';

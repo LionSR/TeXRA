@@ -173,7 +173,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toMatch(/[[\]]/);
   });
 
-  it('advertises the transcript viewer when the focused stream has history', () => {
+  it('advertises full output when the focused stream has history', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         childNavigationAvailable: true,
@@ -184,7 +184,7 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.bindings).toContain('Tab children');
-    expect(display.bindings).toContain('Ctrl-T transcript');
+    expect(display.bindings).toContain('Ctrl-T full output');
     expect(display.bindings).not.toContain('Alt-s subagents');
   });
 
@@ -203,7 +203,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.bindings).toContain('Up/Down select');
     expect(display.bindings).toContain('Enter focus');
-    expect(display.bindings).toContain('v transcript');
+    expect(display.bindings).toContain('v full output');
     expect(display.bindings).toContain('k kill');
     expect(display.bindings).toContain('Tab input');
     expect(display.bindings).toContain('Esc input');
@@ -223,7 +223,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.bindings).toContain('Enter details');
     expect(display.bindings).toContain('k kill');
-    expect(display.bindings).not.toContain('v transcript');
+    expect(display.bindings).not.toContain('v full output');
   });
 
   it('shows foreground actions while a list-owned surface is open', () => {
@@ -241,10 +241,10 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.bindings).toContain('Esc close');
     expect(display.bindings).not.toContain('Up/Down select');
-    expect(display.bindings).not.toContain('v transcript');
+    expect(display.bindings).not.toContain('v full output');
   });
 
-  it('keeps the transcript shortcut in narrow stream views', () => {
+  it('keeps the full-output shortcut in narrow stream views', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         childNavigationAvailable: true,
@@ -254,11 +254,11 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toContain('Ctrl-T transcript');
+    expect(display.bindings).toContain('Ctrl-T full output');
     expect(display.bindings).toContain('Ctrl-C exit');
   });
 
-  it('prefers transcript over stream cycling when the bar is very narrow', () => {
+  it('prefers full output over stream cycling when the bar is very narrow', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         childNavigationAvailable: true,
@@ -285,7 +285,7 @@ describe('CLI StatusBar display model', () => {
     );
   });
 
-  it('does not let setup bindings hide the transcript viewer when it fits', () => {
+  it('does not let setup bindings hide full output when it fits', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         agentSelectionAvailable: true,
@@ -295,11 +295,11 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toContain('Ctrl-T transcript');
+    expect(display.bindings).toContain('Ctrl-T full output');
     expect(display.bindings).toContain('/agent agents');
   });
 
-  it('keeps model and API controls visible after local-command transcript rows', () => {
+  it('keeps model and API controls visible after local-command output rows', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         agentSelectionAvailable: true,
@@ -604,7 +604,7 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.bindings).toBe(
-      'Tab children · Ctrl-T transcript · Ctrl-C stop',
+      'Tab children · Ctrl-T full output · Ctrl-C stop',
     );
     expect(display.bindings).toContain('Ctrl-C stop');
   });

@@ -1,9 +1,9 @@
 // Grouped `/help` output for the chat TUI.
 //
-// The transcript renders assistant text as markdown with `breaks: false`,
+// The help surface renders assistant text as markdown with `breaks: false`,
 // so plain newline-joined lines collapse into one paragraph. Emit real
 // markdown (bold section headers + list items) so each command stays on
-// its own row in the transcript.
+// its own row.
 
 import { metaChordLabel } from '@cli/runtime/shortcutLabels';
 
@@ -72,8 +72,9 @@ function keyboardSection(options: SlashCommandHelpOptions): string {
     // bindings that actually exist (see textInputBindings.ts).
     `- ${textInputEditingHelp()}`,
     '- `Esc` stops the current response · `Ctrl-C` exits idle chats; stops active responses',
-    '- `Ctrl-T` opens the transcript viewer for the focused stream',
-    `- \`Tab\` selects child sessions and processes · \`${focusChord}\` focuses a stream directly`,
+    "- `Ctrl-T` prints the focused stream's full output once into terminal scrollback",
+    "- `Tab` selects child sessions and processes · `v` prints the selected stream's full output",
+    `- \`${focusChord}\` focuses a stream directly`,
   ].join('\n');
 }
 
