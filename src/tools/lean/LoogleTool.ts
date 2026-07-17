@@ -20,7 +20,10 @@ import {
 import { defineTool } from '@tools/core/define';
 import { ensureArray } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { formatResultCount } from '@utils/text/stringUtils';
+import {
+  formatResultCount,
+  truncateWithEllipsis,
+} from '@utils/text/stringUtils';
 
 const LOOGLE_TIMEOUT_MS = 10_000; // 10 s
 const LOOGLE_CHANNEL = 'lean_loogle';
@@ -100,11 +103,7 @@ function formatHit(hit: LoogleHit, index: number): string {
   ];
 
   if (hit.doc) {
-    const truncatedDoc =
-      hit.doc.length > MAX_DOC_LENGTH
-        ? hit.doc.slice(0, MAX_DOC_LENGTH) + '...'
-        : hit.doc;
-    lines.push(`   Doc: ${truncatedDoc}`);
+    lines.push(`   Doc: ${truncateWithEllipsis(hit.doc, MAX_DOC_LENGTH)}`);
   }
 
   return lines.join('\n');
