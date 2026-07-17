@@ -981,7 +981,9 @@ export class StreamSnapshotStore {
         const liveDir = streamDataDir(stream);
         const hasLiveData = await storagePathExists(liveDir);
         const failedWrites = this.failedRollbacks.get(stream);
-        if (!hasLiveData || failedWrites) {
+        const stagedIsAuthoritative =
+          failedWrites !== undefined && failedWrites.phase !== 'live';
+        if (!hasLiveData || stagedIsAuthoritative) {
           if (failedWrites) failedWrites.phase = 'staged';
           if (hasLiveData) {
             // A failed rollback owner makes the staged tree the complete base;
@@ -996,17 +998,30 @@ export class StreamSnapshotStore {
             record.kv = undefined;
             record.writeKv = undefined;
           }
-          if (liveStreams.has(stream) && failedWrites) {
+          if (failedWrites) {
             failedWrites.phase = 'live';
-            await this.replayStagedWrites(stream, failedWrites);
+            if (liveStreams.has(stream)) {
+              await this.replayFailedRollbackWrites(stream, failedWrites);
+            } else {
+              failedWrites.writes.clear();
+              this.releaseFailedRollbackOwnership(stream, failedWrites);
+            }
           }
-          this.releaseFailedRollbackOwnership(stream, failedWrites);
           if (liveStreams.has(stream)) restored.push(stream);
           else pendingCleanup.push(stream);
           return;
         }
 
         await StorageFS.delete(stagedDir, { recursive: true });
+        if (failedWrites) {
+          failedWrites.phase = 'live';
+          if (liveStreams.has(stream)) {
+            await this.replayFailedRollbackWrites(stream, failedWrites);
+          } else {
+            failedWrites.writes.clear();
+            this.releaseFailedRollbackOwnership(stream, failedWrites);
+          }
+        }
         discarded.push(stream);
       },
       { concurrency: SEED_IO_CONCURRENCY },
@@ -1014,9 +1029,8 @@ export class StreamSnapshotStore {
     await pMap(
       [...this.failedRollbacks],
       async ([stream, state]) => {
-        if (!liveStreams.has(stream) || state.phase !== 'live') return;
-        await this.replayStagedWrites(stream, state);
-        this.releaseFailedRollbackOwnership(stream, state);
+        if (!liveStreams.has(stream)) return;
+        await this.replayFailedRollbackWrites(stream, state);
       },
       { concurrency: SEED_IO_CONCURRENCY },
     );
@@ -1044,11 +1058,24 @@ export class StreamSnapshotStore {
     }
   }
 
+  private async replayFailedRollbackWrites(
+    stream: StreamTabId,
+    state: StagedDeletionState,
+  ): Promise<void> {
+    if (state.phase !== 'live') return;
+    await this.replayStagedWrites(stream, state);
+    this.releaseFailedRollbackOwnership(stream, state);
+  }
+
   private releaseFailedRollbackOwnership(
     stream: StreamTabId,
     state: StagedDeletionState | undefined,
   ): void {
-    if (state && this.failedRollbacks.get(stream) === state) {
+    if (
+      state &&
+      state.writes.size === 0 &&
+      this.failedRollbacks.get(stream) === state
+    ) {
       this.failedRollbacks.delete(stream);
     }
   }
@@ -1528,6 +1555,7 @@ export class StreamSnapshotStore {
               failedRollback.writes.get(key) === value
             ) {
               failedRollback.writes.delete(key);
+              this.releaseFailedRollbackOwnership(stream, failedRollback);
             }
           })
           .catch((err: unknown) =>
@@ -1603,6 +1631,11 @@ export class StreamSnapshotStore {
       [...this.records.values()]
         .map((record) => record.seedChain)
         .filter((chain): chain is Promise<void> => chain !== undefined),
+    );
+    await pMap(
+      [...this.failedRollbacks],
+      ([stream, state]) => this.replayFailedRollbackWrites(stream, state),
+      { concurrency: SEED_IO_CONCURRENCY },
     );
     await Promise.all(
       [...this.writeMutexes.values()].map((mutex) => mutex.waitForUnlock()),
