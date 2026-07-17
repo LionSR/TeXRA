@@ -10,6 +10,7 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   LIVE_TAIL_ROWS,
   boundedTranscriptEntryLayout,
+  fullTranscriptEntryLayout,
   liveAssistantDisplayLines,
   transcriptEntryLayout,
   transcriptEntryLayoutRows,
@@ -1568,6 +1569,25 @@ describe('CLI conversation transcript splitting', () => {
     expect(lines.some((line) => line.includes('⎿ wide-output'))).toBe(true);
     expect(lines.some((line) => line.includes('segment segment'))).toBe(true);
     expect(lines.some((line) => line.length > 40)).toBe(false);
+  });
+
+  it('uses the full print width without Ink-only role padding', () => {
+    const entries = [
+      entry('u1', 'user', 'user text', true),
+      entry('e1', 'error', 'error text', true),
+      processEntry('p1'),
+    ];
+
+    for (const transcriptEntry of entries) {
+      const normal = transcriptEntryLayout(transcriptEntry, {
+        mode: 'scrollback-budget',
+        width: 20,
+      });
+      const printed = fullTranscriptEntryLayout(transcriptEntry, 20);
+      expect(normal.columns).toBe(18);
+      expect(printed.columns).toBe(20);
+      expect(printed.lines.every((line) => line.length <= 20)).toBe(true);
+    }
   });
 
   it('prints full output as one control-safe terminal block', () => {

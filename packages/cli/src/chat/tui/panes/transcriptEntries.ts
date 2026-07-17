@@ -98,6 +98,21 @@ export function userPromptAwaitsLiveContinuation(
   return nextRenderableTranscriptEntry(entries, index) === undefined;
 }
 
+/** Whether an entry belongs in append-only terminal scrollback now. */
+export function isStaticTranscriptEntryAt(
+  entries: readonly ConversationEntry[],
+  index: number,
+  status: StreamPhase | undefined,
+): boolean {
+  const entry = entries[index];
+  return (
+    entry !== undefined &&
+    entry.finalized &&
+    isRenderableTranscriptEntry(entry) &&
+    !userPromptAwaitsLiveContinuation(entries, index, status)
+  );
+}
+
 export function splitTranscriptEntries(
   entries: readonly ConversationEntry[],
   status: StreamPhase | undefined,

@@ -33,10 +33,7 @@ import {
 import { useSignal } from '../state/useSignal';
 import { COLOR_HINT } from '../ui/colors';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
-import {
-  isRenderableTranscriptEntry,
-  userPromptAwaitsLiveContinuation,
-} from './transcriptEntries';
+import { isStaticTranscriptEntryAt } from './transcriptEntries';
 import { TranscriptEntry } from './TranscriptEntry';
 import {
   transcriptColumns,
@@ -333,9 +330,7 @@ export function appendStaticTranscriptItems({
   const entries = slice?.entries ?? [];
   const finalizedEntries = entries.filter(
     (entry, index) =>
-      entry.finalized &&
-      isRenderableTranscriptEntry(entry) &&
-      !userPromptAwaitsLiveContinuation(entries, index, slice?.status) &&
+      isStaticTranscriptEntryAt(entries, index, slice?.status) &&
       !seen.has(entry.id),
   );
   const unseenRequests = printRequests.filter(

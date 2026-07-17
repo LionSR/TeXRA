@@ -37,10 +37,7 @@ import { TaskDetailView } from './modals/TaskDetailView';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
-import {
-  isRenderableTranscriptEntry,
-  userPromptAwaitsLiveContinuation,
-} from './panes/transcriptEntries';
+import { isStaticTranscriptEntryAt } from './panes/transcriptEntries';
 import {
   currentApproval,
   pendingApprovalSummaries,
@@ -110,11 +107,8 @@ type ProcessChildInfo = Extract<ActiveChildInfo, { kind: 'process' }>;
 const NO_TRANSCRIPT_PRINTS: readonly TranscriptPrintRequest[] = [];
 
 function lastStaticEntryId(slice: StreamSlice | undefined): string | undefined {
-  return slice?.entries.findLast(
-    (entry, index, entries) =>
-      entry.finalized &&
-      isRenderableTranscriptEntry(entry) &&
-      !userPromptAwaitsLiveContinuation(entries, index, slice.status),
+  return slice?.entries.findLast((entry, index, entries) =>
+    isStaticTranscriptEntryAt(entries, index, slice.status),
   )?.id;
 }
 

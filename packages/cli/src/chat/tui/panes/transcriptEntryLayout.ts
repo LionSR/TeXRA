@@ -251,9 +251,12 @@ export function fullTranscriptEntryLayout(
   entry: ConversationEntry,
   width: number,
 ): TranscriptEntryLayout {
+  // Ordinary Ink rows spend this inset as paddingX. Printed text has no Box
+  // padding, so add it back before the shared layout subtracts it.
+  const printWidth = width + ROLE_GEOMETRY[entry.role].inset;
   const layout = transcriptEntryLayout(entry, {
     mode: 'scrollback-budget',
-    width,
+    width: printWidth,
   });
   if (entry.role !== 'tool') return layout;
   return {
