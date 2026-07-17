@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { maskDisplayValue } from '@cli/chat/tui/input/textInputEditing';
 import { formatApiKeyShadowWarning } from '@cli/runtime/apiStatus';
 import { maybeRunCliOnboarding } from '@cli/onboarding/runOnboarding';
-import { describeSavedKeyLocation } from '@cli/onboarding/onboardingState';
+import {
+  describeSavedKeyLocation,
+  formatSavedKeySummary,
+} from '@cli/onboarding/onboardingState';
 import {
   getOnboardingDeclined,
   setOnboardingDeclined,
@@ -48,11 +51,37 @@ describe('onboarding decline flag', () => {
   });
 });
 
-describe('describeSavedKeyLocation', () => {
+describe('saved key summary', () => {
   it('names the exact secret entry and env-var fallback', () => {
     const message = describeSavedKeyLocation('anthropic');
     expect(message).toContain('apiKey.anthropic');
     expect(message).toContain('ANTHROPIC_API_KEY');
+  });
+
+  it('surfaces the access-route warning when ChatGPT remains active', () => {
+    const warning =
+      'Model access remains on ChatGPT subscription because a more specific setting overrides workspace config.';
+
+    expect(
+      formatSavedKeySummary('anthropic', {
+        apiMode: 'personal',
+        message: warning,
+      }),
+    ).toBe(
+      'Saved your Anthropic API key. Stored in TeXRA secrets as `apiKey.anthropic` (or set ANTHROPIC_API_KEY in your environment). ' +
+        warning,
+    );
+  });
+
+  it('confirms the normal personal-key access route', () => {
+    expect(
+      formatSavedKeySummary('anthropic', {
+        apiMode: 'personal',
+        message: 'Model access: Personal API keys.',
+      }),
+    ).toBe(
+      'Saved your Anthropic API key. Stored in TeXRA secrets as `apiKey.anthropic` (or set ANTHROPIC_API_KEY in your environment). Model access: Personal API keys.',
+    );
   });
 });
 
