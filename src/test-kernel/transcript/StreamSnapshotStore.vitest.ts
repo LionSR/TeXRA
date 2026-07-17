@@ -1061,6 +1061,41 @@ describe('StreamSnapshotStore', () => {
     });
   });
 
+  it('drains writes that arrive as rollback replay returns', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    store.setPlan(STREAM, PLAN);
+    await store.flush();
+    const deletion = await store.stageDeleteStream(STREAM);
+    store.setPlan(STREAM, null);
+    type ReplayHarness = {
+      replayStagedWrites: (
+        stream: StreamTabId,
+        state: unknown,
+      ) => Promise<void>;
+    };
+    const replayHarness = store as unknown as ReplayHarness;
+    const replay = replayHarness.replayStagedWrites.bind(replayHarness);
+    const replaySpy = vi
+      .spyOn(replayHarness, 'replayStagedWrites')
+      .mockImplementationOnce(async (stream, state) => {
+        await replay(stream, state);
+        store.setTodos(STREAM, [TODO]);
+      })
+      .mockImplementation(replay);
+
+    await deletion.rollback();
+
+    replaySpy.mockRestore();
+    const reloaded = new StreamSnapshotStore();
+    await reloaded.load([STREAM]);
+    expect(reloaded.getWorkPlan(STREAM)).toMatchObject({
+      plan: null,
+      todos: [TODO],
+    });
+    await store.deleteStream(STREAM);
+  });
+
   it('serializes overlapping staged deletions for one stream', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);

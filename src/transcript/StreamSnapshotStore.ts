@@ -1042,8 +1042,8 @@ export class StreamSnapshotStore {
     }
   }
 
-  /** Drain a failed owner's buffer and release it without an await-sized gap. */
-  private async drainFailedRollbackWrites(
+  /** Drain buffered writes and release every owner without an await-sized gap. */
+  private async drainStagedWrites(
     stream: StreamTabId,
     state: StagedDeletionState,
   ): Promise<void> {
@@ -1052,6 +1052,10 @@ export class StreamSnapshotStore {
       if (state.writes.size > 0) continue;
       if (this.failedRollbacks.get(stream) === state) {
         this.failedRollbacks.delete(stream);
+      }
+      if (this.stagedDeletions.get(stream) === state) {
+        this.stagedDeletions.delete(stream);
+        state.resolveSettled();
       }
       return;
     }
@@ -1104,7 +1108,7 @@ export class StreamSnapshotStore {
       }
 
       state.phase = 'live';
-      await this.drainFailedRollbackWrites(stream, state);
+      await this.drainStagedWrites(stream, state);
     })();
     const trackedRecovery = recovery.finally(() => {
       if (state.recovery === trackedRecovery) state.recovery = undefined;
@@ -1226,7 +1230,7 @@ export class StreamSnapshotStore {
               await StorageFS.rename(stagedDir, liveDir);
               state.phase = 'live';
             }
-            await this.replayStagedWrites(stream, state);
+            await this.drainStagedWrites(stream, state);
           } catch (error) {
             const failures: unknown[] = [error];
             if (state.phase !== 'live' && canUseStreamDataDir(stream)) {
@@ -1260,7 +1264,7 @@ export class StreamSnapshotStore {
       this.failedRollbacks.set(stream, state);
       try {
         if (state.phase === 'live') {
-          await this.drainFailedRollbackWrites(stream, state);
+          await this.drainStagedWrites(stream, state);
         }
       } catch (recoveryError) {
         failures.push(recoveryError);
