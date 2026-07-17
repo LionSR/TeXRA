@@ -191,29 +191,47 @@ describe('createWorkflowScriptAgentRunner', () => {
   });
 
   it('honors an explicit agent and binds verified run outputs', async () => {
-    const requested = '/storage/executions/bbbbbb222222/r1/draft.tex';
-    const canonical = '/canonical/executions/bbbbbb222222/r1/draft.tex';
+    const firstRequested =
+      '/storage/executions/bbbbbb222222/r1/introduction.tex';
+    const firstCanonical =
+      '/canonical/executions/bbbbbb222222/r1/introduction.tex';
+    const secondRequested =
+      '/storage/executions/cccccc333333/r1/conclusion.tex';
+    const secondCanonical =
+      '/canonical/executions/cccccc333333/r1/conclusion.tex';
     mocks.runStorageLocationFromAnyAbsolutePath.mockImplementation((file) =>
-      file === requested ? { kind: 'runStorage' } : undefined,
+      file === firstRequested || file === secondRequested
+        ? { kind: 'runStorage' }
+        : undefined,
     );
-    mocks.resolveChildRunOutput.mockResolvedValue({
-      kind: 'runStorage',
-      absolutePath: canonical,
-      relativePath: 'r1/draft.tex',
-      executionId: 'bbbbbb222222',
-    });
+    mocks.resolveChildRunOutput.mockImplementation(
+      async (_parentExecutionId, file) => ({
+        kind: 'runStorage',
+        absolutePath:
+          file === firstRequested ? firstCanonical : secondCanonical,
+        relativePath:
+          file === firstRequested ? 'r1/introduction.tex' : 'r1/conclusion.tex',
+        executionId: file === firstRequested ? 'bbbbbb222222' : 'cccccc333333',
+      }),
+    );
     const runner = defaultRunner();
 
     await runner(
       invocation({
         agentName: 'merge',
-        inputFiles: ['notes.tex', requested],
+        inputFiles: [firstRequested, 'notes.tex', secondRequested],
       }),
     );
 
-    expect(mocks.resolveChildRunOutput).toHaveBeenCalledWith(
+    expect(mocks.resolveChildRunOutput).toHaveBeenNthCalledWith(
+      1,
       parentExecutionId,
-      requested,
+      firstRequested,
+    );
+    expect(mocks.resolveChildRunOutput).toHaveBeenNthCalledWith(
+      2,
+      parentExecutionId,
+      secondRequested,
     );
     expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
       { label: 'Input file', files: ['notes.tex'] },
@@ -222,7 +240,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       expect.objectContaining({
         agentName: 'merge',
         configPayload: expect.objectContaining({
-          inputFiles: ['notes.tex', canonical],
+          inputFiles: [firstCanonical, 'notes.tex', secondCanonical],
         }),
       }),
     );
@@ -238,7 +256,58 @@ describe('createWorkflowScriptAgentRunner', () => {
 
     await expect(
       runner(invocation({ inputFiles: [placeholder] })),
-    ).rejects.toThrow(/pass options\.inputFiles with files that still exist/);
+    ).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: expect.stringContaining(placeholder),
+    });
+    expect(mocks.preparedOptions).toHaveLength(0);
+  });
+
+  it('makes storage resolver failures run-fatal', async () => {
+    const placeholder = '/storage/executions/bbbbbb222222/r1/deleted.tex';
+    const storageError = new Error(
+      'Declared output r1/deleted.tex is missing from execution bbbbbb222222.',
+    );
+    mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue({
+      kind: 'runStorage',
+    });
+    mocks.resolveChildRunOutput.mockRejectedValue(storageError);
+    const runner = defaultRunner();
+
+    await expect(
+      runner(invocation({ inputFiles: [placeholder] })),
+    ).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: expect.stringContaining(storageError.message),
+      cause: storageError,
+    });
+    expect(mocks.preparedOptions).toHaveLength(0);
+  });
+
+  it('rejects mixed inputs when any run-storage input no longer resolves', async () => {
+    const resolved = '/storage/executions/bbbbbb222222/r1/draft.tex';
+    const stale = '/storage/executions/cccccc333333/r1/review.tex';
+    mocks.runStorageLocationFromAnyAbsolutePath.mockImplementation((file) =>
+      file === resolved || file === stale ? { kind: 'runStorage' } : undefined,
+    );
+    mocks.resolveChildRunOutput.mockImplementation(async (_parent, file) =>
+      file === resolved
+        ? {
+            kind: 'runStorage',
+            absolutePath: '/canonical/executions/bbbbbb222222/r1/draft.tex',
+            relativePath: 'r1/draft.tex',
+            executionId: 'bbbbbb222222',
+          }
+        : undefined,
+    );
+    const runner = defaultRunner();
+
+    await expect(
+      runner(invocation({ inputFiles: ['notes.tex', resolved, stale] })),
+    ).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: expect.stringContaining(stale),
+    });
     expect(mocks.preparedOptions).toHaveLength(0);
   });
 
