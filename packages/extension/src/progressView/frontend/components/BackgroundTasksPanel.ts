@@ -163,11 +163,15 @@ export class BackgroundTasksPanel extends LitElement {
       /* Status uses a native wa-badge (filled), matching the app-wide badge
          idiom (GoalTab / WorktreeChip / StreamHeader goal chip) rather than a
          wa-tag — tags are for removable/category chips, badges for status.
-         Compact padding/gap/font come from the shared .badge-compact class
-         (compactBadgeStyles). */
+         Compact padding/gap/font-size come from the shared .badge-compact
+         class (compactBadgeStyles). */
       wa-badge.task-status {
         flex: 0 0 auto;
         margin-left: auto;
+      }
+
+      wa-badge.task-status::part(base) {
+        font-weight: var(--font-weight-medium);
       }
 
       /* Nested sections use Web Awesome <wa-details class="collapsible-quiet">

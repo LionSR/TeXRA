@@ -240,10 +240,14 @@ export class StreamHeader extends LitElement {
       }
 
       /* Native wa-badge (brand=active / warning=paused, quiet 'filled'
-         appearance); compact padding/gap/font-weight come from the shared
+         appearance); compact padding/gap/font-size come from the shared
          .badge-compact class (compactBadgeStyles). */
       .goal-chip {
         flex-shrink: 0;
+      }
+
+      .goal-chip::part(base) {
+        font-weight: var(--font-weight-medium);
       }
 
       .goal-chip wa-icon {

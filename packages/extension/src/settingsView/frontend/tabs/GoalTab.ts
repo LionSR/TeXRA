@@ -68,6 +68,13 @@ export class GoalTab extends LitElement {
         background: var(--wa-color-surface-raised);
       }
 
+      /* Compact padding/gap/font-size come from the shared .badge-compact
+         class (compactBadgeStyles); semibold weight is this component's own
+         (the other compact badges use medium). */
+      .status-chip::part(base) {
+        font-weight: var(--wa-font-weight-semibold);
+      }
+
       .objective {
         font-size: var(--wa-font-size-s);
         color: var(--wa-color-text-normal);
