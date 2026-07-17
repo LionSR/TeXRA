@@ -1184,6 +1184,34 @@ describe('StreamSnapshotStore', () => {
     await store.deleteStream(STREAM);
   });
 
+  it('keeps writes buffered when a staging rename fails after moving data', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    store.setPlan(STREAM, PLAN);
+    await store.flush();
+    const renameError = new Error('snapshot rename acknowledgement failed');
+    const rename = StorageFS.rename.bind(StorageFS);
+    const renameSpy = vi
+      .spyOn(StorageFS, 'rename')
+      .mockImplementationOnce(async (source, destination) => {
+        store.setPlan(STREAM, null);
+        await rename(source, destination);
+        throw renameError;
+      })
+      .mockImplementation(rename);
+
+    await expect(store.stageDeleteStream(STREAM)).rejects.toBe(renameError);
+
+    store.setPlan(STREAM, PLAN);
+    renameSpy.mockRestore();
+    const retry = await store.stageDeleteStream(STREAM);
+    await retry.rollback();
+    const reloaded = new StreamSnapshotStore();
+    await reloaded.load([STREAM]);
+    expect(reloaded.getWorkPlan(STREAM).plan).toEqual(PLAN);
+    await store.deleteStream(STREAM);
+  });
+
   it('retains prior rollback writes when retry setup also fails', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);
@@ -1267,31 +1295,26 @@ describe('StreamSnapshotStore', () => {
     await store.load([]);
     store.setPlan(STREAM, PLAN);
     await store.flush();
-    const liveDir = streamDataDir(STREAM);
-    const stat = StorageFS.stat.bind(StorageFS);
-    const statError = Object.assign(new Error('snapshot directory is locked'), {
-      code: 'EACCES',
-    });
+    const setupError = new Error('staging directory is locked');
     const writeError = new Error('snapshot disk is full');
     const writeSpy = vi
       .spyOn(StorageFS, 'writeAtomic')
       .mockRejectedValueOnce(writeError);
-    const statSpy = vi
-      .spyOn(StorageFS, 'stat')
-      .mockImplementation(async (target) => {
-        if (target === liveDir) {
-          store.setPlan(STREAM, null);
-          throw statError;
-        }
-        return stat(target);
-      });
+    const ensureDir = StorageFS.ensureDir.bind(StorageFS);
+    const ensureDirSpy = vi
+      .spyOn(StorageFS, 'ensureDir')
+      .mockImplementationOnce(async () => {
+        store.setPlan(STREAM, null);
+        throw setupError;
+      })
+      .mockImplementation(ensureDir);
 
     const error = await store.stageDeleteStream(STREAM).catch((cause) => cause);
 
     expect(error).toBeInstanceOf(AggregateError);
-    expect((error as AggregateError).errors).toEqual([statError, writeError]);
+    expect((error as AggregateError).errors).toEqual([setupError, writeError]);
 
-    statSpy.mockRestore();
+    ensureDirSpy.mockRestore();
     writeSpy.mockRestore();
     const retry = await store.stageDeleteStream(STREAM);
     await retry.rollback();

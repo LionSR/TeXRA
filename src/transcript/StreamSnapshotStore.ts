@@ -299,6 +299,7 @@ interface StreamRecord {
 
 interface StagedDeletionState {
   writes: Map<string, unknown>;
+  /** Whether failed ownership may safely mirror new writes to the live tree. */
   liveStorageAvailable: boolean;
   settled: Promise<void>;
   resolveSettled: () => void;
@@ -1038,20 +1039,6 @@ export class StreamSnapshotStore {
     state.resolveSettled();
   }
 
-  /** Retain the latest buffered values until a later deletion retry. */
-  private retainFailedRollback(
-    stream: StreamTabId,
-    state: StagedDeletionState,
-  ): void {
-    const prior = this.failedRollbacks.get(stream);
-    if (prior && prior !== state) {
-      for (const [key, value] of prior.writes) {
-        if (!state.writes.has(key)) state.writes.set(key, value);
-      }
-    }
-    this.failedRollbacks.set(stream, state);
-  }
-
   /**
    * Atomically move a stream's sidecars out of the live namespace while
    * keeping its in-memory record available until the transcript registry
@@ -1076,32 +1063,42 @@ export class StreamSnapshotStore {
       resolveSettled,
     };
     this.stagedDeletions.set(stream, state);
+    let namespaceTransitionStarted = false;
+    let replayAttempted = false;
 
     try {
       const failedState = this.failedRollbacks.get(stream);
       if (failedState) {
+        // Transfer ownership before the first await so new writes cannot slip
+        // between the failed transaction and its retry.
+        for (const [key, value] of failedState.writes) {
+          if (!state.writes.has(key)) state.writes.set(key, value);
+        }
+        this.failedRollbacks.delete(stream);
+        namespaceTransitionStarted = true;
         const stagedDir = stagedStreamDataDir(stream);
         const liveDir = streamDataDir(stream);
         if (await storagePathExists(stagedDir)) {
           state.liveStorageAvailable = false;
           if (await storagePathExists(liveDir)) {
-            throw new Error(
-              `Cannot retry snapshot deletion for ${stream}; both live and staged directories exist`,
-            );
+            // Writes after the failure stayed buffered, so the staged tree is
+            // the last complete on-disk snapshot and remains authoritative.
+            await StorageFS.delete(liveDir, { recursive: true });
           }
           await StorageFS.rename(stagedDir, liveDir);
           state.liveStorageAvailable = true;
         } else {
           state.liveStorageAvailable = true;
         }
-        for (const [key, value] of failedState.writes) {
-          if (!state.writes.has(key)) state.writes.set(key, value);
-        }
+        replayAttempted = true;
         await this.replayStagedWrites(stream, state);
-        this.failedRollbacks.delete(stream);
       }
       if (canUseStreamDataDir(stream)) {
-        if (await storagePathExists(stagedStreamDataDir(stream))) {
+        const hasStagedData = await storagePathExists(
+          stagedStreamDataDir(stream),
+        );
+        if (hasStagedData) {
+          namespaceTransitionStarted = true;
           state.liveStorageAvailable = false;
           throw new Error(
             `Stream ${stream} has an unreconciled snapshot deletion`,
@@ -1129,9 +1126,12 @@ export class StreamSnapshotStore {
       const liveDir = canStage ? streamDataDir(stream) : undefined;
       const stagedDir = canStage ? stagedStreamDataDir(stream) : undefined;
       let staged = false;
-      if (liveDir && stagedDir && (await storagePathExists(liveDir))) {
+      const hasLiveData =
+        !liveDir || !stagedDir || (await storagePathExists(liveDir));
+      if (liveDir && stagedDir && hasLiveData) {
         await StorageFS.ensureDir(STREAM_DATA_DELETION_DIR);
         state.liveStorageAvailable = false;
+        namespaceTransitionStarted = true;
         await StorageFS.rename(liveDir, stagedDir);
         staged = true;
       }
@@ -1169,7 +1169,7 @@ export class StreamSnapshotStore {
             }
             await this.replayStagedWrites(stream, state);
           } catch (error) {
-            this.retainFailedRollback(stream, state);
+            this.failedRollbacks.set(stream, state);
             throw error;
           } finally {
             this.settleStagedDeletion(stream, state);
@@ -1179,19 +1179,29 @@ export class StreamSnapshotStore {
     } catch (error) {
       const failures: unknown[] = [error];
       try {
-        const canInspectStaging = canUseStreamDataDir(stream);
-        state.liveStorageAvailable = !canInspectStaging;
-        const snapshotRemainsStaged =
-          canInspectStaging &&
-          (await storagePathExists(stagedStreamDataDir(stream)));
-        state.liveStorageAvailable = !snapshotRemainsStaged;
-        if (snapshotRemainsStaged) {
-          this.retainFailedRollback(stream, state);
-        } else {
+        let canReplay = !replayAttempted;
+        if (
+          canReplay &&
+          namespaceTransitionStarted &&
+          canUseStreamDataDir(stream)
+        ) {
+          state.liveStorageAvailable = false;
+          const [hasLiveData, hasStagedData] = await Promise.all([
+            storagePathExists(streamDataDir(stream)),
+            storagePathExists(stagedStreamDataDir(stream)),
+          ]);
+          canReplay = hasLiveData && !hasStagedData;
+          state.liveStorageAvailable = canReplay;
+        } else if (canReplay) {
+          state.liveStorageAvailable = true;
+        }
+        if (canReplay) {
           await this.replayStagedWrites(stream, state);
+        } else {
+          this.failedRollbacks.set(stream, state);
         }
       } catch (recoveryError) {
-        this.retainFailedRollback(stream, state);
+        this.failedRollbacks.set(stream, state);
         failures.push(recoveryError);
       } finally {
         this.settleStagedDeletion(stream, state);
