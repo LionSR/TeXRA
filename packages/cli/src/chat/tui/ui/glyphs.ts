@@ -38,6 +38,9 @@ export const ERROR_ENTRY_PREFIX = '! ';
 /** Corner glyph that opens each tool-output block. */
 export const TOOL_OUTPUT_CORNER = '⎿';
 
+/** Generated-tokens marker in child-row metadata (`↓9.4k`). */
+export const TOKENS_GENERATED = '↓';
+
 /** Marker for the liveness row shown while a run is active. */
 export const THINKING_MARKER = '✻';
 
