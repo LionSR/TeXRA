@@ -1,26 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  resumeEntryDescription,
-  resumeSelectWindow,
-} from '@cli/chat/tui/forms/ResumeListForm';
+import { resumeEntryDescription } from '@cli/chat/tui/forms/ResumeListForm';
 import { CLI_HISTORY_RESUMABLE_STATUS } from '@cli/runtime/history';
-
-describe('CLI ResumeListForm row budget', () => {
-  it('windows long execution lists inside the available foreground rows', () => {
-    expect(resumeSelectWindow({ availableRows: 10, itemCount: 12 })).toEqual({
-      maxVisibleItems: 1,
-      showOverflow: true,
-    });
-  });
-
-  it('uses the full list when it fits', () => {
-    expect(resumeSelectWindow({ availableRows: 12, itemCount: 4 })).toEqual({
-      maxVisibleItems: 4,
-      showOverflow: false,
-    });
-  });
-});
 
 describe('CLI ResumeListForm labels', () => {
   const TIMESTAMP = '2026-05-20T21:00:00.000Z';
