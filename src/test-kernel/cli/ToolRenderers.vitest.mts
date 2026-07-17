@@ -174,7 +174,7 @@ describe('CLI tool display lines', () => {
     `);
   });
 
-  it('keeps long duplicate error output in the full transcript view', () => {
+  it('keeps long duplicate error output when printing full output', () => {
     const message = `User rejected command: ${'diagnostic detail '.repeat(30)}`;
     const entry = toolUse(
       'bash',
@@ -215,7 +215,7 @@ describe('CLI tool display lines', () => {
         "  line 4",
         "  line 5",
         "  line 6",
-        "  … +11 lines (ctrl + t to view transcript)",
+        "  … +11 lines (ctrl + t to print full output)",
         "  line 18",
         "  line 19",
         "  line 20",
@@ -258,7 +258,7 @@ describe('CLI tool display lines', () => {
     expect(lines.at(-1)).toBe('  line 10');
   });
 
-  it('shows the full bash output when elision is disabled (transcript viewer)', () => {
+  it('shows the full bash output when elision is disabled for printing', () => {
     const entry = toolUse(
       'bash',
       { command: 'seq 12' },

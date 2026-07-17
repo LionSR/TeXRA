@@ -1,11 +1,37 @@
 // Flatten a stream's conversation entries into full-fidelity plain-text lines
-// for the ctrl+t transcript viewer. Unlike the finalized scrollback and the
-// live region — which slice tool output to a head+tail preview — this renders
-// every line so the viewer is the place to read the complete output.
+// for print-once terminal output. Unlike the finalized scrollback and the live
+// region, this renders every tool-output line.
+
+import stripAnsi from 'strip-ansi';
 
 import { isRenderableTranscriptEntry } from '../panes/transcriptEntries';
-import { transcriptEntryLayout } from '../panes/transcriptEntryLayout';
+import { fullTranscriptEntryLayout } from '../panes/transcriptEntryLayout';
 import type { ConversationEntry, StreamSlice } from './cliState';
+
+export interface TranscriptPrintRequest {
+  readonly afterEntryId?: string;
+  readonly id: string;
+  readonly ownerKey: string;
+  readonly slice: StreamSlice | undefined;
+  readonly title?: string;
+}
+
+/** Capture the stream state at the moment the user asks to print it. */
+export function createTranscriptPrintRequest({
+  afterEntryId,
+  id,
+  ownerKey,
+  slice,
+  title,
+}: TranscriptPrintRequest): TranscriptPrintRequest {
+  return {
+    afterEntryId,
+    id,
+    ownerKey,
+    title,
+    slice: slice ? { ...slice, entries: [...slice.entries] } : undefined,
+  };
+}
 
 // Wrapped-line cache keyed by the immutable entry object. Entries are
 // replaced (never mutated in place) when their content changes, so hits are
@@ -38,10 +64,7 @@ function computeTranscriptEntryLines(
   entry: ConversationEntry,
   cols: number,
 ): readonly string[] {
-  return transcriptEntryLayout(entry, {
-    mode: 'viewer',
-    width: cols,
-  }).lines;
+  return fullTranscriptEntryLayout(entry, cols).lines;
 }
 
 function isCompactToolEntry(
@@ -108,4 +131,34 @@ export function transcriptToLines(
     previousLines = lines;
   }
   return out;
+}
+
+const UNSAFE_TERMINAL_CONTROLS =
+  // eslint-disable-next-line no-control-regex -- terminal output must exclude C0/C1 controls
+  /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g;
+
+function safeTerminalText(text: string): string {
+  return stripAnsi(text)
+    .replaceAll('\r\n', '\n')
+    .replaceAll('\r', '\n')
+    .replaceAll('\t', '  ')
+    .replaceAll(UNSAFE_TERMINAL_CONTROLS, '');
+}
+
+/** Format one immutable request for the terminal's static scrollback. */
+export function formatTranscriptForScrollback({
+  cols,
+  request,
+}: {
+  readonly cols: number;
+  readonly request: TranscriptPrintRequest;
+}): string {
+  const heading = safeTerminalText(request.title ?? '')
+    .replaceAll('\n', ' ')
+    .trim();
+  const body = safeTerminalText(
+    transcriptToLines(request.slice, cols).join('\n'),
+  );
+  const label = heading ? `Full output: ${heading}` : 'Full output';
+  return `\n[${label}]\n${body.trimEnd() || '(no output yet)'}\n`;
 }

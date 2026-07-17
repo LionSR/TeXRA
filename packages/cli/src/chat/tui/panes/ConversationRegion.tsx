@@ -4,7 +4,7 @@
 
 // Third-party imports
 import { Box } from 'ink';
-import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
 import { type StreamTabId } from '@shared/schemas';
@@ -39,6 +39,7 @@ import type { PendingApprovalKind } from '../state/approvalQueue';
 import type { ChildListTarget } from '../state/childControls';
 import type { ChildListValue } from '../state/childListSelection';
 import type { StreamSlice } from '../state/cliState';
+import type { TranscriptPrintRequest } from '../state/transcriptLines';
 import type { StreamView } from '../state/streamViews';
 
 // Cap the bottom subagent/todos panels so they never crowd out the
@@ -62,7 +63,7 @@ interface ConversationRegionSnapshot {
     string,
     readonly PendingApprovalKind[]
   >;
-  readonly transcriptViewerStreamId: StreamTabId | undefined;
+  readonly transcriptPrints: readonly TranscriptPrintRequest[];
 }
 
 interface ConversationRegionProps {
@@ -71,10 +72,7 @@ interface ConversationRegionProps {
   readonly onTranscriptViewportChange?: (
     change: TranscriptViewportChange,
   ) => void;
-  readonly renderForegroundSurface: (
-    availableRows: number,
-    transcriptWidth: number,
-  ) => ReactNode;
+  readonly renderForegroundSurface: (availableRows: number) => ReactNode;
   readonly renderFooterChrome: () => ReactNode;
   readonly rows: number;
   readonly snapshot: ConversationRegionSnapshot;
@@ -83,7 +81,7 @@ interface ConversationRegionProps {
   readonly onFocusSession: (streamId: StreamTabId) => void;
   readonly onKillExecution: (executionId: string) => void;
   readonly onOpenProcessDetail: (executionId: string) => void;
-  readonly onViewStream: (streamId: StreamTabId) => void;
+  readonly onPrintStream: (streamId: StreamTabId) => void;
 }
 
 export function ConversationRegion({
@@ -94,22 +92,27 @@ export function ConversationRegion({
   onFocusSession,
   onKillExecution,
   onOpenProcessDetail,
-  onViewStream,
+  onPrintStream,
   onTranscriptViewportChange,
   renderFooterChrome,
   renderForegroundSurface,
   rows,
   snapshot,
 }: ConversationRegionProps): React.JSX.Element {
-  const transcriptViewerOpen = snapshot.transcriptViewerStreamId !== undefined;
   const foregroundOpen = snapshot.foregroundKind !== undefined;
   const inputBarVisible = !foregroundOpen;
   const viewportKey = transcriptViewportKey({
     activeStreamId: snapshot.activeStreamId,
     parentStream: snapshot.parentStream,
-    transcriptViewerStreamId: snapshot.transcriptViewerStreamId,
   });
   const scopedTranscript = isScopedTranscriptViewport(viewportKey);
+  const ownerPrintRequests = useMemo(
+    () =>
+      snapshot.transcriptPrints.filter(
+        (request) => request.ownerKey === viewportKey,
+      ),
+    [snapshot.transcriptPrints, viewportKey],
+  );
   const scrollbackTarget = staticScrollbackTarget({
     activeStreamId: snapshot.activeStreamId,
     rootStreamId: snapshot.rootStreamId,
@@ -165,7 +168,6 @@ export function ConversationRegion({
     inputVisible: inputBarVisible,
     queuedFollowUpPanelRows,
     reverseSearchOpen: snapshot.reverseSearchOpen,
-    reserveTranscriptRows: snapshot.foregroundKind !== 'transcript',
     rows,
     slashPaletteOpen: snapshot.slashPaletteOpen,
     staticTranscriptRows: staticTranscriptRows ?? 0,
@@ -204,25 +206,21 @@ export function ConversationRegion({
     onCancelChildList,
     snapshot.childListFocused,
   ]);
-  const foregroundSurface = renderForegroundSurface(
-    foregroundRows,
-    transcriptWidth,
-  );
+  const foregroundSurface = renderForegroundSurface(foregroundRows);
 
   return (
     <>
-      {transcriptViewerOpen ? null : (
-        <StaticConversationTranscript
-          colorEnabled={colorEnabled}
-          maxRows={staticTranscriptRows}
-          ownerKey={scrollbackTarget.ownerKey}
-          scrollbackStreamId={scrollbackTarget.streamId}
-          width={transcriptWidth}
-        />
-      )}
+      <StaticConversationTranscript
+        colorEnabled={colorEnabled}
+        maxRows={staticTranscriptRows}
+        ownerKey={scrollbackTarget.ownerKey}
+        printRequests={ownerPrintRequests}
+        scrollbackStreamId={scrollbackTarget.streamId}
+        width={transcriptWidth}
+      />
       <Box flexDirection="column">
         <Box flexDirection="column" overflowY="hidden">
-          {!transcriptViewerOpen && conversationRows > 0 ? (
+          {conversationRows > 0 ? (
             <ConversationPane
               colorEnabled={colorEnabled}
               width={transcriptWidth}
@@ -261,7 +259,7 @@ export function ConversationRegion({
               onKillExecution={onKillExecution}
               onOpenProcessDetail={onOpenProcessDetail}
               onSelectionChange={onChildSelectionChange}
-              onViewStream={onViewStream}
+              onPrintStream={onPrintStream}
               pendingApprovals={snapshot.pendingApprovals}
               selectedValue={snapshot.selectedChildValue}
               sessions={snapshot.sessionViews}

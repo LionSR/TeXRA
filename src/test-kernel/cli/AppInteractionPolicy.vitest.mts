@@ -102,7 +102,6 @@ function foregroundInput(
     activeFormOpen: false,
     pendingApproval: true,
     taskDetailOpen: false,
-    transcriptViewerOpen: false,
     ...overrides,
   };
 }
@@ -185,7 +184,6 @@ describe('app interaction policy', () => {
     const surfaceCases = [
       [{ kind: 'taskDetail' }, 12],
       [{ kind: 'form' }, 18],
-      [{ kind: 'transcript' }, undefined],
     ] satisfies readonly (readonly [ForegroundRowsInput, number | undefined])[];
     const expectedByKind = {
       plan: undefined,
@@ -299,7 +297,6 @@ describe('app interaction policy', () => {
   it('prioritizes foreground surfaces ahead of approvals', () => {
     const cases = [
       [foregroundInput({ taskDetailOpen: true }), 'taskDetail'],
-      [foregroundInput({ transcriptViewerOpen: true }), 'transcript'],
       [foregroundInput({ activeFormOpen: true }), 'form'],
       [foregroundInput(), 'approval'],
       [foregroundInput({ pendingApproval: false }), undefined],

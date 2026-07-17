@@ -1379,9 +1379,15 @@ describe('runCli usage output stream routing', () => {
     );
     expect(stdout).toContain('/login, /logout');
     expect(stdout).toContain('ChatGPT or Researcher Access');
-    expect(stdout).toContain('Ctrl-T');
+    expect(stdout).toContain(
+      "print the focused stream's full output once into terminal scrollback",
+    );
     expect(stdout).toContain('Tab');
     expect(stdout).toContain('select a visible child session or process');
+    expect(stdout).toContain('v (child list)');
+    expect(stdout).toContain(
+      "print the selected stream's full output once into terminal scrollback",
+    );
     expect(stdout).not.toContain('open tasks and sub-workflows');
     expect(stdout).not.toContain('open subagents when available');
     expect(stdout).toContain('Esc 1..9');

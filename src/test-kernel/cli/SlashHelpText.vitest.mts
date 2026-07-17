@@ -31,8 +31,8 @@ describe('formatSlashCommandHelp', () => {
     expect(keyboardIndex).toBeGreaterThan(accountIndex);
     expect(help).not.toContain('**Other**');
 
-    // Each command renders as its own markdown list item — single newlines
-    // collapse in the transcript's markdown renderer, list items do not.
+    // Each command renders as its own markdown list item: single newlines
+    // collapse in the help surface's markdown renderer, list items do not.
     expect(help).toContain('- `/clear` — Start a fresh chat session');
     expect(help).toContain(
       '- `/goal` (`/goals`) — Explain autonomous goal mode',
@@ -73,6 +73,12 @@ describe('formatSlashCommandHelp', () => {
     });
     expect(macKittyHelp).toContain('`Esc 1..9`');
     expect(macKittyHelp).toContain('`Shift-Enter` or `Ctrl-J`');
+    expect(macKittyHelp).toContain(
+      "`Ctrl-T` prints the focused stream's full output once into terminal scrollback",
+    );
+    expect(macKittyHelp).toContain(
+      "`v` prints the selected stream's full output",
+    );
   });
 
   it('mentions that typing during a run queues a follow-up', () => {

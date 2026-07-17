@@ -382,12 +382,9 @@ export const rootRunStreamId = ROOT_RUN_STREAM_ID;
 // foregroundOverlaySlice
 // ---------------------------------------------------------------------------
 
-// Signals for the App-level foreground surfaces — the inline slash form, the
-// slash-command palette, reverse search, the transcript viewer, and the
-// foreground transcript and process-detail surfaces. These are view-level
-// toggles, so
-// per the CLAUDE.md TUI rule they live here as signal state rather than as
-// local `useState` in the components that render them.
+// Signals for the App-level foreground surfaces: the inline slash form,
+// slash-command palette, reverse search, and process detail. These view-level
+// toggles live here as signal state rather than local component state.
 
 /** Active inline slash form, or `undefined` when the chat input owns the
  *  screen. The form's `onDone` clears this slot. Kept opaque (the form
@@ -416,16 +413,6 @@ const SLASH_PALETTE_OPEN = signal<boolean>(false);
 export const slashPaletteOpen = SLASH_PALETTE_OPEN;
 const REVERSE_SEARCH_OPEN = signal<boolean>(false);
 export const reverseSearchOpen = REVERSE_SEARCH_OPEN;
-
-/** The stream whose full-output transcript the viewer is showing, or
- *  `undefined` when the viewer is closed. ctrl+t opens it on the active
- *  stream; the child list opens it on a chosen session so each subagent's
- *  transcript is independently browsable without disturbing the main
- *  scrollback. The viewer shows that one stream's tool output untruncated and
- *  scrollable; the finalized scrollback and live region only ever show a
- *  head+tail slice. */
-const TRANSCRIPT_VIEWER_STREAM_ID = signal<StreamTabId | undefined>(undefined);
-export const transcriptViewerStreamId = TRANSCRIPT_VIEWER_STREAM_ID;
 
 /** Process whose captured output is open in TaskDetailView. */
 const TASK_DETAIL_EXECUTION_ID = signal<string | undefined>(undefined);
@@ -514,7 +501,6 @@ export function resetCliState(
   activeForm.set(undefined);
   slashPaletteOpen.set(false);
   reverseSearchOpen.set(false);
-  transcriptViewerStreamId.set(undefined);
   taskDetailExecutionId.set(undefined);
   pendingExitHint.set(false);
   pendingExitResumeId.set(undefined);
