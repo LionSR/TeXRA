@@ -69,7 +69,7 @@ import {
 } from '../runtime/supabaseAuthDeviceCode';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
-import { describeSavedKeyLocation } from './onboardingState';
+import { formatSavedKeySummary } from './onboardingState';
 
 export interface CliOnboardingResult {
   /**
@@ -406,14 +406,11 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
           void (async () => {
             try {
               await saveProviderApiKey(keyProvider, key);
-              await selectCliApiModelAccessRoute('personal');
-              const where = describeSavedKeyLocation(keyProvider);
+              const selection = await selectCliApiModelAccessRoute('personal');
               finish({
                 configured: true,
                 declined: false,
-                summary: `Saved your ${
-                  PROVIDER_DISPLAY_NAMES[keyProvider] ?? keyProvider
-                } API key. ${where}`,
+                summary: formatSavedKeySummary(keyProvider, selection),
               });
             } catch (saveError: unknown) {
               setSaving(false);
