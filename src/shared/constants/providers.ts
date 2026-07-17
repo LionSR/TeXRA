@@ -99,6 +99,14 @@ const PROVIDER_REGISTRY = [
     keyUrl: 'https://platform.moonshot.cn/console',
     streamingKey: GlobalStateKey.STREAMING_MOONSHOT,
     endpointKey: GlobalStateKey.ENDPOINT_MOONSHOT,
+    // China=true is the default since moonshot.cn is the primary platform;
+    // when toggled off (international), keys come from platform.moonshot.ai.
+    // Keys are platform-specific — a .cn key does not work on .ai.
+    region: {
+      key: GlobalStateKey.MOONSHOT_USE_CHINA,
+      default: true,
+      keyUrlWhenUnset: 'https://platform.moonshot.ai/console',
+    },
   },
   {
     id: ModelProvider.DASHSCOPE,
@@ -203,7 +211,7 @@ export const PROVIDER_URLS: Record<string, string> = {
     PROVIDER_REGISTRY.flatMap((p) => (p.keyUrl ? [[p.id, p.keyUrl]] : [])),
   ),
   openRouter: 'https://openrouter.ai/keys',
-  kimiCode: 'https://code.kimi.com/',
+  kimiCode: 'https://www.kimi.com/code/console',
 };
 
 export const PROVIDER_STATE_ENTRIES: readonly ProviderStateEntry[] = [
@@ -373,6 +381,20 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
       warningUrl: 'https://platform.minimax.io/',
       warningUrlLabel: 'Get API key',
       globalStateKey: GlobalStateKey.MINIMAX_USE_CHINA,
+    },
+  ],
+  moonshot: [
+    {
+      key: GlobalStateKey.MOONSHOT_USE_CHINA,
+      label: 'China Region',
+      description:
+        'Use the China endpoint (api.moonshot.cn) instead of international (api.moonshot.ai). Enabled by default. Keys are platform-specific — get international keys at platform.moonshot.ai.',
+      defaultValue: true,
+      warning:
+        'A platform.moonshot.cn key does not work with the international endpoint, and vice versa.',
+      warningUrl: 'https://platform.moonshot.ai/console',
+      warningUrlLabel: 'International console',
+      globalStateKey: GlobalStateKey.MOONSHOT_USE_CHINA,
     },
   ],
   glm: [
