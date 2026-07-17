@@ -6,12 +6,7 @@ import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 import { modelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
 
 // Local imports - model
-import {
-  KIMI_CODE_ANTHROPIC_BASE_URL,
-  KIMI_CODE_MODEL_CONFIGS,
-  KIMI_CODE_OPENAI_BASE_URL,
-  isKimiCodeModelConfig,
-} from '@model/kimiCodeModels';
+import { KIMI_CODE_MODEL_CONFIGS } from '@model/kimiCodeModels';
 import { resolveModelApiKeyProvider } from '@model/openRouterRouting';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import {
@@ -34,26 +29,31 @@ describe('Kimi Code model registry', () => {
   });
 
   it.each([
-    ['kimiCodeK3', 'k3', 'openai', KIMI_CODE_OPENAI_BASE_URL],
-    ['kimiCodeCoding', 'kimi-for-coding', 'openai', KIMI_CODE_OPENAI_BASE_URL],
+    ['kimiCodeK3', 'k3', 'openai', 'https://api.kimi.com/coding/v1'],
+    [
+      'kimiCodeCoding',
+      'kimi-for-coding',
+      'openai',
+      'https://api.kimi.com/coding/v1',
+    ],
     [
       'kimiCodeCodingFast',
       'kimi-for-coding-highspeed',
       'openai',
-      KIMI_CODE_OPENAI_BASE_URL,
+      'https://api.kimi.com/coding/v1',
     ],
-    ['kimiCodeK3Anthropic', 'k3', 'anthropic', KIMI_CODE_ANTHROPIC_BASE_URL],
+    ['kimiCodeK3Anthropic', 'k3', 'anthropic', 'https://api.kimi.com/coding/'],
     [
       'kimiCodeCodingAnthropic',
       'kimi-for-coding',
       'anthropic',
-      KIMI_CODE_ANTHROPIC_BASE_URL,
+      'https://api.kimi.com/coding/',
     ],
     [
       'kimiCodeCodingFastAnthropic',
       'kimi-for-coding-highspeed',
       'anthropic',
-      KIMI_CODE_ANTHROPIC_BASE_URL,
+      'https://api.kimi.com/coding/',
     ],
   ])(
     'maps %s to model %s via %s protocol',
@@ -80,14 +80,6 @@ describe('Kimi Code model registry', () => {
   it('keeps ordinary static registry lookups unchanged', () => {
     expect(getRuntimeModelConfig('kimi25T')).toBe(MODEL_CONFIGS.kimi25T);
   });
-
-  it('identifies Kimi Code configs via the type guard', () => {
-    expect(isKimiCodeModelConfig(KIMI_CODE_MODEL_CONFIGS.kimiCodeK3)).toBe(
-      true,
-    );
-    expect(isKimiCodeModelConfig(MODEL_CONFIGS.kimi25T)).toBe(false);
-    expect(isKimiCodeModelConfig(undefined)).toBe(false);
-  });
 });
 
 describe('Kimi Code routing', () => {
@@ -101,6 +93,9 @@ describe('Kimi Code routing', () => {
         false,
       ),
     ).toBe('kimiCode');
+    expect(
+      resolveModelApiKeyProvider(KIMI_CODE_MODEL_CONFIGS.kimiCodeK3, true),
+    ).toBe('kimiCode');
   });
 
   it('routes OpenAI-protocol models through the Moonshot/Kimi handler', () => {
@@ -113,6 +108,13 @@ describe('Kimi Code routing', () => {
         false,
       ),
     ).toBe('ModelHandlerKimi');
+    expect(
+      modelHandlerCompatibilityKey(
+        KIMI_CODE_MODEL_CONFIGS.kimiCodeK3,
+        true,
+        false,
+      ),
+    ).toBe('ModelHandlerKimi');
   });
 
   it('routes Anthropic-protocol models through the Anthropic handler', () => {
@@ -120,6 +122,13 @@ describe('Kimi Code routing', () => {
       modelHandlerCompatibilityKey(
         KIMI_CODE_MODEL_CONFIGS.kimiCodeK3Anthropic,
         false,
+        false,
+      ),
+    ).toBe('ModelHandlerAnthropic');
+    expect(
+      modelHandlerCompatibilityKey(
+        KIMI_CODE_MODEL_CONFIGS.kimiCodeK3Anthropic,
+        true,
         false,
       ),
     ).toBe('ModelHandlerAnthropic');

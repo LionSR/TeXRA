@@ -4,6 +4,8 @@ import type { ModelConfig } from 'llm-zoo';
 
 export interface OpenRouterRoutingConfig {
   provider?: string;
+  /** Explicit direct-key owner; models with one never route through OpenRouter. */
+  apiKeyProvider?: ApiProvider;
   requiresResponsesAPI?: boolean;
   openRouterOnly: boolean;
   forceDirectProvider?: boolean;
@@ -15,7 +17,9 @@ function isOpenRouterAccessSelected(
   useOpenRouter: boolean,
 ): boolean {
   return (
-    !config.forceDirectProvider && (config.openRouterOnly || useOpenRouter)
+    !config.apiKeyProvider &&
+    !config.forceDirectProvider &&
+    (config.openRouterOnly || useOpenRouter)
   );
 }
 
@@ -32,14 +36,14 @@ export function isOpenRouterRoutingUnsupported(
 
 /** API-key owner for the route ModelFactory will use for this model. */
 export function resolveModelApiKeyProvider(
-  config: OpenRouterRoutingConfig & { apiKeyProvider?: ApiProvider },
+  config: OpenRouterRoutingConfig,
   useOpenRouter: boolean,
 ): ApiProvider | undefined {
-  if (shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
-    return 'openRouter';
-  }
   if (config.apiKeyProvider) {
     return config.apiKeyProvider;
+  }
+  if (shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
+    return 'openRouter';
   }
   return config.provider && isApiProvider(config.provider)
     ? config.provider
