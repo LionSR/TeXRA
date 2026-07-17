@@ -126,12 +126,6 @@ All notable changes to this project will be documented in this file.
 
 ### Shared (all surfaces)
 
-#### Breaking Changes
-
-- **Included OpenAI, Anthropic, and Google access now requires Ultra** — Free
-  and Max users can continue using these providers with their own API keys.
-  Included access to other supported providers is unchanged.
-
 #### Bug Fixes
 
 - **OpenAI-compatible streams accept response metadata** — conversations no
