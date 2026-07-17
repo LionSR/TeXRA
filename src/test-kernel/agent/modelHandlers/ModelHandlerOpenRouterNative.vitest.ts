@@ -193,6 +193,70 @@ describe('ModelHandlerOpenRouterNative Moonshot fixed temperature', () => {
   });
 });
 
+describe('ModelHandlerOpenRouterNative response mode discrimination', () => {
+  function createLoggerStub() {
+    return {
+      debug: () => undefined,
+      info: () => undefined,
+      warn: () => undefined,
+      error: () => undefined,
+    };
+  }
+
+  it('rejects a non-streaming response on the streaming path', async () => {
+    const handler = new ModelHandlerOpenRouterNative(buildConfig());
+    (handler as any).setLogger(createLoggerStub());
+    (handler as any).getStreamingConfig = () => true;
+
+    const client = {
+      chat: {
+        send: async () => ({
+          choices: [],
+          created: 0,
+          id: 'response-id',
+          model: 'openai/gpt-5.5',
+          object: 'chat.completion',
+          usage: null,
+        }),
+      },
+    };
+
+    await assert.rejects(
+      handler.createResponse({
+        client: client as any,
+        messages: [{ role: 'user', content: 'hi' }],
+        temperature: 0,
+      }),
+      /non-streaming response for a streaming request/,
+    );
+  });
+
+  it('rejects a streaming response on the non-streaming path', async () => {
+    const handler = new ModelHandlerOpenRouterNative(buildConfig());
+    (handler as any).setLogger(createLoggerStub());
+    (handler as any).getStreamingConfig = () => false;
+
+    const client = {
+      chat: {
+        send: async () => ({
+          async *[Symbol.asyncIterator]() {
+            yield { choices: [] };
+          },
+        }),
+      },
+    };
+
+    await assert.rejects(
+      handler.createResponse({
+        client: client as any,
+        messages: [{ role: 'user', content: 'hi' }],
+        temperature: 0,
+      }),
+      /streaming response for a non-streaming request/,
+    );
+  });
+});
+
 describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
   it('does not allow overrides for a fixed max-effort model', () => {
     const handler = new ModelHandlerOpenRouterNative(
