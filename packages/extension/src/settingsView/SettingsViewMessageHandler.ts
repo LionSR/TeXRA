@@ -162,6 +162,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
   private executionsWatcher: vscode.FileSystemWatcher | undefined;
+  private executionsWatcherGeneration = 0;
   private readonly handlerRegistry: SettingsViewInboundHandlerRegistry;
 
   // Domain-specific handler delegates
@@ -298,8 +299,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
         void this.registerExecutionsWatcher();
       }),
-      { dispose: () => this.executionsWatcher?.dispose() },
+      { dispose: () => this.invalidateExecutionsWatcher() },
     );
+  }
+
+  private invalidateExecutionsWatcher(): number {
+    const generation = ++this.executionsWatcherGeneration;
+    const watcher = this.executionsWatcher;
+    this.executionsWatcher = undefined;
+    watcher?.dispose();
+    return generation;
   }
 
   /**
@@ -308,9 +317,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
    * webview. The debounce coalesces launch and terminal write bursts.
    */
   private async registerExecutionsWatcher(): Promise<void> {
+    const generation = this.invalidateExecutionsWatcher();
+    let candidate: vscode.FileSystemWatcher | undefined;
     try {
-      this.executionsWatcher?.dispose();
-      this.executionsWatcher = undefined;
       const executionsDir = path.join(
         platform().storage.getStoragePath(),
         RUNS_STORAGE_DIR,
@@ -318,6 +327,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       // A watcher rooted at a not-yet-existing directory can silently never
       // fire; the dir is cheap to create and always wanted.
       await StorageFS.ensureDir(RUNS_STORAGE_DIR);
+      // A workspace change or teardown may supersede this registration while
+      // directory setup is pending.
+      if (generation !== this.executionsWatcherGeneration) return;
       const refreshHistory = debounce(
         () =>
           this.withActiveWebview((w) =>
@@ -328,14 +340,21 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       const onExecutionsEvent = () => {
         void refreshHistory();
       };
-      const watcher = vscode.workspace.createFileSystemWatcher(
+      candidate = vscode.workspace.createFileSystemWatcher(
         new vscode.RelativePattern(vscode.Uri.file(executionsDir), '**'),
       );
-      watcher.onDidCreate(onExecutionsEvent);
-      watcher.onDidChange(onExecutionsEvent);
-      watcher.onDidDelete(onExecutionsEvent);
-      this.executionsWatcher = watcher;
+      candidate.onDidCreate(onExecutionsEvent);
+      candidate.onDidChange(onExecutionsEvent);
+      candidate.onDidDelete(onExecutionsEvent);
+      // Publish only a candidate that still owns the current generation.
+      if (generation !== this.executionsWatcherGeneration) {
+        candidate.dispose();
+        return;
+      }
+      this.executionsWatcher = candidate;
     } catch (error) {
+      candidate?.dispose();
+      if (generation !== this.executionsWatcherGeneration) return;
       logErrorMessage(
         this.channel,
         'Failed to register execution history watcher',

@@ -21,6 +21,12 @@ export const workspace = {
     get: <T>(_key: string, defaultValue?: T): T | undefined => defaultValue,
   }),
   onDidChangeConfiguration: () => ({ dispose: () => {} }),
+  createFileSystemWatcher: () => ({
+    onDidCreate: () => ({ dispose: () => {} }),
+    onDidChange: () => ({ dispose: () => {} }),
+    onDidDelete: () => ({ dispose: () => {} }),
+    dispose: () => {},
+  }),
 };
 
 export const commands = {
@@ -31,6 +37,13 @@ export const Uri = {
   file: (p: string) => ({ fsPath: p, toString: () => p, path: p }),
   parse: (s: string) => ({ fsPath: s, toString: () => s, path: s }),
 };
+
+export class RelativePattern {
+  constructor(
+    public readonly base: unknown,
+    public readonly pattern: string,
+  ) {}
+}
 
 export const FileType = {
   Unknown: 0,
