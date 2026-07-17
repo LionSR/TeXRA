@@ -195,10 +195,20 @@ export function countLines(text: string): number {
  * truncateWithEllipsis('a very long text', 10) // 'a very lo…'
  */
 export function truncateWithEllipsis(text: string, maxLen: number): string {
-  const graphemes = toGraphemes(text);
-  if (graphemes.length <= maxLen) return text;
-  if (maxLen <= 1) return '…';
-  return `${graphemes.slice(0, maxLen - 1).join('')}…`;
+  const prefix: string[] = [];
+
+  // Intl.Segmenter is lazy: stop after the first grapheme beyond the budget so
+  // truncating a large error or tool payload stays bounded by maxLen.
+  for (const { segment } of graphemeSegmenter.segment(text)) {
+    if (prefix.length >= maxLen) {
+      if (maxLen <= 0) return '…';
+      prefix[maxLen - 1] = '…';
+      return prefix.join('');
+    }
+    prefix.push(segment);
+  }
+
+  return text;
 }
 
 /**
