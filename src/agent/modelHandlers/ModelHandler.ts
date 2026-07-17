@@ -596,6 +596,23 @@ export abstract class ModelHandler<
     });
   }
 
+  /** Log the resolved credential route and final wire request config. */
+  protected logOpenAICompatibleClientConfig(baseURL: string): void {
+    let credential: string;
+    if (this.shouldUseServerSideKeys()) {
+      credential = 'TeXRA relay access token';
+    } else if (shouldUseOpenRouter(this.config)) {
+      credential = 'OpenRouter API key';
+    } else {
+      const provider =
+        resolveDirectModelApiKeyProvider(this.config) ?? this.config.provider;
+      credential = `${provider} API key`;
+    }
+    this.logger.debug(
+      `Using ${credential}. Model: ${this.config.fullName}. Base URL: ${baseURL}`,
+    );
+  }
+
   // Provider-identity getters (isAnthropic/isOpenai/isGoogle/isDeepSeek/
   // isKimi/isMiniMax) were removed (#7101): each had exactly one or two call
   // sites, all of which already had `this.config` (or, for the
