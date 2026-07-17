@@ -1000,6 +1000,13 @@ export class StreamSnapshotStore {
       }
       await this.flushWritesForStream(stream);
     }
+  }
+
+  /** Release deletion waiters after every terminal transaction path. */
+  private settleStagedDeletion(
+    stream: StreamTabId,
+    state: StagedDeletionState,
+  ): void {
     if (this.stagedDeletions.get(stream) === state) {
       this.stagedDeletions.delete(stream);
     }
@@ -1114,10 +1121,7 @@ export class StreamSnapshotStore {
               }
             }
           } finally {
-            if (this.stagedDeletions.get(stream) === state) {
-              this.stagedDeletions.delete(stream);
-            }
-            state.resolveSettled();
+            this.settleStagedDeletion(stream, state);
           }
         },
         rollback: async () => {
@@ -1132,15 +1136,16 @@ export class StreamSnapshotStore {
             this.failedRollbacks.set(stream, state);
             throw error;
           } finally {
-            if (this.stagedDeletions.get(stream) === state) {
-              this.stagedDeletions.delete(stream);
-            }
-            state.resolveSettled();
+            this.settleStagedDeletion(stream, state);
           }
         },
       };
     } catch (error) {
-      await this.replayStagedWrites(stream, state);
+      try {
+        await this.replayStagedWrites(stream, state);
+      } finally {
+        this.settleStagedDeletion(stream, state);
+      }
       throw error;
     }
   }
