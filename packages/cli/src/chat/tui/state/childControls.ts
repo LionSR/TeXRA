@@ -2,6 +2,7 @@
 
 // Local imports - shared schemas
 import {
+  MESSAGE_TYPES,
   STREAM_PHASE,
   type ActiveChildInfo,
   type StreamTabId,
@@ -14,7 +15,11 @@ import {
   visibleSubagentRows,
   type ChildStreamEntries,
 } from './childExecutions';
-import type { ProcessOutputTail, StreamSlice } from './cliState';
+import type {
+  ConversationEntry,
+  ProcessOutputTail,
+  StreamSlice,
+} from './cliState';
 
 export interface ChildListTarget {
   readonly slice: StreamSlice | undefined;
@@ -153,4 +158,42 @@ export function numericFocusTargetForActiveStream(init: {
     rootStreamId: target.streamId,
     streams: init.streams,
   }).find((entry) => entry.shortcutIndex === shortcutIndex)?.id;
+}
+
+// The panel re-renders on every stream-sync tick; entries arrays are replaced
+// wholesale on change, so one scan per entries version is enough. `has` (not
+// the value) discriminates a cached undefined from a miss.
+const childResponseSummaryCache = new WeakMap<
+  readonly ConversationEntry[],
+  string | undefined
+>();
+
+/**
+ * Latest thing the child "said": its final model response after the newest
+ * user instruction, falling back to that instruction while a turn is still
+ * running. Rendered on the child list's session rows.
+ */
+export function latestChildResponseSummary(
+  entries: readonly ConversationEntry[] | undefined,
+): string | undefined {
+  if (!entries) return undefined;
+  if (childResponseSummaryCache.has(entries)) {
+    return childResponseSummaryCache.get(entries);
+  }
+  const latestUserIndex = entries.findLastIndex(
+    (entry) => entry.role === 'user' && entry.text.trim(),
+  );
+  const latestInstruction =
+    latestUserIndex >= 0 ? entries[latestUserIndex]?.text : undefined;
+  const summary =
+    entries.findLast(
+      (entry, index) =>
+        index > latestUserIndex &&
+        entry.role === 'assistant' &&
+        entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE &&
+        entry.finalized &&
+        entry.text.trim(),
+    )?.text ?? latestInstruction;
+  childResponseSummaryCache.set(entries, summary);
+  return summary;
 }

@@ -261,6 +261,7 @@ export function ConversationRegion({
               onSelectionChange={onChildSelectionChange}
               onPrintStream={onPrintStream}
               pendingApprovals={snapshot.pendingApprovals}
+              listRootStreamId={snapshot.childListTarget.streamId}
               selectedValue={snapshot.selectedChildValue}
               sessions={snapshot.sessionViews}
               activeProcesses={activeProcesses}
