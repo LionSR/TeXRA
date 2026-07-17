@@ -10,7 +10,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import * as fs from 'node:fs/promises';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, expectTypeOf, it } from 'vitest';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { executeCommand, executeCommandSync } from '@utils/system/execUtils';
@@ -43,8 +43,22 @@ async function waitForProcessExit(pid: number): Promise<void> {
   throw new Error(`Process ${pid} was still running after abort`);
 }
 
+type ExecuteCommandOptions = NonNullable<Parameters<typeof executeCommand>[1]>;
+
 describe('executeCommand', () => {
   const tempDirs: string[] = [];
+
+  it('exposes only text encodings and non-transform output modes', () => {
+    expectTypeOf<ExecuteCommandOptions['encoding']>().toEqualTypeOf<
+      'utf8' | 'utf-8' | 'utf16le' | undefined
+    >();
+    expectTypeOf<ExecuteCommandOptions['stdout']>().toEqualTypeOf<
+      'pipe' | 'ignore' | 'inherit' | 'overlapped' | undefined
+    >();
+    expectTypeOf<ExecuteCommandOptions['stderr']>().toEqualTypeOf<
+      'pipe' | 'ignore' | 'inherit' | 'overlapped' | undefined
+    >();
+  });
 
   // executeCommand resolves its cwd from the workspace; point the fake
   // platform at a directory that exists on disk so spawning succeeds.
