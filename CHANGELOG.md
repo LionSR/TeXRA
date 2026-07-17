@@ -8,8 +8,14 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
-- **Kimi Code membership models** — Kimi Code members can use K3, K2.7, and
-  K2.7 HighSpeed with their Kimi Code API key in the CLI and VS Code extension.
+- **Sign in with Kimi Code** — Kimi Code members can sign in with their
+  membership (device-code flow) or a Kimi Code console API key across the CLI
+  (`texra auth kimi login`, `/login kimi`), VS Code extension, and desktop
+  app. The plan's models appear in the picker as Kimi K3, Kimi for Coding,
+  and Kimi for Coding (High-Speed), with usage covered by the membership.
+- **Moonshot international region** — a China/international toggle for the
+  Moonshot provider selects between api.moonshot.cn and api.moonshot.ai,
+  mirroring the existing DashScope/MiniMax/GLM region toggles.
 - **One conversation history across TeXRA apps** — sessions created in the
   CLI, desktop app, or VS Code extension now appear in the same project
   history when that project is opened in another TeXRA app.

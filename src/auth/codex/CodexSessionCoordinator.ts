@@ -1,13 +1,17 @@
 /**
  * Host-neutral coordinator for the Codex (ChatGPT-subscription) OAuth session.
  *
- * Mirrors the split of `SupabaseSessionCoordinator`: pure state machine over an
- * injected secret-backed storage (one JSON bundle under one key) plus an
- * injected network client, so refresh/expiry logic is unit-testable without the
- * network or a real keychain. Stays `vscode`-free; the loopback server,
- * browser-open, and device-code UI live in the host layer and call into here.
+ * The refresh/expiry race machinery lives in {@link OAuthSessionCoordinatorBase}
+ * (shared with Kimi Code); this class adds the Codex specifics: PKCE/loopback
+ * authorize URLs, the authorization-code exchange, and JWT-claims extraction.
+ * Stays `vscode`-free; the loopback server, browser-open, and device-code UI
+ * live in the host layer and call into here.
  */
-import { safeParseJson } from '@common/parsing/safeParseJson';
+import {
+  OAuthSessionCoordinatorBase,
+  type OAuthSessionLogger,
+  type OAuthSessionStorage,
+} from '../shared/OAuthSessionCoordinatorBase';
 import {
   CODEX_AUTHORIZE_URL,
   CODEX_CLIENT_ID,
@@ -31,11 +35,7 @@ import {
 } from './codexSessionTypes';
 
 /** Secret-backed persistence for the single session bundle. */
-export interface CodexSessionStorage {
-  get(): Promise<string | undefined>;
-  store(value: string): Promise<void>;
-  delete(): Promise<void>;
-}
+export type CodexSessionStorage = OAuthSessionStorage;
 
 /** The network surface the coordinator depends on (injectable for tests). */
 export interface CodexOAuthClient {
@@ -47,10 +47,7 @@ export interface CodexOAuthClient {
   refreshTokens(refreshToken: string): Promise<CodexTokenResponse>;
 }
 
-export interface CodexLogger {
-  debug?(message: string): void;
-  warn?(message: string): void;
-}
+export type CodexLogger = OAuthSessionLogger;
 
 export interface CodexSessionStatus {
   signedIn: boolean;
@@ -73,111 +70,48 @@ export interface CodexSessionCoordinatorInit {
   now?: () => number;
 }
 
-export class CodexSessionCoordinator {
-  private readonly storage: CodexSessionStorage;
+export class CodexSessionCoordinator extends OAuthSessionCoordinatorBase<
+  CodexSession,
+  CodexTokenResponse
+> {
   private readonly client: CodexOAuthClient;
-  private readonly log?: CodexLogger;
-  private readonly now: () => number;
-  private refreshInFlight: Promise<CodexSession> | null = null;
-  /**
-   * Single serialized owner of every session-storage write (login store,
-   * sign-out delete, refresh store, fatal-refresh delete). Serializing the
-   * writes means a write enqueued after a session replacement can never land
-   * before the replacement's own write.
-   */
-  private sessionMutations: Promise<void> = Promise.resolve();
-  private sessionGeneration = 0;
 
   constructor(init: CodexSessionCoordinatorInit) {
-    this.storage = init.storage;
+    super({
+      storage: init.storage,
+      log: init.log,
+      now: init.now,
+      refreshBufferMs: CODEX_TOKEN_REFRESH_BUFFER_MS,
+      messages: {
+        storageNotJson: 'Codex session storage was not valid JSON; ignoring.',
+        bundleInvalid: 'Codex session bundle failed validation; ignoring.',
+        notSignedIn: 'Not signed in with ChatGPT. Run sign-in first.',
+        changedWhileRefreshing:
+          'ChatGPT session changed while refreshing. Try again.',
+        refreshRejected: 'Codex token refresh was rejected; signing out.',
+      },
+    });
     this.client = init.client ?? {
       exchangeAuthorizationCode: defaultExchange,
       refreshTokens: defaultRefresh,
     };
-    this.log = init.log;
-    this.now = init.now ?? (() => Date.now());
   }
 
-  /** Load + validate the persisted session, or null if absent/corrupt. */
-  async loadSession(): Promise<CodexSession | null> {
-    const raw = await this.storage.get();
-    if (!raw) return null;
-    const parsedJson = safeParseJson(raw);
-    if (parsedJson.isErr()) {
-      this.log?.warn?.('Codex session storage was not valid JSON; ignoring.');
-      return null;
-    }
-    const result = CodexSessionSchema.safeParse(parsedJson.value);
-    if (!result.success) {
-      this.log?.warn?.('Codex session bundle failed validation; ignoring.');
-      return null;
-    }
-    return result.data;
+  protected parseSession(value: unknown): CodexSession | null {
+    const result = CodexSessionSchema.safeParse(value);
+    return result.success ? result.data : null;
   }
 
-  private async storeSession(session: CodexSession): Promise<void> {
-    await this.storage.store(JSON.stringify(session));
+  protected refreshTokens(previous: CodexSession): Promise<CodexTokenResponse> {
+    return this.client.refreshTokens(previous.refreshToken);
   }
 
-  /**
-   * Chain `op` after every previously queued session-storage write so
-   * replacement (login/sign-out) and refresh-originated writes settle in the
-   * order they were requested. The chain link is established synchronously
-   * (before the first `await`), so ordering is captured at call time.
-   */
-  private mutateSession(op: () => Promise<void>): Promise<void> {
-    const mutation = this.sessionMutations.then(op);
-    this.sessionMutations = mutation.catch(() => undefined);
-    return mutation;
+  protected createExpiredError(message: string): Error {
+    return new CodexAuthError(message, 'expired');
   }
 
-  /**
-   * Read a session only when no replacement changed its generation while the
-   * queued writes or storage read were settling.
-   */
-  private async loadStableSession(): Promise<{
-    generation: number;
-    session: CodexSession | null;
-  }> {
-    while (true) {
-      const generation = this.sessionGeneration;
-      await this.sessionMutations;
-      const session = await this.loadSession();
-      if (generation === this.sessionGeneration) {
-        return { generation, session };
-      }
-    }
-  }
-
-  /**
-   * Advance the session generation and abandon any in-flight refresh so its
-   * result can no longer overwrite the session that supersedes it. Shared by
-   * sign-out and every successful login, which must enqueue their storage
-   * write via {@link mutateSession} in the same synchronous block — that way
-   * an observed generation implies its write is already in the queue.
-   */
-  private supersedeInFlightRefresh(): void {
-    this.sessionGeneration += 1;
-    this.refreshInFlight = null;
-  }
-
-  /**
-   * Fail an in-flight refresh whose session was superseded (a newer login or
-   * sign-out bumped the generation) so it can't resurrect a stale token.
-   */
-  private assertSameGeneration(generation: number): void {
-    if (generation !== this.sessionGeneration) {
-      throw new CodexAuthError(
-        'ChatGPT session changed while refreshing. Try again.',
-        'expired',
-      );
-    }
-  }
-
-  /** Forget the session (sign out). */
-  async signOut(): Promise<void> {
-    this.supersedeInFlightRefresh();
-    await this.mutateSession(() => this.storage.delete());
+  protected isFatalRefreshError(error: unknown): boolean {
+    return error instanceof CodexAuthError && error.kind === 'fatal';
   }
 
   /** Whether a session is currently signed in (no network). */
@@ -220,10 +154,7 @@ export class CodexSessionCoordinator {
     redirectUri: string;
   }): Promise<CodexSession> {
     const tokens = await this.client.exchangeAuthorizationCode(params);
-    const session = this.buildSession(tokens);
-    this.supersedeInFlightRefresh();
-    await this.mutateSession(() => this.storeSession(session));
-    return session;
+    return this.replaceSession(this.buildSession(tokens));
   }
 
   /** Exchange a device-code authorization code for a stored session. */
@@ -238,87 +169,13 @@ export class CodexSessionCoordinator {
     });
   }
 
-  /** Whether a session is within the proactive-refresh window of expiry. */
-  isExpiringSoon(session: CodexSession): boolean {
-    return this.now() + CODEX_TOKEN_REFRESH_BUFFER_MS >= session.expiresAtMs;
-  }
-
-  /**
-   * Return a non-expired access token, refreshing if needed. Throws a
-   * CodexAuthError('expired') if not signed in, or ('fatal') if the refresh was
-   * rejected (the session is cleared in that case — the user must sign in again).
-   */
-  async getFreshAccessToken(forceRefresh = false): Promise<string> {
-    const session = await this.getFreshSession(forceRefresh);
-    return session.accessToken;
-  }
-
   /** The ChatGPT account id from the current session, if any (no refresh). */
   async getAccountId(): Promise<string | undefined> {
     return (await this.loadSession())?.accountId;
   }
 
-  /** Refresh if needed and return the live session. */
-  async getFreshSession(forceRefresh = false): Promise<CodexSession> {
-    const { generation, session } = await this.loadStableSession();
-    if (!session) {
-      throw new CodexAuthError(
-        'Not signed in with ChatGPT. Run sign-in first.',
-        'expired',
-      );
-    }
-    if (!forceRefresh && !this.isExpiringSoon(session)) return session;
-    return this.refresh(session, generation);
-  }
-
-  private async refresh(
-    previous: CodexSession,
-    generation: number,
-  ): Promise<CodexSession> {
-    // Single-flight: concurrent callers await the same refresh.
-    if (this.refreshInFlight) return this.refreshInFlight;
-    const task = this.performRefresh(previous, generation).finally(() => {
-      if (this.refreshInFlight === task) this.refreshInFlight = null;
-    });
-    this.refreshInFlight = task;
-    return task;
-  }
-
-  private async performRefresh(
-    previous: CodexSession,
-    generation: number,
-  ): Promise<CodexSession> {
-    let tokens: CodexTokenResponse;
-    try {
-      tokens = await this.client.refreshTokens(previous.refreshToken);
-    } catch (error) {
-      if (error instanceof CodexAuthError && error.kind === 'fatal') {
-        // Revoked / invalid refresh token: drop the dead session unless a
-        // newer login/sign-out supersedes it. The check runs inside the
-        // serialized mutation, so a slow delete can never erase a login
-        // whose store is queued behind it.
-        await this.mutateSession(async () => {
-          if (generation !== this.sessionGeneration) return;
-          this.log?.warn?.('Codex token refresh was rejected; signing out.');
-          await this.storage.delete();
-        });
-      }
-      throw error;
-    }
-    const session = this.buildSession(tokens, previous);
-    await this.mutateSession(async () => {
-      this.assertSameGeneration(generation);
-      await this.storeSession(session);
-    });
-    // Superseded while the store settled: the superseding write is queued
-    // after ours (so storage converges), but this caller must not hand out
-    // a token from the replaced session.
-    this.assertSameGeneration(generation);
-    return session;
-  }
-
   /** Map a raw token response into the canonical session, preserving prior fields. */
-  private buildSession(
+  protected buildSession(
     tokens: CodexTokenResponse,
     previous?: CodexSession,
   ): CodexSession {

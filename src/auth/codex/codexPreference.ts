@@ -5,46 +5,22 @@
  * ChatGPT, Codex-eligible OpenAI models route through the subscription instead
  * of the user's API key.
  */
-import { tryPlatform } from '@platform/platform';
-
+import { createSubscriptionPreference } from '../shared/subscriptionPreference';
 import {
   CODEX_PREFER_SUBSCRIPTION_KEY,
   CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY,
 } from './codexConstants';
-import type { ConfigTarget } from '@platform/interfaces';
+import type { SubscriptionPreferenceUpdate } from '../shared/subscriptionPreference';
 
-export interface CodexSubscriptionPreferenceUpdate {
-  readonly effective: boolean;
-  readonly target: ConfigTarget;
-}
+export type CodexSubscriptionPreferenceUpdate = SubscriptionPreferenceUpdate;
 
-/** Read a boolean preference, defaulting to off before platform init. */
-function readCodexFlag(key: string): boolean {
-  return tryPlatform()?.config.get<boolean>(key, false) ?? false;
-}
-
-function codexPreferenceUpdateTarget(key: string): ConfigTarget {
-  const inspection = tryPlatform()?.config.inspect<boolean>(key);
-  return inspection?.workspaceValue !== undefined ? 'workspace' : 'global';
-}
-
-/** Write a boolean preference at the scope that currently controls its value. */
-async function writeCodexFlag(
-  key: string,
-  enabled: boolean,
-): Promise<CodexSubscriptionPreferenceUpdate> {
-  const host = tryPlatform();
-  const target = codexPreferenceUpdateTarget(key);
-  if (!host) return { effective: false, target };
-
-  await host.config.update(key, enabled, target);
-  return { effective: readCodexFlag(key), target };
-}
+const preference = createSubscriptionPreference({
+  preferKey: CODEX_PREFER_SUBSCRIPTION_KEY,
+  toolUseOnlyKey: CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY,
+});
 
 /** Whether the user has switched on "prefer ChatGPT subscription". */
-export function isPreferCodexSubscription(): boolean {
-  return readCodexFlag(CODEX_PREFER_SUBSCRIPTION_KEY);
-}
+export const isPreferCodexSubscription = preference.isPreferSubscription;
 
 /**
  * Whether the ChatGPT subscription is restricted to tool-use agents (off by
@@ -52,20 +28,10 @@ export function isPreferCodexSubscription(): boolean {
  * the user's API key / relay — the Codex backend has no background mode and is
  * less stable for long workflow runs. Read per request by the Codex handler.
  */
-export function isCodexSubscriptionToolUseOnly(): boolean {
-  return readCodexFlag(CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY);
-}
+export const isCodexSubscriptionToolUseOnly = preference.isToolUseOnly;
 
 /** Update the "subscription for tool-use only" switch at the controlling scope. */
-export async function setCodexSubscriptionToolUseOnly(
-  enabled: boolean,
-): Promise<CodexSubscriptionPreferenceUpdate> {
-  return writeCodexFlag(CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY, enabled);
-}
+export const setCodexSubscriptionToolUseOnly = preference.setToolUseOnly;
 
 /** Update the preference at the scope that currently controls its value. */
-export async function setPreferCodexSubscription(
-  enabled: boolean,
-): Promise<CodexSubscriptionPreferenceUpdate> {
-  return writeCodexFlag(CODEX_PREFER_SUBSCRIPTION_KEY, enabled);
-}
+export const setPreferCodexSubscription = preference.setPreferSubscription;
