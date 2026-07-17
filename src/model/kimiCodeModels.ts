@@ -68,8 +68,6 @@ function buildKimiCodeModelConfig(
       credential: 'kimiCode',
       baseUrl: KIMI_CODE_OPENAI_BASE_URL,
       handlerProfile: 'openai-reasoning',
-      allowOpenRouter: false,
-      allowRelay: false,
     },
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,

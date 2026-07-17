@@ -317,8 +317,6 @@ export function modelHandlerCompatibilityKey(
     return 'ModelHandlerOpenRouterNative';
   }
   switch (resolveDirectModelHandlerProfile(config)) {
-    case 'anthropic':
-      return 'ModelHandlerAnthropic';
     case 'openai-reasoning':
       return 'ModelHandlerOpenAIReasoning';
     case undefined:

@@ -2,7 +2,7 @@ import { isApiProvider, type ApiProvider } from './apiProviders';
 
 import type { ModelConfig } from 'llm-zoo';
 
-export interface OpenRouterRoutingConfig {
+interface OpenRouterRoutingConfig {
   provider?: string;
   requiresResponsesAPI?: boolean;
   openRouterOnly: boolean;
@@ -10,20 +10,23 @@ export interface OpenRouterRoutingConfig {
   capabilities?: Pick<ModelConfig['capabilities'], 'reasoningMode'>;
 }
 
-/** Direct handler families for registry entries served outside their model provider's default API. */
-export type DirectModelHandlerProfile = 'anthropic' | 'openai-reasoning';
-
-/** Optional route metadata layered over llm-zoo's provider-family metadata. */
+/**
+ * Atomic managed-route metadata layered over llm-zoo's provider-family data.
+ * Its credential and endpoint stay paired, so managed routes always bypass
+ * OpenRouter and the included-access relay.
+ */
 export interface DirectModelRoutingConfig {
   readonly directAccess?: {
     readonly source: string;
     readonly credential: ApiProvider;
     readonly baseUrl: string;
-    readonly handlerProfile: DirectModelHandlerProfile;
-    readonly allowOpenRouter: boolean;
-    readonly allowRelay: boolean;
+    readonly handlerProfile: 'openai-reasoning';
   };
 }
+
+type DirectModelHandlerProfile = NonNullable<
+  DirectModelRoutingConfig['directAccess']
+>['handlerProfile'];
 
 export type ModelRoutingConfig = OpenRouterRoutingConfig &
   DirectModelRoutingConfig;
@@ -33,7 +36,7 @@ function isOpenRouterAccessSelected(
   useOpenRouter: boolean,
 ): boolean {
   return (
-    config.directAccess?.allowOpenRouter !== false &&
+    !config.directAccess &&
     !config.forceDirectProvider &&
     (config.openRouterOnly || useOpenRouter)
   );
@@ -96,7 +99,7 @@ export function resolveDirectModelBaseUrl(
 export function allowsModelRelay(
   config: Pick<ModelRoutingConfig, 'directAccess' | 'provider'>,
 ): boolean {
-  return config.directAccess?.allowRelay ?? true;
+  return !config.directAccess;
 }
 
 /** Return whether this model request should be routed through OpenRouter. */

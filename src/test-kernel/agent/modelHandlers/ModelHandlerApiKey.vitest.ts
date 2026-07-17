@@ -170,8 +170,6 @@ describe('ModelHandler.getApiKey resolution', () => {
           credential: 'kimiCode',
           baseUrl: 'https://api.kimi.com/coding/v1',
           handlerProfile: 'openai-reasoning',
-          allowOpenRouter: false,
-          allowRelay: false,
         },
       }),
     );
