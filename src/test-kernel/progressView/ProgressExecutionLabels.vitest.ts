@@ -25,7 +25,7 @@ const completedChild: StreamTabInfo = {
   kind: 'agent',
   name: 'reviewer#sub-1',
   label: 'reviewer',
-  agent: 'reviewer',
+  agent: 'builtInToolUse:reviewer',
   agentCategory: AgentCategory.ToolUse,
   creationTimestamp: 2,
   executionId: 'sub-1',

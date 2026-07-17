@@ -271,7 +271,7 @@ const subagentExecutionLabels$ = new Signal.Computed((): ExecutionLabels => {
     if (child.kind !== 'agent' || !child.parentStreamId || !child.executionId) {
       continue;
     }
-    const label = (child.agent ?? child.label).trim();
+    const label = child.label.trim();
     if (label && label !== child.executionId) {
       labels.set(child.executionId, label);
     }
