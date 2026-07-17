@@ -22,6 +22,8 @@ export const DELIVERY_TAG = {
   codexError: 'codex-error',
   claudeAgentResult: 'claude-agent-result',
   claudeAgentError: 'claude-agent-error',
+  workflowScriptResult: 'workflow-script-result',
+  workflowScriptError: 'workflow-script-error',
   githubWebhookActivity: 'github-webhook-activity',
   executionActivity: 'execution-activity',
 } as const;
@@ -54,6 +56,8 @@ export const DELIVERY_TAGS: readonly DeliveryTagEntry[] = [
   { tag: DELIVERY_TAG.codexError, escaped: true },
   { tag: DELIVERY_TAG.claudeAgentResult, escaped: true },
   { tag: DELIVERY_TAG.claudeAgentError, escaped: true },
+  { tag: DELIVERY_TAG.workflowScriptResult, escaped: true },
+  { tag: DELIVERY_TAG.workflowScriptError, escaped: true },
   { tag: DELIVERY_TAG.githubWebhookActivity, escaped: false },
   { tag: DELIVERY_TAG.executionActivity, escaped: false },
 ];
