@@ -1026,6 +1026,30 @@ describe('StreamSnapshotStore', () => {
     await recovered.deleteStream(STREAM);
   });
 
+  it('buffers sidecar writes until a staged deletion rolls back', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    store.setPlan(STREAM, PLAN);
+    await store.flush();
+
+    const deletion = await store.stageDeleteStream(STREAM);
+    store.setPlan(STREAM, null);
+    await store.flush();
+
+    expect(await StorageFS.exists(streamDataDir(STREAM))).toBe(false);
+
+    await deletion.rollback();
+    await store.flush();
+
+    const reloaded = new StreamSnapshotStore();
+    await reloaded.load([STREAM]);
+    expect(reloaded.getWorkPlan(STREAM)).toMatchObject({
+      todos: [],
+      plan: null,
+      planSummary: null,
+    });
+  });
+
   it('allows retry after staged rollback fails', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);

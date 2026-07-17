@@ -288,7 +288,16 @@ interface StreamRecord {
 
 export class StreamSnapshotStore {
   private readonly records = new Map<StreamTabId, StreamRecord>();
-  private readonly stagedDeletions = new Set<StreamTabId>();
+  /**
+   * Writes arriving while a stream's live directory is reversibly staged.
+   * Keeping the latest value per sidecar makes the staging rename a real
+   * transaction boundary: commit discards them, rollback replays them only
+   * after the live namespace has been restored.
+   */
+  private readonly stagedDeletions = new Map<
+    StreamTabId,
+    Map<string, unknown>
+  >();
 
   // -- Per (stream, category) serialized write locks -------------------------
   private readonly writeMutexes = new Map<string, Mutex>();
@@ -905,6 +914,17 @@ export class StreamSnapshotStore {
     if (record) record.kv = undefined;
   }
 
+  /** Restore writes buffered behind a staging attempt after live data returns. */
+  private replayStagedWrites(
+    stream: StreamTabId,
+    stagedWrites: ReadonlyMap<string, unknown>,
+  ): void {
+    this.stagedDeletions.delete(stream);
+    for (const [key, value] of stagedWrites) {
+      this.write(stream, key, value);
+    }
+  }
+
   /**
    * Atomically move a stream's sidecars out of the live namespace while
    * keeping its in-memory record available until the transcript registry
@@ -924,7 +944,8 @@ export class StreamSnapshotStore {
         `Snapshot deletion is already staged for stream ${stream}`,
       );
     }
-    this.stagedDeletions.add(stream);
+    const stagedWrites = new Map<string, unknown>();
+    this.stagedDeletions.set(stream, stagedWrites);
 
     try {
       // Let hydration finish before staging. A record with `seeded === false`
@@ -978,13 +999,14 @@ export class StreamSnapshotStore {
             if (staged && stagedDir && liveDir) {
               await StorageFS.rename(stagedDir, liveDir);
             }
+            this.replayStagedWrites(stream, stagedWrites);
           } finally {
             this.stagedDeletions.delete(stream);
           }
         },
       };
     } catch (error) {
-      this.stagedDeletions.delete(stream);
+      this.replayStagedWrites(stream, stagedWrites);
       throw error;
     }
   }
@@ -1266,6 +1288,11 @@ export class StreamSnapshotStore {
   }
 
   private write(stream: StreamTabId, key: string, value: unknown): void {
+    const stagedWrites = this.stagedDeletions.get(stream);
+    if (stagedWrites) {
+      stagedWrites.set(key, value);
+      return;
+    }
     const chainKey = `${stream}::${key}`;
     const version = this.streamVersion(stream);
     const mutex = this.writeMutexes.get(chainKey) ?? new Mutex();

@@ -142,10 +142,14 @@ export class SessionStores {
   }
 
   async deleteAll(): Promise<DeleteAllStreamsResult> {
-    const persistedStreams = await this.snapshots.listPersistedStreams();
-    const streamIds = unique([...persistedStreams, ...this.streamLogs.keys()]);
+    const [persistedStreams, stagedDeletions] = await Promise.all([
+      this.snapshots.listPersistedStreams(),
+      this.snapshots.listStagedDeletions(),
+    ]);
+    const snapshotStreams = unique([...persistedStreams, ...stagedDeletions]);
+    const streamIds = unique([...snapshotStreams, ...this.streamLogs.keys()]);
     const executionIdsByStream = new Map(this.snapshots.getExecutionIdMap());
-    for (const stream of persistedStreams) {
+    for (const stream of snapshotStreams) {
       const executionId = await this.snapshots.readPersistedExecutionId(stream);
       if (executionId) executionIdsByStream.set(stream, executionId);
       else {

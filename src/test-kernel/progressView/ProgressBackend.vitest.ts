@@ -2062,6 +2062,43 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('retains a stream already participating in staged deletion during bulk cleanup', async () => {
+    const { backend, session } = createIsolatedRecordingBackend();
+    const stream = 'tool@deepseek#a6966e' as StreamTabId;
+    const executionId = 'a6966e' as ExecutionId;
+    let stagedDeletion:
+      | Awaited<ReturnType<typeof backend.state.snapshots.stageDeleteStream>>
+      | undefined;
+
+    try {
+      await backend.state.snapshots.load([stream]);
+      backend.state.streamLogs.ensureStream(stream);
+      backend.state.setStreamTaskState(
+        stream,
+        toolUseTaskState('search', 'deepseekproT'),
+        executionId,
+      );
+      await writeExecutionConfig(executionId);
+      await backend.state.flush();
+      stagedDeletion = await backend.state.snapshots.stageDeleteStream(stream);
+
+      const retained = await backend.state.clearAll();
+
+      expect(retained).toEqual({
+        active: new Set(),
+        failed: new Set([stream]),
+      });
+      expect(backend.state.streamLogs.has(stream)).toBe(true);
+      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
+    } finally {
+      await stagedDeletion?.rollback();
+      await getExecutionStore(executionId).clear();
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('reconciles required cleanup and final execution cleanup independently', async () => {
     const failedStream = 'tool@deepseek#fa11ed6966' as StreamTabId;
     const incompleteStream = 'tool@deepseek#faded6966' as StreamTabId;
