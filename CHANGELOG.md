@@ -349,6 +349,19 @@ All notable changes to this project will be documented in this file.
 
 ### CLI
 
+#### New Features
+
+- **One home for subagents and tasks** — the always-visible session list now
+  hosts everything the separate subagent/task picker did: arrow to any
+  session or background task, Enter to focus a session or open a task's
+  detail view, `k` to kill, with each subagent's latest response summarized
+  on its row. The picker and its two chords are gone; `Esc-S` now focuses
+  the list (like Tab), and the list sits one breathing row below the input.
+- **Focus returns to the main agent automatically** — when the subagent you
+  are watching finishes and reports back, the view snaps back to the main
+  conversation where its report arrives; children waiting for your reply
+  keep the focus.
+
 #### Bug Fixes
 
 - **Ctrl-C reliably cancels queued-follow-up auto-resume** — stopping while an
