@@ -114,6 +114,8 @@ export interface DisplayLineOptions {
   /** When false, emit the full output instead of the head+tail slice.
    *  The ctrl+t print path sets this to include everything. */
   readonly elide?: boolean;
+  /** Include raw output for a caller with an explicit result surface. */
+  readonly showOutput?: boolean;
   /** Terminal columns when the projection must match rich rendered rows. */
   readonly width?: number;
 }
@@ -397,12 +399,13 @@ function buildStyledLines(
     opts.preferInputPreview,
   );
 
-  const output = opts.showOutput ? outputRows(toolUse, elide) : [];
+  const showOutput = options.showOutput === true || opts.showOutput;
+  const output = showOutput ? outputRows(toolUse, elide) : [];
   const exitCode =
     opts.showExitCode && toolUse.isError ? extractExitCode(toolUse) : undefined;
   const errorText = errorTextForDisplay(toolUse);
   const showNoOutput =
-    opts.showOutput &&
+    showOutput &&
     toolUse.status === TOOL_USE_STATUS.COMPLETED &&
     output.length === 0 &&
     !patchGroups &&
@@ -475,7 +478,7 @@ export function toolUseStyledLines(
   toolUse: NormalizedToolUse,
   options: StyledLineOptions = {},
 ): readonly ToolDisplayLine[] {
-  const key = `${options.elide === false ? 'f' : 'e'}|${options.width ?? 'd'}`;
+  const key = `${options.elide === false ? 'f' : 'e'}|${options.showOutput === true ? 'o' : 'h'}|${options.width ?? 'd'}`;
   let cached = styledLinesCache.get(toolUse);
   const hit = cached?.get(key);
   if (hit) return hit;

@@ -147,6 +147,7 @@ function entriesEqual(
   if (prev.role === 'tool' && next.role === 'tool') {
     return (
       prev.workflowScriptFacts === next.workflowScriptFacts &&
+      prev.workflowScriptOutcome === next.workflowScriptOutcome &&
       toolUseEqual(prev.toolUse, next.toolUse)
     );
   }
@@ -195,7 +196,13 @@ function renderLogEntry(
     const toolUse = normalizeToolUseData(entry.data);
     // Drop malformed tool entries rather than crash. The progress view
     // does the same — a bad payload shouldn't take down the transcript.
-    if (!toolUse) return null;
+    // A failed tool.end status is outside ToolUseLogSchema's historical
+    // in_progress/completed vocabulary. The direct runtime subscription has
+    // already projected that terminal workflow result into `prev`; retain it
+    // when the canonical log update therefore cannot be normalized.
+    if (!toolUse) {
+      return prev?.role === 'tool' && prev.workflowScriptOutcome ? prev : null;
+    }
     // Never finalize here. `finalizeSettledPrefix` promotes a tool row only
     // once it completes AND every entry before it has promoted, so a
     // fast tool can't jump ahead of still-streaming assistant text in
@@ -210,6 +217,9 @@ function renderLogEntry(
       toolUse,
       ...(prev?.role === 'tool' && prev.workflowScriptFacts
         ? { workflowScriptFacts: prev.workflowScriptFacts }
+        : {}),
+      ...(prev?.role === 'tool' && prev.workflowScriptOutcome
+        ? { workflowScriptOutcome: prev.workflowScriptOutcome }
         : {}),
     };
     if (prev && entriesEqual(prev, next)) {
@@ -267,7 +277,10 @@ function isSettledEntry(
     case 'process':
       return true;
     case 'tool':
-      return entry.toolUse.status === TOOL_USE_STATUS.COMPLETED;
+      return (
+        entry.toolUse.status === TOOL_USE_STATUS.COMPLETED ||
+        entry.workflowScriptFacts !== undefined
+      );
     case 'assistant':
       return (
         !entry.pendingEmbeddedSubagentFollowup && index < entries.length - 1

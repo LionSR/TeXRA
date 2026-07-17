@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Box, Static, Text } from 'ink';
 
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
-import { TOOL_USE_STATUS, type StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import { wrapAnsiToWidth } from '../render/ansiWrap';
@@ -33,7 +33,7 @@ import {
   type TranscriptPrintRequest,
 } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
-import { COLOR_HINT } from '../ui/colors';
+import { COLOR_ERROR, COLOR_HINT, COLOR_SUCCESS } from '../ui/colors';
 import { TOOL_OUTPUT_CORNER } from '../ui/glyphs';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import { isStaticTranscriptEntryAt } from './transcriptEntries';
@@ -232,9 +232,12 @@ function staticTranscriptItemRowCount(
       .length;
   }
   if (item.kind === 'workflowScriptCompletion') {
-    return Math.max(
-      1,
-      toolUseDisplayLines(item.entry.toolUse, { width }).slice(1).length,
+    return (
+      1 +
+      toolUseDisplayLines(item.entry.toolUse, {
+        showOutput: true,
+        width,
+      }).slice(1).length
     );
   }
   return transcriptEntryLayoutRows(
@@ -298,7 +301,23 @@ function StaticTranscriptItemContent({
     case 'workflowScriptCompletion':
       return (
         <EntryErrorBoundary label="workflow script result">
-          <ToolUseRow omitHeader toolUse={item.entry.toolUse} width={width} />
+          <Box flexDirection="column" paddingLeft={2}>
+            <Text
+              color={
+                item.entry.workflowScriptOutcome === 'failed'
+                  ? COLOR_ERROR
+                  : COLOR_SUCCESS
+              }
+            >
+              {`${TOOL_OUTPUT_CORNER} ${item.entry.workflowScriptOutcome === 'failed' ? 'Workflow script failed' : 'Workflow script completed'}`}
+            </Text>
+            <ToolUseRow
+              omitHeader
+              showOutput
+              toolUse={item.entry.toolUse}
+              width={width}
+            />
+          </Box>
         </EntryErrorBoundary>
       );
   }
@@ -416,10 +435,7 @@ export function appendStaticTranscriptItems({
       }
     }
     const completionId = `${entry.id}:completion`;
-    if (
-      entry.toolUse.status === TOOL_USE_STATUS.COMPLETED &&
-      !seen.has(completionId)
-    ) {
+    if (entry.workflowScriptOutcome !== undefined && !seen.has(completionId)) {
       appendItem({
         id: completionId,
         kind: 'workflowScriptCompletion',

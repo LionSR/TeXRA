@@ -121,15 +121,17 @@ function toolDisplayViewport(
 export const ToolUseRow = memo(function ToolUseRow({
   maxRows,
   omitHeader,
+  showOutput,
   toolUse,
   width,
 }: {
   readonly maxRows?: number;
   readonly omitHeader?: boolean;
+  readonly showOutput?: boolean;
   readonly toolUse: NormalizedToolUse;
   readonly width?: number;
 }): React.JSX.Element {
-  const allLines = toolUseStyledLines(toolUse, { width });
+  const allLines = toolUseStyledLines(toolUse, { showOutput, width });
   const lines = omitHeader === true ? allLines.slice(1) : allLines;
   const viewport = toolDisplayViewport(lines, maxRows);
   return (

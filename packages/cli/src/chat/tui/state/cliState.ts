@@ -73,8 +73,10 @@ export type ConversationEntry =
   | (ConversationEntryBase & {
       readonly role: 'tool';
       readonly toolUse: NormalizedToolUse;
-      /** Finalized progress emitted by one delegate_workflow_script call. */
+      /** Progress emitted by one delegate_workflow_script call. */
       readonly workflowScriptFacts?: readonly WorkflowScriptProgressFact[];
+      /** Terminal trace outcome, kept outside the narrower normalized schema. */
+      readonly workflowScriptOutcome?: WorkflowScriptOutcome;
     })
   | (ConversationEntryBase & {
       readonly role: 'process';
@@ -105,6 +107,16 @@ export type WorkflowScriptProgressFact =
       readonly message: string;
       readonly phaseId?: string;
     };
+
+type WorkflowScriptOutcome = 'completed' | 'failed';
+
+/** Transient ownership of workflow events by one open tool invocation. */
+export interface ActiveWorkflowScriptInvocation {
+  readonly logId: string;
+  readonly parentStageId: string | undefined;
+  readonly phaseIds: ReadonlySet<string>;
+  readonly nextFactIndex: number;
+}
 
 export interface SessionMeta {
   readonly agent: string;
@@ -157,6 +169,7 @@ export interface StreamSlice {
   readonly conversation: ConversationProgress | undefined;
   readonly roundStage?: RoundStage | undefined;
   readonly entries: readonly ConversationEntry[];
+  readonly activeWorkflowScript?: ActiveWorkflowScriptInvocation;
   readonly queuedFollowUps: number;
   readonly queuedFollowUpMessages: readonly string[];
   readonly activeProcesses: readonly ActiveChildInfo[];
