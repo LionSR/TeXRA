@@ -2,7 +2,13 @@
 // to the real terminal. Used to verify the ConversationPane viewport without
 // needing API access. Exits on Ctrl-C.
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -22,6 +28,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { platform, tryPlatform } from '@platform/platform';
 import {
   AgentCategory,
@@ -329,6 +336,7 @@ const HARNESS_VISIBLE_WORKFLOW_AGENTS = parseList(
   process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS,
 );
 const HARNESS_VISIBLE_MODELS = parseList(process.env.HARNESS_VISIBLE_MODELS);
+const HARNESS_MEMORY_FILES = parseList(process.env.HARNESS_MEMORY_FILES);
 
 if (SHOW_PROJECT_SKILL) {
   seedHarnessProjectSkill();
@@ -342,6 +350,23 @@ await initLocalCliPlatform({
   storageRoot: path.join(HARNESS_CWD, '.texra-storage'),
   helperModel: 'harness-model',
 });
+// Seed workspace-storage memory files so `/memory` has rows to list. Files
+// get descending mtimes in list order, so the first name is the newest row
+// and the listing order is deterministic.
+if (HARNESS_MEMORY_FILES.length > 0) {
+  const memoryRoot = path.join(
+    platform().storage.getStoragePath(),
+    MEMORY_STORAGE_DIR,
+  );
+  const newestEpochSeconds = Date.now() / 1000;
+  HARNESS_MEMORY_FILES.forEach((name, index) => {
+    const filePath = path.join(memoryRoot, name);
+    mkdirSync(path.dirname(filePath), { recursive: true });
+    writeFileSync(filePath, `Harness memory ${name}.\n`);
+    const mtime = newestEpochSeconds - index * 60;
+    utimesSync(filePath, mtime, mtime);
+  });
+}
 initializeDefaultSession({ transcripts: await StreamLogStore.open() });
 const harnessFollowUpQueue = defaultSession().followUps.acquire(STREAM_ID);
 for (const followUp of QUEUED_FOLLOW_UPS) {

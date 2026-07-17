@@ -1265,6 +1265,58 @@ const SCENARIOS = [
     maxLineColumns: 60,
   },
   {
+    name: 'memory-form',
+    cols: 100,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_MEMORY_FILES: 'project.md||ideas.md||notes/plan.md',
+    },
+    keys: ['/memory', '\r'],
+    frame: 'viewport',
+    settleMs: ASYNC_FORM_SETTLE_MS,
+    expect: [
+      '/memory',
+      'Choose a memory to preview in the transcript.',
+      '/memories/project.md',
+      '/memories/ideas.md',
+      '/memories/notes/plan.md',
+      '↑/↓ navigate',
+      '1-3/Enter preview',
+      'Esc close',
+    ],
+    unexpect: ['No memory files found.', '/memory - error'],
+  },
+  {
+    // Short terminals collapse /memory to the shared compact single-row
+    // variant instead of overflowing the viewport.
+    name: 'compact-memory-form',
+    rows: 12,
+    cols: 80,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_MEMORY_FILES: 'a.md||b.md||c.md||d.md||e.md||f.md',
+    },
+    keys: ['/memory', '\r'],
+    frame: 'viewport',
+    settleMs: ASYNC_FORM_SETTLE_MS,
+    expect: [
+      '/memory',
+      '/memories/a.md',
+      '+5 more',
+      '↑/↓ navigate',
+      '1-6/Enter preview',
+      'Esc close',
+    ],
+    unexpect: [
+      'Choose a memory to preview in the transcript.',
+      'No memory files found.',
+      '/memory - error',
+    ],
+    maxBlankLinesBetween: [
+      { from: 'entry-4 chat history line', to: '/memory', max: 2 },
+    ],
+  },
+  {
     name: 'compact-tools-form',
     rows: 12,
     cols: 80,
