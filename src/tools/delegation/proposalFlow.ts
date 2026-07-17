@@ -37,6 +37,7 @@ import {
   getDelegationAgentsForScope,
 } from '@tools/delegationAgentAvailability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local imports - delegation
 import { executeSubagent } from './subagentExecution';
@@ -98,11 +99,9 @@ function summarizeProposal(
   if (proposal.memories.length > 0) {
     parts.push(`Memories: ${proposal.memories.join(', ')}`);
   }
-  const instrPreview =
-    proposal.instruction.length > 120
-      ? `${proposal.instruction.slice(0, 117)}...`
-      : proposal.instruction;
-  parts.push(`Instruction: "${instrPreview}"`);
+  parts.push(
+    `Instruction: "${truncateWithEllipsis(proposal.instruction, 120)}"`,
+  );
   return parts.join(', ');
 }
 
