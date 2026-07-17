@@ -102,11 +102,14 @@ export function createWorkflowScriptAgentRunner(
           // Run-storage references can disappear during recovery. Validate
           // the resolved inputs, not merely the paths supplied by the script,
           // so a stale reference cannot launch a useless empty-envelope run.
+          // Run-fatal, not a per-call failure: a plain error would resolve
+          // this agent() to null inside parallel()/pipeline(), silently
+          // filtering away the very misuse this guard exists to surface.
           if (
             inputFiles.length === 0 &&
             (agent.defaultOutputFiles ?? []).length === 0
           ) {
-            throw new Error(
+            throw new WorkflowRunAbortError(
               `Workflow agent '${agent.name}' edits files: pass options.inputFiles ` +
                 `with files that still exist (its result carries output files and ` +
                 `diffs, not response text).`,
