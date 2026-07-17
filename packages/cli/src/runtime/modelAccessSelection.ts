@@ -74,17 +74,6 @@ export async function selectCliModelAccessRoute(
   }
 
   const status = await getCodexStatus();
-  if (status.signedIn && isPreferCodexSubscription()) {
-    const update = await setPreferCodexSubscription(false);
-    invalidateModelOptionsCache();
-    return {
-      apiMode: effectiveCliApiMode(context),
-      message: update.effective
-        ? `Prefer ChatGPT subscription remains enabled because a more specific setting overrides ${update.target} config.`
-        : 'Prefer ChatGPT subscription disabled for Codex models.',
-    };
-  }
-
   let accountLabel = status.email ?? status.accountId ?? 'your account';
   if (!status.signedIn) {
     const init = { device: false, noBrowser: false };
