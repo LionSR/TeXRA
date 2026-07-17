@@ -4,7 +4,6 @@
 // switch the live conversation to a compatible model for future turns.
 
 import { Box, Text, useInput } from 'ink';
-import { useEffect, useRef } from 'react';
 
 import {
   emptyModelListMessageForCliMode,
@@ -17,7 +16,7 @@ import {
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import { formatCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import type { AgentCategory } from '@shared/schemas/agent';
-import { Select, selectIndexForHotkeyInput } from '../ui/Select';
+import { Select } from '../ui/Select';
 import { KeyHints } from '../ui/KeyHints';
 import {
   CompactFormKeyHints,
@@ -30,6 +29,7 @@ import {
   type SelectWindowSize,
 } from './_shared/selectWindow';
 import { useAsyncListForm } from './_shared/useAsyncListForm';
+import { usePendingListFormSelection } from './_shared/ListForm';
 import { isPlainReturnInput } from '../input/inputKeys';
 
 const TUI_MODEL_EMPTY_RECOVERY = {
@@ -102,8 +102,6 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
       onClose: props.onClose,
       isEmpty: (models) => !models.some((model) => model.available),
     });
-  const appliedPendingInput = useRef<string | undefined>(undefined);
-
   const models = data ?? [];
   const items = modelSelectItemsForCliMode(
     models,
@@ -127,26 +125,15 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     props.onClose();
   }
 
-  useEffect(() => {
-    if (loading || error || !props.selectable || !pendingInput) return;
-    if (appliedPendingInput.current === pendingInput) return;
-    appliedPendingInput.current = pendingInput;
-
-    const index = selectIndexForHotkeyInput(pendingInput);
-    clearPendingInput();
-    if (index == null) return;
-
-    const choice = items[index];
-    if (choice && !choice.disabled) props.onSelect?.(choice.value);
-  }, [
-    clearPendingInput,
-    error,
-    items,
+  usePendingListFormSelection({
     loading,
+    error,
     pendingInput,
-    props.onSelect,
-    props.selectable,
-  ]);
+    clearPendingInput,
+    items,
+    enabled: props.selectable,
+    onSelect: handleSelect,
+  });
 
   const transient = renderAsyncListFormTransient({
     loading,

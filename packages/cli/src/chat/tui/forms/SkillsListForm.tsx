@@ -2,27 +2,15 @@
 // registry that feeds prompt injection and builds activation payloads from the
 // shared runtime formatter instead of duplicating skill wiring in the UI layer.
 
-import { Box, Text } from 'ink';
+import { Text } from 'ink';
 
 import { formatRuntimeSkillActivation } from '@skills/runtimeSkills';
 import { readCliRuntimeSkills, skillListRecord } from '@cli/runtime/skills';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-import { COLOR_WARNING } from '../ui/colors';
-import { KeyHints } from '../ui/KeyHints';
-import { Select, type SelectItem } from '../ui/Select';
-import {
-  CompactFormKeyHints,
-  FormFrame,
-  renderAsyncListFormTransient,
-} from './_shared/FormFrame';
-import {
-  computeSelectWindowSize,
-  isCompactFormRows,
-  type SelectWindowSize,
-} from './_shared/selectWindow';
-import { useAsyncListForm } from './_shared/useAsyncListForm';
+import { AsyncListForm } from './_shared/ListForm';
+import type { SelectItem } from '../ui/Select';
 import type {
   DiscoverSkillSourcesResult,
   SourcedSkill,
@@ -84,97 +72,38 @@ function skillImportIssueSummary(issueCount: number): string | undefined {
   return formatResultCount(issueCount, 'import issue');
 }
 
-export function skillsSelectWindow(args: {
-  readonly availableRows: number | undefined;
-  readonly itemCount: number;
-  readonly hasIssues: boolean;
-}): SelectWindowSize {
-  return computeSelectWindowSize({
-    availableRows: args.availableRows,
-    itemCount: args.itemCount,
-    chromeRows: args.hasIssues ? 7 : 6,
-  });
-}
-
 export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
-  const { data, loading, error } = useAsyncListForm<DiscoverSkillSourcesResult>(
-    {
-      load: readCliRuntimeSkills,
-      onClose: props.onClose,
-      isEmpty: (result) => result.skills.length === 0,
-    },
-  );
-
-  const transient = renderAsyncListFormTransient({
-    loading,
-    error,
-    title: '/skills',
-    loadingLabel: 'Loading skills...',
-    showCloseHint: false,
-  });
-  if (transient) return transient;
-
-  const skills = data?.skills ?? [];
-  const issueSummary = skillImportIssueSummary(data?.errors.length ?? 0);
-
-  if (skills.length === 0) {
-    return (
-      <FormFrame color={COLOR_WARNING} title="/skills" showCloseHint={false}>
-        <Text>No discoverable skills found.</Text>
-        {issueSummary ? <Text dimColor>{issueSummary}</Text> : null}
-      </FormFrame>
-    );
-  }
-
-  const selectWindow = skillsSelectWindow({
-    availableRows: props.availableRows,
-    itemCount: skills.length,
-    hasIssues: issueSummary !== undefined,
-  });
-  const items = skillSelectItemsForTui(skills);
-
-  if (isCompactFormRows(props.availableRows)) {
-    return (
-      <FormFrame title="/skills" showCloseHint={false}>
-        <Text dimColor wrap="truncate-end">
-          Select a skill to activate.
-        </Text>
-        {issueSummary ? <Text dimColor>{issueSummary}</Text> : null}
-        <Select
-          items={items}
-          maxVisibleItems={1}
-          showOverflow={false}
-          onSelect={props.onSelect}
-          onCancel={props.onClose}
-        />
-        <CompactFormKeyHints
-          primary={{ key: '1-9/a-z/Enter', action: 'activate' }}
-        />
-      </FormFrame>
-    );
-  }
-
   return (
-    <FormFrame title="/skills" showCloseHint={false}>
-      <Text dimColor>Select a skill to activate it.</Text>
-      {issueSummary ? <Text dimColor>{issueSummary}</Text> : null}
-      <Select
-        items={items}
-        maxVisibleItems={selectWindow.maxVisibleItems}
-        showOverflow={selectWindow.showOverflow}
-        onSelect={props.onSelect}
-        onCancel={props.onClose}
-      />
-      <Box marginTop={1}>
-        <KeyHints
-          hints={[
-            { key: '↑/↓', action: 'navigate' },
-            { key: 'Enter', action: 'activate' },
-            { key: 'Esc', action: 'close' },
-          ]}
-          confirmCancel={false}
-        />
-      </Box>
-    </FormFrame>
+    <AsyncListForm<DiscoverSkillSourcesResult, SkillActivation>
+      title="/skills"
+      loadingLabel="Loading skills..."
+      load={readCliRuntimeSkills}
+      items={(result) => skillSelectItemsForTui(result.skills)}
+      isEmpty={(result) => result.skills.length === 0}
+      availableRows={props.availableRows}
+      description={<Text dimColor>Select a skill to activate it.</Text>}
+      detailFor={(result) => {
+        const summary = skillImportIssueSummary(result.errors.length);
+        return summary ? <Text dimColor>{summary}</Text> : undefined;
+      }}
+      detailRowsFor={(result) => (result.errors.length > 0 ? 1 : 0)}
+      compactDetailFor={(result) => {
+        const summary = skillImportIssueSummary(result.errors.length);
+        return (
+          <>
+            <Text dimColor wrap="truncate-end">
+              Select a skill to activate.
+            </Text>
+            {summary ? <Text dimColor>{summary}</Text> : null}
+          </>
+        );
+      }}
+      emptyMessage="No discoverable skills found."
+      emptyShowCloseHint={false}
+      action="activate"
+      showTransientCloseHint={false}
+      onSelect={props.onSelect}
+      onCancel={props.onClose}
+    />
   );
 }
