@@ -69,6 +69,7 @@ import {
 import { getApiKey, type ApiProvider } from '@model/apiProviders';
 import { isGpt5ModelName } from '@model/modelNames';
 import {
+  allowsModelRelay,
   resolveDirectModelApiKeyProvider,
   resolveDirectModelBaseUrl,
   resolveModelSource,
@@ -481,13 +482,15 @@ export abstract class ModelHandler<
   protected async getApiKey(): Promise<string> {
     const serverSideKeyService = getServerSideKeyService();
     const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
+    const canRouteThroughRelay = allowsModelRelay(this.config);
 
     // Prime caches before using sync methods. This ensures that after reload/continue,
     // the tier config and access status are fetched before shouldUseServerSideKeys() is called.
     // Without this, sync methods return false due to empty caches, causing incorrect tier errors.
-    const hasServerAccess = useIncludedAccess
-      ? await serverSideKeyService.canUseServerSideKeys()
-      : false;
+    const hasServerAccess =
+      useIncludedAccess && canRouteThroughRelay
+        ? await serverSideKeyService.canUseServerSideKeys()
+        : false;
 
     const rules: readonly {
       readonly reason: string;
@@ -498,7 +501,9 @@ export abstract class ModelHandler<
         reason:
           'Quota auto-switch means the relay was selected but is no longer usable.',
         matches: () =>
-          useIncludedAccess && serverSideKeyService.wasQuotaAutoSwitched(),
+          canRouteThroughRelay &&
+          useIncludedAccess &&
+          serverSideKeyService.wasQuotaAutoSwitched(),
         resolve: () => {
           throw new Error(
             `Model "${this.config.name}" cannot use the TeXRA relay because your monthly relay quota is exhausted. ` +

@@ -4,12 +4,12 @@
  * TeXRA uses Kimi Code's OpenAI-compatible endpoint. Protocol selection is a
  * transport concern rather than a second set of user-facing model entries.
  *
- * Both protocols accept the same three model IDs:
+ * The managed service exposes three model IDs:
  * - k3
  * - kimi-for-coding
  * - kimi-for-coding-highspeed
  *
- * These entries retain Moonshot as the underlying model family while one
+ * These entries retain Moonshot as the underlying model family, while one
  * direct-access profile owns their Kimi Code credential, endpoint, handler,
  * model-source grouping, and relay/OpenRouter policy.
  */
@@ -40,8 +40,7 @@ interface KimiCodeModelConfig extends ModelConfig, DirectModelRoutingConfig {
   readonly directAccess: NonNullable<DirectModelRoutingConfig['directAccess']>;
 }
 
-const K3_CONTEXT_WINDOW = 1_048_576;
-const K27_CONTEXT_WINDOW = 262_144;
+const KIMI_CODE_CONTEXT_WINDOW = 262_144;
 const DEFAULT_MAX_OUTPUT_TOKENS = 16_384;
 
 /**
@@ -93,18 +92,18 @@ export const KIMI_CODE_MODEL_CONFIGS: Readonly<
     'kimiCodeK3',
     'k3',
     'Kimi Code K3',
-    K3_CONTEXT_WINDOW,
+    KIMI_CODE_CONTEXT_WINDOW,
   ),
   kimiCodeCoding: buildKimiCodeModelConfig(
     'kimiCodeCoding',
     'kimi-for-coding',
     'Kimi Code K2.7',
-    K27_CONTEXT_WINDOW,
+    KIMI_CODE_CONTEXT_WINDOW,
   ),
   kimiCodeCodingFast: buildKimiCodeModelConfig(
     'kimiCodeCodingFast',
     'kimi-for-coding-highspeed',
     'Kimi Code K2.7 HighSpeed',
-    K27_CONTEXT_WINDOW,
+    KIMI_CODE_CONTEXT_WINDOW,
   ),
 };

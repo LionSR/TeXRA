@@ -251,7 +251,7 @@ async function resolveModelAvailability(
       : availabilityStatus('missing-key');
   }
 
-  if (ctx.relayQuotaExhausted) {
+  if (allowsModelRelay(config) && ctx.relayQuotaExhausted) {
     return availabilityStatus('relay-quota-exhausted');
   }
 
@@ -262,7 +262,11 @@ async function resolveModelAvailability(
   // Fall back to personal API keys when the user opted out of included access
   // OR they aren't authenticated for it (avoids showing every model as
   // disabled for unauthenticated users with the default setting).
-  if (ctx.useIncludedAccess && ctx.hasServerAccess) {
+  if (
+    allowsModelRelay(config) &&
+    ctx.useIncludedAccess &&
+    ctx.hasServerAccess
+  ) {
     return availabilityStatus('not-included');
   }
 
@@ -386,7 +390,10 @@ export async function getModelUnavailableReason(
   if (!directProvider) {
     return `Model "${model}" is provided by ${providerName}, which does not use provider API keys. Use a host that supports ${providerName} models or choose another model.`;
   }
-  return `Model "${model}" requires your ${providerName} API key. Provide it, or enable included access.`;
+  const nextStep = allowsModelRelay(config)
+    ? 'Provide it, or enable included access.'
+    : 'Provide it to continue.';
+  return `Model "${model}" requires your ${providerName} API key. ${nextStep}`;
 }
 
 /** Build typed model option data for a single model. */

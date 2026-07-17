@@ -26,11 +26,17 @@ describe('shouldRouteModelThroughOpenRouter', () => {
       expected: false,
     },
     {
-      name: 'does not override an explicit direct-key provider',
+      name: 'does not override a managed direct route',
       config: {
         openRouterOnly: false,
-        requiresResponsesAPI: false,
-        apiKeyProvider: 'kimiCode' as const,
+        directAccess: {
+          source: 'kimiCode',
+          credential: 'kimiCode' as const,
+          baseUrl: 'https://api.kimi.com/coding/v1',
+          handlerProfile: 'openai-reasoning' as const,
+          allowOpenRouter: false,
+          allowRelay: false,
+        },
       },
       useOpenRouter: true,
       expected: false,

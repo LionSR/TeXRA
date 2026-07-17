@@ -12,11 +12,8 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import * as serverKeysModule from '@auth/serverKeys';
-import {
-  apiKeySecretName,
-  invalidateApiKeyCache,
-  type ApiProvider,
-} from '@model/apiProviders';
+import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
+import type { DirectModelRoutingConfig } from '@model/openRouterRouting';
 
 // Local imports - modules stubbed by these tests
 import * as providerConfigModule from '@utils/config/providerConfig';
@@ -27,13 +24,11 @@ class ExposedKeyHandler extends ModelHandlerOpenRouterNative {
   }
 }
 
-type ApiKeyOverrideConfig = ModelConfig & {
-  readonly apiKeyProvider?: ApiProvider;
-};
+type TestModelConfig = ModelConfig & DirectModelRoutingConfig;
 
 function buildConfig(
-  overrides: Partial<ApiKeyOverrideConfig> = {},
-): ApiKeyOverrideConfig {
+  overrides: Partial<TestModelConfig> = {},
+): TestModelConfig {
   return {
     name: 'gpt-5.5',
     label: 'GPT-5.5',
@@ -107,30 +102,6 @@ describe('ModelHandler.getApiKey resolution', () => {
     assert.equal(relayToken.mock.calls.length, 1);
   });
 
-  it('uses an explicit direct-key provider before relay access', async () => {
-    await initFakePlatform({
-      [apiKeySecretName('kimiCode')]: 'kimi-code-key',
-    });
-    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(true);
-    const { canUseServerSideKeys } = stubServerSideKeyService({
-      useIncludedAccess: true,
-      hasServerAccess: true,
-      shouldUseServerSideKeys: true,
-      quotaAutoSwitched: true,
-    });
-    const relayToken = vi
-      .spyOn(SupabaseClient, 'getRelayAccessToken')
-      .mockResolvedValue('relay-token');
-
-    const handler = new ExposedKeyHandler(
-      buildConfig({ apiKeyProvider: 'kimiCode' }),
-    );
-
-    assert.equal(await handler.exposeGetApiKey(), 'kimi-code-key');
-    assert.equal(canUseServerSideKeys.mock.calls.length, 0);
-    assert.equal(relayToken.mock.calls.length, 0);
-  });
-
   it('blocks relay quota exhaustion before reading any key', async () => {
     vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(false);
     stubServerSideKeyService({
@@ -169,6 +140,38 @@ describe('ModelHandler.getApiKey resolution', () => {
     );
 
     assert.equal(await handler.exposeGetApiKey(), 'openrouter-key');
+  });
+
+  it('uses a managed direct key without consulting relay state', async () => {
+    await initFakePlatform({
+      [apiKeySecretName('kimiCode')]: 'kimi-code-key',
+    });
+    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(true);
+    const { canUseServerSideKeys } = stubServerSideKeyService({
+      useIncludedAccess: true,
+      hasServerAccess: true,
+      shouldUseServerSideKeys: true,
+      quotaAutoSwitched: true,
+    });
+    const relayToken = vi
+      .spyOn(SupabaseClient, 'getRelayAccessToken')
+      .mockResolvedValue('relay-token');
+    const handler = new ExposedKeyHandler(
+      buildConfig({
+        directAccess: {
+          source: 'kimiCode',
+          credential: 'kimiCode',
+          baseUrl: 'https://api.kimi.com/coding/v1',
+          handlerProfile: 'openai-reasoning',
+          allowOpenRouter: false,
+          allowRelay: false,
+        },
+      }),
+    );
+
+    assert.equal(await handler.exposeGetApiKey(), 'kimi-code-key');
+    assert.equal(canUseServerSideKeys.mock.calls.length, 0);
+    assert.equal(relayToken.mock.calls.length, 0);
   });
 
   it('rejects tier-mismatched included access instead of falling back to personal keys', async () => {

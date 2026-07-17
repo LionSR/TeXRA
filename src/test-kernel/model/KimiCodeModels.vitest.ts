@@ -7,7 +7,13 @@ import { modelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
 
 // Local imports - model
 import { KIMI_CODE_MODEL_CONFIGS } from '@model/kimiCodeModels';
-import { resolveModelApiKeyProvider } from '@model/openRouterRouting';
+import {
+  allowsModelRelay,
+  resolveDirectModelBaseUrl,
+  resolveModelApiKeyProvider,
+  resolveModelSource,
+  shouldRouteModelThroughOpenRouter,
+} from '@model/openRouterRouting';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import {
   resolveSetupModel,
@@ -15,65 +21,36 @@ import {
 } from '@model/setupModelDefaults';
 
 describe('Kimi Code model registry', () => {
-  it('exposes six TeXRA ids covering both protocols', () => {
-    expect(Object.keys(KIMI_CODE_MODEL_CONFIGS).sort()).toEqual(
-      [
-        'kimiCodeK3',
-        'kimiCodeCoding',
-        'kimiCodeCodingFast',
-        'kimiCodeK3Anthropic',
-        'kimiCodeCodingAnthropic',
-        'kimiCodeCodingFastAnthropic',
-      ].sort(),
-    );
+  it('exposes one entry for each user-selectable model', () => {
+    expect(Object.keys(KIMI_CODE_MODEL_CONFIGS).toSorted()).toEqual([
+      'kimiCodeCoding',
+      'kimiCodeCodingFast',
+      'kimiCodeK3',
+    ]);
   });
 
   it.each([
-    ['kimiCodeK3', 'k3', 'openai', 'https://api.kimi.com/coding/v1'],
-    [
-      'kimiCodeCoding',
-      'kimi-for-coding',
-      'openai',
+    ['kimiCodeK3', 'k3'],
+    ['kimiCodeCoding', 'kimi-for-coding'],
+    ['kimiCodeCodingFast', 'kimi-for-coding-highspeed'],
+  ])('maps %s to managed model %s', (texraId, fullName) => {
+    const config = KIMI_CODE_MODEL_CONFIGS[texraId];
+    expect(config).toBeDefined();
+    expect(config.fullName).toBe(fullName);
+    expect(config.provider).toBe(ModelProvider.MOONSHOT);
+    expect(config.contextWindow).toBe(262_144);
+    expect(resolveModelSource(config)).toBe('kimiCode');
+    expect(resolveDirectModelBaseUrl(config)).toBe(
       'https://api.kimi.com/coding/v1',
-    ],
-    [
-      'kimiCodeCodingFast',
-      'kimi-for-coding-highspeed',
-      'openai',
-      'https://api.kimi.com/coding/v1',
-    ],
-    ['kimiCodeK3Anthropic', 'k3', 'anthropic', 'https://api.kimi.com/coding/'],
-    [
-      'kimiCodeCodingAnthropic',
-      'kimi-for-coding',
-      'anthropic',
-      'https://api.kimi.com/coding/',
-    ],
-    [
-      'kimiCodeCodingFastAnthropic',
-      'kimi-for-coding-highspeed',
-      'anthropic',
-      'https://api.kimi.com/coding/',
-    ],
-  ])(
-    'maps %s to model %s via %s protocol',
-    (texraId, fullName, protocol, baseUrl) => {
-      const config = KIMI_CODE_MODEL_CONFIGS[texraId];
-      expect(config).toBeDefined();
-      expect(config.fullName).toBe(fullName);
-      expect(config.kimiCodeProtocol).toBe(protocol);
-      expect(config.baseUrl).toBe(baseUrl);
-      expect(config.provider).toBe(ModelProvider.MOONSHOT);
-      expect(config.apiKeyProvider).toBe('kimiCode');
-    },
-  );
+    );
+  });
 
   it('resolves Kimi Code entries through the runtime registry', () => {
     expect(getRuntimeModelConfig('kimiCodeK3')).toBe(
       KIMI_CODE_MODEL_CONFIGS.kimiCodeK3,
     );
-    expect(getRuntimeModelConfig('kimiCodeCodingAnthropic')).toBe(
-      KIMI_CODE_MODEL_CONFIGS.kimiCodeCodingAnthropic,
+    expect(getRuntimeModelConfig('kimiCodeCodingFast')).toBe(
+      KIMI_CODE_MODEL_CONFIGS.kimiCodeCodingFast,
     );
   });
 
@@ -83,64 +60,44 @@ describe('Kimi Code model registry', () => {
 });
 
 describe('Kimi Code routing', () => {
-  it('resolves the API key provider to kimiCode', () => {
+  it('keeps the direct Kimi Code route when OpenRouter is globally enabled', () => {
     expect(
       resolveModelApiKeyProvider(KIMI_CODE_MODEL_CONFIGS.kimiCodeK3, false),
     ).toBe('kimiCode');
     expect(
-      resolveModelApiKeyProvider(
-        KIMI_CODE_MODEL_CONFIGS.kimiCodeK3Anthropic,
-        false,
-      ),
-    ).toBe('kimiCode');
-    expect(
       resolveModelApiKeyProvider(KIMI_CODE_MODEL_CONFIGS.kimiCodeK3, true),
     ).toBe('kimiCode');
+    expect(
+      shouldRouteModelThroughOpenRouter(
+        KIMI_CODE_MODEL_CONFIGS.kimiCodeK3,
+        true,
+      ),
+    ).toBe(false);
   });
 
-  it('routes OpenAI-protocol models through the Moonshot/Kimi handler', () => {
-    // OpenAI-protocol Kimi Code entries ride the Moonshot provider slot; the
-    // Kimi handler is OpenAI-compatible and applies the Kimi Code base URL.
+  it('uses the shared OpenAI reasoning handler', () => {
     expect(
       modelHandlerCompatibilityKey(
         KIMI_CODE_MODEL_CONFIGS.kimiCodeK3,
         false,
         false,
       ),
-    ).toBe('ModelHandlerKimi');
-    expect(
-      modelHandlerCompatibilityKey(
-        KIMI_CODE_MODEL_CONFIGS.kimiCodeK3,
-        true,
-        false,
-      ),
-    ).toBe('ModelHandlerKimi');
+    ).toBe('ModelHandlerOpenAIReasoning');
   });
 
-  it('routes Anthropic-protocol models through the Anthropic handler', () => {
-    expect(
-      modelHandlerCompatibilityKey(
-        KIMI_CODE_MODEL_CONFIGS.kimiCodeK3Anthropic,
-        false,
-        false,
-      ),
-    ).toBe('ModelHandlerAnthropic');
-    expect(
-      modelHandlerCompatibilityKey(
-        KIMI_CODE_MODEL_CONFIGS.kimiCodeK3Anthropic,
-        true,
-        false,
-      ),
-    ).toBe('ModelHandlerAnthropic');
+  it('never sends managed-service credentials through the TeXRA relay', () => {
+    expect(allowsModelRelay(KIMI_CODE_MODEL_CONFIGS.kimiCodeCoding)).toBe(
+      false,
+    );
   });
 });
 
 describe('Kimi Code setup defaults', () => {
   it('includes a setup model for the kimiCode provider', () => {
-    expect(SETUP_MODEL_BY_PROVIDER.kimiCode).toBe('kimiCodeK3');
+    expect(SETUP_MODEL_BY_PROVIDER.kimiCode).toBe('kimiCodeCoding');
   });
 
   it('resolves the preferred setup model to a live Kimi Code entry', () => {
-    expect(resolveSetupModel('kimiCode')).toBe('kimiCodeK3');
+    expect(resolveSetupModel('kimiCode')).toBe('kimiCodeCoding');
   });
 });
