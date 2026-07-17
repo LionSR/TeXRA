@@ -1,9 +1,10 @@
-import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
+import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import {
   getRuntimeModelConfig,
-  runtimeModelConfigEntries,
+  staticModelConfigEntries,
 } from './runtimeModelRegistry';
+import { resolveModelSource } from './openRouterRouting';
 import { isCodexSubscriptionEligible } from './providerCapabilities';
 
 /**
@@ -26,11 +27,31 @@ const PREFERRED_SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
   openRouter: 'sonnet46T',
   xai: 'grok4',
   moonshot: 'kimi25T',
-  kimiCode: 'kimiCodeK3',
+  kimiCode: 'kimiCodeCoding',
   dashscope: 'qwen3max',
   minimax: 'minimax01',
   glm: 'glm5',
   meta: 'musespark11',
+};
+
+/**
+ * Model source each setup credential may probe. `openRouter` has no static
+ * source of its own, so its preferred Anthropic model falls back within that
+ * family; managed direct services such as Kimi Code retain their own source.
+ */
+const FALLBACK_MODEL_SOURCE: Readonly<Record<string, string>> = {
+  anthropic: ModelProvider.ANTHROPIC,
+  openai: ModelProvider.OPENAI,
+  google: ModelProvider.GOOGLE,
+  deepseek: ModelProvider.DEEPSEEK,
+  openRouter: ModelProvider.ANTHROPIC,
+  xai: ModelProvider.XAI,
+  moonshot: ModelProvider.MOONSHOT,
+  kimiCode: 'kimiCode',
+  dashscope: ModelProvider.DASHSCOPE,
+  minimax: ModelProvider.MINIMAX,
+  glm: ModelProvider.GLM,
+  meta: ModelProvider.META,
 };
 
 /** Whether `config` is safe to hand to the setup assistant for `setupProvider`. */
@@ -50,37 +71,22 @@ function isUsableSetupModel(
   return true;
 }
 
-/** Credential namespace a fallback candidate would use for this setup flow. */
-function setupCredentialProvider(
-  config: ModelConfig,
-  setupProvider: string,
-): string | undefined {
-  if (setupProvider === 'openRouter') {
-    return config.provider === 'anthropic' ? 'openRouter' : undefined;
-  }
-  return (
-    (config as { readonly apiKeyProvider?: string }).apiKeyProvider ??
-    config.provider
-  );
-}
-
 /**
  * A still-usable model for `setupProvider`, preferring a non-deprecated one.
- * `MODEL_CONFIGS` iteration order is llm-zoo's own (not a recency contract),
- * so this is "some live model," not necessarily the newest release.
+ * Static registry order is not a recency contract, so this is "some live
+ * model," not necessarily the newest release.
  */
 function fallbackSetupModel(setupProvider: string): string | undefined {
-  const candidates = runtimeModelConfigEntries()
+  const modelSource = FALLBACK_MODEL_SOURCE[setupProvider];
+  if (!modelSource) return undefined;
+
+  const candidates = staticModelConfigEntries()
     .map(([, config]) => config)
-    .filter((config) => {
-      // OpenRouter has no direct provider identity; retain its curated
-      // Anthropic fallback pool while all direct-key providers match the
-      // credential namespace the model will actually use.
-      return (
-        setupCredentialProvider(config, setupProvider) === setupProvider &&
-        isUsableSetupModel(config, setupProvider)
-      );
-    });
+    .filter(
+      (config) =>
+        resolveModelSource(config) === modelSource &&
+        isUsableSetupModel(config, setupProvider),
+    );
   const preferNonDeprecated = candidates.find((config) => !config.deprecated);
   return (preferNonDeprecated ?? candidates[0])?.name;
 }
@@ -97,12 +103,7 @@ function resolveWithPreferred(
   setupProvider: string,
   preferred: string,
 ): string {
-  if (
-    isUsableSetupModel(
-      getRuntimeModelConfig(preferred) ?? MODEL_CONFIGS[preferred],
-      setupProvider,
-    )
-  ) {
+  if (isUsableSetupModel(getRuntimeModelConfig(preferred), setupProvider)) {
     return preferred;
   }
   return fallbackSetupModel(setupProvider) ?? preferred;

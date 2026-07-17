@@ -97,6 +97,7 @@ export enum GlobalStateKey {
   STREAMING_XAI = 'texra.streaming.xai',
   STREAMING_DEEPSEEK = 'texra.streaming.deepseek',
   STREAMING_MOONSHOT = 'texra.streaming.moonshot',
+  STREAMING_KIMI_CODE = 'texra.streaming.kimiCode',
   STREAMING_DASHSCOPE = 'texra.streaming.dashscope',
   STREAMING_MINIMAX = 'texra.streaming.minimax',
   STREAMING_GLM = 'texra.streaming.glm',

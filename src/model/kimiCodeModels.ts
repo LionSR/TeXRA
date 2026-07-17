@@ -1,28 +1,26 @@
 /**
  * Kimi Code managed-service models.
  *
- * Kimi Code membership provides an API Key that works with two protocols:
- * - OpenAI-compatible: https://api.kimi.com/coding/v1
- * - Anthropic-compatible: https://api.kimi.com/coding/
+ * TeXRA uses Kimi Code's OpenAI-compatible endpoint. Protocol selection is a
+ * transport concern rather than a second set of user-facing model entries.
  *
  * Both protocols accept the same three model IDs:
  * - k3
  * - kimi-for-coding
  * - kimi-for-coding-highspeed
  *
- * These entries piggy-back on the Moonshot provider slot (the underlying models
- * are Kimi models) but carry a custom `baseUrl` and `apiKeyProvider` so they
- * authenticate with the Kimi Code API key and route to the Kimi Code endpoints
- * instead of the pay-as-you-go Moonshot Platform.
+ * These entries retain Moonshot as the underlying model family while one
+ * direct-access profile owns their Kimi Code credential, endpoint, handler,
+ * model-source grouping, and relay/OpenRouter policy.
  */
 import {
   DEFAULT_MODEL_CAPABILITIES,
   ModelProvider,
   type ModelConfig,
 } from 'llm-zoo';
+import type { DirectModelRoutingConfig } from '@model/openRouterRouting';
 
 const KIMI_CODE_OPENAI_BASE_URL = 'https://api.kimi.com/coding/v1';
-const KIMI_CODE_ANTHROPIC_BASE_URL = 'https://api.kimi.com/coding/';
 
 /** Recognized Kimi Code model IDs. */
 const KIMI_CODE_MODEL_IDS = [
@@ -33,18 +31,13 @@ const KIMI_CODE_MODEL_IDS = [
 
 type KimiCodeModelId = (typeof KIMI_CODE_MODEL_IDS)[number];
 
-type KimiCodeProtocol = 'openai' | 'anthropic';
-
 /**
  * Marker fields that live on top of llm-zoo's ModelConfig. They are consumed by
  * the model handler and by availability checks; TypeScript sees them via the
  * local {@link KimiCodeModelConfig} type and casts at the boundary.
  */
-interface KimiCodeModelConfig extends ModelConfig {
-  /** Which API-key namespace holds the Kimi Code key. */
-  readonly apiKeyProvider: 'kimiCode';
-  /** Which Kimi Code wire protocol this entry uses. */
-  readonly kimiCodeProtocol: KimiCodeProtocol;
+interface KimiCodeModelConfig extends ModelConfig, DirectModelRoutingConfig {
+  readonly directAccess: NonNullable<DirectModelRoutingConfig['directAccess']>;
 }
 
 const K3_CONTEXT_WINDOW = 1_048_576;
@@ -52,22 +45,14 @@ const K27_CONTEXT_WINDOW = 262_144;
 const DEFAULT_MAX_OUTPUT_TOKENS = 16_384;
 
 /**
- * Build a Kimi Code model config for one protocol.
- * TeXRA model ids encode the protocol so users can choose explicitly.
+ * Build a Kimi Code model config on the managed service's direct route.
  */
 function buildKimiCodeModelConfig(
   texraId: string,
   modelId: KimiCodeModelId,
-  protocol: KimiCodeProtocol,
   label: string,
   contextWindow: number,
-  supportsReasoning: boolean,
 ): KimiCodeModelConfig {
-  const baseUrl =
-    protocol === 'openai'
-      ? KIMI_CODE_OPENAI_BASE_URL
-      : KIMI_CODE_ANTHROPIC_BASE_URL;
-
   return {
     name: texraId,
     fullName: modelId,
@@ -79,72 +64,47 @@ function buildKimiCodeModelConfig(
     inputPrice: 0,
     outputPrice: 0,
     openRouterOnly: false,
-    baseUrl,
-    apiKeyProvider: 'kimiCode',
-    kimiCodeProtocol: protocol,
+    directAccess: {
+      source: 'kimiCode',
+      credential: 'kimiCode',
+      baseUrl: KIMI_CODE_OPENAI_BASE_URL,
+      handlerProfile: 'openai-reasoning',
+      allowOpenRouter: false,
+      allowRelay: false,
+    },
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
-      supportsReasoning,
+      supportsReasoning: true,
       supportsFunctionCalling: true,
       supportsVision: true,
       supportsTokenCounting: false,
     },
-  } as KimiCodeModelConfig;
+  } satisfies KimiCodeModelConfig;
 }
 
 /**
  * Static registry of Kimi Code models. These are merged into the runtime model
  * registry so they appear in model selection and can be requested by id.
  */
-export const KIMI_CODE_MODEL_CONFIGS: Record<string, KimiCodeModelConfig> = {
-  // OpenAI-compatible entries
+export const KIMI_CODE_MODEL_CONFIGS: Readonly<
+  Record<string, KimiCodeModelConfig>
+> = {
   kimiCodeK3: buildKimiCodeModelConfig(
     'kimiCodeK3',
     'k3',
-    'openai',
-    'Kimi Code K3 (OpenAI)',
+    'Kimi Code K3',
     K3_CONTEXT_WINDOW,
-    true,
   ),
   kimiCodeCoding: buildKimiCodeModelConfig(
     'kimiCodeCoding',
     'kimi-for-coding',
-    'openai',
-    'Kimi Code K2.7 (OpenAI)',
+    'Kimi Code K2.7',
     K27_CONTEXT_WINDOW,
-    true,
   ),
   kimiCodeCodingFast: buildKimiCodeModelConfig(
     'kimiCodeCodingFast',
     'kimi-for-coding-highspeed',
-    'openai',
-    'Kimi Code K2.7 HighSpeed (OpenAI)',
+    'Kimi Code K2.7 HighSpeed',
     K27_CONTEXT_WINDOW,
-    true,
-  ),
-  // Anthropic-compatible entries
-  kimiCodeK3Anthropic: buildKimiCodeModelConfig(
-    'kimiCodeK3Anthropic',
-    'k3',
-    'anthropic',
-    'Kimi Code K3 (Anthropic)',
-    K3_CONTEXT_WINDOW,
-    true,
-  ),
-  kimiCodeCodingAnthropic: buildKimiCodeModelConfig(
-    'kimiCodeCodingAnthropic',
-    'kimi-for-coding',
-    'anthropic',
-    'Kimi Code K2.7 (Anthropic)',
-    K27_CONTEXT_WINDOW,
-    true,
-  ),
-  kimiCodeCodingFastAnthropic: buildKimiCodeModelConfig(
-    'kimiCodeCodingFastAnthropic',
-    'kimi-for-coding-highspeed',
-    'anthropic',
-    'Kimi Code K2.7 HighSpeed (Anthropic)',
-    K27_CONTEXT_WINDOW,
-    true,
   ),
 };

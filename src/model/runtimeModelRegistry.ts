@@ -172,6 +172,17 @@ export function getRuntimeModelConfig(model: string): ModelConfig | undefined {
   );
 }
 
+/** All static model entries owned by TeXRA and llm-zoo. */
+export function staticModelConfigEntries(): readonly (readonly [
+  string,
+  ModelConfig,
+])[] {
+  return [
+    ...Object.entries(MODEL_CONFIGS),
+    ...Object.entries(KIMI_CODE_MODEL_CONFIGS),
+  ];
+}
+
 /** Resolve a model after ensuring native discovery has run in this host. */
 export async function resolveRuntimeModelConfig(
   model: string,
@@ -271,8 +282,7 @@ export function runtimeModelConfigEntries(): readonly (readonly [
   ModelConfig,
 ])[] {
   return [
-    ...Object.entries(MODEL_CONFIGS),
-    ...Object.entries(KIMI_CODE_MODEL_CONFIGS),
+    ...staticModelConfigEntries(),
     ...[...runtimeModels].map(([id, entry]) => [id, entry.config] as const),
   ];
 }

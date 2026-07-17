@@ -11,7 +11,6 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 import {
   apiKeyExists,
   apiKeyExistsUncached,
-  isApiProvider,
   type ApiProvider,
 } from './apiProviders';
 import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from './codexSubscriptionRouting';
@@ -21,7 +20,10 @@ import {
 } from './modelOptionsBasic';
 import { getVisibleModels } from './modelOptionsState';
 import {
+  allowsModelRelay,
   isOpenRouterRoutingUnsupported,
+  resolveDirectModelApiKeyProvider,
+  resolveModelSource,
   shouldRouteModelThroughOpenRouter,
 } from './openRouterRouting';
 import {
@@ -150,10 +152,8 @@ async function getPersonalAccessKindForModel(
   config: ModelConfig,
   ctx: ModelAvailabilityContext,
 ): Promise<PersonalModelAccessKind | null> {
-  const { provider } = config;
-  if (!isApiProvider(provider)) {
-    return null;
-  }
+  const provider = resolveDirectModelApiKeyProvider(config);
+  if (!provider) return null;
 
   try {
     if (await ctx.apiKeyExists(provider)) {
@@ -189,6 +189,7 @@ function canUseIncludedAccessForModel(
   ctx: ModelAvailabilityContext,
 ): boolean {
   return (
+    allowsModelRelay(config) &&
     ctx.hasServerAccess &&
     ctx.serverSideKeyService.isProviderOnServer(config.provider) &&
     ctx.serverSideKeyService.canUseModelSync(model)
@@ -379,9 +380,10 @@ export async function getModelUnavailableReason(
   }
 
   // Personal key mode or unauthenticated — missing key or keyless provider.
-  const providerName =
-    PROVIDER_DISPLAY_NAMES[config.provider] ?? config.provider;
-  if (!isApiProvider(config.provider)) {
+  const directProvider = resolveDirectModelApiKeyProvider(config);
+  const modelSource = resolveModelSource(config) ?? config.provider;
+  const providerName = PROVIDER_DISPLAY_NAMES[modelSource] ?? modelSource;
+  if (!directProvider) {
     return `Model "${model}" is provided by ${providerName}, which does not use provider API keys. Use a host that supports ${providerName} models or choose another model.`;
   }
   return `Model "${model}" requires your ${providerName} API key. Provide it, or enable included access.`;

@@ -23,6 +23,7 @@ import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from '@model/cod
 import { isGpt5ModelName } from '@model/modelNames';
 import {
   isOpenRouterRoutingUnsupported,
+  resolveDirectModelHandlerProfile,
   shouldRouteModelThroughOpenRouter,
 } from '@model/openRouterRouting';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
@@ -315,15 +316,13 @@ export function modelHandlerCompatibilityKey(
   if (shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
     return 'ModelHandlerOpenRouterNative';
   }
-
-  // Kimi Code Anthropic-compatible entries share the Moonshot provider slot
-  // but use the Anthropic handler, so their conversation-format key must
-  // match the handler that will actually serve them.
-  if (
-    config.provider === ModelProvider.MOONSHOT &&
-    (config as { kimiCodeProtocol?: string }).kimiCodeProtocol === 'anthropic'
-  ) {
-    return 'ModelHandlerAnthropic';
+  switch (resolveDirectModelHandlerProfile(config)) {
+    case 'anthropic':
+      return 'ModelHandlerAnthropic';
+    case 'openai-reasoning':
+      return 'ModelHandlerOpenAIReasoning';
+    case undefined:
+      break;
   }
 
   return PROVIDER_HANDLER_ROUTES[config.provider].compatibilityKey ?? undefined;
@@ -567,6 +566,16 @@ async function createModelHandlerForResolvedCompatibilityKey(
       );
     }
 
+    case 'ModelHandlerOpenAIReasoning': {
+      logger.debug(CHANNEL, 'Using OpenAI-compatible reasoning handler');
+      const { ReasoningModelHandlerOpenAI } =
+        await import('@agent/modelHandlers/openai/reasoningModelHandlerOpenAI');
+      return finalizeModelHandler(
+        new ReasoningModelHandlerOpenAI(config),
+        'ModelHandlerOpenAIReasoning',
+      );
+    }
+
     case 'ModelHandlerGoogleInteractions': {
       logger.debug(CHANNEL, 'Using Google Interactions API Handler');
       const { ModelHandlerGoogleInteractions } =
@@ -594,24 +603,6 @@ async function createModelHandlerForResolvedCompatibilityKey(
     default: {
       // Direct provider handler. The key is the provider's registered route key.
       assertGoogleInteractionsRoutable(config, useOpenRouter);
-
-      // Kimi Code models ride the Moonshot provider slot but may request the
-      // Anthropic-compatible endpoint. Credential routing remains centralized
-      // in ModelHandler through the config's explicit apiKeyProvider.
-      const kimiCodeProtocol = (config as { kimiCodeProtocol?: string })
-        .kimiCodeProtocol;
-      if (
-        config.provider === ModelProvider.MOONSHOT &&
-        kimiCodeProtocol === 'anthropic'
-      ) {
-        const { ModelHandlerAnthropic } =
-          await import('@agent/modelHandlers/anthropic/modelHandlerAnthropic');
-        return finalizeModelHandler(
-          new ModelHandlerAnthropic(config),
-          'ModelHandlerAnthropic',
-        );
-      }
-
       const route = PROVIDER_HANDLER_ROUTES[config.provider];
       if (!route.load || !route.compatibilityKey) {
         throw new Error(`Unsupported model provider: ${config.provider}`);

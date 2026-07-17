@@ -68,6 +68,11 @@ import {
 // Local imports - model
 import { getApiKey, type ApiProvider } from '@model/apiProviders';
 import { isGpt5ModelName } from '@model/modelNames';
+import {
+  resolveDirectModelApiKeyProvider,
+  resolveDirectModelBaseUrl,
+  resolveModelSource,
+} from '@model/openRouterRouting';
 
 // Local imports - logger
 import { MESSAGE_TYPES } from '@shared/schemas';
@@ -449,7 +454,7 @@ export abstract class ModelHandler<
   }
 
   /** Fetch an API key for the given provider, throwing `errorMessage` on failure. */
-  protected async fetchApiKeyOrThrow(
+  private async fetchApiKeyOrThrow(
     provider: ApiProvider,
     errorMessage: string,
   ): Promise<string> {
@@ -474,18 +479,6 @@ export abstract class ModelHandler<
    * @throws Error if required API key is missing from environment
    */
   protected async getApiKey(): Promise<string> {
-    const apiKeyProvider = (this.config as { apiKeyProvider?: ApiProvider })
-      .apiKeyProvider;
-    if (apiKeyProvider) {
-      this.logger.debug(
-        `Using explicit API key provider ${apiKeyProvider} for ${this.config.name}`,
-      );
-      return this.fetchApiKeyOrThrow(
-        apiKeyProvider,
-        `Missing API key for ${apiKeyProvider}. Set your ${apiKeyProvider} API key to continue.`,
-      );
-    }
-
     const serverSideKeyService = getServerSideKeyService();
     const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
 
@@ -556,11 +549,18 @@ export abstract class ModelHandler<
       {
         reason: 'Personal-key mode uses the configured provider key.',
         matches: () => true,
-        resolve: () =>
-          this.fetchApiKeyOrThrow(
-            this.config.provider.toLowerCase() as ApiProvider,
-            `Missing API key for ${this.config.provider}. Set your ${this.config.provider} API key to continue.`,
-          ),
+        resolve: () => {
+          const directProvider = resolveDirectModelApiKeyProvider(this.config);
+          if (!directProvider) {
+            throw new Error(
+              `Model "${this.config.name}" has no direct API-key provider.`,
+            );
+          }
+          return this.fetchApiKeyOrThrow(
+            directProvider,
+            `Missing API key for ${directProvider}. Set your ${directProvider} API key to continue.`,
+          );
+        },
       },
     ];
 
@@ -583,7 +583,8 @@ export abstract class ModelHandler<
     return resolveBaseUrl({
       provider: this.config.provider,
       openRouterOnly: this.config.openRouterOnly,
-      customBaseUrl: this.config.baseUrl,
+      customBaseUrl:
+        resolveDirectModelBaseUrl(this.config) ?? this.config.baseUrl,
       requiresResponsesAPI: this.config.requiresResponsesAPI,
       forceDirectProvider: (this.config as { forceDirectProvider?: boolean })
         .forceDirectProvider,
@@ -742,7 +743,9 @@ export abstract class ModelHandler<
       return getProviderStreaming('openrouter');
     if (this.config.provider === ModelProvider.OTHERS)
       return getGlobalStreaming();
-    return getProviderStreaming(this.config.provider);
+    return getProviderStreaming(
+      resolveModelSource(this.config) ?? this.config.provider,
+    );
   }
 
   /** Runtime combinator (provider identity × reasoning capability), read by
