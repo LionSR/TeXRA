@@ -53,6 +53,10 @@ const ModelAvailabilityKindSchema = z.enum([
   // distinct from relay `included-access` because it is the user's own
   // credential and runs regardless of relay-vs-personal API mode.
   'subscription-access',
+  // Kimi Code (Moonshot coding-subscription) access via the user's own OAuth
+  // session or console API key. Distinct from `subscription-access` (ChatGPT)
+  // so each subscription surface can label itself.
+  'kimi-code-access',
   // Editor-hosted Copilot access is keyless but distinct from ChatGPT and the
   // TeXRA relay. Permission state is reported by the VS Code host.
   'copilot-access',

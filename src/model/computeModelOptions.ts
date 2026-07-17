@@ -3,6 +3,10 @@ import { LRUCache } from 'lru-cache';
 import { platform } from '@platform/platform';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { isCodexSignedIn, isPreferCodexSubscription } from '@auth/codex';
+import {
+  isKimiCodeSignedIn,
+  isPreferKimiCodeSubscription,
+} from '@auth/kimiCode';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
@@ -14,6 +18,11 @@ import {
   type ApiProvider,
 } from './apiProviders';
 import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from './codexSubscriptionRouting';
+import {
+  isKimiCodeExclusiveModel,
+  resolveKimiCodeProviderCapabilities,
+  resolveKimiCodeRoute,
+} from './kimiCodeSubscriptionRouting';
 import {
   buildBaseModelOption,
   buildBasicModelOptionsData,
@@ -108,6 +117,11 @@ const AVAILABILITY_STATUS_FIELDS: Record<
     available: true,
     requiresKey: false,
   },
+  'kimi-code-access': {
+    label: 'Kimi Code',
+    available: true,
+    requiresKey: false,
+  },
   'copilot-access': {
     label: 'Copilot subscription',
     available: true,
@@ -179,6 +193,11 @@ interface ModelAvailabilityContext {
   /** Whether the user is signed in with ChatGPT (only resolved when the
    * "prefer subscription" switch is on). */
   codexSignedIn: boolean;
+  /** Whether a Kimi Code OAuth session exists AND the "prefer Kimi Code
+   * subscription" switch is on. */
+  kimiCodeOAuthReady: boolean;
+  /** Whether a Kimi Code console API key is stored. */
+  kimiCodeKeySet: boolean;
   agentCategory?: AgentCategory;
   serverSideKeyService: ModelOptionsServerAccess;
 }
@@ -243,6 +262,29 @@ async function resolveModelAvailability(
     }
   }
 
+  // Kimi Code (Moonshot coding subscription). Exclusive plan models are served
+  // ONLY by this endpoint, so they resolve here even under the OpenRouter
+  // toggle and never fall through to the moonshot-key ladder — an open-platform
+  // key does not work on the coding endpoint.
+  const kimiCodeRoute = resolveKimiCodeRoute(
+    config,
+    ctx.useOpenRouter,
+    { oauthReady: ctx.kimiCodeOAuthReady, keySet: ctx.kimiCodeKeySet },
+    ctx.agentCategory,
+  );
+  if (kimiCodeRoute) {
+    return {
+      ...availabilityStatus('kimi-code-access'),
+      providerCapabilities: resolveKimiCodeProviderCapabilities(config),
+    };
+  }
+  if (isKimiCodeExclusiveModel(config)) {
+    return {
+      ...availabilityStatus('missing-key'),
+      label: 'Kimi Code sign-in or API key required',
+    };
+  }
+
   // OpenRouter routing is intentionally outside included access; a configured
   // OpenRouter key is the only ready state for these calls.
   if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
@@ -286,12 +328,17 @@ async function buildAvailabilityContext(
       ? apiKeyExists(access.secrets, provider)
       : apiKeyExistsUncached(access.secrets, provider);
   const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
-  const [hasOpenRouter, hasServerAccess, codexSignedIn] = await Promise.all([
-    hasApiKey('openRouter'),
-    serverSideKeyService.canUseServerSideKeys(),
-    // Only worth a secrets read when the "prefer subscription" switch is on.
-    isPreferCodexSubscription() ? isCodexSignedIn() : Promise.resolve(false),
-  ]);
+  const [hasOpenRouter, hasServerAccess, codexSignedIn, kimiCodeOAuthReady, kimiCodeKeySet] =
+    await Promise.all([
+      hasApiKey('openRouter'),
+      serverSideKeyService.canUseServerSideKeys(),
+      // Only worth a secrets read when the "prefer subscription" switch is on.
+      isPreferCodexSubscription() ? isCodexSignedIn() : Promise.resolve(false),
+      isPreferKimiCodeSubscription()
+        ? isKimiCodeSignedIn()
+        : Promise.resolve(false),
+      hasApiKey('kimiCode'),
+    ]);
   return {
     apiKeyExists: hasApiKey,
     hasOpenRouter,
@@ -302,6 +349,8 @@ async function buildAvailabilityContext(
     useOpenRouter: access.useOpenRouter,
     useIncludedAccess,
     codexSignedIn,
+    kimiCodeOAuthReady,
+    kimiCodeKeySet,
     agentCategory: access.agentCategory,
     serverSideKeyService,
   };
@@ -539,18 +588,30 @@ function visibleModelsForAccess(
   context: ModelAvailabilityContext,
 ): readonly string[] {
   const models = new Set([...configuredModels, ...availableRuntimeModelIds()]);
-  if (!context.codexSignedIn) return [...models];
+  const injectKimiCode = context.kimiCodeOAuthReady || context.kimiCodeKeySet;
+  if (!context.codexSignedIn && !injectKimiCode) return [...models];
 
   for (const [model, config] of runtimeModelConfigEntries()) {
-    if (
-      !config.retired &&
-      !config.deprecated &&
+    if (config.retired || config.deprecated) continue;
+    const codexEligible =
+      context.codexSignedIn &&
       resolveCodexSubscriptionCapabilitiesForAgentCategory(
         config,
         context.useOpenRouter,
         context.agentCategory,
-      ) !== null
-    ) {
+      ) !== null;
+    const kimiCodeEligible =
+      injectKimiCode &&
+      resolveKimiCodeRoute(
+        config,
+        context.useOpenRouter,
+        {
+          oauthReady: context.kimiCodeOAuthReady,
+          keySet: context.kimiCodeKeySet,
+        },
+        context.agentCategory,
+      ) !== null;
+    if (codexEligible || kimiCodeEligible) {
       models.add(model);
     }
   }

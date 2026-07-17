@@ -455,7 +455,7 @@ export abstract class ModelHandler<
   }
 
   /** Fetch an API key for the given provider, throwing `errorMessage` on failure. */
-  private async fetchApiKeyOrThrow(
+  protected async fetchApiKeyOrThrow(
     provider: ApiProvider,
     errorMessage: string,
   ): Promise<string> {

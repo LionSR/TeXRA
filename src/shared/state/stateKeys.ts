@@ -132,6 +132,8 @@ export enum GlobalStateKey {
 
   // Coding plan settings
   GLM_CODING_PLAN = 'texra.glm.codingPlan',
+  /** Stable device UUID sent as X-Msh-Device-Id on Kimi Code OAuth/API calls. */
+  KIMI_CODE_DEVICE_ID = 'texra.kimiCode.deviceId',
 
   // Routing settings
   USE_OPENROUTER = 'texra.useOpenRouter',

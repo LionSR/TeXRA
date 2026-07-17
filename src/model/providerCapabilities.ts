@@ -2,7 +2,7 @@ import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import type { UsageRoute } from '@shared/schemas';
 
-type ProviderAuthMode = 'chatgpt-subscription';
+type ProviderAuthMode = 'chatgpt-subscription' | 'kimi-code-subscription';
 
 export interface OpenAIResponseProviderCapabilities {
   readonly backgroundMode: 'base' | 'disabled';

@@ -115,6 +115,7 @@ const INCLUDED_ACCESS_STATUS_BY_AVAILABILITY = {
   'openrouter-key': 'included: unavailable; OpenRouter key set',
   'missing-key': 'included: unavailable; missing API key',
   'subscription-access': 'chatgpt subscription',
+  'kimi-code-access': 'kimi code subscription',
   'copilot-access': 'copilot: unavailable in CLI',
   'copilot-consent-required': 'copilot: unavailable in CLI',
   'copilot-unavailable': 'copilot: unavailable in CLI',
