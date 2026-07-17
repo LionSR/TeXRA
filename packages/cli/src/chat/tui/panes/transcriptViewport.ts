@@ -1,5 +1,6 @@
 // Pure viewport math for bounded pending transcript panes.
 
+import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import {
   transcriptEntryLayout,
   transcriptEntryLayoutRows,
@@ -20,22 +21,30 @@ function estimateEntryRows(computeRows: () => number): number {
 export function estimateTranscriptEntryRows(
   entry: ConversationEntry,
   width?: number,
+  executionLabels?: ExecutionLabels,
 ): number {
   return estimateEntryRows(() =>
-    transcriptEntryLayoutRows(transcriptEntryLayout(entry, { width })),
+    transcriptEntryLayoutRows(
+      transcriptEntryLayout(entry, { executionLabels, width }),
+    ),
   );
 }
 
 function estimateLiveTranscriptEntryRows(
   entry: ConversationEntry,
   width?: number,
+  executionLabels?: ExecutionLabels,
 ): number {
   // Live mode captures the pending-pane paint contract: assistant text uses
   // its capped raw tail, while rich tool/process rows keep one descriptor
   // line per terminal row instead of being reflowed like plain projections.
   return estimateEntryRows(() =>
     transcriptEntryLayoutRows(
-      transcriptEntryLayout(entry, { mode: 'live', width }),
+      transcriptEntryLayout(entry, {
+        executionLabels,
+        mode: 'live',
+        width,
+      }),
     ),
   );
 }
@@ -52,6 +61,7 @@ export function selectTranscriptEntriesForViewport(
   entries: readonly ConversationEntry[],
   maxRows: number,
   width?: number,
+  executionLabels?: ExecutionLabels,
 ): TranscriptEntrySelection {
   if (!Number.isFinite(maxRows) || maxRows <= 0) {
     return { entries: [], rowLimits: new Map(), usedRows: 0 };
@@ -63,7 +73,11 @@ export function selectTranscriptEntriesForViewport(
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
     if (!isRenderableTranscriptEntry(entry)) continue;
-    const entryRows = estimateLiveTranscriptEntryRows(entry, width);
+    const entryRows = estimateLiveTranscriptEntryRows(
+      entry,
+      width,
+      executionLabels,
+    );
     if (usedRows + entryRows > maxRows) {
       if (selected.length === 0) {
         selected.unshift(entry);

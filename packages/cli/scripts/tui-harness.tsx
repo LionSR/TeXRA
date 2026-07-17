@@ -2014,9 +2014,7 @@ function renderHarnessApp(): React.JSX.Element {
       canStopActiveRun={() => canInterrupt}
       colorEnabled={HARNESS_COLOR_ENABLED}
       onInterruptActive={markHarnessInterrupted}
-      onTranscriptViewportChange={
-        viewportController.handleTranscriptViewportChange
-      }
+      onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={handleHarnessCtrlC}
     />
   );

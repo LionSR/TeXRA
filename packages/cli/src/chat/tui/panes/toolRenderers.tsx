@@ -10,6 +10,10 @@
 
 // Local imports - shared schemas and utilities
 import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
+import {
+  executionsSubagentSummary,
+  type ExecutionLabels,
+} from '@shared/tools/executionsDisplay';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import { isObject } from '@utils/core';
 import {
@@ -120,6 +124,8 @@ export interface DisplayLineOptions {
   readonly neutralStatus?: boolean;
   /** Terminal columns when the projection must match rich rendered rows. */
   readonly width?: number;
+  /** Retained subagent identities used by executions wait/view headers. */
+  readonly executionLabels?: ExecutionLabels;
 }
 
 export type StyledLineOptions = DisplayLineOptions;
@@ -238,11 +244,13 @@ function toolHeaderPreview(
   toolUse: NormalizedToolUse,
   maxPreview: number,
   preferInputPreview: boolean,
+  summaryOverride?: string,
 ): string {
   if (maxPreview <= 0) return '';
+  const headerSummary = summaryOverride ?? toolUse.headerSummary;
   const sourceText = preferInputPreview
-    ? previewInput(toolUse.input) || toolUse.headerSummary || ''
-    : toolUse.headerSummary || previewInput(toolUse.input) || '';
+    ? previewInput(toolUse.input) || headerSummary || ''
+    : headerSummary || previewInput(toolUse.input) || '';
   return sourceText ? truncateSummaryToWidth(sourceText, maxPreview) : '';
 }
 
@@ -388,6 +396,7 @@ function toolRowOptions(
 function buildStyledLines(
   toolUse: NormalizedToolUse,
   options: StyledLineOptions,
+  executionSummary: string | undefined,
 ): readonly ToolDisplayLine[] {
   const elide = options.elide !== false;
   const patchGroups = toolUsePatchGroups(toolUse);
@@ -400,6 +409,7 @@ function buildStyledLines(
       ? MAX_HEADER_PREVIEW
       : toolHeaderPreviewBudget(options.width, opts.displayName),
     opts.preferInputPreview,
+    executionSummary,
   );
 
   const showOutput = options.showOutput === true || opts.showOutput;
@@ -481,11 +491,15 @@ export function toolUseStyledLines(
   toolUse: NormalizedToolUse,
   options: StyledLineOptions = {},
 ): readonly ToolDisplayLine[] {
-  const key = `${options.elide === false ? 'f' : 'e'}|${options.showOutput === true ? 'o' : 'h'}|${options.neutralStatus === true ? 'n' : 's'}|${options.width ?? 'd'}`;
+  const executionSummary =
+    toolUse.toolName === 'executions' && options.executionLabels
+      ? executionsSubagentSummary(toolUse.input, options.executionLabels)
+      : undefined;
+  const key = `${options.elide === false ? 'f' : 'e'}|${options.showOutput === true ? 'o' : 'h'}|${options.neutralStatus === true ? 'n' : 's'}|${options.width ?? 'd'}|${executionSummary ?? ''}`;
   let cached = styledLinesCache.get(toolUse);
   const hit = cached?.get(key);
   if (hit) return hit;
-  const lines = buildStyledLines(toolUse, options);
+  const lines = buildStyledLines(toolUse, options, executionSummary);
   if (!cached) {
     cached = new Map();
     styledLinesCache.set(toolUse, cached);

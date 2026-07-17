@@ -27,10 +27,7 @@ import {
   sessionHeaderIdentityLine,
 } from '@cli/chat/tui/panes/StaticConversationTranscript';
 import { staticScrollbackTarget } from '@cli/chat/tui/appLayout';
-import {
-  transcriptViewportChange,
-  transcriptViewportKey,
-} from '@cli/chat/tui/state/transcriptViewportMode';
+import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMode';
 import {
   createTuiViewportController,
   type TuiRepaintOptions,
@@ -1412,43 +1409,9 @@ describe('CLI conversation transcript splitting', () => {
 
     expect(rootViewportKey).toBe('root-scrollback');
     expect(childViewportKey).toBe(`scoped:${CHILD}`);
-    expect(
-      transcriptViewportChange({
-        previousViewportKey: rootViewportKey,
-        nextViewportKey: childViewportKey,
-      }),
-    ).toMatchObject({
-      previousViewportKey: rootViewportKey,
-      nextViewportKey: childViewportKey,
-    });
-    expect(
-      transcriptViewportChange({
-        previousViewportKey: childViewportKey,
-        nextViewportKey: rootViewportKey,
-      }),
-    ).toMatchObject({
-      previousViewportKey: childViewportKey,
-      nextViewportKey: rootViewportKey,
-    });
   });
 
-  it('repaints viewport switches from a clean scrollback owner', () => {
-    const rootToChild = transcriptViewportChange({
-      previousViewportKey: 'root-scrollback',
-      nextViewportKey: 'scoped:child',
-    });
-    const childToRoot = transcriptViewportChange({
-      previousViewportKey: 'scoped:child',
-      nextViewportKey: 'root-scrollback',
-    });
-    const childToChild = transcriptViewportChange({
-      previousViewportKey: 'scoped:child',
-      nextViewportKey: 'scoped:other-child',
-    });
-
-    expect(rootToChild).toBeDefined();
-    expect(childToRoot).toBeDefined();
-    expect(childToChild).toBeDefined();
+  it('repaints static transcript invalidations from a clean origin', () => {
     const calls: TuiRepaintOptions[] = [];
     const controller = createTuiViewportController({
       current: {
@@ -1458,14 +1421,10 @@ describe('CLI conversation transcript splitting', () => {
       },
     });
 
-    controller.handleTranscriptViewportChange(rootToChild!);
-    controller.handleTranscriptViewportChange(childToRoot!);
-    controller.handleTranscriptViewportChange(childToChild!);
+    controller.repaintTranscript();
     controller.repaintAfterTerminalResume();
 
     expect(calls).toEqual([
-      { clearScrollback: true, preserveStatic: false },
-      { clearScrollback: true, preserveStatic: false },
       { clearScrollback: true, preserveStatic: false },
       { clearScrollback: true },
     ]);

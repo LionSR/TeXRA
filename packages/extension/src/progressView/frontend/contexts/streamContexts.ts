@@ -16,6 +16,7 @@ import type {
   StreamTabInfo,
   TaskGroup,
 } from '@shared/schemas';
+import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import type {
   FollowupOptionsState,
   ProcessOutputMap,
@@ -81,6 +82,8 @@ export interface StreamLogContextValue {
   streamStatus: StreamLifecycleStatus | null;
   /** Render log output in terminal style (monospace, no timestamps, etc). */
   terminalMode: boolean;
+  /** Retained subagent identities for executions tool summaries. */
+  subagentExecutionLabels?: ExecutionLabels;
 }
 
 export const EMPTY_LOG_CONTEXT: StreamLogContextValue = {
