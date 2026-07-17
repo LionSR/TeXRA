@@ -575,7 +575,27 @@ describe('CLI TUI row allocation', () => {
       todosPlanContentRows: 4,
       transcriptRows: 2,
     });
-    expect(allocation.todosPlanRows).not.toBe(1);
+    expect(allocation).toEqual({
+      bottomPanelRows: 0,
+      sessionPanelRows: 0,
+      todosPlanRows: 0,
+    });
+  });
+
+  it('preserves todo content when the child list can yield one row', () => {
+    expect(
+      allocateConversationBottomPanelRows({
+        maxRows: 10,
+        sessionCount: 11,
+        childListFocused: false,
+        todosPlanContentRows: 1,
+        transcriptRows: 20,
+      }),
+    ).toEqual({
+      bottomPanelRows: 10,
+      sessionPanelRows: 8,
+      todosPlanRows: 2,
+    });
   });
 
   it('does not allocate session rows without transcript space', () => {

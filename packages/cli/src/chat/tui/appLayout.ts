@@ -213,8 +213,17 @@ export function allocateConversationBottomPanelRows({
       : 0;
   const todosPlanRows = bottomPanelRows - sessionPanelRows;
   // A lone row cannot hold the separator plus content; hand it back instead
-  // of rendering a dead blank line under the child list.
+  // of rendering a dead blank line under the child list. When the child list
+  // has rows above its own minimum, transfer one first so both panels remain
+  // useful under a proportional split.
   if (todosPanelContentRows > 0 && todosPlanRows === 1) {
+    if (sessionPanelRows > minimumSessionRows) {
+      return {
+        bottomPanelRows,
+        sessionPanelRows: sessionPanelRows - 1,
+        todosPlanRows: 2,
+      };
+    }
     return {
       bottomPanelRows: bottomPanelRows - 1,
       sessionPanelRows,
