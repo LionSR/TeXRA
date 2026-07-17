@@ -12,7 +12,7 @@ export { requestPanelSharedStyles, sp } from './requestPanelSharedStyles';
 export { viewTabStyles, waTabThemeTokenStyles } from './viewTabStyles';
 
 // Shared list-view styles: search highlighting
-export { searchHighlightStyles } from './badgeStyles';
+export { searchHighlightStyles } from './searchHighlightStyles';
 
 // Shared inline wa-callout banner chrome (agent-config, api-key, dependency,
 // login, getting-started, workflow-hint banners)
