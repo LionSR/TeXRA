@@ -473,18 +473,25 @@ export class StreamLogStore {
     this.assertWritableStore('delete a transcript stream');
     this.writeTombstones.add(streamId);
     this.debouncedSave.cancel();
-    this.forgetStreamState(streamId);
-    this.stateRevision += 1;
 
     try {
       await this.inFlightWrite;
-      this.forgetStreamState(streamId);
       await this.executeWrite();
-      if (this.mode.kind === 'ephemeral') return;
-
-      log.info(LOG_TAG, `Deleting stream: ${streamId}`);
-      await this.kv.delete(streamId);
-      await this.deleteSummaryCache(streamId);
+      if (this.mode.kind !== 'ephemeral') {
+        log.info(LOG_TAG, `Deleting stream: ${streamId}`);
+        await this.kv.delete(streamId);
+        await this.deleteSummaryCache(streamId);
+      }
+      // The summaries map is the progress tab registry. Commit its removal
+      // only after durable deletion succeeds so callers can retain and retry a
+      // stream whose transcript cleanup failed.
+      this.forgetStreamState(streamId);
+      this.stateRevision += 1;
+    } catch (error) {
+      // executeWrite() drains dirty ids while the tombstone suppresses writes.
+      // Restore the retry marker if deletion fails and a resident log remains.
+      if (this.logs.has(streamId)) this.dirtyStreamIds.add(streamId);
+      throw error;
     } finally {
       this.writeTombstones.delete(streamId);
     }
