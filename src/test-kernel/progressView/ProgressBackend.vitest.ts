@@ -1862,19 +1862,9 @@ describe('ProgressBackend', () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const stream = 'tool@deepseek#a6966f' as StreamTabId;
     const executionId = 'a6966f' as ExecutionId;
-    const stores = backend.state.stores as unknown as {
-      deleteExecution(
-        executionId: ExecutionId,
-        options?: DeleteExecutionOptions,
-      ): Promise<DeleteExecutionResult>;
-    };
-    const deleteExecutionSpy = vi
-      .spyOn(stores, 'deleteExecution')
-      .mockResolvedValue({
-        status: 'deleted',
-        executionId,
-        adjacentCleanupFailure: 'snapshot directory is locked',
-      });
+    const snapshotDeleteSpy = vi
+      .spyOn(backend.state.snapshots, 'deleteStream')
+      .mockRejectedValueOnce(new Error('snapshot directory is locked'));
 
     try {
       backend.state.streamLogs.ensureStream(stream);
@@ -1883,13 +1873,16 @@ describe('ProgressBackend', () => {
         toolUseTaskState('search', 'deepseekproT'),
         executionId,
       );
+      await writeExecutionConfig(executionId);
+      await backend.state.flush();
 
       await expect(backend.state.clearStream(stream)).resolves.toBe('failed');
 
       expect(backend.state.streamLogs.has(stream)).toBe(true);
       expect(backend.state.snapshots.getExecutionId(stream)).toBe(executionId);
+      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(false);
     } finally {
-      deleteExecutionSpy.mockRestore();
+      snapshotDeleteSpy.mockRestore();
       await backend.state.clearAll();
       backend.dispose();
       session.dispose();

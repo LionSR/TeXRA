@@ -264,20 +264,24 @@ export class SessionStores {
   }
 
   private async deleteAdjacentStreamState(stream: StreamTabId): Promise<void> {
+    // The transcript registry owns tab visibility. Delete it only after every
+    // other sidecar succeeds so a partial cleanup remains retryable in the UI.
     await waitForAdjacentCleanup([
-      this.streamLogs.delete(stream),
       this.snapshots.deleteStream(stream),
       this.goalEntries?.forget(stream),
     ]);
+    await this.streamLogs.delete(stream);
   }
 
   private async deleteAdjacentStreamStates(
     streams: readonly StreamTabId[],
   ): Promise<void> {
     await waitForAdjacentCleanup([
-      ...streams.map((stream) => this.streamLogs.delete(stream)),
       ...streams.map((stream) => this.snapshots.deleteStream(stream)),
       this.goalEntries?.forgetMany(streams),
     ]);
+    await waitForAdjacentCleanup(
+      streams.map((stream) => this.streamLogs.delete(stream)),
+    );
   }
 }
