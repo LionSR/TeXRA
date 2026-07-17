@@ -355,7 +355,9 @@ export class StreamSnapshotStore {
   private kv(streamId: StreamTabId): KVStore {
     const record = this.getOrCreateRecord(streamId);
     if (!record.kv) {
-      record.kv = new KVStore(streamDataDir(streamId));
+      record.kv = new KVStore(streamDataDir(streamId), {
+        throwOnErrors: true,
+      });
     }
     return record.kv;
   }
@@ -996,10 +998,9 @@ export class StreamSnapshotStore {
       const writes = [...state.writes];
       state.writes.clear();
       try {
-        for (const [key, value] of writes) {
-          this.writeUnbuffered(stream, key, value);
-        }
-        await this.flushWritesForStream(stream);
+        await Promise.all(
+          writes.map(([key, value]) => this.queueWrite(stream, key, value)),
+        );
       } catch (error) {
         for (const [key, value] of writes) {
           if (!state.writes.has(key)) state.writes.set(key, value);
@@ -1018,19 +1019,6 @@ export class StreamSnapshotStore {
       this.stagedDeletions.delete(stream);
     }
     state.resolveSettled();
-  }
-
-  /** Persist a failed rollback's buffered values before staging its retry. */
-  private replayFailedRollbackWrites(
-    stream: StreamTabId,
-    failedState: StagedDeletionState,
-    retryState: StagedDeletionState,
-  ): void {
-    for (const [key, value] of failedState.writes) {
-      retryState.writes.set(key, value);
-      this.writeUnbuffered(stream, key, value);
-    }
-    failedState.resolveSettled();
   }
 
   /**
@@ -1071,8 +1059,10 @@ export class StreamSnapshotStore {
           await StorageFS.rename(stagedDir, liveDir);
         }
         this.failedRollbacks.delete(stream);
-        this.replayFailedRollbackWrites(stream, failedState, state);
-        await this.flushWritesForStream(stream);
+        for (const [key, value] of failedState.writes) {
+          if (!state.writes.has(key)) state.writes.set(key, value);
+        }
+        await this.replayStagedWrites(stream, state);
       }
       if (
         canUseStreamDataDir(stream) &&
@@ -1447,28 +1437,33 @@ export class StreamSnapshotStore {
     key: string,
     value: unknown,
   ): void {
+    void this.queueWrite(stream, key, value).catch((err: unknown) =>
+      logger.warn(
+        CHANNEL,
+        `Failed to persist ${key}.json for stream ${stream}; sidecar may be stale.`,
+        { data: err },
+      ),
+    );
+  }
+
+  /** Queue a sidecar write and expose its completion to transactional callers. */
+  private queueWrite(
+    stream: StreamTabId,
+    key: string,
+    value: unknown,
+  ): Promise<void> {
     const chainKey = `${stream}::${key}`;
     const version = this.streamVersion(stream);
     const mutex = this.writeMutexes.get(chainKey) ?? new Mutex();
     this.writeMutexes.set(chainKey, mutex);
-    // Best-effort: a failed sidecar write must not break the lock, but it is
-    // logged so silent data loss (disk full, permission denied) is diagnosable.
-    void mutex
-      .runExclusive(() => {
-        // Eviction guard: `evict()`/`deleteStream()` drop this chain key. A
-        // write queued before that must NOT fire afterward, or a late `kv()`
-        // would re-create the `streamData/{id}/` dir `deleteDir()` just removed.
-        if (!this.writeMutexes.has(chainKey)) return;
-        if (this.streamVersion(stream) !== version) return;
-        return this.kv(stream).write(key, value);
-      })
-      .catch((err: unknown) =>
-        logger.warn(
-          CHANNEL,
-          `Failed to persist ${key}.json for stream ${stream}; sidecar may be stale.`,
-          { data: err },
-        ),
-      );
+    return mutex.runExclusive(() => {
+      // Eviction guard: `evict()`/`deleteStream()` drop this chain key. A
+      // write queued before that must NOT fire afterward, or a late `kv()`
+      // would re-create the `streamData/{id}/` dir `deleteDir()` just removed.
+      if (!this.writeMutexes.has(chainKey)) return;
+      if (this.streamVersion(stream) !== version) return;
+      return this.kv(stream).write(key, value);
+    });
   }
 
   private async flushWritesForStream(stream: StreamTabId): Promise<void> {

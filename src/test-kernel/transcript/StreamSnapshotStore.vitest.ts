@@ -1116,6 +1116,33 @@ describe('StreamSnapshotStore', () => {
     await store.deleteStream(STREAM);
   });
 
+  it('retains buffered writes when rollback persistence fails', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    store.setPlan(STREAM, PLAN);
+    await store.flush();
+    const deletion = await store.stageDeleteStream(STREAM);
+    store.setPlan(STREAM, null);
+    const writeError = new Error('snapshot disk is full');
+    const writeAtomic = StorageFS.writeAtomic.bind(StorageFS);
+    const writeSpy = vi
+      .spyOn(StorageFS, 'writeAtomic')
+      .mockImplementationOnce(async () => {
+        throw writeError;
+      })
+      .mockImplementation(writeAtomic);
+
+    await expect(deletion.rollback()).rejects.toBe(writeError);
+
+    writeSpy.mockRestore();
+    const retry = await store.stageDeleteStream(STREAM);
+    await retry.rollback();
+    const reloaded = new StreamSnapshotStore();
+    await reloaded.load([STREAM]);
+    expect(reloaded.getWorkPlan(STREAM).plan).toBeNull();
+    await store.deleteStream(STREAM);
+  });
+
   it('restores committed residue for complete orphan cleanup', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);
