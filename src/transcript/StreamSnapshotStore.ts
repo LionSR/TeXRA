@@ -1050,14 +1050,22 @@ export class StreamSnapshotStore {
     while (true) {
       await this.replayStagedWrites(stream, state);
       if (state.writes.size > 0) continue;
-      if (this.failedRollbacks.get(stream) === state) {
-        this.failedRollbacks.delete(stream);
-      }
-      if (this.stagedDeletions.get(stream) === state) {
-        this.stagedDeletions.delete(stream);
-        state.resolveSettled();
-      }
+      this.releaseStagedOwnership(stream, state);
       return;
+    }
+  }
+
+  private releaseStagedOwnership(
+    stream: StreamTabId,
+    state: StagedDeletionState,
+  ): void {
+    if (state.writes.size > 0 || state.recovery) return;
+    if (this.failedRollbacks.get(stream) === state) {
+      this.failedRollbacks.delete(stream);
+    }
+    if (this.stagedDeletions.get(stream) === state) {
+      this.stagedDeletions.delete(stream);
+      state.resolveSettled();
     }
   }
 
@@ -1072,6 +1080,7 @@ export class StreamSnapshotStore {
     if (this.failedRollbacks.get(stream) !== state) return Promise.resolve();
     if (state.recovery) return state.recovery;
 
+    let recovered = false;
     const recovery = (async () => {
       if (canUseStreamDataDir(stream)) {
         const stagedDir = stagedStreamDataDir(stream);
@@ -1109,9 +1118,13 @@ export class StreamSnapshotStore {
 
       state.phase = 'live';
       await this.drainStagedWrites(stream, state);
+      recovered = true;
     })();
     const trackedRecovery = recovery.finally(() => {
-      if (state.recovery === trackedRecovery) state.recovery = undefined;
+      if (state.recovery === trackedRecovery) {
+        state.recovery = undefined;
+        if (recovered) this.releaseStagedOwnership(stream, state);
+      }
     });
     state.recovery = trackedRecovery;
     return trackedRecovery;
@@ -1571,8 +1584,7 @@ export class StreamSnapshotStore {
               failedRollback.writes.get(key) === value
             ) {
               failedRollback.writes.delete(key);
-              // Recovery owns release even when this mirrored write drained
-              // the last value, so namespace repair cannot lose its owner.
+              this.releaseStagedOwnership(stream, failedRollback);
             }
           })
           .catch((err: unknown) =>
