@@ -2054,6 +2054,53 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('tracks transcript cleanup failures per stream within one execution', async () => {
+    const failedStream = 'tool@deepseek#f00baa6966' as StreamTabId;
+    const deletedStream = 'workflow@deepseek#f00baa6966' as StreamTabId;
+    const executionId = 'f00baa6966' as ExecutionId;
+    const { backend, session } = createIsolatedRecordingBackend();
+    backend.state.streamLogs.ensureStream(failedStream);
+    backend.state.streamLogs.ensureStream(deletedStream);
+    backend.state.snapshots.setTaskState(
+      failedStream,
+      toolUseTaskState('search', 'deepseekproT'),
+      executionId,
+    );
+    backend.state.snapshots.setTaskState(
+      deletedStream,
+      toolUseTaskState('search', 'deepseekproT'),
+      executionId,
+    );
+    await writeExecutionConfig(executionId);
+    const deleteTranscript = backend.state.streamLogs.delete.bind(
+      backend.state.streamLogs,
+    );
+    const deleteTranscriptSpy = vi
+      .spyOn(backend.state.streamLogs, 'delete')
+      .mockImplementation(async (stream) => {
+        if (stream === failedStream) {
+          throw new Error('transcript directory is locked');
+        }
+        await deleteTranscript(stream);
+      });
+
+    try {
+      const result = await backend.state.clearAll();
+
+      expect(result).toEqual({
+        active: new Set(),
+        failed: new Set([failedStream]),
+      });
+      expect(backend.state.streamLogs.has(failedStream)).toBe(true);
+      expect(backend.state.streamLogs.has(deletedStream)).toBe(false);
+    } finally {
+      deleteTranscriptSpy.mockRestore();
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('forgets goal entries when clearing never-registered streams', async () => {
     const stream = 'tool@deepseek#missing' as StreamTabId;
     const { backend, session } = createIsolatedRecordingBackend();

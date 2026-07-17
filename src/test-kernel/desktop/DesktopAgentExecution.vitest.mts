@@ -1515,6 +1515,38 @@ describe('DesktopProgressBridge', () => {
     });
   });
 
+  it('resyncs a stream retained after durable cleanup fails', async () => {
+    const stream = 'retained-stream' as StreamTabId;
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages, {
+      canonicalStreamIds: [stream],
+      configureProgressSnapshotStore: (store) => {
+        vi.spyOn(store, 'deleteStream').mockRejectedValueOnce(
+          new Error('snapshot directory is locked'),
+        );
+      },
+    });
+    emitSessionFact(bridge, 'setActiveStream', {
+      streamId: stream,
+      agentCategory: AgentCategory.Workflow,
+    });
+    await settleProgressEvents();
+    messages.length = 0;
+
+    await bridge.deleteStream(stream);
+    await settleProgressEvents();
+
+    expect(
+      progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(-1),
+    ).toMatchObject({ activeStream: stream });
+    expect(
+      progressMessages(messages, PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT),
+    ).toContainEqual(expect.objectContaining({ stream }));
+    expect(
+      progressMessages(messages, PROGRESS_VIEW_COMMANDS.DELETE_STREAM),
+    ).toEqual([]);
+  });
+
   it('cancels a pending plan approval instead of hanging when its stream is deleted', async () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);

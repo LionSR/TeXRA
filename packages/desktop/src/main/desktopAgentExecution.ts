@@ -987,6 +987,7 @@ export class DesktopProgressBridge {
     }
     const deletion = await this.state.clearStream(streamId);
     if (deletion !== 'deleted') {
+      this.syncStreamContent(this.updateStreamMetadata());
       await this.options.host.showInfoMessage(
         deletion === 'active'
           ? formatActiveStreamRetention(1)

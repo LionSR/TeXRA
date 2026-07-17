@@ -45,6 +45,10 @@ async function waitForAdjacentCleanup(
   const failures = results.flatMap((result) =>
     result.status === 'rejected' ? [result.reason] : [],
   );
+  throwAdjacentCleanupFailures(failures);
+}
+
+function throwAdjacentCleanupFailures(failures: readonly unknown[]): void {
   if (failures.length === 1) throw failures[0];
   if (failures.length > 1) {
     throw new AggregateError(failures, 'Multiple adjacent cleanups failed');
@@ -181,8 +185,13 @@ export class SessionStores {
     await Promise.all(
       [...streamsByExecution].map(async ([executionId, streams]) => {
         try {
+          let failedAdjacentStreams = new Set<StreamTabId>();
           const result = await this.deleteExecution(executionId, {
-            afterDelete: () => this.deleteAdjacentStreamStates(streams),
+            afterDelete: async () => {
+              const cleanup = await this.deleteAdjacentStreamStates(streams);
+              failedAdjacentStreams = cleanup.failed;
+              throwAdjacentCleanupFailures(cleanup.failures);
+            },
           });
           if (result.status === 'active') {
             for (const stream of streams) active.add(stream);
@@ -191,7 +200,11 @@ export class SessionStores {
               CHANNEL,
               `Execution ${executionId} was deleted, but adjacent stream cleanup was incomplete: ${result.adjacentCleanupFailure}`,
             );
-            for (const stream of streams) failed.add(stream);
+            const retainedStreams =
+              failedAdjacentStreams.size > 0
+                ? failedAdjacentStreams
+                : streams.filter((stream) => this.streamLogs.has(stream));
+            for (const stream of retainedStreams) failed.add(stream);
           }
         } catch (error) {
           logger.warn(
@@ -275,13 +288,54 @@ export class SessionStores {
 
   private async deleteAdjacentStreamStates(
     streams: readonly StreamTabId[],
-  ): Promise<void> {
-    await waitForAdjacentCleanup([
-      ...streams.map((stream) => this.snapshots.deleteStream(stream)),
-      this.goalEntries?.forgetMany(streams),
-    ]);
-    await waitForAdjacentCleanup(
-      streams.map((stream) => this.streamLogs.delete(stream)),
+  ): Promise<{
+    failed: Set<StreamTabId>;
+    failures: unknown[];
+  }> {
+    const failed = new Set<StreamTabId>();
+    const failures: unknown[] = [];
+    const goalResult = this.goalEntries?.forgetMany(streams).then(
+      () => ({ status: 'fulfilled' as const }),
+      (error: unknown) => ({ status: 'rejected' as const, error }),
     );
+    const snapshotResults = await Promise.all(
+      streams.map(async (stream) => {
+        try {
+          await this.snapshots.deleteStream(stream);
+          return { stream, status: 'fulfilled' as const };
+        } catch (error) {
+          return { stream, status: 'rejected' as const, error };
+        }
+      }),
+    );
+    for (const result of snapshotResults) {
+      if (result.status === 'fulfilled') continue;
+      failed.add(result.stream);
+      failures.push(result.error);
+    }
+    const settledGoal = await goalResult;
+    if (settledGoal?.status === 'rejected') {
+      for (const stream of streams) failed.add(stream);
+      failures.push(settledGoal.error);
+    }
+
+    const transcriptResults = await Promise.all(
+      streams
+        .filter((stream) => !failed.has(stream))
+        .map(async (stream) => {
+          try {
+            await this.streamLogs.delete(stream);
+            return { stream, status: 'fulfilled' as const };
+          } catch (error) {
+            return { stream, status: 'rejected' as const, error };
+          }
+        }),
+    );
+    for (const result of transcriptResults) {
+      if (result.status === 'fulfilled') continue;
+      failed.add(result.stream);
+      failures.push(result.error);
+    }
+    return { failed, failures };
   }
 }
