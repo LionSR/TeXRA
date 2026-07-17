@@ -26,7 +26,6 @@ import { SlashPalette, slashPaletteOwnsArrows } from '../commands/SlashPalette';
 import { COLOR_BORDER, COLOR_HINT } from '../ui/colors';
 import { POINTER } from '../ui/glyphs';
 import {
-  findSlashCommand,
   matchSlashCommands,
   parseSlashInput,
   prefixSlashCommands,
