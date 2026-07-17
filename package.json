@@ -137,7 +137,7 @@
     "diff-match-patch": "^1.0.5",
     "dotenv": "^17.4.2",
     "escape-string-regexp": "^5.0.0",
-    "execa": "^9.6.1",
+    "execa": "^10.0.0",
     "fast-json-stable-stringify": "^2.1.0",
     "fast-xml-parser": "^5.10.1",
     "fastest-levenshtein": "^1.0.16",
