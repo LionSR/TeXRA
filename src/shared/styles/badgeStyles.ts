@@ -1,24 +1,5 @@
 import { css, type CSSResult } from 'lit';
 
-/**
- * Compact `wa-badge` chip look — tighter padding/gap/font-size than the
- * component default. This is the app-wide "status chip" idiom (goal chip,
- * PR-state pill, task-status, tool-id tag); apply the `badge-compact` class
- * to the `wa-badge` element alongside its own variant/identifying class.
- *
- * Font weight is deliberately left out here: consumers disagreed on it
- * before this consolidation (medium vs semibold vs unset), so each keeps its
- * own `font-weight` override locally instead of this rule picking a value
- * and silently changing text weight for the others.
- */
-export const compactBadgeStyles: CSSResult = css`
-  .badge-compact::part(base) {
-    gap: var(--wa-space-3xs);
-    padding: var(--wa-space-3xs) var(--wa-space-2xs);
-    font-size: var(--font-size-xs);
-  }
-`;
-
 /** Search-match highlight rules for mark.js output in history item rows. */
 export const searchHighlightStyles: CSSResult = css`
   mark {

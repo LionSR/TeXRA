@@ -35,11 +35,7 @@ import {
   type ActiveChildInfo,
   type InquiryThreadUpdatedEvent,
 } from '@shared/schemas';
-import {
-  designTokens,
-  commonViewStyles,
-  compactBadgeStyles,
-} from '@shared/styles';
+import { designTokens, commonViewStyles } from '@shared/styles';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { ProgressEvents } from '../events';
 
@@ -65,7 +61,6 @@ export class BackgroundTasksPanel extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    compactBadgeStyles,
     css`
       :host {
         display: block;
@@ -162,15 +157,15 @@ export class BackgroundTasksPanel extends LitElement {
 
       /* Status uses a native wa-badge (filled), matching the app-wide badge
          idiom (GoalTab / WorktreeChip / StreamHeader goal chip) rather than a
-         wa-tag — tags are for removable/category chips, badges for status.
-         Compact padding/gap/font-size come from the shared .badge-compact
-         class (compactBadgeStyles). */
+         wa-tag — tags are for removable/category chips, badges for status. */
       wa-badge.task-status {
         flex: 0 0 auto;
         margin-left: auto;
       }
 
       wa-badge.task-status::part(base) {
+        padding: var(--wa-space-3xs) var(--wa-space-2xs);
+        font-size: var(--font-size-xs);
         font-weight: var(--font-weight-medium);
       }
 
@@ -361,7 +356,7 @@ export class BackgroundTasksPanel extends LitElement {
             sync
           ></wa-relative-time>
           <wa-badge
-            class="task-status badge-compact"
+            class="task-status"
             variant=${inquiryStatusVariant(thread.status)}
             appearance="filled"
             >${thread.status}</wa-badge
@@ -483,7 +478,7 @@ export class BackgroundTasksPanel extends LitElement {
               : nothing
           }
           <wa-badge
-            class="task-status badge-compact"
+            class="task-status"
             variant=${waiting ? 'neutral' : 'warning'}
             appearance="filled"
             >${waiting ? 'waiting' : 'running'}</wa-badge
