@@ -824,8 +824,8 @@ export class StreamSnapshotStore {
    * whether the stream has a record: every record defaults `missingOutputs`
    * to `{}` on creation, and a record gets created for read-only reasons
    * too (`kv()` — used by `read()`, `readPersistedExecutionId()`, and the
-   * post-`evict()` `kv()` call in `deleteStream()` — as well as any other
-   * accumulator's own lazy creation, e.g. `setTodos`). Gating on record
+   * read-only `kv()` calls — as well as any other accumulator's own lazy
+   * creation, e.g. `setTodos`). Gating on record
    * presence alone would treat those as "missing outputs existed" and write
    * a spurious `missingOutputs.json`, resurrecting a `streamData/{id}/`
    * directory `listPersistedStreams()` would then report for a stream that
@@ -874,13 +874,22 @@ export class StreamSnapshotStore {
   /** Delete a stream's on-disk sidecar directory + in-memory state. */
   async deleteStream(stream: StreamTabId): Promise<void> {
     const pending = this.cancelPendingWritesForStream(stream);
-    this.evict(stream);
+    // Invalidate in-flight hydration/writes immediately, but keep the record
+    // readable until durable deletion commits. If deleteDir() fails, callers
+    // retain the stream and can retry with its complete in-memory snapshot.
+    this.bumpStreamVersion(stream);
     await Promise.all(pending);
     // Keep this after pending-write cancellation so reserved ids cannot leave
     // older write chains free to recreate a non-stream-owned sidecar path.
-    if (!canUseStreamDataDir(stream)) return;
+    if (!canUseStreamDataDir(stream)) {
+      this.records.delete(stream);
+      return;
+    }
 
-    await this.kv(stream).deleteDir();
+    await new KVStore(streamDataDir(stream), {
+      throwOnErrors: true,
+    }).deleteDir();
+    this.records.delete(stream);
   }
 
   /** Delete the entire `streamData/` tree + all in-memory state. */
@@ -1509,10 +1518,9 @@ export class StreamSnapshotStore {
   ): void {
     // `record` rode across `applyStreamData`'s hydration await. Identity —
     // not mere presence — against the live map entry: eviction during the
-    // await orphans `record`, and `deleteStream()`'s own post-evict `kv()`
-    // call (or a concurrent eager mutation) can already have re-created a
-    // fresh entry, so a presence check would still let orphaned seed state
-    // resurrect the deleted `streamData/{id}/` dir on disk (#8226).
+    // await orphans `record`, and a concurrent eager mutation can already have
+    // re-created a fresh entry, so a presence check would still let orphaned
+    // seed state resurrect the deleted `streamData/{id}/` dir on disk (#8226).
     if (this.records.get(stream) !== record) return;
     for (const key of keys) {
       switch (key) {

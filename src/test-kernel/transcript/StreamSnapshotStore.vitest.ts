@@ -968,6 +968,30 @@ describe('StreamSnapshotStore', () => {
     expect(await StorageFS.exists(dir)).toBe(false);
   });
 
+  it('keeps the in-memory snapshot when durable deletion fails', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    store.setTodos(STREAM, [TODO]);
+    store.setPlan(STREAM, PLAN);
+    await store.flush();
+    const deleteSpy = vi
+      .spyOn(StorageFS, 'delete')
+      .mockRejectedValueOnce(new Error('stream data directory is locked'));
+
+    await expect(store.deleteStream(STREAM)).rejects.toThrow(
+      'stream data directory is locked',
+    );
+
+    expect(store.getWorkPlan(STREAM)).toEqual({
+      todos: [TODO],
+      plan: PLAN,
+      planSummary: PLAN_SUMMARY,
+    });
+
+    deleteSpy.mockRestore();
+    await store.deleteStream(STREAM);
+  });
+
   it('does not resurrect a deleted sidecar dir when deleteStream lands during hydration', async () => {
     // Regression for #8226: applyStreamData awaits execution-config hydration
     // mid-seed. If the stream is deleted during that await, the continuation

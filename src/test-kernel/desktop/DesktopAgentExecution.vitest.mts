@@ -1770,6 +1770,36 @@ describe('DesktopProgressBridge', () => {
     expect(cancel).toHaveBeenCalledWith({ cause: 'All streams deleted.' });
   });
 
+  it('syncs an inactive stream retained by bulk deletion', async () => {
+    const deletedStream = 'deleted-stream' as StreamTabId;
+    const retainedStream = 'retained-stream' as StreamTabId;
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages, {
+      canonicalStreamIds: [deletedStream, retainedStream],
+      configureProgressSnapshotStore: (store) => {
+        const deleteSnapshot = store.deleteStream.bind(store);
+        vi.spyOn(store, 'deleteStream').mockImplementation(async (stream) => {
+          if (stream === retainedStream) {
+            throw new Error('snapshot directory is locked');
+          }
+          await deleteSnapshot(stream);
+        });
+      },
+    });
+    bridge.setActiveStream(deletedStream);
+    messages.length = 0;
+
+    await bridge.deleteAllStreams();
+    await settleProgressEvents();
+
+    expect(
+      progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(-1),
+    ).toMatchObject({ activeStream: retainedStream });
+    expect(
+      progressMessages(messages, PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT),
+    ).toContainEqual(expect.objectContaining({ stream: retainedStream }));
+  });
+
   it('cancels a pending bash approval instead of hanging when all streams are deleted', async () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);

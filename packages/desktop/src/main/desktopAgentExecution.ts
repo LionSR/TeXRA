@@ -1062,7 +1062,8 @@ export class DesktopProgressBridge {
         });
       }
     }
-    this.updateStreamMetadata();
+    const activeStream = this.updateStreamMetadata();
+    if (retainedStreams.size > 0) this.syncStreamContent(activeStream);
     if (retainedStreams.size > 0) {
       await this.options.host.showInfoMessage(
         formatStreamDeletionRetention(
