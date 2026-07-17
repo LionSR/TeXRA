@@ -2,34 +2,40 @@
 import { z } from 'zod';
 
 // Local imports - agent runtime
-import { getExecutionStore } from '@agent/storage';
+import {
+  ExecutionLeaseActiveError,
+  getExecutionStore,
+  registerExecution,
+  releaseOwnedExecutionLeaseAfterFailure,
+} from '@agent/storage';
+import {
+  AgentConfigSchema,
+  type AgentConfigPayload,
+} from '@agent/core/definition/AgentConfig';
+import { startChildRunLoop } from '@agent/runtime/childRunLoop';
 import {
   deriveWorkflowScriptCheckpointId,
   parseWorkflowScript,
-  readWorkflowScriptCheckpoint,
-  type WorkflowJournalEntry,
-  type WorkflowScriptRunResult,
 } from '@agent/workflowScript';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
 
 // Local imports - shared schemas
+import { AgentCategory } from '@shared/schemas';
+import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
-import type { ToolResult } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local imports - tools
+import { configureDelegatedChildApprovals } from '@tools/approval';
+import { createChildStream } from '@tools/childStream';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - utilities
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { formatResultCount, truncateSummary } from '@utils/text/stringUtils';
+import { deriveExecutionId } from '@utils/core/idHash';
 
 // Local imports - delegation
 import { createWorkflowScriptAgentRunner } from './workflowScriptAgentRunner';
-import {
-  runPersistedWorkflowScriptWithProgress,
-  sumCompletedWorkflowJournalCost,
-  workflowJournalEntryCostIdentity,
-} from './workflowScriptRun';
+import { createWorkflowScriptStrategy } from './workflowScriptStrategy';
 
 const WorkflowScriptToolInputSchema = z.strictObject({
   agent: z
@@ -50,48 +56,16 @@ const WorkflowScriptToolInputSchema = z.strictObject({
 
 type WorkflowScriptToolInput = z.infer<typeof WorkflowScriptToolInputSchema>;
 
-function formatWorkflowResult(result: unknown): string {
-  if (typeof result === 'string') return result;
-  return JSON.stringify(result, null, 2) ?? 'undefined';
-}
-
-const RUN_LOG_MAX_LINES = 80;
-const RUN_LOG_MAX_LINE_LENGTH = 500;
-
-interface RunLogCollector {
-  readonly add: (line: string) => void;
-  readonly format: () => string;
-}
-
-/** Retain a small, single-line tail for the invoking model. */
-function createRunLogCollector(): RunLogCollector {
-  const lines: string[] = [];
-  let omitted = 0;
-  return {
-    add: (line) => {
-      lines.push(truncateSummary(line, RUN_LOG_MAX_LINE_LENGTH));
-      if (lines.length > RUN_LOG_MAX_LINES) {
-        lines.shift();
-        omitted += 1;
-      }
-    },
-    format: () => {
-      if (lines.length === 0) return '';
-      const header =
-        omitted > 0
-          ? `=== Run log (last ${lines.length} lines; ${omitted} earlier ${omitted === 1 ? 'line' : 'lines'} omitted) ===`
-          : '=== Run log ===';
-      return `\n\n${header}\n${lines.join('\n')}`;
-    },
-  };
-}
+const STREAM_PREFIX = 'workflow-script';
 
 /** Execute a durable, deterministic workflow script from an opted-in agent. */
 export class WorkflowScriptTool extends defineTool({
   name: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
   description: `Run a deterministic JavaScript workflow that coordinates workflow agents. Workflow agents edit or produce FILES: each agent() call resolves to a result envelope { category: 'workflow', outcome, outputs, diffs, compileFailures, cost } listing the files it produced, never prose. Use this when the complete fan-out, pipeline, and join structure is known in advance and should resume safely after interruption.
 
-Script rules: start with export const meta = { name, description }; no imports or require (only the injected primitives exist: agent, phase, log, parallel, pipeline, concat, and the args global). agent(), parallel(), and pipeline() return Promises: ALWAYS await them. agent(prompt, options) options: inputFiles (REQUIRED for file-editing agents; workspace paths, or a previous call's output paths to chain stages), agentName (another visible workflow agent; defaults to this tool's agent field), id (distinguish otherwise-identical calls), label, phase. A failed call inside parallel()/pipeline() resolves to null; filter with .filter(Boolean). The script's return value is this tool's result, followed by the run log (phases, log() lines, per-call outcomes with cost).
+Script rules: start with export const meta = { name, description }; no imports or require (only the injected primitives exist: agent, phase, log, parallel, pipeline, concat, and the args global). agent(), parallel(), and pipeline() return Promises: ALWAYS await them. agent(prompt, options) options: inputFiles (REQUIRED for file-editing agents; workspace paths, or a previous call's output paths to chain stages), agentName (another visible workflow agent; defaults to this tool's agent field), id (distinguish otherwise-identical calls), label, phase. A failed call inside parallel()/pipeline() resolves to null; filter with .filter(Boolean).
+
+Async: this tool returns immediately with an execution ID and runs the workflow as its own detached execution. The script's return value plus the run log (phases, log() lines, per-call outcomes with cost) are delivered back as a follow-up message when the run completes. Check intermediate progress with the executions tool (path=/executions/<id>, action=wait).
 
 Example:
 export const meta = { name: 'fix-drafts', description: 'Fix typos in two drafts', timeoutMs: 1800000 }
@@ -118,6 +92,8 @@ Tool inclusion is the opt-in boundary: do not add this tool to a default agent c
       );
     }
     const { runContext: parent, callContext } = contexts;
+    const { runScope } = parent;
+
     // Named checkpoint, not content- or toolCallId-keyed: a retrying model
     // rewrites its script, so any key derived from call identity or source
     // text orphans the journal exactly when resume matters (#8666). meta.name
@@ -127,82 +103,123 @@ Tool inclusion is the opt-in boundary: do not add this tool to a default agent c
     const checkpointId = deriveWorkflowScriptCheckpointId({
       name: meta.name,
       defaultAgent: input.agent,
-      parentExecutionId: parent.runScope.executionId,
+      parentExecutionId: runScope.executionId,
     });
-    if (!callContext.trace) {
-      throw new Error(
-        'delegate_workflow_script requires the parent progress trace.',
-      );
-    }
 
-    const store = getExecutionStore(parent.runScope.executionId);
-    // The stable child runner's native cost callback fires only for work that
-    // executes in this attempt. Exact journal replays and stable-child
-    // recoveries do not fire it, even when completion-order changes move a
-    // recovered invocation key to another journal index.
-    const executedEntries = new Set<string>();
-    let costSettled = false;
-    const settleCost = (journal: readonly WorkflowJournalEntry[]): void => {
-      if (costSettled) return;
-      const cost = sumCompletedWorkflowJournalCost(journal, executedEntries);
-      costSettled = true;
-      callContext.hooks?.recordSubagentCost?.(cost);
+    // The run executionId is deterministic from the checkpoint identity, NOT a
+    // fresh random id: a relaunch with the same meta.name regenerates the same
+    // run id, so registration, stream, and grandchildren re-root at one stable
+    // anchor and resume still replays completed calls (#8712). The journal
+    // itself stays on the orchestrator store, where the checkpoint lives.
+    const runExecutionId = deriveExecutionId({ checkpointId });
+    const store = getExecutionStore(runScope.executionId);
+
+    // Captured now, while the launching tool call's ALS frame is live, so the
+    // detached run can still roll its cost into the parent after this call
+    // returns. Undefined totals are skipped (a malformed-journal failure never
+    // records a spurious cost).
+    const recordSubagentCost = callContext?.hooks?.recordSubagentCost;
+    const recordCost = (totalCostUsd: number | undefined): void => {
+      if (totalCostUsd !== undefined) recordSubagentCost?.(totalCostUsd);
     };
 
-    // Live display accumulator only: covers success and failure of this run's
-    // live children (cached replays spend nothing). Boundary settlement below
-    // stays journal-based so resumed runs still roll up replayed spend.
-    let liveCostUsd = 0;
-    const runLog = createRunLogCollector();
-    let run: WorkflowScriptRunResult;
+    const runConfigPayload: AgentConfigPayload = {
+      agent: input.agent,
+      agentCategory: AgentCategory.Workflow,
+      model: parent.model ?? DEFAULT_AGENT_MODEL,
+      instruction: `Workflow script '${meta.name}'`,
+      ...(runScope.workingDirectory !== undefined && {
+        workingDirectory: runScope.workingDirectory,
+      }),
+    };
+    const runConfig = AgentConfigSchema.parse(runConfigPayload);
+
     try {
-      run = await runPersistedWorkflowScriptWithProgress(callContext.trace, {
-        store,
-        checkpointId,
-        script: input.script,
-        ...(input.args != null && { args: input.args }),
-        signal: callContext.signal,
-        runAgent: createWorkflowScriptAgentRunner(
-          parent,
-          input.agent,
-          checkpointId,
-          {
-            onCost: (invocation, totalCostUsd) => {
-              executedEntries.add(workflowJournalEntryCostIdentity(invocation));
-              liveCostUsd += totalCostUsd ?? 0;
-            },
-          },
-        ),
-        getLiveCostUsd: () => liveCostUsd,
-        onActivity: runLog.add,
-      });
-    } catch (runError) {
-      try {
-        const checkpoint = await readWorkflowScriptCheckpoint(
-          store,
-          checkpointId,
-        );
-        settleCost(checkpoint?.journal ?? []);
-      } catch (settlementError) {
-        throw new AggregateError(
-          [runError, settlementError],
-          `Workflow script failed: ${toErrorMessage(runError)} Cost settlement also failed: ${toErrorMessage(settlementError)}`,
-        );
+      await registerExecution(
+        runExecutionId,
+        runConfig,
+        meta.name,
+        runScope.executionId,
+      );
+    } catch (error) {
+      // A relaunch whose prior run is still in flight shares this deterministic
+      // id: the fresh-lease acquisition fails closed rather than starting a
+      // second competing run over the same journal. Point the model at the
+      // live run instead of erroring.
+      if (error instanceof ExecutionLeaseActiveError) {
+        return {
+          status: 'executed',
+          summary: `Workflow script '${meta.name}' is already running`,
+          output: [
+            `A workflow script run for meta.name '${meta.name}' is already in progress; its result will arrive as a follow-up.`,
+            `Execution ID: ${runExecutionId}`,
+            `To check progress: executions tool with path=/executions/${runExecutionId} and action=wait.`,
+          ].join('\n'),
+        };
       }
-      // The run log is the model's only view into what executed before the
-      // failure; without it a timeout reads as total loss instead of
-      // resumable progress.
-      throw new Error(
-        `${toErrorMessage(runError)}${runLog.format()}\n\nCompleted agent() calls are journaled under meta.name '${meta.name}': call this tool again with the same meta.name to resume without repeating them.`,
-        { cause: runError },
+      throw new ToolError(
+        `Failed to launch workflow script '${meta.name}': ${error instanceof Error ? error.message : String(error)}`,
       );
     }
 
-    settleCost(run.journal);
+    const childStream = createChildStream(runExecutionId, runScope.streamId, {
+      streamPrefix: STREAM_PREFIX,
+      streamCategory: AgentCategory.Workflow,
+      agentName: meta.name,
+      description: meta.description,
+      config: runConfig,
+      toolName: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+      runtimeHost: runScope.runtimeHost,
+    });
+    const runChildStreamId = childStream.childStreamId;
+    try {
+      // The run's own stream inherits the orchestrator's bypass so grandchild
+      // agent() calls, which link to this stream, still resolve it transitively.
+      configureDelegatedChildApprovals(
+        runChildStreamId,
+        runScope.streamId,
+        'inherit',
+        runScope.session,
+      );
+
+      startChildRunLoop({
+        childStream,
+        childStreamId: runChildStreamId,
+        parentStreamId: runScope.streamId,
+        executionId: runExecutionId,
+        agentName: meta.name,
+        strategy: createWorkflowScriptStrategy({
+          logger: childStream.logger,
+          store,
+          checkpointId,
+          script: input.script,
+          args: input.args,
+          name: meta.name,
+          createRunAgent: (hooks) =>
+            createWorkflowScriptAgentRunner(
+              parent,
+              input.agent,
+              checkpointId,
+              { executionId: runExecutionId, streamId: runChildStreamId },
+              hooks,
+            ),
+        }),
+        recordCost,
+      });
+    } catch (error) {
+      throw await releaseOwnedExecutionLeaseAfterFailure(runExecutionId, error);
+    }
+
     return {
       status: 'executed',
-      summary: `Completed workflow script '${run.meta.name}' (${formatResultCount(run.agentCalls, 'agent call')})`,
-      output: `${formatWorkflowResult(run.result)}${runLog.format()}`,
+      summary: `Launched workflow script '${meta.name}' (async)`,
+      output: [
+        `Workflow script '${meta.name}' launched. Its result and run log will be delivered automatically as a follow-up message when the run completes.`,
+        `Execution ID: ${runExecutionId}`,
+        `Stream tab: ${runChildStreamId}`,
+        `To check intermediate progress: executions tool with path=/executions/${runExecutionId} and action=wait (waits for next status change).`,
+        `To resume after a timeout or interruption: call this tool again with the same meta.name.`,
+      ].join('\n'),
     };
   }
 }

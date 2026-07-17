@@ -1,14 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setupPlatform } from '@test/support/setupPlatform';
-import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { TraceEmitter } from '@agent/trace';
-import {
-  deriveWorkflowScriptCheckpointId,
-  runPersistedWorkflowScript,
-} from '@agent/workflowScript';
+import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
-import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import { withRunContext } from '@agent/runtime/RunContext';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -17,10 +12,40 @@ import {
   DELEGATION_TOOL_CATEGORY,
   DELEGATION_TOOLS,
 } from '@shared/constants/delegationTools';
-import { getDefaultToolRegistry } from '@tools/registry';
-import { WorkflowScriptTool } from '@tools/delegation/WorkflowScriptTool';
+import { deriveExecutionId } from '@utils/core/idHash';
 
 setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
+
+const mocks = vi.hoisted(() => ({
+  registerExecution: vi.fn(),
+  startChildRunLoop: vi.fn(),
+  createChildStream: vi.fn(),
+  configureDelegatedChildApprovals: vi.fn(),
+}));
+
+// Spread the real storage module so `ExecutionLeaseActiveError`,
+// `getExecutionStore`, and lease helpers stay authentic; only registration is
+// spied so the launch can be observed without touching the async run loop.
+vi.mock('@agent/storage', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agent/storage')>();
+  return { ...actual, registerExecution: mocks.registerExecution };
+});
+
+vi.mock('@agent/runtime/childRunLoop', () => ({
+  startChildRunLoop: mocks.startChildRunLoop,
+}));
+
+vi.mock('@tools/childStream', () => ({
+  createChildStream: mocks.createChildStream,
+}));
+
+vi.mock('@tools/approval', () => ({
+  configureDelegatedChildApprovals: mocks.configureDelegatedChildApprovals,
+}));
+
+import { ExecutionLeaseActiveError } from '@agent/storage';
+import { WorkflowScriptTool } from '@tools/delegation/WorkflowScriptTool';
+import { getDefaultToolRegistry } from '@tools/registry';
 
 const executionId = '7154scripttool' as ExecutionId;
 const streamId = 'stream:workflow-script-tool' as StreamTabId;
@@ -29,14 +54,6 @@ const script = `export const meta = {
   description: 'tests the workflow script tool',
 }
 return await agent('saved call')`;
-const finalResult: AgentFinalResult = {
-  category: 'workflow',
-  outcome: 'completed',
-  outputs: [],
-  compileFailures: [],
-  diffs: [],
-  cost: 0.42,
-};
 
 function parentContext(): LaunchRunContext {
   return {
@@ -61,35 +78,44 @@ function checkpointIdFor(name: string): string {
   });
 }
 
+/** The deterministic run executionId derived from that checkpoint identity. */
+function runExecutionIdFor(name: string): ExecutionId {
+  return deriveExecutionId({ checkpointId: checkpointIdFor(name) });
+}
+
 async function callTool(options?: {
-  readonly toolCallId?: string;
   readonly script?: string;
   readonly recordCost?: (cost: number) => void;
-  readonly signal?: AbortSignal;
-  readonly trace?: TraceEmitter;
-  readonly args?: unknown;
 }) {
   return withRunContext(parentContext(), () =>
     withToolFileInteractionContext(
       {
         tracker: {} as never,
-        toolCallId: options?.toolCallId ?? 'tool-call',
-        trace: options?.trace ?? new TraceEmitter(),
-        signal: options?.signal,
+        toolCallId: 'tool-call',
+        trace: new TraceEmitter(),
         hooks: { recordSubagentCost: options?.recordCost ?? vi.fn() },
       },
       () =>
         new WorkflowScriptTool().call({
           agent: 'correct',
           script: options?.script ?? script,
-          ...(options &&
-            Object.hasOwn(options, 'args') && { args: options.args }),
         }),
     ),
   );
 }
 
-beforeEach(() => clearStoreCache());
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.registerExecution.mockResolvedValue(undefined);
+  mocks.createChildStream.mockImplementation((runId: ExecutionId): unknown => ({
+    childStreamId: `workflow-script#${runId}` as StreamTabId,
+    logger: new TraceEmitter(),
+    waitForInput: vi.fn(),
+    beginTurn: vi.fn(),
+    failTurn: vi.fn(),
+    finalize: vi.fn(),
+  }));
+});
 
 describe('WorkflowScriptTool', () => {
   it('is registered and classified without becoming a proposal tool', () => {
@@ -110,9 +136,10 @@ describe('WorkflowScriptTool', () => {
 
     expect(result.status).toBe('error');
     expect(result.diagnostics).toMatchObject({ type: 'validation_error' });
+    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 
-  it('requires a launched tool context and parent trace', async () => {
+  it('requires a launched tool context', async () => {
     const outside = await new WorkflowScriptTool().call({
       agent: 'correct',
       script,
@@ -121,56 +148,92 @@ describe('WorkflowScriptTool', () => {
       status: 'error',
       error: expect.stringContaining('active launched agent session'),
     });
-
-    const missingTrace = await withRunContext(parentContext(), () =>
-      withToolFileInteractionContext(
-        { tracker: {} as never, toolCallId: 'missing-trace' },
-        () => new WorkflowScriptTool().call({ agent: 'correct', script }),
-      ),
-    );
-    expect(missingTrace).toMatchObject({
-      status: 'error',
-      error: expect.stringContaining('parent progress trace'),
-    });
+    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 
-  it('resumes a named checkpoint even when the retry rewrites the script', async () => {
-    await runPersistedWorkflowScript({
-      store: getExecutionStore(executionId),
-      checkpointId: checkpointIdFor('tool-test'),
-      script,
-      runAgent: async () => finalResult,
-    });
-    clearStoreCache();
-    const recordCost = vi.fn();
+  it('launches the run as a detached child with a deterministic run id', async () => {
+    const result = await callTool();
 
-    const result = await callTool({ toolCallId: 'attempt-1', recordCost });
+    const runExecutionId = runExecutionIdFor('tool-test');
+    // The run id is derived from the checkpoint identity (NOT random), so a
+    // relaunch with the same meta.name re-roots at the same anchor and resume
+    // still works (#8712).
+    expect(mocks.registerExecution).toHaveBeenCalledWith(
+      runExecutionId,
+      expect.objectContaining({ agentCategory: 'workflow', agent: 'correct' }),
+      'tool-test',
+      executionId,
+    );
+    expect(mocks.createChildStream).toHaveBeenCalledWith(
+      runExecutionId,
+      streamId,
+      expect.objectContaining({
+        streamPrefix: 'workflow-script',
+        streamCategory: 'workflow',
+        agentName: 'tool-test',
+      }),
+    );
+    // The run's own stream inherits the orchestrator's approval ancestry.
+    expect(mocks.configureDelegatedChildApprovals).toHaveBeenCalledWith(
+      `workflow-script#${runExecutionId}`,
+      streamId,
+      'inherit',
+      expect.objectContaining({ id: 'workflow-script-test' }),
+    );
+    expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
+    const loopParams = mocks.startChildRunLoop.mock.calls[0]?.[0];
+    expect(loopParams).toMatchObject({
+      childStreamId: `workflow-script#${runExecutionId}`,
+      parentStreamId: streamId,
+      executionId: runExecutionId,
+      agentName: 'tool-test',
+    });
+    expect(loopParams.strategy).toMatchObject({
+      stageLabel: "Workflow script 'tool-test'",
+      launch: expect.any(Function),
+      isTerminal: expect.any(Function),
+    });
+    // Terminal-only: no runTurn (matches the native workflow strategy shape).
+    expect(loopParams.strategy.runTurn).toBeUndefined();
+    expect(loopParams.recordCost).toEqual(expect.any(Function));
 
     expect(result).toMatchObject({
       status: 'executed',
-      summary: "Completed workflow script 'tool-test' (1 agent call)",
+      summary: "Launched workflow script 'tool-test' (async)",
     });
-    expect(result.output).toContain('"category": "workflow"');
-    // The run log rides along so the invoking model sees what executed.
-    expect(result.output).toContain('=== Run log ===');
-    expect(result.output).toContain('Using saved result');
-    // Delta accounting: replayed entries were settled by the attempt that
-    // executed them, so a pure replay settles zero instead of double-billing.
-    expect(recordCost).toHaveBeenCalledTimes(1);
-    expect(recordCost).toHaveBeenCalledWith(0);
+    expect(result.output).toContain(`Execution ID: ${runExecutionId}`);
+    expect(result.output).toContain('same meta.name');
+  });
 
-    // A retrying model rewrites its source; same meta.name still resumes,
-    // and the unchanged agent() call replays instead of re-executing.
-    clearStoreCache();
-    const retryCost = vi.fn();
-    const retry = await callTool({
-      toolCallId: 'attempt-2',
-      recordCost: retryCost,
-      script: `${script}\n// retry rewrote me`,
+  it('regenerates the same run id across relaunches of one meta.name', async () => {
+    await callTool();
+    const first = mocks.startChildRunLoop.mock.calls[0]?.[0].executionId;
+    mocks.startChildRunLoop.mockClear();
+    // A retrying model rewrites its source; the deterministic run id and the
+    // meta.name-anchored checkpoint keep resume intact.
+    await callTool({ script: `${script}\n// retry rewrote me` });
+    const second = mocks.startChildRunLoop.mock.calls[0]?.[0].executionId;
+
+    expect(first).toBe(runExecutionIdFor('tool-test'));
+    expect(second).toBe(first);
+  });
+
+  it('reports already-running when the deterministic id is still leased', async () => {
+    const runExecutionId = runExecutionIdFor('tool-test');
+    mocks.registerExecution.mockRejectedValueOnce(
+      new ExecutionLeaseActiveError(runExecutionId, Date.now()),
+    );
+
+    const result = await callTool();
+
+    expect(result).toMatchObject({
+      status: 'executed',
+      summary: "Workflow script 'tool-test' is already running",
     });
-    expect(retry).toMatchObject({ status: 'executed' });
-    expect(retry.output).toContain('Using saved result');
-    expect(retryCost).toHaveBeenCalledWith(0);
+    expect(result.output).toContain(`Execution ID: ${runExecutionId}`);
+    // A relaunch over a live run never starts a second competing loop.
+    expect(mocks.createChildStream).not.toHaveBeenCalled();
+    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 
   it('derives distinct checkpoints when name or default agent differ', () => {
@@ -183,148 +246,5 @@ describe('WorkflowScriptTool', () => {
         parentExecutionId: executionId,
       }),
     ).not.toBe(base);
-  });
-
-  it('passes JSON arguments through and formats a zero-call result', async () => {
-    const recordCost = vi.fn();
-    const result = await callTool({
-      script: `export const meta = {
-  name: 'arguments',
-  description: 'returns its arguments',
-}
-return args`,
-      args: { question: 'What is conserved?' },
-      recordCost,
-    });
-
-    expect(result).toMatchObject({
-      status: 'executed',
-      summary: "Completed workflow script 'arguments' (0 agent calls)",
-      output: expect.stringContaining('"question": "What is conserved?"'),
-    });
-    expect(recordCost).toHaveBeenCalledTimes(1);
-    expect(recordCost).toHaveBeenCalledWith(0);
-  });
-
-  it('retains checkpoint arguments for null retries and replaces explicit values', async () => {
-    const argsScript = `export const meta = {
-  name: 'retained-arguments',
-  description: 'retains omitted retry arguments',
-}
-return args`;
-    await runPersistedWorkflowScript({
-      store: getExecutionStore(executionId),
-      checkpointId: checkpointIdFor('retained-arguments'),
-      script: argsScript,
-      args: { topic: 'geometry' },
-      runAgent: async () => finalResult,
-    });
-    clearStoreCache();
-
-    const result = await callTool({
-      script: `${argsScript}\n// revised retry`,
-      args: null,
-    });
-
-    expect(result).toMatchObject({
-      status: 'executed',
-      output: expect.stringContaining('"topic": "geometry"'),
-    });
-
-    clearStoreCache();
-    const replacement = await callTool({
-      script: `${argsScript}\n// retry with replacement arguments`,
-      args: { topic: 'analysis' },
-    });
-
-    expect(replacement).toMatchObject({
-      status: 'executed',
-      output: expect.stringContaining('"topic": "analysis"'),
-    });
-  });
-
-  it('bounds and normalizes the model-visible run log', async () => {
-    const result = await callTool({
-      script: `export const meta = {
-  name: 'bounded-log',
-  description: 'bounds model-visible activity',
-}
-for (let index = 0; index < 100; index += 1) log('line-' + index)
-log('oversized\\n' + 'x'.repeat(2_000))
-return 'done'`,
-    });
-
-    expect(result).toMatchObject({ status: 'executed' });
-    expect(result.output).toContain(
-      '=== Run log (last 80 lines; 21 earlier lines omitted) ===',
-    );
-    expect(result.output).not.toContain('line-20\n');
-    expect(result.output).toContain('line-21\n');
-    expect(result.output).toContain('oversized x');
-    expect(result.output).not.toContain('oversized\n');
-    expect(result.output?.length).toBeLessThan(42_000);
-  });
-
-  it('settles a retained journal when later script code fails', async () => {
-    const failingScript = `export const meta = {
-  name: 'retained-settlement',
-  description: 'tests retained journal settlement',
-}
-await agent('saved call')
-throw new Error('script failed after replay')`;
-    await expect(
-      runPersistedWorkflowScript({
-        store: getExecutionStore(executionId),
-        checkpointId: checkpointIdFor('retained-settlement'),
-        script: failingScript,
-        runAgent: async () => finalResult,
-      }),
-    ).rejects.toThrow('script failed after replay');
-    clearStoreCache();
-    const recordCost = vi.fn();
-
-    const result = await callTool({
-      recordCost,
-      script: failingScript,
-    });
-
-    expect(result).toMatchObject({
-      status: 'error',
-      error: expect.stringContaining('script failed after replay'),
-    });
-    // Failures carry the run log and the resume hint back to the model.
-    expect(result.error).toContain(
-      "journaled under meta.name 'retained-settlement'",
-    );
-    // The seeding attempt journaled the entry; this attempt only replays it.
-    expect(recordCost).toHaveBeenCalledTimes(1);
-    expect(recordCost).toHaveBeenCalledWith(0);
-  });
-
-  it('fails closed on malformed journal costs without recording a scalar', async () => {
-    // Distinct meta.name so this journal cannot alias the replay test's key.
-    const malformedScript = `export const meta = {
-  name: 'malformed-cost',
-  description: 'tests malformed journal cost settlement',
-}
-return await agent('saved call')`;
-    await runPersistedWorkflowScript({
-      store: getExecutionStore(executionId),
-      checkpointId: checkpointIdFor('malformed-cost'),
-      script: malformedScript,
-      runAgent: async () => ({ not: 'an agent result' }),
-    });
-    clearStoreCache();
-    const recordCost = vi.fn();
-
-    const result = await callTool({ recordCost, script: malformedScript });
-
-    expect(result).toMatchObject({
-      status: 'error',
-      error: expect.stringContaining(
-        'Workflow journal entry 0 is not an agent final result',
-      ),
-    });
-    expect(recordCost).not.toHaveBeenCalled();
   });
 });

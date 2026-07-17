@@ -6,6 +6,7 @@ import {
   type WorkflowAgentRunner,
 } from '@agent/workflowScript';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
 import { AgentCategory } from '@shared/schemas';
@@ -73,11 +74,26 @@ async function resolveInvocationInputFiles(
   return resolved;
 }
 
+/**
+ * Identity of the detached workflow-run that owns this script's `agent()`
+ * grandchildren. Re-rooting them here (instead of the orchestrator) gives a
+ * clean 3-level tree — orchestrator → run → agent — so killing the run
+ * cascades to its in-flight child. Both fields are stable across relaunch:
+ * `executionId` is derived deterministically from the checkpoint identity, so
+ * the grandchild execution ids and run-storage lineage stay consistent when a
+ * timed-out run is resumed under the same `meta.name`.
+ */
+export interface WorkflowRunIdentity {
+  readonly executionId: ExecutionId;
+  readonly streamId: StreamTabId;
+}
+
 /** Build the production `agent()` adapter for one workflow-script run. */
 export function createWorkflowScriptAgentRunner(
   parent: LaunchRunContext,
   defaultAgentName: string,
   checkpointId: string,
+  run: WorkflowRunIdentity,
   hooks?: {
     /** Fires per live child on success and failure with its total cost. */
     readonly onCost?: (
@@ -92,11 +108,11 @@ export function createWorkflowScriptAgentRunner(
     try {
       const { result } = await executeStableSubagentInBand({
         executionId: workflowChildExecutionId(
-          runScope.executionId,
+          run.executionId,
           checkpointId,
           invocation.key,
         ),
-        parentExecutionId: runScope.executionId,
+        parentExecutionId: run.executionId,
         signal: invocation.signal,
         prepare: async () => {
           const requestedAgent =
@@ -112,7 +128,7 @@ export function createWorkflowScriptAgentRunner(
               agentCategory: AgentCategory.Workflow,
             }),
             resolveInvocationInputFiles(
-              runScope.executionId,
+              run.executionId,
               invocation.options.inputFiles ?? [],
             ),
           ]);
@@ -149,8 +165,8 @@ export function createWorkflowScriptAgentRunner(
           return {
             configPayload,
             agentName: agent.name,
-            parentExecutionId: runScope.executionId,
-            parentStreamId: runScope.streamId,
+            parentExecutionId: run.executionId,
+            parentStreamId: run.streamId,
             runtimeHost: runScope.runtimeHost,
             session: runScope.session,
             signal: invocation.signal,
@@ -158,11 +174,12 @@ export function createWorkflowScriptAgentRunner(
             runtimeUnavailableTools: parent.runtimeUnavailableTools,
             // Live per-kind ancestry, matching LLM delegation: bash and
             // tool-edit each follow the parent's own bypass; proposal stays
-            // unlinked so a child's own delegations still prompt.
+            // unlinked so a child's own delegations still prompt. The run's own
+            // stream inherits from the orchestrator, so this stays transitive.
             onStreamResolved: (resolvedStreamId) => {
               configureDelegatedChildApprovals(
                 resolvedStreamId,
-                runScope.streamId,
+                run.streamId,
                 'inherit',
                 runScope.session,
               );
