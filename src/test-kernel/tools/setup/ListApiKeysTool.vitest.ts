@@ -69,7 +69,10 @@ describe('list_api_keys tool', () => {
     installPlatformWithKeys([apiKeySecretName('anthropic')]);
     const result = await tool.call({});
     assert.equal(result.status, 'executed');
-    assert.match(result.output ?? '', /Providers without a stored key/);
+    assert.match(
+      result.output ?? '',
+      /Providers without a key in TeXRA secrets/,
+    );
     assert.match(result.output ?? '', /openai/);
   });
 
@@ -123,7 +126,10 @@ describe('list_api_keys tool', () => {
     installPlatformWithKeys([apiKeySecretName('anthropic')]);
     const result = await tool.call({});
     assert.equal(result.status, 'executed');
-    assert.equal(result.summary, '1 stored secret: 1/2 provider keys');
+    assert.equal(
+      result.summary,
+      '1 stored secret: 1/2 persisted provider API keys',
+    );
   });
 
   it('summary uses plural form for multiple secrets', async () => {
@@ -133,15 +139,24 @@ describe('list_api_keys tool', () => {
     ]);
     const result = await tool.call({});
     assert.equal(result.status, 'executed');
-    assert.equal(result.summary, '2 stored secrets: 2/2 provider keys');
+    assert.equal(
+      result.summary,
+      '2 stored secrets: 2/2 persisted provider API keys',
+    );
   });
 
   it('shows missing providers even when no provider keys are stored', async () => {
     installPlatformWithKeys([GITHUB_TOKEN_STORAGE_KEY]);
     const result = await tool.call({});
     assert.equal(result.status, 'executed');
-    assert.match(result.output ?? '', /No provider API keys stored/);
-    assert.match(result.output ?? '', /Providers without a stored key/);
+    assert.match(
+      result.output ?? '',
+      /No provider API keys persisted in TeXRA secrets/,
+    );
+    assert.match(
+      result.output ?? '',
+      /Providers without a key in TeXRA secrets/,
+    );
     assert.match(result.output ?? '', /anthropic/);
     assert.match(result.output ?? '', /openai/);
   });
@@ -150,6 +165,6 @@ describe('list_api_keys tool', () => {
     installPlatformWithKeys(['texra.supabase.session']);
     const result = await tool.call({});
     assert.equal(result.status, 'executed');
-    assert.match(result.summary ?? '', /no provider keys/);
+    assert.match(result.summary ?? '', /no persisted provider API keys/);
   });
 });

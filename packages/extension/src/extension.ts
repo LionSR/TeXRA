@@ -534,7 +534,7 @@ export async function activate(context: vscode.ExtensionContext) {
       } satisfies vscode.TextDocumentShowOptions,
     );
   });
-  const defaultSetupPlatform = createDefaultSetupPlatform();
+  const defaultSetupPlatform = createDefaultSetupPlatform('extension');
   setSetupPlatform({
     ...defaultSetupPlatform,
     auth: {

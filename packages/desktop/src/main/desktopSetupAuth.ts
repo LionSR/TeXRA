@@ -7,7 +7,7 @@ let activeSignIn: (() => Promise<boolean>) | undefined;
 
 /** Install a process-owned setup adapter that resolves the active window lazily. */
 export function initializeDesktopSetupAuth(): void {
-  const defaults = createDefaultSetupPlatform();
+  const defaults = createDefaultSetupPlatform('desktop');
   setSetupPlatform({
     ...defaults,
     auth: {

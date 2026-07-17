@@ -66,7 +66,6 @@ import { GitHubSubscriptionTool } from './github';
 import {
   ProbeEnvironmentTool,
   VerifySetupTool,
-  SetApiKeyTool,
   UnsetApiKeyTool,
   ListApiKeysTool,
   InvokeCommandTool,
@@ -140,7 +139,6 @@ function createDefaultTools() {
     github_subscription: new GitHubSubscriptionTool(),
     probe_environment: new ProbeEnvironmentTool(),
     verify_setup: new VerifySetupTool(),
-    set_api_key: new SetApiKeyTool(),
     unset_api_key: new UnsetApiKeyTool(),
     list_api_keys: new ListApiKeysTool(),
     invoke_command: new InvokeCommandTool(),

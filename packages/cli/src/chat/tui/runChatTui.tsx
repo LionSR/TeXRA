@@ -83,7 +83,10 @@ import {
   chatAgentSupportsDelegation,
   chatToolUseAgentUsageError,
 } from './commands/handlers/agentModelCommands';
-import { applyCliApiModeSelection } from './commands/handlers/apiModeCommands';
+import {
+  applyCliApiModeSelection,
+  applyCliProviderApiKey,
+} from './commands/handlers/apiModeCommands';
 import { showCliMemoryPreview } from './commands/handlers/memoryCommands';
 import { loginFromChat } from './commands/handlers/loginCommands';
 import {
@@ -593,6 +596,8 @@ export async function runChat(
       applyCliModelSelection(nextModel, slashCommandContext()),
     onApiModeSelect: (nextMode) =>
       applyCliApiModeSelection(nextMode, slashCommandContext()),
+    onApiKeySave: (provider, key) =>
+      applyCliProviderApiKey(provider, key, slashCommandContext()),
     onLoginSelect: (value) => loginFromChat(value, context),
     onMemorySelect: showCliMemoryPreview,
     onSkillSelect: activateSkillForNextMessage,

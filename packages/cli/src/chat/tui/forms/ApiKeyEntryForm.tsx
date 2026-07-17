@@ -1,5 +1,5 @@
-// Masked provider-key entry, used by first-run onboarding (and reusable by a
-// future `/key` slash command). Props-in -> JSX-out: the captured key lives in
+// Masked provider-key entry shared by first-run onboarding and `/key`.
+// Props-in -> JSX-out: the captured key lives in
 // local state and is never rendered (BaseTextInput `masked`) or logged.
 
 import { Box, Text, useInput } from 'ink';
@@ -52,7 +52,7 @@ export function ApiKeyEntryForm(
         <BaseTextInput
           value={key}
           masked
-          placeholder="paste your API key (hidden)"
+          placeholder="enter your API key (hidden)"
           onChange={setKey}
           onSubmit={(value) => {
             const trimmed = value.trim();

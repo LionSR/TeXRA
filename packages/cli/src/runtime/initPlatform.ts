@@ -352,7 +352,7 @@ export async function initCliPlatform(
     serverSideKeysInitialized = true;
   }
 
-  const defaultSetupPlatform = createDefaultSetupPlatform();
+  const defaultSetupPlatform = createDefaultSetupPlatform('cli');
   setSetupPlatform({
     ...defaultSetupPlatform,
     auth: {

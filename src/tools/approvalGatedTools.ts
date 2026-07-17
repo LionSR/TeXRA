@@ -19,7 +19,6 @@ const APPROVAL_GATED_TOOL_NAME_LIST = [
   'invoke_command',
   'plan',
   'send_to_terminal',
-  'set_api_key',
   'str_replace_editor',
   'unset_api_key',
   'update_config',

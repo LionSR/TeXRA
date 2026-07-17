@@ -53,10 +53,6 @@ const InvokeCommandInputSchema = z.strictObject({
     .string()
     .min(1)
     .describe('VS Code command ID (must be in the setup allowlist).'),
-  args: z
-    .array(z.unknown())
-    .prefault([])
-    .describe('Positional arguments forwarded to the command.'),
 });
 
 type InvokeCommandInput = z.infer<typeof InvokeCommandInputSchema>;
@@ -81,20 +77,12 @@ export class InvokeCommandTool extends defineTool({
         'VS Code command invocation is unavailable in this host.',
       );
     }
-    await platform.commands.invoke(commandId, ...input.args);
-
-    // Never echo raw `args` back into the transcript: if the model passed
-    // a sensitive value (e.g. an API key to `texra.setApiKey`) that
-    // string would otherwise leak into logs, stream UI, and saved
-    // history. Report only the arity, which is enough for the agent to
-    // reason about what it just did.
-    const argPreview =
-      input.args.length > 0 ? ` (${input.args.length} arg(s), redacted)` : '';
+    await platform.commands.invoke(commandId);
 
     return {
       status: 'executed',
-      summary: `Invoked ${commandId}${argPreview}`,
-      output: `Invoked VS Code command "${commandId}"${argPreview}. If this opens a UI prompt, wait for the user's response before continuing.`,
+      summary: `Invoked ${commandId}`,
+      output: `Invoked VS Code command "${commandId}". If this opens a UI prompt, wait for the user's response before continuing.`,
     };
   }
 }
