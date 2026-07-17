@@ -16,7 +16,10 @@ import {
   StreamLogStore,
   StreamSnapshotStore,
 } from '@transcript';
-import { STREAM_DATA_DIR } from '@transcript/streamDataPaths';
+import {
+  stagedStreamDataDir,
+  STREAM_DATA_DIR,
+} from '@transcript/streamDataPaths';
 
 // Local imports - agent
 import {
@@ -2385,6 +2388,52 @@ describe('ProgressBackend', () => {
       expect(await StorageFS.exists(`executions/${executionId}`)).toBe(false);
       expect(GoalStore.getForStream(stream)).toBeNull();
     } finally {
+      await GoalStore.forget(stream);
+      await backend.state.clearAll();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('finishes committed staged residue without requiring a reload', async () => {
+    const stream = 'tool@deepseek#c69661' as StreamTabId;
+    const executionId = 'c69661' as ExecutionId;
+    const { backend, session } = createIsolatedRecordingBackend();
+    backend.state.snapshots.setTaskState(
+      stream,
+      toolUseTaskState('search', 'deepseekproT'),
+      executionId,
+    );
+    await writeExecutionConfig(executionId);
+    await backend.state.flush();
+    await GoalStore.start(stream, 'finish same-session cleanup');
+    const deletion = await backend.state.snapshots.stageDeleteStream(stream);
+    const deleteStorage = StorageFS.delete.bind(StorageFS);
+    const deleteSpy = vi
+      .spyOn(StorageFS, 'delete')
+      .mockImplementationOnce(async (target, options) => {
+        if (target === stagedStreamDataDir(stream)) {
+          throw new Error('staged snapshot directory is locked');
+        }
+        await deleteStorage(target, options);
+      });
+
+    try {
+      await deletion.commit();
+      deleteSpy.mockRestore();
+      expect(await backend.state.snapshots.listStagedDeletions()).toContain(
+        stream,
+      );
+
+      await backend.state.clearAll();
+
+      expect(await backend.state.snapshots.listStagedDeletions()).not.toContain(
+        stream,
+      );
+      expect(await StorageFS.exists(`executions/${executionId}`)).toBe(false);
+      expect(GoalStore.getForStream(stream)).toBeNull();
+    } finally {
+      deleteSpy.mockRestore();
       await GoalStore.forget(stream);
       await backend.state.clearAll();
       backend.dispose();
