@@ -12,7 +12,6 @@ import {
   designTokens,
   animationStyles,
   commonViewStyles,
-  compactBadgeStyles,
 } from '@shared/styles';
 import {
   DEFAULT_STREAM_METADATA_STATUS,
@@ -126,7 +125,6 @@ export class StreamHeader extends LitElement {
     designTokens,
     animationStyles,
     commonViewStyles,
-    compactBadgeStyles,
     statusIndicatorStyles,
     toolbarToggleStyles,
     css`
@@ -240,13 +238,14 @@ export class StreamHeader extends LitElement {
       }
 
       /* Native wa-badge (brand=active / warning=paused, quiet 'filled'
-         appearance); compact padding/gap/font-size come from the shared
-         .badge-compact class (compactBadgeStyles). */
+         appearance), compacted to the prior chip padding. */
       .goal-chip {
         flex-shrink: 0;
       }
 
       .goal-chip::part(base) {
+        gap: var(--wa-space-3xs);
+        padding: 0 var(--wa-space-2xs);
         font-weight: var(--font-weight-medium);
       }
 
@@ -477,7 +476,7 @@ export class StreamHeader extends LitElement {
       : label;
     return html`<wa-badge
         id=${ELEMENT_IDS.GOAL_CHIP}
-        class="goal-chip badge-compact"
+        class="goal-chip"
         variant=${isPaused ? 'warning' : 'brand'}
         appearance="filled"
         aria-label=${tooltip}
