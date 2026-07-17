@@ -197,16 +197,14 @@ export class ModelHandlerOpenAI<
   /**
    * Creates a new OpenAI client using the stored credentials.
    * Handles API key retrieval, base URL resolution, and logging.
-   * @param providerName Optional name used for logging purposes
    */
-  protected async createOpenAIClient(
-    providerName: string = this.config.provider,
-  ): Promise<OpenAI> {
+  protected async createOpenAIClient(): Promise<OpenAI> {
     const apiKey = await this.getApiKey();
     const baseURL = this.getBaseUrl();
-    this.logger.debug(`Using ${providerName} API key. Base URL: ${baseURL}`);
     // there is a time out parameter that can be set; default is 10 minutes
-    return new OpenAI({ apiKey, baseURL });
+    const client = new OpenAI({ apiKey, baseURL });
+    this.logOpenAICompatibleClientConfig(client.baseURL);
+    return client;
   }
 
   /** Returns OpenAI client with configured API key. */
