@@ -79,7 +79,7 @@ function createRunLogCollector(): RunLogCollector {
       if (lines.length === 0) return '';
       const header =
         omitted > 0
-          ? `=== Run log (last ${lines.length} lines; ${omitted} earlier lines omitted) ===`
+          ? `=== Run log (last ${lines.length} lines; ${omitted} earlier ${omitted === 1 ? 'line' : 'lines'} omitted) ===`
           : '=== Run log ===';
       return `\n\n${header}\n${lines.join('\n')}`;
     },
