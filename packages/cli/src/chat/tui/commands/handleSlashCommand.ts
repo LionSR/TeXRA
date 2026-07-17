@@ -274,7 +274,9 @@ export async function handleTuiSlashCommand(
           ? ` Did you mean /${suggestion.name}?`
           : '';
         appendLocalAssistantTranscript(
-          `Unknown command: /${parsed.name}.${didYouMean} Type /help to list commands.`,
+          shouldRedactSlashInput(line)
+            ? 'Unknown command with protected input. Type /help to list commands.'
+            : `Unknown command: /${parsed.name}.${didYouMean} Type /help to list commands.`,
         );
       }
       return true;

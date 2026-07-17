@@ -129,6 +129,9 @@ describe('InputBar slash submit', () => {
       expect(shouldPersistInputHistory('/key:private-value')).toBe(false);
       expect(shouldPersistInputHistory('/key/private-value')).toBe(false);
       expect(shouldPersistInputHistory('/keysk-private-value')).toBe(false);
+      expect(shouldPersistInputHistory('/keyArbitraryCredentialValue')).toBe(
+        false,
+      );
       expect(shouldPersistInputHistory('/ky private-value')).toBe(false);
       expect(shouldPersistInputHistory('/kye:sk-private-value')).toBe(false);
       expect(shouldPersistInputHistory('/apikey private-value')).toBe(false);

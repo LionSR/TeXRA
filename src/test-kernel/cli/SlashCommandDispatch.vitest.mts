@@ -212,7 +212,33 @@ describe('handleTuiSlashCommand', () => {
       ),
     ).toBe(true);
     expect(activeForm.get()).toBeUndefined();
-    expect(lastEntryText()).toContain('Unknown command: /keyboard');
+    expect(lastEntryText()).toContain('Unknown command with protected input');
+  });
+
+  it('redacts arbitrary concatenated key input without forcing the key form', async () => {
+    registerBuiltinSlashCommands();
+    const secret = 'keyArbitraryCredentialValue';
+
+    expect(
+      await handleTuiSlashCommand(`/${secret}`, createContext(createSession())),
+    ).toBe(true);
+    expect(activeForm.get()).toBeUndefined();
+    expect(JSON.stringify([...streams.get().values()])).not.toContain(secret);
+  });
+
+  it('routes the normalized /apikey spelling to the protected form', async () => {
+    registerBuiltinSlashCommands();
+
+    expect(
+      await handleTuiSlashCommand(
+        '/apikey private-value',
+        createContext(createSession()),
+      ),
+    ).toBe(true);
+    expect(activeForm.get()?.commandName).toBe('key');
+    expect(JSON.stringify([...streams.get().values()])).not.toContain(
+      'private-value',
+    );
   });
 
   it('uses ChatGPT device-code login from a likely remote shell', async () => {

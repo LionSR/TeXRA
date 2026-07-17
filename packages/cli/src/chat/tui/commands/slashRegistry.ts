@@ -104,6 +104,7 @@ function redactedCommandForToken(token: string): SlashCommand | undefined {
       commandCandidates(command).some((candidate) =>
         variants.some(
           (variant) =>
+            variant === candidate ||
             isAdjacentTransposition(variant, candidate) ||
             hasConcatenatedCredentialPrefix(variant, candidate),
         ),
@@ -155,7 +156,16 @@ export function shouldRedactSlashInput(text: string): boolean {
 
   const registered = findSlashCommand(parsed.name);
   if (registered !== undefined) return registered.redactInput === true;
-  return parsed.remainder.trim().length > 0;
+  if (parsed.remainder.trim().length > 0) return true;
+  return listSlashCommands().some(
+    (command) =>
+      command.redactInput === true &&
+      commandCandidates(command).some(
+        (candidate) =>
+          parsed.name.length > candidate.length &&
+          parsed.name.toLowerCase().startsWith(candidate),
+      ),
+  );
 }
 
 /**
