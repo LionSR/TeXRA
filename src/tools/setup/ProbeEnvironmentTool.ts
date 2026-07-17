@@ -204,7 +204,8 @@ function buildHeadline(summary: {
   if (
     summary.credentials.hasAnyUsableCredential &&
     !summary.credentials.anyApiKeySet &&
-    !summary.credentials.researcherAccess.authenticated
+    !summary.credentials.researcherAccess.authenticated &&
+    !summary.credentials.chatGptSubscription.enabled
   ) {
     creds.push('usable credential');
   }

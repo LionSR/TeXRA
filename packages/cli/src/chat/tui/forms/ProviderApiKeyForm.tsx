@@ -1,10 +1,13 @@
+// Third-party imports
 import { Text } from 'ink';
 import { useState } from 'react';
 
+// Local imports
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+// Local file imports
 import { ApiKeyEntryForm } from './ApiKeyEntryForm';
 import { ListForm } from './_shared/ListForm';
 

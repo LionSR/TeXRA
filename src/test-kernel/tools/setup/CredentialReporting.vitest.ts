@@ -94,6 +94,10 @@ describe('setup credential reporting', () => {
       result.output ?? '',
       /credentials: ChatGPT subscription enabled/,
     );
+    assert.doesNotMatch(
+      result.output ?? '',
+      /ChatGPT subscription enabled \+ usable credential/,
+    );
     assert.match(result.output ?? '', /"hasAnyUsableCredential": true/);
     assert.match(result.output ?? '', /"anyApiKeySet": false/);
     assert.match(result.output ?? '', /"chatGptSubscription"/);
