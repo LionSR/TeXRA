@@ -6,10 +6,13 @@ import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 import { modelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
 
 // Local imports - model
-import { KIMI_CODE_MODEL_CONFIGS } from '@model/kimiCodeModels';
+import {
+  isKimiCodeExclusiveModel,
+  isKimiSubscriptionEligible,
+  kimiCodeWireModelId,
+} from '@model/kimiCodeSubscriptionRouting';
 import {
   allowsModelRelay,
-  resolveDirectModelBaseUrl,
   resolveModelApiKeyProvider,
   resolveModelSource,
   shouldRouteModelThroughOpenRouter,
@@ -21,91 +24,77 @@ import {
 } from '@model/setupModelDefaults';
 
 describe('Kimi Code model registry', () => {
-  it('exposes one entry for each user-selectable model', () => {
-    expect(Object.keys(KIMI_CODE_MODEL_CONFIGS).toSorted()).toEqual([
-      'kimiCodeCoding',
-      'kimiCodeCodingFast',
-      'kimiCodeK3',
-    ]);
-  });
-
   it.each([
-    ['kimiCodeK3', 'k3'],
-    ['kimiCodeCoding', 'kimi-for-coding'],
-    ['kimiCodeCodingFast', 'kimi-for-coding-highspeed'],
-  ])('maps %s to managed model %s', (texraId, fullName) => {
-    const config = KIMI_CODE_MODEL_CONFIGS[texraId];
+    ['kimiCoding', 'kimi-for-coding'],
+    ['kimiCodingFast', 'kimi-for-coding-highspeed'],
+  ])('registers exclusive plan alias %s with wire id %s', (texraId, fullName) => {
+    const config = MODEL_CONFIGS[texraId];
     expect(config).toBeDefined();
     expect(config.fullName).toBe(fullName);
     expect(config.provider).toBe(ModelProvider.MOONSHOT);
     expect(config.contextWindow).toBe(262_144);
+    expect(config.baseUrl).toBe('https://api.kimi.com/coding/v1');
+    expect(isKimiCodeExclusiveModel(config)).toBe(true);
     expect(resolveModelSource(config)).toBe('kimiCode');
-    expect(resolveDirectModelBaseUrl(config)).toBe(
-      'https://api.kimi.com/coding/v1',
-    );
+    // Plan aliases already use the wire id as fullName — no rename.
+    expect(kimiCodeWireModelId(config)).toBe(fullName);
   });
 
-  it('resolves Kimi Code entries through the runtime registry', () => {
-    expect(getRuntimeModelConfig('kimiCodeK3')).toBe(
-      KIMI_CODE_MODEL_CONFIGS.kimiCodeK3,
-    );
-    expect(getRuntimeModelConfig('kimiCodeCodingFast')).toBe(
-      KIMI_CODE_MODEL_CONFIGS.kimiCodeCodingFast,
-    );
+  it('flags kimi3 as dual-backend (subscription-eligible, not exclusive)', () => {
+    const config = MODEL_CONFIGS.kimi3;
+    expect(isKimiSubscriptionEligible(config)).toBe(true);
+    expect(isKimiCodeExclusiveModel(config)).toBe(false);
+    // The open platform stays its home: source and key owner are moonshot.
+    expect(resolveModelSource(config)).toBe(ModelProvider.MOONSHOT);
+    expect(resolveModelApiKeyProvider(config, false)).toBe('moonshot');
+    // On the coding endpoint the wire id is `k3`.
+    expect(kimiCodeWireModelId(config)).toBe('k3');
   });
 
-  it('keeps ordinary static registry lookups unchanged', () => {
+  it('resolves plan aliases through the runtime registry like any model', () => {
+    expect(getRuntimeModelConfig('kimiCoding')).toBe(MODEL_CONFIGS.kimiCoding);
     expect(getRuntimeModelConfig('kimi25T')).toBe(MODEL_CONFIGS.kimi25T);
-  });
-
-  it('exports immutable registry entries', () => {
-    const config = KIMI_CODE_MODEL_CONFIGS.kimiCodeK3;
-    expect(Object.isFrozen(KIMI_CODE_MODEL_CONFIGS)).toBe(true);
-    expect(Object.isFrozen(config)).toBe(true);
-    expect(Object.isFrozen(config.directAccess)).toBe(true);
-    expect(Object.isFrozen(config.capabilities)).toBe(true);
   });
 });
 
 describe('Kimi Code routing', () => {
   it('keeps the direct Kimi Code route when OpenRouter is globally enabled', () => {
+    expect(resolveModelApiKeyProvider(MODEL_CONFIGS.kimiCoding, false)).toBe(
+      'kimiCode',
+    );
+    expect(resolveModelApiKeyProvider(MODEL_CONFIGS.kimiCoding, true)).toBe(
+      'kimiCode',
+    );
     expect(
-      resolveModelApiKeyProvider(KIMI_CODE_MODEL_CONFIGS.kimiCodeK3, false),
-    ).toBe('kimiCode');
-    expect(
-      resolveModelApiKeyProvider(KIMI_CODE_MODEL_CONFIGS.kimiCodeK3, true),
-    ).toBe('kimiCode');
-    expect(
-      shouldRouteModelThroughOpenRouter(
-        KIMI_CODE_MODEL_CONFIGS.kimiCodeK3,
-        true,
-      ),
+      shouldRouteModelThroughOpenRouter(MODEL_CONFIGS.kimiCoding, true),
     ).toBe(false);
   });
 
   it('uses the shared Kimi handler', () => {
     expect(
-      modelHandlerCompatibilityKey(
-        KIMI_CODE_MODEL_CONFIGS.kimiCodeK3,
-        false,
-        false,
-      ),
+      modelHandlerCompatibilityKey(MODEL_CONFIGS.kimiCoding, false, false),
     ).toBe('ModelHandlerKimi');
   });
 
   it('never sends managed-service credentials through the TeXRA relay', () => {
-    expect(allowsModelRelay(KIMI_CODE_MODEL_CONFIGS.kimiCodeCoding)).toBe(
-      false,
+    expect(allowsModelRelay(MODEL_CONFIGS.kimiCoding)).toBe(false);
+    expect(allowsModelRelay(MODEL_CONFIGS.kimiCodingFast)).toBe(false);
+  });
+
+  it('does not divert other moonshot models off their normal routes', () => {
+    expect(allowsModelRelay(MODEL_CONFIGS.kimi3)).toBe(true);
+    expect(resolveModelApiKeyProvider(MODEL_CONFIGS.kimi25T, false)).toBe(
+      'moonshot',
     );
   });
 });
 
 describe('Kimi Code setup defaults', () => {
   it('includes a setup model for the kimiCode provider', () => {
-    expect(SETUP_MODEL_BY_PROVIDER.kimiCode).toBe('kimiCodeCoding');
+    expect(SETUP_MODEL_BY_PROVIDER.kimiCode).toBe('kimiCoding');
   });
 
   it('resolves the preferred setup model to a live Kimi Code entry', () => {
-    expect(resolveSetupModel('kimiCode')).toBe('kimiCodeCoding');
+    expect(resolveSetupModel('kimiCode')).toBe('kimiCoding');
   });
 });

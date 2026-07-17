@@ -23,6 +23,7 @@ import {
   type ModelOptionsAccess,
   type ModelOptionsServerAccess,
 } from '@model/computeModelOptions';
+import type { ModelOptionData } from '@shared/schemas';
 import { FAST_FIRST_RESPONSE_HINT } from '@shared/constants/fastModels';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { AgentCategory } from '@shared/schemas/agent';
@@ -156,7 +157,7 @@ describe('computeModelOptionsData relay quota state', () => {
       { [apiKeySecretName('kimiCode')]: 'sk-kimi-code' },
     );
 
-    const [model] = await computeModelOptionsData(['kimiCodeCoding'], access);
+    const [model] = await computeModelOptionsData(['kimiCoding'], access);
 
     expect(model).toMatchObject({
       provider: 'kimiCode',
@@ -176,8 +177,8 @@ describe('computeModelOptionsData relay quota state', () => {
       { [apiKeySecretName('moonshot')]: 'sk-moonshot' },
     );
 
-    const [model] = await computeModelOptionsData(['kimiCodeCoding'], access);
-    const reason = await getModelUnavailableReason('kimiCodeCoding', access);
+    const [model] = await computeModelOptionsData(['kimiCoding'], access);
+    const reason = await getModelUnavailableReason('kimiCoding', access);
 
     expect(model).toMatchObject({
       provider: 'kimiCode',
@@ -185,9 +186,10 @@ describe('computeModelOptionsData relay quota state', () => {
       disabled: true,
     });
     expect(reason).toBe(
-      'Model "kimiCodeCoding" requires your Kimi Code API key. Provide it to continue.',
+      'Model "kimiCoding" requires your Kimi Code API key. Provide it to continue.',
     );
   });
+
 
   it('falls back to personal keys when included access is disabled without quota auto-switch', async () => {
     const access = createModelOptionsAccess({
@@ -483,5 +485,65 @@ describe('computeModelOptionsData relay quota state', () => {
     await computeModelOptionsData(['gpt55']);
 
     expect(accessChecks).toBe(2);
+  });
+});
+
+describe('computeModelOptionsData Kimi Code routing (dual-backend kimi3)', () => {
+  beforeEach(() => {
+    invalidateApiKeyCache();
+    invalidateModelOptionsCache();
+  });
+
+  async function kimi3Option(
+    globalState: Record<string, unknown>,
+    secrets: Record<string, string>,
+  ): Promise<ModelOptionData> {
+    await installPlatform({
+      globalState: { [GlobalStateKey.ENABLED_MODELS]: ['kimi3'], ...globalState },
+      secrets,
+    });
+    const [model] = await computeModelOptionsData(['kimi3']);
+    return model;
+  }
+
+  it('routes to Moonshot by default (Prefer Kimi Code off)', async () => {
+    const model = await kimi3Option(
+      {},
+      {
+        [apiKeySecretName('kimiCode')]: 'sk-kimi-code',
+        [apiKeySecretName('moonshot')]: 'sk-moonshot',
+      },
+    );
+    expect(model).toMatchObject({
+      provider: 'moonshot',
+      availability: 'provider-key',
+      disabled: false,
+    });
+  });
+
+  it('routes to Kimi Code when preferred and a Kimi Code key is set', async () => {
+    const model = await kimi3Option(
+      { [GlobalStateKey.KIMI_CODE_PREFER]: true },
+      { [apiKeySecretName('kimiCode')]: 'sk-kimi-code' },
+    );
+    // Picker must show the Kimi Code route the factory will actually take,
+    // even with no Moonshot key present.
+    expect(model).toMatchObject({
+      provider: 'kimiCode',
+      availability: 'provider-key',
+      disabled: false,
+    });
+  });
+
+  it('stays on Moonshot when preferred but no Kimi Code key exists', async () => {
+    const model = await kimi3Option(
+      { [GlobalStateKey.KIMI_CODE_PREFER]: true },
+      { [apiKeySecretName('moonshot')]: 'sk-moonshot' },
+    );
+    expect(model).toMatchObject({
+      provider: 'moonshot',
+      availability: 'provider-key',
+      disabled: false,
+    });
   });
 });

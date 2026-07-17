@@ -146,6 +146,15 @@ export function getGLMCodingPlan(): boolean {
 }
 
 /**
+ * Whether the user opted to route dual-backend Kimi models (K3) through the
+ * Kimi Code coding endpoint when a Kimi Code API key is set. The two
+ * coding-only Kimi models always use that key regardless of this switch.
+ */
+export function getPreferKimiCode(): boolean {
+  return read(GlobalStateKey.KIMI_CODE_PREFER, false);
+}
+
+/**
  * Per-process override for the OpenAI WebSocket toggle, set from the CLI
  * `--websocket`/`--no-websocket` flag. The global-state key has no CLI setter,
  * so this lets a single CLI invocation flip the transport without persisting to

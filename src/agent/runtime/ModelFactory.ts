@@ -19,7 +19,14 @@ import {
 } from '@auth/codex';
 import { AgentError } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { apiKeyExists } from '@model/apiProviders';
 import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from '@model/codexSubscriptionRouting';
+import {
+  isKimiCodeExclusiveModel,
+  isKimiSubscriptionEligible,
+  kimiCodeRuntimeConfig,
+  resolveKimiCodeRoute,
+} from '@model/kimiCodeSubscriptionRouting';
 import { isGpt5ModelName } from '@model/modelNames';
 import {
   isOpenRouterRoutingUnsupported,
@@ -29,7 +36,7 @@ import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import type { AgentCategory } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getConfig } from '@utils/config/configUtils';
-import { getUseOpenRouter } from '@utils/config/providerConfig';
+import { getPreferKimiCode, getUseOpenRouter } from '@utils/config/providerConfig';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 const CHANNEL = 'ModelFactory';
@@ -516,6 +523,32 @@ async function createModelHandlerForResolvedCompatibilityKey(
         new ModelHandlerCodex(config),
         'ModelHandlerOpenAIResponse',
       );
+    }
+  }
+
+  // Kimi Code (Moonshot coding subscription via a console API key) — a
+  // key-neutral override of the Kimi chat-completions path. The conversation
+  // format is unchanged, so the persisted compatibility key stays
+  // 'ModelHandlerKimi' and resume paths are unaffected; only the request's
+  // backend model id, base URL, and credential change. Exclusive plan aliases
+  // already carry the pinned coding baseUrl (the registry-fact predicates route
+  // their key and endpoint automatically), so they keep `config` untouched.
+  // Dual-backend `kimi3` is rerouted only while the "Prefer Kimi Code" switch
+  // is on and a key is stored, by swapping in a synthesized runtime config that
+  // the normal ModelHandlerKimi switch below then builds.
+  if (
+    compatibilityKey === 'ModelHandlerKimi' &&
+    isKimiSubscriptionEligible(config)
+  ) {
+    const keySet = await apiKeyExists(platform().secrets, 'kimiCode');
+    const route = resolveKimiCodeRoute(
+      config,
+      useOpenRouter,
+      keySet,
+      getPreferKimiCode(),
+    );
+    if (route === 'kimiCode' && !isKimiCodeExclusiveModel(config)) {
+      config = kimiCodeRuntimeConfig(config);
     }
   }
 

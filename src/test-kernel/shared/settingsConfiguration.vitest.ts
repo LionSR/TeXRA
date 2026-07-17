@@ -16,6 +16,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   getGLMUseChina,
   getMoonshotUseChina,
+  getPreferKimiCode,
 } from '@utils/config/providerConfig';
 
 interface PackageConfigurationProperty {
@@ -98,6 +99,7 @@ describe('TexraSettingsSchema', () => {
     const globalStateDefaults: Record<string, boolean> = {
       [GlobalStateKey.GLM_USE_CHINA]: getGLMUseChina(),
       [GlobalStateKey.MOONSHOT_USE_CHINA]: getMoonshotUseChina(),
+      [GlobalStateKey.KIMI_CODE_PREFER]: getPreferKimiCode(),
     };
 
     for (const setting of Object.values(PROVIDER_VSCODE_SETTINGS).flat()) {

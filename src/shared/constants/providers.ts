@@ -418,5 +418,15 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
       globalStateKey: GlobalStateKey.GLM_CODING_PLAN,
     },
   ],
+  kimiCode: [
+    {
+      key: GlobalStateKey.KIMI_CODE_PREFER,
+      label: 'Prefer Kimi Code',
+      description:
+        'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
+      defaultValue: false,
+      globalStateKey: GlobalStateKey.KIMI_CODE_PREFER,
+    },
+  ],
   openrouter: [USE_OPENROUTER_PROVIDER_SETTING],
 };

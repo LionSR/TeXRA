@@ -1139,14 +1139,10 @@ describe('CLI model flag validation contract', () => {
 
   it('recognizes Kimi Code membership models', () => {
     expect(knownCliModelIds()).toEqual(
-      expect.arrayContaining([
-        'kimiCodeK3',
-        'kimiCodeCoding',
-        'kimiCodeCodingFast',
-      ]),
+      expect.arrayContaining(['kimiCoding', 'kimiCodingFast']),
     );
-    expect(resolveKnownCliModelId('kimi-for-coding')).toBe('kimiCodeCoding');
-    expect(resolveKnownCliModelId('Kimi Code K3')).toBe('kimiCodeK3');
+    expect(resolveKnownCliModelId('kimi-for-coding')).toBe('kimiCoding');
+    expect(resolveKnownCliModelId('Kimi for Coding')).toBe('kimiCoding');
   });
 });
 
