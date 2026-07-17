@@ -1,5 +1,6 @@
 import type { StreamPhase, StreamTabId } from '@shared/schemas';
 
+import { isChildStreamRemoved } from './childExecutions';
 import { syncStreamLog } from './subscribeStreamLog';
 import {
   finalizeAssistantTranscriptEntries,
@@ -22,6 +23,7 @@ export function projectStreamTranscript(
   streamId: StreamTabId,
   options: ProjectStreamTranscriptOptions = {},
 ): void {
+  if (isChildStreamRemoved(streamId)) return;
   syncStreamLog(streamId);
   if (options.finalize) {
     finalizeAssistantTranscriptEntries(streamId);

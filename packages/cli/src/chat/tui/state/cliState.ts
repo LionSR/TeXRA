@@ -73,6 +73,10 @@ export type ConversationEntry =
   | (ConversationEntryBase & {
       readonly role: 'tool';
       readonly toolUse: NormalizedToolUse;
+      /** Progress emitted by one delegate_workflow_script call. */
+      readonly workflowScriptFacts?: readonly WorkflowScriptProgressFact[];
+      /** Terminal trace outcome, kept outside the narrower normalized schema. */
+      readonly workflowScriptOutcome?: WorkflowScriptOutcome;
     })
   | (ConversationEntryBase & {
       readonly role: 'process';
@@ -86,6 +90,32 @@ export interface CompletedProcessTranscript {
   readonly elapsed?: string | null;
   readonly isError: boolean;
   readonly tailLines: readonly string[];
+}
+
+/** Immutable workflow-script fact appended once to terminal scrollback. */
+export type WorkflowScriptProgressFact =
+  | {
+      readonly type: 'phase';
+      readonly id: string;
+      readonly stageId: string;
+      readonly label: string;
+    }
+  | {
+      readonly type: 'log';
+      readonly id: string;
+      readonly level: 'debug' | 'info' | 'warn' | 'error';
+      readonly message: string;
+      readonly phaseId?: string;
+    };
+
+type WorkflowScriptOutcome = 'completed' | 'failed';
+
+/** Transient ownership of workflow events by one open tool invocation. */
+export interface ActiveWorkflowScriptInvocation {
+  readonly logId: string;
+  readonly parentStageId: string | undefined;
+  readonly phaseIds: ReadonlySet<string>;
+  readonly nextFactIndex: number;
 }
 
 export interface SessionMeta {
@@ -139,6 +169,7 @@ export interface StreamSlice {
   readonly conversation: ConversationProgress | undefined;
   readonly roundStage?: RoundStage | undefined;
   readonly entries: readonly ConversationEntry[];
+  readonly activeWorkflowScript?: ActiveWorkflowScriptInvocation;
   readonly queuedFollowUps: number;
   readonly queuedFollowUpMessages: readonly string[];
   readonly activeProcesses: readonly ActiveChildInfo[];
@@ -231,14 +262,21 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
 // re-render on an actual change.
 
 const STREAMS = signal<ReadonlyMap<StreamTabId, StreamSlice>>(new Map());
+const RETIRED_STREAMS = new Set<StreamTabId>();
 
 /** Per-stream state map, keyed by `StreamTabId`. */
 export const streams = STREAMS;
+
+/** Whether reset retired this stream identity from the current state lifetime. */
+export function isCliStreamRetired(streamId: StreamTabId): boolean {
+  return RETIRED_STREAMS.has(streamId);
+}
 
 export function patchStream(
   streamId: StreamTabId,
   update: (slice: StreamSlice) => StreamSlice,
 ): void {
+  RETIRED_STREAMS.delete(streamId);
   const current = STREAMS.get();
   const slice = current.get(streamId) ?? emptySlice(streamId);
   const next = update(slice);
@@ -288,8 +326,10 @@ export function setStreamStatusInCliState({
   readonly status: StreamPhase;
   readonly substate?: StreamSubstate;
   readonly streamId: StreamTabId;
-}): void {
-  if (isChildStreamRemoved(streamId)) return;
+}): boolean {
+  if (isChildStreamRemoved(streamId) || RETIRED_STREAMS.has(streamId)) {
+    return false;
+  }
   const current = STREAMS.get();
   const existingSlice = current.get(streamId);
   const targetSlice = streamSliceWithStatus(
@@ -298,10 +338,11 @@ export function setStreamStatusInCliState({
     substate,
     nowMs,
   );
-  if (targetSlice === existingSlice) return;
+  if (targetSlice === existingSlice) return true;
   const out = new Map(current);
   out.set(streamId, targetSlice);
   STREAMS.set(out);
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -482,6 +523,12 @@ export function removeStream(streamId: StreamTabId): void {
 // registry other state modules use to reset their own signals in step.
 
 const RESET_HOOKS = new Set<() => void>();
+let CLI_STATE_GENERATION = 0;
+
+/** Identity of the current signal-state lifetime for asynchronous subscribers. */
+export function getCliStateGeneration(): number {
+  return CLI_STATE_GENERATION;
+}
 
 export function registerCliStateResetHook(resetHook: () => void): void {
   RESET_HOOKS.add(resetHook);
@@ -490,6 +537,9 @@ export function registerCliStateResetHook(resetHook: () => void): void {
 export function resetCliState(
   nextSessionMeta: SessionMeta = defaultSessionMeta(),
 ): void {
+  CLI_STATE_GENERATION += 1;
+  RETIRED_STREAMS.clear();
+  for (const streamId of streams.get().keys()) RETIRED_STREAMS.add(streamId);
   sessionMeta.set(nextSessionMeta);
   activeStreamId.set(undefined);
   rootStreamId.set(undefined);

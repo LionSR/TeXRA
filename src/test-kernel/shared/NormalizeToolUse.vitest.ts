@@ -69,9 +69,36 @@ describe('normalizeToolUseData', () => {
       status: 'completed',
     });
     expect(normalized?.isError).toBe(true);
+    expect(normalized?.status).toBe('failed');
     expect(normalized?.errorText).toBe('no such file');
     // headerSummary falls back to errorText when there's no summary
     expect(normalized?.headerSummary).toBe('no such file');
+  });
+
+  it('accepts failed runtime tool status directly', () => {
+    const normalized = normalizeToolUseData({
+      toolName: 'Bash',
+      error: 'cancelled by user',
+      status: 'failed',
+    });
+
+    expect(normalized).toMatchObject({
+      errorText: 'cancelled by user',
+      isError: true,
+      status: 'failed',
+    });
+  });
+
+  it('treats a status-only runtime failure as an error', () => {
+    const normalized = normalizeToolUseData({
+      toolName: 'Bash',
+      status: 'failed',
+    });
+
+    expect(normalized).toMatchObject({
+      isError: true,
+      status: 'failed',
+    });
   });
 
   // Backward compat: streams persisted by older versions stored the tool name

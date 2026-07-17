@@ -48,6 +48,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Workflow-script progress is visible in the CLI** — delegated workflow
+  phases, script log messages, and per-step cost summaries now remain in
+  terminal scrollback beneath the workflow call that produced them.
 - **Full tool output stays in terminal scrollback** — press Ctrl-T to print the
   focused session's complete output once without leaving the chat, or press v
   on a selected child session. Long output remains searchable and available to

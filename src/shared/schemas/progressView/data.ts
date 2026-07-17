@@ -72,6 +72,7 @@ export const UserMessagePayloadSchema = z.object({
 export const TOOL_USE_STATUS = {
   IN_PROGRESS: 'in_progress',
   COMPLETED: 'completed',
+  FAILED: 'failed',
 } as const;
 
 const ToolUseStatusSchema = z.enum(TOOL_USE_STATUS);
