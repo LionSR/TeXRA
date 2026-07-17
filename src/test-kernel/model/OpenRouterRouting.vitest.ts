@@ -25,6 +25,19 @@ describe('shouldRouteModelThroughOpenRouter', () => {
       useOpenRouter: true,
       expected: false,
     },
+    {
+      name: 'does not override a managed direct route',
+      config: {
+        openRouterOnly: false,
+        directAccess: {
+          source: 'kimiCode',
+          credential: 'kimiCode' as const,
+          baseUrl: 'https://api.kimi.com/coding/v1',
+        },
+      },
+      useOpenRouter: true,
+      expected: false,
+    },
   ])('$name', ({ config, useOpenRouter, expected }) => {
     expect(shouldRouteModelThroughOpenRouter(config, useOpenRouter)).toBe(
       expected,

@@ -68,6 +68,12 @@ import {
 // Local imports - model
 import { getApiKey, type ApiProvider } from '@model/apiProviders';
 import { isGpt5ModelName } from '@model/modelNames';
+import {
+  allowsModelRelay,
+  resolveDirectModelApiKeyProvider,
+  resolveDirectModelBaseUrl,
+  resolveModelSource,
+} from '@model/openRouterRouting';
 
 // Local imports - logger
 import { MESSAGE_TYPES } from '@shared/schemas';
@@ -476,13 +482,15 @@ export abstract class ModelHandler<
   protected async getApiKey(): Promise<string> {
     const serverSideKeyService = getServerSideKeyService();
     const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
+    const canRouteThroughRelay = allowsModelRelay(this.config);
 
     // Prime caches before using sync methods. This ensures that after reload/continue,
     // the tier config and access status are fetched before shouldUseServerSideKeys() is called.
     // Without this, sync methods return false due to empty caches, causing incorrect tier errors.
-    const hasServerAccess = useIncludedAccess
-      ? await serverSideKeyService.canUseServerSideKeys()
-      : false;
+    const hasServerAccess =
+      useIncludedAccess && canRouteThroughRelay
+        ? await serverSideKeyService.canUseServerSideKeys()
+        : false;
 
     const rules: readonly {
       readonly reason: string;
@@ -493,7 +501,9 @@ export abstract class ModelHandler<
         reason:
           'Quota auto-switch means the relay was selected but is no longer usable.',
         matches: () =>
-          useIncludedAccess && serverSideKeyService.wasQuotaAutoSwitched(),
+          canRouteThroughRelay &&
+          useIncludedAccess &&
+          serverSideKeyService.wasQuotaAutoSwitched(),
         resolve: () => {
           throw new Error(
             `Model "${this.config.name}" cannot use the TeXRA relay because your monthly relay quota is exhausted. ` +
@@ -544,11 +554,18 @@ export abstract class ModelHandler<
       {
         reason: 'Personal-key mode uses the configured provider key.',
         matches: () => true,
-        resolve: () =>
-          this.fetchApiKeyOrThrow(
-            this.config.provider.toLowerCase() as ApiProvider,
-            `Missing API key for ${this.config.provider}. Set your ${this.config.provider} API key to continue.`,
-          ),
+        resolve: () => {
+          const directProvider = resolveDirectModelApiKeyProvider(this.config);
+          if (!directProvider) {
+            throw new Error(
+              `Model "${this.config.name}" has no direct API-key provider.`,
+            );
+          }
+          return this.fetchApiKeyOrThrow(
+            directProvider,
+            `Missing API key for ${directProvider}. Set your ${directProvider} API key to continue.`,
+          );
+        },
       },
     ];
 
@@ -571,7 +588,8 @@ export abstract class ModelHandler<
     return resolveBaseUrl({
       provider: this.config.provider,
       openRouterOnly: this.config.openRouterOnly,
-      customBaseUrl: this.config.baseUrl,
+      customBaseUrl:
+        resolveDirectModelBaseUrl(this.config) ?? this.config.baseUrl,
       requiresResponsesAPI: this.config.requiresResponsesAPI,
       forceDirectProvider: (this.config as { forceDirectProvider?: boolean })
         .forceDirectProvider,
@@ -730,7 +748,9 @@ export abstract class ModelHandler<
       return getProviderStreaming('openrouter');
     if (this.config.provider === ModelProvider.OTHERS)
       return getGlobalStreaming();
-    return getProviderStreaming(this.config.provider);
+    return getProviderStreaming(
+      resolveModelSource(this.config) ?? this.config.provider,
+    );
   }
 
   /** Runtime combinator (provider identity × reasoning capability), read by

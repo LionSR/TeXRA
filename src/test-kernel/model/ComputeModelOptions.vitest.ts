@@ -145,6 +145,50 @@ describe('computeModelOptionsData relay quota state', () => {
     expect(model.disabled).toBe(true);
   });
 
+  it('uses a Kimi Code key independently of selected relay access', async () => {
+    const access = createModelOptionsAccess(
+      {
+        useIncludedAccess: true,
+        canUseServerSideKeys: true,
+        relayQuotaExceeded: true,
+        quotaAutoSwitched: true,
+      },
+      { [apiKeySecretName('kimiCode')]: 'sk-kimi-code' },
+    );
+
+    const [model] = await computeModelOptionsData(['kimiCodeCoding'], access);
+
+    expect(model).toMatchObject({
+      provider: 'kimiCode',
+      availability: 'provider-key',
+      disabled: false,
+    });
+  });
+
+  it('does not treat a Moonshot key as a Kimi Code credential', async () => {
+    const access = createModelOptionsAccess(
+      {
+        useIncludedAccess: true,
+        canUseServerSideKeys: true,
+        relayQuotaExceeded: false,
+        quotaAutoSwitched: false,
+      },
+      { [apiKeySecretName('moonshot')]: 'sk-moonshot' },
+    );
+
+    const [model] = await computeModelOptionsData(['kimiCodeCoding'], access);
+    const reason = await getModelUnavailableReason('kimiCodeCoding', access);
+
+    expect(model).toMatchObject({
+      provider: 'kimiCode',
+      availability: 'missing-key',
+      disabled: true,
+    });
+    expect(reason).toBe(
+      'Model "kimiCodeCoding" requires your Kimi Code API key. Provide it to continue.',
+    );
+  });
+
   it('falls back to personal keys when included access is disabled without quota auto-switch', async () => {
     const access = createModelOptionsAccess({
       useIncludedAccess: false,

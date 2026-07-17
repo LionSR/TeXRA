@@ -158,6 +158,7 @@ const PROVIDER_REGISTRY = [
 /** Providers not in the main registry (no server-side keys, no model selection). */
 const EXTRA_DISPLAY_NAMES: Record<string, string> = {
   openRouter: 'OpenRouter',
+  kimiCode: 'Kimi Code',
   [ModelProvider.COPILOT]: 'Copilot',
   [ModelProvider.OTHERS]: 'Others',
 };
@@ -167,10 +168,11 @@ const EXTRA_DISPLAY_NAMES: Record<string, string> = {
 // ============================================================================
 
 /** Model sources shown in selection lists. Keyless sources stay outside the API-key registry. */
-export const MODEL_SOURCE_ORDER: ModelProvider[] = [
+export const MODEL_SOURCE_ORDER = [
   ...PROVIDER_REGISTRY.map((provider) => provider.id),
+  'kimiCode',
   ModelProvider.COPILOT,
-];
+] as const;
 
 /**
  * All providers that support server-side API keys.
@@ -201,6 +203,7 @@ export const PROVIDER_URLS: Record<string, string> = {
     PROVIDER_REGISTRY.flatMap((p) => (p.keyUrl ? [[p.id, p.keyUrl]] : [])),
   ),
   openRouter: 'https://openrouter.ai/keys',
+  kimiCode: 'https://code.kimi.com/',
 };
 
 export const PROVIDER_STATE_ENTRIES: readonly ProviderStateEntry[] = [
@@ -215,6 +218,11 @@ export const PROVIDER_STATE_ENTRIES: readonly ProviderStateEntry[] = [
     id: 'openrouter',
     displayName: 'OpenRouter',
     streamingKey: GlobalStateKey.STREAMING_OPENROUTER,
+  },
+  {
+    id: 'kimiCode',
+    displayName: 'Kimi Code',
+    streamingKey: GlobalStateKey.STREAMING_KIMI_CODE,
   },
 ];
 

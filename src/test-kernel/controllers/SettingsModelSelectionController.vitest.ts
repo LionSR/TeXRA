@@ -98,6 +98,23 @@ describe('SettingsModelSelectionController', () => {
     expect(kimi3).not.toHaveProperty('reasoningLevel');
   });
 
+  it('groups membership models under Kimi Code rather than Moonshot', async () => {
+    const controller = new SettingsModelSelectionController({
+      state: createState(),
+      resolveModelOptions,
+      getRuntimeModelEntries: NO_RUNTIME_MODELS,
+    });
+
+    const { models } = await controller.buildSelectionData();
+
+    expect(
+      models.find((model) => model.name === 'kimiCodeCoding'),
+    ).toMatchObject({
+      provider: 'kimiCode',
+      label: 'Kimi Code K2.7',
+    });
+  });
+
   it('moves a stale helper fallback when disabling the effective helper model', async () => {
     const state = createState({
       enabledModels: ['gpt55', 'sonnet46T'],

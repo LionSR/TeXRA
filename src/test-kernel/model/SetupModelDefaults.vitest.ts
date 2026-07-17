@@ -7,6 +7,7 @@ import {
   resolveSetupModel,
   SETUP_MODEL_BY_PROVIDER,
 } from '@model/setupModelDefaults';
+import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { isCodexSubscriptionEligible } from '@model/providerCapabilities';
 import { API_PROVIDERS } from '@model/apiProviders';
 
@@ -22,7 +23,7 @@ import { API_PROVIDERS } from '@model/apiProviders';
 describe('SETUP_MODEL_BY_PROVIDER', () => {
   it('never resolves a provider to a retired or OpenRouter-only model', () => {
     for (const [provider, model] of Object.entries(SETUP_MODEL_BY_PROVIDER)) {
-      const config = MODEL_CONFIGS[model];
+      const config = getRuntimeModelConfig(model) ?? MODEL_CONFIGS[model];
       assert.ok(config, `${provider} resolved to unknown model "${model}"`);
       assert.equal(
         config.retired ?? false,

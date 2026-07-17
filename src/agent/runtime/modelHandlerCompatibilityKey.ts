@@ -7,6 +7,7 @@ export const MODEL_HANDLER_COMPATIBILITY_KEYS = [
   'ModelHandlerVscodeLm',
   'ModelHandlerAnthropic',
   'ModelHandlerOpenAI',
+  'ModelHandlerOpenAIReasoning',
   'ModelHandlerGoogleGenAI',
   'ModelHandlerGoogleInteractions',
   'ModelHandlerDeepSeek',

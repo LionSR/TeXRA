@@ -10,6 +10,7 @@ import {
   isFastFirstResponseModel,
 } from '@shared/constants/fastModels';
 import { getRuntimeModelConfig } from './runtimeModelRegistry';
+import { resolveModelSource } from './openRouterRouting';
 
 /** Return whether the registry marks a model as deprecated. */
 export function isDeprecatedModel(model: string): boolean {
@@ -205,7 +206,7 @@ export function buildBaseModelOption(
   return {
     value: model,
     label: config.label,
-    provider: config.provider,
+    provider: resolveModelSource(config) ?? config.provider,
     context: formatContext(config.contextWindow),
     cost: formatCost(config.inputPrice, config.outputPrice),
     hint: buildModelHint(hintConfig),

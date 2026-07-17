@@ -67,6 +67,7 @@ export const PROVIDER_KEY_REDACTION_RULES = {
   },
   glm: OPENAI_COMPATIBLE_REDACTION,
   meta: OPENAI_COMPATIBLE_REDACTION,
+  kimiCode: OPENAI_COMPATIBLE_REDACTION,
 } as const satisfies Record<ApiKeyProviderId, ProviderKeyRedactionRule>;
 
 const PROVIDER_KEY_PATTERNS = [
