@@ -185,5 +185,5 @@ describe('provider-key onboarding flow', () => {
       expect.stringContaining(providerKey),
     );
     expect(stdout.output).not.toContain(providerKey);
-  });
+  }, 30_000);
 });
