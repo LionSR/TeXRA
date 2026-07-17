@@ -159,7 +159,14 @@ describe('provider-key onboarding flow', () => {
     const { runCliOnboarding } = await import('@cli/onboarding/runOnboarding');
     const resultPromise = runCliOnboarding(false);
 
-    await waitFor(() => stdin.listenerCount('readable') > 0);
+    // Ink attaches its input stream before the active Select handler has
+    // necessarily committed. Wait for both input attachment and the rendered
+    // picker so the shortcut cannot be discarded during a loaded CI run.
+    await waitFor(
+      () =>
+        stdin.listenerCount('readable') > 0 &&
+        stdout.output.includes('Choose how to power model calls'),
+    );
     stdin.write('3');
     await waitFor(() => stdout.output.includes('Choose your provider:'));
     stdin.write('\r');
