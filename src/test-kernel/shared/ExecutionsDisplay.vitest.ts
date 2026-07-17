@@ -26,7 +26,13 @@ describe('executions tool display', () => {
   it('labels a subagent selected through a specific execution path', () => {
     expect(
       executionsSubagentSummary({ path: '/executions/sub-1/report' }, labels),
-    ).toBe('view: reviewer');
+    ).toBe('view: reviewer/report');
+    expect(
+      executionsSubagentSummary(
+        { path: '/executions/sub-1/workspace-files/review.md' },
+        labels,
+      ),
+    ).toBe('view: reviewer/workspace-files/review.md');
   });
 
   it('keeps mixed wait targets complete', () => {

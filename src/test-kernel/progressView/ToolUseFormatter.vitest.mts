@@ -256,6 +256,34 @@ return { papers, question: args.question };`;
     );
   });
 
+  it('keeps the resource path when labeling an executions target', () => {
+    const message: LogMessageData = {
+      id: 'executions-subagent-resource',
+      text: '',
+      level: LOG_LEVELS.INFO,
+      timestamp: 1,
+      messageType: 'toolUse',
+      data: {
+        toolName: 'executions',
+        input: {
+          path: '/executions/sub-1/workspace-files/review.md',
+        },
+      },
+    };
+
+    const container = document.createElement('div');
+    render(
+      formatToolUseTemplate(message, {
+        executionLabels: new Map([['sub-1', 'reviewer']]),
+      }),
+      container,
+    );
+
+    expect(container.querySelector('.tool-use-title')?.textContent).toBe(
+      'executions — view: reviewer/workspace-files/review.md',
+    );
+  });
+
   it('keeps the existing executions title for a background process', () => {
     const message: LogMessageData = {
       id: 'executions-process',

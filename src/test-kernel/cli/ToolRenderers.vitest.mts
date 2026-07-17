@@ -141,6 +141,18 @@ describe('CLI tool display lines', () => {
     ).toEqual(['● executions (/executions/process-1)']);
   });
 
+  it('keeps the resource path when labeling an executions target', () => {
+    const entry = toolUse('executions', {
+      path: '/executions/sub-1/workspace-files/review.md',
+    });
+
+    expect(
+      toolUseDisplayLines(entry, {
+        executionLabels: new Map([['sub-1', 'reviewer']]),
+      }),
+    ).toEqual(['● executions (view: reviewer/workspace-files/review.md)']);
+  });
+
   it('renders TeXRA edit_file calls through the native diff row', () => {
     const entry = toolUse('edit_file', {
       path: 'paper.tex',

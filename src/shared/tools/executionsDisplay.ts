@@ -4,11 +4,23 @@ export const EXECUTIONS_DEFAULT_ACTION = 'view';
 
 export type ExecutionLabels = ReadonlyMap<string, string>;
 
-function executionIdFromPath(path: unknown): string | undefined {
+interface ExecutionPathTarget {
+  id: string;
+  resourceSuffix: string;
+}
+
+function executionTargetFromPath(
+  path: unknown,
+): ExecutionPathTarget | undefined {
   if (typeof path !== 'string') return undefined;
   const segments = path.split('/').filter(Boolean);
   if (segments[0] !== 'executions' || segments.length < 2) return undefined;
-  return segments[1] === 'current' ? undefined : segments[1];
+  if (segments[1] === 'current') return undefined;
+  return {
+    id: segments[1],
+    resourceSuffix:
+      segments.length > 2 ? `/${segments.slice(2).join('/')}` : '',
+  };
 }
 
 /**
@@ -28,19 +40,20 @@ export function executionsSubagentSummary(
   const listedIds = Array.isArray(input.ids)
     ? input.ids.filter((id): id is string => typeof id === 'string' && !!id)
     : [];
-  const pathId = executionIdFromPath(input.path);
-  let targetIds = listedIds;
-  if (targetIds.length === 0) {
-    targetIds = pathId ? [pathId] : [];
-  }
-  if (targetIds.length === 0) return undefined;
+  const pathTarget = executionTargetFromPath(input.path);
+  const targets: ExecutionPathTarget[] = listedIds.map((id) => ({
+    id,
+    resourceSuffix: '',
+  }));
+  if (targets.length === 0 && pathTarget) targets.push(pathTarget);
+  if (targets.length === 0) return undefined;
 
   let matchedSubagent = false;
-  const targets = targetIds.map((id) => {
+  const displayTargets = targets.map(({ id, resourceSuffix }) => {
     const label = labels.get(id)?.trim();
-    if (!label) return id;
+    if (!label) return `${id}${resourceSuffix}`;
     matchedSubagent = true;
-    return label;
+    return `${label}${resourceSuffix}`;
   });
   if (!matchedSubagent) return undefined;
 
@@ -48,5 +61,5 @@ export function executionsSubagentSummary(
     typeof input.action === 'string' && input.action.trim()
       ? input.action.trim()
       : EXECUTIONS_DEFAULT_ACTION;
-  return `${action}: ${targets.join(', ')}`;
+  return `${action}: ${displayTargets.join(', ')}`;
 }
