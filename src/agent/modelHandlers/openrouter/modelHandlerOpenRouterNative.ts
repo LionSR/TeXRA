@@ -69,6 +69,7 @@ import { ModelHandler } from '../ModelHandler';
 import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
 import type {
   ChatResult,
+  ChatStreamChunk,
   ChatUsage,
   ChatMessages,
   ChatAssistantMessage,
@@ -77,6 +78,13 @@ import type {
   ChatContentText,
   ChatRequest,
 } from '@openrouter/sdk/models';
+
+function isOpenRouterChatStream(
+  response: unknown,
+): response is AsyncIterable<ChatStreamChunk> {
+  if (typeof response !== 'object' || response === null) return false;
+  return typeof Reflect.get(response, Symbol.asyncIterator) === 'function';
+}
 
 // ============================================================================
 // Handler
@@ -257,6 +265,11 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           { chatRequest: streamRequest },
           { signal },
         );
+        if (!isOpenRouterChatStream(stream)) {
+          throw new Error(
+            'OpenRouter returned a non-streaming response for a streaming request',
+          );
+        }
         streamConnected = true;
         // Opened after the SDK request-retry boundary returns; the deferred
         // starts fire (if ever) at the first reasoning/content delta.
@@ -314,6 +327,11 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       { chatRequest: nonStreamingRequest },
       { signal },
     );
+    if (isOpenRouterChatStream(response)) {
+      throw new Error(
+        'OpenRouter returned a streaming response for a non-streaming request',
+      );
+    }
 
     if (response.usage?.promptTokens) {
       this.lastKnownInputTokens = response.usage.promptTokens;
@@ -389,6 +407,11 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           { chatRequest: summaryRequest },
           { signal },
         );
+        if (isOpenRouterChatStream(summaryResponse)) {
+          throw new Error(
+            'OpenRouter returned a streaming response for a non-streaming request',
+          );
+        }
         const summaryText = summaryResponse.choices[0]?.message?.content;
         return {
           summaryText:
