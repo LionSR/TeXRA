@@ -65,6 +65,11 @@ vi.mock('@tools/delegation/workflowFileValidation', () => ({
 
 const parentExecutionId = 'aaaaaa111111' as ExecutionId;
 const parentStreamId = 'stream:workflow-script' as StreamTabId;
+// The detached workflow-run's own identity — grandchild agent() calls re-root
+// here, not on the orchestrator (#8712).
+const runExecutionId = 'run0run0run0' as ExecutionId;
+const runStreamId = 'workflow-script#run0run0run0' as StreamTabId;
+const run = { executionId: runExecutionId, streamId: runStreamId };
 const result: AgentFinalResult = {
   category: 'workflow',
   outcome: 'completed',
@@ -100,6 +105,7 @@ function defaultRunner(): ReturnType<typeof createWorkflowScriptAgentRunner> {
     parentContext(),
     'correct',
     'tool-call-7',
+    run,
   );
 }
 
@@ -160,7 +166,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     expect(mocks.executeStableSubagentInBand).toHaveBeenCalledWith(
       expect.objectContaining({
         executionId: expect.stringMatching(/^[a-f0-9]{24}$/),
-        parentExecutionId,
+        parentExecutionId: runExecutionId,
         signal: call.signal,
         prepare: expect.any(Function),
       }),
@@ -168,8 +174,8 @@ describe('createWorkflowScriptAgentRunner', () => {
     expect(mocks.preparedOptions[0]).toEqual(
       expect.objectContaining({
         agentName: 'correct',
-        parentExecutionId,
-        parentStreamId,
+        parentExecutionId: runExecutionId,
+        parentStreamId: runStreamId,
         signal: call.signal,
         approvalPromptsUnavailable: true,
         runtimeUnavailableTools: ['user_question'],
@@ -225,12 +231,12 @@ describe('createWorkflowScriptAgentRunner', () => {
 
     expect(mocks.resolveChildRunOutput).toHaveBeenNthCalledWith(
       1,
-      parentExecutionId,
+      runExecutionId,
       firstRequested,
     );
     expect(mocks.resolveChildRunOutput).toHaveBeenNthCalledWith(
       2,
-      parentExecutionId,
+      runExecutionId,
       secondRequested,
     );
     expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
@@ -323,7 +329,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     prepared.onStreamResolved?.('stream:child' as StreamTabId);
     expect(mocks.configureDelegatedChildApprovals).toHaveBeenCalledWith(
       'stream:child',
-      parentStreamId,
+      runStreamId,
       'inherit',
       expect.objectContaining({ id: 'session' }),
     );
@@ -342,6 +348,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       parentContext(),
       'correct',
       'tool-call-7',
+      run,
       { onCost },
     );
     const call = invocation();
@@ -361,6 +368,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       parentContext(),
       'correct',
       'tool-call-7',
+      run,
       { onCost },
     );
 
