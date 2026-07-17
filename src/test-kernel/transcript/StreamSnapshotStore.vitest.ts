@@ -1547,6 +1547,66 @@ describe('StreamSnapshotStore', () => {
     await store.deleteStream(STREAM);
   });
 
+  it('does not restore staged residue after a live base disappears', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    store.setPlan(STREAM, PLAN);
+    await store.flush();
+    const deletion = await store.stageDeleteStream(STREAM);
+    store.setPlan(STREAM, null);
+    const writeError = new Error('snapshot disk is full');
+    const writeSpy = vi
+      .spyOn(StorageFS, 'writeAtomic')
+      .mockRejectedValueOnce(writeError);
+
+    await expect(deletion.rollback()).rejects.toBe(writeError);
+
+    writeSpy.mockRestore();
+    const liveDir = streamDataDir(STREAM);
+    const stagedDir = stagedStreamDataDir(STREAM);
+    await StorageFS.delete(liveDir, { recursive: true });
+    await StorageFS.ensureDir(stagedDir);
+    await StorageFS.writeAtomic(
+      path.join(stagedDir, 'workPlan.json'),
+      JSON.stringify({
+        todos: [],
+        plan: PLAN,
+        planSummary: PLAN_SUMMARY,
+      }),
+    );
+
+    await store.flush();
+    const reloaded = new StreamSnapshotStore();
+    await reloaded.load([STREAM]);
+    expect(reloaded.getWorkPlan(STREAM).plan).toBeNull();
+    expect(await StorageFS.exists(stagedDir)).toBe(false);
+    await store.deleteStream(STREAM);
+  });
+
+  it('recreates live storage from buffered writes when both bases vanish', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    store.setPlan(STREAM, PLAN);
+    await store.flush();
+    const deletion = await store.stageDeleteStream(STREAM);
+    store.setPlan(STREAM, null);
+    const rollbackError = new Error('snapshot directory is still locked');
+    const renameSpy = vi
+      .spyOn(StorageFS, 'rename')
+      .mockRejectedValueOnce(rollbackError);
+
+    await expect(deletion.rollback()).rejects.toBe(rollbackError);
+
+    renameSpy.mockRestore();
+    await StorageFS.delete(stagedStreamDataDir(STREAM), { recursive: true });
+    await store.flush();
+    const reloaded = new StreamSnapshotStore();
+    await reloaded.load([STREAM]);
+    expect(reloaded.getWorkPlan(STREAM).plan).toBeNull();
+    expect(await StorageFS.exists(streamDataDir(STREAM))).toBe(true);
+    await store.deleteStream(STREAM);
+  });
+
   it('serializes a staging retry behind failed rollback reconciliation', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);

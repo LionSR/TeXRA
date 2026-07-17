@@ -1050,7 +1050,7 @@ export class StreamSnapshotStore {
     while (true) {
       await this.replayStagedWrites(stream, state);
       if (state.writes.size > 0) continue;
-      this.releaseStagedOwnership(stream, state);
+      this.releaseStagedOwnership(stream, state, state.recovery);
       return;
     }
   }
@@ -1058,8 +1058,11 @@ export class StreamSnapshotStore {
   private releaseStagedOwnership(
     stream: StreamTabId,
     state: StagedDeletionState,
+    expectedRecovery: Promise<void> | undefined = undefined,
   ): void {
-    if (state.writes.size > 0 || state.recovery) return;
+    if (state.writes.size > 0 || state.recovery !== expectedRecovery) {
+      return;
+    }
     if (this.failedRollbacks.get(stream) === state) {
       this.failedRollbacks.delete(stream);
     }
@@ -1080,7 +1083,6 @@ export class StreamSnapshotStore {
     if (this.failedRollbacks.get(stream) !== state) return Promise.resolve();
     if (state.recovery) return state.recovery;
 
-    let recovered = false;
     const recovery = (async () => {
       if (canUseStreamDataDir(stream)) {
         const stagedDir = stagedStreamDataDir(stream);
@@ -1091,7 +1093,7 @@ export class StreamSnapshotStore {
           storagePathExists(stagedDir),
         ]);
 
-        if (liveWasAuthoritative && hasLiveData) {
+        if (liveWasAuthoritative) {
           if (hasStagedData) {
             await StorageFS.delete(stagedDir, { recursive: true });
           }
@@ -1108,22 +1110,20 @@ export class StreamSnapshotStore {
             record.kv = undefined;
             record.writeKv = undefined;
           }
-        } else if (!hasLiveData && !liveWasAuthoritative) {
-          state.phase = 'unavailable';
-          throw new Error(
-            `Stream ${stream} has no snapshot namespace to recover`,
-          );
+        }
+        if (!hasLiveData && (liveWasAuthoritative || !hasStagedData)) {
+          await StorageFS.ensureDir(liveDir);
         }
       }
 
+      // If neither namespace remains, buffered values are the only recoverable
+      // state; replay recreates the live directory instead of wedging ownership.
       state.phase = 'live';
       await this.drainStagedWrites(stream, state);
-      recovered = true;
     })();
     const trackedRecovery = recovery.finally(() => {
       if (state.recovery === trackedRecovery) {
         state.recovery = undefined;
-        if (recovered) this.releaseStagedOwnership(stream, state);
       }
     });
     state.recovery = trackedRecovery;
