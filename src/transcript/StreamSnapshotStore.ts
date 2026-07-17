@@ -1079,12 +1079,13 @@ export class StreamSnapshotStore {
   private recoverFailedRollback(
     stream: StreamTabId,
     state: StagedDeletionState,
+    namespace: 'inspect' | 'known-live' = 'inspect',
   ): Promise<void> {
     if (this.failedRollbacks.get(stream) !== state) return Promise.resolve();
     if (state.recovery) return state.recovery;
 
     const recovery = (async () => {
-      if (canUseStreamDataDir(stream)) {
+      if (namespace === 'inspect' && canUseStreamDataDir(stream)) {
         const stagedDir = stagedStreamDataDir(stream);
         const liveDir = streamDataDir(stream);
         const liveWasAuthoritative = state.phase === 'live';
@@ -1277,7 +1278,7 @@ export class StreamSnapshotStore {
       this.failedRollbacks.set(stream, state);
       try {
         if (state.phase === 'live') {
-          await this.drainStagedWrites(stream, state);
+          await this.recoverFailedRollback(stream, state, 'known-live');
         }
       } catch (recoveryError) {
         failures.push(recoveryError);

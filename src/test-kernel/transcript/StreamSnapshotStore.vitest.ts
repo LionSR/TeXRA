@@ -1739,6 +1739,67 @@ describe('StreamSnapshotStore', () => {
     await store.deleteStream(STREAM);
   });
 
+  it('serializes setup-failure replay as the failed recovery owner', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    store.setPlan(STREAM, PLAN);
+    await store.flush();
+    const setupError = new Error('staging directory is locked');
+    const ensureDir = StorageFS.ensureDir.bind(StorageFS);
+    const ensureDirSpy = vi
+      .spyOn(StorageFS, 'ensureDir')
+      .mockImplementationOnce(async () => {
+        store.setPlan(STREAM, null);
+        throw setupError;
+      })
+      .mockImplementation(ensureDir);
+    type RecoveryHarness = {
+      replayStagedWrites: (
+        stream: StreamTabId,
+        state: unknown,
+      ) => Promise<void>;
+      failedRollbacks: Map<StreamTabId, { recovery?: Promise<void> }>;
+    };
+    const recoveryHarness = store as unknown as RecoveryHarness;
+    const replay = recoveryHarness.replayStagedWrites.bind(recoveryHarness);
+    let replayStarted = () => {};
+    const replayStart = new Promise<void>((resolve) => {
+      replayStarted = resolve;
+    });
+    let releaseReplay = () => {};
+    const replayGate = new Promise<void>((resolve) => {
+      releaseReplay = resolve;
+    });
+    const replaySpy = vi
+      .spyOn(recoveryHarness, 'replayStagedWrites')
+      .mockImplementationOnce(async (stream, state) => {
+        await replay(stream, state);
+        replayStarted();
+        await replayGate;
+      })
+      .mockImplementation(replay);
+
+    const staging = store.stageDeleteStream(STREAM);
+    await replayStart;
+
+    const failedState = recoveryHarness.failedRollbacks.get(STREAM);
+    expect(failedState?.recovery).toBeInstanceOf(Promise);
+    const flushing = store.flush();
+    expect(replaySpy).toHaveBeenCalledTimes(1);
+
+    releaseReplay();
+    await expect(staging).rejects.toBe(setupError);
+    await expect(flushing).resolves.toBeUndefined();
+    expect(recoveryHarness.failedRollbacks.has(STREAM)).toBe(false);
+
+    ensureDirSpy.mockRestore();
+    replaySpy.mockRestore();
+    const reloaded = new StreamSnapshotStore();
+    await reloaded.load([STREAM]);
+    expect(reloaded.getWorkPlan(STREAM).plan).toBeNull();
+    await store.deleteStream(STREAM);
+  });
+
   it('waits for active hydration before staging deletion', async () => {
     await installPlatform();
     const executionId = 'feedface' as ExecutionId;
