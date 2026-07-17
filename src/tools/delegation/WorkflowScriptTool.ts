@@ -160,7 +160,7 @@ Tool inclusion is the opt-in boundary: do not add this tool to a default agent c
         store,
         checkpointId,
         script: input.script,
-        ...(input.args !== undefined && { args: input.args }),
+        ...(input.args != null && { args: input.args }),
         signal: callContext.signal,
         runAgent: createWorkflowScriptAgentRunner(
           parent,
