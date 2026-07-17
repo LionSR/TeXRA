@@ -65,6 +65,7 @@ function strategyParams(
   },
 ): WorkflowScriptStrategyParams {
   return {
+    executionId,
     logger: new TraceEmitter(),
     store: getExecutionStore(executionId),
     checkpointId: checkpointIdFor(overrides.name),
