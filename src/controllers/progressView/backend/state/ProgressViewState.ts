@@ -459,6 +459,22 @@ export class ProgressViewState {
     const streamIds = this.streamLogs.keys();
     this.logger.info(`[Persistence] Discovered ${streamIds.length} stream(s)`);
 
+    const reconciledDeletions = await this.snapshots.reconcileStagedDeletions(
+      new Set(streamIds),
+    );
+    if (
+      reconciledDeletions.restored.length > 0 ||
+      reconciledDeletions.pendingCleanup.length > 0 ||
+      reconciledDeletions.discarded.length > 0
+    ) {
+      this.logger.info(
+        '[Persistence] Reconciled interrupted stream deletions',
+        {
+          data: reconciledDeletions,
+        },
+      );
+    }
+
     const sweep = await this.stores.sweepOrphanedStreams(new Set(streamIds));
     if (sweep.streams.length > 0) {
       this.logger.info(

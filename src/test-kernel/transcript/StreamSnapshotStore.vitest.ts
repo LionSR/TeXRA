@@ -9,7 +9,10 @@ import {
   createTempDirPlatform,
 } from '@test/support/tempDirPlatform';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';
-import { STREAM_DATA_DIR } from '@transcript/streamDataPaths';
+import {
+  stagedStreamDataDir,
+  STREAM_DATA_DIR,
+} from '@transcript/streamDataPaths';
 import { getExecutionStore } from '@agent/storage';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
@@ -1015,6 +1018,13 @@ describe('StreamSnapshotStore', () => {
     expect(await StorageFS.exists(streamDataDir(STREAM))).toBe(false);
 
     const recovered = new StreamSnapshotStore();
+    await expect(
+      recovered.reconcileStagedDeletions(new Set([STREAM])),
+    ).resolves.toEqual({
+      restored: [STREAM],
+      pendingCleanup: [],
+      discarded: [],
+    });
     await recovered.load([STREAM]);
 
     expect(recovered.getWorkPlan(STREAM)).toMatchObject({
@@ -1079,6 +1089,8 @@ describe('StreamSnapshotStore', () => {
     store.setPlan(STREAM, PLAN);
     await store.flush();
     const deletion = await store.stageDeleteStream(STREAM);
+    store.setPlan(STREAM, null);
+    await store.flush();
     const rollbackError = new Error('snapshot directory is still locked');
     const renameSpy = vi
       .spyOn(StorageFS, 'rename')
@@ -1087,8 +1099,58 @@ describe('StreamSnapshotStore', () => {
     await expect(deletion.rollback()).rejects.toBe(rollbackError);
 
     renameSpy.mockRestore();
-    await expect(store.deleteStream(STREAM)).resolves.toBeUndefined();
-    expect(await StorageFS.exists(streamDataDir(STREAM))).toBe(false);
+    const retry = await store.stageDeleteStream(STREAM);
+    await retry.rollback();
+    await store.flush();
+
+    const reloaded = new StreamSnapshotStore();
+    await reloaded.load([STREAM]);
+    expect(reloaded.getWorkPlan(STREAM).plan).toBeNull();
+    await store.deleteStream(STREAM);
+  });
+
+  it('restores committed residue for complete orphan cleanup', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    store.setPlan(STREAM, PLAN);
+    await store.flush();
+    await store.stageDeleteStream(STREAM);
+
+    const recovered = new StreamSnapshotStore();
+    await expect(
+      recovered.reconcileStagedDeletions(new Set()),
+    ).resolves.toEqual({
+      restored: [],
+      pendingCleanup: [STREAM],
+      discarded: [],
+    });
+
+    expect(await StorageFS.exists(streamDataDir(STREAM))).toBe(true);
+    expect(await StorageFS.exists(stagedStreamDataDir(STREAM))).toBe(false);
+  });
+
+  it('does not treat storage errors as an absent snapshot directory', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    store.setPlan(STREAM, PLAN);
+    await store.flush();
+    const liveDir = streamDataDir(STREAM);
+    const stat = StorageFS.stat.bind(StorageFS);
+    const statError = Object.assign(new Error('snapshot directory is locked'), {
+      code: 'EACCES',
+    });
+    const statSpy = vi
+      .spyOn(StorageFS, 'stat')
+      .mockImplementation(async (target) => {
+        if (target === liveDir) throw statError;
+        return stat(target);
+      });
+
+    await expect(store.stageDeleteStream(STREAM)).rejects.toBe(statError);
+
+    expect(await StorageFS.exists(liveDir)).toBe(true);
+    statSpy.mockRestore();
+    await store.deleteStream(STREAM);
   });
 
   it('waits for active hydration before staging deletion', async () => {

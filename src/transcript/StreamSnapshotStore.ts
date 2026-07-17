@@ -87,6 +87,16 @@ const CHANNEL = 'StreamSnapshotStore';
  *  managers' `pMap` hydration so startup doesn't open a file handle per tab). */
 const SEED_IO_CONCURRENCY = 8;
 
+async function storagePathExists(target: string): Promise<boolean> {
+  try {
+    await StorageFS.stat(target);
+    return true;
+  } catch (error) {
+    if (isFileNotFoundError(error)) return false;
+    throw error;
+  }
+}
+
 interface StagedStreamSnapshotDeletion {
   commit(): Promise<void>;
   rollback(): Promise<void>;
@@ -301,6 +311,10 @@ export class StreamSnapshotStore {
    * after the live namespace has been restored.
    */
   private readonly stagedDeletions = new Map<
+    StreamTabId,
+    StagedDeletionState
+  >();
+  private readonly failedRollbacks = new Map<
     StreamTabId,
     StagedDeletionState
   >();
@@ -530,8 +544,6 @@ export class StreamSnapshotStore {
   private async readSeed(stream: StreamTabId, version: number): Promise<void> {
     if (this.streamVersion(stream) !== version) return;
     if (this.records.get(stream)?.seeded) return;
-    await this.recoverStagedDeletion(stream);
-    if (this.streamVersion(stream) !== version) return;
     const data = await readStreamData(this.kv(stream));
     if (this.streamVersion(stream) !== version) return;
     await this.applyStreamData(stream, data);
@@ -900,33 +912,81 @@ export class StreamSnapshotStore {
     this.writeMutexes.clear();
     for (const state of this.stagedDeletions.values()) state.resolveSettled();
     this.stagedDeletions.clear();
+    this.failedRollbacks.clear();
   }
 
-  /** Restore a crash-interrupted pre-commit rename before reading the stream. */
-  private async recoverStagedDeletion(
-    stream: StreamTabId,
-    owner?: StagedDeletionState,
-  ): Promise<void> {
-    const activeDeletion = this.stagedDeletions.get(stream);
-    if (
-      (activeDeletion && activeDeletion !== owner) ||
-      !canUseStreamDataDir(stream)
-    ) {
-      return;
+  /**
+   * Reconcile crash-interrupted deletions against the transcript registry.
+   * A live transcript rolls its snapshot directory back. An absent transcript
+   * restores the directory only into the orphan-cleanup namespace so the
+   * execution directory and goal can be removed with the snapshot.
+   */
+  async reconcileStagedDeletions(
+    liveStreams: ReadonlySet<StreamTabId>,
+  ): Promise<{
+    restored: StreamTabId[];
+    pendingCleanup: StreamTabId[];
+    discarded: StreamTabId[];
+  }> {
+    let entries: [string, number][];
+    try {
+      entries = await StorageFS.readDir(STREAM_DATA_DELETION_DIR);
+    } catch (error) {
+      if (isFileNotFoundError(error)) {
+        return { restored: [], pendingCleanup: [], discarded: [] };
+      }
+      throw error;
     }
-    const stagedDir = stagedStreamDataDir(stream);
-    if (!(await StorageFS.exists(stagedDir))) return;
 
-    const liveDir = streamDataDir(stream);
-    if (await StorageFS.exists(liveDir)) {
-      // A newer generation already owns the live path; this is committed
-      // deletion residue whose best retry is ordinary garbage collection.
-      await StorageFS.delete(stagedDir, { recursive: true });
-    } else {
-      await StorageFS.rename(stagedDir, liveDir);
-    }
-    const record = this.records.get(stream);
-    if (record) record.kv = undefined;
+    const restored: StreamTabId[] = [];
+    const pendingCleanup: StreamTabId[] = [];
+    const discarded: StreamTabId[] = [];
+    await pMap(
+      entries.filter(([, type]) => isDirectory(type)),
+      async ([encoded]) => {
+        const parsedStream = StreamTabIdSchema.safeParse(
+          decodeStreamId(encoded),
+        );
+        if (!parsedStream.success) {
+          logger.warn(
+            CHANNEL,
+            `Ignoring invalid staged snapshot directory ${encoded}`,
+            { data: parsedStream.error },
+          );
+          return;
+        }
+        const stream = parsedStream.data;
+        if (this.stagedDeletions.has(stream)) return;
+
+        const stagedDir = stagedStreamDataDir(stream);
+        const liveDir = streamDataDir(stream);
+        const failedWrites = this.failedRollbacks.get(stream);
+        if (!(await storagePathExists(liveDir))) {
+          await StorageFS.ensureDir(STREAM_DATA_DIR);
+          await StorageFS.rename(stagedDir, liveDir);
+          const record = this.records.get(stream);
+          if (record) record.kv = undefined;
+          if (liveStreams.has(stream) && failedWrites) {
+            this.replayStagedWrites(stream, failedWrites);
+            await this.flushWritesForStream(stream);
+          }
+          this.failedRollbacks.delete(stream);
+          if (liveStreams.has(stream)) restored.push(stream);
+          else pendingCleanup.push(stream);
+          return;
+        }
+
+        await StorageFS.delete(stagedDir, { recursive: true });
+        if (liveStreams.has(stream) && failedWrites) {
+          this.replayStagedWrites(stream, failedWrites);
+          await this.flushWritesForStream(stream);
+        }
+        this.failedRollbacks.delete(stream);
+        discarded.push(stream);
+      },
+      { concurrency: SEED_IO_CONCURRENCY },
+    );
+    return { restored, pendingCleanup, discarded };
   }
 
   /** Restore writes buffered behind a staging attempt after live data returns. */
@@ -941,6 +1001,19 @@ export class StreamSnapshotStore {
       this.write(stream, key, value);
     }
     state.resolveSettled();
+  }
+
+  /** Persist a failed rollback's buffered values before staging its retry. */
+  private replayFailedRollbackWrites(
+    stream: StreamTabId,
+    failedState: StagedDeletionState,
+    retryState: StagedDeletionState,
+  ): void {
+    for (const [key, value] of failedState.writes) {
+      retryState.writes.set(key, value);
+      this.writeUnbuffered(stream, key, value);
+    }
+    failedState.resolveSettled();
   }
 
   /**
@@ -968,7 +1041,30 @@ export class StreamSnapshotStore {
     this.stagedDeletions.set(stream, state);
 
     try {
-      await this.recoverStagedDeletion(stream, state);
+      const failedState = this.failedRollbacks.get(stream);
+      if (failedState) {
+        const stagedDir = stagedStreamDataDir(stream);
+        const liveDir = streamDataDir(stream);
+        if (await storagePathExists(stagedDir)) {
+          if (await storagePathExists(liveDir)) {
+            throw new Error(
+              `Cannot retry snapshot deletion for ${stream}; both live and staged directories exist`,
+            );
+          }
+          await StorageFS.rename(stagedDir, liveDir);
+        }
+        this.failedRollbacks.delete(stream);
+        this.replayFailedRollbackWrites(stream, failedState, state);
+        await this.flushWritesForStream(stream);
+      }
+      if (
+        canUseStreamDataDir(stream) &&
+        (await storagePathExists(stagedStreamDataDir(stream)))
+      ) {
+        throw new Error(
+          `Stream ${stream} has an unreconciled snapshot deletion`,
+        );
+      }
       // Let hydration finish before staging. A record with `seeded === false`
       // may already contain sidecars while execution-config hydration is still
       // in flight, so invalidating that seed would make neither disk nor memory
@@ -989,7 +1085,7 @@ export class StreamSnapshotStore {
       const liveDir = canStage ? streamDataDir(stream) : undefined;
       const stagedDir = canStage ? stagedStreamDataDir(stream) : undefined;
       let staged = false;
-      if (liveDir && stagedDir && (await StorageFS.exists(liveDir))) {
+      if (liveDir && stagedDir && (await storagePathExists(liveDir))) {
         await StorageFS.ensureDir(STREAM_DATA_DELETION_DIR);
         await StorageFS.rename(liveDir, stagedDir);
         staged = true;
@@ -1000,6 +1096,7 @@ export class StreamSnapshotStore {
         commit: async () => {
           if (settled) return;
           settled = true;
+          this.failedRollbacks.delete(stream);
           this.evict(stream);
           try {
             if (staged && stagedDir) {
@@ -1028,6 +1125,9 @@ export class StreamSnapshotStore {
               await StorageFS.rename(stagedDir, liveDir);
             }
             this.replayStagedWrites(stream, state);
+          } catch (error) {
+            this.failedRollbacks.set(stream, state);
+            throw error;
           } finally {
             if (this.stagedDeletions.get(stream) === state) {
               this.stagedDeletions.delete(stream);
@@ -1212,7 +1312,6 @@ export class StreamSnapshotStore {
   async readPersistedExecutionId(
     stream: StreamTabId,
   ): Promise<ExecutionId | undefined> {
-    await this.recoverStagedDeletion(stream);
     return executionIdFromMeta(await readMeta(this.kv(stream)));
   }
 
@@ -1225,7 +1324,6 @@ export class StreamSnapshotStore {
    * bare `meta.json`-only match.
    */
   async hasPersistedWorkPlan(stream: StreamTabId): Promise<boolean> {
-    await this.recoverStagedDeletion(stream);
     return this.kv(stream).exists(STREAM_DATA_KEYS.WORK_PLAN);
   }
 
@@ -1240,7 +1338,6 @@ export class StreamSnapshotStore {
   async readLegacyInstruction(
     stream: StreamTabId,
   ): Promise<LegacyInstructionEntry | null> {
-    await this.recoverStagedDeletion(stream);
     const record = this.records.get(stream);
     const meta = record?.seeded
       ? record.meta
@@ -1324,6 +1421,14 @@ export class StreamSnapshotStore {
       stagedDeletion.writes.set(key, value);
       return;
     }
+    this.writeUnbuffered(stream, key, value);
+  }
+
+  private writeUnbuffered(
+    stream: StreamTabId,
+    key: string,
+    value: unknown,
+  ): void {
     const chainKey = `${stream}::${key}`;
     const version = this.streamVersion(stream);
     const mutex = this.writeMutexes.get(chainKey) ?? new Mutex();
@@ -1400,7 +1505,6 @@ export class StreamSnapshotStore {
     if (this.records.get(streamId)?.seeded) {
       return this.snapshotFromMemory(streamId);
     }
-    await this.recoverStagedDeletion(streamId);
     return assembleSnapshot(streamId, await readStreamData(this.kv(streamId)));
   }
 
@@ -1443,7 +1547,6 @@ export class StreamSnapshotStore {
     if (this.records.get(streamId)?.seeded) {
       return this.getOutputFiles(streamId);
     }
-    await this.recoverStagedDeletion(streamId);
     return (await readStreamData(this.kv(streamId))).outputFiles;
   }
 
@@ -1494,8 +1597,6 @@ export class StreamSnapshotStore {
     const next = prev.then(async () => {
       if (this.streamVersion(stream) !== version) return;
       await this.flushWritesForStream(stream);
-      if (this.streamVersion(stream) !== version) return;
-      await this.recoverStagedDeletion(stream);
       if (this.streamVersion(stream) !== version) return;
       const record = this.records.get(stream);
       if (record) record.kv = undefined;
