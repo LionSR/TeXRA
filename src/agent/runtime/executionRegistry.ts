@@ -33,6 +33,7 @@ import {
 import {
   isActivePhase,
   isInFlightPhase,
+  isTerminalOutcomePhase,
   projectRunOutcome,
 } from '@shared/streams/streamStatus';
 import { formatDuration } from '@utils/core';
@@ -295,10 +296,16 @@ export class ExecutionRegistry {
     options: TrackAgentExecutionOptions = {},
   ): void {
     if (options.status) {
+      const previousStatus = this.streamStatus.get(handle.childStreamId);
+      const cause =
+        options.status === STREAM_PHASE.RUNNING &&
+        isTerminalOutcomePhase(previousStatus)
+          ? 'resume'
+          : 'lifecycle';
       this.streamStatus.transition(
         handle.childStreamId,
         options.status,
-        'lifecycle',
+        cause,
         this.streamStatusEmitOptions(handle),
       );
     }
