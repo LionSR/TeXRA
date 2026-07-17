@@ -17,9 +17,9 @@ import type {
   WorkflowAgentRunner,
   WorkflowScriptRunResult,
 } from '@agent/workflowScript';
-import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { AgentTrace } from '@agent/trace';
 import type { ExecutionKVStore } from '@agent/storage';
+import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 
 // Local imports - utilities
 import { toErrorMessage } from '@utils/errors/errorMessage';
