@@ -38,16 +38,6 @@ export interface SessionStoresOptions {
   };
 }
 
-async function waitForAdjacentCleanup(
-  operations: readonly unknown[],
-): Promise<void> {
-  const results = await Promise.allSettled(operations);
-  const failures = results.flatMap((result) =>
-    result.status === 'rejected' ? [result.reason] : [],
-  );
-  throwAdjacentCleanupFailures(failures);
-}
-
 function throwAdjacentCleanupFailures(failures: readonly unknown[]): void {
   if (failures.length === 1) throw failures[0];
   if (failures.length > 1) {
@@ -302,13 +292,36 @@ export class SessionStores {
   }
 
   private async deleteAdjacentStreamState(stream: StreamTabId): Promise<void> {
-    // The transcript registry owns tab visibility. Delete it only after every
-    // other sidecar succeeds so a partial cleanup remains retryable in the UI.
-    await waitForAdjacentCleanup([
-      this.snapshots.deleteStream(stream),
+    const snapshotDeletion = await this.snapshots.stageDeleteStream(stream);
+    try {
+      // The transcript registry is the commit point for tab visibility.
+      // Snapshot sidecars are only renamed before this, so a failure can roll
+      // them back without reconstructing state from partial files.
+      await this.streamLogs.delete(stream);
+    } catch (error) {
+      try {
+        await snapshotDeletion.rollback();
+      } catch (rollbackError) {
+        throw new AggregateError(
+          [error, rollbackError],
+          `Transcript and snapshot rollback failed for stream ${stream}`,
+        );
+      }
+      throw error;
+    }
+
+    const cleanup = await Promise.allSettled([
+      snapshotDeletion.commit(),
       this.goalEntries?.forget(stream),
     ]);
-    await this.streamLogs.delete(stream);
+    for (const result of cleanup) {
+      if (result.status === 'fulfilled') continue;
+      logger.warn(
+        CHANNEL,
+        `Stream ${stream} was deleted, but auxiliary cleanup was incomplete: ${toErrorMessage(result.reason)}`,
+        { data: result.reason },
+      );
+    }
   }
 
   private async deleteAdjacentStreamStates(
@@ -319,30 +332,20 @@ export class SessionStores {
   }> {
     const failed = new Set<StreamTabId>();
     const failures: unknown[] = [];
-    const goalResult = this.goalEntries?.forgetMany(streams).then(
-      () => ({ status: 'fulfilled' as const }),
-      (error: unknown) => ({ status: 'rejected' as const, error }),
-    );
-    const snapshotResults = await Promise.all(
+    const staged = new Map<
+      StreamTabId,
+      Awaited<ReturnType<StreamSnapshotStore['stageDeleteStream']>>
+    >();
+    await Promise.all(
       streams.map(async (stream) => {
         try {
-          await this.snapshots.deleteStream(stream);
-          return { stream, status: 'fulfilled' as const };
+          staged.set(stream, await this.snapshots.stageDeleteStream(stream));
         } catch (error) {
-          return { stream, status: 'rejected' as const, error };
+          failed.add(stream);
+          failures.push(error);
         }
       }),
     );
-    for (const result of snapshotResults) {
-      if (result.status === 'fulfilled') continue;
-      failed.add(result.stream);
-      failures.push(result.error);
-    }
-    const settledGoal = await goalResult;
-    if (settledGoal?.status === 'rejected') {
-      for (const stream of streams) failed.add(stream);
-      failures.push(settledGoal.error);
-    }
 
     const transcriptResults = await Promise.all(
       streams
@@ -360,6 +363,27 @@ export class SessionStores {
       if (result.status === 'fulfilled') continue;
       failed.add(result.stream);
       failures.push(result.error);
+      try {
+        await staged.get(result.stream)?.rollback();
+      } catch (rollbackError) {
+        failures.push(rollbackError);
+      }
+    }
+
+    const committedStreams = streams.filter((stream) => !failed.has(stream));
+    const cleanup = await Promise.allSettled([
+      ...committedStreams.map((stream) => staged.get(stream)?.commit()),
+      committedStreams.length > 0
+        ? this.goalEntries?.forgetMany(committedStreams)
+        : undefined,
+    ]);
+    for (const result of cleanup) {
+      if (result.status === 'fulfilled') continue;
+      logger.warn(
+        CHANNEL,
+        `Streams were deleted, but auxiliary cleanup was incomplete: ${toErrorMessage(result.reason)}`,
+        { data: result.reason },
+      );
     }
     return { failed, failures };
   }

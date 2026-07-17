@@ -1521,7 +1521,7 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages, {
       canonicalStreamIds: [stream],
       configureProgressSnapshotStore: (store) => {
-        vi.spyOn(store, 'deleteStream').mockRejectedValueOnce(
+        vi.spyOn(store, 'stageDeleteStream').mockRejectedValueOnce(
           new Error('snapshot directory is locked'),
         );
       },
@@ -1777,13 +1777,15 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages, {
       canonicalStreamIds: [deletedStream, retainedStream],
       configureProgressSnapshotStore: (store) => {
-        const deleteSnapshot = store.deleteStream.bind(store);
-        vi.spyOn(store, 'deleteStream').mockImplementation(async (stream) => {
-          if (stream === retainedStream) {
-            throw new Error('snapshot directory is locked');
-          }
-          await deleteSnapshot(stream);
-        });
+        const stageSnapshotDelete = store.stageDeleteStream.bind(store);
+        vi.spyOn(store, 'stageDeleteStream').mockImplementation(
+          async (stream) => {
+            if (stream === retainedStream) {
+              throw new Error('snapshot directory is locked');
+            }
+            return stageSnapshotDelete(stream);
+          },
+        );
       },
     });
     bridge.setActiveStream(deletedStream);

@@ -901,12 +901,17 @@ describe('StreamSnapshotStore', () => {
     ]);
 
     const store = new StreamSnapshotStore();
+    let deletion: Promise<void> | undefined;
     const wasDeletedDuringHydration = injectDuringExecutionConfigHydration(
       executionId,
-      () => store.deleteStream(STREAM),
+      () => {
+        deletion = store.deleteStream(STREAM);
+      },
     );
 
     await store.load([STREAM]);
+    if (!deletion) throw new Error('Deletion was not injected');
+    await deletion;
     await store.flush();
 
     expect(wasDeletedDuringHydration).toHaveBeenCalledOnce();
@@ -968,23 +973,18 @@ describe('StreamSnapshotStore', () => {
     expect(await StorageFS.exists(dir)).toBe(false);
   });
 
-  it('keeps the in-memory snapshot when durable deletion fails', async () => {
+  it('keeps the complete snapshot when atomic staging fails', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);
     store.setTodos(STREAM, [TODO]);
     store.setPlan(STREAM, PLAN);
     await store.flush();
-    const deleteStorage = StorageFS.delete.bind(StorageFS);
-    const deleteSpy = vi
-      .spyOn(StorageFS, 'delete')
-      .mockImplementationOnce(async () => {
-        await deleteStorage(path.join(streamDataDir(STREAM), 'workPlan.json'));
-        throw new Error('stream data directory is locked');
-      });
+    const deletionError = new Error('stream data directory is locked');
+    const renameSpy = vi
+      .spyOn(StorageFS, 'rename')
+      .mockRejectedValueOnce(deletionError);
 
-    await expect(store.deleteStream(STREAM)).rejects.toThrow(
-      'stream data directory is locked',
-    );
+    await expect(store.deleteStream(STREAM)).rejects.toBe(deletionError);
 
     expect(store.getWorkPlan(STREAM)).toEqual({
       todos: [TODO],
@@ -1000,11 +1000,33 @@ describe('StreamSnapshotStore', () => {
       planSummary: PLAN_SUMMARY,
     });
 
-    deleteSpy.mockRestore();
+    renameSpy.mockRestore();
     await store.deleteStream(STREAM);
   });
 
-  it('restarts hydration when deletion fails during an active seed', async () => {
+  it('recovers a crash-interrupted staged deletion before hydration', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    store.setTodos(STREAM, [TODO]);
+    store.setPlan(STREAM, PLAN);
+    await store.flush();
+
+    await store.stageDeleteStream(STREAM);
+    expect(await StorageFS.exists(streamDataDir(STREAM))).toBe(false);
+
+    const recovered = new StreamSnapshotStore();
+    await recovered.load([STREAM]);
+
+    expect(recovered.getWorkPlan(STREAM)).toMatchObject({
+      todos: [TODO],
+      plan: PLAN,
+      planSummary: PLAN_SUMMARY,
+    });
+    expect(await StorageFS.exists(streamDataDir(STREAM))).toBe(true);
+    await recovered.deleteStream(STREAM);
+  });
+
+  it('waits for active hydration before staging deletion', async () => {
     await installPlatform();
     const executionId = 'feedface' as ExecutionId;
     const writer = new StreamSnapshotStore();
@@ -1018,7 +1040,7 @@ describe('StreamSnapshotStore', () => {
 
     const store = new StreamSnapshotStore();
     const deletionError = new Error('stream data directory is locked');
-    vi.spyOn(StorageFS, 'delete').mockRejectedValueOnce(deletionError);
+    vi.spyOn(StorageFS, 'rename').mockRejectedValueOnce(deletionError);
     let deletion: Promise<void> | undefined;
     const wasDeleteInjected = injectDuringExecutionConfigHydration(
       executionId,
@@ -1074,14 +1096,17 @@ describe('StreamSnapshotStore', () => {
     ]);
 
     const store = new StreamSnapshotStore();
-    // Await the delete so evict + deleteDir fully complete before hydration
-    // resumes — only the post-await continuation can recreate the dir.
+    let deletion: Promise<void> | undefined;
     const wasDeleteInjected = injectDuringExecutionConfigHydration(
       executionId,
-      () => store.deleteStream(STREAM),
+      () => {
+        deletion = store.deleteStream(STREAM);
+      },
     );
 
     await store.load([STREAM]);
+    if (!deletion) throw new Error('Deletion was not injected');
+    await deletion;
     expect(wasDeleteInjected).toHaveBeenCalledOnce();
     await store.flush();
 

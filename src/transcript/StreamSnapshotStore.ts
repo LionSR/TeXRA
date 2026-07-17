@@ -66,8 +66,10 @@ import { isDirectory } from '@utils/files/fsEntryType';
 import {
   canUseStreamDataDir,
   decodeStreamId,
+  STREAM_DATA_DELETION_DIR,
   STREAM_DATA_DIR,
   STREAM_DATA_KEYS,
+  stagedStreamDataDir,
   streamDataDir,
 } from './streamDataPaths';
 import {
@@ -84,6 +86,11 @@ const CHANNEL = 'StreamSnapshotStore';
 /** Bounded fan-out for seeding many streams' sidecars (mirrors the retired
  *  managers' `pMap` hydration so startup doesn't open a file handle per tab). */
 const SEED_IO_CONCURRENCY = 8;
+
+interface StagedStreamSnapshotDeletion {
+  commit(): Promise<void>;
+  rollback(): Promise<void>;
+}
 
 const UsageRunEventDataSchema = z.looseObject({
   streamId: StreamTabIdSchema,
@@ -281,6 +288,7 @@ interface StreamRecord {
 
 export class StreamSnapshotStore {
   private readonly records = new Map<StreamTabId, StreamRecord>();
+  private readonly stagedDeletions = new Set<StreamTabId>();
 
   // -- Per (stream, category) serialized write locks -------------------------
   private readonly writeMutexes = new Map<string, Mutex>();
@@ -503,6 +511,8 @@ export class StreamSnapshotStore {
   private async readSeed(stream: StreamTabId, version: number): Promise<void> {
     if (this.streamVersion(stream) !== version) return;
     if (this.records.get(stream)?.seeded) return;
+    await this.recoverStagedDeletion(stream);
+    if (this.streamVersion(stream) !== version) return;
     const data = await readStreamData(this.kv(stream));
     if (this.streamVersion(stream) !== version) return;
     await this.applyStreamData(stream, data);
@@ -869,60 +879,113 @@ export class StreamSnapshotStore {
     for (const stream of this.records.keys()) this.bumpStreamVersion(stream);
     this.records.clear();
     this.writeMutexes.clear();
+    this.stagedDeletions.clear();
   }
 
-  /** Delete a stream's on-disk sidecar directory + in-memory state. */
-  async deleteStream(stream: StreamTabId): Promise<void> {
-    const record = this.records.get(stream);
-    const wasSeeded = record?.seeded ?? false;
-    const pending = this.cancelPendingWritesForStream(stream);
-    // Invalidate in-flight hydration/writes immediately, but keep the record
-    // readable until durable deletion commits. If deleteDir() fails, callers
-    // retain the stream and can retry with its complete in-memory snapshot.
-    this.bumpStreamVersion(stream);
-    await Promise.all(pending);
-    // Keep this after pending-write cancellation so reserved ids cannot leave
-    // older write chains free to recreate a non-stream-owned sidecar path.
-    if (!canUseStreamDataDir(stream)) {
-      this.records.delete(stream);
+  /** Restore a crash-interrupted pre-commit rename before reading the stream. */
+  private async recoverStagedDeletion(stream: StreamTabId): Promise<void> {
+    if (this.stagedDeletions.has(stream) || !canUseStreamDataDir(stream))
       return;
+    const stagedDir = stagedStreamDataDir(stream);
+    if (!(await StorageFS.exists(stagedDir))) return;
+
+    const liveDir = streamDataDir(stream);
+    if (await StorageFS.exists(liveDir)) {
+      // A newer generation already owns the live path; this is committed
+      // deletion residue whose best retry is ordinary garbage collection.
+      await StorageFS.delete(stagedDir, { recursive: true });
+    } else {
+      await StorageFS.rename(stagedDir, liveDir);
     }
+    const record = this.records.get(stream);
+    if (record) record.kv = undefined;
+  }
+
+  /**
+   * Atomically move a stream's sidecars out of the live namespace while
+   * keeping its in-memory record available until the transcript registry
+   * decides whether deletion commits.
+   */
+  async stageDeleteStream(
+    stream: StreamTabId,
+  ): Promise<StagedStreamSnapshotDeletion> {
+    if (this.stagedDeletions.has(stream)) {
+      throw new Error(
+        `Snapshot deletion is already staged for stream ${stream}`,
+      );
+    }
+    await this.recoverStagedDeletion(stream);
+    if (this.stagedDeletions.has(stream)) {
+      throw new Error(
+        `Snapshot deletion is already staged for stream ${stream}`,
+      );
+    }
+    this.stagedDeletions.add(stream);
 
     try {
-      await new KVStore(streamDataDir(stream), {
-        throwOnErrors: true,
-      }).deleteDir();
-    } catch (error) {
-      if (wasSeeded && record) {
-        // Recursive removal may have deleted only some sidecars before failing.
-        // Restore every durable field from the authoritative resident record;
-        // reseeding here would replace complete memory with disk fragments.
-        if (record.meta) this.writeMeta(stream, record.meta);
-        this.writeOutputFiles(stream);
-        this.write(stream, STREAM_DATA_KEYS.MISSING_OUTPUTS, {
-          ...record.missingOutputs,
-        });
-        this.write(stream, STREAM_DATA_KEYS.COMPILE_FAILURES, {
-          ...record.compileFailures,
-        });
-        this.writeUsage(stream);
-        this.writeWorkPlan(stream, record.workPlan);
-        await this.flushWritesForStream(stream);
-      } else {
-        // A version bump can interrupt hydration as well as writes. Chain a
-        // fresh seed behind that interrupted work so the retained record
-        // becomes current and mutable once its durable sidecars are read.
-        void this.refreshSeed(stream).catch((seedError: unknown) =>
-          logger.warn(
-            CHANNEL,
-            `Failed to restore snapshot state after retaining stream ${stream}`,
-            { data: seedError },
-          ),
-        );
+      // Let hydration finish before staging. A record with `seeded === false`
+      // may already contain sidecars while execution-config hydration is still
+      // in flight, so invalidating that seed would make neither disk nor memory
+      // authoritative for rollback.
+      let seedChain = this.records.get(stream)?.seedChain;
+      while (seedChain) {
+        await seedChain;
+        const current = this.records.get(stream)?.seedChain;
+        if (!current || current === seedChain) break;
+        seedChain = current;
       }
+
+      const pending = this.cancelPendingWritesForStream(stream);
+      this.bumpStreamVersion(stream);
+      await Promise.all(pending);
+
+      const canStage = canUseStreamDataDir(stream);
+      const liveDir = canStage ? streamDataDir(stream) : undefined;
+      const stagedDir = canStage ? stagedStreamDataDir(stream) : undefined;
+      let staged = false;
+      if (liveDir && stagedDir && (await StorageFS.exists(liveDir))) {
+        await StorageFS.ensureDir(STREAM_DATA_DELETION_DIR);
+        await StorageFS.rename(liveDir, stagedDir);
+        staged = true;
+      }
+
+      let settled = false;
+      return {
+        commit: async () => {
+          if (settled) return;
+          settled = true;
+          this.stagedDeletions.delete(stream);
+          this.evict(stream);
+          if (!staged || !stagedDir) return;
+          try {
+            await StorageFS.delete(stagedDir, { recursive: true });
+          } catch (error) {
+            logger.warn(
+              CHANNEL,
+              `Stream ${stream} was deleted, but staged snapshot cleanup was incomplete.`,
+              { data: error },
+            );
+          }
+        },
+        rollback: async () => {
+          if (settled) return;
+          if (staged && stagedDir && liveDir) {
+            await StorageFS.rename(stagedDir, liveDir);
+          }
+          this.stagedDeletions.delete(stream);
+          settled = true;
+        },
+      };
+    } catch (error) {
+      this.stagedDeletions.delete(stream);
       throw error;
     }
-    this.records.delete(stream);
+  }
+
+  /** Delete a stream's sidecars and in-memory state as one committed action. */
+  async deleteStream(stream: StreamTabId): Promise<void> {
+    const deletion = await this.stageDeleteStream(stream);
+    await deletion.commit();
   }
 
   /** Delete the entire `streamData/` tree + all in-memory state. */
@@ -932,7 +995,14 @@ export class StreamSnapshotStore {
     );
     this.evictAll();
     await Promise.all(pending);
-    await new KVStore(STREAM_DATA_DIR).deleteDir();
+    await Promise.all([
+      new KVStore(STREAM_DATA_DIR).deleteDir(),
+      StorageFS.delete(STREAM_DATA_DELETION_DIR, { recursive: true }).catch(
+        (error: unknown) => {
+          if (!isFileNotFoundError(error)) throw error;
+        },
+      ),
+    ]);
   }
 
   setTodos(stream: StreamTabId, todos: TodoItem[]): void {
@@ -1081,6 +1151,7 @@ export class StreamSnapshotStore {
   async readPersistedExecutionId(
     stream: StreamTabId,
   ): Promise<ExecutionId | undefined> {
+    await this.recoverStagedDeletion(stream);
     return executionIdFromMeta(await readMeta(this.kv(stream)));
   }
 
@@ -1093,6 +1164,7 @@ export class StreamSnapshotStore {
    * bare `meta.json`-only match.
    */
   async hasPersistedWorkPlan(stream: StreamTabId): Promise<boolean> {
+    await this.recoverStagedDeletion(stream);
     return this.kv(stream).exists(STREAM_DATA_KEYS.WORK_PLAN);
   }
 
@@ -1107,6 +1179,7 @@ export class StreamSnapshotStore {
   async readLegacyInstruction(
     stream: StreamTabId,
   ): Promise<LegacyInstructionEntry | null> {
+    await this.recoverStagedDeletion(stream);
     const record = this.records.get(stream);
     const meta = record?.seeded
       ? record.meta
@@ -1261,6 +1334,7 @@ export class StreamSnapshotStore {
     if (this.records.get(streamId)?.seeded) {
       return this.snapshotFromMemory(streamId);
     }
+    await this.recoverStagedDeletion(streamId);
     return assembleSnapshot(streamId, await readStreamData(this.kv(streamId)));
   }
 
@@ -1303,6 +1377,7 @@ export class StreamSnapshotStore {
     if (this.records.get(streamId)?.seeded) {
       return this.getOutputFiles(streamId);
     }
+    await this.recoverStagedDeletion(streamId);
     return (await readStreamData(this.kv(streamId))).outputFiles;
   }
 
@@ -1353,6 +1428,8 @@ export class StreamSnapshotStore {
     const next = prev.then(async () => {
       if (this.streamVersion(stream) !== version) return;
       await this.flushWritesForStream(stream);
+      if (this.streamVersion(stream) !== version) return;
+      await this.recoverStagedDeletion(stream);
       if (this.streamVersion(stream) !== version) return;
       const record = this.records.get(stream);
       if (record) record.kv = undefined;
