@@ -5,6 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Third-party imports
+import { APIError as OpenAIAPIError } from 'openai';
 import { describe, expect, it, vi, type Mock } from 'vitest';
 
 // Local imports - agent runtime
@@ -16,6 +17,7 @@ import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { BaseCycleFields } from '@agent/core/flows/CommonCycleTypes';
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import { RetryableInvocationNode } from '@agent/core/flows/RetryState';
+import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import type {
   HostRetryRequest,
   RetryResult,
@@ -165,6 +167,21 @@ describe('RetryState', () => {
 
     expect(node.shouldAutoRetry(abort)).toBe(false);
     expect(node.fallbackFor(abort)).toEqual({ kind: 'cancelled' });
+  });
+
+  it('auto-retries a status-less OpenAI server_error response', () => {
+    const node = new ExposedRetryNode();
+    const body = {
+      type: 'server_error',
+      code: 'server_error',
+      message:
+        'An error occurred while processing your request. You can retry your request, or contact us through our help center at help.openai.com if the error persists. Please include the request ID 988f71d8-3453-46f1-a466-529d2a967244 in your message.',
+      param: null,
+    };
+    const error = new OpenAIAPIError(undefined, body, body.message, undefined);
+    tagOpenAISdkError(error, 'openai');
+
+    expect(node.shouldAutoRetry(error)).toBe(true);
   });
 
   it('skips flow-level auto-retry when the model handler delegates retries to the provider', () => {
