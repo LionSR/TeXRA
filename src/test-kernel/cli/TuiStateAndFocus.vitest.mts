@@ -297,9 +297,8 @@ describe('cliState Phase 4 fields', () => {
         transcriptViewportKey({
           activeStreamId: root,
           parentStream: parentStream.get(),
-          transcriptViewerStreamId: child1,
         }),
-      ).toBe(`viewer:${child1}`);
+      ).toBe('root-scrollback');
     } finally {
       detach();
     }
@@ -343,19 +342,6 @@ describe('CLI TUI row allocation', () => {
 
     expect(layout.transcriptRows).toBe(1);
     expect(layout.foregroundRows).toBe(12);
-  });
-
-  it('lets transcript viewers own the full foreground region', () => {
-    const layout = allocateMiddleRows({
-      foregroundOpen: true,
-      reserveTranscriptRows: false,
-      reverseSearchOpen: false,
-      rows: 24,
-      slashPaletteOpen: false,
-    });
-
-    expect(layout.transcriptRows).toBe(0);
-    expect(layout.foregroundRows).toBe(19);
   });
 
   it('uses the whole middle region for the transcript without foreground UI', () => {

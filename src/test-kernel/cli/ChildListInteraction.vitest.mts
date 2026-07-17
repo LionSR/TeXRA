@@ -90,14 +90,14 @@ describe('CLI child list interaction', () => {
     expect(output).not.toContain(POINTER);
   });
 
-  it('views and kills only the selected active session, then focuses it', async () => {
+  it('prints and kills only the selected active session, then focuses it', async () => {
     const ink = (await import(cliRequire.resolve('ink'))) as any;
     const React = ((await import(cliRequire.resolve('react'))) as any).default;
     const root = 'root' as StreamTabId;
     const child = 'child' as StreamTabId;
     const onFocusStream = vi.fn();
     const onKillExecution = vi.fn();
-    const onViewStream = vi.fn();
+    const onPrintStream = vi.fn();
     const onCancel = vi.fn();
     let selected = childStreamListValue(root);
 
@@ -117,7 +117,7 @@ describe('CLI child list interaction', () => {
           selected = next;
           setValue(next);
         },
-        onViewStream,
+        onPrintStream,
         selectedValue: value,
         sessions: [session(root, true), session(child)],
       });
@@ -137,7 +137,7 @@ describe('CLI child list interaction', () => {
       stdin.write('\u001B[B');
       await waitFor(() => selected === childStreamListValue(child));
       stdin.write('v');
-      await waitFor(() => onViewStream.mock.calls.length === 1);
+      await waitFor(() => onPrintStream.mock.calls.length === 1);
       stdin.write('k');
       await waitFor(() => onKillExecution.mock.calls.length === 1);
       stdin.write('\r');
@@ -145,7 +145,7 @@ describe('CLI child list interaction', () => {
       stdin.write('\u001B');
       await waitFor(() => onCancel.mock.calls.length === 1);
 
-      expect(onViewStream).toHaveBeenCalledWith(child);
+      expect(onPrintStream).toHaveBeenCalledWith(child);
       expect(onKillExecution).toHaveBeenCalledWith('child-exec');
       expect(onFocusStream).toHaveBeenCalledWith(child);
       expect(onCancel).toHaveBeenCalledOnce();
@@ -154,13 +154,13 @@ describe('CLI child list interaction', () => {
     }
   });
 
-  it('opens and kills a selected process without viewing a transcript', async () => {
+  it('opens and kills a selected process without printing stream output', async () => {
     const ink = (await import(cliRequire.resolve('ink'))) as any;
     const React = ((await import(cliRequire.resolve('react'))) as any).default;
     const processValue = childProcessListValue('process-exec');
     const onKillExecution = vi.fn();
     const onOpenProcessDetail = vi.fn();
-    const onViewStream = vi.fn();
+    const onPrintStream = vi.fn();
 
     const stdin = new FakeStdin();
     const instance = ink.render(
@@ -179,7 +179,7 @@ describe('CLI child list interaction', () => {
         onKillExecution,
         onOpenProcessDetail,
         onSelectionChange: vi.fn(),
-        onViewStream,
+        onPrintStream,
         selectedValue: processValue,
       }),
       {
@@ -199,7 +199,7 @@ describe('CLI child list interaction', () => {
       stdin.write('\r');
       await waitFor(() => onOpenProcessDetail.mock.calls.length === 1);
 
-      expect(onViewStream).not.toHaveBeenCalled();
+      expect(onPrintStream).not.toHaveBeenCalled();
       expect(onKillExecution).toHaveBeenCalledWith('process-exec');
       expect(onOpenProcessDetail).toHaveBeenCalledWith('process-exec');
     } finally {

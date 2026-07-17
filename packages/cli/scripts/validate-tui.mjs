@@ -306,7 +306,7 @@ const SCENARIOS = [
     expect: [
       '● bash (python3 enumerate_triples.py)',
       'tool-output-line-01',
-      '… +9 lines (ctrl + t to view transcript)',
+      '… +9 lines (ctrl + t to print full output)',
       'tool-output-line-18',
     ],
     unexpect: ['tool-output-line-10 hidden-middle'],
@@ -327,18 +327,18 @@ const SCENARIOS = [
     ],
   },
   {
-    name: 'transcript-viewer-long-tool-output',
+    name: 'root-print-full-tool-output',
     cols: 80,
     env: { HARNESS_ENTRIES: '0', HARNESS_LONG_TOOL_OUTPUT: '1' },
     keys: [DC4],
-    frame: 'viewport',
+    frame: 'scrollback',
     expect: [
+      '[Full output: main]',
       'tool-output-line-10 hidden-middle',
       'wide-column-F',
       'tool-output-line-18',
-      'PgUp/PgDn page',
-      'Esc close',
     ],
+    unexpect: ['PgUp/PgDn page', 'Esc close'],
   },
   {
     name: 'orchestrate-launcher',
@@ -2528,7 +2528,7 @@ const SCENARIOS = [
     ],
   },
   {
-    name: 'subagent-focused-transcript-viewer-full-history',
+    name: 'subagent-print-full-history',
     frame: 'scrollback',
     cols: 120,
     rows: 14,
@@ -2539,16 +2539,15 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab children',
-    keys: ['\t', DOWN, DOWN, DOWN, 'v', 'g'],
+    keys: ['\t', DOWN, DOWN, DOWN, 'v'],
     expect: [
-      'strategy\n› Please handle the harness-child-strategy sub-workflow.',
+      '[Full output: strategy]',
+      'Please handle the harness-child-strategy sub-workflow.',
       'strategy detail line 01',
-      'PgUp/PgDn page',
-      'Esc close',
     ],
     unexpect: [
-      'entry-1 chat history line',
-      'entry-4 chat history line',
+      'PgUp/PgDn page',
+      'Esc close',
       'signal read during notification phase',
       'ERROR',
     ],
@@ -2577,7 +2576,7 @@ const SCENARIOS = [
     ],
   },
   {
-    name: 'subagent-list-transcript-return-selection',
+    name: 'subagent-list-print-keeps-selection',
     frame: 'viewport',
     cols: 120,
     env: {
@@ -2586,11 +2585,11 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab children',
-    keys: ['\t', DOWN, DOWN, DOWN, 'v', ESC],
+    keys: ['\t', DOWN, DOWN, DOWN, 'v'],
     expect: [
       '›   ● strategy running',
       'Session selection active.',
-      'v transcript',
+      'v full output',
       'Esc input',
     ],
     unexpect: [
@@ -2609,19 +2608,28 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab children',
-    keys: ['\t', DOWN, DOWN, DOWN, '\r', '\t', UP, UP, UP, '\r'],
+    keys: ['\t', DOWN, DOWN, DOWN, 'v', '\r', '\t', UP, UP, UP, '\r'],
     expect: [
       'entry-1 chat history line',
       'entry-4 chat history line',
-      '✓ ● main running',
-    ],
-    unexpect: [
-      'Please handle the harness-child-strategy sub-workflow.',
+      '[Full output: strategy]',
       'strategy is checking the harness-child-strategy details',
+      '✓ ● main running',
     ],
     maxOccurrences: [
       { text: 'entry-1 chat history line', max: 1 },
       { text: 'entry-4 chat history line', max: 1 },
+      { text: '[Full output: strategy]', max: 1 },
+    ],
+    ordered: [
+      {
+        before: 'assistant reply 3 - confirming receipt of entry 3',
+        after: '[Full output: strategy]',
+      },
+      {
+        before: '[Full output: strategy]',
+        after: 'entry-4 chat history line',
+      },
     ],
   },
   {
@@ -2729,7 +2737,7 @@ const SCENARIOS = [
     expect: [
       '›   ● strategy stopped',
       'Enter focus',
-      'v transcript',
+      'v full output',
       'Tab input',
       'Esc input',
     ],

@@ -47,11 +47,9 @@ export const TASK_DETAIL_LABEL_WIDTH = 13;
 const ULTRA_COMPACT_TASK_DETAIL_MAX_ROWS = 4;
 const NARROW_TASK_DETAIL_HINT_MAX_COLUMNS = 56;
 const MIN_COLUMNS_FOR_KILL_HINT = 44;
-// PgUp/PgDn and g/G are the least essential task-detail hints — they
-// duplicate `TranscriptViewer`'s paging bindings but the arrow-key scroll
-// hint above already covers the same affordance more compactly. Only surface
-// them once there's room for the full hint row (scroll + page + top/bottom +
-// kill + back) without crowding out the higher-priority ones.
+// PgUp/PgDn and g/G are the least essential task-detail hints because the
+// arrow-key hint already covers scrolling more compactly. Only surface them
+// once the full hint row fits without crowding out higher-priority controls.
 const MIN_COLUMNS_FOR_PAGE_JUMP_HINTS = 84;
 
 export function isUltraCompactTaskDetailRows(
