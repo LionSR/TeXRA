@@ -1574,7 +1574,13 @@ describe('StreamSnapshotStore', () => {
       }),
     );
 
-    await store.flush();
+    await expect(
+      store.reconcileStagedDeletions(new Set([STREAM])),
+    ).resolves.toEqual({
+      restored: [],
+      pendingCleanup: [],
+      discarded: [STREAM],
+    });
     const reloaded = new StreamSnapshotStore();
     await reloaded.load([STREAM]);
     expect(reloaded.getWorkPlan(STREAM).plan).toBeNull();
