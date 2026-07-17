@@ -25,6 +25,7 @@ import { assertNever } from '@utils/core';
 
 import {
   activeStreamId,
+  getCliStateGeneration,
   removeStream,
   patchStream,
   type StreamSlice,
@@ -37,6 +38,7 @@ import {
 import { appendCompletedProcessEntries } from './completedProcessTranscript';
 import { sumResumeUsageStats } from './resumeHint';
 import { appendLocalAssistantTranscript } from './transcript';
+import { applyWorkflowScriptProgressEvent } from './workflowScriptProgress';
 
 const GOAL_PAUSED_TRANSCRIPT_NOTICE =
   'Goal paused after a failed cycle. Review the error before starting a new goal.';
@@ -180,6 +182,7 @@ function applyDirectTuiRunEvent(
   event: AgentEvent,
   fallbackStreamId: StreamTabId,
 ): boolean {
+  if (applyWorkflowScriptProgressEvent(event, fallbackStreamId)) return true;
   switch (event.type) {
     case 'run.config':
       applyRunConfig(event.streamId, event.config);
@@ -300,8 +303,10 @@ function applyStreamMeta(
 export function attachTuiRunFactSubscription(
   events: SessionEventHub,
 ): () => void {
+  const generation = getCliStateGeneration();
   const detachSessionFacts = events.subscribe(
     (sessionEvent) => {
+      if (generation !== getCliStateGeneration()) return;
       if (sessionEvent.scope !== 'session') return;
       const fact = sessionEvent.event;
       switch (fact.type) {
@@ -343,7 +348,9 @@ export function attachTuiRunFactSubscription(
   );
   const detachRunFacts = events.subscribe(
     (sessionEvent) => {
+      if (generation !== getCliStateGeneration()) return;
       if (sessionEvent.scope !== 'run') return;
+      if (isChildStreamRemoved(sessionEvent.streamId)) return;
       const { event } = sessionEvent;
       if (applyDirectTuiRunEvent(event, sessionEvent.streamId)) {
         return;
@@ -361,7 +368,10 @@ export function attachTuiRunFactSubscription(
         'goalPaused',
         'run.config',
         'usage',
+        'log',
         'stage.start',
+        'tool.start',
+        'tool.end',
         'child.activity',
         'process.output',
       ],
