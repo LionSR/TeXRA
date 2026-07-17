@@ -13,7 +13,6 @@ import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/mo
 import { SupabaseClient } from '@auth/SupabaseClient';
 import * as serverKeysModule from '@auth/serverKeys';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
-import type { DirectModelRoutingConfig } from '@model/openRouterRouting';
 
 // Local imports - modules stubbed by these tests
 import * as configUtilsModule from '@utils/config/configUtils';
@@ -25,7 +24,7 @@ class ExposedKeyHandler extends ModelHandlerOpenRouterNative {
   }
 }
 
-type TestModelConfig = ModelConfig & DirectModelRoutingConfig;
+type TestModelConfig = ModelConfig;
 
 function buildConfig(
   overrides: Partial<TestModelConfig> = {},
@@ -165,11 +164,10 @@ describe('ModelHandler.getApiKey resolution', () => {
       .mockResolvedValue('relay-token');
     const handler = new ExposedKeyHandler(
       buildConfig({
-        directAccess: {
-          source: 'kimiCode',
-          credential: 'kimiCode',
-          baseUrl: 'https://api.kimi.com/coding/v1',
-        },
+        provider: ModelProvider.MOONSHOT,
+        kimiSubscription: true,
+        baseUrl: 'https://api.kimi.com/coding/v1',
+        openrouterFullName: undefined,
       }),
     );
 

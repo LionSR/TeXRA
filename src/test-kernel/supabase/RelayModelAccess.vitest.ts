@@ -50,7 +50,11 @@ describe('relay tier model access', () => {
             TIER_CONFIG.providers.includes(model.provider) &&
             !model.openRouterOnly &&
             !model.retired &&
-            !ULTRA_ONLY_PROVIDER_SET.has(model.provider.toLowerCase()),
+            !ULTRA_ONLY_PROVIDER_SET.has(model.provider.toLowerCase()) &&
+            // Kimi Code membership models are pinned to the coding endpoint and
+            // are not relay-servable (see RELAY_MODELS in models.ts).
+            (model as { baseUrl?: string }).baseUrl !==
+              'https://api.kimi.com/coding/v1',
         )
         .map((model) => model.name),
     );

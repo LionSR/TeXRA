@@ -6,7 +6,10 @@ import { isCodexSignedIn, isPreferCodexSubscription } from '@auth/codex';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
-import { getUseOpenRouter } from '@utils/config/providerConfig';
+import {
+  getPreferKimiCode,
+  getUseOpenRouter,
+} from '@utils/config/providerConfig';
 
 import {
   apiKeyExists,
@@ -14,6 +17,12 @@ import {
   type ApiProvider,
 } from './apiProviders';
 import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from './codexSubscriptionRouting';
+import {
+  isKimiCodeExclusiveModel,
+  isKimiSubscriptionEligible,
+  kimiCodeRuntimeConfig,
+  resolveKimiCodeRoute,
+} from './kimiCodeSubscriptionRouting';
 import {
   buildBaseModelOption,
   buildBasicModelOptionsData,
@@ -179,8 +188,38 @@ interface ModelAvailabilityContext {
   /** Whether the user is signed in with ChatGPT (only resolved when the
    * "prefer subscription" switch is on). */
   codexSignedIn: boolean;
+  /** Whether the "Prefer Kimi Code" switch is on. */
+  preferKimiCode: boolean;
+  /** Whether a Kimi Code console API key is stored. */
+  kimiCodeKeySet: boolean;
   agentCategory?: AgentCategory;
   serverSideKeyService: ModelOptionsServerAccess;
+}
+
+/**
+ * The config a Kimi-subscription-eligible model actually runs with, mirroring
+ * ModelFactory's dispatch: when the shared route resolver picks the Kimi Code
+ * endpoint for a dual-backend model (`kimi3`), swap in the synthesized runtime
+ * config (coding base URL + `k3` wire id) so availability, the row's product
+ * source, and the unavailable-reason all match what the handler builds.
+ * Exclusive models already carry the pinned config, so this is only material
+ * for dual-backend routes. Returns the original config otherwise.
+ */
+function effectiveKimiCodeConfig(
+  config: ModelConfig,
+  ctx: ModelAvailabilityContext,
+): ModelConfig {
+  if (!isKimiSubscriptionEligible(config)) return config;
+  const route = resolveKimiCodeRoute(
+    config,
+    ctx.useOpenRouter,
+    ctx.kimiCodeKeySet,
+    ctx.preferKimiCode,
+  );
+  if (route === 'kimiCode' && !isKimiCodeExclusiveModel(config)) {
+    return kimiCodeRuntimeConfig(config);
+  }
+  return config;
 }
 
 function canUseIncludedAccessForModel(
@@ -286,12 +325,14 @@ async function buildAvailabilityContext(
       ? apiKeyExists(access.secrets, provider)
       : apiKeyExistsUncached(access.secrets, provider);
   const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
-  const [hasOpenRouter, hasServerAccess, codexSignedIn] = await Promise.all([
-    hasApiKey('openRouter'),
-    serverSideKeyService.canUseServerSideKeys(),
-    // Only worth a secrets read when the "prefer subscription" switch is on.
-    isPreferCodexSubscription() ? isCodexSignedIn() : Promise.resolve(false),
-  ]);
+  const [hasOpenRouter, hasServerAccess, codexSignedIn, kimiCodeKeySet] =
+    await Promise.all([
+      hasApiKey('openRouter'),
+      serverSideKeyService.canUseServerSideKeys(),
+      // Only worth a secrets read when the "prefer subscription" switch is on.
+      isPreferCodexSubscription() ? isCodexSignedIn() : Promise.resolve(false),
+      hasApiKey('kimiCode'),
+    ]);
   return {
     apiKeyExists: hasApiKey,
     hasOpenRouter,
@@ -302,6 +343,8 @@ async function buildAvailabilityContext(
     useOpenRouter: access.useOpenRouter,
     useIncludedAccess,
     codexSignedIn,
+    preferKimiCode: getPreferKimiCode(),
+    kimiCodeKeySet,
     agentCategory: access.agentCategory,
     serverSideKeyService,
   };
@@ -328,7 +371,16 @@ function applyModelOptionsComputationOptions(
   return { ...access, agentCategory: options.agentCategory };
 }
 
-/** Build synchronous fallback options from the current host-visible model list. */
+/**
+ * Build synchronous fallback options from the current host-visible model list.
+ *
+ * Secret-free by design (no key reads), so it cannot resolve credential-
+ * dependent routing: a dual-backend model like `kimi3` shows its canonical
+ * provider home (Moonshot), and the async {@link computeModelOptionsData}
+ * refines it to Kimi Code when "Prefer Kimi Code" plus a stored key actually
+ * reroute it. Exclusive Kimi Code models still show `kimiCode` here because
+ * that is a pure registry fact needing no secret.
+ */
 export function buildVisibleBasicModelOptionsData(
   visibleModels: readonly string[] = getVisibleModels(platform().globalState),
 ): ModelOptionData[] {
@@ -342,8 +394,8 @@ export async function getModelUnavailableReason(
   options: ModelOptionsComputationOptions = {},
 ): Promise<string | null> {
   await discoveredRuntimeModelConfigEntries();
-  const config = getRuntimeModelConfig(model);
-  if (!config) return `Model "${model}" is not recognized.`;
+  const rawConfig = getRuntimeModelConfig(model);
+  if (!rawConfig) return `Model "${model}" is not recognized.`;
 
   // buildDefaultModelOptionsAccess already folds in options.agentCategory, so
   // only the caller-supplied access path needs the option override reapplied.
@@ -351,6 +403,7 @@ export async function getModelUnavailableReason(
     ? applyModelOptionsComputationOptions(access, options)
     : buildDefaultModelOptionsAccess(options);
   const ctx = await buildAvailabilityContext(effectiveAccess, access == null);
+  const config = effectiveKimiCodeConfig(rawConfig, ctx);
   const availability = await resolveModelAvailability(model, config, ctx);
   if (availability.available) return null;
 
@@ -401,10 +454,13 @@ async function buildModelOptionData(
   model: string,
   ctx: ModelAvailabilityContext,
 ): Promise<ModelOptionData> {
-  const config = getRuntimeModelConfig(model);
-  if (!config) {
+  const rawConfig = getRuntimeModelConfig(model);
+  if (!rawConfig) {
     return { value: model, label: model };
   }
+  // Mirror ModelFactory: a dual-backend Kimi model routed to the coding
+  // endpoint runs with the synthesized runtime config, so the row reflects it.
+  const config = effectiveKimiCodeConfig(rawConfig, ctx);
 
   const availability = await resolveModelAvailability(model, config, ctx);
   const optionConfig = availability.providerCapabilities

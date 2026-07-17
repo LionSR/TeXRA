@@ -140,10 +140,20 @@ const ALL_PROVIDERS = [
 ] as const;
 const RELAY_PROVIDERS = new Set<string>(ALL_PROVIDERS);
 
+// Kimi Code membership models are pinned to Moonshot's coding endpoint and can
+// only be served with a per-user Kimi Code key, so the relay (which forwards
+// with its own Moonshot open-platform key) must never advertise them. The pin
+// distinguishes them from `kimi3`, which stays relay-eligible via `kimi-k3`.
+const KIMI_CODE_CODING_BASE_URL = 'https://api.kimi.com/coding/v1';
+
 /** All relay-compatible models from llm-zoo, converted to relay format. */
 const RELAY_MODELS: RelayModel[] = Object.values(MODEL_CONFIGS)
   .filter(
-    (m) => RELAY_PROVIDERS.has(m.provider) && !m.openRouterOnly && !m.retired,
+    (m) =>
+      RELAY_PROVIDERS.has(m.provider) &&
+      !m.openRouterOnly &&
+      !m.retired &&
+      m.baseUrl !== KIMI_CODE_CODING_BASE_URL,
   )
   .map(toRelayModel);
 

@@ -200,8 +200,12 @@ export class SettingsProfileController {
       await this.deps.updateConfig(input.key, input.value);
     }
 
+    // Toggles that re-route models change which entries are available and under
+    // which provider they appear, so the picker must be recomputed: OpenRouter
+    // (global route) and Prefer Kimi Code (reroutes dual-backend Kimi K3).
     const affectsModelAvailability =
-      providerSetting?.globalStateKey === GlobalStateKey.USE_OPENROUTER;
+      providerSetting?.globalStateKey === GlobalStateKey.USE_OPENROUTER ||
+      providerSetting?.globalStateKey === GlobalStateKey.KIMI_CODE_PREFER;
     if (affectsModelAvailability) {
       this.deps.invalidateModelOptionsCache();
     }

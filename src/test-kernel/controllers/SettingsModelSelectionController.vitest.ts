@@ -107,11 +107,9 @@ describe('SettingsModelSelectionController', () => {
 
     const { models } = await controller.buildSelectionData();
 
-    expect(
-      models.find((model) => model.name === 'kimiCodeCoding'),
-    ).toMatchObject({
+    expect(models.find((model) => model.name === 'kimiCoding')).toMatchObject({
       provider: 'kimiCode',
-      label: 'Kimi Code K2.7',
+      label: 'Kimi for Coding',
     });
   });
 
