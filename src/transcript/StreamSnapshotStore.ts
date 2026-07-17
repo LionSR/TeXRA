@@ -1035,6 +1035,20 @@ export class StreamSnapshotStore {
     state.resolveSettled();
   }
 
+  /** Retain the latest buffered values until a later deletion retry. */
+  private retainFailedRollback(
+    stream: StreamTabId,
+    state: StagedDeletionState,
+  ): void {
+    const prior = this.failedRollbacks.get(stream);
+    if (prior && prior !== state) {
+      for (const [key, value] of prior.writes) {
+        if (!state.writes.has(key)) state.writes.set(key, value);
+      }
+    }
+    this.failedRollbacks.set(stream, state);
+  }
+
   /**
    * Atomically move a stream's sidecars out of the live namespace while
    * keeping its in-memory record available until the transcript registry
@@ -1072,11 +1086,11 @@ export class StreamSnapshotStore {
           }
           await StorageFS.rename(stagedDir, liveDir);
         }
-        this.failedRollbacks.delete(stream);
         for (const [key, value] of failedState.writes) {
           if (!state.writes.has(key)) state.writes.set(key, value);
         }
         await this.replayStagedWrites(stream, state);
+        this.failedRollbacks.delete(stream);
       }
       if (
         canUseStreamDataDir(stream) &&
@@ -1144,7 +1158,7 @@ export class StreamSnapshotStore {
             }
             await this.replayStagedWrites(stream, state);
           } catch (error) {
-            this.failedRollbacks.set(stream, state);
+            this.retainFailedRollback(stream, state);
             throw error;
           } finally {
             this.settleStagedDeletion(stream, state);
@@ -1152,16 +1166,27 @@ export class StreamSnapshotStore {
         },
       };
     } catch (error) {
+      const failures: unknown[] = [error];
       try {
-        await this.replayStagedWrites(stream, state);
-      } catch (replayError) {
-        this.failedRollbacks.set(stream, state);
-        throw new AggregateError(
-          [error, replayError],
-          `Failed to stage snapshot deletion for ${stream} and restore buffered writes`,
-        );
+        const snapshotRemainsStaged =
+          canUseStreamDataDir(stream) &&
+          (await storagePathExists(stagedStreamDataDir(stream)));
+        if (snapshotRemainsStaged) {
+          this.retainFailedRollback(stream, state);
+        } else {
+          await this.replayStagedWrites(stream, state);
+        }
+      } catch (recoveryError) {
+        this.retainFailedRollback(stream, state);
+        failures.push(recoveryError);
       } finally {
         this.settleStagedDeletion(stream, state);
+      }
+      if (failures.length > 1) {
+        throw new AggregateError(
+          failures,
+          `Failed to stage snapshot deletion for ${stream} and restore buffered writes`,
+        );
       }
       throw error;
     }
@@ -1441,7 +1466,8 @@ export class StreamSnapshotStore {
   }
 
   private write(stream: StreamTabId, key: string, value: unknown): void {
-    const stagedDeletion = this.stagedDeletions.get(stream);
+    const stagedDeletion =
+      this.stagedDeletions.get(stream) ?? this.failedRollbacks.get(stream);
     if (stagedDeletion) {
       stagedDeletion.writes.set(key, value);
       return;
@@ -1629,7 +1655,10 @@ export class StreamSnapshotStore {
       await this.flushWritesForStream(stream);
       if (this.streamVersion(stream) !== version) return;
       const record = this.records.get(stream);
-      if (record) record.kv = undefined;
+      if (record) {
+        record.kv = undefined;
+        record.writeKv = undefined;
+      }
       const data = await readStreamData(this.kv(stream));
       if (this.streamVersion(stream) !== version) return;
       await this.applyStreamData(stream, data);

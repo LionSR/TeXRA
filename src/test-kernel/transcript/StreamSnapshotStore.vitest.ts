@@ -12,6 +12,7 @@ import { StreamSnapshotStore, streamDataDir } from '@transcript';
 import {
   stagedStreamDataDir,
   STREAM_DATA_DIR,
+  STREAM_DATA_DELETION_DIR,
 } from '@transcript/streamDataPaths';
 import { getExecutionStore } from '@agent/storage';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
@@ -1134,12 +1135,81 @@ describe('StreamSnapshotStore', () => {
 
     await expect(deletion.rollback()).rejects.toBe(writeError);
 
+    const revisedPlan: Plan = { objective: 'Use the recovered draft' };
+    store.setPlan(STREAM, revisedPlan);
     writeSpy.mockRestore();
     const retry = await store.stageDeleteStream(STREAM);
     await retry.rollback();
     const reloaded = new StreamSnapshotStore();
     await reloaded.load([STREAM]);
+    expect(reloaded.getWorkPlan(STREAM).plan).toEqual(revisedPlan);
+    await store.deleteStream(STREAM);
+  });
+
+  it('does not recreate live storage while setup residue is staged', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    store.setPlan(STREAM, PLAN);
+    await store.flush();
+    const liveDir = streamDataDir(STREAM);
+    const stagedDir = stagedStreamDataDir(STREAM);
+    await StorageFS.ensureDir(STREAM_DATA_DELETION_DIR);
+    await StorageFS.rename(liveDir, stagedDir);
+    const stat = StorageFS.stat.bind(StorageFS);
+    const statSpy = vi
+      .spyOn(StorageFS, 'stat')
+      .mockImplementationOnce(async (target) => {
+        expect(target).toBe(stagedDir);
+        store.setPlan(STREAM, null);
+        return stat(target);
+      });
+
+    await expect(store.stageDeleteStream(STREAM)).rejects.toThrow(
+      'unreconciled snapshot deletion',
+    );
+
+    statSpy.mockRestore();
+    expect(await StorageFS.exists(liveDir)).toBe(false);
+    expect(await StorageFS.exists(stagedDir)).toBe(true);
+    const retry = await store.stageDeleteStream(STREAM);
+    await retry.rollback();
+    const reloaded = new StreamSnapshotStore();
+    await reloaded.load([STREAM]);
     expect(reloaded.getWorkPlan(STREAM).plan).toBeNull();
+    await store.deleteStream(STREAM);
+  });
+
+  it('retains prior rollback writes when retry setup also fails', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    store.setPlan(STREAM, PLAN);
+    await store.flush();
+    const deletion = await store.stageDeleteStream(STREAM);
+    store.setPlan(STREAM, null);
+    const rollbackError = new Error('snapshot directory is still locked');
+    const renameSpy = vi
+      .spyOn(StorageFS, 'rename')
+      .mockRejectedValueOnce(rollbackError);
+
+    await expect(deletion.rollback()).rejects.toBe(rollbackError);
+
+    renameSpy.mockRestore();
+    const setupError = new Error('cannot inspect staged snapshot');
+    const statSpy = vi
+      .spyOn(StorageFS, 'stat')
+      .mockRejectedValueOnce(setupError);
+    await expect(store.stageDeleteStream(STREAM)).rejects.toBe(setupError);
+
+    statSpy.mockRestore();
+    store.setTodos(STREAM, [TODO]);
+    const retry = await store.stageDeleteStream(STREAM);
+    await retry.rollback();
+    const reloaded = new StreamSnapshotStore();
+    await reloaded.load([STREAM]);
+    expect(reloaded.getWorkPlan(STREAM)).toMatchObject({
+      plan: null,
+      todos: [TODO],
+    });
     await store.deleteStream(STREAM);
   });
 
