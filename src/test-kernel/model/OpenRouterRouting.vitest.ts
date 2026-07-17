@@ -25,6 +25,16 @@ describe('shouldRouteModelThroughOpenRouter', () => {
       useOpenRouter: true,
       expected: false,
     },
+    {
+      name: 'does not override an explicit direct-key provider',
+      config: {
+        openRouterOnly: false,
+        requiresResponsesAPI: false,
+        apiKeyProvider: 'kimiCode' as const,
+      },
+      useOpenRouter: true,
+      expected: false,
+    },
   ])('$name', ({ config, useOpenRouter, expected }) => {
     expect(shouldRouteModelThroughOpenRouter(config, useOpenRouter)).toBe(
       expected,

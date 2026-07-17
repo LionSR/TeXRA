@@ -91,7 +91,7 @@ export function usesServerSideKeysRoute(
     name: string;
   },
 ): boolean {
-  if (shouldUseOpenRouter(config)) {
+  if (config.apiKeyProvider || shouldUseOpenRouter(config)) {
     return false;
   }
   return getServerSideKeyService().shouldUseServerSideKeysSync(

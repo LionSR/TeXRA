@@ -1,6 +1,9 @@
-import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
+import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
-import { getRuntimeModelConfig } from './runtimeModelRegistry';
+import {
+  getRuntimeModelConfig,
+  runtimeModelConfigEntries,
+} from './runtimeModelRegistry';
 import { isCodexSubscriptionEligible } from './providerCapabilities';
 
 /**
@@ -30,27 +33,6 @@ const PREFERRED_SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
   meta: 'musespark11',
 };
 
-/**
- * The llm-zoo `ModelProvider` each setup-provider key's fallback pool is
- * drawn from. `openRouter` has no direct llm-zoo provider of its own — its
- * preferred pick routes an Anthropic model through OpenRouter, so it falls
- * back within Anthropic's live models too.
- */
-const FALLBACK_MODEL_PROVIDER: Readonly<Record<string, ModelProvider>> = {
-  anthropic: ModelProvider.ANTHROPIC,
-  openai: ModelProvider.OPENAI,
-  google: ModelProvider.GOOGLE,
-  deepseek: ModelProvider.DEEPSEEK,
-  openRouter: ModelProvider.ANTHROPIC,
-  xai: ModelProvider.XAI,
-  moonshot: ModelProvider.MOONSHOT,
-  kimiCode: ModelProvider.MOONSHOT,
-  dashscope: ModelProvider.DASHSCOPE,
-  minimax: ModelProvider.MINIMAX,
-  glm: ModelProvider.GLM,
-  meta: ModelProvider.META,
-};
-
 /** Whether `config` is safe to hand to the setup assistant for `setupProvider`. */
 function isUsableSetupModel(
   config: ModelConfig | undefined,
@@ -68,20 +50,37 @@ function isUsableSetupModel(
   return true;
 }
 
+/** Credential namespace a fallback candidate would use for this setup flow. */
+function setupCredentialProvider(
+  config: ModelConfig,
+  setupProvider: string,
+): string | undefined {
+  if (setupProvider === 'openRouter') {
+    return config.provider === 'anthropic' ? 'openRouter' : undefined;
+  }
+  return (
+    (config as { readonly apiKeyProvider?: string }).apiKeyProvider ??
+    config.provider
+  );
+}
+
 /**
  * A still-usable model for `setupProvider`, preferring a non-deprecated one.
  * `MODEL_CONFIGS` iteration order is llm-zoo's own (not a recency contract),
  * so this is "some live model," not necessarily the newest release.
  */
 function fallbackSetupModel(setupProvider: string): string | undefined {
-  const modelProvider = FALLBACK_MODEL_PROVIDER[setupProvider];
-  if (!modelProvider) return undefined;
-
-  const candidates = Object.values(MODEL_CONFIGS).filter(
-    (config) =>
-      config.provider === modelProvider &&
-      isUsableSetupModel(config, setupProvider),
-  );
+  const candidates = runtimeModelConfigEntries()
+    .map(([, config]) => config)
+    .filter((config) => {
+      // OpenRouter has no direct provider identity; retain its curated
+      // Anthropic fallback pool while all direct-key providers match the
+      // credential namespace the model will actually use.
+      return (
+        setupCredentialProvider(config, setupProvider) === setupProvider &&
+        isUsableSetupModel(config, setupProvider)
+      );
+    });
   const preferNonDeprecated = candidates.find((config) => !config.deprecated);
   return (preferNonDeprecated ?? candidates[0])?.name;
 }

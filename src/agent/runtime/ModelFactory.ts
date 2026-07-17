@@ -21,7 +21,10 @@ import { AgentError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from '@model/codexSubscriptionRouting';
 import { isGpt5ModelName } from '@model/modelNames';
-import { isOpenRouterRoutingUnsupported } from '@model/openRouterRouting';
+import {
+  isOpenRouterRoutingUnsupported,
+  shouldRouteModelThroughOpenRouter,
+} from '@model/openRouterRouting';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import type { AgentCategory } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -309,7 +312,7 @@ export function modelHandlerCompatibilityKey(
   if (shouldUseGoogleInteractionsAPI(config, useOpenRouter)) {
     return 'ModelHandlerGoogleInteractions';
   }
-  if (config.openRouterOnly || useOpenRouter) {
+  if (shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
     return 'ModelHandlerOpenRouterNative';
   }
 
@@ -593,18 +596,18 @@ async function createModelHandlerForResolvedCompatibilityKey(
       assertGoogleInteractionsRoutable(config, useOpenRouter);
 
       // Kimi Code models ride the Moonshot provider slot but may request the
-      // Anthropic-compatible endpoint. Route those to the Anthropic handler
-      // with a Kimi Code credential override.
+      // Anthropic-compatible endpoint. Credential routing remains centralized
+      // in ModelHandler through the config's explicit apiKeyProvider.
       const kimiCodeProtocol = (config as { kimiCodeProtocol?: string })
         .kimiCodeProtocol;
       if (
         config.provider === ModelProvider.MOONSHOT &&
         kimiCodeProtocol === 'anthropic'
       ) {
-        const { ModelHandlerKimiCodeAnthropic } =
-          await import('@agent/modelHandlers/anthropic/modelHandlerKimiCodeAnthropic');
+        const { ModelHandlerAnthropic } =
+          await import('@agent/modelHandlers/anthropic/modelHandlerAnthropic');
         return finalizeModelHandler(
-          new ModelHandlerKimiCodeAnthropic(config),
+          new ModelHandlerAnthropic(config),
           'ModelHandlerAnthropic',
         );
       }

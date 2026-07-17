@@ -474,6 +474,18 @@ export abstract class ModelHandler<
    * @throws Error if required API key is missing from environment
    */
   protected async getApiKey(): Promise<string> {
+    const apiKeyProvider = (this.config as { apiKeyProvider?: ApiProvider })
+      .apiKeyProvider;
+    if (apiKeyProvider) {
+      this.logger.debug(
+        `Using explicit API key provider ${apiKeyProvider} for ${this.config.name}`,
+      );
+      return this.fetchApiKeyOrThrow(
+        apiKeyProvider,
+        `Missing API key for ${apiKeyProvider}. Set your ${apiKeyProvider} API key to continue.`,
+      );
+    }
+
     const serverSideKeyService = getServerSideKeyService();
     const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
 
@@ -544,15 +556,11 @@ export abstract class ModelHandler<
       {
         reason: 'Personal-key mode uses the configured provider key.',
         matches: () => true,
-        resolve: () => {
-          const directProvider =
-            (this.config as { apiKeyProvider?: ApiProvider }).apiKeyProvider ??
-            (this.config.provider.toLowerCase() as ApiProvider);
-          return this.fetchApiKeyOrThrow(
-            directProvider,
-            `Missing API key for ${directProvider}. Set your ${directProvider} API key to continue.`,
-          );
-        },
+        resolve: () =>
+          this.fetchApiKeyOrThrow(
+            this.config.provider.toLowerCase() as ApiProvider,
+            `Missing API key for ${this.config.provider}. Set your ${this.config.provider} API key to continue.`,
+          ),
       },
     ];
 

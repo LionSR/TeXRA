@@ -21,26 +21,26 @@ import {
   type ModelConfig,
 } from 'llm-zoo';
 
-export const KIMI_CODE_OPENAI_BASE_URL = 'https://api.kimi.com/coding/v1';
-export const KIMI_CODE_ANTHROPIC_BASE_URL = 'https://api.kimi.com/coding/';
+const KIMI_CODE_OPENAI_BASE_URL = 'https://api.kimi.com/coding/v1';
+const KIMI_CODE_ANTHROPIC_BASE_URL = 'https://api.kimi.com/coding/';
 
 /** Recognized Kimi Code model IDs. */
-export const KIMI_CODE_MODEL_IDS = [
+const KIMI_CODE_MODEL_IDS = [
   'k3',
   'kimi-for-coding',
   'kimi-for-coding-highspeed',
 ] as const;
 
-export type KimiCodeModelId = (typeof KIMI_CODE_MODEL_IDS)[number];
+type KimiCodeModelId = (typeof KIMI_CODE_MODEL_IDS)[number];
 
-export type KimiCodeProtocol = 'openai' | 'anthropic';
+type KimiCodeProtocol = 'openai' | 'anthropic';
 
 /**
  * Marker fields that live on top of llm-zoo's ModelConfig. They are consumed by
  * the model handler and by availability checks; TypeScript sees them via the
  * local {@link KimiCodeModelConfig} type and casts at the boundary.
  */
-export interface KimiCodeModelConfig extends ModelConfig {
+interface KimiCodeModelConfig extends ModelConfig {
   /** Which API-key namespace holds the Kimi Code key. */
   readonly apiKeyProvider: 'kimiCode';
   /** Which Kimi Code wire protocol this entry uses. */
@@ -148,15 +148,3 @@ export const KIMI_CODE_MODEL_CONFIGS: Record<string, KimiCodeModelConfig> = {
     true,
   ),
 };
-
-/**
- * Whether a model config belongs to the Kimi Code managed service.
- */
-export function isKimiCodeModelConfig(
-  config: ModelConfig | undefined,
-): config is KimiCodeModelConfig {
-  return (
-    config !== undefined &&
-    (config as KimiCodeModelConfig).apiKeyProvider === 'kimiCode'
-  );
-}
