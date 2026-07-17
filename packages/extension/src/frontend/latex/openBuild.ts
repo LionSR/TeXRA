@@ -14,6 +14,7 @@ import {
 } from '@shared/constants/latex';
 
 // Local imports - utilities
+import { getFileStem } from '@utils/core';
 import { AbsoluteFS, pathToLocation } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -38,7 +39,7 @@ function resolveLatexWorkshopOutDir(filePath: string): string {
     return path.join(dir, 'build');
   }
 
-  const docfile = path.basename(filePath, path.extname(filePath));
+  const docfile = getFileStem(filePath);
   const doc = path.join(dir, docfile);
   const workspaceFolder =
     vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? dir;

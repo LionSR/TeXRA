@@ -66,7 +66,7 @@ The extension host is bundled with esbuild and the webviews with Vite (`compile:
 - Document functions with concise comments. Use JSDoc style for public APIs.
 - Keep functions small and focused; extract helpers or modules when logic becomes complex.
 - Keep the directory structure aligned among different webviews (webview, progressView, settingsView). Use the same folder names for modules of the same type and functionality but in different webviews.
-- Place view-specific manager classes under each view's `managers` folder. For example, `WebviewUpdater.ts` lives in `packages/extension/src/progressView/managers/`.
+- Place view-specific, extension-only manager classes under each view's `managers` folder (e.g. `ProgressStreamLifecycleHost.ts` in `packages/extension/src/progressView/managers/`). Host-neutral view backend logic (e.g. `WebviewUpdater.ts`) instead lives under `src/controllers/<view>/backend/`, per the `controllers/` host-neutral-orchestration rule.
 
 ### Naming conventions
 
@@ -399,7 +399,7 @@ See `docs/pocketflow/` for full framework documentation.
 
 **Progress view**
 
-- Extend the existing Lit components in `packages/extension/src/progressView/frontend/components/` (`StreamTabs`, `LogList`, `UsagePanel`, `TaskGroupList`, etc.) and managers in `packages/extension/src/progressView/managers/` (`OutputFilesManager`, `UsageStatsManager`, `WebviewUpdater`) — augment them rather than manipulating the DOM directly.
+- Extend the existing Lit components in `packages/extension/src/progressView/frontend/components/` (`StreamTabs`, `LogList`, `UsagePanel`, `TaskGroupList`, etc.) and the frontend state slices in `packages/extension/src/progressView/frontend/slices/` (`logSlice`, `taskSlice`, `streamMetaSlice`, etc., mirroring the `settingsView/frontend/slices/` pattern) — augment them rather than manipulating the DOM directly.
 - Tool-use and workflow sessions surface in separate filters; continue emitting usage, status, and log events through the established progress event commands so filters, counts, and badges update automatically.
 
 **Error handling and types**
