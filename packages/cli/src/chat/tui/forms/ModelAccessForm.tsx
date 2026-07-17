@@ -40,6 +40,7 @@ export function ModelAccessForm(
               access: {
                 active: props.apiMode,
                 chatGptSignedIn: false,
+                texraSignedIn: false,
               },
               lines: [String(error)],
             });
@@ -62,7 +63,7 @@ export function ModelAccessForm(
       availableRows={props.availableRows}
       items={items}
       compactVisibleItems={items.length}
-      activeValue={status?.access.active ?? props.apiMode}
+      activeValue={status?.access.active}
       description={
         <Text dimColor>Choose how model calls are authenticated.</Text>
       }

@@ -26,6 +26,7 @@ import {
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as chatGptLogin from '@cli/runtime/chatgptLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
+import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import type { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -298,6 +299,30 @@ describe('handleTuiSlashCommand', () => {
     await handleTuiSlashCommand('/api status', context);
     expect(lastEntryText()).toContain('model access: ChatGPT subscription');
     expect(overview).toHaveBeenCalledTimes(2);
+  });
+
+  it('preserves the current chat fallback when selecting ChatGPT', async () => {
+    registerBuiltinSlashCommands();
+    patchSessionMeta({ apiMode: 'personal' });
+    const selection = vi
+      .spyOn(modelAccessSelection, 'selectCliModelAccessRoute')
+      .mockResolvedValue({
+        apiMode: 'personal',
+        message: 'Model access: ChatGPT subscription.',
+      });
+    const session = createSession();
+    session.runPromise = new Promise(() => undefined);
+    const context = createContext(session, {
+      cliContext: createCliContext({ apiMode: 'included' }),
+    });
+
+    await handleTuiSlashCommand('/api chatgpt', context);
+
+    expect(selection).toHaveBeenCalledWith(
+      expect.objectContaining({ apiMode: 'personal' }),
+      'chatgpt',
+      expect.any(Object),
+    );
   });
 
   it('clears TeXRA and ChatGPT credentials on /logout', async () => {

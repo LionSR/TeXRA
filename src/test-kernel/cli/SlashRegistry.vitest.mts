@@ -410,7 +410,7 @@ describe('slashRegistry', () => {
     expect(apiNode.isClosed()).toBe(true);
   });
 
-  it('keeps the API picker open until API mode selection commits', async () => {
+  it('closes the model-access picker before an asynchronous action', async () => {
     resetCliState(INCLUDED_CHAT_SESSION);
     const selection = deferredSelection();
     registerBuiltinSlashCommands({
@@ -428,7 +428,7 @@ describe('slashRegistry', () => {
     apiNode.props?.onSelect?.('personal');
     await settleFormSelection();
 
-    expect(apiNode.isClosed()).toBe(false);
+    expect(apiNode.isClosed()).toBe(true);
 
     selection.resolve();
     await settleFormSelection();

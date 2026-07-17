@@ -12,6 +12,7 @@ import {
 import { saveProviderApiKey } from '@cli/runtime/providerApiKey';
 import { parseCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import {
+  contextForCliModelAccess,
   selectCliApiModelAccessRoute,
   selectCliModelAccessRoute,
 } from '@cli/runtime/modelAccessSelection';
@@ -96,9 +97,11 @@ export async function applyCliModelAccessSelection(
 
   const route = parseCliModelAccessRoute(normalized);
   if (route) {
-    const access = await selectCliModelAccessRoute(context.cliContext, route, {
-      writeProgress: appendLocalAssistantTranscript,
-    });
+    const access = await selectCliModelAccessRoute(
+      contextForCliModelAccess(context.cliContext, sessionMeta.get().apiMode),
+      route,
+      { writeProgress: appendLocalAssistantTranscript },
+    );
     setCliSessionApiMode(access.apiMode);
     let modelNotice: string | undefined;
     try {

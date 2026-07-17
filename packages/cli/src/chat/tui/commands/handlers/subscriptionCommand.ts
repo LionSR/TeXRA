@@ -14,9 +14,9 @@ function parseSubscriptionToggle(normalized: string): boolean | undefined {
 
 /**
  * Toggle "prefer ChatGPT subscription" for Codex-eligible models. The
- * preference is orthogonal to the relay/personal api-mode (it only changes
- * where Codex models get their credentials), so it lives in its own command
- * rather than the `/api` binary.
+ * preference is orthogonal to the relay/personal API fallback. `/api` is the
+ * primary route chooser; this command remains the direct on/off compatibility
+ * control for scripts and established interactive use.
  */
 export async function applyCliSubscriptionToggle(input: string): Promise<void> {
   const normalized = input.trim().toLowerCase();

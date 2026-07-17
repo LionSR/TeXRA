@@ -1,6 +1,6 @@
 import type { UsageRoute } from '@shared/schemas';
 
-import type { CliApiMode } from './apiAccessMode';
+import { parseCliApiMode, type CliApiMode } from './apiAccessMode';
 
 export type CliModelAccessRoute = 'chatgpt' | 'included' | 'personal';
 
@@ -20,14 +20,13 @@ interface CliModelAccessItem {
 export function parseCliModelAccessRoute(
   input: string,
 ): CliModelAccessRoute | undefined {
+  const apiMode = parseCliApiMode(input);
+  if (apiMode) return apiMode;
+
   switch (input.trim().toLowerCase()) {
     case 'chatgpt':
     case 'subscription':
       return 'chatgpt';
-    case 'included':
-      return 'included';
-    case 'personal':
-      return 'personal';
     default:
       return undefined;
   }

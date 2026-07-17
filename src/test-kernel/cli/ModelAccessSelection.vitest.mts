@@ -40,11 +40,16 @@ vi.mock('@model/computeModelOptions', () => ({
   invalidateModelOptionsCache: mocks.invalidateModelOptionsCache,
 }));
 
-vi.mock('@cli/runtime/apiAccessMode', () => ({
-  effectiveCliApiMode: (source: { apiMode?: 'included' | 'personal' }) =>
-    source.apiMode ?? 'included',
-  setCliApiMode: mocks.setCliApiMode,
-}));
+vi.mock('@cli/runtime/apiAccessMode', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@cli/runtime/apiAccessMode')>();
+  return {
+    ...actual,
+    effectiveCliApiMode: (source: { apiMode?: 'included' | 'personal' }) =>
+      source.apiMode ?? 'included',
+    setCliApiMode: mocks.setCliApiMode,
+  };
+});
 
 vi.mock('@cli/runtime/chatgptLogin', () => ({
   chatGptAccountLabel: (session: { email?: string }) =>
@@ -72,8 +77,10 @@ describe('CLI model access routes', () => {
     expect(parseCliModelAccessRoute('chatgpt')).toBe('chatgpt');
     expect(parseCliModelAccessRoute('subscription')).toBe('chatgpt');
     expect(parseCliModelAccessRoute('included')).toBe('included');
+    expect(parseCliModelAccessRoute('relay')).toBe('included');
     expect(parseCliModelAccessRoute('personal')).toBe('personal');
-    expect(parseCliModelAccessRoute('relay')).toBeUndefined();
+    expect(parseCliModelAccessRoute('byok')).toBe('personal');
+    expect(parseCliModelAccessRoute('direct')).toBeUndefined();
   });
 
   it('uses observed access before prospective access preferences', () => {

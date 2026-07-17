@@ -169,6 +169,7 @@ export function registerBuiltinSlashCommands(options?: {
           action: onModelAccessSelect,
           onDone: props.onDone,
           onError: options?.onError,
+          completion: 'beforeAction',
         })}
         onCancel={() => props.onDone(undefined)}
       />
