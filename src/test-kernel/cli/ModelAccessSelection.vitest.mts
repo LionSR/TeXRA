@@ -10,6 +10,7 @@ import {
 import {
   formatCliModelAccessRoute,
   formatCliModelAccessRouteInline,
+  parseCliModelAccessRoute,
   resolveCliModelAccessRoute,
   shortCliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
@@ -67,6 +68,14 @@ beforeEach(() => {
 });
 
 describe('CLI model access routes', () => {
+  it('parses the three routes and the subscription compatibility spelling', () => {
+    expect(parseCliModelAccessRoute('chatgpt')).toBe('chatgpt');
+    expect(parseCliModelAccessRoute('subscription')).toBe('chatgpt');
+    expect(parseCliModelAccessRoute('included')).toBe('included');
+    expect(parseCliModelAccessRoute('personal')).toBe('personal');
+    expect(parseCliModelAccessRoute('relay')).toBeUndefined();
+  });
+
   it('uses observed access before prospective access preferences', () => {
     expect(
       resolveCliModelAccessRoute({

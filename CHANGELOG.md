@@ -64,6 +64,11 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
+- **Model access and accounts have distinct CLI controls** — `/api` now offers
+  ChatGPT subscription, included TeXRA access, and personal API keys in one
+  picker; `/auth` reports both account sessions and the effective route; and
+  `/logout` lets users sign out of either account or explicitly sign out of
+  both.
 - **Add provider keys without leaving a CLI chat** — `/key` opens a provider
   picker followed by masked input and selects personal API-key access after
   the key is saved.

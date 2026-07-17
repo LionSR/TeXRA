@@ -5,7 +5,12 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatPercent } from '@utils/text/stringUtils';
 
 import { getCliApiMode, type CliApiMode } from './apiAccessMode';
-import { formatCliModelAccessRouteInline } from './modelAccessRoute';
+import {
+  formatCliModelAccessRoute,
+  formatCliModelAccessRouteInline,
+  type CliModelAccessStatus,
+} from './modelAccessRoute';
+import { readCliModelAccessStatus } from './modelAccessSelection';
 import { fetchRelayUsageSummary, type RelayUsageSummary } from './relayUsage';
 import {
   getCliAuthProfile,
@@ -23,8 +28,66 @@ export function formatRelayUsageStatus(summary: RelayUsageSummary): string {
 export function formatCliAuthStatusLine(
   profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel'>,
 ): string {
-  if (!profile.authenticated) return 'auth: signed out';
-  return `auth: signed in${profile.accountLabel ? ` as ${profile.accountLabel}` : ''}`;
+  return formatAccountStatusLine(
+    'auth',
+    profile.authenticated,
+    profile.accountLabel,
+  );
+}
+
+function formatAccountStatusLine(
+  label: string,
+  signedIn: boolean,
+  accountLabel?: string,
+): string {
+  if (!signedIn) return `${label}: signed out`;
+  return `${label}: signed in${accountLabel ? ` as ${accountLabel}` : ''}`;
+}
+
+export interface CliModelAccessOverview {
+  readonly access: CliModelAccessStatus;
+  readonly lines: readonly string[];
+}
+
+export function formatCliModelAccessOverview(
+  access: CliModelAccessStatus,
+  profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel' | 'note'>,
+  apiMode: CliApiMode,
+): CliModelAccessOverview {
+  const completeAccess = {
+    ...access,
+    texraSignedIn: profile.authenticated,
+  };
+  const lines = [
+    `model access: ${formatCliModelAccessRoute(access.active)}`,
+    formatAccountStatusLine(
+      'ChatGPT',
+      access.chatGptSignedIn,
+      access.chatGptAccountLabel,
+    ),
+    formatAccountStatusLine(
+      'TeXRA',
+      profile.authenticated,
+      profile.accountLabel,
+    ),
+  ];
+  if (access.active === 'chatgpt') {
+    lines.push(`API fallback: ${formatCliModelAccessRoute(apiMode)}`);
+  }
+  if (profile.note) lines.push(profile.note);
+  return { access: completeAccess, lines };
+}
+
+/** Read both account sessions and the effective model-access route. */
+export async function loadCliModelAccessOverview(
+  options: { readonly apiMode?: CliApiMode } = {},
+): Promise<CliModelAccessOverview> {
+  const apiMode = options.apiMode ?? getCliApiMode();
+  const [access, profile] = await Promise.all([
+    readCliModelAccessStatus(apiMode),
+    getCliAuthProfile(),
+  ]);
+  return formatCliModelAccessOverview(access, profile, apiMode);
 }
 
 /**

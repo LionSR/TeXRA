@@ -3,11 +3,42 @@ import { describe, expect, it } from 'vitest';
 import {
   formatCliApiStatusActionHint,
   formatCliAuthStatusLine,
+  formatCliModelAccessOverview,
   formatRelayUsageStatus,
 } from '@cli/runtime/apiStatus';
 import type { RelayUsageSummary } from '@cli/runtime/relayUsage';
 
 describe('CLI API status text', () => {
+  it('reports both accounts, the effective route, and its API fallback', () => {
+    expect(
+      formatCliModelAccessOverview(
+        {
+          active: 'chatgpt',
+          chatGptSignedIn: true,
+          chatGptAccountLabel: 'chatgpt@example.com',
+        },
+        {
+          authenticated: true,
+          accountLabel: 'texra@example.com',
+        },
+        'personal',
+      ),
+    ).toEqual({
+      access: {
+        active: 'chatgpt',
+        chatGptSignedIn: true,
+        chatGptAccountLabel: 'chatgpt@example.com',
+        texraSignedIn: true,
+      },
+      lines: [
+        'model access: ChatGPT subscription',
+        'ChatGPT: signed in as chatgpt@example.com',
+        'TeXRA: signed in as texra@example.com',
+        'API fallback: Personal API keys',
+      ],
+    });
+  });
+
   it('shows relay quota usage as a percentage', () => {
     const summary: RelayUsageSummary = {
       periodStart: '2026-05-01T00:00:00.000Z',

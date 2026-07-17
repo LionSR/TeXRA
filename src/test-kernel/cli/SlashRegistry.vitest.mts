@@ -19,13 +19,14 @@ import {
   openRegisteredCliSlashForm,
 } from '@cli/chat/tui/commands/slashForms';
 import { LOGIN_FORM_ITEMS } from '@cli/chat/tui/forms/LoginForm';
+import { LOGOUT_FORM_ITEMS } from '@cli/chat/tui/forms/LogoutForm';
 import {
   activeForm,
   resetCliState,
   sessionMeta,
   type SessionMeta,
 } from '@cli/chat/tui/state/cliState';
-import type { CliApiMode } from '@cli/runtime/apiAccessMode';
+import type { CliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { AgentCategory } from '@shared/schemas/agent';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -176,6 +177,14 @@ describe('slashRegistry', () => {
       'texra',
       'chatgpt --device',
       'texra --device',
+    ]);
+  });
+
+  it('offers account-specific and explicit all-account sign-out', () => {
+    expect(LOGOUT_FORM_ITEMS.map((item) => item.value)).toEqual([
+      'chatgpt',
+      'texra',
+      'all',
     ]);
   });
 
@@ -387,7 +396,7 @@ describe('slashRegistry', () => {
     resetCliState(INCLUDED_CHAT_SESSION);
     const errors: string[] = [];
     registerBuiltinSlashCommands({
-      onApiModeSelect: async () => {
+      onModelAccessSelect: async () => {
         throw new Error('api mode failed');
       },
       onError: (error) => {
@@ -401,7 +410,7 @@ describe('slashRegistry', () => {
     expect(openRegisteredCliSlashForm(api, '')).toBe(true);
 
     const apiNode = renderOpenForm<{
-      onSelect?: (value: CliApiMode) => void;
+      onSelect?: (value: CliModelAccessRoute) => void;
     }>();
     apiNode.props?.onSelect?.('personal');
     await settleFormSelection();
@@ -414,7 +423,7 @@ describe('slashRegistry', () => {
     resetCliState(INCLUDED_CHAT_SESSION);
     const selection = deferredSelection();
     registerBuiltinSlashCommands({
-      onApiModeSelect: () => selection.promise,
+      onModelAccessSelect: () => selection.promise,
     });
     const api = listSlashCommands().find((cmd) => cmd.name === 'api');
 
@@ -423,7 +432,7 @@ describe('slashRegistry', () => {
     expect(openRegisteredCliSlashForm(api, '')).toBe(true);
 
     const apiNode = renderOpenForm<{
-      onSelect?: (value: CliApiMode) => void;
+      onSelect?: (value: CliModelAccessRoute) => void;
     }>();
     apiNode.props?.onSelect?.('personal');
     await settleFormSelection();

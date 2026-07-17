@@ -1,19 +1,21 @@
 // Registers the slash commands the input palette surfaces.
 
-import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
+import type { CliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
+import type { CliLogoutTarget } from '@cli/runtime/loginOptions';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import type { ApiProvider } from '@model/apiProviders';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 
-import { ApiModeForm } from '../forms/ApiModeForm';
+import { ModelAccessForm } from '../forms/ModelAccessForm';
 import { AgentListForm } from '../forms/AgentListForm';
 import { ApprovalPolicyForm } from '../forms/ApprovalPolicyForm';
 import { ConfigForm } from '../forms/ConfigForm';
 import { createCliConfigFormProps } from '../forms/CliConfigForm';
 import { LoginForm, type LoginFormValue } from '../forms/LoginForm';
+import { LogoutForm } from '../forms/LogoutForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
 import { ModelListForm } from '../forms/ModelListForm';
 import { ProviderApiKeyForm } from '../forms/ProviderApiKeyForm';
@@ -28,7 +30,7 @@ import {
 } from '../state/cliState';
 import { appendLocalAssistantTranscript } from '../state/transcript';
 import { applyCliProviderApiKey } from './handlers/apiModeCommands';
-import { loginFromChat } from './handlers/loginCommands';
+import { loginFromChat, logoutFromChat } from './handlers/loginCommands';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 import { openCliSlashCommandForm } from './slashForms';
 
@@ -37,12 +39,15 @@ type ApprovalPolicySelectHandler = (
   value: CliApprovalPolicy,
 ) => void | Promise<void>;
 type ModelSelectHandler = (value: string) => void | Promise<void>;
-type ApiModeSelectHandler = (value: CliApiMode) => void | Promise<void>;
+type ModelAccessSelectHandler = (
+  value: CliModelAccessRoute,
+) => void | Promise<void>;
 type ApiKeySaveHandler = (
   provider: ApiProvider,
   key: string,
 ) => string | void | Promise<string | void>;
 type LoginSelectHandler = (value: LoginFormValue) => void | Promise<void>;
+type LogoutSelectHandler = (value: CliLogoutTarget) => void | Promise<void>;
 type MemorySelectHandler = (storagePath: string) => void | Promise<void>;
 type ResumeSelectHandler = (id: ExecutionId) => void | Promise<void>;
 type SkillSelectHandler = (value: SkillActivation) => void | Promise<void>;
@@ -88,9 +93,10 @@ export function registerBuiltinSlashCommands(options?: {
   onModelSelect?: ModelSelectHandler;
   canSelectModel?: () => boolean;
   getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
-  onApiModeSelect?: ApiModeSelectHandler;
+  onModelAccessSelect?: ModelAccessSelectHandler;
   onApiKeySave?: ApiKeySaveHandler;
   onLoginSelect?: LoginSelectHandler;
+  onLogoutSelect?: LogoutSelectHandler;
   onMemorySelect?: MemorySelectHandler;
   onResumeSelect?: ResumeSelectHandler;
   onSkillSelect?: SkillSelectHandler;
@@ -101,12 +107,17 @@ export function registerBuiltinSlashCommands(options?: {
     options?.onAgentSelect ?? ((agent) => patchSessionMeta({ agent }));
   const onModelSelect: ModelSelectHandler =
     options?.onModelSelect ?? setCliSessionModelOverride;
-  const onApiModeSelect: ApiModeSelectHandler =
-    options?.onApiModeSelect ?? ((apiMode) => patchSessionMeta({ apiMode }));
+  const onModelAccessSelect: ModelAccessSelectHandler =
+    options?.onModelAccessSelect ??
+    ((route) => {
+      if (route !== 'chatgpt') patchSessionMeta({ apiMode: route });
+    });
   const onApiKeySave: ApiKeySaveHandler =
     options?.onApiKeySave ?? applyCliProviderApiKey;
   const onLoginSelect: LoginSelectHandler =
     options?.onLoginSelect ?? loginFromChat;
+  const onLogoutSelect: LogoutSelectHandler =
+    options?.onLogoutSelect ?? logoutFromChat;
   const canSelectAgent = options?.canSelectAgent ?? (() => true);
   const canSelectModel = options?.canSelectModel ?? (() => true);
 
@@ -148,14 +159,14 @@ export function registerBuiltinSlashCommands(options?: {
     );
   }
 
-  function ApiModeFormAdapter(props: SlashFormProps): React.JSX.Element {
+  function ModelAccessFormAdapter(props: SlashFormProps): React.JSX.Element {
     const current = sessionMeta.get().apiMode;
     return (
-      <ApiModeForm
-        currentMode={current}
+      <ModelAccessForm
+        apiMode={current}
         availableRows={props.availableRows}
-        onSelect={formSelectionHandler<CliApiMode>({
-          action: onApiModeSelect,
+        onSelect={formSelectionHandler<CliModelAccessRoute>({
+          action: onModelAccessSelect,
           onDone: props.onDone,
           onError: options?.onError,
         })}
@@ -206,6 +217,21 @@ export function registerBuiltinSlashCommands(options?: {
         availableRows={props.availableRows}
         onSelect={formSelectionHandler<LoginFormValue>({
           action: onLoginSelect,
+          onDone: props.onDone,
+          onError: options?.onError,
+          completion: 'beforeAction',
+        })}
+        onCancel={() => props.onDone(undefined)}
+      />
+    );
+  }
+
+  function LogoutFormAdapter(props: SlashFormProps): React.JSX.Element {
+    return (
+      <LogoutForm
+        availableRows={props.availableRows}
+        onSelect={formSelectionHandler<CliLogoutTarget>({
+          action: onLogoutSelect,
           onDone: props.onDone,
           onError: options?.onError,
           completion: 'beforeAction',
@@ -316,9 +342,9 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'api',
-    description: 'Choose included TeXRA access or personal API keys',
+    description: 'Choose ChatGPT, included TeXRA, or personal model access',
     category: 'configuration',
-    formComponent: ApiModeFormAdapter,
+    formComponent: ModelAccessFormAdapter,
   });
   registerSlashCommand({
     name: 'key',
@@ -331,14 +357,14 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'subscription',
-    description: 'Use your ChatGPT subscription for Codex models (on | off)',
+    description: 'Adjust the legacy ChatGPT preference (on | off)',
     aliases: ['sub'],
     category: 'account',
     takesArgs: true,
   });
   registerSlashCommand({
     name: 'auth',
-    description: 'Show TeXRA login status',
+    description: 'Show both accounts and active model access',
     category: 'account',
   });
   registerSlashCommand({
@@ -349,8 +375,9 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'logout',
-    description: 'Sign out of TeXRA',
+    description: 'Sign out of one account or all accounts',
     category: 'account',
+    formComponent: LogoutFormAdapter,
   });
   registerSlashCommand({
     name: 'approval',
@@ -415,7 +442,7 @@ export function registerBuiltinSlashCommands(options?: {
               openCliSlashCommandForm(formName, ''),
             onClose: () => props.onDone(undefined),
             onError: options?.onError,
-            onApiModePersonal: () => onApiModeSelect('personal'),
+            onApiModePersonal: () => onModelAccessSelect('personal'),
           })}
         />
       );

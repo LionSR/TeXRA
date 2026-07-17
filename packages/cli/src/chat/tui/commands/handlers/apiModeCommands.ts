@@ -1,13 +1,20 @@
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { parseCliApiMode, type CliApiMode } from '@cli/runtime/apiAccessMode';
-import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
+import { type CliApiMode } from '@cli/runtime/apiAccessMode';
+import {
+  loadCliApiStatusLines,
+  loadCliModelAccessOverview,
+} from '@cli/runtime/apiStatus';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
 } from '@cli/runtime/modelAccess';
 import { saveProviderApiKey } from '@cli/runtime/providerApiKey';
-import { selectCliApiModelAccessRoute } from '@cli/runtime/modelAccessSelection';
+import { parseCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
+import {
+  selectCliApiModelAccessRoute,
+  selectCliModelAccessRoute,
+} from '@cli/runtime/modelAccessSelection';
 
 import { patchSessionMeta, sessionMeta } from '@cli/chat/tui/state/cliState';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
@@ -19,7 +26,7 @@ import {
   type SlashCommandContext,
 } from './slashContext';
 
-const API_MODE_USAGE = 'Usage: /api personal | /api included';
+const MODEL_ACCESS_USAGE = 'Usage: /api chatgpt | included | personal | status';
 
 async function reconcileRootModelAfterApiModeChange(
   context: SlashCommandContext | undefined,
@@ -73,23 +80,25 @@ export function setCliSessionApiMode(apiMode: CliApiMode): void {
   patchSessionMeta({ apiMode });
 }
 
-export async function applyCliApiModeSelection(
-  mode: string | CliApiMode,
-  context?: SlashCommandContext,
+export async function applyCliModelAccessSelection(
+  routeInput: string,
+  context: SlashCommandContext,
 ): Promise<void> {
-  const normalized = mode.trim().toLowerCase();
+  const normalized = routeInput.trim().toLowerCase();
 
   if (!normalized || normalized === 'status') {
-    const lines = await loadCliApiStatusLines({
+    const { lines } = await loadCliModelAccessOverview({
       apiMode: sessionMeta.get().apiMode,
     });
-    appendLocalAssistantTranscript([...lines, API_MODE_USAGE].join('\n'));
+    appendLocalAssistantTranscript([...lines, MODEL_ACCESS_USAGE].join('\n'));
     return;
   }
 
-  const apiMode = parseCliApiMode(normalized);
-  if (apiMode) {
-    const access = await selectCliApiModelAccessRoute(apiMode);
+  const route = parseCliModelAccessRoute(normalized);
+  if (route) {
+    const access = await selectCliModelAccessRoute(context.cliContext, route, {
+      writeProgress: appendLocalAssistantTranscript,
+    });
     setCliSessionApiMode(access.apiMode);
     let modelNotice: string | undefined;
     try {
@@ -106,11 +115,11 @@ export async function applyCliApiModeSelection(
     return;
   }
 
-  appendLocalAssistantTranscript(API_MODE_USAGE);
+  appendLocalAssistantTranscript(MODEL_ACCESS_USAGE);
 }
 
 export async function showCliAuthStatus(): Promise<void> {
-  const lines = await loadCliApiStatusLines({
+  const { lines } = await loadCliModelAccessOverview({
     apiMode: sessionMeta.get().apiMode,
   });
   appendLocalAssistantTranscript(lines.join('\n'));
