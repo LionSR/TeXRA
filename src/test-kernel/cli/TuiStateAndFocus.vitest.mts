@@ -566,6 +566,24 @@ describe('CLI TUI row allocation', () => {
     ).toMatchObject({ bottomPanelRows: 3, todosPlanRows: 3 });
   });
 
+  it('borrows a child-list row so an active todo stays visible', () => {
+    // Codex review case: many children + one todo under the 10-row cap. The
+    // proportional split grants todos one row — too small for separator +
+    // content — so one row shifts from the ample child list instead.
+    const allocation = allocateConversationBottomPanelRows({
+      maxRows: 10,
+      sessionCount: 11,
+      childListFocused: false,
+      todosPlanContentRows: 1,
+      transcriptRows: 30,
+    });
+    expect(allocation.todosPlanRows).toBe(2);
+    expect(allocation.sessionPanelRows).toBeGreaterThanOrEqual(2);
+    expect(allocation.bottomPanelRows).toBe(
+      allocation.sessionPanelRows + allocation.todosPlanRows,
+    );
+  });
+
   it('hands a lone todos row back instead of rendering a dead separator', () => {
     // The grant would be exactly one row — too small for separator + content.
     const allocation = allocateConversationBottomPanelRows({
