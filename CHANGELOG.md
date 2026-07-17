@@ -26,6 +26,10 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Credential setup stays private and matches the current app** — the setup
+  assistant now distinguishes saved keys, environment variables, ChatGPT
+  access, and included TeXRA access; it directs API-key entry to the current
+  app's protected input instead of asking users to place secrets in chat.
 - **Relay failures can be traced without exposing request content** — relay
   responses now include a correlation identifier that support can use to
   investigate failures before or during a model response.
@@ -60,6 +64,9 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
+- **Add provider keys without leaving a CLI chat** — `/key` opens a provider
+  picker followed by masked input and selects personal API-key access after
+  the key is saved.
 - **Subagent rows show elapsed time and generated tokens** — each row in the
   child list gains a right-aligned metadata column with the subagent's
   elapsed time and how many tokens it has generated so far, so a glance shows

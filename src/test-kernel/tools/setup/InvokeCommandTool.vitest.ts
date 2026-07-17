@@ -31,48 +31,34 @@ function setupTool(): { tool: InvokeCommandTool; invocations: InvokeRecord[] } {
 }
 
 describe('InvokeCommandTool allowlist', () => {
-  it('redacts raw args in summary/output so secrets cannot leak to transcripts', async () => {
+  it('rejects command arguments so credentials cannot reach the host', async () => {
     const { tool, invocations } = setupTool();
 
     const fakeSecret = 'sk-fake-secret-1234567890abcdef';
     const result = await tool.call({
       command: 'texra.setApiKey',
       args: ['openai', fakeSecret],
-    });
+    } as never);
 
-    assert.equal(result.status, 'executed');
-    assert.equal(invocations[0].args.length, 2, 'args still forwarded');
-    assert.ok(
-      !(result.summary ?? '').includes(fakeSecret),
-      'summary must not echo raw args',
-    );
-    assert.ok(
-      !(result.output ?? '').includes(fakeSecret),
-      'output must not echo raw args',
-    );
-    // The tool still acknowledges that args were passed, so the agent
-    // can reason about what it just did.
-    assert.match(result.summary ?? '', /2 arg\(s\), redacted/);
+    assert.equal(result.status, 'error');
+    assert.equal(invocations.length, 0);
   });
 
-  it('allows texra.setApiKey and forwards args', async () => {
+  it('allows texra.setApiKey without model-supplied arguments', async () => {
     const { tool, invocations } = setupTool();
 
-    const result = await tool.call({
-      command: 'texra.setApiKey',
-      args: ['openai'],
-    });
+    const result = await tool.call({ command: 'texra.setApiKey' });
 
     assert.equal(result.status, 'executed');
     assert.equal(invocations.length, 1);
     assert.equal(invocations[0].command, 'texra.setApiKey');
-    assert.deepEqual(invocations[0].args, ['openai']);
+    assert.deepEqual(invocations[0].args, []);
   });
 
   it('allows the Researcher Access sign-in command', async () => {
     const { tool, invocations } = setupTool();
 
-    await tool.call({ command: AUTH_COMMANDS.SIGN_IN, args: [] });
+    await tool.call({ command: AUTH_COMMANDS.SIGN_IN });
 
     assert.equal(invocations.length, 1);
     assert.equal(invocations[0].command, AUTH_COMMANDS.SIGN_IN);
@@ -83,7 +69,6 @@ describe('InvokeCommandTool allowlist', () => {
 
     const result = await tool.call({
       command: 'workbench.extensions.installExtension',
-      args: ['ms-python.python'],
     });
 
     assert.equal(result.status, 'error');
@@ -106,7 +91,7 @@ describe('InvokeCommandTool allowlist', () => {
       'texra.refreshApiKeyStatus',
       'texra.refreshAllOptions',
     ]) {
-      const result = await tool.call({ command: cmd, args: [] });
+      const result = await tool.call({ command: cmd });
       assert.equal(result.status, 'error');
     }
     assert.equal(invocations.length, 0);
@@ -115,9 +100,9 @@ describe('InvokeCommandTool allowlist', () => {
   it('rejects empty/whitespace command names', async () => {
     const { tool, invocations } = setupTool();
 
-    const empty = await tool.call({ command: '', args: [] });
+    const empty = await tool.call({ command: '' });
     assert.equal(empty.status, 'error');
-    const blank = await tool.call({ command: '   ', args: [] });
+    const blank = await tool.call({ command: '   ' });
     assert.equal(blank.status, 'error');
     assert.equal(invocations.length, 0);
   });
@@ -125,7 +110,7 @@ describe('InvokeCommandTool allowlist', () => {
   it('trims surrounding whitespace before allowlist check', async () => {
     const { tool, invocations } = setupTool();
 
-    await tool.call({ command: '  texra.setApiKey  ', args: [] });
+    await tool.call({ command: '  texra.setApiKey  ' });
 
     assert.equal(invocations.length, 1);
     assert.equal(invocations[0].command, 'texra.setApiKey');
