@@ -1,6 +1,6 @@
 ---
 created: 2026-06-21
-updated: 2026-06-21
+updated: 2026-07-18
 ---
 
 # PRD Index
@@ -9,6 +9,9 @@ Central home for all TeXRA Product Requirement Documents, plans, and design audi
 
 | Document                                                                                                                                 | Created    | Updated    |
 | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------- |
+| [Runtime/host decoupling (retired)](./2026-06-27-prd-runtime-host-decoupling.md)                                                         | 2026-06-27 | 2026-07-18 |
+| [Agent SDK boundary (retired)](./2026-06-29-prd-agent-sdk-boundary.md)                                                                   | 2026-06-29 | 2026-07-18 |
+| [Runtime gold standard (retired)](./2026-06-29-prd-runtime-gold-standard.md)                                                             | 2026-06-29 | 2026-07-18 |
 | [PRD: Non-blocking `inquiry` — Async Q&A with the User](./2026-05-15-prd-external-inquiry-async.md)                                      | 2026-05-15 | 2026-06-20 |
 | [PRD: Largest Dual-Systems Consolidation Audit (2026-06)](./2026-06-14-dual-systems-consolidation-2026-06.md)                            | 2026-06-14 | 2026-06-14 |
 | [PRD: Team-First Launcher and Onboarding](./2026-04-30-launcher-and-onboarding.md)                                                       | 2026-04-30 | 2026-06-13 |

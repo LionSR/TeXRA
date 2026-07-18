@@ -17,6 +17,9 @@ updated: 2026-07-18
 > `ModelCell`, `PendingRequests`, `RetryPolicy`, `RetryGate`, and `HostUiBus` are
 > retired and must not be implemented from this record. The `RunDescriptor` name
 > on `main` denotes the unrelated persisted stream schema introduced in [#7164].
+> The companion `2026-06-28-prd-architecture-patterns.md` record remains only on
+> the source branch and is not part of this extraction; references to it below
+> are historical context, not documentation present on `main`.
 
 [#7164]: https://github.com/LionSR/TeXRA/pull/7164
 [#7457]: https://github.com/LionSR/TeXRA/pull/7457

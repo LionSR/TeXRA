@@ -1463,21 +1463,21 @@ Work:
      check now prevents CLI scripts from importing `@tools/goal` again.
      **Implemented in this branch.**
 
-- Add `repairRuntimeHistoryTerminalStatus` and call it from `runAgent` when
-  an execution fails after history registration but before ordinary lifecycle
-  finalization. The command fills a missing terminal status without
-  overwriting a status already written by the lifecycle. **Implemented in
-  this branch.**
-  - Delete raw public history-write aliases for terminal status and workflow
-    result metadata. Headless CLI paths now record terminal events through
-    `markRuntimeHistoryExecutionErrored` /
-    `markRuntimeHistoryExecutionInterrupted`, and workflow output persistence
-    uses `recordRuntimeWorkflowResultArtifacts` so `historyCommands` owns the
-    persisted result-metadata shape. **Implemented in this branch.**
-  - Delete the raw public terminal-status read alias. CLI status resolution now
-    calls `resolveRuntimeHistoryTerminalStatus`, so `historyCommands` owns
-    persisted-status validation and fallback from run outcome to terminal
-    status. **Implemented in this branch.**
+   - Add `repairRuntimeHistoryTerminalStatus` and call it from `runAgent` when
+     an execution fails after history registration but before ordinary lifecycle
+     finalization. The command fills a missing terminal status without
+     overwriting a status already written by the lifecycle. **Implemented in
+     this branch.**
+     - Delete raw public history-write aliases for terminal status and workflow
+       result metadata. Headless CLI paths now record terminal events through
+       `markRuntimeHistoryExecutionErrored` /
+       `markRuntimeHistoryExecutionInterrupted`, and workflow output persistence
+       uses `recordRuntimeWorkflowResultArtifacts` so `historyCommands` owns the
+       persisted result-metadata shape. **Implemented in this branch.**
+     - Delete the raw public terminal-status read alias. CLI status resolution
+       now calls `resolveRuntimeHistoryTerminalStatus`, so `historyCommands` owns
+       persisted-status validation and fallback from run outcome to terminal
+       status. **Implemented in this branch.**
 
 5. Deepen approval prompt lifecycle.
    - Replace public register/unregister/prompt-emission wrappers with a runtime
