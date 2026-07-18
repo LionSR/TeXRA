@@ -65,6 +65,7 @@ const TraceAgentConfigSchema = z
     }),
     TraceAgentConfigSharedFieldsSchema.extend({
       agentCategory: z.literal(AgentCategory.ToolUse),
+      outputSchema: z.record(z.string(), z.unknown()).nullish(),
     }),
   ])
   .superRefine((config, ctx) => {

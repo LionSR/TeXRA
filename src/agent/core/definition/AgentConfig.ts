@@ -55,6 +55,13 @@ const WorkflowAgentConfigFieldsSchema = AgentConfigSharedFieldsSchema.extend({
 
 const ToolUseAgentConfigFieldsSchema = AgentConfigSharedFieldsSchema.extend({
   agentCategory: z.literal(AgentCategory.ToolUse),
+  /**
+   * JSON Schema (a plain object) describing a structured output the agent must
+   * submit through the synthetic `submit_output` terminal tool. Serializable by
+   * design: a live Zod schema or ITool must never travel through config. Absent
+   * for ordinary tool-use runs.
+   */
+  outputSchema: z.record(z.string(), z.unknown()).nullish(),
 });
 
 const AgentConfigFieldsSchema = z.discriminatedUnion('agentCategory', [
