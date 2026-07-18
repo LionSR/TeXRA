@@ -148,97 +148,17 @@ export class MainApp extends MainAppBase {
     this.sessionContextValue = sessionContext$.get();
   }
 
-  private readonly onLatexdiffGetCurrentFile =
-    this.detailHandler<FileActionDetail>(({ type }) => getCurrentFile(type));
+  // Named handlers only where an inline arrow won't do: multi-statement
+  // bodies, plus the two handlers bound at two template sites each. Everything
+  // else binds inline at its template site.
 
-  private readonly onLatexdiffEmptyFile = this.detailHandler<FileActionDetail>(
-    ({ type }) => emptyFile(type),
-  );
-
-  private readonly onAddOpenedFiles =
-    this.detailHandler<MultipleFilesTypeActionDetail>(({ type }) => {
-      if (type !== 'output') {
-        addOpenedFiles(type as DocumentFileType);
-      }
-    });
-
-  private readonly onEmptyFiles =
-    this.detailHandler<MultipleFilesTypeActionDetail>(({ type }) =>
-      emptyFiles(type),
-    );
-
-  private readonly onSelectMultipleFiles =
-    this.detailHandler<MultipleFilesActionDetail>(({ listId }) =>
-      selectMultipleFiles(listId),
-    );
-
-  private readonly onRemoveFile = this.detailHandler<RemoveFileDetail>(
-    ({ listId, file }) => removeFile(listId, file),
-  );
-
-  private readonly onFilesReordered = this.detailHandler<ReorderFilesDetail>(
-    ({ listId, files }) => updateMultiFiles(listId, files),
-  );
-
-  private readonly onCheckboxChange = this.detailHandler<CheckboxChangeDetail>(
-    ({ id, checked }) => updateCheckboxValue(id, checked),
-  );
-
-  private readonly onFocusInstruction =
-    this.detailCommandHandler<FocusInstructionDetail>(
-      MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION,
-      ({ key, text }) => ({ key, text }),
-    );
-
-  private readonly onApiKeyAction = this.detailHandler<BannerActionDetail>(
-    ({ action }) => runApiKeyBannerAction(action as 'set' | 'guide'),
-  );
-
-  private readonly onAgentConfigAction = this.detailHandler<BannerActionDetail>(
-    ({ action }) => runAgentConfigAction(action as 'edit' | 'dir' | 'docs'),
-  );
-
-  private readonly onDependencyDismiss = (): void => {
-    dependencyBanner$.set({ visible: false });
+  private readonly onSignInFromBanner = (): void => {
+    postMessage(MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER);
   };
 
-  private readonly onRecheckDependencies = this.commandHandler(
-    MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES,
-  );
-
-  private readonly onOpenInstallGuide =
-    this.detailCommandHandler<InstallGuideDetail>(
-      MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE,
-      ({ tool }) => ({ tool }),
-    );
-
-  private readonly onSignInFromBanner = this.commandHandler(
-    MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER,
-  );
-
-  private readonly onWelcomeChatGpt = this.commandHandler(
-    MAIN_VIEW_COMMANDS.ONBOARDING_SIGN_IN_CHATGPT,
-  );
-
-  private readonly onWelcomeApiKey = this.commandHandler(
-    MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY,
-  );
-
-  private readonly onWelcomeSkip = this.commandHandler(
-    MAIN_VIEW_COMMANDS.ONBOARDING_SKIP,
-  );
-
-  private readonly onOnboardingRunSetup = this.commandHandler(
-    MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP,
-  );
-
-  private readonly onOnboardingOpenGettingStarted = this.commandHandler(
-    MAIN_VIEW_COMMANDS.ONBOARDING_OPEN_GETTING_STARTED,
-  );
-
-  private readonly onOnboardingSkipSetup = this.commandHandler(
-    MAIN_VIEW_COMMANDS.ONBOARDING_SKIP_SETUP,
-  );
+  private readonly onOnboardingOpenGettingStarted = (): void => {
+    postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_OPEN_GETTING_STARTED);
+  };
 
   private readonly onDismissLogin = (): void => {
     postMessage(MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER);
@@ -251,91 +171,24 @@ export class MainApp extends MainAppBase {
     gettingStartedDismissed$.set(true);
   };
 
-  private readonly onGettingStartedAction =
-    this.detailCommandHandler<GettingStartedActionDetail>(
-      MAIN_VIEW_COMMANDS.GETTING_STARTED_ACTION,
-      ({ action }) => ({ action }),
-    );
-
   private readonly onDismissSessionHint = (): void => {
     postMessage(MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER);
     sessionHintDismissed$.set(true);
   };
 
-  private readonly onLatexDiffsToggle =
-    this.detailHandler<LatexDiffsToggleDetail>(({ visible }) => {
-      latexdiffsVisible$.set(visible);
-      saveState();
-    });
-
-  private readonly onLatexDiffsAction =
-    this.detailHandler<LatexDiffsActionDetail>(({ action }) =>
-      runLatexDiffsAction(action),
-    );
-
-  private readonly onBaseFileChange = this.detailHandler<BaseFileChangeDetail>(
-    ({ value }) => setBaseFile(value),
-  );
-
-  private readonly onEditedFileChange =
-    this.detailHandler<EditedFileChangeDetail>(({ value }) =>
-      setEditedFile(value),
-    );
-
-  private readonly onCommitChange = this.detailHandler<CommitChangeDetail>(
-    ({ value }) => setCommit(value),
-  );
-
-  private readonly onRefreshEditedFiles = (): void => {
-    refreshEditedFiles();
-  };
-
-  private readonly onRefreshCommits = this.commandHandler(
-    MAIN_VIEW_COMMANDS.REFRESH_COMMITS,
-  );
-
-  private readonly onSessionTypeChange =
-    this.detailHandler<SessionTypeChangeDetail>(({ value }) =>
-      changeSessionType(value),
-    );
-
-  private readonly onAgentChange = this.detailHandler<AgentChangeDetail>(
-    ({ sessionType, value }) => changeAgent(sessionType, value),
-  );
-
-  private readonly onModelChange = this.detailHandler<ModelChangeDetail>(
-    ({ value }) => changeModel(value),
-  );
-
-  private readonly onInstructionInput =
-    this.detailHandler<InstructionChangeDetail>(({ value }) => {
-      setInstruction(value);
-      scheduleInstructionSave();
-    });
-
-  private readonly onInstructionPaste = (): void => {
+  private readonly onLatexDiffsToggle = ({
+    detail,
+  }: CustomEvent<LatexDiffsToggleDetail>): void => {
+    latexdiffsVisible$.set(detail.visible);
     saveState();
   };
 
-  private readonly onPanelAction = this.detailHandler<ActionDetail>(
-    ({ action }) => runPanelAction(action),
-  );
-
-  private readonly onExecute = (): void => {
-    executeAgent();
+  private readonly onInstructionInput = ({
+    detail,
+  }: CustomEvent<InstructionChangeDetail>): void => {
+    setInstruction(detail.value);
+    scheduleInstructionSave();
   };
-
-  private readonly onAgentSettings = (): void => {
-    runAgentConfigAction('edit');
-  };
-
-  private readonly onBrowseAllAgents = (): void => {
-    runAgentConfigAction('edit');
-  };
-
-  private readonly onModelSettings = this.commandHandler(
-    MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS,
-  );
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -385,26 +238,6 @@ export class MainApp extends MainAppBase {
       MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
     ];
     commands.forEach((command) => postMessage(command));
-  }
-
-  private commandHandler(
-    command: string,
-    payload?: Record<string, unknown>,
-  ): () => void {
-    return () => postMessage(command, payload);
-  }
-
-  private detailHandler<TDetail>(
-    handler: (detail: TDetail) => void,
-  ): (event: CustomEvent<TDetail>) => void {
-    return (event) => handler(event.detail);
-  }
-
-  private detailCommandHandler<TDetail>(
-    command: string,
-    getPayload: (detail: TDetail) => Record<string, unknown> | undefined,
-  ): (event: CustomEvent<TDetail>) => void {
-    return (event) => postMessage(command, getPayload(event.detail));
   }
 
   protected override onStateRestore(message: StateRestoreMessage): void {
@@ -474,9 +307,12 @@ export class MainApp extends MainAppBase {
           <div class="main-content">
             <onboarding-welcome-card
               @welcome-sign-in=${this.onSignInFromBanner}
-              @welcome-chatgpt=${this.onWelcomeChatGpt}
-              @welcome-api-key=${this.onWelcomeApiKey}
-              @welcome-skip=${this.onWelcomeSkip}
+              @welcome-chatgpt=${() =>
+                postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_SIGN_IN_CHATGPT)}
+              @welcome-api-key=${() =>
+                postMessage(MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY)}
+              @welcome-skip=${() =>
+                postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_SKIP)}
               @onboarding-open-getting-started=${
                 this.onOnboardingOpenGettingStarted
               }
@@ -510,28 +346,43 @@ export class MainApp extends MainAppBase {
           ${
             onboardingState === 'setup'
               ? html`<onboarding-setup-card
-                  @onboarding-run-setup=${this.onOnboardingRunSetup}
+                  @onboarding-run-setup=${() =>
+                    postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP)}
                   @onboarding-open-getting-started=${
                     this.onOnboardingOpenGettingStarted
                   }
-                  @onboarding-skip-setup=${this.onOnboardingSkipSetup}
+                  @onboarding-skip-setup=${() =>
+                    postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_SKIP_SETUP)}
                 ></onboarding-setup-card>`
               : nothing
           }
 
           <instruction-panel
             .showSessionHint=${!sessionHintDismissed$.get()}
-            @session-type-change=${this.onSessionTypeChange}
-            @agent-change=${this.onAgentChange}
-            @model-change=${this.onModelChange}
+            @session-type-change=${({
+              detail,
+            }: CustomEvent<SessionTypeChangeDetail>) =>
+              changeSessionType(detail.value)}
+            @agent-change=${({ detail }: CustomEvent<AgentChangeDetail>) =>
+              changeAgent(detail.sessionType, detail.value)}
+            @model-change=${({ detail }: CustomEvent<ModelChangeDetail>) =>
+              changeModel(detail.value)}
             @instruction-input=${this.onInstructionInput}
-            @instruction-paste=${this.onInstructionPaste}
-            @panel-action=${this.onPanelAction}
-            @execute=${this.onExecute}
-            @agent-settings=${this.onAgentSettings}
-            @browse-all-agents=${this.onBrowseAllAgents}
-            @model-settings=${this.onModelSettings}
-            @focus-instruction=${this.onFocusInstruction}
+            @instruction-paste=${() => saveState()}
+            @panel-action=${({ detail }: CustomEvent<ActionDetail>) =>
+              runPanelAction(detail.action)}
+            @execute=${() => executeAgent()}
+            @agent-settings=${() => runAgentConfigAction('edit')}
+            @browse-all-agents=${() => runAgentConfigAction('edit')}
+            @model-settings=${() =>
+              postMessage(MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS)}
+            @focus-instruction=${({
+              detail,
+            }: CustomEvent<FocusInstructionDetail>) =>
+              postMessage(MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION, {
+                key: detail.key,
+                text: detail.text,
+              })}
             @dismiss-session-hint=${this.onDismissSessionHint}
           ></instruction-panel>
 
@@ -543,15 +394,31 @@ export class MainApp extends MainAppBase {
               gettingStartedVisible$.get() && !gettingStartedDismissed$.get()
             }
             .loginBannerVisible=${loginBannerVisible$.get()}
-            @api-key-action=${this.onApiKeyAction}
-            @agent-config-action=${this.onAgentConfigAction}
-            @dependency-dismiss=${this.onDependencyDismiss}
-            @recheck-dependencies=${this.onRecheckDependencies}
-            @open-install-guide=${this.onOpenInstallGuide}
+            @api-key-action=${({ detail }: CustomEvent<BannerActionDetail>) =>
+              runApiKeyBannerAction(detail.action as 'set' | 'guide')}
+            @agent-config-action=${({
+              detail,
+            }: CustomEvent<BannerActionDetail>) =>
+              runAgentConfigAction(detail.action as 'edit' | 'dir' | 'docs')}
+            @dependency-dismiss=${() =>
+              dependencyBanner$.set({ visible: false })}
+            @recheck-dependencies=${() =>
+              postMessage(MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES)}
+            @open-install-guide=${({
+              detail,
+            }: CustomEvent<InstallGuideDetail>) =>
+              postMessage(MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE, {
+                tool: detail.tool,
+              })}
             @sign-in=${this.onSignInFromBanner}
             @dismiss-login=${this.onDismissLogin}
             @dismiss-getting-started=${this.onDismissGettingStarted}
-            @getting-started-action=${this.onGettingStartedAction}
+            @getting-started-action=${({
+              detail,
+            }: CustomEvent<GettingStartedActionDetail>) =>
+              postMessage(MAIN_VIEW_COMMANDS.GETTING_STARTED_ACTION, {
+                action: detail.action,
+              })}
           ></banner-group>
 
           <wa-divider></wa-divider>
@@ -584,12 +451,33 @@ export class MainApp extends MainAppBase {
                 (config) => html`
                   <file-select-group
                     .config=${config}
-                    @add-opened-files=${this.onAddOpenedFiles}
-                    @empty-files=${this.onEmptyFiles}
-                    @select-multiple-files=${this.onSelectMultipleFiles}
-                    @remove-file=${this.onRemoveFile}
-                    @files-reordered=${this.onFilesReordered}
-                    @checkbox-change=${this.onCheckboxChange}
+                    @add-opened-files=${({
+                      detail,
+                    }: CustomEvent<MultipleFilesTypeActionDetail>) => {
+                      if (detail.type !== 'output') {
+                        addOpenedFiles(detail.type as DocumentFileType);
+                      }
+                    }}
+                    @empty-files=${({
+                      detail,
+                    }: CustomEvent<MultipleFilesTypeActionDetail>) =>
+                      emptyFiles(detail.type)}
+                    @select-multiple-files=${({
+                      detail,
+                    }: CustomEvent<MultipleFilesActionDetail>) =>
+                      selectMultipleFiles(detail.listId)}
+                    @remove-file=${({
+                      detail,
+                    }: CustomEvent<RemoveFileDetail>) =>
+                      removeFile(detail.listId, detail.file)}
+                    @files-reordered=${({
+                      detail,
+                    }: CustomEvent<ReorderFilesDetail>) =>
+                      updateMultiFiles(detail.listId, detail.files)}
+                    @checkbox-change=${({
+                      detail,
+                    }: CustomEvent<CheckboxChangeDetail>) =>
+                      updateCheckboxValue(detail.id, detail.checked)}
                   ></file-select-group>
                 `,
               )}
@@ -611,14 +499,31 @@ export class MainApp extends MainAppBase {
                   .commitOptions=${fo.commit ?? []}
                   .isGitRepo=${isGitRepo$.get()}
                   @latexdiffs-toggle=${this.onLatexDiffsToggle}
-                  @latexdiffs-action=${this.onLatexDiffsAction}
-                  @base-file-change=${this.onBaseFileChange}
-                  @edited-file-change=${this.onEditedFileChange}
-                  @get-current-file=${this.onLatexdiffGetCurrentFile}
-                  @empty-file=${this.onLatexdiffEmptyFile}
-                  @refresh-edited-files=${this.onRefreshEditedFiles}
-                  @commit-change=${this.onCommitChange}
-                  @refresh-commits=${this.onRefreshCommits}
+                  @latexdiffs-action=${({
+                    detail,
+                  }: CustomEvent<LatexDiffsActionDetail>) =>
+                    runLatexDiffsAction(detail.action)}
+                  @base-file-change=${({
+                    detail,
+                  }: CustomEvent<BaseFileChangeDetail>) =>
+                    setBaseFile(detail.value)}
+                  @edited-file-change=${({
+                    detail,
+                  }: CustomEvent<EditedFileChangeDetail>) =>
+                    setEditedFile(detail.value)}
+                  @get-current-file=${({
+                    detail,
+                  }: CustomEvent<FileActionDetail>) =>
+                    getCurrentFile(detail.type)}
+                  @empty-file=${({ detail }: CustomEvent<FileActionDetail>) =>
+                    emptyFile(detail.type)}
+                  @refresh-edited-files=${() => refreshEditedFiles()}
+                  @commit-change=${({
+                    detail,
+                  }: CustomEvent<CommitChangeDetail>) =>
+                    setCommit(detail.value)}
+                  @refresh-commits=${() =>
+                    postMessage(MAIN_VIEW_COMMANDS.REFRESH_COMMITS)}
                 ></latexdiffs-section>
               `
         }
