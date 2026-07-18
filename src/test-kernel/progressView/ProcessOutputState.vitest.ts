@@ -441,6 +441,25 @@ describe('process output frontend state', () => {
     expect(getState().streamStates.get(streamId)?.roundStage).toBeUndefined();
   });
 
+  it('honors an explicit empty active-stream selection', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const state = createInitialState();
+    state.activeStreamId = streamId;
+    registerWorkflowStream(state, streamId);
+    const { ctx, getState } = createContext(state);
+
+    dispatch(
+      streamLifecycleHandlers,
+      {
+        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+        activeStream: '',
+      },
+      ctx,
+    );
+
+    expect(getState().activeStreamId).toBeNull();
+  });
+
   it('clears a stream parent when update parent stream receives null', () => {
     const parent = 'stream-parent' as StreamTabId;
     const child = 'stream-child' as StreamTabId;

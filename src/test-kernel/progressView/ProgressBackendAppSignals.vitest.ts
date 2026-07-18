@@ -3,10 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  ProgressBackend,
-  type ProgressBackendUiConfig,
-} from '@controllers/progressView/backend/ProgressBackend';
+import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
 import type {
   AppSignal,
   AppSignalPayloads,
@@ -73,24 +70,26 @@ class MemoryAppSignals implements AppSignalsLike {
   }
 }
 
-function createUiConfig(): ProgressBackendUiConfig {
-  return {
-    callbacks: {
-      showToolEditPermission: vi.fn(),
-      resolveToolEditPermission: vi.fn(),
-      updateToolEditApprovalBypassState: vi.fn(),
-      updateSuperYoloBypassState: vi.fn(),
-    },
-    hasPendingPermissions: vi.fn(() => false),
-  };
-}
-
 function createBackend(): ProgressBackend {
   return new ProgressBackend({
     storage: new MemoryMementoStorage(),
     sendMessage: () => true,
     hasTarget: () => true,
-    configureUi: () => createUiConfig(),
+    approvals: {
+      canSend: () => true,
+      overrides: {
+        retry: { show: vi.fn(), dismiss: vi.fn() },
+        agentProposal: { show: vi.fn(), dismiss: vi.fn() },
+      },
+    },
+    lifecycle: {
+      stopStream: vi.fn(),
+      cleanupDeletedStream: vi.fn(),
+      cleanupDeletedStreams: vi.fn(),
+      rebuildRenderedStreams: vi.fn(),
+      activateStream: vi.fn(),
+      notifyDeletionRetained: vi.fn(),
+    },
   });
 }
 
