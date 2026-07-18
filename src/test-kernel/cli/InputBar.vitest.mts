@@ -1,6 +1,9 @@
 import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ImagePasteQueue } from '@cli/chat/tui/input/imagePasteQueue';
@@ -20,6 +23,12 @@ import {
   registerSlashCommand,
   unregisterSlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
+import {
+  activeForm,
+  resetCliState,
+  streams,
+} from '@cli/chat/tui/state/cliState';
+import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
 
 const clipboardMock = vi.hoisted(() => ({
   attachClipboardImage: vi.fn(),
@@ -110,6 +119,55 @@ beforeEach(() => clipboardMock.attachClipboardImage.mockReset());
 afterEach(() => vi.clearAllMocks());
 
 describe('InputBar slash submit', () => {
+  it('threads deferred echo through a palette-opened form', async () => {
+    const ink = (await import(cliRequire.resolve('ink'))) as any;
+    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    registerSlashCommand({
+      name: 'model',
+      description: 'Choose a model',
+      echo: 'ifPersists',
+      formComponent: () => null,
+    });
+    const stdin = new FakeStdin();
+    const stdout = new FakeStdout();
+    const instance = ink.render(
+      React.createElement(InputBar, { onSubmit: vi.fn() }),
+      {
+        stdin,
+        stdout,
+        interactive: true,
+        exitOnCtrlC: false,
+        patchConsole: false,
+      },
+    );
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write('/model');
+      await waitFor(() => stdout.buf.includes('/model'));
+      stdin.write('\r');
+      await waitFor(() => activeForm.get()?.commandName === 'model');
+
+      const form = activeForm.get()?.render(() => undefined, 20) as {
+        props?: { onPersist?: () => void };
+      };
+      expect(streams.get().get(CLI_LOCAL_STREAM_ID)?.entries ?? []).toEqual([]);
+
+      form.props?.onPersist?.();
+
+      expect(
+        streams
+          .get()
+          .get(CLI_LOCAL_STREAM_ID)
+          ?.entries.map(({ role, text }) => ({ role, text })),
+      ).toEqual([{ role: 'user', text: '/model' }]);
+    } finally {
+      instance.unmount();
+      unregisterSlashCommand('model');
+      resetCliState();
+    }
+  });
+
   it('does not persist commands whose input may contain a credential', () => {
     registerSlashCommand({
       name: 'key',

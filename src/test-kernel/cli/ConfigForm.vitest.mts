@@ -72,6 +72,7 @@ function renderConfigFormProps(): {
   ) => void | Promise<void>;
   resetValue?: (entry: StateSettingEntry) => void | Promise<void>;
   openForm?: (formName: string) => void;
+  onError?: (error: unknown) => void;
   formRenderers?: Readonly<
     Record<string, (onBack: () => void) => React.JSX.Element>
   >;
@@ -329,6 +330,23 @@ describe('/config slash command wiring', () => {
 
     expect(isStored(config, WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(true);
     expect(props.readValue?.(markCommits)).toBe(false);
+  });
+
+  it('emits a deferred command echo before a configuration error', async () => {
+    const { stores } = makeFakeSettingsStores();
+    const events: string[] = [];
+    registerBuiltinSlashCommands({
+      getConfigStores: () => stores,
+      onError: () => {
+        events.push('error');
+      },
+    });
+    openCliSlashCommandForm('config', '', () => events.push('echo'));
+
+    await renderConfigFormProps().onError?.(new Error('write failed'));
+    await renderConfigFormProps().onError?.(new Error('write failed again'));
+
+    expect(events).toEqual(['echo', 'error', 'error']);
   });
 
   it('re-applies git author config so a toggle takes effect this session', async () => {

@@ -1,7 +1,6 @@
 import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
-import { parseCliHistoryId } from '@cli/runtime/history';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
@@ -17,29 +16,19 @@ import {
   streamAccessTarget,
   streams,
 } from '../state/cliState';
-import { chatTuiCanStartRootRun } from '../state/sessionRunState';
 import { terminalCapabilities } from '../state/terminalCapabilities';
-import {
-  appendLocalAssistantTranscript,
-  appendLocalUserTranscript,
-} from '../state/transcript';
+import { appendLocalAssistantTranscript } from '../state/transcript';
 import { formatSlashCommandHelp, GOAL_MODE_HELP } from './helpText';
-import { applyInitialCliAgentSelection } from './handlers/agentModelCommands';
-import {
-  applyCliModelAccessSelection,
-  showCliAuthStatus,
-} from './handlers/apiModeCommands';
+import { showCliAuthStatus } from './handlers/apiModeCommands';
 import { applyCliApprovalPolicySelection } from './handlers/approvalCommand';
-import { loginFromChat, logoutFromChat } from './handlers/loginCommands';
-import {
-  showCliMemoryList,
-  showCliMemoryPreview,
-} from './handlers/memoryCommands';
 import {
   openCanonicalSlashForm,
   type SlashCommandContext,
 } from './handlers/slashContext';
-import { openRegisteredCliSlashForm } from './slashForms';
+import {
+  appendSlashCommandEcho,
+  openRegisteredCliSlashForm,
+} from './slashForms';
 import {
   findSlashCommand,
   findRedactedSlashCommandInput,
@@ -47,15 +36,27 @@ import {
   parseSlashInput,
   shouldRedactSlashInput,
   suggestSlashCommand,
+  type SlashCommand,
 } from './slashRegistry';
 
-/** Run an async command body, surfacing any failure as a transcript message. */
+/** Run a command body with centralized echo and error persistence. */
 async function runGuardedSlashCommand(
+  line: string,
+  command: SlashCommand | undefined,
   action: () => void | Promise<void>,
+  persistsOnSuccess = true,
 ): Promise<void> {
+  let echoed = false;
+  const echo = (): void => {
+    if (echoed) return;
+    appendSlashCommandEcho(line);
+    echoed = true;
+  };
   try {
+    if (persistsOnSuccess && command?.echo === 'ifPersists') echo();
     await action();
   } catch (error: unknown) {
+    echo();
     appendLocalAssistantTranscript(toErrorMessage(error));
   }
 }
@@ -71,7 +72,11 @@ export async function handleTuiSlashCommand(
     setTransientNotice(
       `For safety, /${redactedIntent.name} accepts credentials only through its masked form.`,
     );
-    if (!openRegisteredCliSlashForm(redactedIntent, '')) {
+    if (
+      !openRegisteredCliSlashForm(redactedIntent, '', () =>
+        appendSlashCommandEcho(line),
+      )
+    ) {
       setTransientNotice(
         `/${redactedIntent.name} is not available in this CLI view yet.`,
       );
@@ -83,59 +88,40 @@ export async function handleTuiSlashCommand(
   const rest = parsed.remainder.trim();
   const registered = findSlashCommand(command) ?? redactedIntent;
   const canonicalCommand = registered?.name ?? command;
-  // Echo the slash input into the transcript so the user can see what they
-  // typed. Slash commands don't go through the agent run, so the usual
-  // USER_MESSAGE stream-log entry is never produced. Skip the echo for the
-  // exit commands (the TUI is tearing down); /clear still echoes because
-  // resetSessionForClear refuses while a run is active and surfaces an
-  // error — without the echo the user wouldn't see what triggered it.
-  if (
-    canonicalCommand !== 'exit' &&
-    canonicalCommand !== 'login' &&
-    !shouldRedactSlashInput(line)
-  ) {
-    appendLocalUserTranscript(line.trim());
+  const opensRegisteredForm =
+    registered?.formName !== undefined &&
+    (!rest || registered.formRemainders?.includes(rest.toLowerCase()));
+  if (opensRegisteredForm) {
+    openCanonicalSlashForm(registered.formName, registered, rest, () =>
+      appendSlashCommandEcho(line),
+    );
+    return true;
+  }
+  if (rest && registered?.argHandler) {
+    await runGuardedSlashCommand(line, registered, () =>
+      registered.argHandler?.(rest, context),
+    );
+    return true;
   }
   switch (canonicalCommand) {
     case 'help': {
-      appendLocalAssistantTranscript(
-        formatSlashCommandHelp(listSlashCommands(), {
-          shortcutModifierLabel: defaultShortcutModifierLabel(),
-          shiftEnterNewline: terminalCapabilities.get().kittyKeyboard,
-        }),
+      await runGuardedSlashCommand(line, registered, () =>
+        appendLocalAssistantTranscript(
+          formatSlashCommandHelp(listSlashCommands(), {
+            shortcutModifierLabel: defaultShortcutModifierLabel(),
+            shiftEnterNewline: terminalCapabilities.get().kittyKeyboard,
+          }),
+        ),
       );
       return true;
     }
     case 'clear':
-      context.resetSession();
+      await runGuardedSlashCommand(line, registered, context.resetSession);
       return true;
     case 'exit':
       context.session.stopRequested = true;
       context.interruptActive();
       context.requestInputExit();
-      return true;
-    case 'agent':
-      if (!chatTuiCanStartRootRun(context.session) && rest) {
-        setTransientNotice(
-          'The agent is fixed for this chat session. Start a new chat to use a different agent.',
-        );
-      } else if (rest) {
-        applyInitialCliAgentSelection(rest, context);
-      } else {
-        openCanonicalSlashForm('agent', registered, rest);
-      }
-      return true;
-    case 'model':
-      openCanonicalSlashForm('model', registered, rest);
-      return true;
-    case 'api':
-      if (!rest) {
-        openCanonicalSlashForm('api', registered, rest);
-        return true;
-      }
-      await runGuardedSlashCommand(() =>
-        applyCliModelAccessSelection(rest, context),
-      );
       return true;
     case 'key':
       if (rest) {
@@ -146,34 +132,15 @@ export async function handleTuiSlashCommand(
       openCanonicalSlashForm('key', registered, '');
       return true;
     case 'auth':
-      await runGuardedSlashCommand(showCliAuthStatus);
-      return true;
-    case 'login':
-      if (!rest) {
-        openCanonicalSlashForm('login', registered, rest);
-        return true;
-      }
-      await loginFromChat(rest, context.cliContext);
-      return true;
-    case 'logout':
-      if (!rest) {
-        openCanonicalSlashForm('logout', registered, rest);
-        return true;
-      }
-      await logoutFromChat(rest);
-      return true;
-    case 'approval':
-      if (rest) {
-        applyCliApprovalPolicySelection(rest, context);
-      } else {
-        openCanonicalSlashForm('approval', registered, rest);
-      }
+      await runGuardedSlashCommand(line, registered, showCliAuthStatus);
       return true;
     case 'yolo':
-      applyCliApprovalPolicySelection(rest || 'yolo', context);
+      await runGuardedSlashCommand(line, registered, () =>
+        applyCliApprovalPolicySelection(rest || 'yolo', context),
+      );
       return true;
     case 'status':
-      await runGuardedSlashCommand(async () => {
+      await runGuardedSlashCommand(line, registered, async () => {
         const meta = sessionMeta.get();
         const activeStreamId = activeStreamIdSignal.get();
         const slice = activeStreamId
@@ -226,48 +193,39 @@ export async function handleTuiSlashCommand(
       });
       return true;
     case 'goal':
-      appendLocalAssistantTranscript(GOAL_MODE_HELP);
-      return true;
-    case 'resume': {
-      if (!rest) {
-        openCanonicalSlashForm('resume', registered, rest);
-        return true;
-      }
-      const id = parseCliHistoryId(rest);
-      if (!id) {
-        appendLocalAssistantTranscript(`Invalid execution id: ${rest}`);
-        return true;
-      }
-      await context.resumeExecution(id);
-      return true;
-    }
-    case 'memory':
-      await runGuardedSlashCommand(async () => {
-        if (!rest) {
-          openCanonicalSlashForm('memory', registered, rest);
-        } else if (rest.toLowerCase() === 'list') {
-          await showCliMemoryList();
-        } else {
-          await showCliMemoryPreview(rest);
-        }
-      });
+      await runGuardedSlashCommand(line, registered, () =>
+        appendLocalAssistantTranscript(GOAL_MODE_HELP),
+      );
       return true;
     case 'compact':
-      requestCliCompaction({
-        streamId: activeStreamIdSignal.get(),
-        requestManualCompaction: (streamId) =>
-          defaultSession().executions.requestManualCompaction(streamId),
-        notifyFollowUpSent,
-        appendTranscript: appendLocalAssistantTranscript,
-      });
+      await runGuardedSlashCommand(line, registered, () =>
+        requestCliCompaction({
+          streamId: activeStreamIdSignal.get(),
+          requestManualCompaction: (streamId) =>
+            defaultSession().executions.requestManualCompaction(streamId),
+          notifyFollowUpSent,
+          appendTranscript: appendLocalAssistantTranscript,
+        }),
+      );
       return true;
     default: {
       if (registered) {
-        if (openRegisteredCliSlashForm(registered, parsed.remainder)) {
+        if (
+          openRegisteredCliSlashForm(registered, parsed.remainder, () =>
+            appendSlashCommandEcho(line),
+          )
+        ) {
           return true;
         }
-        setTransientNotice(
-          `/${parsed.name} is registered but is not available in this CLI view yet.`,
+        await runGuardedSlashCommand(
+          line,
+          registered,
+          () => {
+            throw new Error(
+              `/${parsed.name} is registered but is not available in this CLI view yet.`,
+            );
+          },
+          false,
         );
       } else {
         const suggestion = suggestSlashCommand(command);
