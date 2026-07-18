@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Internal imports
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
 import { convertToolSchema } from '@agent/modelHandlers/toolConversion';
 import type { ToolResult } from '@shared/schemas/toolResult';
 
@@ -115,6 +115,24 @@ export function buildTerminalTool(
   }
 
   return new TerminalTool(capture);
+}
+
+/**
+ * Wrap a base registry so `submit_output` resolves to the run-scoped terminal
+ * tool while every other lookup delegates to `base`. The shared default
+ * registry is never mutated, so concurrent runs never see one another's
+ * terminal tool. Used by the tool-use flow to make the synthetic tool findable
+ * by name (`toolRegistry.get('submit_output')`) alongside the real tools.
+ */
+export function buildTerminalToolRegistry(
+  base: IToolRegistry,
+  terminalTool: ITool,
+): IToolRegistry {
+  return {
+    get: (name) =>
+      name === SUBMIT_OUTPUT_TOOL_NAME ? terminalTool : base.get(name),
+    has: (name) => name === SUBMIT_OUTPUT_TOOL_NAME || base.has(name),
+  };
 }
 
 /**

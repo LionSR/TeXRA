@@ -2,9 +2,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
+// Local imports - core
+import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
+
 // Local imports - tools
 import {
   buildTerminalTool,
+  buildTerminalToolRegistry,
   isStrictNativeCompatible,
   resolveStructuredOutput,
   SUBMIT_OUTPUT_TOOL_NAME,
@@ -161,5 +165,34 @@ describe('buildTerminalTool', () => {
 
     expect(captureA).toHaveBeenCalledTimes(1);
     expect(captureB).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildTerminalToolRegistry', () => {
+  const spec = resolveStructuredOutput(z.strictObject({ title: z.string() }));
+  const realTool = {
+    definition: { name: 'read_file', description: 'read', parameters: {} },
+  } as ITool;
+  const base = new MapToolRegistry({ read_file: realTool });
+
+  it('overrides submit_output while delegating every other lookup', () => {
+    const terminalTool = buildTerminalTool(spec, vi.fn());
+    const overlay = buildTerminalToolRegistry(base, terminalTool);
+
+    expect(overlay.get(SUBMIT_OUTPUT_TOOL_NAME)).toBe(terminalTool);
+    expect(overlay.has(SUBMIT_OUTPUT_TOOL_NAME)).toBe(true);
+    expect(overlay.get('read_file')).toBe(realTool);
+    expect(overlay.has('read_file')).toBe(true);
+    expect(overlay.get('missing')).toBeUndefined();
+    expect(overlay.has('missing')).toBe(false);
+  });
+
+  it('never mutates the base registry', () => {
+    const terminalTool = buildTerminalTool(spec, vi.fn());
+    buildTerminalToolRegistry(base, terminalTool);
+
+    // The shared default registry must never gain the synthetic tool.
+    expect(base.get(SUBMIT_OUTPUT_TOOL_NAME)).toBeUndefined();
+    expect(base.has(SUBMIT_OUTPUT_TOOL_NAME)).toBe(false);
   });
 });
