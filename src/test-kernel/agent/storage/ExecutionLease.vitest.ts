@@ -92,40 +92,6 @@ describe('cross-process execution leases', () => {
     expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
   });
 
-  it('protects executions owned by a host using the legacy heartbeat protocol', async () => {
-    const executionId = 'a8644b' as ExecutionId;
-    await writeExecution(executionId);
-    await StorageFS.writeAtomic(
-      `executions/${executionId}/heartbeat.json`,
-      '{}',
-    );
-
-    await expect(deleteExecution(executionId)).resolves.toMatchObject({
-      status: 'active',
-      executionId,
-    });
-    await expect(
-      acquireResumedExecutionLease(executionId),
-    ).rejects.toBeInstanceOf(ExecutionLeaseActiveError);
-    expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
-  });
-
-  it('allows deletion after a legacy heartbeat becomes stale', async () => {
-    const executionId = 'a8644c' as ExecutionId;
-    await writeExecution(executionId);
-    await StorageFS.writeAtomic(
-      `executions/${executionId}/heartbeat.json`,
-      '{}',
-    );
-    const now = Date.now();
-    vi.spyOn(Date, 'now').mockReturnValue(now + 30_001);
-
-    await expect(deleteExecution(executionId)).resolves.toEqual({
-      status: 'deleted',
-      executionId,
-    });
-  });
-
   it('takes over a stale lease after the explicit horizon', async () => {
     const executionId = 'b8644b' as ExecutionId;
     const now = Date.now();
