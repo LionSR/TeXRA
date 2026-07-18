@@ -130,15 +130,11 @@ export async function loginFromChat(
       : args;
   appendLocalAssistantTranscript(loginStartMessage(loginArgs));
 
-  try {
-    if (loginArgs.target === 'chatgpt') {
-      await loginToChatGptSubscription(loginArgs);
-      return;
-    }
-    await loginToTexraIncludedAccess(loginArgs);
-  } catch (error: unknown) {
-    appendLocalAssistantTranscript(toErrorMessage(error));
+  if (loginArgs.target === 'chatgpt') {
+    await loginToChatGptSubscription(loginArgs);
+    return;
   }
+  await loginToTexraIncludedAccess(loginArgs);
 }
 
 export async function logoutFromChat(input: string): Promise<void> {

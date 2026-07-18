@@ -21,7 +21,10 @@ import {
 } from '../input/imagePasteQueue';
 import { ReverseSearch } from '../input/ReverseSearch';
 import { isCtrlInput } from '../input/inputKeys';
-import { openRegisteredCliSlashForm } from '../commands/slashForms';
+import {
+  appendSlashCommandEcho,
+  openRegisteredCliSlashForm,
+} from '../commands/slashForms';
 import { SlashPalette, slashPaletteOwnsArrows } from '../commands/SlashPalette';
 import { COLOR_BORDER, COLOR_HINT } from '../ui/colors';
 import { POINTER } from '../ui/glyphs';
@@ -287,10 +290,18 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       remainder: string,
     ): void => {
       if (cmd.formComponent) {
+        const commandLine = slashSubmitText(
+          draftValueRef.current,
+          cmd.name,
+          remainder,
+          typedName,
+        );
         // Structured forms own the screen — clear the input and let
         // the active-form signal mount the component (see App.tsx).
         clearDraft();
-        openRegisteredCliSlashForm(cmd, remainder);
+        openRegisteredCliSlashForm(cmd, remainder, () =>
+          appendSlashCommandEcho(commandLine),
+        );
         return;
       }
       if (intent === 'submit') {
