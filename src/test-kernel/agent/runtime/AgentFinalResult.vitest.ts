@@ -109,6 +109,40 @@ describe('AgentFinalResult', () => {
     });
   });
 
+  it('surfaces structured output on the workflow envelope', () => {
+    const flowResult: AgentFlowResult = {
+      category: 'workflow',
+      outcome: 'completed',
+      executionId: 'abcdefabcdef' as ExecutionId,
+      streamId: 'stream:workflow' as StreamTabId,
+      outputs: [],
+      compileFailures: [],
+    };
+
+    expect(
+      buildAgentFinalResult({ flowResult, structured: { title: 'Lemma 1' } }),
+    ).toMatchObject({
+      category: 'workflow',
+      structured: { title: 'Lemma 1' },
+    });
+  });
+
+  it('surfaces structured output on the tool-use envelope', () => {
+    const flowResult: AgentFlowResult = {
+      category: 'toolUse',
+      outcome: 'completed',
+      executionId: 'abcdefabcdef' as ExecutionId,
+      streamId: 'stream:tool-use' as StreamTabId,
+    };
+
+    expect(
+      buildAgentFinalResult({ flowResult, structured: [1, 2, 3] }),
+    ).toMatchObject({
+      category: 'toolUse',
+      structured: [1, 2, 3],
+    });
+  });
+
   it.each(['failed', 'cancelled'] as RunOutcome[])(
     'allows an error path to preserve the %s outcome',
     (outcome) => {
