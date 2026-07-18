@@ -8,10 +8,12 @@ export {
   writeWorkflowScriptCheckpoint,
 } from './persistence';
 export type { PersistedWorkflowScriptRunOptions } from './persistence';
+export { WORKFLOW_SKIPPED_RESULT } from './types';
 export type {
   WorkflowAgentInvocation,
   WorkflowAgentRunner,
   WorkflowJournalEntry,
+  WorkflowScriptControl,
   WorkflowScriptEvent,
   WorkflowScriptRunResult,
 } from './types';
