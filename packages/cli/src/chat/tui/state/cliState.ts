@@ -73,10 +73,6 @@ export type ConversationEntry =
   | (ConversationEntryBase & {
       readonly role: 'tool';
       readonly toolUse: NormalizedToolUse;
-      /** Progress emitted by one delegate_workflow_script call. */
-      readonly workflowScriptFacts?: readonly WorkflowScriptProgressFact[];
-      /** Terminal trace outcome, kept outside the narrower normalized schema. */
-      readonly workflowScriptOutcome?: WorkflowScriptOutcome;
     })
   | (ConversationEntryBase & {
       readonly role: 'process';
@@ -90,32 +86,6 @@ export interface CompletedProcessTranscript {
   readonly elapsed?: string | null;
   readonly isError: boolean;
   readonly tailLines: readonly string[];
-}
-
-/** Immutable workflow-script fact appended once to terminal scrollback. */
-export type WorkflowScriptProgressFact =
-  | {
-      readonly type: 'phase';
-      readonly id: string;
-      readonly stageId: string;
-      readonly label: string;
-    }
-  | {
-      readonly type: 'log';
-      readonly id: string;
-      readonly level: 'debug' | 'info' | 'warn' | 'error';
-      readonly message: string;
-      readonly phaseId?: string;
-    };
-
-type WorkflowScriptOutcome = 'completed' | 'failed';
-
-/** Transient ownership of workflow events by one open tool invocation. */
-export interface ActiveWorkflowScriptInvocation {
-  readonly logId: string;
-  readonly parentStageId: string | undefined;
-  readonly phaseIds: ReadonlySet<string>;
-  readonly nextFactIndex: number;
 }
 
 export interface SessionMeta {
@@ -169,7 +139,6 @@ export interface StreamSlice {
   readonly conversation: ConversationProgress | undefined;
   readonly roundStage?: RoundStage | undefined;
   readonly entries: readonly ConversationEntry[];
-  readonly activeWorkflowScript?: ActiveWorkflowScriptInvocation;
   readonly queuedFollowUps: number;
   readonly queuedFollowUpMessages: readonly string[];
   readonly activeProcesses: readonly ActiveChildInfo[];
