@@ -128,8 +128,6 @@ export interface DisplayLineOptions {
   readonly executionLabels?: ExecutionLabels;
 }
 
-export type StyledLineOptions = DisplayLineOptions;
-
 /** One styled fragment of a tool row. */
 interface ToolDisplaySpan {
   readonly text: string;
@@ -395,7 +393,7 @@ function toolRowOptions(
 
 function buildStyledLines(
   toolUse: NormalizedToolUse,
-  options: StyledLineOptions,
+  options: DisplayLineOptions,
   executionSummary: string | undefined,
 ): readonly ToolDisplayLine[] {
   const elide = options.elide !== false;
@@ -489,7 +487,7 @@ const styledLinesCache = new WeakMap<
 
 export function toolUseStyledLines(
   toolUse: NormalizedToolUse,
-  options: StyledLineOptions = {},
+  options: DisplayLineOptions = {},
 ): readonly ToolDisplayLine[] {
   const executionSummary =
     toolUse.toolName === 'executions' && options.executionLabels

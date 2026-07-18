@@ -72,6 +72,13 @@ function skillImportIssueSummary(issueCount: number): string | undefined {
   return formatResultCount(issueCount, 'import issue');
 }
 
+function skillIssueSummaryDetail(
+  result: DiscoverSkillSourcesResult,
+): React.JSX.Element | undefined {
+  const summary = skillImportIssueSummary(result.errors.length);
+  return summary ? <Text dimColor>{summary}</Text> : undefined;
+}
+
 export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
   return (
     <AsyncListForm<DiscoverSkillSourcesResult, SkillActivation>
@@ -82,22 +89,16 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
       isEmpty={(result) => result.skills.length === 0}
       availableRows={props.availableRows}
       description={<Text dimColor>Select a skill to activate it.</Text>}
-      detailFor={(result) => {
-        const summary = skillImportIssueSummary(result.errors.length);
-        return summary ? <Text dimColor>{summary}</Text> : undefined;
-      }}
+      detailFor={skillIssueSummaryDetail}
       detailRowsFor={(result) => (result.errors.length > 0 ? 1 : 0)}
-      compactDetailFor={(result) => {
-        const summary = skillImportIssueSummary(result.errors.length);
-        return (
-          <>
-            <Text dimColor wrap="truncate-end">
-              Select a skill to activate.
-            </Text>
-            {summary ? <Text dimColor>{summary}</Text> : null}
-          </>
-        );
-      }}
+      compactDetailFor={(result) => (
+        <>
+          <Text dimColor wrap="truncate-end">
+            Select a skill to activate.
+          </Text>
+          {skillIssueSummaryDetail(result)}
+        </>
+      )}
       emptyMessage="No discoverable skills found."
       emptyShowCloseHint={false}
       action="activate"

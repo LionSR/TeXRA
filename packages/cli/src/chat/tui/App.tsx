@@ -110,6 +110,16 @@ function lastStaticEntryId(slice: StreamSlice | undefined): string | undefined {
   )?.id;
 }
 
+// Jump-to-waiting: surface the newly focused stream's pending approval right
+// away instead of leaving it queued behind other streams' items. The root
+// row also owns session-wide (stream-less) approvals.
+function focusStreamAndPromoteApprovals(streamId: StreamTabId): void {
+  activeStreamIdSignal.set(streamId);
+  promoteApprovalsForStream(streamId, {
+    includeSessionWide: streamId === rootStreamIdSignal.get(),
+  });
+}
+
 export interface AppProps {
   readonly onSubmit: (line: string, mediaFiles?: readonly string[]) => void;
   readonly onKillExecution: (executionId: string) => void;
@@ -367,13 +377,7 @@ export function App(props: AppProps): React.JSX.Element {
   }, []);
   const focusSession = useCallback((streamId: StreamTabId) => {
     dispatchChildListSelection({ kind: 'focusStream', streamId });
-    activeStreamIdSignal.set(streamId);
-    // Jump-to-waiting: surface the focused stream's pending approval right
-    // away instead of leaving it queued behind other streams' items. The root
-    // row also owns session-wide (stream-less) approvals.
-    promoteApprovalsForStream(streamId, {
-      includeSessionWide: streamId === rootStreamIdSignal.get(),
-    });
+    focusStreamAndPromoteApprovals(streamId);
   }, []);
   const foregroundKind = foregroundSurfaceKind({
     activeFormOpen: activeForm !== undefined,
@@ -453,10 +457,7 @@ export function App(props: AppProps): React.JSX.Element {
         zeroBasedIndex: digit - 1,
       });
       if (!target) return false;
-      activeStreamIdSignal.set(target);
-      promoteApprovalsForStream(target, {
-        includeSessionWide: target === rootStreamIdSignal.get(),
-      });
+      focusStreamAndPromoteApprovals(target);
       return true;
     }
     return false;

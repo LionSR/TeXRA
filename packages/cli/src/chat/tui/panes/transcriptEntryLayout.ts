@@ -172,14 +172,12 @@ function entryLines(
           width: columns,
         });
       }
-      return mode === 'scrollback' ||
-        mode === 'scrollback-budget' ||
-        mode === 'bounded'
-        ? renderAnsiMarkdown(entry.text, {
-            width: columns,
-            colorEnabled,
-          }).split('\n')
-        : wrapWithPrefix(entry.text, columns, '', '');
+      // Every other mode ('scrollback' | 'scrollback-budget' | finalized
+      // 'bounded') renders through the Markdown pass.
+      return renderAnsiMarkdown(entry.text, {
+        width: columns,
+        colorEnabled,
+      }).split('\n');
     case 'tool': {
       const richProjection =
         mode === 'live' || mode === 'bounded' || mode === 'scrollback-budget';

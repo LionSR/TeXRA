@@ -1149,11 +1149,6 @@
     {
       "file": "src/tools/setup/platform.ts",
       "category": "types",
-      "name": "SetupSecretsAdapter"
-    },
-    {
-      "file": "src/tools/setup/platform.ts",
-      "category": "types",
       "name": "SetupTerminalAdapter"
     },
     {

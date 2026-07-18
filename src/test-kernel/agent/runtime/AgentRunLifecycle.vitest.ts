@@ -75,7 +75,6 @@ const channelTraceMocks = vi.hoisted(() => ({
 
 vi.mock('@agent/storage', () => ({
   finalizeExecution: storageMocks.finalizeExecution,
-  releaseOwnedExecutionLeaseBestEffort: vi.fn(async () => {}),
   synchronizeAgentResultOutcome: storageMocks.synchronizeAgentResultOutcome,
 }));
 

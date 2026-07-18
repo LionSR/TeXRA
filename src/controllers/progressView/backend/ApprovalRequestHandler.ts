@@ -54,7 +54,7 @@ export class ApprovalRequestHandler<
     try {
       this.deliver(id, entry);
     } catch (error) {
-      this.rollbackInitialDelivery(id, entry);
+      this.removeEntry(id, entry, false);
       throw error;
     }
   }
@@ -79,7 +79,7 @@ export class ApprovalRequestHandler<
       try {
         this.deliver(id, entry);
       } catch (error) {
-        this.rollbackInitialDelivery(id, entry);
+        this.removeEntry(id, entry, false);
         reject(error);
       }
     });
@@ -205,15 +205,6 @@ export class ApprovalRequestHandler<
       if (this.pending.get(id) === entry) this.delivered.delete(id);
       throw error;
     }
-  }
-
-  private rollbackInitialDelivery(
-    id: string,
-    entry: PendingRequest<T, Result>,
-  ): void {
-    if (this.pending.get(id) !== entry) return;
-    this.pending.delete(id);
-    this.delivered.delete(id);
   }
 
   private removeExisting(id: string, cause: string): void {

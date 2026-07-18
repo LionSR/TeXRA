@@ -43,6 +43,44 @@ function byteStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
   });
 }
 
+interface GateClient {
+  rpc(
+    name: string,
+    args: Record<string, unknown>,
+  ): Promise<{ data: Record<string, unknown>; error: null }>;
+}
+
+/** A mock relay RPC client that grants a slot and answers refresh with `refreshed`. */
+function createGateClient(
+  options: {
+    refreshed?: boolean;
+    onCall?: (name: string, args: Record<string, unknown>) => void;
+  } = {},
+): GateClient {
+  const { refreshed = true, onCall } = options;
+  return {
+    async rpc(name, args) {
+      onCall?.(name, args);
+      let data: Record<string, unknown>;
+      if (name === 'relay_request_gate') {
+        data = {
+          allowed: true,
+          slotId: args.p_slot_id,
+          activeRequests: 1,
+          concurrencyLimit: 2,
+          requestsThisMinute: 1,
+          rateLimitPerMinute: 20,
+        };
+      } else if (name === 'relay_request_refresh') {
+        data = { refreshed };
+      } else {
+        data = {};
+      }
+      return { data, error: null };
+    },
+  };
+}
+
 describe('relay free-tier request limits', () => {
   it('allows four concurrent free-tier requests', () => {
     assert.equal(getRequestLimits('free').concurrent, 4);
@@ -581,27 +619,9 @@ describe('relay free-tier request limits', () => {
 
   it('uses the same slot id for gate refresh and release RPCs', async () => {
     const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
-    const client = {
-      async rpc(name: string, args: Record<string, unknown>) {
-        calls.push({ name, args });
-        let data: Record<string, unknown>;
-        if (name === 'relay_request_gate') {
-          data = {
-            allowed: true,
-            slotId: args.p_slot_id,
-            activeRequests: 1,
-            concurrencyLimit: 2,
-            requestsThisMinute: 1,
-            rateLimitPerMinute: 20,
-          };
-        } else if (name === 'relay_request_refresh') {
-          data = { refreshed: true };
-        } else {
-          data = {};
-        }
-        return { data, error: null };
-      },
-    };
+    const client = createGateClient({
+      onCall: (name, args) => calls.push({ name, args }),
+    });
 
     const slot = await acquireRelayRequestSlot(client, crypto.randomUUID(), {
       ratePerMinute: 20,
@@ -624,26 +644,7 @@ describe('relay free-tier request limits', () => {
   });
 
   it('rejects refreshes when the request slot is already gone', async () => {
-    const client = {
-      async rpc(name: string, args: Record<string, unknown>) {
-        let data: Record<string, unknown>;
-        if (name === 'relay_request_gate') {
-          data = {
-            allowed: true,
-            slotId: args.p_slot_id,
-            activeRequests: 1,
-            concurrencyLimit: 2,
-            requestsThisMinute: 1,
-            rateLimitPerMinute: 20,
-          };
-        } else if (name === 'relay_request_refresh') {
-          data = { refreshed: false };
-        } else {
-          data = {};
-        }
-        return { data, error: null };
-      },
-    };
+    const client = createGateClient({ refreshed: false });
 
     const slot = await acquireRelayRequestSlot(client, crypto.randomUUID(), {
       ratePerMinute: 20,
@@ -736,27 +737,10 @@ describe('relay free-tier request limits', () => {
     vi.useFakeTimers();
     try {
       const calls: string[] = [];
-      const client = {
-        async rpc(name: string, args: Record<string, unknown>) {
-          calls.push(name);
-          let data: Record<string, unknown>;
-          if (name === 'relay_request_gate') {
-            data = {
-              allowed: true,
-              slotId: args.p_slot_id,
-              activeRequests: 1,
-              concurrencyLimit: 2,
-              requestsThisMinute: 1,
-              rateLimitPerMinute: 20,
-            };
-          } else if (name === 'relay_request_refresh') {
-            data = { refreshed: false };
-          } else {
-            data = {};
-          }
-          return { data, error: null };
-        },
-      };
+      const client = createGateClient({
+        refreshed: false,
+        onCall: (name) => calls.push(name),
+      });
       const slot = await acquireRelayRequestSlot(client, crypto.randomUUID(), {
         ratePerMinute: 20,
         concurrent: 2,

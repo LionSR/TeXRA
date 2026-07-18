@@ -73,9 +73,7 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
     options: { allDeleted: boolean },
   ): void {
     for (const stream of streams) {
-      releaseStreamResources(stream);
-      this.backupCleaner.clearStreamBackups(stream);
-      this.provider.webviewBridge.clearStream(stream);
+      this.cleanupDeletedStream(stream);
     }
     if (options.allDeleted) {
       cleanupUnscopedApprovals();
