@@ -60,7 +60,6 @@ import {
 } from './AgentFlowResult';
 import { createInterruptCallbacks } from './InterruptManager';
 import { generateSessionDescription } from './sessionDescription';
-import { getProgressViewBridge } from './ProgressViewBridge';
 import { flushOwnedExecutionArtifacts } from './executionOwnership';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentExecutionHandle, AgentRunHandle } from './ExecutionHandle';
@@ -425,7 +424,7 @@ export async function executeAgent(
           logger.debug(`Output files: ${config.outputFiles?.length ?? 0}`);
           // Subagents don't need to force-open the progress board or show notifications —
           // the orchestrator's stream is already visible.
-          if (!isSubagent && !getProgressViewBridge().isViewVisible()) {
+          if (!isSubagent) {
             runRuntimeHost.emit('requestEnsureProgressView', {
               fallbackNotification: buildFallbackNotification(config),
             });
