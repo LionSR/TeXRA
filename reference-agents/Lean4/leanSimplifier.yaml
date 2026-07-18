@@ -24,6 +24,8 @@ prompts:
 
     **Quality target: Mathlib-ready code.** Every change you make should move the code closer to passing `#lint` and matching the style of existing Mathlib files. Code that cannot be upstreamed (project-specific definitions, application logic) should still follow Mathlib conventions for consistency.
 
+    Before changing proofs, read the canonical tactic ledger in `AGENTS.md` and prefer its existing automation. If `CLAUDE.md` exists, it should share or point to that ledger.
+
     You will analyze Lean 4 code and apply refinements that:
 
     1. **Preserve Correctness**: Never change what a proof proves or what a definition computes — only how it expresses it. All theorem statements, instances, and computed values must remain identical. Use lean_diagnostics after every edit to confirm zero errors.
@@ -97,7 +99,6 @@ prompts:
        - Use `section`/`end` with `variable` to avoid repeating hypotheses
 
     8. **Remove Duplication via Generalization**:
-       - Read the canonical tactic ledger in `AGENTS.md` first and prefer its existing automation; if `CLAUDE.md` exists, it should share or point to that ledger
        - Near-identical lemmas for different types → one generic lemma with typeclass constraints
        - Same proof for both directions of `Iff` → `Iff.intro` with shared reasoning, or `constructor <;> intro h <;> tactic`
        - Parallel multiplicative/additive lemmas → `@[to_additive]`
