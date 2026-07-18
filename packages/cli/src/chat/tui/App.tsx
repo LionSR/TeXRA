@@ -424,11 +424,10 @@ export function App(props: AppProps): React.JSX.Element {
     approvalKind,
     kind: foregroundKind,
   });
-  const archiveInfoPane = useCallback(() => {
-    const current = infoPaneSignal.get();
-    if (!current) return;
+  const archiveInfoPane = useCallback((lines: readonly string[]) => {
+    if (infoPaneSignal.get()?.lines !== lines) return;
     closeInfoPane();
-    appendLocalAssistantTranscript(current.lines.join('\n'));
+    appendLocalAssistantTranscript(lines.join('\n'));
   }, []);
   function renderForegroundSurface(availableRows: number): React.ReactNode {
     switch (foregroundKind) {
@@ -459,6 +458,7 @@ export function App(props: AppProps): React.JSX.Element {
         return infoPane ? (
           <InfoPane
             availableRows={availableRows}
+            colorEnabled={props.colorEnabled}
             lines={infoPane.lines}
             onClose={closeInfoPane}
             onOverflow={archiveInfoPane}

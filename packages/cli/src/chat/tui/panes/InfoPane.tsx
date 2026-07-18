@@ -27,8 +27,9 @@ export interface InfoPaneProps {
   readonly title: string;
   readonly lines: readonly string[];
   readonly availableRows: number;
+  readonly colorEnabled?: boolean;
   readonly onClose: () => void;
-  readonly onOverflow: () => void;
+  readonly onOverflow: (lines: readonly string[]) => void;
 }
 
 /** Stateless, Esc-only reference text surface with a strict row budget. */
@@ -46,13 +47,17 @@ export function InfoPane(props: InfoPaneProps): React.JSX.Element | null {
   useEffect(() => {
     // Archive after rendering rather than mutating transcript/signal state in
     // the render path. The parent clears this pane in the same transition.
-    if (!fits) props.onOverflow();
+    if (!fits) props.onOverflow(props.lines);
   }, [fits, props.lines, props.onOverflow]);
 
   if (!fits) return null;
   return (
     <FormFrame title={props.title}>
-      <Markdown content={props.lines.join('\n')} width={textWidth} />
+      <Markdown
+        colorEnabled={props.colorEnabled}
+        content={props.lines.join('\n')}
+        width={textWidth}
+      />
     </FormFrame>
   );
 }
