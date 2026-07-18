@@ -55,7 +55,7 @@ function projectCliSessionFact(
   assertNever(fact, 'Unhandled CLI NDJSON session fact');
 }
 
-export function projectCliRunFact(
+function projectCliRunFact(
   streamId: StreamTabId,
   event: AgentEvent,
 ): CliProjectedNdjsonProgressEvent | undefined {
