@@ -47,5 +47,5 @@ export function openCanonicalSlashForm(
     openRegisteredCliSlashForm(registered, remainder, onPersist)
   )
     return;
-  openCliSlashCommandForm(commandName, remainder);
+  openCliSlashCommandForm(commandName, remainder, onPersist);
 }

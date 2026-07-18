@@ -17,6 +17,7 @@ import {
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,
   type SlashCommandContext,
@@ -116,7 +117,14 @@ export async function applyCliModelSelection(
 
   await activeFlow.switchModel(nextModel);
   setCliSessionModelOverride(nextModel);
-  await setCliHelperModel(nextModel);
+  try {
+    await setCliHelperModel(nextModel);
+  } catch (error: unknown) {
+    appendLocalAssistantTranscript(
+      `Model switched to ${nextModel}. Could not persist it as the default helper model: ${toErrorMessage(error)}`,
+    );
+    return;
+  }
 
   appendLocalAssistantTranscript(
     `Model switched to ${nextModel}. Future turns will use it.`,

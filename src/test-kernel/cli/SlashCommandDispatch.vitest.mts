@@ -166,6 +166,19 @@ describe('handleTuiSlashCommand', () => {
     expect(activeForm.get()?.commandName).toBe('login');
   });
 
+  it('opens /approval status without an early transcript echo', async () => {
+    registerBuiltinSlashCommands();
+
+    const handled = await handleTuiSlashCommand(
+      '/approval status',
+      createContext(createSession()),
+    );
+
+    expect(handled).toBe(true);
+    expect(activeForm.get()?.commandName).toBe('approval');
+    expect(localEntries()).toEqual([]);
+  });
+
   it('opens the masked provider-key form through /key and /keys', async () => {
     registerBuiltinSlashCommands();
     const context = createContext(createSession());

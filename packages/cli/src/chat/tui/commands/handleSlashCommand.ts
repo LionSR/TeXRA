@@ -88,15 +88,18 @@ export async function handleTuiSlashCommand(
   const rest = parsed.remainder.trim();
   const registered = findSlashCommand(command) ?? redactedIntent;
   const canonicalCommand = registered?.name ?? command;
-  if (rest && registered?.argHandler) {
-    await runGuardedSlashCommand(line, registered, () =>
-      registered.argHandler?.(rest, context),
+  const opensRegisteredForm =
+    registered?.formName !== undefined &&
+    (!rest || registered.formRemainders?.includes(rest.toLowerCase()));
+  if (opensRegisteredForm) {
+    openCanonicalSlashForm(registered.formName, registered, rest, () =>
+      appendSlashCommandEcho(line),
     );
     return true;
   }
-  if (!rest && registered?.formName) {
-    openCanonicalSlashForm(registered.formName, registered, rest, () =>
-      appendSlashCommandEcho(line),
+  if (rest && registered?.argHandler) {
+    await runGuardedSlashCommand(line, registered, () =>
+      registered.argHandler?.(rest, context),
     );
     return true;
   }

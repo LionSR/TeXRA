@@ -379,6 +379,24 @@ describe('slashRegistry', () => {
     expect(events).toEqual(['echo', 'outcome']);
   });
 
+  it('preserves deferred echo through the command-name form helper', async () => {
+    const events: string[] = [];
+    registerBuiltinSlashCommands({
+      onModelSelect: () => {
+        events.push('outcome');
+      },
+    });
+
+    openCliSlashCommandForm('model', '', () => events.push('echo'));
+    const modelNode = renderOpenForm<{
+      onSelect?: (value: string) => void;
+    }>();
+    modelNode.props?.onSelect?.('gpt55');
+    await settleFormSelection();
+
+    expect(events).toEqual(['echo', 'outcome']);
+  });
+
   it('routes model picker selection failures to the shared error handler', async () => {
     const errors: string[] = [];
     registerBuiltinSlashCommands({

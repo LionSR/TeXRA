@@ -38,6 +38,7 @@ import {
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen,
 } from '../state/cliState';
+import { appendLocalUserTranscript } from '../state/transcript';
 import { useSignal } from '../state/useSignal';
 import type { CursorEdit } from '../input/textInputEditing';
 import type { InputHistory } from '../history/inputHistory';
@@ -287,10 +288,20 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       remainder: string,
     ): void => {
       if (cmd.formComponent) {
+        const commandLine = slashSubmitText(
+          draftValueRef.current,
+          cmd.name,
+          remainder,
+          typedName,
+        );
         // Structured forms own the screen — clear the input and let
         // the active-form signal mount the component (see App.tsx).
         clearDraft();
-        openRegisteredCliSlashForm(cmd, remainder);
+        openRegisteredCliSlashForm(cmd, remainder, () => {
+          if (!shouldRedactSlashInput(commandLine)) {
+            appendLocalUserTranscript(commandLine.trim());
+          }
+        });
         return;
       }
       if (intent === 'submit') {

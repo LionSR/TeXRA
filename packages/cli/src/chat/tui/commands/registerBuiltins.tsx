@@ -440,6 +440,7 @@ export function registerBuiltinSlashCommands(options?: {
     echo: 'ifPersists',
     argHandler: applyCliApprovalPolicySelection,
     formName: 'approval',
+    formRemainders: ['status'],
     formComponent: ApprovalPolicyFormAdapter,
     formEscapeAction: 'cancel',
   });
@@ -518,7 +519,10 @@ export function registerBuiltinSlashCommands(options?: {
             openExternalForm: (formName) =>
               openCliSlashCommandForm(formName, ''),
             onClose: () => props.onDone(undefined),
-            onError: options?.onError,
+            onError: async (error) => {
+              props.onPersist?.();
+              await options?.onError?.(error);
+            },
             onApiModePersonal: () => onModelAccessSelect('personal'),
           })}
         />

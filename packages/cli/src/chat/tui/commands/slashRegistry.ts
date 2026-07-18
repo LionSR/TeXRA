@@ -39,6 +39,8 @@ export interface SlashCommand {
   ) => void | Promise<void>;
   /** Canonical structured form opened when the remainder is empty. */
   readonly formName?: string;
+  /** Additional exact remainders that open the canonical form. */
+  readonly formRemainders?: readonly string[];
   /**
    * Fire-and-forget handler. Receives the raw remainder of the command line
    * (everything after the command name + whitespace).
