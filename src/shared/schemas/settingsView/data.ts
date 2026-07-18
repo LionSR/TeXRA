@@ -501,7 +501,6 @@ export const UpdateGoalListMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST),
   items: z.array(GoalSchema),
 });
-export type UpdateGoalListMessage = z.infer<typeof UpdateGoalListMessageSchema>;
 
 /**
  * Outbound: sent once at webview-ready with the commands this host's inbound
