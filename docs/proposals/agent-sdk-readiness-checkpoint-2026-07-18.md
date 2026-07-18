@@ -198,16 +198,25 @@ Several map onto already-tracked standing items (noted).
    `createChannelWriter`). Already tracked (`logger-simplification-feasibility.md`).
 
 6. **The core cycle flows reach into the ambient runtime + auth singletons**
-   _(strategic; documented + defended in `core/README.md`, not a defect)_. The
-   core reader's central SDK-readiness finding: `createResponseCycleFlow()` /
+   _(strategic; partly documented, not a defect — but the coverage gap is real)_.
+   The core reader's central SDK-readiness finding: `createResponseCycleFlow()` /
    `createToolUseRoundFlow()` cannot be imported and driven in isolation
-   because `CommonCycleTypes.ts:104,124`, `ResponseCycleFlow.ts:215`, and
-   `RetryState.ts:275-300,126` reach `useLaunchRunContext()` and
-   `@auth/SupabaseClient` directly. `core/README.md:29-41` explicitly documents
-   and accepts these as host-agnostic edges — so this is policy, not a bug — but
-   it is the load-bearing obstacle to an importable-and-runnable cycle. The
-   fix, _if/when_ the SDK boundary hardens, is to thread `runScope` + a
-   `refreshCredential` port through the services object; strategic, gated.
+   because `CommonCycleTypes.ts:103,121`, `ResponseCycleFlow.ts:215`, and
+   `RetryState.ts:275,126` reach `useLaunchRunContext()` and
+   `@auth/SupabaseClient` directly. **Accuracy correction (Codex review, P2):**
+   `core/README.md:29-41` blesses a _narrower_ set than an earlier draft of this
+   entry implied — only the **`type`-only** `AgentRuntimeHost`/`StreamStatusMachine`
+   imports in `BaseFlowServices.ts`/`RetryState.ts` and `RetryState.ts`'s
+   `@auth/SupabaseClient` auth-refresh call. The **value** `useLaunchRunContext()`
+   edges in `CommonCycleTypes.ts` / `ResponseCycleFlow.ts` (and
+   `RetryState.ts:275`'s `runScope` read) are **not** documented there, so they
+   are a genuinely _undocumented_ ambient-runtime coupling — treat them as a real
+   boundary gap to close, not a waived one. All of it stays host-agnostic (no
+   `vscode` / `packages/*`), but it is the load-bearing obstacle to an
+   importable-and-runnable cycle. The fix, _if/when_ the SDK boundary hardens, is
+   to thread `runScope` + a `refreshCredential` port through the services object
+   (and to extend the `core/README.md` note to cover — or forbid — the
+   `useLaunchRunContext()` value edges); strategic, gated.
 
 7. **Minor structural / correctness notes** _(LOW; record only)_.
    (a) `support/AnthropicStreamHandler.ts` (Anthropic-only) and
