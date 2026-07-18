@@ -149,11 +149,16 @@ function SessionRow({
   // and last the pending-approval kind. The metadata column never shrinks.
   const approvalSuffix = pendingApprovalRowSuffix(pendingKinds);
   const roundLabel = formatRoundStageLabel(session.slice?.roundStage);
+  // The resolved model is per-agent identity (a workflow run's grandchildren
+  // can each resolve a different model); the list-root row is the conversation
+  // itself, whose model already rides the status bar.
+  const modelLabel = isListRoot ? undefined : session.slice?.model;
   const metadata = metadataColumn
     ? childRowMetadataText({
         elapsed,
         outputTokens: (session.slice?.cumulativeUsage ?? session.slice?.usage)
           ?.outputTokens,
+        toolCallCount: session.slice?.conversation?.toolCallCount,
       })
     : undefined;
   // Child rows summarize what the subagent last said; the list-root row is
@@ -183,6 +188,7 @@ function SessionRow({
           {statusLabel ? ` ${statusLabel}` : ''}
           {approvalSuffix ? ` · ${approvalSuffix}` : ''}
           {roundLabel ? ` · ${roundLabel}` : ''}
+          {modelLabel ? ` · ${modelLabel}` : ''}
           {!metadataColumn && elapsed ? ` · ${elapsed}` : ''}
         </Text>
       </Box>
