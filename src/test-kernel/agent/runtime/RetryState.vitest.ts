@@ -24,7 +24,7 @@ import type {
 } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
-import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   noopAgentRuntimeHost,
@@ -50,7 +50,6 @@ interface TestRetryServices {
   config: { model: string };
   streamId: StreamTabId;
   runtimeHost: AgentRuntimeHost;
-  streamStatus: StreamStatusMachine;
   logger: AgentTrace;
   setAbortController: (ac: AbortController | null) => void;
 }
@@ -85,7 +84,6 @@ function createRetryNode(streamId: StreamTabId): RetryNodeKit {
     config: { model: 'copilot:sonnet46' },
     streamId,
     runtimeHost: noopAgentRuntimeHost,
-    streamStatus,
     logger: noopTrace,
     setAbortController: vi.fn(),
   });
@@ -94,6 +92,7 @@ function createRetryNode(streamId: StreamTabId): RetryNodeKit {
 
 async function withRetryRunContext<T>(
   streamId: StreamTabId,
+  streamStatus: StreamStatusMachine,
   requestRetry: RetryNodeKit['requestRetry'],
   fn: () => T | Promise<T>,
 ): Promise<T> {
@@ -105,10 +104,13 @@ async function withRetryRunContext<T>(
       streamId,
       executionId: `${streamId}-execution` as ExecutionId,
       agentName: 'retry-test',
-      session: sessionWithInteractions({
-        requestRetry,
-        cancel: () => {},
-      }),
+      session: sessionWithInteractions(
+        {
+          requestRetry,
+          cancel: () => {},
+        },
+        streamStatus,
+      ),
     }),
   });
   return await withRunContext(context, fn);
@@ -234,7 +236,7 @@ describe('RetryState', () => {
     expect(node.shouldAutoRetry(overflow)).toBe(false);
   });
 
-  it('updates the injected stream status owner during manual retry', async () => {
+  it('updates the run session status owner during manual retry', async () => {
     const streamId = 'retry-state-owner' as StreamTabId;
     const { node, streamStatus, requestRetry } = createRetryNode(streamId);
 
@@ -242,20 +244,11 @@ describe('RetryState', () => {
 
     try {
       seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
-      seedStreamStatusForTest(
-        defaultSession().status,
-        streamId,
-        STREAM_PHASE.CANCELLED,
-      );
-
-      await withRetryRunContext(streamId, requestRetry, () =>
+      await withRetryRunContext(streamId, streamStatus, requestRetry, () =>
         node.promptFor(new Error('temporary provider failure')),
       );
 
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);
-      expect(defaultSession().status.get(streamId)).toBe(
-        STREAM_PHASE.CANCELLED,
-      );
       expect(requestRetry).toHaveBeenCalledWith(
         expect.objectContaining({
           streamId,
@@ -266,7 +259,6 @@ describe('RetryState', () => {
       );
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);
-      clearStreamStatusForTest(defaultSession().status, streamId);
     }
   });
 
@@ -275,10 +267,10 @@ describe('RetryState', () => {
     const session = createTestSession();
     const recording = createRecordingHost();
     session.useHostInteractions(recording.interactions);
-    const { node, streamStatus } = createRetryNode(streamId);
+    const { node } = createRetryNode(streamId);
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
+      seedStreamStatusForTest(session.status, streamId, STREAM_STATUS.RUNNING);
 
       const prompt = withSessionRetryRunContext(
         streamId,
@@ -298,10 +290,9 @@ describe('RetryState', () => {
         shouldRetry: true,
         userCancelled: false,
       });
-      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);
+      expect(session.status.get(streamId)).toBe(STREAM_STATUS.RUNNING);
     } finally {
       session.dispose();
-      clearStreamStatusForTest(streamStatus, streamId);
     }
   });
 
@@ -316,7 +307,7 @@ describe('RetryState', () => {
       try {
         seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
 
-        await withRetryRunContext(streamId, requestRetry, () =>
+        await withRetryRunContext(streamId, streamStatus, requestRetry, () =>
           node.promptFor(new Error('temporary provider failure')),
         );
 
@@ -342,6 +333,7 @@ describe('RetryState', () => {
 
       const shouldRetry = await withRetryRunContext(
         streamId,
+        streamStatus,
         requestRetry,
         () => node.retryPrompt(undefined, error),
       );

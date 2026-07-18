@@ -57,6 +57,7 @@ function createServices(interrupted = false) {
     config: {},
     workspace: {},
     logger: { info: vi.fn() },
+    onRoundFinalized: () => {},
     modelHandler: {
       checkStopConditions,
       shouldContinue,

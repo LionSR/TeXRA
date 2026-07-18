@@ -26,6 +26,7 @@ import type {
   SessionFact,
 } from '@agent/runtime/SessionEventHub';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
@@ -359,12 +360,14 @@ export function createRecordingHost(): {
  */
 export function sessionWithInteractions(
   interactions: HostInteractions | undefined,
+  status = new StreamStatusMachine(),
 ): SessionHandle {
   const owner = new SessionHostInteractions();
   if (interactions) owner.use(interactions);
   return {
     interactions: owner,
     approvals: createSessionApprovals(),
+    status,
   } as unknown as SessionHandle;
 }
 
@@ -383,6 +386,7 @@ export function withTestRunContext<T>(
   options: {
     approvalPromptsUnavailable?: boolean;
     runtimeUnavailableTools?: readonly string[];
+    sessionStatus?: StreamStatusMachine;
     stopAfterCycle?: boolean;
   } = {},
 ): Promise<T> {
@@ -393,11 +397,16 @@ export function withTestRunContext<T>(
         streamId: streamId as StreamTabId,
         executionId: 'deadbeef' as ExecutionId,
         agentName: 'test-agent',
-        session: sessionWithInteractions(interactionsByHost.get(runtimeHost)),
+        session: sessionWithInteractions(
+          interactionsByHost.get(runtimeHost),
+          options.sessionStatus,
+        ),
       }),
       modelSource: 'live',
       getModel: () => undefined,
-      ...options,
+      approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+      runtimeUnavailableTools: options.runtimeUnavailableTools,
+      stopAfterCycle: options.stopAfterCycle,
     }),
     fn,
   ) as Promise<T>;

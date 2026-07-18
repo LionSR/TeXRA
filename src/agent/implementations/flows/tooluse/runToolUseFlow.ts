@@ -223,10 +223,9 @@ export async function runToolUseFlow<C = unknown>(
   const services: ToolUseServices<C> = {
     ...input,
     session: sessionLifecycle,
-    resolvedTools,
+    setting: { ...setting, tools: resolvedTools },
     toolRegistry: registry,
     snapshot: input.resumeSnapshot ?? null,
-    onRoundFinalized: input.onRoundFinalized ?? (async () => {}),
     persistTodos: (todos) => kv.writeTodos(todos),
     fileService: new TaskRunFileService(executionId),
   };

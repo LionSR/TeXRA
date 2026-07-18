@@ -85,6 +85,7 @@ function dispatchHarness(opts: HarnessOptions) {
     toolRegistry: new MapToolRegistry(opts.tools),
     checkInterruption: opts.checkInterruption ?? (() => false),
     setAbortController: opts.setAbortController ?? (() => {}),
+    onRoundFinalized: () => {},
     run: AgentRunStateSnapshotSchema.parse({}),
     workspace: AgentWorkspaceState.create(),
   } as unknown as ToolUseRoundServices<unknown>;

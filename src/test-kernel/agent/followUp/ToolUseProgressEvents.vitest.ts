@@ -100,9 +100,9 @@ describe('tool-use progress events', () => {
       runtimeHost: host,
       logger,
       modelHandler: { getClient: vi.fn() },
+      onRoundFinalized: () => {},
       config: { model: 'test-model', agent: 'test-agent' },
       setting: { tools: [] },
-      resolvedTools: [],
     } as unknown as ToolUseServices);
 
     try {
@@ -200,9 +200,9 @@ describe('tool-use round outcome persistence (#8023)', () => {
         runtimeHost: host,
         logger,
         modelHandler: { getClient: vi.fn() },
+        onRoundFinalized: () => {},
         config: { model: 'test-model', agent: 'test-agent' },
         setting: { tools: [] },
-        resolvedTools: [],
       } as unknown as ToolUseServices);
 
       try {

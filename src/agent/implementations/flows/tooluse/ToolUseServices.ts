@@ -1,12 +1,8 @@
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
-import type {
-  BaseFlowContextInit,
-  RoundFinalizedCallback,
-} from '@agent/core/flows/BaseFlowServices';
+import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
-import type { ToolDefinition } from '@model';
 import type { SubagentProgressUpdate, TodoItem } from '@shared/schemas';
 import type { TaskRunFileService } from '@utils/files';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
@@ -16,10 +12,8 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly session: IToolUseSession;
   /** Run-storage-aware file locator; used to attach follow-up media files. */
   readonly fileService: TaskRunFileService;
-  readonly resolvedTools: ToolDefinition[];
   readonly toolRegistry: IToolRegistry;
   readonly snapshot: ToolUseSessionSnapshot | null;
-  readonly onRoundFinalized: RoundFinalizedCallback;
   readonly onFollowUpConsumed?: () => void;
   readonly attachedMemoryMisses?: readonly AttachedMemoryMiss[];
   readonly onProgress?: (update: SubagentProgressUpdate) => void;

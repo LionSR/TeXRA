@@ -46,8 +46,8 @@ export interface ModelInvocationConfig<TShared, TServices> {
 /**
  * Only the services this node and its `RetryableInvocationNode` base class
  * actually read: the model handler, logger, setting (temperature/tools),
- * config (for `saveCycleDebug`'s log context), and the retry machinery's
- * `streamStatus`/`setAbortController`, plus the live model client. Picking
+ * config (for `saveCycleDebug`'s log context), the retry machinery's
+ * `setAbortController`, and the live model client. Picking
  * from `AgentCore`/`BaseFlowContextInit` instead of requiring the literal
  * type keeps every existing caller, which passes the full services bag,
  * satisfying this narrower shape structurally.
@@ -56,7 +56,7 @@ type InvocationServices = Pick<
   AgentCore,
   'modelHandler' | 'logger' | 'setting' | 'config'
 > &
-  Pick<BaseFlowContextInit, 'setAbortController' | 'streamStatus'> & {
+  Pick<BaseFlowContextInit, 'setAbortController'> & {
     readonly client: unknown;
     readonly refreshClient?: () => Promise<void>;
   };

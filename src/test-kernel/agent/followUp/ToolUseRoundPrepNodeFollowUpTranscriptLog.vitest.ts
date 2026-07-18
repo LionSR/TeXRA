@@ -20,6 +20,7 @@ function buildServices(
       capabilities: {},
     } as never,
     fileService: { createLocation: vi.fn() } as never,
+    onRoundFinalized: () => {},
     toolRegistry: {} as never,
     ...overrides,
   } as ToolUseRoundServices<unknown>;

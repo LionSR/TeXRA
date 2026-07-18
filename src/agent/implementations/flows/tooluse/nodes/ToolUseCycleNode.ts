@@ -60,7 +60,7 @@ export class ToolUseCycleNode<C> extends Node<
   }
 
   async exec(prepRes: CyclePrepResult): Promise<ToolUseCycleOutcome> {
-    const { setting, resolvedTools, modelHandler } = this.services;
+    const { modelHandler } = this.services;
     const { runScope } = useLaunchRunContext();
     const { streamId } = runScope;
 
@@ -93,7 +93,6 @@ export class ToolUseCycleNode<C> extends Node<
       await withModelClient(
         {
           ...this.services,
-          setting: { ...setting, tools: resolvedTools },
           run: prepRes.runState,
           workspace: prepRes.workspaceState,
         },
