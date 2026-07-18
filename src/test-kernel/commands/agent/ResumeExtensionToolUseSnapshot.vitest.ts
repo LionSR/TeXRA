@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   getToolUsePersistenceEnabled: vi.fn(() => true),
   registerCommand: vi.fn(),
+  retrieveSessionResumeData: vi.fn(),
   resumeQueuedToolUseSnapshot: vi.fn(async () => true),
   showWarningMessage: vi.fn(),
 }));
@@ -32,6 +33,9 @@ vi.mock('@utils/config', async (importActual) => ({
 }));
 vi.mock('@agent/runtime/resumeQueuedToolUse', () => ({
   resumeQueuedToolUseSnapshot: mocks.resumeQueuedToolUseSnapshot,
+}));
+vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
+  retrieveSessionResumeData: mocks.retrieveSessionResumeData,
 }));
 
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
@@ -53,6 +57,7 @@ describe('resumeExtensionToolUseSnapshot', () => {
     mocks.registerCommand.mockReset();
     mocks.resumeQueuedToolUseSnapshot.mockReset();
     mocks.resumeQueuedToolUseSnapshot.mockResolvedValue(true);
+    mocks.showWarningMessage.mockReset();
     mocks.showWarningMessage.mockReset();
   });
 
@@ -84,7 +89,11 @@ describe('resumeExtensionToolUseSnapshot', () => {
 
 describe('registerResumeAgentCommand', () => {
   beforeEach(() => {
+    mocks.getToolUsePersistenceEnabled.mockReturnValue(true);
     mocks.registerCommand.mockReset();
+    mocks.retrieveSessionResumeData.mockReset();
+    mocks.resumeQueuedToolUseSnapshot.mockReset();
+    mocks.resumeQueuedToolUseSnapshot.mockResolvedValue(true);
   });
 
   it('stores the command disposable on the extension context', () => {
@@ -101,5 +110,79 @@ describe('registerResumeAgentCommand', () => {
       expect.any(Function),
     );
     expect(context.subscriptions).toEqual([disposable]);
+  });
+
+  it('resolves an existing v2-shaped command payload to canonical resume data', async () => {
+    const canonical = snapshot();
+    const oldSnapshot = {
+      version: 2,
+      streamId: canonical.streamId,
+      executionId: canonical.executionId,
+      agentConfig: canonical.agentConfig,
+      messages: [],
+      run: {},
+      workspace: {},
+      user: { input: {}, transient: {} },
+      lastUpdated: 0,
+    };
+    mocks.retrieveSessionResumeData.mockResolvedValue(canonical);
+    mocks.registerCommand.mockReturnValue({ dispose: vi.fn() });
+    registerResumeAgentCommand({ subscriptions: [] } as never);
+    const handler = mocks.registerCommand.mock.calls[0]?.[1] as (
+      payload: unknown,
+    ) => Promise<{ success: boolean }>;
+
+    await expect(
+      handler({ snapshot: oldSnapshot, followUp: 'Continue.' }),
+    ).resolves.toEqual({ success: true });
+
+    expect(mocks.retrieveSessionResumeData).toHaveBeenCalledExactlyOnceWith(
+      canonical.streamId,
+      canonical.executionId,
+      canonical.agentConfig,
+    );
+    expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledWith(
+      canonical.streamId,
+      canonical,
+      expect.any(Object),
+      expect.objectContaining({
+        extraFollowUps: [{ text: 'Continue.', origin: 'user' }],
+      }),
+    );
+  });
+
+  it('does not read resume storage when persistence is disabled', async () => {
+    mocks.getToolUsePersistenceEnabled.mockReturnValue(false);
+    mocks.registerCommand.mockReturnValue({ dispose: vi.fn() });
+    registerResumeAgentCommand({ subscriptions: [] } as never);
+    const handler = mocks.registerCommand.mock.calls[0]?.[1] as (
+      payload: unknown,
+    ) => Promise<{ success: boolean }>;
+    const canonical = snapshot();
+
+    await expect(handler({ snapshot: canonical })).resolves.toEqual({
+      success: false,
+    });
+    expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
+    expect(mocks.resumeQueuedToolUseSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('reports retrieval failures through the existing resume warning', async () => {
+    mocks.retrieveSessionResumeData.mockRejectedValue(
+      new Error('storage unavailable'),
+    );
+    mocks.registerCommand.mockReturnValue({ dispose: vi.fn() });
+    registerResumeAgentCommand({ subscriptions: [] } as never);
+    const handler = mocks.registerCommand.mock.calls[0]?.[1] as (
+      payload: unknown,
+    ) => Promise<{ success: boolean }>;
+
+    await expect(handler({ snapshot: snapshot() })).resolves.toEqual({
+      success: false,
+    });
+    expect(mocks.showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to resume tool-use session'),
+    );
+    expect(mocks.resumeQueuedToolUseSnapshot).not.toHaveBeenCalled();
   });
 });

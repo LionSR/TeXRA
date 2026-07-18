@@ -68,6 +68,8 @@ export interface RunToolUseFlowInput<
 > extends BaseFlowContextInit<C> {
   setting: AgentToolUseSetting;
   resumeShared?: PreparedShared | null;
+  /** Persisted shared value from the retrieval read, used as a freshness token. */
+  resumeSourceShared?: unknown;
   /** One batch already drained by an external child-turn owner. */
   drainedFollowUps?: readonly FollowUpQueueBatchItem[];
   /**
@@ -376,6 +378,13 @@ export async function runToolUseFlow<C = unknown>(
 
     if (flowRecord && input.resumeShared) {
       logger.debug('Resuming tool-use flow from persistence');
+      // Retrieval owns the single migration/validation boundary. The second
+      // read may be self-healed only when it still matches the exact value
+      // retrieval observed; any intervening drift must fail loudly instead of
+      // being overwritten by the earlier canonical copy.
+      if (!isDeepStrictEqual(flowRecord.shared, input.resumeSourceShared)) {
+        throw new PersistedFlowStateError(executionId, 'invalid-shared');
+      }
       const resumedShared: PreparedShared = {
         ...input.resumeShared,
         ...(input.resumeShared.modelHandlerCompatibilityKey === undefined &&

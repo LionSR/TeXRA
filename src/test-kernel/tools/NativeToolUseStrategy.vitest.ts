@@ -374,17 +374,18 @@ describe('NativeToolUseStrategy', () => {
         return waitingTurn('initial response');
       },
     );
-    const config = { agentCategory: 'toolUse' };
-    const snapshot = {
+    const config = AgentConfigSchema.parse({
+      agent: 'review',
+      model: 'gpt5',
+      agentCategory: 'toolUse',
+    });
+    const resume = createToolUseResumeData({
       agentConfig: config,
       executionId,
-      messages: [],
-    };
-    mocks.readConfig.mockResolvedValue(config);
-    mocks.retrieveSessionResumeData.mockResolvedValue({
-      type: 'toolUse',
-      snapshot,
+      streamId: childStreamId,
     });
+    mocks.readConfig.mockResolvedValue(config);
+    mocks.retrieveSessionResumeData.mockResolvedValue(resume);
     mocks.resumeToolUseFromSnapshot.mockImplementation(
       async (_snapshot, _host, options) => {
         if (mocks.resumeToolUseFromSnapshot.mock.calls.length > 1) {
@@ -425,6 +426,9 @@ describe('NativeToolUseStrategy', () => {
       await sleep(50);
 
       expect(mocks.resumeToolUseFromSnapshot).toHaveBeenCalledTimes(1);
+      expect(mocks.resumeToolUseFromSnapshot.mock.calls[0]?.[0]).toEqual(
+        resume,
+      );
       expect(
         mocks.resumeToolUseFromSnapshot.mock.calls[0]?.[2].drainedFollowUps,
       ).toEqual([

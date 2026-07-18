@@ -116,17 +116,20 @@ function createTaggedModelHandler(
 function buildToolUseResumeData(
   executionId: ExecutionId,
   streamId: StreamTabId,
+  sourceShared?: unknown,
 ): ToolUseResumeData {
+  const shared = {
+    messages: [],
+    shouldSkipCycle: false,
+    stateSlices: defaultStateSlices(),
+  };
   return {
     type: 'toolUse',
     executionId,
     streamId,
     agentConfig: CONFIG,
-    shared: {
-      messages: [],
-      shouldSkipCycle: false,
-      stateSlices: defaultStateSlices(),
-    },
+    shared,
+    sourceShared: sourceShared ?? structuredClone(shared),
   };
 }
 
@@ -179,7 +182,10 @@ async function runPersistedFlow(
           },
           setAbortController: () => {},
           onRoundFinalized: () => {},
-          ...(resume !== undefined && { resumeShared: resume.shared }),
+          ...(resume !== undefined && {
+            resumeShared: resume.shared,
+            resumeSourceShared: resume.sourceShared,
+          }),
           isSubagent: options.isSubagent ?? true,
           onIdle: options.onIdle,
           takePendingFollowUps: options.takePendingFollowUps,
@@ -608,6 +614,20 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
   it.each([
     {
+      name: 'invalid shared state',
+      reason: 'invalid-shared',
+      stored: {
+        flowName: 'texra',
+        shared: {
+          messages: [],
+          shouldSkipCycle: 'false',
+          stateSlices: null,
+        },
+        createdAt: '2026-01-01T00:00:00.000Z',
+        nodes: [],
+      },
+    },
+    {
       name: 'missing shared state',
       reason: 'missing-shared',
       stored: {
@@ -654,7 +674,9 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       const expectedError = {
         name: PersistedFlowStateError.name,
         reason,
-        cause: expect.objectContaining({ name: 'ZodError' }),
+        ...(reason !== 'invalid-shared' && {
+          cause: expect.objectContaining({ name: 'ZodError' }),
+        }),
       };
       await expect(
         runPersistedFlow(executionId, streamId, snapshot),
@@ -801,7 +823,6 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   it('preserves an established flow when provider cancellation rejects the run', async () => {
     const executionId = 'abc-interrupted-provider' as ExecutionId;
     const streamId = 'chat@gpt54#abc-interrupted-provider' as StreamTabId;
-    const snapshot = buildToolUseResumeData(executionId, streamId);
     const store = getExecutionStore(executionId);
     let flowContext: ToolUseSetupContext | undefined;
     const stored = {
@@ -814,6 +835,11 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       createdAt: new Date().toISOString(),
       nodes: [],
     };
+    const snapshot = buildToolUseResumeData(
+      executionId,
+      streamId,
+      stored.shared,
+    );
     await store.write(flowKey(executionId), stored);
     const abortError = new DOMException(
       'This operation was aborted',
@@ -908,9 +934,8 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   it('preserves late input when an orphaned host-resumed subagent is cancelled mid-turn', async () => {
     const executionId = 'abc-cancel-active-followup' as ExecutionId;
     const streamId = 'chat@gpt54#abc-cancel-active-followup' as StreamTabId;
-    const snapshot = buildToolUseResumeData(executionId, streamId);
     const session = createTestSession();
-    await getExecutionStore(executionId).write(flowKey(executionId), {
+    const stored = {
       flowName: 'texra',
       params: {},
       shared: {
@@ -919,7 +944,13 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       },
       createdAt: new Date().toISOString(),
       nodes: [],
-    });
+    };
+    const snapshot = buildToolUseResumeData(
+      executionId,
+      streamId,
+      stored.shared,
+    );
+    await getExecutionStore(executionId).write(flowKey(executionId), stored);
     let flowContext: ToolUseSetupContext | undefined;
     const abortError = new DOMException(
       'This operation was aborted',

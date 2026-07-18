@@ -295,6 +295,14 @@ function makeResolvedResume() {
   };
 }
 
+function makeAutoResumeData() {
+  return createToolUseResumeData({
+    executionId: 'exec-1' as ExecutionId,
+    streamId: 'stream-1' as StreamTabId,
+    agentConfig: makeResumeConfig(),
+  });
+}
+
 function makeInterruptedController(
   runPromise: Promise<void>,
   runCompleted: boolean,
@@ -315,7 +323,7 @@ function makeInterruptedController(
     async (
       _streamId: StreamTabId,
       ports: { resumeToolUse(snapshot: unknown): Promise<boolean> },
-    ) => ports.resumeToolUse({ version: 2 }),
+    ) => ports.resumeToolUse(makeAutoResumeData()),
   );
   return {
     ctrl: createChatSessionController(makeInit({ session, snapshotStore })),
@@ -342,7 +350,7 @@ async function expectInterruptedRetry(
     async (
       _streamId: StreamTabId,
       ports: { resumeToolUse(snapshot: unknown): Promise<boolean> },
-    ) => ports.resumeToolUse({ version: 2 }),
+    ) => ports.resumeToolUse(makeAutoResumeData()),
   );
   const retry = ctrl.admitInterruptedFollowUp({ text: 'Retry.' });
   expect(retry.kind).toBe('accepted');
@@ -350,7 +358,7 @@ async function expectInterruptedRetry(
   await expect(retry.completion).resolves.toBe(true);
   expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledWith(
     'stream-1',
-    { version: 2 },
+    makeAutoResumeData(),
     expect.any(Object),
     expect.objectContaining({
       extraFollowUps: expectedTexts.map((text) => ({ text })),
@@ -964,7 +972,7 @@ describe('createChatSessionController', () => {
       async (
         _streamId: StreamTabId,
         ports: { resumeToolUse(snapshot: unknown): Promise<boolean> },
-      ) => ports.resumeToolUse({ version: 2 }),
+      ) => ports.resumeToolUse(makeAutoResumeData()),
     );
     mocks.resumeQueuedToolUseSnapshot.mockImplementationOnce(
       async (
@@ -990,7 +998,7 @@ describe('createChatSessionController', () => {
 
     expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledWith(
       'stream-1',
-      { version: 2 },
+      makeAutoResumeData(),
       expect.any(Object),
       expect.objectContaining({
         isCancellationRequested: expect.any(Function),
@@ -1059,7 +1067,7 @@ describe('createChatSessionController', () => {
     await expect(admission.completion).resolves.toBe(true);
     expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledWith(
       'stream-1',
-      { version: 2 },
+      makeAutoResumeData(),
       expect.any(Object),
       expect.objectContaining({
         extraFollowUps: [{ text: 'Do not drop this message.' }],
@@ -1088,7 +1096,7 @@ describe('createChatSessionController', () => {
     expect(mocks.resolveAndResumeStream).toHaveBeenCalledOnce();
     expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledWith(
       'stream-1',
-      { version: 2 },
+      makeAutoResumeData(),
       expect.any(Object),
       expect.objectContaining({
         extraFollowUps: [

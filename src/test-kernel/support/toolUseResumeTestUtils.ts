@@ -25,6 +25,7 @@ export function createToolUseResumeData(
     readonly shared?: Partial<PreparedShared>;
   } = {},
 ): ToolUseResumeData {
+  const shared = createToolUseResumeShared(overrides.shared);
   return {
     type: 'toolUse',
     executionId: 'test-execution' as ExecutionId,
@@ -34,7 +35,8 @@ export function createToolUseResumeData(
       model: 'test-model',
       agentCategory: 'toolUse',
     }),
+    sourceShared: structuredClone(shared),
     ...overrides,
-    shared: createToolUseResumeShared(overrides.shared),
+    shared,
   };
 }

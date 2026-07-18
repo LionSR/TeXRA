@@ -124,7 +124,7 @@ describe('resolveAndResumeStream', () => {
         STREAM,
         STREAM_STATUS.RUNNING,
       );
-      return { type: 'toolUse', snapshot: { streamId: STREAM } };
+      return createToolUseResumeData({ streamId: STREAM });
     });
     const ports = basePorts();
 
@@ -179,7 +179,7 @@ describe('resolveAndResumeStream', () => {
     let cancelled = false;
     retrieveSessionResumeDataMock.mockImplementation(async () => {
       cancelled = true;
-      return { type: 'toolUse', snapshot: { streamId: STREAM } };
+      return createToolUseResumeData({ streamId: STREAM });
     });
     const ports = basePorts({
       isCancellationRequested: () => cancelled,

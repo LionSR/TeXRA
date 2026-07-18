@@ -39,6 +39,8 @@ const logger = createChannelTrace('SessionResumeRetrieval');
 export interface ToolUseResumeData {
   readonly type: 'toolUse';
   readonly shared: PreparedShared;
+  /** Exact persisted value observed before one-time migration/self-heal. */
+  readonly sourceShared: unknown;
   readonly agentConfig: AgentConfig;
   readonly executionId: ExecutionId;
   readonly streamId: StreamTabId;
@@ -195,6 +197,7 @@ async function retrieveToolUseResumeData(
     return {
       type: 'toolUse',
       shared,
+      sourceShared: structuredClone(flowRecord.shared),
       executionId,
       streamId,
       ...(options.parentStreamId !== undefined && {

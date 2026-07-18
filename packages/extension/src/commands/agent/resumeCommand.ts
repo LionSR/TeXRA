@@ -3,7 +3,10 @@ import * as vscode from 'vscode';
 
 // Local imports - agent
 import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
-import type { ToolUseResumeData } from '@agent/runtime/SessionResumeRetrieval';
+import {
+  retrieveSessionResumeData,
+  type ToolUseResumeData,
+} from '@agent/runtime/SessionResumeRetrieval';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
@@ -15,11 +18,20 @@ interface ResumeAgentResult {
 }
 
 interface ResumeAgentCommandPayload {
-  snapshot: ToolUseResumeData;
+  snapshot: Pick<ToolUseResumeData, 'streamId' | 'executionId' | 'agentConfig'>;
   followUp?: string;
 }
 
 const CHANNEL = 'resumeCommand';
+
+async function showResumeError(error: unknown): Promise<void> {
+  const message = logErrorMessage(
+    CHANNEL,
+    'Failed to resume tool-use session',
+    error,
+  );
+  await vscode.window.showWarningMessage(message);
+}
 
 /**
  * Extension wrapper around the host-neutral
@@ -46,14 +58,7 @@ export function resumeExtensionToolUseSnapshot(
       ...(followUp !== undefined && {
         extraFollowUps: [{ text: followUp, origin: 'user' as const }],
       }),
-      onError: async (error) => {
-        const baseMessage = logErrorMessage(
-          CHANNEL,
-          'Failed to resume tool-use session',
-          error,
-        );
-        await vscode.window.showWarningMessage(baseMessage);
-      },
+      onError: showResumeError,
     },
   );
 }
@@ -67,13 +72,27 @@ export function registerResumeAgentCommand(
       handler: async (
         payload: ResumeAgentCommandPayload | undefined,
       ): Promise<ResumeAgentResult> => {
-        const resume = payload?.snapshot;
-        if (!resume) {
+        const identity = payload?.snapshot;
+        if (!identity) {
           return { success: false };
         }
-        if (defaultSession().status.isActiveOrResuming(resume.streamId)) {
+        if (defaultSession().status.isActiveOrResuming(identity.streamId)) {
           return { success: false };
         }
+        if (!getToolUsePersistenceEnabled()) return { success: false };
+
+        let resume;
+        try {
+          resume = await retrieveSessionResumeData(
+            identity.streamId,
+            identity.executionId,
+            identity.agentConfig,
+          );
+        } catch (error) {
+          await showResumeError(error);
+          return { success: false };
+        }
+        if (resume?.type !== 'toolUse') return { success: false };
 
         const success = await resumeExtensionToolUseSnapshot(
           resume,
