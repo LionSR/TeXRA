@@ -11,7 +11,6 @@ import {
 } from '../contexts/streamContexts';
 import { renderStreamHeader } from './streamHeaderView';
 
-import './TerminalCommandStrip';
 import './LogList';
 
 @customElement('process-stream-content')
@@ -19,6 +18,52 @@ export class ProcessStreamContent extends LitElement {
   static override styles = css`
     :host {
       display: contents;
+    }
+
+    /* "$ <command>" strip above the process output. */
+    .command-strip {
+      display: flex;
+      align-items: baseline;
+      gap: var(--wa-space-2xs);
+      padding: var(--wa-space-2xs) var(--wa-space-s);
+      margin: 0 0 var(--wa-space-2xs) 0;
+      background: var(
+        --wa-color-terminal-background,
+        var(--wa-color-surface-default, transparent)
+      );
+      color: var(--wa-color-terminal-foreground, var(--wa-color-text-normal));
+      border: var(--border-thin) solid
+        var(--wa-color-surface-border, transparent);
+      border-radius: var(--border-radius-small);
+      font-family: var(
+        --wa-font-family-mono,
+        ui-monospace,
+        SFMono-Regular,
+        Consolas,
+        monospace
+      );
+      font-size: var(--wa-editor-font-size, var(--font-size-sm));
+      max-height: min(32vh, 320px);
+      overflow-y: auto;
+      overflow-x: hidden;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .command-strip > span {
+      min-width: 0;
+    }
+
+    .prompt {
+      color: var(--wa-color-terminal-ansi-green, var(--color-success, #0a0));
+      font-weight: var(--font-weight-semibold);
+      user-select: none;
+      flex: 0 0 auto;
+    }
+
+    .command {
+      flex: 1 1 auto;
     }
   `;
 
@@ -33,10 +78,11 @@ export class ProcessStreamContent extends LitElement {
 
     // Bash streams register as tool-use kind, so renderStreamHeader reflects
     // their active YOLO / Super YOLO state from the shared tool-use fields.
-    const command =
+    const command = (
       (streamInfo.kind === 'process' ? streamInfo.command : undefined) ??
       streamInfo.description ??
-      '';
+      ''
+    ).trim();
 
     return html`
       ${renderStreamHeader(
@@ -44,8 +90,16 @@ export class ProcessStreamContent extends LitElement {
         streamState,
         this.streamContext.unsupportedCommands,
       )}
-
-      <terminal-command-strip .command=${command}></terminal-command-strip>
+      ${
+        command
+          ? html`
+              <div class="command-strip">
+                <span class="prompt">$</span>
+                <span class="command">${command}</span>
+              </div>
+            `
+          : nothing
+      }
 
       <log-list></log-list>
     `;
