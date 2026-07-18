@@ -374,7 +374,8 @@ describe('handleTuiSlashCommand', () => {
     const context = createContext(createSession());
 
     await handleTuiSlashCommand('/auth', context);
-    expect(lastEntryText()).toContain('model access: ChatGPT subscription');
+    const authStatusText = lastEntryText();
+    expect(authStatusText).toContain('model access: ChatGPT subscription');
 
     await handleTuiSlashCommand('/api status', context);
     const apiStatusText = lastEntryText();
@@ -383,6 +384,7 @@ describe('handleTuiSlashCommand', () => {
     expect(apiStatusText).toContain(
       'included usage this month: 25% used, 75% remaining',
     );
+    expect(apiStatusText).toBe(authStatusText);
     expect(overview).toHaveBeenCalledTimes(2);
   });
 
@@ -436,6 +438,7 @@ describe('handleTuiSlashCommand', () => {
     expect(entry).toContain('Signed out of TeXRA.');
     expect(entry).toContain('Signed out of ChatGPT.');
     expect(entry).toContain('ChatGPT subscription disabled for Codex models.');
+    expect(entry).not.toContain('\n');
   });
 
   it('opens an account-specific sign-out chooser for bare /logout', async () => {
@@ -567,6 +570,7 @@ describe('handleTuiSlashCommand', () => {
 
   it('reports the access route that produced the focused stream usage', async () => {
     registerBuiltinSlashCommands();
+    const overview = vi.spyOn(apiStatus, 'loadCliModelAccessOverview');
     const session = createSession();
     const streamId = 'stream-access' as StreamTabId;
     activeStreamId.set(streamId);
@@ -588,6 +592,7 @@ describe('handleTuiSlashCommand', () => {
     const statusText = lastEntryText(streamId);
     expect(statusText).toContain('model access: Included TeXRA access');
     expect(statusText).not.toContain('model access: ChatGPT subscription');
+    expect(overview).not.toHaveBeenCalled();
   });
 
   it('surfaces status lookup failures without rejecting', async () => {
