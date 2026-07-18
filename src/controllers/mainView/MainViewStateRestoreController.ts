@@ -18,7 +18,6 @@ export function buildMainViewState(
 ): MainViewPersistedState {
   const agentConfig = 'agentConfig' in state ? state.agentConfig : state;
   const isToolUse = agentConfig.agentCategory === AgentCategory.ToolUse;
-  const isWorkflow = agentConfig.agentCategory === AgentCategory.Workflow;
   const toolConfig = agentConfig.toolConfig ?? {};
 
   const agentCategory = isToolUse
@@ -43,9 +42,6 @@ export function buildMainViewState(
     contextFiles: agentConfig.contextFiles,
     mediaFiles: agentConfig.mediaFiles,
     outputFiles: agentConfig.outputFiles,
-    outputFilesActive: isWorkflow
-      ? agentConfig.outputFiles.length > 0
-      : undefined,
     autoExtractFigure: toolConfig.autoExtractFigure,
     autoExtractTikzFigure: toolConfig.autoExtractTikzFigure,
     autoCompileInputPdf: toolConfig.autoCompileInputPdf,

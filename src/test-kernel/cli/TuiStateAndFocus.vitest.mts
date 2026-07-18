@@ -3119,4 +3119,17 @@ describe('child-stream ordered transition matrix', () => {
 
     expect(childStreamEntries.get()).toBe(entriesAfterFirst);
   });
+
+  it('13. first roster parent rejects a conflicting roster until an explicit edge arrives', () => {
+    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
+
+    applySubagentRoster(parentQ, [
+      { ...rosterRow(STREAM_PHASE.RUNNING), agentName: 'stale-parent' },
+    ]);
+
+    expect(parentStream.get().get(kid)).toBe(parentP);
+    expect(activeRows(parentP)).toMatchObject([{ agentName: 'kid-agent' }]);
+    expect(activeRows(parentQ)).toEqual([]);
+  });
 });

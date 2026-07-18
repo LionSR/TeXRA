@@ -111,7 +111,6 @@ const MainViewPersistedStateBaseSchema = UIFileFieldsSchema.merge(
   workflowInstruction: z.string().prefault(''),
   toolUseInstruction: z.string().prefault(''),
   baseFile: z.string().prefault(''),
-  outputFilesActive: z.boolean().prefault(false),
   latexdiffsVisible: z.boolean().prefault(false),
   openedFiles: z.array(z.string()).nullish(),
 });
@@ -199,7 +198,6 @@ const FileStateContextSchema = z.object({
   singleFiles: SingleFilesSchema,
   fileOptions: FileOptionsSchema,
   multiFiles: MultiFilesSchema,
-  outputFilesActive: z.boolean(),
 });
 export type FileStateContextValue = z.infer<typeof FileStateContextSchema>;
 

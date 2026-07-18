@@ -17,7 +17,6 @@ export const MainViewExecuteFilesSchema = z.object({
   inputFilesActive: z.boolean().optional(),
   contextFilesActive: z.boolean().optional(),
   mediaFilesActive: z.boolean().optional(),
-  outputFilesActive: z.boolean().optional(),
 });
 export type MainViewExecuteFiles = z.infer<typeof MainViewExecuteFilesSchema>;
 

@@ -30,8 +30,6 @@ type MainViewMultipleFileSelections = Pick<
   | 'contextFilesActive'
   | 'mediaFiles'
   | 'mediaFilesActive'
-  | 'outputFiles'
-  | 'outputFilesActive'
 >;
 
 export function buildMainViewExecuteMessage(
@@ -63,7 +61,5 @@ function buildMainViewMultipleFileSelections(
     contextFilesActive: multiFiles.contextFiles.length > 0,
     mediaFiles: multiFiles.mediaFiles,
     mediaFilesActive: multiFiles.mediaFiles.length > 0,
-    outputFiles: [],
-    outputFilesActive: false,
   };
 }

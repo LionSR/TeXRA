@@ -47,7 +47,6 @@ import {
   isSelectedAgentOrchestrator$,
   model$,
   multiFiles$,
-  outputFilesActive$,
   primaryInputFile,
   sessionType$,
   singleFiles$,
@@ -172,7 +171,6 @@ export function enterToolUseSession(): void {
     swapModeInstruction(sessionType$.get(), SESSION_TYPES.TOOL_USE);
     sessionType$.set(SESSION_TYPES.TOOL_USE);
     fileSelectionOpen$.set(false);
-    outputFilesActive$.set(false);
     updateMultiFiles('outputFiles', []);
     refreshModelSelectionForActiveSession();
   }
@@ -212,11 +210,6 @@ export function removeFile(listId: keyof MultiFiles, file: string): void {
   const files = (multiFiles$.get()[listId] ?? []).filter(
     (f: string) => f !== file,
   );
-  if (files.length === 0) {
-    if (listId === 'outputFiles') {
-      outputFilesActive$.set(false);
-    }
-  }
   updateMultiFiles(listId, files);
 }
 
@@ -264,9 +257,6 @@ export function emptyFile(type: DocumentFileType | 'base' | 'edited'): void {
 
 export function emptyFiles(type: MultipleDocumentFileType): void {
   const listId = `${type}Files`;
-  if (type === 'output') {
-    outputFilesActive$.set(false);
-  }
   updateMultiFiles(listId as keyof MultiFiles, []);
 }
 
@@ -317,7 +307,6 @@ export function changeSessionType(value: string): void {
   fileSelectionOpen$.set(parsed === SESSION_TYPES.WORKFLOW);
   refreshInstructionPlaceholder();
   if (parsed === SESSION_TYPES.TOOL_USE) {
-    outputFilesActive$.set(false);
     updateMultiFiles('outputFiles', []);
   }
   saveState();
@@ -383,8 +372,6 @@ function polishInstruction(): void {
     contextFilesActive: files.contextFilesActive,
     mediaFiles: files.mediaFiles,
     mediaFilesActive: files.mediaFilesActive,
-    outputFiles: files.outputFiles,
-    outputFilesActive: files.outputFilesActive,
   });
 }
 
