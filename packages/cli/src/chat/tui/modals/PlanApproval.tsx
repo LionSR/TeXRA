@@ -137,7 +137,7 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
   });
   const goalNoticeVisible = goalActionVisible && !feedbackMode;
   // The notice is pinned outside the scroll region in both layouts so the
-  // The `r run as goal` action can never outlive its scope notice; in the
+  // `r run as goal` action can never outlive its scope notice; in the
   // compact card it costs one body row.
   const maxBodyRows = compact
     ? Math.max(1, (compactBodyRows ?? 1) - (goalNoticeVisible ? 1 : 0))
