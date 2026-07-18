@@ -11,7 +11,6 @@ import {
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'arXivCommands';
-logger.initialize(CHANNEL);
 
 // Command IDs
 export const arXivCommands = {

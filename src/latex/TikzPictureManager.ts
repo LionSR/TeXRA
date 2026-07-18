@@ -12,7 +12,6 @@ import { getConfig } from '@utils/config/configUtils';
 import { compileLatex2Pdf } from './texTools';
 
 const CHANNEL = 'LaTeXCommands';
-logger.initialize(CHANNEL);
 
 /**
  * Pick the run-storage-relative path for a location, falling back to its

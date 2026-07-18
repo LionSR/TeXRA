@@ -62,7 +62,6 @@ import {
 } from './stableSubagentAttempt';
 
 const LOG_CHANNEL = 'inBandSubagentExecution';
-logger.initialize(LOG_CHANNEL);
 
 interface InBandSubagentExecutionBaseOptions {
   readonly configPayload: AgentConfigPayload;

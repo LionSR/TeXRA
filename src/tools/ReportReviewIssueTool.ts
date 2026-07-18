@@ -14,7 +14,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { defineTool } from './core/define';
 
 const CHANNEL = 'ReportReviewIssueTool';
-logger.initialize(CHANNEL);
 
 /**
  * Sink injected by the extension host. Returns `accepted: false` with a

@@ -10,7 +10,6 @@ import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'TestCommands';
-logger.initialize(CHANNEL);
 
 type TestCase = { str1: string; str2: string };
 type ConnectionMethod = (

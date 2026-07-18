@@ -26,9 +26,6 @@ import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionCo
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { startChildRunLoop } from '@agent/runtime/childRunLoop';
 
-// Local imports - logger
-import * as logger from '@logger/logUtils';
-
 // Local imports - tools
 import {
   AgentCategory,
@@ -53,9 +50,6 @@ import { executeSubagentForDeliveryInBand } from './inBandSubagentExecution';
 // ============================================================================
 // Shared utilities
 // ============================================================================
-
-const LOG_CHANNEL = 'delegation';
-logger.initialize(LOG_CHANNEL);
 
 /** Metadata about how the delegation was approved, included in the tool result. */
 interface ApprovalMeta {

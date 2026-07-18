@@ -21,7 +21,6 @@ export const IS_WINDOWS = process.platform === 'win32';
 const TEX_TOOLS = ['latexdiff', 'latexindent', 'latexmk'] as const;
 
 const CHANNEL = 'platformPaths';
-logger.initialize(CHANNEL);
 
 // Cache for extra directories to avoid repeated glob operations
 let cachedExtraDirs: string[] | null = null;

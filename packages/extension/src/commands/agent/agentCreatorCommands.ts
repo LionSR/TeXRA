@@ -15,11 +15,9 @@ import { renderAgentTemplateString } from '@agent/templates/agentTemplateRendere
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
 import { agentDirectories, promptToAddAgentToConfig } from '@frontend/agents';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'AgentCreator';
-logger.initialize(CHANNEL);
 
 // Validation only — no .trim() transform, so multiline block-scalar prompts
 // (including their trailing newline) pass through verbatim.

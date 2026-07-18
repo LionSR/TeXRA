@@ -13,7 +13,6 @@ import { hasExtension } from '@utils/core/pathCore';
 import { runLatexFormatter } from '../texFormatter';
 
 const CHANNEL = 'LaTeXCommands';
-logger.initialize(CHANNEL);
 
 export type IndentLatexResult =
   | {

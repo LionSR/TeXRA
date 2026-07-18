@@ -16,7 +16,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 
 const CHANNEL = 'ImgUtils';
-logger.initialize(CHANNEL);
 
 // Define the temporary directory path
 const TEMP_DIR = path.join(os.tmpdir(), 'texra-pdf-conversion');

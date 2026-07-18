@@ -24,7 +24,6 @@ export function flowKey(runId: string): string {
 }
 
 const CHANNEL = 'PersistedFlow';
-logger.initialize(CHANNEL);
 
 export const FLOW_RECORD_SCHEMA_VERSION = 2;
 const START_NODE_ID = 'start';

@@ -18,7 +18,6 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'TestCommands';
-logger.initialize(CHANNEL);
 
 export async function handleTestAgentLoading(): Promise<void> {
   try {

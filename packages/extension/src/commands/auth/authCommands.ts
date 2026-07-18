@@ -9,11 +9,9 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 
 const CHANNEL = 'authCommands';
-logger.initialize(CHANNEL);
 
 type AuthMethod = OAuthProvider | 'github-browser' | 'email';
 
