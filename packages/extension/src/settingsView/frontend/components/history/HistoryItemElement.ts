@@ -14,12 +14,9 @@ import {
   designTokens,
   searchHighlightStyles,
 } from '@shared/styles';
-import { AgentCategory } from '@shared/schemas/agent';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
-import { getAgentCategoryDecorator } from '@shared/utils/icons';
-import { formatShortDateTime } from '@shared/utils/string';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -33,9 +30,13 @@ import { historyStyles } from '@shared/styles/historyStyles';
 
 // Local imports - history view events
 import { HistoryViewEvents } from './events';
-import { hasSearchValue } from './historySearch';
+import {
+  getHistoryItemPresentation,
+  hasHistoryConfigValue,
+  type HistoryConfigValue,
+} from './historyItemPresentation';
 
-type ConfigValue = string | number | boolean | string[] | null | undefined;
+type ConfigValue = HistoryConfigValue;
 
 const LONG_INSTRUCTION_CHARS = 400;
 
@@ -253,7 +254,9 @@ export class HistoryItemElement extends LitElement {
     label: string | TemplateResult,
     entries: Array<[string, ConfigValue]>,
   ): TemplateResult | null {
-    const filtered = entries.filter(([, value]) => hasSearchValue(value));
+    const filtered = entries.filter(([, value]) =>
+      hasHistoryConfigValue(value),
+    );
     if (!filtered.length) return null;
 
     return html`
@@ -276,17 +279,10 @@ export class HistoryItemElement extends LitElement {
       return nothing;
     }
 
-    const config = this.item.agentConfig;
-    const timestamp = formatShortDateTime(this.item.timestamp) ?? 'Unknown';
-    const isToolUse = config.agentCategory === AgentCategory.ToolUse;
-    const categoryVariant: 'warning' | 'brand' = isToolUse
+    const presentation = getHistoryItemPresentation(this.item);
+    const categoryVariant: 'warning' | 'brand' = presentation.isToolUse
       ? 'warning'
       : 'brand';
-    const decorator = getAgentCategoryDecorator(config.agentCategory);
-    const instructionText = config.instruction?.trim()
-      ? config.instruction
-      : null;
-    const descriptionText = this.item.description?.trim() || null;
 
     const extraDetails: TemplateResult[] = [];
     const pushSection = (
@@ -298,40 +294,33 @@ export class HistoryItemElement extends LitElement {
       if (section) extraDetails.push(section);
     };
 
-    if (config.agentCategory === AgentCategory.Workflow) {
-      pushSection('Context', [['ContextFiles', config.contextFiles]]);
-      pushSection('Output Files', [['Files', config.outputFiles]]);
-      if (config.toolConfig) {
-        pushSection(
-          html`${waIcon('tools')} Config`,
-          Object.entries(config.toolConfig) as Array<[string, ConfigValue]>,
-        );
-      }
-    } else if (config.agentCategory === AgentCategory.ToolUse) {
-      pushSection('Edited Files', [['Files', config.editedFiles]]);
+    for (const section of presentation.sections) {
+      pushSection(
+        section.icon
+          ? html`${waIcon(section.icon)} ${section.label}`
+          : section.label,
+        section.entries,
+      );
     }
 
-    const titleText = instructionText ?? descriptionText ?? '(no instruction)';
-    const summaryText =
-      instructionText && descriptionText && descriptionText !== instructionText
-        ? descriptionText
-        : null;
-
     const metaParts: Array<string | TemplateResult> = [
-      timestamp,
+      presentation.timestamp,
       html`<wa-tag variant=${categoryVariant} size="small">
-        ${decorator.icon ? waIcon(decorator.icon) : nothing} ${decorator.label}
+        ${
+          presentation.decorator.icon
+            ? waIcon(presentation.decorator.icon)
+            : nothing
+        }
+        ${presentation.decorator.label}
       </wa-tag>`,
-      `Agent: ${config.agent ?? 'Unknown'}`,
-      `Model: ${config.model ?? 'Unknown'}`,
+      `Agent: ${presentation.agent}`,
+      `Model: ${presentation.model}`,
     ];
-    if (config.agentCategory === AgentCategory.Workflow) {
-      if (config.inputFiles?.length) {
-        metaParts.push(`Inputs: ${config.inputFiles.join(', ')}`);
-      }
-      if (config.mediaFiles?.length) {
-        metaParts.push(`Media: ${config.mediaFiles.join(', ')}`);
-      }
+    if (presentation.inputFiles.length > 0) {
+      metaParts.push(`Inputs: ${presentation.inputFiles.join(', ')}`);
+    }
+    if (presentation.mediaFiles.length > 0) {
+      metaParts.push(`Media: ${presentation.mediaFiles.join(', ')}`);
     }
 
     return html`
@@ -380,7 +369,7 @@ export class HistoryItemElement extends LitElement {
                   })
             }
             ${
-              isToolUse
+              presentation.isToolUse
                 ? html`
                     ${
                       isKnownUnsupported(
@@ -429,10 +418,15 @@ export class HistoryItemElement extends LitElement {
             }
           </div>
         </div>
-        ${this.renderInstructionBlock(instructionText, titleText)}
+        ${this.renderInstructionBlock(
+          presentation.instruction,
+          presentation.title,
+        )}
         ${
-          summaryText
-            ? html`<div class="history-description">${summaryText}</div>`
+          presentation.summary
+            ? html`<div class="history-description">
+                ${presentation.summary}
+              </div>`
             : nothing
         }
         ${

@@ -12,6 +12,13 @@ export type TimelineEntry =
   | { key: string; time: number; msg: LogMessageData }
   | { key: string; time: number; tree: GroupTree };
 
+type MessageTimelineEntry = Extract<TimelineEntry, { msg: LogMessageData }>;
+
+interface MessageLocation {
+  ungroupedIndex?: number;
+  timelineEntry?: MessageTimelineEntry;
+}
+
 /**
  * Owns the derived data structures for the non-terminal render path:
  * the hierarchical group tree, the ungrouped message list, the interleaved
@@ -23,14 +30,11 @@ export class MessageIndex {
   ungrouped: LogMessageData[] = [];
   timeline: TimelineEntry[] = [];
 
-  private ungroupedById = new Map<string, LogMessageData>();
-  private ungroupedIndex = new Map<string, number>();
+  /** Both derived locations for an ungrouped message, keyed once by ID. */
+  private messageLocations = new Map<string, MessageLocation>();
 
   /** O(1) lookup from groupId → tree node. */
   private groupNodeIndex = new Map<string, GroupTree>();
-
-  /** O(1) lookup from ungrouped message ID → timeline index. */
-  private timelineMessageIndex = new Map<string, number>();
 
   /**
    * Patch status/name/end-time changes into the existing group tree.
@@ -94,8 +98,7 @@ export class MessageIndex {
     );
     const messagesByGroup = new Map<string, LogMessageData[]>();
     const ungrouped: LogMessageData[] = [];
-    this.ungroupedById.clear();
-    this.ungroupedIndex.clear();
+    this.messageLocations.clear();
 
     for (const msg of sortedMessages) {
       if (msg.groupId && groupMap.has(msg.groupId)) {
@@ -103,8 +106,9 @@ export class MessageIndex {
         bucket.push(msg);
         messagesByGroup.set(msg.groupId, bucket);
       } else {
-        this.ungroupedIndex.set(msg.id, ungrouped.length);
-        this.ungroupedById.set(msg.id, msg);
+        this.messageLocations.set(msg.id, {
+          ungroupedIndex: ungrouped.length,
+        });
         ungrouped.push(msg);
       }
     }
@@ -156,9 +160,14 @@ export class MessageIndex {
       })),
     ].sort((a, b) => a.time - b.time);
     this.timeline = timeline;
-    this.timelineMessageIndex.clear();
-    for (const [i, item] of timeline.entries()) {
-      if ('msg' in item) this.timelineMessageIndex.set(item.key, i);
+    this.messageLocations.clear();
+    this.reindexUngroupedFrom(0);
+    for (const item of timeline) {
+      if ('msg' in item) {
+        const location = this.messageLocations.get(item.key) ?? {};
+        location.timelineEntry = item;
+        this.messageLocations.set(item.key, location);
+      }
     }
   }
 
@@ -202,7 +211,7 @@ export class MessageIndex {
         ? this.groupNodeIndex.has(m.groupId)
         : false;
       if (inGroupNode) continue;
-      const entry: TimelineEntry = {
+      const entry: MessageTimelineEntry = {
         key: m.id,
         time: m.timestamp ?? 0,
         msg: m,
@@ -210,18 +219,18 @@ export class MessageIndex {
       const lastTime =
         this.timeline.length > 0 ? this.timeline.at(-1)!.time : -Infinity;
       if (entry.time >= lastTime) {
-        this.timelineMessageIndex.set(entry.key, this.timeline.length);
         this.timeline.push(entry);
       } else {
         const idx = this.timeline.findIndex((e) => e.time > entry.time);
         if (idx >= 0) {
           this.timeline.splice(idx, 0, entry);
-          this.reindexTimelineFrom(idx);
         } else {
-          this.timelineMessageIndex.set(entry.key, this.timeline.length);
           this.timeline.push(entry);
         }
       }
+      const location = this.messageLocations.get(entry.key) ?? {};
+      location.timelineEntry = entry;
+      this.messageLocations.set(entry.key, location);
     }
   }
 
@@ -268,11 +277,9 @@ export class MessageIndex {
       for (const index of deltaIndices) {
         const msg = messages[index];
         if (!msg) continue;
-        const timelineIndex = this.timelineMessageIndex.get(msg.id);
-        if (timelineIndex === undefined) continue;
-        const item = this.timeline[timelineIndex];
-        if (item && 'msg' in item && item.key === msg.id) {
-          item.msg = msg;
+        const timelineEntry = this.messageLocations.get(msg.id)?.timelineEntry;
+        if (timelineEntry) {
+          timelineEntry.msg = msg;
         }
       }
       return;
@@ -282,7 +289,13 @@ export class MessageIndex {
       const item = this.timeline[i];
       if (!item) continue;
       if (!('msg' in item)) continue;
-      const fresh = this.ungroupedById.get(item.key);
+      const ungroupedIndex = this.messageLocations.get(
+        item.key,
+      )?.ungroupedIndex;
+      const fresh =
+        ungroupedIndex === undefined
+          ? undefined
+          : this.ungrouped[ungroupedIndex];
       if (fresh && fresh !== item.msg) {
         item.msg = fresh;
       }
@@ -311,18 +324,18 @@ export class MessageIndex {
       }
     }
 
-    const indexed = this.ungroupedIndex.get(msg.id);
+    const indexed = this.messageLocations.get(msg.id)?.ungroupedIndex;
     if (indexed !== undefined && this.ungrouped[indexed]?.id === msg.id) {
       this.ungrouped[indexed] = msg;
-      this.ungroupedById.set(msg.id, msg);
       return;
     }
 
     const idx = this.ungrouped.findIndex((m) => m.id === msg.id);
     if (idx >= 0) {
       this.ungrouped[idx] = msg;
-      this.ungroupedIndex.set(msg.id, idx);
-      this.ungroupedById.set(msg.id, msg);
+      const location = this.messageLocations.get(msg.id) ?? {};
+      location.ungroupedIndex = idx;
+      this.messageLocations.set(msg.id, location);
     }
   }
 
@@ -351,23 +364,22 @@ export class MessageIndex {
     return target.length - 1;
   }
 
-  private reindexTimelineFrom(startIndex: number): void {
-    for (let i = startIndex; i < this.timeline.length; i++) {
-      const item = this.timeline[i];
-      if ('msg' in item) this.timelineMessageIndex.set(item.key, i);
-    }
-  }
-
   private reindexUngroupedFrom(startIndex: number): void {
     for (let i = startIndex; i < this.ungrouped.length; i++) {
       const message = this.ungrouped[i];
-      this.ungroupedIndex.set(message.id, i);
-      this.ungroupedById.set(message.id, message);
+      const location = this.messageLocations.get(message.id) ?? {};
+      location.ungroupedIndex = i;
+      this.messageLocations.set(message.id, location);
     }
   }
 
   private removeUngroupedEntry(id: string): void {
-    this.ungroupedIndex.delete(id);
-    this.ungroupedById.delete(id);
+    const location = this.messageLocations.get(id);
+    if (!location) return;
+    if (location.timelineEntry) {
+      delete location.ungroupedIndex;
+    } else {
+      this.messageLocations.delete(id);
+    }
   }
 }

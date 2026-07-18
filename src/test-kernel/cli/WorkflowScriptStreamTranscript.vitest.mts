@@ -122,10 +122,12 @@ describe('CLI workflow-script child-stream transcript', () => {
           [
             STREAM_ID,
             {
-              activeParentStreamId: PARENT_STREAM_ID,
-              removed: false,
-              retainedOrder: 1,
-              retainedParentStreamId: PARENT_STREAM_ID,
+              kind: 'live' as const,
+              active: true,
+              parent: {
+                kind: 'roster' as const,
+                retained: { streamId: PARENT_STREAM_ID, order: 1 },
+              },
               summary: {
                 agentName: 'draft-sections',
                 executionId: 'exec-1',

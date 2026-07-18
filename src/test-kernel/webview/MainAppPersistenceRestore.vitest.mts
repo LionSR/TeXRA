@@ -19,13 +19,12 @@ import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 /**
  * Characterization tests for MainApp's persistence/restore machinery.
  *
- * These pin down the CURRENT behavior of the two independently-triggered
- * restore paths:
+ * These pin down the shared behavior of the two restore entry points:
  *   1. mount-time webview-storage restore (`restorePersistedState`), and
  *   2. backend-pushed history-rerun/reset restore (`handleRestoreState`),
- * including the legacy single-`instruction` migration precedence, the forced
- * `outputFiles`/`outputFilesActive` reset, and the save-reentrancy guard
- * (exactly one storage write per backend restore).
+ * including legacy single-`instruction` migration, transient output-file
+ * reset, Files-panel state, and the save-reentrancy guard (exactly one
+ * storage write per backend restore).
  *
  * They observe only refactor-stable surfaces — the `@provide`/`@state` context
  * values, host-bridge storage writes, and posted messages — so they must pass
@@ -41,7 +40,7 @@ let webviewState: Record<string, unknown>;
 /**
  * Legacy persisted blob: predates the per-mode instruction fields (only the
  * single `instruction` field is present) and carries stale output-file state
- * that both restore paths must force back to inactive/empty.
+ * that both restore entry points must discard.
  */
 const LEGACY_SEED = {
   sessionType: 'workflow',
@@ -160,10 +159,13 @@ describe('MainApp persistence and restore characterization', () => {
   // singleton before the HOST_BRIDGE_API_KEY mock above is wired up.
   let persistence: typeof import('@webview/frontend/persistence');
   let setInstruction: typeof import('@webview/frontend/mainViewActions').setInstruction;
+  let fileSelectionOpen: typeof import('@webview/frontend/mainViewState').fileSelectionOpen$;
 
   beforeAll(async () => {
     persistence = await import('@webview/frontend/persistence');
     ({ setInstruction } = await import('@webview/frontend/mainViewActions'));
+    ({ fileSelectionOpen$: fileSelectionOpen } =
+      await import('@webview/frontend/mainViewState'));
   });
 
   beforeEach(() => {
@@ -172,7 +174,7 @@ describe('MainApp persistence and restore characterization', () => {
     storageWrites.length = 0;
   });
 
-  it('restores persisted state on mount, migrating the legacy instruction and forcing output files inactive', async () => {
+  it('restores persisted state on mount through the canonical state applicator', async () => {
     const element = await mountMainApp();
     const { fileState, session } = contextsOf(element);
 
@@ -181,12 +183,13 @@ describe('MainApp persistence and restore characterization', () => {
     expect(session.workflowAgent).toBe('correct');
     expect(session.toolUseAgent).toBe('orchestrator');
     expect(session.model).toBe('seed-model');
+    expect(fileSelectionOpen.get()).toBe(true);
 
     // Legacy migration: active mode was workflow, so the single legacy
     // `instruction` becomes the workflow instruction and stays active.
     expect(session.instruction).toBe('legacy single-field instruction');
 
-    // File state restored — EXCEPT output files, which are forced inactive.
+    // File state restored — except output files, which are transient.
     expect(fileState.singleFiles).toEqual({
       editedFile: 'main_polish.tex',
       baseFile: 'main.tex',
@@ -197,7 +200,7 @@ describe('MainApp persistence and restore characterization', () => {
       mediaFiles: [],
       outputFiles: [],
     });
-    expect(fileState.outputFilesActive).toBe(false);
+    expect(fileState).not.toHaveProperty('outputFilesActive');
     expect(fileState.checkboxValues).toEqual({
       autoExtractFigure: true,
       autoExtractTikzFigure: false,
@@ -219,7 +222,7 @@ describe('MainApp persistence and restore characterization', () => {
     expect(blob.workflowInstruction).toBe('legacy single-field instruction');
     expect(blob.toolUseInstruction).toBe('');
     expect(blob.outputFiles).toEqual([]);
-    expect(blob.outputFilesActive).toBe(false);
+    expect(blob).not.toHaveProperty('outputFilesActive');
     expect(blob.latexdiffsVisible).toBe(true);
     expect(blob.editedFile).toBe('other_polish.tex');
   });
@@ -253,7 +256,7 @@ describe('MainApp persistence and restore characterization', () => {
     expect(blob.mediaFiles).toEqual(['figure.png']);
     // Restored output files are dropped, not re-persisted.
     expect(blob.outputFiles).toEqual([]);
-    expect(blob.outputFilesActive).toBe(false);
+    expect(blob).not.toHaveProperty('outputFilesActive');
     expect(blob.instruction).toBe('restored tool-use instruction');
     expect(blob.workflowInstruction).toBe('restored workflow instruction');
     expect(blob.toolUseInstruction).toBe('restored tool-use instruction');
@@ -261,8 +264,9 @@ describe('MainApp persistence and restore characterization', () => {
     const { fileState, session } = contextsOf(element);
     expect(session.sessionType).toBe('toolUse');
     expect(session.instruction).toBe('restored tool-use instruction');
+    expect(fileSelectionOpen.get()).toBe(false);
     expect(fileState.multiFiles.outputFiles).toEqual([]);
-    expect(fileState.outputFilesActive).toBe(false);
+    expect(fileState).not.toHaveProperty('outputFilesActive');
     expect(fileState.checkboxValues.autoExtractTikzFigure).toBe(true);
 
     // No execute unless explicitly requested.
@@ -390,7 +394,7 @@ describe('MainApp persistence and restore characterization', () => {
     expect(blob.contextFiles).toEqual([]);
     expect(blob.mediaFiles).toEqual([]);
     expect(blob.outputFiles).toEqual([]);
-    expect(blob.outputFilesActive).toBe(false);
+    expect(blob).not.toHaveProperty('outputFilesActive');
     // Workflow reset overrides the auto-extract/compile toggles but leaves
     // attachTeXCount as the user set it.
     expect(blob.autoExtractFigure).toBe(false);
