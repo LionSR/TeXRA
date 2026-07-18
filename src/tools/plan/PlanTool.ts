@@ -98,6 +98,7 @@ export type PlanToolInput = z.infer<typeof PlanToolInputSchema>;
 
 export class PlanTool extends defineTool({
   name: 'plan',
+  requiresApproval: true,
   description: `Manage the plan document and (optionally) the autonomous goal pursuing it.
 
 Commands:

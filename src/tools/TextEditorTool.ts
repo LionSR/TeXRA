@@ -82,6 +82,7 @@ export type EditorCommand = TextEditorInput['command'];
  */
 export class TextEditorTool extends defineTool({
   name: 'str_replace_editor',
+  requiresApproval: true,
   description: 'Edit files using search and replace or insertion operations',
   schema: TextEditorInputSchema,
 }) {

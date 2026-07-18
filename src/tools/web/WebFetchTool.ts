@@ -95,6 +95,7 @@ const PRIVATE_IPV6_PREFIXES = ['fc', 'fd', 'fe80'];
 
 export class WebFetchTool extends defineTool({
   name: 'web_fetch',
+  slow: true,
   parallelSafe: true,
   description:
     'Fetch content from a URL and return it as clean text. Uses the native provider fetch tool when available; falls back to fetching HTML and converting to Markdown locally. Include an optional prompt to explain what context you need so the fetched content can be interpreted correctly.',

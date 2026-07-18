@@ -35,6 +35,7 @@ export type EditInput = z.infer<typeof EditInputSchema>;
 
 export class EditFileTool extends defineTool({
   name: 'edit_file',
+  requiresApproval: true,
   description:
     'Performs exact string replacements in workspace files using literal matching. Copy text exactly as it appears in read_file output after the line-number prefix.',
   schema: EditInputSchema,
