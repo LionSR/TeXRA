@@ -223,7 +223,7 @@ function createToolUseStreamState(
   });
 }
 
-export function createWorkflowStreamState(
+function createWorkflowStreamState(
   partial?: Partial<WorkflowStreamState>,
 ): WorkflowStreamState {
   return WorkflowStreamStateSchema.parse({
