@@ -17,9 +17,7 @@ import {
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_RANGES } from '@shared/constants/latex';
 import {
-  createExternalLocation,
   createRunStorageLocation,
-  createWorkspaceLocation,
   FlexibleFS,
   TaskRunFileService,
 } from '@utils/files';
@@ -151,7 +149,12 @@ export class LatexDiffManager {
     // relative \input{} resolution works when its cwd is runDir/r{round}.
     await this.fileService.ensureMirroredInRoundDir(currRound);
     await this.fileService.ensureMirroredInDiffRoundDir(currRound);
-    const diffDirectory = this.getDiffOutputDirectory(currRound);
+    const relativePath = path.join('diff', `r${currRound}`);
+    const diffDirectory: DiffOutputDirectory = {
+      absolutePath: path.join(this.fileService.runDirectory, relativePath),
+      relativePath,
+      executionId: this.fileService.executionId,
+    };
 
     const outputByPath = new Map(
       outputFiles.map((f) => [getComparablePath(f.location), f]),
@@ -200,7 +203,7 @@ export class LatexDiffManager {
                 revised,
                 currRound,
                 undefined,
-                { cwd, outputDirectory: diffDirectory?.absolutePath },
+                { cwd, outputDirectory: diffDirectory.absolutePath },
               ),
             label: 'round-diff',
             pdfStemSuffix: '-diff',
@@ -237,7 +240,7 @@ export class LatexDiffManager {
                 undefined,
                 {
                   cwd,
-                  outputDirectory: diffDirectory?.absolutePath,
+                  outputDirectory: diffDirectory.absolutePath,
                 },
               ),
             label: 'between-rounds-diff',
@@ -290,7 +293,7 @@ export class LatexDiffManager {
     ) => Promise<LaTeXdiffResult>;
     label: string;
     pdfStemSuffix: string;
-    diffDirectory: DiffOutputDirectory | null;
+    diffDirectory: DiffOutputDirectory;
   }): Promise<SingleDiffOutcome | null> {
     const {
       outputPath,
@@ -354,7 +357,7 @@ export class LatexDiffManager {
   private async compileDiffIfSuccessful(
     result: LaTeXdiffResult,
     referenceLocation: FileLocation,
-    diffDirectory: DiffOutputDirectory | null,
+    diffDirectory: DiffOutputDirectory,
     round: number,
     sourceLocation: FileLocation,
     pdfStemSuffix: string,
@@ -366,10 +369,10 @@ export class LatexDiffManager {
       return null;
     }
 
-    const diffLocation = this.buildDiffLocation(
-      referenceLocation,
-      result.diffFileName,
-      diffDirectory,
+    const diffLocation = createRunStorageLocation(
+      path.join(diffDirectory.absolutePath, result.diffFileName),
+      path.join(diffDirectory.relativePath, result.diffFileName),
+      diffDirectory.executionId,
     );
 
     const buildDir = path.join(
@@ -421,93 +424,35 @@ export class LatexDiffManager {
       return { diffLocation, artifact: null };
     }
 
-    const { executionId, runDirectory } = this.fileService.metadata;
+    const { executionId, runDirectory } = this.fileService;
     const compiledPdfPath = path.join(
       buildDir,
       `${path.basename(diffLocation.absolutePath).replace(/\.tex$/i, '')}.pdf`,
     );
     let artifact: CompiledPdfArtifact | null = null;
-    if (executionId && runDirectory) {
-      try {
-        artifact = await publishCompiledPdfArtifact({
-          runDirectory,
-          executionId,
-          round,
-          displayName: path.basename(diffLocation.absolutePath),
-          source: sourceLocation,
-          compiledPdfPath,
-          pdfStemSuffix,
-        });
-      } catch (error) {
-        this.logger.warn(
-          `Failed to publish latexdiff PDF: ${toErrorMessage(error)}`,
-          {
-            data: {
-              diffFile: diffLocation.absolutePath,
-              compiledPdfPath,
-              error,
-            },
+    try {
+      artifact = await publishCompiledPdfArtifact({
+        runDirectory,
+        executionId,
+        round,
+        displayName: path.basename(diffLocation.absolutePath),
+        source: sourceLocation,
+        compiledPdfPath,
+        pdfStemSuffix,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Failed to publish latexdiff PDF: ${toErrorMessage(error)}`,
+        {
+          data: {
+            diffFile: diffLocation.absolutePath,
+            compiledPdfPath,
+            error,
           },
-        );
-      }
+        },
+      );
     }
 
     return { diffLocation, artifact };
-  }
-
-  /**
-   * Describe the diff file that LaTeXdiffService wrote. Workflow runs pass a
-   * run-storage output directory so the generated `.tex` and build artifacts
-   * stay out of the user's workspace. Older callers that do not have run
-   * storage keep the historical sibling placement.
-   */
-  private buildDiffLocation(
-    reference: FileLocation,
-    diffFileName: string,
-    diffDirectory: DiffOutputDirectory | null,
-  ): FileLocation {
-    if (diffDirectory) {
-      const absolutePath = path.join(diffDirectory.absolutePath, diffFileName);
-      return createRunStorageLocation(
-        absolutePath,
-        path.join(diffDirectory.relativePath, diffFileName),
-        diffDirectory.executionId,
-      );
-    }
-
-    const siblingAbsolute = path.join(
-      path.dirname(reference.absolutePath),
-      diffFileName,
-    );
-    if (reference.kind === 'workspace') {
-      const relativeDir = path.dirname(reference.relativePath);
-      return createWorkspaceLocation(
-        siblingAbsolute,
-        path.join(relativeDir, diffFileName),
-      );
-    }
-    if (reference.kind === 'runStorage') {
-      const relativeDir = path.dirname(reference.relativePath);
-      return createRunStorageLocation(
-        siblingAbsolute,
-        path.join(relativeDir, diffFileName),
-        reference.executionId,
-      );
-    }
-    return createExternalLocation(siblingAbsolute);
-  }
-
-  private getDiffOutputDirectory(round: number): DiffOutputDirectory | null {
-    const { executionId, runDirectory } = this.fileService.metadata;
-    if (!executionId || !runDirectory) {
-      return null;
-    }
-
-    const relativePath = path.join('diff', `r${round}`);
-    return {
-      absolutePath: path.join(runDirectory, relativePath),
-      relativePath,
-      executionId,
-    };
   }
 }

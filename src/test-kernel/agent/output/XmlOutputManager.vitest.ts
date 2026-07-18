@@ -46,7 +46,7 @@ function createXmlManager(
         info: vi.fn(),
         domain: vi.fn(),
       } as unknown as AgentTrace),
-    new TaskRunFileService(),
+    new TaskRunFileService('xml-output-manager-test'),
   );
 }
 
@@ -1256,7 +1256,7 @@ Appendix.
         warn: vi.fn(),
         domain: vi.fn(),
       } as unknown as AgentTrace,
-      new TaskRunFileService(),
+      new TaskRunFileService('xml-single-artifact-test'),
     );
   }
 
