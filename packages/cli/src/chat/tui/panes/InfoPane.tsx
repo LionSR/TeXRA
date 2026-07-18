@@ -1,9 +1,12 @@
+// Third-party imports
 import { useEffect } from 'react';
-import { Text, useInput, useWindowSize } from 'ink';
+import { useInput, useWindowSize } from 'ink';
 
-import { isEscapeInput } from '../input/inputKeys';
-import { textDisplayWidth } from '../render/terminalText';
+// Local imports - TUI layout, input, and markdown rendering
 import { FormFrame, formFrameWidth } from '../forms/_shared/FormFrame';
+import { isEscapeInput } from '../input/inputKeys';
+import { renderAnsiMarkdown } from '../render/ansiMarkdown';
+import { Markdown } from '../render/Markdown';
 
 const INFO_PANE_CHROME_ROWS = 5;
 const INFO_PANE_HORIZONTAL_CHROME_COLUMNS = 4;
@@ -13,14 +16,11 @@ export function infoPaneRequiredRows(
   textWidth: number,
 ): number {
   const width = Math.max(1, textWidth);
-  return (
-    INFO_PANE_CHROME_ROWS +
-    lines.reduce(
-      (rows, line) =>
-        rows + Math.max(1, Math.ceil(textDisplayWidth(line) / width)),
-      0,
-    )
-  );
+  const rendered = renderAnsiMarkdown(lines.join('\n'), {
+    colorEnabled: false,
+    width,
+  });
+  return INFO_PANE_CHROME_ROWS + rendered.split('\n').length;
 }
 
 export interface InfoPaneProps {
@@ -52,7 +52,7 @@ export function InfoPane(props: InfoPaneProps): React.JSX.Element | null {
   if (!fits) return null;
   return (
     <FormFrame title={props.title}>
-      <Text wrap="wrap">{props.lines.join('\n')}</Text>
+      <Markdown content={props.lines.join('\n')} width={textWidth} />
     </FormFrame>
   );
 }
