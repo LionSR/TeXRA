@@ -1,5 +1,6 @@
 // Local imports - shared formatting
 import { formatCompactTokenCount } from '@utils/core';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local imports - TUI state and presentation
 import { isChildExecutionErrorStatus } from '../state/childExecutionStatus';
@@ -45,22 +46,31 @@ const PENDING_APPROVAL_ROW_LABELS: Record<PendingApprovalKind, string> = {
  *  and rows keep their inline elapsed, so identity is not crowded out. */
 export const CHILD_ROW_METADATA_MIN_COLUMNS = 60;
 
-/** Right-aligned metadata column for a child row: elapsed time plus the
- *  child's generated tokens so far (e.g. `2m 30s · ↓40k`). Output tokens are
- *  the "work produced" figure — deliberately not the context-fill number the
- *  status bar reports for the focused stream. */
+/** Right-aligned metadata column for a child row: elapsed time, the number of
+ *  tool calls the child has made, and its generated tokens so far (e.g.
+ *  `2m 30s · 5 tool calls · ↓40k`). This is the per-agent stats summary a
+ *  workflow-script run's `agent()` grandchildren surface when the run is
+ *  focused; a plain subagent with no tool calls yet just shows elapsed/tokens.
+ *  Output tokens are the "work produced" figure — deliberately not the
+ *  context-fill number the status bar reports for the focused stream. */
 export function childRowMetadataText({
   elapsed,
   outputTokens,
+  toolCallCount,
 }: {
   readonly elapsed: string | null | undefined;
   readonly outputTokens: number | undefined;
+  readonly toolCallCount?: number | undefined;
 }): string | undefined {
+  const toolCalls =
+    toolCallCount !== undefined && toolCallCount > 0
+      ? formatResultCount(toolCallCount, 'tool call')
+      : undefined;
   const tokens =
     outputTokens !== undefined && outputTokens > 0
       ? `${TOKENS_GENERATED}${formatCompactTokenCount(outputTokens)}`
       : undefined;
-  const parts = [elapsed, tokens].filter(Boolean);
+  const parts = [elapsed, toolCalls, tokens].filter(Boolean);
   return parts.length > 0 ? parts.join(' · ') : undefined;
 }
 
