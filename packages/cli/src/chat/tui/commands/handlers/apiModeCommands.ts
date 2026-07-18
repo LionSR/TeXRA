@@ -5,6 +5,7 @@ import {
   loadCliModelAccessOverview,
 } from '@cli/runtime/apiStatus';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
+import { refreshCodexPreferenceViews } from '@cli/chat/tui/state/codexSubscription';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
@@ -63,6 +64,7 @@ export async function applyCliProviderApiKey(
 ): Promise<string | undefined> {
   await saveProviderApiKey(provider, key);
   const access = await selectCliApiModelAccessRoute('personal');
+  refreshCodexPreferenceViews();
   setCliSessionApiMode(access.apiMode);
   let modelNotice: string | undefined;
   try {
@@ -88,10 +90,17 @@ export async function applyCliModelAccessSelection(
   const normalized = routeInput.trim().toLowerCase();
 
   if (!normalized || normalized === 'status') {
-    const { lines } = await loadCliModelAccessOverview({
-      apiMode: sessionMeta.get().apiMode,
-    });
-    appendLocalAssistantTranscript([...lines, MODEL_ACCESS_USAGE].join('\n'));
+    const apiMode = sessionMeta.get().apiMode;
+    const [{ lines }, apiStatusLines] = await Promise.all([
+      loadCliModelAccessOverview({ apiMode }),
+      loadCliApiStatusLines({ apiMode }),
+    ]);
+    const detailLines = apiStatusLines
+      .slice(2)
+      .filter((line) => !lines.includes(line));
+    appendLocalAssistantTranscript(
+      [...lines, ...detailLines, MODEL_ACCESS_USAGE].join('\n'),
+    );
     return;
   }
 
@@ -102,6 +111,7 @@ export async function applyCliModelAccessSelection(
       route,
       { writeProgress: appendLocalAssistantTranscript },
     );
+    refreshCodexPreferenceViews();
     setCliSessionApiMode(access.apiMode);
     let modelNotice: string | undefined;
     try {

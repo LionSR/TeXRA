@@ -18,6 +18,7 @@ import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
 import {
   activeForm,
   activeStreamId,
+  codexPreferenceVersion,
   patchSessionMeta,
   resetCliState,
   patchStream,
@@ -291,13 +292,24 @@ describe('handleTuiSlashCommand', () => {
           'TeXRA: signed in',
         ],
       });
+    vi.spyOn(apiStatus, 'loadCliApiStatusLines').mockResolvedValue([
+      'api: Included TeXRA access',
+      'auth: signed in',
+      'tier: researcher',
+      'included usage this month: 25% used, 75% remaining',
+    ]);
     const context = createContext(createSession());
 
     await handleTuiSlashCommand('/auth', context);
     expect(lastEntryText()).toContain('model access: ChatGPT subscription');
 
     await handleTuiSlashCommand('/api status', context);
-    expect(lastEntryText()).toContain('model access: ChatGPT subscription');
+    const apiStatusText = lastEntryText();
+    expect(apiStatusText).toContain('model access: ChatGPT subscription');
+    expect(apiStatusText).toContain('tier: researcher');
+    expect(apiStatusText).toContain(
+      'included usage this month: 25% used, 75% remaining',
+    );
     expect(overview).toHaveBeenCalledTimes(2);
   });
 
@@ -315,6 +327,7 @@ describe('handleTuiSlashCommand', () => {
     const context = createContext(session, {
       cliContext: createCliContext({ apiMode: 'included' }),
     });
+    const previousPreferenceVersion = codexPreferenceVersion.get();
 
     await handleTuiSlashCommand('/api chatgpt', context);
 
@@ -323,6 +336,7 @@ describe('handleTuiSlashCommand', () => {
       'chatgpt',
       expect.any(Object),
     );
+    expect(codexPreferenceVersion.get()).toBe(previousPreferenceVersion + 1);
   });
 
   it('clears TeXRA and ChatGPT credentials on /logout', async () => {

@@ -1226,7 +1226,7 @@ const SCENARIOS = [
       'Personal API keys',
       'Included TeXRA access',
       '↑/↓ navigate',
-      '1-2/Enter select',
+      '1-3/Enter select',
       'Esc close',
     ],
     unexpect: ['ServerSideKeyService not initialized'],
