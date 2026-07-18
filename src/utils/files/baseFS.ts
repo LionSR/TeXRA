@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { FileType, type FileStat } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
-import { isFile, isDirectory } from './fsEntryType';
+import { isFile } from './fsEntryType';
 
 /** Convert content to Buffer for writing. */
 function toBuffer(content: string | Uint8Array): Uint8Array {
@@ -177,18 +177,6 @@ export abstract class BaseFS {
     );
   }
 
-  public static async isDir(
-    this: typeof BaseFS,
-    target: string,
-  ): Promise<boolean> {
-    try {
-      const stats = await this.stat(target);
-      return isDirectory(stats.type);
-    } catch {
-      return false;
-    }
-  }
-
   public static async isFile(
     this: typeof BaseFS,
     target: string,
@@ -229,19 +217,6 @@ export abstract class BaseFS {
     return fs.readFileSync(this.preparePath(target));
   }
 
-  public static writeSync(
-    this: typeof BaseFS,
-    target: string,
-    content: string | Buffer,
-  ): void {
-    const resolved = this.preparePath(target);
-    if (typeof content === 'string') {
-      fs.writeFileSync(resolved, content, 'utf-8');
-    } else {
-      fs.writeFileSync(resolved, content);
-    }
-  }
-
   public static deleteSync(this: typeof BaseFS, target: string): void {
     fs.unlinkSync(this.preparePath(target));
   }
@@ -252,12 +227,6 @@ export abstract class BaseFS {
     options?: { recursive?: boolean },
   ): void {
     fs.mkdirSync(this.preparePath(target), options);
-  }
-
-  public static ensureDirSync(this: typeof BaseFS, target: string): void {
-    if (!this.existsSync(target)) {
-      this.mkdirSync(target, { recursive: true });
-    }
   }
 
   public static readDirSync(this: typeof BaseFS, target: string): string[] {
@@ -304,14 +273,6 @@ export abstract class BaseFS {
         }),
   ): fs.WriteStream {
     return fs.createWriteStream(this.preparePath(target), options);
-  }
-
-  public static unlink(
-    this: typeof BaseFS,
-    target: string,
-    callback: (err: NodeJS.ErrnoException | null) => void,
-  ): void {
-    fs.unlink(this.preparePath(target), callback);
   }
 
   // ===== Utility helpers =====
