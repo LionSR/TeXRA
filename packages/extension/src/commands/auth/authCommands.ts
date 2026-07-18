@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { type OAuthProvider, getExternalAuthCallbackUri } from '@auth/config';
 import { AUTH_PROVIDER_ID } from '@auth/constants';
-import { showSettingsView } from '@commands/settings';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 import {
   showLoggedErrorMessage,
@@ -206,14 +205,6 @@ export async function signOut(): Promise<void> {
     }
   } catch (error) {
     void showLoggedErrorMessage(CHANNEL, 'Sign out failed', error);
-  }
-}
-
-export async function viewProfile(): Promise<void> {
-  try {
-    await showSettingsView();
-  } catch (error) {
-    void showLoggedErrorMessage(CHANNEL, 'Failed to load profile', error);
   }
 }
 

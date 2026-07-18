@@ -115,7 +115,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
-import { registerCommands, getMainViewProvider } from './commands';
+import { registerCommands } from './commands';
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
@@ -529,7 +529,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // otherwise block activation on slow disks. (Never rejects — the body is
   // fully wrapped in try/catch.)
   setTimeout(() => void configureLatexSettings(), 0);
-  registerCommands(context);
+  const viewProviders = registerCommands(context);
   registerFileDecorations(context);
 
   initializeNativeToolEditApproval(context, extensionAgentRuntimeHost);
@@ -724,14 +724,7 @@ export async function activate(context: vscode.ExtensionContext) {
   });
 
   const showMainView = async () => {
-    const mvp = getMainViewProvider();
-    if (mvp) {
-      await mvp.showInSidebar();
-      return;
-    }
-    // Fallback when MainViewProvider is not yet registered
-    await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
-    await vscode.commands.executeCommand('texra.mainView.focus');
+    await viewProviders.mainViewProvider.showInSidebar();
   };
 
   const agentEventDisposable = registerAgentEventListeners();
@@ -745,11 +738,10 @@ export async function activate(context: vscode.ExtensionContext) {
     { dispose: disposeStatusListener },
     statusBarItem,
     // `texra.showMainView` keeps its bespoke registration here because the
-    // handler closes over the `MainViewProvider` and the late-bound sidebar
-    // fallback. `texra.toggleView` migrated to the shared command registry
-    // in #3781 batch 4 — its action only needs module-level state
-    // (`getActiveSidebarView()`) so it doesn't need a closure into
-    // `activate()`.
+    // handler closes over the `MainViewProvider`. `texra.toggleView` migrated
+    // to the shared command registry in #3781 batch 4 — its action only needs
+    // module-level state (`getActiveSidebarView()`) so it doesn't need a
+    // closure into `activate()`.
     vscode.commands.registerCommand('texra.showMainView', showMainView),
     vscode.commands.registerCommand('texra.refreshApiKeyStatus', async () => {
       await queueApiKeyStatusRefresh();
@@ -757,21 +749,17 @@ export async function activate(context: vscode.ExtensionContext) {
       // palette, walkthrough, welcome card), so the onboarding funnel must
       // recompute too: the State 0 card has no other signal when a key is
       // added outside the main view's own round-trip.
-      const mainViewProvider = getMainViewProvider();
-      if (mainViewProvider) {
-        await mainViewProvider.refreshOnboardingFunnel().catch(() => {});
-      }
+      await viewProviders.mainViewProvider
+        .refreshOnboardingFunnel()
+        .catch(() => {});
     }),
   );
 
-  const mainViewProvider = getMainViewProvider();
-  if (mainViewProvider) {
-    progressViewProvider.setSidebarWebviewGetter(
-      () => mainViewProvider.getWebviewView()?.webview,
-    );
-    progressViewProvider.setMainViewProvider(mainViewProvider);
-    mainViewProvider.setProgressViewProvider(progressViewProvider);
-  }
+  progressViewProvider.setSidebarWebviewGetter(
+    () => viewProviders.mainViewProvider.getWebviewView()?.webview,
+  );
+  progressViewProvider.setMainViewProvider(viewProviders.mainViewProvider);
+  viewProviders.mainViewProvider.setProgressViewProvider(progressViewProvider);
 
   // Gating commandPalette / keybindings / menus / views on `texra.activated`
   // keeps them hidden until every command handler is registered. This must run
