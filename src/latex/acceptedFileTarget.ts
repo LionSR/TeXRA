@@ -4,6 +4,9 @@ import path from 'node:path';
 // Local imports - agent
 import { extractAgentSuffix } from '@agent/utils/mergeFileUtils';
 
+// Local imports - latex
+import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
+
 // Local imports - utilities
 import type { FileLocation } from '@shared/schemas';
 import {
@@ -106,6 +109,12 @@ export interface AcceptEditedFileReplacePorts {
   /** Notify the host that a workspace file was written at this absolute path. */
   emitWritten: (absolutePath: string) => void;
   showInfo: (message: string) => void | Promise<void>;
+  /**
+   * Remove the stale `_diff` companion file left over from the run that
+   * produced `editedLocation`, if any. Errors (e.g. the file was already
+   * gone) are non-fatal and should be swallowed by the port implementation.
+   */
+  deleteFile: (location: FileLocation) => Promise<void>;
 }
 
 /**
@@ -142,6 +151,13 @@ export async function acceptEditedFileReplace(
     ports.emitWritten(targetLocation.absolutePath);
   }
 
+  await cleanupStaleDiffFile(
+    baseLocation,
+    editedPath,
+    targetLocation,
+    ports.deleteFile,
+  );
+
   await ports.showInfo(
     buildAcceptSuccessMessage(
       targetFileName,
@@ -150,6 +166,53 @@ export async function acceptEditedFileReplace(
     ),
   );
   return true;
+}
+
+/**
+ * Location of the stale `_diff` companion file that a prior latexdiff run
+ * would have generated for the `baseLocation` / `editedPath` pair, sitting
+ * beside `baseLocation`. Shared by every "accept edited content" path so the
+ * diff-naming convention (see {@link generateDiffFileName}) is computed once.
+ */
+export function diffFileLocation(
+  baseLocation: FileLocation,
+  editedPath: string,
+): FileLocation {
+  const diffFileName = generateDiffFileName(
+    baseLocation.absolutePath,
+    editedPath,
+    '_diff',
+  );
+  return siblingLocation(baseLocation, diffFileName);
+}
+
+/**
+ * Delete the stale `_diff` companion file for (baseLocation, editedPath) via
+ * `deleteFile`. No-ops in two cases:
+ *
+ * - `targetLocation` isn't `baseLocation` itself: a copy/sibling write (an
+ *   extension mismatch resolving to a new file via {@link getAcceptedFileTarget},
+ *   or an explicit "save as copy" choice) leaves the base untouched, so the
+ *   diff comparing it against `editedPath` is still accurate.
+ * - The derived diff location equals `targetLocation`: possible whenever
+ *   `baseLocation`'s own name already matches the generated diff-name
+ *   pattern for `editedPath` (e.g. accepting into a base literally named
+ *   `<edited-stem>_diff.tex`, or accepting directly into a latexdiff
+ *   artifact) — deleting it would delete the file just accepted.
+ *
+ * `deleteFile` is expected to swallow its own errors (missing/locked file);
+ * this only guards against deleting content that was never stale.
+ */
+export async function cleanupStaleDiffFile(
+  baseLocation: FileLocation,
+  editedPath: string,
+  targetLocation: FileLocation,
+  deleteFile: (location: FileLocation) => Promise<void>,
+): Promise<void> {
+  if (targetLocation.absolutePath !== baseLocation.absolutePath) return;
+  const diffLocation = diffFileLocation(baseLocation, editedPath);
+  if (diffLocation.absolutePath === targetLocation.absolutePath) return;
+  await deleteFile(diffLocation);
 }
 
 export function getAcceptedFileTarget(
