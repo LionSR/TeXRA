@@ -11,8 +11,10 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-// Local imports - shared styles
+// Local imports - shared webview
 import { commonViewStyles, designTokens } from '@shared/styles';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { postMessage } from '@shared/hostBridge';
 import { renderLoadingState } from '@shared/wa/loadingState';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -57,7 +59,6 @@ import {
 } from '@shared/constants/latex';
 
 // Local imports - shared utilities
-import { createEvent } from '@shared/utils/events';
 import { clamp, filterNotNullish } from '@utils/core';
 import { latexTabStyles } from './LaTeXTab.styles';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
@@ -122,7 +123,7 @@ interface DependencyInfo {
   /** Keys to check for detected tool paths (shown when installed). */
   readonly pathKeys?: ToolPathKey[];
   /** If provided, renders an action button when missing (e.g. VS Code install). */
-  readonly actionEvent?: string;
+  readonly actionCommand?: string;
   readonly actionLabel?: string;
 }
 
@@ -142,7 +143,7 @@ const DEPENDENCIES: DependencyInfo[] = [
     installedDesc: 'Provides LaTeX compilation, PDF preview, and IntelliSense.',
     missingDesc:
       'Required for LaTeX compilation, PDF preview, and IntelliSense.',
-    actionEvent: 'latex-install-workshop',
+    actionCommand: SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP,
     actionLabel: 'Install',
   },
   {
@@ -244,15 +245,13 @@ export class LaTeXTab extends LitElement {
   @property({ type: Boolean }) inlineCriticismSupported = false;
 
   private handleApply(field?: SettingInfo['key'], reset = false): void {
-    this.dispatchEvent(createEvent('latex-apply-settings', { field, reset }));
+    postMessage(SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS, { field, reset });
   }
 
   private handleInlineCriticismToggle(event: Event): void {
-    this.dispatchEvent(
-      createEvent('inline-criticism-toggle', {
-        enabled: Boolean((event.target as WaSwitch | null)?.checked),
-      }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_INLINE_CRITICISM_ENABLED, {
+      enabled: Boolean((event.target as WaSwitch | null)?.checked),
+    });
   }
 
   private allSettingsSet(): boolean {
@@ -281,9 +280,9 @@ export class LaTeXTab extends LitElement {
   }
 
   private handleRunInTerminal(command: string): void {
-    this.dispatchEvent(
-      createEvent('latex-run-install-command', { installCommand: command }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND, {
+      installCommand: command,
+    });
   }
 
   /** Collect detected tool paths for a dependency. */
@@ -302,20 +301,14 @@ export class LaTeXTab extends LitElement {
     let actionSlot: TemplateResult | typeof nothing;
     if (installed) {
       actionSlot = nothing;
-    } else if (dep.actionEvent) {
+    } else if (dep.actionCommand) {
       actionSlot = html`
         <wa-button
           appearance="outlined"
           variant="neutral"
           size="small"
           title="${dep.actionLabel ?? 'Install'}"
-          @click=${() =>
-            this.dispatchEvent(
-              new CustomEvent(dep.actionEvent!, {
-                bubbles: true,
-                composed: true,
-              }),
-            )}
+          @click=${() => postMessage(dep.actionCommand!)}
         >
           ${waIcon('cloud-download', { slot: 'start' })}
           ${dep.actionLabel ?? 'Install'}
@@ -591,12 +584,10 @@ export class LaTeXTab extends LitElement {
     field: F,
     value: LatexConfigValueFor<F> | undefined,
   ): void {
-    this.dispatchEvent(
-      createEvent('latex-set-config-value', {
-        field,
-        value,
-      }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE, {
+      field,
+      value,
+    });
   }
 
   private renderCompileDiffSettings(): TemplateResult {

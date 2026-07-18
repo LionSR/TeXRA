@@ -20,6 +20,8 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { MemoryViewItem } from '@shared/schemas';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { postMessage } from '@shared/hostBridge';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import {
   formatBytes,
@@ -30,9 +32,6 @@ import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import { renderIconActionButtonParts } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
-
-// Local imports - memory view events
-import { MemoryViewEvents } from './events';
 
 @customElement('memory-item')
 export class MemoryItem extends LitElement {
@@ -106,28 +105,27 @@ export class MemoryItem extends LitElement {
 
   private handleOpen(): void {
     if (!this.item) return;
-    this.dispatchEvent(
-      MemoryViewEvents.openItem({ storagePath: this.item.storagePath }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FILE, {
+      storagePath: this.item.storagePath,
+    });
   }
 
   private handleDelete(): void {
     if (!this.item) return;
-    this.dispatchEvent(
-      MemoryViewEvents.deleteItem({
-        storagePath: this.item.storagePath,
-        displayPath: this.item.displayPath,
-      }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.DELETE_MEMORY, {
+      storagePath: this.item.storagePath,
+      displayPath: this.item.displayPath,
+    });
   }
 
   private handleTogglePin(): void {
     if (!this.item) return;
     const { storagePath, pinned } = this.item;
-    this.dispatchEvent(
+    postMessage(
       pinned
-        ? MemoryViewEvents.unpinItem({ storagePath })
-        : MemoryViewEvents.pinItem({ storagePath }),
+        ? SETTINGS_VIEW_COMMANDS.UNPIN_MEMORY
+        : SETTINGS_VIEW_COMMANDS.PIN_MEMORY,
+      { storagePath },
     );
   }
 
@@ -147,9 +145,9 @@ export class MemoryItem extends LitElement {
     if (this.item.previewError) return;
     if (this.requestedPreviewFor === this.item.storagePath) return;
     this.requestedPreviewFor = this.item.storagePath;
-    this.dispatchEvent(
-      MemoryViewEvents.loadPreview({ storagePath: this.item.storagePath }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW, {
+      storagePath: this.item.storagePath,
+    });
   }
 
   private renderMeta(item: MemoryViewItem): TemplateResult {

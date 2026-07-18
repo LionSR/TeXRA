@@ -4,6 +4,10 @@ import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 
+// Local imports - shared webview
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { postMessage } from '@shared/hostBridge';
+
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
@@ -48,7 +52,7 @@ export class SearchBar extends LitElement {
   }
 
   private handleClearHistory(): void {
-    this.dispatchEvent(HistoryViewEvents.clearHistory());
+    postMessage(SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY);
   }
 
   private handleKeydown(event: KeyboardEvent): void {

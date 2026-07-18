@@ -7,9 +7,6 @@ export const HistoryViewEvents = {
   searchPrev: () => createEvent('history-search-prev', undefined),
   toggleItem: (detail: { historyId: string; open: boolean }) =>
     createEvent('history-toggle', detail),
-  historyAction: (detail: { action: string; historyId: string }) =>
-    createEvent('history-action', detail),
-  clearHistory: () => createEvent('history-clear', undefined),
   matchCount: (detail: { display: string }) =>
     createEvent('history-match-count', detail),
   searchClearComplete: () => createEvent('search-clear-complete', undefined),

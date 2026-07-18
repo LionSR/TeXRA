@@ -1,10 +1,19 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({
+  postMessage: vi.fn(),
+}));
+
+vi.mock('@shared/hostBridge', () => ({
+  postMessage: mocks.postMessage,
+}));
 
 // Local imports - component type
 import type { MultiAgentTab } from '@settingsView/frontend/tabs/MultiAgentTab';
 
 // Local imports - shared schemas
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AGENT_MODE_PRESETS,
   type AgentModePreset,
@@ -55,6 +64,20 @@ describe('multi-agent-tab preset card keyboard activation', () => {
     () => import('@settingsView/frontend/tabs/MultiAgentTab'),
   );
 
+  beforeEach(() => {
+    mocks.postMessage.mockClear();
+  });
+
+  /** presetIds from applyAgentModePreset postMessage calls, in order. */
+  function appliedPresetIds(): string[] {
+    return mocks.postMessage.mock.calls
+      .filter(
+        ([command]) =>
+          command === SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
+      )
+      .map(([, payload]) => (payload as { presetId: string }).presetId);
+  }
+
   it('exposes role=button and tabindex=0 on every preset card', async () => {
     const element = await mount();
     const cards = element.shadowRoot?.querySelectorAll('.preset-card') ?? [];
@@ -67,23 +90,17 @@ describe('multi-agent-tab preset card keyboard activation', () => {
 
   it('applies the preset on Enter and Space, not on other keys', async () => {
     const element = await mount();
-    const applied: string[] = [];
-    element.addEventListener('apply-agent-mode-preset', (event) => {
-      applied.push(
-        (event as CustomEvent<{ presetId: string }>).detail.presetId,
-      );
-    });
 
     const firstCard = element.shadowRoot?.querySelector('.preset-card');
     expect(firstCard).toBeInstanceOf(HTMLElement);
 
     dispatchKey(firstCard!, 'a');
-    expect(applied).toHaveLength(0);
+    expect(appliedPresetIds()).toHaveLength(0);
 
     dispatchKey(firstCard!, 'Enter');
     dispatchKey(firstCard!, ' ');
 
-    expect(applied).toEqual([
+    expect(appliedPresetIds()).toEqual([
       AGENT_MODE_PRESETS[0]!.id,
       AGENT_MODE_PRESETS[0]!.id,
     ]);
@@ -91,18 +108,6 @@ describe('multi-agent-tab preset card keyboard activation', () => {
 
   it('does not apply the preset when Enter/Space bubbles from the delete button', async () => {
     const element = await mount({ customPresets: [CUSTOM_PRESET] });
-    const applied: string[] = [];
-    const deleted: string[] = [];
-    element.addEventListener('apply-agent-mode-preset', (event) => {
-      applied.push(
-        (event as CustomEvent<{ presetId: string }>).detail.presetId,
-      );
-    });
-    element.addEventListener('delete-agent-mode-preset', (event) => {
-      deleted.push(
-        (event as CustomEvent<{ presetId: string }>).detail.presetId,
-      );
-    });
 
     const deleteButton =
       element.shadowRoot?.querySelector('.preset-delete-btn');
@@ -110,6 +115,6 @@ describe('multi-agent-tab preset card keyboard activation', () => {
 
     dispatchKey(deleteButton!, 'Enter');
 
-    expect(applied).toHaveLength(0);
+    expect(appliedPresetIds()).toHaveLength(0);
   });
 });
