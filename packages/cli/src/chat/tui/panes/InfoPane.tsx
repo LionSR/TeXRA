@@ -1,26 +1,29 @@
 // Third-party imports
-import { useEffect } from 'react';
+import { useLayoutEffect } from 'react';
 import { useInput, useWindowSize } from 'ink';
 
 // Local imports - TUI layout, input, and markdown rendering
 import { FormFrame, formFrameWidth } from '../forms/_shared/FormFrame';
 import { isEscapeInput } from '../input/inputKeys';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
+import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { Markdown } from '../render/Markdown';
 
-const INFO_PANE_CHROME_ROWS = 5;
+const INFO_PANE_FIXED_CHROME_ROWS = 4;
 const INFO_PANE_HORIZONTAL_CHROME_COLUMNS = 4;
 
 export function infoPaneRequiredRows(
+  title: string,
   lines: readonly string[],
   textWidth: number,
 ): number {
   const width = Math.max(1, textWidth);
+  const titleRows = wrapAnsiToWidth(title, width).split('\n').length;
   const rendered = renderAnsiMarkdown(lines.join('\n'), {
     colorEnabled: false,
     width,
   });
-  return INFO_PANE_CHROME_ROWS + rendered.split('\n').length;
+  return INFO_PANE_FIXED_CHROME_ROWS + titleRows + rendered.split('\n').length;
 }
 
 export interface InfoPaneProps {
@@ -38,15 +41,16 @@ export function InfoPane(props: InfoPaneProps): React.JSX.Element | null {
   const textWidth =
     formFrameWidth(columns) - INFO_PANE_HORIZONTAL_CHROME_COLUMNS;
   const fits =
-    infoPaneRequiredRows(props.lines, textWidth) <= props.availableRows;
+    infoPaneRequiredRows(props.title, props.lines, textWidth) <=
+    props.availableRows;
 
   useInput((input, key) => {
     if (fits && isEscapeInput(input, key)) props.onClose();
   });
 
-  useEffect(() => {
-    // Archive after rendering rather than mutating transcript/signal state in
-    // the render path. The parent clears this pane in the same transition.
+  useLayoutEffect(() => {
+    // Archive before paint rather than committing an empty foreground frame.
+    // The parent clears this pane in the same transition.
     if (!fits) props.onOverflow(props.lines);
   }, [fits, props.lines, props.onOverflow]);
 
