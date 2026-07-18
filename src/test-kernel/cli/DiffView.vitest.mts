@@ -198,6 +198,56 @@ describe('CLI diff display', () => {
     expect(initialLines.some((line) => line.kind === 'added')).toBe(true);
   });
 
+  it('does not skip a standalone deletion to a later hunk addition', () => {
+    const hunks = buildHunks(
+      'draft.tex',
+      [
+        'alpha',
+        'beta',
+        'gamma',
+        'remove this observation',
+        'delta',
+        'epsilon',
+        'zeta',
+        'eta',
+        'theta',
+        'replace this observation',
+        'iota',
+        'kappa',
+        'lambda',
+      ].join('\n'),
+      [
+        'alpha',
+        'beta',
+        'gamma',
+        'delta',
+        'epsilon',
+        'zeta',
+        'eta',
+        'theta',
+        'revised observation',
+        'iota',
+        'kappa',
+        'lambda',
+      ].join('\n'),
+    );
+    const maxDisplayLines = 6;
+    const initialLines = scrollBoundedDiffDisplayLines(
+      hunks,
+      0,
+      maxDisplayLines,
+      initialDiffScrollOffset(hunks, 80, maxDisplayLines),
+      80,
+    );
+
+    expect(initialLines.some((line) => line.text.includes('remove this'))).toBe(
+      true,
+    );
+    expect(
+      initialLines.some((line) => line.text.includes('revised observation')),
+    ).toBe(false);
+  });
+
   it('wraps long changed lines instead of replacing the tail with an ellipsis', () => {
     const proposed =
       'Here $2n+1$ is the $(n+1)$-st odd number, i.e., the next odd number after $2n-1$.';

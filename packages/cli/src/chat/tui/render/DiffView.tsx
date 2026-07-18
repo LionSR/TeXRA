@@ -199,49 +199,23 @@ export function initialDiffScrollOffset(
 
   const initiallyVisibleContentRows = Math.max(1, maxDisplayLines - 1);
   const firstChange = lines.at(changedIndex);
-  const needsAddedRow = firstChange?.kind === 'removed';
-  const topLines = scrollBoundedDiffDisplayLines(
-    hunks,
-    0,
-    maxDisplayLines,
-    0,
-    width,
-  );
-  const additionVisibleAtTop = topLines.some((line) => line.kind === 'added');
-  if (
-    changedIndex < initiallyVisibleContentRows &&
-    (!needsAddedRow || additionVisibleAtTop)
-  ) {
-    return 0;
-  }
-
-  const initialOffset = clamp(
-    changedIndex - 1,
-    0,
-    maxDiffScrollOffset(lines.length, maxDisplayLines),
-  );
-  const initialLines = scrollBoundedDiffDisplayLines(
-    hunks,
-    0,
-    maxDisplayLines,
-    initialOffset,
-    width,
-  );
-  const additionVisible = initialLines.some((line) => line.kind === 'added');
-  if (!needsAddedRow || additionVisible) return initialOffset;
-
   const maxOffset = maxDiffScrollOffset(lines.length, maxDisplayLines);
-  for (let offset = 0; offset <= maxOffset; offset += 1) {
-    const visible = scrollBoundedDiffDisplayLines(
-      hunks,
-      0,
-      maxDisplayLines,
-      offset,
-      width,
-    );
-    if (visible.some((line) => line.kind === 'added')) return offset;
+  const defaultOffset = clamp(changedIndex - 1, 0, maxOffset);
+  if (firstChange?.kind !== 'removed') {
+    return changedIndex < initiallyVisibleContentRows ? 0 : defaultOffset;
   }
-  return initialOffset;
+
+  let removedEnd = changedIndex;
+  while (lines.at(removedEnd + 1)?.kind === 'removed') removedEnd += 1;
+  const addedIndex =
+    lines.at(removedEnd + 1)?.kind === 'added' ? removedEnd + 1 : undefined;
+  if (addedIndex === undefined) {
+    return changedIndex < initiallyVisibleContentRows ? 0 : defaultOffset;
+  }
+
+  if (addedIndex < initiallyVisibleContentRows) return 0;
+
+  return clamp(addedIndex - Math.max(1, maxDisplayLines - 2) + 1, 0, maxOffset);
 }
 
 function overflowMarkerCandidates(
