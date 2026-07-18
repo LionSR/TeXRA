@@ -393,7 +393,7 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
 
   const method = detectInstallMethod();
   const updateCmd = formatUpdateCommand(method);
-  const style = createCliStyle(context.colorEnabled);
+  const style = createCliStyle(context.stderrColorEnabled);
   // Runs before `initInteractiveCliPlatform`, so `platform()` isn't up yet —
   // open the same global `state.json` that `createCliStateStores` opens later
   // directly (see `cliStateStores.ts`). Failures here (e.g. an unreadable or

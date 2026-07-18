@@ -14,6 +14,7 @@ import { saveProviderApiKey } from '@cli/runtime/providerApiKey';
 import { parseCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import {
   contextForCliModelAccess,
+  type CliModelAccessSelectionResult,
   selectCliApiModelAccessRoute,
   selectCliModelAccessRoute,
 } from '@cli/runtime/modelAccessSelection';
@@ -56,14 +57,11 @@ async function reconcileRootModelAfterApiModeChange(
   return selection.notice;
 }
 
-/** Save a provider key, select personal access, and reconcile the root model. */
-export async function applyCliProviderApiKey(
-  provider: ApiProvider,
-  key: string,
-  context?: SlashCommandContext,
-): Promise<string | undefined> {
-  await saveProviderApiKey(provider, key);
-  const access = await selectCliApiModelAccessRoute('personal');
+/** Apply an access selection to the TUI and reconcile the root model. */
+async function completeModelAccessSelection(
+  access: CliModelAccessSelectionResult,
+  context: SlashCommandContext | undefined,
+): Promise<string> {
   refreshCodexPreferenceViews();
   setCliSessionApiMode(access.apiMode);
   let modelNotice: string | undefined;
@@ -76,6 +74,17 @@ export async function applyCliProviderApiKey(
     modelNotice = toErrorMessage(error);
   }
   return [access.message, modelNotice].filter(Boolean).join('\n');
+}
+
+/** Save a provider key, select personal access, and reconcile the root model. */
+export async function applyCliProviderApiKey(
+  provider: ApiProvider,
+  key: string,
+  context?: SlashCommandContext,
+): Promise<string | undefined> {
+  await saveProviderApiKey(provider, key);
+  const access = await selectCliApiModelAccessRoute('personal');
+  return completeModelAccessSelection(access, context);
 }
 
 /** Set the chat session's api-mode without touching the persisted global. */
@@ -111,19 +120,8 @@ export async function applyCliModelAccessSelection(
       route,
       { writeProgress: appendLocalAssistantTranscript },
     );
-    refreshCodexPreferenceViews();
-    setCliSessionApiMode(access.apiMode);
-    let modelNotice: string | undefined;
-    try {
-      modelNotice = await reconcileRootModelAfterApiModeChange(
-        context,
-        access.apiMode,
-      );
-    } catch (error: unknown) {
-      modelNotice = toErrorMessage(error);
-    }
     appendLocalAssistantTranscript(
-      [access.message, ...(modelNotice ? [modelNotice] : [])].join('\n'),
+      await completeModelAccessSelection(access, context),
     );
     return;
   }

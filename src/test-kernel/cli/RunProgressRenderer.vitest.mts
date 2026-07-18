@@ -42,7 +42,6 @@ function context(overrides: Partial<CliContext> = {}): CliContext {
     stderrIsTty: true,
     stdoutColorEnabled: true,
     stderrColorEnabled: true,
-    colorEnabled: true,
     ...overrides,
   });
 }
@@ -300,7 +299,7 @@ function handleActiveProcesses(
       type: 'child.activity',
       kind: 'processes',
       parentStreamId: parentStreamId as StreamTabId,
-      processes,
+      items: processes,
     },
   });
 }
@@ -317,7 +316,7 @@ function handleActiveSubagents(
       type: 'child.activity',
       kind: 'subagents',
       parentStreamId: parentStreamId as StreamTabId,
-      children,
+      items: children,
     },
   });
 }
@@ -445,7 +444,7 @@ describe('CLI run progress renderer', () => {
   it('summarizes multi-input workflow progress without hiding extra files', () => {
     const output = outputBuffer();
     const renderer = createRunProgressRenderer(
-      context({ colorEnabled: false }),
+      context({ stderrColorEnabled: false }),
       {
         colorEnabled: false,
         write: output.write,
@@ -469,7 +468,7 @@ describe('CLI run progress renderer', () => {
     });
     const output = outputBuffer();
     const renderer = createRunProgressRenderer(
-      context({ colorEnabled: false }),
+      context({ stderrColorEnabled: false }),
       {
         colorEnabled: false,
         write: output.write,
@@ -496,7 +495,7 @@ describe('CLI run progress renderer', () => {
     });
     const output = outputBuffer();
     const renderer = createRunProgressRenderer(
-      context({ colorEnabled: false }),
+      context({ stderrColorEnabled: false }),
       {
         colorEnabled: false,
         write: output.write,
@@ -518,7 +517,7 @@ describe('CLI run progress renderer', () => {
   it('prints phase changes on separate lines when ANSI is disabled', () => {
     const output = outputBuffer();
     const renderer = createRunProgressRenderer(
-      context({ colorEnabled: false }),
+      context({ stderrColorEnabled: false }),
       {
         colorEnabled: false,
         write: output.write,
@@ -548,7 +547,7 @@ describe('CLI run progress renderer', () => {
   it('renders the live line from direct session and run facts', () => {
     const output = outputBuffer();
     const renderer = createRunProgressRenderer(
-      context({ colorEnabled: false }),
+      context({ stderrColorEnabled: false }),
       {
         colorEnabled: false,
         write: output.write,
@@ -603,7 +602,7 @@ describe('CLI run progress renderer', () => {
         type: 'child.activity',
         kind: 'subagents',
         parentStreamId: streamId,
-        children: [
+        items: [
           {
             kind: 'subagent',
             executionId: 'child-1',
@@ -639,7 +638,7 @@ describe('CLI run progress renderer', () => {
   it('keeps the root run visible when child streams update progress', () => {
     const output = outputBuffer();
     const renderer = createRunProgressRenderer(
-      context({ colorEnabled: false }),
+      context({ stderrColorEnabled: false }),
       {
         colorEnabled: false,
         write: output.write,
@@ -790,7 +789,7 @@ describe('CLI run progress renderer', () => {
   it('can add typed round progress after tool-call progress claims the root stream', () => {
     const output = outputBuffer();
     const renderer = createRunProgressRenderer(
-      context({ colorEnabled: false }),
+      context({ stderrColorEnabled: false }),
       {
         colorEnabled: false,
         write: output.write,
@@ -818,7 +817,7 @@ describe('CLI run progress renderer', () => {
   it('keeps named active children visible when earlier entries are unnamed', () => {
     const output = outputBuffer();
     const renderer = createRunProgressRenderer(
-      context({ colorEnabled: false }),
+      context({ stderrColorEnabled: false }),
       {
         colorEnabled: false,
         write: output.write,
@@ -852,7 +851,7 @@ describe('CLI run progress renderer', () => {
     let now = 0;
     const output = outputBuffer();
     const renderer = createRunProgressRenderer(
-      context({ colorEnabled: false }),
+      context({ stderrColorEnabled: false }),
       {
         colorEnabled: false,
         write: output.write,
@@ -907,7 +906,7 @@ describe('CLI run progress renderer', () => {
   it('keeps interrupted terminal stream stops distinct from completion', () => {
     const output = outputBuffer();
     const renderer = createRunProgressRenderer(
-      context({ colorEnabled: false }),
+      context({ stderrColorEnabled: false }),
       {
         colorEnabled: false,
         write: output.write,
@@ -934,7 +933,7 @@ describe('CLI run progress renderer', () => {
   it('freezes on a failed terminal stream stop, same as completed/cancelled', () => {
     const output = outputBuffer();
     const renderer = createRunProgressRenderer(
-      context({ colorEnabled: false }),
+      context({ stderrColorEnabled: false }),
       {
         colorEnabled: false,
         write: output.write,
@@ -992,11 +991,16 @@ describe('CLI run progress renderer', () => {
     expect(shouldRenderRunProgress(context({ stderrIsTty: false }))).toBe(true);
   });
 
-  it('routes progress events even when ordinary CLI logs are quiet', async () => {
+  it('uses the stderr color gate when stdout alone allows color', async () => {
     const output = await captureStreamWrites(process.stderr, async () => {
       const events = new SessionEventHub();
       const host = createCliRuntimeHost(
-        context({ quietLogs: true, renderRunProgress: true }),
+        context({
+          quietLogs: true,
+          renderRunProgress: true,
+          stdoutColorEnabled: true,
+          stderrColorEnabled: false,
+        }),
       );
       const detach = host.attachRunProgressRenderer(events);
       emitWorkflowRunConfig(events);
@@ -1005,6 +1009,7 @@ describe('CLI run progress renderer', () => {
     });
 
     expect(output).toContain('polish paper.tex · 0s');
+    expect(output).not.toContain('\r\x1b[2K');
   });
 
   it('deduplicates matching run and session stream-status facts', async () => {
@@ -1012,7 +1017,7 @@ describe('CLI run progress renderer', () => {
       const events = new SessionEventHub();
       const host = createCliRuntimeHost(
         context({
-          colorEnabled: false,
+          stderrColorEnabled: false,
           quietLogs: true,
           renderRunProgress: true,
         }),
@@ -1080,7 +1085,7 @@ describe('CLI run progress renderer', () => {
         const host = createCliRuntimeHost(
           context({
             outputFormat: 'json',
-            colorEnabled: false,
+            stderrColorEnabled: false,
             renderRunProgress: true,
           }),
         );
@@ -1166,7 +1171,7 @@ describe('CLI run progress renderer', () => {
           type: 'child.activity',
           kind: 'subagents',
           parentStreamId: 'parent-stream',
-          children: [
+          items: [
             {
               kind: 'subagent',
               executionId: 'child-execution',

@@ -75,7 +75,9 @@ export function shouldRenderRunProgress(
 
 export function createRunProgressRenderer(
   context: CliContext,
-  init: RunProgressRendererInit = { colorEnabled: context.colorEnabled },
+  init: RunProgressRendererInit = {
+    colorEnabled: context.stderrColorEnabled,
+  },
 ): RunProgressRenderer | undefined {
   if (context.renderRunProgress !== true) return undefined;
   return new DefaultRunProgressRenderer(init);
@@ -221,9 +223,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       case 'child.activity':
         if (this.rootStreamTerminal) return true;
         if (event.kind === 'processes') {
-          this.applyActiveProcesses(event.parentStreamId, event.processes);
+          this.applyActiveProcesses(event.parentStreamId, event.items);
         } else {
-          this.applyActiveSubagents(event.parentStreamId, event.children);
+          this.applyActiveSubagents(event.parentStreamId, event.items);
         }
         this.updateHeartbeat();
         this.render(true);

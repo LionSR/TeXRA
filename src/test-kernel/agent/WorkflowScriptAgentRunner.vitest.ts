@@ -100,12 +100,15 @@ function parentContext(): LaunchRunContext {
   };
 }
 
-function defaultRunner(): ReturnType<typeof createWorkflowScriptAgentRunner> {
+function defaultRunner(
+  hooks?: Parameters<typeof createWorkflowScriptAgentRunner>[4],
+): ReturnType<typeof createWorkflowScriptAgentRunner> {
   return createWorkflowScriptAgentRunner(
     parentContext(),
     'correct',
     'tool-call-7',
     run,
+    hooks,
   );
 }
 
@@ -344,13 +347,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         return { executionId: 'bbbbbb222222', result };
       },
     );
-    const runner = createWorkflowScriptAgentRunner(
-      parentContext(),
-      'correct',
-      'tool-call-7',
-      run,
-      { onCost },
-    );
+    const runner = defaultRunner({ onCost });
     const call = invocation();
 
     await runner(call);
@@ -364,13 +361,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       executionId: 'bbbbbb222222',
       result: { ...result, cost: 0.25 },
     });
-    const runner = createWorkflowScriptAgentRunner(
-      parentContext(),
-      'correct',
-      'tool-call-7',
-      run,
-      { onCost },
-    );
+    const runner = defaultRunner({ onCost });
 
     await runner({ ...invocation(), index: 3 });
 

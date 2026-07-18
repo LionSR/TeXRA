@@ -187,7 +187,7 @@ function projectCliRunFact(
         event: 'updateActiveSubagents',
         payload: {
           parentStreamId: event.parentStreamId,
-          children: [...event.children],
+          children: [...event.items],
         },
       };
     }
@@ -196,7 +196,7 @@ function projectCliRunFact(
         event: 'updateActiveProcesses',
         payload: {
           parentStreamId: event.parentStreamId,
-          processes: [...event.processes],
+          processes: [...event.items],
         },
       };
     }

@@ -83,13 +83,16 @@ export type ClaudeMessageBlock =
       is_error?: boolean;
     };
 
-/** Format a usage object into TeXRA's TokenUsageStats. */
-export function buildClaudeUsageStats(usage: {
+/** Raw per-turn usage as reported by the Claude Agent SDK (snake_case, all optional). */
+export interface ClaudeTurnUsage {
   input_tokens?: number;
   output_tokens?: number;
   cache_read_input_tokens?: number;
   cache_creation_input_tokens?: number;
-}): TokenUsageStats {
+}
+
+/** Format a usage object into TeXRA's TokenUsageStats. */
+export function buildClaudeUsageStats(usage: ClaudeTurnUsage): TokenUsageStats {
   return {
     inputTokens: usage.input_tokens ?? 0,
     outputTokens: usage.output_tokens ?? 0,

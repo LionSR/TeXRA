@@ -42,15 +42,12 @@ function checkpointIdFor(name: string): string {
 }
 
 /** A runAgent that reports its cost through the strategy's onCost hook. */
-function billingRunAgent(
-  hooks: {
-    onCost: (i: WorkflowAgentInvocation, c: number | undefined) => void;
-  },
-  result: unknown = finalResult,
-): WorkflowAgentRunner {
+function billingRunAgent(hooks: {
+  onCost: (i: WorkflowAgentInvocation, c: number | undefined) => void;
+}): WorkflowAgentRunner {
   return async (invocation) => {
     hooks.onCost(invocation, finalResult.cost);
-    return result as AgentFinalResult;
+    return finalResult;
   };
 }
 

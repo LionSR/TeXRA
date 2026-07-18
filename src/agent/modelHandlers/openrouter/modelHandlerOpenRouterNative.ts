@@ -38,7 +38,10 @@ import { isNonEmptyString } from '@utils/core';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
 import { toDataUrl } from '../support/dataUrl';
 import { getDeclaredMaxReasoningEffort } from '../support/reasoningEffort';
-import { resolveMoonshotRequestParameters } from '../support/moonshotRequestParameters';
+import {
+  resolveMoonshotRequestParameters,
+  type MoonshotRequestParameters,
+} from '../support/moonshotRequestParameters';
 import {
   computeOpenRouterPrice,
   normalizeOpenRouterUsage,
@@ -344,23 +347,28 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   }
 
   /**
-   * Temperature request params for this model. Moonshot fixes sampling for
-   * some Kimi families regardless of the caller's choice (Kimi K3 requires
-   * omitting the field entirely), and OpenRouter forwards to the same
-   * Moonshot backends — so this route applies the same fixed-temperature
-   * rules as the direct ModelHandlerKimi path. Returns an empty object when
-   * the request must omit `temperature`.
+   * Moonshot's fixed request parameters for this model, if any apply.
+   * OpenRouter forwards to the same Moonshot backends as the direct
+   * ModelHandlerKimi path, so this route applies the same fixed-parameter
+   * rules.
+   */
+  private resolveMoonshotParameters(): MoonshotRequestParameters | undefined {
+    return this.config.provider === ModelProvider.MOONSHOT
+      ? resolveMoonshotRequestParameters(
+          this.config.fullName,
+          this.capabilities.supportsReasoning,
+        )
+      : undefined;
+  }
+
+  /**
+   * Temperature request params for this model. Returns an empty object when
+   * the request must omit `temperature` (e.g. Kimi K3's fixed sampling).
    */
   private samplingTemperature(requested: number | undefined): {
     temperature?: number;
   } {
-    const fixed =
-      this.config.provider === ModelProvider.MOONSHOT
-        ? resolveMoonshotRequestParameters(
-            this.config.fullName,
-            this.capabilities.supportsReasoning,
-          )
-        : undefined;
+    const fixed = this.resolveMoonshotParameters();
     const value = fixed ? fixed.temperature : requested;
     return value !== undefined ? { temperature: value } : {};
   }
@@ -378,13 +386,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       messages,
       this.lastKnownInputTokens,
       async (conversationMessages, compactionSystemPrompt) => {
-        const moonshotParameters =
-          this.config.provider === ModelProvider.MOONSHOT
-            ? resolveMoonshotRequestParameters(
-                this.config.fullName,
-                this.capabilities.supportsReasoning,
-              )
-            : undefined;
+        const moonshotParameters = this.resolveMoonshotParameters();
         const summaryRequest: ChatRequest & { stream: false } = {
           model: this.config.openrouterFullName,
           messages: [

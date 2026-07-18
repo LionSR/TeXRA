@@ -391,7 +391,7 @@ export class SessionHostInteractions implements HostInteractions {
       'bash',
       request.streamId ?? undefined,
       (interactions) => interactions.requestBashApproval?.(request, options),
-      (cause) => ({ accepted: false, userMessage: cause }),
+      (cause) => cancellationResultFor('bash', cause),
     );
   }
 
@@ -403,7 +403,7 @@ export class SessionHostInteractions implements HostInteractions {
       'plan',
       request.streamId,
       (interactions) => interactions.requestPlanApproval?.(request, options),
-      (cause) => ({ action: 'reject', feedback: cause }),
+      (cause) => cancellationResultFor('plan', cause),
     );
   }
 
@@ -415,7 +415,7 @@ export class SessionHostInteractions implements HostInteractions {
       'proposal',
       request.streamId,
       (interactions) => interactions.requestAgentProposal?.(request, options),
-      (cause) => ({ action: 'reject', feedback: cause }),
+      (cause) => cancellationResultFor('proposal', cause),
     );
   }
 
@@ -427,7 +427,7 @@ export class SessionHostInteractions implements HostInteractions {
       'retry',
       request.streamId,
       (interactions) => interactions.requestRetry?.(request, options),
-      () => ({ action: 'cancel' }),
+      (cause) => cancellationResultFor('retry', cause),
     );
   }
 
@@ -439,7 +439,7 @@ export class SessionHostInteractions implements HostInteractions {
       'userQuestion',
       request.streamId || undefined,
       (interactions) => interactions.askUserQuestion?.(request, options),
-      (cause) => ({ submitted: false, feedback: cause }),
+      (cause) => cancellationResultFor('userQuestion', cause),
     );
   }
 

@@ -374,6 +374,27 @@ export class BashTool extends defineTool({
       logBackgroundFailure(action, err);
     };
 
+    const finalizeAndReport = async (
+      success: boolean,
+      msg: string,
+    ): Promise<void> => {
+      try {
+        const finalization = await finalizeExecution({
+          executionId,
+          terminalStatus: backgroundBashTerminalStatus(success),
+          flowRecord: 'delete',
+        });
+        if (finalization.status === 'failed') throw finalization.error;
+      } catch (err: unknown) {
+        logDurabilityFailure('finalize execution', err);
+      }
+      try {
+        await getExecutionStore(executionId).writeReport(msg);
+      } catch (err: unknown) {
+        logDurabilityFailure('persist report', err);
+      }
+    };
+
     const enqueueParentFollowUp = async (
       text: string,
     ): Promise<ChildRunEnqueueResult | undefined> => {
@@ -498,21 +519,7 @@ export class BashTool extends defineTool({
           } catch (err: unknown) {
             logDurabilityFailure('persist result metadata', err);
           }
-          try {
-            const finalization = await finalizeExecution({
-              executionId,
-              terminalStatus: backgroundBashTerminalStatus(result.success),
-              flowRecord: 'delete',
-            });
-            if (finalization.status === 'failed') throw finalization.error;
-          } catch (err: unknown) {
-            logDurabilityFailure('finalize execution', err);
-          }
-          try {
-            await store.writeReport(msg);
-          } catch (err: unknown) {
-            logDurabilityFailure('persist report', err);
-          }
+          await finalizeAndReport(result.success, msg);
 
           await deliverAndFinalize(msg, { wallTimeMs, error, autoClose: true });
           return;
@@ -520,21 +527,7 @@ export class BashTool extends defineTool({
 
         const { error } = outcome;
         const msg = formatBashError(executionId, command, error);
-        try {
-          const finalization = await finalizeExecution({
-            executionId,
-            terminalStatus: backgroundBashTerminalStatus(false),
-            flowRecord: 'delete',
-          });
-          if (finalization.status === 'failed') throw finalization.error;
-        } catch (err: unknown) {
-          logDurabilityFailure('finalize execution', err);
-        }
-        try {
-          await getExecutionStore(executionId).writeReport(msg);
-        } catch (err: unknown) {
-          logDurabilityFailure('persist report', err);
-        }
+        await finalizeAndReport(false, msg);
 
         await deliverAndFinalize(msg, { error, autoClose: true });
       } catch (err: unknown) {

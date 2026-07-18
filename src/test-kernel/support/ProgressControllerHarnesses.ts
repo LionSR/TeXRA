@@ -106,6 +106,13 @@ export function createProgressStreamLifecycleHarness(
       };
     },
   };
+  const cleanupStream = (stream: StreamTabId): void => {
+    recorder.record('cleanupApprovals', stream);
+    recorder.record('clearRetry', stream);
+    recorder.record('releaseFollowUp', stream);
+    recorder.record('clearBackups', stream);
+    recorder.record('clearWebview', stream);
+  };
   const host: ProgressStreamLifecycleHost = {
     getVisibleStreamIds: () =>
       options.visibleStreams ?? streams.filter((stream) => stream !== 'hidden'),
@@ -117,20 +124,10 @@ export function createProgressStreamLifecycleHarness(
       }
       recorder.record('stop', stream);
     },
-    cleanupDeletedStream: (stream) => {
-      recorder.record('cleanupApprovals', stream);
-      recorder.record('clearRetry', stream);
-      recorder.record('releaseFollowUp', stream);
-      recorder.record('clearBackups', stream);
-      recorder.record('clearWebview', stream);
-    },
+    cleanupDeletedStream: cleanupStream,
     cleanupDeletedStreams: (streams) => {
       for (const stream of streams) {
-        recorder.record('cleanupApprovals', stream);
-        recorder.record('clearRetry', stream);
-        recorder.record('releaseFollowUp', stream);
-        recorder.record('clearBackups', stream);
-        recorder.record('clearWebview', stream);
+        cleanupStream(stream);
       }
     },
     deleteRenderedStream: (stream) => recorder.record('deleteWebview', stream),

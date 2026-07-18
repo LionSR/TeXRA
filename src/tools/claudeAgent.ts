@@ -83,6 +83,7 @@ import {
   type ClaudeAgentEffort,
   type ClaudeAgentPermissionMode,
   type ClaudeMessageBlock,
+  type ClaudeTurnUsage,
 } from './claudeAgentShared';
 import type { Options as ClaudeAgentSdkOptions } from '@anthropic-ai/claude-agent-sdk';
 
@@ -137,12 +138,7 @@ export type ClaudeAgentInput = z.infer<typeof ClaudeAgentInputSchema>;
 
 interface TurnResult {
   finalResponse: string;
-  usage: {
-    input_tokens?: number;
-    output_tokens?: number;
-    cache_read_input_tokens?: number;
-    cache_creation_input_tokens?: number;
-  } | null;
+  usage: ClaudeTurnUsage | null;
   sessionId: string | undefined;
   totalCostUsd?: number;
   isError: boolean;

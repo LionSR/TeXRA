@@ -1,6 +1,7 @@
 import { access } from 'node:fs/promises';
 import path from 'node:path';
 
+import { isFileNotFoundError } from '@common/errors';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import type { ExternalOpener } from '@hosts/uiHosts';
 import type { FileLocation } from '@shared/schemas';
@@ -46,12 +47,6 @@ export interface DesktopPreviewHostOptions {
   forceExternal?: boolean;
 }
 
-function getErrorCode(error: unknown): string | undefined {
-  return typeof error === 'object' && error !== null && 'code' in error
-    ? String(error.code)
-    : undefined;
-}
-
 export function createDesktopPreviewHost(
   options: DesktopPreviewHostOptions,
 ): DesktopPreviewHost {
@@ -64,7 +59,7 @@ export function createDesktopPreviewHost(
     try {
       await access(filePath);
     } catch (error) {
-      if (getErrorCode(error) === 'ENOENT') {
+      if (isFileNotFoundError(error)) {
         await fail(`File not found: ${filePath}`);
       }
       await fail(`Cannot access file ${filePath}: ${toErrorMessage(error)}`);

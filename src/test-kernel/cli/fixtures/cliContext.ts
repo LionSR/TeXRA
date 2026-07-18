@@ -12,7 +12,6 @@ const BASE_CLI_CONTEXT = {
   stderrIsTty: false,
   stdoutColorEnabled: false,
   stderrColorEnabled: false,
-  colorEnabled: false,
   commandName: 'texra',
   version: '0.0.0',
   resourcesPath: '/tmp/resources',

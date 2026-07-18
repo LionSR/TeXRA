@@ -109,7 +109,6 @@ type PersistenceMode = 'required-result' | 'best-effort-delivery';
 
 interface CompletedInBandSubagent {
   readonly executionId: ExecutionId;
-  readonly flowResult: AgentFlowResult;
   readonly built: BuiltSubagentResult;
   readonly delivery?: string;
 }
@@ -610,7 +609,7 @@ async function executeInBand(
   // Post-flow artifact construction deliberately reaches a terminal record.
   // Cancellation observed here rejects the caller without changing that record.
   options.signal?.throwIfAborted();
-  return { executionId, flowResult, built, delivery };
+  return { executionId, built, delivery };
 }
 
 /** Recover a logical child first; resolve launch-only state only when needed. */

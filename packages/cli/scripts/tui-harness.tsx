@@ -1141,7 +1141,7 @@ function emitChildEventOrderRoster(
       type: 'child.activity',
       kind: 'subagents',
       parentStreamId,
-      children,
+      items: children,
     },
   });
 }
