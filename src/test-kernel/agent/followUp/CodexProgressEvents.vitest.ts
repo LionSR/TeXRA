@@ -74,7 +74,7 @@ describe('codex progress events', () => {
     ]);
     expect(runEventsOfType(recorded.events, 'usage')).toMatchObject([
       {
-        data: {
+        payload: {
           streamId,
           storageKey: executionId,
           executionId,

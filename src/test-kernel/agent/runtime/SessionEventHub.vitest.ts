@@ -6,7 +6,7 @@ import {
   type SessionEvent,
 } from '@agent/runtime/SessionEventHub';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
-import { type StreamTabId } from '@shared/schemas';
+import { type StorageKey, type StreamTabId } from '@shared/schemas';
 
 import { recordSessionEvents } from '../progressTestUtils';
 
@@ -125,13 +125,12 @@ describe('SessionEventHub', () => {
     });
     emitRunFact(trace, 'goalPaused', { streamId });
     trace.usage(
-      { inputTokens: 10, outputTokens: 5 },
       {
-        data: {
-          streamId,
-          storageKey: 'run:usage',
-          usage: { inputTokens: 10, outputTokens: 5, cost: 0 },
-        },
+        streamId,
+        storageKey: 'run:usage' as StorageKey,
+        usage: { inputTokens: 10, outputTokens: 5, cost: 0 },
+      },
+      {
         recordTranscript: false,
       },
     );
@@ -196,7 +195,7 @@ describe('SessionEventHub', () => {
         streamId,
         event: {
           type: 'usage',
-          data: {
+          payload: {
             streamId,
             storageKey: 'run:usage',
             usage: { inputTokens: 10, outputTokens: 5, cost: 0 },

@@ -398,8 +398,7 @@ describe('executeCliRequest', () => {
         streamId,
         event: {
           type: 'usage',
-          stats: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
-          data: {
+          payload: {
             streamId,
             storageKey: 'run-1' as StorageKey,
             usage: { inputTokens: 100, outputTokens: 20, cost: 0.5 },

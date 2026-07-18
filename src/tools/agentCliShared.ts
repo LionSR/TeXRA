@@ -38,18 +38,15 @@ export function publishAgentCliStreamUsage(
   usage: TokenUsageStats,
   logger: AgentTrace,
 ): void {
-  const stats = Object.fromEntries(
-    Object.entries(usage).filter(([, value]) => typeof value === 'number'),
-  ) as Record<string, number>;
-  logger.usage(stats, {
-    data: {
+  logger.usage(
+    {
       streamId: childStreamId,
       storageKey: executionId as StorageKey,
       executionId,
       usage,
     },
-    recordTranscript: false,
-  });
+    { recordTranscript: false },
+  );
 }
 
 interface ResumableAgentCliSession {

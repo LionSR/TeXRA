@@ -15,14 +15,17 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { nanoid } from 'nanoid';
 
 import * as logger from '@logger/logUtils';
-import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  type RunOutcome,
+  type UpdateStreamUsagePayload,
+} from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type {
   AgentEvent,
   ContextStateData,
   StreamKind,
-  TokenUsageStats,
   ToolStatus,
 } from './events';
 import type {
@@ -140,11 +143,13 @@ export class TraceEmitter implements AgentTrace {
 
   // ─── Structured emitters ───────────────────────────────────────────
 
-  usage(stats: TokenUsageStats, options: UsageEmitOptions = {}): void {
+  usage(
+    payload: UpdateStreamUsagePayload,
+    options: UsageEmitOptions = {},
+  ): void {
     this.emit({
       type: 'usage',
-      stats,
-      data: options.data,
+      payload,
       recordTranscript: options.recordTranscript,
       stageId: options.stageId,
     });

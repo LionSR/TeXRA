@@ -300,8 +300,8 @@ export function attachTranscriptRecorder(
         appendLog({
           groupId: event.stageId,
           messageType: MESSAGE_TYPES.STATISTICS,
-          text: `Usage - input: ${event.stats.inputTokens ?? 0}, output: ${event.stats.outputTokens ?? 0}`,
-          data: event.stats,
+          text: `Usage - input: ${event.payload.usage.inputTokens}, output: ${event.payload.usage.outputTokens}`,
+          data: event.payload.usage,
         });
         return;
 
