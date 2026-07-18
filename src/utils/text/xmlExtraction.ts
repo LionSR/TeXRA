@@ -17,7 +17,6 @@ import { removeCDATA } from './xmlCdata';
 import { formatContent } from './xmlConversion';
 
 const CHANNEL = 'xmlExtraction';
-logger.initialize(CHANNEL);
 
 /**
  * Regex pattern for matching document opening tags with name attributes.

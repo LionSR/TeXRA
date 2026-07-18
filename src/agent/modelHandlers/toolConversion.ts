@@ -24,7 +24,6 @@ import type {
 // ============================================================================
 
 const CHANNEL = 'toolConversion';
-logger.initialize(CHANNEL);
 
 type JSONSchemaObject = Record<string, unknown>;
 

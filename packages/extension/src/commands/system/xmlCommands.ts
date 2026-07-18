@@ -10,7 +10,6 @@ import {
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'XmlCommands';
-logger.initialize(CHANNEL);
 
 export async function handleParseXml(): Promise<void> {
   try {

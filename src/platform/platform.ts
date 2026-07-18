@@ -82,9 +82,8 @@ export function platform(): Readonly<Platform> {
 /**
  * Get the active platform context, or null if not yet initialized.
  *
- * Use this in facade modules that need to handle module-level
- * initialization (e.g. `logger.initialize(CHANNEL)` at import time)
- * before `initPlatform()` has been called.
+ * Use this in facade modules that need to tolerate access before
+ * `initPlatform()` has been called.
  */
 export function tryPlatform(): Readonly<Platform> | null {
   return _platform;

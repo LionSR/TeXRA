@@ -55,8 +55,6 @@ export {
   type RunStorageEntryInspection,
 } from './runStorageFs';
 
-logger.initialize(CHANNEL);
-
 export class TaskRunFileService {
   public metadata: {
     executionId: ExecutionId | undefined;

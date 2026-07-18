@@ -37,7 +37,6 @@ import { requireField } from './utils';
 
 // Constants
 const CHANNEL = 'TextEditorTool';
-logger.initialize(CHANNEL);
 const SNIPPET_LINES = 4;
 
 /** Rethrow ToolError as-is; wrap other errors with context message */

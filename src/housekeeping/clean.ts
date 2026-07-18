@@ -15,7 +15,6 @@ import { TEMP_EXTENSIONS, PACK_EXTENSIONS, HISTORY_DIR } from './constants';
 import { findFilesFromPatterns, resolveHousekeepingTargets } from './utils';
 
 const CHANNEL = 'Housekeeping';
-logger.initialize(CHANNEL);
 
 function toIgnoreGlobs(dirs: Iterable<string>): string[] {
   return [...dirs].map((dir) => `**/${dir}/**`);

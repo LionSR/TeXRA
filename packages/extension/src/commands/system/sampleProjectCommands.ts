@@ -11,11 +11,9 @@ import {
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
-import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'SampleProjectCommands';
-logger.initialize(CHANNEL);
 
 export const sampleProjectCommands = {
   createSampleProject: 'texra.createSampleProject',

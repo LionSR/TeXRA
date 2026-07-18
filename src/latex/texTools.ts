@@ -17,7 +17,6 @@ import { getConfig } from '@utils/config/configUtils';
 import { splitContentLines } from '@utils/text/stringUtils';
 
 const CHANNEL = 'LaTeXCommands';
-logger.initialize(CHANNEL);
 
 // Raw tail, no TeX-log parsing -- a deliberate choice (see compileCheck.ts):
 // tex compile logs are noisy and heuristic parsing is a losing game, so every

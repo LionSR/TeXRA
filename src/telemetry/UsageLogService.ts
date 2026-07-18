@@ -16,7 +16,6 @@ import type {
 } from './UsageLogTypes';
 
 const CHANNEL = 'UsageLogService';
-logger.initialize(CHANNEL);
 
 const USAGE_LOG_ENDPOINT = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/log-usage`;
 const MAX_QUEUE_SIZE = 1000;

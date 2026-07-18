@@ -8,7 +8,6 @@ import { findFilesFromPatterns, generateTimestamp } from './utils';
 import { TEMP_EXTENSIONS } from './constants';
 
 const CHANNEL = 'Housekeeping';
-logger.initialize(CHANNEL);
 
 export type LatexdiffPackResult =
   | {

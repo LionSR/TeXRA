@@ -88,7 +88,6 @@ type UpdateFilesMessage = MessageFor<
 >;
 
 const CHANNEL = 'FileManager';
-logger.initialize(CHANNEL);
 
 type FileUpdateOptions = {
   notifyWhenEmpty?: boolean;
