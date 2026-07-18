@@ -1,6 +1,6 @@
 ---
 name: lean-tactic-improver
-description: Keep Lean 4 proof size sublinear by turning repeated proof patterns into reusable project automation. Use when Codex notices the same tactic sequences or goal shapes recurring across proofs and should extract them into lemmas, simp sets, aesop rules, or custom tactics, then record them in the project's AGENTS.md or CLAUDE.md tactic ledger so future sessions reuse instead of rederive.
+description: Keep Lean 4 proof size sublinear by turning repeated proof patterns into reusable project automation. Use when Codex notices the same tactic sequences or goal shapes recurring across proofs and should extract them into lemmas, simp sets, aesop rules, or custom tactics, then record them in the project's canonical AGENTS.md tactic ledger so future sessions reuse instead of rederive.
 ---
 
 # Lean Tactic Improver
@@ -11,11 +11,11 @@ Use this skill when proof scripts are growing linearly with the mathematics: the
 
 ## The mechanism
 
-The project's `AGENTS.md` (or `CLAUDE.md`) carries a **tactic ledger**: a curated list of the project's custom tactics, simp sets, aesop rule sets, and workhorse lemmas, each with a one-line "use when". The ledger is the memory that makes improvement compound — automation that is not recorded gets rediscovered or, worse, reinvented.
+The project's `AGENTS.md` carries one canonical **tactic ledger**: a curated list of the project's custom tactics, simp sets, aesop rule sets, and workhorse lemmas, each with a one-line "use when". If the project also uses `CLAUDE.md`, that file shares or points to the same ledger instead of duplicating it. The ledger is the memory that makes improvement compound — automation that is not recorded gets rediscovered or, worse, reinvented.
 
 ## Workflow
 
-1. Read the tactic ledger before writing proofs. If `AGENTS.md`/`CLAUDE.md` has no ledger section yet, create one using the template in [references/tactic-ledger.md](references/tactic-ledger.md).
+1. Read the tactic ledger in `AGENTS.md` before writing proofs. If it has no ledger section yet, create one using the template in [references/tactic-ledger.md](references/tactic-ledger.md); make `CLAUDE.md` share or point to it when that file exists.
 2. Watch for repetition while proving. Apply the rule of three: the third time a tactic sequence or goal shape recurs, stop inlining it and extract.
 3. Choose the cheapest sufficient rung on the abstraction ladder: helper lemma → `@[simp]` lemma or named simp set → aesop rule set → tactic macro → full custom tactic. Do not write an `elab` tactic where a lemma would do.
 4. Implement the automation in the project's dedicated automation file (e.g. `Project/Tactic.lean` or `Project/Attr.lean`), with a docstring stating what goal shapes it closes.

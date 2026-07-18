@@ -14,13 +14,14 @@ Use this checklist for deeper cleanup passes aimed at Mathlib-quality code.
 - Replace brittle chains with clearer arguments when possible.
 - Prefer `calc`, well-scoped `simp`, and direct structure over clutter.
 - Avoid shortening proofs at the cost of readability.
+- Read the canonical tactic ledger in `AGENTS.md` and reuse existing automation before writing a new tactic chain.
 
 ## Generality and reuse
 
 - Use the weakest useful assumptions.
 - Merge true duplicates through generalization when it simplifies the API.
 - Search Mathlib before retaining project-local copies of standard results.
-- Extract tactic sequences repeated three or more times into project automation (see lean-tactic-improver) and record them in the `AGENTS.md`/`CLAUDE.md` tactic ledger; prune ledger entries for automation you remove.
+- Extract tactic sequences repeated three or more times into project automation (see lean-tactic-improver) and record them in the canonical `AGENTS.md` tactic ledger; make `CLAUDE.md` share or point to it if present, and prune entries for automation you remove.
 
 ## Verification
 

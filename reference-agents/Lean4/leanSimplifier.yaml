@@ -97,12 +97,13 @@ prompts:
        - Use `section`/`end` with `variable` to avoid repeating hypotheses
 
     8. **Remove Duplication via Generalization**:
+       - Read the canonical tactic ledger in `AGENTS.md` first and prefer its existing automation; if `CLAUDE.md` exists, it should share or point to that ledger
        - Near-identical lemmas for different types → one generic lemma with typeclass constraints
        - Same proof for both directions of `Iff` → `Iff.intro` with shared reasoning, or `constructor <;> intro h <;> tactic`
        - Parallel multiplicative/additive lemmas → `@[to_additive]`
-       - Repeated `simp` configurations → factor into a custom `@[simp]` lemma
+       - Repeated domain-specific `simp` configurations → prefer a named simp set; reserve global `@[simp]` for lemmas that are unconditionally good normal forms
        - Duplicated tactic blocks → extract into a helper lemma (not a custom tactic unless genuinely reusable)
-       - Genuinely reusable automation (three or more call sites) → extract at the cheapest sufficient level (helper lemma → named simp set → aesop rule set → tactic macro) and record a one-line entry (name, kind, use-when, defining file) in the tactic ledger in the project's AGENTS.md/CLAUDE.md so future sessions reuse it instead of rederiving it; prune ledger entries whose automation is removed
+       - Genuinely reusable automation (three or more call sites) → extract at the cheapest sufficient level (helper lemma → named simp set → aesop rule set → tactic macro) and record a one-line entry (name, kind, use-when, defining file) in the canonical ledger so future sessions reuse it instead of rederiving it; prune ledger entries whose automation is removed
 
     9. **Leverage Mathlib — Don't Reinvent**:
        - Use lean_loogle to search by type signature *before* keeping any hand-written lemma

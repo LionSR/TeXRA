@@ -69,7 +69,7 @@ Extract at the cheapest rung that eliminates the repetition. Each rung costs mor
 - [ ] Automation lives in the project's dedicated automation file, imported early, with a docstring stating the goal shapes it closes.
 - [ ] Rewrote every motivating call site; each got shorter or clearer. Reverted if not.
 - [ ] Full project still builds; no distant proof broke from a new simp/aesop attribute.
-- [ ] Ledger row added or updated in `AGENTS.md`/`CLAUDE.md`.
+- [ ] Ledger row added or updated in the canonical `AGENTS.md` ledger; `CLAUDE.md` shares or points to it if present.
 
 ## Failure modes to avoid
 

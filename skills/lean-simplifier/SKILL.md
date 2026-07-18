@@ -12,13 +12,14 @@ Use this skill when Lean code already works or nearly works, but it is noisy, re
 ## Workflow
 
 1. Read the file as a whole before changing local proofs. Many style and generality problems only make sense at file scope.
-2. Check diagnostics first so you know whether you are simplifying a clean file or repairing active breakage.
-3. Preserve meaning exactly: theorem statements, definitions, and computed behavior should not change.
-4. Improve the file in the order that usually pays off most: naming and organization, import hygiene, docstrings, proof cleanup, then generalization and deduplication.
-5. Replace brittle tactic chains with clearer arguments when that actually improves reviewability.
-6. Search Mathlib before keeping local lemmas that smell standard.
-7. When deduplication reveals a tactic sequence or goal shape repeated three or more times, extract it into project automation (lemma, simp set, aesop rules, or tactic macro) via the lean-tactic-improver skill and record it in the tactic ledger in `AGENTS.md`/`CLAUDE.md`.
-8. Recheck after each logical edit and revert any “simplification” that makes the code harder to trust.
+2. Read the canonical tactic ledger in `AGENTS.md` and prefer its existing automation over new inline tactic chains; if `CLAUDE.md` exists, it should share or point to that ledger.
+3. Check diagnostics first so you know whether you are simplifying a clean file or repairing active breakage.
+4. Preserve meaning exactly: theorem statements, definitions, and computed behavior should not change.
+5. Improve the file in the order that usually pays off most: naming and organization, import hygiene, docstrings, proof cleanup, then generalization and deduplication.
+6. Replace brittle tactic chains with clearer arguments when that actually improves reviewability.
+7. Search Mathlib before keeping local lemmas that smell standard.
+8. When deduplication reveals a tactic sequence or goal shape repeated three or more times, extract it into project automation (lemma, simp set, aesop rules, or tactic macro) via the lean-tactic-improver skill and record it in the canonical ledger.
+9. Recheck after each logical edit and revert any “simplification” that makes the code harder to trust.
 
 ## Quality Bar
 
