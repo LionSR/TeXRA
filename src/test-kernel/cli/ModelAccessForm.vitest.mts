@@ -87,6 +87,8 @@ describe('ModelAccessForm status', () => {
       await waitFor(() => loadCliModelAccessOverview.mock.calls.length > 0);
       await new Promise((resolve) => setTimeout(resolve, 50));
       expect(stdout.output).toContain('model access unavailable');
+      expect(stdout.output).toContain('Sign in through Account');
+      expect(stdout.output).not.toContain('Use your TeXRA account');
       expect(stdout.output).not.toContain('✓');
     } finally {
       instance.unmount();

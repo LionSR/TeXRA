@@ -53,7 +53,11 @@ export function ModelAccessForm(
   const items = buildCliModelAccessItems(
     status?.state === 'loaded'
       ? status.overview.access
-      : { active: props.apiMode, chatGptSignedIn: false },
+      : {
+          active: props.apiMode,
+          chatGptSignedIn: false,
+          texraSignedIn: false,
+        },
   );
   let detailLines: readonly string[] | undefined;
   if (status?.state === 'loaded') detailLines = status.overview.lines;
