@@ -15,12 +15,7 @@ import {
 } from '@controllers/progressView/backend/events/ProgressInteractionHandler';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
 import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
-import {
-  buildApprovalRequestHandlerSet,
-  createProgressBackendUiConfig,
-  replayApprovalRequestHandlers,
-  type ApprovalRequestHandlerSet,
-} from '@controllers/progressView/backend/progressBackendUiConfig';
+import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
 import {
   repairRestartedStreams,
   RestartRepairRetryScheduler,
@@ -82,7 +77,6 @@ import {
   formatActiveStreamRetention,
   formatStreamDeletionRetention,
 } from '@shared/copy/executionHistory';
-import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   cleanupUnscopedApprovals,
@@ -111,11 +105,6 @@ import {
   type DesktopLatexdiffRunContext,
   type DesktopLatexdiffWorkspaceScan,
 } from './desktopProgressFileActions.js';
-import {
-  createDesktopSessionProgressBridge,
-  type DesktopPresentationPayloads,
-  type DesktopSessionProgressBridge,
-} from './desktopSessionProgressBridge.js';
 import {
   prepareDesktopLegacyStreamImport,
   type DesktopLegacyStreamImport,
@@ -195,14 +184,11 @@ export class DesktopProgressBridge {
    * switches and the pending-proposal lookup — the same host-agnostic
    * bookkeeping the extension uses, rather than a hand-rolled registry.
    */
-  private approvalHandlers!: ApprovalRequestHandlerSet;
   private readonly deletedStreams = new Set<StreamTabId>();
   private readonly unsubscribe: () => void;
   private readonly toolEditApprovals: DesktopToolEditApprovalController;
   private readonly hostInteractions: DesktopHostInteractions;
   private readonly fileActions: DesktopProgressFileActions;
-  /** Desktop-local presentation effects not owned by the shared backend. */
-  private readonly sessionProgress: DesktopSessionProgressBridge;
   private restartRepair: Promise<void> = Promise.resolve();
   private readonly restartRepairRetry = new RestartRepairRetryScheduler();
   private startupStreamIds: ReadonlySet<StreamTabId> = new Set();
@@ -251,7 +237,7 @@ export class DesktopProgressBridge {
     this.hostInteractions = createDesktopHostInteractions({
       runtimeHost: this.runtimeHost,
       session: this.session,
-      getApprovalHandlers: () => this.approvalHandlers,
+      getApprovalHandlers: () => this.backend.approvalHandlers,
       getToolEditApprovals: () => this.toolEditApprovals,
     });
     this.detachHostInteractions = this.session.useHostInteractions(
@@ -268,66 +254,72 @@ export class DesktopProgressBridge {
       hasTarget: () => true,
       getStreamControls: (stream) =>
         getProgressStreamControls(stream, this.sessionForStream(stream)),
-      deleteStream: (stream) => this.deleteStream(stream),
       getUnsupportedCommands: () =>
         unsupportedCommands(this.progressViewInboundHandlers),
-      configureUi: ({ webviewUpdater }) => {
-        // The desktop renderer is always attached (no sidebar/editor re-target),
-        // so every show/dismiss reaches the webview.
-        const canSend = () => true;
-        this.approvalHandlers = buildApprovalRequestHandlerSet({
-          webviewUpdater,
-          canSend,
-          logger: this.logger,
-          overrides: {
-            retry: {
-              show: () => undefined,
-              dismiss: () => undefined,
-            },
-            agentProposal: {
-              show: (p) =>
-                webviewUpdater.showPermission({
-                  kind: PERMISSION_KIND.PROPOSAL,
-                  data: p,
-                }),
-              dismiss: (id) =>
-                webviewUpdater.resolvePermission(PERMISSION_KIND.PROPOSAL, id),
-            },
+      approvals: {
+        // The desktop renderer is always attached (no sidebar/editor re-target).
+        canSend: () => true,
+        logger: this.logger,
+        overrides: {
+          retry: {
+            show: () => undefined,
+            dismiss: () => undefined,
           },
-        });
-        return createProgressBackendUiConfig({
-          handlers: this.approvalHandlers,
-          webviewUpdater,
-          canSend,
-        });
+          agentProposal: {
+            show: (p) =>
+              this.backend.webviewUpdater.showPermission({
+                kind: PERMISSION_KIND.PROPOSAL,
+                data: p,
+              }),
+            dismiss: (id) =>
+              this.backend.webviewUpdater.resolvePermission(
+                PERMISSION_KIND.PROPOSAL,
+                id,
+              ),
+          },
+        },
+      },
+      lifecycle: {
+        sessionForStream: (stream) => this.sessionForStream(stream),
+        stopStream: (stream, ownerSession) =>
+          this.stopStreamForSession(stream, ownerSession),
+        cleanupDeletedStream: (stream, ownerSession) => {
+          this.deletedStreams.add(stream);
+          releaseStreamResources(stream, ownerSession);
+          this.releaseApprovalsForStream(stream);
+          this.workflowFileActions.clearStreamBackups(stream);
+        },
+        cleanupDeletedStreams: ({ allDeleted }) => {
+          if (!allDeleted) return;
+          cleanupUnscopedApprovals(this.session);
+          this.session.interactions.cancel({ cause: 'All streams deleted.' });
+          this.clearDesktopSessionMaps();
+          this.workflowFileActions.clearAllBackups();
+        },
+        rebuildRenderedStreams: ({ syncActiveStream = true }) => {
+          const activeStream = this.updateStreamMetadata();
+          if (syncActiveStream) this.syncStreamContent(activeStream);
+        },
+        refreshRenderedStreamsAfterDeletion: () =>
+          this.syncStreamContent(this.updateStreamMetadata()),
+        activateStream: () =>
+          this.syncStreamContent(this.updateStreamMetadata()),
+        notifyDeletionRetained: (activeCount, failedCount) =>
+          this.options.host.showInfoMessage(
+            failedCount === 0
+              ? formatActiveStreamRetention(activeCount)
+              : formatStreamDeletionRetention(activeCount, failedCount),
+          ),
+      },
+      onSetActiveStream: (payload) => {
+        if (payload.streamId && payload.suppressViewSwitch !== true) {
+          this.routeToProgress();
+        }
       },
     });
     this.state = this.backend.state;
     this.streamLogs = this.state.streamLogs;
-    this.sessionProgress = createDesktopSessionProgressBridge({
-      state: this.state,
-      sendMessage: (message) => this.send(message),
-      routeToProgress: () => this.routeToProgress(),
-      onGoalStateChanged: (streamId, active, goalOpts) => {
-        this.backend.webviewUpdater.updateGoalActive(
-          streamId,
-          active,
-          goalOpts,
-        );
-      },
-      onShowError: (message) => {
-        void this.options.host.showErrorMessage(message);
-      },
-    });
     const backendSubscription = this.backend.setupEventListeners();
-    const detachSessionProgressFacts = this.session.events.subscribe(
-      (event) => {
-        if (event.scope === 'session') {
-          this.sessionProgress.handleSessionFact(event.event);
-        }
-      },
-      { scope: 'session' },
-    );
     // Onboarding funnel (PRD: agent-native onboarding): a completed run ends
     // State 1. `AgentRunLifecycle` persists `firstRunDone` BEFORE it emits the
     // terminal `result` event, so by the time this listener fires the funnel
@@ -340,9 +332,7 @@ export class DesktopProgressBridge {
       }
     });
     this.unsubscribe = () => {
-      detachSessionProgressFacts();
       backendSubscription.dispose();
-      this.sessionProgress.dispose();
       unsubscribeResult();
     };
     // Present terminal-error toasts from this window's run results (the run
@@ -437,7 +427,7 @@ export class DesktopProgressBridge {
       },
       agentProposal: {
         getPendingProposal: (proposalId) =>
-          this.approvalHandlers.agentProposal.get(proposalId),
+          this.backend.approvalHandlers.agentProposal.get(proposalId),
         restoreTaskState: async (taskState) => this.restoreTaskState(taskState),
         settleProposal: (proposalId, result) => {
           const resolved = this.hostInteractions.submitProposalDecision(
@@ -473,9 +463,9 @@ export class DesktopProgressBridge {
         lifecycle: {
           setActiveStream: (stream) => this.setActiveStream(stream),
           setAgentFilter: (filter) => this.setAgentFilter(filter),
-          deleteStream: (stream) => this.deleteStream(stream),
-          deleteAllStreams: () => this.deleteAllStreams(),
-          stopStream: (stream) => this.stopStream(stream),
+          deleteStream: (stream) => this.backend.deleteStream(stream),
+          deleteAllStreams: () => this.backend.deleteAllStreams(),
+          stopStream: (stream) => this.backend.stopStream(stream),
         },
         resumeStream: async (stream) => {
           await this.tryResumeStream(stream);
@@ -667,7 +657,7 @@ export class DesktopProgressBridge {
     // Release every pending approval (and proposal payload) without notifying
     // the webview. Each handler owns settlement as well as presentation state,
     // so teardown cannot leave an interaction promise pending.
-    for (const handler of Object.values(this.approvalHandlers)) {
+    for (const handler of Object.values(this.backend.approvalHandlers)) {
       handler.clear();
     }
   }
@@ -874,16 +864,12 @@ export class DesktopProgressBridge {
 
     switch (event) {
       case 'requestEnsureProgressView':
-        this.sessionProgress.handlePresentationEvent(
-          event,
-          payload as DesktopPresentationPayloads[typeof event],
-        );
+        this.routeToProgress();
         return;
       case 'requestShowError':
       case 'requestShowInstruction':
-        this.sessionProgress.handlePresentationEvent(
-          event,
-          payload as DesktopPresentationPayloads[typeof event],
+        void this.options.host.showErrorMessage(
+          (payload as AgentRuntimeEventPayloads['requestShowError']).message,
         );
         return;
       case 'requestOpenFile': {
@@ -927,7 +913,7 @@ export class DesktopProgressBridge {
   async completeWebviewReady(): Promise<void> {
     await this.restartRepair;
     this.syncFullView();
-    await replayApprovalRequestHandlers(this.approvalHandlers);
+    await replayApprovalRequestHandlers(this.backend.approvalHandlers);
   }
 
   setActiveStream(streamId: StreamTabId): void {
@@ -975,103 +961,11 @@ export class DesktopProgressBridge {
   }
 
   async deleteStream(streamId: StreamTabId): Promise<void> {
-    if (!this.streamLogs.has(streamId)) return;
-    const ownerSession = this.sessionForStream(streamId);
-    const ownedLocally =
-      ownerSession.executions.getAgentHandleByStream(streamId) !== undefined;
-    if (ownedLocally && isInFlightPhase(ownerSession.status.get(streamId))) {
-      this.stopStream(streamId);
-    }
-    if (ownedLocally) {
-      await this.state.waitForOwnedExecutionRelease(streamId);
-    }
-    const deletion = await this.state.clearStream(streamId);
-    if (deletion !== 'deleted') {
-      this.syncStreamContent(this.updateStreamMetadata());
-      await this.options.host.showInfoMessage(
-        deletion === 'active'
-          ? formatActiveStreamRetention(1)
-          : formatStreamDeletionRetention(0, 1),
-      );
-      return;
-    }
-    this.deletedStreams.add(streamId);
-
-    // Releases approval state (pending approvals, bypass flags, pending
-    // requests) and the follow-up queue for this stream. Do this before the
-    // deletion event releases the rebound binding that identifies the owner.
-    releaseStreamResources(streamId, ownerSession);
-    this.releaseApprovalsForStream(streamId);
-    this.workflowFileActions.clearStreamBackups(streamId);
-    this.send({
-      command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
-      stream: streamId,
-    });
-    this.syncStreamContent(this.updateStreamMetadata());
+    await this.backend.deleteStream(streamId);
   }
 
   async deleteAllStreams(): Promise<void> {
-    const streamIds = new Set(this.streamLogs.keys());
-    const locallyOwnedStreams: StreamTabId[] = [];
-    for (const streamId of streamIds) {
-      const ownerSession = this.sessionForStream(streamId);
-      if (!ownerSession.executions.getAgentHandleByStream(streamId)) continue;
-      locallyOwnedStreams.push(streamId);
-      if (isInFlightPhase(ownerSession.status.get(streamId))) {
-        this.stopStream(streamId);
-      }
-    }
-    await Promise.all(
-      locallyOwnedStreams.map((streamId) =>
-        this.state.waitForOwnedExecutionRelease(streamId),
-      ),
-    );
-    const retained = await this.state.clearAll();
-    const retainedStreams = new Set([...retained.active, ...retained.failed]);
-    // Approval cleanup (incl. retry/proposal/plan pending state) is scoped
-    // to THIS window's streams via the per-stream helper. Approval state is
-    // session-owned, so none of this can touch another window's pending
-    // approvals or bypass flags.
-    for (const streamId of streamIds) {
-      if (retainedStreams.has(streamId)) continue;
-      this.deletedStreams.add(streamId);
-      releaseStreamResources(streamId, this.sessionForStream(streamId));
-    }
-    if (retainedStreams.size === 0) {
-      // Catch pending approvals with no concrete stream context (undefined or
-      // empty streamId) — the per-stream loop skips them because they do not
-      // equal any StreamTabId. Session-scoped, so a sibling window's streamless
-      // approval is not rejected.
-      cleanupUnscopedApprovals(this.session);
-      // Child/subagent interaction requests may be session-owned without a local
-      // desktop stream entry, so cancel the owning window's remaining pending
-      // interactions after the visible per-stream sweep. This is session-scoped
-      // and does not touch sibling windows.
-      this.session.interactions.cancel({ cause: 'All streams deleted.' });
-      this.clearDesktopSessionMaps();
-      this.workflowFileActions.clearAllBackups();
-      this.send({ command: PROGRESS_VIEW_COMMANDS.DELETE_ALL });
-    } else {
-      for (const streamId of streamIds) {
-        if (retainedStreams.has(streamId)) continue;
-        this.releaseApprovalsForStream(streamId);
-        this.workflowFileActions.clearStreamBackups(streamId);
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
-          stream: streamId,
-        });
-      }
-    }
-    const activeStream = this.updateStreamMetadata();
-    if (retainedStreams.size > 0) {
-      this.syncStreamContent(activeStream);
-      await this.options.host.showInfoMessage(
-        formatStreamDeletionRetention(
-          retained.active.size,
-          retained.failed.size,
-        ),
-      );
-    }
+    await this.backend.deleteAllStreams();
   }
 
   private syncStreamContent(streamId: StreamTabId | ''): void {
@@ -1098,8 +992,10 @@ export class DesktopProgressBridge {
       });
   }
 
-  private stopStream(streamId: StreamTabId): void {
-    const ownerSession = this.sessionForStream(streamId);
+  private stopStreamForSession(
+    streamId: StreamTabId,
+    ownerSession: SessionHandle,
+  ): void {
     // Kind-scoped: clear only the pending retry panel for this stream.
     ownerSession.interactions.cancel({
       streamId,
@@ -1430,7 +1326,7 @@ export class DesktopProgressBridge {
    * blocking switches on a stream that no longer exists.
    */
   private releaseApprovalsForStream(streamId: StreamTabId): void {
-    for (const handler of Object.values(this.approvalHandlers)) {
+    for (const handler of Object.values(this.backend.approvalHandlers)) {
       handler.releaseForStream(streamId);
     }
   }

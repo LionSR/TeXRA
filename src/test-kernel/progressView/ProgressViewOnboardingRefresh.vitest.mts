@@ -65,11 +65,11 @@ function createHostInteractions(
 
 function createMessageHandler(
   provider: ProgressViewProvider,
-  context: vscode.ExtensionContext,
+  _context: vscode.ExtensionContext,
   host = new FakePromptHost(),
   interactions = createHostInteractions(),
 ): ProgressViewMessageHandler {
-  return new ProgressViewMessageHandler(provider, context, host, interactions);
+  return new ProgressViewMessageHandler(provider, host, interactions);
 }
 
 function createProgressViewProvider(): ProgressViewProviderFake {
@@ -80,19 +80,25 @@ function createProgressViewProvider(): ProgressViewProviderFake {
     getKnownFilePaths: vi.fn(() => new Set()),
     getCompileFailures: vi.fn(() => new Map()),
   };
+  const state = {
+    activeStream: '',
+    agentCategoryFilter: 'all',
+    streamLogs: new Map<StreamTabId, unknown>(),
+    snapshots,
+    pickValidActiveStream: vi.fn(() => ''),
+    waitForOwnedExecutionRelease: vi.fn(async () => undefined),
+    clearStream: vi.fn(async (_stream: StreamTabId) => 'deleted' as const),
+    clearAll: vi.fn(async () => ({
+      active: new Set<StreamTabId>(),
+      failed: new Set<StreamTabId>(),
+    })),
+  };
   return {
-    state: {
-      activeStream: '',
-      agentCategoryFilter: 'all',
-      streamLogs: new Map<StreamTabId, unknown>(),
-      snapshots,
-      pickValidActiveStream: vi.fn(() => ''),
-      waitForOwnedExecutionRelease: vi.fn(async () => undefined),
-      clearStream: vi.fn(async () => 'deleted' as const),
-      clearAll: vi.fn(async () => ({
-        active: new Set<StreamTabId>(),
-        failed: new Set<StreamTabId>(),
-      })),
+    state,
+    backend: {
+      deleteStream: (stream: StreamTabId) => state.clearStream(stream),
+      deleteAllStreams: vi.fn(),
+      stopStream: vi.fn(),
     },
     webviewUpdater: {
       updateGoalActive: vi.fn(),
@@ -282,18 +288,14 @@ describe('progress-view onboarding refresh wiring', () => {
         items: ['Delete All', { label: 'Cancel', isCloseAffordance: true }],
       },
     });
-    expect(provider.state.clearAll).not.toHaveBeenCalled();
+    expect(provider.backend.deleteAllStreams).not.toHaveBeenCalled();
 
     await handler.handleMessage(
       { command: PROGRESS_VIEW_COMMANDS.DELETE_ALL },
       createWebviewView(),
     );
 
-    expect(provider.state.clearAll).toHaveBeenCalledOnce();
-    expect(provider.webviewBridge.clearAll).not.toHaveBeenCalled();
-    expect(provider.syncFullView).toHaveBeenCalledWith({
-      forceRebuild: true,
-    });
+    expect(provider.backend.deleteAllStreams).toHaveBeenCalledOnce();
   });
 
   it('routes retry request actions through host interactions', async () => {
@@ -521,14 +523,12 @@ describe('progress-view onboarding refresh wiring', () => {
   });
 
   it('returns deletion failures from host removeStream handling', async () => {
-    const context = createExtensionContext();
     const provider = createProgressViewProvider();
-    const handler = createMessageHandler(provider, context);
     const deletionError = new Error('delete failed');
     const clearStream = provider.state.clearStream as ReturnType<typeof vi.fn>;
     clearStream.mockRejectedValue(deletionError);
 
-    const result = handler.removeStreamFromHost('missing' as StreamTabId);
+    const result = provider.backend.deleteStream('missing' as StreamTabId);
 
     expect(result).toBeInstanceOf(Promise);
     await expect(result).rejects.toBe(deletionError);

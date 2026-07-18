@@ -24,7 +24,7 @@ import { assertNever } from '@utils/core';
 
 import { ApprovalRequestHandler } from './ApprovalRequestHandler';
 import { ExternalInquiryRequestHandler } from './ExternalInquiryRequestHandler';
-import type { ProgressBackendUiConfig } from './ProgressBackend';
+import type { UICallbacks } from './events/ProgressInteractionHandler';
 import type { WebviewUpdater } from './WebviewUpdater';
 
 /**
@@ -259,7 +259,12 @@ export async function replayApprovalRequestHandlers(
   );
 }
 
-export interface ProgressBackendUiConfigParams {
+interface ProgressBackendUiConfig {
+  callbacks: UICallbacks;
+  hasPendingPermissions(streamId: string): boolean;
+}
+
+interface ProgressBackendUiConfigParams {
   handlers: ApprovalRequestHandlerSet;
   /** Transport for the bypass-state pushes (handlers own their own transport). */
   webviewUpdater: WebviewUpdater;

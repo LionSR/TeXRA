@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
-import { ProgressStreamLifecycleController } from '@controllers/progressView/ProgressStreamLifecycleController';
 import {
   ProgressFollowUpController,
   type ProgressFollowUpPlan,
@@ -39,14 +38,16 @@ import { getRuntimeModelDirectFallback } from '@model/runtimeModelRegistry';
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { GettingStartedAction, StreamTabId } from '@shared/schemas';
 import { GETTING_STARTED_COMMANDS } from '@shared/schemas/mainView';
-import { isGoalInFlight } from '@shared/schemas/goal';
 import {
   dispatchProgressViewInbound,
   type ProgressViewInboundHandlerRegistry,
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
 import { unsupportedCommands } from '@shared/utils/dispatcher';
-import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
+import {
+  cleanupUnscopedApprovals,
+  releaseStreamResources,
+} from '@tools/approval';
 import {
   createExternalLocation,
   FlexibleFS,
@@ -56,7 +57,6 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
-import { ProgressStreamLifecycleHost } from './managers/ProgressStreamLifecycleHost';
 import type { ProgressViewProvider } from './ProgressViewProvider';
 import type { ExtensionHostInteractions } from './extensionHostInteractions';
 
@@ -77,7 +77,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 > {
   private readonly recordingManager: RecordingManager;
   private readonly progressHost: ProgressViewHost;
-  private readonly streamLifecycleController: ProgressStreamLifecycleController;
   private readonly workflowActionsController: ProgressWorkflowActionsController;
   private readonly workflowFileActionsController: ProgressViewHost['workflowFileActionsController'];
   private readonly agentProposalController: ProgressViewHost['agentProposalController'];
@@ -92,7 +91,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
   constructor(
     private readonly provider: ProgressViewProvider,
-    context: vscode.ExtensionContext,
     private readonly host: PromptHost,
     private readonly interactions: ExtensionHostInteractions,
   ) {
@@ -116,28 +114,35 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.workflowFileActionsController =
       this.progressHost.workflowFileActionsController;
     this.agentProposalController = this.progressHost.agentProposalController;
-    this.streamLifecycleController = this.createStreamLifecycleController();
     this.apiKeyRetryController = this.createApiKeyRetryController();
     this.followUpController = this.createFollowUpController();
     this.followUpPolishController = new ProgressFollowUpPolishController();
     this.handlerRegistry = this.createHandlerRegistry();
-
-    const unsubscribeGoal = subscribeGoalStateChanges(
-      defaultSession(),
-      ({ streamId }) => {
-        const goal = GoalStore.getForStream(streamId);
-        this.provider.webviewUpdater.updateGoalActive(
-          streamId,
-          isGoalInFlight(goal),
-          { status: goal?.status, objective: goal?.objective },
-        );
-      },
-    );
-    context.subscriptions.push({ dispose: unsubscribeGoal });
   }
 
-  public removeStreamFromHost(streamId: StreamTabId): Promise<void> {
-    return this.streamLifecycleController.deleteStream(streamId);
+  public async stopStream(
+    stream: StreamTabId,
+    options: { clearRetryRequest?: boolean } = {},
+  ): Promise<void> {
+    if (options.clearRetryRequest === true) {
+      this.interactions.cancel({
+        streamId: stream,
+        kind: 'retry',
+        cause: 'Retry request cleared.',
+      });
+    }
+    await this.runViewCommand('texra.stopAgent', [stream]);
+  }
+
+  public cleanupDeletedStream(stream: StreamTabId): void {
+    releaseStreamResources(stream);
+    this.workflowFileActionsController.clearStreamBackups(stream);
+  }
+
+  public cleanupDeletedStreams(options: { allDeleted: boolean }): void {
+    if (!options.allDeleted) return;
+    cleanupUnscopedApprovals();
+    this.interactions.cancel({ cause: 'All streams deleted.' });
   }
 
   /** Execute a VS Code command, routing failures through this view's error channel. */
@@ -308,32 +313,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     }
   }
 
-  private createStreamLifecycleController(): ProgressStreamLifecycleController {
-    return new ProgressStreamLifecycleController({
-      state: {
-        getActiveStream: () => this.provider.state.activeStream,
-        setActiveStream: (stream) => {
-          this.provider.state.activeStream = stream;
-        },
-        hasStream: (stream) => this.provider.state.streamLogs.has(stream),
-        hasTaskState: (stream) =>
-          Boolean(this.provider.state.snapshots.getTaskState(stream)),
-        getStreamIds: () => this.provider.state.streamLogs.keys(),
-        pickValidActiveStream: (streams) =>
-          this.provider.state.pickValidActiveStream(streams),
-        waitForOwnedExecutionRelease: (stream) =>
-          this.provider.state.waitForOwnedExecutionRelease(stream),
-        clearStream: (stream) => this.provider.state.clearStream(stream),
-        clearAll: () => this.provider.state.clearAll(),
-      },
-      host: new ProgressStreamLifecycleHost(
-        this.provider,
-        this.workflowFileActionsController,
-        this.interactions,
-      ),
-    });
-  }
-
   private createProgressViewHost(): ProgressViewHost {
     return new ProgressViewHost({
       run: {
@@ -478,11 +457,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             this.provider.state.agentCategoryFilter = filter;
             this.provider.syncFullView();
           },
-          deleteStream: (stream) =>
-            this.streamLifecycleController.deleteStream(stream),
+          deleteStream: (stream) => this.provider.backend.deleteStream(stream),
           deleteAllStreams: () => this.handleDeleteAll(),
-          stopStream: (stream) =>
-            this.streamLifecycleController.stopStream(stream),
+          stopStream: (stream) => this.provider.backend.stopStream(stream),
         },
         followUp: {
           sendFollowUp: async ({ stream, text, mediaFiles }) => {
@@ -627,7 +604,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     );
 
     if (confirmation !== 'Delete All') return;
-    await this.streamLifecycleController.deleteAllStreams();
+    await this.provider.backend.deleteAllStreams();
   }
 
   // ============================================================

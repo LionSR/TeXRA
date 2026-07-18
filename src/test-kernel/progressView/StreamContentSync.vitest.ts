@@ -129,6 +129,7 @@ describe('progress view stream-content projection', () => {
       updater,
       bridge,
       () => false,
+      vi.fn(),
     );
 
     state.snapshots.addUsage(stream, runId, usage);
@@ -194,6 +195,7 @@ describe('progress view stream-content projection', () => {
       updater,
       bridge,
       () => false,
+      vi.fn(),
     );
 
     state.updateStreamMetadata(stream, {
@@ -230,6 +232,7 @@ describe('progress view stream-content projection', () => {
       updater,
       bridge,
       () => false,
+      vi.fn(),
     );
 
     state.updateStreamMetadata(stream, {
@@ -269,6 +272,7 @@ describe('progress view stream-content projection', () => {
       updater,
       bridge,
       () => false,
+      vi.fn(),
     );
 
     handler.syncStreamContent('');
@@ -285,6 +289,7 @@ describe('progress view stream-content projection', () => {
       updater,
       bridge,
       () => false,
+      vi.fn(),
       (streamId) => {
         expect(streamId).toBe(controlledStream);
         return {
