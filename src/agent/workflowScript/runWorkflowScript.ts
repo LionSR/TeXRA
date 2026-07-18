@@ -6,13 +6,15 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { parseWorkflowScript } from './parseScript';
 import { runScriptInSandbox } from './sandbox';
-import type {
-  WorkflowAgentCallOptions,
-  WorkflowJournalEntry,
-  WorkflowScriptEvent,
-  WorkflowScriptPhaseContext,
-  WorkflowScriptRunOptions,
-  WorkflowScriptRunResult,
+import {
+  WORKFLOW_SKIPPED_RESULT,
+  type WorkflowAgentCallOptions,
+  type WorkflowJournalEntry,
+  type WorkflowScriptControl,
+  type WorkflowScriptEvent,
+  type WorkflowScriptPhaseContext,
+  type WorkflowScriptRunOptions,
+  type WorkflowScriptRunResult,
 } from './types';
 
 /**
@@ -192,7 +194,7 @@ function isWorkflowAbort(error: unknown): boolean {
 export async function runWorkflowScript(
   options: WorkflowScriptRunOptions,
 ): Promise<WorkflowScriptRunResult> {
-  const { runAgent, onEvent, onJournalEntry } = options;
+  const { runAgent, onEvent, onJournalEntry, onControl } = options;
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
   const maxAgentCalls = options.maxAgentCalls ?? DEFAULT_MAX_AGENT_CALLS;
 
@@ -204,6 +206,13 @@ export async function runWorkflowScript(
   const journal = new Map<number, WorkflowJournalEntry>();
   const semaphore = createSemaphore(concurrency);
   const runAbort = new AbortController();
+  // One AbortController per in-flight call, keyed by call index and linked to
+  // runAbort (a run abort cascades to every entry; a per-call abort leaves the
+  // others running). skip()/retry() target a single entry; the entry is
+  // removed as soon as its call settles. Control state is control-plane only —
+  // never journaled, so resume identity is untouched.
+  const callControllers = new Map<number, AbortController>();
+  const pendingControlActions = new Map<number, 'skip' | 'retry'>();
   // Journal replays are free: only live runAgent executions count against
   // the runaway-loop cap, so a resume can replay past the cap and finish
   // the remaining work.
@@ -234,6 +243,19 @@ export async function runWorkflowScript(
       }),
     };
   };
+
+  const requestControl = (index: number, action: 'skip' | 'retry'): void => {
+    const controller = callControllers.get(index);
+    // No-op when the call is not in flight (never started, or already settled).
+    if (!controller) return;
+    pendingControlActions.set(index, action);
+    controller.abort(new Error(`Workflow agent() call ${index} ${action}.`));
+  };
+  const control: WorkflowScriptControl = {
+    skip: (index) => requestControl(index, 'skip'),
+    retry: (index) => requestControl(index, 'retry'),
+  };
+  onControl?.(control);
 
   const rememberFatalRunError = (error: unknown): WorkflowRunAbortError => {
     fatalRunError ??=
@@ -358,73 +380,119 @@ export async function runWorkflowScript(
     emit({ type: 'agent:start', index, label, ...phaseContext });
     // Host-side wall clock (the sandbox's Date.now ban is guest-only): timing
     // and the reported model are progress-only, never journaled, so they can't
-    // affect resume identity or determinism.
+    // affect resume identity or determinism. Declared once outside the attempt
+    // loop: durationMs spans the whole call (across any retry), and the latest
+    // attempt's reportModel wins.
     const startedAt = Date.now();
     let resolvedModel: string | undefined;
-    let result: unknown;
-    try {
-      result = await semaphore.run(() => {
-        // Re-check after waiting for a slot: a timeout/cap abort while this
-        // call was queued must not launch fresh model work.
-        if (runAbort.signal.aborted) {
-          throw rememberFatalRunError(
-            new WorkflowRunAbortError(
-              'Workflow run aborted while this agent() call was queued.',
-            ),
-          );
-        }
-        return runAgent({
-          index,
-          key,
-          prompt,
-          options: callOptions,
-          signal: runAbort.signal,
-          reportModel: (model) => {
-            resolvedModel = model;
-          },
+    // Attempt loop: retry() re-enters with a fresh AbortController and a fresh
+    // runAgent call for this same index/key; skip() and normal settlement exit.
+    // liveCallCounter and issuedCallKeys are index-scoped (charged once above),
+    // so a retry re-runs the model without re-charging the cap or the journal.
+    for (;;) {
+      const callController = new AbortController();
+      // Link this call to the run: any run-level abort cascades to it, so a
+      // runner watching invocation.signal still stops on timeout/cap.
+      const cascade = () => callController.abort(runAbort.signal.reason);
+      if (runAbort.signal.aborted) cascade();
+      else runAbort.signal.addEventListener('abort', cascade, { once: true });
+      callControllers.set(index, callController);
+
+      let result: unknown;
+      let attemptError: { readonly error: unknown } | undefined;
+      try {
+        result = await semaphore.run(() => {
+          // Re-check after waiting for a slot: a timeout/cap abort while this
+          // call was queued must not launch fresh model work.
+          if (runAbort.signal.aborted) {
+            throw rememberFatalRunError(
+              new WorkflowRunAbortError(
+                'Workflow run aborted while this agent() call was queued.',
+              ),
+            );
+          }
+          return runAgent({
+            index,
+            key,
+            prompt,
+            options: callOptions,
+            signal: callController.signal,
+            reportModel: (model) => {
+              resolvedModel = model;
+            },
+          });
         });
-      });
-    } catch (error) {
-      // A runner may surface the run abort (it holds runAbort.signal);
-      // that must stop the workflow, not degrade into a null agent result.
-      if (isWorkflowAbort(error)) throw rememberFatalRunError(error);
-      // A failed agent resolves to null (callers filter with .filter(Boolean))
-      // and is deliberately NOT journaled, so a resume retries it.
+      } catch (error) {
+        attemptError = { error };
+      } finally {
+        runAbort.signal.removeEventListener('abort', cascade);
+        if (callControllers.get(index) === callController) {
+          callControllers.delete(index);
+        }
+      }
+
+      // Control action wins over whatever the (possibly signal-ignoring) runner
+      // did: a deliberate skip/retry discards this attempt's outcome.
+      const action = pendingControlActions.get(index);
+      if (action) pendingControlActions.delete(index);
+      if (action === 'retry') continue;
+      if (action === 'skip') {
+        emit({
+          type: 'agent:end',
+          index,
+          label,
+          ...phaseContext,
+          cached: false,
+          skipped: true,
+        });
+        // First-class SKIPPED value, not journaled — a resume re-runs it.
+        return JSON.stringify(WORKFLOW_SKIPPED_RESULT);
+      }
+
+      if (attemptError) {
+        // A runner may surface the run abort (its signal cascades from
+        // runAbort); that must stop the workflow, not degrade into a null.
+        if (isWorkflowAbort(attemptError.error)) {
+          throw rememberFatalRunError(attemptError.error);
+        }
+        // A failed agent resolves to null (callers filter with .filter(Boolean))
+        // and is deliberately NOT journaled, so a resume retries it.
+        emit({
+          type: 'agent:end',
+          index,
+          label,
+          ...phaseContext,
+          cached: false,
+          error: toErrorMessage(attemptError.error),
+          ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
+          durationMs: Date.now() - startedAt,
+        });
+        return 'null';
+      }
+
+      // Validate before journaling. Resume storage must never contain a value
+      // that the sandbox boundary cannot reproduce.
+      const { payload, normalizedResult } = journalValue(
+        result,
+        'agent() result',
+        false,
+      );
+      await recordJournalEntry(
+        { index, key, result: normalizedResult },
+        label,
+        phaseContext,
+      );
       emit({
         type: 'agent:end',
         index,
         label,
         ...phaseContext,
         cached: false,
-        error: toErrorMessage(error),
         ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
         durationMs: Date.now() - startedAt,
       });
-      return 'null';
+      return payload;
     }
-
-    // Validate before journaling. Resume storage must never contain a value
-    // that the sandbox boundary cannot reproduce.
-    const { payload, normalizedResult } = journalValue(
-      result,
-      'agent() result',
-      false,
-    );
-    await recordJournalEntry(
-      { index, key, result: normalizedResult },
-      label,
-      phaseContext,
-    );
-    emit({
-      type: 'agent:end',
-      index,
-      label,
-      ...phaseContext,
-      cached: false,
-      ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
-      durationMs: Date.now() - startedAt,
-    });
-    return payload;
   }
 
   const argsJson = serializeBridgeValue(options.args, 'Workflow args');

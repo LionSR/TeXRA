@@ -111,7 +111,37 @@ export type WorkflowScriptEvent =
       model?: string;
       /** Host-measured wall time of the agent() call (live calls only). */
       durationMs?: number;
+      /** Deliberately skipped via control.skip(index); not journaled. */
+      skipped?: boolean;
     });
+
+/**
+ * Guest-visible result of a call cancelled via `control.skip(index)`: a
+ * first-class sentinel distinct from a failed call's `null`, so a script (or
+ * host) can tell "deliberately skipped" apart from "runner failed". Skipped
+ * calls are never journaled, so a later resume re-runs them.
+ */
+export const WORKFLOW_SKIPPED_RESULT = '__WORKFLOW_SKIPPED__';
+
+/**
+ * Per-call control handle for an in-flight run, handed to the host once via
+ * {@link WorkflowScriptRunOptions.onControl}. Control actions are control-plane
+ * only: they never touch the journal, checkpoint, or per-call resume identity.
+ */
+export interface WorkflowScriptControl {
+  /**
+   * Cancel a single in-flight `agent()` call as a deliberate skip. The call
+   * resolves to {@link WORKFLOW_SKIPPED_RESULT} and is not journaled. No-op if
+   * the call at `index` is not currently in flight.
+   */
+  skip(index: number): void;
+  /**
+   * Cancel and re-run a single in-flight `agent()` call as a fresh attempt;
+   * the call resolves with the new attempt's result. No-op if the call at
+   * `index` is not currently in flight.
+   */
+  retry(index: number): void;
+}
 
 export interface WorkflowScriptRunOptions {
   /** Full script source, starting with `export const meta = {...}`. */
@@ -132,6 +162,11 @@ export interface WorkflowScriptRunOptions {
    */
   onJournalEntry?: (entry: WorkflowJournalEntry) => void | Promise<void>;
   onEvent?: (event: WorkflowScriptEvent) => void;
+  /**
+   * Handed the per-call control handle once, synchronously, before the script
+   * body runs, so a host can wire interactive skip/retry to in-flight calls.
+   */
+  onControl?: (control: WorkflowScriptControl) => void;
   /** Wall-clock cap for the whole script. Default 10 minutes. */
   timeoutMs?: number;
   /** Lifetime agent() call cap (runaway-loop backstop). Default 200. */
