@@ -39,7 +39,7 @@ import { truncateSummary } from '@utils/text/stringUtils';
 // Local imports - delegation
 import {
   runPersistedWorkflowScriptWithProgress,
-  sumCompletedWorkflowJournalCost,
+  sumCurrentWorkflowRunCost,
   workflowJournalEntryCostIdentity,
 } from './workflowScriptRun';
 
@@ -122,14 +122,20 @@ export function createWorkflowScriptStrategy(
     launch: async (ports, abortController) => {
       // The stable child runner's native cost callback fires only for work
       // that executes in this attempt; exact journal replays and stable-child
-      // recoveries do not fire it. Delta accounting excludes replayed entries
-      // so a pure resume settles zero instead of double-billing.
-      const executedEntries = new Set<string>();
+      // recoveries do not fire it. Keep every observed attempt by stable call
+      // identity so discarded retry/skip/failure work is still billed while a
+      // pure journal replay settles zero.
+      const observedCosts = new Map<string, number>();
       let liveCostUsd = 0;
       const runAgent = params.createRunAgent({
         onCost: (invocation, totalCostUsd) => {
-          executedEntries.add(workflowJournalEntryCostIdentity(invocation));
-          liveCostUsd += totalCostUsd ?? 0;
+          const cost = totalCostUsd ?? 0;
+          const identity = workflowJournalEntryCostIdentity(invocation);
+          observedCosts.set(
+            identity,
+            (observedCosts.get(identity) ?? 0) + cost,
+          );
+          liveCostUsd += cost;
         },
       });
 
@@ -156,10 +162,7 @@ export function createWorkflowScriptStrategy(
             params.checkpointId,
           );
           ports.recordCost(
-            sumCompletedWorkflowJournalCost(
-              checkpoint?.journal ?? [],
-              executedEntries,
-            ),
+            sumCurrentWorkflowRunCost(checkpoint?.journal ?? [], observedCosts),
           );
         } catch {
           // Cost settlement is best-effort on the failure path.
@@ -167,12 +170,9 @@ export function createWorkflowScriptStrategy(
         throw runError;
       }
 
-      // Journal-based settlement (not the live accumulator) so replayed spend
-      // rolls up on resume; a malformed journal fails closed here, before any
-      // cost is recorded.
-      ports.recordCost(
-        sumCompletedWorkflowJournalCost(run.journal, executedEntries),
-      );
+      // Combine observed attempts with journal-authoritative completed costs;
+      // a malformed journal fails closed before any scalar is recorded.
+      ports.recordCost(sumCurrentWorkflowRunCost(run.journal, observedCosts));
       return run;
     },
 

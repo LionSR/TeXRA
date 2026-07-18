@@ -3,8 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   parseWorkflowScript,
   runWorkflowScript,
+  WORKFLOW_SKIPPED_RESULT,
   WorkflowScriptParseError,
   type WorkflowAgentInvocation,
+  type WorkflowScriptControl,
   type WorkflowScriptEvent,
 } from '@agent/workflowScript';
 import { runScriptInSandbox } from '@agent/workflowScript/sandbox';
@@ -335,7 +337,33 @@ return await pipeline(
     expect(run.result).toEqual([11, null, 31]);
   });
 
-  it('bounds concurrent agent() calls with the semaphore', async () => {
+  it('caps concurrent agent() calls to the concurrency limit over a large fan-out', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    let completed = 0;
+    const runner = async (invocation: WorkflowAgentInvocation) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await delay(1);
+      inFlight -= 1;
+      completed += 1;
+      return invocation.prompt;
+    };
+    const run = await runWorkflowScript({
+      script: `${META}
+const items = Array.from({ length: 100 }, (_, i) => i)
+const out = await parallel(items.map((n) => () => agent('call-' + n)))
+return out.length`,
+      runAgent: runner,
+      concurrency: 4,
+    });
+    expect(maxInFlight).toBeLessThanOrEqual(4);
+    expect(completed).toBe(100);
+    expect(run.result).toBe(100);
+    expect(run.agentCalls).toBe(100);
+  });
+
+  it('bounds concurrent agent() calls with the p-queue concurrency limit', async () => {
     let inFlight = 0;
     let maxInFlight = 0;
     const runner = async (invocation: WorkflowAgentInvocation) => {
@@ -1210,6 +1238,152 @@ return 'incorrect success'`,
       message: 'parent stopped',
     });
     expect(childSignal?.aborted).toBe(true);
+  });
+
+  it('skip(index) skips only that call: SKIPPED result, no journal, siblings finish', async () => {
+    const started = new Set<number>();
+    const release = new Map<number, () => void>();
+    const events: WorkflowScriptEvent[] = [];
+    let control!: WorkflowScriptControl;
+    const runner = (invocation: WorkflowAgentInvocation) =>
+      new Promise<string>((resolve, reject) => {
+        started.add(invocation.index);
+        release.set(invocation.index, () =>
+          resolve(`done:${invocation.index}`),
+        );
+        invocation.signal.addEventListener(
+          'abort',
+          () => reject(new Error('aborted')),
+          { once: true },
+        );
+      });
+
+    const runPromise = runWorkflowScript({
+      script: `${META}return await parallel([
+  () => agent('a', { id: 'a' }),
+  () => agent('b', { id: 'b' }),
+  () => agent('c', { id: 'c' }),
+])`,
+      runAgent: runner,
+      concurrency: 3,
+      onControl: (handle) => {
+        control = handle;
+      },
+      onEvent: (event) => events.push(event),
+    });
+
+    await vi.waitFor(() => expect(started.size).toBe(3));
+    control.skip(1);
+    // Siblings settle normally; only index 1 is cancelled.
+    release.get(0)?.();
+    release.get(2)?.();
+
+    const run = await runPromise;
+    const result = run.result as string[];
+    expect(result[0]).toBe('done:0');
+    expect(result[1]).toBe(WORKFLOW_SKIPPED_RESULT);
+    expect(result[2]).toBe('done:2');
+    // Skipped call is NOT journaled (resume re-runs it); siblings are.
+    expect(run.journal.map((entry) => entry.index).toSorted()).toEqual([0, 2]);
+    expect(events).toContainEqual({
+      type: 'agent:end',
+      index: 1,
+      label: 'b',
+      phase: undefined,
+      cached: false,
+      skipped: true,
+    });
+  });
+
+  it('makes a call controllable before emitting agent:start', async () => {
+    let control!: WorkflowScriptControl;
+    const runner = vi.fn(echoRunner);
+    const run = await runWorkflowScript({
+      script: `${META}return await agent('skip immediately')`,
+      runAgent: runner,
+      onControl: (handle) => {
+        control = handle;
+      },
+      onEvent: (event) => {
+        if (event.type === 'agent:start') control.skip(event.index);
+      },
+    });
+
+    expect(run.result).toBe(WORKFLOW_SKIPPED_RESULT);
+    expect(run.journal).toEqual([]);
+    expect(runner).not.toHaveBeenCalled();
+  });
+
+  it('retry(index) re-runs a single in-flight call and yields the new result', async () => {
+    const attemptByIndex = new Map<number, number>();
+    const releases: Array<() => void> = [];
+    let control!: WorkflowScriptControl;
+    const runner = (invocation: WorkflowAgentInvocation) =>
+      new Promise<string>((resolve, reject) => {
+        const attempt = (attemptByIndex.get(invocation.index) ?? 0) + 1;
+        attemptByIndex.set(invocation.index, attempt);
+        releases.push(() => resolve(`attempt-${attempt}`));
+        invocation.signal.addEventListener(
+          'abort',
+          () => reject(new Error('aborted')),
+          { once: true },
+        );
+      });
+
+    const runPromise = runWorkflowScript({
+      script: `${META}return await agent('go')`,
+      runAgent: runner,
+      onControl: (handle) => {
+        control = handle;
+      },
+    });
+
+    await vi.waitFor(() => expect(attemptByIndex.get(0)).toBe(1));
+    control.retry(0);
+    // The aborted first attempt is discarded; a fresh attempt starts.
+    await vi.waitFor(() => expect(attemptByIndex.get(0)).toBe(2));
+    releases.at(-1)?.();
+
+    const run = await runPromise;
+    expect(run.result).toBe('attempt-2');
+    // Journaled exactly once, with the new attempt's result (no double-journal).
+    expect(run.journal).toEqual([
+      { index: 0, key: expect.any(String), result: 'attempt-2' },
+    ]);
+  });
+
+  it('a whole-run abort cascades to every in-flight per-call controller', async () => {
+    const started = new Set<number>();
+    const aborted = new Set<number>();
+    const parent = new AbortController();
+    const runner = (invocation: WorkflowAgentInvocation) =>
+      new Promise<string>((_resolve, reject) => {
+        started.add(invocation.index);
+        invocation.signal.addEventListener(
+          'abort',
+          () => {
+            aborted.add(invocation.index);
+            reject(new Error('aborted'));
+          },
+          { once: true },
+        );
+      });
+
+    const runPromise = runWorkflowScript({
+      script: `${META}return await parallel([
+  () => agent('a', { id: 'a' }),
+  () => agent('b', { id: 'b' }),
+])`,
+      runAgent: runner,
+      concurrency: 2,
+      signal: parent.signal,
+    });
+
+    await vi.waitFor(() => expect(started.size).toBe(2));
+    parent.abort(new DOMException('parent stopped', 'AbortError'));
+
+    await expect(runPromise).rejects.toMatchObject({ name: 'AbortError' });
+    expect(aborted).toEqual(new Set([0, 1]));
   });
 
   it('removes Intl so scripts cannot read the wall clock implicitly', async () => {

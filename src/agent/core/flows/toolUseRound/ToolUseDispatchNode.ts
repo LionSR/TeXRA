@@ -1,3 +1,5 @@
+import PQueue from 'p-queue';
+
 // Local imports - core flow primitives
 import { Node } from '@agent/node';
 import {
@@ -17,7 +19,7 @@ import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegation
 // Local imports - logging
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { AbsoluteFS, pathToLocation } from '@utils/files';
-import { isNonEmptyString, createSemaphore } from '@utils/core';
+import { isNonEmptyString } from '@utils/core';
 
 // Local file imports
 import { FlowTransition } from '../FlowTransitions';
@@ -189,7 +191,7 @@ export class ToolUseDispatchNode<C> extends Node<
     const batchController = new AbortController();
     this.services.setAbortController(batchController);
     try {
-      const semaphore = createSemaphore(MAX_PARALLEL_TOOL_CALLS);
+      const queue = new PQueue({ concurrency: MAX_PARALLEL_TOOL_CALLS });
       let i = 0;
       while (i < live.length) {
         if (
@@ -216,7 +218,7 @@ export class ToolUseDispatchNode<C> extends Node<
         }
         await Promise.all(
           run.map((index) =>
-            semaphore.run(async () => {
+            queue.add(async () => {
               // Re-check after waiting for a slot: an interrupt while this
               // call was queued must not start new work.
               if (batchController.signal.aborted) return;
