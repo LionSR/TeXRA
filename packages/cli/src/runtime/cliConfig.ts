@@ -294,9 +294,7 @@ export async function setWorkspaceCliChatAgent(
   if (agent !== undefined && !trimmed) {
     throw new Error('The default chat agent must not be empty.');
   }
-  const store = await JsonStore.open(workspaceTexraConfigPath(cwd), {
-    corruptionPolicy: 'fail',
-  });
+  const store = await JsonStore.open(workspaceTexraConfigPath(cwd));
   const snapshot = store.snapshot();
   const sectionKey = Object.hasOwn(snapshot, 'texra.chat')
     ? 'texra.chat'
