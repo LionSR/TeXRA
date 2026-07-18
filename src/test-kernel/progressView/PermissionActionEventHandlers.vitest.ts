@@ -19,9 +19,11 @@ import {
   type PermissionActionDetail,
   type PermissionDecision,
 } from '@progressView/frontend/events';
-import type { MessageHandlerContext } from '@progressView/frontend/messageHandlerTypes';
 import type { PermissionState } from '@progressView/frontend/permissionState';
-import { createInitialState } from '@progressView/frontend/store';
+import {
+  permissions$,
+  resetProgressState,
+} from '@progressView/frontend/progressState';
 
 // Local imports - shared contracts
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
@@ -372,46 +374,20 @@ function permissionFrom(detail: PermissionActionDetail): PermissionState {
   return permission;
 }
 
-function createContext(permission: PermissionState): {
-  ctx: MessageHandlerContext;
-  permissions: () => PermissionState[];
-} {
-  let state = createInitialState();
-  let permissions = [permission];
-  return {
-    ctx: {
-      getState: () => state,
-      setState: (updater) => {
-        state = updater(state);
-      },
-      setStreamState: () => {},
-      setStreamLogs: () => {},
-      getPermissions: () => permissions,
-      setPermissions: (next) => {
-        permissions = next;
-      },
-      setPlacement: () => {},
-    },
-    permissions: () => permissions,
-  };
-}
-
 describe('permission action event handler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetProgressState();
   });
 
   it.each(actionCases)('$name', ({ detail, calls, remains, clearedDraft }) => {
     const permission = permissionFrom(detail);
-    const { ctx, permissions } = createContext(permission);
+    permissions$.set([permission]);
 
-    handlePermissionAction(
-      { detail } as CustomEvent<PermissionActionDetail>,
-      ctx,
-    );
+    handlePermissionAction({ detail } as CustomEvent<PermissionActionDetail>);
 
     expect(mocks.postMessage.mock.calls).toEqual(calls);
-    expect(permissions()).toEqual(remains ? [permission] : []);
+    expect(permissions$.get()).toEqual(remains ? [permission] : []);
     if (clearedDraft) {
       expect(mocks.clearInquiryDraft).toHaveBeenCalledWith(clearedDraft);
     } else {

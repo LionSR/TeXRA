@@ -1,23 +1,19 @@
 // Third-party imports
-import { create } from 'mutative';
-import { describe, expect, it } from 'vitest';
-
-// Local imports - common webview
+import { beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports - progress view frontend
 import { streamLifecycleHandlers } from '@progressView/frontend/slices/streamLifecycleSlice';
 import { streamMetaHandlers } from '@progressView/frontend/slices/streamMetaSlice';
 import { syncHandlers } from '@progressView/frontend/slices/syncSlice';
 import {
+  appState,
+  resetProgressState,
+} from '@progressView/frontend/progressState';
+import {
   createInitialState,
   type ProgressState,
-  type StreamLogs,
   type StreamState,
 } from '@progressView/frontend/store';
-import type {
-  HandlerRegistry,
-  MessageHandlerContext,
-} from '@progressView/frontend/messageHandlerTypes';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - shared schemas
@@ -27,40 +23,16 @@ import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
   STREAM_STATUS,
+  type ProgressViewOutboundHandlerRegistry,
   type ProgressViewOutboundMessage,
   type StreamTabId,
 } from '@shared/schemas';
 import { assertSupported } from '@shared/utils/dispatcher';
 
-function createContext(initialState: ProgressState): {
-  ctx: MessageHandlerContext;
-  getState: () => ProgressState;
-} {
-  let state = initialState;
-  const ctx: MessageHandlerContext = {
-    getState: () => state,
-    setState: (updater) => {
-      state = updater(state);
-    },
-    setStreamState: (streamId, updater) => {
-      const current = state.streamStates.get(streamId);
-      if (!current) return;
-      const updated = updater(current);
-      if (updated === current) return;
-      state = create(state, (draft) => {
-        draft.streamStates.set(streamId, updated);
-      });
-    },
-    setStreamLogs: (
-      _streamId,
-      _updater: (prev: StreamLogs) => StreamLogs,
-    ) => {},
-    savePrefs: () => {},
-    getPermissions: () => [],
-    setPermissions: () => {},
-    setPlacement: () => {},
-  };
-  return { ctx, getState: () => state };
+/** Seed the shared appState singleton and return a live reader over it. */
+function seedState(initialState: ProgressState): () => ProgressState {
+  appState.set(initialState);
+  return () => appState.get();
 }
 
 function createProcessState(streamId: StreamTabId): ProgressState {
@@ -90,13 +62,12 @@ function createProcessState(streamId: StreamTabId): ProgressState {
 }
 
 function dispatch(
-  handlers: Partial<HandlerRegistry>,
+  handlers: Partial<ProgressViewOutboundHandlerRegistry>,
   message: ProgressViewOutboundMessage,
-  ctx: MessageHandlerContext,
 ) {
   const handler = handlers[message.command];
   expect(handler).toBeDefined();
-  assertSupported(handler!)(message as never, ctx);
+  assertSupported(handler!)(message as never);
 }
 
 function registerWorkflowStream(
@@ -113,6 +84,10 @@ function registerWorkflowStream(
 }
 
 describe('process output frontend state', () => {
+  beforeEach(() => {
+    resetProgressState();
+  });
+
   it('patches one stream metadata record without replacing siblings', () => {
     const streamId = 'stream-a' as StreamTabId;
     const siblingId = 'stream-b' as StreamTabId;
@@ -142,45 +117,41 @@ describe('process output frontend state', () => {
         ],
       } satisfies Partial<StreamState>),
     );
-    const { ctx, getState } = createContext(state);
+    const getState = seedState(state);
 
-    dispatch(
-      streamMetaHandlers,
-      {
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
-        streamInfo: {
-          kind: 'agent',
-          name: siblingId,
-          label: 'search',
-          agent: 'search',
-          model: 'deepseekproT',
-          agentCategory: AgentCategory.ToolUse,
-          creationTimestamp: 2,
-        },
-        streamState: {
-          kind: AgentCategory.ToolUse,
-          status: STREAM_PHASE.WAITING,
-          lastTimestamp: 9,
-          conversationProgress: {
-            toolCallCount: 3,
-          },
-          roundStage: { index: 1 },
-          activeSubagents: [],
-          finishedSubagentCount: 1,
-          activeProcesses: [
-            {
-              kind: 'process',
-              executionId: 'process-a',
-              agentName: 'bash',
-            },
-          ],
-          finishedProcessCount: 0,
-        },
-        activeStream: siblingId,
-        agentFilter: 'toolUse',
+    dispatch(streamMetaHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+      streamInfo: {
+        kind: 'agent',
+        name: siblingId,
+        label: 'search',
+        agent: 'search',
+        model: 'deepseekproT',
+        agentCategory: AgentCategory.ToolUse,
+        creationTimestamp: 2,
       },
-      ctx,
-    );
+      streamState: {
+        kind: AgentCategory.ToolUse,
+        status: STREAM_PHASE.WAITING,
+        lastTimestamp: 9,
+        conversationProgress: {
+          toolCallCount: 3,
+        },
+        roundStage: { index: 1 },
+        activeSubagents: [],
+        finishedSubagentCount: 1,
+        activeProcesses: [
+          {
+            kind: 'process',
+            executionId: 'process-a',
+            agentName: 'bash',
+          },
+        ],
+        finishedProcessCount: 0,
+      },
+      activeStream: siblingId,
+      agentFilter: 'toolUse',
+    });
 
     expect(getState().streamById.get(streamId)?.label).toBe('stream-a');
     expect(getState().streamById.get(siblingId)).toMatchObject({
@@ -210,19 +181,15 @@ describe('process output frontend state', () => {
 
   it('appends output without pruning sibling process entries', () => {
     const streamId = 'stream-a' as StreamTabId;
-    const { ctx, getState } = createContext(createProcessState(streamId));
+    const getState = seedState(createProcessState(streamId));
 
-    dispatch(
-      streamMetaHandlers,
-      {
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT,
-        stream: streamId,
-        executionId: 'active-process',
-        stdout: '-new',
-        stderr: 'warn',
-      },
-      ctx,
-    );
+    dispatch(streamMetaHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT,
+      stream: streamId,
+      executionId: 'active-process',
+      stdout: '-new',
+      stderr: 'warn',
+    });
 
     const outputs = getState().processOutputs.get(streamId);
     expect(outputs?.get('active-process')).toEqual({
@@ -237,27 +204,23 @@ describe('process output frontend state', () => {
 
   it('prunes stale process entries when badges change', () => {
     const streamId = 'stream-a' as StreamTabId;
-    const { ctx, getState } = createContext(createProcessState(streamId));
+    const getState = seedState(createProcessState(streamId));
 
-    dispatch(
-      streamMetaHandlers,
-      {
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
-        stream: streamId,
-        activeSubagents: [],
-        finishedSubagentCount: 0,
-        activeProcesses: [
-          {
-            kind: 'process',
-            executionId: 'active-process',
-            agentName: 'bash',
-            status: STREAM_STATUS.RUNNING,
-          },
-        ],
-        finishedProcessCount: 0,
-      },
-      ctx,
-    );
+    dispatch(streamMetaHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
+      stream: streamId,
+      activeSubagents: [],
+      finishedSubagentCount: 0,
+      activeProcesses: [
+        {
+          kind: 'process',
+          executionId: 'active-process',
+          agentName: 'bash',
+          status: STREAM_STATUS.RUNNING,
+        },
+      ],
+      finishedProcessCount: 0,
+    });
 
     const outputs = getState().processOutputs.get(streamId);
     expect(outputs?.has('active-process')).toBe(true);
@@ -274,32 +237,24 @@ describe('process output frontend state', () => {
         status: STREAM_PHASE.RUNNING,
       } satisfies Partial<StreamState>),
     );
-    const { ctx, getState } = createContext(state);
+    const getState = seedState(state);
 
-    dispatch(
-      streamMetaHandlers,
-      {
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
-        stream: streamId,
-        status: STREAM_PHASE.RUNNING,
-        substate: STREAM_SUBSTATE.STARTING,
-      },
-      ctx,
-    );
+    dispatch(streamMetaHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
+      stream: streamId,
+      status: STREAM_PHASE.RUNNING,
+      substate: STREAM_SUBSTATE.STARTING,
+    });
 
     expect(getState().streamStates.get(streamId)?.substate).toBe(
       STREAM_SUBSTATE.STARTING,
     );
 
-    dispatch(
-      streamMetaHandlers,
-      {
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
-        stream: streamId,
-        status: STREAM_PHASE.COMPLETED,
-      },
-      ctx,
-    );
+    dispatch(streamMetaHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
+      stream: streamId,
+      status: STREAM_PHASE.COMPLETED,
+    });
 
     expect(getState().streamStates.get(streamId)?.status).toBe(
       STREAM_PHASE.COMPLETED,
@@ -319,40 +274,36 @@ describe('process output frontend state', () => {
         substate: STREAM_SUBSTATE.STARTING,
       } satisfies Partial<StreamState>),
     );
-    const { ctx, getState } = createContext(state);
+    const getState = seedState(state);
 
-    dispatch(
-      streamLifecycleHandlers,
-      {
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
-        streams: [
-          {
-            kind: 'agent',
-            name: streamId,
-            label: 'stream-a',
-            agentCategory: AgentCategory.Workflow,
-            creationTimestamp: 1,
+    dispatch(streamLifecycleHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+      streams: [
+        {
+          kind: 'agent',
+          name: streamId,
+          label: 'stream-a',
+          agentCategory: AgentCategory.Workflow,
+          creationTimestamp: 1,
+        },
+      ],
+      activeStream: streamId,
+      agentFilter: 'all',
+      streamStates: {
+        [streamId]: {
+          kind: AgentCategory.Workflow,
+          status: STREAM_PHASE.COMPLETED,
+          lastTimestamp: 2,
+          conversationProgress: {
+            toolCallCount: 0,
           },
-        ],
-        activeStream: streamId,
-        agentFilter: 'all',
-        streamStates: {
-          [streamId]: {
-            kind: AgentCategory.Workflow,
-            status: STREAM_PHASE.COMPLETED,
-            lastTimestamp: 2,
-            conversationProgress: {
-              toolCallCount: 0,
-            },
-            activeSubagents: [],
-            finishedSubagentCount: 0,
-            activeProcesses: [],
-            finishedProcessCount: 0,
-          },
+          activeSubagents: [],
+          finishedSubagentCount: 0,
+          activeProcesses: [],
+          finishedProcessCount: 0,
         },
       },
-      ctx,
-    );
+    });
 
     expect(getState().streamStates.get(streamId)?.status).toBe(
       STREAM_PHASE.COMPLETED,
@@ -370,7 +321,7 @@ describe('process output frontend state', () => {
         roundStage: { index: 2 },
       } satisfies Partial<StreamState>),
     );
-    const { ctx, getState } = createContext(state);
+    const getState = seedState(state);
 
     const message = JSON.parse(
       JSON.stringify({
@@ -397,7 +348,7 @@ describe('process output frontend state', () => {
       } satisfies ProgressViewOutboundMessage),
     ) as ProgressViewOutboundMessage;
 
-    dispatch(streamMetaHandlers, message, ctx);
+    dispatch(streamMetaHandlers, message);
 
     expect(getState().streamStates.get(streamId)?.roundStage).toBeUndefined();
   });
@@ -412,7 +363,7 @@ describe('process output frontend state', () => {
         roundStage: { index: 2 },
       } satisfies Partial<StreamState>),
     );
-    const { ctx, getState } = createContext(state);
+    const getState = seedState(state);
 
     const message = JSON.parse(
       JSON.stringify({
@@ -436,7 +387,7 @@ describe('process output frontend state', () => {
       } satisfies ProgressViewOutboundMessage),
     ) as ProgressViewOutboundMessage;
 
-    dispatch(syncHandlers, message, ctx);
+    dispatch(syncHandlers, message);
 
     expect(getState().streamStates.get(streamId)?.roundStage).toBeUndefined();
   });
@@ -446,16 +397,12 @@ describe('process output frontend state', () => {
     const state = createInitialState();
     state.activeStreamId = streamId;
     registerWorkflowStream(state, streamId);
-    const { ctx, getState } = createContext(state);
+    const getState = seedState(state);
 
-    dispatch(
-      streamLifecycleHandlers,
-      {
-        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-        activeStream: '',
-      },
-      ctx,
-    );
+    dispatch(streamLifecycleHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: '',
+    });
 
     expect(getState().activeStreamId).toBeNull();
   });
@@ -479,17 +426,13 @@ describe('process output frontend state', () => {
       creationTimestamp: 2,
       parentStreamId: parent,
     });
-    const { ctx, getState } = createContext(state);
+    const getState = seedState(state);
 
-    dispatch(
-      streamLifecycleHandlers,
-      {
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM,
-        stream: child,
-        parentStreamId: null,
-      },
-      ctx,
-    );
+    dispatch(streamLifecycleHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM,
+      stream: child,
+      parentStreamId: null,
+    });
 
     expect(getState().streamById.get(child)?.parentStreamId).toBeUndefined();
   });

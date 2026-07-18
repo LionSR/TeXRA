@@ -8,24 +8,19 @@
 import { create } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import type { ProgressViewOutboundHandlerRegistry } from '@shared/schemas';
 
+import { appState } from '../progressState';
 import { updateToolUseState } from '../stateUtils';
-import type {
-  HandlerRegistry,
-  MessageHandlerContext,
-} from '../messageHandlerTypes';
 
 // ============================================================
 // Helpers
 // ============================================================
 
-function setActiveStreamRecording(
-  ctx: MessageHandlerContext,
-  recording: boolean,
-): void {
-  const streamId = ctx.getState().activeStreamId;
+function setActiveStreamRecording(recording: boolean): void {
+  const streamId = appState.get().activeStreamId;
   if (!streamId) return;
-  updateToolUseState(ctx, streamId, (prev) =>
+  updateToolUseState(streamId, (prev) =>
     create(prev, (draft) => {
       draft.ui.recording = recording;
     }),
@@ -36,21 +31,21 @@ function setActiveStreamRecording(
 // Handlers
 // ============================================================
 
-// `HandlerRegistry` is now exhaustive (every ProgressView outbound command
+// The composed registry is exhaustive (every ProgressView outbound command
 // needs a real handler or `unsupported(...)` — see `@shared/utils/dispatcher`).
 // This slice only owns a subset, so it's typed as a `satisfies Partial<...>`
 // subset rather than the full registry; `messageDispatcher.ts` spreads all
 // slices together and is the actual exhaustiveness checkpoint TypeScript
 // enforces.
 export const followUpHandlers = {
-  [PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT]: (data, ctx) => {
+  [PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT]: (data) => {
     const streamId =
       data.stream ??
-      (data.kind === 'transcribed' ? ctx.getState().activeStreamId : null);
+      (data.kind === 'transcribed' ? appState.get().activeStreamId : null);
     if (!streamId) return;
-    if (!ctx.getState().streamStates.has(streamId)) return;
+    if (!appState.get().streamStates.has(streamId)) return;
 
-    updateToolUseState(ctx, streamId, (prev) =>
+    updateToolUseState(streamId, (prev) =>
       create(prev, (draft) => {
         switch (data.kind) {
           case 'polished':
@@ -75,22 +70,22 @@ export const followUpHandlers = {
     );
   },
 
-  [PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING]: (data, ctx) =>
-    setActiveStreamRecording(ctx, data.status === 'started'),
+  [PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING]: (data) =>
+    setActiveStreamRecording(data.status === 'started'),
 
-  [PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS]: (data, ctx) => {
-    updateToolUseState(ctx, data.stream, (prev) =>
+  [PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS]: (data) => {
+    updateToolUseState(data.stream, (prev) =>
       create(prev, (draft) => {
         draft.queuedFollowUps = data.messages;
       }),
     );
   },
 
-  [PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS]: (data, ctx) => {
-    if (!ctx.getState().streamStates.has(data.stream)) return;
+  [PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS]: (data) => {
+    if (!appState.get().streamStates.has(data.stream)) return;
 
-    ctx.setState((prev) =>
-      create(prev, (draft) => {
+    appState.set(
+      create(appState.get(), (draft) => {
         draft.followupOptionsByStream.set(data.stream, {
           toolUseAgentsData: data.toolUseAgentsData,
           modelOptionsData: data.modelOptionsData,
@@ -98,4 +93,4 @@ export const followUpHandlers = {
       }),
     );
   },
-} satisfies Partial<HandlerRegistry>;
+} satisfies Partial<ProgressViewOutboundHandlerRegistry>;

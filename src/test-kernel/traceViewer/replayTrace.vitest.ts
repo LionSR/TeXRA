@@ -1,5 +1,4 @@
-import { create } from 'mutative';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
@@ -11,10 +10,9 @@ import { getExecutionStore } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
-  createInitialState,
-  type ProgressState,
-} from '@progressView/frontend/store';
-import type { MessageHandlerContext } from '@progressView/frontend/messageHandlerTypes';
+  appState,
+  resetProgressState,
+} from '@progressView/frontend/progressState';
 import {
   AgentCategory,
   LOG_LEVELS,
@@ -39,35 +37,13 @@ function buildStoragePlatform(): Promise<Platform> {
   return createTempDirPlatform('texra-replay-trace-', tempDirs);
 }
 
-function createContext(initialState: ProgressState): {
-  ctx: MessageHandlerContext;
-  getState: () => ProgressState;
-} {
-  let state = initialState;
-  const ctx: MessageHandlerContext = {
-    getState: () => state,
-    setState: (updater) => {
-      state = updater(state);
-    },
-    setStreamState: (streamId, updater) => {
-      const current = state.streamStates.get(streamId);
-      if (!current) return;
-      const updated = updater(current);
-      if (updated === current) return;
-      state = create(state, (draft) => {
-        draft.streamStates.set(streamId, updated);
-      });
-    },
-    setStreamLogs: () => {},
-    savePrefs: () => {},
-    getPermissions: () => [],
-    setPermissions: () => {},
-    setPlacement: () => {},
-  };
-  return { ctx, getState: () => state };
-}
-
 setupPlatform(buildStoragePlatform);
+
+beforeEach(() => {
+  // replayTrace's slices write the shared progressState singletons directly;
+  // reset them so each test starts from a clean slate.
+  resetProgressState();
+});
 
 afterEach(async () => {
   await cleanupTempDirs(tempDirs);
@@ -101,10 +77,10 @@ function legacyTrace(
 
 describe('replayTrace legacy-status fallback (issue #7188)', () => {
   it('replays workflow content without tool-use state', () => {
-    const { ctx, getState } = createContext(createInitialState());
+    const getState = () => appState.get();
     const trace = legacyTrace(undefined);
 
-    replayTrace(trace, ctx);
+    replayTrace(trace);
 
     const replayed = getState().streamStates.get(trace.streamId);
     expect(replayed).toMatchObject({
@@ -117,7 +93,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
   });
 
   it('replays tool-use content without workflow output state', () => {
-    const { ctx, getState } = createContext(createInitialState());
+    const getState = () => appState.get();
     const workflow = legacyTrace(undefined);
     const trace: TraceDocument = {
       ...workflow,
@@ -138,7 +114,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
       }),
     };
 
-    replayTrace(trace, ctx);
+    replayTrace(trace);
 
     const replayed = getState().streamStates.get(trace.streamId);
     expect(replayed).toMatchObject({
@@ -186,15 +162,15 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     expect(result.trace.terminalStatus).toBeNull();
     expect(result.trace.snapshot.status).toBeUndefined();
 
-    const { ctx, getState } = createContext(createInitialState());
-    replayTrace(result.trace, ctx);
+    const getState = () => appState.get();
+    replayTrace(result.trace);
 
     const replayed = getState().streamStates.get(result.trace.streamId);
     expect(replayed?.status).toBe('failed');
   });
 
   it('ignores nested group-end status when the root run stage never closed', () => {
-    const { ctx, getState } = createContext(createInitialState());
+    const getState = () => appState.get();
     const trace: TraceDocument = {
       ...legacyTrace(undefined),
       entries: [
@@ -233,7 +209,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
       ],
     };
 
-    replayTrace(trace, ctx);
+    replayTrace(trace);
 
     const replayed = getState().streamStates.get(trace.streamId);
     expect(replayed?.status).toBe(STREAM_STATUS.READY);
@@ -246,7 +222,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     // `groupId: undefined`, the same "no parent" shape as the root run
     // stage's own GROUP_END. Only `data.kind` (preserved through the
     // stage.end merge by TexraTranscriptRecorder) tells them apart.
-    const { ctx, getState } = createContext(createInitialState());
+    const getState = () => appState.get();
     const trace: TraceDocument = {
       ...legacyTrace(undefined),
       config: AgentConfigSchema.parse({
@@ -282,7 +258,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
       ],
     };
 
-    replayTrace(trace, ctx);
+    replayTrace(trace);
 
     const replayed = getState().streamStates.get(trace.streamId);
     expect(replayed?.status).toBe(STREAM_STATUS.READY);
@@ -301,7 +277,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     // only starts after the root run stage has already opened. Labels are
     // deliberately non-canonical ("Legacy run" / "Round 0", not "Run: ...")
     // to prove the fallback doesn't key on label text either.
-    const { ctx, getState } = createContext(createInitialState());
+    const getState = () => appState.get();
     const trace: TraceDocument = {
       ...legacyTrace(undefined),
       config: AgentConfigSchema.parse({
@@ -344,17 +320,17 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
       ],
     };
 
-    replayTrace(trace, ctx);
+    replayTrace(trace);
 
     const replayed = getState().streamStates.get(trace.streamId);
     expect(replayed?.status).toBe(STREAM_STATUS.READY);
   });
 
   it('derives "failed" from snapshot.status "error" instead of defaulting to ready', () => {
-    const { ctx, getState } = createContext(createInitialState());
+    const getState = () => appState.get();
     const trace = legacyTrace('error');
 
-    replayTrace(trace, ctx);
+    replayTrace(trace);
 
     const replayed = getState().streamStates.get(trace.streamId);
     expect(replayed?.status).not.toBe(STREAM_STATUS.READY);
@@ -362,10 +338,10 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
   });
 
   it('derives a non-ready status from snapshot.status "stopped" instead of defaulting to ready', () => {
-    const { ctx, getState } = createContext(createInitialState());
+    const getState = () => appState.get();
     const trace = legacyTrace('stopped');
 
-    replayTrace(trace, ctx);
+    replayTrace(trace);
 
     const replayed = getState().streamStates.get(trace.streamId);
     // STOPPED folds into the canonical COMPLETED phase (the same collapse
@@ -377,10 +353,10 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
   });
 
   it('still reports READY when neither terminalStatus nor snapshot.status is set', () => {
-    const { ctx, getState } = createContext(createInitialState());
+    const getState = () => appState.get();
     const trace = legacyTrace(undefined);
 
-    replayTrace(trace, ctx);
+    replayTrace(trace);
 
     const replayed = getState().streamStates.get(trace.streamId);
     expect(replayed?.status).toBe(STREAM_STATUS.READY);

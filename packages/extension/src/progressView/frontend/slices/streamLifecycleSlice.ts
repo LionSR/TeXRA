@@ -10,13 +10,18 @@ import { create } from 'mutative';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   createStreamState,
+  type ProgressViewOutboundHandlerRegistry,
   type StreamMetadata,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
 
 import { firstStreamId, type ProgressState, type StreamState } from '../store';
-import { unsupportedProgressCommands$ } from '../progressState';
+import {
+  appState,
+  permissions$,
+  unsupportedProgressCommands$,
+} from '../progressState';
 import { clearResolvedProposalIds } from './permissionSlice';
 import { pendingDescriptions, takePendingDescription } from './streamMetaSlice';
 import {
@@ -35,7 +40,6 @@ import {
   removePermissionsForStream,
   updateParentStreamId,
 } from '../stateUtils';
-import type { HandlerRegistry } from '../messageHandlerTypes';
 
 // ============================================================
 // Helpers
@@ -111,20 +115,19 @@ function updateStreamInfo(
 // Handlers
 // ============================================================
 
-// `HandlerRegistry` is now exhaustive (every ProgressView outbound command
+// The composed registry is exhaustive (every ProgressView outbound command
 // needs a real handler or `unsupported(...)` — see `@shared/utils/dispatcher`).
 // This slice only owns a subset, so it's typed as a `satisfies Partial<...>`
 // subset rather than the full registry; `messageDispatcher.ts` spreads all
 // slices together and is the actual exhaustiveness checkpoint TypeScript
 // enforces.
 export const streamLifecycleHandlers = {
-  [PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS]: (data, ctx) => {
+  [PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS]: (data) => {
     if (data.unsupportedCommands) {
       unsupportedProgressCommands$.set(new Set(data.unsupportedCommands));
     }
-    const previousState = ctx.getState();
     const updated = updateStreamInfo(
-      previousState,
+      appState.get(),
       data.streams,
       data.streamStates,
     );
@@ -141,7 +144,7 @@ export const streamLifecycleHandlers = {
       nextActiveStreamId = firstStreamId(updated.streamById);
     }
 
-    ctx.setState(() =>
+    appState.set(
       create(updated, (draft) => {
         draft.activeStreamId = nextActiveStreamId;
         draft.streamFilter = data.agentFilter;
@@ -149,26 +152,25 @@ export const streamLifecycleHandlers = {
     );
   },
 
-  [PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM]: (data, ctx) => {
-    ctx.setState((prev) => {
-      let nextActiveStreamId: StreamTabId | null;
-      if (data.activeStream === '') {
-        nextActiveStreamId = null;
-      } else if (data.activeStream && prev.streamById.has(data.activeStream)) {
-        nextActiveStreamId = data.activeStream;
-      } else {
-        nextActiveStreamId = firstStreamId(prev.streamById);
-      }
-      if (nextActiveStreamId === prev.activeStreamId) {
-        return prev;
-      }
-      return create(prev, (draft) => {
+  [PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM]: (data) => {
+    const prev = appState.get();
+    let nextActiveStreamId: StreamTabId | null;
+    if (data.activeStream === '') {
+      nextActiveStreamId = null;
+    } else if (data.activeStream && prev.streamById.has(data.activeStream)) {
+      nextActiveStreamId = data.activeStream;
+    } else {
+      nextActiveStreamId = firstStreamId(prev.streamById);
+    }
+    if (nextActiveStreamId === prev.activeStreamId) return;
+    appState.set(
+      create(prev, (draft) => {
         draft.activeStreamId = nextActiveStreamId;
-      });
-    });
+      }),
+    );
   },
 
-  [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]: (data, ctx) => {
+  [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]: (data) => {
     const streamId = data.stream;
 
     // Always clear module-level caches for deleted stream
@@ -178,12 +180,11 @@ export const streamLifecycleHandlers = {
     deleteFollowUpInputTransientState(streamId);
 
     // Remove permissions for the deleted stream to prevent orphaned entries
-    const cleaned = removePermissionsForStream(ctx.getPermissions(), streamId);
-    ctx.setPermissions(cleaned);
+    permissions$.set(removePermissionsForStream(permissions$.get(), streamId));
 
     pendingDescriptions.delete(streamId);
-    ctx.setState((prev) =>
-      create(prev, (draft) => {
+    appState.set(
+      create(appState.get(), (draft) => {
         draft.streamStates.delete(streamId);
         draft.streamLogs.delete(streamId);
         draft.processOutputs.delete(streamId);
@@ -196,7 +197,7 @@ export const streamLifecycleHandlers = {
     );
   },
 
-  [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: (_data, ctx) => {
+  [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: () => {
     clearResolvedProposalIds();
     clearCopyContentStore();
     clearProposalInputStore();
@@ -204,10 +205,10 @@ export const streamLifecycleHandlers = {
     pendingDescriptions.clear();
 
     // Clear all permissions — no streams means no valid permissions
-    ctx.setPermissions([]);
+    permissions$.set([]);
 
-    ctx.setState((prev) =>
-      create(prev, (draft) => {
+    appState.set(
+      create(appState.get(), (draft) => {
         draft.streamById = new Map();
         draft.streamStates = new Map();
         draft.streamLogs = new Map();
@@ -218,7 +219,7 @@ export const streamLifecycleHandlers = {
     );
   },
 
-  [PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM]: (data, ctx) => {
-    updateParentStreamId(ctx, data.stream, data.parentStreamId);
+  [PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM]: (data) => {
+    updateParentStreamId(data.stream, data.parentStreamId);
   },
-} satisfies Partial<HandlerRegistry>;
+} satisfies Partial<ProgressViewOutboundHandlerRegistry>;
