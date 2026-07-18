@@ -10,6 +10,7 @@ import type {
   WorkflowAgentCallOptions,
   WorkflowJournalEntry,
   WorkflowScriptEvent,
+  WorkflowScriptPhaseContext,
   WorkflowScriptRunOptions,
   WorkflowScriptRunResult,
 } from './types';
@@ -219,6 +220,21 @@ export async function runWorkflowScript(
 
   const emit = (event: WorkflowScriptEvent) => onEvent?.(event);
 
+  const phaseContextFor = (
+    phase: string | undefined,
+  ): WorkflowScriptPhaseContext => {
+    const phaseIndex = plannedPhases.findIndex(
+      (plannedPhase) => plannedPhase.title === phase,
+    );
+    return {
+      phase,
+      ...(phaseIndex >= 0 && {
+        phaseIndex,
+        phaseTotal: plannedPhases.length,
+      }),
+    };
+  };
+
   const rememberFatalRunError = (error: unknown): WorkflowRunAbortError => {
     fatalRunError ??=
       error instanceof WorkflowRunAbortError
@@ -231,7 +247,7 @@ export async function runWorkflowScript(
   const recordJournalEntry = async (
     entry: WorkflowJournalEntry,
     label: string,
-    phase: string | undefined,
+    phaseContext: WorkflowScriptPhaseContext,
   ): Promise<void> => {
     journal.set(entry.index, entry);
     try {
@@ -243,7 +259,7 @@ export async function runWorkflowScript(
         type: 'agent:end',
         index: entry.index,
         label,
-        phase,
+        ...phaseContext,
         cached: false,
         error: message,
       });
@@ -268,6 +284,7 @@ export async function runWorkflowScript(
       );
     }
     const callOptions = normalizeAgentOptions(rawOptions, currentPhase);
+    const phaseContext = phaseContextFor(callOptions.phase);
     const index = callCounter;
     callCounter += 1;
 
@@ -301,7 +318,7 @@ export async function runWorkflowScript(
           type: 'agent:end',
           index,
           label,
-          phase: callOptions.phase,
+          ...phaseContext,
           cached,
           error: toErrorMessage(error),
         });
@@ -321,7 +338,7 @@ export async function runWorkflowScript(
         type: 'agent:end',
         index,
         label,
-        phase: callOptions.phase,
+        ...phaseContext,
         cached: true,
       });
       return payload;
@@ -338,7 +355,7 @@ export async function runWorkflowScript(
       );
     }
 
-    emit({ type: 'agent:start', index, label, phase: callOptions.phase });
+    emit({ type: 'agent:start', index, label, ...phaseContext });
     // Host-side wall clock (the sandbox's Date.now ban is guest-only): timing
     // and the reported model are progress-only, never journaled, so they can't
     // affect resume identity or determinism.
@@ -377,7 +394,7 @@ export async function runWorkflowScript(
         type: 'agent:end',
         index,
         label,
-        phase: callOptions.phase,
+        ...phaseContext,
         cached: false,
         error: toErrorMessage(error),
         ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
@@ -396,13 +413,13 @@ export async function runWorkflowScript(
     await recordJournalEntry(
       { index, key, result: normalizedResult },
       label,
-      callOptions.phase,
+      phaseContext,
     );
     emit({
       type: 'agent:end',
       index,
       label,
-      phase: callOptions.phase,
+      ...phaseContext,
       cached: false,
       ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
       durationMs: Date.now() - startedAt,
@@ -439,13 +456,14 @@ export async function runWorkflowScript(
           },
           phase: (args) => {
             currentPhase = String(args[0]);
-            const index = plannedPhases.findIndex(
-              (phase) => phase.title === currentPhase,
-            );
+            const { phaseIndex, phaseTotal } = phaseContextFor(currentPhase);
             emit({
               type: 'phase',
               title: currentPhase,
-              ...(index >= 0 && { index, total: plannedPhases.length }),
+              ...(phaseIndex !== undefined && {
+                index: phaseIndex,
+                total: phaseTotal,
+              }),
             });
             return undefined;
           },

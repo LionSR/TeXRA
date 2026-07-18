@@ -109,8 +109,12 @@ export async function runPersistedWorkflowScriptWithProgress(
     return phase;
   };
 
-  const stageIdFor = (phase: string | undefined): string | undefined =>
-    phase ? phaseFor(phase).handle.id : parentStageId;
+  const stageIdFor = (
+    phase: string | undefined,
+    index?: number,
+    total?: number,
+  ): string | undefined =>
+    phase ? phaseFor(phase, index, total).handle.id : parentStageId;
 
   const info = (message: string, stageId: string | undefined): void => {
     trace.info(message, { stageId });
@@ -136,7 +140,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         const phaseTitle = event.phase ?? currentPhase;
         callPhases.set(event.index, phaseTitle);
         trace.info(`Running: ${event.label}`, {
-          stageId: stageIdFor(phaseTitle),
+          stageId: stageIdFor(phaseTitle, event.phaseIndex, event.phaseTotal),
         });
         break;
       }
@@ -147,7 +151,11 @@ export async function runPersistedWorkflowScriptWithProgress(
           ? callPhases.get(event.index)
           : (event.phase ?? currentPhase);
         callPhases.delete(event.index);
-        const stageId = stageIdFor(phaseTitle);
+        const stageId = stageIdFor(
+          phaseTitle,
+          event.phaseIndex,
+          event.phaseTotal,
+        );
         // Cached replays spend nothing, so their lines stay cost-free; live
         // onCost settles before agent:end, so the total here is current.
         const spent = event.cached ? undefined : getLiveCostUsd?.();
@@ -163,7 +171,10 @@ export async function runPersistedWorkflowScriptWithProgress(
         const metaSuffix =
           event.model === undefined ? '' : ` · ${event.model}${duration}`;
         if (event.error) {
-          if (phaseTitle) phaseFor(phaseTitle).failed = true;
+          if (phaseTitle) {
+            phaseFor(phaseTitle, event.phaseIndex, event.phaseTotal).failed =
+              true;
+          }
           error(
             `Failed: ${event.label}${metaSuffix} - ${event.error}${total}`,
             stageId,
