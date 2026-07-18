@@ -17,6 +17,24 @@ export async function loadCliStatusAssembly(options: {
     readonly usageRoute?: UsageRoute;
   };
 }) {
+  if (options.target) {
+    const subscriptionActive =
+      options.target.category === undefined
+        ? false
+        : await isCodexSubscriptionActive(
+            options.target.model,
+            options.target.category,
+          );
+    return {
+      lines: [],
+      modelAccess: resolveCliModelAccessRoute({
+        apiMode: options.apiMode,
+        subscriptionActive,
+        usageRoute: options.target.usageRoute,
+      }),
+    };
+  }
+
   const [overview, apiStatusLines] = await Promise.all([
     loadCliModelAccessOverview({ apiMode: options.apiMode }),
     options.includeApiDetails
@@ -26,22 +44,11 @@ export async function loadCliStatusAssembly(options: {
   const detailLines = apiStatusLines
     .slice(2)
     .filter((line) => !overview.lines.includes(line));
-  let subscriptionActive = overview.access.active === 'chatgpt';
-  if (options.target) {
-    subscriptionActive =
-      options.target.category === undefined
-        ? false
-        : await isCodexSubscriptionActive(
-            options.target.model,
-            options.target.category,
-          );
-  }
   return {
     lines: [...overview.lines, ...detailLines],
     modelAccess: resolveCliModelAccessRoute({
       apiMode: options.apiMode,
-      subscriptionActive,
-      usageRoute: options.target?.usageRoute,
+      subscriptionActive: overview.access.active === 'chatgpt',
     }),
   };
 }

@@ -570,6 +570,7 @@ describe('handleTuiSlashCommand', () => {
 
   it('reports the access route that produced the focused stream usage', async () => {
     registerBuiltinSlashCommands();
+    const overview = vi.spyOn(apiStatus, 'loadCliModelAccessOverview');
     const session = createSession();
     const streamId = 'stream-access' as StreamTabId;
     activeStreamId.set(streamId);
@@ -591,6 +592,7 @@ describe('handleTuiSlashCommand', () => {
     const statusText = lastEntryText(streamId);
     expect(statusText).toContain('model access: Included TeXRA access');
     expect(statusText).not.toContain('model access: ChatGPT subscription');
+    expect(overview).not.toHaveBeenCalled();
   });
 
   it('surfaces status lookup failures without rejecting', async () => {
