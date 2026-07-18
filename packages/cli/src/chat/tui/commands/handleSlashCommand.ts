@@ -38,7 +38,6 @@ import {
   openCanonicalSlashForm,
   type SlashCommandContext,
 } from './handlers/slashContext';
-import { applyCliSubscriptionToggle } from './handlers/subscriptionCommand';
 import { openRegisteredCliSlashForm } from './slashForms';
 import {
   findSlashCommand,
@@ -144,9 +143,6 @@ export async function handleTuiSlashCommand(
         );
       }
       openCanonicalSlashForm('key', registered, '');
-      return true;
-    case 'subscription':
-      await runGuardedSlashCommand(() => applyCliSubscriptionToggle(rest));
       return true;
     case 'auth':
       await runGuardedSlashCommand(showCliAuthStatus);

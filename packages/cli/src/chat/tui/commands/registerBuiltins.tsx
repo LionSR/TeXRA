@@ -357,13 +357,6 @@ export function registerBuiltinSlashCommands(options?: {
     redactInput: true,
   });
   registerSlashCommand({
-    name: 'subscription',
-    description: 'Adjust the legacy ChatGPT preference (on | off)',
-    aliases: ['sub'],
-    category: 'account',
-    takesArgs: true,
-  });
-  registerSlashCommand({
     name: 'auth',
     description: 'Show both accounts and active model access',
     category: 'account',

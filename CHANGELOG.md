@@ -56,6 +56,9 @@ All notable changes to this project will be documented in this file.
 
 #### Breaking Changes
 
+- **CLI model access now uses `/api` exclusively** — use `/api chatgpt`,
+  `/api included`, or `/api personal`; the separate `/subscription` command
+  and `/sub` alias have been removed.
 - **Structured run results are moving to one outcome field** — scripts reading
   final result objects from `--output-format json` or `ndjson` should use
   `outcome`. Current v0.39 releases and all v0.40 releases continue to emit the

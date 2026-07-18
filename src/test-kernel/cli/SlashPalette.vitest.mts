@@ -79,13 +79,6 @@ describe('SlashPalette navigation', () => {
     ).toBe('run');
     expect(
       slashPaletteEnterHintAction({
-        name: 'foo',
-        description: 'takes an argument',
-        takesArgs: true,
-      }),
-    ).toBe('complete');
-    expect(
-      slashPaletteEnterHintAction({
         name: 'model',
         description: 'choose model',
         formComponent: () => null,

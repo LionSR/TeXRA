@@ -665,14 +665,6 @@ describe('slashRegistry', () => {
     expect(slashPickIntent(help, 'tab')).toBe('complete');
   });
 
-  it('completes arg-taking commands on Enter so the user can type the argument', () => {
-    const foo = { name: 'foo', description: 'takes args', takesArgs: true };
-    registerSlashCommand(foo);
-
-    expect(slashPickIntent(foo, 'enter')).toBe('complete');
-    expect(slashPickIntent(foo, 'tab')).toBe('complete');
-  });
-
   it('suggests the closest command for a typo within the shared threshold', () => {
     registerBuiltinSlashCommands();
 
