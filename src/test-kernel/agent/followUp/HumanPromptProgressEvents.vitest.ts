@@ -18,8 +18,6 @@ import {
   proposalApprovals,
   setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
-  toggleBashApprovalSessionBypass,
-  toggleToolEditApprovalSessionBypass,
 } from '@tools/approval';
 import { requestBashApproval } from '@tools/approval/bashApproval';
 import {
@@ -52,14 +50,25 @@ function installTestPlatform(): Promise<void> {
   });
 }
 
-function inToolContext<T>(
+async function inToolContext<T>(
   host: AgentRuntimeHost,
+  interactions: ReturnType<typeof createRecordingHost>['interactions'],
   streamId: StreamTabId,
   run: () => T,
-): T | Promise<T> {
-  return withRunContext(createRunContext({ runtimeHost: host, streamId }), () =>
-    withToolFileInteractionContext({ tracker: {} as never }, run),
-  );
+): Promise<Awaited<T>> {
+  const detach = defaultSession().useHostInteractions(interactions);
+  try {
+    return await withRunContext(
+      createRunContext({
+        runtimeHost: host,
+        streamId,
+        session: defaultSession(),
+      }),
+      () => withToolFileInteractionContext({ tracker: {} as never }, run),
+    );
+  } finally {
+    detach();
+  }
 }
 
 describe('human prompt progress events', () => {
@@ -79,11 +88,15 @@ describe('human prompt progress events', () => {
     const explicit = createRecordingHost();
     const streamId = 'stream:bash-approval' as StreamTabId;
 
-    const approval = inToolContext(explicit.host, streamId, () =>
-      requestBashApproval({
-        command: 'echo hello',
-        cwd: '/tmp/texra-project',
-      }),
+    const approval = inToolContext(
+      explicit.host,
+      explicit.interactions,
+      streamId,
+      () =>
+        requestBashApproval({
+          command: 'echo hello',
+          cwd: '/tmp/texra-project',
+        }),
     );
 
     const show = await waitForRecordedEvent(
@@ -130,17 +143,21 @@ describe('human prompt progress events', () => {
     const streamId = 'stream:user-question' as StreamTabId;
     const tool = new AskUserQuestionTool();
 
-    const result = inToolContext(explicit.host, streamId, () =>
-      tool.call({
-        context: 'Choose the next step.',
-        questions: [
-          {
-            question: 'Which path should the agent take?',
-            header: 'Path',
-            options: [{ label: 'Inspect logs' }, { label: 'Run the build' }],
-          },
-        ],
-      }),
+    const result = inToolContext(
+      explicit.host,
+      explicit.interactions,
+      streamId,
+      () =>
+        tool.call({
+          context: 'Choose the next step.',
+          questions: [
+            {
+              question: 'Which path should the agent take?',
+              header: 'Path',
+              options: [{ label: 'Inspect logs' }, { label: 'Run the build' }],
+            },
+          ],
+        }),
     );
 
     const show = await waitForRecordedEvent(
@@ -197,7 +214,7 @@ describe('human prompt progress events', () => {
     const explicit = createRecordingHost();
     const streamId = 'stream:tool-edit-bypass' as StreamTabId;
 
-    const enabled = toggleToolEditApprovalSessionBypass(
+    const enabled = defaultSession().approvals.toolEdit.bypass.toggleBypass(
       streamId,
       explicit.host,
     );
@@ -215,7 +232,10 @@ describe('human prompt progress events', () => {
     const explicit = createRecordingHost();
     const streamId = 'stream:bash-bypass' as StreamTabId;
 
-    const enabled = toggleBashApprovalSessionBypass(streamId, explicit.host);
+    const enabled = defaultSession().approvals.bash.bypass.toggleBypass(
+      streamId,
+      explicit.host,
+    );
 
     expect(enabled).toBe(true);
     expect(explicit.events).toEqual([
@@ -235,8 +255,11 @@ describe('human prompt progress events', () => {
         silent: true,
       });
 
-      const approval = inToolContext(explicit.host, streamId, () =>
-        requestBashApproval({ command: 'echo still asks' }),
+      const approval = inToolContext(
+        explicit.host,
+        explicit.interactions,
+        streamId,
+        () => requestBashApproval({ command: 'echo still asks' }),
       );
 
       const show = await waitForRecordedEvent(
@@ -257,8 +280,11 @@ describe('human prompt progress events', () => {
         silent: true,
       });
 
-      const bypassed = await inToolContext(explicit.host, streamId, () =>
-        requestBashApproval({ command: 'echo bypassed' }),
+      const bypassed = await inToolContext(
+        explicit.host,
+        explicit.interactions,
+        streamId,
+        () => requestBashApproval({ command: 'echo bypassed' }),
       );
 
       expect(bypassed).toEqual({ accepted: true });

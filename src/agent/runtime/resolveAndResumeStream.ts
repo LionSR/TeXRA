@@ -46,7 +46,7 @@ export interface ResumeStreamPorts {
     streamId: StreamTabId,
   ): Promise<ResolvedResumeState | undefined>;
   /** Resume a tool-use snapshot (host injects its failure surface). */
-  resumeToolUseSnapshot(snapshot: ToolUseSessionSnapshot): Promise<boolean>;
+  resumeToolUse(snapshot: ToolUseSessionSnapshot): Promise<boolean>;
   /**
    * Launch a workflow resume run. The extension re-parses the config and opens
    * the final output; the desktop runs it directly and opens its own preview —
@@ -129,7 +129,7 @@ export async function resolveAndResumeStream(
 
     if (resume.type === 'toolUse') {
       // The tool-use helper owns the RESUMING flip + follow-up dance.
-      return await ports.resumeToolUseSnapshot(resume.snapshot);
+      return await ports.resumeToolUse(resume.snapshot);
     }
 
     // Workflow launch owns stream acquisition and status transitions through

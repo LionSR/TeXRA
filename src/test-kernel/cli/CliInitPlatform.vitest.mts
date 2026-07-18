@@ -307,7 +307,7 @@ describe('CLI platform init', () => {
       runtimeHost: { emit: vi.fn() },
       streamStatus: { isActiveOrResuming: () => false },
       resolveResumeState: () => pendingResumeState,
-      resumeToolUseSnapshot: vi.fn(async () => false),
+      resumeToolUse: vi.fn(async () => false),
       executeWorkflow: vi.fn(async () => {}),
     });
 

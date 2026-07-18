@@ -26,30 +26,6 @@ describe('default session lifecycle', () => {
     }
   });
 
-  it('defers extension host session access until composition is initialized', async () => {
-    vi.resetModules();
-    const { initializeDefaultSession, teardownDefaultSession } =
-      await import('@agent/runtime/SessionHandle');
-    const { StreamLogStore } = await import('@transcript/StreamLogStore');
-    const { extensionAgentRuntimeHost } =
-      await import('@frontend/agentRuntime/extensionAgentRuntimeHost');
-
-    expect(() => extensionAgentRuntimeHost.interactions).toThrow(
-      'The default session has not been initialized',
-    );
-
-    const session = initializeDefaultSession({
-      transcripts: StreamLogStore.ephemeral(
-        'extension composition lifecycle test',
-      ),
-    });
-    try {
-      expect(extensionAgentRuntimeHost.interactions).toBe(session.interactions);
-    } finally {
-      teardownDefaultSession();
-    }
-  });
-
   it('can initialize again only after explicit teardown', async () => {
     vi.resetModules();
     const {

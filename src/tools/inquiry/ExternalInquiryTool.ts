@@ -471,7 +471,7 @@ export class ExternalInquiryTool extends defineTool({
           transcript: null,
         };
     const interaction =
-      runtimeHost.interactions?.openExternalInquiry?.(permission);
+      ownerSession.interactions.openExternalInquiry(permission);
     if (!interaction) {
       throw new Error('HostInteractions.openExternalInquiry is required');
     }

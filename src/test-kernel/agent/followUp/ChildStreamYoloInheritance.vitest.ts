@@ -17,7 +17,6 @@ import {
   setBashApprovalSessionBypass,
   setDelegatedWorkApprovalBypasses,
   setToolEditApprovalSessionBypass,
-  toggleBashApprovalSessionBypass,
 } from '@tools/approval';
 
 import { createRecordingHost } from '../progressTestUtils';
@@ -184,7 +183,10 @@ describe('child subagent stream approval inheritance', () => {
     configureDelegatedChildApprovals(child, parent);
     expect(isBashApprovalBypassedForStream(child)).toBe(true);
 
-    const first = toggleBashApprovalSessionBypass(child, host);
+    const first = currentSession().approvals.bash.bypass.toggleBypass(
+      child,
+      host,
+    );
     expect(first).toBe(false);
     expect(isBashApprovalBypassedForStream(child)).toBe(false);
     // The parent's own bypass is untouched by the child's toggle.

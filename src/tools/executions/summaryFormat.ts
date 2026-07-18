@@ -15,7 +15,7 @@ import {
   AgentExecutionHandle,
   type ExecutionHandle,
   type ExecutionStatusInfo,
-} from '@agent/runtime/executionRegistry';
+} from '@agent/runtime/ExecutionHandle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { formatResultCount, formatTimestamp } from '@utils/text/stringUtils';

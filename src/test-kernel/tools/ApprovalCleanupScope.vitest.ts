@@ -18,10 +18,6 @@ import {
   setDelegatedWorkApprovalBypasses,
   setBashApprovalSessionBypass,
 } from '@tools/approval';
-import {
-  registerPendingApproval,
-  unregisterPendingApproval,
-} from '@tools/approval/toolEditApproval';
 
 const sid = (s: string): StreamTabId => s as StreamTabId;
 
@@ -68,15 +64,13 @@ describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
     const settled = new Set<string>();
 
     try {
-      registerPendingApproval(
+      sessionA.approvals.toolEdit.registerPending(
         'tool-a',
         createPending('tool-a', settled),
-        sessionA,
       );
-      registerPendingApproval(
+      sessionB.approvals.toolEdit.registerPending(
         'tool-b',
         createPending('tool-b', settled),
-        sessionB,
       );
       sessionA.approvals.bash.registerPending(
         'bash-a',
@@ -103,8 +97,8 @@ describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
         new Set(['tool-a', 'bash-a', 'tool-b', 'bash-b']),
       );
     } finally {
-      unregisterPendingApproval('tool-a', sessionA);
-      unregisterPendingApproval('tool-b', sessionB);
+      sessionA.approvals.toolEdit.unregisterPending('tool-a');
+      sessionB.approvals.toolEdit.unregisterPending('tool-b');
       sessionA.approvals.bash.unregisterPending('bash-a');
       sessionB.approvals.bash.unregisterPending('bash-b');
       sessionA.dispose();
@@ -196,10 +190,9 @@ describe('session-owned approval state (#8144)', () => {
     const streamId = sid('s:appr-dispose');
     const settled = new Set<string>();
 
-    registerPendingApproval(
+    session.approvals.toolEdit.registerPending(
       'tool-dispose',
       createPending('tool-dispose', settled, streamId),
-      session,
     );
     setBashApprovalSessionBypass(streamId, true, noopAgentRuntimeHost, {
       silent: true,

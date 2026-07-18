@@ -6,7 +6,7 @@ import {
   AgentExecutionHandle,
   ProcessExecutionHandle,
   type ExecutionHandle,
-} from '@agent/runtime/executionRegistry';
+} from '@agent/runtime/ExecutionHandle';
 import {
   findActiveAgentExecutionHandle,
   type SessionHandle,

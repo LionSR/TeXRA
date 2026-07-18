@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { createChannelTrace } from '@agent/trace';
 import {
+  getRunContextSession,
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
@@ -46,7 +47,7 @@ The tool returns a JSON object whose keys are the original question texts and wh
 }) {
   protected async execute(input: AskUserQuestionInput): Promise<ToolResult> {
     const context = tryUseRunContext();
-    const runtimeHost = requireRuntimeHost('ask_user_question', context);
+    requireRuntimeHost('ask_user_question', context);
     const streamId = getRunContextStreamId(context);
     const requestId = `user-question-${nanoid()}`;
 
@@ -61,7 +62,8 @@ The tool returns a JSON object whose keys are the original question texts and wh
       allowBypass: false,
       streamId: streamId ?? '',
     };
-    const interaction = runtimeHost.interactions?.askUserQuestion?.(permission);
+    const session = getRunContextSession(context) ?? defaultSession();
+    const interaction = session.interactions.askUserQuestion(permission);
     if (!interaction) {
       throw new Error('HostInteractions.askUserQuestion is required');
     }
