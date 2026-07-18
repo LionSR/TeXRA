@@ -166,13 +166,13 @@ export type ChildActivityEvent =
       readonly type: 'child.activity';
       readonly kind: 'subagents';
       readonly parentStreamId: StreamTabId;
-      readonly children: readonly ActiveChildInfo[];
+      readonly items: readonly ActiveChildInfo[];
     })
   | (StageStamp & {
       readonly type: 'child.activity';
       readonly kind: 'processes';
       readonly parentStreamId: StreamTabId;
-      readonly processes: readonly ActiveChildInfo[];
+      readonly items: readonly ActiveChildInfo[];
     });
 
 /** Incremental output from a child process owned by a parent run stream. */

@@ -299,7 +299,7 @@ function handleActiveProcesses(
       type: 'child.activity',
       kind: 'processes',
       parentStreamId: parentStreamId as StreamTabId,
-      processes,
+      items: processes,
     },
   });
 }
@@ -316,7 +316,7 @@ function handleActiveSubagents(
       type: 'child.activity',
       kind: 'subagents',
       parentStreamId: parentStreamId as StreamTabId,
-      children,
+      items: children,
     },
   });
 }
@@ -602,7 +602,7 @@ describe('CLI run progress renderer', () => {
         type: 'child.activity',
         kind: 'subagents',
         parentStreamId: streamId,
-        children: [
+        items: [
           {
             kind: 'subagent',
             executionId: 'child-1',
@@ -1171,7 +1171,7 @@ describe('CLI run progress renderer', () => {
           type: 'child.activity',
           kind: 'subagents',
           parentStreamId: 'parent-stream',
-          children: [
+          items: [
             {
               kind: 'subagent',
               executionId: 'child-execution',

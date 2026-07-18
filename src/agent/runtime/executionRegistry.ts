@@ -763,13 +763,13 @@ export class ExecutionRegistry {
               type: 'child.activity',
               kind: 'subagents',
               parentStreamId,
-              children: items,
+              items,
             }
           : {
               type: 'child.activity',
               kind: 'processes',
               parentStreamId,
-              processes: items,
+              items,
             },
     });
   }
