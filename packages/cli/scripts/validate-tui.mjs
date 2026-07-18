@@ -1403,6 +1403,27 @@ const SCENARIOS = [
     unexpect: ['First context paragraph', '/model models'],
   },
   {
+    name: 'edit-approval-reanchors-after-resize',
+    rows: 16,
+    cols: 120,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_EDIT_APPROVAL: '1',
+      HARNESS_EDIT_APPROVAL_WRAPPED_CONTEXT: '1',
+    },
+    bootExpect: '· Ctrl-C ',
+    resizes: [{ cols: 40, rows: 16 }],
+    frame: 'viewport',
+    expect: [
+      '-Old acknowledgment.',
+      '+Revised acknowledgment.',
+      'previous',
+      'y approve',
+      'n reject',
+    ],
+    unexpect: ['First context paragraph', '/model models'],
+  },
+  {
     name: 'edit-approval-feedback',
     rows: 24,
     cols: 80,
