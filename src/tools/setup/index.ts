@@ -29,4 +29,4 @@ export { InstallVscodeExtensionTool } from './InstallVscodeExtensionTool';
 export { ReadConfigTool, UpdateConfigTool } from './ConfigTools';
 export { SendToTerminalTool } from './SendToTerminalTool';
 export { ApplyTeamTool } from './ApplyTeamTool';
-export { createDefaultSetupPlatform, setSetupPlatform } from './platform';
+export { setSetupPlatform } from './platform';

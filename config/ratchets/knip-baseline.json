@@ -1127,31 +1127,6 @@
       "name": "LspRange"
     },
     {
-      "file": "src/tools/setup/platform.ts",
-      "category": "types",
-      "name": "SetupAuthAdapter"
-    },
-    {
-      "file": "src/tools/setup/platform.ts",
-      "category": "types",
-      "name": "SetupCommandAdapter"
-    },
-    {
-      "file": "src/tools/setup/platform.ts",
-      "category": "types",
-      "name": "SetupConfigAdapter"
-    },
-    {
-      "file": "src/tools/setup/platform.ts",
-      "category": "types",
-      "name": "SetupExtensionAdapter"
-    },
-    {
-      "file": "src/tools/setup/platform.ts",
-      "category": "types",
-      "name": "SetupTerminalAdapter"
-    },
-    {
       "file": "src/transcript/index.ts",
       "category": "exports",
       "name": "unregisterFlushers"

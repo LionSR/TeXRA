@@ -2,8 +2,8 @@
  * VS Code-free platform adapter for setup tools.
  *
  * Setup tools live in the `@tools/*` VS Code-free zone. Their common
- * credential and configuration capabilities derive from the shared platform;
- * only VS Code-specific interactions are supplied by the extension host.
+ * credential and configuration capabilities derive directly from the shared
+ * platform; hosts install only the capabilities that actually vary.
  *
  * Keep this interface narrow — add methods only when a setup tool needs them.
  */
@@ -62,46 +62,14 @@ export interface SetupSecretsAdapter {
 }
 
 /** Per-command surface. */
-export interface SetupCommandAdapter {
+interface SetupCommandAdapter {
   invoke(commandId: string, ...args: unknown[]): Promise<unknown>;
 }
 
 /** Extension host surface. */
-export interface SetupExtensionAdapter {
+interface SetupExtensionAdapter {
   isInstalled(extensionId: string): boolean;
   install(extensionId: string): Promise<void>;
-}
-
-/** Auth / Researcher Access surface. */
-export interface SetupAuthAdapter {
-  getStatus(): Promise<{
-    authenticated: boolean;
-    remoteAgentCatalogAvailable: boolean;
-    email?: string;
-    tier?: string;
-  }>;
-  /** Start the host's existing TeXRA account sign-in flow, when available. */
-  signIn?: () => Promise<boolean>;
-}
-
-/** Subscription access reported separately from provider API keys. */
-interface SetupModelAccessAdapter {
-  getChatGptSubscriptionStatus(): Promise<{
-    signedIn: boolean;
-    enabled: boolean;
-  }>;
-}
-
-/** Configuration-value surface. Reads/writes scoped to `texra.*` keys. */
-export interface SetupConfigAdapter {
-  /** Read the effective value of a `texra.*` setting. */
-  get(key: string): unknown;
-  /** Write a `texra.*` setting. `target` selects user vs. workspace scope. */
-  update(
-    key: string,
-    value: unknown,
-    target: 'user' | 'workspace',
-  ): Promise<void>;
 }
 
 /**
@@ -117,25 +85,22 @@ export interface SetupConfigAdapter {
  * same as "user interrupted", since neither path tells us anything
  * actionable.
  */
-export type SetupTerminalAdapter = TerminalRunner;
 export type { TerminalRunResult };
 
 export type SetupHost = 'cli' | 'desktop' | 'extension';
 
-/** Aggregated setup platform. */
+/** Host-varying setup capabilities. */
 export interface SetupPlatform {
   /** Product surface currently running the shared setup agent. */
   host: SetupHost;
-  secrets: SetupSecretsAdapter;
-  auth: SetupAuthAdapter;
-  modelAccess: SetupModelAccessAdapter;
-  config: SetupConfigAdapter;
+  /** Start the host's existing TeXRA account sign-in flow, when available. */
+  signIn?: () => Promise<boolean>;
   /** VS Code-only command invocation. */
   commands?: SetupCommandAdapter;
   /** VS Code extension inspection and installation. */
   extensions?: SetupExtensionAdapter;
   /** VS Code integrated-terminal execution. */
-  terminal?: SetupTerminalAdapter;
+  terminal?: TerminalRunner;
 }
 
 /** Setup tools that require a VS Code-specific adapter. */
@@ -153,7 +118,8 @@ function assertTexraScopedKey(key: string): void {
   }
 }
 
-async function defaultAuthStatus(): Promise<{
+/** Researcher Access status shared by every host. */
+export async function getSetupAuthStatus(): Promise<{
   authenticated: boolean;
   remoteAgentCatalogAvailable: boolean;
   email?: string;
@@ -184,59 +150,61 @@ async function defaultAuthStatus(): Promise<{
   };
 }
 
-/**
- * Derive setup capabilities shared by every host from their existing platform
- * ports. This is the sole owner of the common setup wiring; hosts add only
- * capabilities that cannot exist outside VS Code.
- */
-export function createDefaultSetupPlatform(host: SetupHost): SetupPlatform {
-  const services = currentPlatform();
-  const { secrets, config } = services;
+/** Value-free credential capability exposed to setup tools. */
+export const setupSecrets: SetupSecretsAdapter = {
+  providers: API_PROVIDERS,
+  deleteApiKey: (provider) =>
+    currentPlatform().secrets.delete(apiKeySecretName(provider)),
+  hasUsableApiKey: (provider) =>
+    hasUsableApiKey(currentPlatform().secrets, provider),
+  apiKeyOrigin: (provider) =>
+    lookupApiKeyOrigin(currentPlatform().secrets, provider),
+  storedApiKeyExists: async (provider) =>
+    (await currentPlatform().secrets.listStoredKeys()).includes(
+      apiKeySecretName(provider),
+    ),
+  anyUsableCredentialExists: () =>
+    hasUsableSetupCredential(currentPlatform().secrets),
+  gitHubTokenExists: () => resolveGitHubTokenSource(currentPlatform().secrets),
+  listStoredKeys: () => currentPlatform().secrets.listStoredKeys(),
+};
 
+/** Subscription access reported separately from provider API keys. */
+export async function getChatGptSubscriptionStatus(): Promise<{
+  signedIn: boolean;
+  enabled: boolean;
+}> {
+  const status = await getCodexStatus();
   return {
-    host,
-    secrets: {
-      providers: API_PROVIDERS,
-      deleteApiKey: (provider) => secrets.delete(apiKeySecretName(provider)),
-      hasUsableApiKey: (provider) => hasUsableApiKey(secrets, provider),
-      apiKeyOrigin: (provider) => lookupApiKeyOrigin(secrets, provider),
-      storedApiKeyExists: async (provider) =>
-        (await secrets.listStoredKeys()).includes(apiKeySecretName(provider)),
-      anyUsableCredentialExists: () => hasUsableSetupCredential(secrets),
-      gitHubTokenExists: () => resolveGitHubTokenSource(secrets),
-      listStoredKeys: () => secrets.listStoredKeys(),
-    },
-    auth: { getStatus: defaultAuthStatus },
-    modelAccess: {
-      getChatGptSubscriptionStatus: async () => {
-        const status = await getCodexStatus();
-        return {
-          signedIn: status.signedIn,
-          enabled:
-            status.signedIn &&
-            (await isCodexSubscriptionActive(
-              CHATGPT_SETUP_MODEL,
-              AgentCategory.ToolUse,
-            )),
-        };
-      },
-    },
-    config: {
-      get: (key) => {
-        assertTexraScopedKey(key);
-        return config.get(key);
-      },
-      update: async (key, value, target) => {
-        assertTexraScopedKey(key);
-        await config.update(
-          key,
-          value,
-          target === 'workspace' ? 'workspace' : 'global',
-        );
-      },
-    },
+    signedIn: status.signedIn,
+    enabled:
+      status.signedIn &&
+      (await isCodexSubscriptionActive(
+        CHATGPT_SETUP_MODEL,
+        AgentCategory.ToolUse,
+      )),
   };
 }
+
+/** Configuration operations scoped to `texra.*` keys. */
+export const texraScopedConfig = {
+  get(key: string): unknown {
+    assertTexraScopedKey(key);
+    return currentPlatform().config.get(key);
+  },
+  async update(
+    key: string,
+    value: unknown,
+    target: 'user' | 'workspace',
+  ): Promise<void> {
+    assertTexraScopedKey(key);
+    await currentPlatform().config.update(
+      key,
+      value,
+      target === 'workspace' ? 'workspace' : 'global',
+    );
+  },
+};
 
 let override: SetupPlatform | undefined;
 
