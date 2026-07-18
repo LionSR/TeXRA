@@ -550,6 +550,9 @@ export async function buildAgentLaunchContext(
   const launchSession = input.session ?? currentSession();
   const streamStatus = launchSession.status;
   const executionId = input.executionId ?? generateExecutionId();
+  if (!input.streamTabIdOverride && (!config.agent || !config.model)) {
+    throw new AgentError('Missing required fields: model and/or agent');
+  }
   const reservedStreamId = input.streamTabIdOverride
     ? undefined
     : getStreamTabId(config.agent, config.model, { executionId });

@@ -47,6 +47,23 @@ import { RUN_OUTCOME, STREAM_PHASE } from '@shared/schemas';
 import { createRecordingHost } from '../progressTestUtils';
 
 describe('AgentLaunchContext', () => {
+  it('retains the missing-field diagnostic for empty canonical values', async () => {
+    const session = createTestSession();
+    try {
+      await expect(
+        buildAgentLaunchContext({
+          config: AgentConfigSchema.parse({ agent: '', model: '' }),
+          runtimeHost: createRecordingHost().host,
+          session,
+        }),
+      ).rejects.toMatchObject({
+        message: 'Missing required fields: model and/or agent',
+      });
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('publishes missing-agent banners through the explicit runtime host', async () => {
     const explicit = createRecordingHost();
 
