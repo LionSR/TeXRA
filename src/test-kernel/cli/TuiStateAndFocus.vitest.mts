@@ -276,7 +276,7 @@ describe('cliState Phase 4 fields', () => {
           type: 'child.activity',
           kind: 'subagents',
           parentStreamId: root,
-          children: [
+          items: [
             {
               kind: 'subagent',
               executionId: 'agent-1',
@@ -2162,7 +2162,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
           type: 'child.activity',
           kind: 'subagents',
           parentStreamId: root,
-          children: [child],
+          items: [child],
         },
       });
       hub.emit({
@@ -2227,7 +2227,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
           type: 'child.activity',
           kind: 'processes',
           parentStreamId: root,
-          processes: [runningProcessA, runningProcessB],
+          items: [runningProcessA, runningProcessB],
         },
       });
       hub.emit({
@@ -2259,7 +2259,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
           type: 'child.activity',
           kind: 'processes',
           parentStreamId: root,
-          processes: [runningProcessB],
+          items: [runningProcessB],
         },
       });
 
@@ -2671,7 +2671,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
           type: 'child.activity',
           kind: 'processes',
           parentStreamId: root,
-          processes: [
+          items: [
             {
               kind: 'process',
               executionId: 'exec-a',
@@ -2717,7 +2717,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
           type: 'child.activity',
           kind: 'processes',
           parentStreamId: root,
-          processes: [
+          items: [
             { kind: 'process', executionId: 'exec-b', agentName: 'bash' },
           ],
         },

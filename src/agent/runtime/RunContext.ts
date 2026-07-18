@@ -172,58 +172,58 @@ export function tryUseRunContext(): RunContext | undefined {
   return runContextScope.getStore();
 }
 
+/**
+ * Read a field shared by `RunScope` and `BareRunContext`, dispatching on
+ * context kind — `launch` contexts read through `runScope`, `bare` contexts
+ * read the field directly.
+ */
+function getRunContextField<K extends keyof RunScope & keyof BareRunContext>(
+  field: K,
+  context: RunContext | undefined,
+): RunScope[K] | BareRunContext[K] | undefined {
+  return context?.kind === 'launch' ? context.runScope[field] : context?.[field];
+}
+
 /** Return the runtime host for a context, reading launch contexts through RunScope. */
 export function getRunContextRuntimeHost(
   context: RunContext | undefined = tryUseRunContext(),
 ): AgentRuntimeHost | undefined {
-  return context?.kind === 'launch'
-    ? context.runScope.runtimeHost
-    : context?.runtimeHost;
+  return getRunContextField('runtimeHost', context);
 }
 
 /** Return the stream id for a context, reading launch contexts through RunScope. */
 export function getRunContextStreamId(
   context: RunContext | undefined = tryUseRunContext(),
 ): StreamTabId | undefined {
-  return context?.kind === 'launch'
-    ? context.runScope.streamId
-    : context?.streamId;
+  return getRunContextField('streamId', context);
 }
 
 /** Return the execution id for a context, reading launch contexts through RunScope. */
 export function getRunContextExecutionId(
   context: RunContext | undefined = tryUseRunContext(),
 ): ExecutionId | undefined {
-  return context?.kind === 'launch'
-    ? context.runScope.executionId
-    : context?.executionId;
+  return getRunContextField('executionId', context);
 }
 
 /** Return the agent name for a context, reading launch contexts through RunScope. */
 export function getRunContextAgentName(
   context: RunContext | undefined = tryUseRunContext(),
 ): string | undefined {
-  return context?.kind === 'launch'
-    ? context.runScope.agentName
-    : context?.agentName;
+  return getRunContextField('agentName', context);
 }
 
 /** Return the working directory for a context, reading launch contexts through RunScope. */
 export function getRunContextWorkingDirectory(
   context: RunContext | undefined = tryUseRunContext(),
 ): string | undefined {
-  return context?.kind === 'launch'
-    ? context.runScope.workingDirectory
-    : context?.workingDirectory;
+  return getRunContextField('workingDirectory', context);
 }
 
 /** Return the owner session for a context, reading launch contexts through RunScope. */
 export function getRunContextSession(
   context: RunContext | undefined = tryUseRunContext(),
 ): SessionHandle | undefined {
-  return context?.kind === 'launch'
-    ? context.runScope.session
-    : context?.session;
+  return getRunContextField('session', context);
 }
 
 /**

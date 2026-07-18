@@ -891,7 +891,7 @@ describe('DesktopProgressBridge', () => {
       type: 'child.activity',
       kind: 'processes',
       parentStreamId: 'parent',
-      processes: [
+      items: [
         { kind: 'process', executionId: 'process-1', agentName: 'bash' },
       ],
     });
@@ -901,7 +901,7 @@ describe('DesktopProgressBridge', () => {
       type: 'child.activity',
       kind: 'subagents',
       parentStreamId: 'parent',
-      children: [
+      items: [
         {
           kind: 'subagent',
           childStreamId: 'agent-1',
@@ -946,7 +946,7 @@ describe('DesktopProgressBridge', () => {
       type: 'child.activity',
       kind: 'processes',
       parentStreamId: 'parent',
-      processes: [
+      items: [
         { kind: 'process', executionId: 'process-1', agentName: 'bash' },
       ],
     });
@@ -954,7 +954,7 @@ describe('DesktopProgressBridge', () => {
       type: 'child.activity',
       kind: 'subagents',
       parentStreamId: 'parent',
-      children: [
+      items: [
         {
           kind: 'subagent',
           childStreamId: 'agent-1',
@@ -967,13 +967,13 @@ describe('DesktopProgressBridge', () => {
       type: 'child.activity',
       kind: 'processes',
       parentStreamId: 'parent',
-      processes: [],
+      items: [],
     });
     emitRunEvent(bridge, 'parent' as StreamTabId, {
       type: 'child.activity',
       kind: 'subagents',
       parentStreamId: 'parent',
-      children: [],
+      items: [],
     });
 
     const badgeUpdate = progressMessages(
