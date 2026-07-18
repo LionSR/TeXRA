@@ -34,9 +34,9 @@ describe('monacoLanguageForFilePath', () => {
 
 describe('DesktopShowDiffMessageSchema', () => {
   it('round-trips a complete payload', async () => {
-    const { DesktopShowDiffMessageSchema, buildDesktopShowDiffMessage } =
-      await loadDiffMessages();
-    const message = buildDesktopShowDiffMessage({
+    const { DesktopShowDiffMessageSchema } = await loadDiffMessages();
+    const parsed = DesktopShowDiffMessageSchema.parse({
+      command: 'desktop:showDiff',
       title: 'Compare',
       originalText: 'a',
       proposedText: 'b',
@@ -44,7 +44,6 @@ describe('DesktopShowDiffMessageSchema', () => {
       originalPath: '/a',
       proposedPath: '/b',
     });
-    const parsed = DesktopShowDiffMessageSchema.parse(message);
     expect(parsed.command).toBe('desktop:showDiff');
     expect(parsed.language).toBe('latex');
   });
