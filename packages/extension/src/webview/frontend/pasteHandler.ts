@@ -1,13 +1,13 @@
 // Local imports - shared utilities
 import { postMessage } from '@shared/hostBridge';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { generatePastedImageName } from '@shared/files/pastedImageConstants';
 import { insertTextAtCursor } from '@shared/utils/textarea';
 import {
   clipboardImageFiles,
   getExtensionFromMimeType,
   readFileAsBase64,
 } from '@shared/utils/clipboardImages';
+import { generatePastedImageName } from '@utils/files/pastedImageUtils';
 
 export async function handleImagePaste(
   event: ClipboardEvent,

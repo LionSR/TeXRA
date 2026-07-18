@@ -1,4 +1,4 @@
-import { API_KEY_PROVIDER_IDS } from '@shared/constants/apiKeyProviders';
+import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
 
 const REDACTED = '[redacted]';
 

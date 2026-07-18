@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { PROVIDER_KEY_REDACTION_RULES, redactSecrets } from '@logger/redaction';
-import { API_KEY_PROVIDER_IDS } from '@shared/constants/apiKeyProviders';
+import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
 
 describe('desktop log redaction', () => {
   it('redacts obvious secrets and sensitive path prefixes', async () => {

@@ -24,7 +24,7 @@ import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import { bestConnectionMethod } from '@agent/runtime/textConnection';
 import type { ToolDefinition } from '@model';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
-import { OUTPUT_END_TAG } from '@shared/constants/outputProtocol';
+import { OUTPUT_END_TAG } from '@shared/schemas/output';
 import { AbsoluteFS, FlexibleFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { extractScratchpad } from '@utils/text/xmlUtils';

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildMainViewExecuteMessage } from '@shared/mainView';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import { buildMainViewExecuteMessage } from '@shared/mainView/executeMessage';
 import {
   MainViewExecuteInboundMessageSchema,
   MainViewExecuteMessageSchema,

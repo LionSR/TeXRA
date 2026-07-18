@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { resolveProviderKeyRows } from '@settingsView/frontend/components/profile/providerKeyRows';
-import { API_KEY_PROVIDER_IDS } from '@shared/constants/apiKeyProviders';
 import {
+  API_KEY_PROVIDER_IDS,
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
   SERVER_SIDE_PROVIDER_IDS,

@@ -18,8 +18,8 @@ import type { ModelOptionData } from '@shared/schemas';
 import {
   DEFAULT_HELPER_MODEL,
   MODEL_SOURCE_ORDER,
+  isFastFirstResponseModel,
 } from '@shared/constants/providers';
-import { isFastFirstResponseModel } from '@shared/constants/fastModels';
 import {
   ReasoningLevelSchema,
   type ModelSelectionItem,

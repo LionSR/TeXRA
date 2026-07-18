@@ -30,9 +30,9 @@ import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
-import { PersistedState } from '@shared/state';
 import { designTokens } from '@shared/styles';
 import { postMessage } from '@shared/hostBridge';
+import { PersistedState } from '@shared/state/PersistedState';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { copyWithFeedback } from '@shared/utils/clipboard';
