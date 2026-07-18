@@ -14,7 +14,7 @@ import { z } from 'zod';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 import { defineTool } from '../core/define';
-import { getSetupPlatform } from './platform';
+import { texraScopedConfig } from './platform';
 
 /**
  * Per-key value validators for `update_config`. Read access (`read_config`)
@@ -106,7 +106,7 @@ Accepts any key starting with \`texra.\`. Returns the current resolved value (wo
   schema: ReadConfigInputSchema,
 }) {
   protected async execute(input: ReadConfigInput): Promise<ToolResult> {
-    const value = getSetupPlatform().config.get(input.key);
+    const value = texraScopedConfig.get(input.key);
     const json = JSON.stringify(value, null, 2) ?? 'undefined';
     return {
       status: 'executed',
@@ -159,9 +159,8 @@ Anything outside this list must be changed through the host's regular configurat
       );
     }
 
-    const config = getSetupPlatform().config;
-    const previous = config.get(input.key);
-    await config.update(input.key, parsed.data, input.target);
+    const previous = texraScopedConfig.get(input.key);
+    await texraScopedConfig.update(input.key, parsed.data, input.target);
 
     const before = JSON.stringify(previous);
     const after = JSON.stringify(parsed.data);

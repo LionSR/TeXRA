@@ -40,10 +40,7 @@ import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 // Local imports - setup tools
-import {
-  createDefaultSetupPlatform,
-  setSetupPlatform,
-} from '@tools/setup/platform';
+import { setSetupPlatform } from '@tools/setup/platform';
 
 // Local imports - utilities
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -352,15 +349,11 @@ export async function initCliPlatform(
     serverSideKeysInitialized = true;
   }
 
-  const defaultSetupPlatform = createDefaultSetupPlatform('cli');
   setSetupPlatform({
-    ...defaultSetupPlatform,
-    auth: {
-      ...defaultSetupPlatform.auth,
-      signIn: async () => {
-        await signInCliSupabase({ openBrowser: true });
-        return getCliAuthProvider().canAccessRemoteAgentCatalog();
-      },
+    host: 'cli',
+    signIn: async () => {
+      await signInCliSupabase({ openBrowser: true });
+      return getCliAuthProvider().canAccessRemoteAgentCatalog();
     },
   });
 

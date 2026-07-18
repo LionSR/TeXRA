@@ -100,7 +100,7 @@ import { migrateLegacyGlobalBashApprovalOverride } from '@shared/settingsView/ha
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setOpenPdfOpener } from '@tools/OpenPdfTool';
 import { refreshToolAvailability } from '@tools/toolAvailability';
-import { createDefaultSetupPlatform, setSetupPlatform } from '@tools/setup';
+import { setSetupPlatform } from '@tools/setup';
 import {
   SharedPRPollingSource,
   SharedRepoPollingSource,
@@ -544,16 +544,11 @@ export async function activate(context: vscode.ExtensionContext) {
       } satisfies vscode.TextDocumentShowOptions,
     );
   });
-  const defaultSetupPlatform = createDefaultSetupPlatform('extension');
   setSetupPlatform({
-    ...defaultSetupPlatform,
-    auth: {
-      ...defaultSetupPlatform.auth,
-      signIn: async () =>
-        (await vscode.commands.executeCommand<boolean>(
-          AUTH_COMMANDS.SIGN_IN,
-        )) === true,
-    },
+    host: 'extension',
+    signIn: async () =>
+      (await vscode.commands.executeCommand<boolean>(AUTH_COMMANDS.SIGN_IN)) ===
+      true,
     commands: {
       invoke: (cmd, ...args) =>
         Promise.resolve(vscode.commands.executeCommand(cmd, ...args)),

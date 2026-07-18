@@ -1,19 +1,12 @@
-import {
-  createDefaultSetupPlatform,
-  setSetupPlatform,
-} from '@tools/setup/platform';
+import { setSetupPlatform } from '@tools/setup/platform';
 
 let activeSignIn: (() => Promise<boolean>) | undefined;
 
 /** Install a process-owned setup adapter that resolves the active window lazily. */
 export function initializeDesktopSetupAuth(): void {
-  const defaults = createDefaultSetupPlatform('desktop');
   setSetupPlatform({
-    ...defaults,
-    auth: {
-      ...defaults.auth,
-      signIn: () => activeSignIn?.() ?? Promise.resolve(false),
-    },
+    host: 'desktop',
+    signIn: () => activeSignIn?.() ?? Promise.resolve(false),
   });
 }
 

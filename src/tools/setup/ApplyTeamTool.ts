@@ -34,7 +34,7 @@ import {
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 import { defineTool } from '../core/define';
-import { getSetupPlatform } from './platform';
+import { getSetupAuthStatus, getSetupPlatform } from './platform';
 
 /**
  * Built from the actual preset list (plus the hidden starter team) so the
@@ -100,7 +100,7 @@ ${describeTeams()}`,
       initial.resolution.unresolvedNames,
     );
     const setupPlatform = getSetupPlatform();
-    const authenticated = await setupPlatform.auth.getStatus();
+    const authenticated = await getSetupAuthStatus();
 
     const preflight = await preflightTeamAvailability({
       initial,
@@ -111,7 +111,7 @@ ${describeTeams()}`,
       providedChoice: input.unavailableAction ?? undefined,
       choose: async () => undefined,
       signIn: async () => {
-        if (setupPlatform.auth.signIn) return setupPlatform.auth.signIn();
+        if (setupPlatform.signIn) return setupPlatform.signIn();
         if (setupPlatform.commands) {
           return (
             (await setupPlatform.commands.invoke(AUTH_COMMANDS.SIGN_IN)) ===
@@ -138,7 +138,7 @@ ${describeTeams()}`,
     if (preflight.status === 'cancelled') {
       const signInAdvice =
         input.unavailableAction === 'sign-in' &&
-        !setupPlatform.auth.signIn &&
+        !setupPlatform.signIn &&
         !setupPlatform.commands
           ? ' Sign-in is unavailable in this host; sign in through the host account UI, then call apply_team again.'
           : '';
