@@ -10,6 +10,7 @@ import {
 import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
 import {
   sumCompletedWorkflowJournalCost,
+  sumCurrentWorkflowRunCost,
   workflowJournalEntryCostIdentity,
   WorkflowJournalCostError,
 } from '@tools/delegation/workflowScriptRun';
@@ -88,11 +89,35 @@ describe('workflow-script completed journal cost', () => {
     const retry = [...recoveredAfterReorder, liveReplacement];
 
     expect(
-      sumCompletedWorkflowJournalCost(
+      sumCurrentWorkflowRunCost(
         retry,
-        new Set([workflowJournalEntryCostIdentity(liveReplacement)]),
+        new Map([[workflowJournalEntryCostIdentity(liveReplacement), 0.45]]),
       ),
     ).toBe(0.45);
+  });
+
+  it('includes discarded attempts without double-counting completed calls', () => {
+    const retried = entry(0, workflowResult(0.4), 'aaaaaaaaaaaaaaaa');
+    const missingObservedCost = entry(
+      1,
+      workflowResult(0.5),
+      'bbbbbbbbbbbbbbbb',
+    );
+    const skippedIdentity = workflowJournalEntryCostIdentity({
+      index: 2,
+      key: 'cccccccccccccccc',
+    });
+
+    expect(
+      sumCurrentWorkflowRunCost(
+        [retried, missingObservedCost],
+        new Map([
+          [workflowJournalEntryCostIdentity(retried), 0.7],
+          [workflowJournalEntryCostIdentity(missingObservedCost), 0],
+          [skippedIdentity, 0.2],
+        ]),
+      ),
+    ).toBeCloseTo(1.4);
   });
 
   it.each([

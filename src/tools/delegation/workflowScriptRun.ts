@@ -49,29 +49,52 @@ export function workflowJournalEntryCostIdentity(
   return `${entry.index}:${entry.key}`;
 }
 
+function workflowJournalEntryCost(entry: WorkflowJournalEntry): number {
+  const result = AgentFinalResultSchema.safeParse(entry.result);
+  if (!result.success) {
+    throw new WorkflowJournalCostError(entry.index, {
+      cause: result.error,
+    });
+  }
+  return result.data.cost;
+}
+
 /**
- * Sum completed logical-call cost; failed and cancelled attempts are not
- * journaled. Every entry is validated; when `executedEntries` is supplied,
- * only entries whose native child cost callback fired count toward the total.
+ * Sum completed logical-call cost. Failed and cancelled attempts are not
+ * journaled. Every entry is validated.
  */
 export function sumCompletedWorkflowJournalCost(
   journal: readonly WorkflowJournalEntry[],
-  executedEntries?: ReadonlySet<string>,
 ): number {
   let total = 0;
   for (const entry of journal) {
-    const result = AgentFinalResultSchema.safeParse(entry.result);
-    if (!result.success) {
-      throw new WorkflowJournalCostError(entry.index, {
-        cause: result.error,
-      });
+    total += workflowJournalEntryCost(entry);
+  }
+  return total;
+}
+
+/**
+ * Sum cost attributable to the current run, including attempts discarded by
+ * skip/retry/failure. The journal supplies an authoritative completed-attempt
+ * cost when an observer reports no value; taking the per-call maximum avoids
+ * counting the completed attempt twice when both sources report it.
+ */
+export function sumCurrentWorkflowRunCost(
+  journal: readonly WorkflowJournalEntry[],
+  observedCosts: ReadonlyMap<string, number>,
+): number {
+  const unjournaledCosts = new Map(observedCosts);
+  let total = 0;
+  for (const entry of journal) {
+    const journalCost = workflowJournalEntryCost(entry);
+    const identity = workflowJournalEntryCostIdentity(entry);
+    if (unjournaledCosts.has(identity)) {
+      total += Math.max(journalCost, unjournaledCosts.get(identity) ?? 0);
+      unjournaledCosts.delete(identity);
     }
-    if (
-      executedEntries === undefined ||
-      executedEntries.has(workflowJournalEntryCostIdentity(entry))
-    ) {
-      total += result.data.cost;
-    }
+  }
+  for (const observedCost of unjournaledCosts.values()) {
+    total += observedCost;
   }
   return total;
 }

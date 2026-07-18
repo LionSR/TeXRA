@@ -1295,6 +1295,25 @@ return 'incorrect success'`,
     });
   });
 
+  it('makes a call controllable before emitting agent:start', async () => {
+    let control!: WorkflowScriptControl;
+    const runner = vi.fn(echoRunner);
+    const run = await runWorkflowScript({
+      script: `${META}return await agent('skip immediately')`,
+      runAgent: runner,
+      onControl: (handle) => {
+        control = handle;
+      },
+      onEvent: (event) => {
+        if (event.type === 'agent:start') control.skip(event.index);
+      },
+    });
+
+    expect(run.result).toBe(WORKFLOW_SKIPPED_RESULT);
+    expect(run.journal).toEqual([]);
+    expect(runner).not.toHaveBeenCalled();
+  });
+
   it('retry(index) re-runs a single in-flight call and yields the new result', async () => {
     const attemptByIndex = new Map<number, number>();
     const releases: Array<() => void> = [];

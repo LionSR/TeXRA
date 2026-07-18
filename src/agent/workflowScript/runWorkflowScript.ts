@@ -378,7 +378,6 @@ export async function runWorkflowScript(
       );
     }
 
-    emit({ type: 'agent:start', index, label, ...phaseContext });
     // Host-side wall clock (the sandbox's Date.now ban is guest-only): timing
     // and the reported model are progress-only, never journaled, so they can't
     // affect resume identity or determinism. Declared once outside the attempt
@@ -386,6 +385,7 @@ export async function runWorkflowScript(
     // attempt's reportModel wins.
     const startedAt = Date.now();
     let resolvedModel: string | undefined;
+    let startEmitted = false;
     // Attempt loop: retry() re-enters with a fresh AbortController and a fresh
     // runAgent call for this same index/key; skip() and normal settlement exit.
     // liveCallCounter and issuedCallKeys are index-scoped (charged once above),
@@ -398,6 +398,10 @@ export async function runWorkflowScript(
       if (runAbort.signal.aborted) cascade();
       else runAbort.signal.addEventListener('abort', cascade, { once: true });
       callControllers.set(index, callController);
+      if (!startEmitted) {
+        startEmitted = true;
+        emit({ type: 'agent:start', index, label, ...phaseContext });
+      }
 
       let result: unknown;
       let attemptError: { readonly error: unknown } | undefined;
@@ -412,6 +416,7 @@ export async function runWorkflowScript(
               ),
             );
           }
+          callController.signal.throwIfAborted();
           return runAgent({
             index,
             key,
