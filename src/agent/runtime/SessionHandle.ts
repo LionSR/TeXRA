@@ -6,8 +6,7 @@
  * vocabulary they already use after 7a–c landed (`session.interactions.x(...)`,
  * `session.executions.y(...)`). It composes the landed runtime owners —
  * {@link ExecutionRegistry}, {@link ExecutionSubscriptionBinder},
- * {@link SessionHostInteractions} — plus the trace flusher set and an
- * optional session-scoped host channel.
+ * {@link SessionHostInteractions} — plus the other session-scoped owners.
  *
  * A session is one per host context: extension activation (per VS Code window),
  * CLI process, or desktop `BrowserWindow`. The default instance is installed
@@ -36,11 +35,8 @@ import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManage
 import type { StreamTabId } from '@shared/schemas';
 
 import { getRunContextSession, tryUseRunContext } from './RunContext';
-import {
-  AgentExecutionHandle,
-  ExecutionRegistry,
-  type ExecutionHandle,
-} from './executionRegistry';
+import { AgentExecutionHandle, type ExecutionHandle } from './ExecutionHandle';
+import { ExecutionRegistry } from './executionRegistry';
 import { ExecutionSubscriptionBinder } from './ExecutionSubscriptionBinder';
 import { StreamStatusMachine } from './StreamStatusService';
 import {
@@ -55,7 +51,6 @@ import {
 import { WorkflowControlRegistry } from './workflowControlRegistry';
 import { releaseExecutionLeaseAfterArtifacts } from './executionOwnership';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 const logger = createChannelTrace('sessionHandle');
 
@@ -72,7 +67,6 @@ export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
       | 'flushers'
       | 'interactions'
       | 'workflowControls'
-      | 'hostChannel'
     >
   >;
 
@@ -111,12 +105,6 @@ export class SessionHandle {
    * to skip/retry a focused grandchild `agent()` call.
    */
   readonly workflowControls: WorkflowControlRegistry;
-  /**
-   * Optional session-scoped emit surface for the non-run-scoped host-path
-   * emissions (SDK Step 7d follow-on F-1). Unset ⇒ those stay on the bus.
-   */
-  readonly hostChannel?: AgentRuntimeHost;
-
   constructor(init: SessionHandleInit) {
     if (init.transcripts.mode.kind === 'read-only') {
       throw new Error(
@@ -162,7 +150,6 @@ export class SessionHandle {
     // the process-module set (`getActiveFlushers()`) so the process-wide
     // shutdown drain (`flushPendingRunTraces()`) still reaches it.
     this.flushers = init.flushers ?? new Set<() => void>();
-    this.hostChannel = init.hostChannel;
     executions.attachRootExecutionLeaseRelease((executionId) =>
       releaseExecutionLeaseAfterArtifacts(this, executionId),
     );

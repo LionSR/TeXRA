@@ -8,7 +8,7 @@ import {
   finalizeRunTerminal,
   type RunTerminalPersistence,
 } from '@agent/runtime/AgentRunLifecycle';
-import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
+import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import {
   currentSession,
   type SessionHandle,

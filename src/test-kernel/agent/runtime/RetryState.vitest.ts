@@ -262,6 +262,7 @@ describe('RetryState', () => {
           operation: 'Tool-use call',
           model: 'copilot:sonnet46',
         }),
+        undefined,
       );
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);

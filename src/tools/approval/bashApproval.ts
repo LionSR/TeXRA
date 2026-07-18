@@ -56,14 +56,6 @@ export function setBashApprovalSessionBypass(
   );
 }
 
-export function toggleBashApprovalSessionBypass(
-  streamId: StreamTabId,
-  runtimeHost: AgentRuntimeHost,
-  session: SessionHandle = currentSession(),
-): boolean {
-  return session.approvals.bash.bypass.toggleBypass(streamId, runtimeHost);
-}
-
 export function isBashApprovalBypassedForStream(
   streamId: StreamTabId,
   session: SessionHandle = currentSession(),
@@ -87,32 +79,27 @@ export async function requestBashApproval(
     return { accepted: true };
   }
 
-  const runtimeHost = requireRuntimeHost('bash approval', context);
+  requireRuntimeHost('bash approval', context);
 
   return session.approvals.bash.enqueue(streamId, () =>
-    showApprovalPrompt(request, streamId, runtimeHost, session),
+    showApprovalPrompt(request, streamId, session),
   );
 }
 
 async function showApprovalPrompt(
   request: BashApprovalRequest,
   streamId: StreamTabId | undefined,
-  runtimeHost: AgentRuntimeHost,
   session: SessionHandle,
 ): Promise<BashApprovalResult> {
   if (streamId && session.approvals.bash.bypass.isBypassed(streamId)) {
     return { accepted: true };
   }
 
-  const interaction = runtimeHost.interactions?.requestBashApproval?.({
+  return session.interactions.requestBashApproval({
     command: request.command,
     ...(request.cwd ? { cwd: request.cwd } : {}),
     streamId,
   });
-  if (!interaction) {
-    throw new Error('HostInteractions.requestBashApproval is required');
-  }
-  return interaction;
 }
 
 export function buildBashApprovalRejectedResult(

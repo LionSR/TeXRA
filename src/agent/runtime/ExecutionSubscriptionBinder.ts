@@ -12,10 +12,8 @@
  */
 
 import { createChannelTrace } from '@agent/trace';
-import type {
-  ExecutionHandle,
-  ExecutionRegistry,
-} from '@agent/runtime/executionRegistry';
+import type { ExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { DELIVERY_TAG } from '@shared/deliveryTags';

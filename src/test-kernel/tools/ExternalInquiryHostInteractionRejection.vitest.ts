@@ -4,6 +4,7 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it } from 'vitest';
 
 import { setupPlatform } from '@test/support/setupPlatform';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { StreamTabId } from '@shared/schemas';
@@ -11,15 +12,18 @@ import { ExternalInquiryTool } from '@tools/inquiry/ExternalInquiryTool';
 
 const STREAM = 'stream:inquiry-host-interaction' as StreamTabId;
 
-function createRuntimeHostWithRejectingInteraction(
-  reason: Error,
-): AgentRuntimeHost {
+function createRuntimeFixture(reason: Error): {
+  runtimeHost: AgentRuntimeHost;
+  session: ReturnType<typeof createTestSession>;
+} {
+  const session = createTestSession();
+  session.useHostInteractions({
+    cancel: () => {},
+    openExternalInquiry: () => Promise.reject(reason),
+  });
   return {
-    emit: () => {},
-    interactions: {
-      cancel: () => {},
-      openExternalInquiry: () => Promise.reject(reason),
-    },
+    runtimeHost: { emit: () => {} },
+    session,
   };
 }
 
@@ -28,18 +32,21 @@ describe('ExternalInquiryTool host interaction dispatch', () => {
   setupPlatform();
 
   it('surfaces a rejected openExternalInquiry() as a tool error instead of an unhandled rejection', async () => {
-    const runtimeHost = createRuntimeHostWithRejectingInteraction(
+    const { runtimeHost, session } = createRuntimeFixture(
       new Error('external inquiry panel unavailable'),
     );
 
-    const result = await withRunContext(
-      createRunContext({ runtimeHost, streamId: STREAM }),
-      () =>
-        new ExternalInquiryTool().call({
-          command: 'ask',
-          question: 'Does a synchronous panel failure surface as a tool error?',
-        }),
-    );
+    const result = await Promise.resolve(
+      withRunContext(
+        createRunContext({ runtimeHost, streamId: STREAM, session }),
+        () =>
+          new ExternalInquiryTool().call({
+            command: 'ask',
+            question:
+              'Does a synchronous panel failure surface as a tool error?',
+          }),
+      ),
+    ).finally(() => session.dispose());
 
     // Before the fix, `void interaction` dropped the rejection: the promise
     // was never awaited or attached to a .catch(), so the tool call proceeded

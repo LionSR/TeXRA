@@ -14,7 +14,7 @@ import {
   isChildRunLoopActive,
   startChildRunLoop,
 } from '@agent/runtime/childRunLoop';
-import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
+import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   STREAM_PHASE,

@@ -29,7 +29,7 @@ import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   AgentExecutionHandle,
   type LiveToolUseFlowContext,
-} from '@agent/runtime/executionRegistry';
+} from '@agent/runtime/ExecutionHandle';
 import { createRunScope } from '@agent/runtime/RunScope';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {

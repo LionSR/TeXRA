@@ -44,7 +44,7 @@ vi.mock('@tools/childRunDelivery', () => ({
 }));
 
 // Local imports - agent
-import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
+import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { FollowUpWakeResult } from '@agent/followUp/ToolUseFollowUp';
 
 // Local imports - shared

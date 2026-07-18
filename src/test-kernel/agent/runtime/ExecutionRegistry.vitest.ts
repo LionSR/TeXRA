@@ -9,10 +9,10 @@ import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AgentExecutionHandle,
-  ExecutionRegistry,
   ProcessExecutionHandle,
   type LiveToolUseFlowContext,
-} from '@agent/runtime/executionRegistry';
+} from '@agent/runtime/ExecutionHandle';
+import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { ProcessOutputPoller } from '@agent/runtime/ProcessOutputPoller';
 import {

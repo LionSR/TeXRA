@@ -142,7 +142,6 @@ export function cleanupAllApprovals(
 export {
   // Bash approval
   setBashApprovalSessionBypass,
-  toggleBashApprovalSessionBypass,
   isBashApprovalBypassedForStream,
   type BashApprovalRequest,
   type BashApprovalResult,
@@ -157,7 +156,6 @@ export {
 export {
   // Tool edit approval
   setToolEditApprovalSessionBypass,
-  toggleToolEditApprovalSessionBypass,
   isApprovalBypassedForStream,
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,

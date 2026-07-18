@@ -18,7 +18,6 @@ import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
 } from '@test/helpers/streamStatusTestUtils';
-import { resumeToolUseSnapshot } from '@agent/runtime/resumeToolUseSnapshot';
 import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
@@ -60,7 +59,7 @@ function capturedTakePendingFollowUps(): () => readonly FollowUpQueueInput[] {
   return options.takePendingFollowUps;
 }
 
-describe('resumeToolUseSnapshot', () => {
+describe('resumeQueuedToolUseSnapshot', () => {
   beforeEach(() => {
     resumeToolUseFromSnapshotMock.mockReset();
     resumeToolUseFromSnapshotMock.mockImplementation(
@@ -91,7 +90,9 @@ describe('resumeToolUseSnapshot', () => {
     );
 
     await expect(
-      resumeToolUseSnapshot(snapshot(), { runtimeHost }),
+      resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+        onError: vi.fn(),
+      }),
     ).resolves.toBe(true);
 
     // The initial batch travels via the direct drainedFollowUps handoff (a
@@ -121,9 +122,9 @@ describe('resumeToolUseSnapshot', () => {
       { force: true },
     );
 
-    await resumeToolUseSnapshot(snapshot(), {
-      runtimeHost,
-      explicitFollowUp: 'typed alongside resume',
+    await resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+      extraFollowUps: [{ text: 'typed alongside resume', origin: 'user' }],
+      onError: vi.fn(),
     });
 
     expect(
@@ -275,7 +276,12 @@ describe('resumeToolUseSnapshot', () => {
   it('passes snapshot parent stream identity to the leaf resume', async () => {
     const parentStreamId = 'stream:parent' as StreamTabId;
 
-    await resumeToolUseSnapshot(snapshot(parentStreamId), { runtimeHost });
+    await resumeQueuedToolUseSnapshot(
+      STREAM,
+      snapshot(parentStreamId),
+      runtimeHost,
+      { onError: vi.fn() },
+    );
 
     expect(capturedResumeOptions().parentStreamId).toBe(parentStreamId);
   });
@@ -484,11 +490,15 @@ describe('resumeToolUseSnapshot', () => {
     );
 
     await expect(
-      resumeToolUseSnapshot(snapshot('stream:parent' as StreamTabId), {
+      resumeQueuedToolUseSnapshot(
+        STREAM,
+        snapshot('stream:parent' as StreamTabId),
         runtimeHost,
-        explicitFollowUp: 'talk to the subagent',
-        reportFailure,
-      }),
+        {
+          extraFollowUps: [{ text: 'talk to the subagent', origin: 'user' }],
+          onError: reportFailure,
+        },
+      ),
     ).resolves.toBe(true);
 
     expect(
@@ -510,7 +520,9 @@ describe('resumeToolUseSnapshot', () => {
     );
 
     await expect(
-      resumeToolUseSnapshot(snapshot(), { runtimeHost, reportFailure }),
+      resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+        onError: reportFailure,
+      }),
     ).resolves.toBe(false);
 
     expect(defaultSession().followUps.getAll(STREAM)).toEqual(['queued one']);
@@ -532,10 +544,9 @@ describe('resumeToolUseSnapshot', () => {
 
     try {
       await expect(
-        resumeToolUseSnapshot(snapshot(), {
-          runtimeHost,
+        resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
           session,
-          reportFailure: vi.fn(),
+          onError: vi.fn(),
         }),
       ).resolves.toBe(false);
 
@@ -560,10 +571,9 @@ describe('resumeToolUseSnapshot', () => {
       );
 
       await expect(
-        resumeToolUseSnapshot(snapshot(), {
-          runtimeHost,
+        resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
           session,
-          reportFailure: vi.fn(),
+          onError: vi.fn(),
         }),
       ).resolves.toBe(false);
 
@@ -586,7 +596,9 @@ describe('resumeToolUseSnapshot', () => {
     });
 
     await expect(
-      resumeToolUseSnapshot(snapshot(), { runtimeHost }),
+      resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+        onError: vi.fn(),
+      }),
     ).resolves.toBe(true);
     expect(defaultSession().status.get(STREAM)).toBe(STREAM_STATUS.RUNNING);
   });

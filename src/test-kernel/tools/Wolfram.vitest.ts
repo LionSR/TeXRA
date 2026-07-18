@@ -20,7 +20,10 @@ import {
 } from '@tools/wolfram/wolframScriptUtils';
 import * as toolUtils from '@utils/system/toolUtils';
 import * as execUtils from '@utils/system/execUtils';
-import { createRecordingHost } from '../agent/progressTestUtils';
+import {
+  createRecordingHost,
+  sessionWithInteractions,
+} from '../agent/progressTestUtils';
 import { waitForRecordedEvent } from '../support/asyncTestUtils';
 
 // ---------------------------------------------------------------------------
@@ -30,7 +33,11 @@ import { waitForRecordedEvent } from '../support/asyncTestUtils';
 async function dispatchWolfram(streamId: StreamTabId, code: string) {
   const explicit = createRecordingHost();
   const result = withRunContext(
-    createRunContext({ runtimeHost: explicit.host, streamId }),
+    createRunContext({
+      runtimeHost: explicit.host,
+      streamId,
+      session: sessionWithInteractions(explicit.interactions),
+    }),
     () => new WolframTool().call({ code }),
   );
   const show = await waitForRecordedEvent(

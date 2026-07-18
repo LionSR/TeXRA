@@ -35,7 +35,7 @@ function basePorts(
       runState: { agent: 'a', model: 'm' } as never,
       executionId: 'exec-1' as never,
     })),
-    resumeToolUseSnapshot: vi.fn(async () => true),
+    resumeToolUse: vi.fn(async () => true),
     executeWorkflow: vi.fn(async () => {}),
     reportNoResumableSession: vi.fn(),
     reportFailure: vi.fn(),
@@ -62,7 +62,7 @@ describe('resolveAndResumeStream', () => {
     const ports = basePorts();
 
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(true);
-    expect(ports.resumeToolUseSnapshot).toHaveBeenCalledWith(snapshot);
+    expect(ports.resumeToolUse).toHaveBeenCalledWith(snapshot);
     expect(ports.executeWorkflow).not.toHaveBeenCalled();
   });
 
@@ -89,7 +89,7 @@ describe('resolveAndResumeStream', () => {
       expect.anything(),
       { parentStreamId },
     );
-    expect(ports.resumeToolUseSnapshot).toHaveBeenCalledWith(snapshot);
+    expect(ports.resumeToolUse).toHaveBeenCalledWith(snapshot);
   });
 
   it('launches workflow resumes without pre-acquiring the stream', async () => {
@@ -131,7 +131,7 @@ describe('resolveAndResumeStream', () => {
     const ports = basePorts();
 
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
-    expect(ports.resumeToolUseSnapshot).not.toHaveBeenCalled();
+    expect(ports.resumeToolUse).not.toHaveBeenCalled();
     expect(ports.executeWorkflow).not.toHaveBeenCalled();
   });
 
@@ -172,7 +172,7 @@ describe('resolveAndResumeStream', () => {
 
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
     expect(retrieveSessionResumeDataMock).not.toHaveBeenCalled();
-    expect(ports.resumeToolUseSnapshot).not.toHaveBeenCalled();
+    expect(ports.resumeToolUse).not.toHaveBeenCalled();
     expect(ports.executeWorkflow).not.toHaveBeenCalled();
     expect(isResumeInFlight(STREAM)).toBe(false);
   });
@@ -188,7 +188,7 @@ describe('resolveAndResumeStream', () => {
     });
 
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
-    expect(ports.resumeToolUseSnapshot).not.toHaveBeenCalled();
+    expect(ports.resumeToolUse).not.toHaveBeenCalled();
     expect(ports.executeWorkflow).not.toHaveBeenCalled();
     expect(isResumeInFlight(STREAM)).toBe(false);
   });
@@ -222,7 +222,7 @@ describe('resolveAndResumeStream', () => {
     const ports = basePorts({ streamStatus: new StreamStatusMachine() });
 
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(true);
-    expect(ports.resumeToolUseSnapshot).toHaveBeenCalled();
+    expect(ports.resumeToolUse).toHaveBeenCalled();
   });
 
   it('returns false (host owns its messaging) when no state resolves', async () => {
@@ -241,7 +241,7 @@ describe('resolveAndResumeStream', () => {
 
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
     expect(ports.reportNoResumableSession).toHaveBeenCalledWith(STREAM);
-    expect(ports.resumeToolUseSnapshot).not.toHaveBeenCalled();
+    expect(ports.resumeToolUse).not.toHaveBeenCalled();
     expect(ports.executeWorkflow).not.toHaveBeenCalled();
   });
 
@@ -322,7 +322,7 @@ describe('resolveAndResumeStream', () => {
       snapshot: { streamId: STREAM },
     });
     const ports = basePorts({
-      resumeToolUseSnapshot: vi.fn(async () => {
+      resumeToolUse: vi.fn(async () => {
         reachedPort();
         await gate;
         return true;

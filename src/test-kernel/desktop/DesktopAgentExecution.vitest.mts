@@ -74,30 +74,6 @@ type TestableBridge = Bridge & {
   waitUntilReady(): Promise<void>;
   runtimeHost: {
     emit(event: string, payload: unknown): void;
-    interactions?: {
-      requestPlanApproval?: (request: {
-        approvalId: string;
-        streamId: StreamTabId;
-        plan: { objective: string };
-        goalEnabled: boolean;
-      }) => Promise<unknown>;
-      requestAgentProposal?: (request: unknown) => Promise<unknown>;
-      requestRetry?: (request: {
-        streamId: StreamTabId;
-        operation: string;
-      }) => Promise<unknown>;
-      requestBashApproval?: (request: {
-        command: string;
-        streamId?: StreamTabId;
-      }) => Promise<unknown>;
-      requestToolEditApproval?: (request: {
-        path: string;
-        originalContent: string;
-        proposedContent: string;
-        sourceTool: string;
-        streamId?: StreamTabId;
-      }) => Promise<unknown>;
-    };
   };
   handleInteractionEvent(event: string, payload: unknown): void;
   syncFullView(): void;
@@ -137,11 +113,30 @@ type TestableBridge = Bridge & {
 
 type BridgeWithSession = TestableBridge & {
   session: {
-    hostChannel?: {
-      emit(event: string, payload: unknown): void;
-    };
     interactions: {
       cancel(selector?: { cause?: string }): void;
+      requestPlanApproval?: (request: {
+        approvalId: string;
+        streamId: StreamTabId;
+        plan: { objective: string };
+        goalEnabled: boolean;
+      }) => Promise<unknown>;
+      requestAgentProposal?: (request: unknown) => Promise<unknown>;
+      requestRetry?: (request: {
+        streamId: StreamTabId;
+        operation: string;
+      }) => Promise<unknown>;
+      requestBashApproval?: (request: {
+        command: string;
+        streamId?: StreamTabId;
+      }) => Promise<unknown>;
+      requestToolEditApproval?: (request: {
+        path: string;
+        originalContent: string;
+        proposedContent: string;
+        sourceTool: string;
+        streamId?: StreamTabId;
+      }) => Promise<unknown>;
     };
     status: StreamStatusMachine;
     events: SessionHandle['events'];
@@ -156,6 +151,12 @@ type BridgeWithSession = TestableBridge & {
     };
   };
 };
+
+function bridgeInteractions(
+  bridge: TestableBridge,
+): BridgeWithSession['session']['interactions'] {
+  return (bridge as BridgeWithSession).session.interactions;
+}
 
 function bridgeStatus(
   bridge: TestableBridge,
@@ -754,7 +755,7 @@ describe('DesktopProgressBridge', () => {
   it('installs host interactions on the desktop runtime host', async () => {
     const bridge = await createBridge([]);
 
-    expect(bridge.runtimeHost.interactions).toMatchObject({
+    expect(bridgeInteractions(bridge)).toMatchObject({
       requestPlanApproval: expect.any(Function),
       requestAgentProposal: expect.any(Function),
       requestRetry: expect.any(Function),
@@ -766,7 +767,7 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages);
 
     messages.length = 0;
-    const result = bridge.runtimeHost.interactions?.requestPlanApproval?.({
+    const result = bridgeInteractions(bridge).requestPlanApproval?.({
       approvalId: 'plan-host-interaction',
       streamId: 'stream-plan' as StreamTabId,
       plan: { objective: 'Check the desktop host interaction port.' },
@@ -817,7 +818,7 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages);
 
     messages.length = 0;
-    const result = bridge.runtimeHost.interactions?.requestAgentProposal?.({
+    const result = bridgeInteractions(bridge).requestAgentProposal?.({
       proposalId: 'proposal-host-interaction',
       streamId: 'stream-proposal',
       agentCategory: AgentCategory.Workflow,
@@ -877,7 +878,7 @@ describe('DesktopProgressBridge', () => {
 
     messages.length = 0;
     await expect(
-      bridge.runtimeHost.interactions?.requestRetry?.({
+      bridgeInteractions(bridge).requestRetry?.({
         streamId: 'stream-retry' as StreamTabId,
         operation: 'model request',
       }),
@@ -1579,7 +1580,7 @@ describe('DesktopProgressBridge', () => {
       agentCategory: AgentCategory.Workflow,
     });
 
-    const result = bridge.runtimeHost.interactions?.requestPlanApproval?.({
+    const result = bridgeInteractions(bridge).requestPlanApproval?.({
       approvalId: 'plan-cancel-on-delete',
       streamId: 'plan-delete-stream' as StreamTabId,
       plan: { objective: 'Check cancellation on stream delete.' },
@@ -1834,7 +1835,7 @@ describe('DesktopProgressBridge', () => {
       agentCategory: AgentCategory.Workflow,
     });
 
-    const result = bridge.runtimeHost.interactions?.requestBashApproval?.({
+    const result = bridgeInteractions(bridge).requestBashApproval?.({
       command: 'echo hi',
       streamId: 'bash-delete-all-stream' as StreamTabId,
     });
@@ -2169,7 +2170,7 @@ describe('DesktopProgressBridge', () => {
 
     // Register the pending proposal the way production does: through the
     // session's typed host interactions, not a host progress event.
-    const result = bridge.runtimeHost.interactions?.requestAgentProposal?.({
+    const result = bridgeInteractions(bridge).requestAgentProposal?.({
       proposalId: 'proposal-1',
       streamId: 'stream-1',
       agentCategory: AgentCategory.Workflow,
@@ -2395,13 +2396,10 @@ describe('DesktopProgressBridge', () => {
         ) as unknown as TestableBridge;
         const session = (bridge as unknown as { session: SessionHandle })
           .session;
-        const { hostChannel } =
-          session as unknown as BridgeWithSession['session'];
-        if (!hostChannel) throw new Error('desktop window has no host channel');
         return {
           bridge,
           session,
-          emit: (event, payload) => hostChannel.emit(event, payload),
+          emit: (event, payload) => bridge.runtimeHost.emit(event, payload),
           messages,
         };
       };
@@ -2595,13 +2593,12 @@ describe('DesktopProgressBridge', () => {
       const { windowA, windowB } = pair;
 
       const approvalId = 'plan-window-a';
-      const result =
-        windowA.bridge.runtimeHost.interactions?.requestPlanApproval?.({
-          approvalId,
-          streamId: streamA,
-          plan: { objective: 'Prove per-window interaction isolation.' },
-          goalEnabled: false,
-        });
+      const result = bridgeInteractions(windowA.bridge).requestPlanApproval?.({
+        approvalId,
+        streamId: streamA,
+        plan: { objective: 'Prove per-window interaction isolation.' },
+        goalEnabled: false,
+      });
       expect(result).toBeDefined();
       let settled = false;
       void (result as Promise<unknown>).then(() => {
@@ -2785,7 +2782,7 @@ describe('DesktopProgressBridge', () => {
           activeExecutionIds: () => activeExecutionIds,
         });
       const { AgentExecutionHandle, ProcessExecutionHandle } =
-        await import('@agent/runtime/executionRegistry');
+        await import('@agent/runtime/ExecutionHandle');
       const { noopAgentRuntimeHost } =
         await import('@agent/runtime/AgentRuntimeHost');
       const transcriptsA = await openTranscripts();
@@ -2929,13 +2926,14 @@ describe('DesktopProgressBridge', () => {
         await bridgeB.waitUntilReady();
 
         // The retained run still resolves interactions through window A.
-        const planPromise =
-          owner.bridgeA.runtimeHost.interactions?.requestPlanApproval?.({
-            approvalId: 'plan-rebound',
-            streamId,
-            plan: { objective: 'Prove approvals reach the new window.' },
-            goalEnabled: false,
-          });
+        const planPromise = bridgeInteractions(
+          owner.bridgeA,
+        ).requestPlanApproval?.({
+          approvalId: 'plan-rebound',
+          streamId,
+          plan: { objective: 'Prove approvals reach the new window.' },
+          goalEnabled: false,
+        });
         expect(planPromise).toBeDefined();
 
         // The forwarded prompt surfaces only in window B.
@@ -2980,14 +2978,15 @@ describe('DesktopProgressBridge', () => {
         executionId,
         messages: messagesA,
       });
-      const approvalPromise =
-        owner.bridgeA.runtimeHost.interactions?.requestToolEditApproval?.({
-          path: '/workspace/rebound-tool-edit.txt',
-          originalContent: 'old\n',
-          proposedContent: 'new\n',
-          sourceTool: 'write_file',
-          streamId,
-        });
+      const approvalPromise = bridgeInteractions(
+        owner.bridgeA,
+      ).requestToolEditApproval?.({
+        path: '/workspace/rebound-tool-edit.txt',
+        originalContent: 'old\n',
+        proposedContent: 'new\n',
+        sourceTool: 'write_file',
+        streamId,
+      });
       expect(approvalPromise).toBeDefined();
       let oldRequestId = '';
       await vi.waitFor(() => {
@@ -3035,13 +3034,12 @@ describe('DesktopProgressBridge', () => {
       const { bridgeB } = await owner.reopen(messagesB);
       await bridgeB.waitUntilReady();
 
-      const approval =
-        owner.bridgeA.runtimeHost.interactions?.requestPlanApproval?.({
-          approvalId: 'plan-second-window-close',
-          streamId,
-          plan: { objective: 'Survive a second window close.' },
-          goalEnabled: false,
-        });
+      const approval = bridgeInteractions(owner.bridgeA).requestPlanApproval?.({
+        approvalId: 'plan-second-window-close',
+        streamId,
+        plan: { objective: 'Survive a second window close.' },
+        goalEnabled: false,
+      });
       expect(approval).toBeDefined();
       await vi.waitFor(() => {
         expect(
@@ -3101,13 +3099,14 @@ describe('DesktopProgressBridge', () => {
         executionId,
         messages: messagesA,
       });
-      const pendingBeforeClose =
-        owner.bridgeA.runtimeHost.interactions?.requestPlanApproval?.({
-          approvalId: 'plan-before-close',
-          streamId,
-          plan: { objective: 'Preserve the pending approval.' },
-          goalEnabled: false,
-        });
+      const pendingBeforeClose = bridgeInteractions(
+        owner.bridgeA,
+      ).requestPlanApproval?.({
+        approvalId: 'plan-before-close',
+        streamId,
+        plan: { objective: 'Preserve the pending approval.' },
+        goalEnabled: false,
+      });
       expect(pendingBeforeClose).toBeDefined();
       await vi.waitFor(() => {
         expect(
@@ -3125,13 +3124,14 @@ describe('DesktopProgressBridge', () => {
       });
 
       owner.close();
-      const pendingWhileClosed =
-        owner.bridgeA.runtimeHost.interactions?.requestPlanApproval?.({
-          approvalId: 'plan-while-closed',
-          streamId,
-          plan: { objective: 'Buffer the approval until repair.' },
-          goalEnabled: false,
-        });
+      const pendingWhileClosed = bridgeInteractions(
+        owner.bridgeA,
+      ).requestPlanApproval?.({
+        approvalId: 'plan-while-closed',
+        streamId,
+        plan: { objective: 'Buffer the approval until repair.' },
+        goalEnabled: false,
+      });
       expect(pendingWhileClosed).toBeDefined();
 
       const messagesB: unknown[] = [];
@@ -3202,13 +3202,14 @@ describe('DesktopProgressBridge', () => {
 
       try {
         await bridgeB.waitUntilReady();
-        const planPromise =
-          owner.bridgeA.runtimeHost.interactions?.requestPlanApproval?.({
-            approvalId: 'plan-rebound-delete',
-            streamId,
-            plan: { objective: 'Cancel through the durable owner.' },
-            goalEnabled: false,
-          });
+        const planPromise = bridgeInteractions(
+          owner.bridgeA,
+        ).requestPlanApproval?.({
+          approvalId: 'plan-rebound-delete',
+          streamId,
+          plan: { objective: 'Cancel through the durable owner.' },
+          goalEnabled: false,
+        });
         expect(planPromise).toBeDefined();
         await vi.waitFor(() => {
           expect(

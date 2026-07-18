@@ -35,11 +35,7 @@ import {
   setFirstRunDone,
 } from '@shared/state/onboardingState';
 
-import {
-  AgentExecutionHandle,
-  type AgentRunHandle,
-  type ExecutionRegistry,
-} from './executionRegistry';
+import { AgentExecutionHandle, type AgentRunHandle } from './ExecutionHandle';
 import {
   getAgentFlowErrorResult,
   buildTerminalFlowResult,
@@ -47,6 +43,7 @@ import {
   type AgentRuntimeFlowResult,
   type AgentFlowResult,
 } from './AgentFlowResult';
+import type { ExecutionRegistry } from './executionRegistry';
 import type { AgentLaunchContext } from './AgentLaunchContext';
 import type { StreamStatusMachine } from './StreamStatusService';
 
