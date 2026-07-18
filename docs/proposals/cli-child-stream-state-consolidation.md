@@ -227,40 +227,39 @@ Use one signal-backed map in the existing CLI state area. The exact private help
 owned shape is:
 
 ```typescript
-export interface ChildStreamEntry {
-  /** Latest roster metadata, excluding identity and status. */
-  readonly summary?: Omit<SubagentChildInfo, 'childStreamId' | 'status'>;
-
-  /** Parent whose latest roster includes this child. */
-  readonly activeParentStreamId?: StreamTabId;
-
-  /** Parent under which the child first acquired a retained row. */
-  readonly retainedParentStreamId?: StreamTabId;
-  /** One-based, first-seen order within retainedParentStreamId. */
-  readonly retainedOrder?: number;
-
-  /**
-   * undefined: no explicit edge fact observed; use retained parent provisionally
-   * string: explicit current parent
-   * null: explicitly promoted to top-level
-   */
-  readonly edgeParentStreamId?: StreamTabId | null;
-
-  /** Explicit removeStream tombstone for this session-scoped stream identity. */
-  readonly removed: boolean;
+interface RetainedParent {
+  readonly streamId: StreamTabId;
+  readonly order: number;
 }
+
+type ParentProvenance =
+  | { readonly kind: 'roster'; readonly retained: RetainedParent }
+  | {
+      readonly kind: 'explicit';
+      readonly streamId: StreamTabId | null;
+      readonly retained?: RetainedParent;
+    };
+
+type ChildStreamEntry =
+  | {
+      readonly kind: 'live';
+      readonly summary?: Omit<SubagentChildInfo, 'childStreamId' | 'status'>;
+      readonly active: boolean;
+      readonly parent?: ParentProvenance;
+    }
+  | { readonly kind: 'removed' };
 
 const CHILD_STREAMS = signal<ReadonlyMap<StreamTabId, ChildStreamEntry>>(
   new Map(),
 );
 ```
 
-The map key is normally the child identity; `ChildStreamEntry` does not repeat `childStreamId`. The map may also
-hold a minimal tombstone for a removed parent-only stream. This keeps child-removal and parent-removal authority in
-the same collection instead of adding a second mutable `removedStreams` set. No field stores lifecycle status. No
-non-tombstone entry is created merely because a root or child stream is attached.
+The map key is normally the child identity; `ChildStreamEntry` does not repeat `childStreamId`. The `kind`
+discriminant prevents a removal tombstone from carrying stale live fields, while `ParentProvenance.kind` makes
+roster-vs-explicit authority structural instead of inferred from overlapping optional fields. The map may also
+hold a minimal tombstone for a removed parent-only stream. No field stores lifecycle status.
 
-`retainedOrder` is one-based and monotonic within each retained parent. For one roster batch, compute the
+`RetainedParent.order` is one-based and monotonic within each retained parent. For one roster batch, compute the
 pre-existing maximum (zero when there are no retained children), then assign `max + 1`, `max + 2`, and so on to
 previously unretained accepted children in payload order. Existing children keep their original values. The
 maximum is computed from the map during the uncommon insertion transition, so no second mutable order counter is
@@ -277,30 +276,26 @@ All former views are computed from `CHILD_STREAMS` and, where status or existenc
 
 ### Effective parent
 
-For a non-removed entry, first choose a candidate parent:
-
-1. a string `edgeParentStreamId` is the current parent;
-2. `null` means no parent; and
-3. `undefined` falls back to `retainedParentStreamId`, which is the provisional parent learned from a roster.
+For a live entry, `parent.kind` selects authority directly: an explicit parent id is current, explicit `null`
+means no parent, and a roster parent uses `parent.retained.streamId` provisionally.
 
 If the candidate parent has a removal tombstone, return no parent. This precedence preserves roster-before-edge,
 prevents a late roster from reversing promotion, and prevents late child facts from reviving a removed parent.
 
 ### Active subagents for a parent
 
-Return an empty result when the requested parent is tombstoned. Otherwise, select entries whose
-`activeParentStreamId` equals the requested parent and whose effective parent is that same parent. Require
-`summary`. Reconstruct `SubagentChildInfo` by adding the map key as `childStreamId` and reading `status` from
-`streams.get(childStreamId)?.status`.
+Return an empty result when the requested parent is tombstoned. Otherwise, select live entries whose `active`
+flag is true and whose effective parent is the requested parent. Require `summary`. Reconstruct
+`SubagentChildInfo` by adding the map key as `childStreamId` and reading status from the child stream.
 
 The active selector, not status, determines whether a control is killable. A terminal status that arrives after
 roster removal cannot make a retained child active again.
 
 ### Retained child streams for a parent
 
-Return an empty result when the requested parent is tombstoned. Otherwise, select non-removed entries whose
-`retainedParentStreamId` equals the requested parent, require `summary`, and sort by `retainedOrder`. Reconstruct
-each row with status from the child `StreamSlice`.
+Return an empty result when the requested parent is tombstoned. Otherwise, select live entries whose nested
+retained parent names the requested parent, require `summary`, and sort by its `order`. Reconstruct each row with
+status from the child `StreamSlice`.
 
 Promotion does not erase this historical row. Explicit removal of the child or parent does.
 
@@ -344,17 +339,15 @@ is never stored in `ChildStreamEntry`.
 For `child.activity(kind: 'subagents', parentStreamId, children)`:
 
 1. If the payload parent is tombstoned, ignore the snapshot. Late facts cannot recreate a removed parent.
-2. Accept an included child only when neither child nor parent is tombstoned and the child's explicit edge is
-   either absent or equal to the payload parent. Explicit `null` and an explicit different parent make the row
-   incompatible.
+2. Accept an included child only when neither child nor parent is tombstoned and its effective parent is absent or
+   equals the payload parent. Promotion and a different roster- or edge-derived parent make the row incompatible.
 3. Treat the accepted children as the complete active-membership snapshot for that parent at this hub position.
-   Clear `activeParentStreamId` for entries previously active under that parent but absent or incompatible.
+   Clear `active` for entries currently parented there but absent or incompatible.
 4. For each accepted child, update `summary` after removing `childStreamId` and `status`.
-5. Set `activeParentStreamId` to the payload parent.
-6. On the first accepted roster observation, set `retainedParentStreamId` and append `retainedOrder` in payload
-   order.
-7. Do not write `edgeParentStreamId`. A roster supplies provisional topology only through the effective-parent
-   fallback.
+5. Set `active` true.
+6. On the first accepted roster observation, attach a `RetainedParent` in payload order. When no explicit edge
+   exists, store it in the roster-provenance arm; otherwise preserve explicit provenance and add retained history.
+7. Never replace explicit provenance from a roster.
 8. Discard the roster's copied `status` for TUI state. The independently delivered lifecycle transition updates
    the child `StreamSlice`; until it arrives, a derived row may have an undefined status.
 
@@ -366,8 +359,8 @@ from overwriting a newer lifecycle event and leaves exactly one TUI status owner
 For `setParentStream(child, parent)`:
 
 - upsert an entry even if metadata is not yet known;
-- set `edgeParentStreamId` to the parent id or `null`;
-- clear `activeParentStreamId` when it names a different parent;
+- replace parent provenance with `{ kind: 'explicit', streamId: parent }`;
+- clear `active` when the previous effective parent differs;
 - never delete retained metadata or retained order; and
 - ignore the fact while the child is tombstoned by `removeStream`, or while a non-null parent is tombstoned.
 
@@ -412,7 +405,7 @@ explicitly removed.
 
 For the sequence `edge(parent) -> roster(parent, child) -> edge(null) -> late roster(parent, child)`:
 
-- `edgeParentStreamId` remains `null`;
+- explicit parent provenance remains `null`;
 - the effective parent remains absent;
 - the incompatible late roster cannot change active membership or summary metadata;
 - the historical row remains under the former parent; and
@@ -423,14 +416,14 @@ non-killable historical task row.
 
 For `edge(newParent) -> roster(newParent, child) -> late roster(oldParent, child)`, the explicit new edge makes the
 old-parent row incompatible. The child remains active under the new parent, and the late old-parent roster cannot
-overwrite its summary or `activeParentStreamId`.
+overwrite its summary or active membership.
 
 ### Explicit removal and parent removal
 
 For `removeStream(stream)`:
 
 - delete the stream's `StreamSlice` and clear active focus as today;
-- replace any map entry, or create a parent-only entry, with a minimal `removed: true` tombstone;
+- replace any map entry, or create a parent-only entry, with `{ kind: 'removed' }`;
 - exclude the tombstone from every selector; and
 - ignore every later roster, edge, attachment, and status fact for that stream id.
 

@@ -86,7 +86,6 @@ export class InstructionManager extends BaseWebviewManager {
       ['inputFiles', 'inputFilesActive'],
       ['contextFiles', 'contextFilesActive'],
       ['mediaFiles', 'mediaFilesActive'],
-      ['outputFiles', 'outputFilesActive'],
     ] as const;
     for (const [field, activeField] of multiFields) {
       const files: (string | null)[] | undefined = message[field];

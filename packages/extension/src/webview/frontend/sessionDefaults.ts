@@ -6,7 +6,6 @@ export interface SessionDefaults {
   fileInputEnabled: boolean;
   resetFiles: boolean;
   checkboxOverrides?: Partial<CheckboxValues>;
-  outputFilesActive?: boolean;
 }
 
 export const SESSION_DEFAULTS = {
@@ -18,7 +17,6 @@ export const SESSION_DEFAULTS = {
       autoExtractTikzFigure: false,
       autoCompileInputPdf: false,
     },
-    outputFilesActive: false,
   },
   toolUse: {
     fileInputEnabled: false,
