@@ -12,13 +12,12 @@ async function loadPdfMessages(): Promise<
 
 describe('DesktopShowPdfMessageSchema', () => {
   it('round-trips a complete payload', async () => {
-    const { DesktopShowPdfMessageSchema, buildDesktopShowPdfMessage } =
-      await loadPdfMessages();
-    const message = buildDesktopShowPdfMessage({
+    const { DesktopShowPdfMessageSchema } = await loadPdfMessages();
+    const parsed = DesktopShowPdfMessageSchema.parse({
+      command: 'desktop:showPdf',
       title: 'paper.pdf',
       pdfPath: '/abs/path/to/paper.pdf',
     });
-    const parsed = DesktopShowPdfMessageSchema.parse(message);
     expect(parsed.command).toBe('desktop:showPdf');
     expect(parsed.pdfPath).toBe('/abs/path/to/paper.pdf');
   });

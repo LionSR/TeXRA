@@ -42,15 +42,6 @@ export const DesktopClosePdfMessageSchema = z.object({
   command: z.literal(DESKTOP_PDF_COMMANDS.CLOSE_PDF),
 });
 
-export function buildDesktopShowPdfMessage(
-  payload: Omit<DesktopShowPdfMessage, 'command'>,
-): DesktopShowPdfMessage {
-  return {
-    command: DESKTOP_PDF_COMMANDS.SHOW_PDF,
-    ...payload,
-  };
-}
-
 // Sanitize the PDF path before rendering it in an iframe. The renderer
 // must only accept absolute filesystem paths — anything that smells
 // like a different URL scheme (`http:`, `javascript:`, `data:`, ...)

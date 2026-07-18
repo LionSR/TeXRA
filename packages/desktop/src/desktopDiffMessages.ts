@@ -41,15 +41,6 @@ export const DesktopCloseDiffMessageSchema = z.object({
   command: z.literal(DESKTOP_DIFF_COMMANDS.CLOSE_DIFF),
 });
 
-export function buildDesktopShowDiffMessage(
-  payload: Omit<DesktopShowDiffMessage, 'command'>,
-): DesktopShowDiffMessage {
-  return {
-    command: DESKTOP_DIFF_COMMANDS.SHOW_DIFF,
-    ...payload,
-  };
-}
-
 // `desktop:closeDiff` is consumed by the renderer's window-message
 // handler; producers (today: the Playwright trajectory test) construct
 // the literal `{ command: 'desktop:closeDiff' }` inline via
