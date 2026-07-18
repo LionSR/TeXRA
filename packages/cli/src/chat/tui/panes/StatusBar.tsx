@@ -42,6 +42,7 @@ interface StatusBarProps {
   readonly childListFocused?: boolean;
   readonly childListSelectionKind?: 'stream' | 'process';
   readonly childListSelectionKillable?: boolean;
+  readonly childListSelectionWorkflowControllable?: boolean;
   readonly childNavigationAvailable: boolean;
   readonly commandName?: string;
   readonly foregroundEscapeAction?: string;
@@ -177,6 +178,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     childListFocused: props.childListFocused,
     childListSelectionKind: props.childListSelectionKind,
     childListSelectionKillable: props.childListSelectionKillable,
+    childListSelectionWorkflowControllable:
+      props.childListSelectionWorkflowControllable,
     childNavigationAvailable: props.childNavigationAvailable,
     streamFocusAvailable: props.streamFocusAvailable,
     model: accessTarget.model,

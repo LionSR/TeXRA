@@ -832,6 +832,12 @@ export async function runChat(
           detachActiveChildren: detachSubagentsOnStop(),
         });
       }}
+      onSkipExecution={(executionId) => {
+        defaultSession().workflowControls.skip(executionId as ExecutionId);
+      }}
+      onRetryExecution={(executionId) => {
+        defaultSession().workflowControls.retry(executionId as ExecutionId);
+      }}
       history={inputHistory}
     />,
     {

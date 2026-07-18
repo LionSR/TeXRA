@@ -454,4 +454,57 @@ describe('createWorkflowScriptAgentRunner', () => {
       cause: durabilityError,
     });
   });
+
+  it('reports the active-attempt execution id to onChildActive, not the logical id', async () => {
+    // After a durable retry advances the attempt sequence, the live run uses an
+    // attempt-specific execution id — the id its child stream / roster expose.
+    // The runner must bridge THAT id (bracketed active→settle), not the logical
+    // id it hands stable execution, so a host's skip/retry finds the row.
+    const attemptExecutionId = 'cccccc333333' as ExecutionId;
+    let logicalExecutionId: string | undefined;
+    mocks.executeStableSubagentInBand.mockImplementation(async (options) => {
+      logicalExecutionId = options.executionId;
+      options.onActiveExecutionId?.(attemptExecutionId);
+      mocks.preparedOptions.push(await options.prepare());
+      return { executionId: attemptExecutionId, result };
+    });
+    const onChildActive = vi.fn();
+    const runner = defaultRunner({ onChildActive });
+
+    await expect(runner(invocation())).resolves.toBe(result);
+
+    expect(logicalExecutionId).toMatch(/^[a-f0-9]{24}$/);
+    expect(logicalExecutionId).not.toBe(attemptExecutionId);
+    expect(onChildActive).toHaveBeenNthCalledWith(
+      1,
+      attemptExecutionId,
+      expect.objectContaining({ index: 0 }),
+      true,
+    );
+    expect(onChildActive).toHaveBeenNthCalledWith(
+      2,
+      attemptExecutionId,
+      expect.objectContaining({ index: 0 }),
+      false,
+    );
+    expect(onChildActive).not.toHaveBeenCalledWith(
+      logicalExecutionId,
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('leaves onChildActive untouched when a recovered attempt runs no live work', async () => {
+    // A recovered attempt never fires onActiveExecutionId, so the settle guard
+    // must not emit a phantom active/inactive pair for a call that never ran.
+    mocks.executeStableSubagentInBand.mockImplementation(async () => ({
+      executionId: 'bbbbbb222222',
+      result,
+    }));
+    const onChildActive = vi.fn();
+    const runner = defaultRunner({ onChildActive });
+
+    await expect(runner(invocation())).resolves.toBe(result);
+    expect(onChildActive).not.toHaveBeenCalled();
+  });
 });
