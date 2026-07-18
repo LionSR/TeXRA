@@ -302,7 +302,11 @@ describe('app interaction policy', () => {
       [foregroundInput({ taskDetailOpen: true }), 'taskDetail'],
       [foregroundInput({ activeFormOpen: true }), 'form'],
       [foregroundInput({ activeFormOpen: true, formBusy: true }), 'approval'],
-      [foregroundInput({ infoPaneOpen: true }), 'infoPane'],
+      [foregroundInput({ infoPaneOpen: true }), 'approval'],
+      [
+        foregroundInput({ infoPaneOpen: true, pendingApproval: false }),
+        'infoPane',
+      ],
       [foregroundInput(), 'approval'],
       [foregroundInput({ pendingApproval: false }), undefined],
     ] satisfies readonly (readonly [

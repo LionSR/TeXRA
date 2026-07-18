@@ -132,10 +132,13 @@ describe('cliState Phase 4 fields', () => {
   });
 
   it('preserves multiple reference results until each is dismissed', () => {
-    openInfoPane('/memory list', 'first result');
+    openInfoPane('/memory list', 'first\r\nresult');
     openInfoPane('/memory preview', 'second result');
 
-    expect(infoPane.get()?.title).toBe('/memory list');
+    expect(infoPane.get()).toEqual({
+      title: '/memory list',
+      lines: ['first', 'result'],
+    });
     closeInfoPane();
     expect(infoPane.get()).toEqual({
       title: '/memory preview',

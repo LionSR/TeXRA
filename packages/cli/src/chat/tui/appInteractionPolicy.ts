@@ -157,8 +157,8 @@ export function foregroundSurfaceKind({
   if (taskDetailOpen) return 'taskDetail';
   if (pendingApproval && formBusy) return 'approval';
   if (activeFormOpen) return 'form';
-  if (infoPaneOpen) return 'infoPane';
   if (pendingApproval) return 'approval';
+  if (infoPaneOpen) return 'infoPane';
   return undefined;
 }
 

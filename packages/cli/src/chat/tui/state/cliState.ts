@@ -439,7 +439,7 @@ export const infoPane: Signal.Computed<InfoPaneContent | undefined> = computed(
 export function openInfoPane(title: string, text: string): void {
   INFO_PANE_QUEUE.set([
     ...INFO_PANE_QUEUE.get(),
-    { title, lines: text.split('\n') },
+    { title, lines: text.replaceAll('\r\n', '\n').split('\n') },
   ]);
 }
 
