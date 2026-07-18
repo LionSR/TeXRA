@@ -19,7 +19,11 @@ import {
   selectCliModelAccessRoute,
 } from '@cli/runtime/modelAccessSelection';
 
-import { patchSessionMeta, sessionMeta } from '@cli/chat/tui/state/cliState';
+import {
+  patchSessionMeta,
+  sessionMeta,
+  setTransientNotice,
+} from '@cli/chat/tui/state/cliState';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import type { ApiProvider } from '@model/apiProviders';
@@ -126,7 +130,7 @@ export async function applyCliModelAccessSelection(
     return;
   }
 
-  appendLocalAssistantTranscript(MODEL_ACCESS_USAGE);
+  setTransientNotice(MODEL_ACCESS_USAGE);
 }
 
 export async function showCliAuthStatus(): Promise<void> {
