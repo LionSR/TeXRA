@@ -210,7 +210,7 @@ describe('child stream progress events', () => {
         expect.arrayContaining([
           expect.objectContaining({
             parentStreamId,
-            children: [
+            items: [
               expect.objectContaining({
                 executionId,
                 childStreamId,
@@ -222,7 +222,7 @@ describe('child stream progress events', () => {
           }),
           expect.objectContaining({
             parentStreamId,
-            children: [],
+            items: [],
           }),
         ]),
       );
@@ -386,7 +386,7 @@ describe('child stream progress events', () => {
       runEventsOfType(recorded.events, 'child.activity').at(-1),
     ).toMatchObject({
       parentStreamId,
-      children: [],
+      items: [],
     });
     await expect(handle?.result).resolves.toMatchObject({
       type: 'result',
