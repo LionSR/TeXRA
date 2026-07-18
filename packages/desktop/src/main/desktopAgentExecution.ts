@@ -192,6 +192,7 @@ export class DesktopProgressBridge {
   private restartRepair: Promise<void> = Promise.resolve();
   private readonly restartRepairRetry = new RestartRepairRetryScheduler();
   private startupStreamIds: ReadonlySet<StreamTabId> = new Set();
+  private disposed = false;
 
   readonly runtimeHost: AgentRuntimeHost;
   readonly progressViewInboundHandlers: DesktopProgressInboundHandlerRegistry;
@@ -630,6 +631,8 @@ export class DesktopProgressBridge {
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     this.restartRepairRetry.dispose();
     this.detachResultToast?.();
     this.executionRebinder.dispose();
@@ -853,6 +856,7 @@ export class DesktopProgressBridge {
     event: K,
     payload: AgentRuntimeEventPayloads[K],
   ): void {
+    if (this.disposed) return;
     if (isProgressBackendInteractionEvent(event)) {
       this.backend.handleInteractionEvent(
         event,

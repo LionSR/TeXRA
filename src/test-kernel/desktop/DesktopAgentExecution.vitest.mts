@@ -73,6 +73,7 @@ type TestableBridge = Bridge & {
   };
   waitUntilReady(): Promise<void>;
   runtimeHost: {
+    emit(event: string, payload: unknown): void;
     interactions?: {
       requestPlanApproval?: (request: {
         approvalId: string;
@@ -703,6 +704,32 @@ describe('DesktopProgressBridge', () => {
       'API key not found. Set your API key in Settings and run again.',
     );
     expect(showErrorMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores late runtime presentation events after disposal', async () => {
+    const messages: unknown[] = [];
+    const showErrorMessage = vi.fn();
+    const openPath = vi.fn(async () => {});
+    const bridge = await createBridge(messages, {
+      openPath,
+      showErrorMessage,
+    });
+
+    bridge.dispose();
+    messages.length = 0;
+    bridge.runtimeHost.emit('requestEnsureProgressView', {});
+    bridge.runtimeHost.emit('requestShowError', { message: 'late error' });
+    bridge.runtimeHost.emit('requestOpenFile', {
+      location: {
+        kind: 'runStorage',
+        absolutePath: '/workspace/late.tex',
+        relativePath: 'late.tex',
+      },
+    });
+
+    expect(messages).toEqual([]);
+    expect(showErrorMessage).not.toHaveBeenCalled();
+    expect(openPath).not.toHaveBeenCalled();
   });
 
   it('routes requestOpenFile to the desktop preview host (issue #7751 FS3)', async () => {
