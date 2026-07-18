@@ -28,6 +28,10 @@ Rules:
 - Deleting automation means deleting its ledger row in the same change.
 - If the project has an `AGENTS.md` convention already (sections, ordering), fit into it rather than imposing this layout.
 
+## Standalone consumer fallback
+
+Consumers should use the lean-tactic-improver workflow when the skill is available. When skill discovery is unavailable, use this minimal fallback: on the third occurrence, extract the lowest sufficient project-native abstraction without adding a framework solely for automation; rewrite the motivating call sites; add a `Name | Kind | Use when | Defined in` row to the canonical `AGENTS.md` tactic ledger, creating it if needed; make `CLAUDE.md` share or point to that ledger; and prune rows whose automation is removed.
+
 ## The abstraction ladder
 
 Extract at the cheapest rung that eliminates the repetition. Each rung costs more to build, review, and maintain than the one before it.

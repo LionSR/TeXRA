@@ -18,7 +18,7 @@ Use this skill when Lean code already works or nearly works, but it is noisy, re
 5. Improve the file in the order that usually pays off most: naming and organization, import hygiene, docstrings, proof cleanup, then generalization and deduplication.
 6. Replace brittle tactic chains with clearer arguments when that actually improves reviewability.
 7. Search Mathlib before keeping local lemmas that smell standard.
-8. When deduplication reveals a tactic sequence or goal shape repeated three or more times, use the lean-tactic-improver companion skill when available. Otherwise, extract the lowest sufficient project-native abstraction: prefer a helper lemma or named simp set, reserve a tactic macro for a fixed sequence, and never add a framework solely for automation. Rewrite the motivating call sites, then add a `Name | Kind | Use when | Defined in` row to the canonical `AGENTS.md` tactic ledger, creating that section if needed. If `CLAUDE.md` exists, make it share or point to the ledger. Prune rows whose automation you remove.
+8. When deduplication reveals a tactic sequence or goal shape repeated three or more times, use lean-tactic-improver when available. Otherwise use this standalone fallback: on the third occurrence, extract the lowest sufficient project-native abstraction without adding a framework solely for automation; rewrite the motivating call sites; add a `Name | Kind | Use when | Defined in` row to the canonical `AGENTS.md` tactic ledger, creating it if needed; make `CLAUDE.md` share or point to that ledger; and prune rows whose automation is removed.
 9. Recheck after each logical edit and revert any “simplification” that makes the code harder to trust.
 
 ## Quality Bar

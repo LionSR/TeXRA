@@ -11,11 +11,11 @@ Use this skill when proof scripts are growing linearly with the mathematics: the
 
 ## The mechanism
 
-The project's `AGENTS.md` carries one canonical **tactic ledger**: a curated list of the project's custom tactics, simp sets, aesop rule sets, and workhorse lemmas, each with a one-line "use when". If the project also uses `CLAUDE.md`, that file shares or points to the same ledger instead of duplicating it. The ledger is the memory that makes improvement compound — automation that is not recorded gets rediscovered or, worse, reinvented.
+The canonical ledger location, sharing rules, row format, abstraction ladder, and standalone fallback live in [references/tactic-ledger.md](references/tactic-ledger.md). Treat that reference as the single source of truth instead of restating the protocol in consumer skills or prompts.
 
 ## Workflow
 
-1. Read the tactic ledger in `AGENTS.md` before writing proofs. If it has no ledger section yet, create one using the template in [references/tactic-ledger.md](references/tactic-ledger.md); make `CLAUDE.md` share or point to it when that file exists.
+1. Read or initialize the tactic ledger exactly as specified by the canonical protocol.
 2. Watch for repetition while proving. Apply the rule of three: the third time a tactic sequence or goal shape recurs, stop inlining it and extract.
 3. Choose the cheapest sufficient rung on the abstraction ladder: helper lemma → `@[simp]` lemma or named simp set → aesop rule set → tactic macro → full custom tactic. Use a framework-specific rung only when the project already provides that dependency; otherwise stay on a lower rung unless adding the dependency is explicitly in scope. Do not write an `elab` tactic where a lemma would do.
 4. Put domain-specific automation beside the declarations it depends on. Use an early-imported file such as `Project/Tactic.lean` or `Project/Attr.lean` only for dependency-light shared infrastructure. Add a docstring stating what goal shapes the automation closes.
