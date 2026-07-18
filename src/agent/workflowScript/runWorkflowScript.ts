@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 
 import stableStringify from 'fast-json-stable-stringify';
-import { isNonEmptyString, createSemaphore } from '@utils/core';
+import PQueue from 'p-queue';
+import { isNonEmptyString } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { parseWorkflowScript } from './parseScript';
@@ -185,7 +186,7 @@ function isWorkflowAbort(error: unknown): boolean {
  * Runs a workflow script: deterministic JS orchestration over host-executed
  * agents. The script's control flow (loops, fan-out, joins, reduction) runs
  * as plain code with zero model round-trips between steps; every agent()
- * call is bounded by one shared concurrency semaphore and journaled for
+ * call is bounded by one shared p-queue concurrency limit and journaled for
  * resume (same call index + same prompt/options → cached result).
  *
  * On wall-clock timeout the sandbox preempts guest execution, fires the run's
@@ -204,7 +205,7 @@ export async function runWorkflowScript(
     (options.journal ?? []).map((entry) => [entry.index, entry]),
   );
   const journal = new Map<number, WorkflowJournalEntry>();
-  const semaphore = createSemaphore(concurrency);
+  const queue = new PQueue({ concurrency });
   const runAbort = new AbortController();
   // One AbortController per in-flight call, keyed by call index and linked to
   // runAbort (a run abort cascades to every entry; a per-call abort leaves the
@@ -401,7 +402,7 @@ export async function runWorkflowScript(
       let result: unknown;
       let attemptError: { readonly error: unknown } | undefined;
       try {
-        result = await semaphore.run(() => {
+        result = await (queue.add(() => {
           // Re-check after waiting for a slot: a timeout/cap abort while this
           // call was queued must not launch fresh model work.
           if (runAbort.signal.aborted) {
@@ -421,7 +422,10 @@ export async function runWorkflowScript(
               resolvedModel = model;
             },
           });
-        });
+          // p-queue types add() as Promise<T | void>; runAgent's result is
+          // always present here (the task never returns void), so the cast
+          // keeps the value flowing through unchanged.
+        }) as Promise<unknown>);
       } catch (error) {
         attemptError = { error };
       } finally {

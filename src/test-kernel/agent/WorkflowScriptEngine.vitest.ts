@@ -337,7 +337,33 @@ return await pipeline(
     expect(run.result).toEqual([11, null, 31]);
   });
 
-  it('bounds concurrent agent() calls with the semaphore', async () => {
+  it('caps concurrent agent() calls to the concurrency limit over a large fan-out', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    let completed = 0;
+    const runner = async (invocation: WorkflowAgentInvocation) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await delay(1);
+      inFlight -= 1;
+      completed += 1;
+      return invocation.prompt;
+    };
+    const run = await runWorkflowScript({
+      script: `${META}
+const items = Array.from({ length: 100 }, (_, i) => i)
+const out = await parallel(items.map((n) => () => agent('call-' + n)))
+return out.length`,
+      runAgent: runner,
+      concurrency: 4,
+    });
+    expect(maxInFlight).toBeLessThanOrEqual(4);
+    expect(completed).toBe(100);
+    expect(run.result).toBe(100);
+    expect(run.agentCalls).toBe(100);
+  });
+
+  it('bounds concurrent agent() calls with the p-queue concurrency limit', async () => {
     let inFlight = 0;
     let maxInFlight = 0;
     const runner = async (invocation: WorkflowAgentInvocation) => {
