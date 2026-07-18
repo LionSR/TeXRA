@@ -13,12 +13,12 @@ Read this before writing proofs; prefer these over inline tactic chains.
 When a pattern recurs three times, extract it (see lean-tactic-improver)
 and add it here. Prune entries whose automation is removed.
 
-| Name                   | Kind         | Use when                                              | Defined in                 |
-| ---------------------- | ------------ | ----------------------------------------------------- | -------------------------- |
-| `norm_bound`           | tactic macro | closing `‖A x‖ ≤ C * ‖x‖` goals for bounded operators | `Project/Tactic.lean`      |
-| `proj_simp`            | simp set     | reducing compositions of projections `P i * P j`      | `Project/Attr.lean`        |
-| `Foo`                  | aesop rules  | membership/subset goals in the `Foo` lattice          | `Project/Attr.lean`        |
-| `sum_swap_of_summable` | lemma        | interchanging double sums under summability           | `Project/Summability.lean` |
+| Name                   | Kind           | Use when                                              | Defined in                 |
+| ---------------------- | -------------- | ----------------------------------------------------- | -------------------------- |
+| `norm_bound`           | tactic macro   | closing `‖A x‖ ≤ C * ‖x‖` goals for bounded operators | `Project/Tactic.lean`      |
+| `proj_simp`            | simp set       | reducing compositions of projections `P i * P j`      | `Project/Attr.lean`        |
+| `Foo`                  | aesop rule set | membership/subset goals in the `Foo` lattice          | `Project/Attr.lean`        |
+| `sum_swap_of_summable` | lemma          | interchanging double sums under summability           | `Project/Summability.lean` |
 ```
 
 Rules:
