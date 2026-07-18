@@ -39,7 +39,7 @@ afterEach(() => {
 
 beforeEach(() => {
   __resetSetupPlatformForTests();
-  setSetupPlatform({ host: 'extension' });
+  setSetupPlatform({ host: 'extension', signIn: async () => false });
 });
 
 describe('shared setup capabilities', () => {
