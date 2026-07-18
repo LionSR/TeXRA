@@ -56,6 +56,9 @@ All notable changes to this project will be documented in this file.
 
 #### Breaking Changes
 
+- **CLI model access now uses `/api` exclusively** — use `/api chatgpt`,
+  `/api included`, or `/api personal`; the separate `/subscription` command
+  and `/sub` alias have been removed.
 - **Structured run results are moving to one outcome field** — scripts reading
   final result objects from `--output-format json` or `ndjson` should use
   `outcome`. Current v0.39 releases and all v0.40 releases continue to emit the
@@ -64,6 +67,11 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
+- **Model access and accounts have distinct CLI controls** — `/api` now offers
+  ChatGPT subscription, included TeXRA access, and personal API keys in one
+  picker; `/auth` reports both account sessions and the effective route; and
+  `/logout` lets users sign out of either account or explicitly sign out of
+  both.
 - **Add provider keys without leaving a CLI chat** — `/key` opens a provider
   picker followed by masked input and selects personal API-key access after
   the key is saved.

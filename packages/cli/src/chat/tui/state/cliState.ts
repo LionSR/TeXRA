@@ -456,10 +456,10 @@ export const pendingExitResumeId = PENDING_EXIT_RESUME_ID;
 // codexPreferenceSlice
 // ---------------------------------------------------------------------------
 
-// Bumped whenever the in-process ChatGPT-subscription preference changes (via
-// `/subscription`) so the status bar re-reads it immediately instead of waiting
-// for its periodic poll. External changes (extension/desktop/config edits) are
-// still picked up by that poll.
+// Bumped whenever the in-process ChatGPT-subscription preference changes so the
+// status bar re-reads it immediately instead of waiting for its periodic poll.
+// External changes (extension/desktop/config edits) are still picked up by that
+// poll.
 
 const CODEX_PREFERENCE_VERSION = signal<number>(0);
 

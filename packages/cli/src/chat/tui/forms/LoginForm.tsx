@@ -42,9 +42,7 @@ export function LoginForm(props: LoginFormProps): React.JSX.Element {
       availableRows={props.availableRows}
       items={LOGIN_FORM_ITEMS}
       compactVisibleItems={LOGIN_FORM_ITEMS.length}
-      description={
-        <Text dimColor>Choose how TeXRA should authenticate model calls.</Text>
-      }
+      description={<Text dimColor>Choose an account to sign in.</Text>}
       selectMarginTop={1}
       action="select"
       escapeAction="cancel"

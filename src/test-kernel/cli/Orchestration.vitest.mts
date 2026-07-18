@@ -16,9 +16,9 @@ import {
   buildCliOrchestrationItems,
   buildCliResumeItems,
   buildCliTeamItems,
-  buildModelAccessItems,
   orchestrationModelAccessView,
 } from '@cli/runtime/orchestration';
+import { buildCliModelAccessItems } from '@cli/runtime/modelAccessRoute';
 
 import {
   CLI_HISTORY_RESUMABLE_STATUS,
@@ -314,7 +314,7 @@ describe('CLI orchestration items', () => {
       description: 'Included TeXRA access',
       value: { kind: 'configure-model-access' },
     });
-    expect(buildModelAccessItems(status)).toEqual([
+    expect(buildCliModelAccessItems(status)).toEqual([
       {
         value: 'chatgpt',
         label: 'Prefer ChatGPT subscription',
@@ -370,7 +370,7 @@ describe('CLI orchestration items', () => {
       { kind: 'account', provider: 'texra', operation: 'sign-in' },
     ]);
     expect(
-      buildModelAccessItems({
+      buildCliModelAccessItems({
         active: 'personal',
         chatGptSignedIn: false,
         texraSignedIn: false,
