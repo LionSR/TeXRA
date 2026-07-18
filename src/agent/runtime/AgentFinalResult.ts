@@ -98,6 +98,11 @@ export function buildAgentFinalResult(
   if ('flowResult' in source) {
     const result = source.flowResult;
     const outcome = source.outcome ?? result.outcome;
+    // Surface the flow result's own captured structured value when the caller
+    // did not pass one, so a populated flow result carries `structured` without
+    // every caller re-threading it.
+    const structured =
+      source.structured ?? (result as { structured?: unknown }).structured;
     if (result.category === 'workflow') {
       return AgentFinalResultSchema.parse({
         category: result.category,
@@ -107,7 +112,7 @@ export function buildAgentFinalResult(
         diffs: source.diffs,
         cost: result.totalCostUsd,
         diffsUnavailable: source.diffsUnavailable,
-        structured: source.structured,
+        structured,
       });
     }
     return AgentFinalResultSchema.parse({
@@ -116,7 +121,7 @@ export function buildAgentFinalResult(
       response: result.lastResponse,
       files: result.touchedFiles,
       cost: result.totalCostUsd,
-      structured: source.structured,
+      structured,
     });
   }
 

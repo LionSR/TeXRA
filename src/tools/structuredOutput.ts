@@ -57,7 +57,7 @@ export function resolveStructuredOutput(
 }
 
 /** Name of the synthetic tool the model calls to submit its final result. */
-export const SUBMIT_OUTPUT_TOOL_NAME = 'submit_output';
+const SUBMIT_OUTPUT_TOOL_NAME = 'submit_output';
 
 /**
  * Build a synthetic terminal tool whose schema is the spec's Zod schema.

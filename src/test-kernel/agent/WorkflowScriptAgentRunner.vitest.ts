@@ -78,6 +78,16 @@ const result: AgentFinalResult = {
   diffs: [],
   cost: 0,
 };
+// A completed tool-use result carrying a structured value, as a schema call
+// resolves once the agent submits output.
+const structuredResult: AgentFinalResult = {
+  category: 'toolUse',
+  outcome: 'completed',
+  response: '',
+  files: [],
+  cost: 0,
+  structured: { title: 'Lemma 1' },
+};
 
 function parentContext(): LaunchRunContext {
   return {
@@ -501,6 +511,12 @@ describe('createWorkflowScriptAgentRunner', () => {
       category: 'toolUse',
       path: `/agents/${name}.yml`,
     }));
+    mocks.executeStableSubagentInBand.mockImplementationOnce(
+      async (options) => {
+        mocks.preparedOptions.push(await options.prepare());
+        return { executionId: 'bbbbbb222222', result: structuredResult };
+      },
+    );
     const schema = {
       type: 'object',
       properties: { title: { type: 'string' } },
@@ -511,7 +527,7 @@ describe('createWorkflowScriptAgentRunner', () => {
 
     await expect(
       runner(invocation({ agentName: 'assistant', schema })),
-    ).resolves.toBe(result);
+    ).resolves.toBe(structuredResult);
 
     expect(mocks.requireVisibleAgent).toHaveBeenCalledWith(
       'toolUse',
@@ -540,17 +556,81 @@ describe('createWorkflowScriptAgentRunner', () => {
       category: 'toolUse',
       path: `/agents/${name}.yml`,
     }));
+    mocks.executeStableSubagentInBand.mockImplementationOnce(
+      async (options) => {
+        mocks.preparedOptions.push(await options.prepare());
+        return { executionId: 'bbbbbb222222', result: structuredResult };
+      },
+    );
     const schema = { type: 'object', additionalProperties: false };
     const runner = defaultRunner();
 
     // No input files and no default outputs: the workflow path aborts, but a
     // schema call runs a tool-use agent whose result is the submitted value.
-    await expect(runner(invocation({ schema }))).resolves.toBe(result);
+    await expect(
+      runner(invocation({ agentName: 'assistant', schema })),
+    ).resolves.toBe(structuredResult);
     expect(mocks.preparedOptions[0]).toEqual(
       expect.objectContaining({
         configPayload: expect.objectContaining({ agentCategory: 'toolUse' }),
       }),
     );
+  });
+
+  it('aborts a schema call that omits agentName', async () => {
+    const schema = { type: 'object', additionalProperties: false };
+    const runner = defaultRunner();
+
+    // The workflow default 'correct' is a document editor with no tool-use
+    // counterpart, so a schema call must name a tool-use agent explicitly
+    // rather than silently reuse the workflow default under the tool-use
+    // category.
+    await expect(runner(invocation({ schema }))).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: expect.stringMatching(
+        /must name a tool-use agent via agentName/,
+      ),
+    });
+    expect(mocks.preparedOptions).toHaveLength(0);
+    expect(mocks.requireVisibleAgent).not.toHaveBeenCalled();
+  });
+
+  it('aborts a schema run whose agent never submitted structured output', async () => {
+    mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
+      name,
+      source: 'builtInToolUse',
+      category: 'toolUse',
+      path: `/agents/${name}.yml`,
+    }));
+    // The tool-use agent answered in prose and never called submit_output, so
+    // the completed result carries no structured value: the floor must fail
+    // clearly instead of resolving to an envelope with structured undefined.
+    mocks.executeStableSubagentInBand.mockImplementationOnce(
+      async (options) => {
+        mocks.preparedOptions.push(await options.prepare());
+        return {
+          executionId: 'bbbbbb222222',
+          result: {
+            category: 'toolUse',
+            outcome: 'completed',
+            response: 'Here is my answer in prose.',
+            files: [],
+            cost: 0,
+          },
+        };
+      },
+    );
+    const schema = { type: 'object', additionalProperties: false };
+    const runner = defaultRunner();
+
+    await expect(
+      runner(invocation({ agentName: 'assistant', schema })),
+    ).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: expect.stringMatching(
+        /did not call submit_output; no structured result was produced/,
+      ),
+    });
   });
 
   it('leaves onChildActive untouched when a recovered attempt runs no live work', async () => {
