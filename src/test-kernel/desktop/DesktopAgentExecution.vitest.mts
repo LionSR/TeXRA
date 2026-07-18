@@ -250,9 +250,6 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
     import('@test/support/FakePlatform'),
   ]);
   initPlatform(createFakePlatform());
-  vi.doMock('@agent/runtime/ProgressViewBridge', () => ({
-    setProgressViewBridge: vi.fn(),
-  }));
   vi.doMock('@agent/runtime/SessionResumeRetrieval', () => ({
     retrieveSessionResumeData:
       options.retrieveSessionResumeData ?? vi.fn(async () => null),
@@ -613,7 +610,6 @@ function emitStatusFact(
 
 describe('DesktopProgressBridge', () => {
   afterEach(() => {
-    vi.doUnmock('@agent/runtime/ProgressViewBridge');
     vi.doUnmock('@agent/runtime/SessionResumeRetrieval');
     vi.doUnmock('@agent/runtime/executeAgent');
     vi.doUnmock('@agent/runtime/runAgent');
@@ -682,8 +678,17 @@ describe('DesktopProgressBridge', () => {
     const messages: unknown[] = [];
     const showErrorMessage = vi.fn();
     const bridge = await createBridge(messages, { showErrorMessage });
+    messages.length = 0;
 
     bridge.handleInteractionEvent('requestEnsureProgressView', {});
+    bridge.handleInteractionEvent('requestEnsureProgressView', {
+      fallbackNotification: {
+        agentName: 'writer',
+        modelName: 'test-model',
+        inputName: 'paper.tex',
+        outputInfo: 'to paper.out.tex',
+      },
+    });
     bridge.handleInteractionEvent('requestShowError', {
       message: 'Root run failed',
     });
@@ -698,6 +703,7 @@ describe('DesktopProgressBridge', () => {
       command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
       route: 'progress',
     });
+    expect(messages).toHaveLength(1);
     expect(showErrorMessage).toHaveBeenCalledWith('Root run failed');
     // Folded into the same dialog surface as requestShowError — no second
     // subscribe surface or dialog for instructions.

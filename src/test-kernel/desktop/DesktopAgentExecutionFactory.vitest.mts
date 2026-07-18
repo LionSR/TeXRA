@@ -182,9 +182,6 @@ async function createExecution(options: {
   vi.resetModules();
   const { initPlatform } = await import('@platform/platform');
   initPlatform(options.platform ?? createFakePlatform());
-  vi.doMock('@agent/runtime/ProgressViewBridge', () => ({
-    setProgressViewBridge: vi.fn(),
-  }));
   vi.doMock('@agent/runtime/SessionResumeRetrieval', () => ({
     retrieveSessionResumeData: vi.fn(async () => null),
   }));
@@ -265,7 +262,6 @@ async function createExecution(options: {
 
 describe('createDesktopAgentExecution', () => {
   afterEach(async () => {
-    vi.doUnmock('@agent/runtime/ProgressViewBridge');
     vi.doUnmock('@agent/runtime/SessionResumeRetrieval');
     vi.doUnmock('@agent/runtime/executeAgent');
     vi.doUnmock('@agent/runtime/runAgent');
