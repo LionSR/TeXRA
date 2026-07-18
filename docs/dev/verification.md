@@ -91,8 +91,6 @@ re-implementing one of these per host, push the new code into
 - WA color scheme observer: `src/shared/wa/waColorScheme.ts`
 - Action button helper: `src/shared/wa/actionButtons.ts`
 - Empty state helper: `src/shared/wa/emptyState.ts`
-- Walkthrough dialog: `src/shared/wa/walkthroughDialog.ts`
-- Command palette shell: `src/shared/wa/commandPalette.ts`
 - Persisted state: `src/shared/state/PersistedState.ts`
 - Host bridge: `src/shared/hostBridge.ts`
 - Settings tabs: `src/shared/schemas/settingsViewMessages.ts` (`SETTINGS_TAB`)

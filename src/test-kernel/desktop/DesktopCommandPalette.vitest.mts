@@ -6,8 +6,7 @@ import { AgentCategory } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 import { delay } from '@utils/core';
 
-// Local imports - desktop test paths
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+// Local imports - test DOM utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 interface DesktopCommandPaletteController {
@@ -28,6 +27,20 @@ interface DesktopCommandPaletteModule {
     platform?: NodeJS.Platform;
     canOpen?: () => boolean;
   }): DesktopCommandPaletteController;
+  filterCommandPaletteEntries<T extends { id: string; label: string }>(
+    entries: readonly T[],
+    query: string,
+  ): T[];
+  getNextCommandPaletteIndex(
+    currentIndex: number,
+    itemCount: number,
+    delta: number,
+  ): number;
+  executeCommandPaletteEntry(
+    entry: { id: string; label: string; enabled: boolean } | undefined,
+    onExecute: (id: string) => boolean | Promise<boolean>,
+  ): boolean;
+  isCommandPaletteShortcut(event: KeyboardEvent): boolean;
 }
 
 interface DesktopPaletteStream {
@@ -41,13 +54,7 @@ interface DesktopPaletteStream {
 }
 
 async function loadDesktopCommandPalette(): Promise<DesktopCommandPaletteModule> {
-  return import(
-    moduleFileUrl(desktopSourcePath('renderer', 'desktopCommandPalette.ts'))
-  ) as Promise<DesktopCommandPaletteModule>;
-}
-
-async function loadSharedCommandPalette() {
-  return import('@shared/wa/commandPalette');
+  return import('@desktop/renderer/desktopCommandPalette') as unknown as Promise<DesktopCommandPaletteModule>;
 }
 
 // wa-dialog's show/hide flow chains a few requestAnimationFrame and
@@ -96,7 +103,7 @@ describe('desktop command palette', () => {
   ];
 
   it('filters command entries by label, category, and id tokens', async () => {
-    const { filterCommandPaletteEntries } = await loadSharedCommandPalette();
+    const { filterCommandPaletteEntries } = await loadDesktopCommandPalette();
 
     expect(
       filterCommandPaletteEntries(entries, 'progress').map((entry) => entry.id),
@@ -112,8 +119,7 @@ describe('desktop command palette', () => {
   });
 
   it('wraps active command selection through filtered entries', async () => {
-    const { getNextCommandPaletteIndex } =
-      await import('@shared/wa/commandPalette');
+    const { getNextCommandPaletteIndex } = await loadDesktopCommandPalette();
 
     expect(getNextCommandPaletteIndex(0, 3, 1)).toBe(1);
     expect(getNextCommandPaletteIndex(2, 3, 1)).toBe(0);
@@ -122,7 +128,7 @@ describe('desktop command palette', () => {
   });
 
   it('does not dispatch disabled command palette entries', async () => {
-    const { executeCommandPaletteEntry } = await loadSharedCommandPalette();
+    const { executeCommandPaletteEntry } = await loadDesktopCommandPalette();
     const actions = {
       showSettings: vi.fn(),
     };
@@ -144,7 +150,7 @@ describe('desktop command palette', () => {
   });
 
   it('uses the native command palette shortcut shape', async () => {
-    const { isCommandPaletteShortcut } = await loadSharedCommandPalette();
+    const { isCommandPaletteShortcut } = await loadDesktopCommandPalette();
 
     expect(
       isCommandPaletteShortcut({ key: 'k', metaKey: true } as KeyboardEvent),
