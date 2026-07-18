@@ -8,7 +8,6 @@ import type { MainViewExecuteMessage } from '@shared/mainView';
 import type { FileOperationMessage } from '@shared/schemas/mainView/inbound';
 
 const CHANNEL = 'ExecutionHandlers';
-logger.initialize(CHANNEL);
 
 /** Housekeeping commands take no payload beyond the command itself. */
 export interface HousekeepingMessage {

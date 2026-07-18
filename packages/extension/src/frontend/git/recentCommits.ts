@@ -5,7 +5,6 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'recentCommits';
-logger.initialize(CHANNEL);
 
 export interface RecentCommitsResult {
   commits: string[];

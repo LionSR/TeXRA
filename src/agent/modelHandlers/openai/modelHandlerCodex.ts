@@ -54,7 +54,6 @@ import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 
 const CHANNEL = 'ModelHandlerCodex';
-logger.initialize(CHANNEL);
 
 /** Flatten Responses message content (string or typed parts) to plain text. */
 function partsToText(content: unknown): string {

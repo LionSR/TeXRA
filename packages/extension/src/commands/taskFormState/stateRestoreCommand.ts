@@ -15,7 +15,6 @@ import * as logger from '@logger/logUtils';
 import { COMMON_COMMANDS } from '@shared/ipc';
 
 const CHANNEL = 'stateRestoreCommand';
-logger.initialize(CHANNEL);
 
 const RESTORE_MALFORMED_MESSAGE =
   'Cannot restore state: persisted task data is malformed or from an incompatible version';

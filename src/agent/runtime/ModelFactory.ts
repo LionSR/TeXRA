@@ -43,7 +43,6 @@ import {
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 const CHANNEL = 'ModelFactory';
-logger.initialize(CHANNEL);
 
 type ModelHandlerConstructor = new (
   config: ModelConfig,

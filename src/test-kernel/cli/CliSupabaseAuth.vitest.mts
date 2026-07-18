@@ -206,7 +206,6 @@ describe('CLI Supabase auth', () => {
     const { initializeCliSupabaseAuth, signOutCliSupabase } =
       await loadSupabaseAuth();
     initializeCliSupabaseAuth({
-      initialize: vi.fn(),
       debug: vi.fn(),
       info: vi.fn(),
       warn,

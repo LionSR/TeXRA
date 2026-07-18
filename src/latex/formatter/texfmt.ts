@@ -5,7 +5,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 
 const CHANNEL = 'LaTeXCommands';
-logger.initialize(CHANNEL);
 
 export async function runTexFmt(filePath: string): Promise<boolean> {
   try {
