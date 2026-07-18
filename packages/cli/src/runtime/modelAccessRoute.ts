@@ -1,6 +1,6 @@
 import type { UsageRoute } from '@shared/schemas';
 
-import type { CliApiMode } from './apiAccessMode';
+import { parseCliApiMode, type CliApiMode } from './apiAccessMode';
 
 export type CliModelAccessRoute = 'chatgpt' | 'included' | 'personal';
 
@@ -9,6 +9,27 @@ export interface CliModelAccessStatus {
   readonly chatGptSignedIn: boolean;
   readonly chatGptAccountLabel?: string;
   readonly texraSignedIn?: boolean;
+}
+
+interface CliModelAccessItem {
+  readonly value: CliModelAccessRoute;
+  readonly label: string;
+  readonly description: string;
+}
+
+export function parseCliModelAccessRoute(
+  input: string,
+): CliModelAccessRoute | undefined {
+  const apiMode = parseCliApiMode(input);
+  if (apiMode) return apiMode;
+
+  switch (input.trim().toLowerCase()) {
+    case 'chatgpt':
+    case 'subscription':
+      return 'chatgpt';
+    default:
+      return undefined;
+  }
 }
 
 /** Prefer the route that produced usage; otherwise describe the next request. */
@@ -61,4 +82,39 @@ export function formatCliModelAccessRouteInline(
   return route === 'chatgpt'
     ? label
     : label.charAt(0).toLowerCase() + label.slice(1);
+}
+
+/** Build the canonical three choices shown by every model-access picker. */
+export function buildCliModelAccessItems(
+  status: CliModelAccessStatus,
+): CliModelAccessItem[] {
+  let chatGptDescription: string;
+  if (status.active === 'chatgpt') {
+    chatGptDescription = `On · ${status.chatGptAccountLabel ?? 'your account'}`;
+  } else if (status.chatGptSignedIn) {
+    chatGptDescription = `Off · ${status.chatGptAccountLabel ?? 'your account'}`;
+  } else {
+    chatGptDescription = 'Sign in with ChatGPT Plus/Pro/Team';
+  }
+
+  return [
+    {
+      value: 'chatgpt',
+      label: 'Prefer ChatGPT subscription',
+      description: chatGptDescription,
+    },
+    {
+      value: 'included',
+      label: formatCliModelAccessRoute('included'),
+      description:
+        status.texraSignedIn === false
+          ? 'Sign in through Account to use included models'
+          : 'Use your TeXRA account',
+    },
+    {
+      value: 'personal',
+      label: formatCliModelAccessRoute('personal'),
+      description: 'Use keys configured on this computer',
+    },
+  ];
 }

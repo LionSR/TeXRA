@@ -80,11 +80,14 @@ import {
   chatToolUseAgentUsageError,
 } from './commands/handlers/agentModelCommands';
 import {
-  applyCliApiModeSelection,
+  applyCliModelAccessSelection,
   applyCliProviderApiKey,
 } from './commands/handlers/apiModeCommands';
 import { showCliMemoryPreview } from './commands/handlers/memoryCommands';
-import { loginFromChat } from './commands/handlers/loginCommands';
+import {
+  loginFromChat,
+  logoutFromChat,
+} from './commands/handlers/loginCommands';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,
   type SlashCommandContext,
@@ -590,11 +593,12 @@ export async function runChat(
     getModelSwitchDisabledReason,
     onModelSelect: (nextModel) =>
       applyCliModelSelection(nextModel, slashCommandContext()),
-    onApiModeSelect: (nextMode) =>
-      applyCliApiModeSelection(nextMode, slashCommandContext()),
+    onModelAccessSelect: (route) =>
+      applyCliModelAccessSelection(route, slashCommandContext()),
     onApiKeySave: (provider, key) =>
       applyCliProviderApiKey(provider, key, slashCommandContext()),
     onLoginSelect: (value) => loginFromChat(value, context),
+    onLogoutSelect: logoutFromChat,
     onMemorySelect: showCliMemoryPreview,
     onSkillSelect: activateSkillForNextMessage,
     onResumeSelect: (id: ExecutionId) => chatController.resume(id),

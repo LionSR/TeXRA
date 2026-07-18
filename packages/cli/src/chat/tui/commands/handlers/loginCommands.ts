@@ -2,8 +2,12 @@ import {
   refreshCodexPreferenceViews,
   setCliCodexSubscription,
 } from '@cli/chat/tui/state/codexSubscription';
+import { sessionMeta } from '@cli/chat/tui/state/cliState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
-import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
+import {
+  loadCliApiStatusLines,
+  loadCliModelAccessOverview,
+} from '@cli/runtime/apiStatus';
 import {
   chatGptAccountLabel,
   chatGptSignOutPreferenceMessage,
@@ -17,6 +21,7 @@ import {
   hasLoginTransportConflict,
   LOGIN_TRANSPORT_CONFLICT_MESSAGE,
   parseChatLoginSlashArgs,
+  parseCliLogoutTarget,
   type CliLoginSlashArgs,
   type CliTexraLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
@@ -36,6 +41,7 @@ const CHAT_LOGIN_USAGE = [
   'Usage: /login [texra [github | google]] [--no-browser] [--device] [--select-account] [--login-hint <account>]',
   '       /login chatgpt [--no-browser] [--device]',
 ].join('\n');
+const CHAT_LOGOUT_USAGE = 'Usage: /logout chatgpt | texra | all';
 
 function loginStartMessage(args: CliLoginSlashArgs): string {
   if (args.target === 'chatgpt') {
@@ -135,23 +141,35 @@ export async function loginFromChat(
   }
 }
 
-export async function logoutFromChat(): Promise<void> {
+export async function logoutFromChat(input: string): Promise<void> {
+  const target = parseCliLogoutTarget(input);
+  if (!target) {
+    appendLocalAssistantTranscript(CHAT_LOGOUT_USAGE);
+    return;
+  }
+
   const lines: string[] = [];
   let texraSignedOut = false;
 
-  try {
-    await signOutCliSupabase();
-    texraSignedOut = true;
-  } catch (error: unknown) {
-    lines.push(`TeXRA sign-out failed: ${toErrorMessage(error)}`);
+  if (target === 'texra' || target === 'all') {
+    try {
+      await signOutCliSupabase();
+      texraSignedOut = true;
+      lines.push('Signed out of TeXRA.');
+    } catch (error: unknown) {
+      lines.push(`TeXRA sign-out failed: ${toErrorMessage(error)}`);
+    }
   }
 
-  try {
-    const chatGptUpdate = await signOutCliChatGpt();
-    refreshCodexPreferenceViews();
-    lines.push(chatGptSignOutPreferenceMessage(chatGptUpdate));
-  } catch (error: unknown) {
-    lines.push(`ChatGPT sign-out failed: ${toErrorMessage(error)}`);
+  if (target === 'chatgpt' || target === 'all') {
+    try {
+      const chatGptUpdate = await signOutCliChatGpt();
+      refreshCodexPreferenceViews();
+      lines.push('Signed out of ChatGPT.');
+      lines.push(chatGptSignOutPreferenceMessage(chatGptUpdate));
+    } catch (error: unknown) {
+      lines.push(`ChatGPT sign-out failed: ${toErrorMessage(error)}`);
+    }
   }
 
   if (texraSignedOut) {
@@ -161,13 +179,16 @@ export async function logoutFromChat(): Promise<void> {
     const relayNotice = relayTokenStillActiveNotice();
     const apiMode = relayNotice ? 'included' : 'personal';
     setCliSessionApiMode(apiMode);
-    lines.unshift('Signed out.');
     if (relayNotice) lines.push(relayNotice);
-    try {
-      lines.push(...(await loadCliApiStatusLines({ apiMode })));
-    } catch (error: unknown) {
-      lines.push(toErrorMessage(error));
-    }
+  }
+
+  try {
+    const { lines: statusLines } = await loadCliModelAccessOverview({
+      apiMode: sessionMeta.get().apiMode,
+    });
+    lines.push(...statusLines);
+  } catch (error: unknown) {
+    lines.push(toErrorMessage(error));
   }
 
   appendLocalAssistantTranscript(lines.join('\n'));

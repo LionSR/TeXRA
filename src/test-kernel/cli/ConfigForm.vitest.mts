@@ -377,14 +377,15 @@ describe('/config slash command wiring', () => {
       version: 'test',
     });
     const { stores } = makeFakeSettingsStores();
-    const selectedApiModes: string[] = [];
+    const selectedAccessRoutes: string[] = [];
     registerBuiltinSlashCommands({
       getConfigStores: () => stores,
-      onApiModeSelect: (apiMode) => {
-        selectedApiModes.push(apiMode);
+      onModelAccessSelect: (route) => {
+        selectedAccessRoutes.push(route);
+        if (route === 'chatgpt') return;
         sessionMeta.set({
           ...sessionMeta.get(),
-          apiMode,
+          apiMode: route,
         });
       },
     });
@@ -395,7 +396,7 @@ describe('/config slash command wiring', () => {
 
     await props.writeValue?.(openRouter, true);
 
-    expect(selectedApiModes).toEqual(['personal']);
+    expect(selectedAccessRoutes).toEqual(['personal']);
     expect(sessionMeta.get().apiMode).toBe('personal');
     expect(invalidateModelOptionsCache).toHaveBeenCalledOnce();
   });

@@ -5,7 +5,7 @@
 // Claude Code / Gemini CLI / aider: ChatGPT subscription, Researcher Access,
 // and bring-your-own provider key are first-class credential paths, and skip is
 // explicit. After credentials are set the caller re-reads availability in the
-// SAME process (the relay/subscription/key paths invalidate the relevant
+// SAME process (the included/ChatGPT/personal paths invalidate the relevant
 // caches), so the launcher/chat continues with real models — no restart.
 //
 // TTY-only: the gate returns immediately in headless / non-TTY / dumb-terminal

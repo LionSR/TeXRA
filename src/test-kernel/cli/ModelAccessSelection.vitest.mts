@@ -10,6 +10,7 @@ import {
 import {
   formatCliModelAccessRoute,
   formatCliModelAccessRouteInline,
+  parseCliModelAccessRoute,
   resolveCliModelAccessRoute,
   shortCliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
@@ -39,11 +40,16 @@ vi.mock('@model/computeModelOptions', () => ({
   invalidateModelOptionsCache: mocks.invalidateModelOptionsCache,
 }));
 
-vi.mock('@cli/runtime/apiAccessMode', () => ({
-  effectiveCliApiMode: (source: { apiMode?: 'included' | 'personal' }) =>
-    source.apiMode ?? 'included',
-  setCliApiMode: mocks.setCliApiMode,
-}));
+vi.mock('@cli/runtime/apiAccessMode', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@cli/runtime/apiAccessMode')>();
+  return {
+    ...actual,
+    effectiveCliApiMode: (source: { apiMode?: 'included' | 'personal' }) =>
+      source.apiMode ?? 'included',
+    setCliApiMode: mocks.setCliApiMode,
+  };
+});
 
 vi.mock('@cli/runtime/chatgptLogin', () => ({
   chatGptAccountLabel: (session: { email?: string }) =>
@@ -67,6 +73,16 @@ beforeEach(() => {
 });
 
 describe('CLI model access routes', () => {
+  it('parses the three routes and the subscription compatibility spelling', () => {
+    expect(parseCliModelAccessRoute('chatgpt')).toBe('chatgpt');
+    expect(parseCliModelAccessRoute('subscription')).toBe('chatgpt');
+    expect(parseCliModelAccessRoute('included')).toBe('included');
+    expect(parseCliModelAccessRoute('relay')).toBe('included');
+    expect(parseCliModelAccessRoute('personal')).toBe('personal');
+    expect(parseCliModelAccessRoute('byok')).toBe('personal');
+    expect(parseCliModelAccessRoute('direct')).toBeUndefined();
+  });
+
   it('uses observed access before prospective access preferences', () => {
     expect(
       resolveCliModelAccessRoute({
@@ -202,20 +218,28 @@ describe('CLI model access routes', () => {
     expect(result.apiMode).toBe('personal');
   });
 
-  it('uses the ChatGPT row as a preference switch when already enabled', async () => {
-    mocks.getCodexStatus.mockResolvedValue({ signedIn: true });
+  it('keeps the ChatGPT route selected when it is already enabled', async () => {
+    mocks.getCodexStatus.mockResolvedValue({
+      signedIn: true,
+      email: 'user@example.com',
+    });
     mocks.isPreferCodexSubscription.mockReturnValue(true);
+    mocks.setPreferCodexSubscription.mockResolvedValue({
+      effective: true,
+      target: 'global',
+    });
 
     const result = await selectCliModelAccessRoute(context, 'chatgpt', {
       writeProgress: vi.fn(),
     });
 
     expect(mocks.signInCliChatGpt).not.toHaveBeenCalled();
-    expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
+    expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(true);
     expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(result).toEqual({
       apiMode: 'personal',
-      message: 'Prefer ChatGPT subscription disabled for Codex models.',
+      message:
+        'Prefer ChatGPT subscription enabled for Codex models (user@example.com).',
     });
   });
 

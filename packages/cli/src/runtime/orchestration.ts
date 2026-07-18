@@ -98,12 +98,6 @@ export interface CliAccountStatus {
   readonly chatGptAccountLabel?: string;
 }
 
-export interface CliModelAccessItem {
-  readonly value: CliModelAccessRoute;
-  readonly label: string;
-  readonly description: string;
-}
-
 export function isCliOrchestrationModelPickAction(
   action: CliOrchestrationAction,
 ): action is CliOrchestrationModelPickAction {
@@ -313,40 +307,6 @@ function modelAccessItem(status: CliModelAccessStatus): CliOrchestrationItem {
         ? `ChatGPT subscription · ${status.chatGptAccountLabel}`
         : formatCliModelAccessRoute(status.active),
   };
-}
-
-export function buildModelAccessItems(
-  status: CliModelAccessStatus,
-): CliModelAccessItem[] {
-  let chatGptDescription: string;
-  if (status.active === 'chatgpt') {
-    chatGptDescription = `On · ${status.chatGptAccountLabel ?? 'your account'}`;
-  } else if (status.chatGptSignedIn) {
-    chatGptDescription = `Off · ${status.chatGptAccountLabel ?? 'your account'}`;
-  } else {
-    chatGptDescription = 'Sign in with ChatGPT Plus/Pro/Team';
-  }
-
-  return [
-    {
-      value: 'chatgpt',
-      label: 'Prefer ChatGPT subscription',
-      description: chatGptDescription,
-    },
-    {
-      value: 'included',
-      label: formatCliModelAccessRoute('included'),
-      description:
-        status.texraSignedIn === false
-          ? 'Sign in through Account to use included models'
-          : 'Use your TeXRA account',
-    },
-    {
-      value: 'personal',
-      label: formatCliModelAccessRoute('personal'),
-      description: 'Use keys configured on this computer',
-    },
-  ];
 }
 
 export function buildCliResumeItems(
