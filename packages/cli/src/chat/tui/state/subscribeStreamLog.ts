@@ -275,6 +275,11 @@ function renderLogEntry(
   if (phaseData) {
     const phaseLabel = entry.text ?? '';
     if (phaseLabel.trim().length === 0) return null;
+    // GROUP_END (phase close) carries no index/total; keep the counts the
+    // GROUP_START row established so `(i/n)` doesn't vanish when a phase ends.
+    const prevPhase = prev?.role === 'phase' ? prev : undefined;
+    const phaseIndex = phaseData.index ?? prevPhase?.phaseIndex;
+    const phaseTotal = phaseData.total ?? prevPhase?.phaseTotal;
     const next: ConversationEntry = {
       id: entry.id,
       role: 'phase',
@@ -282,8 +287,8 @@ function renderLogEntry(
       ...(entry.messageType ? { messageType: entry.messageType } : {}),
       finalized: true,
       phaseLabel,
-      ...(phaseData.index !== undefined ? { phaseIndex: phaseData.index } : {}),
-      ...(phaseData.total !== undefined ? { phaseTotal: phaseData.total } : {}),
+      ...(phaseIndex !== undefined ? { phaseIndex } : {}),
+      ...(phaseTotal !== undefined ? { phaseTotal } : {}),
     };
     return prev && entriesEqual(prev, next) ? prev : next;
   }
