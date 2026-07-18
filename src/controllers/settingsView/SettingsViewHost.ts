@@ -1,3 +1,4 @@
+import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   SettingsMessageFor,
@@ -7,20 +8,32 @@ import type {
   SettingsRespond,
   SettingsStatePorts,
 } from '@shared/settingsView/types';
-
+import { GlobalStateKey } from '@shared/state/stateKeys';
+import { MAX_PINNED_MEMORIES } from '@tools/memory/constants';
 import {
-  createSettingsMemoryController,
-  type SettingsMemoryControllerFactoryOptions,
-} from './SettingsMemoryControllerFactory';
+  loadMemoryItems,
+  loadMemoryPreview,
+} from '@tools/memory/memoryFileSystem';
+import {
+  buildFile,
+  countPinnedMemories,
+  parseFrontmatter,
+  setPinnedMeta,
+} from '@tools/memory/memoryMeta';
+import { StorageFS } from '@utils/files';
+
 import {
   buildModelSelectionMessage,
   createModelSelectionController,
   type ModelSelectionExtras,
 } from './SettingsModelSelectionControllerFactory';
-import type { SettingsMemoryController } from './SettingsMemoryController';
+import { SettingsMemoryController } from './SettingsMemoryController';
 import type { SettingsModelSelectionController } from './SettingsModelSelectionController';
 
 type Awaitable<T> = T | PromiseLike<T>;
+type MemoryControllerOptions = ConstructorParameters<
+  typeof SettingsMemoryController
+>[0];
 type MemoryPreviewMessage = SettingsMessageFor<
   typeof SETTINGS_VIEW_CMD.GET_MEMORY_PREVIEW
 >;
@@ -37,9 +50,9 @@ type SetReasoningLevelInput = Omit<
 >;
 export interface SettingsViewHostOptions {
   readonly state: SettingsStatePorts;
-  readonly memoryPrompt: SettingsMemoryControllerFactoryOptions['prompt'];
+  readonly memoryPrompt: MemoryControllerOptions['prompt'];
   readonly respond?: SettingsRespond;
-  readonly setMemoryEnabled?: SettingsMemoryControllerFactoryOptions['setMemoryEnabled'];
+  readonly setMemoryEnabled?: MemoryControllerOptions['setMemoryEnabled'];
   readonly modelSelectionExtras?: ModelSelectionExtras;
   readonly beforeModelSelectionMessage?: () => Awaitable<void>;
   readonly controllers?: {
@@ -60,10 +73,30 @@ export class SettingsViewHost {
   constructor(private readonly options: SettingsViewHostOptions) {
     this.memoryController =
       options.controllers?.memory ??
-      createSettingsMemoryController({
-        globalState: options.state.globalState,
+      new SettingsMemoryController({
         prompt: options.memoryPrompt,
-        setMemoryEnabled: options.setMemoryEnabled,
+        loadMemoryItems,
+        loadMemoryPreview,
+        isMemoryEnabled: () =>
+          options.state.globalState.get<boolean>(
+            GlobalStateKey.MEMORY_ENABLED,
+            true,
+          ),
+        setMemoryEnabled:
+          options.setMemoryEnabled ??
+          (async (enabled) => {
+            await options.state.globalState.update(
+              GlobalStateKey.MEMORY_ENABLED,
+              enabled,
+            );
+          }),
+        memoryStoragePath: resolveMemoryStoragePath,
+        storage: StorageFS,
+        maxPinnedMemories: MAX_PINNED_MEMORIES,
+        parseMemoryFile: parseFrontmatter,
+        buildMemoryFile: buildFile,
+        setPinnedMeta,
+        countPinnedMemories,
       });
     this.modelSelectionController =
       options.controllers?.modelSelection ??
