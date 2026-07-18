@@ -12,15 +12,13 @@
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
-// Local imports - shared schemas
-
-// Local imports - shared utilities
-
 // Third-party imports - Lit template utilities
 import { html } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { when } from 'lit/directives/when.js';
+
+// Local imports - shared schemas and utilities
 import {
   ErrorLogDataSchema,
   type ErrorLogData,

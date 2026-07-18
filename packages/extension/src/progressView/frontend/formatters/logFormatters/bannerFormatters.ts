@@ -15,6 +15,7 @@ import { html } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
+// Local imports - shared schemas
 import type { LogMessageData } from '@shared/schemas';
 
 // Local imports - formatter helpers
@@ -22,8 +23,6 @@ import { formatDisplayTimestamp } from '../timestampUtils';
 import { processMarkdownContent } from '../markdownRenderer';
 import { buildDetailsSummary } from '../htmlBuilders';
 import type { FormatResult } from '../baseLogFormatter';
-
-// Local imports - shared schemas
 
 // Banner configuration by messageType
 const BANNER_CONFIG: Record<
