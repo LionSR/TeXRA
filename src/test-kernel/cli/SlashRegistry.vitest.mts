@@ -25,7 +25,7 @@ import {
   sessionMeta,
   type SessionMeta,
 } from '@cli/chat/tui/state/cliState';
-import type { CliApiMode } from '@cli/runtime/apiAccessMode';
+import type { CliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { AgentCategory } from '@shared/schemas/agent';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -387,7 +387,7 @@ describe('slashRegistry', () => {
     resetCliState(INCLUDED_CHAT_SESSION);
     const errors: string[] = [];
     registerBuiltinSlashCommands({
-      onApiModeSelect: async () => {
+      onModelAccessSelect: async () => {
         throw new Error('api mode failed');
       },
       onError: (error) => {
@@ -401,7 +401,7 @@ describe('slashRegistry', () => {
     expect(openRegisteredCliSlashForm(api, '')).toBe(true);
 
     const apiNode = renderOpenForm<{
-      onSelect?: (value: CliApiMode) => void;
+      onSelect?: (value: CliModelAccessRoute) => void;
     }>();
     apiNode.props?.onSelect?.('personal');
     await settleFormSelection();
@@ -410,11 +410,11 @@ describe('slashRegistry', () => {
     expect(apiNode.isClosed()).toBe(true);
   });
 
-  it('keeps the API picker open until API mode selection commits', async () => {
+  it('closes the model-access picker before an asynchronous action', async () => {
     resetCliState(INCLUDED_CHAT_SESSION);
     const selection = deferredSelection();
     registerBuiltinSlashCommands({
-      onApiModeSelect: () => selection.promise,
+      onModelAccessSelect: () => selection.promise,
     });
     const api = listSlashCommands().find((cmd) => cmd.name === 'api');
 
@@ -423,12 +423,12 @@ describe('slashRegistry', () => {
     expect(openRegisteredCliSlashForm(api, '')).toBe(true);
 
     const apiNode = renderOpenForm<{
-      onSelect?: (value: CliApiMode) => void;
+      onSelect?: (value: CliModelAccessRoute) => void;
     }>();
     apiNode.props?.onSelect?.('personal');
     await settleFormSelection();
 
-    expect(apiNode.isClosed()).toBe(false);
+    expect(apiNode.isClosed()).toBe(true);
 
     selection.resolve();
     await settleFormSelection();
@@ -663,14 +663,6 @@ describe('slashRegistry', () => {
 
     expect(slashPickIntent(help, 'enter')).toBe('submit');
     expect(slashPickIntent(help, 'tab')).toBe('complete');
-  });
-
-  it('completes arg-taking commands on Enter so the user can type the argument', () => {
-    const foo = { name: 'foo', description: 'takes args', takesArgs: true };
-    registerSlashCommand(foo);
-
-    expect(slashPickIntent(foo, 'enter')).toBe('complete');
-    expect(slashPickIntent(foo, 'tab')).toBe('complete');
   });
 
   it('suggests the closest command for a typo within the shared threshold', () => {

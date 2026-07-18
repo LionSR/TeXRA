@@ -88,8 +88,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // Whether the selected stream's model/category would currently route through
   // the ChatGPT subscription (preference + eligibility + signed in). The
   // completed usage snapshot supersedes this prospective value in the display.
-  // Polling re-reads external config changes; an in-process `/subscription`
-  // toggle also bumps `codexPreferenceVersion` for an immediate refresh.
+  // Polling re-reads external config changes; an in-process access change also
+  // bumps `codexPreferenceVersion` for an immediate refresh.
   const codexPreferenceVersion = useSignal(codexPreferenceVersionSignal);
   const [subscriptionResolution, setSubscriptionResolution] = useState<{
     readonly model: string;

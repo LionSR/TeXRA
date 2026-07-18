@@ -25,7 +25,7 @@ import {
 import { formatSlashCommandHelp, GOAL_MODE_HELP } from './helpText';
 import { applyInitialCliAgentSelection } from './handlers/agentModelCommands';
 import {
-  applyCliApiModeSelection,
+  applyCliModelAccessSelection,
   showCliAuthStatus,
 } from './handlers/apiModeCommands';
 import { applyCliApprovalPolicySelection } from './handlers/approvalCommand';
@@ -38,7 +38,6 @@ import {
   openCanonicalSlashForm,
   type SlashCommandContext,
 } from './handlers/slashContext';
-import { applyCliSubscriptionToggle } from './handlers/subscriptionCommand';
 import { openRegisteredCliSlashForm } from './slashForms';
 import {
   findSlashCommand,
@@ -134,7 +133,7 @@ export async function handleTuiSlashCommand(
         return true;
       }
       await runGuardedSlashCommand(() =>
-        applyCliApiModeSelection(rest, context),
+        applyCliModelAccessSelection(rest, context),
       );
       return true;
     case 'key':
@@ -144,9 +143,6 @@ export async function handleTuiSlashCommand(
         );
       }
       openCanonicalSlashForm('key', registered, '');
-      return true;
-    case 'subscription':
-      await runGuardedSlashCommand(() => applyCliSubscriptionToggle(rest));
       return true;
     case 'auth':
       await runGuardedSlashCommand(showCliAuthStatus);
@@ -159,7 +155,11 @@ export async function handleTuiSlashCommand(
       await loginFromChat(rest, context.cliContext);
       return true;
     case 'logout':
-      await logoutFromChat();
+      if (!rest) {
+        openCanonicalSlashForm('logout', registered, rest);
+        return true;
+      }
+      await logoutFromChat(rest);
       return true;
     case 'approval':
       if (rest) {

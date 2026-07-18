@@ -19,8 +19,8 @@ export function refreshCodexPreferenceViews(): void {
 
 /**
  * Flip the "prefer ChatGPT subscription" preference and refresh the TUI views.
- * Shared by `/subscription`, `/login chatgpt`, and the retry "switch to your
- * own API key" path so the persist-then-refresh sequence lives in one place.
+ * Shared by ChatGPT login and the retry "switch to your own API key" path so
+ * the persist-then-refresh sequence lives in one place.
  */
 export async function setCliCodexSubscription(
   enabled: boolean,
