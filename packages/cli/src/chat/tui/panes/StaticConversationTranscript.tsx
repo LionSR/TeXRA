@@ -11,17 +11,16 @@ import { Box, Static, Text } from 'ink';
 
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import type { StreamTabId } from '@shared/schemas';
+import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { safeHomedir } from '@utils/system/platformPaths';
 
-import { wrapAnsiToWidth } from '../render/ansiWrap';
 import {
   sessionMeta as sessionMetaSignal,
   streams as streamsSignal,
   type ConversationEntry,
   type SessionMeta,
   type StreamSlice,
-  type WorkflowScriptProgressFact,
 } from '../state/cliState';
 import {
   childStreamEntries as childStreamEntriesSignal,
@@ -34,27 +33,15 @@ import {
   type TranscriptPrintRequest,
 } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
-import { COLOR_ERROR, COLOR_HINT, COLOR_SUCCESS } from '../ui/colors';
-import { TOOL_OUTPUT_CORNER } from '../ui/glyphs';
+import { COLOR_HINT } from '../ui/colors';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import { isStaticTranscriptEntryAt } from './transcriptEntries';
 import { TranscriptEntry } from './TranscriptEntry';
-import { ToolUseRow } from './ToolUseRow';
-import { toolUseDisplayLines, toolUseMarginBottomRows } from './toolRenderers';
 import {
   transcriptColumns,
   transcriptEntryLayout,
   transcriptEntryLayoutRows,
 } from './transcriptEntryLayout';
-
-type WorkflowScriptToolEntry = Extract<ConversationEntry, { role: 'tool' }>;
-
-function workflowScriptFactDisplayLine(
-  fact: WorkflowScriptProgressFact,
-): string {
-  if (fact.type === 'phase') return `${TOOL_OUTPUT_CORNER} ${fact.label}`;
-  return `${fact.phaseId ? '  ' : `${TOOL_OUTPUT_CORNER} `}${fact.message}`;
-}
 
 export type StaticTranscriptItem =
   | {
@@ -73,16 +60,6 @@ export type StaticTranscriptItem =
       readonly id: string;
       readonly kind: 'printedTranscript';
       readonly request: TranscriptPrintRequest;
-    }
-  | {
-      readonly id: string;
-      readonly kind: 'workflowScriptFact';
-      readonly fact: WorkflowScriptProgressFact;
-    }
-  | {
-      readonly id: string;
-      readonly kind: 'workflowScriptCompletion';
-      readonly entry: WorkflowScriptToolEntry;
     };
 
 interface StaticTranscriptState {
@@ -123,7 +100,13 @@ export function sessionHeaderIdentityLine(
       streamId: context.streamId,
       streams: context.streams,
     });
-    return `subagent: ${view.label} · parent: ${view.parentLabel} · model: ${model}`;
+    const toolName = context.childStreamEntries?.get(context.streamId)?.summary
+      ?.toolName;
+    const streamKind =
+      toolName === DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME
+        ? 'workflow script'
+        : 'subagent';
+    return `${streamKind}: ${view.label} · parent: ${view.parentLabel} · model: ${model}`;
   }
   const model = meta.model || '—';
   const agent = meta.agent || 'chat';
@@ -229,22 +212,6 @@ function staticTranscriptItemRowCount(
       request: item.request,
     }).split('\n').length;
   }
-  if (item.kind === 'workflowScriptFact') {
-    const line = workflowScriptFactDisplayLine(item.fact);
-    return wrapAnsiToWidth(line, transcriptColumns(width, 2)).split('\n')
-      .length;
-  }
-  if (item.kind === 'workflowScriptCompletion') {
-    return (
-      1 +
-      toolUseDisplayLines(item.entry.toolUse, {
-        executionLabels,
-        showOutput: true,
-        width: transcriptColumns(width, 2),
-      }).slice(1).length +
-      toolUseMarginBottomRows(item.entry.toolUse)
-    );
-  }
   return transcriptEntryLayoutRows(
     transcriptEntryLayout(item.entry, {
       executionLabels,
@@ -278,21 +245,6 @@ function StaticTranscriptItemContent({
         </EntryErrorBoundary>
       );
     case 'entry':
-      if (
-        item.entry.role === 'tool' &&
-        item.entry.workflowScriptFacts !== undefined
-      ) {
-        return (
-          <EntryErrorBoundary label="workflow script">
-            <ToolUseRow
-              neutralStatus
-              subagentExecutionLabels={executionLabels}
-              toolUse={item.entry.toolUse}
-              width={width}
-            />
-          </EntryErrorBoundary>
-        );
-      }
       return (
         <EntryErrorBoundary label={item.entry.role}>
           <TranscriptEntry
@@ -313,39 +265,6 @@ function StaticTranscriptItemContent({
               request: item.request,
             })}
           </Text>
-        </EntryErrorBoundary>
-      );
-    case 'workflowScriptFact':
-      return (
-        <EntryErrorBoundary label="workflow script progress">
-          <Box paddingLeft={2}>
-            <Text dimColor>{workflowScriptFactDisplayLine(item.fact)}</Text>
-          </Box>
-        </EntryErrorBoundary>
-      );
-    case 'workflowScriptCompletion':
-      return (
-        <EntryErrorBoundary label="workflow script result">
-          <Box flexDirection="column">
-            <Box paddingLeft={2}>
-              <Text
-                color={
-                  item.entry.workflowScriptOutcome === 'failed'
-                    ? COLOR_ERROR
-                    : COLOR_SUCCESS
-                }
-              >
-                {`${TOOL_OUTPUT_CORNER} ${item.entry.workflowScriptOutcome === 'failed' ? 'Workflow script failed' : 'Workflow script completed'}`}
-              </Text>
-            </Box>
-            <ToolUseRow
-              omitHeader
-              showOutput
-              subagentExecutionLabels={executionLabels}
-              toolUse={item.entry.toolUse}
-              width={transcriptColumns(width, 2)}
-            />
-          </Box>
         </EntryErrorBoundary>
       );
   }
@@ -458,20 +377,6 @@ export function appendStaticTranscriptItems({
     }
     for (const request of requestsByUnseenAnchor.get(entry.id) ?? []) {
       appendItem({ id: request.id, kind: 'printedTranscript', request });
-    }
-    if (entry.role !== 'tool' || !entry.workflowScriptFacts) continue;
-    for (const fact of entry.workflowScriptFacts) {
-      if (!seen.has(fact.id)) {
-        appendItem({ id: fact.id, kind: 'workflowScriptFact', fact });
-      }
-    }
-    const completionId = `${entry.id}:completion`;
-    if (entry.workflowScriptOutcome !== undefined && !seen.has(completionId)) {
-      appendItem({
-        id: completionId,
-        kind: 'workflowScriptCompletion',
-        entry,
-      });
     }
   }
   // A legacy or externally restored request may name an entry no longer in
