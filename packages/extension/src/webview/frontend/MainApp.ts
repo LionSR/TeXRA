@@ -118,8 +118,6 @@ const MainAppBase = SignalWatcher(
   BaseWebviewApp as unknown as new (...args: any[]) => BaseWebviewApp,
 );
 
-const ENABLE_MOCKS_GALLERY = process.env.NODE_ENV === 'development';
-
 @customElement('main-app')
 export class MainApp extends MainAppBase {
   static styles = [
@@ -130,7 +128,6 @@ export class MainApp extends MainAppBase {
   ];
 
   @state() protected override debugMode = false;
-  @state() private mocksGalleryLoaded = false;
 
   @provide({ context: fileStateContext })
   @state()
@@ -342,11 +339,6 @@ export class MainApp extends MainAppBase {
 
   override connectedCallback(): void {
     super.connectedCallback();
-    if (ENABLE_MOCKS_GALLERY && localStorage.getItem('texra-mocks') === '1') {
-      void import('./mocks').then(() => {
-        this.mocksGalleryLoaded = true;
-      });
-    }
     restorePersistedState();
   }
 
@@ -462,16 +454,6 @@ export class MainApp extends MainAppBase {
   }
 
   render(): TemplateResult {
-    if (ENABLE_MOCKS_GALLERY && this.mocksGalleryLoaded) {
-      return html`
-        <div class="content-wrapper">
-          <div class="main-content">
-            <texra-mocks-gallery></texra-mocks-gallery>
-          </div>
-        </div>
-      `;
-    }
-
     const onboardingState = onboardingFunnelState$.get();
     if (onboardingState === 'pending') {
       return html`
