@@ -155,6 +155,7 @@ Concrete rules earned from the 2026-07 whole-repo simplification campaign. Full 
 - **Local fakes need justification.** A local fake for a platform port that already has a shared fake in `src/test-kernel/support/` needs a one-line comment naming the capability gap.
 - **Registrations need a consumer.** Global registration (component, command, provider) needs an external surface that actually references it; internal-only usage imports locally.
 - **No new bare module-level mutable singletons in tested code.** Flag module-level `let`/mutable object state that tests would need to reset between runs; it needs an injectable, resettable handle instead.
+- **Async serialization uses `p-queue`.** A new `chain = chain.then(...)` promise-chain (or a `Map` of chained promises) for one-at-a-time execution is a finding; use `new PQueue({ concurrency: 1 })` — per-key ordering via a `Map` of queues — per the `streamApprovalQueue.ts` precedent. A diff that touches an existing hand-rolled chain should migrate it, not grow it.
 
 ## Final pass
 
