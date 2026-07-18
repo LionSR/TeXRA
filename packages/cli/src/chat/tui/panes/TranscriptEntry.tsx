@@ -191,6 +191,19 @@ export const TranscriptEntry = memo(function TranscriptEntry({
           process={entry.process}
         />
       );
+    case 'phase':
+      // A bold, colored divider that separates a workflow-script run's phases
+      // from the per-agent rows beneath. Stateless props-in → JSX-out.
+      return (
+        <Box
+          marginBottom={layout.marginBottomRows}
+          marginTop={layout.marginTopRows}
+        >
+          <Text bold color={colorEnabled !== false ? COLOR_HINT : undefined}>
+            {layout.lines.join('\n')}
+          </Text>
+        </Box>
+      );
     case 'assistant':
       return (
         <Box

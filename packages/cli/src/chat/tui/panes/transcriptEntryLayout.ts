@@ -7,6 +7,7 @@ import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
 import {
   ERROR_ENTRY_PREFIX,
+  STATUS_DIAMOND,
   TOOL_OUTPUT_CORNER,
   USER_ENTRY_PREFIX,
 } from '../ui/glyphs';
@@ -47,6 +48,13 @@ const ROLE_GEOMETRY = {
     inset: 2,
     marginBottomRows: 0,
     marginTopRows: 0,
+  },
+  phase: {
+    firstPrefix: '',
+    continuationPrefix: '  ',
+    inset: 0,
+    marginBottomRows: 0,
+    marginTopRows: 1,
   },
   process: {
     firstPrefix: '',
@@ -195,6 +203,19 @@ function entryLines(
       return mode === 'live' || mode === 'bounded'
         ? lines
         : wrapDisplayLines(lines, columns);
+    }
+    case 'phase': {
+      const suffix =
+        entry.phaseIndex !== undefined && entry.phaseTotal !== undefined
+          ? ` (${entry.phaseIndex + 1}/${entry.phaseTotal})`
+          : '';
+      const geometry = ROLE_GEOMETRY.phase;
+      return wrapWithPrefix(
+        `${STATUS_DIAMOND} ${entry.phaseLabel}${suffix}`,
+        columns,
+        geometry.firstPrefix,
+        geometry.continuationPrefix,
+      );
     }
     default: {
       const geometry = ROLE_GEOMETRY[entry.role];
