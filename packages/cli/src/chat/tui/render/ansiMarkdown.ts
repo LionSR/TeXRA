@@ -17,11 +17,13 @@ import pico from 'picocolors';
 
 import {
   createMarkdownProcessor,
-  createMarkdownRenderer,
   type MarkdownProcessorRenderEnv,
-  type MarkdownItInstance,
   type MarkdownProcessor,
-} from '@shared/markdown';
+} from '@shared/markdown/createMarkdownProcessor';
+import {
+  createMarkdownRenderer,
+  type MarkdownItInstance,
+} from '@shared/markdown/createMarkdownRenderer';
 import { wrapAnsiToWidth } from './ansiWrap';
 import { normalizeKnownHtmlForCliMarkdown } from './htmlMarkdownNormalize';
 import { textDisplayWidth } from './terminalText';

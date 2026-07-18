@@ -16,7 +16,7 @@ import type { FileLocation, OutputFileInfo } from '@shared/schemas';
 import {
   OUTPUT_DOCUMENT_TAG,
   OUTPUT_DOCUMENTS_TAG,
-} from '@shared/constants/outputProtocol';
+} from '@shared/schemas/output';
 import {
   AbsoluteFS,
   createExternalLocation,

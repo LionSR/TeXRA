@@ -13,7 +13,6 @@ import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/hostBridge';
-import { PersistedState } from '@shared/state';
 
 // Local imports - shared schemas
 import {
@@ -22,6 +21,7 @@ import {
 } from '@shared/schemas';
 import { SignalWatcher } from '@shared/signals';
 import { designTokens, viewTabStyles } from '@shared/styles';
+import { PersistedState } from '@shared/state/PersistedState';
 import { registerTeXRAWebAwesomeIcons } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { renderViewHeader } from '@shared/wa/viewHeader';

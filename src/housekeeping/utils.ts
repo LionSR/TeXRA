@@ -11,7 +11,7 @@ import {
   legacyWorkflowOutputStem,
   midEraWorkflowOutputStem,
   normalizeLegacyModel,
-} from '@shared/constants/legacyWorkflowOutput';
+} from '@shared/constants/workflowOutput';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 

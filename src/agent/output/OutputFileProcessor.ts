@@ -7,7 +7,7 @@ import {
   type OutputFileInfo,
   type RoundOutput,
 } from '@shared/schemas';
-import { OUTPUT_DOCUMENTS_TAG } from '@shared/constants/outputProtocol';
+import { OUTPUT_DOCUMENTS_TAG } from '@shared/schemas/output';
 import { normalizeFilePath } from '@utils/core';
 import { FlexibleFS } from '@utils/files';
 import {

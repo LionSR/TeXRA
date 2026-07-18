@@ -9,7 +9,7 @@
 
 // Local imports - utils
 import * as logger from '@logger/logUtils';
-import { OUTPUT_DOCUMENT_TAG } from '@shared/constants/outputProtocol';
+import { OUTPUT_DOCUMENT_TAG } from '@shared/schemas/output';
 import { isObject } from '@utils/core';
 
 // Local imports

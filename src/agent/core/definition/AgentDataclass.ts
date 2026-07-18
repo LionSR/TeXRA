@@ -6,10 +6,7 @@ import {
   AgentCategorySchema,
   AgentNameSchema,
 } from '@shared/schemas/agent';
-import {
-  OUTPUT_DOCUMENTS_TAG,
-  OUTPUT_END_TAG,
-} from '@shared/constants/outputProtocol';
+import { OUTPUT_DOCUMENTS_TAG, OUTPUT_END_TAG } from '@shared/schemas/output';
 
 export { AgentCategory };
 
@@ -70,7 +67,7 @@ export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
  * `documentTag`/`endTag` used to configure the per-agent output container;
  * every bundled and custom agent has converged on the fixed
  * `<documents><document name="...">...</document></documents>` protocol (see
- * `@shared/constants/outputProtocol`). The fixed default legacy values are
+ * `@shared/schemas/output`). The fixed default legacy values are
  * silently ignored so old bundled/persisted copies do not pollute CLI stderr;
  * bespoke legacy tags still warn because they now get the standard container.
  */

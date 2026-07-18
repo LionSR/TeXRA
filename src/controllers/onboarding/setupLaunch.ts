@@ -13,7 +13,7 @@ import {
 } from '@model/setupModelDefaults';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
-import type { MainViewExecuteMessage } from '@shared/mainView';
+import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { AgentCategory } from '@shared/schemas/agent';

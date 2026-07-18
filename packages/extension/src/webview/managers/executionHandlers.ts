@@ -4,7 +4,7 @@ import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewE
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import type { MainViewExecuteMessage } from '@shared/mainView';
+import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import type { FileOperationMessage } from '@shared/schemas/mainView/inbound';
 
 const CHANNEL = 'ExecutionHandlers';

@@ -10,6 +10,15 @@ import { MainViewPersistedStateSchema } from './mainView/state';
 export const ThemeSchema = z.enum(['dark', 'light', 'high-contrast']);
 export type Theme = z.infer<typeof ThemeSchema>;
 
+/** Theme kinds as reported by the Electron desktop host. */
+export const DESKTOP_THEME_KIND = {
+  DARK: 'dark',
+  LIGHT: 'light',
+  HIGH_CONTRAST: 'high-contrast',
+} as const satisfies Record<string, Theme>;
+
+export type DesktopThemeKind = Theme;
+
 export const SetThemeMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.THEME_SET),
   theme: ThemeSchema,

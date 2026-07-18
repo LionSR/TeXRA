@@ -6,7 +6,7 @@ import { consume } from '@lit/context';
 // Local imports - shared modules
 import { themeContext } from '@shared/BaseWebviewApp';
 import { commonViewStyles, designTokens } from '@shared/styles';
-import { DESKTOP_THEME_KIND } from '@shared/constants/desktopTheme';
+import { DESKTOP_THEME_KIND } from '@shared/schemas/commonViewMessages';
 
 // Local imports - shared Web Awesome helpers
 import { renderLoadingState } from '@shared/wa/loadingState';

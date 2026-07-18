@@ -9,8 +9,6 @@ import type {
   SingleFiles,
 } from '../schemas/mainView/state';
 
-export type { MainViewExecuteMessage };
-
 export interface MainViewExecutionFormState {
   readonly sessionType: SessionType;
   readonly workflowAgent: string;

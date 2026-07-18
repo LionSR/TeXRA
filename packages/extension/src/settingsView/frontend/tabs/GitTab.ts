@@ -30,7 +30,7 @@ import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import {
   DEFAULT_GIT_AUTHOR_NAME,
   DEFAULT_GIT_AUTHOR_EMAIL,
-} from '@shared/constants/git';
+} from '@shared/schemas/stateSettings';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
