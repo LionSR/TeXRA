@@ -1,6 +1,6 @@
 # Tactic Ledger Protocol
 
-The tactic ledger is the persistent memory of a Lean project's automation. It lives in the project's `AGENTS.md` (with `CLAUDE.md` either sharing the file or pointing to it) so that every agent session — regardless of harness — reads it at startup and inherits earlier extractions instead of rederiving them.
+The tactic ledger is the persistent memory of a Lean project's automation. It lives in the project's `AGENTS.md` so that every agent session — regardless of harness — reads it at startup and inherits earlier extractions instead of rederiving them. Never replace a distinct `CLAUDE.md` with a link: preserve its contents and add a pointer to the `AGENTS.md` ledger, or leave it unchanged when both paths already identify the same file.
 
 ## Ledger format
 
@@ -30,7 +30,7 @@ Rules:
 
 ## Standalone consumer fallback
 
-Consumers should use the lean-tactic-improver workflow when the skill is available. When skill discovery is unavailable, use this minimal fallback: on the third occurrence, extract the lowest sufficient project-native abstraction without adding a framework solely for automation; rewrite the motivating call sites; add a `Name | Kind | Use when | Defined in` row to the canonical `AGENTS.md` tactic ledger, creating it if needed; make `CLAUDE.md` share or point to that ledger; and prune rows whose automation is removed.
+Consumers should use the lean-tactic-improver workflow when the skill is available. When skill discovery is unavailable, use this minimal fallback: on the third occurrence, extract the lowest sufficient project-native abstraction without adding a framework solely for automation; rewrite the motivating call sites; add a `Name | Kind | Use when | Defined in` row to the canonical `AGENTS.md` tactic ledger, creating it if needed; if `CLAUDE.md` exists, preserve its contents and add a pointer to the `AGENTS.md` ledger unless both paths already identify the same file; and prune rows whose automation is removed.
 
 ## The abstraction ladder
 
@@ -77,7 +77,7 @@ Extract at the cheapest rung that eliminates the repetition. Each rung costs mor
 - [ ] Domain-specific automation is colocated with the declarations it uses; only dependency-light shared infrastructure lives in an early-imported automation file. Its docstring states the goal shapes it closes.
 - [ ] Rewrote every motivating call site; each got shorter or clearer. Reverted if not.
 - [ ] Full project still builds; no distant proof broke from a new simp/aesop attribute.
-- [ ] Ledger row added or updated in the canonical `AGENTS.md` ledger; `CLAUDE.md` shares or points to it if present.
+- [ ] Ledger row added or updated in the canonical `AGENTS.md` ledger; a distinct `CLAUDE.md` preserves its contents and points to that ledger.
 
 ## Failure modes to avoid
 
