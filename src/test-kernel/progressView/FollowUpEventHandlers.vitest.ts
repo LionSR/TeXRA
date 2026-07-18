@@ -19,7 +19,10 @@ import {
   handleFollowUpChange,
   handleFollowUpSend,
 } from '@progressView/frontend/eventHandlers';
-import type { FrontendEventHandlerContext } from '@progressView/frontend/messageHandlerTypes';
+import {
+  appState,
+  resetProgressState,
+} from '@progressView/frontend/progressState';
 import {
   createInitialState,
   isToolUseState,
@@ -43,35 +46,29 @@ function createToolUseState(text: string): StreamState {
   });
 }
 
-function createContext(): {
-  ctx: FrontendEventHandlerContext;
-  getState: () => ProgressState;
-} {
-  let state = createInitialState();
+/**
+ * Seed the shared appState singleton with two tool-use streams and return a
+ * live reader over it. Streams are registered in `streamById` too, so the
+ * real `setStreamStateForId` mutator accepts updates for them.
+ */
+function seedState(): () => ProgressState {
+  const state = createInitialState();
   state.activeStreamId = 'stream-b';
-  state.streamStates.set('stream-a', createToolUseState('draft'));
-  state.streamStates.set('stream-b', createToolUseState('other'));
-
-  const ctx: FrontendEventHandlerContext = {
-    getState: () => state,
-    setState: (updater) => {
-      state = updater(state);
-    },
-    setStreamState: (
-      streamId: StreamTabId,
-      updater: (prev: StreamState) => StreamState,
-    ) => {
-      const current = state.streamStates.get(streamId);
-      if (!current) return;
-      const updated = updater(current);
-      state = create(state, (draft) => {
-        draft.streamStates.set(streamId, updated);
-      });
-    },
-    setStreamLogs: () => {},
-  };
-
-  return { ctx, getState: () => state };
+  for (const [streamId, text] of [
+    ['stream-a', 'draft'],
+    ['stream-b', 'other'],
+  ] as const) {
+    state.streamStates.set(streamId, createToolUseState(text));
+    state.streamById.set(streamId, {
+      kind: 'agent',
+      name: streamId as StreamTabId,
+      label: streamId,
+      agentCategory: AgentCategory.ToolUse,
+      creationTimestamp: 1,
+    });
+  }
+  appState.set(state);
+  return () => appState.get();
 }
 
 function followUpText(state: ProgressState, streamId: string): string {
@@ -85,52 +82,44 @@ function followUpText(state: ProgressState, streamId: string): string {
 describe('stream-scoped follow-up event handlers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetProgressState();
   });
 
   it('appends a late paste token to its source stream', () => {
-    const { ctx, getState } = createContext();
+    const getState = seedState();
 
-    handleFollowUpChange(
-      {
-        detail: {
-          streamId: 'stream-a',
-          value: '[pasted-a.png]',
-          mode: 'append',
-        },
-      } as CustomEvent,
-      ctx,
-    );
+    handleFollowUpChange({
+      detail: {
+        streamId: 'stream-a',
+        value: '[pasted-a.png]',
+        mode: 'append',
+      },
+    } as CustomEvent);
 
     expect(followUpText(getState(), 'stream-a')).toBe('draft [pasted-a.png]');
     expect(followUpText(getState(), 'stream-b')).toBe('other');
   });
 
   it('sends stream A images while stream B is active', () => {
-    const { ctx, getState } = createContext();
-    handleFollowUpChange(
-      {
-        detail: {
-          streamId: 'stream-a',
-          value: 'draft [pasted-a.png]',
-        },
-      } as CustomEvent,
-      ctx,
-    );
+    const getState = seedState();
+    handleFollowUpChange({
+      detail: {
+        streamId: 'stream-a',
+        value: 'draft [pasted-a.png]',
+      },
+    } as CustomEvent);
     const pastedImage = {
       fileName: 'pasted-a.png',
       base64: 'AAAA',
       mediaType: 'image/png',
     };
 
-    handleFollowUpSend(
-      {
-        detail: {
-          streamId: 'stream-a',
-          images: [pastedImage],
-        },
-      } as CustomEvent,
-      ctx,
-    );
+    handleFollowUpSend({
+      detail: {
+        streamId: 'stream-a',
+        images: [pastedImage],
+      },
+    } as CustomEvent);
 
     expect(mocks.postMessage).toHaveBeenCalledWith(
       PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,

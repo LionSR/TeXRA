@@ -1,5 +1,4 @@
 import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
-import type { MessageHandlerContext } from '@progressView/frontend/messageHandlerTypes';
 import {
   AgentCategory,
   executionStatusToRunOutcome,
@@ -144,10 +143,7 @@ function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
  * no-op unless `UPDATE_STREAMS` has already registered the stream (see
  * `logSlice.ts`'s `if (!streamState) return`).
  */
-export function replayTrace(
-  trace: TraceDocument,
-  ctx: MessageHandlerContext,
-): void {
+export function replayTrace(trace: TraceDocument): void {
   const { snapshot } = trace;
   const streamTabBase = {
     name: trace.streamId,
@@ -188,7 +184,7 @@ export function replayTrace(
       },
     },
   };
-  dispatchMessage(updateStreams, ctx);
+  dispatchMessage(updateStreams);
 
   const logDelta: LogDeltaMessage = {
     command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
@@ -197,7 +193,7 @@ export function replayTrace(
     updates: [],
     textDeltas: [],
   };
-  dispatchMessage(logDelta, ctx);
+  dispatchMessage(logDelta);
 
   const syncSnapshot = {
     stream: trace.streamId,
@@ -226,5 +222,5 @@ export function replayTrace(
     command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
     ...syncPayload,
   };
-  dispatchMessage(syncContent, ctx);
+  dispatchMessage(syncContent);
 }
