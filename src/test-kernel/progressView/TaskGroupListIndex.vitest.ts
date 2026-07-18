@@ -392,3 +392,92 @@ describe('task-group-list status icon (#7993 step 3)', () => {
     expect(iconFor('failed-phase')).toBe('error');
   });
 });
+
+// #8722 Phase 2b: a focused delegate_workflow_script run projects its phases
+// as `kind: 'phase'` groups with per-agent Running/Finished/Failed lines
+// beneath. This locks the extension progress view at parity with the CLI's
+// phase/per-agent rendering (#8739): the phase renders as a group header with
+// its label plus the one-based `(i/n)` position, the enriched per-agent lines
+// render under it, and a `Failed:` line keeps error-level styling.
+describe('task-group-list workflow-script phase rendering (#8722)', () => {
+  it('renders a phase group with its (i/n) header and per-agent lines beneath', async () => {
+    const run: TaskGroup = {
+      id: 'run',
+      name: 'Run: workflow',
+      startTime: 1,
+      status: STREAM_PHASE.RUNNING,
+    };
+    const phase: TaskGroup = {
+      id: 'phase-review',
+      name: 'Review',
+      startTime: 2,
+      status: STREAM_PHASE.RUNNING,
+      parentGroupId: 'run',
+      kind: 'phase',
+      index: 1,
+      total: 3,
+    };
+    const messages: LogMessageData[] = [
+      {
+        id: 'agent-a',
+        text: 'Finished: reviewer · claude-opus-4 · 12.3s ($0.04)',
+        timestamp: 3,
+        level: LOG_LEVELS.INFO,
+        groupId: 'phase-review',
+      },
+      {
+        id: 'agent-b',
+        text: 'Failed: critic - timed out ($0.01 total)',
+        timestamp: 4,
+        level: LOG_LEVELS.ERROR,
+        groupId: 'phase-review',
+      },
+    ];
+
+    const list = await renderList([run, phase], messages);
+
+    // Header shows the phase label plus the one-based position, matching the
+    // CLI's `(index+1/total)` diamond header.
+    const title = list.shadowRoot
+      ?.querySelector(
+        `#${GROUP_DOM_IDS.HEADER_PREFIX}phase-review .group-title`,
+      )
+      ?.textContent?.trim();
+    expect(title).toBe('Review (2/3)');
+
+    // The enriched per-agent lines render under the phase group, and the
+    // Failed line keeps error-level styling.
+    const content = list.shadowRoot?.querySelector(
+      `#${GROUP_DOM_IDS.CONTENT_PREFIX}phase-review`,
+    );
+    expect(content?.textContent).toContain(
+      'Finished: reviewer · claude-opus-4 · 12.3s ($0.04)',
+    );
+    expect(content?.textContent).toContain('Failed: critic - timed out');
+    expect(content?.querySelector('.message-error')).not.toBeNull();
+  });
+
+  it('omits the (i/n) suffix when a phase group carries no counts', async () => {
+    const run: TaskGroup = {
+      id: 'run',
+      name: 'Run: workflow',
+      startTime: 1,
+      status: STREAM_PHASE.RUNNING,
+    };
+    const phase: TaskGroup = {
+      id: 'phase-solo',
+      name: 'Solo phase',
+      startTime: 2,
+      status: STREAM_PHASE.RUNNING,
+      parentGroupId: 'run',
+      kind: 'phase',
+    };
+
+    const list = await renderList([run, phase], []);
+
+    const title = list.shadowRoot
+      ?.querySelector(`#${GROUP_DOM_IDS.HEADER_PREFIX}phase-solo .group-title`)
+      ?.textContent?.trim();
+    expect(title).toBe('Solo phase');
+  });
+});

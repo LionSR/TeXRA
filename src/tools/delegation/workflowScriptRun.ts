@@ -89,13 +89,19 @@ export async function runPersistedWorkflowScriptWithProgress(
   let closed = false;
   let runOutcome: RunOutcome = RUN_OUTCOME.FAILED;
 
-  const phaseFor = (title: string): PhaseStage => {
+  const phaseFor = (
+    title: string,
+    index?: number,
+    total?: number,
+  ): PhaseStage => {
     const existing = phases.get(title);
     if (existing) return existing;
     const phase = {
       handle: trace.openStage(title, {
         kind: 'phase',
         parentId: parentStageId,
+        index,
+        total,
       }),
       failed: false,
     };
@@ -120,7 +126,7 @@ export async function runPersistedWorkflowScriptWithProgress(
     switch (event.type) {
       case 'phase':
         currentPhase = event.title;
-        phaseFor(event.title);
+        phaseFor(event.title, event.index, event.total);
         onActivity?.(`Phase: ${event.title}`);
         break;
       case 'log':

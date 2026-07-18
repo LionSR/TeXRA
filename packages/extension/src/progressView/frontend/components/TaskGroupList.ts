@@ -488,6 +488,14 @@ export class TaskGroupList extends LitElement {
       : '';
 
     const statusIcon = getStatusIcon(group.status);
+    // Surface a stage's position in its plan as `(i/n)` when both counts are
+    // present (round stages always carry them; phase stages when the engine
+    // knows the count). `index` is zero-based, so display it one-based — at
+    // parity with the CLI's `(index+1/total)` phase/round headers.
+    const positionText =
+      group.index !== undefined && group.total !== undefined
+        ? ` (${group.index + 1}/${group.total})`
+        : '';
     return html`
       <span class="group-status-icon">
         ${
@@ -500,7 +508,7 @@ export class TaskGroupList extends LitElement {
             : html`<wa-spinner></wa-spinner>`
         }
       </span>
-      <span class="group-title">${group.name}</span>
+      <span class="group-title">${group.name}${positionText}</span>
       <span class="group-time">
         <span class="group-start-time" data-start=${String(group.startTime)}>
           <wa-icon
