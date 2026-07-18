@@ -4,25 +4,29 @@
  *
  * Covers the two acceptance criteria from TeXRA#7442:
  *  - Dispatch parity: real outbound commands still reach the correct slice
- *    handler with `ctx` threaded through, and malformed/unrecognized
- *    messages route to `onError` instead of throwing inside a handler body.
+ *    handler (which writes the shared `progressState` singletons directly),
+ *    and malformed/unrecognized messages route to `onError` instead of
+ *    throwing inside a handler body.
  *  - Unsupported-command capability gating: a registry entry declared
- *    `unsupported(...)` (the mechanism `messageHandlerTypes.ts`'s
- *    `HandlerRegistry` now requires every command to resolve to) surfaces a
- *    clear `UnsupportedCommandError` via `onError` instead of silently
+ *    `unsupported(...)` (the mechanism `ProgressViewOutboundHandlerRegistry`
+ *    now requires every command to resolve to) surfaces a clear
+ *    `UnsupportedCommandError` via `onError` instead of silently
  *    no-oping — exercised directly against the exported
  *    `dispatchProgressViewOutbound`, since the production registry (like
  *    settingsView's/webview's) has no live `unsupported()` entries today.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ZodError } from 'zod';
 
 import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
-import type { MessageHandlerContext } from '@progressView/frontend/messageHandlerTypes';
 import {
-  createInitialState,
-  type ProgressState,
-} from '@progressView/frontend/store';
+  appState,
+  permissions$,
+  placement,
+  resetProgressState,
+} from '@progressView/frontend/progressState';
+import type { PermissionState } from '@progressView/frontend/permissionState';
+import type { StreamTabId } from '@shared/schemas';
 import { MAIN_VIEW_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   dispatchProgressViewOutbound,
@@ -31,6 +35,7 @@ import {
   SyncStreamContentMessageSchema,
   type ProgressViewOutboundHandlerRegistry,
 } from '@shared/schemas';
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
   assertKnownOutboundMessage,
   assertOutboundMessage,
@@ -133,90 +138,73 @@ describe('SyncStreamContentMessageSchema', () => {
   });
 });
 
-function createSpyContext(initialState: ProgressState = createInitialState()): {
-  ctx: MessageHandlerContext;
-  getState: () => ProgressState;
-  setState: ReturnType<typeof vi.fn>;
-  setPermissions: ReturnType<typeof vi.fn>;
-  setPlacement: ReturnType<typeof vi.fn>;
-} {
-  let state = initialState;
-  const setState = vi.fn();
-  const setPermissions = vi.fn();
-  const setPlacement = vi.fn();
-  const ctx: MessageHandlerContext = {
-    getState: () => state,
-    setState: (updater) => {
-      state = updater(state);
-      setState(updater);
+function seededPermission(): PermissionState {
+  return {
+    kind: PERMISSION_KIND.PLAN_APPROVAL,
+    data: {
+      approvalId: 'approval-1',
+      streamId: 'stream-1' as StreamTabId,
+      plan: { objective: 'Do the thing.' },
+      goalEnabled: false,
     },
-    setStreamState: () => {},
-    setStreamLogs: () => {},
-    savePrefs: () => {},
-    getPermissions: () => [],
-    setPermissions,
-    setPlacement,
-  };
-  return { ctx, getState: () => state, setState, setPermissions, setPlacement };
+  } as PermissionState;
 }
 
 describe('progressView dispatchMessage (createDispatcher migration)', () => {
-  it('routes SET_PLACEMENT to uiHandlers with ctx threaded through — dispatch parity', () => {
-    const { ctx, setPlacement } = createSpyContext();
+  beforeEach(() => {
+    resetProgressState();
+  });
+
+  it('routes SET_PLACEMENT to uiHandlers, which writes the placement singleton — dispatch parity', () => {
     const onError = vi.fn();
 
     const handled = dispatchMessage(
       { command: PROGRESS_VIEW_COMMANDS.SET_PLACEMENT, placement: 'editor' },
-      ctx,
       onError,
     );
 
     expect(handled).toBe(true);
-    expect(setPlacement).toHaveBeenCalledWith('editor');
+    expect(placement.get()).toBe('editor');
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it('routes DELETE_ALL to streamLifecycleHandlers with ctx threaded through — dispatch parity', () => {
-    const { ctx, setPermissions, setState } = createSpyContext();
+  it('routes DELETE_ALL to streamLifecycleHandlers, which clears the state singletons — dispatch parity', () => {
+    permissions$.set([seededPermission()]);
     const onError = vi.fn();
 
     const handled = dispatchMessage(
       { command: PROGRESS_VIEW_COMMANDS.DELETE_ALL },
-      ctx,
       onError,
     );
 
     expect(handled).toBe(true);
-    expect(setPermissions).toHaveBeenCalledWith([]);
-    expect(setState).toHaveBeenCalled();
+    expect(permissions$.get()).toEqual([]);
+    expect(appState.get().streamById.size).toBe(0);
     expect(onError).not.toHaveBeenCalled();
   });
 
   it('routes a malformed message to onError instead of throwing inside a handler body', () => {
-    const { ctx, setState } = createSpyContext();
+    const before = appState.get();
     const onError = vi.fn();
 
     // SET_ACTIVE_STREAM requires `activeStream`; omitting it fails schema
     // validation before any handler runs.
     const handled = dispatchMessage(
       { command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM },
-      ctx,
       onError,
     );
 
     expect(handled).toBe(false);
-    expect(setState).not.toHaveBeenCalled();
+    expect(appState.get()).toBe(before);
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onError.mock.calls[0]?.[0]).toBeInstanceOf(ZodError);
   });
 
   it('routes an unrecognized command through the same schema-validation path', () => {
-    const { ctx } = createSpyContext();
     const onError = vi.fn();
 
     const handled = dispatchMessage(
       { command: 'notARealProgressViewCommand' },
-      ctx,
       onError,
     );
 
@@ -230,12 +218,10 @@ describe('progressView dispatchMessage (createDispatcher migration)', () => {
     // BaseWebviewApp's messageListener routes it through handleCommonMessage
     // before handleMessage/dispatchMessage ever sees it. uiHandlers still
     // carries a documented no-op entry to keep the outbound union exhaustive.
-    const { ctx } = createSpyContext();
     const onError = vi.fn();
 
     const handled = dispatchMessage(
       { command: PROGRESS_VIEW_COMMANDS.THEME_SET, theme: 'dark' },
-      ctx,
       onError,
     );
 

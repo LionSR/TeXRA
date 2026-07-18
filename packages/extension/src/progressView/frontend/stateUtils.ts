@@ -9,7 +9,7 @@ import {
 } from './store';
 
 // Local imports
-import type { FrontendEventHandlerContext } from './messageHandlerTypes';
+import { appState, setStreamStateForId } from './progressState';
 import type { PermissionState } from './permissionState';
 
 /**
@@ -72,11 +72,10 @@ export function hasOutputFiles(
  * If the stream is not a tool-use stream, returns previous state unchanged.
  */
 export function updateToolUseState(
-  ctx: FrontendEventHandlerContext,
   stream: StreamTabId,
   updater: (prev: ToolUseStreamState) => ToolUseStreamState,
 ): void {
-  ctx.setStreamState(stream, (prev) => {
+  setStreamStateForId(stream, (prev) => {
     if (!isToolUseState(prev)) return prev;
     return updater(prev);
   });
@@ -87,11 +86,10 @@ export function updateToolUseState(
  * If the stream is not a workflow stream, returns previous state unchanged.
  */
 export function updateWorkflowState(
-  ctx: FrontendEventHandlerContext,
   stream: StreamTabId,
   updater: (prev: WorkflowStreamState) => WorkflowStreamState,
 ): void {
-  ctx.setStreamState(stream, (prev) => {
+  setStreamStateForId(stream, (prev) => {
     if (!isWorkflowState(prev)) return prev;
     return updater(prev);
   });
@@ -102,16 +100,16 @@ export function updateWorkflowState(
  * No-op if the stream doesn't exist or the parentStreamId hasn't changed.
  */
 export function updateParentStreamId(
-  ctx: FrontendEventHandlerContext,
   streamId: string,
   parentStreamId: string | null | undefined,
 ): void {
   const resolved = parentStreamId ?? undefined;
-  ctx.setState((prev) => {
-    const target = prev.streamById.get(streamId);
-    if (!target || target.parentStreamId === resolved) return prev;
-    return create(prev, (draft) => {
+  const prev = appState.get();
+  const target = prev.streamById.get(streamId);
+  if (!target || target.parentStreamId === resolved) return;
+  appState.set(
+    create(prev, (draft) => {
       draft.streamById.set(streamId, { ...target, parentStreamId: resolved });
-    });
-  });
+    }),
+  );
 }

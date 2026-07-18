@@ -29,55 +29,15 @@ import {
   type StreamEventDetail,
   type ToolbarCommandDetail,
 } from './events';
-import {
-  appState,
-  permissions$,
-  placement,
-  setStreamLogsForId,
-  setStreamStateForId,
-} from './progressState';
-import type {
-  FrontendEventHandlerContext,
-  MessageHandlerContext,
-} from './messageHandlerTypes';
-
-/**
- * Handler contexts for a host with no live filter-persistence backend
- * (desktop, trace-viewer) — unlike `ProgressApp`'s own versions, which wire
- * `savePrefs` to its VS Code webview-specific `prefsManager`. Shared here so
- * neither host hand-copies the same getters/setters over `progressState`'s
- * signals.
- */
-export function createHostEventHandlerContext(): FrontendEventHandlerContext {
-  return {
-    getState: () => appState.get(),
-    setState: (updater) => appState.set(updater(appState.get())),
-    setStreamState: setStreamStateForId,
-    setStreamLogs: setStreamLogsForId,
-  };
-}
-
-export function createHostMessageHandlerContext(): MessageHandlerContext {
-  return {
-    ...createHostEventHandlerContext(),
-    getPermissions: () => permissions$.get(),
-    setPermissions: (next) => {
-      permissions$.set(next);
-    },
-    setPlacement: (next) => {
-      placement.set(next);
-    },
-  };
-}
+import { appState, setStreamStateForId } from './progressState';
 
 export function handleStreamSwitch(
   event: CustomEvent<StreamEventDetail>,
-  ctx: FrontendEventHandlerContext,
 ): void {
   const streamId = event.detail.streamId;
   // Optimistic: highlight tab immediately
-  ctx.setState((prev) =>
-    create(prev, (draft) => {
+  appState.set(
+    create(appState.get(), (draft) => {
       draft.activeStreamId = streamId;
     }),
   );
@@ -86,14 +46,13 @@ export function handleStreamSwitch(
 
 export function handleStreamDelete(
   event: CustomEvent<StreamEventDetail>,
-  ctx: FrontendEventHandlerContext,
 ): void {
   const streamId = event.detail.streamId;
   deleteFollowUpInputTransientState(streamId);
 
   // Optimistic removal: apply delete locally before notifying backend
-  ctx.setState((prev) =>
-    create(prev, (draft) => {
+  appState.set(
+    create(appState.get(), (draft) => {
       draft.streamStates.delete(streamId);
       draft.streamLogs.delete(streamId);
       draft.processOutputs.delete(streamId);
@@ -109,17 +68,21 @@ export function handleStreamDelete(
   postMessage(PROGRESS_VIEW_COMMANDS.DELETE_STREAM, { stream: streamId });
 }
 
+/**
+ * Filter-preference persistence is host-specific and lives with the caller:
+ * `ProgressApp.onFilterChange` layers its VS Code webview `prefsManager`
+ * write on top of this handler; desktop/trace-viewer wire this handler
+ * directly and persist nothing.
+ */
 export function handleFilterChange(
   event: CustomEvent<FilterEventDetail>,
-  ctx: FrontendEventHandlerContext,
 ): void {
   const { filter } = event.detail;
-  ctx.setState((prev) =>
-    create(prev, (draft) => {
+  appState.set(
+    create(appState.get(), (draft) => {
       draft.streamFilter = filter;
     }),
   );
-  ctx.savePrefs?.({ streamFilter: filter });
   postMessage(PROGRESS_VIEW_COMMANDS.FILTER_STREAMS, { filter });
 }
 
@@ -129,10 +92,9 @@ export function handleDeleteAll(): void {
 
 export function handleToolbarCommand(
   event: CustomEvent<ToolbarCommandDetail>,
-  ctx: FrontendEventHandlerContext,
 ): void {
   const { command } = event.detail;
-  const streamId = ctx.getState().activeStreamId;
+  const streamId = appState.get().activeStreamId;
   if (!streamId) return;
   postMessage(command, { stream: streamId });
 }
@@ -158,11 +120,10 @@ export function handleGettingStartedAction(
 
 export function handleFollowUpChange(
   event: CustomEvent<FollowUpChangeDetail>,
-  ctx: FrontendEventHandlerContext,
 ): void {
   const { mode = 'replace', streamId, value } = event.detail;
-  if (!ctx.getState().streamStates.has(streamId)) return;
-  updateToolUseState(ctx, streamId, (prev) =>
+  if (!appState.get().streamStates.has(streamId)) return;
+  updateToolUseState(streamId, (prev) =>
     create(prev, (draft) => {
       if (mode === 'replace') {
         draft.ui.followUpText = value;
@@ -179,10 +140,9 @@ export function handleFollowUpChange(
 
 /** Resolve one tool-use stream's trimmed follow-up text, or null if unavailable. */
 function getFollowUpText(
-  ctx: FrontendEventHandlerContext,
   streamId: StreamTabId,
 ): { streamId: StreamTabId; text: string } | null {
-  const state = ctx.getState();
+  const state = appState.get();
   const streamState = state.streamStates.get(streamId);
   if (!streamState || !isToolUseState(streamState)) return null;
 
@@ -194,9 +154,8 @@ function getFollowUpText(
 
 export function handleFollowUpSend(
   event: CustomEvent<FollowUpSendDetail>,
-  ctx: FrontendEventHandlerContext,
 ): void {
-  const result = getFollowUpText(ctx, event.detail.streamId);
+  const result = getFollowUpText(event.detail.streamId);
   if (!result) return;
 
   // Orphan gate: only attach images whose [fileName] token survives in the
@@ -210,16 +169,16 @@ export function handleFollowUpSend(
     text: result.text,
     ...(attached.length > 0 ? { images: attached } : {}),
   });
-  updateToolUseState(ctx, result.streamId, (prev) =>
+  updateToolUseState(result.streamId, (prev) =>
     create(prev, (draft) => {
       draft.ui.followUpText = '';
     }),
   );
 }
 
-export function handleFollowUpPolish(ctx: FrontendEventHandlerContext): void {
-  const streamId = ctx.getState().activeStreamId;
-  const result = streamId ? getFollowUpText(ctx, streamId) : null;
+export function handleFollowUpPolish(): void {
+  const streamId = appState.get().activeStreamId;
+  const result = streamId ? getFollowUpText(streamId) : null;
   if (!result) return;
 
   postMessage(PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP, {
@@ -230,27 +189,43 @@ export function handleFollowUpPolish(ctx: FrontendEventHandlerContext): void {
 
 export function handleFollowUpClear(
   event: CustomEvent<FollowUpClearDetail>,
-  ctx: FrontendEventHandlerContext,
 ): void {
   const streamId = event.detail.streamId;
-  if (!ctx.getState().streamStates.has(streamId)) return;
-  updateToolUseState(ctx, streamId, (prev) =>
+  if (!appState.get().streamStates.has(streamId)) return;
+  updateToolUseState(streamId, (prev) =>
     create(prev, (draft) => {
       draft.ui.followUpText = '';
     }),
   );
 }
 
-export function runCompileFixer(ctx: FrontendEventHandlerContext): void {
-  const stream = ctx.getState().activeStreamId;
+/**
+ * Reset focus/polish/transcription triggers after they've been consumed
+ * (`followup-focus-complete`). Shared by every host that mounts
+ * `<stream-conversation>`.
+ */
+export function handleFollowUpFocusComplete(): void {
+  const streamId = appState.get().activeStreamId;
+  if (!streamId) return;
+
+  setStreamStateForId(streamId, (prev) => {
+    if (!isToolUseState(prev)) return prev;
+    return create(prev, (draft) => {
+      draft.ui.shouldFocusFollowUp = false;
+      draft.ui.polishedText = null;
+      draft.ui.transcribedText = null;
+    });
+  });
+}
+
+export function runCompileFixer(): void {
+  const stream = appState.get().activeStreamId;
   if (!stream) return;
   postMessage(PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER, { stream });
 }
 
-export function handleFollowupRequestOptions(
-  ctx: FrontendEventHandlerContext,
-): void {
-  const stream = ctx.getState().activeStreamId;
+export function handleFollowupRequestOptions(): void {
+  const stream = appState.get().activeStreamId;
   if (!stream) return;
   postMessage(PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS, { stream });
 }
@@ -260,9 +235,8 @@ export function sendFollowupCommand(
     | typeof PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP
     | typeof PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP,
   event: CustomEvent<FollowupCommandDetail>,
-  ctx: FrontendEventHandlerContext,
 ): void {
-  const stream = ctx.getState().activeStreamId;
+  const stream = appState.get().activeStreamId;
   if (!stream) return;
   const { agent, model, initialQuestion } = event.detail;
   postMessage(command, {
@@ -293,7 +267,6 @@ function postWithOptionalBypass(
 
 export function handlePermissionAction(
   event: CustomEvent<PermissionActionDetail>,
-  ctx: MessageHandlerContext,
 ): void {
   const detail = event.detail;
 
@@ -335,7 +308,7 @@ export function handlePermissionAction(
       // Non-terminal actions like openDiff, previewProposed, showLatexdiff
       // just open editors without settling the approval.
       if (action === 'approve' || action === 'reject') {
-        removePrompt(ctx, detail.kind, data.requestId);
+        removePrompt(detail.kind, data.requestId);
       }
       break;
     }
@@ -364,7 +337,7 @@ export function handlePermissionAction(
               action: 'approve',
             },
       );
-      removePrompt(ctx, detail.kind, data.requestId);
+      removePrompt(detail.kind, data.requestId);
       break;
     }
     case PERMISSION_KIND.RETRY: {
@@ -401,7 +374,7 @@ export function handlePermissionAction(
         });
       }
       // Optimistic removal
-      removePrompt(ctx, PERMISSION_KIND.RETRY, data.streamId);
+      removePrompt(PERMISSION_KIND.RETRY, data.streamId);
       break;
     }
     case PERMISSION_KIND.PROPOSAL: {
@@ -449,11 +422,7 @@ export function handlePermissionAction(
       }
       postWithOptionalBypass(bypassMessage, message);
       // Optimistic removal — track resolved ID so late SHOW is a no-op
-      const removed = removePrompt(
-        ctx,
-        PERMISSION_KIND.PROPOSAL,
-        data.proposalId,
-      );
+      const removed = removePrompt(PERMISSION_KIND.PROPOSAL, data.proposalId);
       if (!removed) {
         addResolvedProposalId(data.proposalId);
       }
@@ -475,7 +444,7 @@ export function handlePermissionAction(
               action: decision.action,
             },
       );
-      removePrompt(ctx, PERMISSION_KIND.PLAN_APPROVAL, data.approvalId);
+      removePrompt(PERMISSION_KIND.PLAN_APPROVAL, data.approvalId);
       break;
     }
     case PERMISSION_KIND.EXTERNAL_INQUIRY: {
@@ -498,7 +467,7 @@ export function handlePermissionAction(
           ...(decision.feedback ? { feedback: decision.feedback } : {}),
         });
       }
-      removePrompt(ctx, PERMISSION_KIND.EXTERNAL_INQUIRY, data.requestId);
+      removePrompt(PERMISSION_KIND.EXTERNAL_INQUIRY, data.requestId);
       clearInquiryDraft(data.requestId);
       break;
     }
@@ -509,7 +478,7 @@ export function handlePermissionAction(
         requestId: data.requestId,
         ...decision,
       });
-      removePrompt(ctx, PERMISSION_KIND.USER_QUESTION, data.requestId);
+      removePrompt(PERMISSION_KIND.USER_QUESTION, data.requestId);
       break;
     }
   }
