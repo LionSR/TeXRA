@@ -142,14 +142,17 @@ export type ForegroundSurfaceKind = 'taskDetail' | 'form' | 'approval';
 
 export function foregroundSurfaceKind({
   activeFormOpen,
+  formBusy,
   pendingApproval,
   taskDetailOpen,
 }: {
   readonly activeFormOpen: boolean;
+  readonly formBusy: boolean;
   readonly pendingApproval: boolean;
   readonly taskDetailOpen: boolean;
 }): ForegroundSurfaceKind | undefined {
   if (taskDetailOpen) return 'taskDetail';
+  if (pendingApproval && formBusy) return 'approval';
   if (activeFormOpen) return 'form';
   if (pendingApproval) return 'approval';
   return undefined;

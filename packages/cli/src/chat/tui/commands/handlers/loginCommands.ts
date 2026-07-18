@@ -2,9 +2,7 @@ import {
   refreshCodexPreferenceViews,
   setCliCodexSubscription,
 } from '@cli/chat/tui/state/codexSubscription';
-import { sessionMeta, setTransientNotice } from '@cli/chat/tui/state/cliState';
-import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
-import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
+import { sessionMeta } from '@cli/chat/tui/state/cliState';
 import {
   chatGptAccountLabel,
   chatGptSignOutPreferenceMessage,
@@ -31,8 +29,13 @@ import {
 } from '@cli/runtime/supabaseAuth';
 import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { collapseWhitespace } from '@utils/text/stringUtils';
 
 import { setCliSessionApiMode } from './apiModeCommands';
+import {
+  type SlashCommandOutput,
+  transcriptSlashCommandOutput,
+} from './slashContext';
 import { loadCliAccountStatusLines } from './statusAssembly';
 
 const CHAT_LOGIN_USAGE = [
@@ -41,7 +44,7 @@ const CHAT_LOGIN_USAGE = [
 ].join('\n');
 const CHAT_LOGOUT_USAGE = 'Usage: /logout chatgpt | texra | all';
 
-function loginStartMessage(args: CliLoginSlashArgs): string {
+export function loginStartMessage(args: CliLoginSlashArgs): string {
   if (args.target === 'chatgpt') {
     if (args.device) return 'Starting ChatGPT device-code sign-in.';
     if (args.noBrowser) return 'Starting ChatGPT sign-in.';
@@ -54,34 +57,34 @@ function loginStartMessage(args: CliLoginSlashArgs): string {
 
 async function loginToChatGptSubscription(
   args: Extract<CliLoginSlashArgs, { target: 'chatgpt' }>,
+  output: SlashCommandOutput,
 ): Promise<void> {
   const session = await signInCliChatGpt(args, {
-    writeProgress: appendLocalAssistantTranscript,
+    writeProgress: (message) =>
+      output.writeProgress(message, { copyable: true }),
   });
   const update = await setCliCodexSubscription(true);
 
-  appendLocalAssistantTranscript(
-    [
-      `Signed in with ChatGPT as ${chatGptAccountLabel(session)}.`,
-      update.effective
-        ? 'ChatGPT subscription enabled for Codex models.'
-        : `ChatGPT subscription preference is still disabled because a more specific setting overrides ${update.target} config.`,
-    ].join('\n'),
+  output.appendOutcome(
+    update.effective
+      ? `Signed in with ChatGPT as ${chatGptAccountLabel(session)} (Codex models enabled).`
+      : `Signed in with ChatGPT as ${chatGptAccountLabel(session)} (Codex models remain disabled because a more specific setting overrides ${update.target} config).`,
   );
 }
 
 async function loginToTexraIncludedAccess(
   args: CliTexraLoginSlashArgs,
+  output: SlashCommandOutput,
 ): Promise<void> {
   const accountWarning = githubSelectAccountWarning(args);
-  if (accountWarning) appendLocalAssistantTranscript(accountWarning);
+  if (accountWarning) output.writeProgress(accountWarning);
 
   const session = args.device
     ? await signInCliSupabaseDeviceCode({
         onDeviceCode: (authorization) => {
-          appendLocalAssistantTranscript(
-            formatCliDeviceAuthMessage(authorization),
-          );
+          output.writeProgress(formatCliDeviceAuthMessage(authorization), {
+            copyable: true,
+          });
         },
       })
     : await signInCliSupabase({
@@ -92,33 +95,33 @@ async function loginToTexraIncludedAccess(
         manualBrowserHint: '/login --no-browser',
         onAuthUrl: (url) => {
           if (args.noBrowser) {
-            appendLocalAssistantTranscript(formatCliManualAuthUrlMessage(url));
+            output.writeProgress(formatCliManualAuthUrlMessage(url), {
+              copyable: true,
+            });
           }
         },
       });
   setCliSessionApiMode('included');
-  appendLocalAssistantTranscript(
-    [
-      `Signed in as ${session.account.label}.`,
-      ...(await loadCliApiStatusLines({ apiMode: 'included' })),
-    ].join('\n'),
+  output.appendOutcome(
+    `Signed in with TeXRA as ${session.account.label} (included models enabled).`,
   );
 }
 
 export async function loginFromChat(
   input: string,
   context?: CliContext,
+  output: SlashCommandOutput = transcriptSlashCommandOutput,
 ): Promise<void> {
   const args = parseChatLoginSlashArgs(input);
   if (!args) {
-    setTransientNotice(CHAT_LOGIN_USAGE);
+    output.setNotice(CHAT_LOGIN_USAGE);
     return;
   }
 
   // Match the CLI `login` guard: reject `--device` + `--no-browser` from the
   // user's parsed flags before the ChatGPT path can auto-resolve `device`.
   if (hasLoginTransportConflict(args)) {
-    setTransientNotice(LOGIN_TRANSPORT_CONFLICT_MESSAGE);
+    output.setNotice(LOGIN_TRANSPORT_CONFLICT_MESSAGE);
     return;
   }
 
@@ -126,19 +129,22 @@ export async function loginFromChat(
     args.target === 'chatgpt' && context
       ? { ...args, device: shouldUseChatGptDeviceCode(context, args) }
       : args;
-  appendLocalAssistantTranscript(loginStartMessage(loginArgs));
+  output.writeProgress(loginStartMessage(loginArgs));
 
   if (loginArgs.target === 'chatgpt') {
-    await loginToChatGptSubscription(loginArgs);
+    await loginToChatGptSubscription(loginArgs, output);
     return;
   }
-  await loginToTexraIncludedAccess(loginArgs);
+  await loginToTexraIncludedAccess(loginArgs, output);
 }
 
-export async function logoutFromChat(input: string): Promise<void> {
+export async function logoutFromChat(
+  input: string,
+  output: SlashCommandOutput = transcriptSlashCommandOutput,
+): Promise<void> {
   const target = parseCliLogoutTarget(input);
   if (!target) {
-    setTransientNotice(CHAT_LOGOUT_USAGE);
+    output.setNotice(CHAT_LOGOUT_USAGE);
     return;
   }
 
@@ -185,5 +191,5 @@ export async function logoutFromChat(input: string): Promise<void> {
     lines.push(toErrorMessage(error));
   }
 
-  appendLocalAssistantTranscript(lines.join(' · '));
+  output.appendOutcome(collapseWhitespace(lines.join(' · ')));
 }

@@ -566,6 +566,23 @@ export function registerCliStateResetHook(resetHook: () => void): void {
   RESET_HOOKS.add(resetHook);
 }
 
+/** Submit-side state for the one active slash form. */
+export interface FormProgress {
+  readonly token: symbol;
+  readonly status: 'running' | 'succeeded' | 'failed';
+  readonly title: string;
+  readonly message?: string;
+  readonly copyableMessage?: string;
+  readonly archivedCopyableMessage?: string;
+  readonly archiveCopyable?: () => void;
+  readonly cancel: () => void;
+  readonly dismiss: () => void;
+}
+
+const FORM_PROGRESS = signal<FormProgress | undefined>(undefined);
+export const formProgress = FORM_PROGRESS;
+registerCliStateResetHook(() => FORM_PROGRESS.set(undefined));
+
 export function resetCliState(
   nextSessionMeta: SessionMeta = defaultSessionMeta(),
 ): void {

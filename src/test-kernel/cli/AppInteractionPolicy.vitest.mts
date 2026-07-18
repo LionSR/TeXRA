@@ -100,6 +100,7 @@ function foregroundInput(
 ): ForegroundSurfaceInput {
   return {
     activeFormOpen: false,
+    formBusy: false,
     pendingApproval: true,
     taskDetailOpen: false,
     ...overrides,
@@ -294,10 +295,11 @@ describe('app interaction policy', () => {
     }
   });
 
-  it('prioritizes foreground surfaces ahead of approvals', () => {
+  it('lets approvals preempt only a busy form', () => {
     const cases = [
       [foregroundInput({ taskDetailOpen: true }), 'taskDetail'],
       [foregroundInput({ activeFormOpen: true }), 'form'],
+      [foregroundInput({ activeFormOpen: true, formBusy: true }), 'approval'],
       [foregroundInput(), 'approval'],
       [foregroundInput({ pendingApproval: false }), undefined],
     ] satisfies readonly (readonly [
