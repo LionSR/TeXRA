@@ -411,6 +411,9 @@ describe('handleTuiSlashCommand', () => {
       'chatgpt',
       expect.any(Object),
     );
+    expect(lastEntryText()).toBe(
+      'Model access: ChatGPT subscription. · This model access setting applies to new chats. The current chat keeps its existing model connection.',
+    );
     expect(codexPreferenceVersion.get()).toBe(previousPreferenceVersion + 1);
   });
 

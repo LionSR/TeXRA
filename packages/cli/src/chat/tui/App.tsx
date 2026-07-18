@@ -67,6 +67,7 @@ import {
   rootRunStartAvailable as rootRunStartAvailableSignal,
   rootStreamId as rootStreamIdSignal,
   activeForm as activeFormSignal,
+  formProgress as formProgressSignal,
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen as slashPaletteOpenSignal,
   taskDetailExecutionId as taskDetailExecutionIdSignal,
@@ -156,10 +157,12 @@ export function App(props: AppProps): React.JSX.Element {
   const childStreamEntries = useSignal(childStreamEntriesSignal);
   const subagentExecutionLabels = useSignal(subagentExecutionLabelsSignal);
   const activeForm = useSignal(activeFormSignal);
+  const formProgress = useSignal(formProgressSignal);
   const slashPaletteOpen = useSignal(slashPaletteOpenSignal);
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
   const taskDetailExecutionId = useSignal(taskDetailExecutionIdSignal);
   const rootRunStartAvailable = useSignal(rootRunStartAvailableSignal);
+  const formBusy = formProgress?.status === 'running';
   const pendingSummaries = useSignal(pendingApprovalSummaries);
   const [childListSelection, dispatchChildListSelection] = useReducer(
     reduceChildListSelection,
@@ -404,6 +407,7 @@ export function App(props: AppProps): React.JSX.Element {
   }, []);
   const foregroundKind = foregroundSurfaceKind({
     activeFormOpen: activeForm !== undefined,
+    formBusy,
     pendingApproval: activeApprovalVisible,
     taskDetailOpen: taskDetailProcess !== undefined,
   });
@@ -434,10 +438,10 @@ export function App(props: AppProps): React.JSX.Element {
         );
       }
       case 'form':
-        return activeForm?.render(
-          () => activeFormSignal.set(undefined),
-          availableRows,
-        );
+        return activeForm?.render(() => {
+          formProgressSignal.set(undefined);
+          activeFormSignal.set(undefined);
+        }, availableRows);
       case 'approval':
         return activeApprovalVisible && pending ? (
           <ApprovalModal pending={pending} availableRows={availableRows} />
@@ -538,6 +542,10 @@ export function App(props: AppProps): React.JSX.Element {
     // path used by terminals that deliver a signal; harnesses can fall back to
     // interrupt-then-exit behavior without duplicating that process lifecycle.
     if (key.ctrl && input === 'c') {
+      if (formBusy) {
+        formProgress?.cancel();
+        return;
+      }
       triggerAppCtrlC({
         discardDraft: () =>
           activeDraftRegistry.discard() ||
@@ -640,7 +648,9 @@ export function App(props: AppProps): React.JSX.Element {
               agentSelectionAvailable={agentSelectionAvailable}
               commandName={props.commandName}
               foregroundEscapeAction={foregroundEscapeAction({
-                activeFormEscapeAction: activeForm?.escapeAction,
+                activeFormEscapeAction: formBusy
+                  ? 'cancel'
+                  : activeForm?.escapeAction,
                 approvalKind,
                 foregroundKind,
               })}
