@@ -2,11 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import {
-  signIn as authSignIn,
-  signOut as authSignOut,
-  viewProfile as authViewProfile,
-} from '@commands/auth';
+import { signIn as authSignIn, signOut as authSignOut } from '@commands/auth';
 import {
   stopAgent as agentStopAgent,
   compactResponse as agentCompactResponse,
@@ -60,6 +56,7 @@ import { handleTestTextEditor as sysTestTextEditor } from '@commands/system/text
 import { SIDEBAR_VIEWS, getActiveSidebarView } from '@common/webview';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
 import { getMainWebview } from '@frontend/system/commandUtils';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { runCleanBuild, runCleanOutput } from '@housekeeping';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
@@ -74,6 +71,7 @@ import {
 
 const RESET_CHANNEL = 'mainViewCommands';
 const CHATGPT_SIGN_IN_CHANNEL = 'ChatGptSubscription';
+const AUTH_CHANNEL = 'authCommands';
 
 export function createExtensionCommandActions(
   context: vscode.ExtensionContext,
@@ -118,7 +116,17 @@ export function createExtensionCommandActions(
       return signedIn;
     },
     signOut: authSignOut,
-    viewProfile: authViewProfile,
+    async viewProfile() {
+      try {
+        await settingsViewProvider.showSettingsView();
+      } catch (error) {
+        void showLoggedErrorMessage(
+          AUTH_CHANNEL,
+          'Failed to load profile',
+          error,
+        );
+      }
+    },
     runSetupAssistant: async () => {
       await launchSetupAssistant();
     },
