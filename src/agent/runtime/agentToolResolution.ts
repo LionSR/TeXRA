@@ -52,7 +52,6 @@ import {
   withDelegationAgentAvailability,
 } from '@tools/delegationAgentAvailability';
 import { withDelegationWorktreeAvailability } from '@tools/delegationWorktreeAvailability';
-import { isApprovalGatedToolName } from '@tools/approvalGatedTools';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   SharedToolInjectionRegistry,
@@ -152,7 +151,8 @@ export async function resolveAgentTools({
   const passesRuntimeGates = (name: string): boolean => {
     if (runtimeUnavailable.has(name)) return false;
     return (
-      approvalPromptsUnavailable !== true || !isApprovalGatedToolName(name)
+      approvalPromptsUnavailable !== true ||
+      effectiveRegistry.get(name)?.requiresApproval !== true
     );
   };
 

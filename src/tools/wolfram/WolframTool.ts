@@ -56,6 +56,9 @@ export type WolframInput = z.infer<typeof WolframInputSchema>;
 
 export class WolframTool extends defineTool({
   name: 'wolfram',
+  requiresApproval: true,
+  slow: true,
+  deferLogUntilApproval: true,
   description: `Execute approval-gated Wolfram Language code. Use this tool for quick calculations, symbolic math, and one-off evaluations only when Wolfram/external computation is allowed by the user. Do not use it when the user requested a specific verification method or prohibited external computation. Sessions do NOT persist between calls - each execution starts fresh with no memory of previous variables or definitions. For complex scripts requiring session persistence, iterative development, or saving intermediate results, write to a .wl file and run via bash instead. IMPORTANT: Never hardcode expected values in Print statements - always compute and display actual results dynamically. Write tests using VerificationTest or assertions to verify properties, printing computed values rather than predetermined strings.`,
   schema: WolframInputSchema,
 }) {

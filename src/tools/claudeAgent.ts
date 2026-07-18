@@ -526,6 +526,7 @@ function startClaudeAgentLoop(params: {
 
 export class ClaudeAgentTool extends defineTool({
   name: CLAUDE_AGENT_NAME,
+  requiresApproval: true,
   description:
     'Spin off a Claude Code agent (via @anthropic-ai/claude-agent-sdk) to perform code analysis, generation, or research. ' +
     'The agent runs the native `claude` binary locally and can read files, run commands, and make edits within its permission mode. ' +

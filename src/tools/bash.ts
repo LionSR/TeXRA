@@ -141,6 +141,10 @@ class BashBackgroundSession implements ExecutionInterruptHandler {
 
 export class BashTool extends defineTool({
   name: 'bash',
+  requiresApproval: true,
+  slow: true,
+  deferLogUntilApproval: true,
+  streamsOutput: true,
   description:
     'Execute shell commands directly in the workspace directory. Commands run from the project root automatically. Available environment variables: $PROJECT_DIR (workspace path), $PROJECT_NAME (project name). Returns stdout on success, throws error with stderr on failure. Use run_in_background for long-running commands.',
   schema: BashInputSchema,

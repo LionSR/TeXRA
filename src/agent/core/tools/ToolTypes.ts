@@ -29,6 +29,11 @@ export interface ITool {
    * both mutates nothing and never prompts for approval.
    */
   readonly parallelSafe?: boolean;
+  /** Execution behavior consumed by tool resolution and dispatch. */
+  readonly requiresApproval?: boolean;
+  readonly slow?: boolean;
+  readonly deferLogUntilApproval?: boolean;
+  readonly streamsOutput?: boolean;
   call(rawInput: unknown): Promise<ToolResult>;
 }
 

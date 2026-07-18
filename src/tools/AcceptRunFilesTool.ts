@@ -104,6 +104,7 @@ export type AcceptRunFilesInput = z.infer<typeof AcceptRunFilesInputSchema>;
 
 export class AcceptRunFilesTool extends defineTool({
   name: 'accept_run_files',
+  requiresApproval: true,
   description: `Accept output files from a completed workflow run into the workspace.
 
 Use this tool ONLY for workflow subagent results (category="workflow").
