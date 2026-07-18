@@ -25,9 +25,9 @@ import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
-import { PROVIDER_URLS } from '@shared/constants/providers';
 import { getConfig, updateConfig, SETTINGS_QUERY } from '@utils/config';
 import { checkCoreDependencies, getToolDocsCommand } from '@utils/system';
+import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { DiffManager } from './managers/DiffManager';
@@ -79,8 +79,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     this.diffManager = new DiffManager();
     this.instructionManager = new InstructionManager();
     this.interactionController = new MainViewInteractionController({
-      getProviderUrl: (provider) =>
-        PROVIDER_URLS[provider as keyof typeof PROVIDER_URLS],
+      getProviderUrl: getProviderKeyUrl,
       getToolDocsCommand,
     });
     this.startupController = new MainViewStartupController({

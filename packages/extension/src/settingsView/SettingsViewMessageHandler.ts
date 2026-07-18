@@ -225,12 +225,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
             provider,
             PROVIDER_DISPLAY_NAMES[provider] ?? provider,
           ),
-        getProviderKeyUrl: (provider) => {
-          const defaultUrl = PROVIDER_URLS[provider];
-          return defaultUrl
-            ? getProviderKeyUrl(provider, defaultUrl)
-            : undefined;
-        },
+        getProviderKeyUrl,
         getApiKeySecretName: (provider) =>
           SecretManager.getApiKeySecretName(provider as ApiProvider),
         setSecret: (key, value) => SecretManager.set(key, value),
