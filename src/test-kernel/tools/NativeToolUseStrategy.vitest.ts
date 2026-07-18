@@ -14,6 +14,7 @@ import {
   isChildRunLoopActive,
   startChildRunLoop,
 } from '@agent/runtime/childRunLoop';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -72,11 +73,12 @@ function fakePorts() {
 function baseParams(parentSession = createTestSession()) {
   if (parentSession !== defaultSession()) ownedSessions.add(parentSession);
   return {
-    configPayload: {
+    config: AgentConfigSchema.parse({
       agent: 'review',
       model: 'gpt5',
       agentCategory: 'toolUse',
-    } as never,
+    }),
+    agentCategoryExplicit: true,
     executionId: 'exec-1' as ExecutionId,
     agentName: 'review',
     orchestratorStreamId: 'orchestrator-stream' as StreamTabId,
@@ -135,6 +137,11 @@ describe('NativeToolUseStrategy', () => {
     });
 
     await strategy.launch(fakePorts(), new AbortController());
+    expect(mocks.executeAgent).toHaveBeenLastCalledWith(
+      params.config,
+      params.executionId,
+      expect.objectContaining({ enforceCategory: true }),
+    );
     expect(strategy.resolveDeliveryTarget?.()).toBe(
       params.orchestratorStreamId,
     );

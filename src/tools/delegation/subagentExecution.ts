@@ -160,31 +160,23 @@ export async function executeSubagent(
 
   const executionId = generateExecutionId();
   const startedAt = Date.now();
-  const syntheticConfig = AgentConfigSchema.parse(childConfigPayload);
-  await registerExecution(
-    executionId,
-    syntheticConfig,
-    agentName,
-    parentExecutionId,
-  );
+  const config = AgentConfigSchema.parse(childConfigPayload);
+  await registerExecution(executionId, config, agentName, parentExecutionId);
 
-  const isToolUse = childConfigPayload.agentCategory === AgentCategory.ToolUse;
+  const isToolUse = config.agentCategory === AgentCategory.ToolUse;
   // Must match the id `buildAgentLaunchContext` actually reserves for this
   // executionId (see AgentLaunchContext.ts's `reservedStreamId`), or the
   // loop acquires the wrong follow-up queue/interrupt slot. That reservation
-  // uses the RAW, unparsed `configPayload.agent`/`configPayload.model` — not
-  // `AgentConfigSchema.parse(configPayload).agent` (the later `config.agent`
-  // recomputation never wins; the upfront reservation always does) — and
-  // NOT the `agentName` parameter, which callers may resolve differently
+  // uses the canonical config's agent/model — not the `agentName` parameter,
+  // which callers may resolve differently
   // (e.g. an approved agent override's display name vs. its registry name).
   // Derive from the exact same fields, not a parallel formula.
-  const childStreamId = getStreamTabId(
-    childConfigPayload.agent,
-    childConfigPayload.model,
-    { executionId },
-  );
+  const childStreamId = getStreamTabId(config.agent, config.model, {
+    executionId,
+  });
   const strategyParams = {
-    configPayload: childConfigPayload,
+    config,
+    agentCategoryExplicit: childConfigPayload.agentCategory !== undefined,
     executionId,
     agentName,
     orchestratorStreamId,

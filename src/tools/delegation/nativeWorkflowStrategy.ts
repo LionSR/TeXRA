@@ -12,7 +12,7 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentRunHandle } from '@agent/runtime/ExecutionHandle';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
-import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 import {
@@ -22,7 +22,8 @@ import {
 import { subagentDeliveryMessage } from './subagentDeliveryFormat';
 
 export interface NativeWorkflowStrategyParams {
-  readonly configPayload: AgentConfigPayload;
+  readonly config: AgentConfig;
+  readonly agentCategoryExplicit: boolean;
   readonly executionId: ExecutionId;
   readonly agentName: string;
   readonly orchestratorStreamId: StreamTabId;
@@ -64,27 +65,23 @@ export function createNativeWorkflowStrategy(
     stageLabel: 'Native workflow subagent',
 
     launch: async (ports) => {
-      const result = await executeAgent(
-        params.configPayload,
-        params.executionId,
-        {
-          runtimeHost: params.runtimeHost,
-          session: params.parentSession,
-          isSubagent: true,
-          enforceCategory: true,
-          parentStreamId: params.orchestratorStreamId,
-          approvalPromptsUnavailable: params.approvalPromptsUnavailable,
-          runtimeUnavailableTools: params.runtimeUnavailableTools,
-          onStreamResolved: params.onStreamResolved,
-          onProgress: (update) => ports.notify(update),
-          onRunError: (err) => {
-            lastErr = err;
-          },
-          onRun: (handle) => {
-            runHandle = handle;
-          },
+      const result = await executeAgent(params.config, params.executionId, {
+        runtimeHost: params.runtimeHost,
+        session: params.parentSession,
+        isSubagent: true,
+        enforceCategory: params.agentCategoryExplicit,
+        parentStreamId: params.orchestratorStreamId,
+        approvalPromptsUnavailable: params.approvalPromptsUnavailable,
+        runtimeUnavailableTools: params.runtimeUnavailableTools,
+        onStreamResolved: params.onStreamResolved,
+        onProgress: (update) => ports.notify(update),
+        onRunError: (err) => {
+          lastErr = err;
         },
-      );
+        onRun: (handle) => {
+          runHandle = handle;
+        },
+      });
       // The run's total cost to date (including nested subagents), not a
       // per-turn delta — the loop commits the latest value to the parent
       // exactly once, when the child's run ends.
