@@ -27,7 +27,7 @@ export interface PlanApprovalProps {
 export const COMPACT_PLAN_APPROVAL_MAX_ROWS = 7;
 const PLAN_APPROVAL_TITLE = 'Approve plan?';
 export const PLAN_APPROVAL_GOAL_NOTICE =
-  'Approve & run only auto-approves bash.';
+  'Runs until done; only Bash is automatic.';
 const PLAN_APPROVAL_GOAL_NOTICE_ROWS = 2;
 const PLAN_APPROVAL_FEEDBACK_MARGIN_ROWS = 1;
 const PLAN_APPROVAL_FEEDBACK_PREFIX_COLUMNS = 2;
@@ -35,7 +35,7 @@ const PLAN_APPROVAL_FEEDBACK_PLACEHOLDER = 'Feedback to send with rejection';
 const PLAN_APPROVAL_HIDDEN_NOUN = 'plan rows';
 const PLAN_APPROVAL_GOAL_ACTION = {
   key: 'r',
-  action: 'approve & run',
+  action: 'run as goal',
 } as const;
 
 export function isCompactPlanApprovalRows(
@@ -137,7 +137,7 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
   });
   const goalNoticeVisible = goalActionVisible && !feedbackMode;
   // The notice is pinned outside the scroll region in both layouts so the
-  // `r approve & run` action can never outlive its scope warning; in the
+  // The `r run as goal` action can never outlive its scope notice; in the
   // compact card it costs one body row.
   const maxBodyRows = compact
     ? Math.max(1, (compactBodyRows ?? 1) - (goalNoticeVisible ? 1 : 0))

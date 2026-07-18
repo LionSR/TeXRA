@@ -778,7 +778,7 @@ All notable changes to this project will be documented in this file.
 - **Accurate context-window gauge** — the status bar now measures context-window usage from input tokens only, so the percentage and its warning colors no longer jump prematurely after a long response.
 - **Cleaner machine-readable output** — the CLI no longer emits stray progress lines after a run has finished, keeping `--output-format ndjson` output well-formed.
 - **Skills available in the CLI** — the terminal client now ships with its built-in skills, so they appear and run after a normal install.
-- **Approving a plan no longer skips edit review** — choosing approve-and-run now auto-approves only the plan's shell commands; file edits keep going through the normal diff approval so you still review every change.
+- **Running a plan as a goal no longer skips edit review** — choosing **Run as Goal** now auto-approves only the plan's shell commands; file edits keep going through the normal diff approval so you still review every change.
 - **Tidier model and tool pickers** — the model and tool lists now reserve room for their key hints, so the footer and bottom rows stay visible instead of being pushed off-screen in short terminals.
 - **Smoother approval policy picker** — choosing an approval policy from the picker now closes the menu before applying your choice, so the new setting takes effect cleanly without the picker lingering.
 
@@ -787,7 +787,7 @@ All notable changes to this project will be documented in this file.
 - **Live workflow progress** — the elapsed-time status line now keeps ticking during quiet workflow runs instead of freezing when there are no active sub-tasks, so you can tell a long run is still working. When a run processes several input files, the progress line shows the first filename with a compact "+N" so the extra inputs are no longer hidden.
 - **Readable elapsed times** — the status bar and subagent timers now show compact durations like `1m 15s` and `2h 5m` instead of raw seconds.
 - **Less clutter during goal runs** — the todo and plan panel now hides once every item is finished, so a stale completed checklist no longer lingers while the next turn is running.
-- **Clearer plan approval** — when a goal run is active, the plan approval prompt now states that choosing approve-and-run will auto-approve only Bash commands, so you know the scope before confirming.
+- **Clearer plan approval** — the autonomous plan action is now called **Run as Goal**, and its prompt explains that the agent keeps working across turns until it finishes or needs input. It also states that only Bash commands are auto-approved, while edits and other actions still require review.
 - **Clearer subagent panel navigation** — the Escape hint in the subagent panel now reads "back" when you are viewing a task's detail and "close" otherwise, matching what the key actually does.
 - **`/goal` help** — typing `/goal` (or `\goal`) now shows a quick explanation of autonomous goal mode instead of starting an agent turn.
 - **Clearer team hints** — when a multi-agent team is unavailable, the CLI now points you to `texra multi-agent inspect <team-id>` so it is obvious which value to supply.
