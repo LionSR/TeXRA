@@ -11,6 +11,7 @@ import { formatCliSessionStatus } from '../sessionStatus';
 import { requestCliCompaction } from '../state/compactionRequest';
 import {
   activeStreamId as activeStreamIdSignal,
+  openInfoPane,
   sessionMeta,
   setTransientNotice,
   streamAccessTarget,
@@ -44,7 +45,6 @@ async function runGuardedSlashCommand(
   line: string,
   command: SlashCommand | undefined,
   action: () => void | Promise<void>,
-  persistsOnSuccess = true,
 ): Promise<void> {
   let echoed = false;
   const echo = (): void => {
@@ -53,7 +53,7 @@ async function runGuardedSlashCommand(
     echoed = true;
   };
   try {
-    if (persistsOnSuccess && command?.echo === 'ifPersists') echo();
+    if (command?.echo === 'ifPersists') echo();
     await action();
   } catch (error: unknown) {
     echo();
@@ -106,7 +106,8 @@ export async function handleTuiSlashCommand(
   switch (canonicalCommand) {
     case 'help': {
       await runGuardedSlashCommand(line, registered, () =>
-        appendLocalAssistantTranscript(
+        openInfoPane(
+          '/help',
           formatSlashCommandHelp(listSlashCommands(), {
             shortcutModifierLabel: defaultShortcutModifierLabel(),
             shiftEnterNewline: terminalCapabilities.get().kittyKeyboard,
@@ -194,7 +195,7 @@ export async function handleTuiSlashCommand(
       return true;
     case 'goal':
       await runGuardedSlashCommand(line, registered, () =>
-        appendLocalAssistantTranscript(GOAL_MODE_HELP),
+        openInfoPane('/goal', GOAL_MODE_HELP),
       );
       return true;
     case 'compact':
@@ -217,16 +218,11 @@ export async function handleTuiSlashCommand(
         ) {
           return true;
         }
-        await runGuardedSlashCommand(
-          line,
-          registered,
-          () => {
-            throw new Error(
-              `/${parsed.name} is registered but is not available in this CLI view yet.`,
-            );
-          },
-          false,
-        );
+        await runGuardedSlashCommand(line, registered, () => {
+          throw new Error(
+            `/${parsed.name} is registered but is not available in this CLI view yet.`,
+          );
+        });
       } else {
         const suggestion = suggestSlashCommand(command);
         const didYouMean = suggestion
