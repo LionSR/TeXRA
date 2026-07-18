@@ -72,7 +72,6 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
   formatActiveStreamRetention,
   formatStreamDeletionRetention,
@@ -268,18 +267,6 @@ export class DesktopProgressBridge {
           retry: {
             show: () => undefined,
             dismiss: () => undefined,
-          },
-          agentProposal: {
-            show: (p) =>
-              this.backend.webviewUpdater.showPermission({
-                kind: PERMISSION_KIND.PROPOSAL,
-                data: p,
-              }),
-            dismiss: (id) =>
-              this.backend.webviewUpdater.resolvePermission(
-                PERMISSION_KIND.PROPOSAL,
-                id,
-              ),
           },
         },
       },
