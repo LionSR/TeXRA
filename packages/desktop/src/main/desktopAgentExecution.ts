@@ -6,8 +6,7 @@ import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewE
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { platform, tryPlatform } from '@platform/platform';
+import { platform } from '@platform/platform';
 import { StreamLogStore, type StreamSnapshotStore } from '@transcript';
 import {
   isProgressBackendInteractionEvent,
@@ -110,7 +109,6 @@ import {
 } from './desktopLegacyStreamImporter.js';
 import type { DesktopProgressInboundHandlerRegistry } from './desktopProgressIpc.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
-import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 
 const DESKTOP_UNAVAILABLE_TOOLS: readonly RegisteredToolName[] = [
   ...SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
@@ -149,24 +147,6 @@ export interface DesktopProgressBridgeOptions {
   progressSnapshotStore: StreamSnapshotStore;
   /** Runs after canonical state is loaded and before restart repair begins. */
   afterCanonicalLoad?: () => Promise<void>;
-}
-
-class MemoryProgressStorage implements MementoStorage {
-  private readonly values = new Map<string, unknown>();
-
-  get<T>(key: string): T | undefined;
-  get<T>(key: string, defaultValue: T): T;
-  get<T>(key: string, defaultValue?: T): T | undefined {
-    return this.values.has(key) ? (this.values.get(key) as T) : defaultValue;
-  }
-
-  async update<T>(key: string, value: T | undefined): Promise<void> {
-    if (value === undefined) {
-      this.values.delete(key);
-      return;
-    }
-    this.values.set(key, value);
-  }
 }
 
 export class DesktopProgressBridge {
@@ -244,7 +224,7 @@ export class DesktopProgressBridge {
 
     this.backend = new ProgressBackend({
       session: this.session,
-      storage: tryPlatform()?.workspaceState ?? new MemoryProgressStorage(),
+      storage: platform().workspaceState,
       snapshots: options.progressSnapshotStore,
       sendMessage: (message) => {
         return this.postToRenderer(message) !== false;
@@ -1333,8 +1313,7 @@ export class DesktopProgressBridge {
     return listWorkspaceFiles({
       root: workspacePath,
       config,
-      readDirectory: (directory) =>
-        (tryPlatform()?.fs ?? nodeFilesystem).readDirectory(directory),
+      readDirectory: (directory) => platform().fs.readDirectory(directory),
     });
   }
 }
