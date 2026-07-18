@@ -1,10 +1,19 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({
+  postMessage: vi.fn(),
+}));
+
+vi.mock('@shared/hostBridge', () => ({
+  postMessage: mocks.postMessage,
+}));
 
 // Local imports - component type
 import type { MemoryItem } from '@settingsView/frontend/components/memory/MemoryItem';
 
 // Local imports - shared schemas
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { MemoryViewItem } from '@shared/schemas/memoryViewMessages';
 
 // Local imports - test utilities
@@ -32,12 +41,16 @@ async function mount(item: MemoryViewItem): Promise<MemoryItem> {
  * Regression coverage for the wa-button-group + tooltip consolidation onto
  * `renderIconActionButtonParts` (src/shared/wa/actionButtons.ts): the
  * pin/open/delete cluster must keep rendering one `<wa-tooltip>` per grouped
- * button and keep dispatching the same memory-view events on click.
+ * button and keep posting the same settings-view commands on click.
  */
 describe('memory-item action group', () => {
   useLitComponentTestDom(
     () => import('@settingsView/frontend/components/memory/MemoryItem'),
   );
+
+  beforeEach(() => {
+    mocks.postMessage.mockClear();
+  });
 
   it('renders each grouped action as a wa-button with a matching sibling tooltip', async () => {
     const element = await mount(makeItem());
@@ -67,20 +80,19 @@ describe('memory-item action group', () => {
     expect(pinTooltip?.textContent).toBe('Unpin this memory');
   });
 
-  it('dispatches memory-delete-item on delete-button click', async () => {
+  it('posts deleteMemory on delete-button click', async () => {
     const element = await mount(makeItem());
-    const events: unknown[] = [];
-    element.addEventListener('memory-delete-item', (event) => {
-      events.push((event as CustomEvent).detail);
-    });
 
     const deleteButton = element.shadowRoot?.querySelector<HTMLElement>(
       '#memory-delete-button',
     );
     deleteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    expect(events).toEqual([
-      { storagePath: '/memory/notes.md', displayPath: 'notes.md' },
+    expect(mocks.postMessage.mock.calls).toEqual([
+      [
+        SETTINGS_VIEW_COMMANDS.DELETE_MEMORY,
+        { storagePath: '/memory/notes.md', displayPath: 'notes.md' },
+      ],
     ]);
   });
 });

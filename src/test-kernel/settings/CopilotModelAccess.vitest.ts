@@ -1,7 +1,16 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({
+  postMessage: vi.fn(),
+}));
+
+vi.mock('@shared/hostBridge', () => ({
+  postMessage: mocks.postMessage,
+}));
 
 // Local imports - shared schemas
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ModelSelectionItem } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - test utilities
@@ -28,6 +37,10 @@ const copilotModel: ModelSelectionItem = {
 describe('Copilot model access settings', () => {
   useLitComponentTestDom(() => import('@settingsView/frontend/tabs/ModelsTab'));
 
+  beforeEach(() => {
+    mocks.postMessage.mockClear();
+  });
+
   it('shows a keyless consent action only when VS Code discovers Copilot models', async () => {
     const tab = document.createElement('models-tab') as ModelsTabElement;
     tab.modelSelectionItems = [copilotModel];
@@ -40,14 +53,13 @@ describe('Copilot model access settings', () => {
       'No provider API key is needed',
     );
 
-    let requestedModel: string | undefined;
-    tab.addEventListener('model-access-request', (event) => {
-      requestedModel = (event as CustomEvent<{ modelName: string }>).detail
-        .modelName;
-    });
-
     section?.querySelector<HTMLElement>('wa-button')?.click();
-    expect(requestedModel).toBe('copilot:sonnet46');
+    expect(mocks.postMessage.mock.calls).toEqual([
+      [
+        SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,
+        { modelName: 'copilot:sonnet46' },
+      ],
+    ]);
   });
 
   it('omits the Copilot section when the host discovers no models', async () => {

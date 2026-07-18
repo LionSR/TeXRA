@@ -1,5 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const mocks = vi.hoisted(() => ({
+  postMessage: vi.fn(),
+}));
+
+vi.mock('@shared/hostBridge', () => ({
+  postMessage: mocks.postMessage,
+}));
+
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   ModelSelectionItem,
   ProviderKeyStatus,
@@ -12,8 +21,6 @@ type ModelSelectionListElement = HTMLElement & {
   providerKeyStatuses: ProviderKeyStatus[];
   updateComplete: Promise<boolean>;
 };
-
-type ModelSelectionEventDetail = { modelName: string; enabled: boolean };
 
 const deepseekModel: ModelSelectionItem = {
   name: 'deepseek',
@@ -45,6 +52,10 @@ describe('ModelSelectionList provider key status', () => {
     () =>
       import('@settingsView/frontend/components/profile/ModelSelectionList'),
   );
+
+  beforeEach(() => {
+    mocks.postMessage.mockClear();
+  });
 
   it('shows a read-only API-key status in model provider groups before profile load', async () => {
     const list = await renderModelSelectionList((el) => {
@@ -80,7 +91,7 @@ describe('ModelSelectionList provider key status', () => {
     );
   });
 
-  it('renders the per-model enabled toggle as wa-switch and emits model-enabled-set on change', async () => {
+  it('renders the per-model enabled toggle as wa-switch and posts setModelEnabled on change', async () => {
     const list = await renderModelSelectionList(() => {});
 
     const providerToggle = list.shadowRoot!.querySelector<HTMLElement>(
@@ -96,16 +107,16 @@ describe('ModelSelectionList provider key status', () => {
     expect(modelSwitch).not.toBeNull();
     expect(modelSwitch.checked).toBe(true);
 
-    let detail: ModelSelectionEventDetail | undefined;
-    list.addEventListener('model-enabled-set', (event) => {
-      detail = (event as CustomEvent<ModelSelectionEventDetail>).detail;
-    });
-
     modelSwitch.checked = false;
     modelSwitch.dispatchEvent(
       new Event('change', { bubbles: true, composed: true }),
     );
 
-    expect(detail).toEqual({ modelName: 'deepseek', enabled: false });
+    expect(mocks.postMessage.mock.calls).toEqual([
+      [
+        SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED,
+        { modelName: 'deepseek', enabled: false },
+      ],
+    ]);
   });
 });

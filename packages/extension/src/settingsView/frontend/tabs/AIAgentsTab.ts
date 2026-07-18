@@ -12,11 +12,12 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { postMessage } from '@shared/hostBridge';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderLoadingState } from '@shared/wa/loadingState';
 
 // Local imports - shared schemas
-import { createEvent } from '@shared/utils/events';
 import type {
   ToolDashboardItem,
   ToolStatus,
@@ -174,11 +175,11 @@ export class AIAgentsTab extends LitElement {
   claudeAgentPermissionMode: ClaudeAgentPermissionMode = 'acceptEdits';
   @property({ type: String }) claudeAgentEffort: ClaudeAgentEffort = 'high';
 
-  private emitSelect(eventName: string, key: string, e: Event): void {
+  private postSelect(command: string, key: string, e: Event): void {
     const select = e.currentTarget as WaSelect | null;
     const value = typeof select?.value === 'string' ? select.value : '';
     if (value) {
-      this.dispatchEvent(createEvent(eventName, { [key]: value }));
+      postMessage(command, { [key]: value });
     }
   }
 
@@ -209,19 +210,34 @@ export class AIAgentsTab extends LitElement {
           'Sandbox mode',
           this.codexSandboxMode,
           SANDBOX_MODE_OPTIONS,
-          (e) => this.emitSelect('codex-sandbox-mode-change', 'mode', e),
+          (e) =>
+            this.postSelect(
+              SETTINGS_VIEW_COMMANDS.SET_CODEX_SANDBOX_MODE,
+              'mode',
+              e,
+            ),
         )}
         ${this.renderSelectRow(
           'Reasoning effort',
           this.codexReasoningEffort,
           REASONING_EFFORT_OPTIONS,
-          (e) => this.emitSelect('codex-reasoning-effort-change', 'effort', e),
+          (e) =>
+            this.postSelect(
+              SETTINGS_VIEW_COMMANDS.SET_CODEX_REASONING_EFFORT,
+              'effort',
+              e,
+            ),
         )}
         ${this.renderSelectRow(
           'Approval policy',
           this.codexApprovalPolicy,
           APPROVAL_POLICY_OPTIONS,
-          (e) => this.emitSelect('codex-approval-policy-change', 'policy', e),
+          (e) =>
+            this.postSelect(
+              SETTINGS_VIEW_COMMANDS.SET_CODEX_APPROVAL_POLICY,
+              'policy',
+              e,
+            ),
         )}
       </div>
     `;
@@ -234,20 +250,34 @@ export class AIAgentsTab extends LitElement {
           'Model',
           this.claudeAgentModel,
           CLAUDE_MODEL_OPTIONS,
-          (e) => this.emitSelect('claude-agent-model-change', 'model', e),
+          (e) =>
+            this.postSelect(
+              SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_MODEL,
+              'model',
+              e,
+            ),
         )}
         ${this.renderSelectRow(
           'Reasoning effort',
           this.claudeAgentEffort,
           CLAUDE_EFFORT_OPTIONS,
-          (e) => this.emitSelect('claude-agent-effort-change', 'effort', e),
+          (e) =>
+            this.postSelect(
+              SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_EFFORT,
+              'effort',
+              e,
+            ),
         )}
         ${this.renderSelectRow(
           'Permission mode',
           this.claudeAgentPermissionMode,
           CLAUDE_PERMISSION_MODE_OPTIONS,
           (e) =>
-            this.emitSelect('claude-agent-permission-mode-change', 'mode', e),
+            this.postSelect(
+              SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_PERMISSION_MODE,
+              'mode',
+              e,
+            ),
         )}
       </div>
     `;
