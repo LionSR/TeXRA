@@ -60,13 +60,12 @@ export class OutputNode<C = unknown> extends Node<
 > {
   private outputDependencies(): OutputDependencies {
     const { runScope } = useLaunchRunContext();
-    const { executionId, runtimeHost, streamId } = runScope;
+    const { runtimeHost, streamId } = runScope;
     const { baseFiles, config, fileService, logger, setting } = this.services;
 
     return {
       baseFiles,
       config,
-      executionId,
       fileService,
       logger,
       runtimeHost,
@@ -99,7 +98,7 @@ export class OutputNode<C = unknown> extends Node<
     // stats all see the same base locations (see snapshotResolution).
     const diffBaseFiles = await resolveBaseFilesForDiff(
       baseFiles,
-      outputDependencies.executionId,
+      outputDependencies.fileService.executionId,
     );
 
     let mapping: RoundFileMapping | undefined;

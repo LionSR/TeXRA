@@ -13,7 +13,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
   createRunStorageLocation,
-  createWorkspaceLocation,
   pathToLocation,
 } from './fileLocation';
 import {
@@ -56,49 +55,16 @@ export {
 } from './runStorageFs';
 
 export class TaskRunFileService {
-  public metadata: {
-    executionId: ExecutionId | undefined;
-    runDirectory: string | undefined;
-  };
+  public readonly runDirectory: string;
   private hasPreparedSnapshot = false;
   private readonly mirroredDependencies = new Set<string>();
 
-  constructor(executionId?: ExecutionId) {
-    this.metadata = {
-      executionId: undefined,
-      runDirectory: undefined,
-    };
-    this.updateRunContext(executionId);
-  }
-
-  public updateRunContext(executionId?: ExecutionId | null): void {
-    const nextRunDirectory = executionId ? getRunDir(executionId) : undefined;
-
-    const contextChanged =
-      this.metadata.executionId !== executionId ||
-      this.metadata.runDirectory !== nextRunDirectory;
-
-    this.metadata.executionId = executionId ?? undefined;
-    this.metadata.runDirectory = nextRunDirectory;
-
-    if (contextChanged) {
-      this.hasPreparedSnapshot = false;
-      this.mirroredDependencies.clear();
-    }
-  }
-
-  public getExecutionId(): ExecutionId | undefined {
-    return this.metadata.executionId;
-  }
-
-  public hasRunDirectory(): boolean {
-    return Boolean(this.metadata.runDirectory);
+  constructor(public readonly executionId: ExecutionId) {
+    this.runDirectory = getRunDir(executionId);
   }
 
   private async ensureRunDirectory(): Promise<void> {
-    const executionId = this.metadata.executionId;
-    if (!executionId) return;
-    await ensureRunDir(executionId);
+    await ensureRunDir(this.executionId);
   }
 
   /**
@@ -119,10 +85,7 @@ export class TaskRunFileService {
       mirrorBaseFiles?: boolean;
     } = {},
   ): Promise<void> {
-    const executionId = this.metadata.executionId;
-    if (!executionId || this.hasPreparedSnapshot) {
-      return;
-    }
+    if (this.hasPreparedSnapshot) return;
 
     await this.ensureRunDirectory();
 
@@ -165,15 +128,12 @@ export class TaskRunFileService {
     if (target.kind !== 'workspace') return;
     if (shouldSkipRelocation(target.relativePath)) return;
 
-    const executionId = this.metadata.executionId;
-    if (!executionId) return;
-
     try {
       const stats = await fs.stat(target.absolutePath);
       if (!stats.isFile()) return;
 
       const snapshotAbsolute = getOriginalSnapshotPath(
-        executionId,
+        this.executionId,
         target.relativePath,
       );
 
@@ -201,22 +161,14 @@ export class TaskRunFileService {
       return createExternalLocation(resolved.absolutePath);
     }
 
-    const executionId = this.metadata.executionId;
-    if (executionId) {
-      const runAbsolute = getRunStorageAbsolutePath(
-        executionId,
-        resolved.relativePath,
-      );
-      return createRunStorageLocation(
-        runAbsolute,
-        resolved.relativePath,
-        executionId,
-      );
-    }
-
-    return createWorkspaceLocation(
-      resolved.absolutePath,
+    const runAbsolute = getRunStorageAbsolutePath(
+      this.executionId,
       resolved.relativePath,
+    );
+    return createRunStorageLocation(
+      runAbsolute,
+      resolved.relativePath,
+      this.executionId,
     );
   }
 
@@ -248,14 +200,9 @@ export class TaskRunFileService {
       return location;
     }
 
-    const executionId = this.metadata.executionId;
-    if (!executionId) {
-      return location;
-    }
-
     await this.ensureRunDirectory();
     const runAbsolute = getRunStorageAbsolutePath(
-      executionId,
+      this.executionId,
       location.relativePath,
     );
 
@@ -271,7 +218,7 @@ export class TaskRunFileService {
     return createRunStorageLocation(
       runAbsolute,
       location.relativePath,
-      executionId,
+      this.executionId,
     );
   }
 
@@ -313,10 +260,7 @@ export class TaskRunFileService {
     relativeDirectory: string,
     options: { protectPrimaryOutput: boolean },
   ): Promise<void> {
-    const executionId = this.metadata.executionId;
-    if (!executionId || this.mirroredDependencies.size === 0) {
-      return;
-    }
+    if (this.mirroredDependencies.size === 0) return;
 
     await Promise.all(
       [...this.mirroredDependencies].map(async (relativePath) => {
@@ -346,11 +290,11 @@ export class TaskRunFileService {
         // workspace mirror at `runDir/<rel>`, which is correct — those
         // are never written to.
         const snapshotAbsolute = getOriginalSnapshotPath(
-          executionId,
+          this.executionId,
           relativePath,
         );
         const workspaceMirrorAbsolute = getRunStorageAbsolutePath(
-          executionId,
+          this.executionId,
           relativePath,
         );
         let sourceAbsolute = workspaceMirrorAbsolute;
@@ -366,7 +310,7 @@ export class TaskRunFileService {
           }
         }
         const destinationAbsolute = getRunStorageAbsolutePath(
-          executionId,
+          this.executionId,
           path.join(relativeDirectory, relativePath),
         );
 
