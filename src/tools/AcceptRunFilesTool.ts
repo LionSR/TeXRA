@@ -392,6 +392,10 @@ Optional:
         const originalLocation = WorkspaceFS.locatePath(originalPath);
         if (originalLocation.kind === 'external') return null;
 
+        // diffFileLocation's return type is the full FileLocation union
+        // (siblingLocation isn't generic over the input's kind), so this
+        // narrows for relativePath access below even though, given a
+        // 'workspace' input, it can only ever resolve to 'workspace'.
         const loc = diffFileLocation(originalLocation, outputPath);
         if (loc.kind === 'external') return null;
 
