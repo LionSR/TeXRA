@@ -1,11 +1,26 @@
 ---
 created: 2026-06-21
-updated: 2026-06-21
+updated: 2026-07-18
 ---
 
 # PRD Index
 
-Central home for all TeXRA Product Requirement Documents, plans, and design audits. Top-level documents are filename-prefixed with their `created` date; every document also carries `created` / `updated` frontmatter derived from git history. The table below is sorted by last update.
+Central home for all TeXRA Product Requirement Documents, plans, and design audits. Top-level documents are filename-prefixed with their `created` date; every document also carries `created` / `updated` frontmatter derived from git history. The non-retired records below are sorted by last update.
+
+The three retired runtime-boundary records dated 2026-06-27 and 2026-06-29
+were restored for #8753 before a separate maintainer decision on deleting
+`codex/decouple-ui-agent-core`. Their in-body implementation claims describe
+that archived source branch, not `main`.
+
+## Retired proposals
+
+| Document                                                               | Created    | Retired    |
+| ---------------------------------------------------------------------- | ---------- | ---------- |
+| [Runtime/host decoupling](./2026-06-27-prd-runtime-host-decoupling.md) | 2026-06-27 | 2026-07-18 |
+| [Agent SDK boundary](./2026-06-29-prd-agent-sdk-boundary.md)           | 2026-06-29 | 2026-07-18 |
+| [Runtime gold standard](./2026-06-29-prd-runtime-gold-standard.md)     | 2026-06-29 | 2026-07-18 |
+
+## Other records
 
 | Document                                                                                                                                 | Created    | Updated    |
 | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------- |
