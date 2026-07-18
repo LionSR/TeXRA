@@ -684,16 +684,17 @@ function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
   }
 
   const maxColumns = statusBarInnerWidth(input.width);
+  const ctrlCAction = input.ctrlCAction ?? 'exit';
   if (input.foregroundInputActive) {
     return foregroundBindingsText(
-      input.ctrlCAction ?? 'exit',
+      ctrlCAction,
       maxColumns,
       input.foregroundEscapeAction,
     );
   }
   if (input.childListFocused) {
     return childListBindingsText(
-      input.ctrlCAction ?? 'exit',
+      ctrlCAction,
       input.childListSelectionKind,
       input.childListSelectionKillable ?? false,
       maxColumns,
@@ -701,7 +702,7 @@ function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
   }
   if (input.shortcutsActive === false) {
     return foregroundBindingsText(
-      input.ctrlCAction ?? 'exit',
+      ctrlCAction,
       maxColumns,
       input.foregroundEscapeAction,
     );
@@ -713,7 +714,7 @@ function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
     input.shortcutModifierLabel,
     input.shiftEnterNewline,
     input.transcriptAvailable,
-    input.ctrlCAction,
+    ctrlCAction,
     maxColumns,
   );
 }

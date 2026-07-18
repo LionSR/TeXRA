@@ -1,12 +1,5 @@
 // Node imports
-import {
-  mkdir,
-  mkdtemp,
-  realpath,
-  rm,
-  symlink,
-  writeFile,
-} from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
@@ -18,16 +11,13 @@ import {
   canonicalizeWorkspacePath,
   createNodeWorkspace,
 } from '@platform/defaults/nodeWorkspace';
+import { cleanupTempDirs } from '@test/support/tempDirPlatform';
 
 describe('Node workspace identity', () => {
   const tempDirs: string[] = [];
 
   afterEach(async () => {
-    await Promise.all(
-      tempDirs
-        .splice(0)
-        .map((path) => rm(path, { recursive: true, force: true })),
-    );
+    await cleanupTempDirs(tempDirs);
   });
 
   it('uses the physical directory for a symlinked workspace', async () => {

@@ -43,7 +43,6 @@ vi.mock('@agent/runtime/executeAgent', () => ({
 vi.mock('@agent/storage', () => ({
   finalizeExecution: mocks.finalizeExecution,
   getExecutionStore: vi.fn(() => ({ readConfig: mocks.readConfig })),
-  releaseOwnedExecutionLeaseBestEffort: vi.fn(async () => {}),
   synchronizeAgentResultOutcome: mocks.synchronizeAgentResultOutcome,
 }));
 

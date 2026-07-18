@@ -114,6 +114,22 @@ async function promptForApiKey(
   });
 }
 
+type ProviderQuickPickItem = Awaited<
+  ReturnType<typeof SecretManager.getApiProviderQuickPickItems>
+>[number];
+
+async function pickApiProvider(
+  placeHolder: string,
+  prompt: string,
+): Promise<ApiProvider | undefined> {
+  const providerItems = await SecretManager.getApiProviderQuickPickItems();
+  const providerPick = await vscode.window.showQuickPick<ProviderQuickPickItem>(
+    providerItems,
+    { placeHolder, prompt },
+  );
+  return providerPick?.provider;
+}
+
 /**
  * Set an API key. Migrated to the shared command registry in
  * #3781 batch 4. The registry forwards a single typed argument so the
@@ -125,41 +141,26 @@ export async function setApiKey(provider?: ApiProvider): Promise<void> {
     return;
   }
 
-  const providerItems = await SecretManager.getApiProviderQuickPickItems();
-  const providerPick = await vscode.window.showQuickPick<ProviderQuickPickItem>(
-    providerItems,
-    {
-      placeHolder: 'Select API provider',
-      prompt:
-        "Keys are stored in VS Code's encrypted secret store, never on disk.",
-    },
+  const picked = await pickApiProvider(
+    'Select API provider',
+    "Keys are stored in VS Code's encrypted secret store, never on disk.",
   );
 
-  if (providerPick?.provider) {
-    await setApiKeyForProvider(providerPick.provider);
+  if (picked) {
+    await setApiKeyForProvider(picked);
   }
 }
-
-type ProviderQuickPickItem = Awaited<
-  ReturnType<typeof SecretManager.getApiProviderQuickPickItems>
->[number];
 
 /**
  * Remove an API key after a confirmation prompt. Migrated to the shared
  * command registry in #3781 batch 4.
  */
 export async function removeApiKey(): Promise<void> {
-  const providerItems = await SecretManager.getApiProviderQuickPickItems();
-  const providerPick = await vscode.window.showQuickPick<ProviderQuickPickItem>(
-    providerItems,
-    {
-      placeHolder: 'Select API provider to remove key',
-      prompt:
-        'Only removes the key from TeXRA — does not delete it from the provider.',
-    },
+  const provider = await pickApiProvider(
+    'Select API provider to remove key',
+    'Only removes the key from TeXRA — does not delete it from the provider.',
   );
 
-  const provider = providerPick?.provider;
   if (!provider) {
     return;
   }

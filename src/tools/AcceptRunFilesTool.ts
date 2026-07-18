@@ -341,24 +341,25 @@ Optional:
     runPath: string,
   ): Promise<{ sourceAbsolute: string; sourceLocation: FileLocation }> {
     const entry = await inspectRunStorageEntry(executionId, runPath);
-    if (entry.kind === 'file') {
-      return {
-        sourceAbsolute: entry.location.absolutePath,
-        sourceLocation: entry.location,
-      };
-    }
-    if (entry.kind === 'symlink') {
-      throw new ToolError(
-        `Cannot accept ${runPath} from run ${executionId}: the run-storage entry is a symlink, meaning this round did not emit the file. Accepting it would propagate snapshot or workspace content rather than agent output.`,
-      );
-    }
-    if (entry.kind === 'directory' || entry.kind === 'unsupported') {
-      throw new ToolError(
-        `Cannot accept ${runPath} from run ${executionId}: the run-storage entry is not a regular file.`,
-      );
-    }
-    if (entry.kind === 'invalid') {
-      throw new ToolError(`Cannot accept ${runPath}: ${entry.reason}`);
+    switch (entry.kind) {
+      case 'file':
+        return {
+          sourceAbsolute: entry.location.absolutePath,
+          sourceLocation: entry.location,
+        };
+      case 'symlink':
+        throw new ToolError(
+          `Cannot accept ${runPath} from run ${executionId}: the run-storage entry is a symlink, meaning this round did not emit the file. Accepting it would propagate snapshot or workspace content rather than agent output.`,
+        );
+      case 'directory':
+      case 'unsupported':
+        throw new ToolError(
+          `Cannot accept ${runPath} from run ${executionId}: the run-storage entry is not a regular file.`,
+        );
+      case 'invalid':
+        throw new ToolError(`Cannot accept ${runPath}: ${entry.reason}`);
+      case 'missing':
+        break;
     }
 
     // Fall back to workspace

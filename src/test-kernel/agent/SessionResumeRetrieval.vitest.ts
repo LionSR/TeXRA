@@ -38,6 +38,7 @@ import {
 import {
   migrateSharedState,
   ToolUseRunSharedCanonicalSchema,
+  type StateSlicesSnapshot,
 } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
@@ -88,7 +89,7 @@ type ToolUseSetupContext = Parameters<ToolUseFlowSetupCallback>[0];
 function defaultStateSlices(
   model = 'gpt54',
   transient: Record<string, string> = {},
-) {
+): StateSlicesSnapshot {
   return {
     runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
     workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),

@@ -18,19 +18,17 @@ const mocks = vi.hoisted(() => ({
       operation(),
   ),
   releaseOwnedExecutionLeaseAfterFailure: vi.fn(),
-  releaseOwnedExecutionLeaseBestEffort: vi.fn(),
+  completeOwnedExecutionLease: vi.fn(),
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
   abandonOwnedExecutionLease: mocks.abandonOwnedExecutionLease,
   acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
-  completeOwnedExecutionLease: mocks.releaseOwnedExecutionLeaseBestEffort,
+  completeOwnedExecutionLease: mocks.completeOwnedExecutionLease,
   runWithOwnedExecutionLease: mocks.runWithOwnedExecutionLease,
   runWithExecutionLeaseWriteFence: mocks.runWithExecutionLeaseWriteFence,
   releaseOwnedExecutionLeaseAfterFailure:
     mocks.releaseOwnedExecutionLeaseAfterFailure,
-  releaseOwnedExecutionLeaseBestEffort:
-    mocks.releaseOwnedExecutionLeaseBestEffort,
 }));
 
 vi.mock('@agent/runtime/AgentLaunchContext', () => ({
@@ -89,7 +87,7 @@ describe('resumeToolUseFromSnapshot cancellation handoff', () => {
     mocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
       async (_executionId: ExecutionId, error: unknown) => error,
     );
-    mocks.releaseOwnedExecutionLeaseBestEffort.mockResolvedValue(undefined);
+    mocks.completeOwnedExecutionLease.mockResolvedValue(undefined);
   });
 
   it('resolves execution lineage before activating the resume stream', async () => {
@@ -196,9 +194,7 @@ describe('resumeToolUseFromSnapshot cancellation handoff', () => {
     });
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-    expect(mocks.releaseOwnedExecutionLeaseBestEffort).toHaveBeenCalledWith(
-      executionId,
-    );
+    expect(mocks.completeOwnedExecutionLease).toHaveBeenCalledWith(executionId);
     expect(mocks.invokeModelOrTool).not.toHaveBeenCalled();
     expect(order).toEqual([
       'attach',

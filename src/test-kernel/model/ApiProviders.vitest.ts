@@ -64,29 +64,25 @@ function setupApiKeyToolPlatform(
   store: Map<string, string>,
   envProviders: ReadonlySet<ApiProvider> = new Set(),
 ): void {
-  function keyName(provider: ApiProvider): string {
-    return apiKeySecretName(provider);
-  }
-
   const platform: SetupPlatform = {
     host: 'cli',
     secrets: {
       providers: ['openai', 'kimiCode'],
       async deleteApiKey(provider) {
-        store.delete(keyName(provider));
+        store.delete(apiKeySecretName(provider));
       },
       async hasUsableApiKey(provider) {
         return (
-          (store.get(keyName(provider))?.trim().length ?? 0) > 0 ||
+          (store.get(apiKeySecretName(provider))?.trim().length ?? 0) > 0 ||
           envProviders.has(provider)
         );
       },
       async apiKeyOrigin(provider) {
-        if (store.has(keyName(provider))) return 'secret';
+        if (store.has(apiKeySecretName(provider))) return 'secret';
         return envProviders.has(provider) ? 'env' : 'none';
       },
       async storedApiKeyExists(provider) {
-        return store.has(keyName(provider));
+        return store.has(apiKeySecretName(provider));
       },
       async anyUsableCredentialExists() {
         return store.size > 0;

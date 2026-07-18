@@ -263,20 +263,8 @@ export async function executeCliRequest(
   let runResult:
     | { readonly ok: true; readonly result: ExecuteAgentResult }
     | { readonly ok: false } = { ok: false };
-  // Distinguishes a failed run from a failure in `options.wrap`'s post-run
-  // cleanup: once invoke() has resolved, AgentRunLifecycle has already
-  // persisted the run's true terminal status (e.g. COMPLETED), and a later
-  // cleanup rejection must not overwrite it with ERROR (#7863).
-  let invokeSettledOk = false;
-  const trackedInvoke = async (): Promise<ExecuteAgentResult> => {
-    const result = await invoke();
-    invokeSettledOk = true;
-    return result;
-  };
   try {
-    const result = await (options.wrap
-      ? options.wrap(trackedInvoke)
-      : trackedInvoke());
+    const result = await (options.wrap ? options.wrap(invoke) : invoke());
     runResult = { ok: true, result };
   } catch (err) {
     // Only a classified, already-handled AgentError resolves to a non-zero
