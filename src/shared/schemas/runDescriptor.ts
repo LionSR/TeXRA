@@ -5,7 +5,7 @@ import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
 
 export const RUN_DESCRIPTOR_SCHEMA_VERSION = 1;
 
-export const RunConfigReferenceSchema = z.strictObject({
+const RunConfigReferenceSchema = z.strictObject({
   kind: z.literal('executionConfig'),
   executionId: ExecutionIdSchema,
   path: z.string(),

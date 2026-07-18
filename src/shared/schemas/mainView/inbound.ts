@@ -50,12 +50,12 @@ const CommonMessages = [
   }),
 ] as const;
 
-export const OpenAgentSettingsMessageSchema = z.object({
+const OpenAgentSettingsMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS),
   sessionType: SessionTypeSchema.optional(),
 });
 
-export const OpenAgentDirectoryMessageSchema = z.object({
+const OpenAgentDirectoryMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY),
   customDirSet: z.boolean().optional(),
 });
@@ -80,26 +80,26 @@ const SettingsMessages = [
 // instead of a shared loose object — file paths flowing straight into VS
 // Code commands (see executionHandlers.handleFileOperation) must be
 // validated at the dispatch boundary like every other inbound message.
-export const MergeMessageSchema = z.object({
+const MergeMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.MERGE),
   inputFile: z.string(),
   editedFile: z.string(),
 });
 export type MergeMessage = z.infer<typeof MergeMessageSchema>;
 
-export const CompareMessageSchema = z.object({
+const CompareMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.COMPARE),
   baseFile: z.string(),
   editedFile: z.string(),
 });
 export type CompareMessage = z.infer<typeof CompareMessageSchema>;
 
-export const AcceptEditedMessageSchema = z.object({
+const AcceptEditedMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.ACCEPT_EDITED),
   baseFile: z.string(),
   editedFile: z.string(),
 });
-export type AcceptEditedMessage = z.infer<typeof AcceptEditedMessageSchema>;
+type AcceptEditedMessage = z.infer<typeof AcceptEditedMessageSchema>;
 
 /** Union consumed by `executionHandlers.handleFileOperation`. */
 export type FileOperationMessage =
@@ -254,7 +254,7 @@ const BannerMessages = [
 // dispatch boundary before DiffManager's typed handlers run.
 // ============================================================
 
-export const RequestRecentCommitsMessageSchema = z.object({
+const RequestRecentCommitsMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS),
   notifyWhenEmpty: z.boolean().nullish(),
 });
@@ -262,7 +262,7 @@ export type RequestRecentCommitsMessage = z.infer<
   typeof RequestRecentCommitsMessageSchema
 >;
 
-export const LatexdiffMessageSchema = z.object({
+const LatexdiffMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.LATEXDIFF),
   inputFile: z.string(),
   baseFile: z.string(),
@@ -270,7 +270,7 @@ export const LatexdiffMessageSchema = z.object({
 });
 export type LatexdiffMessage = z.infer<typeof LatexdiffMessageSchema>;
 
-export const LatexdiffvcMessageSchema = z.object({
+const LatexdiffvcMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.LATEXDIFFVC),
   inputFile: z.string(),
   baseFile: z.string(),
@@ -285,7 +285,7 @@ const latexdiffvcOperationFields = {
   clean: z.boolean().nullish(),
 };
 
-export const PackLatexdiffvcMessageSchema = z.object({
+const PackLatexdiffvcMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC),
   ...latexdiffvcOperationFields,
 });
@@ -331,7 +331,7 @@ const CleanSingleMessageSchema = z.object({
   ...singleOperationFields,
 });
 
-export const PackMultipleMessageSchema = z.object({
+const PackMultipleMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.PACK_MULTIPLE),
   ...singleOperationFields,
   inputFiles: z.array(z.string()).optional(),

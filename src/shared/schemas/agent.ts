@@ -27,9 +27,10 @@ export const AgentSourceSchema = z.enum(AGENT_SOURCE);
 
 export type AgentSourceType = z.infer<typeof AgentSourceSchema>;
 
-// Backend-compatible alias: value + type share the name "AgentSource"
-// (the standard Zod dual-export pattern used throughout the backend)
-export const AgentSource = AgentSourceSchema;
+// Backend-compatible type alias under the plain name "AgentSource". The
+// former value half of the Zod dual-export pattern (`const AgentSource =
+// AgentSourceSchema`) was dropped once every consumer proved type-only;
+// value use sites import `AgentSourceSchema` directly.
 export type AgentSource = AgentSourceType;
 
 const AGENT_NAME_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_-]*$/u;

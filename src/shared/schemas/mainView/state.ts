@@ -221,7 +221,7 @@ export type SessionContextValue = z.infer<typeof SessionContextSchema>;
 const StringValueDetailSchema = z.object({
   value: z.string(),
 });
-export type StringValueDetail = z.infer<typeof StringValueDetailSchema>;
+type StringValueDetail = z.infer<typeof StringValueDetailSchema>;
 
 export type BaseFileChangeDetail = StringValueDetail;
 export type EditedFileChangeDetail = StringValueDetail;

@@ -248,7 +248,7 @@ export const WORKTREE_PR_STATE = {
   DRAFT: 'draft',
 } as const;
 
-export const WorktreePRStateSchema = z.enum(WORKTREE_PR_STATE);
+const WorktreePRStateSchema = z.enum(WORKTREE_PR_STATE);
 export type WorktreePRState = z.infer<typeof WorktreePRStateSchema>;
 
 export const WORKTREE_CI_STATE = {
@@ -259,10 +259,10 @@ export const WORKTREE_CI_STATE = {
   UNKNOWN: 'unknown',
 } as const;
 
-export const WorktreeCIStateSchema = z.enum(WORKTREE_CI_STATE);
+const WorktreeCIStateSchema = z.enum(WORKTREE_CI_STATE);
 export type WorktreeCIState = z.infer<typeof WorktreeCIStateSchema>;
 
-export const WorktreePRInfoSchema = z.object({
+const WorktreePRInfoSchema = z.object({
   number: z.number(),
   state: WorktreePRStateSchema,
   title: z.string().optional(),
@@ -271,7 +271,7 @@ export const WorktreePRInfoSchema = z.object({
   ciState: WorktreeCIStateSchema.optional(),
 });
 
-export const WorktreeInfoSchema = z.object({
+const WorktreeInfoSchema = z.object({
   /** Absolute path of the worktree the agent is operating in. */
   workingDirectory: z.string(),
   /** Current HEAD branch, if checked out. */
@@ -289,7 +289,7 @@ export type WorktreeInfo = z.infer<typeof WorktreeInfoSchema>;
  * consumers can validate the common fields directly; Zod's discriminated
  * unions don't support `.pick()`/`.partial()`.
  */
-export const StreamTabInfoBaseSchema = z.object({
+const StreamTabInfoBaseSchema = z.object({
   name: z.string(),
   label: z.string(),
   /** Name of the agent/tool that launched the stream (e.g. "bash",

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /** Stream diagnostics for debugging Anthropic streaming failures */
-export const StreamDiagnosticsSchema = z.object({
+const StreamDiagnosticsSchema = z.object({
   thinkingChars: z.number().prefault(0),
   textChars: z.number().prefault(0),
   toolInputChars: z.number().prefault(0),
@@ -159,7 +159,7 @@ const ProviderErrorSchema = z.preprocess(
 export type ProviderError = z.infer<typeof ProviderErrorSchema>;
 
 /** Context about where/when the error occurred */
-export const ErrorContextSchema = z.object({
+const ErrorContextSchema = z.object({
   operation: z.string().optional(),
   model: z.string().optional(),
 });

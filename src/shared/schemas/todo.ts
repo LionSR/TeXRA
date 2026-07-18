@@ -8,7 +8,7 @@ export const TODO_STATUS = {
   COMPLETED: 'completed',
 } as const;
 
-export const TodoStatusSchema = z
+const TodoStatusSchema = z
   .enum(TODO_STATUS)
   .describe('Current status of the task');
 export type TodoStatus = z.infer<typeof TodoStatusSchema>;
@@ -23,7 +23,7 @@ export const TodoItemSchema = z.strictObject({
 });
 export type TodoItem = z.infer<typeof TodoItemSchema>;
 
-export const UpdateTodosPayloadSchema = z.strictObject({
+const UpdateTodosPayloadSchema = z.strictObject({
   streamId: StreamTabIdSchema,
   todos: z.array(TodoItemSchema),
 });

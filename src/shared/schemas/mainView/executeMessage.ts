@@ -20,14 +20,11 @@ export const MainViewExecuteFilesSchema = z.object({
 });
 export type MainViewExecuteFiles = z.infer<typeof MainViewExecuteFilesSchema>;
 
-export const MainViewExecuteSessionSchema = z.object({
+const MainViewExecuteSessionSchema = z.object({
   workingDirectory: z.string().nullish(),
   cliOutputFile: z.string().nullish(),
   cliMultiAgentPresetId: z.string().nullish(),
 });
-export type MainViewExecuteSession = z.infer<
-  typeof MainViewExecuteSessionSchema
->;
 
 /**
  * Payload from the main view for agent execution. The IPC dispatcher adds the
