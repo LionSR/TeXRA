@@ -19,6 +19,7 @@ import {
   submitSlashCommandWhenReady,
   type InputBarHandle,
 } from '@cli/chat/tui/panes/InputBar';
+import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
   registerSlashCommand,
   unregisterSlashCommand,
@@ -115,8 +116,88 @@ async function waitFor(
   }
 }
 
+function fakeHistory(entries: readonly string[]): InputHistory {
+  return {
+    push: async () => undefined,
+    reverseFind: () => undefined,
+    at: (index) => entries[index],
+    length: () => entries.length,
+  };
+}
+
 beforeEach(() => clipboardMock.attachClipboardImage.mockReset());
 afterEach(() => vi.clearAllMocks());
+
+describe('InputBar arrow-key child-list focus', () => {
+  it('falls through to the child list on ↓/↑ when there is no history to walk', async () => {
+    const ink = (await import(cliRequire.resolve('ink'))) as any;
+    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const onFocusChildList = vi.fn();
+
+    const stdin = new FakeStdin();
+    const instance = ink.render(
+      React.createElement(InputBar, {
+        onSubmit: vi.fn(),
+        onFocusChildList,
+      }),
+      {
+        stdin,
+        stdout: new FakeStdout(),
+        interactive: true,
+        exitOnCtrlC: false,
+        patchConsole: false,
+      },
+    );
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write('[B');
+      await waitFor(() => onFocusChildList.mock.calls.length === 1);
+      stdin.write('[A');
+      await waitFor(() => onFocusChildList.mock.calls.length === 2);
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('still recalls history on ↑ but hands off on an idle ↓', async () => {
+    const ink = (await import(cliRequire.resolve('ink'))) as any;
+    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const onFocusChildList = vi.fn();
+    const history = fakeHistory(['first command', 'second command']);
+
+    const stdin = new FakeStdin();
+    const stdout = new FakeStdout();
+    const instance = ink.render(
+      React.createElement(InputBar, {
+        onSubmit: vi.fn(),
+        onFocusChildList,
+        history,
+      }),
+      {
+        stdin,
+        stdout,
+        interactive: true,
+        exitOnCtrlC: false,
+        patchConsole: false,
+      },
+    );
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      // Idle Down has nothing to walk forward into — hands off immediately.
+      stdin.write('[B');
+      await waitFor(() => onFocusChildList.mock.calls.length === 1);
+      // Up still recalls the most recent entry rather than escaping.
+      stdin.write('[A');
+      await waitFor(() => stdout.buf.includes('second command'));
+
+      expect(onFocusChildList).toHaveBeenCalledTimes(1);
+    } finally {
+      instance.unmount();
+    }
+  });
+});
 
 describe('InputBar slash submit', () => {
   it('threads deferred echo through a palette-opened form', async () => {

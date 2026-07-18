@@ -407,6 +407,12 @@ export function App(props: AppProps): React.JSX.Element {
   const cancelChildList = useCallback(() => {
     dispatchChildListSelection({ kind: 'blur' });
   }, []);
+  const focusChildList = useCallback(() => {
+    const firstChildValue = childListValues.at(0);
+    if (firstChildValue) {
+      dispatchChildListSelection({ kind: 'focus', value: firstChildValue });
+    }
+  }, [childListValues]);
   const focusSession = useCallback((streamId: StreamTabId) => {
     dispatchChildListSelection({ kind: 'focusStream', streamId });
     focusStreamAndPromoteApprovals(streamId);
@@ -610,10 +616,7 @@ export function App(props: AppProps): React.JSX.Element {
 
     // Tab transfers keyboard ownership from the input to the child list.
     if (key.tab) {
-      const firstChildValue = childListValues.at(0);
-      if (firstChildValue) {
-        dispatchChildListSelection({ kind: 'focus', value: firstChildValue });
-      }
+      focusChildList();
       return;
     }
 
@@ -666,6 +669,7 @@ export function App(props: AppProps): React.JSX.Element {
               disabled={inputDisabled}
               history={props.history}
               keyboardActive={!childListFocused}
+              onFocusChildList={focusChildList}
             />
             <StatusBar
               agentSelectionAvailable={agentSelectionAvailable}
