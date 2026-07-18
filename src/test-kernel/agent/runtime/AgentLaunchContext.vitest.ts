@@ -38,6 +38,7 @@ import {
   type AgentLaunchContext,
 } from '@agent/runtime/AgentLaunchContext';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { useRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
@@ -152,12 +153,12 @@ describe('AgentLaunchContext', () => {
     try {
       await expect(
         buildAgentLaunchContext({
-          configPayload: {
+          config: AgentConfigSchema.parse({
             agent: 'chat',
             model: 'gpt55',
             agentCategory: AgentCategory.ToolUse,
             delegationAgentScope,
-          },
+          }),
           runtimeHost: createRecordingHost().host,
           session,
           streamTabIdOverride: 'late-assembly-stream',

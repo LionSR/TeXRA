@@ -14,10 +14,7 @@ import {
   type RunReflectionFlowResult,
 } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import { inferPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
-import {
-  type AgentConfig,
-  type AgentConfigPayload,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RoundFinalizedCallback } from '@agent/core/flows/BaseFlowServices';
 import {
   AgentCategory,
@@ -326,10 +323,8 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   /** When true, proposal tools are filtered out to prevent nesting. */
   isSubagent?: boolean;
   /**
-   * When true, enforce that configPayload.agentCategory matches the agent's
-   * YAML-defined category. Callers that explicitly set a category (e.g.
-   * DelegationTools) should opt in; callers that pass pre-parsed configs with
-   * prefaulted defaults (e.g. runExecuteCommand) should leave this off.
+   * When true, enforce that an explicitly supplied category matches the
+   * agent's YAML-defined category.
    */
   enforceCategory?: boolean;
   /** Fires with the real streamId before the stream is activated (before UI sync). */
@@ -352,12 +347,12 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
 }
 
 export function executeAgent(
-  configPayload: AgentConfigPayload,
+  config: AgentConfig,
   executionId: ExecutionId | undefined,
   options: ExecuteAgentOptions & { allowWaitingResult: true },
 ): Promise<AgentFlowResult | WaitingToolUseFlowResult>;
 export function executeAgent(
-  configPayload: AgentConfigPayload,
+  config: AgentConfig,
   executionId: ExecutionId | undefined,
   options: ExecuteAgentOptions & { allowWaitingResult?: false | undefined },
 ): Promise<AgentFlowResult>;
@@ -369,7 +364,7 @@ export function executeAgent(
  * its descriptor. Resume paths reuse the existing execution record.
  */
 export async function executeAgent(
-  configPayload: AgentConfigPayload,
+  config: AgentConfig,
   executionId: ExecutionId | undefined,
   options: ExecuteAgentOptions,
 ): Promise<AgentRuntimeFlowResult> {
@@ -379,7 +374,7 @@ export async function executeAgent(
 
   const { runtimeHost } = options;
   const ctx = await buildAgentLaunchContext({
-    configPayload,
+    config,
     executionId,
     runtimeHost,
     onBeforeActivation: options.onStreamResolved,
@@ -506,7 +501,7 @@ export async function resumeToolUseFromSnapshot(
   try {
     isSubagent = await hasPersistedParent(snapshot.executionId);
     ctx = await buildAgentLaunchContext({
-      configPayload: snapshot.agentConfig,
+      config: snapshot.agentConfig,
       executionId: snapshot.executionId,
       runtimeHost,
       streamTabIdOverride: snapshot.streamId,

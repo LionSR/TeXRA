@@ -18,11 +18,7 @@ import {
 import { getExecutionStore } from '@agent/storage';
 import { createChannelTrace } from '@agent/trace';
 import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-  type AgentConfigPayload,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
 import {
@@ -89,14 +85,14 @@ export interface AgentLaunchContext extends AgentCore {
 }
 
 export interface AgentLaunchInput {
-  configPayload: AgentConfigPayload;
+  config: AgentConfig;
   executionId?: ExecutionId;
   runtimeHost: AgentRuntimeHost;
   streamTabIdOverride?: StreamTabId;
   taskType?: string;
   /** Fires after streamId is assigned but before setActiveStream is emitted. */
   onBeforeActivation?: (streamId: StreamTabId) => void;
-  /** When true, reject if configPayload.agentCategory doesn't match the YAML-defined category. */
+  /** When true, reject if an explicit category doesn't match the YAML-defined category. */
   enforceCategory?: boolean;
   /** Skip the `requestShowError` toast -- for callers that show their own UI. */
   suppressErrorNotification?: boolean;
@@ -236,8 +232,7 @@ async function assembleAgentLaunchContext(
   reservedStreamId: StreamTabId | undefined,
   resources: AgentLaunchResources,
 ): Promise<AgentLaunchContext> {
-  const { configPayload } = input;
-  const fullConfig = AgentConfigSchema.parse(configPayload);
+  const fullConfig = input.config;
   // Resolve by the source the delegation captured at validation time, so launch
   // lands on the exact entry validation/display resolved. When no source is
   // pinned (direct launches, restored records), resolution falls to the
@@ -260,20 +255,18 @@ async function assembleAgentLaunchContext(
   // registry's pre-merge category can't see: a child agent that `inherits` a
   // parent of the other category resolves with the scanner's pre-merge category
   // (used by getVisibleAgent) but loads a post-merge `setting.agentCategory`
-  // that differs. Only enforced when the caller opts in via enforceCategory,
-  // because many code paths pass pre-parsed configs where agentCategory was
-  // prefaulted to Workflow by the schema (not explicitly chosen by the caller).
+  // that differs. Only enforced when the caller opts in and the category was
+  // explicitly supplied before schema defaults were applied.
   if (
     input.enforceCategory &&
-    configPayload.agentCategory &&
-    configPayload.agentCategory !== setting.agentCategory
+    fullConfig.agentCategory !== setting.agentCategory
   ) {
     const suggestion =
       setting.agentCategory === AgentCategory.ToolUse
         ? 'delegate_agent'
         : 'delegate_workflow';
     throw new AgentError(
-      `Agent '${fullConfig.agent}' is a ${setting.agentCategory} agent but was launched as ${configPayload.agentCategory}. Use ${suggestion} instead.`,
+      `Agent '${fullConfig.agent}' is a ${setting.agentCategory} agent but was launched as ${fullConfig.agentCategory}. Use ${suggestion} instead.`,
     );
   }
 
@@ -379,7 +372,7 @@ async function assembleAgentLaunchContext(
   }
 
   const agentPath = path.dirname(resolution.definitionPath);
-  const workingDirectory = configPayload.workingDirectory?.trim() || undefined;
+  const workingDirectory = config.workingDirectory?.trim() || undefined;
   const runScope = createRunScope({
     runtimeHost,
     streamId,
@@ -482,7 +475,7 @@ function acquireStreamOrThrow(
  *    tab doesn't hang in STARTING.
  */
 function compensateFailedActivation(args: {
-  configPayload: AgentConfigPayload;
+  config: AgentConfig;
   reservedStreamId?: StreamTabId;
   activatedStreamId?: StreamTabId;
   streamStatus: StreamStatusMachine;
@@ -494,7 +487,7 @@ function compensateFailedActivation(args: {
   runTrace?: RunTrace;
 }): void {
   const {
-    configPayload,
+    config,
     reservedStreamId,
     activatedStreamId,
     streamStatus,
@@ -510,9 +503,9 @@ function compensateFailedActivation(args: {
     if (runTrace) {
       logSdkError(
         runTrace.trace,
-        `Failed to start agent ${configPayload.agent}: ${getSdkErrorMessage(err)}`,
+        `Failed to start agent ${config.agent}: ${getSdkErrorMessage(err)}`,
         err,
-        { operation: `start ${configPayload.agent}` },
+        { operation: `start ${config.agent}` },
       );
     }
     if (
@@ -527,7 +520,7 @@ function compensateFailedActivation(args: {
     ) {
       runTrace?.trace.warn('Failed to mark activation failure terminal', {
         data: {
-          agentIdentifier: configPayload.agent,
+          agentIdentifier: config.agent,
           streamId: activatedStreamId,
         },
       });
@@ -553,20 +546,13 @@ function compensateFailedActivation(args: {
 export async function buildAgentLaunchContext(
   input: AgentLaunchInput,
 ): Promise<AgentLaunchContext> {
-  const { configPayload, runtimeHost } = input;
+  const { config, runtimeHost } = input;
   const launchSession = input.session ?? currentSession();
   const streamStatus = launchSession.status;
   const executionId = input.executionId ?? generateExecutionId();
-  if (
-    !input.streamTabIdOverride &&
-    (!configPayload.agent || !configPayload.model)
-  ) {
-    throw new AgentError('Missing required fields: model and/or agent');
-  }
-
   const reservedStreamId = input.streamTabIdOverride
     ? undefined
-    : getStreamTabId(configPayload.agent, configPayload.model, { executionId });
+    : getStreamTabId(config.agent, config.model, { executionId });
   if (reservedStreamId) {
     acquireStreamOrThrow(
       reservedStreamId,
@@ -590,7 +576,7 @@ export async function buildAgentLaunchContext(
   } catch (err) {
     resources.fail((activatedStreamId, runTrace) => {
       compensateFailedActivation({
-        configPayload,
+        config,
         reservedStreamId,
         activatedStreamId,
         streamStatus,
