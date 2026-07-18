@@ -36,6 +36,12 @@ const MAX_FANOUT = 512;
 const DRAIN_GRACE_MS = 5_000;
 const LABEL_EXCERPT_LENGTH = 48;
 
+type WorkflowScriptPhaseContext = {
+  readonly phase: string | undefined;
+  readonly phaseIndex?: number;
+  readonly phaseTotal?: number;
+};
+
 /**
  * Fan-out primitives, defined INSIDE the sandbox realm (trusted prelude,
  * compiled by the host, run before the script body). They must not live
@@ -219,6 +225,21 @@ export async function runWorkflowScript(
 
   const emit = (event: WorkflowScriptEvent) => onEvent?.(event);
 
+  const phaseContextFor = (
+    phase: string | undefined,
+  ): WorkflowScriptPhaseContext => {
+    const phaseIndex = plannedPhases.findIndex(
+      (plannedPhase) => plannedPhase.title === phase,
+    );
+    return {
+      phase,
+      ...(phaseIndex >= 0 && {
+        phaseIndex,
+        phaseTotal: plannedPhases.length,
+      }),
+    };
+  };
+
   const rememberFatalRunError = (error: unknown): WorkflowRunAbortError => {
     fatalRunError ??=
       error instanceof WorkflowRunAbortError
@@ -231,7 +252,7 @@ export async function runWorkflowScript(
   const recordJournalEntry = async (
     entry: WorkflowJournalEntry,
     label: string,
-    phase: string | undefined,
+    phaseContext: WorkflowScriptPhaseContext,
   ): Promise<void> => {
     journal.set(entry.index, entry);
     try {
@@ -243,7 +264,7 @@ export async function runWorkflowScript(
         type: 'agent:end',
         index: entry.index,
         label,
-        phase,
+        ...phaseContext,
         cached: false,
         error: message,
       });
@@ -268,16 +289,7 @@ export async function runWorkflowScript(
       );
     }
     const callOptions = normalizeAgentOptions(rawOptions, currentPhase);
-    const phaseIndex = plannedPhases.findIndex(
-      (phase) => phase.title === callOptions.phase,
-    );
-    const phaseContext = {
-      phase: callOptions.phase,
-      ...(phaseIndex >= 0 && {
-        phaseIndex,
-        phaseTotal: plannedPhases.length,
-      }),
-    };
+    const phaseContext = phaseContextFor(callOptions.phase);
     const index = callCounter;
     callCounter += 1;
 
@@ -406,7 +418,7 @@ export async function runWorkflowScript(
     await recordJournalEntry(
       { index, key, result: normalizedResult },
       label,
-      callOptions.phase,
+      phaseContext,
     );
     emit({
       type: 'agent:end',
@@ -449,13 +461,14 @@ export async function runWorkflowScript(
           },
           phase: (args) => {
             currentPhase = String(args[0]);
-            const index = plannedPhases.findIndex(
-              (phase) => phase.title === currentPhase,
-            );
+            const { phaseIndex, phaseTotal } = phaseContextFor(currentPhase);
             emit({
               type: 'phase',
               title: currentPhase,
-              ...(index >= 0 && { index, total: plannedPhases.length }),
+              ...(phaseIndex !== undefined && {
+                index: phaseIndex,
+                total: phaseTotal,
+              }),
             });
             return undefined;
           },

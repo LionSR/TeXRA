@@ -252,9 +252,10 @@ return await parallel([
   });
 
   it('surfaces a late checkpoint failure from an abandoned agent call', async () => {
+    const events: WorkflowScriptEvent[] = [];
     await expect(
       runWorkflowScript({
-        script: `${META}agent('abandoned'); return 'guest success'`,
+        script: `${META}agent('abandoned', { phase: 'Work' }); return 'guest success'`,
         runAgent: async () => {
           await delay(5);
           return 'completed child';
@@ -263,8 +264,16 @@ return await parallel([
           await delay(5);
           throw new Error('checkpoint offline');
         },
+        onEvent: (event) => events.push(event),
       }),
     ).rejects.toMatchObject({ name: 'WorkflowRunAbortError' });
+    expect(events.at(-1)).toMatchObject({
+      type: 'agent:end',
+      phase: 'Work',
+      phaseIndex: 0,
+      phaseTotal: 1,
+      error: expect.stringContaining('checkpoint offline'),
+    });
   });
 
   it('does not let a guest error mask a late checkpoint failure', async () => {
