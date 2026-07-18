@@ -16,6 +16,7 @@ import { registerDiffRefresh } from '@frontend/ui/diffView';
 import {
   acceptEditedFileReplace,
   buildAcceptSuccessMessage,
+  cleanupStaleDiffFile,
   getAcceptedFileTarget,
   siblingLocation,
 } from '@latex/acceptedFileTarget';
@@ -43,6 +44,16 @@ function validateFileLocations(
     return null;
   }
   return fileToUseLocation;
+}
+
+/** Delete a workspace file, swallowing errors (already gone, locked) since
+ *  diff-file cleanup is a best-effort side effect of accepting a file. */
+async function deleteDiffFileNonFatal(location: FileLocation): Promise<void> {
+  try {
+    await FlexibleFS.delete(location);
+  } catch {
+    // Non-fatal: diff file may not exist or may be locked.
+  }
 }
 
 async function validateFilesExist(
@@ -163,6 +174,11 @@ function buildCopyTarget(
   };
 }
 
+type ReplaceOrCopyTarget = {
+  targetLocation: FileLocation;
+  targetFileName: string;
+};
+
 /** Offer a quick-pick between replacing the original and saving a postfixed
  *  copy, used when run metadata is available. Returns undefined when the user
  *  cancels. */
@@ -170,13 +186,11 @@ async function pickReplaceOrCopyTarget(
   baseLocation: FileLocation,
   editedPath: string,
   copyMeta: AcceptCopyMeta,
-): Promise<
-  { targetLocation: FileLocation; targetFileName: string } | undefined
-> {
+): Promise<ReplaceOrCopyTarget | undefined> {
   const replaceTarget = getAcceptedFileTarget(baseLocation, editedPath);
   const copyTarget = buildCopyTarget(baseLocation, copyMeta);
   type AcceptItem = vscode.QuickPickItem & {
-    target: { targetLocation: FileLocation; targetFileName: string };
+    target: ReplaceOrCopyTarget;
   };
   const acceptItems: AcceptItem[] = [
     {
@@ -242,6 +256,7 @@ async function handleAcceptEdited(
           vscode.window.showInformationMessage(message);
           logger.info(CHANNEL, message);
         },
+        deleteFile: deleteDiffFileNonFatal,
       });
     }
 
@@ -265,6 +280,16 @@ async function handleAcceptEdited(
         absolutePaths: [targetLocation.absolutePath],
       });
     }
+
+    // No-ops unless targetLocation is fileToUseLocation itself: "save as
+    // copy" and an extension-mismatched "replace" both leave the base (and
+    // its diff) untouched, so cleanup would delete a still-meaningful diff.
+    await cleanupStaleDiffFile(
+      fileToUseLocation,
+      editedLocation.absolutePath,
+      targetLocation,
+      deleteDiffFileNonFatal,
+    );
 
     const successMessage = buildAcceptSuccessMessage(
       targetFileName,

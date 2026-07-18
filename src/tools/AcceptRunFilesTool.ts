@@ -9,9 +9,6 @@
  * panel as write_file), so the user can review, edit, or reject each file.
  */
 
-// Standard library imports
-import * as path from 'node:path';
-
 // Third-party imports
 import { z } from 'zod';
 
@@ -22,7 +19,7 @@ import { getExecutionStore } from '@agent/storage';
 import { appSignals } from '@eventBus/AppSignals';
 
 // Local imports - shared
-import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
+import { diffFileLocation } from '@latex/acceptedFileTarget';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 import { ExecutionIdSchema } from '@shared/schemas';
 import type { ExecutionId, FileLocation } from '@shared/schemas';
@@ -384,25 +381,29 @@ Optional:
   }
 
   /**
-   * Remove diff files from the workspace that correspond to accepted output files.
-   * Uses generateDiffFileName (the same logic that creates diff files) to derive names.
+   * Remove diff files from the workspace that correspond to accepted output
+   * files, using the same diff-naming convention as the manual "Accept" flow
+   * (see {@link diffFileLocation}) so both paths stay in sync.
    */
   private async cleanupDiffFiles(
     entries: { outputPath: string; originalPath: string }[],
   ): Promise<string[]> {
     const results = await Promise.all(
       entries.map(async ({ outputPath, originalPath }) => {
-        const diffFileName = generateDiffFileName(
-          originalPath,
-          outputPath,
-          '_diff',
-        );
-        const dir = path.dirname(originalPath);
-        const fullDiffPath =
-          dir === '.' ? diffFileName : `${dir}/${diffFileName}`;
+        const originalLocation = WorkspaceFS.locatePath(originalPath);
+        if (originalLocation.kind === 'external') return null;
 
-        const loc = WorkspaceFS.locatePath(fullDiffPath);
+        // diffFileLocation's return type is the full FileLocation union
+        // (siblingLocation isn't generic over the input's kind), so this
+        // narrows for relativePath access below even though, given a
+        // 'workspace' input, it can only ever resolve to 'workspace'.
+        const loc = diffFileLocation(originalLocation, outputPath);
         if (loc.kind === 'external') return null;
+
+        // Never delete the file we just accepted into — possible when
+        // originalPath's own name already matches the generated diff-name
+        // pattern for outputPath (see cleanupStaleDiffFile's docstring).
+        if (loc.absolutePath === originalLocation.absolutePath) return null;
 
         try {
           await WorkspaceFS.delete(loc.relativePath);
