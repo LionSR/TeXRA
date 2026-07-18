@@ -9,7 +9,6 @@ import type {
 } from '@agent/core/definition/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
 import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
-import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 
 /** Callback invoked when a round/cycle completes for usage tracking. */
 export type RoundFinalizedCallback = (
@@ -28,9 +27,8 @@ export interface AgentCore<C = unknown> {
 }
 
 export interface BaseFlowContextInit<C = unknown> extends AgentCore<C> {
-  streamStatus: StreamStatusMachine;
   checkInterruption: () => boolean;
   setAbortController: (ctrl: AbortController | null) => void;
   onInterrupt?: () => void;
-  onRoundFinalized?: RoundFinalizedCallback;
+  onRoundFinalized: RoundFinalizedCallback;
 }

@@ -11,7 +11,6 @@ import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
 } from '@agent/core/state/AgentState';
-import { bestConnectionMethod } from '@agent/runtime/textConnection';
 import { buildFailedRetryInfo } from '@common/errors';
 import type { AgentFileLocation, RetryErrorInfo } from '@shared/schemas';
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -107,7 +106,6 @@ export class ResponseCycleNode<C = unknown> extends Node<
         await withModelClient(
           {
             ...this.services,
-            bestConnectionMethod,
             toolRegistry: getDefaultToolRegistry(),
             round: prepRes.round,
             run: prepRes.run,

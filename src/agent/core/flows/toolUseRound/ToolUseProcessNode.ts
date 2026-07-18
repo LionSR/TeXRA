@@ -195,7 +195,7 @@ export class ToolUseProcessNode<C> extends BaseNode<
       shared.roundResponseTimeMs,
       shared.roundNormalizedUsage ?? null,
     );
-    await onRoundFinalized?.(run);
+    await onRoundFinalized(run);
     run.totalRounds += 1;
 
     shared.stopReason = execRes.stopReason;

@@ -29,9 +29,9 @@ export class ToolUsePrepareNode<C> extends Node<
   async exec(
     _prepRes: void,
   ): Promise<{ kind: 'success'; result: CyclePrepResult }> {
-    const { userVarChannels, logger, snapshot, config, fileService } =
+    const { userVarChannels, logger, snapshot, config, fileService, setting } =
       this.services;
-    const resolvedToolNames = this.services.resolvedTools.map((t) => t.name);
+    const resolvedToolNames = setting.tools.map((tool) => tool.name);
     const hasDelegationTools = hasDelegationTool(resolvedToolNames);
     const promptOptions = {
       resolvedToolNames,

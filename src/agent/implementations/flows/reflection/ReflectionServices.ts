@@ -1,9 +1,6 @@
 import type { PromptBuilder } from '@agent/prompt';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
-import type {
-  BaseFlowContextInit,
-  RoundFinalizedCallback,
-} from '@agent/core/flows/BaseFlowServices';
+import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import type { OutputState } from '@agent/output/outputState';
 import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
@@ -31,5 +28,4 @@ export interface ReflectionServices<
   ) => AgentFileLocation | Promise<AgentFileLocation>;
   readonly workflowOutputPolicy: WorkflowOutputPolicy;
   readonly baseFiles: FileLocation[];
-  readonly onRoundFinalized: RoundFinalizedCallback;
 }
