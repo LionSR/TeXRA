@@ -20,6 +20,10 @@ import type {
 import type { AgentTrace } from '@agent/trace';
 import type { ExecutionKVStore } from '@agent/storage';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
+import type {
+  WorkflowControlRegistry,
+  WorkflowRunControl,
+} from '@agent/runtime/workflowControlRegistry';
 
 // Local imports - shared
 import { DELIVERY_TAG } from '@shared/deliveryTags';
@@ -93,14 +97,25 @@ export interface WorkflowScriptStrategyParams {
   /** Durable identity (`meta.name`) — used in the resume hint on failure. */
   readonly name: string;
   /**
+   * Session-owned registry the strategy registers this run's skip/retry bridge
+   * on while the run is in flight, so a host can target a focused grandchild.
+   */
+  readonly workflowControls: WorkflowControlRegistry;
+  /**
    * Build the `agent()` adapter bound to the run's ancestry, wired to the
    * supplied per-live-child cost hook so delta accounting stays local to this
-   * run.
+   * run, plus the child-active hook that maps a live grandchild's execution id
+   * to its engine call index.
    */
   readonly createRunAgent: (hooks: {
     readonly onCost: (
       invocation: WorkflowAgentInvocation,
       totalCostUsd: number | undefined,
+    ) => void;
+    readonly onChildActive: (
+      grandchildExecutionId: ExecutionId,
+      invocation: WorkflowAgentInvocation,
+      active: boolean,
     ) => void;
   }) => WorkflowAgentRunner;
 }
@@ -127,6 +142,10 @@ export function createWorkflowScriptStrategy(
       // pure journal replay settles zero.
       const observedCosts = new Map<string, number>();
       let liveCostUsd = 0;
+      // Live grandchild execution id → engine call index, maintained by the
+      // runner's child-active hook. The identity bridge that lets an
+      // execution-id-keyed host action reach the engine's index-keyed control.
+      const liveCallIndexByChild = new Map<ExecutionId, number>();
       const runAgent = params.createRunAgent({
         onCost: (invocation, totalCostUsd) => {
           const cost = totalCostUsd ?? 0;
@@ -137,8 +156,16 @@ export function createWorkflowScriptStrategy(
           );
           liveCostUsd += cost;
         },
+        onChildActive: (grandchildExecutionId, invocation, active) => {
+          if (active) {
+            liveCallIndexByChild.set(grandchildExecutionId, invocation.index);
+          } else {
+            liveCallIndexByChild.delete(grandchildExecutionId);
+          }
+        },
       });
 
+      let unregisterControls: (() => void) | undefined;
       let run: WorkflowScriptRunResult;
       try {
         run = await runPersistedWorkflowScriptWithProgress(params.logger, {
@@ -150,6 +177,25 @@ export function createWorkflowScriptStrategy(
           runAgent,
           getLiveCostUsd: () => liveCostUsd,
           onActivity: runLog.add,
+          onControl: (control) => {
+            // Translate an execution-id-keyed host request into an
+            // index-keyed engine action; unknown/settled children no-op,
+            // matching the engine's own not-in-flight semantics.
+            const runControl: WorkflowRunControl = {
+              skip: (grandchildId) => {
+                const index = liveCallIndexByChild.get(grandchildId);
+                if (index !== undefined) control.skip(index);
+              },
+              retry: (grandchildId) => {
+                const index = liveCallIndexByChild.get(grandchildId);
+                if (index !== undefined) control.retry(index);
+              },
+            };
+            unregisterControls = params.workflowControls.register(
+              params.executionId,
+              runControl,
+            );
+          },
         });
       } catch (runError) {
         // Settle whatever the journal recorded before the failure so a resumed
@@ -168,6 +214,11 @@ export function createWorkflowScriptStrategy(
           // Cost settlement is best-effort on the failure path.
         }
         throw runError;
+      } finally {
+        // The control handle outlives no in-flight call; drop the registration
+        // the moment the run settles so a later host request cannot reach a
+        // dead engine control.
+        unregisterControls?.();
       }
 
       // Combine observed attempts with journal-authoritative completed costs;
