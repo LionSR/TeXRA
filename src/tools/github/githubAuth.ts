@@ -60,9 +60,5 @@ export async function resolveGitHubTokenSource(
   if (normalizeGitHubToken(await secrets.getStored(GITHUB_TOKEN_STORAGE_KEY))) {
     return 'secret';
   }
-  return GITHUB_TOKEN_ENV_VARS.some((name) =>
-    normalizeGitHubToken(secrets.getEnv(name)),
-  )
-    ? 'env'
-    : 'none';
+  return getGitHubEnvToken((name) => secrets.getEnv(name)) ? 'env' : 'none';
 }
