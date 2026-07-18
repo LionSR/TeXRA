@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 
+import pDefer from 'p-defer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
@@ -1345,11 +1346,17 @@ describe('StreamSnapshotStore', () => {
 
     renameSpy.mockRestore();
     const writeAtomic = StorageFS.writeAtomic.bind(StorageFS);
+    const writeFinished = pDefer<void>();
     const writeSpy = vi
       .spyOn(StorageFS, 'writeAtomic')
-      .mockImplementation(writeAtomic);
+      .mockImplementation((...args) => {
+        const write = writeAtomic(...args);
+        writeFinished.resolve(write);
+        return write;
+      });
     store.setTodos(STREAM, [TODO]);
-    await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledTimes(1));
+    await writeFinished.promise;
+    expect(writeSpy).toHaveBeenCalledTimes(1);
     writeSpy.mockRestore();
 
     const reloaded = new StreamSnapshotStore();
