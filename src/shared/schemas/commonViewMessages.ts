@@ -15,12 +15,12 @@ export const SetThemeMessageSchema = z.object({
   theme: ThemeSchema,
 });
 
-export const SetDebugModeMessageSchema = z.object({
+const SetDebugModeMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.DEBUG_MODE_SET),
   debugMode: z.boolean(),
 });
 
-export const StateRestoreMessageSchema = z.object({
+const StateRestoreMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.STATE_RESTORE),
   state: MainViewPersistedStateSchema.nullish(),
   executeImmediately: z.boolean().nullish(),
@@ -32,7 +32,7 @@ export const WebviewReadyMessageSchema = z.object({
   view: z.enum(['main', 'progress', 'settings']).nullish(),
 });
 
-export const SwitchViewTargetSchema = z.enum(['main', 'progress', 'dashboard']);
+const SwitchViewTargetSchema = z.enum(['main', 'progress', 'dashboard']);
 export type SwitchViewTarget = z.infer<typeof SwitchViewTargetSchema>;
 
 export const SwitchViewMessageSchema = z.object({
@@ -41,7 +41,7 @@ export const SwitchViewMessageSchema = z.object({
   openInEditor: z.boolean().nullish(),
 });
 
-export const ErrorMessageSchema = z.object({
+const ErrorMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.ERROR),
   message: z.string(),
   details: z.unknown().nullish(),

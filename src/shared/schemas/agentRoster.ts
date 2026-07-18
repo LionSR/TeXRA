@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 const AgentKeyListSchema = z.array(z.string().trim().min(1));
-export const AgentRosterCategorySelectionSchema = z.union([
+const AgentRosterCategorySelectionSchema = z.union([
   z.literal('all'),
   AgentKeyListSchema,
 ]);

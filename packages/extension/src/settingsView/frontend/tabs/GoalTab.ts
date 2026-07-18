@@ -5,11 +5,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { designTokens, commonViewStyles } from '@shared/styles';
-import {
-  formatGoalTime,
-  isGoalInFlight,
-  goalDurationMs,
-} from '@shared/schemas';
+import { formatGoalTime, isGoalInFlight, goalElapsedMs } from '@shared/schemas';
 import type { Goal, GoalStatus } from '@shared/schemas';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -138,7 +134,7 @@ export class GoalTab extends LitElement {
     const metaParts: MetaPart[] = [
       html`<span class="stream-id">${item.streamId}</span>`,
       html`<span title="Wall-clock duration since this Goal started"
-        >duration ${formatGoalTime(goalDurationMs(item))}</span
+        >duration ${formatGoalTime(goalElapsedMs(item))}</span
       >`,
     ];
     return html`

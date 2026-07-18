@@ -50,7 +50,7 @@ import {
   StreamScopedBaseSchema,
 } from './data';
 
-export const UpdateStreamsMessageSchema = z.object({
+const UpdateStreamsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS),
   streams: z.array(StreamTabInfoSchema),
   activeStream: z.union([StreamTabIdSchema, z.literal('')]),
@@ -66,7 +66,7 @@ export const UpdateStreamsMessageSchema = z.object({
   unsupportedCommands: z.array(z.string()).optional(),
 });
 
-export const UpdateStreamMetadataMessageSchema = z.object({
+const UpdateStreamMetadataMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA),
   streamInfo: StreamTabInfoSchema,
   streamState: StreamMetadataSchema,
@@ -74,23 +74,22 @@ export const UpdateStreamMetadataMessageSchema = z.object({
   agentFilter: AgentCategoryFilterSchema.optional(),
 });
 
-export const SetActiveStreamMessageSchema = z.object({
+const SetActiveStreamMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM),
   activeStream: z.union([StreamTabIdSchema, z.literal('')]),
 });
 
-export const UpdateConversationProgressMessageSchema =
-  StreamScopedBaseSchema.extend({
-    command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS),
-    progress: ConversationProgressSchema,
-  });
+const UpdateConversationProgressMessageSchema = StreamScopedBaseSchema.extend({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS),
+  progress: ConversationProgressSchema,
+});
 
-export const UpdateRoundStageMessageSchema = StreamScopedBaseSchema.extend({
+const UpdateRoundStageMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_ROUND_STAGE),
   roundStage: RoundStageSchema,
 });
 
-export const UpdateStreamBadgesMessageSchema = StreamScopedBaseSchema.extend({
+const UpdateStreamBadgesMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES),
   activeSubagents: z.array(ActiveChildInfoSchema),
   finishedSubagentCount: z.number(),
@@ -98,32 +97,31 @@ export const UpdateStreamBadgesMessageSchema = StreamScopedBaseSchema.extend({
   finishedProcessCount: z.number(),
 });
 
-export const UpdateProcessOutputMessageSchema = StreamScopedBaseSchema.extend(
+const UpdateProcessOutputMessageSchema = StreamScopedBaseSchema.extend(
   ProcessOutputTailSchema.shape,
 ).extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT),
   executionId: z.string(),
 });
 
-export const UpdateParentStreamMessageSchema = StreamScopedBaseSchema.extend({
+const UpdateParentStreamMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM),
   parentStreamId: StreamTabIdSchema.nullish(),
 });
 
-export const UpdateStreamDescriptionMessageSchema =
-  StreamScopedBaseSchema.extend({
-    command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION),
-    description: z.string(),
-  });
+const UpdateStreamDescriptionMessageSchema = StreamScopedBaseSchema.extend({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION),
+  description: z.string(),
+});
 
-export const UpdateStreamStatusMessageSchema = StreamScopedBaseSchema.extend({
+const UpdateStreamStatusMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS),
   status: StreamPhaseSchema,
   substate: StreamSubstateSchema.optional(),
   lastTimestamp: z.number().optional(),
 });
 
-export const LogDeltaMessageSchema = z.object({
+const LogDeltaMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.LOG_DELTA),
   streamId: StreamTabIdSchema,
   entries: z.array(StreamLogEntrySchema),
@@ -146,45 +144,43 @@ function RoundUpdateMessageSchema<C extends string, T extends z.ZodType>(
   });
 }
 
-export const UpdateFilesMessageSchema = RoundUpdateMessageSchema(
+const UpdateFilesMessageSchema = RoundUpdateMessageSchema(
   PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
   OutputFileInfoSchema,
 );
 
-export const UpdateMissingOutputsMessageSchema = RoundUpdateMessageSchema(
+const UpdateMissingOutputsMessageSchema = RoundUpdateMessageSchema(
   PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
   z.string(),
 );
 
-export const UpdateCompileFailuresMessageSchema = RoundUpdateMessageSchema(
+const UpdateCompileFailuresMessageSchema = RoundUpdateMessageSchema(
   PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES,
   CompileFailureSchema,
 );
 
-export const UpdateTodosMessageSchema = StreamScopedBaseSchema.extend({
+const UpdateTodosMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_TODOS),
   todos: z.array(TodoItemSchema),
 });
 
-export const UpdatePlanMessageSchema = StreamScopedBaseSchema.extend({
+const UpdatePlanMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PLAN),
   plan: PlanSchema.nullable(),
 });
 
-export const UpdateRunUsageMessageSchema = StreamScopedBaseSchema.extend({
+const UpdateRunUsageMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE),
   runId: z.string(),
   usage: TokenUsageStatsSchema,
 });
 
-export const UpdateQueuedFollowUpsMessageSchema = StreamScopedBaseSchema.extend(
-  {
-    command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS),
-    messages: z.array(z.string()),
-  },
-);
+const UpdateQueuedFollowUpsMessageSchema = StreamScopedBaseSchema.extend({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS),
+  messages: z.array(z.string()),
+});
 
-export const SetFollowupOptionsMessageSchema = StreamScopedBaseSchema.extend({
+const SetFollowupOptionsMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS),
   toolUseAgentsData: z.array(AgentOptionDataSchema).optional(),
   modelOptionsData: z.array(ModelOptionDataSchema).optional(),
@@ -238,7 +234,7 @@ const PermissionPayloadSchema = z.discriminatedUnion('kind', [
 ]);
 export type PermissionPayload = z.infer<typeof PermissionPayloadSchema>;
 
-export const UpdatePermissionMessageSchema = z.discriminatedUnion('action', [
+const UpdatePermissionMessageSchema = z.discriminatedUnion('action', [
   z.object({
     command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
     action: z.literal('show'),
@@ -253,7 +249,7 @@ export const UpdatePermissionMessageSchema = z.discriminatedUnion('action', [
 ]);
 const BypassTypeSchema = z.enum(['toolEdit', 'superYolo']);
 
-export const UpdateBypassMessageSchema = StreamScopedBaseSchema.extend({
+const UpdateBypassMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS),
   type: BypassTypeSchema,
   bypassActive: z.boolean(),
@@ -265,7 +261,7 @@ const FollowUpTextKindSchema = z.enum([
   'transcribed',
 ]);
 
-export const UpdateFollowUpTextMessageSchema = z.object({
+const UpdateFollowUpTextMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT),
   stream: StreamTabIdSchema.nullish(),
   kind: FollowUpTextKindSchema,
@@ -275,18 +271,18 @@ export const UpdateFollowUpTextMessageSchema = z.object({
 
 const RecordingStatusSchema = z.enum(['started', 'stopped', 'error']);
 
-export const UpdateRecordingMessageSchema = z.object({
+const UpdateRecordingMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING),
   status: RecordingStatusSchema,
   error: z.string().optional(),
 });
 
-export const SyncInquiryThreadsMessageSchema = z.object({
+const SyncInquiryThreadsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SYNC_INQUIRY_THREADS),
   threads: z.array(InquiryThreadUpdatedEventSchema),
 });
 
-export const UpdateInquiryThreadMessageSchema = z.object({
+const UpdateInquiryThreadMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_INQUIRY_THREAD),
   thread: InquiryThreadUpdatedEventSchema,
 });
@@ -397,20 +393,20 @@ const GoalActiveUpdatedMessageSchema = StreamScopedBaseSchema.extend({
 // `COMMON_COMMANDS.THEME_SET` messages already carry for both mainView and
 // progressView; a narrower local enum here previously just hadn't been
 // exercised against real payloads before outbound send validation (#8123).
-export const ProgressSetThemeMessageSchema = z.object({
+const ProgressSetThemeMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.THEME_SET),
   theme: ThemeSchema,
 });
 
-export const ProgressDeleteStreamMessageSchema = StreamScopedBaseSchema.extend({
+const ProgressDeleteStreamMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.DELETE_STREAM),
 });
 
-export const ProgressDeleteAllMessageSchema = z.object({
+const ProgressDeleteAllMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.DELETE_ALL),
 });
 
-export const SetPlacementMessageSchema = z.object({
+const SetPlacementMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SET_PLACEMENT),
   placement: ProgressViewPlacementSchema,
 });

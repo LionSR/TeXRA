@@ -23,7 +23,7 @@ export const PlanSchema = z.strictObject({
 });
 export type Plan = z.infer<typeof PlanSchema>;
 
-export const UpdatePlanPayloadSchema = z.strictObject({
+const UpdatePlanPayloadSchema = z.strictObject({
   streamId: StreamTabIdSchema,
   plan: PlanSchema.nullable(),
 });
