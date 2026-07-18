@@ -28,6 +28,11 @@ interface DesktopFileSelectionModule {
 
 async function loadDesktopFileSelection(): Promise<DesktopFileSelectionModule> {
   vi.resetModules();
+  const [{ installPlatform }, { nodeFilesystem }] = await Promise.all([
+    import('@test/support/setupPlatform'),
+    import('@platform/defaults/nodeFilesystem'),
+  ]);
+  await installPlatform({}, { fs: nodeFilesystem });
   return import(
     moduleFileUrl(desktopSourcePath('main', 'desktopFileSelection.ts'))
   ) as Promise<DesktopFileSelectionModule>;
