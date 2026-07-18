@@ -171,12 +171,12 @@ async function runPersistedFlow(
           logger: noopTrace,
           userVarChannels,
           modelHandler: createTaggedModelHandler(ACTIVE_COMPATIBILITY_KEY),
-          streamStatus: session.status,
           checkInterruption: () => interrupted,
           onInterrupt: () => {
             interrupted = true;
           },
           setAbortController: () => {},
+          onRoundFinalized: () => {},
           ...(snapshot !== undefined && { resumeSnapshot: snapshot }),
           isSubagent: options.isSubagent ?? true,
           onIdle: options.onIdle,

@@ -99,7 +99,7 @@ export async function runReflectionFlow<C = unknown>(
     parentStage,
     userVarChannels,
     checkInterruption,
-    onRoundFinalized = async () => {},
+    onRoundFinalized,
   } = input;
   const { runScope } = useLaunchRunContext();
   const { runtimeHost, streamId, executionId, session: runSession } = runScope;

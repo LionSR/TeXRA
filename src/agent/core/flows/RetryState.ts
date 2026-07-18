@@ -7,7 +7,6 @@ import { Node } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
-import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { normalizeProviderError } from '@common/errors';
 import {
@@ -57,7 +56,6 @@ export type InvocationResult<TSuccess> =
 
 interface RetryableNodeServices {
   config: Pick<AgentConfig, 'model'>;
-  streamStatus: StreamStatusMachine;
   logger: AgentTrace;
   setAbortController: (ac: AbortController | null) => void;
   refreshClient?: () => Promise<void>;
@@ -271,9 +269,10 @@ export abstract class RetryableInvocationNode<
   protected async handleManualRetryPrompt(
     error: Error,
   ): Promise<ManualRetryPromptResult> {
-    const { logger, streamStatus } = this.services;
+    const { logger } = this.services;
     const { runScope } = useLaunchRunContext();
     const { session, streamId } = runScope;
+    const streamStatus = session.status;
     const operationName = this.getOperationName();
     const formatted = normalizeProviderError(error);
 
