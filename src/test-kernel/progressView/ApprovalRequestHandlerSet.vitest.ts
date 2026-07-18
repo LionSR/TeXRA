@@ -1,14 +1,86 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  buildApprovalRequestHandlerSet,
   cancelApprovalRequestHandlers,
   createProgressBackendUiConfig,
   replayApprovalRequestHandlers,
   type ApprovalRequestHandlerSet,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
-import type { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
+import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  AgentCategory,
+  type AgentProposalPermission,
+  type ProgressViewOutboundMessage,
+} from '@shared/schemas';
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+
+const proposal = {
+  proposalId: 'proposal-1',
+  streamId: 'stream-1',
+  agentCategory: AgentCategory.ToolUse,
+  agent: 'search',
+  model: 'deepseekproT',
+  instruction: 'Search for a reference.',
+  memories: [],
+} satisfies AgentProposalPermission;
 
 describe('ApprovalRequestHandlerSet helpers', () => {
+  it('uses the built-in permission transport for agent proposals by default', () => {
+    const messages: ProgressViewOutboundMessage[] = [];
+    const handlers = buildApprovalRequestHandlerSet({
+      webviewUpdater: new WebviewUpdater(
+        (message) => messages.push(message),
+        () => true,
+      ),
+      canSend: () => true,
+      overrides: {
+        retry: { show: vi.fn(), dismiss: vi.fn() },
+      },
+    });
+
+    handlers.agentProposal.show(proposal);
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+      action: 'show',
+      permission: { kind: PERMISSION_KIND.PROPOSAL, data: proposal },
+    });
+
+    expect(handlers.agentProposal.dismiss(proposal.proposalId)).toBe(true);
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+      action: 'resolve',
+      kind: PERMISSION_KIND.PROPOSAL,
+      id: proposal.proposalId,
+    });
+  });
+
+  it('uses an explicit agent proposal transport override when supplied', () => {
+    const messages: ProgressViewOutboundMessage[] = [];
+    const show = vi.fn();
+    const dismiss = vi.fn();
+    const handlers = buildApprovalRequestHandlerSet({
+      webviewUpdater: new WebviewUpdater(
+        (message) => messages.push(message),
+        () => true,
+      ),
+      canSend: () => true,
+      overrides: {
+        retry: { show: vi.fn(), dismiss: vi.fn() },
+        agentProposal: { show, dismiss },
+      },
+    });
+
+    handlers.agentProposal.show(proposal);
+    expect(show).toHaveBeenCalledWith(proposal);
+    expect(messages).toEqual([]);
+
+    expect(handlers.agentProposal.dismiss(proposal.proposalId)).toBe(true);
+    expect(dismiss).toHaveBeenCalledWith(proposal.proposalId);
+    expect(messages).toEqual([]);
+  });
+
   it('routes cancellation through the exact listed interaction handlers', () => {
     const cancellationScope = {};
     const request = { streamId: 'stream-1' };
