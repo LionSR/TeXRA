@@ -10,6 +10,7 @@ import type {
   WorkflowAgentCallOptions,
   WorkflowJournalEntry,
   WorkflowScriptEvent,
+  WorkflowScriptPhaseContext,
   WorkflowScriptRunOptions,
   WorkflowScriptRunResult,
 } from './types';
@@ -35,12 +36,6 @@ const DEFAULT_MAX_AGENT_CALLS = 200;
 const MAX_FANOUT = 512;
 const DRAIN_GRACE_MS = 5_000;
 const LABEL_EXCERPT_LENGTH = 48;
-
-type WorkflowScriptPhaseContext = {
-  readonly phase: string | undefined;
-  readonly phaseIndex?: number;
-  readonly phaseTotal?: number;
-};
 
 /**
  * Fan-out primitives, defined INSIDE the sandbox realm (trusted prelude,

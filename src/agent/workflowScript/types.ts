@@ -78,7 +78,7 @@ export interface WorkflowJournalEntry {
   result: unknown;
 }
 
-interface WorkflowScriptPhaseContext {
+export interface WorkflowScriptPhaseContext {
   phase?: string;
   /** Zero-based position in meta.phases, when phase is declared. */
   phaseIndex?: number;
