@@ -63,11 +63,7 @@ The tool returns a JSON object whose keys are the original question texts and wh
       streamId: streamId ?? '',
     };
     const session = getRunContextSession(context) ?? defaultSession();
-    const interaction = session.interactions.askUserQuestion(permission);
-    if (!interaction) {
-      throw new Error('HostInteractions.askUserQuestion is required');
-    }
-    const result = await interaction;
+    const result = await session.interactions.askUserQuestion(permission);
 
     if (!result.submitted) {
       return {

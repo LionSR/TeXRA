@@ -95,15 +95,11 @@ async function showApprovalPrompt(
     return { accepted: true };
   }
 
-  const interaction = session.interactions.requestBashApproval({
+  return session.interactions.requestBashApproval({
     command: request.command,
     ...(request.cwd ? { cwd: request.cwd } : {}),
     streamId,
   });
-  if (!interaction) {
-    throw new Error('HostInteractions.requestBashApproval is required');
-  }
-  return interaction;
 }
 
 export function buildBashApprovalRejectedResult(
