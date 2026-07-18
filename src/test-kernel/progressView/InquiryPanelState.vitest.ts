@@ -1,60 +1,30 @@
 // Third-party imports
-import { create } from 'mutative';
-import { describe, expect, it } from 'vitest';
-
-// Local imports - common webview
+import { beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports - progress view frontend
 import { inquiryHandlers } from '@progressView/frontend/slices/inquirySlice';
 import {
+  appState,
+  resetProgressState,
+} from '@progressView/frontend/progressState';
+import {
   createInitialState,
   type ProgressState,
-  type StreamLogs,
 } from '@progressView/frontend/store';
-import type {
-  HandlerRegistry,
-  MessageHandlerContext,
-} from '@progressView/frontend/messageHandlerTypes';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   ExternalInquiryThreadId,
   InquiryThreadUpdatedEvent,
+  ProgressViewOutboundHandlerRegistry,
   ProgressViewOutboundMessage,
   StreamTabId,
 } from '@shared/schemas';
 import { assertSupported } from '@shared/utils/dispatcher';
 
-// Local imports - shared schemas
-
-function createContext(initialState: ProgressState): {
-  ctx: MessageHandlerContext;
-  getState: () => ProgressState;
-} {
-  let state = initialState;
-  const ctx: MessageHandlerContext = {
-    getState: () => state,
-    setState: (updater) => {
-      state = updater(state);
-    },
-    setStreamState: (streamId, updater) => {
-      const current = state.streamStates.get(streamId);
-      if (!current) return;
-      const updated = updater(current);
-      if (updated === current) return;
-      state = create(state, (draft) => {
-        draft.streamStates.set(streamId, updated);
-      });
-    },
-    setStreamLogs: (
-      _streamId,
-      _updater: (prev: StreamLogs) => StreamLogs,
-    ) => {},
-    savePrefs: () => {},
-    getPermissions: () => [],
-    setPermissions: () => {},
-    setPlacement: () => {},
-  };
-  return { ctx, getState: () => state };
+/** Seed the shared appState singleton and return a live reader over it. */
+function seedState(initialState: ProgressState): () => ProgressState {
+  appState.set(initialState);
+  return () => appState.get();
 }
 
 function thread(
@@ -72,31 +42,29 @@ function thread(
   };
 }
 
-function dispatch(
-  message: ProgressViewOutboundMessage,
-  ctx: MessageHandlerContext,
-) {
-  const handler = (inquiryHandlers as Partial<HandlerRegistry>)[
-    message.command
-  ];
+function dispatch(message: ProgressViewOutboundMessage) {
+  const handler = (
+    inquiryHandlers as Partial<ProgressViewOutboundHandlerRegistry>
+  )[message.command];
   expect(handler).toBeDefined();
-  assertSupported(handler!)(message as never, ctx);
+  assertSupported(handler!)(message as never);
 }
 
 describe('inquiry panel frontend state', () => {
-  it('hydrates durable inquiry summaries', () => {
-    const { ctx, getState } = createContext(createInitialState());
+  beforeEach(() => {
+    resetProgressState();
+  });
 
-    dispatch(
-      {
-        command: PROGRESS_VIEW_COMMANDS.SYNC_INQUIRY_THREADS,
-        threads: [
-          thread('ei_aabbccdd0011', 'stream-a', 'open'),
-          thread('ei_aabbccdd0012', 'stream-a', 'answered'),
-        ],
-      },
-      ctx,
-    );
+  it('hydrates durable inquiry summaries', () => {
+    const getState = seedState(createInitialState());
+
+    dispatch({
+      command: PROGRESS_VIEW_COMMANDS.SYNC_INQUIRY_THREADS,
+      threads: [
+        thread('ei_aabbccdd0011', 'stream-a', 'open'),
+        thread('ei_aabbccdd0012', 'stream-a', 'answered'),
+      ],
+    });
 
     expect(getState().inquiries.size).toBe(2);
     expect(getState().inquiries.get('ei_aabbccdd0011')).toMatchObject({
@@ -106,25 +74,19 @@ describe('inquiry panel frontend state', () => {
   });
 
   it('does not retain ownerless thread summaries in panel state', () => {
-    const { ctx, getState } = createContext(createInitialState());
+    const getState = seedState(createInitialState());
 
-    dispatch(
-      {
-        command: PROGRESS_VIEW_COMMANDS.SYNC_INQUIRY_THREADS,
-        threads: [
-          thread('ei_aabbccdd0011', null, 'answered'),
-          thread('ei_aabbccdd0012', 'stream-a', 'open'),
-        ],
-      },
-      ctx,
-    );
-    dispatch(
-      {
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_INQUIRY_THREAD,
-        thread: thread('ei_aabbccdd0013', null, 'answered'),
-      },
-      ctx,
-    );
+    dispatch({
+      command: PROGRESS_VIEW_COMMANDS.SYNC_INQUIRY_THREADS,
+      threads: [
+        thread('ei_aabbccdd0011', null, 'answered'),
+        thread('ei_aabbccdd0012', 'stream-a', 'open'),
+      ],
+    });
+    dispatch({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_INQUIRY_THREAD,
+      thread: thread('ei_aabbccdd0013', null, 'answered'),
+    });
 
     expect(getState().inquiries.has('ei_aabbccdd0011')).toBe(false);
     expect(getState().inquiries.has('ei_aabbccdd0012')).toBe(true);
@@ -137,22 +99,16 @@ describe('inquiry panel frontend state', () => {
       'ei_stale000000' as ExternalInquiryThreadId,
       thread('ei_stale000000', 'stream-a', 'open'),
     );
-    const { ctx, getState } = createContext(state);
+    const getState = seedState(state);
 
-    dispatch(
-      {
-        command: PROGRESS_VIEW_COMMANDS.SYNC_INQUIRY_THREADS,
-        threads: [thread('ei_aabbccdd0011', 'stream-a', 'open')],
-      },
-      ctx,
-    );
-    dispatch(
-      {
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_INQUIRY_THREAD,
-        thread: thread('ei_aabbccdd0011', 'stream-a', 'answered'),
-      },
-      ctx,
-    );
+    dispatch({
+      command: PROGRESS_VIEW_COMMANDS.SYNC_INQUIRY_THREADS,
+      threads: [thread('ei_aabbccdd0011', 'stream-a', 'open')],
+    });
+    dispatch({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_INQUIRY_THREAD,
+      thread: thread('ei_aabbccdd0011', 'stream-a', 'answered'),
+    });
 
     expect(getState().inquiries.has('ei_stale000000')).toBe(false);
     expect(getState().inquiries.get('ei_aabbccdd0011')?.status).toBe(

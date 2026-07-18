@@ -12,14 +12,13 @@ import '@progressView/frontend';
 import '@progressView/frontend/components/TexraDiffView';
 import type { StreamTabs } from '@progressView/frontend/components/StreamTabs';
 import {
-  createHostEventHandlerContext,
-  createHostMessageHandlerContext,
   handleDeleteAll,
   handleFileAction,
   handleFilterChange,
   handleFollowupRequestOptions,
   handleFollowUpChange,
   handleFollowUpClear,
+  handleFollowUpFocusComplete,
   handleFollowUpPolish,
   handleFollowUpSend,
   handleGettingStartedAction,
@@ -31,14 +30,12 @@ import {
   sendFollowupCommand,
 } from '@progressView/frontend/eventHandlers';
 import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
-import type { PermissionActionDetail } from '@progressView/frontend/events';
 import {
   activeStreamId$,
   appState,
   childStreamsByParent$,
   hasAnyStreams$,
   pendingApprovalIds$,
-  setStreamStateForId,
   streamFilter$,
   streamStates$,
   streams$,
@@ -231,12 +228,12 @@ function emptyWorkspaceTemplate(): TemplateResult {
 // =============================================================================
 //
 // PRD § 7.C: `<progress-app>` is NOT mounted in Electron; the children mount
-// directly. We recreate the message-routing and event-handler context here so
-// the same `messageDispatcher` + `eventHandlers` modules drive both hosts.
+// directly. The same `messageDispatcher` + `eventHandlers` modules drive both
+// hosts over the shared `progressState` singletons.
 //
-// savePrefs intentionally omitted (matching trace-viewer's use of the same
-// shared contexts) — filter persistence isn't wired on desktop (yet). Filter
-// changes still apply for the active session.
+// Filter persistence isn't wired on desktop (yet) — that layer is VS
+// Code-only, in `ProgressApp.onFilterChange`. Filter changes still apply for
+// the active session.
 
 function isProgressOutboundMessage(
   raw: unknown,
@@ -697,7 +694,7 @@ window.addEventListener('message', (event) => {
   // Progress view messages: dispatch directly into the shared messageDispatcher
   // — no need to mount <progress-app> for plumbing. PRD § 7.C.
   if (isProgressOutboundMessage(event.data)) {
-    dispatchMessage(event.data, createHostMessageHandlerContext());
+    dispatchMessage(event.data);
     return;
   }
 });
@@ -708,97 +705,75 @@ window.addEventListener('message', (event) => {
 
 function wireRailTabs(): void {
   railTabs.addEventListener('stream-switch', ((e: CustomEvent) => {
-    handleStreamSwitch(e, createHostEventHandlerContext());
+    handleStreamSwitch(e);
     // Switching to a stream pulls the user out of the launcher view.
     setRouteState('progress');
   }) as EventListener);
-  railTabs.addEventListener('stream-delete', ((e: CustomEvent) =>
-    handleStreamDelete(e, createHostEventHandlerContext())) as EventListener);
-  railTabs.addEventListener('filter-change', ((e: CustomEvent) =>
-    handleFilterChange(e, createHostEventHandlerContext())) as EventListener);
+  railTabs.addEventListener(
+    'stream-delete',
+    handleStreamDelete as EventListener,
+  );
+  railTabs.addEventListener(
+    'filter-change',
+    handleFilterChange as EventListener,
+  );
   railTabs.addEventListener('delete-all', handleDeleteAll as EventListener);
 }
 
 function wireConversation(): void {
-  const ctx = createHostEventHandlerContext;
-  conversationView.addEventListener('stream-switch', ((e: CustomEvent) => {
-    handleStreamSwitch(e, ctx());
-  }) as EventListener);
-  conversationView.addEventListener('toolbar-command', ((e: CustomEvent) =>
-    handleToolbarCommand(e, ctx())) as EventListener);
-  conversationView.addEventListener('permission-action', ((
-    e: CustomEvent<PermissionActionDetail>,
-  ) =>
-    handlePermissionAction(
-      e,
-      createHostMessageHandlerContext(),
-    )) as EventListener);
+  conversationView.addEventListener(
+    'stream-switch',
+    handleStreamSwitch as EventListener,
+  );
+  conversationView.addEventListener(
+    'toolbar-command',
+    handleToolbarCommand as EventListener,
+  );
+  conversationView.addEventListener(
+    'permission-action',
+    handlePermissionAction as EventListener,
+  );
   conversationView.addEventListener(
     'file-action',
     handleFileAction as EventListener,
   );
-  conversationView.addEventListener('compile-fixer-run', () =>
-    runCompileFixer(ctx()),
-  );
+  conversationView.addEventListener('compile-fixer-run', runCompileFixer);
   conversationView.addEventListener(
     'getting-started-action',
     handleGettingStartedAction as EventListener,
   );
-  conversationView.addEventListener('followup-request-options', () =>
-    handleFollowupRequestOptions(ctx()),
+  conversationView.addEventListener(
+    'followup-request-options',
+    handleFollowupRequestOptions,
   );
   conversationView.addEventListener('followup-setup', ((e: CustomEvent) =>
     sendFollowupCommand(
       PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP,
       e,
-      ctx(),
     )) as EventListener);
   conversationView.addEventListener('followup-run', ((e: CustomEvent) =>
     sendFollowupCommand(
       PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP,
       e,
-      ctx(),
     )) as EventListener);
-  conversationView.addEventListener('followup-change', ((e: CustomEvent) =>
-    handleFollowUpChange(e, ctx())) as EventListener);
-  conversationView.addEventListener('followup-send', ((e: CustomEvent) =>
-    handleFollowUpSend(e, ctx())) as EventListener);
-  conversationView.addEventListener('followup-polish', () =>
-    handleFollowUpPolish(ctx()),
+  conversationView.addEventListener(
+    'followup-change',
+    handleFollowUpChange as EventListener,
   );
-  conversationView.addEventListener('followup-clear', ((e: CustomEvent) =>
-    handleFollowUpClear(e, ctx())) as EventListener);
+  conversationView.addEventListener(
+    'followup-send',
+    handleFollowUpSend as EventListener,
+  );
+  conversationView.addEventListener('followup-polish', handleFollowUpPolish);
+  conversationView.addEventListener(
+    'followup-clear',
+    handleFollowUpClear as EventListener,
+  );
   // followup-focus-complete: clear the focus/polish/transcribe trigger flags.
   conversationView.addEventListener(
     'followup-focus-complete',
-    clearActiveFollowUpFocusFlags,
+    handleFollowUpFocusComplete,
   );
-}
-
-interface FollowUpFocusUiState {
-  ui: {
-    shouldFocusFollowUp?: boolean;
-    polishedText?: string | null;
-    transcribedText?: string | null;
-  };
-}
-
-function clearActiveFollowUpFocusFlags(): void {
-  const streamId = appState.get().activeStreamId;
-  if (!streamId) return;
-  setStreamStateForId(streamId, (prev) => {
-    // The followup-focus-complete handler in ProgressApp is a no-op when
-    // not a tool-use state; mirror that here. Importing the type guard
-    // would create a circular dep, so match the structural shape instead.
-    if (!('ui' in prev)) return prev;
-    return mutate(prev, (draft) => {
-      if (!('ui' in draft)) return;
-      const { ui } = draft as FollowUpFocusUiState;
-      ui.shouldFocusFollowUp = false;
-      ui.polishedText = null;
-      ui.transcribedText = null;
-    });
-  });
 }
 
 if (!bootstrapFailed) {

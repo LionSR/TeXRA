@@ -1,5 +1,3 @@
-import { create } from 'mutative';
-
 // Third-party imports
 import { html, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
@@ -31,7 +29,6 @@ import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 // Local imports - progress view frontend
 import { progressAppStyles } from './progressAppStyles';
 import { webviewStorage } from './webviewStorage';
-import { isToolUseState } from './store';
 import {
   activeStreamId$,
   appState,
@@ -39,11 +36,8 @@ import {
   hasAnyStreams$,
   narrowLayout,
   pendingApprovalIds$,
-  permissions$,
   placement,
   resetProgressState,
-  setStreamLogsForId,
-  setStreamStateForId,
   streamFilter$,
   streamStates$,
   tabStreams$,
@@ -57,6 +51,7 @@ import {
   handleFollowupRequestOptions,
   handleFollowUpChange,
   handleFollowUpClear,
+  handleFollowUpFocusComplete,
   handleFollowUpPolish,
   handleFollowUpSend,
   handleGettingStartedAction,
@@ -68,11 +63,7 @@ import {
   sendFollowupCommand,
 } from './eventHandlers';
 import { dispatchMessage } from './messageDispatcher';
-import type { PermissionActionDetail } from './events';
-import type {
-  FrontendEventHandlerContext,
-  MessageHandlerContext,
-} from './messageHandlerTypes';
+import type { FilterEventDetail } from './events';
 // Local imports - progress view components
 import './components/StreamTabs';
 import './components/StreamConversation';
@@ -187,20 +178,20 @@ export class ProgressApp extends ProgressAppBase {
                   <wa-split-panel .position=${splitPosition}>
                     <stream-conversation
                       slot="start"
-                      @stream-switch=${this.onStreamSwitch}
-                      @toolbar-command=${this.onToolbarCommand}
-                      @permission-action=${this.onPermissionAction}
+                      @stream-switch=${handleStreamSwitch}
+                      @toolbar-command=${handleToolbarCommand}
+                      @permission-action=${handlePermissionAction}
                       @file-action=${handleFileAction}
-                      @compile-fixer-run=${this.onCompileFixerRun}
+                      @compile-fixer-run=${runCompileFixer}
                       @getting-started-action=${handleGettingStartedAction}
-                      @followup-request-options=${this.onFollowupRequestOptions}
+                      @followup-request-options=${handleFollowupRequestOptions}
                       @followup-setup=${this.onFollowupSetup}
                       @followup-run=${this.onFollowupRun}
-                      @followup-change=${this.onFollowUpChange}
-                      @followup-send=${this.onFollowUpSend}
-                      @followup-polish=${this.onFollowUpPolish}
-                      @followup-clear=${this.onFollowUpClear}
-                      @followup-focus-complete=${this.onFollowUpFocusComplete}
+                      @followup-change=${handleFollowUpChange}
+                      @followup-send=${handleFollowUpSend}
+                      @followup-polish=${handleFollowUpPolish}
+                      @followup-clear=${handleFollowUpClear}
+                      @followup-focus-complete=${handleFollowUpFocusComplete}
                     ></stream-conversation>
 
                     <stream-tabs
@@ -213,8 +204,8 @@ export class ProgressApp extends ProgressAppBase {
                       .streamStates=${streamStates$.get()}
                       .pendingApprovalStreamIds=${pendingApprovalIds$.get()}
                       .childStreamsByParent=${childStreamsByParent$.get()}
-                      @stream-switch=${this.onStreamSwitch}
-                      @stream-delete=${this.onStreamDelete}
+                      @stream-switch=${handleStreamSwitch}
+                      @stream-delete=${handleStreamDelete}
                       @filter-change=${this.onFilterChange}
                       @delete-all=${handleDeleteAll}
                     ></stream-tabs>
@@ -259,7 +250,7 @@ export class ProgressApp extends ProgressAppBase {
   }
 
   protected override handleMessage(raw: unknown): void {
-    dispatchMessage(raw, this.createMessageHandlerContext(), (error) => {
+    dispatchMessage(raw, (error) => {
       const command =
         raw && typeof raw === 'object' && 'command' in raw
           ? String((raw as { command: unknown }).command)
@@ -269,37 +260,6 @@ export class ProgressApp extends ProgressAppBase {
         error,
       );
     });
-  }
-
-  /**
-   * Get the event handler context.
-   * Always returns fresh context - closures capture current state via getters.
-   * Stream mutators delegate to the module-level helpers in `progressState`
-   * (shared with the desktop renderer).
-   */
-  private getEventHandlerContext(): FrontendEventHandlerContext {
-    return {
-      getState: () => appState.get(),
-      setState: (updater) => {
-        appState.set(updater(appState.get()));
-      },
-      setStreamState: setStreamStateForId,
-      setStreamLogs: setStreamLogsForId,
-      savePrefs: (prefs) => this.prefsManager.update(prefs),
-    };
-  }
-
-  private createMessageHandlerContext(): MessageHandlerContext {
-    return {
-      ...this.getEventHandlerContext(),
-      getPermissions: () => permissions$.get(),
-      setPermissions: (permissions) => {
-        permissions$.set(permissions);
-      },
-      setPlacement: (next) => {
-        placement.set(next);
-      },
-    };
   }
 
   private onViewTabShow = (event: WaTabShowEvent): void => {
@@ -368,68 +328,22 @@ export class ProgressApp extends ProgressAppBase {
     postMessage(PROGRESS_VIEW_COMMANDS.POP_BACK);
   };
 
-  // Event handler wrappers - delegate to extracted handlers
-  private onStreamSwitch = (e: CustomEvent): void =>
-    handleStreamSwitch(e, this.getEventHandlerContext());
-  private onStreamDelete = (e: CustomEvent): void =>
-    handleStreamDelete(e, this.getEventHandlerContext());
-  private onPermissionAction = (e: CustomEvent<PermissionActionDetail>): void =>
-    handlePermissionAction(e, this.createMessageHandlerContext());
+  /**
+   * The one host-specific layer over the shared `handleFilterChange`:
+   * persist the chosen filter through this webview's `prefsManager`
+   * (VS Code webview state). Desktop/trace-viewer wire the shared handler
+   * directly and persist nothing.
+   */
+  private onFilterChange = (e: CustomEvent<FilterEventDetail>): void => {
+    handleFilterChange(e);
+    this.prefsManager.update({ streamFilter: e.detail.filter });
+  };
 
-  // Event handlers requiring context
-  private onFilterChange = (e: CustomEvent): void =>
-    handleFilterChange(e, this.getEventHandlerContext());
-
-  private onToolbarCommand = (e: CustomEvent): void =>
-    handleToolbarCommand(e, this.getEventHandlerContext());
-
-  private onFollowUpChange = (e: CustomEvent): void =>
-    handleFollowUpChange(e, this.getEventHandlerContext());
-
-  private onFollowUpSend = (e: CustomEvent): void =>
-    handleFollowUpSend(e, this.getEventHandlerContext());
-
-  private onFollowUpPolish = (): void =>
-    handleFollowUpPolish(this.getEventHandlerContext());
-
-  private onFollowUpClear = (e: CustomEvent): void =>
-    handleFollowUpClear(e, this.getEventHandlerContext());
-
-  private onCompileFixerRun = (): void =>
-    runCompileFixer(this.getEventHandlerContext());
-
-  private onFollowupRequestOptions = (): void =>
-    handleFollowupRequestOptions(this.getEventHandlerContext());
-
+  // `sendFollowupCommand` is shared by both followup entry points; these
+  // arrows bind which backend command each event maps to.
   private onFollowupSetup = (e: CustomEvent): void =>
-    sendFollowupCommand(
-      PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP,
-      e,
-      this.getEventHandlerContext(),
-    );
+    sendFollowupCommand(PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP, e);
 
   private onFollowupRun = (e: CustomEvent): void =>
-    sendFollowupCommand(
-      PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP,
-      e,
-      this.getEventHandlerContext(),
-    );
-
-  /**
-   * Reset focus/polish/transcription triggers after they've been consumed.
-   * Part of Lit-native Phase 9e reactive property pattern.
-   */
-  private onFollowUpFocusComplete(): void {
-    const streamId = appState.get().activeStreamId;
-    if (!streamId) return;
-
-    setStreamStateForId(streamId, (prev) => {
-      if (!isToolUseState(prev)) return prev;
-      return create(prev, (draft) => {
-        draft.ui.shouldFocusFollowUp = false;
-        draft.ui.polishedText = null;
-        draft.ui.transcribedText = null;
-      });
-    });
-  }
+    sendFollowupCommand(PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP, e);
 }

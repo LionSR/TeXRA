@@ -12,13 +12,14 @@ import {
   type ContextStateData,
   type EndGroupStatus,
   type LogMessageData,
+  type ProgressViewOutboundHandlerRegistry,
   type StreamLogEntry,
   type StreamLogTextDelta,
   type TaskGroupStatus,
 } from '@shared/schemas';
 
+import { appState } from '../progressState';
 import type { StreamLogs, StreamState } from '../store';
-import type { HandlerRegistry } from '../messageHandlerTypes';
 
 /**
  * A `GROUP_END` row's `data.status` carries either the native `TaskGroupStatus`
@@ -193,19 +194,19 @@ function applyTextDelta(
   return existingIndex;
 }
 
-// `HandlerRegistry` is now exhaustive (every ProgressView outbound command
+// The composed registry is exhaustive (every ProgressView outbound command
 // needs a real handler or `unsupported(...)` — see `@shared/utils/dispatcher`).
 // This slice only owns a subset, so it's typed as a `satisfies Partial<...>`
 // subset rather than the full registry; `messageDispatcher.ts` spreads all
 // slices together and is the actual exhaustiveness checkpoint TypeScript
 // enforces.
 export const logHandlers = {
-  [PROGRESS_VIEW_COMMANDS.LOG_DELTA]: (data, ctx) => {
+  [PROGRESS_VIEW_COMMANDS.LOG_DELTA]: (data) => {
     const { streamId, entries, updates } = data;
     const textDeltas = data.textDeltas ?? [];
 
-    ctx.setState((prev) =>
-      create(prev, (draft) => {
+    appState.set(
+      create(appState.get(), (draft) => {
         const streamState = draft.streamStates.get(streamId);
         if (!streamState) return;
 
@@ -264,4 +265,4 @@ export const logHandlers = {
       }),
     );
   },
-} satisfies Partial<HandlerRegistry>;
+} satisfies Partial<ProgressViewOutboundHandlerRegistry>;
