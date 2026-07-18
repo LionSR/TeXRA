@@ -4,7 +4,10 @@ import { ReasoningEffort } from 'llm-zoo';
 
 // Local imports - mappings under test
 import { toOpenRouterReasoningEffort } from '@agent/modelHandlers/openrouter/openRouterStreaming';
-import { toOpenAIReasoningEffort } from '@agent/modelHandlers/support/reasoningEffort';
+import {
+  clampReasoningEffortToHighOrMax,
+  toOpenAIReasoningEffort,
+} from '@agent/modelHandlers/support/reasoningEffort';
 
 // Regression coverage for the SDK-vocabulary mismatch that produced
 // `400 reasoning_effort: Invalid option: expected one of
@@ -54,5 +57,25 @@ describe('toOpenRouterReasoningEffort', () => {
 
   it('falls back to "low" for unrecognized values', () => {
     expect(toOpenRouterReasoningEffort('bogus', false)).toBe('low');
+  });
+});
+
+// Shared clamp for providers (DeepSeek, GLM) whose OpenAI-compatible surface
+// accepts only 'high' and 'max'. Previously copy-pasted in both handlers.
+describe('clampReasoningEffortToHighOrMax', () => {
+  it('maps the above-high tiers to "max"', () => {
+    expect(clampReasoningEffortToHighOrMax(ReasoningEffort.XHIGH)).toBe('max');
+    expect(clampReasoningEffortToHighOrMax(ReasoningEffort.MAX)).toBe('max');
+  });
+
+  it('maps high and every below-high tier to the "high" floor', () => {
+    for (const effort of [
+      ReasoningEffort.HIGH,
+      ReasoningEffort.MEDIUM,
+      ReasoningEffort.LOW,
+      ReasoningEffort.NONE,
+    ]) {
+      expect(clampReasoningEffortToHighOrMax(effort)).toBe('high');
+    }
   });
 });
