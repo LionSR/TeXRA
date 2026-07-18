@@ -11,7 +11,7 @@ Use this skill for day-to-day Lean 4 proof development: proving lemmas, debuggin
 
 ## Workflow
 
-1. Read the target file and surrounding declarations before editing. Understand the theorem statement, available hypotheses, and local notation.
+1. Read the target file and surrounding declarations before editing. Understand the theorem statement, available hypotheses, and local notation. Also read the project's canonical tactic ledger in `AGENTS.md` if one exists — prefer the project's custom tactics, simp sets, and workhorse lemmas over rebuilding inline tactic chains.
 2. Check the current diagnostics first. Let the elaborator tell you what is actually wrong before you guess.
 3. Outline the proof strategy informally before writing code when the theorem is nontrivial.
 4. Search for existing lemmas and APIs before inventing helper lemmas or long tactic scripts.
@@ -26,5 +26,7 @@ Use this skill for day-to-day Lean 4 proof development: proving lemmas, debuggin
 - Keep proofs readable enough that another formalizer can maintain them.
 - Treat diagnostics as ground truth.
 - If a proof attempt becomes opaque or fragile, back up and choose a clearer route.
+
+When the same tactic sequence or goal shape shows up for the third time, stop inlining it and use lean-tactic-improver when available. Otherwise use this standalone fallback: on the third occurrence, extract the lowest sufficient project-native abstraction without adding a framework solely for automation; rewrite the motivating call sites; add a `Name | Kind | Use when | Defined in` row to the canonical `AGENTS.md` tactic ledger, creating it if needed; if `CLAUDE.md` exists, preserve its contents and add a pointer to the `AGENTS.md` ledger unless both paths already identify the same file; and prune rows whose automation is removed.
 
 For stuck proofs or longer debugging sessions, use [references/proof-workflow.md](references/proof-workflow.md) for a stricter loop around search, inspection, iteration, and cleanup.

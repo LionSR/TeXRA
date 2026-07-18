@@ -184,6 +184,7 @@ These skills bring TeXRA's research workflows to any agent system that supports 
 - **lean-proof-assistant** — develops and debugs Lean proofs with goal inspection and lemma search
 - **lean-search** — locates existing Lean 4 and Mathlib lemmas, APIs, and formalization patterns
 - **lean-simplifier** — refactors code toward Mathlib-quality style while preserving meaning
+- **lean-tactic-improver** — turns repeated proof patterns into reusable project automation
 
 ### Quick Start
 
@@ -195,7 +196,7 @@ These skills bring TeXRA's research workflows to any agent system that supports 
 Skills can also be installed via Codex or by symlinking individual skill directories into your agent's skills location.
 
 ::: tip Use Case
-If you formalize mathematics in Lean 4, these skills let AI assistants search Mathlib, draft and debug proofs, and keep blueprints in sync with formal declarations.
+If you formalize mathematics in Lean 4, these skills let AI assistants search Mathlib, draft and debug proofs, reuse project-specific proof patterns across sessions, and keep blueprints in sync with formal declarations.
 :::
 
 [GitHub Repository](https://github.com/texra-ai/texra-lean-skills)
