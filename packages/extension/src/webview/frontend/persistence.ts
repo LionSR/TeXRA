@@ -17,12 +17,15 @@ import { type ZodError } from 'zod';
 
 // Local imports - shared state and schemas
 import { hostBridge } from '@shared/hostBridge';
-import { createWebviewStorage, PersistedState } from '@shared/state';
 import {
   MainViewPersistedStateSchema,
   type MainViewPersistedState,
 } from '@shared/schemas';
 import type { MultiFiles } from '@shared/schemas';
+import {
+  createWebviewStorage,
+  PersistedState,
+} from '@shared/state/PersistedState';
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 import { createFlushableDebounce } from '@utils/core';
 

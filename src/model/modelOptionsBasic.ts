@@ -3,12 +3,10 @@ import { hint, type ModelConfig } from 'llm-zoo';
 import type { ModelOptionData } from '@shared/schemas';
 import {
   EXPENSIVE_MODEL_HINT,
-  isExpensiveModel,
-} from '@shared/constants/expensiveModels';
-import {
   FAST_FIRST_RESPONSE_HINT,
+  isExpensiveModel,
   isFastFirstResponseModel,
-} from '@shared/constants/fastModels';
+} from '@shared/constants/providers';
 import { getRuntimeModelConfig } from './runtimeModelRegistry';
 import { resolveModelSource } from './openRouterRouting';
 

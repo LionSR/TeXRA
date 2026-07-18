@@ -77,7 +77,7 @@ import {
 // Local imports - logger
 import { MESSAGE_TYPES } from '@shared/schemas';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
-import { OUTPUT_END_TAG } from '@shared/constants/outputProtocol';
+import { OUTPUT_END_TAG } from '@shared/schemas/output';
 
 // Local imports - tools
 import type {

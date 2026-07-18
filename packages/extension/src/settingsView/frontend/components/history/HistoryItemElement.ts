@@ -9,11 +9,7 @@ import Mark from 'mark.js';
 // Local imports - shared
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
-import {
-  commonViewStyles,
-  designTokens,
-  searchHighlightStyles,
-} from '@shared/styles';
+import { commonViewStyles, designTokens } from '@shared/styles';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
@@ -26,7 +22,10 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - history view styles
-import { historyStyles } from '@shared/styles/historyStyles';
+import {
+  historyStyles,
+  searchHighlightStyles,
+} from '@shared/styles/historyStyles';
 
 // Local imports - history view events
 import { HistoryViewEvents } from './events';

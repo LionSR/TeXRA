@@ -13,9 +13,8 @@ import { consume } from '@lit/context';
 
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import { RecordingButtonController } from '@shared/litControllers';
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { generatePastedImageName } from '@shared/files/pastedImageConstants';
+import { RecordingButtonController } from '@shared/litControllers/RecordingButtonController';
 import { getTextareaValue, insertTextAtCursor } from '@shared/utils/textarea';
 import {
   clipboardImageFiles,
@@ -25,6 +24,7 @@ import {
 } from '@shared/utils/clipboardImages';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
+import { generatePastedImageName } from '@utils/files/pastedImageUtils';
 import {
   archivedContext,
   followUpEventSinkContext,

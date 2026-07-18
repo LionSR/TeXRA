@@ -22,7 +22,7 @@ import {
   type ExtendedTokenUsageStats,
   type LogMessageData,
 } from '@shared/schemas';
-import { OUTPUT_DOCUMENTS_TAG } from '@shared/constants/outputProtocol';
+import { OUTPUT_DOCUMENTS_TAG } from '@shared/schemas/output';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { formatCompactTokenCount, getBasename } from '@utils/core';
 import { formatCostUsd } from '@utils/text/stringUtils';

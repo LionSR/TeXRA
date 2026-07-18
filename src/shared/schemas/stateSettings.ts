@@ -3,12 +3,6 @@ import { z } from 'zod';
 
 // Local imports - shared constants & state keys
 import {
-  DEFAULT_GIT_AUTHOR_EMAIL,
-  DEFAULT_GIT_AUTHOR_NAME,
-  DEFAULT_GIT_MARK_COMMITS,
-  DEFAULT_GIT_WORKTREE_SUPPORT,
-} from '@shared/constants/git';
-import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_CONFIG_RANGES,
   LATEX_FORMATTER_VALUES,
@@ -33,6 +27,29 @@ import {
   CodexSandboxModeSchema,
 } from '@shared/schemas/agentCliSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+
+// ============================================================================
+// Git defaults
+// ============================================================================
+
+export const DEFAULT_GIT_AUTHOR_NAME = 'texra-ai';
+export const DEFAULT_GIT_AUTHOR_EMAIL = 'texra-ai@users.noreply.github.com';
+
+/**
+ * Default for `texra.git.markCommits` when the workspace has never
+ * toggled the setting. Shared by the backend reader
+ * (`readGitAuthorSettings`) and the frontend signal initializer
+ * (`SettingsApp.gitMarkCommits`) so the Git tab doesn't flash the
+ * wrong state on first paint before settings arrive.
+ */
+export const DEFAULT_GIT_MARK_COMMITS = true;
+
+/**
+ * Default for `texra.git.worktreeSupport` when the workspace has never toggled
+ * it. Shared by the backend reader (`readGitAuthorSettingsFromState`) and the
+ * state-settings catalog so the default lives in one place.
+ */
+export const DEFAULT_GIT_WORKTREE_SUPPORT = false;
 
 /**
  * Host-neutral catalog for **state-backed** TeXRA settings.

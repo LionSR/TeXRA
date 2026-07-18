@@ -23,11 +23,9 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import {
   PROVIDER_DISPLAY_NAMES,
   MODEL_SOURCE_ORDER,
-} from '@shared/constants/providers';
-import {
   EXPENSIVE_MODEL_HINT,
   isExpensiveModel,
-} from '@shared/constants/expensiveModels';
+} from '@shared/constants/providers';
 
 // Local imports - profile view styles and events
 import {

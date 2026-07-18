@@ -16,11 +16,11 @@ import {
   RoundKeySchema,
 } from '@shared/schemas';
 import type { OutputFileInfo, RoundIndexed } from '@shared/schemas';
-import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import {
   legacyWorkflowOutputRoundRegex,
   midEraWorkflowOutputStem,
-} from '@shared/constants/legacyWorkflowOutput';
+  parseWorkflowOutputRoundDir,
+} from '@shared/constants/workflowOutput';
 import {
   WorkspaceFS,
   FlexibleFS,

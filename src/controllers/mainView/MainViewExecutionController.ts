@@ -6,7 +6,7 @@ import {
 } from '@agent/core/state/executionRequests';
 
 // Local imports - shared schemas
-import type { MainViewExecuteMessage } from '@shared/mainView';
+import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import {
   DEFAULT_TOOL_CONFIG,
   ToolConfigSchema,

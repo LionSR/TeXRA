@@ -34,10 +34,10 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import {
   CLI_STATE_SETTINGS,
+  DEFAULT_GIT_AUTHOR_NAME,
   STATE_SETTINGS,
   type StateSettingEntry,
 } from '@shared/schemas/stateSettings';
-import { DEFAULT_GIT_AUTHOR_NAME } from '@shared/constants/git';
 import { AgentCategory } from '@shared/schemas/agent';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
