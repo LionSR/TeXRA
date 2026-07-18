@@ -1,4 +1,5 @@
 // Third-party imports
+import { ModelProvider } from 'llm-zoo';
 import OpenAI, { OpenAIError } from 'openai';
 // Exported by openai@6.x via the package's ./lib/* subpath; keep typecheck
 // coverage around SDK upgrades because this is not a top-level public helper.
@@ -2405,11 +2406,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /**
    * Provider identifier for usage tracking. `openai-response` distinguishes
-   * OpenAI's Responses surface from its Chat Completions surface; non-OpenAI
-   * backends on this surface (Meta) override to their own provider.
+   * OpenAI's Responses surface from its Chat Completions surface; compatible
+   * non-OpenAI backends retain their configured provider.
    */
   protected get usageProvider(): NormalizedUsage['provider'] {
-    return 'openai-response';
+    return this.config.provider === ModelProvider.OPENAI
+      ? 'openai-response'
+      : (this.config.provider as NormalizedUsage['provider']);
   }
 
   /** Normalizes OpenAI Responses API usage data into a unified format. */
