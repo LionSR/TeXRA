@@ -10,7 +10,7 @@ import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { AgentRunHandle } from '@agent/runtime/executionRegistry';
+import type { AgentRunHandle } from '@agent/runtime/ExecutionHandle';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';

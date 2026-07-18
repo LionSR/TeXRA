@@ -15,7 +15,7 @@ import {
   defaultSession,
   getAllActiveExecutionIds,
 } from '@agent/runtime/SessionHandle';
-import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
+import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { type Plan, type StreamTabId } from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
@@ -115,7 +115,6 @@ describe('SessionHandle', () => {
     expect(second.transcripts).toBe(first.transcripts);
     expect(second.followUps).toBe(first.followUps);
     expect(defaultSession().flushers).toBe(getActiveFlushers());
-    expect(defaultSession().hostChannel).toBeUndefined();
   });
 
   it('a fresh session shares no member with the default session', () => {
@@ -133,20 +132,8 @@ describe('SessionHandle', () => {
         defaultSession().workflowControls,
       );
       expect(fresh.flushers).not.toBe(getActiveFlushers());
-      expect(fresh.hostChannel).toBeUndefined();
     } finally {
       fresh.dispose();
-    }
-  });
-
-  it('builds fresh registries even when only a host channel is injected', () => {
-    const { host } = createRecordingHost();
-    const session = createTestSession({ hostChannel: host });
-    try {
-      expect(session.hostChannel).toBe(host);
-      expect(session.executions).not.toBe(defaultSession().executions);
-    } finally {
-      session.dispose();
     }
   });
 

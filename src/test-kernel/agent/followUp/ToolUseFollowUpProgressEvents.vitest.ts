@@ -20,7 +20,7 @@ import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import {
   AgentExecutionHandle,
   type LiveToolUseFlowContext,
-} from '@agent/runtime/executionRegistry';
+} from '@agent/runtime/ExecutionHandle';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   notifyFollowUpSent,

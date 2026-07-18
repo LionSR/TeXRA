@@ -35,7 +35,7 @@ import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import {
   AgentExecutionHandle,
   ProcessExecutionHandle,
-} from '@agent/runtime/executionRegistry';
+} from '@agent/runtime/ExecutionHandle';
 import { currentSession } from '@agent/runtime/SessionHandle';
 
 // Local imports - utils

@@ -50,15 +50,6 @@ import { SessionEventHub } from './SessionEventHub';
 
 const logger = createChannelTrace('executionRegistry');
 
-export type { ExecutionHandle } from './ExecutionHandle';
-export {
-  type ExecutionStatusInfo,
-  type LiveToolUseFlowContext,
-  type AgentRunHandle,
-  AgentExecutionHandle,
-  ProcessExecutionHandle,
-} from './ExecutionHandle';
-
 export interface StopAgentStreamOptions {
   readonly detachActiveChildren?: boolean;
   readonly runtimeHost?: AgentRuntimeHost;

@@ -26,7 +26,7 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   AgentExecutionHandle,
   type LiveToolUseFlowContext,
-} from '@agent/runtime/executionRegistry';
+} from '@agent/runtime/ExecutionHandle';
 import {
   presentFollowUpWakeResult,
   sendFollowUp,

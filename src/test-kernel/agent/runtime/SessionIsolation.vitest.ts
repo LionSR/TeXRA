@@ -27,7 +27,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
-import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
+import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import {
   RUN_OUTCOME,

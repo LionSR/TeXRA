@@ -22,10 +22,8 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 // Local imports - runtime
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { ExecutionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
-import {
-  AgentExecutionHandle,
-  ExecutionRegistry,
-} from '@agent/runtime/executionRegistry';
+import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 

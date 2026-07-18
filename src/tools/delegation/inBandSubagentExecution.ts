@@ -28,7 +28,7 @@ import {
   type AgentFlowResult,
 } from '@agent/runtime/AgentFlowResult';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { AgentRunHandle } from '@agent/runtime/executionRegistry';
+import type { AgentRunHandle } from '@agent/runtime/ExecutionHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import * as logger from '@logger/logUtils';

@@ -27,7 +27,7 @@ import {
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { AgentRunHandle } from '@agent/runtime/executionRegistry';
+import type { AgentRunHandle } from '@agent/runtime/ExecutionHandle';
 import type {
   ChildRunPorts,
   ChildRunStrategy,

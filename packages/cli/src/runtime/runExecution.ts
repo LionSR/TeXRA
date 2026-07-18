@@ -192,14 +192,10 @@ export async function executeCliRequest(
       beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
     }),
   );
-  const interactionHost: CliRuntimeHost = {
-    ...runtimeHost,
-    interactions: session.interactions,
-  };
   // Present terminal-error toasts from the run's `result` event through the same
   // runtimeHost path the lifecycle used before (so ndjson / logger output is
   // unchanged); the lifecycle no longer emits them directly.
-  const detachResultToast = attachTerminalResultToast(session, interactionHost);
+  const detachResultToast = attachTerminalResultToast(session, runtimeHost);
   const detachSessionProgressProjection =
     runContext.outputFormat === 'ndjson'
       ? attachCliSessionProgressProjection(session.events)
@@ -210,7 +206,7 @@ export async function executeCliRequest(
   let shutdownInterrupted = false;
   let shutdownFinalizationFailureReported = false;
   const reportFinalizationFailure = (error: unknown): void => {
-    interactionHost.emit('requestShowError', {
+    runtimeHost.emit('requestShowError', {
       message: toErrorMessage(error),
     });
   };
@@ -246,7 +242,7 @@ export async function executeCliRequest(
   };
   const invoke = (): Promise<ExecuteAgentResult> =>
     runAgent(request, {
-      runtimeHost: interactionHost,
+      runtimeHost,
       session,
       enforceCategory: options.enforceCategory,
       registerExecution: options.registerExecution,
@@ -286,7 +282,7 @@ export async function executeCliRequest(
     } finally {
       detachSnapshotFlusher();
       detachSnapshotEvents();
-      await interactionHost.close();
+      await runtimeHost.close();
     }
   }
 

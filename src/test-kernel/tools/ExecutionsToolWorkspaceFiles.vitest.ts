@@ -18,7 +18,7 @@ import { StreamSnapshotStore, streamDataDir } from '@transcript';
 import { flowKey } from '@agent/node/persistedFlow';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
+import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import {
   RUN_DESCRIPTOR_SCHEMA_VERSION,
   STREAM_PHASE,

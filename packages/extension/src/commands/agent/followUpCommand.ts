@@ -10,12 +10,12 @@ import {
   wakeQueuedFollowUpStream,
   type SendFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
-import { shouldProbePersistedFlowForFollowUp } from '@agent/runtime/followUpResumeDetection';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { STREAM_PHASE } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 
 const logger = createChannelTrace('followUpCommand');
 
@@ -38,7 +38,7 @@ async function lazyDetectWaitingStatus(
   if (currentStatus === STREAM_PHASE.WAITING) {
     return true;
   }
-  if (!shouldProbePersistedFlowForFollowUp(currentStatus)) {
+  if (isInFlightPhase(currentStatus)) {
     return false;
   }
   if (inFlightDetections.has(streamId)) {

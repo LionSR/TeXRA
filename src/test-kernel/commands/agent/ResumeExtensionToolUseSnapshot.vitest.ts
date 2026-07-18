@@ -5,15 +5,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * The tool-use persistence gate is extension-only: the desktop never honored
- * `texra.toolUse.persistence.enabled`, so the shared {@link resumeToolUseSnapshot}
- * leaf stays ungated and the gate lives in this adapter. These tests pin that
+ * `texra.toolUse.persistence.enabled`, so the shared
+ * {@link resumeQueuedToolUseSnapshot} leaf stays ungated and the gate lives in
+ * this adapter. These tests pin that
  * the gate is applied here (not in the shared leaf) and that an enabled adapter
  * delegates straight through.
  */
 const mocks = vi.hoisted(() => ({
   getToolUsePersistenceEnabled: vi.fn(() => true),
   registerCommand: vi.fn(),
-  resumeToolUseSnapshot: vi.fn(async () => true),
+  resumeQueuedToolUseSnapshot: vi.fn(async () => true),
   showWarningMessage: vi.fn(),
 }));
 
@@ -29,8 +30,8 @@ vi.mock('@utils/config', async (importActual) => ({
   ...(await importActual<typeof import('@utils/config')>()),
   getToolUsePersistenceEnabled: mocks.getToolUsePersistenceEnabled,
 }));
-vi.mock('@agent/runtime/resumeToolUseSnapshot', () => ({
-  resumeToolUseSnapshot: mocks.resumeToolUseSnapshot,
+vi.mock('@agent/runtime/resumeQueuedToolUse', () => ({
+  resumeQueuedToolUseSnapshot: mocks.resumeQueuedToolUseSnapshot,
 }));
 
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
@@ -50,8 +51,8 @@ describe('resumeExtensionToolUseSnapshot', () => {
   beforeEach(() => {
     mocks.getToolUsePersistenceEnabled.mockReturnValue(true);
     mocks.registerCommand.mockReset();
-    mocks.resumeToolUseSnapshot.mockReset();
-    mocks.resumeToolUseSnapshot.mockResolvedValue(true);
+    mocks.resumeQueuedToolUseSnapshot.mockReset();
+    mocks.resumeQueuedToolUseSnapshot.mockResolvedValue(true);
     mocks.showWarningMessage.mockReset();
   });
 
@@ -61,7 +62,7 @@ describe('resumeExtensionToolUseSnapshot', () => {
     await expect(resumeExtensionToolUseSnapshot(snapshot())).resolves.toBe(
       false,
     );
-    expect(mocks.resumeToolUseSnapshot).not.toHaveBeenCalled();
+    expect(mocks.resumeQueuedToolUseSnapshot).not.toHaveBeenCalled();
   });
 
   it('delegates to the shared leaf with the explicit follow-up when enabled', async () => {
@@ -69,11 +70,13 @@ describe('resumeExtensionToolUseSnapshot', () => {
       resumeExtensionToolUseSnapshot(snapshot(), 'typed alongside resume'),
     ).resolves.toBe(true);
 
-    expect(mocks.resumeToolUseSnapshot).toHaveBeenCalledTimes(1);
-    expect(mocks.resumeToolUseSnapshot).toHaveBeenCalledWith(
+    expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledTimes(1);
+    expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledWith(
+      STREAM,
       snapshot(),
+      expect.any(Object),
       expect.objectContaining({
-        explicitFollowUp: 'typed alongside resume',
+        extraFollowUps: [{ text: 'typed alongside resume', origin: 'user' }],
       }),
     );
   });
