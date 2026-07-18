@@ -151,7 +151,8 @@ describe('MainViewMessageHandler interaction mappings', () => {
     ]);
   });
 
-  it('preserves workflow and tool-use agent-settings arguments', async () => {
+  it('preserves extension and agent-settings arguments', async () => {
+    await dispatch({ command: MAIN_VIEW_COMMANDS.SETTINGS_OPEN });
     await dispatch({
       command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
       sessionType: 'workflow',
@@ -162,6 +163,7 @@ describe('MainViewMessageHandler interaction mappings', () => {
     });
 
     expect(mocks.safeExecuteCommand.mock.calls).toEqual([
+      ['workbench.action.openSettings', ['@ext:texra.extension'], 'MainView'],
       ['texra.showAgents', [undefined], 'MainView'],
       ['texra.showAgents', ['toolUse'], 'MainView'],
     ]);
@@ -216,11 +218,18 @@ describe('MainViewMessageHandler interaction mappings', () => {
     await dispatch({ command: MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL });
     await dispatch({
       command: MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL,
+      provider: 'missing',
+    });
+    await dispatch({
+      command: MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL,
       provider: 'openai',
     });
     await dispatch({ command: MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE });
 
-    expect(mocks.getProviderKeyUrl).toHaveBeenCalledOnce();
+    expect(mocks.getProviderKeyUrl.mock.calls).toEqual([
+      ['missing'],
+      ['openai'],
+    ]);
     expect(mocks.openExternal.mock.calls).toEqual([
       [
         {
