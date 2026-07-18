@@ -338,6 +338,11 @@ export async function runWorkflowScript(
     }
 
     emit({ type: 'agent:start', index, label, phase: callOptions.phase });
+    // Host-side wall clock (the sandbox's Date.now ban is guest-only): timing
+    // and the reported model are progress-only, never journaled, so they can't
+    // affect resume identity or determinism.
+    const startedAt = Date.now();
+    let resolvedModel: string | undefined;
     let result: unknown;
     try {
       result = await semaphore.run(() => {
@@ -356,6 +361,9 @@ export async function runWorkflowScript(
           prompt,
           options: callOptions,
           signal: runAbort.signal,
+          reportModel: (model) => {
+            resolvedModel = model;
+          },
         });
       });
     } catch (error) {
@@ -371,6 +379,8 @@ export async function runWorkflowScript(
         phase: callOptions.phase,
         cached: false,
         error: toErrorMessage(error),
+        ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
+        durationMs: Date.now() - startedAt,
       });
       return 'null';
     }
@@ -393,6 +403,8 @@ export async function runWorkflowScript(
       label,
       phase: callOptions.phase,
       cached: false,
+      ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
+      durationMs: Date.now() - startedAt,
     });
     return payload;
   }

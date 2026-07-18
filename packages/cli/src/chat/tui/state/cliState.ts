@@ -71,6 +71,15 @@ interface ConversationEntryBase {
 export type ConversationEntry =
   | (ConversationEntryBase & { readonly role: 'assistant' | 'error' | 'user' })
   | (ConversationEntryBase & {
+      readonly role: 'phase';
+      /** Phase title displayed in the group-header divider row. */
+      readonly phaseLabel: string;
+      /** 0-based phase order within the run, when the emitter provides it. */
+      readonly phaseIndex?: number;
+      /** Total phase count for the run, when the emitter provides it. */
+      readonly phaseTotal?: number;
+    })
+  | (ConversationEntryBase & {
       readonly role: 'tool';
       readonly toolUse: NormalizedToolUse;
     })
