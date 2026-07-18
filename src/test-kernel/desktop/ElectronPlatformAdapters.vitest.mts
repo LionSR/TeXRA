@@ -40,10 +40,7 @@ interface JsonStore {
 
 interface JsonStoreModule {
   JsonStore: {
-    open(
-      filePath: string,
-      options: { corruptionPolicy: 'fail' },
-    ): Promise<JsonStore>;
+    open(filePath: string): Promise<JsonStore>;
   };
 }
 
@@ -136,9 +133,7 @@ describe('desktop platform adapters', () => {
       loadJsonStore(),
     ]);
     const root = await makeTempDir('texra-electron-secrets-');
-    const store = await JsonStore.open(join(root, 'secrets.json'), {
-      corruptionPolicy: 'fail',
-    });
+    const store = await JsonStore.open(join(root, 'secrets.json'));
     const secrets = new secretsModule.ElectronSecrets(store, options);
     return { module: secretsModule, store, secrets };
   }
@@ -171,9 +166,7 @@ describe('desktop platform adapters', () => {
   it('persists state values and deletes undefined updates through JsonStore', async () => {
     const JsonStore = await loadJsonStore();
     const root = await makeTempDir('texra-electron-state-');
-    const store = await JsonStore.open(join(root, 'state.json'), {
-      corruptionPolicy: 'fail',
-    });
+    const store = await JsonStore.open(join(root, 'state.json'));
 
     await store.update('session', { active: true });
     await store.update('cleared', 'value');

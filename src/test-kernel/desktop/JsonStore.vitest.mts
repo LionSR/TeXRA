@@ -30,14 +30,9 @@ interface JsonStore {
   snapshot(): Record<string, unknown>;
 }
 
-interface JsonStoreOptions {
-  corruptionPolicy: 'fail';
-  mode?: number;
-}
-
 interface JsonStoreModule {
   JsonStore: {
-    open(filePath: string, options: JsonStoreOptions): Promise<JsonStore>;
+    open(filePath: string, options?: { mode?: number }): Promise<JsonStore>;
   };
 }
 
@@ -71,9 +66,7 @@ describe('shared JsonStore', () => {
     const original = '{"truncated"';
     const filePath = await createTempFile('state.json', original);
 
-    await expect(
-      JsonStore.open(filePath, { corruptionPolicy: 'fail' }),
-    ).rejects.toBeInstanceOf(SyntaxError);
+    await expect(JsonStore.open(filePath)).rejects.toBeInstanceOf(SyntaxError);
     expect(await readFile(filePath, 'utf8')).toBe(original);
   });
 
@@ -85,9 +78,9 @@ describe('shared JsonStore', () => {
     const JsonStore = await loadJsonStore();
     const filePath = await createTempFile('state.json', content);
 
-    await expect(
-      JsonStore.open(filePath, { corruptionPolicy: 'fail' }),
-    ).rejects.toThrow('to contain a JSON object');
+    await expect(JsonStore.open(filePath)).rejects.toThrow(
+      'to contain a JSON object',
+    );
   });
 
   it('merges with a concurrent writer instead of flushing a stale open-time snapshot', async () => {
@@ -97,9 +90,7 @@ describe('shared JsonStore', () => {
       '{"keep": 1, "drop": 1}\n',
     );
 
-    const store = await JsonStore.open(filePath, {
-      corruptionPolicy: 'fail',
-    });
+    const store = await JsonStore.open(filePath);
     // Simulate another process persisting a key while this store sits open
     // (e.g. across an awaited network fetch).
     await writeFile(filePath, '{"keep": 1, "drop": 1, "foreign": 2}\n');
@@ -115,9 +106,7 @@ describe('shared JsonStore', () => {
   it('rejects a mutation when the file becomes corrupt and preserves its bytes', async () => {
     const JsonStore = await loadJsonStore();
     const filePath = await createTempFile('state.json', '{"keep": 1}\n');
-    const store = await JsonStore.open(filePath, {
-      corruptionPolicy: 'fail',
-    });
+    const store = await JsonStore.open(filePath);
 
     const corrupt = '{"truncated"';
     await writeFile(filePath, corrupt);
@@ -129,9 +118,7 @@ describe('shared JsonStore', () => {
   it('preserves loaded keys when the backing file disappears before a mutation', async () => {
     const JsonStore = await loadJsonStore();
     const filePath = await createTempFile('state.json', '{"keep": 1}\n');
-    const store = await JsonStore.open(filePath, {
-      corruptionPolicy: 'fail',
-    });
+    const store = await JsonStore.open(filePath);
 
     await rm(filePath);
     await store.set('added', 2);
@@ -147,8 +134,8 @@ describe('shared JsonStore', () => {
     const filePath = await createTempFile('state.json', '{}\n');
 
     const [a, b] = await Promise.all([
-      JsonStore.open(filePath, { corruptionPolicy: 'fail' }),
-      JsonStore.open(filePath, { corruptionPolicy: 'fail' }),
+      JsonStore.open(filePath),
+      JsonStore.open(filePath),
     ]);
     // Both instances opened off the same on-disk snapshot; without per-path
     // read-modify-write serialization the later flush drops the other's key.
@@ -204,7 +191,7 @@ describe('shared JsonStore', () => {
     const script = `
       (async () => {
         const { JsonStore } = require(${JSON.stringify(bundlePath)});
-        const store = await JsonStore.open(${JSON.stringify(filePath)}, { corruptionPolicy: 'fail' });
+        const store = await JsonStore.open(${JSON.stringify(filePath)});
         console.log('ready');
         await store.set('child', 2);
       })().catch((error) => {
@@ -258,7 +245,6 @@ describe('shared JsonStore', () => {
 
     try {
       const store = await JsonStore.open(filePath, {
-        corruptionPolicy: 'fail',
         mode: 0o600,
       });
 
@@ -282,7 +268,6 @@ describe('shared JsonStore', () => {
     const filePath = join(tempDir, 'nested', 'secrets.json');
 
     const store = await JsonStore.open(filePath, {
-      corruptionPolicy: 'fail',
       mode: 0o600,
     });
     await store.set('key', 'value');

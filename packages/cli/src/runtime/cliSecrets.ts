@@ -75,7 +75,6 @@ export class CliSecrets implements PlatformSecrets {
   private openStore(): Promise<JsonStore> {
     return JsonStore.open(this.filePath, {
       mode: SECRETS_FILE_MODE,
-      corruptionPolicy: 'fail',
     });
   }
 }
