@@ -1,6 +1,15 @@
 import { activeForm } from '../state/cliState';
+import { appendLocalUserTranscript } from '../state/transcript';
 
-import { findSlashCommand, type SlashCommand } from './slashRegistry';
+import {
+  findSlashCommand,
+  shouldRedactSlashInput,
+  type SlashCommand,
+} from './slashRegistry';
+
+export function appendSlashCommandEcho(line: string): void {
+  if (!shouldRedactSlashInput(line)) appendLocalUserTranscript(line.trim());
+}
 
 export function openRegisteredCliSlashForm(
   command: SlashCommand,

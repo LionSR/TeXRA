@@ -42,13 +42,8 @@ export interface SlashCommand {
   /** Additional exact remainders that open the canonical form. */
   readonly formRemainders?: readonly string[];
   /**
-   * Fire-and-forget handler. Receives the raw remainder of the command line
-   * (everything after the command name + whitespace).
-   */
-  readonly handler?: (remainder: string) => void;
-  /**
    * Optional structured-form renderer. When present, picking the command
-   * mounts this component instead of routing through `handler` / the input.
+   * mounts this component instead of routing through the input.
    */
   readonly formComponent?: React.ComponentType<SlashFormProps>;
   /**

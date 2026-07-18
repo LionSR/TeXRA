@@ -17,10 +17,7 @@ import {
   streams,
 } from '../state/cliState';
 import { terminalCapabilities } from '../state/terminalCapabilities';
-import {
-  appendLocalAssistantTranscript,
-  appendLocalUserTranscript,
-} from '../state/transcript';
+import { appendLocalAssistantTranscript } from '../state/transcript';
 import { formatSlashCommandHelp, GOAL_MODE_HELP } from './helpText';
 import { showCliAuthStatus } from './handlers/apiModeCommands';
 import { applyCliApprovalPolicySelection } from './handlers/approvalCommand';
@@ -28,7 +25,10 @@ import {
   openCanonicalSlashForm,
   type SlashCommandContext,
 } from './handlers/slashContext';
-import { openRegisteredCliSlashForm } from './slashForms';
+import {
+  appendSlashCommandEcho,
+  openRegisteredCliSlashForm,
+} from './slashForms';
 import {
   findSlashCommand,
   findRedactedSlashCommandInput,
@@ -38,10 +38,6 @@ import {
   suggestSlashCommand,
   type SlashCommand,
 } from './slashRegistry';
-
-function appendSlashCommandEcho(line: string): void {
-  if (!shouldRedactSlashInput(line)) appendLocalUserTranscript(line.trim());
-}
 
 /** Run a command body with centralized echo and error persistence. */
 async function runGuardedSlashCommand(
@@ -76,7 +72,11 @@ export async function handleTuiSlashCommand(
     setTransientNotice(
       `For safety, /${redactedIntent.name} accepts credentials only through its masked form.`,
     );
-    if (!openRegisteredCliSlashForm(redactedIntent, '')) {
+    if (
+      !openRegisteredCliSlashForm(redactedIntent, '', () =>
+        appendSlashCommandEcho(line),
+      )
+    ) {
       setTransientNotice(
         `/${redactedIntent.name} is not available in this CLI view yet.`,
       );
@@ -210,7 +210,11 @@ export async function handleTuiSlashCommand(
       return true;
     default: {
       if (registered) {
-        if (openRegisteredCliSlashForm(registered, parsed.remainder)) {
+        if (
+          openRegisteredCliSlashForm(registered, parsed.remainder, () =>
+            appendSlashCommandEcho(line),
+          )
+        ) {
           return true;
         }
         await runGuardedSlashCommand(

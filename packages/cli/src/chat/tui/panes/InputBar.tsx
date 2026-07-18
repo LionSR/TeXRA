@@ -21,7 +21,10 @@ import {
 } from '../input/imagePasteQueue';
 import { ReverseSearch } from '../input/ReverseSearch';
 import { isCtrlInput } from '../input/inputKeys';
-import { openRegisteredCliSlashForm } from '../commands/slashForms';
+import {
+  appendSlashCommandEcho,
+  openRegisteredCliSlashForm,
+} from '../commands/slashForms';
 import { SlashPalette, slashPaletteOwnsArrows } from '../commands/SlashPalette';
 import { COLOR_BORDER, COLOR_HINT } from '../ui/colors';
 import { POINTER } from '../ui/glyphs';
@@ -38,7 +41,6 @@ import {
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen,
 } from '../state/cliState';
-import { appendLocalUserTranscript } from '../state/transcript';
 import { useSignal } from '../state/useSignal';
 import type { CursorEdit } from '../input/textInputEditing';
 import type { InputHistory } from '../history/inputHistory';
@@ -297,11 +299,9 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         // Structured forms own the screen — clear the input and let
         // the active-form signal mount the component (see App.tsx).
         clearDraft();
-        openRegisteredCliSlashForm(cmd, remainder, () => {
-          if (!shouldRedactSlashInput(commandLine)) {
-            appendLocalUserTranscript(commandLine.trim());
-          }
-        });
+        openRegisteredCliSlashForm(cmd, remainder, () =>
+          appendSlashCommandEcho(commandLine),
+        );
         return;
       }
       if (intent === 'submit') {

@@ -142,6 +142,27 @@ describe('handleTuiSlashCommand', () => {
     ]);
   });
 
+  it('threads deferred echo through fallback registered forms', async () => {
+    registerSlashCommand({
+      name: 'custom-form',
+      description: 'Custom form',
+      echo: 'ifPersists',
+      formComponent: () => null,
+    });
+
+    await handleTuiSlashCommand('/custom-form', createContext(createSession()));
+    const form = activeForm.get()?.render(() => undefined, 20) as {
+      props?: { onPersist?: () => void };
+    };
+    expect(localEntries()).toEqual([]);
+
+    form.props?.onPersist?.();
+
+    expect(localEntries().map(({ role, text }) => ({ role, text }))).toEqual([
+      { role: 'user', text: '/custom-form' },
+    ]);
+  });
+
   it('opens alias-addressed structured forms through the canonical command', async () => {
     registerBuiltinSlashCommands();
 
