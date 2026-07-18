@@ -36,7 +36,10 @@ Extract at the cheapest rung that eliminates the repetition. Each rung costs mor
 2. **`@[simp]` lemma or named simp set.** When the repetition is "the same rewrites over and over". Prefer a named set for domain-specific normal forms:
 
    ```lean
+   -- Project/Attr.lean: dependency-light registration, imported early
    register_simp_attr proj_simp
+
+   -- Project/Projection.lean: domain lemma, beside the definition of P
    @[proj_simp] theorem P_mul_P (i j : ι) : P i * P j = if i = j then P i else 0 := ...
    -- call sites: simp [proj_simp]   (or: simp only [proj_simp])
    ```
