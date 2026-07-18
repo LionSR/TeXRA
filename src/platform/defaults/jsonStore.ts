@@ -19,13 +19,6 @@ type JsonRecord = Record<string, unknown>;
 
 export interface JsonStoreOptions {
   /**
-   * Determines how a present file containing malformed or non-object JSON is
-   * handled. The current contract permits only `fail`; a recovery policy must
-   * define how the original bytes are preserved and how recovery is reported
-   * before this type is widened.
-   */
-  corruptionPolicy: 'fail';
-  /**
    * POSIX mode for the store file (e.g. `0o600` to restrict a secrets file
    * to its owner). The containing directory is created/chmod'd with the
    * same owner permissions plus execute — `0o600` -> `0o700` — so it stays
@@ -102,7 +95,7 @@ export class JsonStore implements StateStore {
    */
   static async open(
     filePath: string,
-    options: JsonStoreOptions,
+    options: JsonStoreOptions = {},
   ): Promise<JsonStore> {
     const storePath = resolve(filePath);
     return new JsonStore(storePath, await readJsonRecord(storePath), options);
