@@ -441,12 +441,29 @@ export const taskDetailExecutionId = TASK_DETAIL_EXECUTION_ID;
 // transientNoticeSlice
 // ---------------------------------------------------------------------------
 
-/** Regenerable status-bar text, optionally with a structured resume target. */
-export interface TransientNotice {
-  readonly text: string;
-  readonly resumeId?: string;
-  readonly expiresAt: number;
-}
+/** Regenerable status-bar text with explicit behavior for exit confirmation. */
+export type TransientNotice =
+  | {
+      readonly kind: 'message';
+      readonly text: string;
+      readonly expiresAt: number;
+    }
+  | {
+      readonly kind: 'exit';
+      readonly text: string;
+      readonly resumeId?: string;
+      readonly expiresAt: number;
+    };
+
+type TransientNoticeOptions =
+  | { readonly kind?: 'message'; readonly ttlMs?: number }
+  | {
+      readonly kind: 'exit';
+      readonly resumeId?: string;
+      readonly ttlMs?: number;
+    };
+
+const DEFAULT_TRANSIENT_NOTICE_TTL_MS = 4_000;
 
 const TRANSIENT_NOTICE = signal<TransientNotice | undefined>(undefined);
 let transientNoticeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -457,21 +474,28 @@ export const transientNotice = TRANSIENT_NOTICE;
 /** Show a regenerable status-bar notice for a bounded interval. */
 export function setTransientNotice(
   text: string,
-  options: { readonly resumeId?: string; readonly ttlMs?: number } = {},
+  options: TransientNoticeOptions = {},
 ): void {
-  const expiresAt = Date.now() + (options.ttlMs ?? 4_000);
-  const notice: TransientNotice = {
-    text,
-    expiresAt,
-    resumeId: options.resumeId,
-  };
+  const ttlMs = options.ttlMs ?? DEFAULT_TRANSIENT_NOTICE_TTL_MS;
+  const expiresAt = Date.now() + ttlMs;
+  const singleLineText = text.replaceAll(/[ \t]*\r?\n[ \t]*/g, ' · ').trim();
+  const notice: TransientNotice =
+    options.kind === 'exit'
+      ? {
+          kind: 'exit',
+          text: singleLineText,
+          expiresAt,
+          resumeId: options.resumeId,
+        }
+      : { kind: 'message', text: singleLineText, expiresAt };
   if (transientNoticeTimer) clearTimeout(transientNoticeTimer);
   TRANSIENT_NOTICE.set(notice);
   transientNoticeTimer = setTimeout(() => {
-    if (TRANSIENT_NOTICE.get()?.expiresAt === expiresAt) {
+    if (TRANSIENT_NOTICE.get() === notice) {
       TRANSIENT_NOTICE.set(undefined);
+      transientNoticeTimer = undefined;
     }
-  }, options.ttlMs ?? 4_000);
+  }, ttlMs);
   transientNoticeTimer.unref?.();
 }
 

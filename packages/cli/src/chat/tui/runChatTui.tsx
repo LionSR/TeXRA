@@ -106,6 +106,7 @@ import {
   streams as streamsSignal,
   clearTransientNotice,
   setTransientNotice,
+  transientNotice as transientNoticeSignal,
 } from './state/cliState';
 import {
   childStreamEntries as childStreamEntriesSignal,
@@ -151,6 +152,8 @@ import {
   type TuiSession,
 } from './state/sessionRunState';
 import type { SkillActivation } from './forms/SkillsListForm';
+
+const EXIT_CONFIRMATION_TTL_MS = 800;
 
 export interface ChatResult {
   exitCode: number;
@@ -867,20 +870,12 @@ export async function runChat(
   );
   inkRef.current = ink;
 
-  let pendingExitTimer: ReturnType<typeof setTimeout> | undefined;
-  let exitArmed = false;
   const terminalJobControlSupported = supportsTerminalJobControl();
   // Set once a signal exit (exitNow) starts: its ink.unmount() resolves
   // waitUntilExit and re-enters the post-waitUntilExit finally, so the finally
   // guards on this to avoid draining persistence / printing the resume hint a
   // second time.
   let exiting = false;
-  const clearPendingExit = (): void => {
-    if (pendingExitTimer) clearTimeout(pendingExitTimer);
-    pendingExitTimer = undefined;
-    exitArmed = false;
-    clearTransientNotice();
-  };
   const removeProcessHandlers = (): void => {
     process.off('SIGINT', handleSigint);
     process.off('SIGTERM', handleSigterm);
@@ -936,7 +931,7 @@ export async function runChat(
   const exitNow = (exitCode: number): void => {
     exiting = true;
     removeProcessHandlers();
-    clearPendingExit();
+    clearTransientNotice();
     ink.unmount();
     cleanupTerminalModes({ clearItermProgress });
     // Print the resume hint last, after Ink has torn down and the terminal modes
@@ -954,17 +949,15 @@ export async function runChat(
     ]).finally(() => process.exit(exitCode));
   };
   const armExit = (): void => {
-    exitArmed = true;
     setTransientNotice('Press Ctrl-C again to exit', {
+      kind: 'exit',
       resumeId: transcriptLifecycle.canResume ? session.executionId : undefined,
-      ttlMs: 800,
+      ttlMs: EXIT_CONFIRMATION_TTL_MS,
     });
-    if (pendingExitTimer) clearTimeout(pendingExitTimer);
-    pendingExitTimer = setTimeout(clearPendingExit, 800);
   };
   const handleSigint = (): void => {
     const sigintAction = chatTuiSigintAction({
-      exitArmed,
+      exitArmed: transientNoticeSignal.get()?.kind === 'exit',
       canStopActiveRun: canStopActiveRun(),
       resumableIdle: isResumableIdle(),
     });
@@ -1031,7 +1024,7 @@ export async function runChat(
   };
   function requestInputExit(): void {
     removeProcessHandlers();
-    clearPendingExit();
+    clearTransientNotice();
     ink.unmount();
   }
   // Ownership transfers right here, not any earlier: everything above this
@@ -1083,7 +1076,7 @@ export async function runChat(
     // async exit, dropping the flush and the signal exit code.
     if (!exiting) {
       removeProcessHandlers();
-      clearPendingExit();
+      clearTransientNotice();
       for (const dispose of disposers) dispose();
       await followUpQueue.onIdle();
       // A suspended (idle/WAITING) root session is resumable: its flow record
