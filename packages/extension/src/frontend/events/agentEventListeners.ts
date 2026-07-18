@@ -8,7 +8,6 @@
  */
 import * as vscode from 'vscode';
 
-import { getProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -17,6 +16,7 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { extensionPresentationEvents } from '@frontend/events/extensionPresentationEvents';
 import * as logger from '@logger/logUtils';
+import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   INSTRUCTION_ACTION,
@@ -109,14 +109,17 @@ function handleRequestShowError({ message }: RequestShowErrorPayload): void {
 
 async function handleRequestEnsureProgressView(
   payload: RequestEnsureProgressViewPayload,
+  progressViewProvider: ProgressViewProvider,
 ): Promise<void> {
+  if (progressViewProvider.isViewVisible()) return;
+
   await vscode.commands.executeCommand('texra.showProgressView');
 
   // If the view is still not visible after attempting to open it and a
   // fallback notification was provided, show a toast as a last resort.
   // This preserves the original two-check semantics that relied on await.
   const fb = payload.fallbackNotification;
-  if (fb && !getProgressViewBridge().isViewVisible()) {
+  if (fb && !progressViewProvider.isViewVisible()) {
     const selection = await vscode.window.showInformationMessage(
       `TeXRA Agent Started: "${fb.agentName}" is processing ${fb.inputName} with ${fb.modelName} ${fb.outputInfo}. View in ProgressBoard for progress.`,
       {
@@ -136,7 +139,9 @@ async function handleRequestEnsureProgressView(
  * Register all agent→frontend event listeners.
  * Returns a Disposable that cleans up all subscriptions.
  */
-export function registerAgentEventListeners(): vscode.Disposable {
+export function registerAgentEventListeners(
+  progressViewProvider: ProgressViewProvider,
+): vscode.Disposable {
   const controller = new AbortController();
   const { signal } = controller;
 
@@ -158,7 +163,8 @@ export function registerAgentEventListeners(): vscode.Disposable {
   });
   extensionPresentationEvents.on(
     'requestEnsureProgressView',
-    (payload) => void handleRequestEnsureProgressView(payload),
+    (payload) =>
+      void handleRequestEnsureProgressView(payload, progressViewProvider),
     { signal },
   );
 

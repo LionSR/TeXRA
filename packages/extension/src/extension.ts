@@ -727,7 +727,8 @@ export async function activate(context: vscode.ExtensionContext) {
     await viewProviders.mainViewProvider.showInSidebar();
   };
 
-  const agentEventDisposable = registerAgentEventListeners();
+  const agentEventDisposable =
+    registerAgentEventListeners(progressViewProvider);
 
   // Surface curated research tools to VS Code's Language Model Tool API
   // (Copilot Chat `#texra_*` references).

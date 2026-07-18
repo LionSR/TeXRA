@@ -46,7 +46,6 @@ import {
   getAllActiveExecutionIds,
   SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import {
   presentFollowUpWakeResult,
   sendFollowUp,
@@ -218,7 +217,6 @@ export class DesktopProgressBridge {
     this.detachHostInteractions = this.session.useHostInteractions(
       this.hostInteractions,
     );
-    setProgressViewBridge({ isViewVisible: () => true });
     const syncRenderedStreams = (): void =>
       this.syncStreamContent(this.updateStreamMetadata());
 
@@ -830,9 +828,12 @@ export class DesktopProgressBridge {
     if (!isRuntimePresentationEvent(event)) return;
 
     switch (event) {
-      case 'requestEnsureProgressView':
-        this.routeToProgress();
+      case 'requestEnsureProgressView': {
+        const data =
+          payload as AgentRuntimeEventPayloads['requestEnsureProgressView'];
+        if (!data.fallbackNotification) this.routeToProgress();
         return;
+      }
       case 'requestShowError':
       case 'requestShowInstruction': {
         const { message } = payload as
