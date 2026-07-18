@@ -181,7 +181,9 @@ function getRunContextField<K extends keyof RunScope & keyof BareRunContext>(
   field: K,
   context: RunContext | undefined,
 ): RunScope[K] | BareRunContext[K] | undefined {
-  return context?.kind === 'launch' ? context.runScope[field] : context?.[field];
+  return context?.kind === 'launch'
+    ? context.runScope[field]
+    : context?.[field];
 }
 
 /** Return the runtime host for a context, reading launch contexts through RunScope. */

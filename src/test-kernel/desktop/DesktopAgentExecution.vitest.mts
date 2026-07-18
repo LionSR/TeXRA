@@ -891,9 +891,7 @@ describe('DesktopProgressBridge', () => {
       type: 'child.activity',
       kind: 'processes',
       parentStreamId: 'parent',
-      items: [
-        { kind: 'process', executionId: 'process-1', agentName: 'bash' },
-      ],
+      items: [{ kind: 'process', executionId: 'process-1', agentName: 'bash' }],
     });
 
     vi.spyOn(Date, 'now').mockReturnValue(2_000);
@@ -946,9 +944,7 @@ describe('DesktopProgressBridge', () => {
       type: 'child.activity',
       kind: 'processes',
       parentStreamId: 'parent',
-      items: [
-        { kind: 'process', executionId: 'process-1', agentName: 'bash' },
-      ],
+      items: [{ kind: 'process', executionId: 'process-1', agentName: 'bash' }],
     });
     emitRunEvent(bridge, 'parent' as StreamTabId, {
       type: 'child.activity',
