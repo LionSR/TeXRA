@@ -56,6 +56,7 @@ import {
   type StreamTabMeta,
   type TodoItem,
   type TokenUsageStats,
+  type UpdateStreamUsagePayload,
   type WorkPlanSnapshot,
 } from '@shared/schemas';
 import { getCleanAgentName } from '@shared/schemas/agent';
@@ -101,12 +102,6 @@ interface StagedStreamSnapshotDeletion {
   commit(): Promise<void>;
   rollback(): Promise<void>;
 }
-
-const UsageRunEventDataSchema = z.looseObject({
-  streamId: StreamTabIdSchema,
-  storageKey: z.string().min(1),
-  usage: TokenUsageStatsParsingSchema,
-});
 
 type OutputFilesPatch = Map<number, OutputFileInfo[] | null>;
 type UsageUpdateResult =
@@ -441,7 +436,7 @@ export class StreamSnapshotStore {
             );
             return;
           case 'usage':
-            this.handleSessionUsageEvent(event.data);
+            this.handleSessionUsageEvent(event.payload);
             return;
           case 'updateTodos':
             this.setTodos(event.streamId, event.todos);
@@ -506,14 +501,25 @@ export class StreamSnapshotStore {
     };
   }
 
-  private handleSessionUsageEvent(data: unknown): void {
-    const payload = UsageRunEventDataSchema.safeParse(data);
-    if (!payload.success) return;
-    void this.addUsage(
-      payload.data.streamId,
-      payload.data.storageKey as StorageKey,
-      payload.data.usage,
-    );
+  private handleSessionUsageEvent(payload: UpdateStreamUsagePayload): void {
+    const {
+      inputTokens,
+      outputTokens,
+      cost,
+      cacheReadInputTokens,
+      cacheMissInputTokens,
+      cacheCreationInputTokens,
+      usageRoute,
+    } = payload.usage;
+    void this.addUsage(payload.streamId, payload.storageKey, {
+      inputTokens,
+      outputTokens,
+      cost,
+      cacheReadInputTokens,
+      cacheMissInputTokens,
+      cacheCreationInputTokens,
+      usageRoute,
+    });
   }
 
   /**

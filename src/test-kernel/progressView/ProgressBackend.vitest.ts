@@ -1531,8 +1531,7 @@ describe('ProgressBackend', () => {
         streamId,
         event: {
           type: 'usage',
-          stats: { inputTokens: 10, outputTokens: 5, cost: 0.01 },
-          data: {
+          payload: {
             streamId,
             storageKey,
             usage: { inputTokens: 10, outputTokens: 5, cost: 0.01 },

@@ -2298,8 +2298,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         streamId: root,
         event: {
           type: 'usage',
-          stats: usage,
-          data: {
+          payload: {
             streamId: root,
             storageKey,
             executionId: 'exec-direct',
@@ -2458,8 +2457,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         streamId: root,
         event: {
           type: 'usage',
-          stats: payload.usage,
-          data: payload,
+          payload,
         },
       });
       hub.emit({
@@ -2467,8 +2465,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         streamId: root,
         event: {
           type: 'usage',
-          stats: secondPayload.usage,
-          data: secondPayload,
+          payload: secondPayload,
         },
       });
 
@@ -2601,8 +2598,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         streamId: root,
         event: {
           type: 'usage',
-          stats: {},
-          data: {
+          payload: {
             streamId: root,
             storageKey,
             usage: {
@@ -2619,8 +2615,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         streamId: root,
         event: {
           type: 'usage',
-          stats: {},
-          data: {
+          payload: {
             streamId: root,
             storageKey,
             usage: {
