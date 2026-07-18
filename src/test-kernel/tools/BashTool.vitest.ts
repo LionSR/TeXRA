@@ -45,7 +45,6 @@ import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 // Type imports
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
@@ -187,12 +186,12 @@ function roundServices(opts: {
     } satisfies AgentPrompt,
     userVarChannels: { input: {}, transient: {} },
     logger: opts.logger,
-    streamStatus: new StreamStatusMachine(),
     client: {} as OpenAI,
     fileService: new TaskRunFileService('deadbeef'),
     toolRegistry: opts.toolRegistry,
     checkInterruption: opts.checkInterruption ?? (() => false),
     setAbortController: opts.setAbortController ?? (() => {}),
+    onRoundFinalized: () => {},
     run: AgentRunStateSnapshotSchema.parse({}),
     workspace: AgentWorkspaceState.create(),
   };

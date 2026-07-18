@@ -13,7 +13,6 @@ import {
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { withTestRunContext } from '../progressTestUtils';
 
 /**
@@ -135,6 +134,7 @@ describe('ToolUseDispatchNode interruption', () => {
       },
       prompt: { systemPrompt: '', userPrefix: '', userRequest: '' },
       run: AgentRunStateSnapshotSchema.parse({}),
+      onRoundFinalized: () => {},
       session: {
         hasQueuedFollowUp: () => false,
       },
@@ -143,7 +143,6 @@ describe('ToolUseDispatchNode interruption', () => {
         temperature: 0,
         tools: [{ name: 'toolA' }, { name: 'toolB' }],
       },
-      streamStatus: new StreamStatusMachine(),
       toolRegistry: new MapToolRegistry({
         toolA: { call: toolACall, definition: { name: 'toolA' } } as never,
         toolB: { call: toolBCall, definition: { name: 'toolB' } } as never,
@@ -308,6 +307,7 @@ describe('ToolUseDispatchNode interruption', () => {
       },
       prompt: { systemPrompt: '', userPrefix: '', userRequest: '' },
       run: AgentRunStateSnapshotSchema.parse({}),
+      onRoundFinalized: () => {},
       session: {
         hasQueuedFollowUp: () => false,
       },
@@ -316,7 +316,6 @@ describe('ToolUseDispatchNode interruption', () => {
         temperature: 0,
         tools: [{ name: 'toolA' }, { name: 'toolB' }],
       },
-      streamStatus: new StreamStatusMachine(),
       toolRegistry: new MapToolRegistry({
         toolA: { call: toolACall, definition: { name: 'toolA' } } as never,
         toolB: { call: toolBCall, definition: { name: 'toolB' } } as never,

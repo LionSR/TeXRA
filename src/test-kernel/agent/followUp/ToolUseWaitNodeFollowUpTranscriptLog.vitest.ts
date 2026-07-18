@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import { TraceEmitter } from '@agent/trace';
 import { ToolUseWaitNode } from '@agent/implementations/flows/tooluse/nodes/ToolUseWaitNode';
 import type {
   ToolUseRunShared,
@@ -14,14 +15,19 @@ function buildServices(
   overrides: Partial<ToolUseServices<unknown>> = {},
 ): ToolUseServices<unknown> {
   return {
-    logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    logger: Object.assign(new TraceEmitter(), {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    }),
     modelHandler: {
       createUserFollowUpMessages: vi.fn(async (messages) => messages),
       addMediaToUserMessage: vi.fn(async () => []),
       capabilities: {},
     } as never,
     fileService: { createLocation: vi.fn() } as never,
-    streamStatus: { transition: vi.fn() } as never,
+    onRoundFinalized: () => {},
     ...overrides,
   } as ToolUseServices<unknown>;
 }
