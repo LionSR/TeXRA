@@ -11,7 +11,7 @@ export function createFakeSetupPlatform(
 ): SetupPlatform {
   return {
     host: overrides.host ?? 'cli',
-    signIn: overrides.signIn,
+    signIn: overrides.signIn ?? (async () => false),
     commands: {
       async invoke() {},
       ...overrides.commands,

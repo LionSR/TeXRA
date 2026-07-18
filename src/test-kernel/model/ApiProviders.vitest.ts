@@ -79,6 +79,7 @@ function setupApiKeyToolPlatform(
   );
   setSetupPlatform({
     host: 'cli',
+    signIn: async () => false,
     commands: {
       async invoke() {},
     },
