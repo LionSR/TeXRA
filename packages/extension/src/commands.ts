@@ -22,25 +22,17 @@ import {
 import { registerMainViewCommands } from '@commands/system';
 import { registerStateRestoreCommand } from '@commands/taskFormState';
 import {
-  registerSettingsViewCommands,
-  initializeSettingsViewProvider,
-} from '@commands/settings';
-import {
   createExtensionCommandActions,
   registerExtensionCommandRegistry,
 } from '@commands/extensionCommandSurface';
 import { registerGitCommands } from '@commands/git/gitCommands';
 import { registerAgentReviewCommands } from '@commands/review/agentReviewCommands';
-// Local file imports
+
+// Local imports - components
+import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { MainViewProvider } from './MainViewProvider';
 
-let mainViewProviderInstance: MainViewProvider | null = null;
-
-export function getMainViewProvider(): MainViewProvider | null {
-  return mainViewProviderInstance;
-}
-
-export function registerCommands(context: vscode.ExtensionContext): void {
+export function registerCommands(context: vscode.ExtensionContext) {
   registerFileSelectionCommands(context);
   registerLatexdiffCommands(context);
   registerGitCommands(context);
@@ -49,7 +41,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   registerCleanCommands(context);
   registerMergeCommands(context);
   registerStateRestoreCommand(context);
-  registerSettingsViewCommands(context);
+  const settingsViewProvider = new SettingsViewProvider(context);
   registerCompareCommands(context);
   registerFollowUpCommand(context);
   registerResumeAgentCommand(context);
@@ -80,17 +72,16 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   // VS Code state directly (e.g. `vscode.window.activeTextEditor`).
   // Host-exclusive commands like `texra.showGitSettings` follow the same
   // `Exclude<>` pattern desktop already uses.
-  const settingsViewProvider = initializeSettingsViewProvider(context);
   registerExtensionCommandRegistry(
     context,
     createExtensionCommandActions(context, settingsViewProvider),
   );
 
-  mainViewProviderInstance = new MainViewProvider(context);
+  const mainViewProvider = new MainViewProvider(context);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
       'texra.mainView',
-      mainViewProviderInstance,
+      mainViewProvider,
       {
         webviewOptions: {
           retainContextWhenHidden: true,
@@ -98,4 +89,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
       },
     ),
   );
+
+  return { mainViewProvider, settingsViewProvider };
 }
