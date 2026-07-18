@@ -71,7 +71,7 @@ was the `extends ... TextConnectionService` on `ResponseCycleServices` ten
 lines below it — the repo's banned "single-caller extraction" (AGENTS.md
 "abstraction-cost guardrails"). Its one member `bestConnectionMethod` is now
 declared directly on `ResponseCycleServices` (its sole carrier), and the
-private interface deleted. Net −4 LOC.
+private interface deleted. Net −3 LOC (9 insertions / 12 deletions).
 
 Why this one was unattended-safe: it is a **non-exported type** (no
 exported-surface change; nothing outside the file can name it — grep-confirmed
@@ -295,7 +295,7 @@ host deep-import width the north-star flagged as accelerating has **contracted**
 0, so the boundary erosion has reversed under the maintainers' consolidation
 train. **One cleanup was applied this pass:** the private, non-exported,
 single-use `TextConnectionService` interface inlined into
-`ResponseCycleServices` (−4 LOC), verified type-safe (all six configs) +
+`ResponseCycleServices` (−3 LOC), verified type-safe (all six configs) +
 lint-clean + the one relevant suite green. The pass otherwise found no
 unattended-safe cleanup — three candidates were verified false positives
 (`followUpResumeDetection`, `IToolRegistry`, `RetryableInvocationNode`, all
