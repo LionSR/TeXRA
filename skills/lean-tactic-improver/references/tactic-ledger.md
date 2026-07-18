@@ -46,7 +46,7 @@ Extract at the cheapest rung that eliminates the repetition. Each rung costs mor
 
    Reserve global `@[simp]` for lemmas that are unconditionally good normal forms everywhere in the project.
 
-3. **Aesop rule set.** When the repetition is shallow search (membership, subsets, positivity-style side goals) rather than rewriting:
+3. **Aesop rule set.** When the project already depends on Aesop and the repetition is shallow search (membership, subsets, positivity-style side goals) rather than rewriting. Do not add Aesop as an incidental dependency; stay on a lower rung unless that dependency change is explicitly in scope.
 
    ```lean
    declare_aesop_rule_sets [Foo]
@@ -69,6 +69,7 @@ Extract at the cheapest rung that eliminates the repetition. Each rung costs mor
 - [ ] The pattern has at least three real occurrences (rule of three) — count them before building anything.
 - [ ] Searched Mathlib for existing automation (`simp` lemma families, `positivity`/`gcongr`/`fun_prop` extensions, existing aesop rule sets) before writing project-local machinery.
 - [ ] Picked the lowest sufficient ladder rung.
+- [ ] Any framework-specific rung is already available in the project; otherwise stayed on a lower rung rather than adding an incidental dependency.
 - [ ] Domain-specific automation is colocated with the declarations it uses; only dependency-light shared infrastructure lives in an early-imported automation file. Its docstring states the goal shapes it closes.
 - [ ] Rewrote every motivating call site; each got shorter or clearer. Reverted if not.
 - [ ] Full project still builds; no distant proof broke from a new simp/aesop attribute.
