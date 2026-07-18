@@ -75,6 +75,9 @@ export const nodeFilesystem: FileSystemProvider = {
     };
   },
 
+  // These operations intentionally use fs.promises in every host:
+  // vscode.workspace.fs has no chunked-read API and reports symlinks
+  // unreliably across platforms.
   async isSymlink(target: string): Promise<boolean> {
     const lstats = await fs.promises.lstat(target);
     return lstats.isSymbolicLink();
