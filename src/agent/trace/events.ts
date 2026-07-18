@@ -379,8 +379,12 @@ export type AgentEvent =
   | DomainEvent
   | ResultEvent;
 
-/** Run facts consumed by both progress-view and headless CLI projections. */
-export const RUN_FACT_EVENT_TYPES = [
+/**
+ * Event types consumed by both progress-view and headless CLI projections.
+ * This host subscription vocabulary is intentionally broader than
+ * `RunFactEvent`: it also includes transient runtime events that hosts project.
+ */
+export const RUN_FACT_EVENT_TYPES = Object.freeze([
   'conversation.progress',
   'updateTodos',
   'updatePlan',
@@ -394,4 +398,4 @@ export const RUN_FACT_EVENT_TYPES = [
   'stage.start',
   'child.activity',
   'process.output',
-] as const satisfies readonly AgentEvent['type'][];
+] as const satisfies readonly AgentEvent['type'][]);
