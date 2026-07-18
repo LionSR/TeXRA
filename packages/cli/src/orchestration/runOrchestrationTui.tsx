@@ -8,7 +8,6 @@ import { wrapAnsiToWidth } from '../chat/tui/render/ansiWrap';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
 import { computeSelectWindowSize } from '../chat/tui/forms/_shared/selectWindow';
 import {
-  buildModelAccessItems,
   isCliOrchestrationModelPickAction,
   orchestrationModelAccessView,
   type CliOrchestrationAction,
@@ -16,6 +15,7 @@ import {
   type CliOrchestrationModelPickAction,
 } from '../runtime/orchestration';
 import {
+  buildCliModelAccessItems,
   formatCliModelAccessRoute,
   type CliModelAccessRoute,
   type CliModelAccessStatus,
@@ -266,7 +266,7 @@ export function OrchestrationApp(
   const teamOpen = step.kind === 'team';
   const accountOpen = step.kind === 'account';
   const modelAccessItems = props.modelAccess
-    ? buildModelAccessItems(props.modelAccess)
+    ? buildCliModelAccessItems(props.modelAccess)
     : [];
   const activeModelAccess: CliModelAccessRoute | undefined =
     props.modelAccess?.active;

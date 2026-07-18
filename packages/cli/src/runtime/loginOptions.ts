@@ -31,7 +31,27 @@ interface CliChatGptLoginSlashArgs {
 export type CliLoginSlashArgs =
   CliTexraLoginSlashArgs | CliChatGptLoginSlashArgs;
 
+export type CliLogoutTarget = 'chatgpt' | 'texra' | 'all';
+
 const CHATGPT_LOGIN_TARGETS = new Set(['chatgpt', 'codex', 'subscription']);
+
+export function parseCliLogoutTarget(
+  input: string,
+): CliLogoutTarget | undefined {
+  switch (input.trim().toLowerCase()) {
+    case 'chatgpt':
+    case 'codex':
+    case 'subscription':
+      return 'chatgpt';
+    case 'texra':
+    case 'researcher':
+      return 'texra';
+    case 'all':
+      return 'all';
+    default:
+      return undefined;
+  }
+}
 
 export function resolveLoginProvider(
   positional: string | undefined,

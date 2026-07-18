@@ -18,6 +18,7 @@ import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
 import {
   activeForm,
   activeStreamId,
+  codexPreferenceVersion,
   patchSessionMeta,
   resetCliState,
   patchStream,
@@ -26,6 +27,7 @@ import {
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as chatGptLogin from '@cli/runtime/chatgptLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
+import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import type { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -53,6 +55,13 @@ function createSession(): TuiSession {
     runCompleted: false,
     stopRequested: false,
   };
+}
+
+function mockModelAccessOverview(): void {
+  vi.spyOn(apiStatus, 'loadCliModelAccessOverview').mockResolvedValue({
+    access: { active: 'personal', chatGptSignedIn: false },
+    lines: ['model access: Personal API keys'],
+  });
 }
 
 function createCliContext(overrides: Partial<CliContext> = {}): CliContext {
@@ -267,6 +276,69 @@ describe('handleTuiSlashCommand', () => {
     );
   });
 
+  it('derives /auth and /api status from the same access overview', async () => {
+    registerBuiltinSlashCommands();
+    const overview = vi
+      .spyOn(apiStatus, 'loadCliModelAccessOverview')
+      .mockResolvedValue({
+        access: {
+          active: 'chatgpt',
+          chatGptSignedIn: true,
+          texraSignedIn: true,
+        },
+        lines: [
+          'model access: ChatGPT subscription',
+          'ChatGPT: signed in',
+          'TeXRA: signed in',
+        ],
+      });
+    vi.spyOn(apiStatus, 'loadCliApiStatusLines').mockResolvedValue([
+      'api: Included TeXRA access',
+      'auth: signed in',
+      'tier: researcher',
+      'included usage this month: 25% used, 75% remaining',
+    ]);
+    const context = createContext(createSession());
+
+    await handleTuiSlashCommand('/auth', context);
+    expect(lastEntryText()).toContain('model access: ChatGPT subscription');
+
+    await handleTuiSlashCommand('/api status', context);
+    const apiStatusText = lastEntryText();
+    expect(apiStatusText).toContain('model access: ChatGPT subscription');
+    expect(apiStatusText).toContain('tier: researcher');
+    expect(apiStatusText).toContain(
+      'included usage this month: 25% used, 75% remaining',
+    );
+    expect(overview).toHaveBeenCalledTimes(2);
+  });
+
+  it('preserves the current chat fallback when selecting ChatGPT', async () => {
+    registerBuiltinSlashCommands();
+    patchSessionMeta({ apiMode: 'personal' });
+    const selection = vi
+      .spyOn(modelAccessSelection, 'selectCliModelAccessRoute')
+      .mockResolvedValue({
+        apiMode: 'personal',
+        message: 'Model access: ChatGPT subscription.',
+      });
+    const session = createSession();
+    session.runPromise = new Promise(() => undefined);
+    const context = createContext(session, {
+      cliContext: createCliContext({ apiMode: 'included' }),
+    });
+    const previousPreferenceVersion = codexPreferenceVersion.get();
+
+    await handleTuiSlashCommand('/api chatgpt', context);
+
+    expect(selection).toHaveBeenCalledWith(
+      expect.objectContaining({ apiMode: 'personal' }),
+      'chatgpt',
+      expect.any(Object),
+    );
+    expect(codexPreferenceVersion.get()).toBe(previousPreferenceVersion + 1);
+  });
+
   it('clears TeXRA and ChatGPT credentials on /logout', async () => {
     registerBuiltinSlashCommands();
     const signOutSupabase = vi
@@ -277,12 +349,10 @@ describe('handleTuiSlashCommand', () => {
       .mockResolvedValue({
         preferenceUpdate: { effective: false, target: 'global' },
       });
-    vi.spyOn(apiStatus, 'loadCliApiStatusLines').mockResolvedValue([
-      'API mode: personal',
-    ]);
+    mockModelAccessOverview();
 
     const handled = await handleTuiSlashCommand(
-      '/logout',
+      '/logout all',
       createContext(createSession()),
     );
 
@@ -290,8 +360,50 @@ describe('handleTuiSlashCommand', () => {
     expect(signOutSupabase).toHaveBeenCalledOnce();
     expect(signOutChatGpt).toHaveBeenCalledOnce();
     const entry = lastEntryText();
-    expect(entry).toContain('Signed out.');
+    expect(entry).toContain('Signed out of TeXRA.');
+    expect(entry).toContain('Signed out of ChatGPT.');
     expect(entry).toContain('ChatGPT subscription disabled for Codex models.');
+  });
+
+  it('opens an account-specific sign-out chooser for bare /logout', async () => {
+    registerBuiltinSlashCommands();
+
+    const handled = await handleTuiSlashCommand(
+      '/logout',
+      createContext(createSession()),
+    );
+
+    expect(handled).toBe(true);
+    expect(activeForm.get()?.commandName).toBe('logout');
+  });
+
+  it('signs out of only the requested account', async () => {
+    registerBuiltinSlashCommands();
+    const signOutSupabase = vi
+      .spyOn(supabaseAuth, 'signOutCliSupabase')
+      .mockResolvedValue(undefined);
+    const signOutChatGpt = vi
+      .spyOn(chatGptLogin, 'signOutCliChatGpt')
+      .mockResolvedValue({
+        preferenceUpdate: { effective: false, target: 'global' },
+      });
+    mockModelAccessOverview();
+    const previousPreferenceVersion = codexPreferenceVersion.get();
+
+    await handleTuiSlashCommand(
+      '/logout texra',
+      createContext(createSession()),
+    );
+    expect(signOutSupabase).toHaveBeenCalledOnce();
+    expect(signOutChatGpt).not.toHaveBeenCalled();
+    expect(codexPreferenceVersion.get()).toBe(previousPreferenceVersion + 1);
+
+    await handleTuiSlashCommand(
+      '/logout chatgpt',
+      createContext(createSession()),
+    );
+    expect(signOutSupabase).toHaveBeenCalledOnce();
+    expect(signOutChatGpt).toHaveBeenCalledOnce();
   });
 
   it('reports successful TeXRA sign-out when ChatGPT logout fails', async () => {
@@ -300,18 +412,16 @@ describe('handleTuiSlashCommand', () => {
     vi.spyOn(chatGptLogin, 'signOutCliChatGpt').mockRejectedValue(
       new Error('Codex logout failed'),
     );
-    vi.spyOn(apiStatus, 'loadCliApiStatusLines').mockResolvedValue([
-      'API mode: personal',
-    ]);
+    mockModelAccessOverview();
 
     const handled = await handleTuiSlashCommand(
-      '/logout',
+      '/logout all',
       createContext(createSession()),
     );
 
     expect(handled).toBe(true);
     const entry = lastEntryText();
-    expect(entry).toContain('Signed out.');
+    expect(entry).toContain('Signed out of TeXRA.');
     expect(entry).toContain('ChatGPT sign-out failed: Codex logout failed');
   });
 
@@ -321,18 +431,17 @@ describe('handleTuiSlashCommand', () => {
     vi.spyOn(chatGptLogin, 'signOutCliChatGpt').mockResolvedValue({
       preferenceError: 'Config write failed',
     });
-    vi.spyOn(apiStatus, 'loadCliApiStatusLines').mockResolvedValue([
-      'API mode: personal',
-    ]);
+    mockModelAccessOverview();
 
     const handled = await handleTuiSlashCommand(
-      '/logout',
+      '/logout all',
       createContext(createSession()),
     );
 
     expect(handled).toBe(true);
     const entry = lastEntryText();
-    expect(entry).toContain('Signed out.');
+    expect(entry).toContain('Signed out of TeXRA.');
+    expect(entry).toContain('Signed out of ChatGPT.');
     expect(entry).toContain(
       'ChatGPT subscription preference could not be disabled: Config write failed',
     );
