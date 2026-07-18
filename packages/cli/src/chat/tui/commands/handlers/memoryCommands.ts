@@ -2,13 +2,13 @@ import {
   formatCliMemoryList,
   formatCliMemoryPreview,
 } from '@cli/runtime/memory';
-import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
+import { openInfoPane } from '@cli/chat/tui/state/cliState';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 
 export async function showCliMemoryList(): Promise<void> {
-  appendLocalAssistantTranscript(formatCliMemoryList(await loadMemoryItems()));
+  openInfoPane('/memory list', formatCliMemoryList(await loadMemoryItems()));
 }
 
 export async function showCliMemoryPreview(inputPath: string): Promise<void> {
-  appendLocalAssistantTranscript(await formatCliMemoryPreview(inputPath));
+  openInfoPane('/memory preview', await formatCliMemoryPreview(inputPath));
 }

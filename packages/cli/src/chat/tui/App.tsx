@@ -38,6 +38,7 @@ import {
 } from './appInteractionPolicy';
 import { ApprovalModal } from './modals/ApprovalModal';
 import { TaskDetailView } from './modals/TaskDetailView';
+import { InfoPane } from './panes/InfoPane';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
@@ -67,13 +68,16 @@ import {
   rootRunStartAvailable as rootRunStartAvailableSignal,
   rootStreamId as rootStreamIdSignal,
   activeForm as activeFormSignal,
+  closeInfoPane,
   formProgress as formProgressSignal,
+  infoPane as infoPaneSignal,
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen as slashPaletteOpenSignal,
   taskDetailExecutionId as taskDetailExecutionIdSignal,
   streams as streamsSignal,
   type StreamSlice,
 } from './state/cliState';
+import { appendLocalAssistantTranscript } from './state/transcript';
 import {
   activeSubagentsFor,
   childStreamEntries as childStreamEntriesSignal,
@@ -158,6 +162,7 @@ export function App(props: AppProps): React.JSX.Element {
   const subagentExecutionLabels = useSignal(subagentExecutionLabelsSignal);
   const activeForm = useSignal(activeFormSignal);
   const formProgress = useSignal(formProgressSignal);
+  const infoPane = useSignal(infoPaneSignal);
   const slashPaletteOpen = useSignal(slashPaletteOpenSignal);
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
   const taskDetailExecutionId = useSignal(taskDetailExecutionIdSignal);
@@ -203,6 +208,7 @@ export function App(props: AppProps): React.JSX.Element {
   const foregroundOpen =
     activeApprovalVisible ||
     activeForm !== undefined ||
+    infoPane !== undefined ||
     taskDetailExecutionId !== undefined;
   const childInputDisabledMessage = focusedChildInputDisabledMessage({
     activeStreamId,
@@ -408,6 +414,7 @@ export function App(props: AppProps): React.JSX.Element {
   const foregroundKind = foregroundSurfaceKind({
     activeFormOpen: activeForm !== undefined,
     formBusy,
+    infoPaneOpen: infoPane !== undefined,
     pendingApproval: activeApprovalVisible,
     taskDetailOpen: taskDetailProcess !== undefined,
   });
@@ -417,6 +424,11 @@ export function App(props: AppProps): React.JSX.Element {
     approvalKind,
     kind: foregroundKind,
   });
+  const archiveInfoPane = useCallback((lines: readonly string[]) => {
+    if (infoPaneSignal.get()?.lines !== lines) return;
+    closeInfoPane();
+    appendLocalAssistantTranscript(lines.join('\n'));
+  }, []);
   function renderForegroundSurface(availableRows: number): React.ReactNode {
     switch (foregroundKind) {
       case 'taskDetail': {
@@ -442,6 +454,17 @@ export function App(props: AppProps): React.JSX.Element {
           formProgressSignal.set(undefined);
           activeFormSignal.set(undefined);
         }, availableRows);
+      case 'infoPane':
+        return infoPane ? (
+          <InfoPane
+            availableRows={availableRows}
+            colorEnabled={props.colorEnabled}
+            lines={infoPane.lines}
+            onClose={closeInfoPane}
+            onOverflow={archiveInfoPane}
+            title={infoPane.title}
+          />
+        ) : null;
       case 'approval':
         return activeApprovalVisible && pending ? (
           <ApprovalModal pending={pending} availableRows={availableRows} />

@@ -35,7 +35,7 @@ export function MemoryListForm(props: MemoryListFormProps): React.JSX.Element {
       }
       availableRows={props.availableRows}
       description={
-        <Text dimColor>Choose a memory to preview in the transcript.</Text>
+        <Text dimColor>Choose a memory to preview. Press Esc to close.</Text>
       }
       emptyMessage="No memory files found."
       selectMarginTop={1}
