@@ -102,6 +102,18 @@ describe('isStrictNativeCompatible', () => {
 
     expect(isStrictNativeCompatible(spec)).toBe(false);
   });
+
+  it('rejects a bare object node with no additionalProperties: false', () => {
+    const spec = resolveStructuredOutput({ type: 'object' });
+
+    expect(isStrictNativeCompatible(spec)).toBe(false);
+  });
+
+  it('rejects an unconstrained (empty) schema', () => {
+    const spec = resolveStructuredOutput({});
+
+    expect(isStrictNativeCompatible(spec)).toBe(false);
+  });
 });
 
 describe('buildTerminalTool', () => {
