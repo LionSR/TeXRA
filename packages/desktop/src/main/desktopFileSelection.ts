@@ -1,7 +1,6 @@
 import { isAbsolute, relative, resolve } from 'node:path';
 
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { platform, tryPlatform } from '@platform/platform';
+import { platform } from '@platform/platform';
 import {
   getEditedFileListConfig,
   getFileListConfig,
@@ -54,10 +53,6 @@ const MULTI_SET_COMMAND_BY_FILE_TYPE = {
 
 type DesktopMultiFileType = keyof typeof MULTI_SET_COMMAND_BY_FILE_TYPE;
 
-function readDirectory(directory: string) {
-  return (tryPlatform()?.fs ?? nodeFilesystem).readDirectory(directory);
-}
-
 async function listFiles(
   root: string,
   rawConfig: FileListConfig,
@@ -65,7 +60,7 @@ async function listFiles(
   return listWorkspaceFiles({
     root,
     config: rawConfig,
-    readDirectory,
+    readDirectory: (directory) => platform().fs.readDirectory(directory),
   });
 }
 
