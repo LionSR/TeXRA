@@ -84,6 +84,7 @@ function dispatchHarness(opts: HarnessOptions) {
     logger: runTrace.trace,
     toolRegistry: new MapToolRegistry(opts.tools),
     checkInterruption: opts.checkInterruption ?? (() => false),
+    onRoundFinalized: () => {},
     setAbortController: opts.setAbortController ?? (() => {}),
     run: AgentRunStateSnapshotSchema.parse({}),
     workspace: AgentWorkspaceState.create(),

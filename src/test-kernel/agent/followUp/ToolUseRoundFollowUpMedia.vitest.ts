@@ -13,7 +13,6 @@ import {
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { withTestRunContext } from '../progressTestUtils';
 
 /**
@@ -30,10 +29,10 @@ function baseRoundServices(traceLabel: string) {
       createLocation: (filePath: string) => ({ absolutePath: filePath }),
     },
     logger: createRunTrace(traceLabel, StreamLogStore.ephemeral('test')).trace,
+    onRoundFinalized: () => {},
     prompt: { systemPrompt: '', userPrefix: '', userRequest: '' },
     run: AgentRunStateSnapshotSchema.parse({}),
     setAbortController: () => {},
-    streamStatus: new StreamStatusMachine(),
     userVarChannels: { input: {}, transient: {} },
     workspace: AgentWorkspaceState.create(),
   };
