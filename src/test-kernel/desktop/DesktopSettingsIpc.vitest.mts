@@ -3,7 +3,7 @@ import { FakeStateStore } from '@test/support/FakePlatform';
 import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import { DEFAULT_GIT_MARK_COMMITS } from '@shared/constants/git';
+import { DEFAULT_GIT_MARK_COMMITS } from '@shared/schemas/stateSettings';
 import {
   isWorktreeSupportEnabled,
   setWorktreeSupportEnabled,

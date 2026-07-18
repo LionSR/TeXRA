@@ -32,8 +32,10 @@ import {
   waIcon,
   type TeXRAIconName,
 } from '@shared/wa/webAwesomeIcons';
-import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
-import { API_KEY_PROVIDER_IDS } from '@shared/constants/apiKeyProviders';
+import {
+  API_KEY_PROVIDER_IDS,
+  PROVIDER_DISPLAY_NAMES,
+} from '@shared/constants/providers';
 
 // Local imports - settings view
 import '@shared/wa/tabs';

@@ -1,7 +1,7 @@
 // Local imports - shared schemas and constants
 import type { ProviderKeyStatus } from '@shared/schemas/settingsViewMessages';
-import { API_KEY_PROVIDER_IDS } from '@shared/constants/apiKeyProviders';
 import {
+  API_KEY_PROVIDER_IDS,
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
 } from '@shared/constants/providers';

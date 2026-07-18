@@ -50,12 +50,14 @@ import '@webview/frontend';
 import { hostBridge, postMessage } from '@shared/hostBridge';
 import type { StreamTabId } from '@shared/schemas';
 import { Signal } from '@shared/signals';
-import { SetThemeMessageSchema } from '@shared/schemas/commonViewMessages';
+import {
+  SetThemeMessageSchema,
+  type DesktopThemeKind,
+} from '@shared/schemas/commonViewMessages';
 import {
   ProgressViewOutboundMessageSchema,
   type ProgressViewOutboundMessage,
 } from '@shared/schemas/progressView';
-import type { DesktopThemeKind } from '@shared/constants/desktopTheme';
 import {
   applyHostBodyTheme,
   getWindowTargetOrigin,

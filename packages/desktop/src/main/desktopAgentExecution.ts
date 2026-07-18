@@ -60,7 +60,6 @@ import {
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
-import type { MainViewExecuteMessage } from '@shared/mainView';
 import {
   type RunOutcome,
   type AgentCategoryFilter,
@@ -71,6 +70,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
+import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import {
   formatActiveStreamRetention,
   formatStreamDeletionRetention,

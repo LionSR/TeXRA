@@ -14,10 +14,10 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared styles
-import { CopyButtonController } from '@shared/litControllers';
 import { compactIconActionButtonStyles } from '@shared/styles';
 import { decodeXmlEntities } from '@shared/subagentFollowup';
 import { DELIVERY_TAGS, type DeliveryTagName } from '@shared/deliveryTags';
+import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import { designTokens } from '@shared/styles/litStyles';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';

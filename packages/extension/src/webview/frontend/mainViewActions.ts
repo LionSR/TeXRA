@@ -9,10 +9,6 @@
 // Local imports - shared IPC and helpers
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import {
-  buildMainViewExecuteMessage,
-  type MainViewExecuteMessage,
-} from '@shared/mainView';
 import type {
   ActionDetail,
   CompareMessage,
@@ -24,6 +20,8 @@ import type {
   PackLatexdiffvcMessage,
   PackMultipleMessage,
 } from '@shared/schemas';
+import { buildMainViewExecuteMessage } from '@shared/mainView/executeMessage';
+import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 
 // Local imports - utilities
 import { capitalize } from '@utils/text/stringUtils';

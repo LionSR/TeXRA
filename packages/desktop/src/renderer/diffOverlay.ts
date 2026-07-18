@@ -1,7 +1,7 @@
 import {
   DESKTOP_THEME_KIND,
   type DesktopThemeKind,
-} from '@shared/constants/desktopTheme';
+} from '@shared/schemas/commonViewMessages';
 import { createOverlayDialog } from './overlayDialog';
 import type { DesktopShowDiffMessage } from '../desktopDiffMessages';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';

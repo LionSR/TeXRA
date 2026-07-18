@@ -1,4 +1,4 @@
-import type { MainViewExecuteMessage } from '@shared/mainView';
+import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import { installDesktopHostBridge } from './hostBridge.js';
 import { createDesktopExecutionIpc } from './desktopExecutionIpc.js';
 import {
