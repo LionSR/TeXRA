@@ -23,6 +23,7 @@ import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
 import {
   activeForm,
   activeStreamId,
+  closeInfoPane,
   codexPreferenceVersion,
   infoPane,
   patchSessionMeta,
@@ -131,6 +132,7 @@ describe('handleTuiSlashCommand', () => {
     expect(infoPane.get()?.lines.join('\n')).toContain('**Keyboard**');
     expect(localEntries()).toEqual([]);
 
+    closeInfoPane();
     await handleTuiSlashCommand('/goal', context);
     expect(infoPane.get()).toMatchObject({ title: '/goal' });
     expect(infoPane.get()?.lines.join('\n')).toContain(
@@ -154,6 +156,8 @@ describe('handleTuiSlashCommand', () => {
     });
 
     await showCliMemoryPreview('note.md');
+    expect(infoPane.get()?.title).toBe('/memory list');
+    closeInfoPane();
     expect(infoPane.get()).toMatchObject({ title: '/memory preview' });
     expect(infoPane.get()?.lines).toContain('Remember this.');
     expect(localEntries()).toEqual([]);

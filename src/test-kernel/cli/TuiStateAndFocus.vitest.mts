@@ -11,6 +11,7 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
   activeStreamId,
+  closeInfoPane,
   infoPane,
   openInfoPane,
   rootRunPending,
@@ -128,6 +129,18 @@ describe('cliState Phase 4 fields', () => {
     resetCliState();
 
     expect(infoPane.get()).toBeUndefined();
+  });
+
+  it('preserves multiple reference results until each is dismissed', () => {
+    openInfoPane('/memory list', 'first result');
+    openInfoPane('/memory preview', 'second result');
+
+    expect(infoPane.get()?.title).toBe('/memory list');
+    closeInfoPane();
+    expect(infoPane.get()).toEqual({
+      title: '/memory preview',
+      lines: ['second result'],
+    });
   });
 
   it('normalizes transient notices to the status bar single-line contract', () => {

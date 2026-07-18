@@ -68,6 +68,7 @@ import {
   rootRunStartAvailable as rootRunStartAvailableSignal,
   rootStreamId as rootStreamIdSignal,
   activeForm as activeFormSignal,
+  closeInfoPane,
   formProgress as formProgressSignal,
   infoPane as infoPaneSignal,
   reverseSearchOpen as reverseSearchOpenSignal,
@@ -423,11 +424,10 @@ export function App(props: AppProps): React.JSX.Element {
     approvalKind,
     kind: foregroundKind,
   });
-  const closeInfoPane = useCallback(() => infoPaneSignal.set(undefined), []);
   const archiveInfoPane = useCallback(() => {
     const current = infoPaneSignal.get();
     if (!current) return;
-    infoPaneSignal.set(undefined);
+    closeInfoPane();
     appendLocalAssistantTranscript(current.lines.join('\n'));
   }, []);
   function renderForegroundSurface(availableRows: number): React.ReactNode {

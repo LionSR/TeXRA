@@ -47,7 +47,7 @@ export function InfoPane(props: InfoPaneProps): React.JSX.Element | null {
     // Archive after rendering rather than mutating transcript/signal state in
     // the render path. The parent clears this pane in the same transition.
     if (!fits) props.onOverflow();
-  }, [fits, props.onOverflow]);
+  }, [fits, props.lines, props.onOverflow]);
 
   if (!fits) return null;
   return (

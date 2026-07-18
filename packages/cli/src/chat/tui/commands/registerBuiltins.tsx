@@ -626,7 +626,7 @@ export function registerBuiltinSlashCommands(options?: {
     description: 'Explain autonomous goal mode',
     aliases: ['goals'],
     category: 'session',
-    echo: 'ifPersists',
+    echo: 'never',
   });
   registerSlashCommand({
     name: 'resume',

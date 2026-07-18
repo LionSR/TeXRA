@@ -3,7 +3,7 @@
  * focus, overlays, exit hints) lives here as signals; formerly one file per
  * slice under `cliState/`.
  */
-import { signal, type Signal } from '@lit-labs/signals';
+import { computed, signal, type Signal } from '@lit-labs/signals';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
@@ -430,12 +430,22 @@ interface InfoPaneContent {
   readonly lines: readonly string[];
 }
 
-const INFO_PANE = signal<InfoPaneContent | undefined>(undefined);
-export const infoPane = INFO_PANE;
+const INFO_PANE_QUEUE = signal<readonly InfoPaneContent[]>([]);
+export const infoPane: Signal.Computed<InfoPaneContent | undefined> = computed(
+  () => INFO_PANE_QUEUE.get().at(0),
+);
 
 /** Open regenerable reference text in the foreground pane. */
 export function openInfoPane(title: string, text: string): void {
-  INFO_PANE.set({ title, lines: text.split('\n') });
+  INFO_PANE_QUEUE.set([
+    ...INFO_PANE_QUEUE.get(),
+    { title, lines: text.split('\n') },
+  ]);
+}
+
+/** Close the active reference pane and reveal any concurrently queued result. */
+export function closeInfoPane(): void {
+  INFO_PANE_QUEUE.set(INFO_PANE_QUEUE.get().slice(1));
 }
 
 /** True while the slash-command palette is mounted in the InputBar. App-level
@@ -611,7 +621,7 @@ export function resetCliState(
   rootRunStreamId.set(undefined);
   resetChildStreamEntries();
   activeForm.set(undefined);
-  infoPane.set(undefined);
+  INFO_PANE_QUEUE.set([]);
   slashPaletteOpen.set(false);
   reverseSearchOpen.set(false);
   taskDetailExecutionId.set(undefined);
