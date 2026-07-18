@@ -1,8 +1,8 @@
 import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
-import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
+import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
 import { GoalStore } from '@tools/goal';
 import { toErrorMessage } from '@utils/errors/errorMessage';
