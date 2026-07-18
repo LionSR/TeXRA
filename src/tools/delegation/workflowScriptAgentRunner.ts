@@ -138,6 +138,22 @@ export function createWorkflowScriptAgentRunner(
             schema !== undefined
               ? AgentCategory.ToolUse
               : AgentCategory.Workflow;
+          // A schema call runs a tool-use agent, so it must name one: the
+          // workflow default (this tool's `agent` field) is a document editor
+          // with no same-named tool-use counterpart, and resolving it under the
+          // tool-use category would fail with a confusing "Unknown toolUse
+          // agent". Fail loudly here instead of silently substituting an
+          // unrelated general agent.
+          if (
+            schema !== undefined &&
+            invocation.options.agentName === undefined
+          ) {
+            throw new WorkflowRunAbortError(
+              `Structured-output agent() calls must name a tool-use agent via ` +
+                `agentName: the workflow default '${defaultAgentName}' is a ` +
+                `document editor with no tool-use counterpart.`,
+            );
+          }
           const requestedAgent =
             invocation.options.agentName ?? defaultAgentName;
           const agent = requireVisibleAgent(
@@ -224,6 +240,19 @@ export function createWorkflowScriptAgentRunner(
       if (result.outcome !== 'completed') {
         throw new Error(
           `Workflow subagent ended with ${result.outcome} outcome.`,
+        );
+      }
+      // Floor guarantee: a schema call that completes without the agent ever
+      // calling submit_output yields no structured value. Fail the run clearly
+      // rather than resolving the call to an envelope with `structured`
+      // undefined (reliable forcing/repair is the deferred accelerator, #8831).
+      if (
+        invocation.options.schema !== undefined &&
+        result.structured === undefined
+      ) {
+        throw new WorkflowRunAbortError(
+          `agent '${invocation.options.agentName}' did not call submit_output; ` +
+            `no structured result was produced.`,
         );
       }
       return result;
