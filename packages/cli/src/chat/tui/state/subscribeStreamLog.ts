@@ -10,6 +10,7 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import { appendCliApiSwitchHint } from '@cli/runtime/approvalAdapter';
 import {
   MESSAGE_TYPES,
+  STREAM_LOG_ENTRY_TYPES,
   TOOL_USE_STATUS,
   type NormalizedToolUse,
   type StreamLogEntry,
@@ -160,7 +161,44 @@ function entriesEqual(
   if (prev.role === 'process' && next.role === 'process') {
     return prev.process === next.process;
   }
+  if (prev.role === 'phase' && next.role === 'phase') {
+    return (
+      prev.phaseIndex === next.phaseIndex && prev.phaseTotal === next.phaseTotal
+    );
+  }
   return true;
+}
+
+/**
+ * A phase group header — the `stage.start`/`stage.end` rows a workflow-script
+ * run emits per `phase()` (recorded as GROUP_START then upserted in place to
+ * GROUP_END with `data.kind === 'phase'`). Detected by `kind`, not entry
+ * `type`, so the header keeps its distinct role after the phase closes. Round,
+ * run, and session groups (other `kind` values) fall through to plain rows.
+ */
+function phaseGroupData(
+  entry: StreamLogEntry,
+): { index?: number; total?: number } | null {
+  if (
+    entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_START &&
+    entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END
+  ) {
+    return null;
+  }
+  const data = entry.data;
+  if (typeof data !== 'object' || data === null || !('kind' in data)) {
+    return null;
+  }
+  const { kind, index, total } = data as {
+    kind?: unknown;
+    index?: unknown;
+    total?: unknown;
+  };
+  if (kind !== 'phase') return null;
+  return {
+    ...(typeof index === 'number' ? { index } : {}),
+    ...(typeof total === 'number' ? { total } : {}),
+  };
 }
 
 function logEntryRole(
@@ -229,6 +267,27 @@ function renderLogEntry(
     return next;
   }
 
+  // Phase group headers finalize the moment they appear (like user/error
+  // rows): the label never changes, and a later stage.end only upserts the
+  // group's `data`, keeping the same id. Detect before the generic text path
+  // so the row renders as a distinct divider instead of plain assistant prose.
+  const phaseData = phaseGroupData(entry);
+  if (phaseData) {
+    const phaseLabel = entry.text ?? '';
+    if (phaseLabel.trim().length === 0) return null;
+    const next: ConversationEntry = {
+      id: entry.id,
+      role: 'phase',
+      text: phaseLabel,
+      ...(entry.messageType ? { messageType: entry.messageType } : {}),
+      finalized: true,
+      phaseLabel,
+      ...(phaseData.index !== undefined ? { phaseIndex: phaseData.index } : {}),
+      ...(phaseData.total !== undefined ? { phaseTotal: phaseData.total } : {}),
+    };
+    return prev && entriesEqual(prev, next) ? prev : next;
+  }
+
   const text = entry.text ?? '';
   const role = logEntryRole(entry.messageType);
   const assistantTranscript =
@@ -269,6 +328,7 @@ function isSettledEntry(
     case 'user':
     case 'error':
     case 'process':
+    case 'phase':
       return true;
     case 'tool':
       return (

@@ -124,6 +124,9 @@ export function createWorkflowScriptAgentRunner(
               invocation.options.inputFiles ?? [],
             ),
           ]);
+          // Surface the resolved child model so the engine can attach it to
+          // this call's `agent:end` progress event.
+          invocation.reportModel?.(model);
           // Run-storage references can disappear during recovery. Validate
           // the resolved inputs, not merely the paths supplied by the script,
           // so a stale reference cannot launch a useless empty-envelope run.

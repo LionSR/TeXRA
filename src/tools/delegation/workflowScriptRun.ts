@@ -9,7 +9,7 @@ import {
 } from '@agent/workflowScript';
 import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
-import { formatCostUsd } from '@utils/text/stringUtils';
+import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 type WorkflowScriptRunWithProgressOptions = Omit<
   PersistedWorkflowScriptRunOptions,
@@ -147,13 +147,25 @@ export async function runPersistedWorkflowScriptWithProgress(
         const spent = event.cached ? undefined : getLiveCostUsd?.();
         const total =
           spent === undefined ? '' : ` (${formatCostUsd(spent)} total)`;
+        // Live calls carry the resolved child model plus host-measured wall
+        // time; the duration rides alongside the model so it never appears as
+        // a bare orphan. Cached replays report neither, so the suffix is empty.
+        const duration =
+          event.durationMs === undefined
+            ? ''
+            : ` · ${formatCompactDuration(event.durationMs)}`;
+        const metaSuffix =
+          event.model === undefined ? '' : ` · ${event.model}${duration}`;
         if (event.error) {
           if (phaseTitle) phaseFor(phaseTitle).failed = true;
-          error(`Failed: ${event.label} - ${event.error}${total}`, stageId);
+          error(
+            `Failed: ${event.label}${metaSuffix} - ${event.error}${total}`,
+            stageId,
+          );
         } else if (event.cached) {
           info(`Using saved result: ${event.label}`, stageId);
         } else {
-          info(`Finished: ${event.label}${total}`, stageId);
+          info(`Finished: ${event.label}${metaSuffix}${total}`, stageId);
         }
         break;
       }

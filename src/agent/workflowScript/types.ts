@@ -52,6 +52,12 @@ export interface WorkflowAgentInvocation {
    * consuming model quota instead of finishing in the background.
    */
   signal: AbortSignal;
+  /**
+   * Optional host-side side channel: the runner reports the child model it
+   * resolved so the engine can attach it to the matching `agent:end` event
+   * for progress UIs. Never journaled — it does not affect resume identity.
+   */
+  reportModel?: (model: string) => void;
 }
 
 /**
@@ -83,6 +89,10 @@ export type WorkflowScriptEvent =
       phase?: string;
       cached: boolean;
       error?: string;
+      /** Child model resolved by the runner (live calls only). */
+      model?: string;
+      /** Host-measured wall time of the agent() call (live calls only). */
+      durationMs?: number;
     };
 
 export interface WorkflowScriptRunOptions {
