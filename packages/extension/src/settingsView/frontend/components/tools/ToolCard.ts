@@ -12,10 +12,13 @@ import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
+
+// Local imports - shared webview
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { postMessage } from '@shared/hostBridge';
 import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
-import { createEvent } from '@shared/utils/events';
 import type {
   ToolCommandKind,
   ToolDashboardItem,
@@ -194,36 +197,33 @@ export class ToolCard extends LitElement {
 
   private handleInstallUrl(): void {
     if (this.item.installUrl) {
-      this.dispatchEvent(
-        createEvent('tool-open-url', { url: this.item.installUrl }),
-      );
+      postMessage(SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL, {
+        url: this.item.installUrl,
+      });
     }
   }
 
   private handleInstallExtension(): void {
     if (this.item.installExtensionId) {
-      this.dispatchEvent(
-        createEvent('tool-install-extension', {
-          extensionId: this.item.installExtensionId,
-        }),
-      );
+      postMessage(SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION, {
+        extensionId: this.item.installExtensionId,
+      });
     }
   }
 
   private runCommand(kind: ToolCommandKind): void {
-    this.dispatchEvent(
-      createEvent('tool-run-command', { toolId: this.item.id, kind }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND, {
+      toolId: this.item.id,
+      kind,
+    });
   }
 
   private handleToggle(e: Event): void {
     const target = e.currentTarget as WaSwitch | null;
-    this.dispatchEvent(
-      createEvent('tool-toggle', {
-        toolId: this.item.id,
-        enabled: Boolean(target?.checked),
-      }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL, {
+      toolId: this.item.id,
+      enabled: Boolean(target?.checked),
+    });
   }
 
   private static readonly STATUS_CONFIG: Record<
