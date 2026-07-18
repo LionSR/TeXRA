@@ -50,7 +50,6 @@ import { KeyHints, type KeyHint } from '../chat/tui/ui/KeyHints';
 import { Select, type SelectItem } from '../chat/tui/ui/Select';
 import { type CliApiMode } from '../runtime/apiAccessMode';
 import { chatGptAccountLabel, signInCliChatGpt } from '../runtime/chatgptLogin';
-import { resolveCliStdoutColorEnabled } from '../runtime/cliContext';
 import { hasCliCredentialForApiMode } from '../runtime/credentialStatus';
 import { selectCliApiModelAccessRoute } from '../runtime/modelAccessSelection';
 import { saveProviderApiKey } from '../runtime/providerApiKey';
@@ -91,7 +90,6 @@ export interface OnboardingGateContext {
   readonly stdoutIsTty?: boolean;
   readonly termIsDumb?: boolean;
   readonly stdoutColorEnabled?: boolean;
-  readonly colorEnabled?: boolean;
   readonly apiMode?: CliApiMode;
 }
 
@@ -182,7 +180,7 @@ export async function maybeRunCliOnboarding(
   return runOnboardingFlow({
     firstRun: true,
     apiMode: context.apiMode,
-    colorEnabled: resolveCliStdoutColorEnabled(context),
+    colorEnabled: context.stdoutColorEnabled,
   });
 }
 
