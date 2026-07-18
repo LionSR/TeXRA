@@ -482,7 +482,12 @@ return null`,
       onEvent: (event) => events.push(event),
     });
     expect(invocations[0].options.phase).toBe('Work');
-    expect(events).toContainEqual({ type: 'phase', title: 'Work' });
+    expect(events).toContainEqual({
+      type: 'phase',
+      title: 'Work',
+      index: 0,
+      total: 1,
+    });
     expect(events).toContainEqual({
       type: 'agent:start',
       index: 0,

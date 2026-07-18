@@ -73,7 +73,14 @@ export interface WorkflowJournalEntry {
 }
 
 export type WorkflowScriptEvent =
-  | { type: 'phase'; title: string }
+  | {
+      type: 'phase';
+      title: string;
+      /** Zero-based position in meta.phases, when the phase is declared. */
+      index?: number;
+      /** Number of phases declared in meta.phases. */
+      total?: number;
+    }
   | { type: 'log'; message: string }
   | { type: 'agent:start'; index: number; label: string; phase?: string }
   | {

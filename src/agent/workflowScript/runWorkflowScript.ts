@@ -213,6 +213,7 @@ export async function runWorkflowScript(
   const pendingAgentCalls = new Set<Promise<unknown>>();
   let callCounter = 0;
   const issuedCallKeys = new Set<string>();
+  const plannedPhases = meta.phases ?? [];
   let currentPhase: string | undefined;
   let fatalRunError: WorkflowRunAbortError | undefined;
 
@@ -426,7 +427,14 @@ export async function runWorkflowScript(
           },
           phase: (args) => {
             currentPhase = String(args[0]);
-            emit({ type: 'phase', title: currentPhase });
+            const index = plannedPhases.findIndex(
+              (phase) => phase.title === currentPhase,
+            );
+            emit({
+              type: 'phase',
+              title: currentPhase,
+              ...(index >= 0 && { index, total: plannedPhases.length }),
+            });
             return undefined;
           },
         },
