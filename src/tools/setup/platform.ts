@@ -93,8 +93,8 @@ export type SetupHost = 'cli' | 'desktop' | 'extension';
 export interface SetupPlatform {
   /** Product surface currently running the shared setup agent. */
   host: SetupHost;
-  /** Start the host's existing TeXRA account sign-in flow, when available. */
-  signIn?: () => Promise<boolean>;
+  /** Start the host's existing TeXRA account sign-in flow. */
+  signIn: () => Promise<boolean>;
   /** VS Code-only command invocation. */
   commands?: SetupCommandAdapter;
   /** VS Code extension inspection and installation. */
