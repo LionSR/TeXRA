@@ -13,8 +13,9 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 
-// Local imports - shared utils
-import { createEvent } from '@shared/utils/events';
+// Local imports - shared webview
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { postMessage } from '@shared/hostBridge';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
@@ -199,18 +200,16 @@ export class MultiAgentTab extends LitElement {
   @property({ attribute: false }) orchestratorAgents: string[] = [];
   @state() private activePresetId: string | null = null;
 
-  private emitToggle(eventName: string, event: Event): void {
+  private postToggle(command: string, event: Event): void {
     const target = event.target as WaSwitch | null;
-    this.dispatchEvent(
-      createEvent(eventName, { enabled: Boolean(target?.checked) }),
-    );
+    postMessage(command, { enabled: Boolean(target?.checked) });
   }
 
   private handlePresetClick(preset: AgentModePreset): void {
     this.activePresetId = preset.id;
-    this.dispatchEvent(
-      createEvent('apply-agent-mode-preset', { presetId: preset.id }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET, {
+      presetId: preset.id,
+    });
   }
 
   private handlePresetKey(event: KeyboardEvent, preset: AgentModePreset): void {
@@ -228,9 +227,9 @@ export class MultiAgentTab extends LitElement {
 
   private handleDeletePreset(event: Event, preset: AgentModePreset): void {
     event.stopPropagation();
-    this.dispatchEvent(
-      createEvent('delete-agent-mode-preset', { presetId: preset.id }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET, {
+      presetId: preset.id,
+    });
   }
 
   private isOrchestratorAgent(name: string): boolean {
@@ -399,7 +398,10 @@ export class MultiAgentTab extends LitElement {
           <wa-switch
             ?checked=${this.allowOrchestratorKill}
             @change=${(e: Event) =>
-              this.emitToggle('allow-orchestrator-kill-toggle', e)}
+              this.postToggle(
+                SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL,
+                e,
+              )}
           >
             Let orchestrator stop agents early
           </wa-switch>
@@ -414,7 +416,10 @@ export class MultiAgentTab extends LitElement {
           <wa-switch
             ?checked=${this.detachSubagentsOnStop}
             @change=${(e: Event) =>
-              this.emitToggle('detach-subagents-on-stop-toggle', e)}
+              this.postToggle(
+                SETTINGS_VIEW_COMMANDS.SET_DETACH_SUBAGENTS_ON_STOP,
+                e,
+              )}
           >
             Keep agents running if I stop the orchestrator
           </wa-switch>
@@ -428,7 +433,10 @@ export class MultiAgentTab extends LitElement {
           <wa-switch
             ?checked=${this.worktreeSupport}
             @change=${(e: Event) =>
-              this.emitToggle('worktree-support-toggle', e)}
+              this.postToggle(
+                SETTINGS_VIEW_COMMANDS.SET_GIT_WORKTREE_SUPPORT,
+                e,
+              )}
           >
             Allow agents to work in git worktrees
           </wa-switch>

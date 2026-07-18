@@ -16,6 +16,7 @@ import { classMap } from 'lit/directives/class-map.js';
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { postMessage } from '@shared/hostBridge';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
@@ -29,7 +30,6 @@ import {
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { pluralize } from '@utils/text/stringUtils';
-import { AgentSelectionEvents } from './events';
 import { agentSelectionPanelStyles } from './AgentSelectionPanel.styles';
 
 /** Shorthand: derive the canonical key from an AgentSelectionItem. */
@@ -174,31 +174,27 @@ export class AgentSelectionPanel extends LitElement {
   }
 
   private handleOpenYaml(agent: AgentSelectionItem): void {
-    this.dispatchEvent(
-      AgentSelectionEvents.openYaml({
-        agentName: agent.name,
-        agentSource: agent.source,
-      }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML, {
+      agentName: agent.name,
+      agentSource: agent.source,
+    });
   }
 
   private handleCustomizeAgent(agent: AgentSelectionItem): void {
-    this.dispatchEvent(
-      AgentSelectionEvents.customizeAgent({
-        agentName: agent.name,
-        agentSource: agent.source,
-      }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT, {
+      agentName: agent.name,
+      agentSource: agent.source,
+    });
   }
 
   private handleDeleteCustomAgent(agent: AgentSelectionItem): void {
     const key = agentKey(agent);
     if (this.pendingDeleteKey === key) {
-      // Confirmed — dispatch the delete event
+      // Confirmed — request the delete
       this.pendingDeleteKey = null;
-      this.dispatchEvent(
-        AgentSelectionEvents.deleteCustomAgent({ agentName: agent.name }),
-      );
+      postMessage(SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT, {
+        agentName: agent.name,
+      });
     } else {
       // First click — show confirmation
       this.pendingDeleteKey = key;
@@ -210,39 +206,33 @@ export class AgentSelectionPanel extends LitElement {
   }
 
   private handleViewRemotePrompt(agent: AgentSelectionItem): void {
-    this.dispatchEvent(
-      AgentSelectionEvents.viewRemotePrompt({ agentName: agent.name }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT, {
+      agentName: agent.name,
+    });
   }
 
   private handleRevealAgentFile(agent: AgentSelectionItem): void {
-    this.dispatchEvent(
-      AgentSelectionEvents.revealAgentFile({
-        agentName: agent.name,
-        agentSource: agent.source,
-      }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE, {
+      agentName: agent.name,
+      agentSource: agent.source,
+    });
   }
 
   private handleToggleEnabled(agent: AgentSelectionItem): void {
-    this.dispatchEvent(
-      AgentSelectionEvents.setEnabled({
-        agentName: agent.name,
-        agentSource: agent.source,
-        category: this.category,
-        enabled: !agent.enabled,
-      }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED, {
+      agentName: agent.name,
+      agentSource: agent.source,
+      category: this.category,
+      enabled: !agent.enabled,
+    });
   }
 
   private handleSetAllEnabled(source: AgentSourceType, enabled: boolean): void {
-    this.dispatchEvent(
-      AgentSelectionEvents.setAllEnabled({
-        category: this.category,
-        source,
-        enabled,
-      }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED, {
+      category: this.category,
+      source,
+      enabled,
+    });
   }
 
   private renderListItem(agent: AgentSelectionItem): TemplateResult {

@@ -5,6 +5,8 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { postMessage } from '@shared/hostBridge';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Side-effect imports - register WA components
@@ -19,8 +21,6 @@ import { API_ACCESS_MODE_OPTIONS } from '@shared/schemas/settingsViewMessages';
 // Local imports - profile view styles
 import { apiAccessSectionStyles } from './ApiAccessSection.styles';
 
-// Local imports - profile view events
-import { ProfileViewEvents } from './events';
 import type WaRadioGroup from '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
 
 @customElement('api-access-section')
@@ -33,7 +33,7 @@ export class ApiAccessSection extends LitElement {
     const target = event.currentTarget as WaRadioGroup | null;
     const mode = target?.value === 'included' ? 'included' : 'personal';
     if (mode !== this.mode) {
-      this.dispatchEvent(ProfileViewEvents.setApiAccessMode({ mode }));
+      postMessage(SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE, { mode });
     }
   }
 

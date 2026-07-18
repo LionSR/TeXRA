@@ -116,15 +116,6 @@ import type { HistoryTab } from './tabs/HistoryTab';
 
 registerTeXRAWebAwesomeIcons();
 
-const HISTORY_ACTION_COMMANDS: Record<string, string> = {
-  delete: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
-  restore: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
-  rerun: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
-  'export-md': SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
-  'export-tex': SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX,
-  'export-html': SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_HTML,
-};
-
 const API_KEY_PROVIDER_SET = new Set<string>(API_KEY_PROVIDER_IDS);
 
 type SettingsTabMetadata = {
@@ -151,18 +142,6 @@ const SETTINGS_TABS = SETTINGS_TAB_ORDER.map((name) => ({
   panel: SETTINGS_TAB_PANEL_BY_NAME[name],
   ...SETTINGS_TAB_METADATA[name],
 }));
-
-/** Create an event handler that forwards event.detail to a postMessage command. */
-function forwardDetail<T extends Record<string, unknown>>(
-  command: string,
-): (event: CustomEvent<T>) => void {
-  return (event: CustomEvent<T>) => postMessage(command, event.detail);
-}
-
-/** Create an event handler that sends a postMessage command with no payload. */
-function forwardCommand(command: string): () => void {
-  return () => postMessage(command);
-}
 
 // Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
 // Safe because SettingsApp implements all abstract members below.
@@ -235,67 +214,18 @@ export class SettingsApp extends SettingsAppBase {
     }
   }
 
-  // Memory event handlers
-  private handleMemoryRefresh = forwardCommand(
-    SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA,
-  );
+  // Header auth actions (SettingsApp's own header buttons)
+  private readonly handleSignIn = (): void => {
+    postMessage(SETTINGS_VIEW_COMMANDS.SIGN_IN);
+  };
 
-  private handleMemoryOpenFolder = forwardCommand(
-    SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER,
-  );
+  private readonly handleSignOut = (): void => {
+    postMessage(SETTINGS_VIEW_COMMANDS.SIGN_OUT);
+  };
 
-  private handleMemoryToggleEnabled = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED,
-  );
-
-  private handleMemoryOpenItem = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FILE,
-  );
-
-  private handleMemoryDeleteItem(
-    event: CustomEvent<{ storagePath: string; displayPath?: string }>,
-  ): void {
-    const { storagePath, displayPath = storagePath } = event.detail;
-    postMessage(SETTINGS_VIEW_COMMANDS.DELETE_MEMORY, {
-      storagePath,
-      displayPath,
-    });
-  }
-
-  private handleMemoryLoadPreview = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW,
-  );
-
-  private handleMemoryPinItem = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.PIN_MEMORY,
-  );
-
-  private handleMemoryUnpinItem = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.UNPIN_MEMORY,
-  );
-
-  // History event handlers
-  private handleHistoryAction(
-    event: CustomEvent<{ action: string; historyId: string }>,
-  ): void {
-    const command = HISTORY_ACTION_COMMANDS[event.detail.action];
-    if (!command) return;
-    postMessage(command, { historyId: event.detail.historyId });
-  }
-
-  private handleClearHistory = forwardCommand(
-    SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY,
-  );
-
-  // Profile event handlers
-  private handleSignIn = forwardCommand(SETTINGS_VIEW_COMMANDS.SIGN_IN);
-
-  private handleSignOut = forwardCommand(SETTINGS_VIEW_COMMANDS.SIGN_OUT);
-
-  private handleApiAccessMode = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
-  );
-
+  // Provider-key entry flow. Lives here (not in a leaf component) because it
+  // branches on `isDesktopHost` — a `BaseWebviewApp` capability — to choose
+  // between the in-webview modal (desktop) and the host prompt (VS Code).
   private openProviderKeyFlow(target: {
     provider: string;
     displayName: string;
@@ -357,255 +287,9 @@ export class SettingsApp extends SettingsAppBase {
     this.openProviderKeyFlow(target);
   };
 
-  private handleRemoveProviderKey = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
-  );
-
-  private handleOpenProviderKeyUrl = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL,
-  );
-
-  private handleSetProviderStreaming = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_PROVIDER_STREAMING,
-  );
-
-  private handleSetProviderEndpoint = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_PROVIDER_ENDPOINT,
-  );
-
-  private handleSetGlobalStreaming = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING,
-  );
-
-  private handleSetProviderVscodeSetting = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_PROVIDER_VSCODE_SETTING,
-  );
-
-  private handleOpenUrl = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL,
-  );
-
-  // Model selection event handlers
-  private handleSetModelEnabled = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED,
-  );
-
-  private handleSetHelperModel = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_HELPER_MODEL,
-  );
-
-  private handleSetReasoningLevel = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL,
-  );
-
-  private handleSetPreferShortModelNames = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_PREFER_SHORT_MODEL_NAMES,
-  );
-
-  private handleRequestModelAccess = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,
-  );
-
-  // Agent selection event handlers
-  private handleOpenAgentYaml = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML,
-  );
-
-  private handleSetAgentEnabled = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
-  );
-
-  private handleSetAllAgentsEnabled = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED,
-  );
-
-  private handleOpenAgentFolder = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER,
-  );
-
-  private handleCreateAgent = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.CREATE_AGENT,
-  );
-
-  private handleCustomizeAgent = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT,
-  );
-
-  private handleDeleteCustomAgent = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT,
-  );
-
-  private handleSetCustomAgentDir = forwardCommand(
-    SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR,
-  );
-
-  private handleResetCustomAgentDir = forwardCommand(
-    SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR,
-  );
-
-  private handleRevealAgentFile = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE,
-  );
-
-  private handleViewRemoteAgentPrompt = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT,
-  );
-
-  private handleAllowOrchestratorKillToggle = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL,
-  );
-
-  private handleDetachSubagentsOnStopToggle = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_DETACH_SUBAGENTS_ON_STOP,
-  );
-
-  private handleApplyAgentModePreset = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
-  );
-
-  private handleSaveAgentModePreset = forwardCommand(
-    SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET,
-  );
-
-  private handleDeleteAgentModePreset = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET,
-  );
-
-  // Tool dashboard event handlers
-  private handleToolOpenUrl = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL,
-  );
-
-  private handleToolInstallExtension = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION,
-  );
-
-  private handleToolRecheck = forwardCommand(
-    SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
-  );
-
-  private handleToolToggle = forwardDetail(SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL);
-
-  private handleToolRunCommand = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND,
-  );
-
-  // Approval settings event handlers
-  private handleBashApprovalToggle = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED,
-  );
-
-  private handleCodexSandboxModeChange = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_CODEX_SANDBOX_MODE,
-  );
-
-  private handleCodexReasoningEffortChange = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_CODEX_REASONING_EFFORT,
-  );
-
-  private handleCodexApprovalPolicyChange = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_CODEX_APPROVAL_POLICY,
-  );
-
-  private handleClaudeAgentModelChange = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_MODEL,
-  );
-
-  private handleClaudeAgentPermissionModeChange = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_PERMISSION_MODE,
-  );
-
-  private handleClaudeAgentEffortChange = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_EFFORT,
-  );
-
-  // Git settings event handlers
-  private handleGitMarkCommitsToggle = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_GIT_MARK_COMMITS,
-  );
-
-  private handleGitAuthorNameChange = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_NAME,
-  );
-
-  private handleGitAuthorEmailChange = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_EMAIL,
-  );
-
-  private handleWorktreeSupportToggle = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_GIT_WORKTREE_SUPPORT,
-  );
-
-  // GitHub token handlers
-  private handleGitHubTokenSet = forwardCommand(
-    SETTINGS_VIEW_COMMANDS.SET_GITHUB_TOKEN,
-  );
-
-  private handleGitHubTokenRemove = forwardCommand(
-    SETTINGS_VIEW_COMMANDS.REMOVE_GITHUB_TOKEN,
-  );
-
-  private handleGitHubTokenOpenUrl = forwardCommand(
-    SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL,
-  );
-
-  // ChatGPT subscription sign-in handlers
-  private handleChatGptSignIn = forwardCommand(
-    SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT,
-  );
-
-  private handleChatGptSignOut = forwardCommand(
-    SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT,
-  );
-
-  private handleSetChatGptPreferSubscription = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
-  );
-
-  private handleSetChatGptSubscriptionToolUseOnly = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_CHATGPT_SUBSCRIPTION_TOOL_USE_ONLY,
-  );
-
-  private handleDesktopCrashReportingToggle = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_ENABLED,
-  );
-
-  private handleDesktopCrashReportingDsnSet = forwardCommand(
-    SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_DSN,
-  );
-
-  private handleUnsubscribePR = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR,
-  );
-
-  private handleOpenPRSubscriptionStream = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.OPEN_PR_SUBSCRIPTION_STREAM,
-  );
-
-  // LaTeX settings event handlers
-  private handleApplyLatexSettings = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS,
-  );
-
-  private handleInstallLatexWorkshop = forwardCommand(
-    SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP,
-  );
-
-  private handleSetLatexConfigValue = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE,
-  );
-
-  private handleSetInlineCriticismEnabled = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.SET_INLINE_CRITICISM_ENABLED,
-  );
-
-  private handleRunInstallCommand = forwardDetail(
-    SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
-  );
-
-  private handleOpenVscodeSettings = forwardCommand(
-    SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS,
-  );
+  private readonly handleOpenVscodeSettings = (): void => {
+    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS);
+  };
 
   private renderHeader(): TemplateResult {
     const settingsButton = isKnownUnsupported(
@@ -751,14 +435,6 @@ export class SettingsApp extends SettingsAppBase {
               .items=${memoryItems.get()}
               .enabled=${memoryEnabled.get()}
               .toggleDisabled=${memoryToggleDisabled.get()}
-              @memory-refresh=${this.handleMemoryRefresh}
-              @memory-open-folder=${this.handleMemoryOpenFolder}
-              @memory-toggle-enabled=${this.handleMemoryToggleEnabled}
-              @memory-open-item=${this.handleMemoryOpenItem}
-              @memory-delete-item=${this.handleMemoryDeleteItem}
-              @memory-load-preview=${this.handleMemoryLoadPreview}
-              @memory-pin-item=${this.handleMemoryPinItem}
-              @memory-unpin-item=${this.handleMemoryUnpinItem}
             ></memory-tab>
           </wa-tab-panel>
 
@@ -779,8 +455,6 @@ export class SettingsApp extends SettingsAppBase {
             <history-tab
               .items=${historyItems.get()}
               .unsupportedCommands=${unsupportedCommands.get()}
-              @history-action=${this.handleHistoryAction}
-              @history-clear=${this.handleClearHistory}
             ></history-tab>
           </wa-tab-panel>
 
@@ -797,32 +471,7 @@ export class SettingsApp extends SettingsAppBase {
               .reliabilitySettings=${reliabilitySettings.get()}
               .helperModel=${helperModel.get()}
               .preferShortModelNames=${preferShortModelNames.get()}
-              @profile-api-access-mode=${this.handleApiAccessMode}
               @provider-key-set=${this.handleSetProviderKey}
-              @provider-key-remove=${this.handleRemoveProviderKey}
-              @provider-key-open-url=${this.handleOpenProviderKeyUrl}
-              @provider-streaming-set=${this.handleSetProviderStreaming}
-              @provider-endpoint-set=${this.handleSetProviderEndpoint}
-              @provider-global-streaming-set=${this.handleSetGlobalStreaming}
-              @provider-vscode-setting-set=${
-                this.handleSetProviderVscodeSetting
-              }
-              @provider-open-url=${this.handleOpenUrl}
-              @model-enabled-set=${this.handleSetModelEnabled}
-              @helper-model-set=${this.handleSetHelperModel}
-              @model-reasoning-level-set=${this.handleSetReasoningLevel}
-              @prefer-short-model-names-set=${
-                this.handleSetPreferShortModelNames
-              }
-              @model-access-request=${this.handleRequestModelAccess}
-              @chatgpt-sign-in=${this.handleChatGptSignIn}
-              @chatgpt-sign-out=${this.handleChatGptSignOut}
-              @chatgpt-prefer-subscription-set=${
-                this.handleSetChatGptPreferSubscription
-              }
-              @chatgpt-subscription-tool-use-only-set=${
-                this.handleSetChatGptSubscriptionToolUseOnly
-              }
             ></models-tab>
           </wa-tab-panel>
 
@@ -835,18 +484,6 @@ export class SettingsApp extends SettingsAppBase {
               .initialSubTab=${agentSubTab.get()}
               .userTier=${tier.get()}
               .unsupportedCommands=${unsupportedCommands.get()}
-              @agent-open-yaml=${this.handleOpenAgentYaml}
-              @agent-enabled-set=${this.handleSetAgentEnabled}
-              @agent-all-enabled-set=${this.handleSetAllAgentsEnabled}
-              @agent-open-folder=${this.handleOpenAgentFolder}
-              @agent-reveal-file=${this.handleRevealAgentFile}
-              @agent-create=${this.handleCreateAgent}
-              @agent-customize=${this.handleCustomizeAgent}
-              @agent-delete-custom=${this.handleDeleteCustomAgent}
-              @agent-set-custom-dir=${this.handleSetCustomAgentDir}
-              @agent-reset-custom-dir=${this.handleResetCustomAgentDir}
-              @save-agent-mode-preset=${this.handleSaveAgentModePreset}
-              @agent-view-remote-prompt=${this.handleViewRemoteAgentPrompt}
             ></agents-tab>
           </wa-tab-panel>
 
@@ -857,15 +494,6 @@ export class SettingsApp extends SettingsAppBase {
               .allowOrchestratorKill=${allowOrchestratorKill.get()}
               .detachSubagentsOnStop=${detachSubagentsOnStop.get()}
               .worktreeSupport=${gitWorktreeSupport.get()}
-              @allow-orchestrator-kill-toggle=${
-                this.handleAllowOrchestratorKillToggle
-              }
-              @detach-subagents-on-stop-toggle=${
-                this.handleDetachSubagentsOnStopToggle
-              }
-              @worktree-support-toggle=${this.handleWorktreeSupportToggle}
-              @apply-agent-mode-preset=${this.handleApplyAgentModePreset}
-              @delete-agent-mode-preset=${this.handleDeleteAgentModePreset}
             ></multi-agent-tab>
           </wa-tab-panel>
 
@@ -880,18 +508,6 @@ export class SettingsApp extends SettingsAppBase {
               )}
               .desktopCrashReportingEnabled=${desktopCrashReportingEnabled.get()}
               .desktopCrashReportingConfigured=${desktopCrashReportingConfigured.get()}
-              @tool-open-url=${this.handleToolOpenUrl}
-              @tool-install-extension=${this.handleToolInstallExtension}
-              @tool-run-command=${this.handleToolRunCommand}
-              @tool-recheck=${this.handleToolRecheck}
-              @tool-toggle=${this.handleToolToggle}
-              @bash-approval-toggle=${this.handleBashApprovalToggle}
-              @desktop-crash-reporting-toggle=${
-                this.handleDesktopCrashReportingToggle
-              }
-              @desktop-crash-reporting-dsn-set=${
-                this.handleDesktopCrashReportingDsnSet
-              }
             ></tools-tab>
           </wa-tab-panel>
 
@@ -905,22 +521,6 @@ export class SettingsApp extends SettingsAppBase {
               .claudeAgentModel=${claudeAgentModel.get()}
               .claudeAgentPermissionMode=${claudeAgentPermissionMode.get()}
               .claudeAgentEffort=${claudeAgentEffort.get()}
-              @tool-open-url=${this.handleToolOpenUrl}
-              @tool-install-extension=${this.handleToolInstallExtension}
-              @tool-run-command=${this.handleToolRunCommand}
-              @tool-toggle=${this.handleToolToggle}
-              @codex-sandbox-mode-change=${this.handleCodexSandboxModeChange}
-              @codex-reasoning-effort-change=${
-                this.handleCodexReasoningEffortChange
-              }
-              @codex-approval-policy-change=${
-                this.handleCodexApprovalPolicyChange
-              }
-              @claude-agent-model-change=${this.handleClaudeAgentModelChange}
-              @claude-agent-permission-mode-change=${
-                this.handleClaudeAgentPermissionModeChange
-              }
-              @claude-agent-effort-change=${this.handleClaudeAgentEffortChange}
             ></ai-agents-tab>
           </wa-tab-panel>
 
@@ -931,16 +531,6 @@ export class SettingsApp extends SettingsAppBase {
               .authorEmail=${gitAuthorEmail.get()}
               .toggleDisabled=${!gitSettingsLoaded.get()}
               .unsupportedCommands=${unsupportedCommands.get()}
-              @git-mark-commits-toggle=${this.handleGitMarkCommitsToggle}
-              @git-author-name-change=${this.handleGitAuthorNameChange}
-              @git-author-email-change=${this.handleGitAuthorEmailChange}
-              @github-token-set=${this.handleGitHubTokenSet}
-              @github-token-remove=${this.handleGitHubTokenRemove}
-              @github-token-open-url=${this.handleGitHubTokenOpenUrl}
-              @unsubscribe-pr=${this.handleUnsubscribePR}
-              @open-pr-subscription-stream=${
-                this.handleOpenPRSubscriptionStream
-              }
               .githubTokenStatus=${githubTokenStatus.get()}
               .prSubscriptions=${prSubscriptions.get()}
             ></git-tab>
@@ -958,11 +548,6 @@ export class SettingsApp extends SettingsAppBase {
                 unsupportedCommands.get(),
                 SETTINGS_VIEW_COMMANDS.GET_INLINE_CRITICISM_ENABLED,
               )}
-              @latex-apply-settings=${this.handleApplyLatexSettings}
-              @latex-install-workshop=${this.handleInstallLatexWorkshop}
-              @latex-run-install-command=${this.handleRunInstallCommand}
-              @latex-set-config-value=${this.handleSetLatexConfigValue}
-              @inline-criticism-toggle=${this.handleSetInlineCriticismEnabled}
             ></latex-tab>
           </wa-tab-panel>
         </wa-tab-group>

@@ -7,6 +7,8 @@ import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { postMessage } from '@shared/hostBridge';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import {
@@ -24,8 +26,8 @@ import type {
   ProviderKeyStatus,
   ProviderVscodeSetting,
 } from '@shared/schemas/settingsViewMessages';
+import { createEvent } from '@shared/utils/events';
 import { providerKeyListStyles } from './ProviderKeyList.styles';
-import { ProviderKeyEvents } from './events';
 import { resolveProviderKeyRows } from './providerKeyRows';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
@@ -72,7 +74,9 @@ export class ProviderKeyList extends LitElement {
             label: 'Remove',
             tooltip: 'Remove key',
             onClick: () =>
-              this.dispatchEvent(ProviderKeyEvents.removeKey({ provider })),
+              postMessage(SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY, {
+                provider,
+              }),
           })
         : nothing;
 
@@ -83,8 +87,10 @@ export class ProviderKeyList extends LitElement {
           icon: 'key',
           label: 'Set',
           tooltip: 'Set API key',
+          // Bubbles to SettingsApp, which owns the desktop-vs-VS Code
+          // provider-key entry flow (modal on desktop, host prompt otherwise).
           onClick: () =>
-            this.dispatchEvent(ProviderKeyEvents.setKey({ provider })),
+            this.dispatchEvent(createEvent('provider-key-set', { provider })),
         })}
         ${renderIconActionButton({
           id: `provider-key-get-${provider}`,
@@ -92,7 +98,9 @@ export class ProviderKeyList extends LitElement {
           label: 'Get',
           tooltip: 'Get API key from provider',
           onClick: () =>
-            this.dispatchEvent(ProviderKeyEvents.openKeyUrl({ provider })),
+            postMessage(SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL, {
+              provider,
+            }),
         })}
         ${removeButton}
       </div>
@@ -106,12 +114,10 @@ export class ProviderKeyList extends LitElement {
           ?checked=${entry.streaming}
           @change=${(e: Event) => {
             const checked = (e.target as WaSwitch).checked;
-            this.dispatchEvent(
-              ProviderKeyEvents.setStreaming({
-                provider: entry.provider,
-                enabled: checked,
-              }),
-            );
+            postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_STREAMING, {
+              provider: entry.provider,
+              enabled: checked,
+            });
           }}
         >
           Streaming
@@ -129,12 +135,10 @@ export class ProviderKeyList extends LitElement {
               placeholder="Leave blank for default"
               @change=${(e: Event) => {
                 const value = (e.target as WaInput).value?.trim() ?? '';
-                this.dispatchEvent(
-                  ProviderKeyEvents.setEndpoint({
-                    provider: entry.provider,
-                    endpoint: value,
-                  }),
-                );
+                postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_ENDPOINT, {
+                  provider: entry.provider,
+                  endpoint: value,
+                });
               }}
             ></wa-input>
           </div>
@@ -161,9 +165,9 @@ export class ProviderKeyList extends LitElement {
             appearance="plain"
             size="small"
             @click=${() =>
-              this.dispatchEvent(
-                ProviderKeyEvents.openUrl({ url: setting.warningUrl! }),
-              )}
+              postMessage(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL, {
+                url: setting.warningUrl!,
+              })}
           >
             ${setting.warningUrlLabel}
           </wa-button>`
@@ -181,12 +185,10 @@ export class ProviderKeyList extends LitElement {
           ?checked=${setting.value}
           @change=${(e: Event) => {
             const checked = (e.target as WaSwitch).checked;
-            this.dispatchEvent(
-              ProviderKeyEvents.setVscodeSetting({
-                key: setting.key,
-                value: checked,
-              }),
-            );
+            postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_VSCODE_SETTING, {
+              key: setting.key,
+              value: checked,
+            });
           }}
         >
           ${setting.label}
@@ -239,9 +241,9 @@ export class ProviderKeyList extends LitElement {
           ?checked=${this.globalStreamingDefault}
           @change=${(e: Event) => {
             const checked = (e.target as WaSwitch).checked;
-            this.dispatchEvent(
-              ProviderKeyEvents.setGlobalStreaming({ enabled: checked }),
-            );
+            postMessage(SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING, {
+              enabled: checked,
+            });
           }}
         >
           Enable streaming

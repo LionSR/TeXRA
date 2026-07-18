@@ -8,6 +8,7 @@ import Mark from 'mark.js';
 
 // Local imports - shared
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { postMessage } from '@shared/hostBridge';
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
 import {
   commonViewStyles,
@@ -37,6 +38,16 @@ import {
 } from './historyItemPresentation';
 
 const LONG_INSTRUCTION_CHARS = 400;
+
+/** Per-item action → settings-view command carrying this item's historyId. */
+const HISTORY_ACTION_COMMANDS: Record<string, string> = {
+  delete: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
+  restore: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
+  rerun: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
+  'export-md': SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
+  'export-tex': SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX,
+  'export-html': SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_HTML,
+};
 
 @customElement('history-item')
 export class HistoryItemElement extends LitElement {
@@ -121,9 +132,9 @@ export class HistoryItemElement extends LitElement {
 
   private handleAction(action: string): void {
     if (!this.item) return;
-    this.dispatchEvent(
-      HistoryViewEvents.historyAction({ action, historyId: this.item.id }),
-    );
+    const command = HISTORY_ACTION_COMMANDS[action];
+    if (!command) return;
+    postMessage(command, { historyId: this.item.id });
   }
 
   private handleActionClick(event: MouseEvent): void {

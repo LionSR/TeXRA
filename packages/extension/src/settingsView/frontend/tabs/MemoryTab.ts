@@ -3,11 +3,11 @@
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { postMessage } from '@shared/hostBridge';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { MemoryViewItem } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-
-import { MemoryViewEvents } from '../components/memory/events';
 
 // Side-effect: register child components.
 import '../components/memory/MemoryToggle';
@@ -42,11 +42,11 @@ export class MemoryTab extends LitElement {
   @property({ attribute: false }) toggleDisabled = true;
 
   private handleRefresh = (): void => {
-    this.dispatchEvent(MemoryViewEvents.refresh());
+    postMessage(SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA);
   };
 
   private handleOpenFolder = (): void => {
-    this.dispatchEvent(MemoryViewEvents.openFolder());
+    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER);
   };
 
   private renderMemoryReminder(): TemplateResult {

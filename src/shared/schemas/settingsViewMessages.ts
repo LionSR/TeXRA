@@ -26,11 +26,7 @@ export {
 // modules so the historical settings surface (single import site) stays
 // intact. The schemas themselves are no longer re-exported here — consumers
 // only ever needed the inferred types through this barrel.
-export {
-  type MemoryViewItem,
-  type MemoryPreview,
-  type MemoryItemActionDetail,
-} from './memoryViewMessages';
+export { type MemoryViewItem, type MemoryPreview } from './memoryViewMessages';
 
 export { type HistoryItem } from './historyViewMessages';
 
