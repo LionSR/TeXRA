@@ -42,6 +42,7 @@ import {
   thinkingIndicatorVisible,
   type BypassState,
   type StreamSlice,
+  type TransientNotice,
 } from '../state/cliState';
 import {
   activeStreamScope,
@@ -80,8 +81,7 @@ export interface StatusBarDisplayInput {
    *  active, so "running" reads as alive rather than a static word. Omitted
    *  in tests/headless, same as `elapsedMs`. */
   readonly runningFrame?: string;
-  readonly pendingExitHint: boolean;
-  readonly pendingExitResumeId: string | undefined;
+  readonly transientNotice: TransientNotice | undefined;
   readonly commandName?: string;
   readonly bypass: BypassState;
   readonly thinkingActive?: boolean;
@@ -220,7 +220,6 @@ function roundSegment(
     : undefined;
 }
 
-const PENDING_EXIT_HINT_TEXT = 'Press Ctrl-C again to exit';
 // Lower values are removed first when the left status group exceeds the row.
 const STATUS_BAR_COMPACT_PRIORITY = {
   activeProcess: 10,
@@ -287,7 +286,7 @@ function statusBarInnerWidth(width: number | undefined): number | undefined {
     : Math.max(0, width - STATUS_BAR_HORIZONTAL_PADDING);
 }
 
-function fitPendingExitStatusBarLeftSegments(
+function fitTransientNoticeStatusBarLeftSegments(
   segments: readonly StatusBarSegment[],
   width: number | undefined,
 ): readonly StatusBarSegment[] {
@@ -696,10 +695,10 @@ const BYPASS_BADGES: ReadonlyArray<{
 // condition: an active pending-exit prompt always wins, then an actual
 // foreground surface, then the child list, and only then normal chat shortcuts.
 function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
-  if (input.pendingExitHint && input.pendingExitResumeId) {
+  if (input.transientNotice?.resumeId) {
     return `Resume this session with: ${formatResumeCommand(
       input.commandName,
-      input.pendingExitResumeId,
+      input.transientNotice.resumeId,
       { approvalPolicy: input.approvalPolicy },
     )}`;
   }
@@ -756,8 +755,8 @@ export function buildStatusBarDisplay(
     });
   }
 
-  if (input.pendingExitHint) {
-    left.push({ text: PENDING_EXIT_HINT_TEXT, color: COLOR_WARNING });
+  if (input.transientNotice) {
+    left.push({ text: input.transientNotice.text, color: COLOR_WARNING });
     const queuedCount = input.queuedFollowUpMessages.length;
     if (queuedCount > 0) {
       // Exiting drops queued follow-ups silently — warn before the user
@@ -846,8 +845,8 @@ export function buildStatusBarDisplay(
       });
     }
   }
-  const fittedLeft = input.pendingExitHint
-    ? fitPendingExitStatusBarLeftSegments(left, input.width)
+  const fittedLeft = input.transientNotice
+    ? fitTransientNoticeStatusBarLeftSegments(left, input.width)
     : fitStatusBarLeftSegments(left, input.width);
 
   return {

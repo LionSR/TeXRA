@@ -104,8 +104,8 @@ import {
   patchSessionMeta,
   sessionMeta as sessionMetaSignal,
   streams as streamsSignal,
-  pendingExitHint,
-  pendingExitResumeId,
+  clearTransientNotice,
+  setTransientNotice,
 } from './state/cliState';
 import {
   childStreamEntries as childStreamEntriesSignal,
@@ -879,8 +879,7 @@ export async function runChat(
     if (pendingExitTimer) clearTimeout(pendingExitTimer);
     pendingExitTimer = undefined;
     exitArmed = false;
-    pendingExitHint.set(false);
-    pendingExitResumeId.set(undefined);
+    clearTransientNotice();
   };
   const removeProcessHandlers = (): void => {
     process.off('SIGINT', handleSigint);
@@ -956,10 +955,10 @@ export async function runChat(
   };
   const armExit = (): void => {
     exitArmed = true;
-    pendingExitHint.set(true);
-    pendingExitResumeId.set(
-      transcriptLifecycle.canResume ? session.executionId : undefined,
-    );
+    setTransientNotice('Press Ctrl-C again to exit', {
+      resumeId: transcriptLifecycle.canResume ? session.executionId : undefined,
+      ttlMs: 800,
+    });
     if (pendingExitTimer) clearTimeout(pendingExitTimer);
     pendingExitTimer = setTimeout(clearPendingExit, 800);
   };

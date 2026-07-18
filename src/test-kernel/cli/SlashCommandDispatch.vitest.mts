@@ -23,6 +23,7 @@ import {
   resetCliState,
   patchStream,
   streams,
+  transientNotice,
 } from '@cli/chat/tui/state/cliState';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as chatGptLogin from '@cli/runtime/chatgptLogin';
@@ -156,7 +157,9 @@ describe('handleTuiSlashCommand', () => {
 
     expect(activeForm.get()?.commandName).toBe('key');
     expect(JSON.stringify(activeForm.get())).not.toContain(secret);
-    expect(lastEntryText()).toContain('does not accept a key as an argument');
+    expect(transientNotice.get()?.text).toContain(
+      'does not accept a key as an argument',
+    );
     expect(JSON.stringify([...streams.get().values()])).not.toContain(secret);
   });
 
@@ -221,7 +224,9 @@ describe('handleTuiSlashCommand', () => {
       ),
     ).toBe(true);
     expect(activeForm.get()).toBeUndefined();
-    expect(lastEntryText()).toContain('Unknown command with protected input');
+    expect(transientNotice.get()?.text).toContain(
+      'Unknown command with protected input',
+    );
   });
 
   it('redacts arbitrary concatenated key input without forcing the key form', async () => {

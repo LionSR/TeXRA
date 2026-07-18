@@ -438,19 +438,49 @@ const TASK_DETAIL_EXECUTION_ID = signal<string | undefined>(undefined);
 export const taskDetailExecutionId = TASK_DETAIL_EXECUTION_ID;
 
 // ---------------------------------------------------------------------------
-// exitHintSlice
+// transientNoticeSlice
 // ---------------------------------------------------------------------------
 
-// Ctrl-C-to-exit resume hint: whether the next exit should surface a resume
-// id, and which run it points at.
+/** Regenerable status-bar text, optionally with a structured resume target. */
+export interface TransientNotice {
+  readonly text: string;
+  readonly resumeId?: string;
+  readonly expiresAt: number;
+}
 
-const PENDING_EXIT_HINT = signal<boolean>(false);
-const PENDING_EXIT_RESUME_ID = signal<string | undefined>(undefined);
+const TRANSIENT_NOTICE = signal<TransientNotice | undefined>(undefined);
+let transientNoticeTimer: ReturnType<typeof setTimeout> | undefined;
 
-/** Whether the next exit should surface a resume hint. */
-export const pendingExitHint = PENDING_EXIT_HINT;
-/** Which run the pending exit hint's resume id points at. */
-export const pendingExitResumeId = PENDING_EXIT_RESUME_ID;
+/** Single status-bar notice slot; later notices replace earlier ones. */
+export const transientNotice = TRANSIENT_NOTICE;
+
+/** Show a regenerable status-bar notice for a bounded interval. */
+export function setTransientNotice(
+  text: string,
+  options: { readonly resumeId?: string; readonly ttlMs?: number } = {},
+): void {
+  const expiresAt = Date.now() + (options.ttlMs ?? 4_000);
+  const notice: TransientNotice = {
+    text,
+    expiresAt,
+    resumeId: options.resumeId,
+  };
+  if (transientNoticeTimer) clearTimeout(transientNoticeTimer);
+  TRANSIENT_NOTICE.set(notice);
+  transientNoticeTimer = setTimeout(() => {
+    if (TRANSIENT_NOTICE.get()?.expiresAt === expiresAt) {
+      TRANSIENT_NOTICE.set(undefined);
+    }
+  }, options.ttlMs ?? 4_000);
+  transientNoticeTimer.unref?.();
+}
+
+/** Remove the current status-bar notice, including its pending expiry timer. */
+export function clearTransientNotice(): void {
+  if (transientNoticeTimer) clearTimeout(transientNoticeTimer);
+  transientNoticeTimer = undefined;
+  TRANSIENT_NOTICE.set(undefined);
+}
 
 // ---------------------------------------------------------------------------
 // codexPreferenceSlice
@@ -530,7 +560,6 @@ export function resetCliState(
   slashPaletteOpen.set(false);
   reverseSearchOpen.set(false);
   taskDetailExecutionId.set(undefined);
-  pendingExitHint.set(false);
-  pendingExitResumeId.set(undefined);
+  clearTransientNotice();
   for (const resetHook of RESET_HOOKS) resetHook();
 }

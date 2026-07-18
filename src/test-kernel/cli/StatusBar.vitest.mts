@@ -25,8 +25,7 @@ function statusInput(
 ): StatusBarDisplayInput {
   return {
     status: STREAM_PHASE.WAITING,
-    pendingExitHint: false,
-    pendingExitResumeId: undefined,
+    transientNotice: undefined,
     bypass: NO_BYPASS,
     queuedFollowUpMessages: [],
     usage: undefined,
@@ -1264,8 +1263,11 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        pendingExitHint: true,
-        pendingExitResumeId: 'abc123',
+        transientNotice: {
+          text: 'Press Ctrl-C again to exit',
+          resumeId: 'abc123',
+          expiresAt: 1,
+        },
       }),
     );
 
@@ -1283,8 +1285,11 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        pendingExitHint: true,
-        pendingExitResumeId: 'abc123',
+        transientNotice: {
+          text: 'Press Ctrl-C again to exit',
+          resumeId: 'abc123',
+          expiresAt: 1,
+        },
         commandName: 'texra-local',
       }),
     );
@@ -1298,8 +1303,11 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        pendingExitHint: true,
-        pendingExitResumeId: 'abc123',
+        transientNotice: {
+          text: 'Press Ctrl-C again to exit',
+          resumeId: 'abc123',
+          expiresAt: 1,
+        },
         queuedFollowUpMessages: [
           'Keep the proof under one page.',
           'Also mention the finite monoid argument.',
@@ -1345,8 +1353,11 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        pendingExitHint: true,
-        pendingExitResumeId: 'abc123',
+        transientNotice: {
+          text: 'Press Ctrl-C again to exit',
+          resumeId: 'abc123',
+          expiresAt: 1,
+        },
         width: 29,
       }),
     );
