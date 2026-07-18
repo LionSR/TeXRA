@@ -20,7 +20,7 @@ export const CHATGPT_TOOL_USE_ONLY_DESCRIPTION =
  * extension schema, when one exists.
  */
 
-export const NON_REGEX_REPLACEMENT_CATEGORIES = [
+const NON_REGEX_REPLACEMENT_CATEGORIES = [
   'latex_spacing',
   'equations',
   'sections',
@@ -36,7 +36,7 @@ export const NON_REGEX_REPLACEMENT_CATEGORIES = [
   'max_style',
 ] as const;
 
-export const REGEX_REPLACEMENT_CATEGORIES = [
+const REGEX_REPLACEMENT_CATEGORIES = [
   'fenced_latex_blocks',
   'inline_math',
   'parentheses',
@@ -662,7 +662,7 @@ export const CoreSettingsShape = {
     .prefault(DEFAULT_CORE_SETTINGS.toolUse),
 };
 
-export const CoreSettingsSchema = z
+const CoreSettingsSchema = z
   .strictObject(CoreSettingsShape)
   .prefault(DEFAULT_CORE_SETTINGS);
 
@@ -775,7 +775,7 @@ export const CORE_SETTING_PATHS = [
   'toolUse.persistence.ttlHours',
 ] as const satisfies readonly LeafPaths<CoreSettings>[];
 
-export type CoreSettingPath = (typeof CORE_SETTING_PATHS)[number];
+type CoreSettingPath = (typeof CORE_SETTING_PATHS)[number];
 
 // Build fails if any schema leaf path is missing from CORE_SETTING_PATHS above.
 type _AssertCorePathsExhaustive = AssertNever<

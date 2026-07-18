@@ -4,20 +4,20 @@ import { DiffStatsSchema } from './lineChanges';
 import { ExecutionIdSchema } from './identifiers';
 import { RoundNumberSchema } from './roundIndexed';
 
-export const WorkspaceFileLocationSchema = z.strictObject({
+const WorkspaceFileLocationSchema = z.strictObject({
   kind: z.literal('workspace'),
   absolutePath: z.string(),
   relativePath: z.string(),
 });
 
-export const RunStorageFileLocationSchema = z.strictObject({
+const RunStorageFileLocationSchema = z.strictObject({
   kind: z.literal('runStorage'),
   absolutePath: z.string(),
   relativePath: z.string(),
   executionId: ExecutionIdSchema,
 });
 
-export const ExternalFileLocationSchema = z.strictObject({
+const ExternalFileLocationSchema = z.strictObject({
   kind: z.literal('external'),
   absolutePath: z.string(),
 });
@@ -43,12 +43,12 @@ export type ExternalFileLocation = z.infer<typeof ExternalFileLocationSchema>;
 export type FileLocation = z.infer<typeof FileLocationSchema>;
 export type AgentFileLocation = z.infer<typeof AgentFileLocationSchema>;
 
-export const OutputFileSchema = z.strictObject({
+const OutputFileSchema = z.strictObject({
   source: z.string(),
   location: FileLocationSchema,
 });
 
-export const FileLineageSchema = z.strictObject({
+const FileLineageSchema = z.strictObject({
   original: FileLocationSchema.nullable(),
   diffBase: FileLocationSchema.nullable(),
   diffFile: FileLocationSchema.nullable(),
