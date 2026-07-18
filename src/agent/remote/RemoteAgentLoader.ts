@@ -26,7 +26,6 @@ import {
 import { fetchRemoteAgentConfigYaml } from './remoteAgentConfigClient';
 
 const CHANNEL = 'RemoteAgentLoader';
-logger.initialize(CHANNEL);
 
 const FETCH_TIMEOUT_MS = 30_000;
 

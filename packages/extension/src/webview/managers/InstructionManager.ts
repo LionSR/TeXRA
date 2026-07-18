@@ -16,7 +16,6 @@ import {
 import { BaseWebviewManager } from './BaseWebviewManager';
 
 const CHANNEL = 'InstructionManager';
-logger.initialize(CHANNEL);
 
 type PolishInstructionMessage = Extract<
   MainViewInboundMessage,

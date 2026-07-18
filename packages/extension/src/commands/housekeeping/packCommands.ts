@@ -14,7 +14,6 @@ import {
   runPackMultiple,
   runPackRunDir,
 } from '@housekeeping';
-import * as logger from '@logger/logUtils';
 import type { FileOpResult } from '@shared/schemas/opResults';
 import { WorkspaceFS } from '@utils/files';
 import {
@@ -29,7 +28,6 @@ import {
 } from './streamEventUtils';
 
 const CHANNEL = 'packCommands';
-logger.initialize(CHANNEL);
 
 const PackConfigSchema = FileOpParamsSchema.extend({
   // Pack permits an empty model in config; clean keeps it required.

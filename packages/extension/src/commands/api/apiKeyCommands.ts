@@ -9,7 +9,6 @@ import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
-import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { refreshApiKeyCaches } from '@tools/setup/apiKeyHelpers';
@@ -20,7 +19,6 @@ import {
 } from '@utils/config/providerConfig';
 
 const CHANNEL = 'ApiKeyCommands';
-logger.initialize(CHANNEL);
 
 export const apiKeyCommands = {
   setApiKey: 'texra.setApiKey',

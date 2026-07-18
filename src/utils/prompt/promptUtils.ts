@@ -7,7 +7,6 @@ import { filterNotNull } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'promptUtils';
-logger.initialize(CHANNEL);
 
 export interface XmlFormatFromFilesResult {
   readonly xml: string | null;

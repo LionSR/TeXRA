@@ -69,7 +69,6 @@ export abstract class BaseViewMessageHandler<
     this.logger = logger;
     this.channel = `${viewName}MessageHandler`;
     this._options = options ?? {};
-    logger.initialize(this.channel);
   }
 
   /**

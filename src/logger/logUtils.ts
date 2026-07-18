@@ -143,7 +143,7 @@ export type ChannelWriter = (
 
 /**
  * Create a protocol-neutral writer for one shared or agent channel.
- * Channel creation is eager, matching `initialize`.
+ * Channel creation is eager so the returned writer owns a ready sink.
  */
 export function createChannelWriter(
   channel: string,
@@ -177,10 +177,6 @@ function logAt(
 ): void {
   // Functional callers write to the shared output channel.
   writeLine(level, channel, /* isAgent */ false, message, options.data);
-}
-
-export function initialize(channel: string, isAgent = false): void {
-  ensureChannel(channel, isAgent);
 }
 
 /**

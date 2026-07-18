@@ -12,7 +12,6 @@ import {
 } from '@utils/diagnostics/diagnosticFormatting';
 
 const CHANNEL = 'LinterCommands';
-logger.initialize(CHANNEL);
 
 function showNoIssuesMessage(): void {
   vscode.window.showInformationMessage(
