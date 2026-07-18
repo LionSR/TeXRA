@@ -1,34 +1,17 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
+import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import type { ToolDefinition } from '@model';
-import type { ToolResult } from '@shared/schemas/toolResult';
 import { DiagnosticsTool } from '@tools/DiagnosticsTool';
 import {
   DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
   DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
 } from '@tools/diagnosticsRuntimeCapabilities';
+import { getDefaultToolRegistry } from '@tools/registry';
 
 const logger = { warn: () => {} };
-
-function testTool(name: string): ITool {
-  return {
-    definition: { name },
-    call: async (): Promise<ToolResult> => ({
-      status: 'executed',
-      summary: `${name} called`,
-      output: '',
-    }),
-  };
-}
-
-function registryFor(names: readonly string[]): MapToolRegistry {
-  return new MapToolRegistry(
-    Object.fromEntries(names.map((name) => [name, testTool(name)])),
-  );
-}
 
 function toolDefs(names: readonly string[]): ToolDefinition[] {
   return names.map((name) => ({ name }));
@@ -55,7 +38,7 @@ describe('tool-use tool resolution', () => {
       'wolfram',
       'write_file',
     ];
-    const registry = registryFor(names);
+    const registry = getDefaultToolRegistry();
 
     const { tools } = await resolveAgentTools({
       tools: toolDefs(names),
@@ -79,7 +62,7 @@ describe('tool-use tool resolution', () => {
       'plan',
       'update_config',
     ];
-    const registry = registryFor(names);
+    const registry = getDefaultToolRegistry();
 
     const { tools } = await resolveAgentTools({
       tools: toolDefs(names),
@@ -109,7 +92,7 @@ describe('tool-use tool resolution', () => {
       'inquiry',
       'write_file',
     ];
-    const registry = registryFor(names);
+    const registry = getDefaultToolRegistry();
 
     const { tools } = await resolveAgentTools({
       tools: toolDefs(names),
@@ -176,7 +159,7 @@ describe('tool-use tool resolution', () => {
   });
 
   it('filters injected approval-gated tools when approval prompts are unavailable', async () => {
-    const registry = registryFor(['grep', 'update_config']);
+    const registry = getDefaultToolRegistry();
     toolInjections.register({
       toolName: 'update_config',
       shouldInject: () => true,

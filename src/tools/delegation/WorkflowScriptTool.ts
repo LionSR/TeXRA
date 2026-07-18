@@ -62,6 +62,7 @@ const STREAM_PREFIX = 'workflow-script';
 /** Execute a durable, deterministic workflow script from an opted-in agent. */
 export class WorkflowScriptTool extends defineTool({
   name: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+  slow: true,
   description: `Run a deterministic JavaScript workflow that coordinates workflow agents. Workflow agents edit or produce FILES: each agent() call resolves to a result envelope { category: 'workflow', outcome, outputs, diffs, compileFailures, cost } listing the files it produced, never prose. Use this when the complete fan-out, pipeline, and join structure is known in advance and should resume safely after interruption.
 
 Script rules: start with export const meta = { name, description }; no imports or require (only the injected primitives exist: agent, phase, log, parallel, pipeline, concat, and the args global). agent(), parallel(), and pipeline() return Promises: ALWAYS await them. agent(prompt, options) options: inputFiles (REQUIRED for file-editing agents; workspace paths, or a previous call's output paths to chain stages), agentName (another visible workflow agent; defaults to this tool's agent field), id (distinguish otherwise-identical calls), label, phase. A failed call inside parallel()/pipeline() resolves to null; filter with .filter(Boolean).

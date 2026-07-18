@@ -25,6 +25,7 @@ export type WriteInput = z.infer<typeof WriteInputSchema>;
 
 export class WriteFileTool extends defineTool({
   name: 'write_file',
+  requiresApproval: true,
   description:
     'Overwrite a workspace file with the provided content. Creates the file if it does not exist.',
   schema: WriteInputSchema,

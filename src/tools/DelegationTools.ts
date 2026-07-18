@@ -114,6 +114,7 @@ async function deliverResumeWakeFailure(
 /** Tool for delegating tasks to workflow agents (document processing). */
 export class WorkflowAgentTool extends defineTool({
   name: 'delegate_workflow',
+  requiresApproval: true,
   // Static base text; the "Available agents:" line is resolved per run at the
   // resolveAgentTools boundary.
   description: `Delegate to a workflow agent. The agent rewrites every file you list in inputFiles, emitting one revised <document> per input. Use for whole-document operations: proofreading, polishing, applying reviews, adding derivations, merging revisions. For interactive tool use or selective edits, use delegate_agent instead.
@@ -219,6 +220,7 @@ export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
 /** Tool for delegating tasks to tool-use agents (interactive assistants). */
 export class DelegateAgentTool extends defineTool({
   name: 'delegate_agent',
+  requiresApproval: true,
   // Static base text; the "Available agents:", "Available models:", and "Git
   // worktree support:" lines are resolved per run at the resolveAgentTools
   // boundary.

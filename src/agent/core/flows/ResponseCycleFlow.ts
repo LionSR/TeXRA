@@ -24,7 +24,6 @@ import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { ToolDefinition } from '@model';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
 import { OUTPUT_END_TAG } from '@shared/constants/outputProtocol';
-import { isApprovalGatedToolName } from '@tools/approvalGatedTools';
 import { AbsoluteFS, FlexibleFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { extractScratchpad } from '@utils/text/xmlUtils';
@@ -207,7 +206,10 @@ type ContinuationNodeResult = SkippableNodeResult<{
 }>;
 
 export function responseCycleToolsForModel<C>(
-  services: Pick<ResponseCycleServices<C>, 'modelHandler' | 'setting'>,
+  services: Pick<
+    ResponseCycleServices<C>,
+    'modelHandler' | 'setting' | 'toolRegistry'
+  >,
 ): ToolDefinition[] | undefined {
   if (!services.modelHandler.capabilities.supportsFunctionCalling) {
     return undefined;
@@ -218,7 +220,7 @@ export function responseCycleToolsForModel<C>(
     (tool) =>
       !runtimeUnavailable.has(tool.name) &&
       (runContext.approvalPromptsUnavailable !== true ||
-        !isApprovalGatedToolName(tool.name)),
+        services.toolRegistry.get(tool.name)?.requiresApproval !== true),
   );
 }
 

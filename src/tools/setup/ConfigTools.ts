@@ -139,6 +139,7 @@ type UpdateConfigInput = z.infer<typeof UpdateConfigInputSchema>;
 
 export class UpdateConfigTool extends defineTool({
   name: 'update_config',
+  requiresApproval: true,
   description: `Update a TeXRA configuration value (allowlisted keys only).
 
 Use this AFTER calling \`read_config\` and explaining to the user what the setting does and what the new value will mean — every change should be educative. Pass \`target: "workspace"\` only when the change is genuinely workspace-specific (e.g. a project-local bib path); default to \`"user"\` for general preferences shared across workspaces.

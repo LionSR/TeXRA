@@ -354,6 +354,7 @@ Do not treat paper-specific claims from the external model as automatically veri
 
 export class ExternalInquiryTool extends defineTool({
   name: 'inquiry',
+  requiresApproval: true,
   description: TOOL_DESCRIPTION,
   schema: InquiryInputSchema,
 }) {

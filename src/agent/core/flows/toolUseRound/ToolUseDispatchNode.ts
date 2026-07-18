@@ -14,7 +14,6 @@ import {
 } from '@agent/core/tools/toolAttachmentExtraction';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { FileLocation } from '@shared/schemas';
-import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 
 // Local imports - logging
 import type { ToolResult } from '@shared/schemas/toolResult';
@@ -31,22 +30,6 @@ import {
 } from './toolCallParsing';
 import type { ToolUseRoundServices } from '../CycleServices';
 import type { ToolUseRoundShared } from './roundShared';
-
-/** Tools that may take a while and benefit from showing in-progress state. */
-const SLOW_TOOLS = new Set([
-  'bash',
-  'wolfram',
-  'web_fetch',
-  'web_search',
-  'executions',
-  DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
-]);
-
-/** Tools that defer in-progress logging until after approval. */
-const DEFERRED_LOG_TOOLS = new Set(['bash', 'codex', 'wolfram']);
-
-/** Tools that support streaming partial output to the UI. */
-const STREAMABLE_TOOLS = new Set(['bash']);
 
 /** Max concurrently executing tool calls within one dispatch batch. */
 const MAX_PARALLEL_TOOL_CALLS = 4;
@@ -409,11 +392,11 @@ export class ToolUseDispatchNode<C> extends Node<
   ): Promise<ToolExecutionResult | null> {
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
     const tool = options.toolRegistry.get(call.name);
-    const isDeferred = DEFERRED_LOG_TOOLS.has(call.name);
+    const isDeferred = tool?.deferLogUntilApproval === true;
 
     // Capture groupId at start. For deferred tools, delay logging until onExecutionReady.
     const logRef: ToolExecutionResult['logRef'] =
-      SLOW_TOOLS.has(call.name) && !isDeferred
+      tool?.slow === true && !isDeferred
         ? startToolUseCard(options.logger, call.name, parsedInput ?? call.raw)
         : { logId: undefined, groupId: options.logger.activeStageId() };
 
@@ -434,7 +417,7 @@ export class ToolUseDispatchNode<C> extends Node<
     // Build streaming callback for tools that support it.
     // Keeps a rolling tail buffer (max STREAM_BUFFER_MAX) to bound memory.
     let onToolOutput: ((chunk: string) => void) | undefined;
-    if (STREAMABLE_TOOLS.has(call.name)) {
+    if (tool?.streamsOutput === true) {
       let outputBuffer = '';
       onToolOutput = (chunk: string) => {
         outputBuffer += chunk;
