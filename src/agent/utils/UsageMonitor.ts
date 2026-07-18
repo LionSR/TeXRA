@@ -6,7 +6,6 @@ import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { usesServerSideKeysRoute } from '@agent/modelHandlers/support/ProxyConfigResolver';
 import type {
   ExtendedTokenUsageStats,
@@ -86,7 +85,6 @@ export interface UsageMonitorModelInfo {
  */
 export interface UsageMonitorContext {
   logger: AgentTrace;
-  runtimeHost: AgentRuntimeHost;
   storageKey: StorageKey;
   streamId: StreamTabId;
 }
