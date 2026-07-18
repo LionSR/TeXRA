@@ -53,7 +53,7 @@ export function applyInitialCliAgentSelection(
 ): void {
   if (!chatTuiCanStartRootRun(context.session)) {
     appendLocalAssistantTranscript(
-      'Agent changes are only available before the first message. Use texra chat --agent <name> to choose a root agent in a new chat.',
+      'The agent is fixed for this chat session. Start a new chat to use a different agent.',
     );
     return;
   }
@@ -80,23 +80,19 @@ export async function applyCliModelSelection(
 ): Promise<void> {
   const nextModel = model.trim();
   if (chatTuiCanStartRootRun(context.session)) {
-    try {
-      const { apiMode } = sessionMeta.get();
-      const selection = await selectCliRunnableModel(nextModel, {
-        fallbackReason: 'explicit-override',
+    const { apiMode } = sessionMeta.get();
+    const selection = await selectCliRunnableModel(nextModel, {
+      fallbackReason: 'explicit-override',
+      apiMode,
+      noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
         apiMode,
-        noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-          apiMode,
-          CHAT_API_MODE_MODEL_RECOVERY,
-        ),
-        agentCategory: AgentCategory.ToolUse,
-      });
-      await setCliHelperModel(selection.model);
-      setCliSessionModelOverride(selection.model);
-      appendLocalAssistantTranscript(`Root model set to ${selection.model}.`);
-    } catch (error: unknown) {
-      appendLocalAssistantTranscript(toErrorMessage(error));
-    }
+        CHAT_API_MODE_MODEL_RECOVERY,
+      ),
+      agentCategory: AgentCategory.ToolUse,
+    });
+    await setCliHelperModel(selection.model);
+    setCliSessionModelOverride(selection.model);
+    appendLocalAssistantTranscript(`Root model set to ${selection.model}.`);
     return;
   }
 
@@ -119,14 +115,8 @@ export async function applyCliModelSelection(
     return;
   }
 
-  try {
-    await activeFlow.switchModel(nextModel);
-    setCliSessionModelOverride(nextModel);
-  } catch (error: unknown) {
-    appendLocalAssistantTranscript(toErrorMessage(error));
-    return;
-  }
-
+  await activeFlow.switchModel(nextModel);
+  setCliSessionModelOverride(nextModel);
   try {
     await setCliHelperModel(nextModel);
   } catch (error: unknown) {
