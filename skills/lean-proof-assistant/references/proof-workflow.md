@@ -11,6 +11,7 @@ Use this checklist when proof development is stuck or the file needs a disciplin
 
 ## Search and proof strategy
 
+- Check the project's tactic ledger (`AGENTS.md`/`CLAUDE.md`) for custom tactics, simp sets, and workhorse lemmas before writing long tactic chains.
 - Search for existing lemmas before proving helpers.
 - Try both type-shape and name-based searches.
 - Prefer clear proof structure over long fragile tactic chains.
@@ -18,6 +19,7 @@ Use this checklist when proof development is stuck or the file needs a disciplin
 
 ## Cleanup
 
+- If a tactic sequence recurred three or more times during the session, extract it via the lean-tactic-improver skill and record it in the tactic ledger instead of leaving copies inline.
 - Remove stale debugging commands and temporary scaffolding.
 - Keep the final proof readable enough for another contributor to maintain.
 - Leave the file with clean diagnostics.

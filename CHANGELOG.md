@@ -8,6 +8,13 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
+- **Lean tactic self-improvement** — a new `lean-tactic-improver` skill teaches
+  Lean agents to turn repeated proof patterns into reusable project automation
+  (lemmas, simp sets, aesop rules, custom tactics) and to remember it in a
+  tactic ledger kept in the project's `AGENTS.md`/`CLAUDE.md`, so proofs stop
+  growing linearly with the mathematics. The Lean proof-assistant and
+  simplifier skills and the built-in Lean agent now consult and maintain the
+  same ledger.
 - **Kimi Code membership models** — Kimi Code members can use their Kimi Code
   API key for Kimi for Coding and Kimi for Coding (High-Speed) in the CLI and
   VS Code extension. A "Prefer Kimi Code" switch additionally routes Kimi K3

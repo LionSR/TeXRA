@@ -20,6 +20,7 @@ Use this checklist for deeper cleanup passes aimed at Mathlib-quality code.
 - Use the weakest useful assumptions.
 - Merge true duplicates through generalization when it simplifies the API.
 - Search Mathlib before retaining project-local copies of standard results.
+- Extract tactic sequences repeated three or more times into project automation (see lean-tactic-improver) and record them in the `AGENTS.md`/`CLAUDE.md` tactic ledger; prune ledger entries for automation you remove.
 
 ## Verification
 

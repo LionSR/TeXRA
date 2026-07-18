@@ -54,6 +54,10 @@
           "path": "resources/skills/lean-simplifier/SKILL.md"
         },
         {
+          "name": "lean-tactic-improver",
+          "path": "resources/skills/lean-tactic-improver/SKILL.md"
+        },
+        {
           "name": "literature-search",
           "path": "resources/skills/literature-search/SKILL.md"
         },
@@ -774,6 +778,7 @@
     "resources/skills/lean-proof-assistant/SKILL.md",
     "resources/skills/lean-search/SKILL.md",
     "resources/skills/lean-simplifier/SKILL.md",
+    "resources/skills/lean-tactic-improver/SKILL.md",
     "resources/skills/literature-search/SKILL.md",
     "resources/skills/manuscript-review/SKILL.md",
     "resources/skills/math-ocr/SKILL.md",

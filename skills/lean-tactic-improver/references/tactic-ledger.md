@@ -1,0 +1,80 @@
+# Tactic Ledger Protocol
+
+The tactic ledger is the persistent memory of a Lean project's automation. It lives in the project's `AGENTS.md` (with `CLAUDE.md` either sharing the file or pointing to it) so that every agent session — regardless of harness — reads it at startup and inherits earlier extractions instead of rederiving them.
+
+## Ledger format
+
+Keep one section, one table, one line per entry:
+
+```markdown
+## Lean tactic ledger
+
+Read this before writing proofs; prefer these over inline tactic chains.
+When a pattern recurs three times, extract it (see lean-tactic-improver)
+and add it here. Prune entries whose automation is removed.
+
+| Name                   | Kind         | Use when                                              | Defined in                 |
+| ---------------------- | ------------ | ----------------------------------------------------- | -------------------------- |
+| `norm_bound`           | tactic macro | closing `‖A x‖ ≤ C * ‖x‖` goals for bounded operators | `Project/Tactic.lean`      |
+| `proj_simp`            | simp set     | reducing compositions of projections `P i * P j`      | `Project/Attr.lean`        |
+| `Foo.aesop_safe`       | aesop rules  | membership/subset goals in the `Foo` lattice          | `Project/Attr.lean`        |
+| `sum_swap_of_summable` | lemma        | interchanging double sums under summability           | `Project/Summability.lean` |
+```
+
+Rules:
+
+- One line per entry; the "use when" column is the searchable part — describe the goal shape, not the implementation.
+- Record only automation with three or more real call sites. Single-use helpers are ordinary lemmas and do not belong in the ledger.
+- Deleting automation means deleting its ledger row in the same change.
+- If the project has an `AGENTS.md` convention already (sections, ordering), fit into it rather than imposing this layout.
+
+## The abstraction ladder
+
+Extract at the cheapest rung that eliminates the repetition. Each rung costs more to build, review, and maintain than the one before it.
+
+1. **Helper lemma.** The default. A recurring goal shape usually means a missing lemma with the right statement. Search Mathlib first — the lemma often exists.
+2. **`@[simp]` lemma or named simp set.** When the repetition is "the same rewrites over and over". Prefer a named set for domain-specific normal forms:
+
+   ```lean
+   register_simp_attr proj_simp
+   @[proj_simp] theorem P_mul_P (i j : ι) : P i * P j = if i = j then P i else 0 := ...
+   -- call sites: simp with proj_simp   (or: simp only [proj_simp])
+   ```
+
+   Reserve global `@[simp]` for lemmas that are unconditionally good normal forms everywhere in the project.
+
+3. **Aesop rule set.** When the repetition is shallow search (membership, subsets, positivity-style side goals) rather than rewriting:
+
+   ```lean
+   declare_aesop_rule_sets [Foo]
+   @[aesop safe apply (rule_sets := [Foo])] theorem mem_bar_of_mem_foo ... := ...
+   -- call sites: aesop (rule_sets := [Foo])
+   ```
+
+4. **Tactic macro.** When the repetition is a fixed _sequence_ of tactics:
+
+   ```lean
+   /-- Close `‖A x‖ ≤ C * ‖x‖` goals for operators built from bounded pieces. -/
+   macro "norm_bound" : tactic =>
+     `(tactic| (apply norm_le_of_bounded <;> simp with proj_simp <;> positivity))
+   ```
+
+5. **Full `elab` tactic.** Only when the automation must inspect the goal or branch on it. This is rare in application projects; exhaust the rungs above first.
+
+## Extraction checklist
+
+- [ ] The pattern has at least three real occurrences (rule of three) — count them before building anything.
+- [ ] Searched Mathlib for existing automation (`simp` lemma families, `positivity`/`gcongr`/`fun_prop` extensions, existing aesop rule sets) before writing project-local machinery.
+- [ ] Picked the lowest sufficient ladder rung.
+- [ ] Automation lives in the project's dedicated automation file, imported early, with a docstring stating the goal shapes it closes.
+- [ ] Rewrote every motivating call site; each got shorter or clearer. Reverted if not.
+- [ ] Full project still builds; no distant proof broke from a new simp/aesop attribute.
+- [ ] Ledger row added or updated in `AGENTS.md`/`CLAUDE.md`.
+
+## Failure modes to avoid
+
+- **Premature abstraction.** Two occurrences is a coincidence; wait for the third.
+- **Simp set pollution.** A broad `@[simp]` lemma can loop, slow the whole build, or break unrelated proofs. Named sets keep the blast radius local.
+- **Opaque macros.** If a reviewer cannot guess what `crush` does from its name and docstring, split it or rename it. Automation names should describe the goal shape they close.
+- **Ledger rot.** An entry that no longer matches the code is worse than no entry. Curation is part of every extraction pass.
+- **Unrecorded automation.** Building a tactic without a ledger row wastes the work — the next session cannot see it, and the linear growth resumes.

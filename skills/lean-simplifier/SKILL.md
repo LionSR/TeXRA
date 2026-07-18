@@ -17,7 +17,8 @@ Use this skill when Lean code already works or nearly works, but it is noisy, re
 4. Improve the file in the order that usually pays off most: naming and organization, import hygiene, docstrings, proof cleanup, then generalization and deduplication.
 5. Replace brittle tactic chains with clearer arguments when that actually improves reviewability.
 6. Search Mathlib before keeping local lemmas that smell standard.
-7. Recheck after each logical edit and revert any “simplification” that makes the code harder to trust.
+7. When deduplication reveals a tactic sequence or goal shape repeated three or more times, extract it into project automation (lemma, simp set, aesop rules, or tactic macro) via the lean-tactic-improver skill and record it in the tactic ledger in `AGENTS.md`/`CLAUDE.md`.
+8. Recheck after each logical edit and revert any “simplification” that makes the code harder to trust.
 
 ## Quality Bar
 

@@ -102,6 +102,7 @@ prompts:
        - Parallel multiplicative/additive lemmas → `@[to_additive]`
        - Repeated `simp` configurations → factor into a custom `@[simp]` lemma
        - Duplicated tactic blocks → extract into a helper lemma (not a custom tactic unless genuinely reusable)
+       - Genuinely reusable automation (three or more call sites) → extract at the cheapest sufficient level (helper lemma → named simp set → aesop rule set → tactic macro) and record a one-line entry (name, kind, use-when, defining file) in the tactic ledger in the project's AGENTS.md/CLAUDE.md so future sessions reuse it instead of rederiving it; prune ledger entries whose automation is removed
 
     9. **Leverage Mathlib — Don't Reinvent**:
        - Use lean_loogle to search by type signature *before* keeping any hand-written lemma

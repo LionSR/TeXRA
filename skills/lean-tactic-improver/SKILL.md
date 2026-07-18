@@ -1,0 +1,34 @@
+---
+name: lean-tactic-improver
+description: Keep Lean 4 proof size sublinear by turning repeated proof patterns into reusable project automation. Use when Codex notices the same tactic sequences or goal shapes recurring across proofs and should extract them into lemmas, simp sets, aesop rules, or custom tactics, then record them in the project's AGENTS.md tactic ledger so future sessions reuse instead of rederive.
+---
+
+# Lean Tactic Improver
+
+## When to use this skill
+
+Use this skill when proof scripts are growing linearly with the mathematics: the same tactic sequence keeps being pasted, the same goal shape keeps being discharged by hand, or a new proof is mostly boilerplate already written elsewhere in the project. This skill is the self-improvement loop that converts that repetition into project automation and remembers it across sessions.
+
+## The mechanism
+
+The project's `AGENTS.md` (or `CLAUDE.md`) carries a **tactic ledger**: a curated list of the project's custom tactics, simp sets, aesop rule sets, and workhorse lemmas, each with a one-line "use when". The ledger is the memory that makes improvement compound — automation that is not recorded gets rediscovered or, worse, reinvented.
+
+## Workflow
+
+1. Read the tactic ledger before writing proofs. If `AGENTS.md`/`CLAUDE.md` has no ledger section yet, create one using the template in [references/tactic-ledger.md](references/tactic-ledger.md).
+2. Watch for repetition while proving. Apply the rule of three: the third time a tactic sequence or goal shape recurs, stop inlining it and extract.
+3. Choose the cheapest sufficient rung on the abstraction ladder: helper lemma → `@[simp]` lemma or named simp set → aesop rule set → tactic macro → full custom tactic. Do not write an `elab` tactic where a lemma would do.
+4. Implement the automation in the project's dedicated automation file (e.g. `Project/Tactic.lean` or `Project/Attr.lean`), with a docstring stating what goal shapes it closes.
+5. Prove its worth immediately: rewrite the call sites that motivated the extraction. Every one of them must get shorter or clearer; if they do not, revert the abstraction.
+6. Record it: add or update the ledger entry (name, kind, use-when, defining file) so the next session starts from the improved baseline.
+7. Curate on every pass: prune ledger entries whose automation was removed, and merge overlapping automation instead of accumulating near-duplicates.
+
+## Quality Bar
+
+- Judge automation by its call sites: three or more real uses, each shorter and clearer than before.
+- Automation must compress _and_ clarify — a macro that hides the mathematical argument is a regression even when it shortens the file.
+- Keep the global `simp` set safe: prefer named simp sets or `simp only` lemma lists over broad `@[simp]` attributes that slow builds or break distant proofs.
+- Never change what theorems state; extraction refactors proofs, not statements.
+- Keep the ledger short and current — a stale or bloated ledger is ignored, and an ignored ledger ends the improvement loop.
+
+For the ledger format, the full abstraction ladder with Lean idioms, and the extraction checklist, use [references/tactic-ledger.md](references/tactic-ledger.md).
