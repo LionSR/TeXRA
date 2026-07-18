@@ -58,7 +58,14 @@ const LIVE_ACTIVITY_MESSAGE_TYPES = new Set<string>([
 ]);
 
 function transcriptMessageTypesForStream(streamId: StreamTabId): Set<string> {
-  return /^(bash@tool|claude@agent-sdk|codex@codex-sdk)#/.test(streamId)
+  // Detached child runs surface their full log output (phase group rows and
+  // plain log lines, both `DEFAULT`) when focused, unlike the root/subagent
+  // transcript which shows only model/tool/user/error rows. A workflow-script
+  // run is one such child: its phases and per-agent Running/Finished lines
+  // project onto its own stream trace and must render in its focused viewport.
+  return /^(bash@tool|claude@agent-sdk|codex@codex-sdk|workflow-script)#/.test(
+    streamId,
+  )
     ? CHILD_STREAM_LOG_MESSAGE_TYPES
     : TRANSCRIPT_MESSAGE_TYPES;
 }
@@ -148,11 +155,7 @@ function entriesEqual(
     return false;
   }
   if (prev.role === 'tool' && next.role === 'tool') {
-    return (
-      prev.workflowScriptFacts === next.workflowScriptFacts &&
-      prev.workflowScriptOutcome === next.workflowScriptOutcome &&
-      toolUseEqual(prev.toolUse, next.toolUse)
-    );
+    return toolUseEqual(prev.toolUse, next.toolUse);
   }
   if (prev.role === 'process' && next.role === 'process') {
     return prev.process === next.process;
@@ -212,12 +215,6 @@ function renderLogEntry(
       ...(entry.messageType ? { messageType: entry.messageType } : {}),
       finalized: prev?.finalized ?? false,
       toolUse,
-      ...(prev?.role === 'tool' && prev.workflowScriptFacts
-        ? { workflowScriptFacts: prev.workflowScriptFacts }
-        : {}),
-      ...(prev?.role === 'tool' && prev.workflowScriptOutcome
-        ? { workflowScriptOutcome: prev.workflowScriptOutcome }
-        : {}),
     };
     if (prev && entriesEqual(prev, next)) {
       // Same content under a fresh `data` reference: refresh the cache
@@ -276,10 +273,7 @@ function isSettledEntry(
     case 'tool':
       return (
         entry.toolUse.status === TOOL_USE_STATUS.COMPLETED ||
-        entry.toolUse.status === TOOL_USE_STATUS.FAILED ||
-        // An empty array deliberately anchors a neutral immutable owner row
-        // before the first append-only workflow fact arrives.
-        entry.workflowScriptFacts !== undefined
+        entry.toolUse.status === TOOL_USE_STATUS.FAILED
       );
     case 'assistant':
       return (
