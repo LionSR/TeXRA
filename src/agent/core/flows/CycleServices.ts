@@ -58,17 +58,6 @@ export async function withModelClient<C, T extends object>(
   };
 }
 
-interface TextConnectionService {
-  /**
-   * Determines the best textual connector between two strings in a LaTeX
-   * document context (empty string, space, or newline).
-   */
-  readonly bestConnectionMethod: (
-    str1: string,
-    str2: string,
-  ) => Promise<{ connector: string; choice: string }>;
-}
-
 /**
  * Shared services for the cycle/round flows: the live model client plus the
  * run-scoped file service and state both inner primitives operate on.
@@ -82,8 +71,16 @@ interface CycleRunServices<C = unknown>
 
 /** Services for response cycle flow nodes. */
 export interface ResponseCycleServices<C = unknown>
-  extends CycleRunServices<C>, TextConnectionService {
+  extends CycleRunServices<C> {
   round: ConversationRoundStateSnapshot;
+  /**
+   * Determines the best textual connector between two strings in a LaTeX
+   * document context (empty string, space, or newline).
+   */
+  readonly bestConnectionMethod: (
+    str1: string,
+    str2: string,
+  ) => Promise<{ connector: string; choice: string }>;
 }
 
 /**
