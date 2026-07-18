@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Lean Tactic Improver'
+  short_description: 'Extract reusable Lean automation'
+  default_prompt: 'Use $lean-tactic-improver to find repeated proof patterns in this project, extract them into reusable lemmas, simp sets, or tactics, and update the canonical tactic ledger in AGENTS.md; preserve any distinct CLAUDE.md and add a pointer to the ledger.'

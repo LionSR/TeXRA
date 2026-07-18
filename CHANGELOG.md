@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
+- **Lean agents reuse successful proof patterns** — proof development and
+  simplification can build on effective patterns from earlier sessions, making
+  repeated formalization work shorter and more consistent over time.
 - **Kimi Code membership models** — Kimi Code members can use their Kimi Code
   API key for Kimi for Coding and Kimi for Coding (High-Speed) in the CLI and
   VS Code extension. A "Prefer Kimi Code" switch additionally routes Kimi K3
