@@ -1,15 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setupPlatform } from '@test/support/setupPlatform';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { TraceEmitter } from '@agent/trace';
 import {
   deriveWorkflowScriptCheckpointId,
   runPersistedWorkflowScript,
+  WORKFLOW_SKIPPED_RESULT,
   type WorkflowAgentInvocation,
   type WorkflowAgentRunner,
 } from '@agent/workflowScript';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecutionId } from '@shared/schemas';
 import {
   createWorkflowScriptStrategy,
@@ -55,6 +58,8 @@ function fakePorts() {
   return { notify: vi.fn(), recordCost: vi.fn() };
 }
 
+let session: SessionHandle;
+
 function strategyParams(
   overrides: Partial<WorkflowScriptStrategyParams> & {
     readonly name: string;
@@ -68,11 +73,15 @@ function strategyParams(
     checkpointId: checkpointIdFor(overrides.name),
     script,
     args: undefined,
+    session,
     ...overrides,
   };
 }
 
-beforeEach(() => clearStoreCache());
+beforeEach(() => {
+  clearStoreCache();
+  session = createTestSession();
+});
 
 describe('createWorkflowScriptStrategy', () => {
   it('is a terminal-only strategy with no runTurn', () => {
@@ -278,5 +287,131 @@ return await agent('saved call')`;
       'Workflow journal entry 0 is not an agent final result',
     );
     expect(ports.recordCost).not.toHaveBeenCalled();
+  });
+});
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve = (): void => undefined;
+  const promise = new Promise<void>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
+/**
+ * A fake `runAgent` that stands in for the production runner: it announces its
+ * grandchild execution id through the `onChildActive` bridge and hangs the
+ * first attempt until the per-call signal aborts, so a test can drive an
+ * interactive skip/retry against a call that is genuinely in flight.
+ */
+function controllableRunAgent(grandchildExecutionId: ExecutionId): {
+  readonly createRunAgent: WorkflowScriptStrategyParams['createRunAgent'];
+  readonly firstAttemptStarted: Promise<void>;
+  readonly attempts: () => number;
+  readonly onCost: (cost: number) => void;
+} {
+  const started = deferred();
+  let attemptCount = 0;
+  let reportCost: ((cost: number) => void) | undefined;
+  const createRunAgent: WorkflowScriptStrategyParams['createRunAgent'] = (
+    hooks,
+  ) => {
+    return async (invocation) => {
+      attemptCount += 1;
+      const thisAttempt = attemptCount;
+      reportCost = (cost) => hooks.onCost(invocation, cost);
+      hooks.onChildActive(grandchildExecutionId, invocation, true);
+      started.resolve();
+      try {
+        if (thisAttempt === 1) {
+          // Hang until a control action aborts this attempt (skip/retry).
+          await new Promise<never>((_, reject) => {
+            invocation.signal.addEventListener(
+              'abort',
+              () => reject(invocation.signal.reason),
+              { once: true },
+            );
+          });
+        }
+        return finalResult;
+      } finally {
+        hooks.onChildActive(grandchildExecutionId, invocation, false);
+      }
+    };
+  };
+  return {
+    createRunAgent,
+    firstAttemptStarted: started.promise,
+    attempts: () => attemptCount,
+    onCost: (cost) => reportCost?.(cost),
+  };
+}
+
+describe('createWorkflowScriptStrategy interactive controls', () => {
+  const grandchildExecutionId = 'grandchild-exec-0' as ExecutionId;
+
+  it('skips an in-flight grandchild by execution id via the session registry', async () => {
+    const fake = controllableRunAgent(grandchildExecutionId);
+    const strategy = createWorkflowScriptStrategy(
+      strategyParams({
+        name: 'strategy-test',
+        createRunAgent: fake.createRunAgent,
+      }),
+    );
+
+    const launch = strategy.launch(fakePorts(), new AbortController());
+    await fake.firstAttemptStarted;
+    // An unknown execution id no-ops (the call stays in flight)...
+    session.workflowControls.skip('not-a-grandchild' as ExecutionId);
+    // ...while the right one translates execId → index → engine skip.
+    session.workflowControls.skip(grandchildExecutionId);
+
+    const turn = await launch;
+    expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);
+    expect(fake.attempts()).toBe(1);
+    // The registration is dropped when the run settles.
+    session.workflowControls.skip(grandchildExecutionId);
+  });
+
+  it('retries an in-flight grandchild by execution id, re-running the call', async () => {
+    const fake = controllableRunAgent(grandchildExecutionId);
+    const strategy = createWorkflowScriptStrategy(
+      strategyParams({
+        name: 'strategy-test',
+        createRunAgent: fake.createRunAgent,
+      }),
+    );
+
+    const launch = strategy.launch(fakePorts(), new AbortController());
+    await fake.firstAttemptStarted;
+    session.workflowControls.retry(grandchildExecutionId);
+
+    const turn = await launch;
+    // The second attempt settles with the real result, and the call ran twice.
+    expect(turn.result).toMatchObject({ category: 'workflow', cost: 0.42 });
+    expect(fake.attempts()).toBe(2);
+  });
+
+  it('bills a skipped attempt that consumed cost to the parent exactly once', async () => {
+    const fake = controllableRunAgent(grandchildExecutionId);
+    const ports = fakePorts();
+    const strategy = createWorkflowScriptStrategy(
+      strategyParams({
+        name: 'strategy-test',
+        createRunAgent: fake.createRunAgent,
+      }),
+    );
+
+    const launch = strategy.launch(ports, new AbortController());
+    await fake.firstAttemptStarted;
+    // Model tokens were spent before the user skipped the attempt.
+    fake.onCost(0.42);
+    session.workflowControls.skip(grandchildExecutionId);
+
+    const turn = await launch;
+    expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);
+    // The discarded attempt is billed once even though it was never journaled.
+    expect(ports.recordCost).toHaveBeenCalledTimes(1);
+    expect(ports.recordCost).toHaveBeenCalledWith(0.42);
   });
 });

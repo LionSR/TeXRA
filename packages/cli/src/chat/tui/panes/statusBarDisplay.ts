@@ -127,6 +127,9 @@ export interface StatusBarDisplayInput {
   readonly childListFocused?: boolean;
   readonly childListSelectionKind?: 'stream' | 'process';
   readonly childListSelectionKillable?: boolean;
+  /** True while the focused row is an in-flight workflow-script grandchild
+   *  that can be skipped or retried. */
+  readonly childListSelectionWorkflowControllable?: boolean;
 }
 
 interface StatusBarDisplay {
@@ -498,6 +501,7 @@ function childListBindingsText(
   ctrlCAction: CtrlCAction,
   selectionKind: 'stream' | 'process' | undefined,
   selectionKillable: boolean,
+  selectionWorkflowControllable: boolean,
   maxColumns?: number,
 ): string {
   const ctrlCBinding = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
@@ -512,7 +516,24 @@ function childListBindingsText(
   const killBinding = selectionKillable
     ? keyHintText({ key: 'k', action: 'kill' })
     : undefined;
+  const skipBinding = selectionWorkflowControllable
+    ? keyHintText({ key: 's', action: 'skip' })
+    : undefined;
+  const retryBinding = selectionWorkflowControllable
+    ? keyHintText({ key: 'r', action: 'retry' })
+    : undefined;
   const candidates = [
+    statusBarBindingRow([
+      keyHintText({ key: 'Up/Down', action: 'select' }),
+      enterBinding,
+      fullOutputBinding,
+      killBinding,
+      skipBinding,
+      retryBinding,
+      keyHintText({ key: 'Tab', action: 'input' }),
+      keyHintText({ key: 'Esc', action: 'input' }),
+      ctrlCBinding,
+    ]),
     statusBarBindingRow([
       keyHintText({ key: 'Up/Down', action: 'select' }),
       enterBinding,
@@ -697,6 +718,7 @@ function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
       ctrlCAction,
       input.childListSelectionKind,
       input.childListSelectionKillable ?? false,
+      input.childListSelectionWorkflowControllable ?? false,
       maxColumns,
     );
   }

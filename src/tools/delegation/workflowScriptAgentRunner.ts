@@ -92,18 +92,32 @@ export function createWorkflowScriptAgentRunner(
       invocation: WorkflowAgentInvocation,
       totalCostUsd: number | undefined,
     ) => void;
+    /**
+     * Fires when a live attempt for this grandchild begins (`active: true`)
+     * and settles (`active: false`), carrying its derived execution id — the
+     * identity a host uses to target interactive skip/retry. Retries re-enter
+     * the runner with the same id, so each attempt is bracketed by a
+     * start/settle pair.
+     */
+    readonly onChildActive?: (
+      grandchildExecutionId: ExecutionId,
+      invocation: WorkflowAgentInvocation,
+      active: boolean,
+    ) => void;
   },
 ): WorkflowAgentRunner {
   const { runScope } = parent;
 
   return async (invocation) => {
+    const grandchildExecutionId = deriveExecutionId({
+      checkpointId,
+      key: invocation.key,
+      parentExecutionId: run.executionId,
+    });
+    hooks?.onChildActive?.(grandchildExecutionId, invocation, true);
     try {
       const { result } = await executeStableSubagentInBand({
-        executionId: deriveExecutionId({
-          checkpointId,
-          key: invocation.key,
-          parentExecutionId: run.executionId,
-        }),
+        executionId: grandchildExecutionId,
         parentExecutionId: run.executionId,
         signal: invocation.signal,
         prepare: async () => {
@@ -194,6 +208,8 @@ export function createWorkflowScriptAgentRunner(
         throw new WorkflowRunAbortError(error.message, { cause: error });
       }
       throw error;
+    } finally {
+      hooks?.onChildActive?.(grandchildExecutionId, invocation, false);
     }
   };
 }

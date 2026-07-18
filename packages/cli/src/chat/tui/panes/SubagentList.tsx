@@ -264,6 +264,10 @@ export interface SubagentListProps {
   readonly onCancel?: () => void;
   readonly onFocusStream?: (streamId: StreamTabId) => void;
   readonly onKillExecution?: (executionId: string) => void;
+  /** Skip the focused, in-flight workflow-script grandchild `agent()` call. */
+  readonly onSkipExecution?: (executionId: string) => void;
+  /** Retry the focused, in-flight workflow-script grandchild `agent()` call. */
+  readonly onRetryExecution?: (executionId: string) => void;
   readonly onOpenProcessDetail?: (executionId: string) => void;
   readonly onSelectionChange?: (value: ChildListValue) => void;
   readonly onPrintStream?: (streamId: StreamTabId) => void;
@@ -377,7 +381,18 @@ export function SubagentList(
         props.onPrintStream?.(streamId);
         return;
       }
-      if (input.toLowerCase() !== 'k') return;
+      const key_ = input.toLowerCase();
+      // Skip/retry target only a focused subagent stream (a workflow-script
+      // grandchild); the session control registry no-ops for any execution id
+      // that is not an in-flight grandchild, so non-workflow rows are inert.
+      if ((key_ === 's' || key_ === 'r') && streamId) {
+        const executionId = props.activeSubagentExecutionIds?.get(streamId);
+        if (!executionId) return;
+        if (key_ === 's') props.onSkipExecution?.(executionId);
+        else props.onRetryExecution?.(executionId);
+        return;
+      }
+      if (key_ !== 'k') return;
       const processId = childListProcessId(props.selectedValue);
       let executionId: string | undefined;
       if (processId && props.selectedValue) {
