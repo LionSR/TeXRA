@@ -95,8 +95,8 @@ export function resolveWorkspaceSourceDir(
 /**
  * Compile each .tex output of a round to verify the workflow produced a
  * buildable document. Success is silent; failures write the log tail to
- * `<runDir>/compile/r<round>_<safe>.log`. Missing toolchains, runs without a run
- * directory, and non-root fragments are skipped gracefully.
+ * `<runDir>/compile/r<round>_<safe>.log`. Missing toolchains and non-root
+ * fragments are skipped gracefully.
  */
 export async function runCompileCheck(
   ctx: CompileCheckContext,
@@ -106,11 +106,7 @@ export async function runCompileCheck(
     return { failures: [], artifacts: [] };
   }
 
-  const runDirectory = ctx.fileService.metadata.runDirectory;
-  if (!runDirectory) {
-    ctx.logger.debug('Compile check skipped: no run directory');
-    return { failures: [], artifacts: [] };
-  }
+  const { runDirectory } = ctx.fileService;
 
   const texOutputs = (
     getOutputFilesByRound(ctx.outputState)[currentRound] ?? []
@@ -283,7 +279,7 @@ async function compileOne(
   const legacyLogDest = pathToLocation(
     path.join(opts.compileRoot, `r${currentRound}_${legacySafeName}.log`),
   );
-  const executionId = ctx.fileService.metadata.executionId;
+  const { executionId } = ctx.fileService;
 
   const clearStaleLogs = (): Promise<void[]> =>
     Promise.all([
@@ -391,7 +387,7 @@ interface WriteCompileFailureArgs {
   outputFile: OutputFileInfo;
   logDest: FileLocation;
   logRelativePath: string;
-  executionId: ExecutionId | undefined;
+  executionId: ExecutionId;
   failureLogExcerpt: string;
 }
 
@@ -428,13 +424,11 @@ async function writeCompileFailure(args: WriteCompileFailureArgs): Promise<{
     );
   }
 
-  const logLocation = executionId
-    ? createRunStorageLocation(
-        logDest.absolutePath,
-        logRelativePath,
-        executionId,
-      )
-    : logDest;
+  const logLocation = createRunStorageLocation(
+    logDest.absolutePath,
+    logRelativePath,
+    executionId,
+  );
   return {
     failure: {
       round: currentRound,
@@ -456,7 +450,7 @@ interface TryPublishArtifactArgs {
   outputFile: OutputFileInfo;
   compiledBasename: string;
   buildDir: string;
-  executionId: ExecutionId | undefined;
+  executionId: ExecutionId;
 }
 
 /**
@@ -477,7 +471,6 @@ async function tryPublishArtifact(
     buildDir,
     executionId,
   } = args;
-  if (!executionId) return null;
 
   const compiledPdfPath = path.join(
     buildDir,

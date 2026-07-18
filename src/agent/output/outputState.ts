@@ -42,7 +42,6 @@ export interface OutputDependencies {
   baseFiles: FileLocation[];
   logger: AgentTrace;
   fileService: TaskRunFileService;
-  executionId: string;
   streamId: string;
   runtimeHost: AgentRuntimeHost;
 }
@@ -137,8 +136,6 @@ export function setActiveRun(
   deps: OutputDependencies,
   storageKey: StorageKey,
 ): void {
-  deps.fileService.updateRunContext(deps.executionId);
-
   if (storageKey === state.storageKey) return;
 
   // Clear reference to old preparation - allows GC even if it's still running
