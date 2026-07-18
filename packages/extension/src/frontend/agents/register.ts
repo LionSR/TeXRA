@@ -9,7 +9,6 @@ import * as logger from '@logger/logUtils';
 import type { AgentSource } from '@shared/schemas/agent';
 
 const CHANNEL = 'AgentRegister';
-logger.initialize(CHANNEL);
 
 export type AgentRegistrationSkipReason = 'alreadyRegistered';
 

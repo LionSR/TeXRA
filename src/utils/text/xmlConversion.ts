@@ -40,7 +40,6 @@ function detectInputFormat(text: string): OutputFormat {
 }
 
 const CHANNEL = 'xmlConversion';
-logger.initialize(CHANNEL);
 
 /**
  * Cached pandoc availability check.

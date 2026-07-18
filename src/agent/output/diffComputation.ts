@@ -24,7 +24,6 @@ import { ensureRoundData, type OutputState } from './outputState';
 import type { RoundFileMapping } from './types';
 
 const CHANNEL = 'OutputDiffStats';
-logger.initialize(CHANNEL);
 
 // ============================================================================
 // Helpers

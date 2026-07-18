@@ -47,7 +47,6 @@ import type { PlatformSecrets } from '@platform/secrets';
  * platform layer.
  */
 export interface LogBackend {
-  initialize(channel: string, isAgent?: boolean): void;
   debug(channel: string, message: string): void;
   info(channel: string, message: string): void;
   warn(channel: string, message: string): void;
@@ -90,7 +89,6 @@ let coordinator: SupabaseSessionCoordinator | undefined;
 let coordinatorSecrets: PlatformSecrets | undefined;
 let activeAuthLog: LogBackend | undefined;
 const deferredAuthLog: LogBackend = {
-  initialize: (channel, isAgent) => activeAuthLog?.initialize(channel, isAgent),
   debug: (channel, message) => activeAuthLog?.debug(channel, message),
   info: (channel, message) => activeAuthLog?.info(channel, message),
   warn: (channel, message) => activeAuthLog?.warn(channel, message),

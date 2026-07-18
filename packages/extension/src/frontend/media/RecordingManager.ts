@@ -11,7 +11,6 @@ import * as logger from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'RecordingManager';
-logger.initialize(CHANNEL);
 
 type RecordingMessageInput =
   { status: 'started' | 'stopped' } | { status: 'error'; error: string };

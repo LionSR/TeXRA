@@ -130,8 +130,8 @@ describe('logUtils', () => {
     const sink = { appendLine: vi.fn(), dispose };
     logger.setOutputChannelFactory(() => sink);
 
-    logger.initialize('shared');
-    logger.initialize('agent', true);
+    logger.createChannelWriter('shared', false);
+    logger.createChannelWriter('agent', true);
     logger.setOutputChannelFactory(null);
 
     expect(dispose).toHaveBeenCalledOnce();

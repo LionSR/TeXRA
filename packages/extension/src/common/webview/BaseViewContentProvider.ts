@@ -26,7 +26,6 @@ abstract class BaseViewContentProvider {
     // Default: convert 'HistoryView' to 'historyView'
     this.viewPath =
       viewPath ?? viewName.charAt(0).toLowerCase() + viewName.slice(1);
-    logger.initialize(this.channel);
   }
 
   protected getViewPath(): string {

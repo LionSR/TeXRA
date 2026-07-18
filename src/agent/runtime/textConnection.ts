@@ -6,7 +6,6 @@ import { classifyAgentError, getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'LaTeXCommands';
-logger.initialize(CHANNEL);
 
 export interface ConnectionResult {
   connector: string;

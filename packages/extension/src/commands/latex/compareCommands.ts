@@ -30,7 +30,6 @@ import { FlexibleFS } from '@utils/files';
 type AcceptCopyMeta = { agent: string; model: string; round: number };
 
 const CHANNEL = 'CompareCommands';
-logger.initialize(CHANNEL);
 
 function validateFileLocations(
   inputLocation: FileLocation,

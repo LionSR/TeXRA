@@ -22,7 +22,6 @@ import {
 import { defineTool } from './core/define';
 
 const CHANNEL = 'DiagnosticsTool';
-logger.initialize(CHANNEL);
 
 const DiagnosticsPathSchema = z
   .string()

@@ -32,7 +32,6 @@ import { BinaryResolver } from './binaryResolver';
 import { executeCommand, executeCommandSync } from './execUtils';
 
 const CHANNEL = 'toolUtils';
-logger.initialize(CHANNEL);
 
 // Interface for tool configuration (internal to this module)
 interface ToolConfig {

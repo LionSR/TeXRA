@@ -18,7 +18,6 @@ import { checkToolInstalled } from '@utils/system/toolUtils';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'AudioUtils';
-logger.initialize(CHANNEL);
 
 const RECORDINGS_DIR = 'recordings';
 

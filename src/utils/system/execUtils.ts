@@ -22,7 +22,6 @@ import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'execUtils';
-logger.initialize(CHANNEL);
 
 type ExecaTextEncoding = Extract<
   NonNullable<Options['encoding']>,

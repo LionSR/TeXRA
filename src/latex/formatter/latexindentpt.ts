@@ -11,7 +11,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 
 const CHANNEL = 'LaTeXCommands';
-logger.initialize(CHANNEL);
 
 async function cleanupIndentLog(logPath: string): Promise<void> {
   try {

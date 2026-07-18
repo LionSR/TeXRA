@@ -26,7 +26,6 @@ import { extendEnvPath } from '@utils/system/platformPaths';
 import { isGitRepository } from '@utils/system/isGitRepository';
 
 const CHANNEL = 'gitCommands';
-logger.initialize(CHANNEL);
 
 const COMMIT_HASH_PATTERN = /^[0-9a-fA-F]{4,40}$/;
 const OVERLEAF_GIT_TOKEN_URL = 'https://www.overleaf.com/user/settings';
