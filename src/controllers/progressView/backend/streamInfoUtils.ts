@@ -1,9 +1,9 @@
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
+import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 import { filterNotNull } from '@utils/core';
 import { peekWorktreeInfo, resolveWorktreeInfo } from '@utils/git/worktreeInfo';
 import { buildStreamTabInfo } from './streamTabInfo';
-import { compareByNewestCreationTime } from './streamOrdering';
 import type { ProgressViewState } from './state/ProgressViewState';
 
 function ensureWorktreeProbe(workingDirectory: string): void {
