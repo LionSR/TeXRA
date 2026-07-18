@@ -100,8 +100,9 @@ export function sessionHeaderIdentityLine(
       streamId: context.streamId,
       streams: context.streams,
     });
-    const toolName = context.childStreamEntries?.get(context.streamId)?.summary
-      ?.toolName;
+    const childEntry = context.childStreamEntries?.get(context.streamId);
+    const toolName =
+      childEntry?.kind === 'live' ? childEntry.summary?.toolName : undefined;
     const streamKind =
       toolName === DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME
         ? 'workflow script'

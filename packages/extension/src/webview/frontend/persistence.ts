@@ -7,9 +7,9 @@
  *   1. mount-time webview-storage restore (`restorePersistedState`), and
  *   2. backend-pushed history-rerun/reset restore (`handleRestoreState`).
  *
- * Both paths force `outputFiles`/`outputFilesActive` back to empty/false and
- * share `restorePerModeInstructions`'s legacy-migration precedence. Behavior
- * is pinned by `src/test-kernel/webview/MainAppPersistenceRestore.vitest.mts`.
+ * Both paths apply state through `applyState`, which owns output-file reset
+ * and legacy-instruction precedence. Behavior is pinned by
+ * `src/test-kernel/webview/MainAppPersistenceRestore.vitest.mts`.
  */
 
 // Third-party imports
@@ -38,7 +38,6 @@ import {
   latexdiffsVisible$,
   model$,
   multiFiles$,
-  outputFilesActive$,
   sessionType$,
   singleFiles$,
   toolUseAgent$,
@@ -106,7 +105,6 @@ export function saveState(): void {
     contextFiles: mf.contextFiles,
     mediaFiles: mf.mediaFiles,
     outputFiles: [],
-    outputFilesActive: false,
     latexdiffsVisible: latexdiffsVisible$.get(),
     autoExtractFigure: cv.autoExtractFigure,
     autoExtractTikzFigure: cv.autoExtractTikzFigure,
@@ -121,33 +119,7 @@ export function restorePersistedState(): void {
   // State is parsed through MainViewPersistedStateSchema which provides all defaults.
   // No manual fallbacks needed - schema handles missing/invalid values.
   const state = stateManager.getState();
-
-  sessionType$.set(state.sessionType);
-  fileSelectionOpen$.set(state.sessionType === SESSION_TYPES.WORKFLOW);
-  workflowAgent$.set(state.workflowAgent);
-  toolUseAgent$.set(state.toolUseAgent);
-  model$.set(state.model);
-  commit$.set(state.commit);
-
-  restorePerModeInstructions(state);
-  singleFiles$.set({
-    editedFile: state.editedFile,
-    baseFile: state.baseFile,
-  });
-  multiFiles$.set({
-    inputFiles: state.inputFiles,
-    contextFiles: state.contextFiles,
-    mediaFiles: state.mediaFiles,
-    outputFiles: [],
-  });
-  outputFilesActive$.set(false);
-  latexdiffsVisible$.set(state.latexdiffsVisible);
-  checkboxValues$.set({
-    autoExtractFigure: state.autoExtractFigure,
-    autoExtractTikzFigure: state.autoExtractTikzFigure,
-    autoCompileInputPdf: state.autoCompileInputPdf,
-    attachTeXCount: state.attachTeXCount,
-  });
+  applyState(state);
 }
 
 /**
@@ -193,32 +165,35 @@ export function handleRestoreState(
   const state = parsed.data;
   blockSave();
   try {
-    sessionType$.set(state.sessionType);
-    workflowAgent$.set(state.workflowAgent);
-    toolUseAgent$.set(state.toolUseAgent);
-    model$.set(state.model);
-    commit$.set(state.commit);
-    restorePerModeInstructions(state);
-    singleFiles$.set({
-      editedFile: state.editedFile,
-      baseFile: state.baseFile,
-    });
-
-    checkboxValues$.set({
-      autoExtractFigure: state.autoExtractFigure,
-      autoExtractTikzFigure: state.autoExtractTikzFigure,
-      autoCompileInputPdf: state.autoCompileInputPdf,
-      attachTeXCount: state.attachTeXCount,
-    });
-    outputFilesActive$.set(false);
-    latexdiffsVisible$.set(state.latexdiffsVisible);
-
-    restoreFileArrays(state);
+    applyState(state);
   } finally {
     unblockSave();
   }
   saveState();
   return true;
+}
+
+/** Apply one parsed snapshot regardless of whether storage or the host sent it. */
+function applyState(state: MainViewPersistedState): void {
+  sessionType$.set(state.sessionType);
+  fileSelectionOpen$.set(state.sessionType === SESSION_TYPES.WORKFLOW);
+  workflowAgent$.set(state.workflowAgent);
+  toolUseAgent$.set(state.toolUseAgent);
+  model$.set(state.model);
+  commit$.set(state.commit);
+  restorePerModeInstructions(state);
+  singleFiles$.set({
+    editedFile: state.editedFile,
+    baseFile: state.baseFile,
+  });
+  restoreFileArrays(state);
+  latexdiffsVisible$.set(state.latexdiffsVisible);
+  checkboxValues$.set({
+    autoExtractFigure: state.autoExtractFigure,
+    autoExtractTikzFigure: state.autoExtractTikzFigure,
+    autoCompileInputPdf: state.autoCompileInputPdf,
+    attachTeXCount: state.attachTeXCount,
+  });
 }
 
 function restoreFileArrays(state: MainViewPersistedState): void {
@@ -256,9 +231,6 @@ function clearForNewSession(): void {
         ...checkboxValues$.get(),
         ...defaults.checkboxOverrides,
       });
-    }
-    if (defaults.outputFilesActive !== undefined) {
-      outputFilesActive$.set(false);
     }
   }
   saveState();

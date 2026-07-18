@@ -168,6 +168,40 @@ describe('task-group-list ungrouped message indexes', () => {
     expect(timelineEntry?.msg).toBe(updated);
   });
 
+  it('keeps one location record coherent across out-of-order insertion and update', () => {
+    const original = [
+      createMessage('m1', 'one', 1),
+      createMessage('m3', 'three', 3),
+    ];
+    const list = createList(original);
+    const inserted = createMessage('m2', 'two', 2);
+    const withInsertion = [...original, inserted];
+
+    list.index.appendNewMessages(withInsertion, original.length);
+    list.index.appendToTimeline(withInsertion, original.length);
+
+    expect(list.index.ungrouped.map((message) => message.id)).toEqual([
+      'm1',
+      'm2',
+      'm3',
+    ]);
+    expect(list.index.timeline.map((entry) => entry.key)).toEqual([
+      'm1',
+      'm2',
+      'm3',
+    ]);
+
+    const updated = { ...inserted, text: 'two updated' };
+    const next = [...original, updated];
+    list.index.updateCachedMessageRefs(next, withInsertion, [2]);
+    list.index.updateTimelineMessageRefs(next, [2]);
+
+    expect(list.index.ungrouped[1]).toBe(updated);
+    expect(
+      list.index.timeline.find((entry) => entry.key === 'm2' && 'msg' in entry),
+    ).toMatchObject({ msg: updated });
+  });
+
   it('patches stable group metadata without rebuilding the message tree', () => {
     const group = createGroup('g1', STREAM_PHASE.RUNNING);
     const message = createMessage('m1', 'grouped', 2, group.id);

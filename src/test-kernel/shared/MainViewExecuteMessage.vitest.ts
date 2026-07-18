@@ -44,8 +44,6 @@ describe('MainView execute message builder', () => {
         contextFilesActive: true,
         mediaFiles: ['figure.png'],
         mediaFilesActive: true,
-        outputFiles: [],
-        outputFilesActive: false,
       },
       toolConfig: {
         autoExtractFigure: true,

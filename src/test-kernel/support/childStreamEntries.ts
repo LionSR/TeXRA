@@ -22,13 +22,32 @@ export interface ChildStreamEntryRow extends SubagentChildInfo {
   readonly active?: boolean;
 }
 
+type TestParentProvenance =
+  | {
+      readonly kind: 'explicit';
+      readonly streamId: StreamTabId | null;
+      readonly retained?: {
+        readonly streamId: StreamTabId;
+        readonly order: number;
+      };
+    }
+  | {
+      readonly kind: 'roster';
+      readonly retained: {
+        readonly streamId: StreamTabId;
+        readonly order: number;
+      };
+    };
+
 function toEntry(
   row: ChildStreamEntryRow,
   parentDefaults: {
-    readonly activeParentStreamId?: StreamTabId;
-    readonly edgeParentStreamId?: StreamTabId | null;
-    readonly retainedParentStreamId?: StreamTabId;
-    readonly retainedOrder?: number;
+    readonly active: boolean;
+    readonly explicitParentStreamId?: StreamTabId | null;
+    readonly retained?: {
+      readonly streamId: StreamTabId;
+      readonly order: number;
+    };
   },
 ): ChildStreamEntry {
   const {
@@ -39,14 +58,27 @@ function toEntry(
     active,
     ...summary
   } = row;
+  if (removed === true) return { kind: 'removed' };
+  const retained = parentDefaults.retained;
+  const explicitParent =
+    edgeParentStreamId !== undefined
+      ? edgeParentStreamId
+      : parentDefaults.explicitParentStreamId;
+  let parent: TestParentProvenance | undefined;
+  if (explicitParent !== undefined) {
+    parent = {
+      kind: 'explicit',
+      streamId: explicitParent,
+      ...(retained && { retained }),
+    };
+  } else if (retained) {
+    parent = { kind: 'roster', retained };
+  }
   return {
+    kind: 'live',
     summary,
-    activeParentStreamId:
-      active === false ? undefined : parentDefaults.activeParentStreamId,
-    retainedParentStreamId: parentDefaults.retainedParentStreamId,
-    retainedOrder: parentDefaults.retainedOrder,
-    edgeParentStreamId: edgeParentStreamId ?? parentDefaults.edgeParentStreamId,
-    removed: removed ?? false,
+    active: active ?? parentDefaults.active,
+    ...(parent && { parent }),
   };
 }
 
@@ -79,9 +111,8 @@ export function buildChildStreamEntries(init: {
     map.set(
       row.childStreamId,
       toEntry(row, {
-        activeParentStreamId: parentStreamId,
-        retainedParentStreamId: parentStreamId,
-        retainedOrder: index + 1,
+        active: true,
+        retained: { streamId: parentStreamId, order: index + 1 },
       }),
     );
   });
@@ -89,15 +120,16 @@ export function buildChildStreamEntries(init: {
     map.set(
       row.childStreamId,
       toEntry(row, {
-        activeParentStreamId: parentStreamId,
-        edgeParentStreamId: parentStreamId,
+        active: true,
+        explicitParentStreamId: parentStreamId,
       }),
     );
   }
   for (const childStreamId of edgeOnly) {
     map.set(childStreamId, {
-      edgeParentStreamId: parentStreamId,
-      removed: false,
+      kind: 'live',
+      active: false,
+      parent: { kind: 'explicit', streamId: parentStreamId },
     });
   }
   return map;
