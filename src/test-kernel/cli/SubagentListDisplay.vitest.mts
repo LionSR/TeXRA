@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -6,7 +8,11 @@ import {
   childStatusColor,
   pendingApprovalRowSuffix,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
-import { compactChildRowText } from '@cli/chat/tui/panes/SubagentList';
+import {
+  SubagentList,
+  compactChildRowText,
+} from '@cli/chat/tui/panes/SubagentList';
+import type { StreamSlice } from '@cli/chat/tui/state/cliState';
 import {
   nextSelectHighlightIndex,
   selectControlledHighlightIndex,
@@ -14,7 +20,11 @@ import {
   type SelectItem,
 } from '@cli/chat/tui/ui/Select';
 import type { StreamView } from '@cli/chat/tui/state/streamViews';
-import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+import { AgentCategory, STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+
+const cliRequire = createRequire(
+  new URL('../../../packages/cli/package.json', import.meta.url),
+);
 
 function session(id: string, active = false): StreamView {
   return {
@@ -22,6 +32,35 @@ function session(id: string, active = false): StreamView {
     label: id,
     slice: undefined,
     active,
+  };
+}
+
+function workflowAgentSlice(
+  id: string,
+  overrides: Partial<StreamSlice>,
+): StreamSlice {
+  return {
+    streamId: id as StreamTabId,
+    model: undefined,
+    category: AgentCategory.Workflow,
+    status: STREAM_PHASE.COMPLETED,
+    substate: undefined,
+    runStartedAt: undefined,
+    description: undefined,
+    thinkingActive: false,
+    usage: undefined,
+    cumulativeUsage: undefined,
+    conversation: undefined,
+    roundStage: undefined,
+    entries: [],
+    queuedFollowUps: 0,
+    queuedFollowUpMessages: [],
+    activeProcesses: [],
+    todos: [],
+    plan: null,
+    processOutput: new Map(),
+    bypass: { bash: false, toolEdit: false, superYolo: false },
+    ...overrides,
   };
 }
 
@@ -170,5 +209,72 @@ describe('CLI child list display model', () => {
     expect(
       childRowMetadataText({ elapsed: null, outputTokens: 0 }),
     ).toBeUndefined();
+  });
+
+  it('adds the tool-call count between elapsed and generated tokens', () => {
+    expect(
+      childRowMetadataText({
+        elapsed: '2m 30s',
+        outputTokens: 39_900,
+        toolCallCount: 5,
+      }),
+    ).toBe('2m 30s · 5 tool calls · ↓40k');
+    expect(
+      childRowMetadataText({
+        elapsed: '45s',
+        outputTokens: undefined,
+        toolCallCount: 1,
+      }),
+    ).toBe('45s · 1 tool call');
+    // No tool calls yet is not a datum worth a column segment.
+    expect(
+      childRowMetadataText({
+        elapsed: '45s',
+        outputTokens: undefined,
+        toolCallCount: 0,
+      }),
+    ).toBe('45s');
+  });
+
+  it('surfaces per-agent model, tool calls, and tokens for a focused run', async () => {
+    const ink = (await import(cliRequire.resolve('ink'))) as any;
+    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const run = 'run' as StreamTabId;
+    const agent = 'agent-1' as StreamTabId;
+    const output: string = ink.renderToString(
+      React.createElement(SubagentList, {
+        listRootStreamId: run,
+        maxRows: 6,
+        keyboardActive: false,
+        sessions: [
+          {
+            id: run,
+            label: 'workflow-run',
+            slice: workflowAgentSlice('run', { status: STREAM_PHASE.RUNNING }),
+            active: true,
+          },
+          {
+            id: agent,
+            label: 'coder',
+            slice: workflowAgentSlice('agent-1', {
+              model: 'claude-sonnet-4',
+              conversation: { toolCallCount: 5 },
+              cumulativeUsage: {
+                inputTokens: 1000,
+                outputTokens: 39_900,
+                cost: 0,
+              },
+            }),
+            active: false,
+          },
+        ],
+      }),
+      { columns: 100 },
+    );
+
+    expect(output).toContain('coder');
+    expect(output).toContain('claude-sonnet-4');
+    expect(output).toContain('5 tool calls');
+    expect(output).toContain('↓40k');
   });
 });
