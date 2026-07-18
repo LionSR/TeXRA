@@ -74,8 +74,8 @@ const SettingsMessages = [
   }),
 ] as const;
 
-// MERGE sends the primary input plus the edited file (planMerge); COMPARE
-// and ACCEPT_EDITED send the base/edited pair (planCompare). Each command
+// MERGE sends the primary input plus the edited file; COMPARE and
+// ACCEPT_EDITED send the base/edited pair. Each command
 // needs a distinct required-field shape, so they get their own schemas
 // instead of a shared loose object — file paths flowing straight into VS
 // Code commands (see executionHandlers.handleFileOperation) must be
