@@ -19,6 +19,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { createChildStream } from '@tools/childStream';
 import {
   createRecordingHost,
@@ -44,6 +45,8 @@ const normalizedErrorExecutionId = 'c11117' as ExecutionId;
 const normalizedErrorChildStreamId = 'codex#c11117' as StreamTabId;
 const noProjectionAutoCloseExecutionId = 'c11118' as ExecutionId;
 const noProjectionAutoCloseChildStreamId = 'bash#c11118' as StreamTabId;
+const workflowRelaunchExecutionId = 'c11119' as ExecutionId;
+const workflowRelaunchChildStreamId = 'workflow-script#c11119' as StreamTabId;
 const config = {
   agentCategory: AgentCategory.ToolUse,
   model: 'test-model',
@@ -92,6 +95,7 @@ describe('child stream progress events', () => {
       failedChildStreamId,
       normalizedErrorChildStreamId,
       noProjectionAutoCloseChildStreamId,
+      workflowRelaunchChildStreamId,
     ]) {
       clearStreamStatusForTest(defaultSession().status, streamId);
     }
@@ -238,6 +242,66 @@ describe('child stream progress events', () => {
         streamId: childStreamId,
       });
     } finally {
+      recorded.detach();
+    }
+  });
+
+  it('marks a deterministic child-stream relaunch as running', async () => {
+    const active = createRecordingHost();
+    const firstRun = withSessionEventRecording(() =>
+      createChildStream(workflowRelaunchExecutionId, parentStreamId, {
+        runtimeHost: active.host,
+        streamPrefix: 'workflow-script',
+        streamCategory: AgentCategory.Workflow,
+        agentName: 'draft-sections',
+        description: 'Run a named child task',
+        config,
+        toolName: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+      }),
+    );
+    await withSessionEventRecording(() => firstRun.finalize());
+    expect(defaultSession().status.get(workflowRelaunchChildStreamId)).toBe(
+      STREAM_PHASE.COMPLETED,
+    );
+
+    const recorded = recordSessionEvents(defaultSession().events);
+    const relaunched = createChildStream(
+      workflowRelaunchExecutionId,
+      parentStreamId,
+      {
+        runtimeHost: active.host,
+        streamPrefix: 'workflow-script',
+        streamCategory: AgentCategory.Workflow,
+        agentName: 'draft-sections',
+        description: 'Resume the named child task',
+        config,
+        toolName: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+      },
+    );
+
+    try {
+      expect(defaultSession().status.get(workflowRelaunchChildStreamId)).toBe(
+        STREAM_PHASE.RUNNING,
+      );
+      expect(
+        defaultSession().executions.getActiveChildren(parentStreamId).subagents,
+      ).toContainEqual(
+        expect.objectContaining({
+          childStreamId: workflowRelaunchChildStreamId,
+          executionId: workflowRelaunchExecutionId,
+          status: STREAM_PHASE.RUNNING,
+        }),
+      );
+      expect(runEventsOfType(recorded.events, 'status')).toContainEqual(
+        expect.objectContaining({
+          cause: 'resume',
+          phase: STREAM_PHASE.RUNNING,
+          previousPhase: STREAM_PHASE.COMPLETED,
+          streamId: workflowRelaunchChildStreamId,
+        }),
+      );
+    } finally {
+      await relaunched.finalize();
       recorded.detach();
     }
   });
