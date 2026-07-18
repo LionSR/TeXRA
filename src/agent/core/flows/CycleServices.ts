@@ -75,14 +75,6 @@ export interface ResponseCycleServices<
   C = unknown,
 > extends CycleRunServices<C> {
   round: ConversationRoundStateSnapshot;
-  /**
-   * Determines the best textual connector between two strings in a LaTeX
-   * document context (empty string, space, or newline).
-   */
-  readonly bestConnectionMethod: (
-    str1: string,
-    str2: string,
-  ) => Promise<{ connector: string; choice: string }>;
 }
 
 /**

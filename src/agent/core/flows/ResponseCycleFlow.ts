@@ -21,6 +21,7 @@ import {
 import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 import { K_SLICE } from '@agent/core/constants';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
+import { bestConnectionMethod } from '@agent/runtime/textConnection';
 import type { ToolDefinition } from '@model';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
 import { OUTPUT_END_TAG } from '@shared/constants/outputProtocol';
@@ -315,7 +316,7 @@ class ResponseProcessNode<C> extends BaseNode<
       // Re-applying would run non-idempotent custom replacements twice.
       const processedResponse = newResponse;
 
-      const connector = await this.services.bestConnectionMethod(
+      const connector = await bestConnectionMethod(
         prepRes.lastResponse.slice(-K_SLICE),
         processedResponse.slice(0, K_SLICE),
       );
@@ -450,7 +451,7 @@ class ResponseCycleFinalizeNode<C> extends BaseNode<
     // throwing *after* recordRound has already mutated run state — otherwise
     // that catch would re-record the round and double-count usage/response time.
     try {
-      await onRoundFinalized?.(run);
+      await onRoundFinalized(run);
     } catch (error) {
       logger.warn(
         `Round finalization callback failed: ${toErrorMessage(error)}`,

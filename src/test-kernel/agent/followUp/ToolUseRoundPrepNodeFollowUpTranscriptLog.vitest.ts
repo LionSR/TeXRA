@@ -14,6 +14,7 @@ function buildServices(
     checkInterruption: () => false,
     config: { model: 'deepseekT', agent: 'chat' } as never,
     logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    onRoundFinalized: () => {},
     modelHandler: {
       createUserFollowUpMessages: vi.fn(async (messages) => messages),
       addMediaToUserMessage: vi.fn(async () => []),

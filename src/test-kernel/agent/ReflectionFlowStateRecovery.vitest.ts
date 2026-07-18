@@ -102,9 +102,9 @@ async function runPersistedReflectionFlow(
           transient: {},
         },
         modelHandler: createModelHandler(),
-        streamStatus: session.status,
         checkInterruption: () => true,
         setAbortController: () => {},
+        onRoundFinalized: () => {},
       }),
     );
   } finally {

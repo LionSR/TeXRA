@@ -29,11 +29,9 @@ function buildServices(
       systemPrompt: 'You are careful.',
       userRequest: 'Do the thing.',
     }),
-    resolvedTools: [],
     session: {} as never,
-    setting: { agentCategory: 'toolUse' } as never,
+    setting: { agentCategory: 'toolUse', tools: [] } as never,
     snapshot: null,
-    streamStatus: {} as never,
     toolRegistry: {} as never,
     userVarChannels: { input: {}, transient: {} },
     checkInterruption: () => false,
@@ -121,7 +119,7 @@ describe('ToolUsePrepareNode resume (prompt-cache preservation)', () => {
     const snapshot = buildSnapshot();
     const services = buildServices({ snapshot });
     const node = new ToolUsePrepareNode().setServices(services);
-    const resolvedToolNames = services.resolvedTools.map((tool) => tool.name);
+    const resolvedToolNames = services.setting.tools.map((tool) => tool.name);
     const rebuiltPrompts = await buildInitialToolUsePrompts(
       services.prompt,
       services.userVarChannels.transient,
