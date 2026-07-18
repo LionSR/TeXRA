@@ -83,6 +83,11 @@ const LONG_EXTERNAL_INQUIRY_ANSWER_FOR_TRUNCATION = Array.from(
 ).join(' ');
 const FULL_WIDTH_AGENT_PROPOSAL_BORDER_80 = `╔${'═'.repeat(78)}╗`;
 const ASYNC_FORM_SETTLE_MS = 12000;
+const WRAPPED_EDIT_APPROVAL_ENV = Object.freeze({
+  HARNESS_ENTRIES: '4',
+  HARNESS_EDIT_APPROVAL: '1',
+  HARNESS_EDIT_APPROVAL_WRAPPED_CONTEXT: '1',
+});
 const PHYSICIST_LOCAL_TOOL_USE_AGENTS = [
   'research',
   'review',
@@ -1385,11 +1390,7 @@ const SCENARIOS = [
     name: 'edit-approval-opens-at-change',
     rows: 16,
     cols: 80,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_EDIT_APPROVAL: '1',
-      HARNESS_EDIT_APPROVAL_WRAPPED_CONTEXT: '1',
-    },
+    env: { ...WRAPPED_EDIT_APPROVAL_ENV },
     bootExpect: '· Ctrl-C ',
     frame: 'viewport',
     expect: [
@@ -1406,11 +1407,7 @@ const SCENARIOS = [
     name: 'edit-approval-reanchors-after-resize',
     rows: 16,
     cols: 120,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_EDIT_APPROVAL: '1',
-      HARNESS_EDIT_APPROVAL_WRAPPED_CONTEXT: '1',
-    },
+    env: { ...WRAPPED_EDIT_APPROVAL_ENV },
     bootExpect: '· Ctrl-C ',
     resizes: [{ cols: 40, rows: 16 }],
     frame: 'viewport',
@@ -1444,11 +1441,7 @@ const SCENARIOS = [
     name: 'edit-approval-feedback-preserves-scroll',
     rows: 24,
     cols: 40,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_EDIT_APPROVAL: '1',
-      HARNESS_EDIT_APPROVAL_WRAPPED_CONTEXT: '1',
-    },
+    env: { ...WRAPPED_EDIT_APPROVAL_ENV },
     bootExpect: '· Ctrl-C ',
     keys: [
       { input: UP.repeat(20), delayMs: 200 },
@@ -1468,11 +1461,7 @@ const SCENARIOS = [
     name: 'edit-approval-feedback-exit-reanchors',
     rows: 16,
     cols: 40,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_EDIT_APPROVAL: '1',
-      HARNESS_EDIT_APPROVAL_WRAPPED_CONTEXT: '1',
-    },
+    env: { ...WRAPPED_EDIT_APPROVAL_ENV },
     bootExpect: '· Ctrl-C ',
     keys: [
       'n',
@@ -1488,6 +1477,17 @@ const SCENARIOS = [
       'n reject',
     ],
     unexpect: ['First context paragraph', 'Enter send note'],
+  },
+  {
+    name: 'edit-approval-feedback-exit-preserves-scroll',
+    rows: 24,
+    cols: 40,
+    env: { ...WRAPPED_EDIT_APPROVAL_ENV },
+    bootExpect: '· Ctrl-C ',
+    keys: [{ input: UP.repeat(20), delayMs: 200 }, 'n', 'short note', ESC],
+    frame: 'viewport',
+    expect: ['alpha alpha alpha alpha alpha', 'y approve', 'n reject'],
+    unexpect: ['-Old acknowledgment.', '+Revised acknowledgment.'],
   },
   {
     name: 'narrow-edit-approval',

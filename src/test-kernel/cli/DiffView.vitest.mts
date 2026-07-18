@@ -163,6 +163,41 @@ describe('CLI diff display', () => {
     expect(initialLines.some((line) => line.kind === 'added')).toBe(true);
   });
 
+  it('anchors a wrapped replacement on its added side', () => {
+    const hunks = buildHunks(
+      'draft.tex',
+      [
+        'alpha',
+        'beta',
+        'gamma',
+        `old result ${'continuation '.repeat(12)}`,
+        'epsilon',
+        'zeta',
+        'eta',
+      ].join('\n'),
+      [
+        'alpha',
+        'beta',
+        'gamma',
+        `new result ${'continuation '.repeat(12)}`,
+        'epsilon',
+        'zeta',
+        'eta',
+      ].join('\n'),
+    );
+    const maxDisplayLines = 7;
+
+    const initialLines = scrollBoundedDiffDisplayLines(
+      hunks,
+      0,
+      maxDisplayLines,
+      initialDiffScrollOffset(hunks, 32, maxDisplayLines),
+      32,
+    );
+
+    expect(initialLines.some((line) => line.kind === 'added')).toBe(true);
+  });
+
   it('wraps long changed lines instead of replacing the tail with an ellipsis', () => {
     const proposed =
       'Here $2n+1$ is the $(n+1)$-st odd number, i.e., the next odd number after $2n-1$.';
