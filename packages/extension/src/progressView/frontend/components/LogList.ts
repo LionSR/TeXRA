@@ -50,8 +50,7 @@ import {
 import { logStyles } from '../styles/logStyles';
 
 // Local imports - progress view formatters
-import { getCopyContent } from '../formatters/copyContentStore';
-import { getProposalInput } from '../formatters/proposalInputStore';
+import { getCopyContent, getProposalInput } from '../formatters/contentStore';
 
 // Local imports - progress view components (type-only)
 import type { TaskGroupList } from './TaskGroupList';

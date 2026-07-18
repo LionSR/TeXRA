@@ -7,12 +7,15 @@
  * single-line templates with `// prettier-ignore` to prevent whitespace issues.
  *
  * The section builders and web-search/web-fetch formatters live in
- * `./toolFormatters/`; this file owns `formatToolUseTemplate` and is the
- * public entry point so existing import paths keep working.
+ * `./toolFormatters/`; this file owns `formatToolUseTemplate`.
  */
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/details/details.js';
+
+// Third-party imports - Lit template utilities
+import { html, nothing, type TemplateResult } from 'lit';
+import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared utilities
 import type { LogMessageData } from '@shared/schemas';
@@ -31,15 +34,6 @@ import {
 import { isObject } from '@utils/core';
 import { truncateSummary } from '@utils/text/stringUtils';
 
-// Local imports - Lit template utilities
-import {
-  html,
-  nothing,
-  classMap,
-  type TemplateResult,
-  type FormatResult,
-} from '../litTemplates';
-
 // Local imports - formatter helpers
 import {
   buildToolUseSection,
@@ -50,7 +44,7 @@ import {
   stopSummaryToggleKeydown,
   SPINNER_ICON_NAME,
 } from '../htmlBuilders';
-import { registerProposalInput } from '../proposalInputStore';
+import { registerProposalInput } from '../contentStore';
 import { stringifyWithLanguage } from '../parseUtils';
 import { TOOL_LABEL_MAP, TRIVIAL_WRITE_OUTPUT } from '../constants';
 
@@ -63,11 +57,7 @@ import {
   truncateHeaderSummary,
 } from './toolFormatters/helpers';
 import { dispatchToolSections } from './toolFormatters/toolSections';
-
-export {
-  formatWebSearchTemplate,
-  formatWebFetchTemplate,
-} from './toolFormatters/webFormatters';
+import type { FormatResult } from '../baseLogFormatter';
 
 /** Format tool use log entry as TemplateResult. */
 export function formatToolUseTemplate(
