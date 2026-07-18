@@ -1,12 +1,13 @@
 export const meta = {
   name: 'debt-audit',
   description:
-    'Area debt audit: map seams read-only, generate deletion ideas through lenses, dedup, adversarially verify net gain',
+    'Area debt audit: scout (optional), map seams read-only, open ideation, dedup, adversarially verify net gain',
   whenToUse:
-    'Recurring rotation over codebase areas. Caller scouts the area first and passes seams (and optionally lenses + measured numbers) as args. Proven on the 2026-07-18 runtime-coupling audit (tracker #8758: 12/12 issues shipped).',
+    'Recurring rotation over codebase areas (tracker #8787). Minimal call: {area, charter} — the engine scouts and decomposes itself. Pass seams/lenses only to direct it. Proven on the 2026-07-18 runtime-coupling audit (tracker #8758: 12/12 issues shipped).',
   phases: [
+    { title: 'Scout', detail: 'self-decompose the area (skipped when caller passes seams)' },
     { title: 'Map', detail: 'one read-only mapper per seam' },
-    { title: 'Ideas', detail: 'architect lenses over the merged map' },
+    { title: 'Ideas', detail: 'open ideation over the merged map' },
     { title: 'Shortlist', detail: 'dedup + rank candidates' },
     { title: 'Verify', detail: 'adversarial net-gain verification per candidate' },
   ],
@@ -14,16 +15,23 @@ export const meta = {
 
 // args: {
 //   area: string                       — short name of the area under audit
-//   seams: [{ key, brief }]            — one mapper per seam; brief = directories, questions, suspects
-//   lenses?: [{ key, brief }]          — defaults below if omitted
+//   charter?: string                   — free-text description of the territory (directories, why now,
+//                                        anything suspicious); the scout decomposes from this when no
+//                                        seams are given
+//   seams?: [{ key, brief }]           — optional pre-scouted decomposition; omit to let the engine
+//                                        decompose itself
+//   lenses?: [{ key, brief }]          — optional directed ideation angles; omit for open ideation
 //   measured?: string                  — hard numbers the caller grepped up front
-//   doNotRedo?: string                 — adjudicated do-not-do items so lenses/verifiers skip them
+//   doNotRedo?: string                 — adjudicated do-not-do items so ideation/verifiers skip them
 // }
+// Structure is deliberately concentrated at the END of the pipeline: discovery (scout, map, ideas)
+// runs with maximum freedom; the adversarial verify gate before filing is where rigor lives, because
+// a wrongly-scoped finding costs real implementation cycles downstream.
 let A = args
 if (typeof A === 'string') A = JSON.parse(A)
 A = A || {}
-if (!A.area || !Array.isArray(A.seams) || A.seams.length === 0) {
-  throw new Error('debt-audit requires args {area, seams: [{key, brief}, ...]}')
+if (!A.area) {
+  throw new Error('debt-audit requires args {area, ...}')
 }
 
 const ROOT = '/Users/siruilu/Local/AI-Projects/coauthor'
@@ -57,7 +65,7 @@ const MAP_SCHEMA = {
     },
     components: {
       type: 'array',
-      maxItems: 25,
+      maxItems: 30,
       items: {
         type: 'object',
         additionalProperties: false,
@@ -88,12 +96,12 @@ const MAP_SCHEMA = {
     },
     passThroughs: {
       type: 'array',
-      maxItems: 15,
+      maxItems: 20,
       items: { type: 'string', description: 'symbol + file:line of a wrapper/shim/alias that only forwards' },
     },
     candidates: {
       type: 'array',
-      maxItems: 8,
+      maxItems: 12,
       items: {
         type: 'object',
         additionalProperties: false,
@@ -113,8 +121,52 @@ const MAP_SCHEMA = {
   },
 }
 
+let seams = Array.isArray(A.seams) && A.seams.length > 0 ? A.seams : null
+if (!seams) {
+  phase('Scout')
+  const SCOUT_SCHEMA = {
+    type: 'object',
+    additionalProperties: false,
+    required: ['seams'],
+    properties: {
+      seams: {
+        type: 'array',
+        minItems: 3,
+        maxItems: 12,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['key', 'brief'],
+          properties: {
+            key: { type: 'string', description: 'short kebab-case name' },
+            brief: {
+              type: 'string',
+              description: 'directories/files, the questions worth asking, suspects with any counts you measured',
+            },
+          },
+        },
+      },
+      measured: { type: 'string', description: 'hard numbers you grepped while scouting' },
+    },
+  }
+  const scout = await agent(
+    `Scout the "${A.area}" area of the TeXRA repo for a tech-debt audit and decompose it into parallel-mappable seams.
+${GROUND_RULES}
+${PHILOSOPHY}
+${MEASURED}
+${A.charter ? '\nCALLER CHARTER (starting point, not a fence):\n' + A.charter : ''}
+
+Explore however you judge best — directory sizes, import graphs, suspect-pattern greps, git history. Decompose into however many seams the territory actually warrants (disjoint enough that parallel mappers will not duplicate work), and put your measured numbers in the briefs so mappers start from facts.`,
+    { label: 'scout', phase: 'Scout', schema: SCOUT_SCHEMA, effort: 'xhigh' },
+  )
+  if (!scout) throw new Error('scout agent died; pass seams explicitly to skip scouting')
+  seams = scout.seams
+  if (scout.measured) A.measured = (A.measured ? A.measured + '\n' : '') + scout.measured
+  log('scout decomposed "' + A.area + '" into ' + seams.length + ' seams: ' + seams.map((s) => s.key).join(', '))
+}
+
 function mapPrompt(s) {
-  return `You are one of ${A.seams.length} parallel seam mappers in a tech-debt audit of the "${A.area}" area.
+  return `You are one of ${seams.length} parallel seam mappers in a tech-debt audit of the "${A.area}" area.
 ${GROUND_RULES}
 ${PHILOSOPHY}
 ${MEASURED}
@@ -122,19 +174,19 @@ ${MEASURED}
 YOUR SEAM: ${s.key}
 ${s.brief}
 
-Method: start from the named directories/files, read the real code (not just names), grep for consumers before calling anything dead or single-caller (remember .mts). Distinguish EARNS_KEEP from SHALLOW/PASS_THROUGH honestly; if a seam is already clean, say so — a false debt claim poisons the downstream synthesis. For candidates, only propose deletions where named symbols cease to exist, and estimate netLoC including the cost of whatever replaces them.`
+The brief is a starting point, not a fence: follow the debt where it actually leads, and report load-bearing findings outside the brief (in notes or as candidates) rather than dropping them. Read the real code, not just names; grep for consumers before calling anything dead or single-caller (remember .mts). If the seam is already clean, say so plainly — a false debt claim poisons the downstream synthesis, and "healthy" is a valuable verdict. For candidates, only propose deletions where named symbols cease to exist, and estimate netLoC including the cost of whatever replaces them.`
 }
 
 phase('Map')
 const maps = []
 let mc = 0
 async function mapWorker() {
-  while (mc < A.seams.length) {
-    const s = A.seams[mc++]
+  while (mc < seams.length) {
+    const s = seams[mc++]
     const r = await agent(mapPrompt(s), { label: 'map:' + s.key, phase: 'Map', schema: MAP_SCHEMA, effort: 'high' })
     if (r) {
       maps.push({ seam: s.key, ...r })
-      log('mapped ' + s.key + ' (' + maps.length + '/' + A.seams.length + ')')
+      log('mapped ' + s.key + ' (' + maps.length + '/' + seams.length + ')')
     } else {
       log('mapper DIED: ' + s.key)
     }
@@ -149,7 +201,7 @@ const IDEAS_SCHEMA = {
   properties: {
     ideas: {
       type: 'array',
-      maxItems: 5,
+      maxItems: 8,
       items: {
         type: 'object',
         additionalProperties: false,
@@ -173,34 +225,22 @@ const IDEAS_SCHEMA = {
   },
 }
 
-const DEFAULT_LENSES = [
-  {
-    key: 'seam-deletion',
-    brief:
-      'LENS: SEAM DELETION. Find abstractions whose seam costs more than the duplication it prevents and propose deleting the seam wholesale, tolerating modest duplication where the dup is smaller than the port+adapter+wiring stack. The test: after deletion, is the code a junior can follow SHORTER end-to-end?',
-  },
-  {
-    key: 'dual-system-kill',
-    brief:
-      'LENS: DUAL-SYSTEM KILL. Every place two subsystems do the same job (two writers of one fact, two composition paths, a frozen legacy twin behind a flag): design the retirement of the weaker side, naming every symbol that dies and the migration/retention story for anything persisted.',
-  },
-  {
-    key: 'encoding-unification',
-    brief:
-      'LENS: ONE ENCODING PER FACT. Find facts that travel in multiple encodings or get re-parsed/re-validated downstream of a producer that already had the type. Propose the single typed carrier and delete every re-parser and hand-copied list. Beware persisted formats: breaking them is the risk to price in.',
-  },
-  {
-    key: 'layer-collapse',
-    brief:
-      'LENS: LAYER COLLAPSE. Pass-through wrappers, single-host abstractions with host-neutral Deps bags that buy nothing, facades that only forward, factories with one caller, micro-files with one importer: propose the fold-ins, honoring the repo rule that relocations do not count as deletions.',
-  },
-]
-const LENSES = Array.isArray(A.lenses) && A.lenses.length > 0 ? A.lenses : DEFAULT_LENSES
+// Ideation runs open by default: parallel architects over the same maps, differentiated only by an
+// anti-herding nudge, with dedup downstream. Callers who want directed angles can pass lenses.
+const IDEATORS = Array.isArray(A.lenses) && A.lenses.length > 0
+  ? A.lenses
+  : Array.from({ length: 4 }, (_, i) => ({
+      key: 'open-' + (i + 1),
+      brief:
+        'You are ideation agent ' +
+        (i + 1) +
+        ' of 4. The other three see the same maps; note the obvious candidates briefly, then push past them to what the others are likely to miss — the deepest structural simplifications you can defend with evidence, whatever their shape.',
+    }))
 
 phase('Ideas')
 const mapDigest = JSON.stringify(maps)
 const ideaResults = await parallel(
-  LENSES.map((l) => () =>
+  IDEATORS.map((l) => () =>
     agent(
       `You are an architect generating DEEP simplification ideas for the "${A.area}" area of the TeXRA repo. Not nitpicks; structural ideas that remove whole components.
 ${GROUND_RULES}
@@ -212,14 +252,14 @@ ${l.brief}
 The seam mappers' full structured findings (JSON):
 ${mapDigest}
 
-Generate 3-5 ideas THROUGH YOUR LENS ONLY. Ground every idea in map evidence (verify surprising claims yourself with a grep before relying on them). Every deletion must name symbols. Count netLoC honestly including additions. Do not propose adding ports/facades/adapters as the primary move.`,
+Ground every idea in map evidence (verify surprising claims yourself with a grep before relying on them). Every deletion must name symbols. Count netLoC honestly including additions. Adding ports/facades/adapters as the primary move is almost never the answer here.`,
       { label: 'ideas:' + l.key, phase: 'Ideas', schema: IDEAS_SCHEMA, effort: 'xhigh' },
     ).then((r) => (r ? { lens: l.key, ideas: r.ideas } : null)),
   ),
 )
 
 const allIdeas = ideaResults.filter(Boolean).flatMap((r) => r.ideas.map((i) => ({ ...i, lens: r.lens })))
-log('collected ' + allIdeas.length + ' raw ideas across ' + ideaResults.filter(Boolean).length + ' lenses')
+log('collected ' + allIdeas.length + ' raw ideas across ' + ideaResults.filter(Boolean).length + ' ideation agents')
 
 const SHORTLIST_SCHEMA = {
   type: 'object',
@@ -228,7 +268,7 @@ const SHORTLIST_SCHEMA = {
   properties: {
     shortlist: {
       type: 'array',
-      maxItems: 12,
+      maxItems: 15,
       items: {
         type: 'object',
         additionalProperties: false,
