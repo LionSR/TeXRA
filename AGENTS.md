@@ -541,6 +541,8 @@ These rules were earned from a 2026-07 whole-repo simplification campaign, not d
 
 - **No bare module-level mutable singletons in tested code.** State that tests need to isolate belongs behind an injectable, resettable handle, not a bare module-level variable. The only test flake hit during the 2026-07 campaign was a module-level session singleton colliding across suites.
 
+- **Serialize async work with `p-queue`, not hand-rolled promise chains.** When operations must run one at a time (per-file write ordering, approval prompts, follow-up dispatch), use the root-dependency `p-queue`: `new PQueue({ concurrency: 1 })`, or a `Map` of queues for per-key ordering, as `src/agent/runtime/streamApprovalQueue.ts` and the CLI's `chatSessionController.followUpQueue` already do. Don't hand-roll the `chain = chain.then(...)` idiom — every copy re-solves error isolation (a swallowed rejection poisons or silently skips later work) and map-entry cleanup by hand, and the 2026-07-18 coupling audit found each existing copy did so differently. Standing migration targets, adopt when touched: `writeChains` in `src/platform/defaults/jsonStore.ts` and `todoPersistChain` in `ToolUseCycleNode.ts` (the third copy, `VscodeFileSystem.appendChains`, is slated for deletion with #8743).
+
 ### Test fixtures and fakes
 
 - **Fixture rule of three.** When the same literal setup block appears three or more times in one test file, extract it to a file-local helper. Setup shared across multiple suites gets promoted to `src/test-kernel/support/`. Five test lanes in the campaign removed about 860 lines that were almost entirely repeated literal setup; one file constructed the same handle inline 33 times.
