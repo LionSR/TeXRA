@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
 import {
-  buildDesktopShowPromptMessage,
+  DESKTOP_PROMPT_COMMANDS,
   DesktopSettlePromptMessageSchema,
+  type DesktopShowPromptMessage,
 } from '../desktopPromptMessages.js';
 import type {
   DesktopCommandMessage,
@@ -38,14 +39,13 @@ export class DesktopPromptController implements DesktopPromptIpc {
     const requestId = randomUUID();
     return new Promise((resolve) => {
       this.pending.set(requestId, { resolve });
-      const delivered = this.renderer.postToRenderer(
-        buildDesktopShowPromptMessage({
-          requestId,
-          title: input.title,
-          prompt: input.prompt,
-          password: input.password ?? false,
-        }),
-      );
+      const delivered = this.renderer.postToRenderer({
+        command: DESKTOP_PROMPT_COMMANDS.SHOW,
+        requestId,
+        title: input.title,
+        prompt: input.prompt,
+        password: input.password ?? false,
+      } satisfies DesktopShowPromptMessage);
       if (!delivered) this.settle(requestId, undefined);
     });
   }

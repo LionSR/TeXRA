@@ -10,7 +10,10 @@ import { getFileStem } from '@utils/core';
 import { createExternalLocation } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { buildDesktopShowPdfMessage } from '../desktopPdfMessages.js';
+import {
+  DESKTOP_PDF_COMMANDS,
+  type DesktopShowPdfMessage,
+} from '../desktopPdfMessages.js';
 
 interface DesktopShellAdapter {
   openExternal(url: string): Promise<void>;
@@ -95,9 +98,11 @@ export function createDesktopPreviewHost(
   function tryShowPdfInRenderer(pdfPath: string, title: string): boolean {
     if (!options.postToRenderer || options.forceExternal) return false;
     try {
-      const result = options.postToRenderer(
-        buildDesktopShowPdfMessage({ title, pdfPath }),
-      );
+      const result = options.postToRenderer({
+        command: DESKTOP_PDF_COMMANDS.SHOW_PDF,
+        title,
+        pdfPath,
+      } satisfies DesktopShowPdfMessage);
       return result !== false;
     } catch (error) {
       console.error(
