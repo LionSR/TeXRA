@@ -2,7 +2,7 @@
  * Agent index module - public API for the agent registry.
  */
 
-export { AgentSource } from '@shared/schemas/agent';
+export type { AgentSource } from '@shared/schemas/agent';
 
 export {
   AgentDirectoryService,

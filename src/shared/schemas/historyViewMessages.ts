@@ -44,7 +44,7 @@ const AgentConfigSummarySchema = z.discriminatedUnion('agentCategory', [
   ToolUseConfigSummarySchema,
 ]);
 
-export const HistoryItemSchema = z.object({
+const HistoryItemSchema = z.object({
   id: z.string(),
   timestamp: z.string(),
   agentConfig: AgentConfigSummarySchema,
@@ -72,7 +72,7 @@ export const HistoryClearedMessageSchema = z.object({
 // ============================================================
 
 /** History ID field for operations on specific items */
-export const HistoryIdMessageSchema = z.object({
+const HistoryIdMessageSchema = z.object({
   historyId: z.string().min(1),
 });
 

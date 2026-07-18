@@ -7,7 +7,7 @@ export const LOG_LEVELS = {
   DEBUG: 'debug',
 } as const;
 
-export const LogLevelSchema = z.enum(LOG_LEVELS);
+const LogLevelSchema = z.enum(LOG_LEVELS);
 export type LogLevel = z.infer<typeof LogLevelSchema>;
 
 /**
@@ -52,7 +52,7 @@ export const MESSAGE_TYPES = {
   DEFAULT: 'default',
 } as const;
 
-export const MessageTypeSchema = z.enum(MESSAGE_TYPES);
+const MessageTypeSchema = z.enum(MESSAGE_TYPES);
 
 export type MessageType = z.infer<typeof MessageTypeSchema>;
 
@@ -74,7 +74,7 @@ export const STREAM_LOG_ENTRY_TYPES = {
   GROUP_END: 'group-end',
 } as const;
 
-export const StreamLogEntryTypeSchema = z.enum(STREAM_LOG_ENTRY_TYPES);
+const StreamLogEntryTypeSchema = z.enum(STREAM_LOG_ENTRY_TYPES);
 
 export const FileListEntrySchema = z.object({
   path: z.string(),

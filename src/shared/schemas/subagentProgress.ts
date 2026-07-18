@@ -11,13 +11,13 @@ import type { Plan } from './plan';
 import type { TodoItem } from './todo';
 
 /** Todo state changed in a tool-use subagent. */
-export interface TodoProgressUpdate {
+interface TodoProgressUpdate {
   readonly kind: 'todos';
   readonly todos: TodoItem[];
 }
 
 /** Periodic overview of tool-use subagent activity. */
-export interface OverviewProgressUpdate {
+interface OverviewProgressUpdate {
   readonly kind: 'overview';
   readonly toolCallCount: number;
   readonly filesChanged: string[];
@@ -25,13 +25,13 @@ export interface OverviewProgressUpdate {
 }
 
 /** Plan state changed in a tool-use subagent. */
-export interface PlanProgressUpdate {
+interface PlanProgressUpdate {
   readonly kind: 'plan';
   readonly plan: Plan | null;
 }
 
 /** Subagent has finished initialization and is about to call the model. */
-export interface StartedProgressUpdate {
+interface StartedProgressUpdate {
   readonly kind: 'started';
 }
 
