@@ -78,6 +78,14 @@ export interface WorkflowJournalEntry {
   result: unknown;
 }
 
+export interface WorkflowScriptPhaseContext {
+  phase?: string;
+  /** Zero-based position in meta.phases, when phase is declared. */
+  phaseIndex?: number;
+  /** Number of phases declared in meta.phases. */
+  phaseTotal?: number;
+}
+
 export type WorkflowScriptEvent =
   | {
       type: 'phase';
@@ -88,19 +96,22 @@ export type WorkflowScriptEvent =
       total?: number;
     }
   | { type: 'log'; message: string }
-  | { type: 'agent:start'; index: number; label: string; phase?: string }
-  | {
+  | (WorkflowScriptPhaseContext & {
+      type: 'agent:start';
+      index: number;
+      label: string;
+    })
+  | (WorkflowScriptPhaseContext & {
       type: 'agent:end';
       index: number;
       label: string;
-      phase?: string;
       cached: boolean;
       error?: string;
       /** Child model resolved by the runner (live calls only). */
       model?: string;
       /** Host-measured wall time of the agent() call (live calls only). */
       durationMs?: number;
-    };
+    });
 
 export interface WorkflowScriptRunOptions {
   /** Full script source, starting with `export const meta = {...}`. */

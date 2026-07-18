@@ -131,6 +131,35 @@ return await agent('Read', { phase: 'Review' })`;
     );
   });
 
+  it('keeps phase counts when an agent opens the stage before phase()', async () => {
+    const { trace, events } = recordingTrace();
+    const script = `export const meta = {
+  name: 'early-phase-agent',
+  description: 'opens a declared phase from an agent event',
+  phases: [{ title: 'Research' }, { title: 'Write' }],
+}
+const early = agent('Draft', { phase: 'Write' })
+phase('Write')
+return await early`;
+
+    await runPersistedWorkflowScriptWithProgress(trace, {
+      store: getExecutionStore(executionId),
+      checkpointId: 'early-phase-agent',
+      script,
+      runAgent: async () => 'done',
+    });
+
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'stage.start',
+        id: stageId(events, 'Write'),
+        kind: 'phase',
+        index: 1,
+        total: 2,
+      }),
+    );
+  });
+
   it('renders the running total on live finish lines only', async () => {
     const store = getExecutionStore(executionId);
     const script = `${meta}

@@ -135,6 +135,12 @@ All notable changes to this project will be documented in this file.
 
 ### Extension (VS Code)
 
+#### New Features
+
+- **Workflow phase headers show their plan position** — focused workflow runs
+  label each declared phase with its current and total position, matching the
+  CLI progress view.
+
 #### Bug Fixes
 
 - **Extension history stays available if automatic updates cannot start** —
