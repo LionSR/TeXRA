@@ -1919,6 +1919,10 @@
         "path": "resources/skills/lean-simplifier/SKILL.md"
       },
       {
+        "name": "lean-tactic-improver",
+        "path": "resources/skills/lean-tactic-improver/SKILL.md"
+      },
+      {
         "name": "literature-search",
         "path": "resources/skills/literature-search/SKILL.md"
       },
