@@ -71,10 +71,7 @@ import {
   rejectHeadlessOnlyFlags,
 } from './_helpers/globalArgs';
 import { runResumeExecution } from '../runtime/resumeExecution';
-import {
-  resolveCliStdoutColorEnabled,
-  type CliContext,
-} from '../runtime/cliContext';
+import { type CliContext } from '../runtime/cliContext';
 
 async function canLaunchWithDefaultModel(
   context: CliContext,
@@ -235,7 +232,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
       version: context.version,
       statusLines,
       allowDefaultModelLaunch,
-      colorEnabled: resolveCliStdoutColorEnabled(context),
+      colorEnabled: context.stdoutColorEnabled,
     });
 
     switch (action.kind) {
@@ -334,7 +331,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
       case 'configure-settings': {
         const { runConfigTui } = await import('../config/runConfigTui');
         await runConfigTui({
-          colorEnabled: resolveCliStdoutColorEnabled(context),
+          colorEnabled: context.stdoutColorEnabled,
           onError: writeErrorStderr,
         });
         continue launcher;
