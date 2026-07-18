@@ -39,18 +39,31 @@ positive** (the recurring `src/`-only-grep methodology error struck again — th
 core and runtime readers both re-surfaced `followUpResumeDetection` /
 `IToolRegistry`; see below).
 
-## New signal this pass — the boundary erosion has reversed
+## New signal this pass — the boundary erosion is no longer accelerating
 
 The north-star's central "the boundary is eroding while unfenced" concern (§3:
 extension 49 / CLI 35 / desktop 27 distinct `@agent/*` deep-import specifiers,
-up 1.36×/1.94×/1.59× over 5.4 weeks) **is no longer trending up**. Recounted
-at `1f7082f`:
+up 1.36×/1.94×/1.59× over 5.4 weeks) **is no longer trending up on the two
+largest hosts**. Recounted at `1f7082f`:
 
-| Host                 | North-star baseline | Now (`1f7082f`) | Δ   |
-| -------------------- | ------------------- | --------------- | --- |
-| `packages/extension` | 49                  | **44**          | −5  |
-| `packages/cli`       | 35                  | **34**          | −1  |
-| `packages/desktop`   | 27                  | **27**          | 0   |
+| Host                 | North-star baseline | Now (`1f7082f`) | Δ    |
+| -------------------- | ------------------- | --------------- | ---- |
+| `packages/extension` | 49                  | **44**          | −5   |
+| `packages/cli`       | 35                  | **34**          | −1   |
+| `packages/desktop`   | 27                  | **29**          | +2\* |
+
+\*_Census note (Codex review, P2)._ The complete distinct-`@agent/*`-specifier
+count includes both static `from`-imports **and** dynamic `import('@agent/…')`.
+Desktop is the only host with dynamic `@agent` imports — 2 of them
+(`@agent/runtime/runAgent`, `@agent/runtime/helperModelName`) — so its complete
+count is **29**, not the 27 a static-`from`-only census reports; extension and
+CLI have **zero** dynamic `@agent` imports, so their static and complete
+censuses coincide at 44/34. The north-star's stated desktop `27` appears to be a
+static-`from` count, so the desktop `+2` is largely this **census correction**,
+not confirmed new drift — and it is a caution for the R-b baseline, which must
+count dynamic imports or it will under-freeze desktop by exactly these two. The
+headline rests on the two hosts whose drop is unambiguous under either census:
+extension (−5) and CLI (−1).
 
 Core→host alias violations remain **0** (R-a would install at a zero
 baseline, unchanged). The maintainers' consolidation train (the 07-12 window's
@@ -299,10 +312,12 @@ surface (split point #2).
 
 **SDK-ready in shape; no structural refactoring warranted.** The tree is
 healthy: the spine anchors hold at `1f7082f`, and — notably this pass — the
-host deep-import width the north-star flagged as accelerating has **contracted**
-(extension 49→44, CLI 35→34, desktop 27→27) with core→host violations still
-0, so the boundary erosion has reversed under the maintainers' consolidation
-train. **One cleanup was applied this pass:** the private, non-exported,
+host deep-import width the north-star flagged as accelerating has **stopped
+rising on the two largest hosts** (extension 49→44, CLI 35→34; desktop 27→29,
+the +2 largely a census correction — desktop is the only host with dynamic
+`@agent` imports, see the boundary table) with core→host violations still 0, so
+the erosion the north-star flagged is no longer accelerating under the
+maintainers' consolidation train. **One cleanup was applied this pass:** the private, non-exported,
 single-use `TextConnectionService` interface inlined into
 `ResponseCycleServices` (−2 LOC), verified type-safe (all six configs) +
 lint-clean + the one relevant suite green. The pass otherwise found no
@@ -338,9 +353,12 @@ or `RetryableInvocationNode`; do not sweep the reviewed-train items unattended.
   tools edge; `RetryableInvocationNode` driven by a test subclass in
   `RetryState.vitest.ts`.
 - Boundary metric recounted at `1f7082f`: distinct `@agent/*` deep-import
-  specifiers — extension **44**, CLI **34**, desktop **27** (north-star
-  baseline 49/35/27); `src/**` → extension-homed / `@cli` / `@desktop` alias
-  imports: **0**.
+  specifiers (static `from` + dynamic `import()`) — extension **44**, CLI
+  **34**, desktop **29** (north-star baseline 49/35/27). Desktop-only: 2 dynamic
+  `import('@agent/…')` (`runAgent`, `helperModelName`) beyond its 27 static
+  `from`-imports; extension/CLI have 0 dynamic `@agent` imports (static ==
+  complete). `src/**` → extension-homed / `@cli` / `@desktop` alias imports:
+  **0**.
 - Logger census corrected: `createChannelTrace` importers **36** (35 as the
   module-logger idiom), 71 total occurrences — not ~210.
 - Delegation depth verified still tracked-but-ungated (no `maxDelegationDepth`,
