@@ -140,8 +140,7 @@ export const streamTabStyles = css`
   }
 
   .tab-meta .remote-agent,
-  .tab-meta .agent-category,
-  .tab-meta .multi-file {
+  .tab-meta .agent-category {
     margin-left: var(--wa-space-2xs);
   }
 
