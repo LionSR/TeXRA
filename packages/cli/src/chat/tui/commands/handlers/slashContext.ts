@@ -40,7 +40,12 @@ export function openCanonicalSlashForm(
   commandName: string,
   registered: SlashCommand | undefined,
   remainder: string,
+  onPersist?: () => void,
 ): void {
-  if (registered && openRegisteredCliSlashForm(registered, remainder)) return;
+  if (
+    registered &&
+    openRegisteredCliSlashForm(registered, remainder, onPersist)
+  )
+    return;
   openCliSlashCommandForm(commandName, remainder);
 }

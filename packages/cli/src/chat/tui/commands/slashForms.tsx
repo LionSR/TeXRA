@@ -5,6 +5,7 @@ import { findSlashCommand, type SlashCommand } from './slashRegistry';
 export function openRegisteredCliSlashForm(
   command: SlashCommand,
   remainder: string,
+  onPersist?: () => void,
 ): boolean {
   const Form = command.formComponent;
   if (!Form) return false;
@@ -15,6 +16,8 @@ export function openRegisteredCliSlashForm(
       <Form
         availableRows={availableRows}
         remainder={remainder.trimStart()}
+        onPersist={onPersist}
+        echoOnPersist={command.echo === 'ifPersists'}
         onDone={() => close()}
       />
     ),

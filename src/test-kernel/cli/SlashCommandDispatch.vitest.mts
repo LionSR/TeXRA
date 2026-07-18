@@ -12,6 +12,7 @@ import { type SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashC
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import {
   listSlashCommands,
+  registerSlashCommand,
   unregisterSlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
 import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
@@ -107,7 +108,40 @@ function lastEntryText(
   return streams.get().get(streamId)?.entries.at(-1)?.text;
 }
 
+function localEntries() {
+  return streams.get().get(CLI_LOCAL_STREAM_ID)?.entries ?? [];
+}
+
 describe('handleTuiSlashCommand', () => {
+  it('does not leave command echoes for overlay-only commands', async () => {
+    registerBuiltinSlashCommands();
+    const context = createContext(createSession());
+
+    await handleTuiSlashCommand('/tools', context);
+    expect(localEntries()).toEqual([]);
+
+    await handleTuiSlashCommand('/help', context);
+    expect(localEntries().map((entry) => entry.role)).toEqual(['assistant']);
+  });
+
+  it('adds a lazy command echo before errors even under echo never', async () => {
+    registerSlashCommand({
+      name: 'unavailable',
+      description: 'Unavailable test command',
+      echo: 'never',
+    });
+
+    await handleTuiSlashCommand('/unavailable', createContext(createSession()));
+
+    expect(localEntries().map(({ role, text }) => ({ role, text }))).toEqual([
+      { role: 'user', text: '/unavailable' },
+      {
+        role: 'assistant',
+        text: '/unavailable is registered but is not available in this CLI view yet.',
+      },
+    ]);
+  });
+
   it('opens alias-addressed structured forms through the canonical command', async () => {
     registerBuiltinSlashCommands();
 

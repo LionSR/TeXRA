@@ -357,6 +357,28 @@ describe('slashRegistry', () => {
     expect(modelNode.isClosed()).toBe(true);
   });
 
+  it('defers a form command echo until a persistent selection', async () => {
+    const events: string[] = [];
+    registerBuiltinSlashCommands({
+      onModelSelect: () => {
+        events.push('outcome');
+      },
+    });
+    const model = listSlashCommands().find((cmd) => cmd.name === 'model');
+    if (!model) throw new Error('Expected /model to be registered');
+
+    openRegisteredCliSlashForm(model, '', () => events.push('echo'));
+    expect(events).toEqual([]);
+
+    const modelNode = renderOpenForm<{
+      onSelect?: (value: string) => void;
+    }>();
+    modelNode.props?.onSelect?.('gpt55');
+    await settleFormSelection();
+
+    expect(events).toEqual(['echo', 'outcome']);
+  });
+
   it('routes model picker selection failures to the shared error handler', async () => {
     const errors: string[] = [];
     registerBuiltinSlashCommands({

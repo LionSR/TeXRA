@@ -1,6 +1,7 @@
 // Registers the slash commands the input palette surfaces.
 
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
+import { parseCliHistoryId } from '@cli/runtime/history';
 import type { CliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import type { CliLogoutTarget } from '@cli/runtime/loginOptions';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
@@ -29,8 +30,20 @@ import {
   setCliSessionModelOverride,
 } from '../state/cliState';
 import { appendLocalAssistantTranscript } from '../state/transcript';
-import { applyCliProviderApiKey } from './handlers/apiModeCommands';
+import {
+  applyCliModelSelection,
+  applyInitialCliAgentSelection,
+} from './handlers/agentModelCommands';
+import {
+  applyCliModelAccessSelection,
+  applyCliProviderApiKey,
+} from './handlers/apiModeCommands';
+import { applyCliApprovalPolicySelection } from './handlers/approvalCommand';
 import { loginFromChat, logoutFromChat } from './handlers/loginCommands';
+import {
+  showCliMemoryList,
+  showCliMemoryPreview,
+} from './handlers/memoryCommands';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 import { openCliSlashCommandForm } from './slashForms';
 
@@ -59,14 +72,19 @@ function formSelectionHandler<T>({
   action,
   onDone,
   onError,
+  onPersist,
+  echoOnPersist = false,
   completion = 'afterAction',
 }: {
   readonly action: (value: T) => void | Promise<void>;
   readonly onDone: (value: T) => void;
   readonly onError?: ErrorHandler;
+  readonly onPersist?: () => void;
+  readonly echoOnPersist?: boolean;
   readonly completion?: SelectionCompletion;
 }): (value: T) => void {
   return (value) => {
+    if (echoOnPersist) onPersist?.();
     if (completion === 'beforeAction') {
       onDone(value);
     }
@@ -76,7 +94,10 @@ function formSelectionHandler<T>({
     };
 
     void runAction()
-      .catch((error: unknown) => onError?.(error))
+      .catch((error: unknown) => {
+        if (!echoOnPersist) onPersist?.();
+        return onError?.(error);
+      })
       .finally(() => {
         if (completion === 'afterAction') {
           onDone(value);
@@ -153,6 +174,8 @@ export function registerBuiltinSlashCommands(options?: {
             selectable && canSelectModel()
               ? () => openModelSelectionForm()
               : props.onDone,
+          onPersist: props.onPersist,
+          echoOnPersist: props.echoOnPersist,
         })}
         onClose={() => props.onDone(undefined)}
       />
@@ -169,6 +192,8 @@ export function registerBuiltinSlashCommands(options?: {
           action: onModelAccessSelect,
           onDone: props.onDone,
           onError: options?.onError,
+          onPersist: props.onPersist,
+          echoOnPersist: props.echoOnPersist,
           completion: 'beforeAction',
         })}
         onCancel={() => props.onDone(undefined)}
@@ -186,6 +211,8 @@ export function registerBuiltinSlashCommands(options?: {
           action: (value) => options?.onApprovalPolicySelect?.(value),
           onDone: props.onDone,
           completion: 'beforeAction',
+          onPersist: props.onPersist,
+          echoOnPersist: props.echoOnPersist,
         })}
         onCancel={() => props.onDone(undefined)}
       />
@@ -221,6 +248,8 @@ export function registerBuiltinSlashCommands(options?: {
           onDone: props.onDone,
           onError: options?.onError,
           completion: 'beforeAction',
+          onPersist: props.onPersist,
+          echoOnPersist: props.echoOnPersist,
         })}
         onCancel={() => props.onDone(undefined)}
       />
@@ -236,6 +265,8 @@ export function registerBuiltinSlashCommands(options?: {
           onDone: props.onDone,
           onError: options?.onError,
           completion: 'beforeAction',
+          onPersist: props.onPersist,
+          echoOnPersist: props.echoOnPersist,
         })}
         onCancel={() => props.onDone(undefined)}
       />
@@ -257,6 +288,8 @@ export function registerBuiltinSlashCommands(options?: {
           action: onModelSelect,
           onDone: props.onDone,
           onError: options?.onError,
+          onPersist: props.onPersist,
+          echoOnPersist: props.echoOnPersist,
         })}
         onClose={() => props.onDone(undefined)}
       />
@@ -272,6 +305,8 @@ export function registerBuiltinSlashCommands(options?: {
           onDone: props.onDone,
           onError: options?.onError,
           completion: 'beforeAction',
+          onPersist: props.onPersist,
+          echoOnPersist: props.echoOnPersist,
         })}
         onClose={() => props.onDone(undefined)}
       />
@@ -287,6 +322,8 @@ export function registerBuiltinSlashCommands(options?: {
           onDone: props.onDone,
           onError: options?.onError,
           completion: 'beforeAction',
+          onPersist: props.onPersist,
+          echoOnPersist: props.echoOnPersist,
         })}
         onClose={() => props.onDone(undefined)}
       />
@@ -311,6 +348,8 @@ export function registerBuiltinSlashCommands(options?: {
           onDone: props.onDone,
           onError: options?.onError,
           completion: 'beforeAction',
+          onPersist: props.onPersist,
+          echoOnPersist: props.echoOnPersist,
         })}
         onClose={() => props.onDone(undefined)}
       />
@@ -321,17 +360,22 @@ export function registerBuiltinSlashCommands(options?: {
     name: 'help',
     description: 'Show available slash commands',
     category: 'session',
+    echo: 'never',
   });
   registerSlashCommand({
     name: 'clear',
     description: 'Start a fresh chat session',
     category: 'session',
+    echo: 'ifPersists',
   });
   registerSlashCommand({
     name: 'agent',
     description: 'List or choose the root agent',
     aliases: ['agents'],
     category: 'configuration',
+    echo: 'ifPersists',
+    argHandler: applyInitialCliAgentSelection,
+    formName: 'agent',
     formComponent: AgentListFormAdapter,
   });
   registerSlashCommand({
@@ -339,12 +383,18 @@ export function registerBuiltinSlashCommands(options?: {
     description: 'List available models',
     aliases: ['models'],
     category: 'configuration',
+    echo: 'ifPersists',
+    argHandler: applyCliModelSelection,
+    formName: 'model',
     formComponent: ModelListFormAdapter,
   });
   registerSlashCommand({
     name: 'api',
     description: 'Choose ChatGPT, included TeXRA, or personal model access',
     category: 'configuration',
+    echo: 'ifPersists',
+    argHandler: applyCliModelAccessSelection,
+    formName: 'api',
     formComponent: ModelAccessFormAdapter,
   });
   registerSlashCommand({
@@ -352,6 +402,8 @@ export function registerBuiltinSlashCommands(options?: {
     description: 'Add a provider API key with masked input',
     aliases: ['keys'],
     category: 'configuration',
+    echo: 'never',
+    formName: 'key',
     formComponent: ProviderApiKeyFormAdapter,
     formEscapeAction: 'close',
     redactInput: true,
@@ -360,23 +412,34 @@ export function registerBuiltinSlashCommands(options?: {
     name: 'auth',
     description: 'Show both accounts and active model access',
     category: 'account',
+    echo: 'ifPersists',
   });
   registerSlashCommand({
     name: 'login',
     description: 'Sign in to ChatGPT or Researcher Access',
     category: 'account',
+    echo: 'ifPersists',
+    argHandler: (remainder, context) =>
+      loginFromChat(remainder, context.cliContext),
+    formName: 'login',
     formComponent: LoginFormAdapter,
   });
   registerSlashCommand({
     name: 'logout',
     description: 'Sign out of one account or all accounts',
     category: 'account',
+    echo: 'ifPersists',
+    argHandler: logoutFromChat,
+    formName: 'logout',
     formComponent: LogoutFormAdapter,
   });
   registerSlashCommand({
     name: 'approval',
     description: 'Switch approval policy',
     category: 'configuration',
+    echo: 'ifPersists',
+    argHandler: applyCliApprovalPolicySelection,
+    formName: 'approval',
     formComponent: ApprovalPolicyFormAdapter,
     formEscapeAction: 'cancel',
   });
@@ -384,28 +447,44 @@ export function registerBuiltinSlashCommands(options?: {
     name: 'yolo',
     description: 'Auto-approve privileged actions',
     category: 'configuration',
+    echo: 'ifPersists',
   });
   registerSlashCommand({
     name: 'status',
     description: 'Show session details',
     category: 'session',
+    echo: 'ifPersists',
   });
   registerSlashCommand({
     name: 'goal',
     description: 'Explain autonomous goal mode',
     aliases: ['goals'],
     category: 'session',
+    echo: 'ifPersists',
   });
   registerSlashCommand({
     name: 'resume',
     description: 'Resume a previous session',
     category: 'session',
+    echo: 'ifPersists',
+    argHandler: async (remainder, context) => {
+      const id = parseCliHistoryId(remainder);
+      if (!id) throw new Error(`Invalid execution id: ${remainder}`);
+      await context.resumeExecution(id);
+    },
+    formName: 'resume',
     formComponent: ResumeListFormAdapter,
   });
   registerSlashCommand({
     name: 'memory',
     description: 'List stored memories',
     category: 'configuration',
+    echo: 'ifPersists',
+    argHandler: async (remainder) => {
+      if (remainder.toLowerCase() === 'list') await showCliMemoryList();
+      else await showCliMemoryPreview(remainder);
+    },
+    formName: 'memory',
     formComponent: MemoryListFormAdapter,
   });
   registerSlashCommand({
@@ -413,12 +492,16 @@ export function registerBuiltinSlashCommands(options?: {
     description: 'List available skills',
     aliases: ['skill'],
     category: 'configuration',
+    echo: 'never',
+    formName: 'skills',
     formComponent: SkillsListFormAdapter,
   });
   registerSlashCommand({
     name: 'tools',
     description: 'List or toggle external integrations',
     category: 'configuration',
+    echo: 'never',
+    formName: 'tools',
     formComponent: ToolsListFormAdapter,
   });
   // Only offer /config when the host wired the stores it reads/writes — a
@@ -446,6 +529,8 @@ export function registerBuiltinSlashCommands(options?: {
       description: 'View and toggle settings',
       aliases: ['settings'],
       category: 'configuration',
+      echo: 'never',
+      formName: 'config',
       formComponent: ConfigFormAdapter,
       formEscapeAction: 'close',
     });
@@ -454,11 +539,13 @@ export function registerBuiltinSlashCommands(options?: {
     name: 'compact',
     description: 'Request context compaction',
     category: 'session',
+    echo: 'ifPersists',
   });
   registerSlashCommand({
     name: 'exit',
     description: 'Exit the CLI session',
     aliases: ['quit'],
     category: 'session',
+    echo: 'never',
   });
 }

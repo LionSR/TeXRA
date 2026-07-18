@@ -5,6 +5,8 @@ import {
   typoSuggestionThreshold,
 } from '@utils/text/editDistance';
 
+import type { SlashCommandContext } from './handlers/slashContext';
+
 /** Help-screen grouping. Uncategorized commands land in a trailing
  *  "Other" section, so plugin-style registrations stay visible. */
 export type SlashCommandCategory = 'session' | 'configuration' | 'account';
@@ -14,6 +16,8 @@ export type SlashCommandCategory = 'session' | 'configuration' | 'account';
  *  commit the user's selection or `onDone(undefined)` on cancel. */
 export interface SlashFormProps<T = unknown> {
   readonly onDone: (result: T | undefined) => void;
+  readonly onPersist?: () => void;
+  readonly echoOnPersist?: boolean;
   readonly remainder: string;
   readonly availableRows?: number;
 }
@@ -26,6 +30,15 @@ export interface SlashCommand {
   readonly aliases?: readonly string[];
   /** Where the command appears in the grouped `/help` listing. */
   readonly category?: SlashCommandCategory;
+  /** Dispatch policy for the typed command line in native scrollback. */
+  readonly echo?: 'ifPersists' | 'never';
+  /** Handle a non-empty command remainder. */
+  readonly argHandler?: (
+    remainder: string,
+    context: SlashCommandContext,
+  ) => void | Promise<void>;
+  /** Canonical structured form opened when the remainder is empty. */
+  readonly formName?: string;
   /**
    * Fire-and-forget handler. Receives the raw remainder of the command line
    * (everything after the command name + whitespace).

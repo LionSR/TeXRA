@@ -17,7 +17,6 @@ import {
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,
   type SlashCommandContext,
@@ -53,7 +52,7 @@ export function applyInitialCliAgentSelection(
 ): void {
   if (!chatTuiCanStartRootRun(context.session)) {
     appendLocalAssistantTranscript(
-      'Agent changes are only available before the first message. Use texra chat --agent <name> to choose a root agent in a new chat.',
+      'The agent is fixed for this chat session. Start a new chat to use a different agent.',
     );
     return;
   }
@@ -80,23 +79,19 @@ export async function applyCliModelSelection(
 ): Promise<void> {
   const nextModel = model.trim();
   if (chatTuiCanStartRootRun(context.session)) {
-    try {
-      const { apiMode } = sessionMeta.get();
-      const selection = await selectCliRunnableModel(nextModel, {
-        fallbackReason: 'explicit-override',
+    const { apiMode } = sessionMeta.get();
+    const selection = await selectCliRunnableModel(nextModel, {
+      fallbackReason: 'explicit-override',
+      apiMode,
+      noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
         apiMode,
-        noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-          apiMode,
-          CHAT_API_MODE_MODEL_RECOVERY,
-        ),
-        agentCategory: AgentCategory.ToolUse,
-      });
-      await setCliHelperModel(selection.model);
-      setCliSessionModelOverride(selection.model);
-      appendLocalAssistantTranscript(`Root model set to ${selection.model}.`);
-    } catch (error: unknown) {
-      appendLocalAssistantTranscript(toErrorMessage(error));
-    }
+        CHAT_API_MODE_MODEL_RECOVERY,
+      ),
+      agentCategory: AgentCategory.ToolUse,
+    });
+    await setCliHelperModel(selection.model);
+    setCliSessionModelOverride(selection.model);
+    appendLocalAssistantTranscript(`Root model set to ${selection.model}.`);
     return;
   }
 
@@ -119,22 +114,9 @@ export async function applyCliModelSelection(
     return;
   }
 
-  try {
-    await activeFlow.switchModel(nextModel);
-    setCliSessionModelOverride(nextModel);
-  } catch (error: unknown) {
-    appendLocalAssistantTranscript(toErrorMessage(error));
-    return;
-  }
-
-  try {
-    await setCliHelperModel(nextModel);
-  } catch (error: unknown) {
-    appendLocalAssistantTranscript(
-      `Model switched to ${nextModel}. Could not persist it as the default helper model: ${toErrorMessage(error)}`,
-    );
-    return;
-  }
+  await activeFlow.switchModel(nextModel);
+  setCliSessionModelOverride(nextModel);
+  await setCliHelperModel(nextModel);
 
   appendLocalAssistantTranscript(
     `Model switched to ${nextModel}. Future turns will use it.`,
