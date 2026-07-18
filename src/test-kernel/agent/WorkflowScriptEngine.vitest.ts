@@ -1394,4 +1394,29 @@ return 'incorrect success'`,
       }),
     ).rejects.toThrow();
   });
+
+  it('templates structured data into a string via render()', async () => {
+    const run = await runWorkflowScript({
+      script: `${META}return render('{{ n }} items: {% for f in items %}{{ f.title }} {% endfor %}', { n: 2, items: [{ title: 'a' }, { title: 'b' }] })`,
+      runAgent: echoRunner,
+    });
+    expect(run.result).toBe('2 items: a b ');
+  });
+
+  it('renders with autoescape off so values are not HTML-escaped', async () => {
+    const run = await runWorkflowScript({
+      script: `${META}return render('{{ v }}', { v: 'a & b < c' })`,
+      runAgent: echoRunner,
+    });
+    expect(run.result).toBe('a & b < c');
+  });
+
+  it('throws when render() is given a non-string template', async () => {
+    await expect(
+      runWorkflowScript({
+        script: `${META}return render(42, {})`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/templateString to be a string/);
+  });
 });

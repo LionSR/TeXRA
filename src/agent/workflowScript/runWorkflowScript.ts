@@ -6,6 +6,7 @@ import { isNonEmptyString } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { parseWorkflowScript } from './parseScript';
+import { renderWorkflowTemplate } from './renderPrimitive';
 import { runScriptInSandbox } from './sandbox';
 import {
   WORKFLOW_SKIPPED_RESULT,
@@ -544,6 +545,11 @@ export async function runWorkflowScript(
             });
             return undefined;
           },
+          render: (args) =>
+            renderWorkflowTemplate(
+              args[0] as string,
+              (args[1] as Record<string, unknown> | undefined) ?? {},
+            ),
         },
         argsJson,
         realmPreludes: [ORCHESTRATION_PRELUDE],
