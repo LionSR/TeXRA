@@ -253,7 +253,7 @@ export class ProgressBackend {
         ownerSessions.get(stream)?.executions.getAgentHandleByStream(stream) !==
         undefined,
     );
-    await Promise.allSettled(
+    await Promise.all(
       locallyOwnedStreams.map(async (stream) => {
         const ownerSession = ownerSessions.get(stream) ?? this.session;
         if (isInFlightPhase(ownerSession.status.get(stream))) {
