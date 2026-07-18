@@ -149,11 +149,6 @@
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
       "form": "doMock",
-      "specifier": "@agent/runtime/ProgressViewBridge"
-    },
-    {
-      "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
-      "form": "doMock",
       "specifier": "@agent/runtime/runAgent"
     },
     {
@@ -175,11 +170,6 @@
       "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.mts",
       "form": "doMock",
       "specifier": "@agent/runtime/executeAgent"
-    },
-    {
-      "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.mts",
-      "form": "doMock",
-      "specifier": "@agent/runtime/ProgressViewBridge"
     },
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.mts",
