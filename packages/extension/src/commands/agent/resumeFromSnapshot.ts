@@ -57,7 +57,7 @@ export function tryResumeFromSnapshot(streamId: StreamTabId): Promise<boolean> {
         ...(parentStreamId !== undefined && { parentStreamId }),
       };
     },
-    resumeToolUseSnapshot: resumeExtensionToolUseSnapshot,
+    resumeToolUse: resumeExtensionToolUseSnapshot,
     executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
       runExecuteCommand({ config, executionId, modelHandlerCompatibilityKey }),
     reportFailure: (id, error) => {

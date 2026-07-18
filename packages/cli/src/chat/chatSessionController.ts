@@ -333,25 +333,21 @@ export function createChatSessionController(
       createTuiHostInteractions(runtimeHost, sessionContext),
     );
     disposers.push(detachHostInteractions);
-    const interactiveHost: CliRuntimeHost = {
-      ...runtimeHost,
-      interactions: defaultSession().interactions,
-    };
     const detachResultToast = attachTerminalResultToast(
       defaultSession(),
-      interactiveHost,
+      runtimeHost,
     );
     const detachTuiRunFacts = attachTuiRunFactSubscription(
       defaultSession().events,
     );
     return {
-      runtimeHost: interactiveHost,
+      runtimeHost,
       approvalsUnavailable: approvalPromptsUnavailable(sessionContext),
       finalize: (): void => {
         detachResultToast();
         detachTuiRunFacts();
         detachHostInteractions();
-        if (session.runtimeHost === interactiveHost) {
+        if (session.runtimeHost === runtimeHost) {
           session.runtimeHost = undefined;
         }
         markChatTuiRunCompleted(session);
@@ -632,7 +628,7 @@ export function createChatSessionController(
               executionId,
               parentStreamId,
             }),
-            resumeToolUseSnapshot: (snapshot) =>
+            resumeToolUse: (snapshot) =>
               resumeQueuedToolUseSnapshot(streamId, snapshot, runtimeHost, {
                 session: defaultSession(),
                 approvalPromptsUnavailable: approvalsUnavailable,

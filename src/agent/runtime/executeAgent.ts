@@ -66,7 +66,7 @@ import { generateSessionDescription } from './sessionDescription';
 import { getProgressViewBridge } from './ProgressViewBridge';
 import { flushOwnedExecutionArtifacts } from './executionOwnership';
 import type { SessionHandle } from './SessionHandle';
-import type { AgentExecutionHandle, AgentRunHandle } from './executionRegistry';
+import type { AgentExecutionHandle, AgentRunHandle } from './ExecutionHandle';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 

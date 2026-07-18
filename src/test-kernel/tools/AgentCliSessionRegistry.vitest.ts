@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  AgentExecutionHandle,
-  ExecutionRegistry,
-} from '@agent/runtime/executionRegistry';
+import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 import { createRecordingHost } from '../agent/progressTestUtils';
