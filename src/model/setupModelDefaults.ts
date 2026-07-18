@@ -14,7 +14,7 @@ import { isCodexSubscriptionEligible } from './providerCapabilities';
  * provider can retire the pinned model at any time (this has already
  * happened live for `xai: 'grok4'`), which would otherwise make the setup
  * assistant silently probe a dead model forever. `resolveSetupModel` below
- * validates each preference against the live `MODEL_CONFIGS` registry and
+ * validates each preference through the runtime model registry and
  * substitutes a still-usable model for that provider when the pin has gone
  * stale, so {@link SETUP_MODEL_BY_PROVIDER} always resolves to a servable
  * model without needing this table hand-updated on every retirement.
@@ -128,7 +128,8 @@ export function resolveSetupModel(setupProvider: string): string | undefined {
  * Provider-specific models the setup assistant can use when that provider is
  * the only known usable credential. Kept with model metadata so hosts do not
  * each define their own setup routing truth. Resolved once at module load —
- * `MODEL_CONFIGS` is static per process — via {@link resolveWithPreferred}, so
+ * the static model catalog is fixed per process — via
+ * {@link resolveWithPreferred}, so
  * a provider's curated pick going stale (retired or OpenRouter-only) degrades
  * to a live fallback instead of hard-failing the setup probe.
  */

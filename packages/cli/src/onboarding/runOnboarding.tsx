@@ -219,6 +219,10 @@ async function runOnboardingFlow(options: {
         onResolve={record}
       />,
       {
+        // Both callers reject non-TTY output before reaching this flow. Keep
+        // that product boundary authoritative when a real PTY also has CI set;
+        // Ink otherwise disables interactive rendering from its CI heuristic.
+        interactive: true,
         stdout: tuiOutputStreamForColor(
           process.stdout,
           options.colorEnabled ?? true,

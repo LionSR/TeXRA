@@ -58,7 +58,6 @@ vi.mock('@agent/runtime/executeAgent', () => ({
 vi.mock('@agent/storage', () => ({
   getExecutionStore: mocks.getExecutionStore,
   registerExecution: mocks.registerExecution,
-  releaseOwnedExecutionLeaseBestEffort: mocks.releaseOwnedExecutionLease,
 }));
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
