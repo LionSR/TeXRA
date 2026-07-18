@@ -17,7 +17,7 @@ and add it here. Prune entries whose automation is removed.
 | ---------------------- | ------------ | ----------------------------------------------------- | -------------------------- |
 | `norm_bound`           | tactic macro | closing `‖A x‖ ≤ C * ‖x‖` goals for bounded operators | `Project/Tactic.lean`      |
 | `proj_simp`            | simp set     | reducing compositions of projections `P i * P j`      | `Project/Attr.lean`        |
-| `Foo.aesop_safe`       | aesop rules  | membership/subset goals in the `Foo` lattice          | `Project/Attr.lean`        |
+| `Foo`                  | aesop rules  | membership/subset goals in the `Foo` lattice          | `Project/Attr.lean`        |
 | `sum_swap_of_summable` | lemma        | interchanging double sums under summability           | `Project/Summability.lean` |
 ```
 
@@ -38,7 +38,7 @@ Extract at the cheapest rung that eliminates the repetition. Each rung costs mor
    ```lean
    register_simp_attr proj_simp
    @[proj_simp] theorem P_mul_P (i j : ι) : P i * P j = if i = j then P i else 0 := ...
-   -- call sites: simp with proj_simp   (or: simp only [proj_simp])
+   -- call sites: simp [proj_simp]   (or: simp only [proj_simp])
    ```
 
    Reserve global `@[simp]` for lemmas that are unconditionally good normal forms everywhere in the project.
@@ -56,7 +56,7 @@ Extract at the cheapest rung that eliminates the repetition. Each rung costs mor
    ```lean
    /-- Close `‖A x‖ ≤ C * ‖x‖` goals for operators built from bounded pieces. -/
    macro "norm_bound" : tactic =>
-     `(tactic| (apply norm_le_of_bounded <;> simp with proj_simp <;> positivity))
+     `(tactic| (apply norm_le_of_bounded <;> simp [proj_simp] <;> positivity))
    ```
 
 5. **Full `elab` tactic.** Only when the automation must inspect the goal or branch on it. This is rare in application projects; exhaust the rungs above first.
