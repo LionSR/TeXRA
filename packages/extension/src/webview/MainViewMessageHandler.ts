@@ -1,9 +1,5 @@
 import * as vscode from 'vscode';
 
-import {
-  MainViewInteractionController,
-  type MainViewCommandPlan,
-} from '@controllers/mainView/MainViewInteractionController';
 import { MainViewStartupController } from '@controllers/mainView/MainViewStartupController';
 import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
 import { BaseViewMessageHandler } from '@common/webview';
@@ -49,7 +45,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly fileManager: FileManager;
   private readonly diffManager: DiffManager;
   private readonly instructionManager: InstructionManager;
-  private readonly interactionController: MainViewInteractionController;
   private readonly startupController: MainViewStartupController;
   private readonly handlerRegistry: MainViewInboundHandlerRegistry;
 
@@ -78,10 +73,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     this.fileManager = new FileManager();
     this.diffManager = new DiffManager();
     this.instructionManager = new InstructionManager();
-    this.interactionController = new MainViewInteractionController({
-      getProviderUrl: getProviderKeyUrl,
-      getToolDocsCommand,
-    });
     this.startupController = new MainViewStartupController({
       getConfig,
       loadOptions,
@@ -125,9 +116,27 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         showInstructionWithSuppress(m.key, m.text),
       [MAIN_VIEW_COMMANDS.GET_THEME]: () => this.handleThemeRequest(),
       [MAIN_VIEW_COMMANDS.GET_DEBUG_MODE]: () => this.handleDebugModeRequest(),
-      [COMMON_COMMANDS.SWITCH_VIEW]: (m) => {
-        return this.runCommandPlan(
-          this.interactionController.getSwitchViewCommand(m),
+      [COMMON_COMMANDS.SWITCH_VIEW]: async (m) => {
+        if (m.view === 'dashboard') {
+          await safeExecuteCommand('texra.showDashboard', [], this.viewName);
+          return;
+        }
+        if (m.view === 'main') {
+          await safeExecuteCommand('texra.showMainView', [], this.viewName);
+          return;
+        }
+        if (m.openInEditor) {
+          await safeExecuteCommand(
+            'texra.openProgressViewInTab',
+            [],
+            this.viewName,
+          );
+          return;
+        }
+        await safeExecuteCommand(
+          'texra.showProgressView',
+          [{ inPlace: true }],
+          this.viewName,
         );
       },
 
@@ -137,22 +146,23 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           model: m.model,
         }),
       [MAIN_VIEW_COMMANDS.SETTINGS_OPEN]: () =>
-        this.runCommandPlan(
-          this.interactionController.getOpenSettingsCommand(
-            SETTINGS_QUERY.EXTENSION,
-          ),
+        safeExecuteCommand(
+          'workbench.action.openSettings',
+          [SETTINGS_QUERY.EXTENSION],
+          this.viewName,
         ),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS]: (m) =>
-        this.runCommandPlan(
-          this.interactionController.getOpenAgentSettingsCommand(m),
+        safeExecuteCommand(
+          'texra.showAgents',
+          [m.sessionType === 'toolUse' ? 'toolUse' : undefined],
+          this.viewName,
         ),
       [MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS]: () =>
         safeExecuteCommand('texra.showModels', [], this.viewName),
       [MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS]: () =>
         safeExecuteCommand('texra.showMultiAgent', [], this.viewName),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY]: async (m) => {
-        const action = this.interactionController.getAgentDirectoryAction(m);
-        if (action.kind === 'openAgentSettings') {
+        if (!m.customDirSet) {
           await safeExecuteCommand('texra.showAgents', [], this.viewName);
           return;
         }
@@ -237,19 +247,24 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         await this.onboarding?.refreshOnboardingFunnel();
       },
       [MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY]: (m) => {
-        return this.runCommandPlan(
-          this.interactionController.getSetProviderApiKeyCommand(m),
+        if (!m.provider) return;
+        return safeExecuteCommand(
+          'texra.setApiKey',
+          [m.provider],
+          this.viewName,
         );
       },
       [MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL]: async (m) => {
-        const url = this.interactionController.getProviderApiKeyUrl(m);
+        const url = m.provider ? getProviderKeyUrl(m.provider) : undefined;
         if (url) {
           await vscode.env.openExternal(vscode.Uri.parse(url));
         }
       },
       [MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE]: async () => {
         await vscode.env.openExternal(
-          vscode.Uri.parse(this.interactionController.getApiKeyGuideUrl()),
+          vscode.Uri.parse(
+            'https://texra.ai/guide/installation#setting-up-api-keys',
+          ),
         );
       },
 
@@ -264,9 +279,11 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: (m) =>
         this.postToActiveView(m),
       [MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE]: (m) => {
-        return this.runCommandPlan(
-          this.interactionController.getInstallGuideCommand(m),
-        );
+        const docsCommand = getToolDocsCommand(m.tool);
+        if (!docsCommand) return;
+
+        const [command, ...args] = docsCommand.split(',');
+        return safeExecuteCommand(command, args, this.viewName);
       },
       [MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES]: async () => {
         const view = this.getActiveView();
@@ -274,9 +291,16 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           return;
         }
         const missingTools = await checkCoreDependencies(true);
-        view.webview.postMessage(
-          this.interactionController.getDependencyBannerMessage(missingTools),
-        );
+        if (missingTools.length === 0) {
+          view.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER,
+          });
+          return;
+        }
+        view.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER,
+          missingTools: [...missingTools],
+        });
       },
       [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: (m) => this.postToActiveView(m),
       [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: (m) => this.postToActiveView(m),
@@ -298,14 +322,10 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           );
         }
       },
-      [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: (m) =>
-        this.applyConfigUpdate(
-          this.interactionController.getDismissConfigUpdate(m),
-        ),
-      [MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER]: (m) =>
-        this.applyConfigUpdate(
-          this.interactionController.getDismissConfigUpdate(m),
-        ),
+      [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: () =>
+        updateConfig('ui.showLoginBanner', false),
+      [MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER]: () =>
+        updateConfig('ui.showOrchestratorBanner', false),
       [MAIN_VIEW_COMMANDS.GETTING_STARTED_ACTION]: async (m) => {
         await safeExecuteCommand(
           GETTING_STARTED_COMMANDS[m.action],
@@ -396,20 +416,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       command: MAIN_VIEW_COMMANDS.DEBUG_MODE_SET,
       debugMode,
     });
-  }
-
-  private async runCommandPlan(
-    plan: MainViewCommandPlan | null,
-  ): Promise<void> {
-    if (!plan) return;
-    await safeExecuteCommand(plan.command, plan.args, this.viewName);
-  }
-
-  private async applyConfigUpdate(configUpdate: {
-    key: string;
-    value: boolean;
-  }): Promise<void> {
-    await updateConfig(configUpdate.key, configUpdate.value);
   }
 
   /** Run `fn` with the active webview view, or no-op when none is attached. */
