@@ -18,7 +18,7 @@ import {
   legacyWorkflowOutputStem,
   midEraWorkflowOutputStem,
   normalizeLegacyModel,
-} from '@shared/constants/legacyWorkflowOutput';
+} from '@shared/constants/workflowOutput';
 
 describe('filename-era workflow output grammar', () => {
   let workspacePath: string;

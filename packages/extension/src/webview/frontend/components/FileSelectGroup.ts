@@ -8,13 +8,13 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-import { SortableController } from '@shared/litControllers';
 import { designTokens } from '@shared/styles';
 import type {
   CheckboxValues,
   DocumentFileType,
   FileSelectConfig,
 } from '@shared/schemas';
+import { SortableController } from '@shared/litControllers/SortableController';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import { getBasename, normalizeFilePath } from '@utils/core';

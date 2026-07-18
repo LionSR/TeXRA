@@ -19,7 +19,7 @@ import {
 import {
   TEXRA_CLI_SUPPORTED_NODE_RANGE,
   TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY,
-} from '@shared/constants/cliRuntime';
+} from '@tools/externalToolDefs';
 import { extractErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 

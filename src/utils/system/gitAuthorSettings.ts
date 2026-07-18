@@ -4,7 +4,7 @@ import {
   DEFAULT_GIT_AUTHOR_NAME,
   DEFAULT_GIT_MARK_COMMITS,
   DEFAULT_GIT_WORKTREE_SUPPORT,
-} from '@shared/constants/git';
+} from '@shared/schemas/stateSettings';
 import type { UpdateGitAuthorSettingsMessage } from '@shared/schemas/settingsViewMessages';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { setWorktreeSupportEnabled } from '@utils/config/worktreeConfig';

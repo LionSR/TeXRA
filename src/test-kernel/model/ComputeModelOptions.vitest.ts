@@ -24,7 +24,7 @@ import {
   type ModelOptionsServerAccess,
 } from '@model/computeModelOptions';
 import type { ModelOptionData } from '@shared/schemas';
-import { FAST_FIRST_RESPONSE_HINT } from '@shared/constants/fastModels';
+import { FAST_FIRST_RESPONSE_HINT } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { AgentCategory } from '@shared/schemas/agent';
 

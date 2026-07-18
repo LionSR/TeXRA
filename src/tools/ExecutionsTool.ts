@@ -44,7 +44,7 @@ import {
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
-} from '@shared/constants/toolDefaults';
+} from '@shared/toolUse';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream, requireStreamId } from '@tools/contextHelpers';

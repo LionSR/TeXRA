@@ -17,7 +17,6 @@ import { z } from 'zod';
 // Local imports
 import { platform } from '@platform/platform';
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
-import { TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY } from '@shared/constants/cliRuntime';
 import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
 import type { RegisteredToolName } from '@tools/registry';
 import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
@@ -44,6 +43,19 @@ import { isGitRepository } from '@utils/system/isGitRepository';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { isWSL } from '@utils/system/wslDetect';
 import { BinaryResolver } from '@utils/system/binaryResolver';
+
+/** Node.js semver range the `texra` CLI supports. */
+export const TEXRA_CLI_SUPPORTED_NODE_RANGE = '>=22.9.0';
+
+/** Human-readable rendering of {@link TEXRA_CLI_SUPPORTED_NODE_RANGE}. */
+export const TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY = (() => {
+  const versions = TEXRA_CLI_SUPPORTED_NODE_RANGE.split(' || ');
+  const finalVersion = versions.at(-1);
+
+  return versions.length > 1 && finalVersion != null
+    ? `${versions.slice(0, -1).join(', ')}, or ${finalVersion}`
+    : TEXRA_CLI_SUPPORTED_NODE_RANGE;
+})();
 
 const ZOTERO_PROBE_TIMEOUT_MS = 2000;
 const TEXRA_CLI_CHECK = {

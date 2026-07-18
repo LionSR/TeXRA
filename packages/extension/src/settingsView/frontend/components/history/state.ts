@@ -2,7 +2,10 @@ import { z } from 'zod';
 
 // Local imports - shared state
 import { hostBridge } from '@shared/hostBridge';
-import { PersistedState, createWebviewStorage } from '@shared/state';
+import {
+  PersistedState,
+  createWebviewStorage,
+} from '@shared/state/PersistedState';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 
 const HistoryViewStateSchema = z.object({

@@ -13,6 +13,10 @@ import { KNOWN_TEXRA_KEYS } from '@cli/schemas/knownKeys';
 import { CORE_SETTING_PATHS } from '@shared/schemas/coreSettings';
 import {
   CLI_STATE_SETTINGS,
+  DEFAULT_GIT_AUTHOR_EMAIL,
+  DEFAULT_GIT_AUTHOR_NAME,
+  DEFAULT_GIT_MARK_COMMITS,
+  DEFAULT_GIT_WORKTREE_SUPPORT,
   STATE_SETTINGS,
   STATE_SETTING_KEYS,
   settingEnumChoices,
@@ -42,12 +46,6 @@ import {
   CODEX_REASONING_EFFORT_DEFAULT,
   CODEX_SANDBOX_MODE_DEFAULT,
 } from '@shared/schemas/agentCliSettings';
-import {
-  DEFAULT_GIT_AUTHOR_EMAIL,
-  DEFAULT_GIT_AUTHOR_NAME,
-  DEFAULT_GIT_MARK_COMMITS,
-  DEFAULT_GIT_WORKTREE_SUPPORT,
-} from '@shared/constants/git';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 

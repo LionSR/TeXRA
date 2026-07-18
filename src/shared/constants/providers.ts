@@ -433,3 +433,86 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
   ],
   openrouter: [USE_OPENROUTER_PROVIDER_SETTING],
 };
+
+// ============================================================================
+// Direct API-key providers
+// ============================================================================
+
+/**
+ * Provider IDs where users can configure direct API keys — the single source
+ * for direct key-provider enumeration.
+ */
+export const API_KEY_PROVIDER_IDS = [
+  'openai',
+  'anthropic',
+  'openRouter',
+  'google',
+  'xai',
+  'deepseek',
+  'moonshot',
+  'kimiCode',
+  'dashscope',
+  'minimax',
+  'glm',
+  'meta',
+] as const;
+
+// ============================================================================
+// Model pricing hints
+// ============================================================================
+
+/**
+ * Price-based predicate for "fast first response" models.
+ *
+ * Models strictly under $1/M input are treated as small, fast, cheap variants
+ * that are a reasonable first try. Using pricing as the single source of truth
+ * avoids the substring-match foot-guns that plagued earlier regex-based versions
+ * (matching `gemini*`, `minimax*`, etc. unintentionally).
+ *
+ * Note: this threshold is intentionally separate from the relay's free-tier
+ * cutoff. The free tier may include capable mid-range models (e.g. Sonnet at
+ * $3/M) that are not "fast" in the latency sense.
+ */
+
+/** Input-price ceiling (USD per million tokens) for the fast-model hint. */
+const FAST_FIRST_RESPONSE_PRICE_CEILING = 1;
+
+/** Hint string prepended to the model tooltip when the model qualifies. */
+export const FAST_FIRST_RESPONSE_HINT =
+  '⚡ Fast first response — try this for quick replies';
+
+/**
+ * Returns true when a model's input price qualifies it as a fast first-try pick.
+ * Undefined prices (unpriced / local / custom) are treated as non-fast.
+ */
+export function isFastFirstResponseModel(
+  inputPrice: number | undefined,
+): boolean {
+  return (
+    inputPrice !== undefined && inputPrice < FAST_FIRST_RESPONSE_PRICE_CEILING
+  );
+}
+
+/**
+ * Predicate and copy for models whose API pricing is high enough that we
+ * actively steer users toward the External Inquiry tool — which lets agents
+ * ask the user to paste an answer from their own ChatGPT/Claude/Gemini
+ * subscription instead of paying per-token API rates. For OpenAI's "-pro"
+ * variants ($15-$30 input, $120-$180 output per 1M) a single agentic turn
+ * can cost tens of dollars.
+ *
+ * The match is name-shaped (`gpt<digits>pro`) rather than price-thresholded
+ * so a future flagship Pro release stays covered without a tweak, and other
+ * vendors' priciest reasoning models aren't lumped in.
+ */
+
+/** Hint string prepended to the model tooltip when the model qualifies. */
+export const EXPENSIVE_MODEL_HINT =
+  '💸 Premium API pricing — consider the External Inquiry tool to use your own ChatGPT/Claude subscription instead';
+
+const GPT_PRO_NAME = /^gpt\d+pro$/;
+
+/** Returns true when API use of the model is expensive enough to warn about. */
+export function isExpensiveModel(provider: string, name: string): boolean {
+  return provider === 'openai' && GPT_PRO_NAME.test(name);
+}

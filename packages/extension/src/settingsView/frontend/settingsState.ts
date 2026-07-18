@@ -44,7 +44,7 @@ import {
   DEFAULT_GIT_AUTHOR_NAME,
   DEFAULT_GIT_AUTHOR_EMAIL,
   DEFAULT_GIT_MARK_COMMITS,
-} from '@shared/constants/git';
+} from '@shared/schemas/stateSettings';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';

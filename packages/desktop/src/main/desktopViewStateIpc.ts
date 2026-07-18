@@ -4,7 +4,7 @@ import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   DESKTOP_THEME_KIND,
   type DesktopThemeKind,
-} from '@shared/constants/desktopTheme';
+} from '@shared/schemas/commonViewMessages';
 
 import {
   createCommandHandler,

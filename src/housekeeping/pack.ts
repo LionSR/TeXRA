@@ -3,12 +3,12 @@ import * as path from 'node:path';
 
 // Local imports - result types
 import * as logger from '@logger/logUtils';
-import { getAgentFirstNameChunk } from '@shared/constants/legacyWorkflowOutput';
 import { getCleanAgentName } from '@shared/schemas/agent';
 import type { FileOpResult } from '@shared/schemas/opResults';
 
 // Local imports - log
 import {
+  getAgentFirstNameChunk,
   parseWorkflowOutputRoundDir,
   workflowOutputRoundDir,
 } from '@shared/constants/workflowOutput';
