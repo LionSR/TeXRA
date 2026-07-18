@@ -37,6 +37,13 @@ export interface WorkflowAgentCallOptions {
   agentName?: string;
   /** Workspace or run-storage files bound as the child's input files. */
   inputFiles?: string[];
+  /**
+   * Plain JSON Schema object describing the structured result the call must
+   * produce. Its presence routes the call to a tool-use agent that finishes by
+   * submitting a validated value, surfaced on the result's `.structured`.
+   * Participates in the journal key, so resume stays correct.
+   */
+  schema?: Record<string, unknown>;
 }
 
 export interface WorkflowAgentInvocation {

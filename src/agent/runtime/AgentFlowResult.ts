@@ -42,6 +42,8 @@ export const ToolUseFlowResultSchema = AgentFlowMetaSchema.extend({
   lastResponse: z.string().optional(),
   /** Workspace-relative paths of files edited by tool calls during this session. */
   touchedFiles: z.array(z.string()).optional(),
+  /** Value captured by the `submit_output` terminal tool, if the run used one. */
+  structured: z.unknown().optional(),
 });
 
 const AgentFlowResultSchema = z.discriminatedUnion('category', [

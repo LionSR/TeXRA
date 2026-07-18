@@ -78,6 +78,7 @@ export async function buildSubagentResult(
     flowResult: result,
     diffs,
     diffsUnavailable,
+    structured: result.category === 'toolUse' ? result.structured : undefined,
   });
   return {
     result: finalResult,

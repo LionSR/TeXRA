@@ -648,11 +648,18 @@ function normalizeAgentOptions(
     }
     options[field] = field === 'id' ? value.trim() : value;
   }
-  for (const field of ['schema', 'outputSchema'] as const) {
-    if (!Object.hasOwn(source, field)) continue;
-    throw new Error(
-      `agent() option "${field}" is unsupported. Pass structured data between stages through a JSON output file.`,
-    );
+  if (Object.hasOwn(source, 'schema')) {
+    const schema = source.schema;
+    if (
+      schema === null ||
+      typeof schema !== 'object' ||
+      Array.isArray(schema)
+    ) {
+      throw new Error(
+        'agent() option "schema" must be a plain JSON Schema object.',
+      );
+    }
+    options.schema = schema as Record<string, unknown>;
   }
   if (source.inputFiles !== undefined) {
     if (
