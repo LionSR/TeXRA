@@ -120,6 +120,22 @@ const STRICT_INCOMPATIBLE_KEYWORDS = [
 ] as const;
 
 /**
+ * Keywords whose presence means a schema node constrains its value. A node with
+ * none of these (a bare `{}`, or the `{}` fallback when `convertToolSchema`
+ * returns null) accepts any value, which strict native output cannot represent.
+ */
+const CONSTRAINT_KEYWORDS = [
+  'type',
+  'anyOf',
+  'oneOf',
+  'allOf',
+  'not',
+  '$ref',
+  'enum',
+  'const',
+] as const;
+
+/**
  * Whether the spec's JSON Schema is compatible with provider strict-mode native
  * structured output. Consumed later (Phase 2) to decide whether to attempt
  * native forcing.
@@ -141,16 +157,24 @@ function isNodeStrictNativeCompatible(node: unknown): boolean {
     if (keyword in schema) return false;
   }
 
-  const properties = schema.properties as Record<string, unknown> | undefined;
-  if (properties && typeof properties === 'object') {
+  const isObjectNode = schema.type === 'object' || 'properties' in schema;
+  if (isObjectNode) {
+    // Strict mode requires objects to forbid extra properties and mark every
+    // property required. A bare { type: 'object' } (no properties, no
+    // additionalProperties: false) still accepts arbitrary fields.
     if (schema.additionalProperties !== false) return false;
-    const required = new Set(
-      Array.isArray(schema.required) ? (schema.required as string[]) : [],
-    );
-    for (const key of Object.keys(properties)) {
-      if (!required.has(key)) return false;
-      if (!isNodeStrictNativeCompatible(properties[key])) return false;
+    const properties = schema.properties as Record<string, unknown> | undefined;
+    if (properties && typeof properties === 'object') {
+      const required = new Set(
+        Array.isArray(schema.required) ? (schema.required as string[]) : [],
+      );
+      for (const key of Object.keys(properties)) {
+        if (!required.has(key)) return false;
+        if (!isNodeStrictNativeCompatible(properties[key])) return false;
+      }
     }
+  } else if (!CONSTRAINT_KEYWORDS.some((keyword) => keyword in schema)) {
+    return false;
   }
 
   for (const key of ['items', 'additionalItems', 'not'] as const) {
