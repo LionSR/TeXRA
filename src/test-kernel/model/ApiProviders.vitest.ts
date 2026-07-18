@@ -1,5 +1,5 @@
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import {
@@ -13,7 +13,7 @@ import {
   type ApiProvider,
 } from '@model/apiProviders';
 import { UnsetApiKeyTool } from '@tools/setup/UnsetApiKeyTool';
-import { setSetupPlatform, type SetupPlatform } from '@tools/setup/platform';
+import { setSetupPlatform, setupSecrets } from '@tools/setup/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 
 function createSecrets(
@@ -64,71 +64,25 @@ function setupApiKeyToolPlatform(
   store: Map<string, string>,
   envProviders: ReadonlySet<ApiProvider> = new Set(),
 ): void {
-  const platform: SetupPlatform = {
-    host: 'cli',
-    secrets: {
-      providers: ['openai', 'kimiCode'],
-      async deleteApiKey(provider) {
-        store.delete(apiKeySecretName(provider));
-      },
-      async hasUsableApiKey(provider) {
-        return (
-          (store.get(apiKeySecretName(provider))?.trim().length ?? 0) > 0 ||
-          envProviders.has(provider)
-        );
-      },
-      async apiKeyOrigin(provider) {
-        if (store.has(apiKeySecretName(provider))) return 'secret';
-        return envProviders.has(provider) ? 'env' : 'none';
-      },
-      async storedApiKeyExists(provider) {
-        return store.has(apiKeySecretName(provider));
-      },
-      async anyUsableCredentialExists() {
-        return store.size > 0;
-      },
-      async gitHubTokenExists() {
-        return 'none';
-      },
-      async listStoredKeys() {
-        return [...store.keys()] as readonly string[];
-      },
+  vi.spyOn(setupSecrets, 'deleteApiKey').mockImplementation(
+    async (provider) => {
+      store.delete(apiKeySecretName(provider));
     },
+  );
+  vi.spyOn(setupSecrets, 'hasUsableApiKey').mockImplementation(
+    async (provider) =>
+      (store.get(apiKeySecretName(provider))?.trim().length ?? 0) > 0 ||
+      envProviders.has(provider),
+  );
+  vi.spyOn(setupSecrets, 'storedApiKeyExists').mockImplementation(
+    async (provider) => store.has(apiKeySecretName(provider)),
+  );
+  setSetupPlatform({
+    host: 'cli',
     commands: {
       async invoke() {},
     },
-    extensions: {
-      isInstalled() {
-        return false;
-      },
-      async install() {},
-    },
-    auth: {
-      async getStatus() {
-        return {
-          authenticated: false,
-          remoteAgentCatalogAvailable: false,
-        };
-      },
-    },
-    modelAccess: {
-      async getChatGptSubscriptionStatus() {
-        return { signedIn: false, enabled: false };
-      },
-    },
-    config: {
-      get() {
-        return undefined;
-      },
-      async update() {},
-    },
-    terminal: {
-      async runCommand() {
-        return { exitCode: 0, output: '', timedOut: false };
-      },
-    },
-  };
-  setSetupPlatform(platform);
+  });
 }
 
 describe('API provider key caches', () => {
@@ -138,6 +92,7 @@ describe('API provider key caches', () => {
 
   afterEach(() => {
     invalidateApiKeyCache();
+    vi.restoreAllMocks();
   });
 
   it('uses the documented Kimi Code environment variable', () => {
