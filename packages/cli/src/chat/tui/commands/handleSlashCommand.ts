@@ -2,8 +2,6 @@ import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
-import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
 import { GoalStore } from '@tools/goal';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -25,6 +23,7 @@ import {
   openCanonicalSlashForm,
   type SlashCommandContext,
 } from './handlers/slashContext';
+import { loadCliStatusAssembly } from './handlers/statusAssembly';
 import {
   appendSlashCommandEcho,
   openRegisteredCliSlashForm,
@@ -150,23 +149,20 @@ export async function handleTuiSlashCommand(
           model: meta.model || context.initialModel,
           category: meta.category,
         });
-        const subscriptionActive =
-          accessTarget.category === undefined
-            ? false
-            : await isCodexSubscriptionActive(
-                accessTarget.model,
-                accessTarget.category,
-              );
+        const status = await loadCliStatusAssembly({
+          apiMode: meta.apiMode,
+          target: {
+            model: accessTarget.model,
+            category: accessTarget.category,
+            usageRoute: slice?.usage?.usageRoute,
+          },
+        });
         appendLocalAssistantTranscript(
           formatCliSessionStatus({
             agent: meta.agent || context.initialAgent,
             model: accessTarget.model,
             teamName: meta.teamName,
-            modelAccess: resolveCliModelAccessRoute({
-              apiMode: meta.apiMode,
-              subscriptionActive,
-              usageRoute: slice?.usage?.usageRoute,
-            }),
+            modelAccess: status.modelAccess,
             approval: formatCliApprovalPolicy(context.getApprovalPolicy()),
             approvalBypasses: slice?.bypass,
             status: slice?.status ?? 'not started',

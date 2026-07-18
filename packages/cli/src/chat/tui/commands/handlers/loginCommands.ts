@@ -4,10 +4,7 @@ import {
 } from '@cli/chat/tui/state/codexSubscription';
 import { sessionMeta, setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
-import {
-  loadCliApiStatusLines,
-  loadCliModelAccessOverview,
-} from '@cli/runtime/apiStatus';
+import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
 import {
   chatGptAccountLabel,
   chatGptSignOutPreferenceMessage,
@@ -36,6 +33,7 @@ import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode'
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { setCliSessionApiMode } from './apiModeCommands';
+import { loadCliStatusAssembly } from './statusAssembly';
 
 const CHAT_LOGIN_USAGE = [
   'Usage: /login [texra [github | google]] [--no-browser] [--device] [--select-account] [--login-hint <account>]',
@@ -179,13 +177,13 @@ export async function logoutFromChat(input: string): Promise<void> {
   }
 
   try {
-    const { lines: statusLines } = await loadCliModelAccessOverview({
+    const status = await loadCliStatusAssembly({
       apiMode: sessionMeta.get().apiMode,
     });
-    lines.push(...statusLines);
+    lines.push(...status.lines);
   } catch (error: unknown) {
     lines.push(toErrorMessage(error));
   }
 
-  appendLocalAssistantTranscript(lines.join('\n'));
+  appendLocalAssistantTranscript(lines.join(' · '));
 }

@@ -1,9 +1,5 @@
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { type CliApiMode } from '@cli/runtime/apiAccessMode';
-import {
-  loadCliApiStatusLines,
-  loadCliModelAccessOverview,
-} from '@cli/runtime/apiStatus';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import { refreshCodexPreferenceViews } from '@cli/chat/tui/state/codexSubscription';
 import {
@@ -32,6 +28,7 @@ import {
   CHAT_API_MODE_MODEL_RECOVERY,
   type SlashCommandContext,
 } from './slashContext';
+import { loadCliStatusAssembly } from './statusAssembly';
 
 const MODEL_ACCESS_USAGE = 'Usage: /api chatgpt | included | personal | status';
 
@@ -104,16 +101,11 @@ export async function applyCliModelAccessSelection(
 
   if (!normalized || normalized === 'status') {
     const apiMode = sessionMeta.get().apiMode;
-    const [{ lines }, apiStatusLines] = await Promise.all([
-      loadCliModelAccessOverview({ apiMode }),
-      loadCliApiStatusLines({ apiMode }),
-    ]);
-    const detailLines = apiStatusLines
-      .slice(2)
-      .filter((line) => !lines.includes(line));
-    appendLocalAssistantTranscript(
-      [...lines, ...detailLines, MODEL_ACCESS_USAGE].join('\n'),
-    );
+    const status = await loadCliStatusAssembly({
+      apiMode,
+      includeApiDetails: true,
+    });
+    appendLocalAssistantTranscript(status.lines.join('\n'));
     return;
   }
 
@@ -134,8 +126,9 @@ export async function applyCliModelAccessSelection(
 }
 
 export async function showCliAuthStatus(): Promise<void> {
-  const { lines } = await loadCliModelAccessOverview({
+  const status = await loadCliStatusAssembly({
     apiMode: sessionMeta.get().apiMode,
+    includeApiDetails: true,
   });
-  appendLocalAssistantTranscript(lines.join('\n'));
+  appendLocalAssistantTranscript(status.lines.join('\n'));
 }
