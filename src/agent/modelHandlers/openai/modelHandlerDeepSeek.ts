@@ -3,6 +3,7 @@ import { ReasoningEffort } from 'llm-zoo';
 
 // Local file imports
 import type { DeepSeekToolCall } from '@agent/types/ModelHandlerContracts';
+import { clampReasoningEffortToHighOrMax } from '@agent/modelHandlers/support/reasoningEffort';
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
 
 // Type imports
@@ -79,14 +80,11 @@ export class ModelHandlerDeepSeek extends ReasoningModelHandlerOpenAI<DeepSeekTo
   }
 
   /**
-   * DeepSeek's OpenAI-format API accepts only high/max. Its compatibility layer
-   * maps low/medium to high and the above-high tiers (xhigh, max) to max, so do
-   * that explicitly.
+   * DeepSeek's OpenAI-format API accepts only high/max; delegate to the shared
+   * high-or-max clamp (see `clampReasoningEffortToHighOrMax`).
    */
   protected override validateReasoningEffort(effort: string): string {
-    return effort === ReasoningEffort.XHIGH || effort === ReasoningEffort.MAX
-      ? 'max'
-      : 'high';
+    return clampReasoningEffortToHighOrMax(effort);
   }
 
   /** DeepSeek requires merging consecutive roles and stringified content. */

@@ -62,3 +62,18 @@ export function toOpenAIReasoningEffort(
       return maxReasoningEffort === ReasoningEffort.MAX ? 'max' : 'xhigh';
   }
 }
+
+/**
+ * Clamp an internal reasoning-effort value for providers whose OpenAI-compatible
+ * surface accepts only 'high' and 'max' (DeepSeek, GLM). Their compatibility
+ * layer maps the below-high tiers (none/low/medium) up to the 'high' floor and
+ * the above-high tiers (xhigh, max) to 'max'; reproduce that explicitly so an
+ * out-of-vocabulary value never leaks to the API.
+ */
+export function clampReasoningEffortToHighOrMax(
+  effort: string,
+): 'high' | 'max' {
+  return effort === ReasoningEffort.XHIGH || effort === ReasoningEffort.MAX
+    ? 'max'
+    : 'high';
+}
