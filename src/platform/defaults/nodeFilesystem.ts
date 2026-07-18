@@ -13,7 +13,6 @@ import {
   type FileSystemProvider,
   type FileStat,
 } from '../interfaces';
-import * as nodeFsOps from './nodeFsOps';
 
 /**
  * Resolve the target type of a symlink, producing combined bitmasks
@@ -76,15 +75,33 @@ export const nodeFilesystem: FileSystemProvider = {
     };
   },
 
-  isSymlink: nodeFsOps.isSymlink,
+  async isSymlink(target: string): Promise<boolean> {
+    const lstats = await fs.promises.lstat(target);
+    return lstats.isSymbolicLink();
+  },
 
-  realPath: nodeFsOps.realPath,
+  async realPath(target: string): Promise<string> {
+    return fs.promises.realpath(target);
+  },
 
   async readFile(target: string): Promise<Uint8Array> {
     return fs.promises.readFile(target);
   },
 
-  readFileChunk: nodeFsOps.readFileChunk,
+  async readFileChunk(
+    target: string,
+    offset: number,
+    length: number,
+  ): Promise<Uint8Array> {
+    const handle = await fs.promises.open(target, 'r');
+    try {
+      const buffer = Buffer.alloc(length);
+      const { bytesRead } = await handle.read(buffer, 0, length, offset);
+      return buffer.subarray(0, bytesRead);
+    } finally {
+      await handle.close();
+    }
+  },
 
   async writeFile(target: string, content: Uint8Array): Promise<void> {
     await fs.promises.writeFile(target, content);
