@@ -144,10 +144,9 @@ const APPROVAL_REQUEST_HANDLER_KEYS = Object.keys(
 ) as Array<keyof ApprovalRequestHandlerSet>;
 
 /**
- * Host-specific show/dismiss transport for one approval kind. retry and
- * agentProposal differ across hosts (the extension shows a retry panel and
- * upgrades proposals with model/agent dropdowns; the desktop cancels retries
- * and shows a plain proposal), so each host supplies these two directly.
+ * Host-specific show/dismiss transport for one approval kind. Every host
+ * supplies retry behavior. A host may override agent proposals when it needs
+ * richer presentation data than the built-in permission handler provides.
  */
 interface ApprovalHandlerTransport<T> {
   show: (item: T) => void;
@@ -156,7 +155,7 @@ interface ApprovalHandlerTransport<T> {
 
 interface ApprovalRequestHandlerOverrides {
   retry: ApprovalHandlerTransport<RetryPermission>;
-  agentProposal: ApprovalHandlerTransport<AgentProposalPermission>;
+  agentProposal?: ApprovalHandlerTransport<AgentProposalPermission>;
 }
 
 export interface BuildApprovalRequestHandlerSetParams {
@@ -238,16 +237,22 @@ export function buildApprovalRequestHandlerSet(
       overrides.retry.dismiss,
       canSend,
     ),
-    agentProposal: new ApprovalRequestHandler<
-      AgentProposalPermission,
-      'proposalId',
-      ProposalResult
-    >(
-      'proposalId',
-      overrides.agentProposal.show,
-      overrides.agentProposal.dismiss,
-      canSend,
-    ),
+    agentProposal: overrides.agentProposal
+      ? new ApprovalRequestHandler<
+          AgentProposalPermission,
+          'proposalId',
+          ProposalResult
+        >(
+          'proposalId',
+          overrides.agentProposal.show,
+          overrides.agentProposal.dismiss,
+          canSend,
+        )
+      : webviewPermissionHandler<
+          typeof PERMISSION_KIND.PROPOSAL,
+          'proposalId',
+          ProposalResult
+        >(webviewUpdater, canSend, PERMISSION_KIND.PROPOSAL, 'proposalId'),
   };
 }
 
