@@ -46,11 +46,11 @@ extension 49 / CLI 35 / desktop 27 distinct `@agent/*` deep-import specifiers,
 up 1.36×/1.94×/1.59× over 5.4 weeks) **is no longer trending up**. Recounted
 at `1f7082f`:
 
-| Host                 | North-star baseline | Now (`1f7082f`) | Δ    |
-| -------------------- | ------------------- | --------------- | ---- |
-| `packages/extension` | 49                  | **44**          | −5   |
-| `packages/cli`       | 35                  | **34**          | −1   |
-| `packages/desktop`   | 27                  | **27**          | 0    |
+| Host                 | North-star baseline | Now (`1f7082f`) | Δ   |
+| -------------------- | ------------------- | --------------- | --- |
+| `packages/extension` | 49                  | **44**          | −5  |
+| `packages/cli`       | 35                  | **34**          | −1  |
+| `packages/desktop`   | 27                  | **27**          | 0   |
 
 Core→host alias violations remain **0** (R-a would install at a zero
 baseline, unchanged). The maintainers' consolidation train (the 07-12 window's
@@ -79,7 +79,7 @@ the only two `TextConnectionService` references are its definition and its one
 `extends` site), the edit is contained entirely to `CycleServices.ts` (no
 `packages/**` edit), it has **no dedicated test** (the
 `TextConnectionHelperModel.vitest.ts` suite exercises the unrelated
-`bestConnectionMethod` *function* in `@agent/runtime/textConnection`, not the
+`bestConnectionMethod` _function_ in `@agent/runtime/textConnection`, not the
 interface type), and it is a **pure type merge** — `ResponseCycleServices`'s
 structural shape is byte-identical before and after, so it cannot change
 runtime behavior. **Verified:** `npm run typecheck` clean (exit 0, all six
@@ -148,7 +148,7 @@ Several map onto already-tracked standing items (noted).
    documented tension, not a bug)_. The model reader's highest-leverage finding:
    because messages are provider-opaque (`M extends ProviderMessage`), the flow
    holds `shared.messages` as an untyped array it cannot inspect, so every
-   transcript operation round-trips through a handler method — which is *why*
+   transcript operation round-trips through a handler method — which is _why_
    `IModelHandler` has 31 members (~10 of them message-mutation methods:
    `initializeMessages`, `createRoundMessages`, `createUserFollowUpMessages`,
    `prependTextToUserMessage`, …). This is the same conscious divergence the
@@ -189,7 +189,7 @@ Several map onto already-tracked standing items (noted).
    `createChannelTrace` fabricates a full inert `AgentTrace` (`...noopTrace` +
    4 log methods) only so module singletons can type a field as `AgentTrace`.
    Corrected count this pass: **36** files import `createChannelTrace` (35 as
-   the `const logger = createChannelTrace('X')` module-logger idiom) — *not*
+   the `const logger = createChannelTrace('X')` module-logger idiom) — _not_
    the "~210" the runtime reader estimated (that grep over-counted; the direct
    census is 36 importers / 71 total occurrences). `logUtils.ts` /
    `redaction.ts` themselves are a thin, justified `console`/OutputChannel
@@ -206,7 +206,7 @@ Several map onto already-tracked standing items (noted).
    `@auth/SupabaseClient` directly. `core/README.md:29-41` explicitly documents
    and accepts these as host-agnostic edges — so this is policy, not a bug — but
    it is the load-bearing obstacle to an importable-and-runnable cycle. The
-   fix, *if/when* the SDK boundary hardens, is to thread `runScope` + a
+   fix, _if/when_ the SDK boundary hardens, is to thread `runScope` + a
    `refreshCredential` port through the services object; strategic, gated.
 
 7. **Minor structural / correctness notes** _(LOW; record only)_.
@@ -338,5 +338,3 @@ or `RetryableInvocationNode`; do not sweep the reviewed-train items unattended.
   0 grep hits across `src/` + `packages/`).
 - This checkpoint is added under `docs/proposals/`, an internal directory
   excluded from the texra.ai publish allowlist — not a root-level doc.
-</content>
-</invoke>

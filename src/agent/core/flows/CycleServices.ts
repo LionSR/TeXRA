@@ -70,8 +70,9 @@ interface CycleRunServices<C = unknown>
 }
 
 /** Services for response cycle flow nodes. */
-export interface ResponseCycleServices<C = unknown>
-  extends CycleRunServices<C> {
+export interface ResponseCycleServices<
+  C = unknown,
+> extends CycleRunServices<C> {
   round: ConversationRoundStateSnapshot;
   /**
    * Determines the best textual connector between two strings in a LaTeX
