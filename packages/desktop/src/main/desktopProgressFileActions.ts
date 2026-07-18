@@ -123,6 +123,13 @@ export class DesktopProgressFileActions {
             absolutePaths: [absolutePath],
           }),
         showInfo: (message) => this.ui.showInfoMessage(message),
+        deleteFile: async (location) => {
+          try {
+            await AbsoluteFS.delete(location.absolutePath);
+          } catch {
+            // Non-fatal: diff file may not exist or may be locked.
+          }
+        },
       },
     );
   }
