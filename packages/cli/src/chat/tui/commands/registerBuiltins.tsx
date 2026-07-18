@@ -3,12 +3,17 @@
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
 import { parseCliHistoryId } from '@cli/runtime/history';
 import type { CliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
-import type { CliLogoutTarget } from '@cli/runtime/loginOptions';
+import {
+  type CliLogoutTarget,
+  parseChatLoginSlashArgs,
+} from '@cli/runtime/loginOptions';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import type { ApiProvider } from '@model/apiProviders';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import { collapseWhitespace } from '@utils/text/stringUtils';
 
 import { ModelAccessForm } from '../forms/ModelAccessForm';
 import { AgentListForm } from '../forms/AgentListForm';
@@ -25,8 +30,11 @@ import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
 import { ToolsListForm } from '../forms/ToolsListForm';
 import {
   activeForm,
+  formProgress,
+  getCliStateGeneration,
   patchSessionMeta,
   sessionMeta,
+  setTransientNotice,
   setCliSessionModelOverride,
 } from '../state/cliState';
 import { appendLocalAssistantTranscript } from '../state/transcript';
@@ -39,7 +47,15 @@ import {
   applyCliProviderApiKey,
 } from './handlers/apiModeCommands';
 import { applyCliApprovalPolicySelection } from './handlers/approvalCommand';
-import { loginFromChat, logoutFromChat } from './handlers/loginCommands';
+import {
+  loginFromChat,
+  loginStartMessage,
+  logoutFromChat,
+} from './handlers/loginCommands';
+import {
+  type SlashCommandOutput,
+  transcriptSlashCommandOutput,
+} from './handlers/slashContext';
 import {
   showCliMemoryList,
   showCliMemoryPreview,
@@ -52,20 +68,29 @@ type ApprovalPolicySelectHandler = (
   value: CliApprovalPolicy,
 ) => void | Promise<void>;
 type ModelSelectHandler = (value: string) => void | Promise<void>;
+type FormActionResult =
+  void | (Promise<void> & { readonly abort?: () => void });
 type ModelAccessSelectHandler = (
   value: CliModelAccessRoute,
-) => void | Promise<void>;
+  output: SlashCommandOutput,
+) => FormActionResult;
 type ApiKeySaveHandler = (
   provider: ApiProvider,
   key: string,
 ) => string | void | Promise<string | void>;
-type LoginSelectHandler = (value: LoginFormValue) => void | Promise<void>;
-type LogoutSelectHandler = (value: CliLogoutTarget) => void | Promise<void>;
+type LoginSelectHandler = (
+  value: LoginFormValue,
+  output: SlashCommandOutput,
+) => FormActionResult;
+type LogoutSelectHandler = (
+  value: CliLogoutTarget,
+  output: SlashCommandOutput,
+) => FormActionResult;
 type MemorySelectHandler = (storagePath: string) => void | Promise<void>;
 type ResumeSelectHandler = (id: ExecutionId) => void | Promise<void>;
 type SkillSelectHandler = (value: SkillActivation) => void | Promise<void>;
 type ErrorHandler = (error: unknown) => void | Promise<void>;
-type SelectionCompletion = 'afterAction' | 'beforeAction';
+type SelectionCompletion = 'afterAction' | 'beforeAction' | 'busy';
 
 /** Build a form selection handler with consistent completion and errors. */
 function formSelectionHandler<T>({
@@ -75,22 +100,148 @@ function formSelectionHandler<T>({
   onPersist,
   echoOnPersist = false,
   completion = 'afterAction',
+  busyTitle,
+  abandonNotice = 'Operation abandoned; it may still complete.',
 }: {
-  readonly action: (value: T) => void | Promise<void>;
+  readonly action: (value: T, output: SlashCommandOutput) => FormActionResult;
   readonly onDone: (value: T) => void;
   readonly onError?: ErrorHandler;
   readonly onPersist?: () => void;
   readonly echoOnPersist?: boolean;
   readonly completion?: SelectionCompletion;
+  readonly busyTitle?: (value: T) => string;
+  readonly abandonNotice?: string;
 }): (value: T) => void {
   return (value) => {
+    if (completion === 'busy') {
+      const generation = getCliStateGeneration();
+      const token = Symbol('form submission');
+      const actionController: { abort?: () => void } = {};
+      const currentProgress = () => {
+        if (generation !== getCliStateGeneration()) return undefined;
+        const current = formProgress.get();
+        return current?.token === token ? current : undefined;
+      };
+      const close = (): void => {
+        if (!currentProgress()) return;
+        formProgress.set(undefined);
+        onDone(value);
+      };
+      const cancel = (): void => {
+        if (!currentProgress()) return;
+        const canAbort = actionController.abort !== undefined;
+        try {
+          actionController.abort?.();
+        } catch {
+          // Detaching must still restore the form boundary if abort fails.
+        }
+        formProgress.set(undefined);
+        onDone(value);
+        if (!canAbort && generation === getCliStateGeneration()) {
+          setTransientNotice(abandonNotice);
+        }
+      };
+      const title = busyTitle?.(value) ?? 'Working';
+      const archiveCopyable = (): void => {
+        const current = currentProgress();
+        if (!current?.copyableMessage) return;
+        if (echoOnPersist) onPersist?.();
+        appendLocalAssistantTranscript(current.copyableMessage);
+        formProgress.set({
+          ...current,
+          message: 'Authentication instructions were written to scrollback.',
+          copyableMessage: undefined,
+          archivedCopyableMessage: current.copyableMessage,
+        });
+      };
+      formProgress.set({
+        token,
+        status: 'running',
+        title,
+        archiveCopyable,
+        cancel,
+        dismiss: close,
+      });
+
+      const output: SlashCommandOutput = {
+        appendOutcome: (message) => {
+          if (!currentProgress()) return;
+          if (echoOnPersist) onPersist?.();
+          appendLocalAssistantTranscript(message);
+          const current = currentProgress();
+          if (current) formProgress.set({ ...current, message });
+        },
+        setNotice: (message) => {
+          if (currentProgress()) setTransientNotice(message);
+        },
+        writeProgress: (message, options) => {
+          const current = currentProgress();
+          if (!current) return;
+          formProgress.set({
+            ...current,
+            message,
+            copyableMessage: options?.copyable
+              ? message
+              : current.copyableMessage,
+          });
+        },
+      };
+
+      let actionResult: FormActionResult;
+      try {
+        actionResult = action(value, output);
+      } catch (error: unknown) {
+        actionResult = Promise.reject(error);
+      }
+      if (actionResult?.abort) actionController.abort = actionResult.abort;
+
+      void Promise.resolve(actionResult)
+        .then(() => {
+          const current = currentProgress();
+          if (!current) return;
+          if (current.copyableMessage || current.archivedCopyableMessage) {
+            formProgress.set({ ...current, status: 'succeeded' });
+          } else {
+            close();
+          }
+        })
+        .catch(async (error: unknown) => {
+          let current = currentProgress();
+          if (!current) return;
+          if (echoOnPersist) onPersist?.();
+          const errorMessage = toErrorMessage(error);
+          const copyableMessage =
+            current.copyableMessage ?? current.archivedCopyableMessage;
+          const persistedError = copyableMessage
+            ? new Error(
+                `${collapseWhitespace(errorMessage)} · ${collapseWhitespace(
+                  copyableMessage,
+                )}`,
+              )
+            : error;
+          await onError?.(persistedError);
+          current = currentProgress();
+          if (!current) return;
+          if (current.copyableMessage || current.archivedCopyableMessage) {
+            formProgress.set({
+              ...current,
+              status: 'failed',
+              message: errorMessage,
+            });
+          } else {
+            close();
+          }
+        });
+      return;
+    }
+
     if (echoOnPersist) onPersist?.();
     if (completion === 'beforeAction') {
       onDone(value);
     }
 
     const runAction = async (): Promise<void> => {
-      await action(value);
+      await action(value, transcriptSlashCommandOutput);
     };
 
     void runAction()
@@ -130,15 +281,18 @@ export function registerBuiltinSlashCommands(options?: {
     options?.onModelSelect ?? setCliSessionModelOverride;
   const onModelAccessSelect: ModelAccessSelectHandler =
     options?.onModelAccessSelect ??
-    ((route) => {
+    ((route, output) => {
       if (route !== 'chatgpt') patchSessionMeta({ apiMode: route });
+      output.appendOutcome(`Model access set to ${route}.`);
     });
   const onApiKeySave: ApiKeySaveHandler =
     options?.onApiKeySave ?? applyCliProviderApiKey;
   const onLoginSelect: LoginSelectHandler =
-    options?.onLoginSelect ?? loginFromChat;
+    options?.onLoginSelect ??
+    ((value, output) => loginFromChat(value, undefined, output));
   const onLogoutSelect: LogoutSelectHandler =
-    options?.onLogoutSelect ?? logoutFromChat;
+    options?.onLogoutSelect ??
+    ((value, output) => logoutFromChat(value, output));
   const canSelectAgent = options?.canSelectAgent ?? (() => true);
   const canSelectModel = options?.canSelectModel ?? (() => true);
 
@@ -194,7 +348,10 @@ export function registerBuiltinSlashCommands(options?: {
           onError: options?.onError,
           onPersist: props.onPersist,
           echoOnPersist: props.echoOnPersist,
-          completion: 'beforeAction',
+          completion: 'busy',
+          busyTitle: () => 'Updating model access',
+          abandonNotice:
+            'Model access update abandoned; it may still complete.',
         })}
         onCancel={() => props.onDone(undefined)}
       />
@@ -247,7 +404,13 @@ export function registerBuiltinSlashCommands(options?: {
           action: onLoginSelect,
           onDone: props.onDone,
           onError: options?.onError,
-          completion: 'beforeAction',
+          completion: 'busy',
+          busyTitle: (value) => {
+            const args = parseChatLoginSlashArgs(value);
+            return args ? loginStartMessage(args) : 'Signing in';
+          },
+          abandonNotice:
+            'Sign-in abandoned; the browser flow may still complete.',
           onPersist: props.onPersist,
           echoOnPersist: props.echoOnPersist,
         })}
@@ -264,7 +427,9 @@ export function registerBuiltinSlashCommands(options?: {
           action: onLogoutSelect,
           onDone: props.onDone,
           onError: options?.onError,
-          completion: 'beforeAction',
+          completion: 'busy',
+          busyTitle: () => 'Signing out',
+          abandonNotice: 'Sign-out abandoned; it may still complete.',
           onPersist: props.onPersist,
           echoOnPersist: props.echoOnPersist,
         })}
@@ -429,7 +594,7 @@ export function registerBuiltinSlashCommands(options?: {
     description: 'Sign out of one account or all accounts',
     category: 'account',
     echo: 'ifPersists',
-    argHandler: logoutFromChat,
+    argHandler: (remainder) => logoutFromChat(remainder),
     formName: 'logout',
     formComponent: LogoutFormAdapter,
   });
@@ -523,7 +688,12 @@ export function registerBuiltinSlashCommands(options?: {
               props.onPersist?.();
               await options?.onError?.(error);
             },
-            onApiModePersonal: () => onModelAccessSelect('personal'),
+            onApiModePersonal: async () => {
+              await onModelAccessSelect(
+                'personal',
+                transcriptSlashCommandOutput,
+              );
+            },
           })}
         />
       );
