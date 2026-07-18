@@ -242,6 +242,13 @@ async function handleAcceptEdited(
           vscode.window.showInformationMessage(message);
           logger.info(CHANNEL, message);
         },
+        deleteFile: async (location) => {
+          try {
+            await FlexibleFS.delete(location);
+          } catch {
+            // Non-fatal: diff file may not exist or may be locked.
+          }
+        },
       });
     }
 

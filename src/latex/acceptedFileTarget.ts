@@ -4,6 +4,9 @@ import path from 'node:path';
 // Local imports - agent
 import { extractAgentSuffix } from '@agent/utils/mergeFileUtils';
 
+// Local imports - latex
+import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
+
 // Local imports - utilities
 import type { FileLocation } from '@shared/schemas';
 import {
@@ -106,6 +109,12 @@ export interface AcceptEditedFileReplacePorts {
   /** Notify the host that a workspace file was written at this absolute path. */
   emitWritten: (absolutePath: string) => void;
   showInfo: (message: string) => void | Promise<void>;
+  /**
+   * Remove the stale `_diff` companion file left over from the run that
+   * produced `editedLocation`, if any. Errors (e.g. the file was already
+   * gone) are non-fatal and should be swallowed by the port implementation.
+   */
+  deleteFile: (location: FileLocation) => Promise<void>;
 }
 
 /**
@@ -142,6 +151,8 @@ export async function acceptEditedFileReplace(
     ports.emitWritten(targetLocation.absolutePath);
   }
 
+  await ports.deleteFile(diffFileLocation(baseLocation, editedPath));
+
   await ports.showInfo(
     buildAcceptSuccessMessage(
       targetFileName,
@@ -150,6 +161,24 @@ export async function acceptEditedFileReplace(
     ),
   );
   return true;
+}
+
+/**
+ * Location of the stale `_diff` companion file that a prior latexdiff run
+ * would have generated for the `baseLocation` / `editedPath` pair, sitting
+ * beside `baseLocation`. Shared by every "accept edited content" path so the
+ * diff-naming convention (see {@link generateDiffFileName}) is computed once.
+ */
+export function diffFileLocation(
+  baseLocation: FileLocation,
+  editedPath: string,
+): FileLocation {
+  const diffFileName = generateDiffFileName(
+    baseLocation.absolutePath,
+    editedPath,
+    '_diff',
+  );
+  return siblingLocation(baseLocation, diffFileName);
 }
 
 export function getAcceptedFileTarget(
