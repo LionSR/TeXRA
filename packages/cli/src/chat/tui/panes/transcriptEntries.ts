@@ -67,6 +67,7 @@ export function isRenderableTranscriptEntry(entry: ConversationEntry): boolean {
     case 'assistant':
     case 'error':
     case 'user':
+    case 'phase':
       return terminalVisibleTranscriptText(entry.text).trim().length > 0;
     case 'process':
     case 'tool':
