@@ -11,19 +11,22 @@ import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
   buildMainViewExecuteMessage,
-  planCompare,
-  planLatexdiff,
-  planLatexdiffVC,
-  planLatexdiffVCPack,
-  planMerge,
-  planPackClean,
   type MainViewExecuteMessage,
 } from '@shared/mainView';
 import type {
   ActionDetail,
+  CompareMessage,
   LatexDiffsActionDetail,
+  LatexdiffMessage,
+  LatexdiffvcMessage,
+  MergeMessage,
   MultiFiles,
+  PackLatexdiffvcMessage,
+  PackMultipleMessage,
 } from '@shared/schemas';
+
+// Local imports - utilities
+import { capitalize } from '@utils/text/stringUtils';
 
 // Local imports - main view
 import {
@@ -62,32 +65,10 @@ import {
   ONBOARDING_PLACEHOLDERS,
 } from './store';
 
-export type MainActionPlan =
-  | { readonly valid: false; readonly message: string }
-  | {
-      readonly valid: true;
-      readonly command: string;
-      readonly payload: Record<string, unknown>;
-      readonly infoText?: string;
-    };
-
 export function showInformation(text: string): void {
   postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
     text,
   });
-}
-
-export function postActionPlan(plan: MainActionPlan): boolean {
-  if (!plan.valid) {
-    showInformation(plan.message);
-    return false;
-  }
-
-  postMessage(plan.command, plan.payload);
-  if (plan.infoText) {
-    showInformation(plan.infoText);
-  }
-  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -387,17 +368,43 @@ export function runPanelAction(action: ActionDetail['action']): void {
   switch (action) {
     case 'pack':
     case 'clean': {
+      const inputFile = primaryInputFile();
+      const selectedModel = model$.get();
+      if (!inputFile || !selectedModel) {
+        showInformation(
+          'Please select all required fields (input file and model)',
+        );
+        break;
+      }
+
+      const filteredInputs = multiFiles$.get().inputFiles.filter(Boolean);
+      const additionalInputFiles = filteredInputs.slice(1);
+      const useMultiple = additionalInputFiles.length > 0;
+
+      let command: string;
+      if (action === 'pack') {
+        command = useMultiple
+          ? MAIN_VIEW_COMMANDS.PACK_MULTIPLE
+          : MAIN_VIEW_COMMANDS.PACK_SINGLE;
+      } else {
+        command = useMultiple
+          ? MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE
+          : MAIN_VIEW_COMMANDS.CLEAN_SINGLE;
+      }
+
       const isToolUse = sessionType$.get() === SESSION_TYPES.TOOL_USE;
-      postActionPlan(
-        planPackClean(
-          {
-            primaryInput: primaryInputFile(),
-            model: model$.get(),
-            inputFiles: multiFiles$.get().inputFiles,
-            agent: isToolUse ? toolUseAgent$.get() : workflowAgent$.get(),
-          },
-          action,
-        ),
+      postMessage(command, {
+        inputFile,
+        agent: isToolUse ? toolUseAgent$.get() : workflowAgent$.get(),
+        model: selectedModel,
+        inputFiles: useMultiple ? additionalInputFiles : undefined,
+      } satisfies Omit<PackMultipleMessage, 'command'>);
+
+      const actionLabel = capitalize(action);
+      showInformation(
+        useMultiple
+          ? `${actionLabel}ing multiple files: ${filteredInputs.join(', ')}`
+          : `${actionLabel}ing single file: ${inputFile}`,
       );
       break;
     }
@@ -419,72 +426,77 @@ export function runLatexDiffsAction(
 ): void {
   const sf = singleFiles$.get();
   switch (action) {
-    case 'latexdiff':
-      postActionPlan(
-        planLatexdiff({
-          inputFile: primaryInputFile(),
-          baseFile: sf.baseFile,
-          editedFile: sf.editedFile,
-        }),
+    case 'latexdiff': {
+      postMessage(MAIN_VIEW_COMMANDS.LATEXDIFF, {
+        inputFile: primaryInputFile(),
+        baseFile: sf.baseFile,
+        editedFile: sf.editedFile,
+      } satisfies Omit<LatexdiffMessage, 'command'>);
+      showInformation(
+        `Running LaTeX diff between ${sf.baseFile} and ${sf.editedFile}`,
       );
       break;
-    case 'latexdiffvc':
-      postActionPlan(
-        planLatexdiffVC({
-          inputFile: primaryInputFile(),
-          baseFile: sf.baseFile,
-          commitHash: commit$.get(),
-        }),
+    }
+    case 'latexdiffvc': {
+      const commitHash = commit$.get();
+      postMessage(MAIN_VIEW_COMMANDS.LATEXDIFFVC, {
+        inputFile: primaryInputFile(),
+        baseFile: sf.baseFile,
+        commitHash,
+      } satisfies Omit<LatexdiffvcMessage, 'command'>);
+      showInformation(
+        `Running LaTeX diff with version control: ${sf.baseFile} at commit ${commitHash}`,
       );
       break;
+    }
     case 'packLatexdiffvc':
-      postActionPlan(
-        planLatexdiffVCPack(
-          {
-            inputFile: primaryInputFile(),
-            baseFile: sf.baseFile,
-            commitHash: commit$.get(),
-          },
-          'pack',
-        ),
+    case 'cleanLatexdiffvc': {
+      const commitHash = commit$.get();
+      const clean = action === 'cleanLatexdiffvc';
+      const command = clean
+        ? MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC
+        : MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC;
+      postMessage(command, {
+        inputFile: primaryInputFile(),
+        baseFile: sf.baseFile,
+        commitHash,
+        clean,
+      } satisfies Omit<PackLatexdiffvcMessage, 'command'>);
+      const actionLabel = clean ? 'Clean' : 'Pack';
+      showInformation(
+        `${actionLabel}ing LaTeX diff with version control: ${sf.baseFile} at commit ${commitHash}`,
       );
       break;
-    case 'cleanLatexdiffvc':
-      postActionPlan(
-        planLatexdiffVCPack(
-          {
-            inputFile: primaryInputFile(),
-            baseFile: sf.baseFile,
-            commitHash: commit$.get(),
-          },
-          'clean',
-        ),
-      );
+    }
+    case 'merge': {
+      const inputFile = primaryInputFile();
+      if (!inputFile || !sf.editedFile) {
+        showInformation('Please select both input and edited files to merge');
+        break;
+      }
+      postMessage(MAIN_VIEW_COMMANDS.MERGE, {
+        inputFile,
+        editedFile: sf.editedFile,
+      } satisfies Omit<MergeMessage, 'command'>);
+      showInformation(`Merging files: ${inputFile} and ${sf.editedFile}`);
       break;
-    case 'merge':
-      postActionPlan(
-        planMerge({
-          primaryInput: primaryInputFile(),
-          editedFile: sf.editedFile,
-        }),
-      );
-      break;
+    }
     case 'compare':
-      postActionPlan(
-        planCompare(
-          { baseFile: sf.baseFile, editedFile: sf.editedFile },
-          MAIN_VIEW_COMMANDS.COMPARE,
-        ),
-      );
+    case 'accept': {
+      if (!sf.baseFile || !sf.editedFile) {
+        showInformation('Please select both base and edited files to compare');
+        break;
+      }
+      const command =
+        action === 'compare'
+          ? MAIN_VIEW_COMMANDS.COMPARE
+          : MAIN_VIEW_COMMANDS.ACCEPT_EDITED;
+      postMessage(command, {
+        baseFile: sf.baseFile,
+        editedFile: sf.editedFile,
+      } satisfies Omit<CompareMessage, 'command'>);
       break;
-    case 'accept':
-      postActionPlan(
-        planCompare(
-          { baseFile: sf.baseFile, editedFile: sf.editedFile },
-          MAIN_VIEW_COMMANDS.ACCEPT_EDITED,
-        ),
-      );
-      break;
+    }
   }
 }
 
