@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
@@ -109,6 +109,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   const [feedbackValue, setFeedbackValue] = useState('');
   const [feedbackExitCount, setFeedbackExitCount] = useState(0);
   const feedbackModeRef = useRef(false);
+  const feedbackWasCompactRef = useRef(false);
   const title = `Apply edit to ${props.request.path}?`;
   const diffWidth = clampModalWidth(columns - EDIT_DIFF_PADDING);
   const maxDiffLines = editApprovalDiffRowsBudget({
@@ -164,15 +165,20 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
       }) <= COMPACT_DIFF_DISPLAY_LINES,
     [columns, props.availableRows, title],
   );
+  useEffect(() => {
+    if (feedbackMode && feedbackDiffIsCompact(feedbackValue)) {
+      feedbackWasCompactRef.current = true;
+    }
+  }, [feedbackDiffIsCompact, feedbackMode, feedbackValue]);
   const handleFeedbackModeChange = useCallback(
     (active: boolean) => {
-      if (
-        feedbackModeRef.current &&
-        !active &&
-        feedbackDiffIsCompact(feedbackValue)
-      ) {
+      if (active && feedbackDiffIsCompact(feedbackValue)) {
+        feedbackWasCompactRef.current = true;
+      }
+      if (feedbackModeRef.current && !active && feedbackWasCompactRef.current) {
         setFeedbackExitCount((count) => count + 1);
       }
+      if (!active) feedbackWasCompactRef.current = false;
       feedbackModeRef.current = active;
       setFeedbackMode(active);
     },
