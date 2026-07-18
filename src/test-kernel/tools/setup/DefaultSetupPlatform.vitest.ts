@@ -14,9 +14,12 @@ import * as codexAuth from '@auth/codex';
 import * as codexSubscription from '@model/codexSubscriptionActive';
 import {
   __resetSetupPlatformForTests,
-  createDefaultSetupPlatform,
+  getChatGptSubscriptionStatus,
+  getSetupAuthStatus,
   getSetupPlatform,
   setSetupPlatform,
+  setupSecrets,
+  texraScopedConfig,
 } from '@tools/setup/platform';
 
 setupPlatform({
@@ -36,10 +39,10 @@ afterEach(() => {
 
 beforeEach(() => {
   __resetSetupPlatformForTests();
-  setSetupPlatform(createDefaultSetupPlatform('extension'));
+  setSetupPlatform({ host: 'extension' });
 });
 
-describe('default setup platform', () => {
+describe('shared setup capabilities', () => {
   it('derives credential and configuration operations from platform ports', async () => {
     const setup = getSetupPlatform();
 
@@ -47,24 +50,24 @@ describe('default setup platform', () => {
     expect(setup.commands).toBeUndefined();
     expect(setup.extensions).toBeUndefined();
     expect(setup.terminal).toBeUndefined();
-    await expect(setup.secrets.storedApiKeyExists('openai')).resolves.toBe(
-      true,
-    );
-    await expect(setup.secrets.hasUsableApiKey('openai')).resolves.toBe(true);
-    await expect(setup.secrets.gitHubTokenExists()).resolves.toBe('env');
-    await expect(setup.secrets.listStoredKeys()).resolves.toContain(
+    await expect(setupSecrets.storedApiKeyExists('openai')).resolves.toBe(true);
+    await expect(setupSecrets.hasUsableApiKey('openai')).resolves.toBe(true);
+    await expect(setupSecrets.gitHubTokenExists()).resolves.toBe('env');
+    await expect(setupSecrets.listStoredKeys()).resolves.toContain(
       'apiKey.openai',
     );
 
-    expect(setup.config.get('texra.bib.defaultPath')).toBe('references.bib');
-    await setup.config.update('texra.bib.defaultPath', 'main.bib', 'user');
+    expect(texraScopedConfig.get('texra.bib.defaultPath')).toBe(
+      'references.bib',
+    );
+    await texraScopedConfig.update('texra.bib.defaultPath', 'main.bib', 'user');
     expect(
       platform().config.inspect('texra.bib.defaultPath')?.globalValue,
     ).toBe('main.bib');
   });
 
   it('keeps the configuration boundary at texra.* keys', () => {
-    expect(() => getSetupPlatform().config.get('editor.fontSize')).toThrow(
+    expect(() => texraScopedConfig.get('editor.fontSize')).toThrow(
       'Setup config adapter is scoped to texra.* keys',
     );
   });
@@ -75,9 +78,7 @@ describe('default setup platform', () => {
       'apiKey.openai',
     ]);
 
-    await expect(
-      getSetupPlatform().secrets.storedApiKeyExists('openai'),
-    ).resolves.toBe(true);
+    await expect(setupSecrets.storedApiKeyExists('openai')).resolves.toBe(true);
   });
 
   it('does not report a rejected relay token as authenticated', async () => {
@@ -87,7 +88,7 @@ describe('default setup platform', () => {
       vi.fn().mockResolvedValue(new Response(null, { status: 401 })),
     );
 
-    await expect(getSetupPlatform().auth.getStatus()).resolves.toEqual({
+    await expect(getSetupAuthStatus()).resolves.toEqual({
       authenticated: false,
       remoteAgentCatalogAvailable: false,
     });
@@ -112,7 +113,7 @@ describe('default setup platform', () => {
     } as Awaited<ReturnType<typeof SupabaseClient.getUser>>);
     vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue('Max');
 
-    await expect(getSetupPlatform().auth.getStatus()).resolves.toEqual({
+    await expect(getSetupAuthStatus()).resolves.toEqual({
       authenticated: true,
       remoteAgentCatalogAvailable: true,
       email: 'researcher@example.com',
@@ -128,7 +129,7 @@ describe('default setup platform', () => {
     vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue(null);
     vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue('Max');
 
-    await expect(getSetupPlatform().auth.getStatus()).resolves.toEqual({
+    await expect(getSetupAuthStatus()).resolves.toEqual({
       authenticated: true,
       remoteAgentCatalogAvailable: false,
       email: undefined,
@@ -137,10 +138,8 @@ describe('default setup platform', () => {
   });
 
   it('keeps API-key-only setup usable without reporting sign-in', async () => {
-    const setup = getSetupPlatform();
-
-    await expect(setup.secrets.anyUsableCredentialExists()).resolves.toBe(true);
-    await expect(setup.auth.getStatus()).resolves.toEqual({
+    await expect(setupSecrets.anyUsableCredentialExists()).resolves.toBe(true);
+    await expect(getSetupAuthStatus()).resolves.toEqual({
       authenticated: false,
       remoteAgentCatalogAvailable: false,
     });
@@ -153,8 +152,7 @@ describe('default setup platform', () => {
       accountId: 'account-private-id',
     });
 
-    const status =
-      await getSetupPlatform().modelAccess.getChatGptSubscriptionStatus();
+    const status = await getChatGptSubscriptionStatus();
 
     expect(status.signedIn).toBe(true);
     expect(status).not.toHaveProperty('account');
@@ -171,8 +169,9 @@ describe('default setup platform', () => {
       false,
     );
 
-    await expect(
-      getSetupPlatform().modelAccess.getChatGptSubscriptionStatus(),
-    ).resolves.toEqual({ signedIn: true, enabled: false });
+    await expect(getChatGptSubscriptionStatus()).resolves.toEqual({
+      signedIn: true,
+      enabled: false,
+    });
   });
 });

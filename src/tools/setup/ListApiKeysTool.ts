@@ -9,7 +9,7 @@ import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from '../core/define';
-import { getSetupPlatform } from './platform';
+import { setupSecrets } from './platform';
 
 const ListApiKeysInputSchema = z
   .strictObject({})
@@ -31,8 +31,7 @@ export class ListApiKeysTool extends defineTool({
   schema: ListApiKeysInputSchema,
 }) {
   protected async execute(_input: ListApiKeysInput): Promise<ToolResult> {
-    const platform = getSetupPlatform();
-    const storedKeys = await platform.secrets.listStoredKeys();
+    const storedKeys = await setupSecrets.listStoredKeys();
 
     if (storedKeys.length === 0) {
       return {
@@ -43,7 +42,7 @@ export class ListApiKeysTool extends defineTool({
       };
     }
 
-    const { providers } = platform.secrets;
+    const { providers } = setupSecrets;
     const knownProviderKeyMap = new Map(
       providers.map((p) => [apiKeySecretName(p), p] as const),
     );

@@ -13,7 +13,12 @@ import { extendEnvPath, safeHomedir } from '@utils/system/platformPaths';
 
 // Local file imports
 import { defineTool } from '../core/define';
-import { getSetupPlatform } from './platform';
+import {
+  getChatGptSubscriptionStatus,
+  getSetupAuthStatus,
+  getSetupPlatform,
+  setupSecrets,
+} from './platform';
 import { CORE_LATEX_TOOLS, IMAGE_TOOLS, locateTool } from './toolProbing';
 
 const ProbeEnvironmentInputSchema = z
@@ -66,7 +71,7 @@ export class ProbeEnvironmentTool extends defineTool({
     const pm = detectPackageManager();
     // Authentication verifies a configured relay token and primes the shared
     // status cache. Credential readiness must read that settled state.
-    const auth = await platform.auth.getStatus().catch(() => ({
+    const auth = await getSetupAuthStatus().catch(() => ({
       authenticated: false as const,
     }));
 
@@ -81,19 +86,19 @@ export class ProbeEnvironmentTool extends defineTool({
       Promise.all(PROBED_CORE_TOOLS.map(checkTool)),
       Promise.all(OPTIONAL_TOOLS.map(checkTool)),
       Promise.all(
-        platform.secrets.providers.map(async (provider) => {
-          const origin = await platform.secrets
+        setupSecrets.providers.map(async (provider) => {
+          const origin = await setupSecrets
             .apiKeyOrigin(provider)
             .catch(() => 'unknown' as const);
           return { provider, origin };
         }),
       ),
-      platform.secrets
+      setupSecrets
         .anyUsableCredentialExists()
         .then((available) => ({ available, status: 'known' as const }))
         .catch(() => ({ available: false, status: 'unknown' as const })),
-      platform.secrets.gitHubTokenExists().catch(() => 'none' as const),
-      platform.modelAccess.getChatGptSubscriptionStatus().catch(() => ({
+      setupSecrets.gitHubTokenExists().catch(() => 'none' as const),
+      getChatGptSubscriptionStatus().catch(() => ({
         signedIn: false,
         enabled: false,
       })),
