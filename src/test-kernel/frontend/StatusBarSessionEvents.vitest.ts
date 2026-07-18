@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports - status bar state
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { subscribeStatusBarSessionEvents } from '@frontend/statusBar/statusBarSessionEvents';
-import { STREAM_PHASE } from '@shared/schemas';
+import { STREAM_PHASE, type StorageKey } from '@shared/schemas';
 
 describe('subscribeStatusBarSessionEvents', () => {
   it('tracks stream status changes from the session status plane', () => {
@@ -52,10 +52,9 @@ describe('subscribeStatusBarSessionEvents', () => {
       streamId: 'stream-a',
       event: {
         type: 'usage',
-        stats: {},
-        data: {
+        payload: {
           streamId: 'stream-a',
-          storageKey: 'run-a',
+          storageKey: 'run-a' as StorageKey,
           usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
         },
       },
@@ -71,7 +70,7 @@ describe('subscribeStatusBarSessionEvents', () => {
     dispose();
   });
 
-  it('ignores malformed usage payloads and usage for unknown streams', () => {
+  it('ignores usage for unknown streams', () => {
     const session = createTestSession();
     const tracker = new StatusBarUsageTracker();
     const onStatusChanged = vi.fn();
@@ -88,22 +87,9 @@ describe('subscribeStatusBarSessionEvents', () => {
       streamId: 'stream-a',
       event: {
         type: 'usage',
-        stats: {},
-        data: {
+        payload: {
           streamId: 'stream-a',
-          storageKey: 'run-a',
-          usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
-        },
-      },
-    });
-    session.events.emit({
-      scope: 'run',
-      streamId: 'stream-a',
-      event: {
-        type: 'usage',
-        stats: {},
-        data: {
-          streamId: 'stream-a',
+          storageKey: 'run-a' as StorageKey,
           usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
         },
       },

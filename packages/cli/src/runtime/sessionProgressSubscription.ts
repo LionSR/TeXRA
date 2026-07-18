@@ -1,5 +1,4 @@
 import { RUN_FACT_EVENT_TYPES, type AgentEvent } from '@agent/trace';
-import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import type {
   SessionEventHub,
   SessionFact,
@@ -60,8 +59,7 @@ function projectCliRunFact(
   event: AgentEvent,
 ): CliProjectedNdjsonProgressEvent | undefined {
   if (event.type === 'usage') {
-    const payload = toUpdateStreamUsagePayload(event.data, streamId);
-    return payload ? { event: 'updateStreamUsage', payload } : undefined;
+    return { event: 'updateStreamUsage', payload: event.payload };
   }
 
   if (event.type === 'run.config') {

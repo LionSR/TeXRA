@@ -1,5 +1,4 @@
 // Local imports - runtime events
-import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 // Local imports - status bar state
@@ -31,11 +30,7 @@ export function subscribeStatusBarSessionEvents({
     (sessionEvent) => {
       if (sessionEvent.scope !== 'run') return;
       if (sessionEvent.event.type !== 'usage') return;
-      const payload = toUpdateStreamUsagePayload(
-        sessionEvent.event.data,
-        sessionEvent.streamId,
-      );
-      if (!payload) return;
+      const { payload } = sessionEvent.event;
       if (tracker.recordUsage(payload.streamId, payload.usage)) {
         onUsageChanged();
       }

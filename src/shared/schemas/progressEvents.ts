@@ -8,7 +8,7 @@ import type {
   RoundStage,
 } from './streamState';
 import type { StreamPhase, StreamSubstate } from './stream';
-import type { TokenUsageStats } from './usage';
+import type { ExtendedTokenUsageStats } from './usage';
 
 /**
  * Fact-native payload vocabulary for session- and run-scoped runtime facts.
@@ -103,7 +103,7 @@ export interface UpdateStreamUsagePayload {
   streamId: StreamTabId;
   storageKey: StorageKey;
   executionId?: ExecutionId;
-  usage: TokenUsageStats;
+  usage: ExtendedTokenUsageStats;
 }
 
 export interface UpdateConversationProgressPayload {
