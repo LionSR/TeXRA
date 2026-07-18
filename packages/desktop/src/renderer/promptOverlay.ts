@@ -4,7 +4,7 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - prompt protocol
 import {
-  buildDesktopSettlePromptMessage,
+  DESKTOP_PROMPT_COMMANDS,
   type DesktopSettlePromptMessage,
   type DesktopShowPromptMessage,
 } from '../desktopPromptMessages';
@@ -66,7 +66,11 @@ export function createDesktopPromptOverlay(
     request: DesktopShowPromptMessage,
     value: string | null,
   ): void {
-    send(buildDesktopSettlePromptMessage(request.requestId, value));
+    send({
+      command: DESKTOP_PROMPT_COMMANDS.SETTLE,
+      requestId: request.requestId,
+      value,
+    });
   }
 
   function settle(value: string | null): void {
