@@ -64,6 +64,26 @@ describe('cleanupStaleDiffFile', () => {
 
     assert.strictEqual(deleted.length, 0);
   });
+
+  it('skips deletion when the target is not the base itself (copy/sibling write)', async () => {
+    const base = createWorkspaceLocation('/ws/paper.tex', 'paper.tex');
+    const sibling = createWorkspaceLocation(
+      '/ws/paper_copy.tex',
+      'paper_copy.tex',
+    );
+    const deleted: FileLocation[] = [];
+
+    await cleanupStaleDiffFile(
+      base,
+      '/ws/paper_correct.tex',
+      sibling,
+      async (location) => {
+        deleted.push(location);
+      },
+    );
+
+    assert.strictEqual(deleted.length, 0);
+  });
 });
 
 describe('acceptEditedFileReplace', () => {
@@ -127,6 +147,19 @@ describe('acceptEditedFileReplace', () => {
       'paper_diff.tex',
     );
     const edited = createWorkspaceLocation('/ws/paper.tex', 'paper.tex');
+    const ports = buildPorts();
+
+    const accepted = await acceptEditedFileReplace(base, edited, ports);
+
+    assert.strictEqual(accepted, true);
+    assert.strictEqual(ports.deleted.length, 0);
+  });
+
+  it('does not clean up the base diff when accepting into a new sibling (extension mismatch)', async () => {
+    // Different extensions -> getAcceptedFileTarget resolves to a new
+    // sibling file, leaving base untouched, so its diff is still accurate.
+    const base = createWorkspaceLocation('/ws/paper.tex', 'paper.tex');
+    const edited = createWorkspaceLocation('/ws/notes.md', 'notes.md');
     const ports = buildPorts();
 
     const accepted = await acceptEditedFileReplace(base, edited, ports);

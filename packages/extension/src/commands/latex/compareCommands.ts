@@ -177,11 +177,6 @@ function buildCopyTarget(
 type ReplaceOrCopyTarget = {
   targetLocation: FileLocation;
   targetFileName: string;
-  /** 'replace' overwrites baseLocation itself — the same target
-   *  acceptEditedFileReplace would resolve to — so it's eligible for the
-   *  same stale-diff cleanup. 'copy' leaves baseLocation untouched, so its
-   *  diff against the edited content is still meaningful and is kept. */
-  kind: 'replace' | 'copy';
 };
 
 /** Offer a quick-pick between replacing the original and saving a postfixed
@@ -201,12 +196,12 @@ async function pickReplaceOrCopyTarget(
     {
       label: '$(replace) Replace original',
       description: replaceTarget.targetFileName,
-      target: { ...replaceTarget, kind: 'replace' },
+      target: replaceTarget,
     },
     {
       label: '$(files) Save as copy',
       description: copyTarget.targetFileName,
-      target: { ...copyTarget, kind: 'copy' },
+      target: copyTarget,
     },
   ];
 
@@ -274,7 +269,7 @@ async function handleAcceptEdited(
     );
     if (!resolved) return false;
 
-    const { targetLocation, targetFileName, kind } = resolved;
+    const { targetLocation, targetFileName } = resolved;
     const targetExisted = await FlexibleFS.exists(targetLocation);
 
     const editedContent = await FlexibleFS.read(editedLocation);
@@ -286,17 +281,15 @@ async function handleAcceptEdited(
       });
     }
 
-    // Only 'replace' overwrites the base file in place, matching the
-    // no-copyMeta path's semantics — 'copy' leaves the base (and its diff)
-    // untouched, so cleanup would delete a still-meaningful diff.
-    if (kind === 'replace') {
-      await cleanupStaleDiffFile(
-        fileToUseLocation,
-        editedLocation.absolutePath,
-        targetLocation,
-        deleteDiffFileNonFatal,
-      );
-    }
+    // No-ops unless targetLocation is fileToUseLocation itself: "save as
+    // copy" and an extension-mismatched "replace" both leave the base (and
+    // its diff) untouched, so cleanup would delete a still-meaningful diff.
+    await cleanupStaleDiffFile(
+      fileToUseLocation,
+      editedLocation.absolutePath,
+      targetLocation,
+      deleteDiffFileNonFatal,
+    );
 
     const successMessage = buildAcceptSuccessMessage(
       targetFileName,

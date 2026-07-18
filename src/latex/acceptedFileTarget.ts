@@ -188,13 +188,20 @@ export function diffFileLocation(
 
 /**
  * Delete the stale `_diff` companion file for (baseLocation, editedPath) via
- * `deleteFile`, unless doing so would delete `targetLocation` itself — the
- * file just accepted. This coincidence is possible whenever `baseLocation`'s
- * own name already matches the generated diff-name pattern for `editedPath`
- * (e.g. accepting into a base literally named `<edited-stem>_diff.tex`, or
- * accepting directly into a latexdiff artifact). `deleteFile` is expected to
- * swallow its own errors (missing/locked file); this only guards against
- * deleting content that was never stale.
+ * `deleteFile`. No-ops in two cases:
+ *
+ * - `targetLocation` isn't `baseLocation` itself: a copy/sibling write (an
+ *   extension mismatch resolving to a new file via {@link getAcceptedFileTarget},
+ *   or an explicit "save as copy" choice) leaves the base untouched, so the
+ *   diff comparing it against `editedPath` is still accurate.
+ * - The derived diff location equals `targetLocation`: possible whenever
+ *   `baseLocation`'s own name already matches the generated diff-name
+ *   pattern for `editedPath` (e.g. accepting into a base literally named
+ *   `<edited-stem>_diff.tex`, or accepting directly into a latexdiff
+ *   artifact) — deleting it would delete the file just accepted.
+ *
+ * `deleteFile` is expected to swallow its own errors (missing/locked file);
+ * this only guards against deleting content that was never stale.
  */
 export async function cleanupStaleDiffFile(
   baseLocation: FileLocation,
@@ -202,6 +209,7 @@ export async function cleanupStaleDiffFile(
   targetLocation: FileLocation,
   deleteFile: (location: FileLocation) => Promise<void>,
 ): Promise<void> {
+  if (targetLocation.absolutePath !== baseLocation.absolutePath) return;
   const diffLocation = diffFileLocation(baseLocation, editedPath);
   if (diffLocation.absolutePath === targetLocation.absolutePath) return;
   await deleteFile(diffLocation);
