@@ -6,8 +6,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliToolUseResumeResolution } from '@cli/runtime/sessionResume';
@@ -389,14 +389,16 @@ describe('runChat signal ownership wiring', () => {
     const streamId = 'stream-resume' as StreamTabId;
     const resolution: CliToolUseResumeResolution = {
       kind: 'toolUse',
-      streamId,
-      snapshot: { streamId } as ToolUseSessionSnapshot,
-      config: AgentConfigSchema.parse({
-        agent: 'orchestrator',
-        model: 'gpt-test',
-        agentCategory: 'toolUse',
-        cliMultiAgentPresetId: 'physicist',
-        delegationAgentScope,
+      ...createToolUseResumeData({
+        executionId: 'exec-resume' as ExecutionId,
+        streamId,
+        agentConfig: AgentConfigSchema.parse({
+          agent: 'orchestrator',
+          model: 'gpt-test',
+          agentCategory: 'toolUse',
+          cliMultiAgentPresetId: 'physicist',
+          delegationAgentScope,
+        }),
       }),
     };
     const { runChat } = await import('@cli/chat/tui/runChatTui');

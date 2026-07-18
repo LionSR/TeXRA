@@ -201,33 +201,29 @@ export function createNativeToolUseStrategy(
             substate: STREAM_SUBSTATE.RESUMING,
           },
         );
-        return await resumeToolUseFromSnapshot(
-          resume.snapshot,
-          params.runtimeHost,
-          {
-            session: params.parentSession,
-            approvalPromptsUnavailable: params.approvalPromptsUnavailable,
-            runtimeUnavailableTools: params.runtimeUnavailableTools,
-            parentStreamId: params.orchestratorStreamId,
-            // The loop's queue never admits synthetic goal continuations for
-            // a subagent, but its batch type is shared with root flows. Keep
-            // the existing defensive downgrade rather than silently dropping
-            // a future synthetic item.
-            drainedFollowUps: followUps.map((item) => ({
-              text: item.text,
-              displayText: item.displayText,
-              mediaFiles: item.mediaFiles,
-              origin: item.origin === 'synthetic' ? 'user' : item.origin,
-            })),
-            onProgress: (update) => ports.notify(update),
-            onRunError: (err) => {
-              lastErr = err;
-            },
-            onRun: (handle) => {
-              runHandle = handle;
-            },
+        return await resumeToolUseFromSnapshot(resume, params.runtimeHost, {
+          session: params.parentSession,
+          approvalPromptsUnavailable: params.approvalPromptsUnavailable,
+          runtimeUnavailableTools: params.runtimeUnavailableTools,
+          parentStreamId: params.orchestratorStreamId,
+          // The loop's queue never admits synthetic goal continuations for
+          // a subagent, but its batch type is shared with root flows. Keep
+          // the existing defensive downgrade rather than silently dropping
+          // a future synthetic item.
+          drainedFollowUps: followUps.map((item) => ({
+            text: item.text,
+            displayText: item.displayText,
+            mediaFiles: item.mediaFiles,
+            origin: item.origin === 'synthetic' ? 'user' : item.origin,
+          })),
+          onProgress: (update) => ports.notify(update),
+          onRunError: (err) => {
+            lastErr = err;
           },
-        );
+          onRun: (handle) => {
+            runHandle = handle;
+          },
+        });
       }),
 
     isTerminal: (turn) => !isWaitingFlowResult(turn),

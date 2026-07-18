@@ -4,6 +4,7 @@ import '@test/support/defaultSessionTestSetup';
 // Test support imports
 import { setTimeout as sleep } from 'node:timers/promises';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 // Third-party imports
 
@@ -254,16 +255,12 @@ describe('NativeToolUseStrategy', () => {
     });
 
     const config = { agentCategory: 'toolUse' };
-    const snapshot = {
-      agentConfig: config,
+    const snapshot = createToolUseResumeData({
       executionId: params.executionId,
-      messages: [],
-    };
-    mocks.readConfig.mockResolvedValue(config);
-    mocks.retrieveSessionResumeData.mockResolvedValue({
-      type: 'toolUse',
-      snapshot,
+      streamId: childStreamId,
     });
+    mocks.readConfig.mockResolvedValue(config);
+    mocks.retrieveSessionResumeData.mockResolvedValue(snapshot);
     mocks.resumeToolUseFromSnapshot.mockResolvedValueOnce({
       category: 'toolUse',
       outcome: 'completed',
@@ -322,14 +319,9 @@ describe('NativeToolUseStrategy', () => {
     });
 
     mocks.readConfig.mockResolvedValue({ agentCategory: 'toolUse' });
-    mocks.retrieveSessionResumeData.mockResolvedValue({
-      type: 'toolUse',
-      snapshot: {
-        agentConfig: {},
-        executionId: params.executionId,
-        messages: [],
-      },
-    });
+    mocks.retrieveSessionResumeData.mockResolvedValue(
+      createToolUseResumeData({ executionId: params.executionId }),
+    );
     const resumeError = new Error('resume storage unreadable');
     mocks.resumeToolUseFromSnapshot.mockRejectedValueOnce(resumeError);
 

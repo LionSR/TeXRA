@@ -3,6 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,7 +22,6 @@ import {
 import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
-import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -34,8 +34,8 @@ const STREAM = 'stream:tooluse-resume' as StreamTabId;
 const runtimeHost = { emit: vi.fn() };
 let recordedSession: ReturnType<typeof recordSessionEvents> | undefined;
 
-function snapshot(parentStreamId?: StreamTabId): ToolUseSessionSnapshot {
-  return { streamId: STREAM, parentStreamId } as ToolUseSessionSnapshot;
+function snapshot(parentStreamId?: StreamTabId) {
+  return createToolUseResumeData({ streamId: STREAM, parentStreamId });
 }
 
 interface CapturedResumeOptions {

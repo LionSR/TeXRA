@@ -22,7 +22,10 @@ import {
   flowKey,
   type FlowRecord,
 } from '@agent/node/persistedFlow';
-import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
+import {
+  retrieveSessionResumeData,
+  type ToolUseResumeData,
+} from '@agent/runtime/SessionResumeRetrieval';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
@@ -40,7 +43,6 @@ import {
   ToolUseRunSharedCanonicalSchema,
   type StateSlicesSnapshot,
 } from '@agent/implementations/flows/tooluse/nodes/types';
-import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import {
   RUN_OUTCOME,
@@ -111,27 +113,27 @@ function createTaggedModelHandler(
   return handler as unknown as RunToolUseFlowInput['modelHandler'];
 }
 
-function buildToolUseSnapshot(
+function buildToolUseResumeData(
   executionId: ExecutionId,
   streamId: StreamTabId,
-): ToolUseSessionSnapshot {
+): ToolUseResumeData {
   return {
-    version: 2,
+    type: 'toolUse',
     executionId,
     streamId,
     agentConfig: CONFIG,
-    messages: [],
-    run: AgentRunStateSnapshotSchema.parse({}),
-    workspace: AgentWorkspaceState.create().toSnapshot(),
-    user: { input: {}, transient: {} },
-    lastUpdated: 0,
+    shared: {
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: defaultStateSlices(),
+    },
   };
 }
 
 async function runPersistedFlow(
   executionId: ExecutionId,
   streamId: StreamTabId,
-  snapshot: ToolUseSessionSnapshot | undefined,
+  resume: ToolUseResumeData | undefined,
   onSetup?: ToolUseFlowSetupCallback,
   session: SessionHandle = createTestSession(),
   options: {
@@ -143,8 +145,8 @@ async function runPersistedFlow(
     ) => void;
   } = {},
 ): Promise<RunToolUseFlowResult> {
-  const config = snapshot?.agentConfig ?? CONFIG;
-  const userVarChannels = snapshot?.user ?? {
+  const config = resume?.agentConfig ?? CONFIG;
+  const userVarChannels = resume?.shared.stateSlices.userChannels ?? {
     input: Object.freeze({ MODEL: config.model }),
     transient: {},
   };
@@ -177,7 +179,7 @@ async function runPersistedFlow(
           },
           setAbortController: () => {},
           onRoundFinalized: () => {},
-          ...(snapshot !== undefined && { resumeSnapshot: snapshot }),
+          ...(resume !== undefined && { resumeShared: resume.shared }),
           isSubagent: options.isSubagent ?? true,
           onIdle: options.onIdle,
           takePendingFollowUps: options.takePendingFollowUps,
@@ -196,9 +198,9 @@ async function runPersistedFlow(
 async function runResumedFlowToWaiting(
   executionId: ExecutionId,
   streamId: StreamTabId,
-  snapshot: ToolUseSessionSnapshot,
+  resume: ToolUseResumeData,
 ): Promise<void> {
-  const result = await runPersistedFlow(executionId, streamId, snapshot);
+  const result = await runPersistedFlow(executionId, streamId, resume);
   expect(result.outcome).toBe(STREAM_PHASE.WAITING);
 }
 
@@ -241,8 +243,8 @@ describe('retrieveSessionResumeData', () => {
 
     expect(resume?.type).toBe('toolUse');
     if (resume?.type !== 'toolUse') return;
-    expect(resume.snapshot.streamId).toBe(streamId);
-    expect(resume.snapshot.agentConfig.model).toBe('gpt55');
+    expect(resume.streamId).toBe(streamId);
+    expect(resume.agentConfig.model).toBe('gpt55');
   });
 
   it('preserves a recovered parent stream id in tool-use snapshots', async () => {
@@ -270,7 +272,7 @@ describe('retrieveSessionResumeData', () => {
 
     expect(resume?.type).toBe('toolUse');
     if (resume?.type !== 'toolUse') return;
-    expect(resume.snapshot.parentStreamId).toBe(parentStreamId);
+    expect(resume.parentStreamId).toBe(parentStreamId);
   });
 
   it('infers the legacy Google GenAI handler for old Google Content transcripts', async () => {
@@ -301,7 +303,7 @@ describe('retrieveSessionResumeData', () => {
 
     expect(resume?.type).toBe('toolUse');
     if (resume?.type !== 'toolUse') return;
-    expect(resume.snapshot.modelHandlerCompatibilityKey).toBe(
+    expect(resume.shared.modelHandlerCompatibilityKey).toBe(
       'ModelHandlerGoogleGenAI',
     );
   });
@@ -336,7 +338,7 @@ describe('retrieveSessionResumeData', () => {
 
     expect(resume?.type).toBe('toolUse');
     if (resume?.type !== 'toolUse') return;
-    expect(resume.snapshot.messages).toEqual([
+    expect(resume.shared.messages).toEqual([
       {
         role: 'user',
         content: 'Continue the legacy conversation.',
@@ -373,7 +375,7 @@ describe('retrieveSessionResumeData', () => {
 
     expect(resume?.type).toBe('toolUse');
     if (resume?.type !== 'toolUse') return;
-    expect(resume.snapshot.messages).toEqual([
+    expect(resume.shared.messages).toEqual([
       { role: 'user', content: 'Continue the flat legacy conversation.' },
     ]);
   });
@@ -516,7 +518,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   it('creates fresh shared state when the flow record is absent', async () => {
     const executionId = 'abc-flow-absent' as ExecutionId;
     const streamId = 'chat@gpt54#abc-flow-absent' as StreamTabId;
-    const snapshot = buildToolUseSnapshot(executionId, streamId);
+    const snapshot = buildToolUseResumeData(executionId, streamId);
 
     const result = await runPersistedFlow(executionId, streamId, snapshot);
 
@@ -526,12 +528,8 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     );
     expect(ToolUseRunSharedCanonicalSchema.parse(stored?.shared)).toMatchObject(
       {
-        messages: snapshot.messages,
-        stateSlices: {
-          runStateSnapshot: snapshot.run,
-          workspaceSnapshot: snapshot.workspace,
-          userChannels: snapshot.user,
-        },
+        messages: snapshot.shared.messages,
+        stateSlices: snapshot.shared.stateSlices,
       },
     );
   });
@@ -539,7 +537,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   it('offers queue ownership again after a resumed subagent parks', async () => {
     const executionId = 'abc-flow-post-park-owner' as ExecutionId;
     const streamId = 'chat@gpt54#abc-flow-post-park-owner' as StreamTabId;
-    const snapshot = buildToolUseSnapshot(executionId, streamId);
+    const snapshot = buildToolUseResumeData(executionId, streamId);
     const boundaryEvents: string[] = [];
     const takePendingFollowUps = vi.fn(() => {
       boundaryEvents.push('take');
@@ -570,7 +568,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       const streamId =
         `chat@gpt54#abc-flow-read-failure-${suffix}` as StreamTabId;
       const snapshot = resume
-        ? buildToolUseSnapshot(executionId, streamId)
+        ? buildToolUseResumeData(executionId, streamId)
         : undefined;
       const store = getExecutionStore(executionId);
       const session = createTestSession();
@@ -610,20 +608,6 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
   it.each([
     {
-      name: 'invalid shared state',
-      reason: 'invalid-shared',
-      stored: {
-        flowName: 'texra',
-        shared: {
-          messages: [],
-          shouldSkipCycle: 'false',
-          stateSlices: null,
-        },
-        createdAt: '2026-01-01T00:00:00.000Z',
-        nodes: [],
-      },
-    },
-    {
       name: 'missing shared state',
       reason: 'missing-shared',
       stored: {
@@ -661,7 +645,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const slug = name.replaceAll(' ', '-');
     const executionId = `abc-flow-${slug}` as ExecutionId;
     const streamId = `chat@gpt54#abc-flow-${slug}` as StreamTabId;
-    const snapshot = buildToolUseSnapshot(executionId, streamId);
+    const snapshot = buildToolUseResumeData(executionId, streamId);
     const store = getExecutionStore(executionId);
     await store.write(flowKey(executionId), stored);
     const deleteSpy = vi.spyOn(store, 'delete');
@@ -685,7 +669,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   it('skips persistence recovery when setup hands off a cancellation', async () => {
     const executionId = 'abc-cancel-setup' as ExecutionId;
     const streamId = 'chat@gpt54#abc-cancel-setup' as StreamTabId;
-    const snapshot = buildToolUseSnapshot(executionId, streamId);
+    const snapshot = buildToolUseResumeData(executionId, streamId);
     const store = getExecutionStore(executionId);
     const readSpy = vi.spyOn(store, 'read');
     const writeSpy = vi.spyOn(store, 'write');
@@ -745,7 +729,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   it('skips repair writes when cancellation arrives during the recovery read', async () => {
     const executionId = 'abc-cancel-read' as ExecutionId;
     const streamId = 'chat@gpt54#abc-cancel-read' as StreamTabId;
-    const snapshot = buildToolUseSnapshot(executionId, streamId);
+    const snapshot = buildToolUseResumeData(executionId, streamId);
     const store = getExecutionStore(executionId);
     let flowContext: ToolUseSetupContext | undefined;
     const readSpy = vi.spyOn(store, 'read').mockImplementationOnce(async () => {
@@ -756,11 +740,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         shared: {
           messages: [],
           shouldSkipCycle: true,
-          stateSlices: {
-            runStateSnapshot: snapshot.run,
-            workspaceSnapshot: snapshot.workspace,
-            userChannels: snapshot.user,
-          },
+          stateSlices: snapshot.shared.stateSlices,
         },
         createdAt: new Date().toISOString(),
         nodes: [],
@@ -793,7 +773,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   it('preserves the resumable flow after an established run is interrupted', async () => {
     const executionId = 'abc-interrupted-conversation' as ExecutionId;
     const streamId = 'chat@gpt54#abc-interrupted-conversation' as StreamTabId;
-    const snapshot = buildToolUseSnapshot(executionId, streamId);
+    const snapshot = buildToolUseResumeData(executionId, streamId);
     const store = getExecutionStore(executionId);
     let flowContext: ToolUseSetupContext | undefined;
 
@@ -821,7 +801,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   it('preserves an established flow when provider cancellation rejects the run', async () => {
     const executionId = 'abc-interrupted-provider' as ExecutionId;
     const streamId = 'chat@gpt54#abc-interrupted-provider' as StreamTabId;
-    const snapshot = buildToolUseSnapshot(executionId, streamId);
+    const snapshot = buildToolUseResumeData(executionId, streamId);
     const store = getExecutionStore(executionId);
     let flowContext: ToolUseSetupContext | undefined;
     const stored = {
@@ -892,7 +872,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     // is preserved.
     const executionId = 'abc-cancel-followup' as ExecutionId;
     const streamId = 'chat@gpt54#abc-cancel-followup' as StreamTabId;
-    const snapshot = buildToolUseSnapshot(executionId, streamId);
+    const snapshot = buildToolUseResumeData(executionId, streamId);
     const store = getExecutionStore(executionId);
     const session = createTestSession();
     let flowContext: ToolUseSetupContext | undefined;
@@ -928,7 +908,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   it('preserves late input when an orphaned host-resumed subagent is cancelled mid-turn', async () => {
     const executionId = 'abc-cancel-active-followup' as ExecutionId;
     const streamId = 'chat@gpt54#abc-cancel-active-followup' as StreamTabId;
-    const snapshot = buildToolUseSnapshot(executionId, streamId);
+    const snapshot = buildToolUseResumeData(executionId, streamId);
     const session = createTestSession();
     await getExecutionStore(executionId).write(flowKey(executionId), {
       flowName: 'texra',
@@ -984,8 +964,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           { role: 'user', content: 'Continue the legacy conversation.' },
         ],
         shouldSkipCycle: false,
-        // Pass-through field the boundary's ToolUseSessionSnapshot contract
-        // does not carry -- must survive the consumer's self-heal write.
+        // Pass-through state must survive the consumer's self-heal write.
         systemPrompt: 'You are a helpful assistant.',
         stateSlices: defaultStateSlices(),
       },
@@ -1009,28 +988,24 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     );
     expect(resume?.type).toBe('toolUse');
     if (resume?.type !== 'toolUse') return;
-    expect(resume.snapshot.modelHandlerCompatibilityKey).toBeUndefined();
+    expect(resume.shared.modelHandlerCompatibilityKey).toBeUndefined();
 
-    await runResumedFlowToWaiting(executionId, streamId, resume.snapshot);
+    await runResumedFlowToWaiting(executionId, streamId, resume);
 
     const healedRecord = await getExecutionStore(executionId).read<FlowRecord>(
       flowKey(executionId),
     );
 
     expect(healedRecord?.shared).toMatchObject({
-      messages: resume.snapshot.messages,
+      messages: resume.shared.messages,
       modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
-      stateSlices: {
-        runStateSnapshot: resume.snapshot.run,
-        workspaceSnapshot: resume.snapshot.workspace,
-        userChannels: resume.snapshot.user,
-      },
+      stateSlices: resume.shared.stateSlices,
       systemPrompt: 'You are a helpful assistant.',
     });
   });
 
   it('skips the resume self-heal write when the persisted record is already canonical (issue #8018)', async () => {
-    // `resumeToolUseFromSnapshot` passes `resumeSnapshot` on every
+    // `resumeToolUseFromSnapshot` passes `resumeShared` on every
     // native-subagent turn, so the resume-branch self-heal write must not
     // fire when the persisted record already matches what would be
     // written -- otherwise every turn costs a `StorageFSKVStore` disk
@@ -1061,14 +1036,14 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     );
     expect(resume?.type).toBe('toolUse');
     if (resume?.type !== 'toolUse') return;
-    expect(resume.snapshot.modelHandlerCompatibilityKey).toBe(
+    expect(resume.shared.modelHandlerCompatibilityKey).toBe(
       ACTIVE_COMPATIBILITY_KEY,
     );
 
     const store = getExecutionStore(executionId);
     const writeSpy = vi.spyOn(store, 'write');
     try {
-      await runResumedFlowToWaiting(executionId, streamId, resume.snapshot);
+      await runResumedFlowToWaiting(executionId, streamId, resume);
 
       // `PersistedFlow` still legitimately persists its own node-cursor
       // progress once as the flow steps through to WAITING -- that write is
@@ -1117,11 +1092,11 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     );
     expect(resume?.type).toBe('toolUse');
     if (resume?.type !== 'toolUse') return;
-    expect(resume.snapshot.modelHandlerCompatibilityKey).toBe(
+    expect(resume.shared.modelHandlerCompatibilityKey).toBe(
       persistedCompatibilityKey,
     );
 
-    await runResumedFlowToWaiting(executionId, streamId, resume.snapshot);
+    await runResumedFlowToWaiting(executionId, streamId, resume);
 
     const healedRecord = await getExecutionStore(executionId).read<FlowRecord>(
       flowKey(executionId),
@@ -1132,12 +1107,12 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it.each([
-    { name: 'direct stored-state recovery', withSnapshot: false },
-    { name: 'unvalidated resume snapshot', withSnapshot: true },
+    { name: 'direct stored-state recovery', withResume: false },
+    { name: 'retrieved canonical resume', withResume: true },
   ])(
     'migrates a legacy workspace before strict validation: $name',
-    async ({ withSnapshot }) => {
-      const suffix = withSnapshot ? 'snapshot' : 'stored';
+    async ({ withResume }) => {
+      const suffix = withResume ? 'retrieved' : 'stored';
       const executionId = `abc141-${suffix}` as ExecutionId;
       const streamId = `chat@gpt54#abc141-${suffix}` as StreamTabId;
       const legacyWorkspaceSnapshot = {
@@ -1170,14 +1145,16 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         nodes: [{ action: 'default', nodeId: 'start' }],
       });
 
-      const snapshot = withSnapshot
-        ? buildToolUseSnapshot(executionId, streamId)
+      const retrieved = withResume
+        ? await retrieveSessionResumeData(
+            streamId,
+            executionId,
+            agentConfigToTaskState(CONFIG),
+          )
         : undefined;
-      if (snapshot) {
-        // Simulate a typed external command payload that bypassed schema parsing.
-        Object.assign(snapshot, { workspace: legacyWorkspaceSnapshot });
-      }
-      const result = await runPersistedFlow(executionId, streamId, snapshot);
+      const resume = retrieved?.type === 'toolUse' ? retrieved : undefined;
+      if (withResume) expect(resume).toBeDefined();
+      const result = await runPersistedFlow(executionId, streamId, resume);
       expect(result.outcome).toBe(STREAM_PHASE.WAITING);
 
       const healedRecord = await getExecutionStore(

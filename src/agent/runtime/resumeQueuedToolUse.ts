@@ -1,4 +1,3 @@
-import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import type {
   FollowUpQueueBatchItem,
   FollowUpQueueInput,
@@ -14,6 +13,7 @@ import {
   type SubagentRunOptions,
 } from './executeAgent';
 import { defaultSession } from './SessionHandle';
+import type { ToolUseResumeData } from './SessionResumeRetrieval';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
@@ -65,7 +65,7 @@ export interface ResumeQueuedToolUseOptions extends SubagentRunOptions {
  */
 export async function resumeQueuedToolUseSnapshot(
   streamId: StreamTabId,
-  snapshot: ToolUseSessionSnapshot,
+  resume: ToolUseResumeData,
   runtimeHost: AgentRuntimeHost,
   options: ResumeQueuedToolUseOptions,
 ): Promise<boolean> {
@@ -118,12 +118,12 @@ export async function resumeQueuedToolUseSnapshot(
     // `ToolUseWaitNode` — only its child-run loop's queue wait consumes it),
     // so re-queued items would sit unconsumed until the next wake. A root
     // cursor accepts either route; the handoff works for both.
-    const result = await resumeToolUseFromSnapshot(snapshot, runtimeHost, {
+    const result = await resumeToolUseFromSnapshot(resume, runtimeHost, {
       session: options.session,
       approvalPromptsUnavailable: options.approvalPromptsUnavailable,
       runtimeUnavailableTools: options.runtimeUnavailableTools,
       parentStreamId:
-        options.parentStreamId ?? snapshot.parentStreamId ?? undefined,
+        options.parentStreamId ?? resume.parentStreamId ?? undefined,
       onFollowUpConsumed: () => {
         followUps = [];
         options.onFollowUpConsumed?.();

@@ -6,6 +6,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AgentConfigSchema,
@@ -92,26 +93,21 @@ describe('resolveCliResumeSnapshot', () => {
     expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
   });
 
-  it('returns toolUse with snapshot + streamId when a flow record exists', async () => {
+  it('returns canonical tool-use state when a flow record exists', async () => {
     const config = toolUseConfig();
-    const snapshot = {
+    const resume = createToolUseResumeData({
       executionId: EXECUTION_ID,
       streamId: STREAM_ID,
       agentConfig: { ...config, model: 'gpt-5.5' },
-    };
-    mocks.readCliHistoryConfig.mockResolvedValue(config);
-    mocks.retrieveSessionResumeData.mockResolvedValue({
-      type: 'toolUse',
-      snapshot,
     });
+    mocks.readCliHistoryConfig.mockResolvedValue(config);
+    mocks.retrieveSessionResumeData.mockResolvedValue(resume);
 
     const result = await resolve();
 
     expect(result).toEqual({
       kind: 'toolUse',
-      snapshot,
-      streamId: STREAM_ID,
-      config: snapshot.agentConfig,
+      ...resume,
     });
     // The stream id is re-derived from agent + model + execution id so resume
     // reuses the original stream/transcript.

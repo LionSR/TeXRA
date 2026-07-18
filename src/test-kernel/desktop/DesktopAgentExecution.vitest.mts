@@ -10,8 +10,10 @@ import {
 
 // Local imports - agent state
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { noopTrace, type AgentEvent, type AgentTrace } from '@agent/trace';
 import {
+  AgentConfigSchema,
   WorkflowAgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
@@ -224,11 +226,11 @@ type ProgressMessage = {
 
 /** Shared fixture for the tool-use "search" agentConfig used across several
  * resume tests below. */
-const SEARCH_TOOL_USE_AGENT_CONFIG = {
+const SEARCH_TOOL_USE_AGENT_CONFIG = AgentConfigSchema.parse({
   agent: 'search',
   model: 'deepseekproT',
   agentCategory: AgentCategory.ToolUse,
-} as const;
+});
 
 /**
  * Registers the desktop module mocks once and imports the bridge module.
@@ -1630,14 +1632,13 @@ describe('DesktopProgressBridge', () => {
 
   it('does not resume a stream deleted in this desktop session', async () => {
     const taskState = { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG };
-    const retrieveSessionResumeData = vi.fn(async () => ({
-      type: 'toolUse',
-      snapshot: {
-        executionId: 'ec1001',
-        streamId: 'stream-1',
+    const retrieveSessionResumeData = vi.fn(async () =>
+      createToolUseResumeData({
+        executionId: 'ec1001' as ExecutionId,
+        streamId: 'stream-1' as StreamTabId,
         agentConfig: taskState.agentConfig,
-      },
-    }));
+      }),
+    );
     const bridge = await createBridge([], {
       canonicalStreamIds: ['stream-1'],
       retrieveSessionResumeData,
@@ -1992,17 +1993,15 @@ describe('DesktopProgressBridge', () => {
         _executionId: string,
         _runState: unknown,
         options?: { parentStreamId?: StreamTabId },
-      ) => ({
-        type: 'toolUse',
-        snapshot: {
-          executionId: 'ec1001',
-          streamId: 'stream-1',
+      ) =>
+        createToolUseResumeData({
+          executionId: 'ec1001' as ExecutionId,
+          streamId: 'stream-1' as StreamTabId,
           agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG,
           ...(options?.parentStreamId !== undefined && {
             parentStreamId: options.parentStreamId,
           }),
-        },
-      }),
+        }),
     );
     const resumeToolUseFromSnapshot = vi.fn(async (...args: unknown[]) => {
       const options = args[2] as { onFollowUpConsumed?: () => void };
@@ -2072,14 +2071,13 @@ describe('DesktopProgressBridge', () => {
   });
 
   it('keeps queued follow-ups when tool-use resume fails', async () => {
-    const retrieveSessionResumeData = vi.fn(async () => ({
-      type: 'toolUse',
-      snapshot: {
-        executionId: 'ec1001',
-        streamId: 'stream-1',
+    const retrieveSessionResumeData = vi.fn(async () =>
+      createToolUseResumeData({
+        executionId: 'ec1001' as ExecutionId,
+        streamId: 'stream-1' as StreamTabId,
         agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG,
-      },
-    }));
+      }),
+    );
     const resumeToolUseFromSnapshot = vi.fn(async () => {
       throw new Error('resume failed');
     });
@@ -2141,14 +2139,11 @@ describe('DesktopProgressBridge', () => {
     const retrieveSessionResumeData = vi.fn(async () => {
       retrieveStarted();
       await retrieveGate;
-      return {
-        type: 'toolUse',
-        snapshot: {
-          executionId: 'ec1001',
-          streamId: 'stream-1',
-          agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG,
-        },
-      };
+      return createToolUseResumeData({
+        executionId: 'ec1001' as ExecutionId,
+        streamId: 'stream-1' as StreamTabId,
+        agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG,
+      });
     });
     const bridge = await createBridge([], { retrieveSessionResumeData });
 

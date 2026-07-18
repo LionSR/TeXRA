@@ -2,6 +2,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 const retrieveSessionResumeDataMock = vi.hoisted(() => vi.fn());
 
@@ -54,11 +55,8 @@ describe('resolveAndResumeStream', () => {
   });
 
   it('routes a tool-use snapshot to the resume port', async () => {
-    const snapshot = { streamId: STREAM, executionId: 'exec-1' };
-    retrieveSessionResumeDataMock.mockResolvedValue({
-      type: 'toolUse',
-      snapshot,
-    });
+    const snapshot = createToolUseResumeData({ streamId: STREAM });
+    retrieveSessionResumeDataMock.mockResolvedValue(snapshot);
     const ports = basePorts();
 
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(true);
@@ -68,11 +66,11 @@ describe('resolveAndResumeStream', () => {
 
   it('passes recovered parent stream identity to resume retrieval', async () => {
     const parentStreamId = 'stream:parent' as StreamTabId;
-    const snapshot = { streamId: STREAM, executionId: 'exec-1' };
-    retrieveSessionResumeDataMock.mockResolvedValue({
-      type: 'toolUse',
-      snapshot,
+    const snapshot = createToolUseResumeData({
+      streamId: STREAM,
+      parentStreamId,
     });
+    retrieveSessionResumeDataMock.mockResolvedValue(snapshot);
     const ports = basePorts({
       resolveResumeState: vi.fn(async () => ({
         runState: { agent: 'a', model: 'm' } as never,
@@ -215,10 +213,9 @@ describe('resolveAndResumeStream', () => {
       STREAM,
       STREAM_STATUS.RUNNING,
     );
-    retrieveSessionResumeDataMock.mockResolvedValue({
-      type: 'toolUse',
-      snapshot: { streamId: STREAM, executionId: 'exec-1' },
-    });
+    retrieveSessionResumeDataMock.mockResolvedValue(
+      createToolUseResumeData({ streamId: STREAM }),
+    );
     const ports = basePorts({ streamStatus: new StreamStatusMachine() });
 
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(true);
@@ -317,10 +314,9 @@ describe('resolveAndResumeStream', () => {
     const reached = new Promise<void>((resolve) => {
       reachedPort = resolve;
     });
-    retrieveSessionResumeDataMock.mockResolvedValue({
-      type: 'toolUse',
-      snapshot: { streamId: STREAM },
-    });
+    retrieveSessionResumeDataMock.mockResolvedValue(
+      createToolUseResumeData({ streamId: STREAM }),
+    );
     const ports = basePorts({
       resumeToolUse: vi.fn(async () => {
         reachedPort();

@@ -469,13 +469,13 @@ export function createChatSessionController(
       clearLocalTranscript();
       followUpQueue.clear();
       session.streamId = resolution.streamId;
-      session.executionId = resolution.snapshot.executionId;
+      session.executionId = resolution.executionId;
       publishChatTuiRunState(session);
       rootStreamId.set(resolution.streamId);
 
-      const currentModel = resolution.config.model;
+      const currentModel = resolution.agentConfig.model;
       const sessionContext = getSessionContext(currentModel);
-      activateAgentConfig(resolution.config, 'history');
+      activateAgentConfig(resolution.agentConfig, 'history');
 
       await defaultSession().transcripts.ensureLoaded(resolution.streamId);
       await snapshotStore.load([resolution.streamId]);
@@ -512,7 +512,7 @@ export function createChatSessionController(
 
       const runChain = setCliHelperModel(currentModel)
         .then(() =>
-          resumeToolUseFromSnapshot(resolution.snapshot, runtimeHost, {
+          resumeToolUseFromSnapshot(resolution, runtimeHost, {
             approvalPromptsUnavailable: approvalsUnavailable,
             runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
             drainedFollowUps: supersededRecovery?.followUps.map((followUp) => ({

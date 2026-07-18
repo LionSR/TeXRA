@@ -123,6 +123,7 @@ vi.mock('@cli/runtime/sessionResume', () => ({
 
 import { StreamSnapshotStore } from '@transcript';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { wakeQueuedFollowUpStream } from '@agent/followUp/ToolUseFollowUp';
 import type { ResumeStreamPorts } from '@agent/runtime/resolveAndResumeStream';
@@ -286,9 +287,11 @@ function makeResumeSnapshotStore(options: {
 function makeResolvedResume() {
   return {
     kind: 'toolUse' as const,
-    streamId: 'stream-resume' as StreamTabId,
-    snapshot: { executionId: 'exec-resume' } as never,
-    config: makeResumeConfig(),
+    ...createToolUseResumeData({
+      executionId: 'exec-resume' as ExecutionId,
+      streamId: 'stream-resume' as StreamTabId,
+      agentConfig: makeResumeConfig(),
+    }),
   };
 }
 
@@ -652,7 +655,7 @@ describe('createChatSessionController', () => {
 
     await ctrl.resume('exec-resume' as ExecutionId, {
       ...makeResolvedResume(),
-      config,
+      agentConfig: config,
     });
 
     expect(sessionMeta.get()).toMatchObject({
@@ -882,7 +885,6 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore }),
     );
     const preResolved = makeResolvedResume();
-    const { snapshot } = preResolved;
     mocks.resumeToolUseFromSnapshot.mockImplementationOnce(
       async (
         _snapshot: unknown,
@@ -909,7 +911,7 @@ describe('createChatSessionController', () => {
     await resumeStarted;
     await vi.waitFor(() =>
       expect(mocks.resumeToolUseFromSnapshot).toHaveBeenCalledWith(
-        snapshot,
+        preResolved,
         expect.any(Object),
         expect.objectContaining({
           isCancellationRequested: expect.any(Function),

@@ -3,8 +3,8 @@ import * as vscode from 'vscode';
 
 // Local imports - agent
 import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
+import type { ToolUseResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -15,7 +15,7 @@ interface ResumeAgentResult {
 }
 
 interface ResumeAgentCommandPayload {
-  snapshot: ToolUseSessionSnapshot;
+  snapshot: ToolUseResumeData;
   followUp?: string;
 }
 
@@ -32,15 +32,15 @@ const CHANNEL = 'resumeCommand';
  * this adapter to preserve each host's pre-unification resume behavior.
  */
 export function resumeExtensionToolUseSnapshot(
-  snapshot: ToolUseSessionSnapshot,
+  resume: ToolUseResumeData,
   followUp?: string,
 ): Promise<boolean> {
   if (!getToolUsePersistenceEnabled()) {
     return Promise.resolve(false);
   }
   return resumeQueuedToolUseSnapshot(
-    snapshot.streamId,
-    snapshot,
+    resume.streamId,
+    resume,
     extensionAgentRuntimeHost,
     {
       ...(followUp !== undefined && {
@@ -67,16 +67,16 @@ export function registerResumeAgentCommand(
       handler: async (
         payload: ResumeAgentCommandPayload | undefined,
       ): Promise<ResumeAgentResult> => {
-        const snapshot = payload?.snapshot;
-        if (!snapshot) {
+        const resume = payload?.snapshot;
+        if (!resume) {
           return { success: false };
         }
-        if (defaultSession().status.isActiveOrResuming(snapshot.streamId)) {
+        if (defaultSession().status.isActiveOrResuming(resume.streamId)) {
           return { success: false };
         }
 
         const success = await resumeExtensionToolUseSnapshot(
-          snapshot,
+          resume,
           payload?.followUp,
         );
         return { success };

@@ -34,7 +34,7 @@ vi.mock('@agent/runtime/resumeQueuedToolUse', () => ({
   resumeQueuedToolUseSnapshot: mocks.resumeQueuedToolUseSnapshot,
 }));
 
-import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import {
   registerResumeAgentCommand,
   resumeExtensionToolUseSnapshot,
@@ -43,8 +43,8 @@ import type { StreamTabId } from '@shared/schemas';
 
 const STREAM = 'stream:ext-resume' as StreamTabId;
 
-function snapshot(): ToolUseSessionSnapshot {
-  return { streamId: STREAM } as ToolUseSessionSnapshot;
+function snapshot() {
+  return createToolUseResumeData({ streamId: STREAM });
 }
 
 describe('resumeExtensionToolUseSnapshot', () => {

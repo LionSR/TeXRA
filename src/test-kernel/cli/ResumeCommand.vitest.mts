@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { ExecutionId } from '@shared/schemas';
 
@@ -50,12 +51,7 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
 function resumableResolution() {
   return {
     kind: 'toolUse',
-    snapshot: {},
-    streamId: 'stream-1',
-    config: {
-      agent: 'review',
-      model: 'gpt-5',
-    },
+    ...createToolUseResumeData(),
   } as const;
 }
 
