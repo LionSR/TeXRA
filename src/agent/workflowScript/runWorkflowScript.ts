@@ -219,11 +219,10 @@ export async function runWorkflowScript(
   const emit = (event: WorkflowScriptEvent) => onEvent?.(event);
 
   const rememberFatalRunError = (error: unknown): WorkflowRunAbortError => {
-    const fatal =
+    fatalRunError ??=
       error instanceof WorkflowRunAbortError
         ? error
         : new WorkflowRunAbortError(toErrorMessage(error));
-    fatalRunError ??= fatal;
     runAbort.abort();
     return fatalRunError;
   };
@@ -257,10 +256,9 @@ export async function runWorkflowScript(
   ): Promise<string | undefined> {
     if (runAbort.signal.aborted) {
       throw rememberFatalRunError(
-        fatalRunError ??
-          new WorkflowRunAbortError(
-            'Workflow run aborted (timeout or call cap); no new agent() calls may start.',
-          ),
+        new WorkflowRunAbortError(
+          'Workflow run aborted (timeout or call cap); no new agent() calls may start.',
+        ),
       );
     }
     if (!isNonEmptyString(prompt)) {
@@ -285,24 +283,38 @@ export async function runWorkflowScript(
     }
     issuedCallKeys.add(key);
 
-    const prior = priorEntries.get(index);
-    if (prior && prior.key === key) {
-      let payload: string | undefined;
-      let normalizedResult: unknown;
+    // Serialize (and round-trip deserialize) a result value for the journal,
+    // emitting the matching `agent:end` failure event if it isn't
+    // bridge-safe. Shared by the cached-replay and live-call paths below,
+    // which differ only in the source value, its label, and `cached`.
+    const journalValue = (
+      value: unknown,
+      valueLabel: string,
+      cached: boolean,
+    ): { payload: string | undefined; normalizedResult: unknown } => {
       try {
-        payload = serializeBridgeValue(prior.result, 'Cached agent() result');
-        normalizedResult = deserializeBridgeValue(payload);
+        const payload = serializeBridgeValue(value, valueLabel);
+        return { payload, normalizedResult: deserializeBridgeValue(payload) };
       } catch (error) {
         emit({
           type: 'agent:end',
           index,
           label,
           phase: callOptions.phase,
-          cached: true,
+          cached,
           error: toErrorMessage(error),
         });
         throw error;
       }
+    };
+
+    const prior = priorEntries.get(index);
+    if (prior && prior.key === key) {
+      const { payload, normalizedResult } = journalValue(
+        prior.result,
+        'Cached agent() result',
+        true,
+      );
       journal.set(index, { ...prior, result: normalizedResult });
       emit({
         type: 'agent:end',
@@ -333,10 +345,9 @@ export async function runWorkflowScript(
         // call was queued must not launch fresh model work.
         if (runAbort.signal.aborted) {
           throw rememberFatalRunError(
-            fatalRunError ??
-              new WorkflowRunAbortError(
-                'Workflow run aborted while this agent() call was queued.',
-              ),
+            new WorkflowRunAbortError(
+              'Workflow run aborted while this agent() call was queued.',
+            ),
           );
         }
         return runAgent({
@@ -364,24 +375,13 @@ export async function runWorkflowScript(
       return 'null';
     }
 
-    let payload: string | undefined;
-    let normalizedResult: unknown;
-    try {
-      // Validate before journaling. Resume storage must never contain a value
-      // that the sandbox boundary cannot reproduce.
-      payload = serializeBridgeValue(result, 'agent() result');
-      normalizedResult = deserializeBridgeValue(payload);
-    } catch (error) {
-      emit({
-        type: 'agent:end',
-        index,
-        label,
-        phase: callOptions.phase,
-        cached: false,
-        error: toErrorMessage(error),
-      });
-      throw error;
-    }
+    // Validate before journaling. Resume storage must never contain a value
+    // that the sandbox boundary cannot reproduce.
+    const { payload, normalizedResult } = journalValue(
+      result,
+      'agent() result',
+      false,
+    );
     await recordJournalEntry(
       { index, key, result: normalizedResult },
       label,

@@ -1,10 +1,17 @@
 import { formatResultCount } from '@utils/text/stringUtils';
 
+/** Joins non-empty parts (in order) with "and", dropping undefined slots. */
+function joinCountedParts(parts: ReadonlyArray<string | undefined>): string {
+  return parts
+    .filter((part): part is string => part !== undefined)
+    .join(' and ');
+}
+
 export function formatExecutionHistoryRetention(
   activeCount: number,
   failedCount: number,
 ): string {
-  const retained = [
+  const retained = joinCountedParts([
     activeCount > 0
       ? formatResultCount(activeCount, 'active execution')
       : undefined,
@@ -15,8 +22,8 @@ export function formatExecutionHistoryRetention(
           'executions that could not be removed',
         )
       : undefined,
-  ].filter((part): part is string => part !== undefined);
-  return `Cleared stored history except for ${retained.join(' and ')}.`;
+  ]);
+  return `Cleared stored history except for ${retained}.`;
 }
 
 export function formatCliHistoryDeletionSummary(counts: {
@@ -50,7 +57,7 @@ export function formatStreamDeletionRetention(
   activeCount: number,
   failedCount: number,
 ): string {
-  const reasons = [
+  const reasons = joinCountedParts([
     activeCount > 0
       ? formatResultCount(activeCount, 'active stream')
       : undefined,
@@ -61,6 +68,6 @@ export function formatStreamDeletionRetention(
           'streams that could not be deleted',
         )
       : undefined,
-  ].filter((reason): reason is string => reason !== undefined);
-  return `Kept ${reasons.join(' and ')}.`;
+  ]);
+  return `Kept ${reasons}.`;
 }

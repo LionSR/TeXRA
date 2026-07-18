@@ -117,11 +117,7 @@ export class ProgressApiKeyRetryController {
       }
     }
 
-    if (!shouldProceed) {
-      return false;
-    }
-
-    return true;
+    return shouldProceed;
   }
 
   async applyOwnApiKeyRouting(

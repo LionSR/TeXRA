@@ -53,6 +53,15 @@ function statusError(statusCode: number): Error {
   });
 }
 
+function createLoggerStub() {
+  return {
+    debug: () => undefined,
+    info: () => undefined,
+    warn: () => undefined,
+    error: () => undefined,
+  };
+}
+
 describe('ModelHandlerOpenRouterNative routing precedence', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -135,15 +144,6 @@ describe('ModelHandlerOpenRouterNative Moonshot fixed temperature', () => {
     };
   }
 
-  function createLoggerStub() {
-    return {
-      debug: () => undefined,
-      info: () => undefined,
-      warn: () => undefined,
-      error: () => undefined,
-    };
-  }
-
   it('omits temperature for Kimi K3 routed through OpenRouter', async () => {
     // Same rule as the direct Moonshot path: K3 fixes sampling server-side
     // and requires requests to omit temperature. OpenRouter forwards to the
@@ -194,15 +194,6 @@ describe('ModelHandlerOpenRouterNative Moonshot fixed temperature', () => {
 });
 
 describe('ModelHandlerOpenRouterNative response mode discrimination', () => {
-  function createLoggerStub() {
-    return {
-      debug: () => undefined,
-      info: () => undefined,
-      warn: () => undefined,
-      error: () => undefined,
-    };
-  }
-
   it('rejects a non-streaming response on the streaming path', async () => {
     const handler = new ModelHandlerOpenRouterNative(buildConfig());
     (handler as any).setLogger(createLoggerStub());

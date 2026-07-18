@@ -11,18 +11,16 @@ const mocks = vi.hoisted(() => ({
   finalizeExecution: vi.fn(),
   markOwnedExecutionLeaseUndurable: vi.fn(),
   registerExecution: vi.fn(),
-  releaseOwnedExecutionLeaseBestEffort: vi.fn(),
+  completeOwnedExecutionLease: vi.fn(),
 }));
 
 vi.mock('@agent/storage', () => ({
   abandonOwnedExecutionLease: mocks.abandonOwnedExecutionLease,
   runWithOwnedExecutionLease: mocks.runWithOwnedExecutionLease,
   acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
-  completeOwnedExecutionLease: mocks.releaseOwnedExecutionLeaseBestEffort,
+  completeOwnedExecutionLease: mocks.completeOwnedExecutionLease,
   finalizeExecution: mocks.finalizeExecution,
   registerExecution: mocks.registerExecution,
-  releaseOwnedExecutionLeaseBestEffort:
-    mocks.releaseOwnedExecutionLeaseBestEffort,
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
@@ -53,7 +51,7 @@ describe('runAgent execution ownership', () => {
     vi.clearAllMocks();
     mocks.registerExecution.mockResolvedValue(undefined);
     mocks.acquireResumedExecutionLease.mockResolvedValue('acquired');
-    mocks.releaseOwnedExecutionLeaseBestEffort.mockResolvedValue(undefined);
+    mocks.completeOwnedExecutionLease.mockResolvedValue(undefined);
     flushArtifacts.mockResolvedValue(undefined);
     mocks.finalizeExecution.mockResolvedValue({
       status: 'durable',
@@ -76,7 +74,7 @@ describe('runAgent execution ownership', () => {
 
     expect(mocks.registerExecution).toHaveBeenCalledOnce();
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
-    expect(mocks.releaseOwnedExecutionLeaseBestEffort).toHaveBeenCalledWith(
+    expect(mocks.completeOwnedExecutionLease).toHaveBeenCalledWith(
       EXECUTION_ID,
     );
   });
@@ -91,7 +89,7 @@ describe('runAgent execution ownership', () => {
     expect(mocks.acquireResumedExecutionLease).toHaveBeenCalledWith(
       EXECUTION_ID,
     );
-    expect(mocks.releaseOwnedExecutionLeaseBestEffort).toHaveBeenCalledWith(
+    expect(mocks.completeOwnedExecutionLease).toHaveBeenCalledWith(
       EXECUTION_ID,
     );
   });
@@ -108,11 +106,9 @@ describe('runAgent execution ownership', () => {
         flowRecord: 'deleted',
       };
     });
-    mocks.releaseOwnedExecutionLeaseBestEffort.mockImplementationOnce(
-      async () => {
-        order.push('release');
-      },
-    );
+    mocks.completeOwnedExecutionLease.mockImplementationOnce(async () => {
+      order.push('release');
+    });
     await expect(
       runAgent(
         { config: CONFIG, executionId: EXECUTION_ID },
@@ -151,7 +147,7 @@ describe('runAgent execution ownership', () => {
     ).rejects.toBe(launchError);
 
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
-    expect(mocks.releaseOwnedExecutionLeaseBestEffort).toHaveBeenCalledWith(
+    expect(mocks.completeOwnedExecutionLease).toHaveBeenCalledWith(
       EXECUTION_ID,
     );
   });
@@ -193,11 +189,9 @@ describe('runAgent execution ownership', () => {
         outcome: 'COMPLETED',
       };
     });
-    mocks.releaseOwnedExecutionLeaseBestEffort.mockImplementationOnce(
-      async () => {
-        order.push('release');
-      },
-    );
+    mocks.completeOwnedExecutionLease.mockImplementationOnce(async () => {
+      order.push('release');
+    });
     flushArtifacts.mockImplementationOnce(async () => {
       order.push('session-artifacts');
     });
@@ -247,7 +241,7 @@ describe('runAgent execution ownership', () => {
       runError,
       artifactError,
     ]);
-    expect(mocks.releaseOwnedExecutionLeaseBestEffort).not.toHaveBeenCalled();
+    expect(mocks.completeOwnedExecutionLease).not.toHaveBeenCalled();
     expect(mocks.abandonOwnedExecutionLease).toHaveBeenCalledWith(EXECUTION_ID);
     expect(flushArtifacts).toHaveBeenCalledOnce();
   });

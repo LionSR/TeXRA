@@ -404,7 +404,6 @@ export async function runScriptInSandbox(
           if (settlement.outcome.error) throw settlement.outcome.error;
           return settlement.outcome.value;
         case 'host-failure':
-          throw settlement.error;
         case 'aborted':
           throw settlement.error;
         case 'timeout':
@@ -518,17 +517,14 @@ function installHostBridge(
   setGlobal(context, '__wfHostSync', syncDispatcher);
   syncDispatcher.dispose();
 
+  const readOptionalString = (handle: QuickJSHandle): string | undefined =>
+    context.typeof(handle) === 'string' ? context.getString(handle) : undefined;
+
   const resultDispatcher = context.newFunction(
     '__wfHostDeliver',
     (payloadHandle, errorHandle) => {
-      const payload =
-        context.typeof(payloadHandle) === 'string'
-          ? context.getString(payloadHandle)
-          : undefined;
-      const errorJson =
-        context.typeof(errorHandle) === 'string'
-          ? context.getString(errorHandle)
-          : undefined;
+      const payload = readOptionalString(payloadHandle);
+      const errorJson = readOptionalString(errorHandle);
       deliver(parseOutcome(payload, errorJson));
       return context.undefined;
     },

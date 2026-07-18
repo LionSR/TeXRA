@@ -380,6 +380,15 @@ export class StreamSnapshotStore {
     return record.writeKv;
   }
 
+  /** Drop cached KV handles so the next access re-resolves against the stream's current directory. */
+  private invalidateKvHandles(stream: StreamTabId): void {
+    const record = this.records.get(stream);
+    if (record) {
+      record.kv = undefined;
+      record.writeKv = undefined;
+    }
+  }
+
   private async listStreamsUnder(root: string): Promise<StreamTabId[]> {
     try {
       const entries = await StorageFS.readDir(root);
@@ -999,11 +1008,7 @@ export class StreamSnapshotStore {
         if (!hasLiveData) {
           await StorageFS.ensureDir(STREAM_DATA_DIR);
           await StorageFS.rename(stagedDir, liveDir);
-          const record = this.records.get(stream);
-          if (record) {
-            record.kv = undefined;
-            record.writeKv = undefined;
-          }
+          this.invalidateKvHandles(stream);
           if (liveStreams.has(stream)) restored.push(stream);
           else pendingCleanup.push(stream);
           return;
@@ -1127,11 +1132,7 @@ export class StreamSnapshotStore {
           state.phase = 'transitioning';
           await StorageFS.rename(stagedDir, liveDir);
           outcome = 'restored';
-          const record = this.records.get(stream);
-          if (record) {
-            record.kv = undefined;
-            record.writeKv = undefined;
-          }
+          this.invalidateKvHandles(stream);
         }
         if (!hasLiveData && (liveWasAuthoritative || !hasStagedData)) {
           await StorageFS.ensureDir(liveDir);
@@ -1808,11 +1809,7 @@ export class StreamSnapshotStore {
       if (this.streamVersion(stream) !== version) return;
       await this.flushWritesForStream(stream);
       if (this.streamVersion(stream) !== version) return;
-      const record = this.records.get(stream);
-      if (record) {
-        record.kv = undefined;
-        record.writeKv = undefined;
-      }
+      this.invalidateKvHandles(stream);
       const data = await readStreamData(this.kv(stream));
       if (this.streamVersion(stream) !== version) return;
       await this.applyStreamData(stream, data);

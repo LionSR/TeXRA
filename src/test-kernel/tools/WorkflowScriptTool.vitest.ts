@@ -84,22 +84,19 @@ function runExecutionIdFor(name: string): ExecutionId {
   return deriveExecutionId({ checkpointId: checkpointIdFor(name) });
 }
 
-async function callTool(options?: {
-  readonly script?: string;
-  readonly recordCost?: (cost: number) => void;
-}) {
+async function callTool(overrideScript?: string) {
   return withRunContext(parentContext(), () =>
     withToolFileInteractionContext(
       {
         tracker: {} as never,
         toolCallId: 'tool-call',
         trace: new TraceEmitter(),
-        hooks: { recordSubagentCost: options?.recordCost ?? vi.fn() },
+        hooks: { recordSubagentCost: vi.fn() },
       },
       () =>
         new WorkflowScriptTool().call({
           agent: 'correct',
-          script: options?.script ?? script,
+          script: overrideScript ?? script,
         }),
     ),
   );
@@ -212,7 +209,7 @@ describe('WorkflowScriptTool', () => {
     mocks.startChildRunLoop.mockClear();
     // A retrying model rewrites its source; the deterministic run id and the
     // meta.name-anchored checkpoint keep resume intact.
-    await callTool({ script: `${script}\n// retry rewrote me` });
+    await callTool(`${script}\n// retry rewrote me`);
     const second = mocks.startChildRunLoop.mock.calls[0]?.[0].executionId;
 
     expect(first).toBe(runExecutionIdFor('tool-test'));
