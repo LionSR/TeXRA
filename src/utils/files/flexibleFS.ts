@@ -35,10 +35,6 @@ class FlexibleFSImpl {
     return AbsoluteFS.read(target.absolutePath);
   }
 
-  readBytes(target: FileLocation): Promise<Buffer> {
-    return AbsoluteFS.readBytes(target.absolutePath);
-  }
-
   appendFile(
     target: FileLocation,
     content: string | Uint8Array,
