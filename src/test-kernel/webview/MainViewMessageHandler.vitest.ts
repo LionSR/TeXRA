@@ -4,11 +4,11 @@ import { setImmediate as nextTurn } from 'node:timers/promises';
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Type imports
-import type * as vscode from 'vscode';
-
 // Local imports - IPC contracts
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
+
+// Type imports
+import type * as vscode from 'vscode';
 
 const mocks = vi.hoisted(() => ({
   safeExecuteCommand: vi.fn(),
