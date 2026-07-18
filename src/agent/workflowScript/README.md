@@ -26,6 +26,10 @@ return concat(sections, { separator: '\n\n' });
 
 - `agent(prompt, opts?)` — one subagent run; resolves to the host runner's
   typed result, or `null` on failure (filter with `.filter(Boolean)`).
+  `agent(prompt, { schema })`, where `schema` is a JSON Schema object, runs a
+  tool-use agent (name one via `agentName`) that finishes by calling
+  `submit_output`; the call resolves to an envelope whose `.structured` is the
+  validated object rather than edited files.
 - `parallel(thunks)` — concurrent barrier; failed thunks resolve to `null`.
 - `pipeline(items, ...stages)` — per-item stage chains with **no barrier**
   between stages; a throwing stage drops that item to `null`. Each stage is

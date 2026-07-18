@@ -11,8 +11,11 @@ import {
   buildTerminalToolRegistry,
   isStrictNativeCompatible,
   resolveStructuredOutput,
-  SUBMIT_OUTPUT_TOOL_NAME,
 } from '@tools/structuredOutput';
+
+// The synthetic terminal tool's name is a file-local const in
+// structuredOutput.ts; assert against the literal here.
+const SUBMIT_OUTPUT_TOOL_NAME = 'submit_output';
 
 describe('resolveStructuredOutput', () => {
   it('round-trips a JSON Schema object through z.fromJSONSchema', () => {
