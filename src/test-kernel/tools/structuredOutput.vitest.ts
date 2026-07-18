@@ -143,6 +143,14 @@ describe('buildTerminalTool', () => {
     expect(capture).not.toHaveBeenCalled();
   });
 
+  it('rejects a non-object root schema so provider tool inputs stay valid', () => {
+    const arraySpec = resolveStructuredOutput(z.array(z.string()));
+
+    expect(() => buildTerminalTool(arraySpec, vi.fn())).toThrow(
+      /object at the root/,
+    );
+  });
+
   it('binds capture per instance so concurrent runs never share a sink', async () => {
     const captureA = vi.fn<(value: unknown) => void>();
     const captureB = vi.fn<(value: unknown) => void>();

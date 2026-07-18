@@ -74,6 +74,19 @@ export function buildTerminalTool(
   spec: StructuredOutputSpec,
   capture: (value: unknown) => void,
 ): ITool {
+  // Provider tool inputs (and native structured output) require an object at the
+  // root; a scalar or array root would be rejected at request time. Fail here
+  // with a clear message instead, so a caller wraps the value in a property.
+  if (spec.jsonSchema.type !== 'object') {
+    const got =
+      typeof spec.jsonSchema.type === 'string'
+        ? `type "${spec.jsonSchema.type}"`
+        : 'no root type';
+    throw new Error(
+      `Structured output schema must be an object at the root (got ${got}). Wrap a scalar or array result in an object property.`,
+    );
+  }
+
   const GeneratedTool = defineTool({
     name: SUBMIT_OUTPUT_TOOL_NAME,
     description:
