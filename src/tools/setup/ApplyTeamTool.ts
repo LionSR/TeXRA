@@ -19,7 +19,6 @@ import {
   getAgentsByCategory,
   refresh,
 } from '@agent/index/agentRegistry';
-import { AUTH_COMMANDS } from '@auth/constants';
 import { preflightTeamAvailability } from '@common/teams/TeamAvailabilityPreflight';
 import {
   resolveTeamRoster,
@@ -99,7 +98,7 @@ ${describeTeams()}`,
       preset,
       initial.resolution.unresolvedNames,
     );
-    const setupPlatform = getSetupPlatform();
+    const { signIn } = getSetupPlatform();
     const authenticated = await getSetupAuthStatus();
 
     const preflight = await preflightTeamAvailability({
@@ -110,16 +109,7 @@ ${describeTeams()}`,
         authenticated.remoteAgentCatalogAvailable,
       providedChoice: input.unavailableAction ?? undefined,
       choose: async () => undefined,
-      signIn: async () => {
-        if (setupPlatform.signIn) return setupPlatform.signIn();
-        if (setupPlatform.commands) {
-          return (
-            (await setupPlatform.commands.invoke(AUTH_COMMANDS.SIGN_IN)) ===
-            true
-          );
-        }
-        return false;
-      },
+      signIn,
       refresh: async () => {
         await refresh({ includeRemote: true });
         return { preset, resolution: resolveTeamRoster(state, preset) };
@@ -136,16 +126,10 @@ ${describeTeams()}`,
     }
 
     if (preflight.status === 'cancelled') {
-      const signInAdvice =
-        input.unavailableAction === 'sign-in' &&
-        !setupPlatform.signIn &&
-        !setupPlatform.commands
-          ? ' Sign-in is unavailable in this host; sign in through the host account UI, then call apply_team again.'
-          : '';
       return {
         status: 'executed',
         summary: `Cancelled ${preset.name} team application.`,
-        output: `Cancelled. No roster or default-team state was written.${signInAdvice}`,
+        output: 'Cancelled. No roster or default-team state was written.',
       };
     }
     if (preflight.status === 'unavailable') {
