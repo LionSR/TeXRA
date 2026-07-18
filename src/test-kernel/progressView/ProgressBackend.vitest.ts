@@ -106,6 +106,7 @@ function createLifecycleOptions(
     cleanupDeletedStream: vi.fn(),
     cleanupDeletedStreams: vi.fn(),
     rebuildRenderedStreams: vi.fn(),
+    refreshRenderedStreamsAfterDeletion: vi.fn(),
     activateStream: vi.fn(),
     notifyDeletionRetained: vi.fn(),
     ...overrides,
@@ -142,10 +143,12 @@ function createRecordingBackend(): {
 
 function createIsolatedRecordingBackend(
   session: SessionHandle = createTestSession(),
+  lifecycle = createLifecycleOptions(),
 ): {
   backend: ProgressBackend;
   messages: ProgressViewOutboundMessage[];
   session: SessionHandle;
+  lifecycle: ProgressBackendOptions['lifecycle'];
 } {
   const messages: ProgressViewOutboundMessage[] = [];
   const backend = new ProgressBackend({
@@ -158,9 +161,9 @@ function createIsolatedRecordingBackend(
     },
     hasTarget: () => true,
     approvals: createApprovalOptions(),
-    lifecycle: createLifecycleOptions(),
+    lifecycle,
   });
-  return { backend, messages, session };
+  return { backend, lifecycle, messages, session };
 }
 
 async function createPersistentRecordingBackend(): Promise<
@@ -420,6 +423,23 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('clears retry UI when stopping without deleting', async () => {
+    const { backend, lifecycle, session } = createIsolatedRecordingBackend();
+    const stream = 'standalone-stop' as StreamTabId;
+
+    try {
+      await backend.stopStream(stream);
+
+      expect(lifecycle.stopStream).toHaveBeenCalledWith(stream, session, {
+        clearRetryRequest: true,
+      });
+      expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalled();
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('deletes an active stream and activates the next visible stream', async () => {
     const session = createTestSession();
     const messages: ProgressViewOutboundMessage[] = [];
@@ -455,6 +475,231 @@ describe('ProgressBackend', () => {
         command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
         stream: second,
       });
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('skips hidden fallbacks after deleting the active stream', async () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, lifecycle, session } = target;
+    const active = 'active-workflow' as StreamTabId;
+    const hidden = 'hidden-tool-use' as StreamTabId;
+    const visible = 'visible-workflow' as StreamTabId;
+
+    try {
+      for (const stream of [active, hidden, visible]) {
+        backend.state.streamLogs.ensureStream(stream);
+      }
+      backend.state.updateStreamMetadata(active, {
+        agentCategory: AgentCategory.Workflow,
+      });
+      backend.state.updateStreamMetadata(hidden, {
+        agentCategory: AgentCategory.ToolUse,
+      });
+      backend.state.updateStreamMetadata(visible, {
+        agentCategory: AgentCategory.Workflow,
+      });
+      backend.state.agentCategoryFilter = AgentCategory.Workflow;
+      backend.state.activeStream = active;
+
+      await backend.deleteStream(active);
+
+      expect(backend.state.activeStream).toBe(visible);
+      expect(lifecycle.activateStream).toHaveBeenCalledWith(visible);
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('clears selection when deleting the last visible stream', async () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, lifecycle, session } = target;
+    const active = 'active-workflow' as StreamTabId;
+    const hidden = 'hidden-tool-use' as StreamTabId;
+
+    try {
+      backend.state.streamLogs.ensureStream(active);
+      backend.state.streamLogs.ensureStream(hidden);
+      backend.state.updateStreamMetadata(active, {
+        agentCategory: AgentCategory.Workflow,
+      });
+      backend.state.updateStreamMetadata(hidden, {
+        agentCategory: AgentCategory.ToolUse,
+      });
+      backend.state.agentCategoryFilter = AgentCategory.Workflow;
+      backend.state.activeStream = active;
+
+      await backend.deleteStream(active);
+
+      expect(backend.state.activeStream).toBe('');
+      expect(lifecycle.activateStream).not.toHaveBeenCalled();
+      expect(
+        lifecycle.refreshRenderedStreamsAfterDeletion,
+      ).toHaveBeenCalledOnce();
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('preserves a stream switch during active-stream deletion', async () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, lifecycle, session } = target;
+    const active = 'active-stream' as StreamTabId;
+    const fallback = 'fallback-stream' as StreamTabId;
+    const selected = 'selected-during-delete' as StreamTabId;
+    const clearStream = backend.state.clearStream.bind(backend.state);
+    let releaseClear!: () => void;
+    const clearGate = new Promise<void>((resolve) => {
+      releaseClear = resolve;
+    });
+    vi.spyOn(backend.state, 'clearStream').mockImplementation(
+      async (stream) => {
+        await clearGate;
+        return clearStream(stream);
+      },
+    );
+
+    try {
+      for (const stream of [active, fallback, selected]) {
+        backend.state.streamLogs.ensureStream(stream);
+      }
+      backend.state.activeStream = active;
+
+      const deletion = backend.deleteStream(active);
+      backend.state.activeStream = selected;
+      releaseClear();
+      await deletion;
+
+      expect(backend.state.activeStream).toBe(selected);
+      expect(lifecycle.activateStream).toHaveBeenCalledWith(selected);
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('cleans every stream and emits one bulk deletion', async () => {
+    const { backend, lifecycle, messages, session } =
+      createIsolatedRecordingBackend();
+    const first = 'bulk-first' as StreamTabId;
+    const second = 'bulk-second' as StreamTabId;
+    backend.state.streamLogs.ensureStream(first);
+    backend.state.streamLogs.ensureStream(second);
+    vi.spyOn(backend.state, 'clearAll').mockResolvedValue({
+      active: new Set(),
+      failed: new Set(),
+    });
+
+    try {
+      await backend.deleteAllStreams();
+
+      expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(
+        first,
+        session,
+      );
+      expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(
+        second,
+        session,
+      );
+      expect(lifecycle.cleanupDeletedStreams).toHaveBeenCalledWith({
+        allDeleted: true,
+      });
+      expect(messages).toContainEqual({
+        command: PROGRESS_VIEW_COMMANDS.DELETE_ALL,
+      });
+      expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
+        forceRebuild: true,
+        syncActiveStream: false,
+      });
+      expect(lifecycle.notifyDeletionRetained).not.toHaveBeenCalled();
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('stops locally owned streams before bulk cleanup', async () => {
+    const { backend, lifecycle, session } = createIsolatedRecordingBackend();
+    const first = 'owned-first' as StreamTabId;
+    const second = 'owned-second' as StreamTabId;
+    backend.state.streamLogs.ensureStream(first);
+    backend.state.streamLogs.ensureStream(second);
+    session.status.transition(
+      first,
+      STREAM_PHASE.RUNNING,
+      STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    );
+    session.status.transition(
+      second,
+      STREAM_PHASE.RUNNING,
+      STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    );
+    vi.spyOn(session.executions, 'getAgentHandleByStream').mockReturnValue(
+      {} as never,
+    );
+    const waitForRelease = vi
+      .spyOn(backend.state, 'waitForOwnedExecutionRelease')
+      .mockResolvedValue(undefined);
+    vi.spyOn(backend.state, 'clearAll').mockResolvedValue({
+      active: new Set(),
+      failed: new Set(),
+    });
+
+    try {
+      await backend.deleteAllStreams();
+
+      expect(lifecycle.stopStream).toHaveBeenCalledWith(first, session);
+      expect(lifecycle.stopStream).toHaveBeenCalledWith(second, session);
+      expect(waitForRelease).toHaveBeenCalledWith(first);
+      expect(waitForRelease).toHaveBeenCalledWith(second);
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('retains protected streams during bulk cleanup', async () => {
+    const { backend, lifecycle, messages, session } =
+      createIsolatedRecordingBackend();
+    const deleted = 'bulk-deleted' as StreamTabId;
+    const retained = 'bulk-retained' as StreamTabId;
+    backend.state.streamLogs.ensureStream(deleted);
+    backend.state.streamLogs.ensureStream(retained);
+    vi.spyOn(backend.state, 'clearAll').mockResolvedValue({
+      active: new Set([retained]),
+      failed: new Set(),
+    });
+
+    try {
+      await backend.deleteAllStreams();
+
+      expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(
+        deleted,
+        session,
+      );
+      expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalledWith(
+        retained,
+        session,
+      );
+      expect(lifecycle.cleanupDeletedStreams).toHaveBeenCalledWith({
+        allDeleted: false,
+      });
+      expect(messages).toContainEqual({
+        command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
+        stream: deleted,
+      });
+      expect(messages).not.toContainEqual({
+        command: PROGRESS_VIEW_COMMANDS.DELETE_ALL,
+      });
+      expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
+        forceRebuild: true,
+        syncActiveStream: true,
+      });
+      expect(lifecycle.notifyDeletionRetained).toHaveBeenCalledWith(1, 0);
     } finally {
       backend.dispose();
       session.dispose();
