@@ -4,6 +4,7 @@ import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import { responseCycleToolsForModel } from '@agent/core/flows/ResponseCycleFlow';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
+import { getDefaultToolRegistry } from '@tools/registry';
 
 function toolNames(tools: readonly { name: string }[] | undefined): string[] {
   return tools?.map((tool) => tool.name) ?? [];
@@ -15,6 +16,7 @@ function responseServices({
   supportsFunctionCalling?: boolean;
 }) {
   return {
+    toolRegistry: getDefaultToolRegistry(),
     modelHandler: {
       capabilities: { supportsFunctionCalling },
     },

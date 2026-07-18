@@ -19,6 +19,7 @@ export type ApplyPathInput = z.infer<typeof ApplyPathInputSchema>;
 
 export class ApplyPathTool extends defineTool({
   name: 'apply_path',
+  requiresApproval: true,
   description: 'Apply a unified diff patch using git apply.',
   schema: ApplyPathInputSchema,
 }) {

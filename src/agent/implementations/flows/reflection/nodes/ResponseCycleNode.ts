@@ -14,6 +14,7 @@ import type {
 import { bestConnectionMethod } from '@agent/runtime/textConnection';
 import { buildFailedRetryInfo } from '@common/errors';
 import type { AgentFileLocation, RetryErrorInfo } from '@shared/schemas';
+import { getDefaultToolRegistry } from '@tools/registry';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import type {
@@ -107,6 +108,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
           {
             ...this.services,
             bestConnectionMethod,
+            toolRegistry: getDefaultToolRegistry(),
             round: prepRes.round,
             run: prepRes.run,
             workspace: prepRes.workspace,
