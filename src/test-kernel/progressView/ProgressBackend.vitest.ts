@@ -524,9 +524,12 @@ describe('ProgressBackend', () => {
     const active = 'active-workflow' as StreamTabId;
     const hidden = 'hidden-tool-use' as StreamTabId;
     const visible = 'visible-workflow' as StreamTabId;
+    const releaseEntries = vi.spyOn(backend.state.streamLogs, 'releaseEntries');
 
     try {
-      for (const stream of [active, hidden, visible]) {
+      // The unfiltered durable fallback selects the last stream (`hidden`),
+      // then the progress filter replaces it with `visible`.
+      for (const stream of [active, visible, hidden]) {
         backend.state.streamLogs.ensureStream(stream);
       }
       backend.state.updateStreamMetadata(active, {
@@ -545,6 +548,7 @@ describe('ProgressBackend', () => {
 
       expect(backend.state.activeStream).toBe(visible);
       expect(lifecycle.activateStream).toHaveBeenCalledWith(visible);
+      expect(releaseEntries).toHaveBeenCalledWith(hidden);
     } finally {
       backend.dispose();
       session.dispose();

@@ -221,6 +221,9 @@ export class ProgressBackend {
         visibleStreams.length === 0
           ? ''
           : this.state.pickValidActiveStream(visibleStreams);
+      if (activeAfterClear && activeAfterClear !== nextActive) {
+        this.state.releasePreviousActive(activeAfterClear);
+      }
       this.state.activeStream = nextActive;
       shouldActivateStream = nextActive !== '';
     } else if (wasActive && hasVisibleActive) {
