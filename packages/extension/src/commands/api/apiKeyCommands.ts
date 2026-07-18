@@ -11,10 +11,7 @@ import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  PROVIDER_DISPLAY_NAMES,
-  PROVIDER_URLS,
-} from '@shared/constants/providers';
+import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { refreshApiKeyCaches } from '@tools/setup/apiKeyHelpers';
 import { getSetupPlatform } from '@tools/setup/platform';
 import {
@@ -44,10 +41,7 @@ function createProfileKeyController(): SettingsProfileKeyController {
         provider,
         PROVIDER_DISPLAY_NAMES[provider] ?? provider,
       ),
-    getProviderKeyUrl: (provider) => {
-      const defaultUrl = PROVIDER_URLS[provider];
-      return defaultUrl ? getProviderKeyUrl(provider, defaultUrl) : undefined;
-    },
+    getProviderKeyUrl,
     getApiKeySecretName: (provider) =>
       SecretManager.getApiKeySecretName(provider as ApiProvider),
     setSecret: (key, value) => SecretManager.set(key, value),
@@ -104,7 +98,8 @@ async function promptForApiKey(
   ib.buttons = [getKeyButton];
   ib.onDidTriggerButton((button) => {
     if (button === getKeyButton) {
-      void vscode.env.openExternal(vscode.Uri.parse(PROVIDER_URLS[provider]));
+      const keyUrl = getProviderKeyUrl(provider);
+      if (keyUrl) void vscode.env.openExternal(vscode.Uri.parse(keyUrl));
     }
   });
   return settleQuickInput(ib, (accept) => {
