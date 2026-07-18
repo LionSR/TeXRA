@@ -42,6 +42,7 @@ import {
   thinkingIndicatorVisible,
   type BypassState,
   type StreamSlice,
+  type TransientNotice,
 } from '../state/cliState';
 import {
   activeStreamScope,
@@ -80,8 +81,7 @@ export interface StatusBarDisplayInput {
    *  active, so "running" reads as alive rather than a static word. Omitted
    *  in tests/headless, same as `elapsedMs`. */
   readonly runningFrame?: string;
-  readonly pendingExitHint: boolean;
-  readonly pendingExitResumeId: string | undefined;
+  readonly transientNotice: TransientNotice | undefined;
   readonly commandName?: string;
   readonly bypass: BypassState;
   readonly thinkingActive?: boolean;
@@ -220,7 +220,6 @@ function roundSegment(
     : undefined;
 }
 
-const PENDING_EXIT_HINT_TEXT = 'Press Ctrl-C again to exit';
 // Lower values are removed first when the left status group exceeds the row.
 const STATUS_BAR_COMPACT_PRIORITY = {
   activeProcess: 10,
@@ -287,16 +286,24 @@ function statusBarInnerWidth(width: number | undefined): number | undefined {
     : Math.max(0, width - STATUS_BAR_HORIZONTAL_PADDING);
 }
 
-function fitPendingExitStatusBarLeftSegments(
+function fitTransientNoticeStatusBarLeftSegments(
   segments: readonly StatusBarSegment[],
+  noticeIndex: number,
   width: number | undefined,
 ): readonly StatusBarSegment[] {
   const innerWidth = statusBarInnerWidth(width);
   if (innerWidth === undefined) return segments;
 
   const fitted = [...segments];
-  while (fitted.length > 2 && statusBarSegmentsWidth(fitted) > innerWidth) {
+  while (
+    fitted.length > noticeIndex + 1 &&
+    statusBarSegmentsWidth(fitted) > innerWidth
+  ) {
     fitted.pop();
+  }
+
+  if (noticeIndex > 1 && statusBarSegmentsWidth(fitted) > innerWidth) {
+    fitted.splice(1, noticeIndex - 1);
   }
 
   const icon = fitted[0];
@@ -693,13 +700,16 @@ const BYPASS_BADGES: ReadonlyArray<{
 ];
 
 // Which text occupies the bindings row is a priority order, not a single
-// condition: an active pending-exit prompt always wins, then an actual
+// condition: a resumable exit confirmation always wins, then an actual
 // foreground surface, then the child list, and only then normal chat shortcuts.
 function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
-  if (input.pendingExitHint && input.pendingExitResumeId) {
+  if (
+    input.transientNotice?.kind === 'exit' &&
+    input.transientNotice.resumeId
+  ) {
     return `Resume this session with: ${formatResumeCommand(
       input.commandName,
-      input.pendingExitResumeId,
+      input.transientNotice.resumeId,
       { approvalPolicy: input.approvalPolicy },
     )}`;
   }
@@ -756,10 +766,12 @@ export function buildStatusBarDisplay(
     });
   }
 
-  if (input.pendingExitHint) {
-    left.push({ text: PENDING_EXIT_HINT_TEXT, color: COLOR_WARNING });
+  let transientNoticeIndex: number | undefined;
+  if (input.transientNotice) {
+    transientNoticeIndex = left.length;
+    left.push({ text: input.transientNotice.text, color: COLOR_WARNING });
     const queuedCount = input.queuedFollowUpMessages.length;
-    if (queuedCount > 0) {
+    if (input.transientNotice.kind === 'exit' && queuedCount > 0) {
       // Exiting drops queued follow-ups silently — warn before the user
       // confirms with the second Ctrl-C.
       left.push({
@@ -846,9 +858,14 @@ export function buildStatusBarDisplay(
       });
     }
   }
-  const fittedLeft = input.pendingExitHint
-    ? fitPendingExitStatusBarLeftSegments(left, input.width)
-    : fitStatusBarLeftSegments(left, input.width);
+  const fittedLeft =
+    transientNoticeIndex !== undefined
+      ? fitTransientNoticeStatusBarLeftSegments(
+          left,
+          transientNoticeIndex,
+          input.width,
+        )
+      : fitStatusBarLeftSegments(left, input.width);
 
   return {
     left: fittedLeft,

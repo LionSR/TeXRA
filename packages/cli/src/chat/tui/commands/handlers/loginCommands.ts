@@ -2,7 +2,7 @@ import {
   refreshCodexPreferenceViews,
   setCliCodexSubscription,
 } from '@cli/chat/tui/state/codexSubscription';
-import { sessionMeta } from '@cli/chat/tui/state/cliState';
+import { sessionMeta, setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import {
   loadCliApiStatusLines,
@@ -113,14 +113,14 @@ export async function loginFromChat(
 ): Promise<void> {
   const args = parseChatLoginSlashArgs(input);
   if (!args) {
-    appendLocalAssistantTranscript(CHAT_LOGIN_USAGE);
+    setTransientNotice(CHAT_LOGIN_USAGE);
     return;
   }
 
   // Match the CLI `login` guard: reject `--device` + `--no-browser` from the
   // user's parsed flags before the ChatGPT path can auto-resolve `device`.
   if (hasLoginTransportConflict(args)) {
-    appendLocalAssistantTranscript(LOGIN_TRANSPORT_CONFLICT_MESSAGE);
+    setTransientNotice(LOGIN_TRANSPORT_CONFLICT_MESSAGE);
     return;
   }
 
@@ -144,7 +144,7 @@ export async function loginFromChat(
 export async function logoutFromChat(input: string): Promise<void> {
   const target = parseCliLogoutTarget(input);
   if (!target) {
-    appendLocalAssistantTranscript(CHAT_LOGOUT_USAGE);
+    setTransientNotice(CHAT_LOGOUT_USAGE);
     return;
   }
 

@@ -10,8 +10,7 @@ import { approvalQueueStatus } from '../state/approvalQueue';
 import { terminalCapabilities } from '../state/terminalCapabilities';
 import {
   codexPreferenceVersion as codexPreferenceVersionSignal,
-  pendingExitHint as pendingExitHintSignal,
-  pendingExitResumeId as pendingExitResumeIdSignal,
+  transientNotice as transientNoticeSignal,
   activeStreamId as activeStreamIdSignal,
   rootRunPending as rootRunPendingSignal,
   rootRunStreamId as rootRunStreamIdSignal,
@@ -58,8 +57,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const parentStream = useSignal(parentStreamSignal);
   const childStreamEntries = useSignal(childStreamEntriesSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
-  const pendingExitHint = useSignal(pendingExitHintSignal);
-  const pendingExitResumeId = useSignal(pendingExitResumeIdSignal);
+  const transientNotice = useSignal(transientNoticeSignal);
   const approvals = useSignal(approvalQueueStatus);
   const caps = useSignal(terminalCapabilities);
   const { columns } = useWindowSize();
@@ -155,8 +153,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     substate: statusSlice?.substate,
     elapsedMs: runStartedAt !== undefined ? now - runStartedAt : undefined,
     runningFrame: runStartedAt !== undefined ? loadingFrameAt(now) : undefined,
-    pendingExitHint,
-    pendingExitResumeId,
+    transientNotice,
     commandName: props.commandName,
     bypass: statusSlice?.bypass ?? NO_BYPASS,
     thinkingActive: statusSlice?.thinkingActive ?? false,

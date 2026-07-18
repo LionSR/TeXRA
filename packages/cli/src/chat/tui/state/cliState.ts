@@ -438,19 +438,73 @@ const TASK_DETAIL_EXECUTION_ID = signal<string | undefined>(undefined);
 export const taskDetailExecutionId = TASK_DETAIL_EXECUTION_ID;
 
 // ---------------------------------------------------------------------------
-// exitHintSlice
+// transientNoticeSlice
 // ---------------------------------------------------------------------------
 
-// Ctrl-C-to-exit resume hint: whether the next exit should surface a resume
-// id, and which run it points at.
+/** Regenerable status-bar text with explicit behavior for exit confirmation. */
+export type TransientNotice =
+  | {
+      readonly kind: 'message';
+      readonly text: string;
+      readonly expiresAt: number;
+    }
+  | {
+      readonly kind: 'exit';
+      readonly text: string;
+      readonly resumeId?: string;
+      readonly expiresAt: number;
+    };
 
-const PENDING_EXIT_HINT = signal<boolean>(false);
-const PENDING_EXIT_RESUME_ID = signal<string | undefined>(undefined);
+type TransientNoticeOptions =
+  | { readonly kind?: 'message'; readonly ttlMs?: number }
+  | {
+      readonly kind: 'exit';
+      readonly resumeId?: string;
+      readonly ttlMs?: number;
+    };
 
-/** Whether the next exit should surface a resume hint. */
-export const pendingExitHint = PENDING_EXIT_HINT;
-/** Which run the pending exit hint's resume id points at. */
-export const pendingExitResumeId = PENDING_EXIT_RESUME_ID;
+const DEFAULT_TRANSIENT_NOTICE_TTL_MS = 4_000;
+
+const TRANSIENT_NOTICE = signal<TransientNotice | undefined>(undefined);
+let transientNoticeTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Single status-bar notice slot; later notices replace earlier ones. */
+export const transientNotice = TRANSIENT_NOTICE;
+
+/** Show a regenerable status-bar notice for a bounded interval. */
+export function setTransientNotice(
+  text: string,
+  options: TransientNoticeOptions = {},
+): void {
+  const ttlMs = options.ttlMs ?? DEFAULT_TRANSIENT_NOTICE_TTL_MS;
+  const expiresAt = Date.now() + ttlMs;
+  const singleLineText = text.replaceAll(/[ \t]*\r?\n[ \t]*/g, ' · ').trim();
+  const notice: TransientNotice =
+    options.kind === 'exit'
+      ? {
+          kind: 'exit',
+          text: singleLineText,
+          expiresAt,
+          resumeId: options.resumeId,
+        }
+      : { kind: 'message', text: singleLineText, expiresAt };
+  if (transientNoticeTimer) clearTimeout(transientNoticeTimer);
+  TRANSIENT_NOTICE.set(notice);
+  transientNoticeTimer = setTimeout(() => {
+    if (TRANSIENT_NOTICE.get() === notice) {
+      TRANSIENT_NOTICE.set(undefined);
+      transientNoticeTimer = undefined;
+    }
+  }, ttlMs);
+  transientNoticeTimer.unref?.();
+}
+
+/** Remove the current status-bar notice, including its pending expiry timer. */
+export function clearTransientNotice(): void {
+  if (transientNoticeTimer) clearTimeout(transientNoticeTimer);
+  transientNoticeTimer = undefined;
+  TRANSIENT_NOTICE.set(undefined);
+}
 
 // ---------------------------------------------------------------------------
 // codexPreferenceSlice
@@ -530,7 +584,6 @@ export function resetCliState(
   slashPaletteOpen.set(false);
   reverseSearchOpen.set(false);
   taskDetailExecutionId.set(undefined);
-  pendingExitHint.set(false);
-  pendingExitResumeId.set(undefined);
+  clearTransientNotice();
   for (const resetHook of RESET_HOOKS) resetHook();
 }

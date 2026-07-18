@@ -25,8 +25,7 @@ function statusInput(
 ): StatusBarDisplayInput {
   return {
     status: STREAM_PHASE.WAITING,
-    pendingExitHint: false,
-    pendingExitResumeId: undefined,
+    transientNotice: undefined,
     bypass: NO_BYPASS,
     queuedFollowUpMessages: [],
     usage: undefined,
@@ -1264,8 +1263,12 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        pendingExitHint: true,
-        pendingExitResumeId: 'abc123',
+        transientNotice: {
+          kind: 'exit',
+          text: 'Press Ctrl-C again to exit',
+          resumeId: 'abc123',
+          expiresAt: 1,
+        },
       }),
     );
 
@@ -1283,8 +1286,12 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        pendingExitHint: true,
-        pendingExitResumeId: 'abc123',
+        transientNotice: {
+          kind: 'exit',
+          text: 'Press Ctrl-C again to exit',
+          resumeId: 'abc123',
+          expiresAt: 1,
+        },
         commandName: 'texra-local',
       }),
     );
@@ -1298,8 +1305,12 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        pendingExitHint: true,
-        pendingExitResumeId: 'abc123',
+        transientNotice: {
+          kind: 'exit',
+          text: 'Press Ctrl-C again to exit',
+          resumeId: 'abc123',
+          expiresAt: 1,
+        },
         queuedFollowUpMessages: [
           'Keep the proof under one page.',
           'Also mention the finite monoid argument.',
@@ -1317,6 +1328,26 @@ describe('CLI StatusBar display model', () => {
           '2 queued follow-ups will be discarded',
       ),
     ).toMatchObject({ color: 'red' });
+  });
+
+  it('does not describe queued follow-ups as discarded for ordinary notices', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        transientNotice: {
+          kind: 'message',
+          text: 'Signed in successfully',
+          expiresAt: 1,
+        },
+        queuedFollowUpMessages: ['Continue with the proof.'],
+      }),
+    );
+
+    expect(display.left.map(statusBarSegmentText)).toContain(
+      'Signed in successfully',
+    );
+    expect(display.left.map(statusBarSegmentText)).not.toContain(
+      '1 queued follow-up will be discarded',
+    );
   });
 
   it('compacts token usage to a percentage before dropping it on narrow widths', () => {
@@ -1345,8 +1376,12 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        pendingExitHint: true,
-        pendingExitResumeId: 'abc123',
+        transientNotice: {
+          kind: 'exit',
+          text: 'Press Ctrl-C again to exit',
+          resumeId: 'abc123',
+          expiresAt: 1,
+        },
         width: 29,
       }),
     );
@@ -1358,6 +1393,25 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toBe(
       'Resume this session with: texra resume abc123',
     );
+  });
+
+  it('keeps a transient notice visible beside an ephemeral badge', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        transcriptMode: 'ephemeral',
+        transientNotice: {
+          kind: 'message',
+          text: 'Sign-in failed; try again',
+          expiresAt: 1,
+        },
+        width: 29,
+      }),
+    );
+
+    expect(display.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'Sign-in failed; try again',
+    ]);
   });
 
   it('uses portable Esc labels for meta shortcuts on macOS', () => {

@@ -13,6 +13,7 @@ import { requestCliCompaction } from '../state/compactionRequest';
 import {
   activeStreamId as activeStreamIdSignal,
   sessionMeta,
+  setTransientNotice,
   streamAccessTarget,
   streams,
 } from '../state/cliState';
@@ -67,11 +68,11 @@ export async function handleTuiSlashCommand(
   const parsed = parseSlashInput(line);
   if (!parsed) {
     if (!redactedIntent) return false;
-    appendLocalAssistantTranscript(
+    setTransientNotice(
       `For safety, /${redactedIntent.name} accepts credentials only through its masked form.`,
     );
     if (!openRegisteredCliSlashForm(redactedIntent, '')) {
-      appendLocalAssistantTranscript(
+      setTransientNotice(
         `/${redactedIntent.name} is not available in this CLI view yet.`,
       );
     }
@@ -115,7 +116,7 @@ export async function handleTuiSlashCommand(
       return true;
     case 'agent':
       if (!chatTuiCanStartRootRun(context.session) && rest) {
-        appendLocalAssistantTranscript(
+        setTransientNotice(
           'The agent is fixed for this chat session. Start a new chat to use a different agent.',
         );
       } else if (rest) {
@@ -138,7 +139,7 @@ export async function handleTuiSlashCommand(
       return true;
     case 'key':
       if (rest) {
-        appendLocalAssistantTranscript(
+        setTransientNotice(
           'For safety, `/key` does not accept a key as an argument. Enter it in the masked form.',
         );
       }
@@ -265,7 +266,7 @@ export async function handleTuiSlashCommand(
         if (openRegisteredCliSlashForm(registered, parsed.remainder)) {
           return true;
         }
-        appendLocalAssistantTranscript(
+        setTransientNotice(
           `/${parsed.name} is registered but is not available in this CLI view yet.`,
         );
       } else {
@@ -273,7 +274,7 @@ export async function handleTuiSlashCommand(
         const didYouMean = suggestion
           ? ` Did you mean /${suggestion.name}?`
           : '';
-        appendLocalAssistantTranscript(
+        setTransientNotice(
           shouldRedactSlashInput(line)
             ? 'Unknown command with protected input. Type /help to list commands.'
             : `Unknown command: /${parsed.name}.${didYouMean} Type /help to list commands.`,
