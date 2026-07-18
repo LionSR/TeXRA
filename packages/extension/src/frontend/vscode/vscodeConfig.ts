@@ -2,6 +2,8 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { configKeyVariants } from '@shared/config/configKeys';
+
 import type {
   ConfigInspection,
   ConfigProvider,
@@ -13,11 +15,6 @@ interface VscodeConfigInspection<T> {
   globalValue?: T;
   workspaceValue?: T;
   workspaceFolderValue?: T;
-}
-
-function configKeys(key: string): string[] {
-  if (key.startsWith('texra.')) return [key];
-  return [key, `texra.${key}`];
 }
 
 function workspaceConfiguration(
@@ -86,7 +83,7 @@ export class VscodeConfigProvider implements ConfigProvider {
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
-    const inspection = configKeys(key)
+    const inspection = configKeyVariants(key)
       .map((item) => workspaceConfiguration().inspect<T>(item))
       .find((item) => item !== undefined);
     return normalizeInspection(inspection, this.get<T>(key));
@@ -108,7 +105,11 @@ export class VscodeConfigProvider implements ConfigProvider {
   ): vscode.Disposable {
     return vscode.workspace.onDidChangeConfiguration((event) => {
       if (typeof key === 'string') {
-        if (configKeys(key).some((item) => event.affectsConfiguration(item))) {
+        if (
+          configKeyVariants(key).some((item) =>
+            event.affectsConfiguration(item),
+          )
+        ) {
           listener();
         }
         return;
@@ -116,7 +117,7 @@ export class VscodeConfigProvider implements ConfigProvider {
       if (Array.isArray(key)) {
         if (
           key.some((item) =>
-            configKeys(item).some((candidate) =>
+            configKeyVariants(item).some((candidate) =>
               event.affectsConfiguration(candidate),
             ),
           )
