@@ -40,7 +40,7 @@ import type {
   AgentRuntimeEventPayloads,
   AgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
-import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
+import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
 import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
 import {
   getAllActiveExecutionIds,
@@ -1025,7 +1025,7 @@ export class DesktopProgressBridge {
         };
       },
       resumeToolUse: (snapshot) =>
-        resumeQueuedToolUseSnapshot(
+        resumeQueuedToolUseFromResumeData(
           snapshot.streamId,
           snapshot,
           this.runtimeHost,

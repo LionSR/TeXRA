@@ -32,14 +32,14 @@ const mocks = vi.hoisted(() => ({
   persistChildRunReport: vi.fn(),
   persistChildRunResultMeta: vi.fn(),
   readConfig: vi.fn(),
-  resumeToolUseFromSnapshot: vi.fn(),
+  resumeToolUseFromResumeData: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   synchronizeAgentResultOutcome: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/executeAgent', () => ({
   executeAgent: mocks.executeAgent,
-  resumeToolUseFromSnapshot: mocks.resumeToolUseFromSnapshot,
+  resumeToolUseFromResumeData: mocks.resumeToolUseFromResumeData,
 }));
 
 vi.mock('@agent/storage', () => ({
@@ -261,7 +261,7 @@ describe('NativeToolUseStrategy', () => {
     });
     mocks.readConfig.mockResolvedValue(config);
     mocks.retrieveSessionResumeData.mockResolvedValue(snapshot);
-    mocks.resumeToolUseFromSnapshot.mockResolvedValueOnce({
+    mocks.resumeToolUseFromResumeData.mockResolvedValueOnce({
       category: 'toolUse',
       outcome: 'completed',
       lastResponse: 'done',
@@ -280,7 +280,7 @@ describe('NativeToolUseStrategy', () => {
       params.executionId,
       config,
     );
-    expect(mocks.resumeToolUseFromSnapshot).toHaveBeenCalledWith(
+    expect(mocks.resumeToolUseFromResumeData).toHaveBeenCalledWith(
       snapshot,
       params.runtimeHost,
       expect.objectContaining({
@@ -323,7 +323,7 @@ describe('NativeToolUseStrategy', () => {
       createToolUseResumeData({ executionId: params.executionId }),
     );
     const resumeError = new Error('resume storage unreadable');
-    mocks.resumeToolUseFromSnapshot.mockRejectedValueOnce(resumeError);
+    mocks.resumeToolUseFromResumeData.mockRejectedValueOnce(resumeError);
 
     await expect(
       strategy.runTurn!([], fakePorts(), new AbortController()),
@@ -386,9 +386,9 @@ describe('NativeToolUseStrategy', () => {
     });
     mocks.readConfig.mockResolvedValue(config);
     mocks.retrieveSessionResumeData.mockResolvedValue(resume);
-    mocks.resumeToolUseFromSnapshot.mockImplementation(
+    mocks.resumeToolUseFromResumeData.mockImplementation(
       async (_snapshot, _host, options) => {
-        if (mocks.resumeToolUseFromSnapshot.mock.calls.length > 1) {
+        if (mocks.resumeToolUseFromResumeData.mock.calls.length > 1) {
           throw new Error('the same follow-up batch resumed more than once');
         }
         options.onRun?.(handle);
@@ -416,7 +416,7 @@ describe('NativeToolUseStrategy', () => {
       });
 
       await vi.waitFor(() =>
-        expect(mocks.resumeToolUseFromSnapshot).toHaveBeenCalledTimes(1),
+        expect(mocks.resumeToolUseFromResumeData).toHaveBeenCalledTimes(1),
       );
       await vi.waitFor(() =>
         expect(mocks.enqueueChildRunFollowUp).toHaveBeenCalledTimes(2),
@@ -425,12 +425,12 @@ describe('NativeToolUseStrategy', () => {
       // immediate resume. The guarded mock above prevents an actual busy loop.
       await sleep(50);
 
-      expect(mocks.resumeToolUseFromSnapshot).toHaveBeenCalledTimes(1);
-      expect(mocks.resumeToolUseFromSnapshot.mock.calls[0]?.[0]).toEqual(
+      expect(mocks.resumeToolUseFromResumeData).toHaveBeenCalledTimes(1);
+      expect(mocks.resumeToolUseFromResumeData.mock.calls[0]?.[0]).toEqual(
         resume,
       );
       expect(
-        mocks.resumeToolUseFromSnapshot.mock.calls[0]?.[2].drainedFollowUps,
+        mocks.resumeToolUseFromResumeData.mock.calls[0]?.[2].drainedFollowUps,
       ).toEqual([
         {
           text: 'Also state exactly where finiteness is used.',

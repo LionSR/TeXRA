@@ -283,8 +283,8 @@ function buildFallbackNotification(config: AgentConfig): FallbackNotification {
 
 /**
  * Callback and host-context fields shared by every entry point that drives one
- * subagent run (`executeAgent`, `resumeToolUseFromSnapshot`, and
- * `resumeQueuedToolUseSnapshot`). Extracted so the three option bags describing
+ * subagent run (`executeAgent`, `resumeToolUseFromResumeData`, and
+ * `resumeQueuedToolUseFromResumeData`). Extracted so the three option bags describing
  * the same run can't silently drift out of sync or re-declare the same field
  * under a different name.
  */
@@ -337,7 +337,7 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    * a fresh launch of a persistent native subagent (`isSubagent` without
    * `stopAfterCycle`) can produce one, so only such drivers opt in. Resume
    * paths have no equivalent flag: whether a resumed run is a subagent comes
-   * from persisted lineage, so `resumeToolUseFromSnapshot` always admits
+   * from persisted lineage, so `resumeToolUseFromResumeData` always admits
    * WAITING and callers narrow with `isWaitingFlowResult`.
    */
   allowWaitingResult?: boolean;
@@ -457,7 +457,7 @@ export async function executeAgent(
   });
 }
 
-export interface ResumeToolUseFromSnapshotOptions extends SubagentRunOptions {
+export interface ResumeToolUseFromResumeDataOptions extends SubagentRunOptions {
   /**
    * Take messages queued after the initial drain. The flow invokes this once
    * after attaching its live context and before resuming the persisted cursor.
@@ -480,10 +480,10 @@ export interface ResumeToolUseFromSnapshotOptions extends SubagentRunOptions {
  * is a subagent — and can therefore legitimately resolve WAITING again — comes
  * from persisted lineage (`hasPersistedParent`), never from the caller.
  */
-export async function resumeToolUseFromSnapshot(
+export async function resumeToolUseFromResumeData(
   resume: ToolUseResumeData,
   runtimeHost: AgentRuntimeHost,
-  options: ResumeToolUseFromSnapshotOptions = {},
+  options: ResumeToolUseFromResumeDataOptions = {},
 ): Promise<AgentRuntimeFlowResult> {
   await acquireResumedExecutionLease(resume.executionId);
   const modelHandlerCompatibilityKey =

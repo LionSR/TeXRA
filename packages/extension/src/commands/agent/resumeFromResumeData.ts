@@ -1,5 +1,5 @@
 /**
- * Snapshot-driven auto-resume entry point for the VS Code host.
+ * Persisted-state auto-resume entry point for the VS Code host.
  *
  * Used by:
  *   - `texra.sendFollowUp` (auto-resume when a follow-up lands on a
@@ -21,13 +21,15 @@ import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { StreamTabId } from '@shared/schemas';
 
 import { runExecuteCommand } from './executeCommand';
-import { resumeExtensionToolUseSnapshot } from './resumeCommand';
+import { resumeExtensionToolUseFromResumeData } from './resumeCommand';
 
 const logger = createChannelTrace('resumeFromSnapshot');
 
 export { isResumeInFlight };
 
-export function tryResumeFromSnapshot(streamId: StreamTabId): Promise<boolean> {
+export function tryResumeFromResumeData(
+  streamId: StreamTabId,
+): Promise<boolean> {
   return resolveAndResumeStream(streamId, {
     runtimeHost: extensionAgentRuntimeHost,
     // The extension runs on the default session for this host-path caller
@@ -57,7 +59,7 @@ export function tryResumeFromSnapshot(streamId: StreamTabId): Promise<boolean> {
         ...(parentStreamId !== undefined && { parentStreamId }),
       };
     },
-    resumeToolUse: resumeExtensionToolUseSnapshot,
+    resumeToolUse: resumeExtensionToolUseFromResumeData,
     executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
       runExecuteCommand({ config, executionId, modelHandlerCompatibilityKey }),
     reportFailure: (id, error) => {

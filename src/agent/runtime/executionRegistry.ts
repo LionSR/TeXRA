@@ -890,7 +890,7 @@ export class ExecutionRegistry {
    * and suspenders against a future non-waiting exit that forgets the clear
    * (see #7324 review discussion).
    *
-   * `resumeQueuedToolUseSnapshot` flips `streamStatus` to RUNNING with a
+   * `resumeQueuedToolUseFromResumeData` flips `streamStatus` to RUNNING with a
    * RESUMING substate *before* the resumed run installs its own interrupt
    * context, so a stop landing in that window would otherwise find this same
    * still-WAITING-suspended handle but a non-WAITING phase, and get wrongly

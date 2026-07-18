@@ -388,7 +388,6 @@ describe('runChat signal ownership wiring', () => {
     } as const;
     const streamId = 'stream-resume' as StreamTabId;
     const resolution: CliToolUseResumeResolution = {
-      kind: 'toolUse',
       ...createToolUseResumeData({
         executionId: 'exec-resume' as ExecutionId,
         streamId,

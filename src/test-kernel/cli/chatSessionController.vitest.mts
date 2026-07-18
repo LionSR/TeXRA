@@ -24,8 +24,8 @@ const mocks = vi.hoisted(() => ({
   attachTuiRunFactSubscription: vi.fn(),
   createTuiHostInteractions: vi.fn(),
   resolveAndResumeStream: vi.fn(),
-  resumeQueuedToolUseSnapshot: vi.fn(),
-  resumeToolUseFromSnapshot: vi.fn(),
+  resumeQueuedToolUseFromResumeData: vi.fn(),
+  resumeToolUseFromResumeData: vi.fn(),
   projectStreamTranscript: vi.fn(),
   notify: vi.fn(),
   appendLocalAssistantTranscript: vi.fn(),
@@ -33,7 +33,7 @@ const mocks = vi.hoisted(() => ({
   appendLocalUserTranscript: vi.fn(),
   clearLocalTranscript: vi.fn(),
   moveLocalTranscriptToStream: vi.fn(),
-  resolveCliResumeSnapshot: vi.fn(),
+  resolveCliResume: vi.fn(),
   followUpEnqueue: vi.fn(),
   sessionEventEmit: vi.fn(),
 }));
@@ -47,12 +47,12 @@ vi.mock('@agent/runtime/resolveAndResumeStream', () => ({
 }));
 
 vi.mock('@agent/runtime/resumeQueuedToolUse', () => ({
-  resumeQueuedToolUseSnapshot: mocks.resumeQueuedToolUseSnapshot,
+  resumeQueuedToolUseFromResumeData: mocks.resumeQueuedToolUseFromResumeData,
 }));
 
 vi.mock('@agent/runtime/executeAgent', () => ({
   executeAgent: mocks.executeAgent,
-  resumeToolUseFromSnapshot: mocks.resumeToolUseFromSnapshot,
+  resumeToolUseFromResumeData: mocks.resumeToolUseFromResumeData,
 }));
 
 vi.mock('@agent/runtime/runAgent', () => ({
@@ -114,11 +114,11 @@ vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
 }));
 
 vi.mock('@cli/runtime/sessionResume', () => ({
-  resolveCliResumeSnapshot: mocks.resolveCliResumeSnapshot,
+  resolveCliResume: mocks.resolveCliResume,
   explainNonResumable: (
-    resolution: { readonly kind: string },
+    resolution: { readonly type: string },
     id: string,
-  ): string => `not resumable (${resolution.kind}): ${id}`,
+  ): string => `not resumable (${resolution.type}): ${id}`,
 }));
 
 import { StreamSnapshotStore } from '@transcript';
@@ -285,14 +285,11 @@ function makeResumeSnapshotStore(options: {
 }
 
 function makeResolvedResume() {
-  return {
-    kind: 'toolUse' as const,
-    ...createToolUseResumeData({
-      executionId: 'exec-resume' as ExecutionId,
-      streamId: 'stream-resume' as StreamTabId,
-      agentConfig: makeResumeConfig(),
-    }),
-  };
+  return createToolUseResumeData({
+    executionId: 'exec-resume' as ExecutionId,
+    streamId: 'stream-resume' as StreamTabId,
+    agentConfig: makeResumeConfig(),
+  });
 }
 
 function makeAutoResumeData() {
@@ -356,7 +353,7 @@ async function expectInterruptedRetry(
   expect(retry.kind).toBe('accepted');
   if (retry.kind !== 'accepted') return;
   await expect(retry.completion).resolves.toBe(true);
-  expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledWith(
+  expect(mocks.resumeQueuedToolUseFromResumeData).toHaveBeenCalledWith(
     'stream-1',
     makeAutoResumeData(),
     expect.any(Object),
@@ -454,8 +451,8 @@ describe('createChatSessionController', () => {
     });
     mocks.resolveAndResumeStream.mockReset();
     mocks.resolveAndResumeStream.mockResolvedValue(true);
-    mocks.resumeQueuedToolUseSnapshot.mockReset();
-    mocks.resumeQueuedToolUseSnapshot.mockImplementation(
+    mocks.resumeQueuedToolUseFromResumeData.mockReset();
+    mocks.resumeQueuedToolUseFromResumeData.mockImplementation(
       async (...args: unknown[]) => {
         const options = args[3] as ResumeQueuedToolUseOptions;
         options.onFollowUpQueueReady?.();
@@ -469,11 +466,11 @@ describe('createChatSessionController', () => {
     mocks.appendLocalUserTranscript.mockReset();
     mocks.clearLocalTranscript.mockReset();
     mocks.moveLocalTranscriptToStream.mockReset();
-    mocks.resolveCliResumeSnapshot.mockReset();
+    mocks.resolveCliResume.mockReset();
     mocks.followUpEnqueue.mockReset();
     mocks.sessionEventEmit.mockReset();
-    mocks.resumeToolUseFromSnapshot.mockReset();
-    mocks.resumeToolUseFromSnapshot.mockResolvedValue({
+    mocks.resumeToolUseFromResumeData.mockReset();
+    mocks.resumeToolUseFromResumeData.mockResolvedValue({
       category: 'toolUse',
       outcome: RUN_OUTCOME.COMPLETED,
       executionId: 'exec-resume',
@@ -631,9 +628,9 @@ describe('createChatSessionController', () => {
     expect(session.runCompleted).toBe(true);
   });
 
-  it('reserves the root-run slot before resume() awaits the resolved snapshot', async () => {
-    const snapshot = pDefer<{ readonly kind: 'not-found' }>();
-    mocks.resolveCliResumeSnapshot.mockReturnValueOnce(snapshot.promise);
+  it('reserves the root-run slot before resume() awaits the resolution', async () => {
+    const resolution = pDefer<{ readonly type: 'not-found' }>();
+    mocks.resolveCliResume.mockReturnValueOnce(resolution.promise);
     const session = makeSession({ runCompleted: true });
     const ctrl = createChatSessionController(makeInit({ session }));
 
@@ -646,7 +643,7 @@ describe('createChatSessionController', () => {
     expect(session.runCompleted).toBe(false);
     expect(ctrl.canStartRootRun()).toBe(false);
 
-    snapshot.resolve({ kind: 'not-found' });
+    resolution.resolve({ type: 'not-found' });
     await resumed;
     expect(session.runCompleted).toBe(true);
   });
@@ -675,7 +672,7 @@ describe('createChatSessionController', () => {
 
   it('treats a manually resumed subagent returning to WAITING as a successful turn', async () => {
     const session = makeSession({ runCompleted: true });
-    mocks.resumeToolUseFromSnapshot.mockResolvedValueOnce({
+    mocks.resumeToolUseFromResumeData.mockResolvedValueOnce({
       category: 'toolUse',
       outcome: STREAM_PHASE.WAITING,
       executionId: 'exec-resume',
@@ -729,7 +726,7 @@ describe('createChatSessionController', () => {
     await manualResume;
     await expect(admission.completion).resolves.toBe(true);
     await vi.waitFor(() =>
-      expect(mocks.resumeToolUseFromSnapshot).toHaveBeenCalledWith(
+      expect(mocks.resumeToolUseFromResumeData).toHaveBeenCalledWith(
         expect.anything(),
         expect.any(Object),
         expect.objectContaining({
@@ -744,9 +741,9 @@ describe('createChatSessionController', () => {
     );
   });
 
-  it('resume() suspended on the resolved snapshot keeps a concurrent follow-up wake from also claiming the root-run slot', async () => {
+  it('resume() suspended on the resolution keeps a concurrent follow-up wake from also claiming the root-run slot', async () => {
     // Reproduces the finding's interleaving: resume(A) suspends on
-    // resolveCliResumeSnapshot (an await-suspension point) with the slot
+    // resolveCliResume (an await-suspension point) with the slot
     // already claimed; a follow-up wake (tryResumeStream for a different
     // stream) fires while A is still suspended. Pre-fix, resume(A) checked
     // availability but claimed the slot only after this (and three more)
@@ -754,8 +751,8 @@ describe('createChatSessionController', () => {
     // and start doing real work — which resume(A) would then clobber when
     // it woke back up and unconditionally overwrote session.runPromise.
     // Post-fix, exactly one caller (A) ever holds the slot.
-    const snapshot = pDefer<{ readonly kind: 'not-found' }>();
-    mocks.resolveCliResumeSnapshot.mockReturnValueOnce(snapshot.promise);
+    const resolution = pDefer<{ readonly type: 'not-found' }>();
+    mocks.resolveCliResume.mockReturnValueOnce(resolution.promise);
     const session = makeSession({ runCompleted: true });
     const snapshotStoreForB = makeResumeSnapshotStore({
       executionId: undefined,
@@ -765,7 +762,7 @@ describe('createChatSessionController', () => {
     );
 
     const resumeA = ctrl.resume('aaaaaa' as ExecutionId);
-    // A is now suspended inside resolveCliResumeSnapshot; the slot is
+    // A is now suspended inside resolveCliResume; the slot is
     // already claimed.
     expect(session.runPromise).toBeDefined();
     expect(session.runCompleted).toBe(false);
@@ -778,7 +775,7 @@ describe('createChatSessionController', () => {
     await expect(resumedB).resolves.toBe(false);
 
     // A remains the sole owner of the slot end to end.
-    snapshot.resolve({ kind: 'not-found' });
+    resolution.resolve({ type: 'not-found' });
     await resumeA;
     expect(session.runCompleted).toBe(true);
   });
@@ -787,7 +784,7 @@ describe('createChatSessionController', () => {
     // The early slot claim makes this resume() interruptible before the resumed
     // agent actually starts running. If the user hits Ctrl-C during that
     // rehydration window, resume() must notice `session.stopRequested` and bail
-    // out instead of silently starting `resumeToolUseFromSnapshot()` once the
+    // out instead of silently starting `resumeToolUseFromResumeData()` once the
     // awaits finish.
     const ensureLoaded = pDefer<void>();
     const base = mocks.defaultSession();
@@ -843,7 +840,7 @@ describe('createChatSessionController', () => {
     ensureLoaded.resolve();
     await resumed;
 
-    expect(mocks.resumeToolUseFromSnapshot).not.toHaveBeenCalled();
+    expect(mocks.resumeToolUseFromResumeData).not.toHaveBeenCalled();
     expect(session.runCompleted).toBe(true);
     expect(session.interruptedStreamId).toBe('stream-resume');
   });
@@ -869,7 +866,7 @@ describe('createChatSessionController', () => {
     expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
       'snapshot load failed',
     );
-    expect(mocks.resumeToolUseFromSnapshot).not.toHaveBeenCalled();
+    expect(mocks.resumeToolUseFromResumeData).not.toHaveBeenCalled();
     expect(session.runExitCode).toBe(CliExitCode.AgentError);
     expect(session.runCompleted).toBe(true);
     expect(session.interruptedStreamId).toBe('stream-interrupted');
@@ -893,7 +890,7 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore }),
     );
     const preResolved = makeResolvedResume();
-    mocks.resumeToolUseFromSnapshot.mockImplementationOnce(
+    mocks.resumeToolUseFromResumeData.mockImplementationOnce(
       async (
         _snapshot: unknown,
         _runtimeHost: unknown,
@@ -918,7 +915,7 @@ describe('createChatSessionController', () => {
 
     await resumeStarted;
     await vi.waitFor(() =>
-      expect(mocks.resumeToolUseFromSnapshot).toHaveBeenCalledWith(
+      expect(mocks.resumeToolUseFromResumeData).toHaveBeenCalledWith(
         preResolved,
         expect.any(Object),
         expect.objectContaining({
@@ -926,7 +923,8 @@ describe('createChatSessionController', () => {
         }),
       ),
     );
-    const resumeOptions = mocks.resumeToolUseFromSnapshot.mock.calls[0]?.[2] as
+    const resumeOptions = mocks.resumeToolUseFromResumeData.mock
+      .calls[0]?.[2] as
       { readonly isCancellationRequested?: () => boolean } | undefined;
     expect(resumeOptions?.isCancellationRequested?.()).toBe(true);
     await session.runPromise;
@@ -974,7 +972,7 @@ describe('createChatSessionController', () => {
         ports: { resumeToolUse(snapshot: unknown): Promise<boolean> },
       ) => ports.resumeToolUse(makeAutoResumeData()),
     );
-    mocks.resumeQueuedToolUseSnapshot.mockImplementationOnce(
+    mocks.resumeQueuedToolUseFromResumeData.mockImplementationOnce(
       async (
         _streamId: StreamTabId,
         _snapshot: unknown,
@@ -996,7 +994,7 @@ describe('createChatSessionController', () => {
 
     await expect(ctrl.tryResumeStream('stream-1')).resolves.toBe(true);
 
-    expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledWith(
+    expect(mocks.resumeQueuedToolUseFromResumeData).toHaveBeenCalledWith(
       'stream-1',
       makeAutoResumeData(),
       expect.any(Object),
@@ -1065,7 +1063,7 @@ describe('createChatSessionController', () => {
     teardown.resolve();
     if (admission.kind !== 'accepted') return;
     await expect(admission.completion).resolves.toBe(true);
-    expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledWith(
+    expect(mocks.resumeQueuedToolUseFromResumeData).toHaveBeenCalledWith(
       'stream-1',
       makeAutoResumeData(),
       expect.any(Object),
@@ -1094,7 +1092,7 @@ describe('createChatSessionController', () => {
     teardown.resolve();
     await expect(first.completion).resolves.toBe(true);
     expect(mocks.resolveAndResumeStream).toHaveBeenCalledOnce();
-    expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledWith(
+    expect(mocks.resumeQueuedToolUseFromResumeData).toHaveBeenCalledWith(
       'stream-1',
       makeAutoResumeData(),
       expect.any(Object),
@@ -1110,7 +1108,7 @@ describe('createChatSessionController', () => {
   it('stops batching once ordinary follow-up routing is ready', async () => {
     const resume = pDefer<boolean>();
     const { ctrl } = makeInterruptedController(Promise.resolve(), true);
-    mocks.resumeQueuedToolUseSnapshot.mockImplementationOnce(
+    mocks.resumeQueuedToolUseFromResumeData.mockImplementationOnce(
       async (...args: unknown[]) => {
         const options = args[3] as ResumeQueuedToolUseOptions;
         options.onFollowUpQueueReady?.();
@@ -1122,7 +1120,7 @@ describe('createChatSessionController', () => {
     expect(first.kind).toBe('accepted');
     if (first.kind !== 'accepted') return;
     await vi.waitFor(() =>
-      expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledOnce(),
+      expect(mocks.resumeQueuedToolUseFromResumeData).toHaveBeenCalledOnce(),
     );
 
     expect(ctrl.admitInterruptedFollowUp({ text: 'Route normally.' })).toEqual({

@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
+import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
 import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
@@ -18,7 +18,10 @@ interface ResumeAgentResult {
 }
 
 interface ResumeAgentCommandPayload {
-  snapshot: Pick<ToolUseResumeData, 'streamId' | 'executionId' | 'agentConfig'>;
+  snapshot: Pick<
+    ToolUseResumeData,
+    'streamId' | 'executionId' | 'agentConfig' | 'parentStreamId'
+  >;
   followUp?: string;
 }
 
@@ -35,7 +38,7 @@ async function showResumeError(error: unknown): Promise<void> {
 
 /**
  * Extension wrapper around the host-neutral
- * {@link resumeQueuedToolUseSnapshot}: it supplies the extension runtime host
+ * {@link resumeQueuedToolUseFromResumeData}: it supplies the extension runtime host
  * and surfaces failures as a warning toast.
  * Used by both the `texra.resumeAgent` command and the resume orchestrator.
  *
@@ -43,14 +46,14 @@ async function showResumeError(error: unknown): Promise<void> {
  * never honored this setting, so it stays out of the shared leaf and lives in
  * this adapter to preserve each host's pre-unification resume behavior.
  */
-export function resumeExtensionToolUseSnapshot(
+export function resumeExtensionToolUseFromResumeData(
   resume: ToolUseResumeData,
   followUp?: string,
 ): Promise<boolean> {
   if (!getToolUsePersistenceEnabled()) {
     return Promise.resolve(false);
   }
-  return resumeQueuedToolUseSnapshot(
+  return resumeQueuedToolUseFromResumeData(
     resume.streamId,
     resume,
     extensionAgentRuntimeHost,
@@ -87,6 +90,7 @@ export function registerResumeAgentCommand(
             identity.streamId,
             identity.executionId,
             identity.agentConfig,
+            { parentStreamId: identity.parentStreamId },
           );
         } catch (error) {
           await showResumeError(error);
@@ -94,7 +98,7 @@ export function registerResumeAgentCommand(
         }
         if (resume?.type !== 'toolUse') return { success: false };
 
-        const success = await resumeExtensionToolUseSnapshot(
+        const success = await resumeExtensionToolUseFromResumeData(
           resume,
           payload?.followUp,
         );

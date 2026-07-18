@@ -889,7 +889,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     // `ToolUseSessionLifecycle.interrupt()` unconditionally disposed the
     // queue (dropping the just-appended follow-up) and the finally below
     // unconditionally released it again, so neither the caller
-    // (`resumeQueuedToolUseSnapshot`, which never restores follow-ups on
+    // (`resumeQueuedToolUseFromResumeData`, which never restores follow-ups on
     // this success path) nor a later resume could ever recover the user's
     // queued input. Fixed by routing this window's cancellation through
     // `ToolUseSessionLifecycle.interruptPreservingQueue()` (cancels the
@@ -1036,7 +1036,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('skips the resume self-heal write when the persisted record is already canonical (issue #8018)', async () => {
-    // `resumeToolUseFromSnapshot` passes `resumeShared` on every
+    // `resumeToolUseFromResumeData` passes `resumeShared` on every
     // native-subagent turn, so the resume-branch self-heal write must not
     // fire when the persisted record already matches what would be
     // written -- otherwise every turn costs a `StorageFSKVStore` disk

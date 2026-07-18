@@ -7,19 +7,19 @@ import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const resumeToolUseFromSnapshotMock = vi.hoisted(() =>
+const resumeToolUseFromResumeDataMock = vi.hoisted(() =>
   vi.fn(async (..._args: unknown[]): Promise<unknown> => undefined),
 );
 
 vi.mock('@agent/runtime/executeAgent', () => ({
-  resumeToolUseFromSnapshot: resumeToolUseFromSnapshotMock,
+  resumeToolUseFromResumeData: resumeToolUseFromResumeDataMock,
 }));
 
 import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
 } from '@test/helpers/streamStatusTestUtils';
-import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
+import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import {
@@ -48,7 +48,7 @@ interface CapturedResumeOptions {
 }
 
 function capturedResumeOptions(): CapturedResumeOptions {
-  const calls = resumeToolUseFromSnapshotMock.mock
+  const calls = resumeToolUseFromResumeDataMock.mock
     .calls as unknown as unknown[][];
   return calls.at(-1)?.[2] as CapturedResumeOptions;
 }
@@ -59,10 +59,10 @@ function capturedTakePendingFollowUps(): () => readonly FollowUpQueueInput[] {
   return options.takePendingFollowUps;
 }
 
-describe('resumeQueuedToolUseSnapshot', () => {
+describe('resumeQueuedToolUseFromResumeData', () => {
   beforeEach(() => {
-    resumeToolUseFromSnapshotMock.mockReset();
-    resumeToolUseFromSnapshotMock.mockImplementation(
+    resumeToolUseFromResumeDataMock.mockReset();
+    resumeToolUseFromResumeDataMock.mockImplementation(
       async (...args: unknown[]) => {
         const options = args[2] as CapturedResumeOptions;
         options.onFollowUpConsumed?.();
@@ -90,7 +90,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
     );
 
     await expect(
-      resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
         onError: vi.fn(),
       }),
     ).resolves.toBe(true);
@@ -122,7 +122,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
       { force: true },
     );
 
-    await resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+    await resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
       extraFollowUps: [{ text: 'typed alongside resume', origin: 'user' }],
       onError: vi.fn(),
     });
@@ -139,7 +139,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
       });
     });
     let attachmentFollowUps: readonly FollowUpQueueInput[] = [];
-    resumeToolUseFromSnapshotMock.mockImplementationOnce(
+    resumeToolUseFromResumeDataMock.mockImplementationOnce(
       async (...args: unknown[]) => {
         const options = args[2] as ReturnType<typeof capturedResumeOptions>;
         defaultSession().followUps.enqueue(STREAM, {
@@ -150,7 +150,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
       },
     );
 
-    await resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+    await resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
       onFollowUpQueueReady,
       onError: vi.fn(),
     });
@@ -169,7 +169,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
 
   it('claims a follow-up queued during an orphaned host-resumed subagent turn after it parks', async () => {
     let postParkFollowUps: readonly FollowUpQueueInput[] = [];
-    resumeToolUseFromSnapshotMock.mockImplementationOnce(
+    resumeToolUseFromResumeDataMock.mockImplementationOnce(
       async (...args: unknown[]) => {
         const options = args[2] as ReturnType<typeof capturedResumeOptions>;
         expect(options.takePendingFollowUps()).toEqual([]);
@@ -189,7 +189,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
     );
 
     await expect(
-      resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
         onError: vi.fn(),
       }),
     ).resolves.toBe(true);
@@ -201,7 +201,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
   });
 
   it('restores a post-park batch exactly once when cancellation wins before consumption', async () => {
-    resumeToolUseFromSnapshotMock.mockImplementationOnce(
+    resumeToolUseFromResumeDataMock.mockImplementationOnce(
       async (...args: unknown[]) => {
         const options = args[2] as ReturnType<typeof capturedResumeOptions>;
         expect(options.takePendingFollowUps()).toEqual([]);
@@ -227,7 +227,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
     );
 
     await expect(
-      resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
         onError: vi.fn(),
       }),
     ).resolves.toBe(false);
@@ -241,7 +241,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
     const unregisterChildRunLoop =
       defaultSession().executions.registerChildRunLoop(STREAM);
     try {
-      resumeToolUseFromSnapshotMock.mockImplementationOnce(
+      resumeToolUseFromResumeDataMock.mockImplementationOnce(
         async (...args: unknown[]) => {
           const options = args[2] as ReturnType<typeof capturedResumeOptions>;
           expect(options.takePendingFollowUps()).toEqual([]);
@@ -260,7 +260,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
       );
 
       await expect(
-        resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
           onError: vi.fn(),
         }),
       ).resolves.toBe(true);
@@ -276,7 +276,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
   it('passes snapshot parent stream identity to the leaf resume', async () => {
     const parentStreamId = 'stream:parent' as StreamTabId;
 
-    await resumeQueuedToolUseSnapshot(
+    await resumeQueuedToolUseFromResumeData(
       STREAM,
       snapshot(parentStreamId),
       runtimeHost,
@@ -290,7 +290,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
     const explicitParent = 'stream:explicit-parent' as StreamTabId;
     const snapshotParent = 'stream:snapshot-parent' as StreamTabId;
 
-    await resumeQueuedToolUseSnapshot(
+    await resumeQueuedToolUseFromResumeData(
       STREAM,
       snapshot(snapshotParent),
       runtimeHost,
@@ -310,7 +310,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
       { force: true },
     );
     const isCancellationRequested = vi.fn(() => true);
-    resumeToolUseFromSnapshotMock.mockImplementationOnce(
+    resumeToolUseFromResumeDataMock.mockImplementationOnce(
       async (...args: unknown[]) => {
         const options = args[2] as ReturnType<typeof capturedResumeOptions>;
         expect(options.isCancellationRequested).toBe(isCancellationRequested);
@@ -332,7 +332,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
     );
 
     await expect(
-      resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
         isCancellationRequested,
         onError: vi.fn(),
       }),
@@ -351,7 +351,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
       { text: 'queued one' },
       { force: true },
     );
-    resumeToolUseFromSnapshotMock.mockImplementationOnce(
+    resumeToolUseFromResumeDataMock.mockImplementationOnce(
       async (...args: unknown[]) => {
         const options = args[2] as ReturnType<typeof capturedResumeOptions>;
         options.takePendingFollowUps();
@@ -370,7 +370,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
     );
 
     await expect(
-      resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
         isCancellationRequested: () => false,
         onError: vi.fn(),
       }),
@@ -388,7 +388,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
       { text: 'queued one' },
       { force: true },
     );
-    resumeToolUseFromSnapshotMock.mockImplementationOnce(
+    resumeToolUseFromResumeDataMock.mockImplementationOnce(
       async (...args: unknown[]) => {
         const options = args[2] as ReturnType<typeof capturedResumeOptions>;
         options.takePendingFollowUps();
@@ -396,7 +396,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
     );
 
     await expect(
-      resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
         isCancellationRequested: () => true,
         onResult: () => {
           throw failure;
@@ -425,7 +425,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
       { text: 'queued one' },
       { force: true },
     );
-    resumeToolUseFromSnapshotMock.mockImplementationOnce(
+    resumeToolUseFromResumeDataMock.mockImplementationOnce(
       async (...args: unknown[]) => {
         const options = args[2] as ReturnType<typeof capturedResumeOptions>;
         options.takePendingFollowUps();
@@ -440,7 +440,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
     );
 
     await expect(
-      resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
         isCancellationRequested,
         onResult: () => {
           throw failure;
@@ -470,7 +470,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
       { text: 'queued one' },
       { force: true },
     );
-    resumeToolUseFromSnapshotMock.mockImplementationOnce(
+    resumeToolUseFromResumeDataMock.mockImplementationOnce(
       async (...args: unknown[]) => {
         const options = args[2] as ReturnType<typeof capturedResumeOptions>;
         options.takePendingFollowUps();
@@ -490,7 +490,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
     );
 
     await expect(
-      resumeQueuedToolUseSnapshot(
+      resumeQueuedToolUseFromResumeData(
         STREAM,
         snapshot('stream:parent' as StreamTabId),
         runtimeHost,
@@ -511,7 +511,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
 
   it('re-enqueues follow-ups, settles to WAITING, and reports on failure', async () => {
     const failure = new Error('resume blew up');
-    resumeToolUseFromSnapshotMock.mockRejectedValue(failure);
+    resumeToolUseFromResumeDataMock.mockRejectedValue(failure);
     const reportFailure = vi.fn();
     defaultSession().followUps.enqueue(
       STREAM,
@@ -520,7 +520,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
     );
 
     await expect(
-      resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
         onError: reportFailure,
       }),
     ).resolves.toBe(false);
@@ -539,12 +539,12 @@ describe('resumeQueuedToolUseSnapshot', () => {
 
   it('uses the supplied session status plane for resume markers', async () => {
     const failure = new Error('session-scoped resume failed');
-    resumeToolUseFromSnapshotMock.mockRejectedValue(failure);
+    resumeToolUseFromResumeDataMock.mockRejectedValue(failure);
     const session = createTestSession();
 
     try {
       await expect(
-        resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
           session,
           onError: vi.fn(),
         }),
@@ -560,7 +560,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
 
   it('preserves failed resume follow-ups in the supplied session queue only', async () => {
     const failure = new Error('session queue resume failed');
-    resumeToolUseFromSnapshotMock.mockRejectedValue(failure);
+    resumeToolUseFromResumeDataMock.mockRejectedValue(failure);
     const session = createTestSession();
 
     try {
@@ -571,7 +571,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
       );
 
       await expect(
-        resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
           session,
           onError: vi.fn(),
         }),
@@ -587,7 +587,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
   });
 
   it('leaves the status alone when the started run has taken it over', async () => {
-    resumeToolUseFromSnapshotMock.mockImplementation(async () => {
+    resumeToolUseFromResumeDataMock.mockImplementation(async () => {
       seedStreamStatusForTest(
         defaultSession().status,
         STREAM,
@@ -596,7 +596,7 @@ describe('resumeQueuedToolUseSnapshot', () => {
     });
 
     await expect(
-      resumeQueuedToolUseSnapshot(STREAM, snapshot(), runtimeHost, {
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
         onError: vi.fn(),
       }),
     ).resolves.toBe(true);

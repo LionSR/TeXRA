@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   getToolUsePersistenceEnabled: vi.fn(() => true),
   registerCommand: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
-  resumeQueuedToolUseSnapshot: vi.fn(async () => true),
+  resumeQueuedToolUseFromResumeData: vi.fn(async () => true),
   showWarningMessage: vi.fn(),
 }));
 
@@ -24,7 +24,7 @@ vi.mock('@utils/config', async (importActual) => ({
   getToolUsePersistenceEnabled: mocks.getToolUsePersistenceEnabled,
 }));
 vi.mock('@agent/runtime/resumeQueuedToolUse', () => ({
-  resumeQueuedToolUseSnapshot: mocks.resumeQueuedToolUseSnapshot,
+  resumeQueuedToolUseFromResumeData: mocks.resumeQueuedToolUseFromResumeData,
 }));
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
   retrieveSessionResumeData: mocks.retrieveSessionResumeData,
@@ -33,11 +33,12 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import {
   registerResumeAgentCommand,
-  resumeExtensionToolUseSnapshot,
+  resumeExtensionToolUseFromResumeData,
 } from '@commands/agent/resumeCommand';
 import type { StreamTabId } from '@shared/schemas';
 
 const STREAM = 'stream:ext-resume' as StreamTabId;
+const PARENT_STREAM = 'stream:ext-parent' as StreamTabId;
 
 function snapshot() {
   return createToolUseResumeData({ streamId: STREAM });
@@ -53,27 +54,30 @@ beforeEach(() => {
   mocks.getToolUsePersistenceEnabled.mockReturnValue(true);
   mocks.registerCommand.mockReset();
   mocks.retrieveSessionResumeData.mockReset();
-  mocks.resumeQueuedToolUseSnapshot.mockReset().mockResolvedValue(true);
+  mocks.resumeQueuedToolUseFromResumeData.mockReset().mockResolvedValue(true);
   mocks.showWarningMessage.mockReset();
 });
 
-describe('resumeExtensionToolUseSnapshot', () => {
+describe('resumeExtensionToolUseFromResumeData', () => {
   it('refuses to resume when tool-use persistence is disabled', async () => {
     mocks.getToolUsePersistenceEnabled.mockReturnValue(false);
 
-    await expect(resumeExtensionToolUseSnapshot(snapshot())).resolves.toBe(
-      false,
-    );
-    expect(mocks.resumeQueuedToolUseSnapshot).not.toHaveBeenCalled();
+    await expect(
+      resumeExtensionToolUseFromResumeData(snapshot()),
+    ).resolves.toBe(false);
+    expect(mocks.resumeQueuedToolUseFromResumeData).not.toHaveBeenCalled();
   });
 
   it('delegates to the shared leaf with the explicit follow-up when enabled', async () => {
     await expect(
-      resumeExtensionToolUseSnapshot(snapshot(), 'typed alongside resume'),
+      resumeExtensionToolUseFromResumeData(
+        snapshot(),
+        'typed alongside resume',
+      ),
     ).resolves.toBe(true);
 
-    expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledTimes(1);
-    expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledWith(
+    expect(mocks.resumeQueuedToolUseFromResumeData).toHaveBeenCalledTimes(1);
+    expect(mocks.resumeQueuedToolUseFromResumeData).toHaveBeenCalledWith(
       STREAM,
       snapshot(),
       expect.any(Object),
@@ -108,6 +112,7 @@ describe('registerResumeAgentCommand', () => {
       streamId: canonical.streamId,
       executionId: canonical.executionId,
       agentConfig: canonical.agentConfig,
+      parentStreamId: PARENT_STREAM,
     };
     mocks.retrieveSessionResumeData.mockResolvedValue(canonical);
 
@@ -119,8 +124,9 @@ describe('registerResumeAgentCommand', () => {
       canonical.streamId,
       canonical.executionId,
       canonical.agentConfig,
+      { parentStreamId: PARENT_STREAM },
     );
-    expect(mocks.resumeQueuedToolUseSnapshot).toHaveBeenCalledWith(
+    expect(mocks.resumeQueuedToolUseFromResumeData).toHaveBeenCalledWith(
       canonical.streamId,
       canonical,
       expect.any(Object),
@@ -137,7 +143,7 @@ describe('registerResumeAgentCommand', () => {
       success: false,
     });
     expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
-    expect(mocks.resumeQueuedToolUseSnapshot).not.toHaveBeenCalled();
+    expect(mocks.resumeQueuedToolUseFromResumeData).not.toHaveBeenCalled();
   });
 
   it('reports retrieval failures through the existing resume warning', async () => {
@@ -151,6 +157,6 @@ describe('registerResumeAgentCommand', () => {
     expect(mocks.showWarningMessage).toHaveBeenCalledWith(
       expect.stringContaining('Failed to resume tool-use session'),
     );
-    expect(mocks.resumeQueuedToolUseSnapshot).not.toHaveBeenCalled();
+    expect(mocks.resumeQueuedToolUseFromResumeData).not.toHaveBeenCalled();
   });
 });

@@ -58,7 +58,7 @@ interface WorkflowResumeData {
 export type SessionResumeData = ToolUseResumeData | WorkflowResumeData;
 
 export interface SessionResumeRetrievalOptions {
-  readonly parentStreamId?: StreamTabId;
+  readonly parentStreamId?: StreamTabId | undefined;
 }
 
 function throwIfResumeStorageUnreadable(
