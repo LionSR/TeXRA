@@ -21,8 +21,10 @@ import {
 import { LOGIN_FORM_ITEMS } from '@cli/chat/tui/forms/LoginForm';
 import {
   activeForm,
+  formProgress,
   resetCliState,
   sessionMeta,
+  transientNotice,
   type SessionMeta,
 } from '@cli/chat/tui/state/cliState';
 import type { CliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
@@ -450,7 +452,7 @@ describe('slashRegistry', () => {
     expect(apiNode.isClosed()).toBe(true);
   });
 
-  it('closes the model-access picker before an asynchronous action', async () => {
+  it('keeps model-access selection in a busy form until it settles', async () => {
     resetCliState(INCLUDED_CHAT_SESSION);
     const selection = deferredSelection();
     registerBuiltinSlashCommands({
@@ -468,7 +470,11 @@ describe('slashRegistry', () => {
     apiNode.props?.onSelect?.('personal');
     await settleFormSelection();
 
-    expect(apiNode.isClosed()).toBe(true);
+    expect(apiNode.isClosed()).toBe(false);
+    expect(formProgress.get()).toMatchObject({
+      status: 'running',
+      title: 'Updating model access',
+    });
 
     selection.resolve();
     await settleFormSelection();
@@ -505,7 +511,7 @@ describe('slashRegistry', () => {
     expect(keyNode.isClosed()).toBe(true);
   });
 
-  it('closes the login picker before running the selected login path', async () => {
+  it('closes the login form after the selected login path settles', async () => {
     const selected: string[] = [];
     let closed = false;
     let sawClosedBeforeLogin = false;
@@ -533,7 +539,151 @@ describe('slashRegistry', () => {
 
     expect(selected).toEqual(['chatgpt']);
     expect(closed).toBe(true);
-    expect(sawClosedBeforeLogin).toBe(true);
+    expect(sawClosedBeforeLogin).toBe(false);
+  });
+
+  it('holds a copyable login frame until the user dismisses it', async () => {
+    registerBuiltinSlashCommands({
+      onLoginSelect: (_value, output) => {
+        output.writeProgress('Open https://example.test/device', {
+          copyable: true,
+        });
+      },
+    });
+    const login = findSlashCommand('login');
+    if (!login) throw new Error('Expected /login to be registered');
+
+    expect(openRegisteredCliSlashForm(login, '')).toBe(true);
+    const loginNode = renderOpenForm<{
+      onSelect?: (value: string) => void;
+    }>();
+    loginNode.props?.onSelect?.('chatgpt');
+    await settleFormSelection();
+
+    expect(loginNode.isClosed()).toBe(false);
+    expect(formProgress.get()).toMatchObject({
+      status: 'succeeded',
+      message: 'Open https://example.test/device',
+      copyableMessage: 'Open https://example.test/device',
+    });
+
+    formProgress.get()?.dismiss();
+    expect(loginNode.isClosed()).toBe(true);
+  });
+
+  it('detaches a busy login and ignores its late completion', async () => {
+    const selection = deferredSelection();
+    registerBuiltinSlashCommands({
+      onLoginSelect: (_value, output) => {
+        output.writeProgress('Open https://example.test/device', {
+          copyable: true,
+        });
+        return selection.promise;
+      },
+    });
+    const login = findSlashCommand('login');
+    if (!login) throw new Error('Expected /login to be registered');
+
+    expect(openRegisteredCliSlashForm(login, '')).toBe(true);
+    const loginNode = renderOpenForm<{
+      onSelect?: (value: string) => void;
+    }>();
+    loginNode.props?.onSelect?.('chatgpt');
+    formProgress.get()?.cancel();
+
+    expect(loginNode.isClosed()).toBe(true);
+    expect(formProgress.get()).toBeUndefined();
+    expect(transientNotice.get()?.text).toContain('Sign-in abandoned');
+
+    selection.resolve();
+    await settleFormSelection();
+    expect(formProgress.get()).toBeUndefined();
+  });
+
+  it('keeps a failed login URL in its one persistent error', async () => {
+    const errors: string[] = [];
+    registerBuiltinSlashCommands({
+      onLoginSelect: (_value, output) => {
+        output.writeProgress('Open https://example.test/manual', {
+          copyable: true,
+        });
+        throw new Error('Sign-in failed');
+      },
+      onError: (error) => {
+        errors.push(toErrorMessage(error));
+      },
+    });
+    const login = findSlashCommand('login');
+    if (!login) throw new Error('Expected /login to be registered');
+
+    expect(openRegisteredCliSlashForm(login, '')).toBe(true);
+    const loginNode = renderOpenForm<{
+      onSelect?: (value: string) => void;
+    }>();
+    loginNode.props?.onSelect?.('chatgpt');
+    await settleFormSelection();
+
+    expect(errors).toEqual([
+      'Sign-in failed · Open https://example.test/manual',
+    ]);
+    expect(formProgress.get()).toMatchObject({
+      status: 'failed',
+      copyableMessage: 'Open https://example.test/manual',
+    });
+    expect(loginNode.isClosed()).toBe(false);
+  });
+
+  it('drops a busy form completion after CLI state reset', async () => {
+    const selection = deferredSelection();
+    const outcomes: string[] = [];
+    registerBuiltinSlashCommands({
+      onModelAccessSelect: async (_value, output) => {
+        await selection.promise;
+        output.appendOutcome('late outcome');
+        outcomes.push('action settled');
+      },
+    });
+    const api = findSlashCommand('api');
+    if (!api) throw new Error('Expected /api to be registered');
+
+    expect(openRegisteredCliSlashForm(api, '')).toBe(true);
+    const apiNode = renderOpenForm<{
+      onSelect?: (value: CliModelAccessRoute) => void;
+    }>();
+    apiNode.props?.onSelect?.('personal');
+    resetCliState(INCLUDED_CHAT_SESSION);
+    selection.resolve();
+    await settleFormSelection();
+
+    expect(outcomes).toEqual(['action settled']);
+    expect(formProgress.get()).toBeUndefined();
+    expect(apiNode.isClosed()).toBe(false);
+  });
+
+  it('calls an available abort hook when a busy form is cancelled', () => {
+    let aborted = false;
+    const selection = deferredSelection();
+    const completion = selection.promise as Promise<void> & {
+      abort?: () => void;
+    };
+    completion.abort = () => {
+      aborted = true;
+    };
+    registerBuiltinSlashCommands({
+      onLogoutSelect: () => completion,
+    });
+    const logout = findSlashCommand('logout');
+    if (!logout) throw new Error('Expected /logout to be registered');
+
+    expect(openRegisteredCliSlashForm(logout, '')).toBe(true);
+    const logoutNode = renderOpenForm<{
+      onSelect?: (value: 'all') => void;
+    }>();
+    logoutNode.props?.onSelect?.('all');
+    formProgress.get()?.cancel();
+
+    expect(aborted).toBe(true);
+    expect(transientNotice.get()).toBeUndefined();
   });
 
   it('closes the approval policy picker before applying the new policy', async () => {

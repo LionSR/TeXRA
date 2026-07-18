@@ -15,18 +15,16 @@ import {
   selectCliModelAccessRoute,
 } from '@cli/runtime/modelAccessSelection';
 
-import {
-  patchSessionMeta,
-  sessionMeta,
-  setTransientNotice,
-} from '@cli/chat/tui/state/cliState';
+import { patchSessionMeta, sessionMeta } from '@cli/chat/tui/state/cliState';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
-import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import type { ApiProvider } from '@model/apiProviders';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { collapseWhitespace } from '@utils/text/stringUtils';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,
+  type SlashCommandOutput,
   type SlashCommandContext,
+  transcriptSlashCommandOutput,
 } from './slashContext';
 import { loadCliAccountStatusLines } from './statusAssembly';
 
@@ -73,7 +71,9 @@ async function completeModelAccessSelection(
   } catch (error: unknown) {
     modelNotice = toErrorMessage(error);
   }
-  return [access.message, modelNotice].filter(Boolean).join('\n');
+  return collapseWhitespace(
+    [access.message, modelNotice].filter(Boolean).join(' · '),
+  );
 }
 
 /** Save a provider key, select personal access, and reconcile the root model. */
@@ -96,6 +96,7 @@ export function setCliSessionApiMode(apiMode: CliApiMode): void {
 export async function applyCliModelAccessSelection(
   routeInput: string,
   context: SlashCommandContext,
+  output: SlashCommandOutput = transcriptSlashCommandOutput,
 ): Promise<void> {
   const normalized = routeInput.trim().toLowerCase();
 
@@ -105,7 +106,7 @@ export async function applyCliModelAccessSelection(
       apiMode,
       includeApiDetails: true,
     });
-    appendLocalAssistantTranscript(lines.join('\n'));
+    output.appendOutcome(lines.join('\n'));
     return;
   }
 
@@ -114,15 +115,16 @@ export async function applyCliModelAccessSelection(
     const access = await selectCliModelAccessRoute(
       contextForCliModelAccess(context.cliContext, sessionMeta.get().apiMode),
       route,
-      { writeProgress: appendLocalAssistantTranscript },
+      {
+        writeProgress: (message) =>
+          output.writeProgress(message, { copyable: true }),
+      },
     );
-    appendLocalAssistantTranscript(
-      await completeModelAccessSelection(access, context),
-    );
+    output.appendOutcome(await completeModelAccessSelection(access, context));
     return;
   }
 
-  setTransientNotice(MODEL_ACCESS_USAGE);
+  output.setNotice(MODEL_ACCESS_USAGE);
 }
 
 export async function showCliAuthStatus(): Promise<void> {
@@ -130,5 +132,5 @@ export async function showCliAuthStatus(): Promise<void> {
     apiMode: sessionMeta.get().apiMode,
     includeApiDetails: true,
   });
-  appendLocalAssistantTranscript(lines.join('\n'));
+  transcriptSlashCommandOutput.appendOutcome(lines.join('\n'));
 }

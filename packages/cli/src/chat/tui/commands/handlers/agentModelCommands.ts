@@ -12,6 +12,7 @@ import {
 import {
   patchSessionMeta,
   sessionMeta,
+  setTransientNotice,
   setCliSessionModelOverride,
 } from '@cli/chat/tui/state/cliState';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
@@ -52,7 +53,7 @@ export function applyInitialCliAgentSelection(
   context: SlashCommandContext,
 ): void {
   if (!chatTuiCanStartRootRun(context.session)) {
-    appendLocalAssistantTranscript(
+    setTransientNotice(
       'The agent is fixed for this chat session. Start a new chat to use a different agent.',
     );
     return;
@@ -61,7 +62,7 @@ export function applyInitialCliAgentSelection(
   const nextAgent = agentName.trim();
   const usageError = chatToolUseAgentUsageError(nextAgent);
   if (usageError) {
-    appendLocalAssistantTranscript(usageError);
+    setTransientNotice(usageError);
     return;
   }
   patchSessionMeta({
