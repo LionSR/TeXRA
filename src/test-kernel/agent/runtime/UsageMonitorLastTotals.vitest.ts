@@ -21,11 +21,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 
-import {
-  createRecordingHost,
-  recordSessionEvents,
-  runEventsOfType,
-} from '../progressTestUtils';
+import { recordSessionEvents, runEventsOfType } from '../progressTestUtils';
 
 const modelInfo = {
   capabilities: {
@@ -45,7 +41,6 @@ const modelInfo = {
 };
 
 function createMonitorWithEvents() {
-  const { host } = createRecordingHost();
   const logger = new TraceEmitter();
   const hub = new SessionEventHub();
   const storageKey = 'usage-last-totals' as StorageKey;
@@ -56,7 +51,7 @@ function createMonitorWithEvents() {
   );
   const monitor = new UsageMonitor(
     modelInfo,
-    { logger, runtimeHost: host, storageKey, streamId },
+    { logger, storageKey, streamId },
     { agentName: 'assistant', agentCategory: AgentCategory.ToolUse },
   );
   return {

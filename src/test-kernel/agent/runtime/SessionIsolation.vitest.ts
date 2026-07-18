@@ -112,7 +112,6 @@ function createLifecycleContext(
       modelInfo,
       {
         logger: noopTrace,
-        runtimeHost,
         storageKey,
         streamId,
       },

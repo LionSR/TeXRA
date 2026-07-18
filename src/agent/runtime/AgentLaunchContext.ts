@@ -412,7 +412,7 @@ async function assembleAgentLaunchContext(
 
   const usageMonitor = new UsageMonitor(
     { capabilities: modelHandler.capabilities, config: modelHandler.config },
-    { logger: agentLogger, runtimeHost, storageKey, streamId },
+    { logger: agentLogger, storageKey, streamId },
     {
       agentName: config.agent,
       agentCategory: setting.agentCategory,
