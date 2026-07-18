@@ -3,13 +3,22 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Third-party imports
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 // Local imports
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform } from '@platform/platform';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { refresh } from '@agent/index/agentRegistry';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
@@ -84,6 +93,10 @@ beforeAll(async () => {
     ),
   );
   await refresh({ includeRemote: false });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('apply_team', () => {
@@ -192,16 +205,12 @@ describe('apply_team', () => {
   });
 
   it('honors an explicit continuation when catalog access is available', async () => {
-    setSetupPlatform(
-      createFakeSetupPlatform({
-        auth: {
-          getStatus: async () => ({
-            authenticated: true,
-            remoteAgentCatalogAvailable: true,
-          }),
-        },
-      }),
+    vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
+    vi.spyOn(SupabaseClient, 'canAccessRemoteAgentCatalog').mockResolvedValue(
+      true,
     );
+    vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue(null);
+    vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue('free');
 
     const result = await new ApplyTeamTool().call({
       teamId: 'starter',
@@ -216,17 +225,13 @@ describe('apply_team', () => {
 
   it('uses the host setup sign-in capability before its forced retry', async () => {
     const signIn = vi.fn(async () => true);
-    setSetupPlatform(
-      createFakeSetupPlatform({
-        auth: {
-          getStatus: async () => ({
-            authenticated: true,
-            remoteAgentCatalogAvailable: false,
-          }),
-          signIn,
-        },
-      }),
+    vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
+    vi.spyOn(SupabaseClient, 'canAccessRemoteAgentCatalog').mockResolvedValue(
+      false,
     );
+    vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue(null);
+    vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue('free');
+    setSetupPlatform(createFakeSetupPlatform({ signIn }));
 
     const result = await new ApplyTeamTool().call({
       teamId: 'starter',

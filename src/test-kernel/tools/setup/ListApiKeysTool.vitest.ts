@@ -2,31 +2,25 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { describe, it } from 'vitest';
+import { afterEach, describe, it, vi } from 'vitest';
 
 // Local imports
 import { apiKeySecretName } from '@model/apiProviders';
 import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 import { ListApiKeysTool } from '@tools/setup/ListApiKeysTool';
-import { setSetupPlatform } from '@tools/setup/platform';
-
-// Local file imports
-import { createFakeSetupPlatform } from './fixtures';
+import { setupSecrets } from '@tools/setup/platform';
 
 const FAKE_PROVIDERS = ['anthropic', 'openai'] as const;
+const ORIGINAL_PROVIDERS = setupSecrets.providers;
 
 function installPlatform(
   listStoredKeys: () => Promise<readonly string[]>,
 ): void {
-  const base = createFakeSetupPlatform();
-  setSetupPlatform({
-    ...base,
-    secrets: {
-      ...base.secrets,
-      providers: FAKE_PROVIDERS,
-      listStoredKeys,
-    },
+  Object.defineProperty(setupSecrets, 'providers', {
+    configurable: true,
+    value: FAKE_PROVIDERS,
   });
+  vi.spyOn(setupSecrets, 'listStoredKeys').mockImplementation(listStoredKeys);
 }
 
 function installPlatformWithKeys(keys: readonly string[]): void {
@@ -34,6 +28,14 @@ function installPlatformWithKeys(keys: readonly string[]): void {
 }
 
 const tool = new ListApiKeysTool();
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  Object.defineProperty(setupSecrets, 'providers', {
+    configurable: true,
+    value: ORIGINAL_PROVIDERS,
+  });
+});
 
 describe('list_api_keys tool', () => {
   it('reports an empty credential store', async () => {

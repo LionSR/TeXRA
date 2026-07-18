@@ -7,7 +7,7 @@ import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local file imports
 import { defineTool } from '../core/define';
-import { getSetupPlatform } from './platform';
+import { getSetupAuthStatus, getSetupPlatform, setupSecrets } from './platform';
 import { CORE_LATEX_TOOLS, isToolPresent } from './toolProbing';
 
 const VerifySetupInputSchema = z.strictObject({
@@ -73,7 +73,7 @@ export class VerifySetupTool extends defineTool({
 
     // Authentication verifies a configured relay token and primes the shared
     // status cache. Credential readiness must read that settled state.
-    const auth = await platform.auth.getStatus().catch(() => ({
+    const auth = await getSetupAuthStatus().catch(() => ({
       authenticated: false as const,
     }));
     const [coreResults, hasMagick, hasGm, hasUsableCredential] =
@@ -81,7 +81,7 @@ export class VerifySetupTool extends defineTool({
         Promise.all(CORE_LATEX_TOOLS.map(isToolPresent)),
         isToolPresent('magick'),
         isToolPresent('gm'),
-        platform.secrets.anyUsableCredentialExists(),
+        setupSecrets.anyUsableCredentialExists(),
       ]);
 
     const missingCore: string[] = CORE_LATEX_TOOLS.filter(

@@ -7,7 +7,7 @@ import { type ToolResult } from '@shared/schemas/toolResult';
 
 // Local file imports
 import { defineTool } from '../core/define';
-import { getSetupPlatform } from './platform';
+import { getSetupPlatform, setupSecrets } from './platform';
 import { refreshApiKeyCaches, requireApiProvider } from './apiKeyHelpers';
 
 const UnsetApiKeyInputSchema = z.strictObject({
@@ -30,7 +30,7 @@ export class UnsetApiKeyTool extends defineTool({
     const provider = requireApiProvider(input.provider);
     const envVar = apiKeyEnvName(provider);
 
-    const storedExists = await platform.secrets.storedApiKeyExists(provider);
+    const storedExists = await setupSecrets.storedApiKeyExists(provider);
     if (!storedExists) {
       // If no persisted entry exists but a *usable* (non-blank) key
       // is still reported, it's coming from the `<PROVIDER>_API_KEY`
@@ -38,7 +38,7 @@ export class UnsetApiKeyTool extends defineTool({
       // Use `hasUsableApiKey` (not `apiKeyExists`) so a stale
       // `PROVIDER_API_KEY=""` doesn't falsely claim an env var is
       // supplying credentials.
-      const envExists = await platform.secrets.hasUsableApiKey(provider);
+      const envExists = await setupSecrets.hasUsableApiKey(provider);
       if (envExists) {
         return {
           status: 'executed',
@@ -53,7 +53,7 @@ export class UnsetApiKeyTool extends defineTool({
       };
     }
 
-    await platform.secrets.deleteApiKey(provider);
+    await setupSecrets.deleteApiKey(provider);
     // Mirror the manual removal flow: drop cached model availability and
     // key-origin lookups so models that just lost their credential stop
     // appearing selectable.
@@ -63,7 +63,7 @@ export class UnsetApiKeyTool extends defineTool({
     // tell the user why the key still appears to exist after removal.
     // `hasUsableApiKey` here too, so a blank env var doesn't trip the
     // "env var still active" branch.
-    const stillPresent = await platform.secrets.hasUsableApiKey(provider);
+    const stillPresent = await setupSecrets.hasUsableApiKey(provider);
     if (stillPresent) {
       return {
         status: 'executed',

@@ -1,78 +1,84 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
-import { describe, it } from 'vitest';
+import { afterEach, describe, it, vi } from 'vitest';
 
 // Local imports
 import { ProbeEnvironmentTool } from '@tools/setup/ProbeEnvironmentTool';
 import { VerifySetupTool } from '@tools/setup/VerifySetupTool';
-import {
-  setSetupPlatform,
-  type SetupSecretsAdapter,
-} from '@tools/setup/platform';
+import * as setupPlatformModule from '@tools/setup/platform';
+import { setSetupPlatform, setupSecrets } from '@tools/setup/platform';
 
 // Local file imports
 import { createFakeSetupPlatform } from './fixtures';
 
-function installSetupPlatformWithSecrets(
-  secretsOverrides: Partial<SetupSecretsAdapter>,
-): void {
-  const platform = createFakeSetupPlatform();
-  setSetupPlatform({
-    ...platform,
-    secrets: { ...platform.secrets, ...secretsOverrides },
-  });
+const ORIGINAL_PROVIDERS = setupSecrets.providers;
+
+function installSetupPlatformWithSecrets(options: {
+  providers?: typeof setupSecrets.providers;
+  apiKeyOrigin?: typeof setupSecrets.apiKeyOrigin;
+  anyUsableCredentialExists?: typeof setupSecrets.anyUsableCredentialExists;
+}): void {
+  setSetupPlatform(createFakeSetupPlatform());
+  if (options.providers) {
+    Object.defineProperty(setupSecrets, 'providers', {
+      configurable: true,
+      value: options.providers,
+    });
+  }
+  if (options.apiKeyOrigin) {
+    vi.spyOn(setupSecrets, 'apiKeyOrigin').mockImplementation(
+      options.apiKeyOrigin,
+    );
+  }
+  if (options.anyUsableCredentialExists) {
+    vi.spyOn(setupSecrets, 'anyUsableCredentialExists').mockImplementation(
+      options.anyUsableCredentialExists,
+    );
+  }
 }
 
 function installChatGptOnlySetupPlatform(): void {
-  const platform = createFakeSetupPlatform();
-  setSetupPlatform({
-    ...platform,
-    secrets: {
-      ...platform.secrets,
-      async anyUsableCredentialExists() {
-        return true;
-      },
-    },
-    modelAccess: {
-      async getChatGptSubscriptionStatus() {
-        return {
-          signedIn: true,
-          enabled: true,
-        };
-      },
-    },
-  });
+  setSetupPlatform(createFakeSetupPlatform());
+  vi.spyOn(setupSecrets, 'anyUsableCredentialExists').mockResolvedValue(true);
+  vi.spyOn(
+    setupPlatformModule,
+    'getChatGptSubscriptionStatus',
+  ).mockResolvedValue({ signedIn: true, enabled: true });
 }
 
 async function assertAuthPrecedesCredentialProbe(
   run: () => Promise<unknown>,
 ): Promise<void> {
   const calls: string[] = [];
-  const platform = createFakeSetupPlatform();
-  setSetupPlatform({
-    ...platform,
-    auth: {
-      async getStatus() {
-        calls.push('auth');
-        return {
-          authenticated: false,
-          remoteAgentCatalogAvailable: false,
-        };
-      },
+  setSetupPlatform(createFakeSetupPlatform());
+  vi.spyOn(setupPlatformModule, 'getSetupAuthStatus').mockImplementation(
+    async () => {
+      calls.push('auth');
+      return {
+        authenticated: false,
+        remoteAgentCatalogAvailable: false,
+      };
     },
-    secrets: {
-      ...platform.secrets,
-      async anyUsableCredentialExists() {
-        calls.push('credential');
-        return false;
-      },
+  );
+  vi.spyOn(setupSecrets, 'anyUsableCredentialExists').mockImplementation(
+    async () => {
+      calls.push('credential');
+      return false;
     },
-  });
+  );
 
   await run();
 
   assert.deepEqual(calls, ['auth', 'credential']);
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  Object.defineProperty(setupSecrets, 'providers', {
+    configurable: true,
+    value: ORIGINAL_PROVIDERS,
+  });
+});
 
 describe('setup credential reporting', () => {
   it('reports the active host and provider-key origin without secret values', async () => {
