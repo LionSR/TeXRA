@@ -9,6 +9,7 @@ import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getValidatedConfig } from '@utils/config/configUtils';
 import {
   getProviderEndpoint,
+  getProviderKeyUrl,
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
 import { readPlatformSetting } from '@utils/config/platformSettings';
@@ -174,5 +175,29 @@ describe('getProviderEndpoint', () => {
 
   it('returns empty string for a provider with no endpoint key', () => {
     expect(getProviderEndpoint('not-a-real-provider')).toBe('');
+  });
+});
+
+describe('getProviderKeyUrl', () => {
+  it('owns the provider default and applies the configured region', async () => {
+    await installPlatform({
+      globalState: { [GlobalStateKey.MOONSHOT_USE_CHINA]: false },
+    });
+
+    expect(getProviderKeyUrl('moonshot')).toBe(
+      'https://platform.moonshot.ai/console',
+    );
+  });
+
+  it('returns the registry default when the default region is active', async () => {
+    await installPlatform({});
+
+    expect(getProviderKeyUrl('moonshot')).toBe(
+      'https://platform.moonshot.cn/console',
+    );
+    expect(getProviderKeyUrl('openai')).toBe(
+      'https://platform.openai.com/api-keys',
+    );
+    expect(getProviderKeyUrl('not-a-provider')).toBeUndefined();
   });
 });
