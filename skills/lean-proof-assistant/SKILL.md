@@ -27,6 +27,6 @@ Use this skill for day-to-day Lean 4 proof development: proving lemmas, debuggin
 - Treat diagnostics as ground truth.
 - If a proof attempt becomes opaque or fragile, back up and choose a clearer route.
 
-When the same tactic sequence or goal shape shows up for the third time, stop inlining it and use the lean-tactic-improver companion skill. It owns ledger creation and format, extraction, and recording so proof size grows sublinearly with the mathematics.
+When the same tactic sequence or goal shape shows up for the third time, stop inlining it. Use the lean-tactic-improver companion skill when available. Otherwise, extract the lowest sufficient project-native abstraction: prefer a helper lemma or named simp set, reserve a tactic macro for a fixed sequence, and never add a framework solely for automation. Rewrite the motivating call sites, then add a `Name | Kind | Use when | Defined in` row to the canonical `AGENTS.md` tactic ledger, creating that section if needed. If `CLAUDE.md` exists, make it share or point to the ledger. This fallback keeps the skill useful when installed independently.
 
 For stuck proofs or longer debugging sessions, use [references/proof-workflow.md](references/proof-workflow.md) for a stricter loop around search, inspection, iteration, and cleanup.

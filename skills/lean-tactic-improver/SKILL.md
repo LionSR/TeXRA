@@ -1,6 +1,6 @@
 ---
 name: lean-tactic-improver
-description: Keep Lean 4 proof size sublinear by turning repeated proof patterns into reusable project automation. Use when Codex notices the same tactic sequences or goal shapes recurring across proofs and should extract them into lemmas, simp sets, aesop rules, or custom tactics, then record them in the project's canonical AGENTS.md tactic ledger so future sessions reuse instead of rederive.
+description: Extract repeated Lean 4 proof patterns into reusable project automation and record them in the project's canonical AGENTS.md tactic ledger. Use when Codex notices the same tactic sequences or goal shapes recurring across proofs and should turn them into lemmas, simp sets, aesop rules, or custom tactics for future sessions to reuse.
 ---
 
 # Lean Tactic Improver
