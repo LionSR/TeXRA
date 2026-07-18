@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
@@ -107,6 +107,8 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const [feedbackMode, setFeedbackMode] = useState(false);
   const [feedbackValue, setFeedbackValue] = useState('');
+  const [feedbackExitCount, setFeedbackExitCount] = useState(0);
+  const feedbackModeRef = useRef(false);
   const title = `Apply edit to ${props.request.path}?`;
   const diffWidth = clampModalWidth(columns - EDIT_DIFF_PADDING);
   const maxDiffLines = editApprovalDiffRowsBudget({
@@ -142,9 +144,22 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
     [diffWidth, hunks, maxDiffLines],
   );
   const scrollResetKey = useMemo(
-    () => ({ availableRows: props.availableRows, columns, hunks }),
-    [columns, hunks, props.availableRows],
+    () => ({
+      availableRows: props.availableRows,
+      columns,
+      feedbackExitCount,
+      hunks,
+      request: props.request,
+    }),
+    [columns, feedbackExitCount, hunks, props.availableRows, props.request],
   );
+  const handleFeedbackModeChange = useCallback((active: boolean) => {
+    if (feedbackModeRef.current && !active) {
+      setFeedbackExitCount((count) => count + 1);
+    }
+    feedbackModeRef.current = active;
+    setFeedbackMode(active);
+  }, []);
   const { scrollOffset, scrollable: diffScrollable } = useScrollableOffset({
     initialOffset: initialScrollOffset,
     maxScrollOffset,
@@ -165,7 +180,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
       alwaysAllow={{ kind: 'toolEdit', label: 'approve edits for session' }}
       feedbackPlaceholder={EDIT_APPROVAL_FEEDBACK_PLACEHOLDER}
       compact={compactCard}
-      onFeedbackModeChange={setFeedbackMode}
+      onFeedbackModeChange={handleFeedbackModeChange}
       onFeedbackValueChange={setFeedbackValue}
       onDecide={props.onDecide}
     >

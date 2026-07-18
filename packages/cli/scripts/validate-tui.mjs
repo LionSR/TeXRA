@@ -1465,6 +1465,31 @@ const SCENARIOS = [
     unexpect: ['-Old acknowledgment.', '+Revised acknowledgment.'],
   },
   {
+    name: 'edit-approval-feedback-exit-reanchors',
+    rows: 16,
+    cols: 40,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_EDIT_APPROVAL: '1',
+      HARNESS_EDIT_APPROVAL_WRAPPED_CONTEXT: '1',
+    },
+    bootExpect: '· Ctrl-C ',
+    keys: [
+      'n',
+      'This rejection note is deliberately long enough to make the diff compact.',
+      ESC,
+    ],
+    frame: 'viewport',
+    expect: [
+      '-Old acknowledgment.',
+      '+Revised acknowledgment.',
+      'previous',
+      'y approve',
+      'n reject',
+    ],
+    unexpect: ['First context paragraph', 'Enter send note'],
+  },
+  {
     name: 'narrow-edit-approval',
     rows: 12,
     cols: 40,

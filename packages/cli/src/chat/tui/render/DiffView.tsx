@@ -195,8 +195,16 @@ export function initialDiffScrollOffset(
   const changedIndex = lines.findIndex(
     (line) => line.kind === 'added' || line.kind === 'removed',
   );
-  const initiallyVisibleRows = Math.max(1, maxDisplayLines - 1);
-  if (changedIndex < 0 || changedIndex < initiallyVisibleRows) return 0;
+  if (changedIndex < 0) return 0;
+
+  const initiallyVisibleContentRows = Math.max(1, maxDisplayLines - 1);
+  const firstChange = lines.at(changedIndex);
+  const nextLine = lines.at(changedIndex + 1);
+  const requiredRows =
+    firstChange?.kind === 'removed' && nextLine?.kind === 'added' ? 2 : 1;
+  if (changedIndex + requiredRows <= initiallyVisibleContentRows) {
+    return 0;
+  }
 
   return clamp(
     changedIndex - 1,
