@@ -14,7 +14,7 @@ Use this checklist for deeper cleanup passes aimed at Mathlib-quality code.
 - Replace brittle chains with clearer arguments when possible.
 - Prefer `calc`, well-scoped `simp`, and direct structure over clutter.
 - Avoid shortening proofs at the cost of readability.
-- Read the canonical tactic ledger in `AGENTS.md` and reuse existing automation before writing a new tactic chain.
+- If the project has a canonical tactic ledger in `AGENTS.md`, read it and reuse existing automation before writing a new tactic chain.
 
 ## Generality and reuse
 

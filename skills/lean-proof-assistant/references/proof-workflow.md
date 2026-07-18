@@ -11,7 +11,7 @@ Use this checklist when proof development is stuck or the file needs a disciplin
 
 ## Search and proof strategy
 
-- Check the project's canonical tactic ledger in `AGENTS.md` for custom tactics, simp sets, and workhorse lemmas before writing long tactic chains; if `CLAUDE.md` exists, it should share or point to that ledger.
+- If the project has a canonical tactic ledger in `AGENTS.md`, check it for custom tactics, simp sets, and workhorse lemmas before writing long tactic chains; if `CLAUDE.md` exists, it should share or point to that ledger.
 - Search for existing lemmas before proving helpers.
 - Try both type-shape and name-based searches.
 - Prefer clear proof structure over long fragile tactic chains.
