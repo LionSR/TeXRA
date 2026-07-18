@@ -17,12 +17,8 @@ import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 // Local imports - progress view helpers
 import { buildDetailsSummary } from '../formatters/htmlBuilders';
 
-/** Stat item to display */
-export interface StatItem {
-  icon: string;
-  label: string;
-  value: string;
-}
+// Local imports - local components (StatItem's home is ContextManagement)
+import type { StatItem } from './ContextManagement';
 
 @customElement('statistics-panel')
 export class StatisticsPanel extends LitElement {

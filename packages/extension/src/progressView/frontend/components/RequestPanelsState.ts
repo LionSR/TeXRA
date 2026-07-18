@@ -2,8 +2,8 @@
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 // Local imports - progress view component types
+import { permissionId, type PermissionState } from '../permissionState';
 import type { BaseRequestPanel } from './BaseRequestPanel';
-import type { PermissionState } from '../permissionState';
 
 const REQUEST_PANEL_SELECTOR =
   'tool-edit-request-panel, bash-request-panel, retry-request-panel, proposal-request-panel, plan-approval-request-panel, external-inquiry-panel, user-question-panel';
@@ -126,21 +126,5 @@ export function findPanelForPermission(
 }
 
 export function getPermissionKey(permission: PermissionState): string {
-  let id: string;
-  switch (permission.kind) {
-    case PERMISSION_KIND.RETRY:
-      id = permission.data.streamId;
-      break;
-    case PERMISSION_KIND.PROPOSAL:
-      id = permission.data.proposalId;
-      break;
-    case PERMISSION_KIND.PLAN_APPROVAL:
-      id = permission.data.approvalId;
-      break;
-    default:
-      id = permission.data.requestId;
-      break;
-  }
-
-  return `${permission.kind}:${id}`;
+  return `${permission.kind}:${permissionId(permission)}`;
 }

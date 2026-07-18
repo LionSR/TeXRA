@@ -10,8 +10,10 @@
 import { html } from 'lit';
 
 // Local imports - shared schemas and components
-import type { ActionConfig } from '@progressView/frontend/components/ContextManagement';
-import type { StatItem } from '@progressView/frontend/components/StatisticsPanel';
+import type {
+  ActionConfig,
+  StatItem,
+} from '@progressView/frontend/components/ContextManagement';
 import {
   ContextManagementDataSchema,
   type ContextManagementData,
