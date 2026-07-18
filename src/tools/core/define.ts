@@ -24,6 +24,11 @@ export function defineTool<T>(def: {
    * calls in one model response to execute concurrently (see ITool).
    */
   parallelSafe?: boolean;
+  /** Execution behavior consumed by tool resolution and dispatch. */
+  requiresApproval?: boolean;
+  slow?: boolean;
+  deferLogUntilApproval?: boolean;
+  streamsOutput?: boolean;
 }) {
   const getDescription = (): string =>
     typeof def.description === 'function' ? def.description() : def.description;
@@ -45,6 +50,10 @@ export function defineTool<T>(def: {
 
   abstract class GeneratedTool extends BaseTool<T> {
     readonly parallelSafe = def.parallelSafe;
+    readonly requiresApproval = def.requiresApproval;
+    readonly slow = def.slow;
+    readonly deferLogUntilApproval = def.deferLogUntilApproval;
+    readonly streamsOutput = def.streamsOutput;
 
     constructor(override?: Partial<ToolDefinition>) {
       super(buildDefinition(override), def.schema);

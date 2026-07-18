@@ -171,6 +171,7 @@ export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
 
 export class ExecutionsTool extends defineTool({
   name: 'executions',
+  slow: true,
   description: `View execution history and manage running executions.
 
 Paths:

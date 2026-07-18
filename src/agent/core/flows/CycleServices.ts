@@ -67,6 +67,7 @@ interface CycleRunServices<C = unknown>
   readonly fileService: TaskRunFileService;
   readonly run: AgentRunStateSnapshot;
   readonly workspace: AgentWorkspaceState;
+  readonly toolRegistry: IToolRegistry;
 }
 
 /** Services for response cycle flow nodes. */
@@ -93,7 +94,6 @@ export interface ResponseCycleServices<
  * fields before running the round.
  */
 export interface ToolUseRoundServices<C = unknown> extends CycleRunServices<C> {
-  readonly toolRegistry: IToolRegistry;
   /** Session for injecting queued user messages after tool dispatch. */
   readonly session?: IToolUseSession;
   /** Callback when a queued follow-up is consumed (clears UI display). */
