@@ -8,12 +8,10 @@
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
-import {
-  html,
-  classMap,
-  type TemplateResult,
-  type FormatResult,
-} from '@progressView/frontend/formatters/litTemplates';
+import { html, type TemplateResult } from 'lit';
+import { classMap } from 'lit/directives/class-map.js';
+
+import type { FormatResult } from '@progressView/frontend/formatters/baseLogFormatter';
 import {
   buildToolUseSection,
   wrapInPre,

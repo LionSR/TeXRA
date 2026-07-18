@@ -9,12 +9,9 @@
  * single-line templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
-import {
-  html,
-  nothing,
-  ifDefined,
-  type TemplateResult,
-} from '@progressView/frontend/formatters/litTemplates';
+import { html, nothing, type TemplateResult } from 'lit';
+import { ifDefined } from 'lit/directives/if-defined.js';
+
 import {
   buildToolUseSection,
   wrapInPre,
@@ -64,14 +61,6 @@ import {
   getExecutionsWaitTimeoutSeconds,
   isMcpTextBlock,
 } from './helpers';
-
-type SpecializedToolRenderer = (
-  input: unknown,
-) => TemplateResult | typeof nothing | null | undefined;
-
-const SPECIALIZED_TOOL_SECTION_RENDERERS = {
-  ...codexToolRenderers,
-} satisfies Record<string, SpecializedToolRenderer>;
 
 export type ToolSectionContext = {
   toolName: string;
@@ -387,9 +376,7 @@ function buildWorkflowScriptSections(
 function buildSpecializedSections(ctx: ToolSectionContext): TemplateResult[] {
   const { toolName, input } = ctx;
   const content =
-    SPECIALIZED_TOOL_SECTION_RENDERERS[
-      toolName as keyof typeof SPECIALIZED_TOOL_SECTION_RENDERERS
-    ](input);
+    codexToolRenderers[toolName as keyof typeof codexToolRenderers](input);
   if (content != null && content !== nothing) {
     return [content];
   }
@@ -556,8 +543,7 @@ const TOOL_SECTION_BUILDERS: Array<{
     build: buildDelegationSections,
   },
   {
-    match: (ctx) =>
-      Object.hasOwn(SPECIALIZED_TOOL_SECTION_RENDERERS, ctx.toolName),
+    match: (ctx) => Object.hasOwn(codexToolRenderers, ctx.toolName),
     build: buildSpecializedSections,
   },
   { match: (ctx) => ctx.toolName.startsWith('mcp:'), build: buildMcpSections },

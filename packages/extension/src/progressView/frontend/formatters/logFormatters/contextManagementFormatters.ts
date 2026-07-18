@@ -6,7 +6,10 @@
  * Uses Lit-native component.
  */
 
-// Local imports - shared schemas
+// Third-party imports - Lit template utilities
+import { html } from 'lit';
+
+// Local imports - shared schemas and components
 import type { ActionConfig } from '@progressView/frontend/components/ContextManagement';
 import type { StatItem } from '@progressView/frontend/components/StatisticsPanel';
 import {
@@ -16,8 +19,8 @@ import {
 } from '@shared/schemas';
 import { formatCompactTokenCount } from '@utils/core';
 
-// Local imports - Lit template utilities
-import { html, type FormatResult } from '../litTemplates';
+// Local imports - formatter helpers
+import type { FormatResult } from '../baseLogFormatter';
 
 /**
  * Minimum reduced token threshold below which the "Max Tokens Reduced" event
