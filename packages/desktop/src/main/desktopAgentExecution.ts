@@ -1037,16 +1037,16 @@ export class DesktopProgressBridge {
       this.deletedStreams.add(streamId);
       releaseStreamResources(streamId, this.sessionForStream(streamId));
     }
-    // Catch pending approvals with no concrete stream context (undefined or
-    // empty streamId) — the per-stream loop skips them because they do not
-    // equal any StreamTabId. Session-scoped, so a sibling window's streamless
-    // approval is not rejected.
-    if (retainedStreams.size === 0) cleanupUnscopedApprovals(this.session);
-    // Child/subagent interaction requests may be session-owned without a local
-    // desktop stream entry, so cancel the owning window's remaining pending
-    // interactions after the visible per-stream sweep. This is session-scoped
-    // and does not touch sibling windows.
     if (retainedStreams.size === 0) {
+      // Catch pending approvals with no concrete stream context (undefined or
+      // empty streamId) — the per-stream loop skips them because they do not
+      // equal any StreamTabId. Session-scoped, so a sibling window's streamless
+      // approval is not rejected.
+      cleanupUnscopedApprovals(this.session);
+      // Child/subagent interaction requests may be session-owned without a local
+      // desktop stream entry, so cancel the owning window's remaining pending
+      // interactions after the visible per-stream sweep. This is session-scoped
+      // and does not touch sibling windows.
       this.session.interactions.cancel({ cause: 'All streams deleted.' });
       this.clearDesktopSessionMaps();
       this.workflowFileActions.clearAllBackups();
@@ -1063,8 +1063,8 @@ export class DesktopProgressBridge {
       }
     }
     const activeStream = this.updateStreamMetadata();
-    if (retainedStreams.size > 0) this.syncStreamContent(activeStream);
     if (retainedStreams.size > 0) {
+      this.syncStreamContent(activeStream);
       await this.options.host.showInfoMessage(
         formatStreamDeletionRetention(
           retained.active.size,

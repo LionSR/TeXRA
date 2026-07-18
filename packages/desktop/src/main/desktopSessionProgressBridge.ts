@@ -1,6 +1,5 @@
 /** Desktop-only presentation effects for session and runtime events. */
 
-import type { AgentTrace } from '@agent/trace';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -68,11 +67,12 @@ class DesktopSessionProgressBridgeImpl implements DesktopSessionProgressBridge {
         this.options.routeToProgress();
         return;
       case 'requestShowError':
-        this.options.onShowError((payload as RequestShowErrorPayload).message);
-        return;
       case 'requestShowInstruction':
+        // No second dialog surface: fold the instruction into the same
+        // error-dialog path `requestShowError` uses (one dialog per host).
         this.options.onShowError(
-          (payload as RequestShowInstructionPayload).message,
+          (payload as RequestShowErrorPayload | RequestShowInstructionPayload)
+            .message,
         );
         return;
     }

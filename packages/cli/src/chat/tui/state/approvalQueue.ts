@@ -112,6 +112,19 @@ interface ApprovalQueueItem {
 
 const pendingItems: ApprovalQueueItem[] = [];
 
+/** Split `items` into [matching, non-matching], each order-preserving. */
+function partitionItems(
+  items: readonly ApprovalQueueItem[],
+  predicate: (item: ApprovalQueueItem) => boolean,
+): [ApprovalQueueItem[], ApprovalQueueItem[]] {
+  const matching: ApprovalQueueItem[] = [];
+  const rest: ApprovalQueueItem[] = [];
+  for (const item of items) {
+    (predicate(item) ? matching : rest).push(item);
+  }
+  return [matching, rest];
+}
+
 const INTERRUPT: ApprovalDecision = {
   accepted: false,
   userMessage: 'Session interrupted.',
@@ -150,11 +163,7 @@ function settleItems(
   decision: ApprovalDecision,
 ): number {
   const previousForeground = pendingItems[0];
-  const removed: ApprovalQueueItem[] = [];
-  const retained: ApprovalQueueItem[] = [];
-  for (const item of pendingItems) {
-    (predicate(item) ? removed : retained).push(item);
-  }
+  const [removed, retained] = partitionItems(pendingItems, predicate);
   if (removed.length === 0) return 0;
 
   pendingItems.splice(0, pendingItems.length, ...retained);
@@ -265,11 +274,7 @@ export function promoteApprovalsForStream(
       (options.includeSessionWide === true && itemStreamId === undefined)
     );
   };
-  const promoted: ApprovalQueueItem[] = [];
-  const rest: ApprovalQueueItem[] = [];
-  for (const item of pendingItems) {
-    (matches(item) ? promoted : rest).push(item);
-  }
+  const [promoted, rest] = partitionItems(pendingItems, matches);
   if (promoted.length === 0) return;
   const next = [...promoted, ...rest];
   // Already a contiguous prefix (a head-only check would miss matching items

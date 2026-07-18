@@ -351,16 +351,17 @@ export function SubagentList(
   const hiddenProcessCount = activeProcesses.filter(
     (process) => !visibleValues.has(childProcessListValue(process.executionId)),
   ).length;
-  const hiddenRowSummary = [
-    hiddenSessionCount > 0
-      ? `+${formatResultCount(hiddenSessionCount, 'session')}`
-      : undefined,
-    hiddenProcessCount > 0
-      ? `+${formatResultCount(hiddenProcessCount, 'process')}`
-      : undefined,
-  ]
-    .filter((part): part is string => part !== undefined)
-    .join(', ');
+  const hiddenRowSummary =
+    [
+      hiddenSessionCount > 0
+        ? `+${formatResultCount(hiddenSessionCount, 'session')}`
+        : undefined,
+      hiddenProcessCount > 0
+        ? `+${formatResultCount(hiddenProcessCount, 'process')}`
+        : undefined,
+    ]
+      .filter((part): part is string => part !== undefined)
+      .join(', ') || undefined;
 
   useInput(
     (input, key) => {
@@ -428,7 +429,7 @@ export function SubagentList(
                 isListRoot={session.id === props.listRootStreamId}
                 active={state.active}
                 focused={state.focused}
-                hiddenRowSummary={hiddenRowSummary || undefined}
+                hiddenRowSummary={hiddenRowSummary}
                 metadataColumn={metadataColumn}
                 nowMs={nowMs}
                 pendingKinds={props.pendingApprovals?.get(session.id)}
@@ -441,7 +442,7 @@ export function SubagentList(
             <ProcessRow
               child={process}
               focused={state.focused}
-              hiddenRowSummary={hiddenRowSummary || undefined}
+              hiddenRowSummary={hiddenRowSummary}
               metadataColumn={metadataColumn}
               nowMs={nowMs}
               tail={processOutput?.get(process.executionId)}

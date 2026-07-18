@@ -22,6 +22,7 @@ export interface ParsedWorkflowScript {
 }
 
 interface ExportedMetaDeclaration {
+  exportStart: number;
   declarationStart: number;
   literalStart: number;
   literalEnd: number;
@@ -90,6 +91,7 @@ function exportedMetaDeclaration(
     return undefined;
   }
   return {
+    exportStart: first.start,
     declarationStart: declaration.start,
     literalStart: meta.init.start,
     literalEnd: meta.init.end,
@@ -153,7 +155,7 @@ export function parseWorkflowScript(source: string): ParsedWorkflowScript {
   }
 
   const body =
-    source.slice(0, program.body[0]?.start ?? 0) +
+    source.slice(0, metaDeclaration.exportStart) +
     source.slice(metaDeclaration.declarationStart);
   return { meta: parsed.data, body };
 }

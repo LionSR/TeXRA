@@ -47,14 +47,12 @@ async function reconcileRootModelAfterApiModeChange(
   return selection.notice;
 }
 
-/** Save a provider key, select personal access, and reconcile the root model. */
-export async function applyCliProviderApiKey(
-  provider: ApiProvider,
-  key: string,
-  context?: SlashCommandContext,
-): Promise<string | undefined> {
-  await saveProviderApiKey(provider, key);
-  const access = await selectCliApiModelAccessRoute('personal');
+/** Select an api-mode access route, apply it to the session, and reconcile the root model. */
+async function applyApiModelAccessRoute(
+  requestedMode: CliApiMode,
+  context: SlashCommandContext | undefined,
+): Promise<string> {
+  const access = await selectCliApiModelAccessRoute(requestedMode);
   setCliSessionApiMode(access.apiMode);
   let modelNotice: string | undefined;
   try {
@@ -66,6 +64,16 @@ export async function applyCliProviderApiKey(
     modelNotice = toErrorMessage(error);
   }
   return [access.message, modelNotice].filter(Boolean).join('\n');
+}
+
+/** Save a provider key, select personal access, and reconcile the root model. */
+export async function applyCliProviderApiKey(
+  provider: ApiProvider,
+  key: string,
+  context?: SlashCommandContext,
+): Promise<string | undefined> {
+  await saveProviderApiKey(provider, key);
+  return applyApiModelAccessRoute('personal', context);
 }
 
 /** Set the chat session's api-mode without touching the persisted global. */
@@ -89,19 +97,8 @@ export async function applyCliApiModeSelection(
 
   const apiMode = parseCliApiMode(normalized);
   if (apiMode) {
-    const access = await selectCliApiModelAccessRoute(apiMode);
-    setCliSessionApiMode(access.apiMode);
-    let modelNotice: string | undefined;
-    try {
-      modelNotice = await reconcileRootModelAfterApiModeChange(
-        context,
-        access.apiMode,
-      );
-    } catch (error: unknown) {
-      modelNotice = toErrorMessage(error);
-    }
     appendLocalAssistantTranscript(
-      [access.message, ...(modelNotice ? [modelNotice] : [])].join('\n'),
+      await applyApiModelAccessRoute(apiMode, context),
     );
     return;
   }

@@ -76,6 +76,7 @@ describe('agent creator orchestration', () => {
       '<yaml>generated: true</yaml>',
     );
     mocks.validateAgentYamlContent.mockImplementation(() => undefined);
+    vi.spyOn(AbsoluteFS, 'write').mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -111,7 +112,6 @@ describe('agent creator orchestration', () => {
   });
 
   it('passes selected tool metadata into tool-use generation', async () => {
-    vi.spyOn(AbsoluteFS, 'write').mockResolvedValue(undefined);
     const ui = createUi([], {
       promptAgentName: vi.fn(async () => 'researcher'),
       promptDescription: vi.fn(async () => 'Search papers and edit files'),
@@ -150,7 +150,6 @@ describe('agent creator orchestration', () => {
   });
 
   it('stops before description when name selection is cancelled', async () => {
-    vi.spyOn(AbsoluteFS, 'write').mockResolvedValue(undefined);
     const ui = createUi([], {
       promptAgentName: vi.fn(async () => undefined),
     });
@@ -163,7 +162,6 @@ describe('agent creator orchestration', () => {
   });
 
   it('stops before generation when description is cancelled', async () => {
-    vi.spyOn(AbsoluteFS, 'write').mockResolvedValue(undefined);
     const ui = createUi([], {
       promptDescription: vi.fn(async () => undefined),
     });
@@ -176,7 +174,6 @@ describe('agent creator orchestration', () => {
   });
 
   it('stops tool-use creation before filesystem access when tool selection is cancelled', async () => {
-    vi.spyOn(AbsoluteFS, 'write').mockResolvedValue(undefined);
     const ui = createUi([], {
       pickTools: vi.fn(async () => undefined),
     });
@@ -190,7 +187,6 @@ describe('agent creator orchestration', () => {
   });
 
   it('includes the validation error in the second generation attempt', async () => {
-    vi.spyOn(AbsoluteFS, 'write').mockResolvedValue(undefined);
     const ui = createUi();
     mocks.runHelperModelCompletion
       .mockResolvedValueOnce('<yaml>invalid</yaml>')
@@ -216,7 +212,6 @@ describe('agent creator orchestration', () => {
   });
 
   it('uses the deterministic template after both generation attempts fail', async () => {
-    vi.spyOn(AbsoluteFS, 'write').mockResolvedValue(undefined);
     const ui = createUi();
     mocks.runHelperModelCompletion.mockRejectedValue(
       new Error('model unavailable'),

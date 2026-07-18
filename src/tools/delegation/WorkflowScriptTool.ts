@@ -32,6 +32,7 @@ import { defineTool } from '@tools/core/define';
 
 // Local imports - utilities
 import { deriveExecutionId } from '@utils/core/idHash';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - delegation
 import { createWorkflowScriptAgentRunner } from './workflowScriptAgentRunner';
@@ -158,7 +159,7 @@ Tool inclusion is the opt-in boundary: do not add this tool to a default agent c
         };
       }
       throw new ToolError(
-        `Failed to launch workflow script '${meta.name}': ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to launch workflow script '${meta.name}': ${toErrorMessage(error)}`,
       );
     }
 

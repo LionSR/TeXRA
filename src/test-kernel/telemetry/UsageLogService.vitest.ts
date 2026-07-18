@@ -41,6 +41,15 @@ function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200 });
 }
 
+/** A promise a test can resolve on demand, used to stall a mocked fetch call. */
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 // ky passes a Request object; read each batch body from it. `beforeRespond`
 // lets a test stall or fail a specific call before the success response.
 function stubFetch(
@@ -76,10 +85,8 @@ describe('UsageLogService', () => {
   it('drains entries queued while another flush is in flight', async () => {
     vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
 
-    let releaseFirstFetch: (() => void) | undefined;
-    const firstFetchReleased = new Promise<void>((resolve) => {
-      releaseFirstFetch = resolve;
-    });
+    const { promise: firstFetchReleased, resolve: releaseFirstFetch } =
+      deferred();
     const batches: unknown[] = [];
     const fetchMock = stubFetch(batches, async (callCount) => {
       if (callCount === 1) {
@@ -95,7 +102,7 @@ describe('UsageLogService', () => {
     const secondFlush = UsageLogService.flush();
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    releaseFirstFetch?.();
+    releaseFirstFetch();
     await expect(Promise.all([firstFlush, secondFlush])).resolves.toEqual([
       USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
       USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
@@ -108,14 +115,10 @@ describe('UsageLogService', () => {
   it('waits for successive active batches during disposal', async () => {
     vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
 
-    let releaseFirstFetch: (() => void) | undefined;
-    let releaseSecondFetch: (() => void) | undefined;
-    const firstFetchReleased = new Promise<void>((resolve) => {
-      releaseFirstFetch = resolve;
-    });
-    const secondFetchReleased = new Promise<void>((resolve) => {
-      releaseSecondFetch = resolve;
-    });
+    const { promise: firstFetchReleased, resolve: releaseFirstFetch } =
+      deferred();
+    const { promise: secondFetchReleased, resolve: releaseSecondFetch } =
+      deferred();
     const batches: unknown[] = [];
     const fetchMock = stubFetch(batches, async (callCount) => {
       if (callCount === 1) await firstFetchReleased;
@@ -130,7 +133,7 @@ describe('UsageLogService', () => {
     const secondFlush = UsageLogService.flush();
     const disposal = UsageLogService.dispose();
 
-    releaseFirstFetch?.();
+    releaseFirstFetch();
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 
     let disposed = false;
@@ -140,7 +143,7 @@ describe('UsageLogService', () => {
     await Promise.resolve();
     expect(disposed).toBe(false);
 
-    releaseSecondFetch?.();
+    releaseSecondFetch();
     await expect(Promise.all([firstFlush, secondFlush])).resolves.toEqual([
       USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
       USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
@@ -155,10 +158,7 @@ describe('UsageLogService', () => {
     vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
     const warn = vi.spyOn(logger, 'warn');
 
-    let releaseFetch: (() => void) | undefined;
-    const fetchReleased = new Promise<void>((resolve) => {
-      releaseFetch = resolve;
-    });
+    const { promise: fetchReleased, resolve: releaseFetch } = deferred();
     const batches: unknown[] = [];
     const fetchMock = stubFetch(batches, async () => {
       await fetchReleased;
@@ -188,7 +188,7 @@ describe('UsageLogService', () => {
     );
     expect(disposed).toBe(false);
 
-    releaseFetch?.();
+    releaseFetch();
     await expect(flush).resolves.toBe(USAGE_LOG_FLUSH_OUTCOME.ACCEPTED);
     await expect(disposal).resolves.toBeUndefined();
     expect(batches.map(batchModels)).toEqual([['slow']]);
@@ -252,10 +252,8 @@ describe('UsageLogService', () => {
   it('discards a permanent rejection and continues with later entries', async () => {
     vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
 
-    let releaseRejection: (() => void) | undefined;
-    const rejectionReleased = new Promise<void>((resolve) => {
-      releaseRejection = resolve;
-    });
+    const { promise: rejectionReleased, resolve: releaseRejection } =
+      deferred();
     const batches: unknown[] = [];
     const fetchMock = stubFetch(batches, async (callCount) => {
       if (callCount === 2) throw new Error('network unavailable');
@@ -274,7 +272,7 @@ describe('UsageLogService', () => {
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     UsageLogService.log(usageEntry('valid'));
-    releaseRejection?.();
+    releaseRejection();
 
     await expect(flush).resolves.toBe(USAGE_LOG_FLUSH_OUTCOME.REJECTED);
     expect(fetchMock).toHaveBeenCalledTimes(2);
