@@ -273,6 +273,24 @@ export function sendFollowupCommand(
   });
 }
 
+/**
+ * Post an optional session-bypass-enable message before the terminal
+ * protocol message it gates. Webview messages are delivered FIFO to the
+ * extension host, and the bypass-enable message sets the per-stream bypass
+ * synchronously when handled — so sending it first guarantees it lands
+ * before the terminal message unblocks the agent, and the agent can't race
+ * ahead and re-prompt the next gated action before bypass is live.
+ */
+function postWithOptionalBypass(
+  bypassMessage: ProgressViewInboundMessage | undefined,
+  message: ProgressViewInboundMessage,
+): void {
+  if (bypassMessage) {
+    postPermissionMessage(bypassMessage);
+  }
+  postPermissionMessage(message);
+}
+
 export function handlePermissionAction(
   event: CustomEvent<PermissionActionDetail>,
   ctx: MessageHandlerContext,
@@ -287,24 +305,19 @@ export function handlePermissionAction(
       // stream — mirroring the toolbar shield and the CLI's `a` = approve
       // session. It never reaches the backend approval protocol.
       const isYolo = decision.action === APPROVE_SESSION_ACTION;
-      if (isYolo) {
-        // Enable session bypass BEFORE settling the approval. Webview messages
-        // are delivered FIFO and ENABLE_APPROVAL_BYPASS sets the per-stream
-        // bypass synchronously when handled, so it lands before the approve
-        // message unblocks the agent — the agent can't race ahead and
-        // re-prompt the next gated action. Set-on (not toggle) is also
-        // inversion-proof: edit and bash bypass can be decoupled on a delegated
-        // child stream. The button only renders with a real stream (see
-        // canBypass), but guard anyway.
-        const stream = data.streamId;
-        if (stream) {
-          postMessage(PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS, {
-            stream,
-          });
-        }
-      }
+      // Set-on (not toggle) is inversion-proof: edit and bash bypass can be
+      // decoupled on a delegated child stream. The button only renders with
+      // a real stream (see canBypass), but guard anyway.
+      const bypassMessage =
+        isYolo && data.streamId
+          ? ({
+              command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
+              stream: data.streamId,
+            } satisfies ProgressViewInboundMessage)
+          : undefined;
       const action = isYolo ? 'approve' : decision.action;
-      postPermissionMessage(
+      postWithOptionalBypass(
+        bypassMessage,
         decision.action === 'reject'
           ? {
               command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
@@ -329,12 +342,15 @@ export function handlePermissionAction(
     case PERMISSION_KIND.BASH: {
       const { data, decision } = detail;
       const isYolo = decision.action === APPROVE_SESSION_ACTION;
-      if (isYolo && data.streamId) {
-        postMessage(PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS, {
-          stream: data.streamId,
-        });
-      }
-      postPermissionMessage(
+      const bypassMessage =
+        isYolo && data.streamId
+          ? ({
+              command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
+              stream: data.streamId,
+            } satisfies ProgressViewInboundMessage)
+          : undefined;
+      postWithOptionalBypass(
+        bypassMessage,
         decision.action === 'reject'
           ? {
               command: PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION,
@@ -392,23 +408,22 @@ export function handlePermissionAction(
       const { data, decision } = detail;
       // Approve-all accepts this proposal and enables delegated-task approval
       // for the rest of the stream. It never reaches the backend proposal
-      // protocol (action stays approve|reject|setup). Enable the bypass BEFORE
-      // settling the approval:
-      // webview messages are FIFO and ENABLE_SUPER_YOLO_BYPASS sets the
-      // per-stream bypass synchronously, so it lands before approve unblocks the
-      // agent and the next proposal can't race ahead and re-prompt. Use the
-      // idempotent ENABLE (force-on), not the TOGGLE: approval can be turned on
-      // from the stream header while this prompt is still visible (which does not
-      // auto-resolve the open proposal), and a toggle would then flip bypass back
-      // OFF here — the opposite of "enable". Mirrors edit/bash ENABLE_APPROVAL_BYPASS.
+      // protocol (action stays approve|reject|setup). Use the idempotent
+      // ENABLE (force-on), not the TOGGLE: approval can be turned on from the
+      // stream header while this prompt is still visible (which does not
+      // auto-resolve the open proposal), and a toggle would then flip bypass
+      // back OFF here — the opposite of "enable". Mirrors edit/bash
+      // ENABLE_APPROVAL_BYPASS (see postWithOptionalBypass for the FIFO
+      // ordering rationale shared by all three bypass-gated permission kinds).
       const approveAllDelegatedWork =
         decision.action === APPROVE_ALL_DELEGATED_WORK_ACTION;
-      if (approveAllDelegatedWork) {
-        postMessage(PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS, {
-          stream: data.streamId,
-          initiatingProposalId: data.proposalId,
-        });
-      }
+      const bypassMessage = approveAllDelegatedWork
+        ? ({
+            command: PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS,
+            stream: data.streamId,
+            initiatingProposalId: data.proposalId,
+          } satisfies ProgressViewInboundMessage)
+        : undefined;
       let message: ProgressViewInboundMessage;
       if (decision.action === 'approve' || approveAllDelegatedWork) {
         message = {
@@ -432,7 +447,7 @@ export function handlePermissionAction(
           action: 'setup',
         };
       }
-      postPermissionMessage(message);
+      postWithOptionalBypass(bypassMessage, message);
       // Optimistic removal — track resolved ID so late SHOW is a no-op
       const removed = removePrompt(
         ctx,
