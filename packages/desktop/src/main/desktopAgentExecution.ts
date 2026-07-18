@@ -872,11 +872,13 @@ export class DesktopProgressBridge {
         this.routeToProgress();
         return;
       case 'requestShowError':
-      case 'requestShowInstruction':
-        void this.options.host.showErrorMessage(
-          (payload as AgentRuntimeEventPayloads['requestShowError']).message,
-        );
+      case 'requestShowInstruction': {
+        const { message } = payload as
+          | AgentRuntimeEventPayloads['requestShowError']
+          | AgentRuntimeEventPayloads['requestShowInstruction'];
+        void this.options.host.showErrorMessage(message);
         return;
+      }
       case 'requestOpenFile': {
         // The extension previews via its LaTeX-Workshop build+view flow
         // (openBuildDisplayIfTex); desktop has no such editor integration,

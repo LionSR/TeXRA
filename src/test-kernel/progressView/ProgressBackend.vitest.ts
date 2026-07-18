@@ -703,6 +703,45 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('aborts bulk cleanup when stopping an owned stream fails', async () => {
+    const stopError = new Error('stop failed');
+    const lifecycle = createLifecycleOptions({
+      stopStream: vi.fn().mockRejectedValue(stopError),
+    });
+    const { backend, session } = createIsolatedRecordingBackend(
+      createTestSession(),
+      lifecycle,
+    );
+    const stream = 'owned-stop-failure' as StreamTabId;
+    backend.state.streamLogs.ensureStream(stream);
+    session.status.transition(
+      stream,
+      STREAM_PHASE.RUNNING,
+      STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    );
+    vi.spyOn(session.executions, 'getAgentHandleByStream').mockReturnValue(
+      {} as never,
+    );
+    const waitForRelease = vi.spyOn(
+      backend.state,
+      'waitForOwnedExecutionRelease',
+    );
+    const clearAll = vi.spyOn(backend.state, 'clearAll');
+
+    try {
+      await expect(backend.deleteAllStreams()).rejects.toBe(stopError);
+
+      expect(lifecycle.stopStream).toHaveBeenCalledWith(stream, session);
+      expect(waitForRelease).not.toHaveBeenCalled();
+      expect(clearAll).not.toHaveBeenCalled();
+      expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalled();
+      expect(lifecycle.cleanupDeletedStreams).not.toHaveBeenCalled();
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('retains protected streams during bulk cleanup', async () => {
     const { backend, lifecycle, messages, session } =
       createIsolatedRecordingBackend();
