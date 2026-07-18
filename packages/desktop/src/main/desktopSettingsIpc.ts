@@ -1,6 +1,5 @@
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 
-import { SettingsGoalController } from '@controllers/settingsView/SettingsGoalController';
 import {
   createSettingsViewCommandHandlers,
   type SettingsViewCommandActions,
@@ -78,9 +77,6 @@ export function createDesktopSettingsIpc(
   // a visible info dialog instead of a console-only error log.
   const onError = createDesktopErrorReporter(options.ui.onError, (error) => {
     void options.ui.showInfoMessage(error.reason).catch(options.ui.onError);
-  });
-  const goalController = new SettingsGoalController({
-    listGoals: () => GoalStore.list(),
   });
   const settingsHost = new SettingsViewHost({
     state: { workspaceState, globalState },
@@ -187,7 +183,10 @@ export function createDesktopSettingsIpc(
    * subscription surface without a user-visible gain.
    */
   function postGoalList(): void {
-    options.postToRenderer(goalController.getGoalListMessage());
+    options.postToRenderer({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
+      items: [...GoalStore.list()],
+    });
   }
 
   async function postInitialSettingsData(): Promise<void> {
