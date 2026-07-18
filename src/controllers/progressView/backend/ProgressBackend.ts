@@ -308,10 +308,10 @@ export class ProgressBackend {
       (sessionEvent) => {
         if (this.disposed) return;
         if (sessionEvent.scope !== 'session') return;
+        this.factApplier.handleSessionFact(sessionEvent.event);
         if (sessionEvent.event.type === 'setActiveStream') {
           this.onSetActiveStream?.(sessionEvent.event.payload);
         }
-        this.factApplier.handleSessionFact(sessionEvent.event);
       },
       { scope: 'session' },
     );

@@ -290,6 +290,43 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('applies active-stream facts before host navigation callbacks', () => {
+    const session = createTestSession();
+    const streamId = 'fact-before-route' as StreamTabId;
+    const onSetActiveStream = vi.fn(() => {
+      throw new Error('closed renderer');
+    });
+    const backend = new ProgressBackend({
+      storage: new MemoryMementoStorage(),
+      snapshots: new StreamSnapshotStore(),
+      session,
+      sendMessage: vi.fn(() => true),
+      hasTarget: () => true,
+      approvals: createApprovalOptions(),
+      lifecycle: createLifecycleOptions(),
+      onSetActiveStream,
+    });
+    const subscription = backend.setupEventListeners();
+
+    try {
+      session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'setActiveStream',
+          payload: { streamId, agentCategory: AgentCategory.Workflow },
+        },
+      });
+
+      expect(backend.state.activeStream).toBe(streamId);
+      expect(backend.state.streamLogs.has(streamId)).toBe(true);
+      expect(onSetActiveStream).toHaveBeenCalledOnce();
+    } finally {
+      subscription.dispose();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('clears an empty active-stream selection through the shared fact path', async () => {
     const target = createIsolatedRecordingBackend();
     const { backend, messages, session } = target;
