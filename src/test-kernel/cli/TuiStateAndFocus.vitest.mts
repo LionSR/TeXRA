@@ -18,8 +18,10 @@ import {
   removeStream,
   resetCliState,
   patchStream,
+  setTransientNotice,
   setStreamStatusInCliState,
   streams,
+  transientNotice,
 } from '@cli/chat/tui/state/cliState';
 import {
   allocateConversationBottomPanelRows,
@@ -117,6 +119,15 @@ afterEach(() => {
 });
 
 describe('cliState Phase 4 fields', () => {
+  it('normalizes transient notices to the status bar single-line contract', () => {
+    setTransientNotice('Usage: /login target\n       /login chatgpt --device');
+
+    expect(transientNotice.get()).toMatchObject({
+      kind: 'message',
+      text: 'Usage: /login target · /login chatgpt --device',
+    });
+  });
+
   it('initialises every new slice with empty subagent/process/todo/plan/bypass defaults', () => {
     patchStream(root, (s) => ({ ...s, status: 'running' }));
     const slice = streams.get().get(root);
