@@ -24,8 +24,7 @@ import {
 // Local imports - agent
 import {
   ProgressBackend,
-  type ProgressBackendServices,
-  type ProgressBackendUiConfig,
+  type ProgressBackendOptions,
 } from '@controllers/progressView/backend/ProgressBackend';
 import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
 import type { AgentEvent } from '@agent/trace';
@@ -89,15 +88,28 @@ class MemoryMementoStorage implements MementoStorage {
   }
 }
 
-function createUiConfig(): ProgressBackendUiConfig {
+function createApprovalOptions() {
   return {
-    callbacks: {
-      showToolEditPermission: vi.fn(),
-      resolveToolEditPermission: vi.fn(),
-      updateToolEditApprovalBypassState: vi.fn(),
-      updateSuperYoloBypassState: vi.fn(),
+    canSend: () => true,
+    overrides: {
+      retry: { show: vi.fn(), dismiss: vi.fn() },
+      agentProposal: { show: vi.fn(), dismiss: vi.fn() },
     },
-    hasPendingPermissions: vi.fn(() => false),
+  };
+}
+
+function createLifecycleOptions(
+  overrides: Partial<ProgressBackendOptions['lifecycle']> = {},
+): ProgressBackendOptions['lifecycle'] {
+  return {
+    stopStream: vi.fn(),
+    cleanupDeletedStream: vi.fn(),
+    cleanupDeletedStreams: vi.fn(),
+    rebuildRenderedStreams: vi.fn(),
+    refreshRenderedStreamsAfterDeletion: vi.fn(),
+    activateStream: vi.fn(),
+    notifyDeletionRetained: vi.fn(),
+    ...overrides,
   };
 }
 
@@ -123,17 +135,20 @@ function createRecordingBackend(): {
       return true;
     },
     hasTarget: () => true,
-    configureUi: () => createUiConfig(),
+    approvals: createApprovalOptions(),
+    lifecycle: createLifecycleOptions(),
   });
   return { backend, messages };
 }
 
 function createIsolatedRecordingBackend(
   session: SessionHandle = createTestSession(),
+  lifecycle = createLifecycleOptions(),
 ): {
   backend: ProgressBackend;
   messages: ProgressViewOutboundMessage[];
   session: SessionHandle;
+  lifecycle: ProgressBackendOptions['lifecycle'];
 } {
   const messages: ProgressViewOutboundMessage[] = [];
   const backend = new ProgressBackend({
@@ -145,9 +160,10 @@ function createIsolatedRecordingBackend(
       return true;
     },
     hasTarget: () => true,
-    configureUi: () => createUiConfig(),
+    approvals: createApprovalOptions(),
+    lifecycle,
   });
-  return { backend, messages, session };
+  return { backend, lifecycle, messages, session };
 }
 
 async function createPersistentRecordingBackend(): Promise<
@@ -239,23 +255,15 @@ function emitRunFact<K extends RunFactEventName>(
 
 describe('ProgressBackend', () => {
   it('constructs the shared progress backend service graph', () => {
-    let servicesFromConfig: ProgressBackendServices | undefined;
-
     const backend = new ProgressBackend({
       storage: new MemoryMementoStorage(),
       sendMessage: vi.fn(() => true),
       hasTarget: () => true,
-      configureUi: (services) => {
-        servicesFromConfig = services;
-        return createUiConfig();
-      },
+      approvals: createApprovalOptions(),
+      lifecycle: createLifecycleOptions(),
     });
 
-    expect(servicesFromConfig).toEqual({
-      state: backend.state,
-      webviewUpdater: backend.webviewUpdater,
-      webviewBridge: backend.webviewBridge,
-    });
+    expect(backend.approvalHandlers).toBeDefined();
     expect(backend.interactionHandler).toBeDefined();
 
     backend.dispose();
@@ -282,26 +290,107 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('applies active-stream facts before host navigation callbacks', () => {
+    const session = createTestSession();
+    const streamId = 'fact-before-route' as StreamTabId;
+    const onSetActiveStream = vi.fn(() => {
+      throw new Error('closed renderer');
+    });
+    const backend = new ProgressBackend({
+      storage: new MemoryMementoStorage(),
+      snapshots: new StreamSnapshotStore(),
+      session,
+      sendMessage: vi.fn(() => true),
+      hasTarget: () => true,
+      approvals: createApprovalOptions(),
+      lifecycle: createLifecycleOptions(),
+      onSetActiveStream,
+    });
+    const subscription = backend.setupEventListeners();
+
+    try {
+      session.events.emit({
+        scope: 'session',
+        event: {
+          type: 'setActiveStream',
+          payload: { streamId, agentCategory: AgentCategory.Workflow },
+        },
+      });
+
+      expect(backend.state.activeStream).toBe(streamId);
+      expect(backend.state.streamLogs.has(streamId)).toBe(true);
+      expect(onSetActiveStream).toHaveBeenCalledOnce();
+    } finally {
+      subscription.dispose();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('clears an empty active-stream selection through the shared fact path', async () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, messages, session } = target;
+    const subscription = backend.setupEventListeners();
+
+    try {
+      backend.state.activeStream = 'previous-stream';
+      emitActiveStream(target, { streamId: null });
+
+      await vi.waitFor(() => expect(backend.state.activeStream).toBe(''));
+      expect(messages).toContainEqual({
+        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+        activeStream: '',
+      });
+    } finally {
+      subscription.dispose();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('projects goal-state changes through the shared fact path', async () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, messages, session } = target;
+    const subscription = backend.setupEventListeners();
+    const stream = 'goal-projection' as StreamTabId;
+
+    try {
+      await GoalStore.start(stream, 'Complete the proof');
+      session.events.emit({
+        scope: 'session',
+        event: { type: 'goalStateChanged', payload: { streamId: stream } },
+      });
+
+      await vi.waitFor(() =>
+        expect(messages).toContainEqual({
+          command: PROGRESS_VIEW_COMMANDS.GOAL_ACTIVE_UPDATED,
+          stream,
+          active: true,
+          status: 'active',
+          objective: 'Complete the proof',
+        }),
+      );
+    } finally {
+      await GoalStore.forget(stream);
+      subscription.dispose();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('routes removeStream session facts through the shared lifecycle delete path', async () => {
     const session = createTestSession();
     const deletedStreams: StreamTabId[] = [];
-    const backendRef: { current?: ProgressBackend } = {};
     const backend = new ProgressBackend({
       storage: new MemoryMementoStorage(),
       session,
       sendMessage: vi.fn(() => true),
       hasTarget: () => true,
-      configureUi: () => createUiConfig(),
-      deleteStream: async (stream) => {
-        const currentBackend = backendRef.current;
-        if (!currentBackend) {
-          throw new Error('Progress backend was not initialized');
-        }
-        await currentBackend.state.clearStream(stream);
-        deletedStreams.push(stream);
-      },
+      approvals: createApprovalOptions(),
+      lifecycle: createLifecycleOptions({
+        cleanupDeletedStream: (stream) => deletedStreams.push(stream),
+      }),
     });
-    backendRef.current = backend;
     const subscription = backend.setupEventListeners();
     const streamId = 'desktop-child-stream' as StreamTabId;
 
@@ -327,17 +416,15 @@ describe('ProgressBackend', () => {
 
   it('handles removeStream session facts before backend load', async () => {
     const session = createTestSession();
-    const deletedStreams: StreamTabId[] = [];
     const backend = new ProgressBackend({
       storage: new MemoryMementoStorage(),
       session,
       sendMessage: vi.fn(() => true),
       hasTarget: () => true,
-      configureUi: () => createUiConfig(),
-      deleteStream: async (stream) => {
-        deletedStreams.push(stream);
-      },
+      approvals: createApprovalOptions(),
+      lifecycle: createLifecycleOptions(),
     });
+    const clearStream = vi.spyOn(backend.state, 'clearStream');
     const subscription = backend.setupEventListeners();
     const streamId = 'preload-child-stream' as StreamTabId;
 
@@ -347,9 +434,344 @@ describe('ProgressBackend', () => {
         event: { type: 'removeStream', payload: { streamId } },
       });
 
-      await vi.waitFor(() => expect(deletedStreams).toEqual([streamId]));
+      await vi.waitFor(() =>
+        expect(clearStream).toHaveBeenCalledWith(streamId),
+      );
     } finally {
       subscription.dispose();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('refuses reserved stream identifiers before durable cleanup', async () => {
+    const { backend, session } = createIsolatedRecordingBackend();
+    const clearStream = vi.spyOn(backend.state, 'clearStream');
+
+    try {
+      await backend.deleteStream('' as StreamTabId);
+      await backend.deleteStream('.' as StreamTabId);
+      await backend.deleteStream('..' as StreamTabId);
+
+      expect(clearStream).not.toHaveBeenCalled();
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('clears retry UI when stopping without deleting', async () => {
+    const { backend, lifecycle, session } = createIsolatedRecordingBackend();
+    const stream = 'standalone-stop' as StreamTabId;
+
+    try {
+      await backend.stopStream(stream);
+
+      expect(lifecycle.stopStream).toHaveBeenCalledWith(stream, session, {
+        clearRetryRequest: true,
+      });
+      expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalled();
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('deletes an active stream and activates the next visible stream', async () => {
+    const session = createTestSession();
+    const messages: ProgressViewOutboundMessage[] = [];
+    const lifecycle = createLifecycleOptions();
+    const backend = new ProgressBackend({
+      storage: new MemoryMementoStorage(),
+      snapshots: new StreamSnapshotStore(),
+      session,
+      sendMessage: (message) => {
+        messages.push(message);
+        return true;
+      },
+      hasTarget: () => true,
+      approvals: createApprovalOptions(),
+      lifecycle,
+    });
+    const first = 'first-visible' as StreamTabId;
+    const second = 'second-visible' as StreamTabId;
+
+    try {
+      backend.state.streamLogs.ensureStream(first);
+      backend.state.streamLogs.ensureStream(second);
+      backend.state.activeStream = second;
+
+      await backend.deleteStream(second);
+
+      expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(
+        second,
+        session,
+      );
+      expect(lifecycle.activateStream).toHaveBeenCalledWith(first);
+      expect(messages).toContainEqual({
+        command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
+        stream: second,
+      });
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('skips hidden fallbacks after deleting the active stream', async () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, lifecycle, session } = target;
+    const active = 'active-workflow' as StreamTabId;
+    const hidden = 'hidden-tool-use' as StreamTabId;
+    const visible = 'visible-workflow' as StreamTabId;
+    const releaseEntries = vi.spyOn(backend.state.streamLogs, 'releaseEntries');
+
+    try {
+      // The unfiltered durable fallback selects the last stream (`hidden`),
+      // then the progress filter replaces it with `visible`.
+      for (const stream of [active, visible, hidden]) {
+        backend.state.streamLogs.ensureStream(stream);
+      }
+      backend.state.updateStreamMetadata(active, {
+        agentCategory: AgentCategory.Workflow,
+      });
+      backend.state.updateStreamMetadata(hidden, {
+        agentCategory: AgentCategory.ToolUse,
+      });
+      backend.state.updateStreamMetadata(visible, {
+        agentCategory: AgentCategory.Workflow,
+      });
+      backend.state.agentCategoryFilter = AgentCategory.Workflow;
+      backend.state.activeStream = active;
+
+      await backend.deleteStream(active);
+
+      expect(backend.state.activeStream).toBe(visible);
+      expect(lifecycle.activateStream).toHaveBeenCalledWith(visible);
+      expect(releaseEntries).toHaveBeenCalledWith(hidden);
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('clears selection when deleting the last visible stream', async () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, lifecycle, session } = target;
+    const active = 'active-workflow' as StreamTabId;
+    const hidden = 'hidden-tool-use' as StreamTabId;
+
+    try {
+      backend.state.streamLogs.ensureStream(active);
+      backend.state.streamLogs.ensureStream(hidden);
+      backend.state.updateStreamMetadata(active, {
+        agentCategory: AgentCategory.Workflow,
+      });
+      backend.state.updateStreamMetadata(hidden, {
+        agentCategory: AgentCategory.ToolUse,
+      });
+      backend.state.agentCategoryFilter = AgentCategory.Workflow;
+      backend.state.activeStream = active;
+
+      await backend.deleteStream(active);
+
+      expect(backend.state.activeStream).toBe('');
+      expect(lifecycle.activateStream).not.toHaveBeenCalled();
+      expect(
+        lifecycle.refreshRenderedStreamsAfterDeletion,
+      ).toHaveBeenCalledOnce();
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('preserves a stream switch during active-stream deletion', async () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, lifecycle, session } = target;
+    const active = 'active-stream' as StreamTabId;
+    const fallback = 'fallback-stream' as StreamTabId;
+    const selected = 'selected-during-delete' as StreamTabId;
+    const clearStream = backend.state.clearStream.bind(backend.state);
+    let releaseClear!: () => void;
+    const clearGate = new Promise<void>((resolve) => {
+      releaseClear = resolve;
+    });
+    vi.spyOn(backend.state, 'clearStream').mockImplementation(
+      async (stream) => {
+        await clearGate;
+        return clearStream(stream);
+      },
+    );
+
+    try {
+      for (const stream of [active, fallback, selected]) {
+        backend.state.streamLogs.ensureStream(stream);
+      }
+      backend.state.activeStream = active;
+
+      const deletion = backend.deleteStream(active);
+      backend.state.activeStream = selected;
+      releaseClear();
+      await deletion;
+
+      expect(backend.state.activeStream).toBe(selected);
+      expect(lifecycle.activateStream).toHaveBeenCalledWith(selected);
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('cleans every stream and emits one bulk deletion', async () => {
+    const { backend, lifecycle, messages, session } =
+      createIsolatedRecordingBackend();
+    const first = 'bulk-first' as StreamTabId;
+    const second = 'bulk-second' as StreamTabId;
+    backend.state.streamLogs.ensureStream(first);
+    backend.state.streamLogs.ensureStream(second);
+    vi.spyOn(backend.state, 'clearAll').mockResolvedValue({
+      active: new Set(),
+      failed: new Set(),
+    });
+
+    try {
+      await backend.deleteAllStreams();
+
+      expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(
+        first,
+        session,
+      );
+      expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(
+        second,
+        session,
+      );
+      expect(lifecycle.cleanupDeletedStreams).toHaveBeenCalledWith({
+        allDeleted: true,
+      });
+      expect(messages).toContainEqual({
+        command: PROGRESS_VIEW_COMMANDS.DELETE_ALL,
+      });
+      expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
+        forceRebuild: true,
+        syncActiveStream: false,
+      });
+      expect(lifecycle.notifyDeletionRetained).not.toHaveBeenCalled();
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('stops locally owned streams before bulk cleanup', async () => {
+    const { backend, lifecycle, session } = createIsolatedRecordingBackend();
+    const first = 'owned-first' as StreamTabId;
+    const second = 'owned-second' as StreamTabId;
+    backend.state.streamLogs.ensureStream(first);
+    backend.state.streamLogs.ensureStream(second);
+    session.status.transition(
+      first,
+      STREAM_PHASE.RUNNING,
+      STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    );
+    session.status.transition(
+      second,
+      STREAM_PHASE.RUNNING,
+      STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    );
+    vi.spyOn(session.executions, 'getAgentHandleByStream').mockReturnValue(
+      {} as never,
+    );
+    const waitForRelease = vi
+      .spyOn(backend.state, 'waitForOwnedExecutionRelease')
+      .mockResolvedValue(undefined);
+    vi.spyOn(backend.state, 'clearAll').mockResolvedValue({
+      active: new Set(),
+      failed: new Set(),
+    });
+
+    try {
+      await backend.deleteAllStreams();
+
+      expect(lifecycle.stopStream).toHaveBeenCalledWith(first, session);
+      expect(lifecycle.stopStream).toHaveBeenCalledWith(second, session);
+      expect(waitForRelease).toHaveBeenCalledWith(first);
+      expect(waitForRelease).toHaveBeenCalledWith(second);
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('retains protected streams during bulk cleanup', async () => {
+    const { backend, lifecycle, messages, session } =
+      createIsolatedRecordingBackend();
+    const deleted = 'bulk-deleted' as StreamTabId;
+    const retained = 'bulk-retained' as StreamTabId;
+    backend.state.streamLogs.ensureStream(deleted);
+    backend.state.streamLogs.ensureStream(retained);
+    vi.spyOn(backend.state, 'clearAll').mockResolvedValue({
+      active: new Set([retained]),
+      failed: new Set(),
+    });
+
+    try {
+      await backend.deleteAllStreams();
+
+      expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(
+        deleted,
+        session,
+      );
+      expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalledWith(
+        retained,
+        session,
+      );
+      expect(lifecycle.cleanupDeletedStreams).toHaveBeenCalledWith({
+        allDeleted: false,
+      });
+      expect(messages).toContainEqual({
+        command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
+        stream: deleted,
+      });
+      expect(messages).not.toContainEqual({
+        command: PROGRESS_VIEW_COMMANDS.DELETE_ALL,
+      });
+      expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
+        forceRebuild: true,
+        syncActiveStream: true,
+      });
+      expect(lifecycle.notifyDeletionRetained).toHaveBeenCalledWith(1, 0);
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('retains rendered state when durable stream cleanup fails', async () => {
+    const session = createTestSession();
+    const lifecycle = createLifecycleOptions();
+    const backend = new ProgressBackend({
+      storage: new MemoryMementoStorage(),
+      snapshots: new StreamSnapshotStore(),
+      session,
+      sendMessage: vi.fn(),
+      hasTarget: () => true,
+      approvals: createApprovalOptions(),
+      lifecycle,
+    });
+    const stream = 'retained-stream' as StreamTabId;
+    backend.state.streamLogs.ensureStream(stream);
+    vi.spyOn(backend.state, 'clearStream').mockResolvedValueOnce('failed');
+
+    try {
+      await backend.deleteStream(stream);
+
+      expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalled();
+      expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
+        forceRebuild: true,
+      });
+      expect(lifecycle.notifyDeletionRetained).toHaveBeenCalledWith(0, 1);
+    } finally {
       backend.dispose();
       session.dispose();
     }
@@ -362,7 +784,8 @@ describe('ProgressBackend', () => {
       storage: new MemoryMementoStorage(),
       sendMessage: sent,
       hasTarget: () => hasTarget,
-      configureUi: () => createUiConfig(),
+      approvals: createApprovalOptions(),
+      lifecycle: createLifecycleOptions(),
     });
 
     backend.webviewUpdater.updateStreams([], '', 'all');
@@ -393,7 +816,8 @@ describe('ProgressBackend', () => {
       storage: new MemoryMementoStorage(),
       sendMessage: sent,
       hasTarget: () => true,
-      configureUi: () => createUiConfig(),
+      approvals: createApprovalOptions(),
+      lifecycle: createLifecycleOptions(),
     });
 
     expect(() =>

@@ -260,18 +260,10 @@ export class WebviewUpdater {
     });
   }
 
-  setActiveStream(activeStream: StreamTabId): void {
+  setActiveStream(activeStream: ActiveStreamId): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
       activeStream,
-    });
-  }
-
-  /** Send lightweight delete notification to the current active target. */
-  deleteStream(stream: StreamTabId): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
-      stream,
     });
   }
 
