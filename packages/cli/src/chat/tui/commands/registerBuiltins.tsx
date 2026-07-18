@@ -645,7 +645,7 @@ export function registerBuiltinSlashCommands(options?: {
     name: 'memory',
     description: 'List stored memories',
     category: 'configuration',
-    echo: 'ifPersists',
+    echo: 'never',
     argHandler: async (remainder) => {
       if (remainder.toLowerCase() === 'list') await showCliMemoryList();
       else await showCliMemoryPreview(remainder);

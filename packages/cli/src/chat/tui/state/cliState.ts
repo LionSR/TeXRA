@@ -425,6 +425,19 @@ const ACTIVE_FORM: Signal.State<ActiveSlashForm | undefined> = signal<
 /** Active inline slash form, or `undefined` when the chat input owns the screen. */
 export const activeForm = ACTIVE_FORM;
 
+interface InfoPaneContent {
+  readonly title: string;
+  readonly lines: readonly string[];
+}
+
+const INFO_PANE = signal<InfoPaneContent | undefined>(undefined);
+export const infoPane = INFO_PANE;
+
+/** Open regenerable reference text in the foreground pane. */
+export function openInfoPane(title: string, text: string): void {
+  INFO_PANE.set({ title, lines: text.split('\n') });
+}
+
 /** True while the slash-command palette is mounted in the InputBar. App-level
  *  Tab handlers gate on this so palette-Tab (accept selection) doesn't double
  *  with stream-focus Tab. */
@@ -598,6 +611,7 @@ export function resetCliState(
   rootRunStreamId.set(undefined);
   resetChildStreamEntries();
   activeForm.set(undefined);
+  infoPane.set(undefined);
   slashPaletteOpen.set(false);
   reverseSearchOpen.set(false);
   taskDetailExecutionId.set(undefined);

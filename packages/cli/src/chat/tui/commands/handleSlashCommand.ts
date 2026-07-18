@@ -11,6 +11,7 @@ import { formatCliSessionStatus } from '../sessionStatus';
 import { requestCliCompaction } from '../state/compactionRequest';
 import {
   activeStreamId as activeStreamIdSignal,
+  openInfoPane,
   sessionMeta,
   setTransientNotice,
   streamAccessTarget,
@@ -105,13 +106,18 @@ export async function handleTuiSlashCommand(
   }
   switch (canonicalCommand) {
     case 'help': {
-      await runGuardedSlashCommand(line, registered, () =>
-        appendLocalAssistantTranscript(
-          formatSlashCommandHelp(listSlashCommands(), {
-            shortcutModifierLabel: defaultShortcutModifierLabel(),
-            shiftEnterNewline: terminalCapabilities.get().kittyKeyboard,
-          }),
-        ),
+      await runGuardedSlashCommand(
+        line,
+        registered,
+        () =>
+          openInfoPane(
+            '/help',
+            formatSlashCommandHelp(listSlashCommands(), {
+              shortcutModifierLabel: defaultShortcutModifierLabel(),
+              shiftEnterNewline: terminalCapabilities.get().kittyKeyboard,
+            }),
+          ),
+        false,
       );
       return true;
     }
@@ -193,8 +199,11 @@ export async function handleTuiSlashCommand(
       });
       return true;
     case 'goal':
-      await runGuardedSlashCommand(line, registered, () =>
-        appendLocalAssistantTranscript(GOAL_MODE_HELP),
+      await runGuardedSlashCommand(
+        line,
+        registered,
+        () => openInfoPane('/goal', GOAL_MODE_HELP),
+        false,
       );
       return true;
     case 'compact':

@@ -101,6 +101,7 @@ function foregroundInput(
   return {
     activeFormOpen: false,
     formBusy: false,
+    infoPaneOpen: false,
     pendingApproval: true,
     taskDetailOpen: false,
     ...overrides,
@@ -185,6 +186,7 @@ describe('app interaction policy', () => {
     const surfaceCases = [
       [{ kind: 'taskDetail' }, 12],
       [{ kind: 'form' }, 18],
+      [{ kind: 'infoPane' }, undefined],
     ] satisfies readonly (readonly [ForegroundRowsInput, number | undefined])[];
     const expectedByKind = {
       plan: undefined,
@@ -300,6 +302,7 @@ describe('app interaction policy', () => {
       [foregroundInput({ taskDetailOpen: true }), 'taskDetail'],
       [foregroundInput({ activeFormOpen: true }), 'form'],
       [foregroundInput({ activeFormOpen: true, formBusy: true }), 'approval'],
+      [foregroundInput({ infoPaneOpen: true }), 'infoPane'],
       [foregroundInput(), 'approval'],
       [foregroundInput({ pendingApproval: false }), undefined],
     ] satisfies readonly (readonly [
@@ -327,6 +330,7 @@ describe('app interaction policy', () => {
     const surfaceCases = [
       [{ foregroundKind: 'taskDetail' }, 'back'],
       [{ foregroundKind: 'form' }, 'close'],
+      [{ foregroundKind: 'infoPane' }, 'close'],
       [{ activeFormEscapeAction: 'cancel', foregroundKind: 'form' }, 'cancel'],
     ] satisfies readonly (readonly [ForegroundEscapeInput, string])[];
     const approvalCases = [

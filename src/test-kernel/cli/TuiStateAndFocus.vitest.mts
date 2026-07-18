@@ -11,6 +11,8 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
   activeStreamId,
+  infoPane,
+  openInfoPane,
   rootRunPending,
   rootRunStartAvailable,
   rootRunStreamId,
@@ -119,6 +121,15 @@ afterEach(() => {
 });
 
 describe('cliState Phase 4 fields', () => {
+  it('clears foreground reference text with the session state', () => {
+    openInfoPane('/help', 'reference text');
+    expect(infoPane.get()).toBeDefined();
+
+    resetCliState();
+
+    expect(infoPane.get()).toBeUndefined();
+  });
+
   it('normalizes transient notices to the status bar single-line contract', () => {
     setTransientNotice('Usage: /login target\n       /login chatgpt --device');
 
