@@ -268,6 +268,16 @@ export async function runWorkflowScript(
       );
     }
     const callOptions = normalizeAgentOptions(rawOptions, currentPhase);
+    const phaseIndex = plannedPhases.findIndex(
+      (phase) => phase.title === callOptions.phase,
+    );
+    const phaseContext = {
+      phase: callOptions.phase,
+      ...(phaseIndex >= 0 && {
+        phaseIndex,
+        phaseTotal: plannedPhases.length,
+      }),
+    };
     const index = callCounter;
     callCounter += 1;
 
@@ -301,7 +311,7 @@ export async function runWorkflowScript(
           type: 'agent:end',
           index,
           label,
-          phase: callOptions.phase,
+          ...phaseContext,
           cached,
           error: toErrorMessage(error),
         });
@@ -321,7 +331,7 @@ export async function runWorkflowScript(
         type: 'agent:end',
         index,
         label,
-        phase: callOptions.phase,
+        ...phaseContext,
         cached: true,
       });
       return payload;
@@ -338,7 +348,7 @@ export async function runWorkflowScript(
       );
     }
 
-    emit({ type: 'agent:start', index, label, phase: callOptions.phase });
+    emit({ type: 'agent:start', index, label, ...phaseContext });
     // Host-side wall clock (the sandbox's Date.now ban is guest-only): timing
     // and the reported model are progress-only, never journaled, so they can't
     // affect resume identity or determinism.
@@ -377,7 +387,7 @@ export async function runWorkflowScript(
         type: 'agent:end',
         index,
         label,
-        phase: callOptions.phase,
+        ...phaseContext,
         cached: false,
         error: toErrorMessage(error),
         ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
@@ -402,7 +412,7 @@ export async function runWorkflowScript(
       type: 'agent:end',
       index,
       label,
-      phase: callOptions.phase,
+      ...phaseContext,
       cached: false,
       ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
       durationMs: Date.now() - startedAt,

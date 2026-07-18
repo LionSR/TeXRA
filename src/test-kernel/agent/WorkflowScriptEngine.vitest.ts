@@ -493,6 +493,8 @@ return null`,
       index: 0,
       label: 'labelled',
       phase: 'Work',
+      phaseIndex: 0,
+      phaseTotal: 1,
     });
   });
 
