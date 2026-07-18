@@ -8,7 +8,6 @@ import { CLI_STATE_SETTINGS } from '@shared/schemas/stateSettings';
 import {
   CliUsageError,
   readCliAmbientState,
-  resolveCliStdoutColorEnabled,
   type CliContext,
 } from '../runtime/cliContext';
 import {
@@ -250,7 +249,7 @@ const configEditCommand = defineCliCommand({
     await initLocalCliPlatform(context);
     const { runConfigTui } = await import('../config/runConfigTui');
     await runConfigTui({
-      colorEnabled: resolveCliStdoutColorEnabled(context),
+      colorEnabled: context.stdoutColorEnabled,
       onError: writeErrorStderr,
     });
     return CliExitCode.Success;

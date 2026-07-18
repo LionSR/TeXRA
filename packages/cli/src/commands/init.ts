@@ -29,10 +29,7 @@ import {
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { emitCliResult } from './_helpers/output';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
-import {
-  resolveCliStdoutColorEnabled,
-  type CliContext,
-} from '../runtime/cliContext';
+import { type CliContext } from '../runtime/cliContext';
 
 interface InitAgentOption {
   readonly name: string;
@@ -206,7 +203,7 @@ async function runInit(
     const result = await runInitWizard({
       agents,
       models,
-      colorEnabled: resolveCliStdoutColorEnabled(context),
+      colorEnabled: context.stdoutColorEnabled,
     });
     if (!result) {
       writeTextStderr('Cancelled. No config written.');

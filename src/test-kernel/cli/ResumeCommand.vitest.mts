@@ -43,7 +43,6 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
     stderrIsTty: true,
     stdoutColorEnabled: true,
     stderrColorEnabled: true,
-    colorEnabled: true,
     ...overrides,
   });
 }
