@@ -49,6 +49,11 @@ export function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+/** Check if a value is a thenable (has a callable `.then`). */
+export function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return typeof (value as PromiseLike<unknown> | null)?.then === 'function';
+}
+
 /** Predicate for filtering null values from arrays while narrowing the element type. */
 export function filterNotNull<T>(item: T | null): item is T {
   return item !== null;
