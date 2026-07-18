@@ -38,6 +38,7 @@ import {
   type AgentLaunchContext,
 } from '@agent/runtime/AgentLaunchContext';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { useRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
@@ -46,6 +47,23 @@ import { RUN_OUTCOME, STREAM_PHASE } from '@shared/schemas';
 import { createRecordingHost } from '../progressTestUtils';
 
 describe('AgentLaunchContext', () => {
+  it('retains the missing-field diagnostic for empty canonical values', async () => {
+    const session = createTestSession();
+    try {
+      await expect(
+        buildAgentLaunchContext({
+          config: AgentConfigSchema.parse({ agent: '', model: '' }),
+          runtimeHost: createRecordingHost().host,
+          session,
+        }),
+      ).rejects.toMatchObject({
+        message: 'Missing required fields: model and/or agent',
+      });
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('publishes missing-agent banners through the explicit runtime host', async () => {
     const explicit = createRecordingHost();
 
@@ -152,12 +170,12 @@ describe('AgentLaunchContext', () => {
     try {
       await expect(
         buildAgentLaunchContext({
-          configPayload: {
+          config: AgentConfigSchema.parse({
             agent: 'chat',
             model: 'gpt55',
             agentCategory: AgentCategory.ToolUse,
             delegationAgentScope,
-          },
+          }),
           runtimeHost: createRecordingHost().host,
           session,
           streamTabIdOverride: 'late-assembly-stream',
