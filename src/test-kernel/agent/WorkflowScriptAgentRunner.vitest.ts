@@ -494,6 +494,65 @@ describe('createWorkflowScriptAgentRunner', () => {
     );
   });
 
+  it('routes an agent({ schema }) call to a tool-use agent with an output schema', async () => {
+    mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
+      name,
+      source: 'builtInToolUse',
+      category: 'toolUse',
+      path: `/agents/${name}.yml`,
+    }));
+    const schema = {
+      type: 'object',
+      properties: { title: { type: 'string' } },
+      required: ['title'],
+      additionalProperties: false,
+    };
+    const runner = defaultRunner();
+
+    await expect(
+      runner(invocation({ agentName: 'assistant', schema })),
+    ).resolves.toBe(result);
+
+    expect(mocks.requireVisibleAgent).toHaveBeenCalledWith(
+      'toolUse',
+      'assistant',
+      expect.anything(),
+    );
+    expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
+      parentModel: 'parent-model',
+      agentCategory: 'toolUse',
+    });
+    expect(mocks.preparedOptions[0]).toEqual(
+      expect.objectContaining({
+        agentName: 'assistant',
+        configPayload: expect.objectContaining({
+          agentCategory: 'toolUse',
+          outputSchema: schema,
+        }),
+      }),
+    );
+  });
+
+  it('exempts a schema call from the workflow empty-files guard', async () => {
+    mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
+      name,
+      source: 'builtInToolUse',
+      category: 'toolUse',
+      path: `/agents/${name}.yml`,
+    }));
+    const schema = { type: 'object', additionalProperties: false };
+    const runner = defaultRunner();
+
+    // No input files and no default outputs: the workflow path aborts, but a
+    // schema call runs a tool-use agent whose result is the submitted value.
+    await expect(runner(invocation({ schema }))).resolves.toBe(result);
+    expect(mocks.preparedOptions[0]).toEqual(
+      expect.objectContaining({
+        configPayload: expect.objectContaining({ agentCategory: 'toolUse' }),
+      }),
+    );
+  });
+
   it('leaves onChildActive untouched when a recovered attempt runs no live work', async () => {
     // A recovered attempt never fires onActiveExecutionId, so the settle guard
     // must not emit a phantom active/inactive pair for a call that never ran.
