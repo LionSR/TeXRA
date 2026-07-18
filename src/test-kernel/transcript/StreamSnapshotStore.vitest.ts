@@ -179,6 +179,13 @@ describe('StreamSnapshotStore', () => {
     const failure = compileFailure('paper.tex', 1);
     const executionId = 'a1b2c3d4' as ExecutionId;
     const taskState = toolUseTaskState('session-search', 'kimi26T');
+    const extendedUsage = {
+      ...usage(100, 20, 0.5),
+      elapsedTime: 1.5,
+      percentageCached: 25,
+      reasoningTokens: 7,
+      toolUseTokens: 4,
+    };
 
     await getExecutionStore(executionId).writeConfig(taskState.agentConfig);
 
@@ -242,11 +249,10 @@ describe('StreamSnapshotStore', () => {
       streamId: STREAM,
       event: {
         type: 'usage',
-        stats: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
-        data: {
+        payload: {
           streamId: STREAM,
           storageKey: RUN,
-          usage: usage(100, 20, 0.5),
+          usage: extendedUsage,
         },
       },
     });
@@ -295,6 +301,10 @@ describe('StreamSnapshotStore', () => {
       outputTokens: 20,
       cost: 0.5,
     });
+    expect(snap.runUsage[RUN]).not.toHaveProperty('elapsedTime');
+    expect(snap.runUsage[RUN]).not.toHaveProperty('percentageCached');
+    expect(snap.runUsage[RUN]).not.toHaveProperty('reasoningTokens');
+    expect(snap.runUsage[RUN]).not.toHaveProperty('toolUseTokens');
     expect(snap.executionId).toBe(executionId);
     expect(snap.description).toBe('session-search / kimi26T');
     expect(snap.parentStreamId).toBe(OTHER_STREAM);

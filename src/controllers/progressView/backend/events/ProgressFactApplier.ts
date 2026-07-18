@@ -15,7 +15,6 @@ import {
 } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { TaskState } from '@agent/core/state/TaskState';
-import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
@@ -111,10 +110,7 @@ export class ProgressFactApplier {
    * after an await is still logged instead of becoming an unhandled rejection.
    */
   private readonly runFactHandlers: RunFactHandlers = {
-    usage: (streamId, event) => {
-      const payload = toUpdateStreamUsagePayload(event.data, streamId);
-      if (payload) return this.handleUpdateStreamUsage(payload);
-    },
+    usage: (_streamId, event) => this.handleUpdateStreamUsage(event.payload),
     'run.config': (_streamId, event) =>
       this.handleSetTaskState({
         streamId: event.streamId,

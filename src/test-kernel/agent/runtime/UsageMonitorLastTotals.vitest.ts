@@ -103,14 +103,14 @@ describe('UsageMonitor', () => {
       await monitor.recordUsage(state);
 
       const usageEvent = runEventsOfType(events, 'usage').at(0);
-      const usageData = usageEvent?.data as
-        { usage?: Record<string, unknown> } | undefined;
-      expect(usageData).toMatchObject({
+      expect(usageEvent?.payload).toMatchObject({
         usage: {
           usageRoute: 'chatgpt-subscription',
         },
       });
-      expect(usageData?.usage).not.toHaveProperty('viaChatGptSubscription');
+      expect(usageEvent?.payload.usage).not.toHaveProperty(
+        'viaChatGptSubscription',
+      );
     } finally {
       dispose();
     }
