@@ -4,7 +4,6 @@ import * as logger from '@logger/logUtils';
 import { REFRESH_THRESHOLD_MS } from '@utils/config';
 
 const CHANNEL = 'DiffRefresh';
-logger.initialize(CHANNEL);
 
 interface DiffInfo {
   left: vscode.Uri;

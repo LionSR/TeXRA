@@ -16,7 +16,6 @@ import { formatResultCount } from '@utils/text/stringUtils';
 import { defineTool } from '../core/define';
 
 const CHANNEL = 'InlineCommentTool';
-logger.initialize(CHANNEL);
 
 /** A single comment within a thread, as seen by the agent. */
 interface InlineCommentView {

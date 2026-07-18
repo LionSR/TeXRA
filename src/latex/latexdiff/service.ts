@@ -7,10 +7,7 @@
  */
 
 import { LaTeXdiffService as LaTeXdiffServiceImpl } from '@latex/latexdiff';
-import * as logger from '@logger/logUtils';
 
 export const CHANNEL = 'LaTeXCommands';
-
-logger.initialize(CHANNEL);
 
 export const LaTeXdiffService = new LaTeXdiffServiceImpl(CHANNEL);

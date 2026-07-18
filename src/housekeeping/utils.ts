@@ -18,7 +18,6 @@ import { WorkspaceFS } from '@utils/files';
 import { DEFAULT_MAX_ROUNDS } from './constants';
 
 const CHANNEL = 'Housekeeping';
-logger.initialize(CHANNEL);
 
 /**
  * Produce an ISO-8601 timestamp stripped of separators, suitable for use in

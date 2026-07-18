@@ -29,7 +29,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 const CHANNEL = 'SetupAssistant';
-logger.initialize(CHANNEL);
 
 interface LaunchModelResolution {
   model: string;

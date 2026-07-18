@@ -5,7 +5,6 @@ import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOut
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'FinalOutputOpener';
-logger.initialize(CHANNEL);
 
 /**
  * On successful workflow completion, preview the final revised output so
