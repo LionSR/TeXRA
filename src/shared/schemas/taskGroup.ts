@@ -3,8 +3,7 @@ import { z } from 'zod';
 import { EndGroupStatusSchema } from './log';
 import { TaskGroupStatusSchema } from './stream';
 
-export const StageKindSchema = z.enum(['run', 'round', 'phase', 'session']);
-export type StageKind = z.infer<typeof StageKindSchema>;
+const StageKindSchema = z.enum(['run', 'round', 'phase', 'session']);
 
 /** Shared by `TaskGroupSchema` and `GroupLogPayloadSchema` below. */
 const taskGroupIndexField = z.int().nonnegative();
@@ -65,4 +64,3 @@ export const GroupLogPayloadSchema = z.looseObject({
   name: z.string().optional().catch(undefined),
   endTime: taskGroupEndTimeField.optional().catch(undefined),
 });
-export type GroupLogPayload = z.infer<typeof GroupLogPayloadSchema>;

@@ -17,7 +17,7 @@ export { SETTINGS_VIEW_CMD } from '@shared/ipc';
 export {
   formatGoalTime,
   isGoalInFlight,
-  goalDurationMs,
+  goalElapsedMs,
   type Goal,
   type GoalStatus,
 } from './goal';

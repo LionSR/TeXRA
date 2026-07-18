@@ -11,7 +11,7 @@ import type { ZodIssue } from 'zod';
  * Base schema for file references (metadata only, no binary data).
  * Used when binary data has been stripped for serialization/logging.
  */
-export const FileReferenceSchema = z.looseObject({
+const FileReferenceSchema = z.looseObject({
   /** Workspace-relative or descriptive path for the file */
   path: z.string(),
   /** MIME type for the file */
@@ -36,7 +36,7 @@ export type ToolFileAttachment = z.infer<typeof ToolFileAttachmentSchema>;
 /**
  * Schema for edit records in tool results.
  */
-export const EditRecordSchema = z.object({
+const EditRecordSchema = z.object({
   path: z.string(),
   lineChanges: LineChangesSchema.optional(),
   /** 1-based line number where the edit starts (for navigation) */
@@ -44,7 +44,7 @@ export const EditRecordSchema = z.object({
 });
 export type EditRecord = z.infer<typeof EditRecordSchema>;
 
-export const EditedFileRecordSchema = z.object({
+const EditedFileRecordSchema = z.object({
   path: z.string(),
   ok: z.boolean(),
   source: z.string(),
@@ -138,7 +138,7 @@ const ToolResultSharedFields = {
   attachmentSummary: z.string().optional(),
 };
 
-export const ExecutedToolResultSchema = z
+const ExecutedToolResultSchema = z
   .object({
     status: z.literal('executed'),
     /** Detailed output from the tool */
@@ -158,7 +158,7 @@ export const ExecutedToolResultSchema = z
   })
   .catchall(z.unknown());
 
-export const ErrorToolResultSchema = z
+const ErrorToolResultSchema = z
   .object({
     status: z.literal('error'),
     /** Error message if tool execution failed */

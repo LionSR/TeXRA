@@ -60,7 +60,7 @@ export const UpdateMemoryEnabledMessageSchema = z.object({
 // ============================================================
 
 /** Memory path message for file operations (reusable field schema) */
-export const MemoryPathMessageSchema = z.object({
+const MemoryPathMessageSchema = z.object({
   storagePath: z.string().min(1),
 });
 
@@ -74,12 +74,12 @@ export type MemoryItemActionDetail = z.infer<
 >;
 
 /** Memory delete message with display path for confirmation (reusable field schema) */
-export const MemoryDeleteMessageSchema = MemoryPathMessageSchema.extend({
+const MemoryDeleteMessageSchema = MemoryPathMessageSchema.extend({
   displayPath: z.string().min(1),
 });
 
 /** Memory enabled toggle message (reusable field schema) */
-export const MemoryEnabledMessageSchema = z.object({
+const MemoryEnabledMessageSchema = z.object({
   enabled: z.boolean(),
 });
 

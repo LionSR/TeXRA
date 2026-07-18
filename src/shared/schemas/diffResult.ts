@@ -9,7 +9,7 @@ import {
 } from './output';
 import { RoundNumberSchema } from './roundIndexed';
 
-export const DiffStatusSchema = z.enum(['success', 'error']);
+const DiffStatusSchema = z.enum(['success', 'error']);
 export type DiffStatus = z.infer<typeof DiffStatusSchema>;
 
 /** Shared metadata fields for diff results */
@@ -28,7 +28,7 @@ const DiffMetadataSchema = z.object({
  * container shape. `revisedRound` (see {@link DiffResultDisplaySchema}) is
  * derived from `revised.round` rather than duplicated here.
  */
-export const DiffResultSchema = DiffMetadataSchema.extend({
+const DiffResultSchema = DiffMetadataSchema.extend({
   baseLocation: FileLocationSchema.nullable(),
   baseRound: RoundNumberSchema.nullable(),
   revised: OutputFileInfoSchema,

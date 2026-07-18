@@ -18,7 +18,7 @@ import { AgentOptionDataSchema, ModelOptionDataSchema } from './state';
 const FileListSchema = z.array(z.string());
 const SingleFileSelectedSchema = z.object({ filePath: z.string() });
 
-export const SetModelOptionsMessageSchema = z.object({
+const SetModelOptionsMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS),
   optionsData: z.array(ModelOptionDataSchema).optional(),
   optionsDataByCategory: z
@@ -29,7 +29,7 @@ export const SetModelOptionsMessageSchema = z.object({
     .optional(),
 });
 
-export const SetAgentOptionsMessageSchema = z.object({
+const SetAgentOptionsMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS),
   optionsData: z
     .object({
@@ -40,118 +40,118 @@ export const SetAgentOptionsMessageSchema = z.object({
   selectedToolUseAgent: z.string().optional(),
 });
 
-export const SetEditedFileMessageSchema = withFilesArray(
+const SetEditedFileMessageSchema = withFilesArray(
   MAIN_VIEW_COMMANDS.SET_EDITED_FILE,
 );
 
-export const SetBaseFileMessageSchema = withFilesArray(
+const SetBaseFileMessageSchema = withFilesArray(
   MAIN_VIEW_COMMANDS.SET_BASE_FILE,
 ).extend({
   preserveBaseFile: z.boolean().nullish(),
 });
 
-export const EditedFileSelectedMessageSchema = SingleFileSelectedSchema.extend({
+const EditedFileSelectedMessageSchema = SingleFileSelectedSchema.extend({
   command: z.literal(MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED),
 });
 
-export const SetInputFilesMessageSchema = withFilesArray(
+const SetInputFilesMessageSchema = withFilesArray(
   MAIN_VIEW_COMMANDS.SET_INPUT_FILES,
 );
 
-export const SetContextFilesMessageSchema = withFilesArray(
+const SetContextFilesMessageSchema = withFilesArray(
   MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES,
 );
 
-export const SetMediaFilesMessageSchema = withFilesArray(
+const SetMediaFilesMessageSchema = withFilesArray(
   MAIN_VIEW_COMMANDS.SET_MEDIA_FILES,
 );
 
-export const SetOutputFilesMessageSchema = withFilesArray(
+const SetOutputFilesMessageSchema = withFilesArray(
   MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES,
 );
 
-export const AddMediaFileMessageSchema = z.object({
+const AddMediaFileMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE),
   file: z.string(),
 });
 
-export const SetRecentCommitsMessageSchema = z.object({
+const SetRecentCommitsMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS),
   commits: FileListSchema,
   isGitRepo: z.boolean().nullish(),
 });
 
-export const SetCurrentFileMessageSchema = z.object({
+const SetCurrentFileMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_CURRENT_FILE),
   filePath: z.string(),
   fileType: z.string(),
 });
 
-export const SetSelectedCommitMessageSchema = z.object({
+const SetSelectedCommitMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_SELECTED_COMMIT),
   commitHash: z.string(),
   commitLabel: z.string().nullish(),
 });
 
-export const SetOpenedFilesMessageSchema = z.object({
+const SetOpenedFilesMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_OPENED_FILES),
   files: FileListSchema,
   fileType: z.string(),
   shouldFilter: z.boolean().nullish(),
 });
 
-export const InstructionTextPolishedMessageSchema = z.object({
+const InstructionTextPolishedMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED),
   text: z.string(),
 });
 
-export const InstructionTextPolishErrorMessageSchema = z.object({
+const InstructionTextPolishErrorMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR),
   error: z.string().nullish(),
 });
 
-export const InstructionTextTranscribedMessageSchema = z.object({
+const InstructionTextTranscribedMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED),
   text: z.string().nullish(),
 });
 
-export const ShowApiKeyBannerMessageSchema = z.object({
+const ShowApiKeyBannerMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER),
   provider: z.string().nullish(),
   requiresKey: z.boolean().nullish(),
 });
 
-export const ShowAgentConfigBannerMessageSchema = z.object({
+const ShowAgentConfigBannerMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER),
   agentName: z.string().nullish(),
   customDirSet: z.boolean().nullish(),
 });
 
-export const ShowDependencyBannerMessageSchema = z.object({
+const ShowDependencyBannerMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER),
   missingTools: z.array(z.string()).nullish(),
 });
 
-export const ShowGettingStartedBannerMessageSchema = z.object({
+const ShowGettingStartedBannerMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER),
 });
 
-export const ShowOrchestratorBannerMessageSchema = z.object({
+const ShowOrchestratorBannerMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER),
 });
 
-export const ShowLoginBannerMessageSchema = z.object({
+const ShowLoginBannerMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER),
 });
 
-export const SetSelectedAgentMessageSchema = z.object({
+const SetSelectedAgentMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT),
   agentId: z.string().nullish(),
   sessionType: z.string().nullish(),
 });
 
 /** Host → webview push of the derived onboarding-funnel state. */
-export const SetOnboardingFunnelMessageSchema = z.object({
+const SetOnboardingFunnelMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL),
   state: OnboardingFunnelStateSchema,
 });
