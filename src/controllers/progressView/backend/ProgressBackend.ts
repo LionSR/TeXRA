@@ -113,6 +113,9 @@ export class ProgressBackend {
     this.lifecycle = options.lifecycle;
     this.postMessage = (message) => {
       if (!options.hasTarget()) return;
+      // View refreshes are best-effort; a closed transport must not take
+      // down the backend. The async wrapper funnels sync throws and
+      // rejections into one swallowed path.
       void (async () => options.sendMessage(message))().catch(() => undefined);
     };
     this.state = new ProgressViewState(

@@ -244,6 +244,9 @@ export class DesktopProgressBridge {
       this.hostInteractions,
     );
     setProgressViewBridge({ isViewVisible: () => true });
+    const syncRenderedStreams = (): void =>
+      this.syncStreamContent(this.updateStreamMetadata());
+
     this.backend = new ProgressBackend({
       session: this.session,
       storage: tryPlatform()?.workspaceState ?? new MemoryProgressStorage(),
@@ -300,10 +303,8 @@ export class DesktopProgressBridge {
           const activeStream = this.updateStreamMetadata();
           if (syncActiveStream) this.syncStreamContent(activeStream);
         },
-        refreshRenderedStreamsAfterDeletion: () =>
-          this.syncStreamContent(this.updateStreamMetadata()),
-        activateStream: () =>
-          this.syncStreamContent(this.updateStreamMetadata()),
+        refreshRenderedStreamsAfterDeletion: syncRenderedStreams,
+        activateStream: (_stream) => syncRenderedStreams(),
         notifyDeletionRetained: (activeCount, failedCount) =>
           this.options.host.showInfoMessage(
             failedCount === 0

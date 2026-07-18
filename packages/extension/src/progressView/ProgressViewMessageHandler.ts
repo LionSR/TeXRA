@@ -131,7 +131,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         cause: 'Retry request cleared.',
       });
     }
-    await this.runViewCommand('texra.stopAgent', [stream]);
+    // Deletion must stop if the command fails; safeExecuteCommand intentionally
+    // absorbs errors for ordinary view actions.
+    await vscode.commands.executeCommand('texra.stopAgent', stream);
   }
 
   public cleanupDeletedStream(stream: StreamTabId): void {
