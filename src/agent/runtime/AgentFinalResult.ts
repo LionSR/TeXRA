@@ -37,6 +37,7 @@ export const WorkflowAgentFinalResultSchema = WorkflowFlowResultSchema.pick({
     diffs: z.array(ResultDiffSummarySchema).prefault(() => []),
     cost: CostSchema,
     diffsUnavailable: z.string().optional(),
+    structured: z.unknown().optional(),
   })
   .strict();
 
@@ -50,6 +51,7 @@ const ToolUseAgentFinalResultSchema = ToolUseFlowResultSchema.pick({
       .unwrap()
       .prefault(() => []),
     cost: CostSchema,
+    structured: z.unknown().optional(),
   })
   .strict();
 
@@ -67,10 +69,12 @@ type AgentFinalResultSource =
       readonly outcome?: RunOutcome;
       readonly diffs?: readonly ResultDiffSummary[];
       readonly diffsUnavailable?: string;
+      readonly structured?: unknown;
     }
   | {
       readonly category: AgentFlowCategory;
       readonly outcome: RunOutcome;
+      readonly structured?: unknown;
     };
 
 /**
@@ -83,6 +87,7 @@ export function buildAgentFinalResult(source: {
   readonly outcome?: RunOutcome;
   readonly diffs?: readonly ResultDiffSummary[];
   readonly diffsUnavailable?: string;
+  readonly structured?: unknown;
 }): Extract<AgentFinalResult, { category: 'workflow' }>;
 export function buildAgentFinalResult(
   source: AgentFinalResultSource,
@@ -102,6 +107,7 @@ export function buildAgentFinalResult(
         diffs: source.diffs,
         cost: result.totalCostUsd,
         diffsUnavailable: source.diffsUnavailable,
+        structured: source.structured,
       });
     }
     return AgentFinalResultSchema.parse({
@@ -110,6 +116,7 @@ export function buildAgentFinalResult(
       response: result.lastResponse,
       files: result.touchedFiles,
       cost: result.totalCostUsd,
+      structured: source.structured,
     });
   }
 
