@@ -1242,6 +1242,16 @@ const SCENARIOS = [
     unexpect: ['ServerSideKeyService not initialized'],
   },
   {
+    name: 'api-form-chatgpt-hotkey',
+    rows: 12,
+    cols: 80,
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/api', '\r', '1'],
+    frame: 'viewport',
+    expect: ['Model access set to ChatGPT subscription.'],
+    unexpect: ['ServerSideKeyService not initialized'],
+  },
+  {
     name: 'compact-approval-form',
     rows: 10,
     cols: 60,

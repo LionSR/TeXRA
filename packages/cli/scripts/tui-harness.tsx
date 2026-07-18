@@ -1969,9 +1969,15 @@ registerBuiltinSlashCommands({
       `Harness model selected. Future turns: ${model}.`,
     );
   },
-  onApiModeSelect: (apiMode) => {
-    sessionMeta.set({ ...sessionMeta.get(), apiMode });
-    appendHarnessAssistantTranscript(`API mode set to ${apiMode}.`);
+  onModelAccessSelect: (route) => {
+    if (route === 'chatgpt') {
+      appendHarnessAssistantTranscript(
+        'Model access set to ChatGPT subscription.',
+      );
+      return;
+    }
+    sessionMeta.set({ ...sessionMeta.get(), apiMode: route });
+    appendHarnessAssistantTranscript(`API mode set to ${route}.`);
   },
   onMemorySelect: (storagePath) => {
     appendHarnessAssistantTranscript(
