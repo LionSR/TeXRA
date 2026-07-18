@@ -316,7 +316,6 @@ describe('CLI doctor', () => {
     const stdout = captureDoctorStdout(
       {
         ...context,
-        colorEnabled: true,
         stdoutIsTty: false,
         stderrIsTty: true,
         stdoutColorEnabled: false,
@@ -333,7 +332,6 @@ describe('CLI doctor', () => {
     const stdout = captureDoctorStdout(
       {
         ...context,
-        colorEnabled: false,
         stdoutIsTty: true,
         stderrIsTty: false,
         stdoutColorEnabled: true,

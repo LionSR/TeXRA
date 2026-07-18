@@ -44,11 +44,7 @@ import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import { chatgptAuthCommand } from './chatgptAuth';
 import { authTokenCommand } from './relayTokens';
-import {
-  CliUsageError,
-  resolveCliStdoutColorEnabled,
-  type CliContext,
-} from '../runtime/cliContext';
+import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
 interface LoginCommandArgs {
   readonly provider?: string;
@@ -253,9 +249,7 @@ export async function runLoginCommand(
   }
 
   const { promptForLoginProvider } = await import('./loginProviderPicker');
-  const choice = await promptForLoginProvider(
-    resolveCliStdoutColorEnabled(context),
-  );
+  const choice = await promptForLoginProvider(context.stdoutColorEnabled);
   if (!choice) {
     writeTextStderr('Cancelled. No sign-in started.');
     return CliExitCode.Success;

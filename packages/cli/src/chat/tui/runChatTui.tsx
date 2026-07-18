@@ -25,11 +25,7 @@ import {
   wakeQueuedFollowUpStream,
 } from '@agent/followUp/ToolUseFollowUp';
 import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
-import {
-  type CliContext,
-  readCliVersion,
-  resolveCliStdoutColorEnabled,
-} from '@cli/runtime/cliContext';
+import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
 import { type CliToolUseResumeResolution } from '@cli/runtime/sessionResume';
 import { effectiveCliApiMode } from '@cli/runtime/apiAccessMode';
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
@@ -812,7 +808,7 @@ export async function runChat(
     });
   };
 
-  const stdoutColorEnabled = resolveCliStdoutColorEnabled(context) ?? true;
+  const stdoutColorEnabled = context.stdoutColorEnabled;
   const inkRef: { current?: InkInstance } = {};
   const viewportController = createTuiViewportController(inkRef);
   const ink = render(

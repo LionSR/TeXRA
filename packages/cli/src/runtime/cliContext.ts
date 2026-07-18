@@ -52,8 +52,6 @@ export interface CliContext {
   readonly stdoutColorEnabled: boolean;
   /** Color allowed when writing to stderr. */
   readonly stderrColorEnabled: boolean;
-  /** Back-compat alias for `stderrColorEnabled`. */
-  readonly colorEnabled: boolean;
   readonly commandName: string;
   readonly version: string;
   readonly resourcesPath: string;
@@ -73,23 +71,6 @@ export class CliUsageError extends Error {
   }
 }
 
-/**
- * Resolves the color-enabled decision for stdout-bound output.
- *
- * `colorEnabled` is documented on `CliContext` as a back-compat alias for
- * `stderrColorEnabled`, but every CLI entry point already reused it as the
- * pre-stdout/stderr-split generic fallback for stdout too — this centralizes
- * that existing behavior rather than introducing it. Takes a structural pick
- * (not the full `CliContext`) so narrower "minimal slice" contexts, like
- * `OnboardingGateContext`, can share the helper.
- */
-export function resolveCliStdoutColorEnabled(context: {
-  readonly stdoutColorEnabled?: boolean;
-  readonly colorEnabled?: boolean;
-}): boolean | undefined {
-  return context.stdoutColorEnabled ?? context.colorEnabled;
-}
-
 export interface CliAmbientState {
   readonly isCi: boolean;
   readonly stdinIsTty: boolean;
@@ -100,8 +81,6 @@ export interface CliAmbientState {
   readonly stdoutColorEnabled: boolean;
   /** Color is allowed on stderr. */
   readonly stderrColorEnabled: boolean;
-  /** Back-compat alias for `stderrColorEnabled`. */
-  readonly colorEnabled: boolean;
 }
 
 /**
@@ -163,7 +142,6 @@ export function readCliAmbientState(): CliAmbientState {
     termIsDumb: dumbTerm,
     stdoutColorEnabled,
     stderrColorEnabled,
-    colorEnabled: stderrColorEnabled,
   };
   return cachedAmbient;
 }
@@ -473,7 +451,6 @@ export async function buildCliContext(
     stderrIsTty: ambient.stderrIsTty,
     stdoutColorEnabled,
     stderrColorEnabled,
-    colorEnabled: stderrColorEnabled,
     commandName: resolveCliCommandName(readCliEntrypointPath()),
     version: await readCliVersion(),
     resourcesPath: resolveCliResourcesPath(),
