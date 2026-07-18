@@ -1,5 +1,12 @@
 // Slash command registry and parse helpers.
 
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+import { EventEmitter } from 'node:events';
+import { createRequire } from 'node:module';
+import { setTimeout as sleep } from 'node:timers/promises';
+
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -24,9 +31,11 @@ import {
   formProgress,
   resetCliState,
   sessionMeta,
+  streams,
   transientNotice,
   type SessionMeta,
 } from '@cli/chat/tui/state/cliState';
+import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
 import type { CliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { AgentCategory } from '@shared/schemas/agent';
@@ -44,6 +53,49 @@ const INCLUDED_CHAT_SESSION: SessionMeta = {
   transcriptMode: 'persistent',
   version: 'test',
 };
+
+const cliRequire = createRequire(
+  new URL('../../../packages/cli/package.json', import.meta.url),
+);
+
+class FakeStdout extends EventEmitter {
+  readonly isTTY = true;
+  readonly columns = 80;
+  readonly rows = 24;
+  output = '';
+
+  write(chunk: string): boolean {
+    this.output += chunk;
+    return true;
+  }
+
+  getColorDepth(): number {
+    return 24;
+  }
+}
+
+class FakeStdin extends EventEmitter {
+  readonly isTTY = true;
+
+  read(): null {
+    return null;
+  }
+
+  ref(): void {}
+  unref(): void {}
+  pause(): void {}
+  resume(): void {}
+  setEncoding(): void {}
+  setRawMode(): void {}
+}
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+  const deadline = Date.now() + 2000;
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error('Timed out waiting for state');
+    await sleep(10);
+  }
+}
 
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
@@ -569,6 +621,61 @@ describe('slashRegistry', () => {
 
     formProgress.get()?.dismiss();
     expect(loginNode.isClosed()).toBe(true);
+  });
+
+  it('moves a login instruction to scrollback when its frame cannot fit', async () => {
+    const instruction =
+      'Open https://example.test/device and enter verification code ABCD-EFGH';
+    registerBuiltinSlashCommands({
+      onLoginSelect: (_value, output) => {
+        output.writeProgress(instruction, { copyable: true });
+      },
+    });
+    const login = findSlashCommand('login');
+    if (!login) throw new Error('Expected /login to be registered');
+
+    expect(openRegisteredCliSlashForm(login, '')).toBe(true);
+    const loginNode = renderOpenForm<{
+      onSelect?: (value: string) => void;
+    }>();
+    loginNode.props?.onSelect?.('chatgpt');
+    await waitFor(() => formProgress.get()?.status === 'succeeded');
+    expect(formProgress.get()?.archiveCopyable).toBeTypeOf('function');
+
+    const ink = (await import(cliRequire.resolve('ink'))) as any;
+    const stdout = new FakeStdout();
+    const instance = ink.render(
+      activeForm.get()?.render(() => {}, 20),
+      {
+        stdin: new FakeStdin(),
+        stdout,
+        interactive: true,
+        exitOnCtrlC: false,
+        patchConsole: false,
+      },
+    );
+    try {
+      instance.rerender(activeForm.get()?.render(() => {}, 4));
+      await waitFor(
+        () => formProgress.get()?.archivedCopyableMessage === instruction,
+      );
+      await waitFor(() => stdout.output.includes('scrollback'));
+      expect(stdout.output).toContain('scrollback');
+      expect(formProgress.get()).toMatchObject({
+        status: 'succeeded',
+        message: 'Authentication instructions were written to scrollback.',
+        copyableMessage: undefined,
+        archivedCopyableMessage: instruction,
+      });
+      expect(
+        streams
+          .get()
+          .get(CLI_LOCAL_STREAM_ID)
+          ?.entries.map((entry) => entry.text),
+      ).toEqual([instruction]);
+    } finally {
+      instance.unmount();
+    }
   });
 
   it('detaches a busy login and ignores its late completion', async () => {

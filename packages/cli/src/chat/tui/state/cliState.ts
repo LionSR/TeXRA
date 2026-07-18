@@ -573,6 +573,8 @@ export interface FormProgress {
   readonly title: string;
   readonly message?: string;
   readonly copyableMessage?: string;
+  readonly archivedCopyableMessage?: string;
+  readonly archiveCopyable?: () => void;
   readonly cancel: () => void;
   readonly dismiss: () => void;
 }

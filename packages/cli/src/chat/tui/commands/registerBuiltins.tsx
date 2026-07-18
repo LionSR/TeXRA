@@ -142,10 +142,23 @@ function formSelectionHandler<T>({
         }
       };
       const title = busyTitle?.(value) ?? 'Working';
+      const archiveCopyable = (): void => {
+        const current = currentProgress();
+        if (!current?.copyableMessage) return;
+        if (echoOnPersist) onPersist?.();
+        appendLocalAssistantTranscript(current.copyableMessage);
+        formProgress.set({
+          ...current,
+          message: 'Authentication instructions were written to scrollback.',
+          copyableMessage: undefined,
+          archivedCopyableMessage: current.copyableMessage,
+        });
+      };
       formProgress.set({
         token,
         status: 'running',
         title,
+        archiveCopyable,
         cancel,
         dismiss: close,
       });
@@ -186,7 +199,7 @@ function formSelectionHandler<T>({
         .then(() => {
           const current = currentProgress();
           if (!current) return;
-          if (current.copyableMessage) {
+          if (current.copyableMessage || current.archivedCopyableMessage) {
             formProgress.set({ ...current, status: 'succeeded' });
           } else {
             close();
@@ -197,17 +210,19 @@ function formSelectionHandler<T>({
           if (!current) return;
           if (echoOnPersist) onPersist?.();
           const errorMessage = toErrorMessage(error);
-          const persistedError = current.copyableMessage
+          const copyableMessage =
+            current.copyableMessage ?? current.archivedCopyableMessage;
+          const persistedError = copyableMessage
             ? new Error(
                 `${collapseWhitespace(errorMessage)} · ${collapseWhitespace(
-                  current.copyableMessage,
+                  copyableMessage,
                 )}`,
               )
             : error;
           await onError?.(persistedError);
           current = currentProgress();
           if (!current) return;
-          if (current.copyableMessage) {
+          if (current.copyableMessage || current.archivedCopyableMessage) {
             formProgress.set({
               ...current,
               status: 'failed',

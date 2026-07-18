@@ -543,7 +543,6 @@ export function App(props: AppProps): React.JSX.Element {
     // interrupt-then-exit behavior without duplicating that process lifecycle.
     if (key.ctrl && input === 'c') {
       if (formBusy) {
-        props.onCtrlC?.();
         formProgress?.cancel();
         return;
       }
