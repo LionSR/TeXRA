@@ -63,8 +63,11 @@ recommended groups at the bottom are a good starting point.
   workflow-agent calls with predetermined branching and fan-out. Pass a default
   `agent`, the complete `script`, and optional JSON `args`. The script begins
   with `export const meta = { name, description }` and can use `agent`, `phase`,
-  `log`, `parallel`, `pipeline`, and `concat`. It is intentionally absent from
-  the recommended orchestrator set.
+  `log`, `parallel`, `pipeline`, and `concat`. `agent(prompt, { schema })`, where
+  `schema` is a JSON Schema object, runs a tool-use agent (name one via
+  `agentName`) that finishes by calling `submit_output`; the call resolves to an
+  envelope whose `.structured` is the validated object. It is intentionally
+  absent from the recommended orchestrator set.
 - `delegate_agent` — delegate to another tool-use agent. Pass `agent`,
   `model`, and `instruction` for a fresh run, or `execution_id` +
   `instruction` to resume a WAITING subagent.
