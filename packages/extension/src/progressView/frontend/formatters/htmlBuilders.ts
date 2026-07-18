@@ -8,6 +8,12 @@
  */
 
 // Third-party imports - use optimized hljs with only TeXRA-relevant languages
+import { html, nothing, type TemplateResult } from 'lit';
+import { classMap } from 'lit/directives/class-map.js';
+import { ifDefined } from 'lit/directives/if-defined.js';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+import { diff_match_patch, DIFF_DELETE, DIFF_INSERT } from 'diff-match-patch';
+
 import type { FileListEntry } from '@shared/schemas';
 import { hljs } from '@shared/highlighting/hljs';
 
@@ -15,24 +21,13 @@ import { hljs } from '@shared/highlighting/hljs';
 import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
 import { getBasename } from '@utils/core';
 
-// Local imports - Lit template utilities
-import {
-  html,
-  unsafeHTML,
-  classMap,
-  ifDefined,
-  nothing,
-  type TemplateResult,
-} from './litTemplates';
-
 // Local imports - formatter helpers
 import {
   TOOL_ICON_MAP,
   DIFF_DETECTION_LINE_LIMIT,
   DIFF_MARKER_THRESHOLD,
 } from './constants';
-import { generateInlineDiff } from './wordDiff';
-import { registerCopyContent } from './copyContentStore';
+import { registerCopyContent } from './contentStore';
 
 /** Build a tool-use section template. Empty label omits the label element. */
 export function buildToolUseSection(
@@ -348,6 +343,28 @@ export function buildExecutionsPathDisplay(
 // ============================================================================
 // Edit Diff Display (Inline Word-Level Diff)
 // ============================================================================
+
+// Singleton diff_match_patch instance - reused across calls to avoid allocation overhead
+let dmpInstance: InstanceType<typeof diff_match_patch> | null = null;
+
+/** Generate inline diff template showing changes between old and new text. */
+function generateInlineDiff(oldText: string, newText: string): TemplateResult {
+  dmpInstance ??= new diff_match_patch();
+  const dmp = dmpInstance;
+  const diffs = dmp.diff_main(oldText ?? '', newText ?? '');
+  dmp.diff_cleanupSemantic(diffs);
+
+  return html`${diffs.map(([op, text]: [number, string]) => {
+    switch (op) {
+      case DIFF_DELETE:
+        return html`<span class="diff-inline-del">${text}</span>`;
+      case DIFF_INSERT:
+        return html`<span class="diff-inline-add">${text}</span>`;
+      default:
+        return text;
+    }
+  })}`;
+}
 
 /** Build edit diff section showing old_string to new_string with inline highlighting. */
 export function buildEditDiffSection(

@@ -10,21 +10,19 @@
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
-// Local imports - Lit utilities
+// Third-party imports - Lit utilities
+import { html } from 'lit';
+import { ifDefined } from 'lit/directives/if-defined.js';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+
+// Local imports - shared schemas
 import type { LogMessageData } from '@shared/schemas';
-import {
-  html,
-  unsafeHTML,
-  ifDefined,
-  type FormatResult,
-} from '../litTemplates';
 
 // Local imports - formatter helpers
 import { formatDisplayTimestamp } from '../timestampUtils';
 import { processMarkdownContent } from '../markdownRenderer';
 import { buildDetailsSummary } from '../htmlBuilders';
-
-// Local imports - shared schemas
+import type { FormatResult } from '../baseLogFormatter';
 
 // Banner configuration by messageType
 const BANNER_CONFIG: Record<

@@ -1,12 +1,17 @@
 /**
  * Base log formatter utilities for open state management and error handling.
  */
+
 import {
   STREAMING_TEXT_MESSAGE_TYPES,
   type LogMessageData,
 } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { TemplateResult } from 'lit';
+
+/** Result type for formatters that return Lit templates directly. */
+export type FormatResult = TemplateResult | null;
 
 export type FormatOptions = {
   preservedOpen?: boolean;
