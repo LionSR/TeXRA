@@ -7,6 +7,7 @@ import * as path from 'node:path';
 
 import { normalizeFilePath } from '@utils/core';
 import { isPathWithin } from '@utils/core/pathCore';
+import { capitalize } from '@utils/text/stringUtils';
 
 import type { WorkspaceProvider } from '../interfaces';
 
@@ -36,9 +37,7 @@ export function canonicalizeWorkspacePath(workspacePath: string): string {
       existingAncestor = parent;
     }
   }
-  return /^[a-z]:[\\/]/.test(canonical)
-    ? `${canonical.charAt(0).toUpperCase()}${canonical.slice(1)}`
-    : canonical;
+  return /^[a-z]:[\\/]/.test(canonical) ? capitalize(canonical) : canonical;
 }
 
 export function createNodeWorkspace(

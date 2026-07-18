@@ -12,6 +12,7 @@ import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 import { html, nothing, render } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
+import { isThenable } from '@utils/core';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
@@ -119,7 +120,7 @@ export function executeCommandPaletteEntry(
   // logs but doesn't propagate — sync handler errors still throw
   // synchronously and bubble to the caller.
   const result = onExecute(entry.id);
-  if (typeof (result as { then?: unknown })?.then === 'function') {
+  if (isThenable(result)) {
     (result as Promise<boolean>).catch((error) => {
       console.error('[command-palette] async dispatch rejected', error);
     });
