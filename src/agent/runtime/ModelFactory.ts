@@ -126,8 +126,8 @@ const PROVIDER_HANDLER_ROUTES: Record<ModelProvider, ProviderHandlerRoute> = {
   },
   [ModelProvider.META]: {
     load: async () =>
-      (await import('@agent/modelHandlers/openai/modelHandlerMeta'))
-        .ModelHandlerMeta,
+      (await import('@agent/modelHandlers/openai/modelHandlerOpenAIResponse'))
+        .ModelHandlerOpenAIResponse,
     compatibilityKey: 'ModelHandlerMeta',
   },
   [ModelProvider.OTHERS]: {

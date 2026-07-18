@@ -87,7 +87,7 @@ function createConfig(overrides: Partial<ModelConfig> = {}): ModelConfig {
     fullName: 'gpt-4.1',
     shortName: 'gpt-4.1',
     label: 'GPT 4.1',
-    provider: ModelProvider.OPENAI,
+    provider: overrides.provider ?? ModelProvider.OPENAI,
     maxOutputTokens: overrides.maxOutputTokens ?? 1024,
     inputPrice: 0,
     outputPrice: 0,
@@ -1508,8 +1508,8 @@ describe('ModelHandlerOpenAIResponse.initializeOutputAndPrefill', () => {
 });
 
 describe('ModelHandlerOpenAIResponse.normalizeUsage', () => {
-  it('maps input_tokens_details.cache_write_tokens to cacheCreationTokens', () => {
-    const handler = createHandler();
+  it('maps cache writes and derives usage attribution from configuration', () => {
+    const handler = createHandler({ provider: ModelProvider.META });
     const usage: ResponseUsage = {
       input_tokens: 100,
       output_tokens: 20,
@@ -1520,6 +1520,7 @@ describe('ModelHandlerOpenAIResponse.normalizeUsage', () => {
 
     const normalized = handler.normalizeUsage(usage, 0);
 
+    assert.equal(normalized.provider, 'meta');
     assert.equal(normalized.cacheCreationTokens, 15);
     assert.equal(normalized.cachedInputTokens, 10);
   });
