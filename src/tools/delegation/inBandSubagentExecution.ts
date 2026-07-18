@@ -89,6 +89,15 @@ export interface StableInBandSubagentExecutionOptions {
   readonly signal?: AbortSignal;
   /** Resolve mutable launch prerequisites only when no result can be recovered. */
   readonly prepare: () => Promise<InBandSubagentExecutionOptions>;
+  /**
+   * Fires once, just before a live attempt runs, with the execution id that
+   * attempt actually uses — the logical id on attempt 0, an attempt-specific
+   * id after a durable retry advanced the sequence. This is the id the child
+   * stream registers under and the roster exposes, so a host targeting the
+   * in-flight child (skip/retry) must key on it, not the pre-derived logical
+   * id. Recovered attempts never run live, so this does not fire for them.
+   */
+  readonly onActiveExecutionId?: (executionId: ExecutionId) => void;
 }
 
 /** Legacy delivery callers may still provide a bare one-shot run context. */
@@ -727,6 +736,9 @@ export async function executeStableSubagentInBand(
         { cause },
       );
     }
+    // The resolved attempt id is now final and about to run live; surface it
+    // so a host can target this in-flight attempt by the id the roster shows.
+    options.onActiveExecutionId?.(executionId);
     const prepared = await options.prepare();
     if (prepared.parentExecutionId !== options.parentExecutionId) {
       throw new SubagentReconciliationError(

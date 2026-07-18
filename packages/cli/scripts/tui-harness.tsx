@@ -2022,6 +2022,8 @@ function renderHarnessApp(): React.JSX.Element {
     <App
       onSubmit={handleHarnessSubmit}
       onKillExecution={markHarnessExecutionStopped}
+      onSkipExecution={() => undefined}
+      onRetryExecution={() => undefined}
       canInterruptActiveRun={() => canInterrupt}
       canStopActiveRun={() => canInterrupt}
       colorEnabled={HARNESS_COLOR_ENABLED}

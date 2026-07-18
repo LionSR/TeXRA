@@ -154,6 +154,50 @@ describe('CLI child list interaction', () => {
     }
   });
 
+  it('skips and retries the focused subagent grandchild by execution id', async () => {
+    const ink = (await import(cliRequire.resolve('ink'))) as any;
+    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const root = 'root' as StreamTabId;
+    const child = 'child' as StreamTabId;
+    const onSkipExecution = vi.fn();
+    const onRetryExecution = vi.fn();
+
+    const stdin = new FakeStdin();
+    const instance = ink.render(
+      React.createElement(SubagentList, {
+        activeSubagentExecutionIds: new Map([[child, 'child-exec']]),
+        keyboardActive: true,
+        maxRows: 5,
+        onCancel: vi.fn(),
+        onSkipExecution,
+        onRetryExecution,
+        onSelectionChange: vi.fn(),
+        selectedValue: childStreamListValue(child),
+        sessions: [session(root, true), session(child)],
+      }),
+      {
+        stdin,
+        stdout: new FakeStdout(),
+        interactive: true,
+        exitOnCtrlC: false,
+        patchConsole: false,
+      },
+    );
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write('s');
+      await waitFor(() => onSkipExecution.mock.calls.length === 1);
+      stdin.write('r');
+      await waitFor(() => onRetryExecution.mock.calls.length === 1);
+
+      expect(onSkipExecution).toHaveBeenCalledWith('child-exec');
+      expect(onRetryExecution).toHaveBeenCalledWith('child-exec');
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it('opens and kills a selected process without printing stream output', async () => {
     const ink = (await import(cliRequire.resolve('ink'))) as any;
     const React = ((await import(cliRequire.resolve('react'))) as any).default;
