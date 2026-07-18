@@ -1,7 +1,6 @@
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
-import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { SubagentProgressUpdate, TodoItem } from '@shared/schemas';
 import type { TaskRunFileService } from '@utils/files';
@@ -15,7 +14,6 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly toolRegistry: IToolRegistry;
   readonly snapshot: ToolUseSessionSnapshot | null;
   readonly onFollowUpConsumed?: () => void;
-  readonly attachedMemoryMisses?: readonly AttachedMemoryMiss[];
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
   /** Persist todos to the execution KV store. Injected by runToolUseFlow. */
   readonly persistTodos?: (todos: TodoItem[]) => Promise<void>;

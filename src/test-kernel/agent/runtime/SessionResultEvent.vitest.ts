@@ -108,7 +108,7 @@ function createCtx(overrides?: { logger?: TraceEmitter }): {
     attachedMemoryMisses: [],
     usageMonitor: new UsageMonitor(
       modelInfo,
-      { logger, runtimeHost: explicit.host, storageKey, streamId },
+      { logger, storageKey, streamId },
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),
     modelHandler: {
