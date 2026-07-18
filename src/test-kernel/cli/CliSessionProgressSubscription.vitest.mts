@@ -185,8 +185,7 @@ const PROGRESS_PROJECTION_CASES = {
   updateStreamUsage: {
     source: runEvent({
       type: 'usage',
-      stats: {},
-      data: {
+      payload: {
         streamId,
         storageKey,
         usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
@@ -580,30 +579,6 @@ describe('attachCliSessionProgressProjection', () => {
         3,
         progressRecord('updateStreamStatus', resumingStatusPayload),
       );
-    } finally {
-      detach();
-    }
-  });
-
-  it('drops malformed retained run facts instead of forwarding unchecked payloads', () => {
-    const events = new SessionEventHub();
-    const writeRecord = recordWriter();
-    const detach = attachCliSessionProgressProjection(events, writeRecord);
-
-    try {
-      events.emit({
-        scope: 'run',
-        streamId,
-        event: {
-          type: 'usage',
-          stats: {},
-          data: {
-            streamId,
-            usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
-          },
-        },
-      });
-      expect(writeRecord).not.toHaveBeenCalled();
     } finally {
       detach();
     }

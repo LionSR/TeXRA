@@ -25,6 +25,7 @@ import type {
   UpdateCompileFailuresPayload,
   UpdateMissingOutputsPayload,
   UpdatePlanPayload,
+  UpdateStreamUsagePayload,
   UpdateTodosPayload,
 } from '@shared/schemas';
 import type { StreamTransitionCause } from '@shared/streams/streamStatus';
@@ -39,15 +40,6 @@ export type ToolStatus = 'completed' | 'failed' | 'in_progress';
  * (TeXRA's MessageType) plug in without coupling the SDK.
  */
 export type StreamKind = string;
-
-/** Token-usage stats emitted at the end of each model turn. */
-export interface TokenUsageStats {
-  readonly inputTokens?: number;
-  readonly outputTokens?: number;
-  readonly cacheCreationTokens?: number;
-  readonly cacheReadTokens?: number;
-  readonly [key: string]: number | undefined;
-}
 
 /** Context-state snapshot emitted around context-management checkpoints. */
 export interface ContextStateData {
@@ -139,13 +131,7 @@ export interface ToolEndEvent extends StageStamp {
 /** Token-usage report. */
 export interface UsageEvent extends StageStamp {
   readonly type: 'usage';
-  readonly stats: TokenUsageStats;
-  /**
-   * Host/product-specific usage projection payload. Agent-general consumers can
-   * ignore this; TeXRA uses it to project sidebar totals from the same trace
-   * event that records transcript statistics.
-   */
-  readonly data?: unknown;
+  readonly payload: UpdateStreamUsagePayload;
   /** False when this usage report should not create a transcript stats row. */
   readonly recordTranscript?: boolean;
 }

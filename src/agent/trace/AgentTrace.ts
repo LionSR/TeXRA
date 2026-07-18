@@ -11,7 +11,7 @@
  * `toolUseHelpers.ts` that operate on this interface — there is no host
  * subtype. SDK consumers program directly against `AgentTrace`.
  */
-import type { RunOutcome } from '@shared/schemas';
+import type { RunOutcome, UpdateStreamUsagePayload } from '@shared/schemas';
 
 import type {
   AgentEvent,
@@ -19,7 +19,6 @@ import type {
   LogEvent,
   ResponseFinalizedEvent,
   StreamKind,
-  TokenUsageStats,
   ToolStatus,
 } from './events';
 
@@ -144,7 +143,6 @@ export interface StagedEmitOptions {
 }
 
 export interface UsageEmitOptions extends StagedEmitOptions {
-  readonly data?: unknown;
   readonly recordTranscript?: boolean;
 }
 
@@ -170,7 +168,7 @@ export interface AgentTrace {
   error(message: string, options?: LogOptions): void;
 
   // ─── First-class agent-general union arms ───────────────────────────
-  usage(stats: TokenUsageStats, options?: UsageEmitOptions): void;
+  usage(payload: UpdateStreamUsagePayload, options?: UsageEmitOptions): void;
   contextState(snapshot: ContextStateData, options?: StagedEmitOptions): void;
   toolStart(
     input: { logId: string; toolName: string; input: unknown },

@@ -2,7 +2,6 @@
 
 import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
@@ -185,12 +184,9 @@ function applyDirectTuiRunEvent(
     case 'run.config':
       applyRunConfig(event.streamId, event.config);
       return true;
-    case 'usage': {
-      const payload = toUpdateStreamUsagePayload(event.data, fallbackStreamId);
-      if (!payload) return false;
-      applyUsageUpdate(payload);
+    case 'usage':
+      applyUsageUpdate(event.payload);
       return true;
-    }
     case 'conversation.progress':
       patchStream(fallbackStreamId, (s) => ({
         ...s,
