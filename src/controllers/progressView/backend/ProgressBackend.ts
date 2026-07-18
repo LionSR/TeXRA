@@ -5,7 +5,6 @@ import {
 import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
 import {
   ProgressFactApplier,
-  PROGRESS_BACKEND_RUN_PROGRESS_EVENT_TYPES,
   type GetProgressStreamControls,
   type ProgressEventSubscription,
 } from '@controllers/progressView/backend/events/ProgressFactApplier';
@@ -23,6 +22,7 @@ import {
   type BuildApprovalRequestHandlerSetParams,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
+import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
 import {
   defaultSession,
   type SessionHandle,
@@ -327,7 +327,7 @@ export class ProgressBackend {
           sessionEvent.event,
         );
       },
-      { scope: 'run', types: PROGRESS_BACKEND_RUN_PROGRESS_EVENT_TYPES },
+      { scope: 'run', types: RUN_FACT_EVENT_TYPES },
     );
     return {
       dispose: () => {

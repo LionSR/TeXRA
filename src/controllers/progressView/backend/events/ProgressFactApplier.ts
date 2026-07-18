@@ -7,8 +7,12 @@ import {
   type StreamExecutionState,
 } from '@controllers/progressView/backend/state/ProgressViewState';
 import { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
-import type { AgentEvent, AgentTrace } from '@agent/trace';
-import { createChannelTrace } from '@agent/trace';
+import {
+  createChannelTrace,
+  RUN_FACT_EVENT_TYPES,
+  type AgentEvent,
+  type AgentTrace,
+} from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { TaskState } from '@agent/core/state/TaskState';
 import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
@@ -75,33 +79,6 @@ export type ProgressStreamControls = ProgressStreamBypassControls &
 export type GetProgressStreamControls = (
   stream: StreamTabId,
 ) => ProgressStreamControls;
-
-/**
- * Run-scoped event types this backend handles, and the single source of truth
- * for the `runFactHandlers` table: the `RunFactHandlers` mapped type requires
- * exactly one handler per entry, so a listed type without a handler (or vice
- * versa) is a compile error. `ProgressBackend` reuses this as its run-scope
- * subscription filter, keeping delivered and handled events in sync by
- * construction.
- */
-const RUN_FACT_EVENT_TYPES = [
-  'conversation.progress',
-  'updateTodos',
-  'updatePlan',
-  'addOutputFiles',
-  'updateMissingOutputs',
-  'updateCompileFailures',
-  'goalPaused',
-  'run.config',
-  'usage',
-  'status',
-  'stage.start',
-  'child.activity',
-  'process.output',
-] as const satisfies readonly AgentEvent['type'][];
-
-export const PROGRESS_BACKEND_RUN_PROGRESS_EVENT_TYPES: readonly AgentEvent['type'][] =
-  RUN_FACT_EVENT_TYPES;
 
 type RunFactType = (typeof RUN_FACT_EVENT_TYPES)[number];
 
