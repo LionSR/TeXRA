@@ -1,4 +1,5 @@
 // Local file imports
+import { clampReasoningEffortToHighOrMax } from '@agent/modelHandlers/support/reasoningEffort';
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
 
 /**
@@ -30,10 +31,11 @@ export class ModelHandlerGLM extends ReasoningModelHandlerOpenAI {
 
   /**
    * GLM effort-capable models accept only high/max on the OpenAI-compatible
-   * surface. Keep lower user selections valid by mapping them to high.
+   * surface; delegate to the shared high-or-max clamp (see
+   * `clampReasoningEffortToHighOrMax`).
    */
   protected override validateReasoningEffort(effort: string): string {
-    return effort === 'xhigh' || effort === 'max' ? 'max' : 'high';
+    return clampReasoningEffortToHighOrMax(effort);
   }
 
   /**
