@@ -17,24 +17,9 @@
       "name": "DESKTOP_COMMAND_IDS"
     },
     {
-      "file": "packages/desktop/src/desktopDiffMessages.ts",
-      "category": "exports",
-      "name": "DESKTOP_DIFF_COMMANDS"
-    },
-    {
       "file": "packages/desktop/src/desktopLogMessages.ts",
       "category": "exports",
       "name": "DesktopLogSnapshotSchema"
-    },
-    {
-      "file": "packages/desktop/src/desktopPdfMessages.ts",
-      "category": "exports",
-      "name": "DESKTOP_PDF_COMMANDS"
-    },
-    {
-      "file": "packages/desktop/src/desktopPromptMessages.ts",
-      "category": "exports",
-      "name": "DESKTOP_PROMPT_COMMANDS"
     },
     {
       "file": "packages/desktop/src/desktopShellMessages.ts",

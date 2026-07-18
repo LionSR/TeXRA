@@ -26,16 +26,3 @@ export const DesktopSettlePromptMessageSchema = z.strictObject({
 export type DesktopSettlePromptMessage = z.infer<
   typeof DesktopSettlePromptMessageSchema
 >;
-
-export function buildDesktopShowPromptMessage(
-  payload: Omit<DesktopShowPromptMessage, 'command'>,
-): DesktopShowPromptMessage {
-  return { command: DESKTOP_PROMPT_COMMANDS.SHOW, ...payload };
-}
-
-export function buildDesktopSettlePromptMessage(
-  requestId: string,
-  value: string | null,
-): DesktopSettlePromptMessage {
-  return { command: DESKTOP_PROMPT_COMMANDS.SETTLE, requestId, value };
-}

@@ -11,7 +11,8 @@ import {
 import { computeUserPatch } from '@tools/approval/toolEditApproval';
 
 import {
-  buildDesktopShowDiffMessage,
+  DESKTOP_DIFF_COMMANDS,
+  type DesktopShowDiffMessage,
   monacoLanguageForFilePath,
 } from '../desktopDiffMessages.js';
 import { createTexraTempDir } from './desktopTempDir.js';
@@ -51,7 +52,7 @@ export function createDesktopDiffHost(
   // Try to render the diff in the wa-dialog overlay. Returns `false` (so the
   // caller falls back to the external editor) when the renderer rejects or
   // throws; mirrors the preview host's contract.
-  function tryShowDiffInRenderer(message: unknown): boolean {
+  function tryShowDiffInRenderer(message: DesktopShowDiffMessage): boolean {
     if (!options.postToRenderer || options.forceExternal) return false;
     try {
       return options.postToRenderer(message) !== false;
@@ -77,16 +78,15 @@ export function createDesktopDiffHost(
     // Prefer the in-app overlay when wired. A `false` return value or
     // a thrown error opts into the external-editor fallback (covers the
     // startup IPC race, destroyed BrowserWindow, and `forceExternal`).
-    const shownInRenderer = tryShowDiffInRenderer(
-      buildDesktopShowDiffMessage({
-        title,
-        originalText: originalContent,
-        proposedText: proposedContent,
-        language: monacoLanguageForFilePath(proposed.filePath),
-        originalPath: original.filePath,
-        proposedPath: proposed.filePath,
-      }),
-    );
+    const shownInRenderer = tryShowDiffInRenderer({
+      command: DESKTOP_DIFF_COMMANDS.SHOW_DIFF,
+      title,
+      originalText: originalContent,
+      proposedText: proposedContent,
+      language: monacoLanguageForFilePath(proposed.filePath),
+      originalPath: original.filePath,
+      proposedPath: proposed.filePath,
+    });
     if (shownInRenderer) return { original, proposed, title };
 
     // External-editor fallback: write a unified patch file and open it.
