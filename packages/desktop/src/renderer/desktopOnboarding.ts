@@ -5,7 +5,7 @@
 
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import { html, nothing, render, type TemplateResult } from 'lit';
+import { html, render, type TemplateResult } from 'lit';
 
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -157,15 +157,9 @@ export function createFirstRunWalkthrough({
           `,
         )}
       </ol>
-      ${
-        actions.length > 0
-          ? html`
-              <div slot="footer" class="desktop-onboarding-actions">
-                ${actions.map(actionTemplate)}
-              </div>
-            `
-          : nothing
-      }
+      <div slot="footer" class="desktop-onboarding-actions">
+        ${actions.map(actionTemplate)}
+      </div>
     `,
     dialog,
   );
