@@ -43,12 +43,17 @@ describe('workflow-script progress bridge', () => {
   it('projects phases and logs under the captured parent stage', async () => {
     const { trace, events } = recordingTrace();
     const parent = trace.openStage('Parent');
+    const plannedMeta = `export const meta = {
+  name: 'planned-progress-test',
+  description: 'tests planned workflow progress projection',
+  phases: [{ title: 'Research' }, { title: 'Write' }],
+}`;
 
     await parent.within(() =>
       runPersistedWorkflowScriptWithProgress(trace, {
         store: getExecutionStore(executionId),
         checkpointId: 'phase-log',
-        script: `${meta}
+        script: `${plannedMeta}
 log('Preparing the workflow')
 phase('Research')
 log('Checking the source')
@@ -71,6 +76,8 @@ return await agent('Inspect')`,
         id: phaseId,
         parentId: parent.id,
         kind: 'phase',
+        index: 0,
+        total: 2,
       }),
     );
     expect(events.some((event) => event.type === 'child.activity')).toBe(false);
