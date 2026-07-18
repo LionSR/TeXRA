@@ -1,7 +1,9 @@
 import { type CliContext } from '@cli/runtime/cliContext';
 import { type CliNoAvailableModelsRecoveryOptions } from '@cli/runtime/modelAccess';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
+import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { type ExecutionId } from '@shared/schemas';
 
 import {
@@ -27,6 +29,23 @@ export interface SlashCommandContext {
   readonly resetSession: () => void;
   readonly resumeExecution: (id: ExecutionId) => Promise<void>;
 }
+
+/** Output boundary shared by direct slash dispatch and busy form submission. */
+export interface SlashCommandOutput {
+  readonly appendOutcome: (message: string) => void;
+  readonly setNotice: (message: string) => void;
+  readonly writeProgress: (
+    message: string,
+    options?: { readonly copyable?: boolean },
+  ) => void;
+}
+
+/** Direct command output remains in the ordinary TUI transcript. */
+export const transcriptSlashCommandOutput: SlashCommandOutput = {
+  appendOutcome: appendLocalAssistantTranscript,
+  setNotice: setTransientNotice,
+  writeProgress: (message) => appendLocalAssistantTranscript(message),
+};
 
 export const CHAT_API_MODE_MODEL_RECOVERY = {
   includedModeAction: 'switch to included TeXRA access with `/api included`',

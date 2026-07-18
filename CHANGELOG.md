@@ -70,6 +70,9 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
+- **Account changes stay visible without filling chat history** — sign-in,
+  sign-out, and model-access forms now show their progress in place and leave
+  only the final result in the conversation.
 - **Model access and accounts have distinct CLI controls** — `/api` now offers
   ChatGPT subscription, included TeXRA access, and personal API keys in one
   picker; `/auth` reports both account sessions and the effective route; and
