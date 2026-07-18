@@ -22,27 +22,27 @@ interface ModelAccessFormProps {
   readonly onCancel: () => void;
 }
 
+type ModelAccessFormStatus =
+  | { readonly state: 'loaded'; readonly overview: CliModelAccessOverview }
+  | { readonly state: 'failed'; readonly message: string };
+
 export function ModelAccessForm(
   props: ModelAccessFormProps,
 ): React.JSX.Element {
-  const [status, setStatus] = useState<CliModelAccessOverview | null>(null);
+  const [status, setStatus] = useState<ModelAccessFormStatus | null>(null);
 
   useCancellableEffect(
     (isCancelled) => {
       setStatus(null);
       void loadCliModelAccessOverview({ apiMode: props.apiMode })
         .then((overview) => {
-          if (!isCancelled()) setStatus(overview);
+          if (!isCancelled()) setStatus({ state: 'loaded', overview });
         })
         .catch((error: unknown) => {
           if (!isCancelled()) {
             setStatus({
-              access: {
-                active: props.apiMode,
-                chatGptSignedIn: false,
-                texraSignedIn: false,
-              },
-              lines: [String(error)],
+              state: 'failed',
+              message: String(error),
             });
           }
         });
@@ -51,11 +51,13 @@ export function ModelAccessForm(
   );
 
   const items = buildCliModelAccessItems(
-    status?.access ?? {
-      active: props.apiMode,
-      chatGptSignedIn: false,
-    },
+    status?.state === 'loaded'
+      ? status.overview.access
+      : { active: props.apiMode, chatGptSignedIn: false },
   );
+  let detailLines: readonly string[] | undefined;
+  if (status?.state === 'loaded') detailLines = status.overview.lines;
+  if (status?.state === 'failed') detailLines = [status.message];
 
   return (
     <ListForm
@@ -63,16 +65,18 @@ export function ModelAccessForm(
       availableRows={props.availableRows}
       items={items}
       compactVisibleItems={items.length}
-      activeValue={status?.access.active}
+      activeValue={
+        status?.state === 'loaded' ? status.overview.access.active : undefined
+      }
       description={
         <Text dimColor>Choose how model calls are authenticated.</Text>
       }
       detail={
         <Box marginTop={1} flexDirection="column">
-          {status === null ? (
+          {detailLines === undefined ? (
             <LoadingIndicator label="loading model access..." />
           ) : (
-            status.lines.map((line, index) => (
+            detailLines.map((line, index) => (
               <Text key={`${index}:${line}`} dimColor>
                 {line}
               </Text>
@@ -80,7 +84,7 @@ export function ModelAccessForm(
           )}
         </Box>
       }
-      detailRows={1 + (status?.lines.length ?? 1)}
+      detailRows={1 + (detailLines?.length ?? 1)}
       selectMarginTop={1}
       action="select"
       onSelect={props.onSelect}
