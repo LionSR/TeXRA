@@ -8,7 +8,7 @@ import {
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
+import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { onFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import { STREAM_PHASE } from '@shared/schemas';

@@ -311,8 +311,8 @@ function makeInterruptedController(
   mocks.resolveAndResumeStream.mockImplementationOnce(
     async (
       _streamId: StreamTabId,
-      ports: { resumeToolUseSnapshot(snapshot: unknown): Promise<boolean> },
-    ) => ports.resumeToolUseSnapshot({ version: 2 }),
+      ports: { resumeToolUse(snapshot: unknown): Promise<boolean> },
+    ) => ports.resumeToolUse({ version: 2 }),
   );
   return {
     ctrl: createChatSessionController(makeInit({ session, snapshotStore })),
@@ -338,8 +338,8 @@ async function expectInterruptedRetry(
   mocks.resolveAndResumeStream.mockImplementationOnce(
     async (
       _streamId: StreamTabId,
-      ports: { resumeToolUseSnapshot(snapshot: unknown): Promise<boolean> },
-    ) => ports.resumeToolUseSnapshot({ version: 2 }),
+      ports: { resumeToolUse(snapshot: unknown): Promise<boolean> },
+    ) => ports.resumeToolUse({ version: 2 }),
   );
   const retry = ctrl.admitInterruptedFollowUp({ text: 'Retry.' });
   expect(retry.kind).toBe('accepted');
@@ -961,8 +961,8 @@ describe('createChatSessionController', () => {
     mocks.resolveAndResumeStream.mockImplementationOnce(
       async (
         _streamId: StreamTabId,
-        ports: { resumeToolUseSnapshot(snapshot: unknown): Promise<boolean> },
-      ) => ports.resumeToolUseSnapshot({ version: 2 }),
+        ports: { resumeToolUse(snapshot: unknown): Promise<boolean> },
+      ) => ports.resumeToolUse({ version: 2 }),
     );
     mocks.resumeQueuedToolUseSnapshot.mockImplementationOnce(
       async (

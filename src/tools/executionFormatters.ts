@@ -1,5 +1,5 @@
 import type { ExecutionListingEntry, TodoEntry } from '@agent/storage';
-import { type ExecutionStatusInfo } from '@agent/runtime/executionRegistry';
+import type { ExecutionStatusInfo } from '@agent/runtime/ExecutionHandle';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import {
   EXECUTION_STATUS,

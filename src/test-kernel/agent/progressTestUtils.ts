@@ -4,6 +4,7 @@ import type { ToolUseRunShared } from '@agent/implementations/flows/tooluse/node
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   matchesCancelSelector,
+  SessionHostInteractions,
   type BashSettlement,
   type HostBashApprovalResult,
   type HostInteractionCancelSelector,
@@ -52,6 +53,8 @@ export interface RecordingHostDecisions {
     decision: UserQuestionSettlement,
   ): boolean;
 }
+
+const interactionsByHost = new WeakMap<AgentRuntimeHost, HostInteractions>();
 
 export function recordSessionEvents(
   hub: SessionEventHub,
@@ -336,9 +339,9 @@ export function createRecordingHost(): {
     }
   }
   const host = {
-    interactions,
     emit: (event: string, payload: unknown) => events.push({ event, payload }),
   } as AgentRuntimeHost & RecordingProgressSink;
+  interactionsByHost.set(host, interactions);
   return {
     events,
     decisions,
@@ -357,8 +360,10 @@ export function createRecordingHost(): {
 export function sessionWithInteractions(
   interactions: HostInteractions | undefined,
 ): SessionHandle {
+  const owner = new SessionHostInteractions();
+  if (interactions) owner.use(interactions);
   return {
-    interactions,
+    interactions: owner,
     approvals: createSessionApprovals(),
   } as unknown as SessionHandle;
 }
@@ -388,7 +393,7 @@ export function withTestRunContext<T>(
         streamId: streamId as StreamTabId,
         executionId: 'deadbeef' as ExecutionId,
         agentName: 'test-agent',
-        session: sessionWithInteractions(runtimeHost.interactions),
+        session: sessionWithInteractions(interactionsByHost.get(runtimeHost)),
       }),
       modelSource: 'live',
       getModel: () => undefined,

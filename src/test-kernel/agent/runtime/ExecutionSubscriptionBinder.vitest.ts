@@ -2,10 +2,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import {
-  AgentExecutionHandle,
-  ExecutionRegistry,
-} from '@agent/runtime/executionRegistry';
+import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { ExecutionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
 import type { StreamTabId } from '@shared/schemas';
 

@@ -39,27 +39,6 @@ const TOOL_EDIT_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireEditApproval';
 
 export const REVEAL_TIMEOUT_MS = 1500;
 
-/** Register a pending approval entry for rejection tracking. */
-export function registerPendingApproval(
-  id: string,
-  entry: {
-    streamId?: StreamTabId;
-    isSettled: () => boolean;
-    settle: (result: ToolEditApprovalResult) => void;
-  },
-  session: SessionHandle = currentSession(),
-): void {
-  session.approvals.toolEdit.registerPending(id, entry);
-}
-
-/** Unregister a pending approval entry after it has been resolved. */
-export function unregisterPendingApproval(
-  id: string,
-  session: SessionHandle = currentSession(),
-): void {
-  session.approvals.toolEdit.unregisterPending(id);
-}
-
 export function setToolEditApprovalSessionBypass(
   streamId: StreamTabId,
   enabled: boolean,
@@ -72,21 +51,6 @@ export function setToolEditApprovalSessionBypass(
     runtimeHost,
     options,
   );
-}
-
-/**
- * Flip the stream's tool-edit bypass. Retained as part of the symmetric
- * set/toggle/is bypass API (mirrors `toggleBashApprovalSessionBypass`) and
- * exercised by the approval-gate unit tests. It has no production caller today:
- * the shield toolbar toggle forces state via `setToolEditApprovalSessionBypass`
- * (see `applyCoupledBypass` in ProgressViewCommandHandlers).
- */
-export function toggleToolEditApprovalSessionBypass(
-  streamId: StreamTabId,
-  runtimeHost: AgentRuntimeHost,
-  session: SessionHandle = currentSession(),
-): boolean {
-  return session.approvals.toolEdit.bypass.toggleBypass(streamId, runtimeHost);
 }
 
 export function isApprovalBypassedForStream(

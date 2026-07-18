@@ -21,7 +21,6 @@ import { WriteFileTool } from '@tools/WriteTool';
 import {
   cleanupAllApprovals,
   setToolEditApprovalSessionBypass,
-  toggleToolEditApprovalSessionBypass,
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval';
@@ -358,22 +357,24 @@ describe('Tool edit approval gating', () => {
     assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'alpha\n');
   });
 
-  it('toggleToolEditApprovalSessionBypass toggles state and returns new value', () => {
+  it('toggles tool-edit bypass state and returns the new value', () => {
     // Test toggle mechanics (per-stream state)
     // Initially bypass is off (cleared in beforeEach)
 
     // Toggle on - should return true
-    const enabledState = toggleToolEditApprovalSessionBypass(
-      TEST_STREAM_ID,
-      noopAgentRuntimeHost,
-    );
+    const enabledState =
+      defaultSession().approvals.toolEdit.bypass.toggleBypass(
+        TEST_STREAM_ID,
+        noopAgentRuntimeHost,
+      );
     assert.strictEqual(enabledState, true, 'Toggle returns true when enabling');
 
     // Toggle off - should return false
-    const disabledState = toggleToolEditApprovalSessionBypass(
-      TEST_STREAM_ID,
-      noopAgentRuntimeHost,
-    );
+    const disabledState =
+      defaultSession().approvals.toolEdit.bypass.toggleBypass(
+        TEST_STREAM_ID,
+        noopAgentRuntimeHost,
+      );
     assert.strictEqual(
       disabledState,
       false,
@@ -381,10 +382,11 @@ describe('Tool edit approval gating', () => {
     );
 
     // Toggle on again
-    const reenabledState = toggleToolEditApprovalSessionBypass(
-      TEST_STREAM_ID,
-      noopAgentRuntimeHost,
-    );
+    const reenabledState =
+      defaultSession().approvals.toolEdit.bypass.toggleBypass(
+        TEST_STREAM_ID,
+        noopAgentRuntimeHost,
+      );
     assert.strictEqual(
       reenabledState,
       true,

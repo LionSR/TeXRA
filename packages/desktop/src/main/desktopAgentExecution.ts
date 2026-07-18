@@ -41,7 +41,7 @@ import type {
   AgentRuntimeEventPayloads,
   AgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
-import { resumeToolUseSnapshot } from '@agent/runtime/resumeToolUseSnapshot';
+import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
 import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
 import {
   getAllActiveExecutionIds,
@@ -214,21 +214,16 @@ export class DesktopProgressBridge {
     private readonly options: DesktopProgressBridgeOptions,
   ) {
     this.logger = options.logger ?? createChannelTrace('DesktopProgressBridge');
-    const hostChannel: AgentRuntimeHost = {
+    this.runtimeHost = {
       emit: (event, payload) => this.handleInteractionEvent(event, payload),
     };
     this.session = new SessionHandle({
-      hostChannel,
       transcripts: options.transcripts,
     });
     this.executionRebinder = new DesktopExecutionRebinder(
       this.session,
       this.logger,
     );
-    this.runtimeHost = {
-      ...hostChannel,
-      interactions: this.session.interactions,
-    };
     this.toolEditApprovals = createDesktopToolEditApprovalController({
       runtimeHost: this.runtimeHost,
       session: this.session,
@@ -1048,13 +1043,17 @@ export class DesktopProgressBridge {
           }),
         };
       },
-      resumeToolUseSnapshot: (snapshot) =>
-        resumeToolUseSnapshot(snapshot, {
-          runtimeHost: this.runtimeHost,
-          session: this.session,
-          runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
-          reportFailure: (error) => this.reportResumeFailure(streamId, error),
-        }),
+      resumeToolUse: (snapshot) =>
+        resumeQueuedToolUseSnapshot(
+          snapshot.streamId,
+          snapshot,
+          this.runtimeHost,
+          {
+            session: this.session,
+            runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
+            onError: (error) => this.reportResumeFailure(streamId, error),
+          },
+        ),
       executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
         this.runExecution(
           { config, executionId },

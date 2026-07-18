@@ -1,6 +1,5 @@
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import type { RuntimePresentationEventPayloads } from '@agent/runtime/runtimePresentationEvents';
-import type { HostInteractions } from './HostInteractions';
 
 export type AgentRuntimeEventPayloads = RuntimeInteractionEventPayloads &
   RuntimePresentationEventPayloads;
@@ -27,8 +26,6 @@ export type AgentRuntimeEvent = keyof AgentRuntimeEventPayloads;
  * by tests and non-interactive paths.
  */
 export interface AgentRuntimeHost {
-  readonly interactions?: HostInteractions;
-
   emit<K extends AgentRuntimeEvent>(
     event: K,
     payload: AgentRuntimeEventPayloads[K],

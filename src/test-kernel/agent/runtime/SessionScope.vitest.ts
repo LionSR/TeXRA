@@ -19,7 +19,7 @@ import {
   defaultSession,
   getAllActiveExecutionIds,
 } from '@agent/runtime/SessionHandle';
-import { AgentExecutionHandle } from '@agent/runtime/executionRegistry';
+import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { MESSAGE_TYPES, type Plan, type StreamTabId } from '@shared/schemas';
 import { cleanupAllApprovals } from '@tools/approval';

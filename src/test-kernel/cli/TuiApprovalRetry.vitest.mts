@@ -42,6 +42,7 @@ vi.mock('@platform/platform', () => ({
 
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import {
   clearApprovals,
@@ -87,10 +88,12 @@ function tui(runtimeHost = host()): {
 } {
   const cliContext = context();
   const interactions = createTuiHostInteractions(runtimeHost, cliContext);
+  const detachInteractions = defaultSession().useHostInteractions(interactions);
   let disposed = false;
   const dispose = () => {
     if (disposed) return;
     disposed = true;
+    detachInteractions();
     interactions.dispose?.();
   };
   onTestFinished(dispose);
@@ -183,15 +186,11 @@ describe('TUI retry approvals', () => {
   });
 
   it('updates TUI bash bypass state when goal auto-approval is enabled and cleared', async () => {
-    const { runtimeHost, interactions } = tui();
-    const hostWithInteractions = {
-      ...runtimeHost,
-      interactions,
-    } satisfies CliRuntimeHost;
+    const { runtimeHost } = tui();
     await setGoalSessionBashAutoApproval(
       'goal-bypass-stream',
       true,
-      hostWithInteractions,
+      runtimeHost,
     );
     expect(streams.get().get('goal-bypass-stream')?.bypass.bash).toBe(true);
     expect(runtimeHost.emit).toHaveBeenCalledWith(
@@ -205,7 +204,7 @@ describe('TUI retry approvals', () => {
     await setGoalSessionBashAutoApproval(
       'goal-bypass-stream',
       false,
-      hostWithInteractions,
+      runtimeHost,
     );
     expect(streams.get().get('goal-bypass-stream')?.bypass.bash).toBe(false);
     expect(runtimeHost.emit).toHaveBeenCalledWith(

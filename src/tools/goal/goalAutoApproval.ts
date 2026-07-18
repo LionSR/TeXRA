@@ -1,4 +1,5 @@
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas/identifiers';
 
 /**
@@ -29,7 +30,7 @@ export async function setGoalSessionBashAutoApproval(
   const { setBashApprovalSessionBypass } =
     await import('@tools/approval/bashApproval');
   setBashApprovalSessionBypass(streamId, enabled, runtimeHost);
-  runtimeHost.interactions?.setApprovalBypassState?.({
+  currentSession().interactions.setApprovalBypassState({
     streamId,
     kind: 'bash',
     bypassActive: enabled,
