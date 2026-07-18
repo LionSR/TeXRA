@@ -6,11 +6,8 @@
  * with `// prettier-ignore` to prevent whitespace issues.
  */
 
-import {
-  html,
-  ifDefined,
-  type TemplateResult,
-} from '@progressView/frontend/formatters/litTemplates';
+import { html, type TemplateResult } from 'lit';
+import { ifDefined } from 'lit/directives/if-defined.js';
 import {
   buildToolUseSection,
   wrapInPre,
