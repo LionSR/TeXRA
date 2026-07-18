@@ -7,6 +7,11 @@ import dotenv from 'dotenv';
 
 // Local imports - core
 import { initPlatform, platform } from '@platform/platform';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import {
+  canonicalizeWorkspacePath,
+  createNodeWorkspace,
+} from '@platform/defaults/nodeWorkspace';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
@@ -83,8 +88,6 @@ import {
   registerInlineComments,
 } from '@frontend/comments/inlineComments';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-import { VscodeFileSystem } from '@frontend/vscode/vscodeFileSystem';
-import { VscodeWorkspace } from '@frontend/vscode/vscodeWorkspace';
 import { migrateLegacyVscodeStorage } from '@frontend/vscode/sharedStorageRoot';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { VscodeConfigProvider } from '@frontend/vscode/vscodeConfig';
@@ -180,7 +183,14 @@ export async function activate(context: vscode.ExtensionContext) {
     );
     return;
   }
-  const workspace = new VscodeWorkspace();
+  const rawWorkspacePath = () =>
+    vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const workspace = createNodeWorkspace(rawWorkspacePath, () => {
+    const rawPath = rawWorkspacePath();
+    return rawPath && rawPath !== canonicalizeWorkspacePath(rawPath)
+      ? [rawPath]
+      : [];
+  });
   const workspaceRoot = workspace.getWorkspacePath();
   if (!workspaceRoot) return;
 
@@ -226,7 +236,7 @@ export async function activate(context: vscode.ExtensionContext) {
     config: new VscodeConfigProvider(),
     globalState: context.globalState,
     workspaceState: workspaceSM,
-    fs: new VscodeFileSystem(),
+    fs: nodeFilesystem,
     workspace,
     storage,
     fileLocks: nodeFileLocks,
