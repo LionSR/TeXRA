@@ -3,38 +3,12 @@ import {
   loadCliApiStatusLines,
   loadCliModelAccessOverview,
 } from '@cli/runtime/apiStatus';
-import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
-import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
-import type { AgentCategory, UsageRoute } from '@shared/schemas';
 
-/** Load the canonical account/access snapshot used by TUI status commands. */
-export async function loadCliStatusAssembly(options: {
+/** Load the canonical account snapshot used by TUI account commands. */
+export async function loadCliAccountStatusLines(options: {
   readonly apiMode: CliApiMode;
   readonly includeApiDetails?: boolean;
-  readonly target?: {
-    readonly model: string;
-    readonly category: AgentCategory | undefined;
-    readonly usageRoute?: UsageRoute;
-  };
-}) {
-  if (options.target) {
-    const subscriptionActive =
-      options.target.category === undefined
-        ? false
-        : await isCodexSubscriptionActive(
-            options.target.model,
-            options.target.category,
-          );
-    return {
-      lines: [],
-      modelAccess: resolveCliModelAccessRoute({
-        apiMode: options.apiMode,
-        subscriptionActive,
-        usageRoute: options.target.usageRoute,
-      }),
-    };
-  }
-
+}): Promise<string[]> {
   const [overview, apiStatusLines] = await Promise.all([
     loadCliModelAccessOverview({ apiMode: options.apiMode }),
     options.includeApiDetails
@@ -44,11 +18,5 @@ export async function loadCliStatusAssembly(options: {
   const detailLines = apiStatusLines
     .slice(2)
     .filter((line) => !overview.lines.includes(line));
-  return {
-    lines: [...overview.lines, ...detailLines],
-    modelAccess: resolveCliModelAccessRoute({
-      apiMode: options.apiMode,
-      subscriptionActive: overview.access.active === 'chatgpt',
-    }),
-  };
+  return [...overview.lines, ...detailLines];
 }

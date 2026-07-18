@@ -28,7 +28,7 @@ import {
   CHAT_API_MODE_MODEL_RECOVERY,
   type SlashCommandContext,
 } from './slashContext';
-import { loadCliStatusAssembly } from './statusAssembly';
+import { loadCliAccountStatusLines } from './statusAssembly';
 
 const MODEL_ACCESS_USAGE = 'Usage: /api chatgpt | included | personal | status';
 
@@ -101,11 +101,11 @@ export async function applyCliModelAccessSelection(
 
   if (!normalized || normalized === 'status') {
     const apiMode = sessionMeta.get().apiMode;
-    const status = await loadCliStatusAssembly({
+    const lines = await loadCliAccountStatusLines({
       apiMode,
       includeApiDetails: true,
     });
-    appendLocalAssistantTranscript(status.lines.join('\n'));
+    appendLocalAssistantTranscript(lines.join('\n'));
     return;
   }
 
@@ -126,9 +126,9 @@ export async function applyCliModelAccessSelection(
 }
 
 export async function showCliAuthStatus(): Promise<void> {
-  const status = await loadCliStatusAssembly({
+  const lines = await loadCliAccountStatusLines({
     apiMode: sessionMeta.get().apiMode,
     includeApiDetails: true,
   });
-  appendLocalAssistantTranscript(status.lines.join('\n'));
+  appendLocalAssistantTranscript(lines.join('\n'));
 }

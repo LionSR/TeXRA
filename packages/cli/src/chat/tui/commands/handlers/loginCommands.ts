@@ -33,7 +33,7 @@ import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode'
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { setCliSessionApiMode } from './apiModeCommands';
-import { loadCliStatusAssembly } from './statusAssembly';
+import { loadCliAccountStatusLines } from './statusAssembly';
 
 const CHAT_LOGIN_USAGE = [
   'Usage: /login [texra [github | google]] [--no-browser] [--device] [--select-account] [--login-hint <account>]',
@@ -177,10 +177,10 @@ export async function logoutFromChat(input: string): Promise<void> {
   }
 
   try {
-    const status = await loadCliStatusAssembly({
+    const statusLines = await loadCliAccountStatusLines({
       apiMode: sessionMeta.get().apiMode,
     });
-    lines.push(...status.lines);
+    lines.push(...statusLines);
   } catch (error: unknown) {
     lines.push(toErrorMessage(error));
   }
