@@ -232,13 +232,13 @@ function applyDirectTuiRunEvent(
       if (event.kind === 'subagents') {
         applyActiveSubagents({
           parentStreamId: event.parentStreamId,
-          children: [...event.children],
+          children: [...event.items],
         });
         return true;
       }
       applyActiveProcesses({
         parentStreamId: event.parentStreamId,
-        processes: [...event.processes],
+        processes: [...event.items],
       });
       return true;
     case 'process.output':

@@ -3,9 +3,9 @@
 
 import { strict as assert } from 'node:assert';
 import { describe, expect, it } from 'vitest';
-import { compareByNewestCreationTime } from '@controllers/progressView/backend/streamOrdering';
 import { buildStreamTabInfo } from '@controllers/progressView/backend/streamTabInfo';
 import { AgentCategory, type StreamTabInfo } from '@shared/schemas';
+import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 
 // ---------------------------------------------------------------------------
 // streamInfoUtils

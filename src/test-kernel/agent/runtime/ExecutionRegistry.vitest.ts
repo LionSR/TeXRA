@@ -1127,7 +1127,7 @@ describe('executionRegistry', () => {
       expect(childActivity[0]).toMatchObject({
         kind: 'subagents',
         parentStreamId,
-        children: [
+        items: [
           {
             executionId,
             agentName: 'test-subagent',
@@ -1144,7 +1144,7 @@ describe('executionRegistry', () => {
       expect(childActivity.at(-1)).toMatchObject({
         kind: 'subagents',
         parentStreamId,
-        children: [],
+        items: [],
       });
     } finally {
       registry.dispose();
@@ -1439,7 +1439,7 @@ describe('executionRegistry', () => {
       ).toMatchObject({
         kind: 'subagents',
         parentStreamId,
-        children: [],
+        items: [],
       });
     } finally {
       registry.dispose();
