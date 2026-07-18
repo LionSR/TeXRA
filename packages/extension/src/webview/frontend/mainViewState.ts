@@ -76,7 +76,6 @@ export const instructionPlaceholder$ = signal(
 export const singleFiles$ = signal<SingleFiles>({ ...DEFAULT_SINGLE_FILES });
 export const fileOptions$ = signal<FileOptions>({ ...DEFAULT_FILE_OPTIONS });
 export const multiFiles$ = signal<MultiFiles>({ ...DEFAULT_MULTI_FILES });
-export const outputFilesActive$ = signal(DEFAULT_STATE.outputFilesActive);
 export const checkboxValues$ = signal<CheckboxValues>({
   ...DEFAULT_CHECKBOX_VALUES,
 });
@@ -190,7 +189,6 @@ export const fileStateContext$ = new Signal.Computed(
     singleFiles: singleFiles$.get(),
     fileOptions: fileOptions$.get(),
     multiFiles: multiFiles$.get(),
-    outputFilesActive: outputFilesActive$.get(),
   }),
 );
 
@@ -232,7 +230,6 @@ export function resetMainViewState(): void {
   singleFiles$.set({ ...DEFAULT_SINGLE_FILES });
   fileOptions$.set({ ...DEFAULT_FILE_OPTIONS });
   multiFiles$.set({ ...DEFAULT_MULTI_FILES });
-  outputFilesActive$.set(DEFAULT_STATE.outputFilesActive);
   checkboxValues$.set({ ...DEFAULT_CHECKBOX_VALUES });
   isGitRepo$.set(true);
   latexdiffsVisible$.set(DEFAULT_STATE.latexdiffsVisible);

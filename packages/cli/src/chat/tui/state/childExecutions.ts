@@ -20,30 +20,42 @@ import type {
 
 import type { StreamSlice } from './cliState';
 
-/**
- * One child stream's relationship state. Also doubles as a minimal removal
- * tombstone (`removed: true`, every other field absent) for a stream
- * identity — child or parent — that must never be resurrected by a later
- * fact.
- */
-export interface ChildStreamEntry {
+interface RetainedParent {
+  readonly streamId: StreamTabId;
+  /** One-based, first-seen order within `streamId`. */
+  readonly order: number;
+}
+
+type ParentProvenance =
+  | {
+      /** No explicit edge fact yet; the first roster owns current topology. */
+      readonly kind: 'roster';
+      readonly retained: RetainedParent;
+    }
+  | {
+      /** Explicit edge wins; null means promotion to top level. */
+      readonly kind: 'explicit';
+      readonly streamId: StreamTabId | null;
+      /** Historical first-roster placement, independent of current topology. */
+      readonly retained?: RetainedParent;
+    };
+
+interface LiveChildStreamEntry {
+  readonly kind: 'live';
   /** Latest roster metadata, excluding identity and status. */
   readonly summary?: Omit<SubagentChildInfo, 'childStreamId' | 'status'>;
-  /** Parent whose latest roster includes this child. */
-  readonly activeParentStreamId?: StreamTabId;
-  /** Parent under which the child first acquired a retained row. */
-  readonly retainedParentStreamId?: StreamTabId;
-  /** One-based, first-seen order within `retainedParentStreamId`. */
-  readonly retainedOrder?: number;
-  /**
-   * `undefined`: no explicit edge fact observed; use the retained parent
-   * provisionally. A string is the explicit current parent. `null` means
-   * explicitly promoted to top-level.
-   */
-  readonly edgeParentStreamId?: StreamTabId | null;
-  /** Explicit `removeStream` tombstone for this session-scoped identity. */
-  readonly removed: boolean;
+  /** Whether the current parent roster still includes this child. */
+  readonly active: boolean;
+  /** Current topology and its authority, plus optional retained history. */
+  readonly parent?: ParentProvenance;
 }
+
+interface RemovedChildStreamEntry {
+  readonly kind: 'removed';
+}
+
+/** One live child relationship or an explicit removal tombstone. */
+export type ChildStreamEntry = LiveChildStreamEntry | RemovedChildStreamEntry;
 
 export type ChildStreamEntries = ReadonlyMap<StreamTabId, ChildStreamEntry>;
 
@@ -64,7 +76,7 @@ export const subagentExecutionLabels: Signal.Computed<
 > = computed(() => {
   const labels = new Map<string, string>();
   for (const entry of CHILD_STREAMS.get().values()) {
-    if (entry.removed || !entry.summary) continue;
+    if (entry.kind === 'removed' || !entry.summary) continue;
     const label = childExecutionLabel(entry.summary);
     if (label !== entry.summary.executionId) {
       labels.set(entry.summary.executionId, label);
@@ -73,12 +85,20 @@ export const subagentExecutionLabels: Signal.Computed<
   return labels;
 });
 
-function candidateParent(
-  entry: ChildStreamEntry,
+function retainedParent(
+  entry: LiveChildStreamEntry | undefined,
+): RetainedParent | undefined {
+  if (!entry?.parent) return undefined;
+  return entry.parent.retained;
+}
+
+function currentParent(
+  entry: LiveChildStreamEntry | undefined,
 ): StreamTabId | null | undefined {
-  return entry.edgeParentStreamId !== undefined
-    ? entry.edgeParentStreamId
-    : entry.retainedParentStreamId;
+  if (!entry?.parent) return undefined;
+  return entry.parent.kind === 'explicit'
+    ? entry.parent.streamId
+    : entry.parent.retained.streamId;
 }
 
 /**
@@ -92,10 +112,10 @@ function effectiveParentFromEntries(
   entries: ChildStreamEntries,
 ): StreamTabId | undefined {
   const entry = entries.get(childStreamId);
-  if (!entry || entry.removed) return undefined;
-  const candidate = candidateParent(entry);
+  if (!entry || entry.kind === 'removed') return undefined;
+  const candidate = currentParent(entry);
   if (!candidate) return undefined;
-  if (entries.get(candidate)?.removed) return undefined;
+  if (entries.get(candidate)?.kind === 'removed') return undefined;
   return candidate;
 }
 
@@ -119,7 +139,7 @@ export const parentStream: Signal.Computed<
 
 /** Whether a stream identity (child or parent) carries a removal tombstone. */
 export function isChildStreamRemoved(streamId: StreamTabId): boolean {
-  return CHILD_STREAMS.get().get(streamId)?.removed === true;
+  return CHILD_STREAMS.get().get(streamId)?.kind === 'removed';
 }
 
 export function resetChildStreamEntries(): void {
@@ -143,18 +163,30 @@ export function setParentStream(
   if (parentStreamId === undefined) return;
   const current = CHILD_STREAMS.get();
   const entry = current.get(childStreamId);
-  if (entry?.removed) return;
-  if (parentStreamId !== null && current.get(parentStreamId)?.removed) return;
-  if (entry?.edgeParentStreamId === parentStreamId) return;
+  if (entry?.kind === 'removed') return;
+  if (
+    parentStreamId !== null &&
+    current.get(parentStreamId)?.kind === 'removed'
+  ) {
+    return;
+  }
+  if (
+    entry?.parent?.kind === 'explicit' &&
+    entry.parent.streamId === parentStreamId
+  ) {
+    return;
+  }
 
-  const nextActiveParentStreamId =
-    entry?.activeParentStreamId === parentStreamId
-      ? entry.activeParentStreamId
-      : undefined;
-  const next: ChildStreamEntry = {
-    ...(entry ?? { removed: false }),
-    edgeParentStreamId: parentStreamId,
-    activeParentStreamId: nextActiveParentStreamId,
+  const live = entry ?? { kind: 'live', active: false };
+  const retained = retainedParent(live);
+  const next: LiveChildStreamEntry = {
+    ...live,
+    parent: {
+      kind: 'explicit',
+      streamId: parentStreamId,
+      ...(retained && { retained }),
+    },
+    active: live.active && currentParent(live) === parentStreamId,
   };
   const out = new Map(current);
   out.set(childStreamId, next);
@@ -165,8 +197,8 @@ export function setParentStream(
  *  spurious `changed` on a same-content roster snapshot the runtime resends
  *  as a fresh array/object on every poll. */
 function summaryUnchanged(
-  a: ChildStreamEntry['summary'],
-  b: ChildStreamEntry['summary'],
+  a: LiveChildStreamEntry['summary'],
+  b: LiveChildStreamEntry['summary'],
 ): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
@@ -179,18 +211,15 @@ function summaryUnchanged(
   );
 }
 
-/** Whether applying `nextEntry` over `entry` would be a no-op — compares only
- *  the fields `applySubagentRoster` itself writes (summary, active/retained
- *  parent, retained order), never `edgeParentStreamId`/`removed`. */
+/** Whether applying `nextEntry` over `entry` would be a no-op. */
 function subagentEntryUnchanged(
-  entry: ChildStreamEntry | undefined,
-  nextEntry: ChildStreamEntry,
+  entry: LiveChildStreamEntry | undefined,
+  nextEntry: LiveChildStreamEntry,
 ): boolean {
   return (
     entry !== undefined &&
-    entry.activeParentStreamId === nextEntry.activeParentStreamId &&
-    entry.retainedParentStreamId === nextEntry.retainedParentStreamId &&
-    entry.retainedOrder === nextEntry.retainedOrder &&
+    entry.active === nextEntry.active &&
+    entry.parent === nextEntry.parent &&
     summaryUnchanged(entry.summary, nextEntry.summary)
   );
 }
@@ -207,7 +236,7 @@ export function applySubagentRoster(
   children: readonly ActiveChildInfo[],
 ): void {
   const current = CHILD_STREAMS.get();
-  if (current.get(parentStreamId)?.removed) return;
+  if (current.get(parentStreamId)?.kind === 'removed') return;
 
   const subagents = children.filter(
     (child): child is SubagentChildInfo => child.kind === 'subagent',
@@ -216,20 +245,18 @@ export function applySubagentRoster(
   const accepted = new Map<StreamTabId, SubagentChildInfo>();
   for (const child of subagents) {
     const entry = current.get(child.childStreamId);
-    if (entry?.removed) continue;
-    const edge = entry?.edgeParentStreamId;
-    if (edge !== undefined && edge !== parentStreamId) continue;
+    if (entry?.kind === 'removed') continue;
+    const parent = currentParent(entry);
+    if (parent !== undefined && parent !== parentStreamId) continue;
     accepted.set(child.childStreamId, child);
   }
 
   let maxRetainedOrder = 0;
   for (const entry of current.values()) {
-    if (
-      entry.retainedParentStreamId === parentStreamId &&
-      entry.retainedOrder !== undefined &&
-      entry.retainedOrder > maxRetainedOrder
-    ) {
-      maxRetainedOrder = entry.retainedOrder;
+    if (entry.kind === 'removed') continue;
+    const retained = retainedParent(entry);
+    if (retained?.streamId === parentStreamId) {
+      maxRetainedOrder = Math.max(maxRetainedOrder, retained.order);
     }
   }
 
@@ -239,28 +266,44 @@ export function applySubagentRoster(
   // Clear active membership for entries previously active under this parent
   // but absent or incompatible with this snapshot.
   for (const [childStreamId, entry] of current) {
-    if (entry.activeParentStreamId !== parentStreamId) continue;
+    if (
+      entry.kind === 'removed' ||
+      !entry.active ||
+      currentParent(entry) !== parentStreamId
+    ) {
+      continue;
+    }
     if (accepted.has(childStreamId)) continue;
-    out.set(childStreamId, { ...entry, activeParentStreamId: undefined });
+    out.set(childStreamId, { ...entry, active: false });
     changed = true;
   }
 
   for (const [childStreamId, child] of accepted) {
-    const entry = out.get(childStreamId);
+    const currentEntry = out.get(childStreamId);
+    const entry = currentEntry?.kind === 'live' ? currentEntry : undefined;
     const {
       childStreamId: _childStreamId,
       status: _status,
       ...summary
     } = child;
-    const isFirstRetained = entry?.retainedParentStreamId === undefined;
-    const nextEntry: ChildStreamEntry = {
-      ...(entry ?? { removed: false }),
+    const existingRetained = retainedParent(entry);
+    const retained =
+      existingRetained ??
+      ({
+        streamId: parentStreamId,
+        order: ++maxRetainedOrder,
+      } satisfies RetainedParent);
+    let parent = entry?.parent;
+    if (!parent) {
+      parent = { kind: 'roster', retained };
+    } else if (parent.kind === 'explicit' && !parent.retained) {
+      parent = { ...parent, retained };
+    }
+    const nextEntry: LiveChildStreamEntry = {
+      ...(entry ?? { kind: 'live' as const }),
       summary,
-      activeParentStreamId: parentStreamId,
-      retainedParentStreamId: entry?.retainedParentStreamId ?? parentStreamId,
-      retainedOrder: isFirstRetained
-        ? ++maxRetainedOrder
-        : entry?.retainedOrder,
+      active: true,
+      parent,
     };
     if (subagentEntryUnchanged(entry, nextEntry)) continue;
     out.set(childStreamId, nextEntry);
@@ -280,25 +323,39 @@ export function applySubagentRoster(
 export function applyChildStreamRemoval(streamId: StreamTabId): void {
   const current = CHILD_STREAMS.get();
   const out = new Map(current);
-  out.set(streamId, { removed: true });
+  out.set(streamId, { kind: 'removed' });
 
   for (const [childStreamId, entry] of current) {
-    if (childStreamId === streamId || entry.removed) continue;
-    let next = entry;
-    if (next.activeParentStreamId === streamId) {
-      next = { ...next, activeParentStreamId: undefined };
+    if (childStreamId === streamId || entry.kind === 'removed') continue;
+    const beforeParent = currentParent(entry);
+    const retained = retainedParent(entry);
+    const nextRetained = retained?.streamId === streamId ? undefined : retained;
+    let parent = entry.parent;
+    if (parent?.kind === 'roster' && !nextRetained) {
+      parent = { kind: 'explicit', streamId: null };
+    } else if (parent?.kind === 'explicit') {
+      const streamIdValue =
+        parent.streamId === streamId ? null : parent.streamId;
+      if (
+        streamIdValue !== parent.streamId ||
+        nextRetained !== parent.retained
+      ) {
+        parent = {
+          kind: 'explicit',
+          streamId: streamIdValue,
+          ...(nextRetained && { retained: nextRetained }),
+        };
+      }
     }
-    if (next.retainedParentStreamId === streamId) {
-      next = {
-        ...next,
-        retainedParentStreamId: undefined,
-        retainedOrder: undefined,
-      };
+    const active = beforeParent === streamId ? false : entry.active;
+    const next: LiveChildStreamEntry = {
+      ...entry,
+      active,
+      parent,
+    };
+    if (active !== entry.active || parent !== entry.parent) {
+      out.set(childStreamId, next);
     }
-    if (next.edgeParentStreamId === streamId) {
-      next = { ...next, edgeParentStreamId: null };
-    }
-    if (next !== entry) out.set(childStreamId, next);
   }
 
   CHILD_STREAMS.set(out);
@@ -310,7 +367,7 @@ export function applyChildStreamRemoval(streamId: StreamTabId): void {
 
 function reconstruct(
   childStreamId: StreamTabId,
-  entry: ChildStreamEntry,
+  entry: LiveChildStreamEntry,
   streams: ReadonlyMap<StreamTabId, Pick<StreamSlice, 'status'>>,
 ): SubagentChildInfo | undefined {
   if (!entry.summary) return undefined;
@@ -334,10 +391,10 @@ export function activeSubagentsFor(
   entries: ChildStreamEntries,
   streams: ReadonlyMap<StreamTabId, Pick<StreamSlice, 'status'>>,
 ): readonly SubagentChildInfo[] {
-  if (entries.get(parentStreamId)?.removed) return [];
+  if (entries.get(parentStreamId)?.kind === 'removed') return [];
   const out: SubagentChildInfo[] = [];
   for (const [childStreamId, entry] of entries) {
-    if (entry.removed || entry.activeParentStreamId !== parentStreamId) {
+    if (entry.kind === 'removed' || !entry.active) {
       continue;
     }
     if (effectiveParentFromEntries(childStreamId, entries) !== parentStreamId) {
@@ -359,14 +416,16 @@ export function retainedChildStreamsFor(
   entries: ChildStreamEntries,
   streams: ReadonlyMap<StreamTabId, Pick<StreamSlice, 'status'>>,
 ): readonly SubagentChildInfo[] {
-  if (entries.get(parentStreamId)?.removed) return [];
+  if (entries.get(parentStreamId)?.kind === 'removed') return [];
   const rows: Array<{ order: number; info: SubagentChildInfo }> = [];
   for (const [childStreamId, entry] of entries) {
-    if (entry.removed || entry.retainedParentStreamId !== parentStreamId) {
+    if (entry.kind === 'removed') {
       continue;
     }
+    const retained = retainedParent(entry);
+    if (retained?.streamId !== parentStreamId) continue;
     const info = reconstruct(childStreamId, entry, streams);
-    if (info) rows.push({ order: entry.retainedOrder ?? 0, info });
+    if (info) rows.push({ order: retained.order, info });
   }
   rows.sort((left, right) => left.order - right.order);
   return rows.map((row) => row.info);
@@ -420,7 +479,7 @@ export function focusOrderDescendants(
     out.push(child.childStreamId);
   }
   for (const [childStreamId, entry] of entries) {
-    if (entry.removed || seen.has(childStreamId)) continue;
+    if (entry.kind === 'removed' || seen.has(childStreamId)) continue;
     if (effectiveParentFromEntries(childStreamId, entries) !== parentStreamId) {
       continue;
     }

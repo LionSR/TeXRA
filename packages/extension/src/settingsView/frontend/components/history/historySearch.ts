@@ -1,6 +1,9 @@
 import type { HistoryItem } from '@shared/schemas';
-import { getAgentCategoryDecorator } from '@shared/utils/icons';
-import { formatShortDateTime } from '@shared/utils/string';
+
+import {
+  getHistoryItemPresentation,
+  hasHistoryConfigValue,
+} from './historyItemPresentation';
 
 type ToolConfigEntry = [string, unknown];
 
@@ -9,11 +12,6 @@ function normalizeSearchText(text: string): string {
     .normalize('NFD')
     .replaceAll(/[\u0300-\u036f]/g, '')
     .toLocaleLowerCase();
-}
-
-export function hasSearchValue(value: unknown): boolean {
-  if (value == null) return false;
-  return !Array.isArray(value) || value.length > 0;
 }
 
 function addSearchValue(parts: string[], value: unknown): void {
@@ -49,7 +47,7 @@ function addLabelledValue(
   label: string,
   value: unknown,
 ): boolean {
-  if (!hasSearchValue(value)) return false;
+  if (!hasHistoryConfigValue(value)) return false;
 
   parts.push(label);
   addSearchValue(parts, value);
@@ -61,7 +59,9 @@ function addConfigSection(
   sectionLabel: string,
   entries: ToolConfigEntry[],
 ): boolean {
-  const visibleEntries = entries.filter(([, value]) => hasSearchValue(value));
+  const visibleEntries = entries.filter(([, value]) =>
+    hasHistoryConfigValue(value),
+  );
   if (visibleEntries.length === 0) return false;
 
   parts.push(sectionLabel);
@@ -76,50 +76,29 @@ function addConfigSection(
  * Build a lowercase search body matching the fields HistoryItemElement renders.
  */
 export function getHistorySearchText(item: HistoryItem): string {
+  const presentation = getHistoryItemPresentation(item);
   const parts: string[] = [
-    item.id,
-    item.timestamp,
-    formatShortDateTime(item.timestamp) ?? '',
+    presentation.id,
+    presentation.rawTimestamp,
+    presentation.timestamp,
   ];
-  addSearchValue(parts, item.description);
+  addSearchValue(parts, presentation.description);
 
-  const config = item.agentConfig;
-  parts.push('Category', getAgentCategoryDecorator(config.agentCategory).label);
+  parts.push('Category', presentation.decorator.label);
   parts.push('Agent');
-  addSearchValue(parts, config.agent ?? 'Unknown');
+  addSearchValue(parts, presentation.agent);
   parts.push('Model');
-  addSearchValue(parts, config.model ?? 'Unknown');
+  addSearchValue(parts, presentation.model);
   parts.push('Instruction');
-  addSearchValue(
-    parts,
-    config.instruction?.trim() ? config.instruction : 'Not set',
-  );
+  addSearchValue(parts, presentation.instruction ?? 'Not set');
 
-  if (config.agentCategory === 'workflow') {
-    addLabelledValue(parts, 'InputFiles', config.inputFiles);
-    addLabelledValue(parts, 'MediaFiles', config.mediaFiles);
-
-    const hasMoreDetails = [
-      addConfigSection(parts, 'Context', [
-        ['ContextFiles', config.contextFiles],
-      ]),
-      addConfigSection(parts, 'Output Files', [['Files', config.outputFiles]]),
-      config.toolConfig
-        ? addConfigSection(parts, 'Config', Object.entries(config.toolConfig))
-        : false,
-    ].some(Boolean);
-
-    if (hasMoreDetails) {
-      parts.push('More details');
-    }
-  } else if (config.agentCategory === 'toolUse') {
-    const hasMoreDetails = addConfigSection(parts, 'Edited Files', [
-      ['Files', config.editedFiles],
-    ]);
-
-    if (hasMoreDetails) {
-      parts.push('More details');
-    }
+  addLabelledValue(parts, 'InputFiles', presentation.inputFiles);
+  addLabelledValue(parts, 'MediaFiles', presentation.mediaFiles);
+  const hasMoreDetails = presentation.sections
+    .map((section) => addConfigSection(parts, section.label, section.entries))
+    .some(Boolean);
+  if (hasMoreDetails) {
+    parts.push('More details');
   }
 
   return normalizeSearchText(parts.join('\n'));

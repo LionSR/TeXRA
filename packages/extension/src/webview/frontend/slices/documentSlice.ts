@@ -20,7 +20,6 @@ import {
   fileOptions$,
   isGitRepo$,
   multiFiles$,
-  outputFilesActive$,
   singleFiles$,
 } from '../mainViewState';
 import { showInformation, updateMultiFiles } from '../mainViewActions';
@@ -45,9 +44,6 @@ function handleSetMultipleFiles(message: SetMultipleFilesMessage): void {
   if (!listId) return;
 
   multiFiles$.set({ ...multiFiles$.get(), [listId]: files });
-  if (listId === 'outputFiles') {
-    outputFilesActive$.set(false);
-  }
   saveState();
 }
 
