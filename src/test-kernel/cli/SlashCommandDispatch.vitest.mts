@@ -8,6 +8,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import * as codexAuth from '@auth/codex';
 import { handleTuiSlashCommand } from '@cli/chat/tui/commands/handleSlashCommand';
+import {
+  showCliMemoryList,
+  showCliMemoryPreview,
+} from '@cli/chat/tui/commands/handlers/memoryCommands';
 import { type SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashContext';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import {
@@ -19,7 +23,9 @@ import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
 import {
   activeForm,
   activeStreamId,
+  closeInfoPane,
   codexPreferenceVersion,
+  infoPane,
   patchSessionMeta,
   resetCliState,
   patchStream,
@@ -39,6 +45,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import * as memoryFileSystem from '@tools/memory/memoryFileSystem';
 
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
@@ -113,7 +120,7 @@ function localEntries() {
 }
 
 describe('handleTuiSlashCommand', () => {
-  it('does not leave command echoes for overlay-only commands', async () => {
+  it('opens reference commands without leaving transcript rows', async () => {
     registerBuiltinSlashCommands();
     const context = createContext(createSession());
 
@@ -121,7 +128,39 @@ describe('handleTuiSlashCommand', () => {
     expect(localEntries()).toEqual([]);
 
     await handleTuiSlashCommand('/help', context);
-    expect(localEntries().map((entry) => entry.role)).toEqual(['assistant']);
+    expect(infoPane.get()).toMatchObject({ title: '/help' });
+    expect(infoPane.get()?.lines.join('\n')).toContain('**Keyboard**');
+    expect(localEntries()).toEqual([]);
+
+    closeInfoPane();
+    await handleTuiSlashCommand('/goal', context);
+    expect(infoPane.get()).toMatchObject({ title: '/goal' });
+    expect(infoPane.get()?.lines.join('\n')).toContain(
+      'Goal mode starts from an approved plan',
+    );
+    expect(localEntries()).toEqual([]);
+  });
+
+  it('opens memory list and preview output in the reference pane', async () => {
+    vi.spyOn(memoryFileSystem, 'loadMemoryItems').mockResolvedValue([]);
+    vi.spyOn(memoryFileSystem, 'loadMemoryPreview').mockResolvedValue({
+      storagePath: 'memory/note.md',
+      lineCount: 1,
+      preview: 'Remember this.',
+    });
+
+    await showCliMemoryList();
+    expect(infoPane.get()).toEqual({
+      title: '/memory list',
+      lines: ['No memory files found.'],
+    });
+
+    await showCliMemoryPreview('note.md');
+    expect(infoPane.get()?.title).toBe('/memory list');
+    closeInfoPane();
+    expect(infoPane.get()).toMatchObject({ title: '/memory preview' });
+    expect(infoPane.get()?.lines).toContain('Remember this.');
+    expect(localEntries()).toEqual([]);
   });
 
   it('adds a lazy command echo before errors even under echo never', async () => {
