@@ -151,7 +151,12 @@ export async function acceptEditedFileReplace(
     ports.emitWritten(targetLocation.absolutePath);
   }
 
-  await ports.deleteFile(diffFileLocation(baseLocation, editedPath));
+  await cleanupStaleDiffFile(
+    baseLocation,
+    editedPath,
+    targetLocation,
+    ports.deleteFile,
+  );
 
   await ports.showInfo(
     buildAcceptSuccessMessage(
@@ -179,6 +184,27 @@ export function diffFileLocation(
     '_diff',
   );
   return siblingLocation(baseLocation, diffFileName);
+}
+
+/**
+ * Delete the stale `_diff` companion file for (baseLocation, editedPath) via
+ * `deleteFile`, unless doing so would delete `targetLocation` itself — the
+ * file just accepted. This coincidence is possible whenever `baseLocation`'s
+ * own name already matches the generated diff-name pattern for `editedPath`
+ * (e.g. accepting into a base literally named `<edited-stem>_diff.tex`, or
+ * accepting directly into a latexdiff artifact). `deleteFile` is expected to
+ * swallow its own errors (missing/locked file); this only guards against
+ * deleting content that was never stale.
+ */
+export async function cleanupStaleDiffFile(
+  baseLocation: FileLocation,
+  editedPath: string,
+  targetLocation: FileLocation,
+  deleteFile: (location: FileLocation) => Promise<void>,
+): Promise<void> {
+  const diffLocation = diffFileLocation(baseLocation, editedPath);
+  if (diffLocation.absolutePath === targetLocation.absolutePath) return;
+  await deleteFile(diffLocation);
 }
 
 export function getAcceptedFileTarget(

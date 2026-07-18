@@ -16,6 +16,7 @@ import { registerDiffRefresh } from '@frontend/ui/diffView';
 import {
   acceptEditedFileReplace,
   buildAcceptSuccessMessage,
+  cleanupStaleDiffFile,
   getAcceptedFileTarget,
   siblingLocation,
 } from '@latex/acceptedFileTarget';
@@ -43,6 +44,16 @@ function validateFileLocations(
     return null;
   }
   return fileToUseLocation;
+}
+
+/** Delete a workspace file, swallowing errors (already gone, locked) since
+ *  diff-file cleanup is a best-effort side effect of accepting a file. */
+async function deleteDiffFileNonFatal(location: FileLocation): Promise<void> {
+  try {
+    await FlexibleFS.delete(location);
+  } catch {
+    // Non-fatal: diff file may not exist or may be locked.
+  }
 }
 
 async function validateFilesExist(
@@ -163,6 +174,16 @@ function buildCopyTarget(
   };
 }
 
+type ReplaceOrCopyTarget = {
+  targetLocation: FileLocation;
+  targetFileName: string;
+  /** 'replace' overwrites baseLocation itself — the same target
+   *  acceptEditedFileReplace would resolve to — so it's eligible for the
+   *  same stale-diff cleanup. 'copy' leaves baseLocation untouched, so its
+   *  diff against the edited content is still meaningful and is kept. */
+  kind: 'replace' | 'copy';
+};
+
 /** Offer a quick-pick between replacing the original and saving a postfixed
  *  copy, used when run metadata is available. Returns undefined when the user
  *  cancels. */
@@ -170,24 +191,22 @@ async function pickReplaceOrCopyTarget(
   baseLocation: FileLocation,
   editedPath: string,
   copyMeta: AcceptCopyMeta,
-): Promise<
-  { targetLocation: FileLocation; targetFileName: string } | undefined
-> {
+): Promise<ReplaceOrCopyTarget | undefined> {
   const replaceTarget = getAcceptedFileTarget(baseLocation, editedPath);
   const copyTarget = buildCopyTarget(baseLocation, copyMeta);
   type AcceptItem = vscode.QuickPickItem & {
-    target: { targetLocation: FileLocation; targetFileName: string };
+    target: ReplaceOrCopyTarget;
   };
   const acceptItems: AcceptItem[] = [
     {
       label: '$(replace) Replace original',
       description: replaceTarget.targetFileName,
-      target: replaceTarget,
+      target: { ...replaceTarget, kind: 'replace' },
     },
     {
       label: '$(files) Save as copy',
       description: copyTarget.targetFileName,
-      target: copyTarget,
+      target: { ...copyTarget, kind: 'copy' },
     },
   ];
 
@@ -242,13 +261,7 @@ async function handleAcceptEdited(
           vscode.window.showInformationMessage(message);
           logger.info(CHANNEL, message);
         },
-        deleteFile: async (location) => {
-          try {
-            await FlexibleFS.delete(location);
-          } catch {
-            // Non-fatal: diff file may not exist or may be locked.
-          }
-        },
+        deleteFile: deleteDiffFileNonFatal,
       });
     }
 
@@ -261,7 +274,7 @@ async function handleAcceptEdited(
     );
     if (!resolved) return false;
 
-    const { targetLocation, targetFileName } = resolved;
+    const { targetLocation, targetFileName, kind } = resolved;
     const targetExisted = await FlexibleFS.exists(targetLocation);
 
     const editedContent = await FlexibleFS.read(editedLocation);
@@ -271,6 +284,18 @@ async function handleAcceptEdited(
       appSignals.emit('workspaceFilesWritten', {
         absolutePaths: [targetLocation.absolutePath],
       });
+    }
+
+    // Only 'replace' overwrites the base file in place, matching the
+    // no-copyMeta path's semantics — 'copy' leaves the base (and its diff)
+    // untouched, so cleanup would delete a still-meaningful diff.
+    if (kind === 'replace') {
+      await cleanupStaleDiffFile(
+        fileToUseLocation,
+        editedLocation.absolutePath,
+        targetLocation,
+        deleteDiffFileNonFatal,
+      );
     }
 
     const successMessage = buildAcceptSuccessMessage(

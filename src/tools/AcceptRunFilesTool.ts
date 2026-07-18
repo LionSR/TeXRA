@@ -399,6 +399,11 @@ Optional:
         const loc = diffFileLocation(originalLocation, outputPath);
         if (loc.kind === 'external') return null;
 
+        // Never delete the file we just accepted into — possible when
+        // originalPath's own name already matches the generated diff-name
+        // pattern for outputPath (see cleanupStaleDiffFile's docstring).
+        if (loc.absolutePath === originalLocation.absolutePath) return null;
+
         try {
           await WorkspaceFS.delete(loc.relativePath);
           return loc.relativePath;

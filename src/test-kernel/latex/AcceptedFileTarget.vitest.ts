@@ -4,6 +4,7 @@ import { describe, it } from 'vitest';
 
 import {
   acceptEditedFileReplace,
+  cleanupStaleDiffFile,
   diffFileLocation,
   type AcceptEditedFileReplacePorts,
 } from '@latex/acceptedFileTarget';
@@ -24,6 +25,44 @@ describe('diffFileLocation', () => {
     if (loc.kind === 'workspace') {
       assert.strictEqual(loc.relativePath, 'chapters/paper_correct_diff.tex');
     }
+  });
+});
+
+describe('cleanupStaleDiffFile', () => {
+  it('deletes the derived diff location when it differs from the target', async () => {
+    const base = createWorkspaceLocation('/ws/paper.tex', 'paper.tex');
+    const deleted: FileLocation[] = [];
+
+    await cleanupStaleDiffFile(
+      base,
+      '/ws/paper_correct.tex',
+      base,
+      async (location) => {
+        deleted.push(location);
+      },
+    );
+
+    assert.strictEqual(deleted.length, 1);
+    assert.strictEqual(deleted[0].absolutePath, '/ws/paper_correct_diff.tex');
+  });
+
+  it('skips deletion when the derived diff location is the accept target', async () => {
+    const base = createWorkspaceLocation(
+      '/ws/paper_diff.tex',
+      'paper_diff.tex',
+    );
+    const deleted: FileLocation[] = [];
+
+    await cleanupStaleDiffFile(
+      base,
+      '/ws/paper.tex',
+      base,
+      async (location) => {
+        deleted.push(location);
+      },
+    );
+
+    assert.strictEqual(deleted.length, 0);
   });
 });
 
@@ -76,6 +115,23 @@ describe('acceptEditedFileReplace', () => {
     const accepted = await acceptEditedFileReplace(base, edited, ports);
 
     assert.strictEqual(accepted, false);
+    assert.strictEqual(ports.deleted.length, 0);
+  });
+
+  it('does not delete the just-accepted file when it collides with the derived diff name', async () => {
+    // base is literally named "<edited-stem>_diff.tex" — the same name
+    // diffFileLocation would derive for this edited/base pair — so the
+    // write target and the "stale diff" coincide.
+    const base = createWorkspaceLocation(
+      '/ws/paper_diff.tex',
+      'paper_diff.tex',
+    );
+    const edited = createWorkspaceLocation('/ws/paper.tex', 'paper.tex');
+    const ports = buildPorts();
+
+    const accepted = await acceptEditedFileReplace(base, edited, ports);
+
+    assert.strictEqual(accepted, true);
     assert.strictEqual(ports.deleted.length, 0);
   });
 });
