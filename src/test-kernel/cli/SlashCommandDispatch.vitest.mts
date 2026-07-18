@@ -388,6 +388,7 @@ describe('handleTuiSlashCommand', () => {
         preferenceUpdate: { effective: false, target: 'global' },
       });
     mockModelAccessOverview();
+    const previousPreferenceVersion = codexPreferenceVersion.get();
 
     await handleTuiSlashCommand(
       '/logout texra',
@@ -395,6 +396,7 @@ describe('handleTuiSlashCommand', () => {
     );
     expect(signOutSupabase).toHaveBeenCalledOnce();
     expect(signOutChatGpt).not.toHaveBeenCalled();
+    expect(codexPreferenceVersion.get()).toBe(previousPreferenceVersion + 1);
 
     await handleTuiSlashCommand(
       '/logout chatgpt',

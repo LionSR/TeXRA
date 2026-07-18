@@ -62,7 +62,6 @@ async function completeModelAccessSelection(
   access: CliModelAccessSelectionResult,
   context: SlashCommandContext | undefined,
 ): Promise<string> {
-  refreshCodexPreferenceViews();
   setCliSessionApiMode(access.apiMode);
   let modelNotice: string | undefined;
   try {
@@ -87,9 +86,10 @@ export async function applyCliProviderApiKey(
   return completeModelAccessSelection(access, context);
 }
 
-/** Set the chat session's api-mode without touching the persisted global. */
+/** Set the session API mode and refresh access-dependent TUI views. */
 export function setCliSessionApiMode(apiMode: CliApiMode): void {
   patchSessionMeta({ apiMode });
+  refreshCodexPreferenceViews();
 }
 
 export async function applyCliModelAccessSelection(
