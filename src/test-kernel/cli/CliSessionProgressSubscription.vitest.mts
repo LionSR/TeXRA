@@ -10,6 +10,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   SessionEventHub,
   type SessionEvent,
+  type SessionEventSubscriber,
   type SessionFact,
 } from '@agent/runtime/SessionEventHub';
 import type {
@@ -608,13 +609,21 @@ describe('attachCliSessionProgressProjection', () => {
     }
   });
 
-  it('does not project run events outside the shared fact vocabulary', () => {
+  it('returns no record for an unknown event that reaches the run projection callback', () => {
     const events = new SessionEventHub();
     const writeRecord = recordWriter();
+    let runSubscriber: SessionEventSubscriber | undefined;
+    vi.spyOn(events, 'subscribe').mockImplementation(
+      (subscriber, filter = {}) => {
+        if (filter.scope === 'run') runSubscriber = subscriber;
+        return () => {};
+      },
+    );
     const detach = attachCliSessionProgressProjection(events, writeRecord);
 
     try {
-      events.emit({
+      if (!runSubscriber) throw new Error('Run subscriber was not attached');
+      runSubscriber({
         scope: 'run',
         streamId,
         event: {
