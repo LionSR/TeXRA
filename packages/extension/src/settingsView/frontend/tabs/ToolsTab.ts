@@ -8,11 +8,12 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { postMessage } from '@shared/hostBridge';
 import { renderLoadingState } from '@shared/wa/loadingState';
 import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
-import { createEvent } from '@shared/utils/events';
 import type {
   ToolDashboardItem,
   ToolCategory,
@@ -200,26 +201,27 @@ export class ToolsTab extends LitElement {
   @property({ attribute: false }) desktopCrashReportingConfigured = false;
 
   private handleRecheck(): void {
-    this.dispatchEvent(createEvent('tool-recheck'));
+    postMessage(SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS);
   }
 
-  private emitToggle(eventName: string, e: Event): void {
+  private postToggle(command: string, e: Event): void {
     const target = e.target as WaSwitch | null;
-    this.dispatchEvent(
-      createEvent(eventName, { enabled: Boolean(target?.checked) }),
-    );
+    postMessage(command, { enabled: Boolean(target?.checked) });
   }
 
   private handleBashApprovalToggle = (e: Event): void => {
-    this.emitToggle('bash-approval-toggle', e);
+    this.postToggle(SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED, e);
   };
 
   private handleDesktopCrashReportingToggle = (e: Event): void => {
-    this.emitToggle('desktop-crash-reporting-toggle', e);
+    this.postToggle(
+      SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_ENABLED,
+      e,
+    );
   };
 
   private handleSetDesktopCrashReportingDsn = (): void => {
-    this.dispatchEvent(createEvent('desktop-crash-reporting-dsn-set', {}));
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_DSN);
   };
 
   private renderApprovalSettings(): TemplateResult {

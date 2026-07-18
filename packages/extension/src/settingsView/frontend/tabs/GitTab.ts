@@ -7,6 +7,7 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { postMessage } from '@shared/hostBridge';
 import {
   renderSetStatusIcon,
   statusCheckIconStyles,
@@ -23,7 +24,6 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 import type { PRSubscriptionEntry } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - shared utils
-import { createEvent } from '@shared/utils/events';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 
 // Local imports - shared constants
@@ -197,18 +197,16 @@ export class GitTab extends LitElement {
 
   private handleMarkCommitsToggle(event: Event): void {
     const target = event.target as WaSwitch | null;
-    this.dispatchEvent(
-      createEvent('git-mark-commits-toggle', {
-        enabled: Boolean(target?.checked),
-      }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_GIT_MARK_COMMITS, {
+      enabled: Boolean(target?.checked),
+    });
   }
 
   private handleAuthorNameChange(event: Event): void {
     const target = event.target as WaInput | null;
     const name = target?.value?.trim();
     if (name) {
-      this.dispatchEvent(createEvent('git-author-name-change', { name }));
+      postMessage(SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_NAME, { name });
     }
   }
 
@@ -216,30 +214,30 @@ export class GitTab extends LitElement {
     const target = event.target as WaInput | null;
     const email = target?.value?.trim();
     if (email) {
-      this.dispatchEvent(createEvent('git-author-email-change', { email }));
+      postMessage(SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_EMAIL, { email });
     }
   }
 
   private handleSetGitHubToken(): void {
-    this.dispatchEvent(createEvent('github-token-set', {}));
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_GITHUB_TOKEN);
   }
 
   private handleRemoveGitHubToken(): void {
-    this.dispatchEvent(createEvent('github-token-remove', {}));
+    postMessage(SETTINGS_VIEW_COMMANDS.REMOVE_GITHUB_TOKEN);
   }
 
   private handleOpenGitHubTokenUrl(): void {
-    this.dispatchEvent(createEvent('github-token-open-url', {}));
+    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL);
   }
 
   private handleUnsubscribePR(key: string): void {
-    this.dispatchEvent(createEvent('unsubscribe-pr', { key }));
+    postMessage(SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR, { key });
   }
 
   private handleOpenPRSubscriptionStream(streamId: string): void {
-    this.dispatchEvent(
-      createEvent('open-pr-subscription-stream', { streamId }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_PR_SUBSCRIPTION_STREAM, {
+      streamId,
+    });
   }
 
   private renderTokenStatusBadge(): TemplateResult {

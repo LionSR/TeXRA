@@ -1,5 +1,16 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({
+  postMessage: vi.fn(),
+}));
+
+vi.mock('@shared/hostBridge', () => ({
+  postMessage: mocks.postMessage,
+}));
+
+// Local imports - shared schemas
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - test utilities
 import { useLitComponentTestDom } from './litComponentTestUtils';
@@ -55,6 +66,10 @@ describe('settings reliability placement', () => {
     await import('@settingsView/frontend/tabs/MultiAgentTab');
   });
 
+  beforeEach(() => {
+    mocks.postMessage.mockClear();
+  });
+
   it('shows reliability settings at the bottom of the Models tab', async () => {
     const tab = await mountModelsTab();
     const section = await getReliabilitySection(tab);
@@ -74,13 +89,8 @@ describe('settings reliability placement', () => {
     expect(tab.shadowRoot?.textContent).not.toContain('Retry attempts');
   });
 
-  it('emits numeric reliability changes through the existing VS Code setting event', async () => {
+  it('posts numeric reliability changes through the existing VS Code setting command', async () => {
     const tab = await mountModelsTab();
-
-    const events: unknown[] = [];
-    tab.addEventListener('provider-vscode-setting-set', (event) => {
-      events.push((event as CustomEvent).detail);
-    });
 
     const section = await getReliabilitySection(tab);
 
@@ -92,11 +102,14 @@ describe('settings reliability placement', () => {
       new Event('change', { bubbles: true, composed: true }),
     );
 
-    expect(events).toEqual([
-      {
-        key: 'texra.model.compactionThresholdPercent',
-        value: 100,
-      },
+    expect(mocks.postMessage.mock.calls).toEqual([
+      [
+        SETTINGS_VIEW_COMMANDS.SET_PROVIDER_VSCODE_SETTING,
+        {
+          key: 'texra.model.compactionThresholdPercent',
+          value: 100,
+        },
+      ],
     ]);
   });
 });

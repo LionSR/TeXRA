@@ -4,11 +4,12 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
 
+// Local imports - shared webview
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { postMessage } from '@shared/hostBridge';
+
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
-
-// Local imports - memory view events
-import { MemoryViewEvents } from './events';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 @customElement('memory-toggle')
@@ -34,9 +35,9 @@ export class MemoryToggle extends LitElement {
 
   private handleChange(event: Event): void {
     const target = event.currentTarget as WaSwitch | null;
-    this.dispatchEvent(
-      MemoryViewEvents.toggleEnabled({ enabled: Boolean(target?.checked) }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED, {
+      enabled: Boolean(target?.checked),
+    });
   }
 
   override render(): TemplateResult {

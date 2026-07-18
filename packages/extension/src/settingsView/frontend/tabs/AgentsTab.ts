@@ -22,12 +22,12 @@ import {
 
 // Local imports - shared schemas
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { postMessage } from '@shared/hostBridge';
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import type { WaTabShowEvent } from '@shared/wa/tabs';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { AgentSelectionEvents } from '../components/profile/events';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/AgentSelectionPanel';
@@ -174,36 +174,34 @@ export class AgentsTab extends LitElement {
   }
 
   private handleOpenFolder(): void {
-    this.dispatchEvent(
-      AgentSelectionEvents.openFolder({ folderType: 'custom' }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER, {
+      folderType: 'custom',
+    });
   }
 
   private handleCreateAgent(): void {
-    this.dispatchEvent(
-      AgentSelectionEvents.createAgent({ category: this.activeSubTab }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.CREATE_AGENT, {
+      category: this.activeSubTab,
+    });
   }
 
   private handleCreateFromTemplate(): void {
-    this.dispatchEvent(
-      AgentSelectionEvents.createAgent({
-        category: this.activeSubTab,
-        mode: 'template',
-      }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.CREATE_AGENT, {
+      category: this.activeSubTab,
+      mode: 'template',
+    });
   }
 
   private handleChangeCustomDir(): void {
-    this.dispatchEvent(AgentSelectionEvents.setCustomDir());
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR);
   }
 
   private handleResetCustomDir(): void {
-    this.dispatchEvent(AgentSelectionEvents.resetCustomDir());
+    postMessage(SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR);
   }
 
   private handleSaveTeam(): void {
-    this.dispatchEvent(AgentSelectionEvents.saveTeam());
+    postMessage(SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET);
   }
 
   private handleSubTabShow = (event: WaTabShowEvent): void => {

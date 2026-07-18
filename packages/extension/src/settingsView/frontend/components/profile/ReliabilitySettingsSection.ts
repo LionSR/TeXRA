@@ -7,8 +7,9 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 
-// Local imports - shared utilities
-import { createEvent } from '@shared/utils/events';
+// Local imports - shared webview
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { postMessage } from '@shared/hostBridge';
 import type { NumberVscodeSetting } from '@shared/schemas/settingsViewMessages';
 import { clampOptional } from '@utils/core';
 
@@ -80,9 +81,10 @@ export class ReliabilitySettingsSection extends LitElement {
     }
     const value = clampOptional(parsed, setting.min, setting.max);
     if (value !== parsed) input.value = String(value);
-    this.dispatchEvent(
-      createEvent('provider-vscode-setting-set', { key: setting.key, value }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_VSCODE_SETTING, {
+      key: setting.key,
+      value,
+    });
   }
 
   private renderSetting(setting: NumberVscodeSetting): TemplateResult {

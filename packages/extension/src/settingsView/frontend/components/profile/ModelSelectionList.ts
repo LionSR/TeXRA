@@ -6,6 +6,8 @@ import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { postMessage } from '@shared/hostBridge';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
   renderSetStatusIcon,
@@ -36,7 +38,6 @@ import {
   type ReasoningLevel,
 } from '@shared/schemas/settingsViewMessages';
 import { modelSelectionListStyles } from './ModelSelectionList.styles';
-import { ModelSelectionEvents } from './events';
 import { resolveProviderKeyRows } from './providerKeyRows';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
@@ -124,21 +125,17 @@ export class ModelSelectionList extends LitElement {
   }
 
   private handleHelperModelChange(e: Event): void {
-    this.dispatchEvent(
-      ModelSelectionEvents.setHelperModel({
-        modelName: this.readSelectValue(e),
-      }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_HELPER_MODEL, {
+      modelName: this.readSelectValue(e),
+    });
   }
 
   private handleReasoningLevelChange(modelName: string, e: Event): void {
     const value = this.readSelectValue(e);
-    this.dispatchEvent(
-      ModelSelectionEvents.setReasoningLevel({
-        modelName,
-        level: value === '' ? null : value,
-      }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL, {
+      modelName,
+      level: value === '' ? null : value,
+    });
   }
 
   private getIncludedAccessReasoningCap(
@@ -224,12 +221,10 @@ export class ModelSelectionList extends LitElement {
           ?disabled=${!available && !model.enabled}
           @change=${(e: Event) => {
             const checked = (e.target as WaSwitch).checked;
-            this.dispatchEvent(
-              ModelSelectionEvents.setModelEnabled({
-                modelName: model.name,
-                enabled: checked,
-              }),
-            );
+            postMessage(SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED, {
+              modelName: model.name,
+              enabled: checked,
+            });
           }}
         >
           <span class="model-name">${model.label}</span>
@@ -381,9 +376,9 @@ export class ModelSelectionList extends LitElement {
             ?checked=${this.preferShortModelNames}
             @change=${(e: Event) => {
               const enabled = (e.target as WaSwitch).checked;
-              this.dispatchEvent(
-                ModelSelectionEvents.setPreferShortModelNames({ enabled }),
-              );
+              postMessage(SETTINGS_VIEW_COMMANDS.SET_PREFER_SHORT_MODEL_NAMES, {
+                enabled,
+              });
             }}
           >
             Use short model names

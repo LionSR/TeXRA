@@ -5,6 +5,8 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { postMessage } from '@shared/hostBridge';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Web Awesome icon bundle (side-effect import)
@@ -31,10 +33,6 @@ import '../components/profile/RelayQuotaMeter';
 import '../components/profile/ProviderKeyList';
 import '../components/profile/ModelSelectionList';
 import '../components/profile/ReliabilitySettingsSection';
-import {
-  ChatGptAuthEvents,
-  ModelSelectionEvents,
-} from '../components/profile/events';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 @customElement('models-tab')
@@ -144,16 +142,18 @@ export class ModelsTab extends LitElement {
 
   private readonly handlePreferSubscriptionChange = (event: Event): void => {
     const enabled = (event.target as WaSwitch).checked;
-    this.dispatchEvent(ChatGptAuthEvents.setPreferSubscription({ enabled }));
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION, {
+      enabled,
+    });
   };
 
   private readonly handleSubscriptionToolUseOnlyChange = (
     event: Event,
   ): void => {
     const enabled = (event.target as WaSwitch).checked;
-    this.dispatchEvent(
-      ChatGptAuthEvents.setSubscriptionToolUseOnly({ enabled }),
-    );
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_CHATGPT_SUBSCRIPTION_TOOL_USE_ONLY, {
+      enabled,
+    });
   };
 
   private renderTabHint(): TemplateResult {
@@ -312,7 +312,8 @@ export class ModelsTab extends LitElement {
                 <wa-button
                   appearance="outlined"
                   size="s"
-                  @click=${() => this.dispatchEvent(ChatGptAuthEvents.signOut())}
+                  @click=${() =>
+                    postMessage(SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT)}
                 >
                   Sign out
                 </wa-button>
@@ -320,7 +321,8 @@ export class ModelsTab extends LitElement {
             : html`<wa-button
                 variant="brand"
                 size="small"
-                @click=${() => this.dispatchEvent(ChatGptAuthEvents.signIn())}
+                @click=${() =>
+                  postMessage(SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT)}
               >
                 Sign in with ChatGPT
               </wa-button>`
@@ -373,11 +375,9 @@ export class ModelsTab extends LitElement {
                   variant="brand"
                   size="s"
                   @click=${() =>
-                    this.dispatchEvent(
-                      ModelSelectionEvents.requestAccess({
-                        modelName: consentModel.name,
-                      }),
-                    )}
+                    postMessage(SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, {
+                      modelName: consentModel.name,
+                    })}
                 >
                   ${waIcon('shield', { slot: 'start' })} Grant access
                 </wa-button>`

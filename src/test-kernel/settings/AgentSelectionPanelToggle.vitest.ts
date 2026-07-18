@@ -1,5 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const mocks = vi.hoisted(() => ({
+  postMessage: vi.fn(),
+}));
+
+vi.mock('@shared/hostBridge', () => ({
+  postMessage: mocks.postMessage,
+}));
+
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { AGENT_SOURCE } from '@shared/schemas/agent';
 import type { AgentSelectionItem } from '@shared/schemas/settingsView/data';
 import { useLitComponentTestDom } from './litComponentTestUtils';
@@ -8,13 +17,6 @@ type AgentSelectionPanelElement = HTMLElement & {
   agents: AgentSelectionItem[];
   category: 'workflow' | 'toolUse';
   updateComplete: Promise<boolean>;
-};
-
-type AgentEnabledSetDetail = {
-  agentName: string;
-  agentSource: string;
-  category: string;
-  enabled: boolean;
 };
 
 const workflowAgent: AgentSelectionItem = {
@@ -42,6 +44,10 @@ describe('AgentSelectionPanel enabled toggle', () => {
       import('@settingsView/frontend/components/profile/AgentSelectionPanel'),
   );
 
+  beforeEach(() => {
+    mocks.postMessage.mockClear();
+  });
+
   it('renders the per-agent enabled toggle as wa-switch, not wa-checkbox', async () => {
     const panel = await renderAgentSelectionPanel();
 
@@ -55,14 +61,10 @@ describe('AgentSelectionPanel enabled toggle', () => {
     expect(toggle.checked).toBe(true);
   });
 
-  it('dispatches agent-enabled-set (not a click on the row) when the toggle is clicked', async () => {
+  it('posts setAgentEnabled (not a click on the row) when the toggle is clicked', async () => {
     const panel = await renderAgentSelectionPanel();
 
-    let detail: AgentEnabledSetDetail | undefined;
     let rowClicked = false;
-    panel.addEventListener('agent-enabled-set', (event) => {
-      detail = (event as CustomEvent<AgentEnabledSetDetail>).detail;
-    });
     panel
       .shadowRoot!.querySelector('.agent-list-item')
       ?.addEventListener('click', () => {
@@ -76,12 +78,17 @@ describe('AgentSelectionPanel enabled toggle', () => {
       new MouseEvent('click', { bubbles: true, composed: true }),
     );
 
-    expect(detail).toEqual({
-      agentName: 'summarize',
-      agentSource: AGENT_SOURCE.BUILT_IN_WORKFLOW,
-      category: 'workflow',
-      enabled: false,
-    });
+    expect(mocks.postMessage.mock.calls).toEqual([
+      [
+        SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
+        {
+          agentName: 'summarize',
+          agentSource: AGENT_SOURCE.BUILT_IN_WORKFLOW,
+          category: 'workflow',
+          enabled: false,
+        },
+      ],
+    ]);
     // The toggle's click handler stops propagation, so the row's own
     // click-to-select handler must not also fire.
     expect(rowClicked).toBe(false);
