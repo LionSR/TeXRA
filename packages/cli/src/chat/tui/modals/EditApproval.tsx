@@ -141,11 +141,15 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
     () => initialDiffScrollOffset(hunks, diffWidth, maxDiffLines),
     [diffWidth, hunks, maxDiffLines],
   );
+  const scrollResetKey = useMemo(
+    () => ({ availableRows: props.availableRows, columns, hunks }),
+    [columns, hunks, props.availableRows],
+  );
   const { scrollOffset, scrollable: diffScrollable } = useScrollableOffset({
     initialOffset: initialScrollOffset,
     maxScrollOffset,
     pageRows: Math.max(1, maxDiffLines - 2),
-    resetKey: props.request,
+    resetKey: scrollResetKey,
   });
   const compactDiffLayout = maxDiffLines <= COMPACT_DIFF_DISPLAY_LINES;
   const compactCard =

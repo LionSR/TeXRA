@@ -1441,6 +1441,30 @@ const SCENARIOS = [
     unexpect: ['/model models'],
   },
   {
+    name: 'edit-approval-feedback-preserves-scroll',
+    rows: 24,
+    cols: 40,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_EDIT_APPROVAL: '1',
+      HARNESS_EDIT_APPROVAL_WRAPPED_CONTEXT: '1',
+    },
+    bootExpect: '· Ctrl-C ',
+    keys: [
+      { input: UP.repeat(20), delayMs: 200 },
+      'n',
+      'This rejection note is deliberately long enough to wrap across several terminal rows.',
+    ],
+    frame: 'viewport',
+    expect: [
+      'alpha alpha alpha alpha alpha',
+      '> This rejection note is deliberately',
+      'Enter send note',
+      'Esc back',
+    ],
+    unexpect: ['-Old acknowledgment.', '+Revised acknowledgment.'],
+  },
+  {
     name: 'narrow-edit-approval',
     rows: 12,
     cols: 40,

@@ -19,7 +19,7 @@ export function useScrollableOffset({
   /** Release the key bindings while another surface owns ↑/↓ (e.g. a
    *  feedback text input); the offset itself is retained. */
   readonly active?: boolean;
-  /** Row followed when it changes and restored whenever `resetKey` changes. */
+  /** Row shown initially and restored whenever `resetKey` changes. */
   readonly initialOffset?: number;
   readonly maxScrollOffset: number;
   readonly pageRows: number;
@@ -42,10 +42,6 @@ export function useScrollableOffset({
   useEffect(() => {
     setScrollOffset((current) => clamp(current, 0, maxScrollOffset));
   }, [maxScrollOffset]);
-
-  useEffect(() => {
-    setScrollOffset(clamp(initialOffset, 0, maxScrollOffsetRef.current));
-  }, [initialOffset]);
 
   useEffect(() => {
     setScrollOffset(
