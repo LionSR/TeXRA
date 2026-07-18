@@ -52,6 +52,7 @@ import {
   createSessionApprovals,
   type SessionApprovals,
 } from './streamApprovalQueue';
+import { WorkflowControlRegistry } from './workflowControlRegistry';
 import { releaseExecutionLeaseAfterArtifacts } from './executionOwnership';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
@@ -70,6 +71,7 @@ export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
       | 'followUps'
       | 'flushers'
       | 'interactions'
+      | 'workflowControls'
       | 'hostChannel'
     >
   >;
@@ -102,6 +104,13 @@ export class SessionHandle {
   readonly interactions: SessionHostInteractions;
   /** Session-owned approval queues, pending registries, and bypass state. */
   readonly approvals: SessionApprovals;
+  /**
+   * Session-owned bridge from a workflow-script grandchild's execution id to
+   * its run's engine skip/retry control. Populated by the workflow-script
+   * strategy while a run is in flight; a host (the CLI child list) consumes it
+   * to skip/retry a focused grandchild `agent()` call.
+   */
+  readonly workflowControls: WorkflowControlRegistry;
   /**
    * Optional session-scoped emit surface for the non-run-scoped host-path
    * emissions (SDK Step 7d follow-on F-1). Unset ⇒ those stay on the bus.
@@ -147,6 +156,8 @@ export class SessionHandle {
     this.followUps = followUps;
     this.interactions = init.interactions ?? new SessionHostInteractions();
     this.approvals = approvals;
+    this.workflowControls =
+      init.workflowControls ?? new WorkflowControlRegistry();
     // A fresh session owns its own flusher set; the default session aliases
     // the process-module set (`getActiveFlushers()`) so the process-wide
     // shutdown drain (`flushPendingRunTraces()`) still reaches it.

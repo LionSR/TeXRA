@@ -78,6 +78,8 @@ interface ConversationRegionProps {
   readonly onChildSelectionChange: (value: ChildListValue) => void;
   readonly onFocusSession: (streamId: StreamTabId) => void;
   readonly onKillExecution: (executionId: string) => void;
+  readonly onSkipExecution: (executionId: string) => void;
+  readonly onRetryExecution: (executionId: string) => void;
   readonly onOpenProcessDetail: (executionId: string) => void;
   readonly onPrintStream: (streamId: StreamTabId) => void;
 }
@@ -89,6 +91,8 @@ export function ConversationRegion({
   onChildSelectionChange,
   onFocusSession,
   onKillExecution,
+  onSkipExecution,
+  onRetryExecution,
   onOpenProcessDetail,
   onPrintStream,
   onStaticTranscriptChange,
@@ -253,6 +257,8 @@ export function ConversationRegion({
               onCancel={onCancelChildList}
               onFocusStream={onFocusSession}
               onKillExecution={onKillExecution}
+              onSkipExecution={onSkipExecution}
+              onRetryExecution={onRetryExecution}
               onOpenProcessDetail={onOpenProcessDetail}
               onSelectionChange={onChildSelectionChange}
               onPrintStream={onPrintStream}

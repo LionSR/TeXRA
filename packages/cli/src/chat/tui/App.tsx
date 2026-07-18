@@ -14,7 +14,11 @@ import {
 
 // Local imports - shared runtime
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
+import {
+  AgentCategory,
+  type ActiveChildInfo,
+  type StreamTabId,
+} from '@shared/schemas';
 
 // Local imports - TUI surfaces and state
 import {
@@ -123,6 +127,10 @@ function focusStreamAndPromoteApprovals(streamId: StreamTabId): void {
 export interface AppProps {
   readonly onSubmit: (line: string, mediaFiles?: readonly string[]) => void;
   readonly onKillExecution: (executionId: string) => void;
+  /** Skip a focused, in-flight workflow-script grandchild `agent()` call. */
+  readonly onSkipExecution: (executionId: string) => void;
+  /** Retry a focused, in-flight workflow-script grandchild `agent()` call. */
+  readonly onRetryExecution: (executionId: string) => void;
   readonly canInterruptActiveRun: () => boolean;
   readonly canStopActiveRun?: () => boolean;
   readonly colorEnabled?: boolean;
@@ -336,6 +344,21 @@ export function App(props: AppProps): React.JSX.Element {
       )
     : selectedChildStreamId !== undefined &&
       activeSubagentExecutionIds.has(selectedChildStreamId);
+  // A workflow-script grandchild `agent()` call is the only interactively
+  // skip/retry-able row: it is a Workflow-category subagent whose parent
+  // stream is itself the Workflow run (the run stream's parent is the
+  // orchestrator, a non-Workflow category), which excludes the run stream
+  // itself so its row never shows a control that would silently no-op.
+  const parentOfSelectedChild =
+    selectedChildStreamId !== undefined
+      ? parentStream.get(selectedChildStreamId)
+      : undefined;
+  const selectedChildWorkflowControllable =
+    selectedChildKillable &&
+    selectedChildStreamId !== undefined &&
+    streams.get(selectedChildStreamId)?.category === AgentCategory.Workflow &&
+    parentOfSelectedChild !== undefined &&
+    streams.get(parentOfSelectedChild)?.category === AgentCategory.Workflow;
   const taskDetailProcess = taskDetailExecutionId
     ? activeProcesses.find(
         (process) => process.executionId === taskDetailExecutionId,
@@ -627,6 +650,9 @@ export function App(props: AppProps): React.JSX.Element {
               childListFocused={childListFocused}
               childListSelectionKind={selectedChildKind}
               childListSelectionKillable={selectedChildKillable}
+              childListSelectionWorkflowControllable={
+                selectedChildWorkflowControllable
+              }
               childNavigationAvailable={childListAvailable}
               shortcutsActive={focusShortcutsActive}
               streamFocusAvailable={sessionViews.length > 0}
@@ -657,6 +683,8 @@ export function App(props: AppProps): React.JSX.Element {
         onCancelChildList={cancelChildList}
         onFocusSession={focusSession}
         onKillExecution={props.onKillExecution}
+        onSkipExecution={props.onSkipExecution}
+        onRetryExecution={props.onRetryExecution}
         onOpenProcessDetail={(executionId) =>
           taskDetailExecutionIdSignal.set(executionId)
         }
