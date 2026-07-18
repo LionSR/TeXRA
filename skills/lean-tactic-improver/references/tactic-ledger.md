@@ -66,7 +66,7 @@ Extract at the cheapest rung that eliminates the repetition. Each rung costs mor
 - [ ] The pattern has at least three real occurrences (rule of three) — count them before building anything.
 - [ ] Searched Mathlib for existing automation (`simp` lemma families, `positivity`/`gcongr`/`fun_prop` extensions, existing aesop rule sets) before writing project-local machinery.
 - [ ] Picked the lowest sufficient ladder rung.
-- [ ] Automation lives in the project's dedicated automation file, imported early, with a docstring stating the goal shapes it closes.
+- [ ] Domain-specific automation is colocated with the declarations it uses; only dependency-light shared infrastructure lives in an early-imported automation file. Its docstring states the goal shapes it closes.
 - [ ] Rewrote every motivating call site; each got shorter or clearer. Reverted if not.
 - [ ] Full project still builds; no distant proof broke from a new simp/aesop attribute.
 - [ ] Ledger row added or updated in the canonical `AGENTS.md` ledger; `CLAUDE.md` shares or points to it if present.

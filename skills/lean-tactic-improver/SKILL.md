@@ -18,7 +18,7 @@ The project's `AGENTS.md` carries one canonical **tactic ledger**: a curated lis
 1. Read the tactic ledger in `AGENTS.md` before writing proofs. If it has no ledger section yet, create one using the template in [references/tactic-ledger.md](references/tactic-ledger.md); make `CLAUDE.md` share or point to it when that file exists.
 2. Watch for repetition while proving. Apply the rule of three: the third time a tactic sequence or goal shape recurs, stop inlining it and extract.
 3. Choose the cheapest sufficient rung on the abstraction ladder: helper lemma → `@[simp]` lemma or named simp set → aesop rule set → tactic macro → full custom tactic. Do not write an `elab` tactic where a lemma would do.
-4. Implement the automation in the project's dedicated automation file (e.g. `Project/Tactic.lean` or `Project/Attr.lean`), with a docstring stating what goal shapes it closes.
+4. Put domain-specific automation beside the declarations it depends on. Use an early-imported file such as `Project/Tactic.lean` or `Project/Attr.lean` only for dependency-light shared infrastructure. Add a docstring stating what goal shapes the automation closes.
 5. Prove its worth immediately: rewrite the call sites that motivated the extraction. Every one of them must get shorter or clearer; if they do not, revert the abstraction.
 6. Record it: add or update the ledger entry (name, kind, use-when, defining file) so the next session starts from the improved baseline.
 7. Curate on every pass: prune ledger entries whose automation was removed, and merge overlapping automation instead of accumulating near-duplicates.

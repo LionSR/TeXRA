@@ -184,7 +184,7 @@ These skills bring TeXRA's research workflows to any agent system that supports 
 - **lean-proof-assistant** — develops and debugs Lean proofs with goal inspection and lemma search
 - **lean-search** — locates existing Lean 4 and Mathlib lemmas, APIs, and formalization patterns
 - **lean-simplifier** — refactors code toward Mathlib-quality style while preserving meaning
-- **lean-tactic-improver** — extracts repeated proof patterns into reusable project automation and records it in a tactic ledger in `AGENTS.md`/`CLAUDE.md`, so proof size grows sublinearly across sessions
+- **lean-tactic-improver** — extracts repeated proof patterns into reusable project automation and records it in the project's canonical `AGENTS.md` tactic ledger, so proof size grows sublinearly with the mathematics across sessions
 
 ### Quick Start
 

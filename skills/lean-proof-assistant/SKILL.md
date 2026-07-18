@@ -27,6 +27,6 @@ Use this skill for day-to-day Lean 4 proof development: proving lemmas, debuggin
 - Treat diagnostics as ground truth.
 - If a proof attempt becomes opaque or fragile, back up and choose a clearer route.
 
-When the same tactic sequence or goal shape shows up for the third time, stop inlining it: switch to the lean-tactic-improver skill to extract it into reusable automation and record it in the project's tactic ledger, so proof size stops growing linearly with proof length.
+When the same tactic sequence or goal shape shows up for the third time, stop inlining it: switch to the lean-tactic-improver skill to extract it into reusable automation and record it in the project's tactic ledger, so proof size grows sublinearly with the mathematics.
 
 For stuck proofs or longer debugging sessions, use [references/proof-workflow.md](references/proof-workflow.md) for a stricter loop around search, inspection, iteration, and cleanup.
