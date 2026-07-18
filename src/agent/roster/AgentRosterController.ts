@@ -21,6 +21,7 @@ import {
   setDefaultTeamId,
 } from '@shared/state/onboardingState';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { KeyedMutex, unique } from '@utils/core';
 import type { StateStore } from '@platform/interfaces';
 
 export interface AgentRosterEntry {
@@ -48,24 +49,13 @@ export interface AgentRosterControllerDeps<
   readonly fallbackTeamId?: string | null;
 }
 
-const workspaceWriteQueues = new WeakMap<StateStore, Promise<void>>();
+const workspaceWriteMutex = new KeyedMutex<StateStore>();
 
 function serializeWorkspaceWrite(
   store: StateStore,
   write: () => Promise<void>,
 ): Promise<void> {
-  const previous = workspaceWriteQueues.get(store) ?? Promise.resolve();
-  const run = previous.then(write);
-  // Release the queue after either outcome; callers still receive `run` and
-  // therefore observe their own write error.
-  workspaceWriteQueues.set(
-    store,
-    run.then(
-      () => undefined,
-      () => undefined,
-    ),
-  );
-  return run;
+  return workspaceWriteMutex.runExclusive(store, write);
 }
 
 export interface AgentRosterSnapshot<
@@ -88,10 +78,6 @@ function allPresets(
   extra: readonly AgentModePreset[] = [],
 ): readonly AgentModePreset[] {
   return [STARTER_AGENT_MODE_PRESET, ...AGENT_MODE_PRESETS, ...extra];
-}
-
-function unique(values: readonly string[]): string[] {
-  return [...new Set(values)];
 }
 
 function identifiersEqual(
