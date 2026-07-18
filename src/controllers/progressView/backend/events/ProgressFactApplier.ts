@@ -42,6 +42,8 @@ import {
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import { buildStreamContentSync } from '@shared/streams/streamContentSync';
+import { isGoalInFlight } from '@shared/schemas/goal';
+import { GoalStore } from '@tools/goal';
 import { assertNever, mapToRecord } from '@utils/core';
 
 import { withEventErrorHandling } from './errorHandling';
@@ -73,10 +75,6 @@ export type ProgressStreamControls = ProgressStreamBypassControls &
 export type GetProgressStreamControls = (
   stream: StreamTabId,
 ) => ProgressStreamControls;
-
-export type DeleteProgressStream = (
-  stream: StreamTabId,
-) => void | Promise<void>;
 
 /**
  * Run-scoped event types this backend handles, and the single source of truth
@@ -205,8 +203,10 @@ export class ProgressFactApplier {
     private webviewUpdater: WebviewUpdater,
     private webviewBridge: WebviewBridge,
     private readonly hasPendingPermissions: (streamId: string) => boolean,
+    private readonly deleteStream: (
+      stream: StreamTabId,
+    ) => void | Promise<void>,
     private readonly getStreamControls: GetProgressStreamControls = getDefaultProgressStreamControls,
-    private readonly deleteStream: DeleteProgressStream = () => undefined,
   ) {
     this.logger = createChannelTrace('ProgressFactApplier');
   }
@@ -265,7 +265,7 @@ export class ProgressFactApplier {
     this.applyFact(`failed to handle ${fact.type} fact`, () => {
       switch (fact.type) {
         case 'goalStateChanged':
-          return;
+          return this.handleGoalStateChanged(fact.payload.streamId);
         case 'inquiryThreadUpdated':
           return this.handleInquiryThreadUpdated(fact.payload);
         case 'clearMissingOutputs':
@@ -482,7 +482,11 @@ export class ProgressFactApplier {
     payload: SetActiveStreamPayload,
   ): Promise<void> {
     const { streamId, isRemote } = payload;
-    if (!streamId) return;
+    if (!streamId) {
+      this.state.activeStream = '';
+      this.webviewUpdater.setActiveStream('');
+      return;
+    }
 
     const wasKnownStream = this.state.streamLogs.has(streamId);
     const previousFilter = this.state.agentCategoryFilter;
@@ -579,6 +583,14 @@ export class ProgressFactApplier {
     // is only relevant when this IS the active stream.
     this.syncStreamContent(streamId, {
       includeActiveState: shouldSwitch && wasKnownStream && !filterChanged,
+    });
+  }
+
+  private handleGoalStateChanged(streamId: StreamTabId): void {
+    const goal = GoalStore.getForStream(streamId);
+    this.webviewUpdater.updateGoalActive(streamId, isGoalInFlight(goal), {
+      status: goal?.status,
+      objective: goal?.objective,
     });
   }
 

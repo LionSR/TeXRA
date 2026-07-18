@@ -30,12 +30,6 @@ vi.mock('@frontend/system/commandUtils', () => ({
   safeExecuteCommand: mocks.safeExecuteCommand,
 }));
 
-function createExtensionContext(): vscode.ExtensionContext {
-  return {
-    subscriptions: [],
-  } as unknown as vscode.ExtensionContext;
-}
-
 function createWebviewView(): vscode.WebviewView {
   return {
     webview: { postMessage: vi.fn() },
@@ -65,11 +59,10 @@ function createHostInteractions(
 
 function createMessageHandler(
   provider: ProgressViewProvider,
-  context: vscode.ExtensionContext,
   host = new FakePromptHost(),
   interactions = createHostInteractions(),
 ): ProgressViewMessageHandler {
-  return new ProgressViewMessageHandler(provider, context, host, interactions);
+  return new ProgressViewMessageHandler(provider, host, interactions);
 }
 
 function createProgressViewProvider(): ProgressViewProviderFake {
@@ -80,19 +73,25 @@ function createProgressViewProvider(): ProgressViewProviderFake {
     getKnownFilePaths: vi.fn(() => new Set()),
     getCompileFailures: vi.fn(() => new Map()),
   };
+  const state = {
+    activeStream: '',
+    agentCategoryFilter: 'all',
+    streamLogs: new Map<StreamTabId, unknown>(),
+    snapshots,
+    pickValidActiveStream: vi.fn(() => ''),
+    waitForOwnedExecutionRelease: vi.fn(async () => undefined),
+    clearStream: vi.fn(async (_stream: StreamTabId) => 'deleted' as const),
+    clearAll: vi.fn(async () => ({
+      active: new Set<StreamTabId>(),
+      failed: new Set<StreamTabId>(),
+    })),
+  };
   return {
-    state: {
-      activeStream: '',
-      agentCategoryFilter: 'all',
-      streamLogs: new Map<StreamTabId, unknown>(),
-      snapshots,
-      pickValidActiveStream: vi.fn(() => ''),
-      waitForOwnedExecutionRelease: vi.fn(async () => undefined),
-      clearStream: vi.fn(async () => 'deleted' as const),
-      clearAll: vi.fn(async () => ({
-        active: new Set<StreamTabId>(),
-        failed: new Set<StreamTabId>(),
-      })),
+    state,
+    backend: {
+      deleteStream: (stream: StreamTabId) => state.clearStream(stream),
+      deleteAllStreams: vi.fn(),
+      stopStream: vi.fn(),
     },
     webviewUpdater: {
       updateGoalActive: vi.fn(),
@@ -132,10 +131,9 @@ describe('progress-view onboarding refresh wiring', () => {
   });
 
   it('refreshes the onboarding funnel after progress setup actions', async () => {
-    const context = createExtensionContext();
     const provider = createProgressViewProvider();
     provider.refreshOnboardingFunnel.mockResolvedValue(undefined);
-    const handler = createMessageHandler(provider, context);
+    const handler = createMessageHandler(provider);
 
     await handler.handleMessage(
       {
@@ -170,10 +168,7 @@ describe('progress-view onboarding refresh wiring', () => {
           finishCommand = resolve;
         }),
     );
-    const handler = createMessageHandler(
-      createProgressViewProvider(),
-      createExtensionContext(),
-    );
+    const handler = createMessageHandler(createProgressViewProvider());
     const start = (
       handler as unknown as {
         executeValidatedUntilStarted(request: {
@@ -193,10 +188,7 @@ describe('progress-view onboarding refresh wiring', () => {
 
   it('reports a replacement launch failure before a run handle exists', async () => {
     mocks.safeExecuteCommand.mockResolvedValue(false);
-    const handler = createMessageHandler(
-      createProgressViewProvider(),
-      createExtensionContext(),
-    );
+    const handler = createMessageHandler(createProgressViewProvider());
 
     await expect(
       (
@@ -211,10 +203,7 @@ describe('progress-view onboarding refresh wiring', () => {
 
   it('settles a replacement launch when command error handling rejects', async () => {
     mocks.safeExecuteCommand.mockRejectedValue(new Error('command failed'));
-    const handler = createMessageHandler(
-      createProgressViewProvider(),
-      createExtensionContext(),
-    );
+    const handler = createMessageHandler(createProgressViewProvider());
 
     await expect(
       (
@@ -235,9 +224,8 @@ describe('progress-view onboarding refresh wiring', () => {
   ] as const)(
     'does not refresh the onboarding funnel for %s',
     async (action) => {
-      const context = createExtensionContext();
       const provider = createProgressViewProvider();
-      const handler = createMessageHandler(provider, context);
+      const handler = createMessageHandler(provider);
 
       await handler.handleMessage(
         {
@@ -255,7 +243,6 @@ describe('progress-view onboarding refresh wiring', () => {
   );
 
   it('uses PromptHost warning options before deleting all streams', async () => {
-    const context = createExtensionContext();
     const provider = createProgressViewProvider();
     const prompt = new FakePromptHost({
       promptResponses: ['Cancel', 'Delete All'],
@@ -266,7 +253,7 @@ describe('progress-view onboarding refresh wiring', () => {
       }
     ).keys = vi.fn(() => []);
 
-    const handler = createMessageHandler(provider, context, prompt);
+    const handler = createMessageHandler(provider, prompt);
 
     await handler.handleMessage(
       { command: PROGRESS_VIEW_COMMANDS.DELETE_ALL },
@@ -282,18 +269,14 @@ describe('progress-view onboarding refresh wiring', () => {
         items: ['Delete All', { label: 'Cancel', isCloseAffordance: true }],
       },
     });
-    expect(provider.state.clearAll).not.toHaveBeenCalled();
+    expect(provider.backend.deleteAllStreams).not.toHaveBeenCalled();
 
     await handler.handleMessage(
       { command: PROGRESS_VIEW_COMMANDS.DELETE_ALL },
       createWebviewView(),
     );
 
-    expect(provider.state.clearAll).toHaveBeenCalledOnce();
-    expect(provider.webviewBridge.clearAll).not.toHaveBeenCalled();
-    expect(provider.syncFullView).toHaveBeenCalledWith({
-      forceRebuild: true,
-    });
+    expect(provider.backend.deleteAllStreams).toHaveBeenCalledOnce();
   });
 
   it('routes retry request actions through host interactions', async () => {
@@ -302,7 +285,6 @@ describe('progress-view onboarding refresh wiring', () => {
     });
     const directHandler = createMessageHandler(
       createProgressViewProvider(),
-      createExtensionContext(),
       new FakePromptHost(),
       interactions,
     );
@@ -343,12 +325,10 @@ describe('progress-view onboarding refresh wiring', () => {
   });
 
   it('reports missing retry requests when no pending interaction matches', async () => {
-    const context = createExtensionContext();
     const provider = createProgressViewProvider();
     const prompt = new FakePromptHost();
     const handler = createMessageHandler(
       provider,
-      context,
       prompt,
       createHostInteractions({ submitRetryDecision: vi.fn(() => false) }),
     );
@@ -374,7 +354,6 @@ describe('progress-view onboarding refresh wiring', () => {
     });
     const handler = createMessageHandler(
       createProgressViewProvider(),
-      createExtensionContext(),
       new FakePromptHost(),
       interactions,
     );
@@ -406,7 +385,6 @@ describe('progress-view onboarding refresh wiring', () => {
     });
     const handler = createMessageHandler(
       createProgressViewProvider(),
-      createExtensionContext(),
       new FakePromptHost(),
       interactions,
     );
@@ -444,7 +422,7 @@ describe('progress-view onboarding refresh wiring', () => {
     vi.mocked(provider.state.snapshots.getKnownFilePaths).mockReturnValue(
       new Set(['/workspace/generated.tex', 'extra.tex']),
     );
-    const handler = createMessageHandler(provider, createExtensionContext());
+    const handler = createMessageHandler(provider);
     const view = createWebviewView();
 
     await handler.handleMessage(
@@ -521,14 +499,12 @@ describe('progress-view onboarding refresh wiring', () => {
   });
 
   it('returns deletion failures from host removeStream handling', async () => {
-    const context = createExtensionContext();
     const provider = createProgressViewProvider();
-    const handler = createMessageHandler(provider, context);
     const deletionError = new Error('delete failed');
     const clearStream = provider.state.clearStream as ReturnType<typeof vi.fn>;
     clearStream.mockRejectedValue(deletionError);
 
-    const result = handler.removeStreamFromHost('missing' as StreamTabId);
+    const result = provider.backend.deleteStream('missing' as StreamTabId);
 
     expect(result).toBeInstanceOf(Promise);
     await expect(result).rejects.toBe(deletionError);
