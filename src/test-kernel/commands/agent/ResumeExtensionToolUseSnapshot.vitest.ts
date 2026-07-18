@@ -3,14 +3,6 @@ import '@test/support/defaultSessionTestSetup';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-/**
- * The tool-use persistence gate is extension-only: the desktop never honored
- * `texra.toolUse.persistence.enabled`, so the shared
- * {@link resumeQueuedToolUseSnapshot} leaf stays ungated and the gate lives in
- * this adapter. These tests pin that
- * the gate is applied here (not in the shared leaf) and that an enabled adapter
- * delegates straight through.
- */
 const mocks = vi.hoisted(() => ({
   getToolUsePersistenceEnabled: vi.fn(() => true),
   registerCommand: vi.fn(),
@@ -51,16 +43,21 @@ function snapshot() {
   return createToolUseResumeData({ streamId: STREAM });
 }
 
-describe('resumeExtensionToolUseSnapshot', () => {
-  beforeEach(() => {
-    mocks.getToolUsePersistenceEnabled.mockReturnValue(true);
-    mocks.registerCommand.mockReset();
-    mocks.resumeQueuedToolUseSnapshot.mockReset();
-    mocks.resumeQueuedToolUseSnapshot.mockResolvedValue(true);
-    mocks.showWarningMessage.mockReset();
-    mocks.showWarningMessage.mockReset();
-  });
+function registerHandler() {
+  mocks.registerCommand.mockReturnValue({ dispose: vi.fn() });
+  registerResumeAgentCommand({ subscriptions: [] } as never);
+  return mocks.registerCommand.mock.calls[0]?.[1];
+}
 
+beforeEach(() => {
+  mocks.getToolUsePersistenceEnabled.mockReturnValue(true);
+  mocks.registerCommand.mockReset();
+  mocks.retrieveSessionResumeData.mockReset();
+  mocks.resumeQueuedToolUseSnapshot.mockReset().mockResolvedValue(true);
+  mocks.showWarningMessage.mockReset();
+});
+
+describe('resumeExtensionToolUseSnapshot', () => {
   it('refuses to resume when tool-use persistence is disabled', async () => {
     mocks.getToolUsePersistenceEnabled.mockReturnValue(false);
 
@@ -88,14 +85,6 @@ describe('resumeExtensionToolUseSnapshot', () => {
 });
 
 describe('registerResumeAgentCommand', () => {
-  beforeEach(() => {
-    mocks.getToolUsePersistenceEnabled.mockReturnValue(true);
-    mocks.registerCommand.mockReset();
-    mocks.retrieveSessionResumeData.mockReset();
-    mocks.resumeQueuedToolUseSnapshot.mockReset();
-    mocks.resumeQueuedToolUseSnapshot.mockResolvedValue(true);
-  });
-
   it('stores the command disposable on the extension context', () => {
     const disposable = { dispose: vi.fn() };
     mocks.registerCommand.mockReturnValue(disposable);
@@ -119,21 +108,11 @@ describe('registerResumeAgentCommand', () => {
       streamId: canonical.streamId,
       executionId: canonical.executionId,
       agentConfig: canonical.agentConfig,
-      messages: [],
-      run: {},
-      workspace: {},
-      user: { input: {}, transient: {} },
-      lastUpdated: 0,
     };
     mocks.retrieveSessionResumeData.mockResolvedValue(canonical);
-    mocks.registerCommand.mockReturnValue({ dispose: vi.fn() });
-    registerResumeAgentCommand({ subscriptions: [] } as never);
-    const handler = mocks.registerCommand.mock.calls[0]?.[1] as (
-      payload: unknown,
-    ) => Promise<{ success: boolean }>;
 
     await expect(
-      handler({ snapshot: oldSnapshot, followUp: 'Continue.' }),
+      registerHandler()({ snapshot: oldSnapshot, followUp: 'Continue.' }),
     ).resolves.toEqual({ success: true });
 
     expect(mocks.retrieveSessionResumeData).toHaveBeenCalledExactlyOnceWith(
@@ -153,14 +132,8 @@ describe('registerResumeAgentCommand', () => {
 
   it('does not read resume storage when persistence is disabled', async () => {
     mocks.getToolUsePersistenceEnabled.mockReturnValue(false);
-    mocks.registerCommand.mockReturnValue({ dispose: vi.fn() });
-    registerResumeAgentCommand({ subscriptions: [] } as never);
-    const handler = mocks.registerCommand.mock.calls[0]?.[1] as (
-      payload: unknown,
-    ) => Promise<{ success: boolean }>;
-    const canonical = snapshot();
 
-    await expect(handler({ snapshot: canonical })).resolves.toEqual({
+    await expect(registerHandler()({ snapshot: snapshot() })).resolves.toEqual({
       success: false,
     });
     expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
@@ -171,13 +144,8 @@ describe('registerResumeAgentCommand', () => {
     mocks.retrieveSessionResumeData.mockRejectedValue(
       new Error('storage unavailable'),
     );
-    mocks.registerCommand.mockReturnValue({ dispose: vi.fn() });
-    registerResumeAgentCommand({ subscriptions: [] } as never);
-    const handler = mocks.registerCommand.mock.calls[0]?.[1] as (
-      payload: unknown,
-    ) => Promise<{ success: boolean }>;
 
-    await expect(handler({ snapshot: snapshot() })).resolves.toEqual({
+    await expect(registerHandler()({ snapshot: snapshot() })).resolves.toEqual({
       success: false,
     });
     expect(mocks.showWarningMessage).toHaveBeenCalledWith(
