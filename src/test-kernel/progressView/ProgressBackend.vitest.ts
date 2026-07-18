@@ -1350,7 +1350,7 @@ describe('ProgressBackend', () => {
           type: 'child.activity',
           kind: 'subagents',
           parentStreamId,
-          children: [child],
+          items: [child],
         },
       });
 
@@ -1361,7 +1361,7 @@ describe('ProgressBackend', () => {
           type: 'child.activity',
           kind: 'processes',
           parentStreamId,
-          processes: [process],
+          items: [process],
         },
       });
 

@@ -16,6 +16,7 @@ import {
   EMPTY_STREAM_META,
   reduceStreamMeta,
 } from '@shared/streams/streamMetaReducer';
+import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 
 import {
   EMPTY_PROCESS_OUTPUTS,
@@ -50,15 +51,6 @@ export function takePendingDescription(
  * appending for a while before the next reset. The shared reducer applies it.
  */
 const WEBVIEW_OUTPUT_CAP = { maxChars: 100_000, retainChars: 80_000 } as const;
-
-function compareByNewestCreationTime(
-  a: StreamTabInfo,
-  b: StreamTabInfo,
-): number {
-  return (
-    b.creationTimestamp - a.creationTimestamp || a.name.localeCompare(b.name)
-  );
-}
 
 function upsertSortedStreamInfo(
   streams: Map<StreamTabId, StreamTabInfo>,

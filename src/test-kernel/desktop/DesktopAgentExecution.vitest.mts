@@ -891,9 +891,7 @@ describe('DesktopProgressBridge', () => {
       type: 'child.activity',
       kind: 'processes',
       parentStreamId: 'parent',
-      processes: [
-        { kind: 'process', executionId: 'process-1', agentName: 'bash' },
-      ],
+      items: [{ kind: 'process', executionId: 'process-1', agentName: 'bash' }],
     });
 
     vi.spyOn(Date, 'now').mockReturnValue(2_000);
@@ -901,7 +899,7 @@ describe('DesktopProgressBridge', () => {
       type: 'child.activity',
       kind: 'subagents',
       parentStreamId: 'parent',
-      children: [
+      items: [
         {
           kind: 'subagent',
           childStreamId: 'agent-1',
@@ -946,15 +944,13 @@ describe('DesktopProgressBridge', () => {
       type: 'child.activity',
       kind: 'processes',
       parentStreamId: 'parent',
-      processes: [
-        { kind: 'process', executionId: 'process-1', agentName: 'bash' },
-      ],
+      items: [{ kind: 'process', executionId: 'process-1', agentName: 'bash' }],
     });
     emitRunEvent(bridge, 'parent' as StreamTabId, {
       type: 'child.activity',
       kind: 'subagents',
       parentStreamId: 'parent',
-      children: [
+      items: [
         {
           kind: 'subagent',
           childStreamId: 'agent-1',
@@ -967,13 +963,13 @@ describe('DesktopProgressBridge', () => {
       type: 'child.activity',
       kind: 'processes',
       parentStreamId: 'parent',
-      processes: [],
+      items: [],
     });
     emitRunEvent(bridge, 'parent' as StreamTabId, {
       type: 'child.activity',
       kind: 'subagents',
       parentStreamId: 'parent',
-      children: [],
+      items: [],
     });
 
     const badgeUpdate = progressMessages(

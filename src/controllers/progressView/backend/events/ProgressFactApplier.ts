@@ -181,22 +181,16 @@ export class ProgressFactApplier {
         },
       });
     },
-    'child.activity': (_streamId, event) => {
-      if (event.kind === 'subagents') {
-        return this.updateActiveChildren(event.parentStreamId, {
-          activeField: 'activeSubagents',
-          countField: 'finishedSubagentCount',
-          next: [...event.children],
-        });
-      }
-      if (event.kind === 'processes') {
-        return this.updateActiveChildren(event.parentStreamId, {
-          activeField: 'activeProcesses',
-          countField: 'finishedProcessCount',
-          next: [...event.processes],
-        });
-      }
-    },
+    'child.activity': (_streamId, event) =>
+      this.updateActiveChildren(event.parentStreamId, {
+        activeField:
+          event.kind === 'subagents' ? 'activeSubagents' : 'activeProcesses',
+        countField:
+          event.kind === 'subagents'
+            ? 'finishedSubagentCount'
+            : 'finishedProcessCount',
+        next: [...event.items],
+      }),
     'process.output': (_streamId, event) =>
       this.handleUpdateProcessOutput({
         parentStreamId: event.parentStreamId,

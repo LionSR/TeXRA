@@ -223,9 +223,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       case 'child.activity':
         if (this.rootStreamTerminal) return true;
         if (event.kind === 'processes') {
-          this.applyActiveProcesses(event.parentStreamId, event.processes);
+          this.applyActiveProcesses(event.parentStreamId, event.items);
         } else {
-          this.applyActiveSubagents(event.parentStreamId, event.children);
+          this.applyActiveSubagents(event.parentStreamId, event.items);
         }
         this.updateHeartbeat();
         this.render(true);
