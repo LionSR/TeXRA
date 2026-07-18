@@ -77,14 +77,13 @@ describe('getGitHubToken', () => {
   });
 
   it('ignores blank platform secrets before using environment fallbacks', async () => {
-    process.env.GH_TOKEN = 'gh-env-token';
-
     const githubAuth = await import('@tools/github/githubAuth');
 
     await installPlatform({
       secrets: {
         [githubAuth.GITHUB_TOKEN_STORAGE_KEY]: '   ',
       },
+      secretsEnv: { GH_TOKEN: 'gh-env-token' },
     });
 
     await expect(githubAuth.getGitHubToken()).resolves.toBe('gh-env-token');

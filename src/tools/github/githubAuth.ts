@@ -22,17 +22,27 @@ function normalizeGitHubToken(token: string | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-function getGitHubEnvToken(): string | undefined {
+function getGitHubEnvToken(
+  readEnv: (name: string) => string | undefined,
+): string | undefined {
   for (const envVar of GITHUB_TOKEN_ENV_VARS) {
-    const token = normalizeGitHubToken(process.env[envVar]);
+    const token = normalizeGitHubToken(readEnv(envVar));
     if (token) return token;
   }
   return undefined;
 }
 
 export async function getGitHubToken(): Promise<string | undefined> {
-  const stored = await tryPlatform()?.secrets.get(GITHUB_TOKEN_STORAGE_KEY);
-  return normalizeGitHubToken(stored) ?? getGitHubEnvToken();
+  const secrets = tryPlatform()?.secrets;
+  // No platform yet (e.g. module-level init before `initPlatform()` runs):
+  // there's no secrets seam to call, so read process.env directly — same
+  // documented pre-init exception as `tryPlatform()` itself.
+  if (!secrets) return getGitHubEnvToken((name) => process.env[name]);
+  const stored = await secrets.get(GITHUB_TOKEN_STORAGE_KEY);
+  return (
+    normalizeGitHubToken(stored) ??
+    getGitHubEnvToken((name) => secrets.getEnv(name))
+  );
 }
 
 /**
