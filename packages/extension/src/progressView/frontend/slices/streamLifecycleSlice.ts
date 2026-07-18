@@ -23,8 +23,10 @@ import {
   mergeBackendOwnedState,
   metadataToStreamStatePartial,
 } from './streamStateMerge';
-import { clearCopyContentStore } from '../formatters/copyContentStore';
-import { clearProposalInputStore } from '../formatters/proposalInputStore';
+import {
+  clearCopyContentStore,
+  clearProposalInputStore,
+} from '../formatters/contentStore';
 import {
   clearFollowUpInputTransientStateStore,
   deleteFollowUpInputTransientState,

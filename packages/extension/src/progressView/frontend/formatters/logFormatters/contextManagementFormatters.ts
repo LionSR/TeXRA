@@ -7,6 +7,7 @@
  */
 
 // Local imports - shared schemas
+import { html } from 'lit';
 import type { ActionConfig } from '@progressView/frontend/components/ContextManagement';
 import type { StatItem } from '@progressView/frontend/components/StatisticsPanel';
 import {
@@ -16,8 +17,9 @@ import {
 } from '@shared/schemas';
 import { formatCompactTokenCount } from '@utils/core';
 
-// Local imports - Lit template utilities
-import { html, type FormatResult } from '../litTemplates';
+// Third-party imports - Lit template utilities
+
+import type { FormatResult } from '../baseLogFormatter';
 
 /**
  * Minimum reduced token threshold below which the "Max Tokens Reduced" event

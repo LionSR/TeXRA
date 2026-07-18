@@ -3,6 +3,9 @@
  * Provides log message formatting functions for the progress view.
  */
 
+// Third-party imports - Lit template utilities
+import { html, nothing, type TemplateResult } from 'lit';
+
 // Local imports - formatter helpers
 import type { LogMessageData, MessageType } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -11,31 +14,30 @@ import {
   isStreamingTextLogMessage,
   safeFormat,
   type FormatOptions,
+  type FormatResult,
 } from './baseLogFormatter';
 import {
   formatBannerContentTemplate,
-  formatContextManagementTemplate,
-  formatDefaultLogMessageTemplate,
-  formatErrorTemplate,
+  formatModelResponseTemplate,
+} from './logFormatters/bannerFormatters';
+import { formatContextManagementTemplate } from './logFormatters/contextManagementFormatters';
+import {
   formatFileListTemplate,
   formatLatexdiffTemplate,
   formatMissingOutputsTemplate,
-  formatModelResponseTemplate,
-  formatProgressStatusTemplate,
   formatStatisticsTemplate,
-  formatToolUseTemplate,
+} from './logFormatters/dataFormatters';
+import {
+  formatDefaultLogMessageTemplate,
+  formatErrorTemplate,
+  formatProgressStatusTemplate,
   formatUserMessageTemplate,
+} from './logFormatters/messageFormatters';
+import { formatToolUseTemplate } from './logFormatters/toolFormatters';
+import {
   formatWebFetchTemplate,
   formatWebSearchTemplate,
-} from './logFormatters';
-
-// Local imports - Lit template utilities
-import {
-  html,
-  nothing,
-  type TemplateResult,
-  type FormatResult,
-} from './litTemplates';
+} from './logFormatters/toolFormatters/webFormatters';
 
 export { isStreamingTextLogMessage } from './baseLogFormatter';
 

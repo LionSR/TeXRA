@@ -14,6 +14,8 @@ import { z } from 'zod';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared utilities
+import { html } from 'lit';
+import { ifDefined } from 'lit/directives/if-defined.js';
 import {
   ExtendedTokenUsageStatsSchema,
   FileListEntrySchema,
@@ -27,11 +29,12 @@ import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { formatCompactTokenCount, getBasename } from '@utils/core';
 import { formatCostUsd } from '@utils/text/stringUtils';
 
-// Local imports - shared schemas
-import { html, ifDefined, type FormatResult } from '../litTemplates';
+// Third-party imports - Lit template utilities
+
+import { buildFileListRender, buildDetailsSummary } from '../htmlBuilders';
+import type { FormatResult } from '../baseLogFormatter';
 
 // Local imports - formatter helpers
-import { buildFileListRender, buildDetailsSummary } from '../htmlBuilders';
 
 /** Format file list entry as TemplateResult. */
 export function formatFileListTemplate(

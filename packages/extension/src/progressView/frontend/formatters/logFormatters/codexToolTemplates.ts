@@ -1,5 +1,8 @@
 // Third-party imports
 import { z } from 'zod';
+import { html, nothing, type TemplateResult } from 'lit';
+import { repeat } from 'lit/directives/repeat.js';
+import { when } from 'lit/directives/when.js';
 
 // Local imports - shared utilities
 import {
@@ -14,15 +17,6 @@ import {
 } from '@shared/schemas/codex';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { formatDuration } from '@utils/core';
-
-// Local imports - Lit template utilities
-import {
-  html,
-  nothing,
-  repeat,
-  when,
-  type TemplateResult,
-} from '../litTemplates';
 
 // Local imports - formatter helpers
 import {

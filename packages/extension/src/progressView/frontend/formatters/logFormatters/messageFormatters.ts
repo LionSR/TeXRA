@@ -13,30 +13,28 @@
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared schemas
+
+// Local imports - shared utilities
+
+// Third-party imports - Lit template utilities
+import { html } from 'lit';
+import { classMap } from 'lit/directives/class-map.js';
+import { ifDefined } from 'lit/directives/if-defined.js';
+import { when } from 'lit/directives/when.js';
 import {
   ErrorLogDataSchema,
   type ErrorLogData,
   type LogMessageData,
 } from '@shared/schemas';
-
-// Local imports - shared utilities
 import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
-
-// Local imports - Lit template utilities
-import {
-  html,
-  when,
-  classMap,
-  ifDefined,
-  type FormatResult,
-} from '../litTemplates';
 
 // Local imports - formatter helpers
 import { stringifyWithLanguage } from '../parseUtils';
 import { formatDisplayTimestamp } from '../timestampUtils';
 import { ICON_BY_LEVEL } from '../constants';
-import { registerCopyContent } from '../copyContentStore';
+import { registerCopyContent } from '../contentStore';
 import { stopSummaryToggleKeydown } from '../htmlBuilders';
+import type { FormatResult } from '../baseLogFormatter';
 
 /** Format user message entry as TemplateResult. */
 export function formatUserMessageTemplate(
