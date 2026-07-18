@@ -19,13 +19,6 @@ export class StorageFS extends RelativeFS {
     return platform().storage.getStoragePath();
   }
 
-  /**
-   * Get the global storage base path (shared across workspaces)
-   */
-  public static getGlobalPath(): string {
-    return platform().storage.getGlobalStoragePath();
-  }
-
   // Inherit file operations from RelativeFS
 }
 
@@ -35,6 +28,6 @@ export class StorageFS extends RelativeFS {
  */
 export class GlobalStorageFS extends RelativeFS {
   protected static override getBasePath(): string {
-    return StorageFS.getGlobalPath();
+    return platform().storage.getGlobalStoragePath();
   }
 }
