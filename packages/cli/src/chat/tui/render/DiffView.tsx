@@ -178,6 +178,33 @@ export function maxDiffScrollOffset(
   });
 }
 
+/**
+ * Start a scrollable approval diff near its first changed visual row. Long
+ * wrapped context lines can otherwise consume the whole initial viewport.
+ */
+export function initialDiffScrollOffset(
+  hunks: readonly Hunk[],
+  width: number,
+  maxDisplayLines: number,
+): number {
+  if (maxDisplayLines <= COMPACT_DIFF_DISPLAY_LINES) return 0;
+
+  const lines = wrappedDiffDisplayLines(hunks, width);
+  if (lines.length <= maxDisplayLines) return 0;
+
+  const changedIndex = lines.findIndex(
+    (line) => line.kind === 'added' || line.kind === 'removed',
+  );
+  const initiallyVisibleRows = Math.max(1, maxDisplayLines - 1);
+  if (changedIndex < 0 || changedIndex < initiallyVisibleRows) return 0;
+
+  return clamp(
+    changedIndex - 1,
+    0,
+    maxDiffScrollOffset(lines.length, maxDisplayLines),
+  );
+}
+
 function overflowMarkerCandidates(
   kind: OverflowMarkerKind,
   count: number,

@@ -779,6 +779,7 @@ All notable changes to this project will be documented in this file.
 - **Cleaner machine-readable output** — the CLI no longer emits stray progress lines after a run has finished, keeping `--output-format ndjson` output well-formed.
 - **Skills available in the CLI** — the terminal client now ships with its built-in skills, so they appear and run after a normal install.
 - **Approving a plan no longer skips edit review** — choosing approve-and-run now auto-approves only the plan's shell commands; file edits keep going through the normal diff approval so you still review every change.
+- **Edit previews open on the change** — approval previews now begin near the first added or removed line, so long wrapped context no longer hides the proposed edit below the fold.
 - **Tidier model and tool pickers** — the model and tool lists now reserve room for their key hints, so the footer and bottom rows stay visible instead of being pushed off-screen in short terminals.
 - **Smoother approval policy picker** — choosing an approval policy from the picker now closes the menu before applying your choice, so the new setting takes effect cleanly without the picker lingering.
 

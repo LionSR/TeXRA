@@ -18,6 +18,7 @@ import {
   COMPACT_DIFF_DISPLAY_LINES,
   diffVisualRowCount,
   DiffView,
+  initialDiffScrollOffset,
   maxDiffScrollOffset,
   statsFromHunks,
 } from '../render/DiffView';
@@ -136,9 +137,15 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
     [diffWidth, hunks],
   );
   const maxScrollOffset = maxDiffScrollOffset(diffRows, maxDiffLines);
+  const initialScrollOffset = useMemo(
+    () => initialDiffScrollOffset(hunks, diffWidth, maxDiffLines),
+    [diffWidth, hunks, maxDiffLines],
+  );
   const { scrollOffset, scrollable: diffScrollable } = useScrollableOffset({
+    initialOffset: initialScrollOffset,
     maxScrollOffset,
     pageRows: Math.max(1, maxDiffLines - 2),
+    resetKey: props.request,
   });
   const compactDiffLayout = maxDiffLines <= COMPACT_DIFF_DISPLAY_LINES;
   const compactCard =

@@ -1382,6 +1382,27 @@ const SCENARIOS = [
     unexpect: ['Alt-p tasks', 'Option-p tasks', '/model models'],
   },
   {
+    name: 'edit-approval-opens-at-change',
+    rows: 16,
+    cols: 80,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_EDIT_APPROVAL: '1',
+      HARNESS_EDIT_APPROVAL_WRAPPED_CONTEXT: '1',
+    },
+    bootExpect: '· Ctrl-C ',
+    frame: 'viewport',
+    expect: [
+      'Apply edit to acknowledgments.tex?',
+      '-Old acknowledgment.',
+      '+Revised acknowledgment.',
+      'previous rows',
+      'y approve',
+      'n reject',
+    ],
+    unexpect: ['First context paragraph', '/model models'],
+  },
+  {
     name: 'edit-approval-feedback',
     rows: 24,
     cols: 80,

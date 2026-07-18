@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildHunks,
   diffVisualRowCount,
+  initialDiffScrollOffset,
   maxDiffScrollOffset,
   scrollBoundedDiffDisplayLines,
   wrappedDiffDisplayLines,
@@ -92,6 +93,48 @@ describe('CLI diff display', () => {
       kind: 'overflow',
       text: expect.stringContaining('hidden'),
     });
+  });
+
+  it('opens a scrollable diff at the edit when wrapped context would hide it', () => {
+    const context = [
+      `First context paragraph ${'alpha '.repeat(18)}`,
+      `Second context paragraph ${'beta '.repeat(18)}`,
+      `Third context paragraph ${'gamma '.repeat(18)}`,
+    ];
+    const hunks = buildHunks(
+      'acknowledgments.tex',
+      [...context, 'Old acknowledgment.'].join('\n'),
+      [...context, 'Revised acknowledgment.'].join('\n'),
+    );
+    const width = 40;
+    const maxDisplayLines = 7;
+
+    const topLines = scrollBoundedDiffDisplayLines(
+      hunks,
+      0,
+      maxDisplayLines,
+      0,
+      width,
+    );
+    expect(topLines.every((line) => line.kind !== 'added')).toBe(true);
+    expect(topLines.every((line) => line.kind !== 'removed')).toBe(true);
+
+    const initialOffset = initialDiffScrollOffset(
+      hunks,
+      width,
+      maxDisplayLines,
+    );
+    const initialLines = scrollBoundedDiffDisplayLines(
+      hunks,
+      0,
+      maxDisplayLines,
+      initialOffset,
+      width,
+    );
+
+    expect(initialOffset).toBeGreaterThan(0);
+    expect(initialLines.some((line) => line.kind === 'removed')).toBe(true);
+    expect(initialLines.some((line) => line.kind === 'added')).toBe(true);
   });
 
   it('wraps long changed lines instead of replacing the tail with an ellipsis', () => {

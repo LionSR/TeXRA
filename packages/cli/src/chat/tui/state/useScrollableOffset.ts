@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useInput } from 'ink';
 
 import { clamp } from '@utils/core';
@@ -11,6 +11,7 @@ import { clamp } from '@utils/core';
  */
 export function useScrollableOffset({
   active = true,
+  initialOffset = 0,
   maxScrollOffset,
   pageRows,
   resetKey,
@@ -18,12 +19,20 @@ export function useScrollableOffset({
   /** Release the key bindings while another surface owns ↑/↓ (e.g. a
    *  feedback text input); the offset itself is retained. */
   readonly active?: boolean;
+  /** Row shown on first render and whenever `resetKey` changes. */
+  readonly initialOffset?: number;
   readonly maxScrollOffset: number;
   readonly pageRows: number;
-  /** Snap back to the top whenever this changes (e.g. new content). */
+  /** Return to `initialOffset` whenever this changes (e.g. new content). */
   readonly resetKey?: unknown;
 }): { scrollOffset: number; scrollable: boolean } {
-  const [scrollOffset, setScrollOffset] = useState(0);
+  const initialOffsetRef = useRef(initialOffset);
+  const maxScrollOffsetRef = useRef(maxScrollOffset);
+  initialOffsetRef.current = initialOffset;
+  maxScrollOffsetRef.current = maxScrollOffset;
+  const [scrollOffset, setScrollOffset] = useState(() =>
+    clamp(initialOffset, 0, maxScrollOffset),
+  );
   const scrollable = maxScrollOffset > 0;
 
   function scrollBy(delta: number): void {
@@ -35,7 +44,9 @@ export function useScrollableOffset({
   }, [maxScrollOffset]);
 
   useEffect(() => {
-    setScrollOffset(0);
+    setScrollOffset(
+      clamp(initialOffsetRef.current, 0, maxScrollOffsetRef.current),
+    );
   }, [resetKey]);
 
   useInput(
