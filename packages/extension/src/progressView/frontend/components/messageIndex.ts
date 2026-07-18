@@ -160,8 +160,6 @@ export class MessageIndex {
       })),
     ].sort((a, b) => a.time - b.time);
     this.timeline = timeline;
-    this.messageLocations.clear();
-    this.reindexUngroupedFrom(0);
     for (const item of timeline) {
       if ('msg' in item) {
         const location = this.messageLocations.get(item.key) ?? {};

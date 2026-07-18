@@ -36,8 +36,6 @@ import {
   type HistoryConfigValue,
 } from './historyItemPresentation';
 
-type ConfigValue = HistoryConfigValue;
-
 const LONG_INSTRUCTION_CHARS = 400;
 
 @customElement('history-item')
@@ -206,7 +204,7 @@ export class HistoryItemElement extends LitElement {
     return this.markElements ?? [];
   }
 
-  private renderValue(value: ConfigValue): TemplateResult {
+  private renderValue(value: HistoryConfigValue): TemplateResult {
     if (Array.isArray(value)) {
       return this.renderMarkdownValue(value.join(', '));
     }
@@ -252,7 +250,7 @@ export class HistoryItemElement extends LitElement {
 
   private renderConfigSection(
     label: string | TemplateResult,
-    entries: Array<[string, ConfigValue]>,
+    entries: Array<[string, HistoryConfigValue]>,
   ): TemplateResult | null {
     const filtered = entries.filter(([, value]) =>
       hasHistoryConfigValue(value),
@@ -287,7 +285,7 @@ export class HistoryItemElement extends LitElement {
     const extraDetails: TemplateResult[] = [];
     const pushSection = (
       label: string | TemplateResult,
-      entries: Array<[string, ConfigValue]>,
+      entries: Array<[string, HistoryConfigValue]>,
     ): void => {
       // renderConfigSection filters empty entries and returns null when none remain.
       const section = this.renderConfigSection(label, entries);
