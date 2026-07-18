@@ -10,7 +10,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 
 const CHANNEL = 'LaTeXCommands';
-logger.initialize(CHANNEL);
 
 /**
  * Check if a LaTeX file contains Chinese-related packages

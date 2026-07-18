@@ -13,7 +13,6 @@ const CHANNEL = 'PocketFlow';
 // every reflection-flow failure even though ending is the intended behavior.
 // (`waiting` is not terminal — ToolUseWaitNode wires it as a self-loop successor.)
 const TERMINAL_ACTIONS = new Set<Action>(['complete', 'finalize']);
-logger.initialize(CHANNEL);
 
 /**
  * Base node class for PocketFlow.

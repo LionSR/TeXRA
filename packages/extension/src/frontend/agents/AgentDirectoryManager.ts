@@ -22,7 +22,6 @@ import { AbsoluteFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'AgentLoad';
-logger.initialize(CHANNEL);
 
 type AgentDirectoryEventType = 'create' | 'change' | 'delete';
 

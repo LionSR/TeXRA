@@ -31,7 +31,6 @@ const LaTeXdiffResultSchema = z.object({
 export type LaTeXdiffResult = z.infer<typeof LaTeXdiffResultSchema>;
 
 const CHANNEL = 'LaTeXCommands';
-logger.initialize(CHANNEL);
 
 function hasDocumentEnvironment(content: string): boolean {
   return (

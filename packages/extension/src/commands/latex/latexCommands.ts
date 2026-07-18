@@ -28,7 +28,6 @@ import { delay } from '@utils/core';
 import { getIndentTeXNotification } from './latexHousekeepingNotifications';
 
 const CHANNEL = 'LaTeXCommands';
-logger.initialize(CHANNEL);
 
 /**
  * Run a LaTeX entry-point command under the active-file guard, surfacing any

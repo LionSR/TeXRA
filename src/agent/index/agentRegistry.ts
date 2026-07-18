@@ -37,7 +37,6 @@ import {
 import type { AgentEntry, ResolvedAgent } from './agentEntry';
 
 const CHANNEL = 'agentRegistry';
-logger.initialize(CHANNEL);
 
 // Re-exports kept stable for external consumers.
 export type { AgentEntry, ResolvedAgent } from './agentEntry';

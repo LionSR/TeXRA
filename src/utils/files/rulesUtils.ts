@@ -8,7 +8,6 @@ import { AbsoluteFS } from './absoluteFS';
 import { WorkspaceFS } from './workspaceFS';
 
 const CHANNEL = 'rulesUtils';
-logger.initialize(CHANNEL);
 
 const RULES_FILE = '.texrarules';
 

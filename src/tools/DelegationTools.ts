@@ -72,7 +72,6 @@ export { rejectOversizedBibAttachments } from './delegation/inputFields';
 export type { WorkflowAgentInput };
 
 const LOG_CHANNEL = 'delegation';
-logger.initialize(LOG_CHANNEL);
 
 /**
  * Deliver a terminal error to the orchestrator when a resumed subagent's wake

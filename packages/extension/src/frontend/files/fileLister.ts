@@ -15,7 +15,6 @@ import { WorkspaceFS } from '@utils/files';
 import { getFilesRecursively } from './listing';
 
 const CHANNEL = 'FileLister';
-logger.initialize(CHANNEL);
 
 export class FileLister {
   private static instance: FileLister | null = null;
