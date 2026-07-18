@@ -378,3 +378,20 @@ export type AgentEvent =
   | ResponseFinalizedEvent
   | DomainEvent
   | ResultEvent;
+
+/** Run facts consumed by both progress-view and headless CLI projections. */
+export const RUN_FACT_EVENT_TYPES = [
+  'conversation.progress',
+  'updateTodos',
+  'updatePlan',
+  'addOutputFiles',
+  'updateMissingOutputs',
+  'updateCompileFailures',
+  'goalPaused',
+  'run.config',
+  'usage',
+  'status',
+  'stage.start',
+  'child.activity',
+  'process.output',
+] as const satisfies readonly AgentEvent['type'][];

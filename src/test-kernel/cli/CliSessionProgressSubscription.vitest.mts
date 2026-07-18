@@ -18,6 +18,7 @@ import type {
 } from '@cli/runtime/cliNdjsonProgressEvents';
 import {
   attachCliSessionProgressProjection,
+  projectCliRunFact,
   type CliNdjsonProgressRecordWriter,
 } from '@cli/runtime/sessionProgressSubscription';
 import {
@@ -606,6 +607,16 @@ describe('attachCliSessionProgressProjection', () => {
     } finally {
       detach();
     }
+  });
+
+  it('does not project run events outside the shared fact vocabulary', () => {
+    expect(
+      projectCliRunFact(streamId, {
+        type: 'log',
+        level: 'info',
+        message: 'not a progress fact',
+      }),
+    ).toBeUndefined();
   });
 
   it('derives updateConversationProgress from a typed conversation progress event', () => {

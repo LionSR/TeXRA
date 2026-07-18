@@ -1,4 +1,4 @@
-import type { AgentEvent } from '@agent/trace';
+import { RUN_FACT_EVENT_TYPES, type AgentEvent } from '@agent/trace';
 import { toUpdateStreamUsagePayload } from '@agent/runtime/runFactUsage';
 import type {
   SessionEventHub,
@@ -22,22 +22,6 @@ type CliProjectedNdjsonProgressEvent = {
 }[CliNdjsonProgressEvent];
 
 export type CliNdjsonProgressRecordWriter = (record: CliNdjsonRecord) => void;
-
-const CLI_RUN_PROGRESS_EVENT_TYPES: readonly AgentEvent['type'][] = [
-  'conversation.progress',
-  'updateTodos',
-  'updatePlan',
-  'addOutputFiles',
-  'updateMissingOutputs',
-  'updateCompileFailures',
-  'goalPaused',
-  'run.config',
-  'usage',
-  'status',
-  'stage.start',
-  'child.activity',
-  'process.output',
-];
 
 /**
  * Project session facts onto the frozen NDJSON progress-event vocabulary.
@@ -71,7 +55,7 @@ function projectCliSessionFact(
   assertNever(fact, 'Unhandled CLI NDJSON session fact');
 }
 
-function projectCliRunFact(
+export function projectCliRunFact(
   streamId: StreamTabId,
   event: AgentEvent,
 ): CliProjectedNdjsonProgressEvent | undefined {
@@ -272,7 +256,7 @@ export function attachCliSessionProgressProjection(
       );
       if (projected) emitProjected(projected);
     },
-    { scope: 'run', types: CLI_RUN_PROGRESS_EVENT_TYPES },
+    { scope: 'run', types: RUN_FACT_EVENT_TYPES },
   );
 
   return () => {
