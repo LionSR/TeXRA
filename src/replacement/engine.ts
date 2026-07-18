@@ -48,7 +48,6 @@ import {
 } from './rulesRegex';
 
 const CHANNEL = 'ReplacementEngine';
-logger.initialize(CHANNEL);
 
 /**
  * High-level APIs for applying text replacement rules.

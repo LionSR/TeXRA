@@ -17,7 +17,6 @@ import { pathToLocation } from '@utils/files';
 import { pluralize } from '@utils/text/stringUtils';
 
 const CHANNEL = 'TestCommands';
-logger.initialize(CHANNEL);
 
 async function runLaTeXCommand(
   action: string,

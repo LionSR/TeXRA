@@ -15,7 +15,6 @@ import {
 } from '@utils/media/img';
 
 const CHANNEL = 'TestCommands';
-logger.initialize(CHANNEL);
 
 const PDF_FILTERS = { 'PDF files': ['pdf'] };
 

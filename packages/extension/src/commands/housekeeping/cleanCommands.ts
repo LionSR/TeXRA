@@ -22,7 +22,6 @@ import {
 import { emitClearMissingOutputs } from './streamEventUtils';
 
 const CHANNEL = 'cleanCommands';
-logger.initialize(CHANNEL);
 
 const CleanConfigSchema = FileOpParamsSchema.extend(fileOpConfigFields);
 

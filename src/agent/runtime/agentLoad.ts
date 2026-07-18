@@ -24,7 +24,6 @@ import { resolveToolDefinitions, type RawToolConfig } from '@tools/registry';
 import { AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'agentLoad';
-logger.initialize(CHANNEL);
 
 interface ValidAgentDefinition {
   name: string;

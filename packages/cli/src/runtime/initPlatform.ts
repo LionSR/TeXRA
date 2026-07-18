@@ -105,7 +105,6 @@ function logAt(
 }
 
 const cliPlatformLog: LogBackend = {
-  initialize() {},
   debug: (channel, message) => logAt('debug', channel, message),
   info: (channel, message) => logAt('info', channel, message),
   warn: (channel, message) => logAt('warn', channel, message),

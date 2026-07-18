@@ -18,7 +18,6 @@ import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'openFileCommands';
-logger.initialize(CHANNEL);
 
 const openFileCommands = {
   openFileCompile: 'texra.openFileCompile',

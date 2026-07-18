@@ -6,7 +6,6 @@
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'ReplacementEngine';
-logger.initialize(CHANNEL);
 
 /**
  * Applies LaTeX quotes formatting to a LaTeX document.

@@ -11,7 +11,6 @@ import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'fileSelectionCommands';
-logger.initialize(CHANNEL);
 
 interface PickerOptions<Many extends boolean> {
   allowMany: Many;
