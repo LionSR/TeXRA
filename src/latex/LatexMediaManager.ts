@@ -68,7 +68,7 @@ export class LatexMediaManager {
     baseDir?: string,
   ): Promise<void> {
     const fileService = this.fileService;
-    if (!fileService?.hasRunDirectory() || figures.length === 0) {
+    if (!fileService || figures.length === 0) {
       return;
     }
 
@@ -201,7 +201,7 @@ export class LatexMediaManager {
     files: FileLocation[],
   ): Promise<void> {
     const fileService = this.fileService;
-    if (!fileService?.hasRunDirectory() || files.length === 0) {
+    if (!fileService || files.length === 0) {
       return;
     }
 
@@ -378,7 +378,7 @@ export class LatexMediaManager {
    * but not re-sent to the model on every round.
    */
   private async mirrorFiguresForFiles(files: FileLocation[]): Promise<void> {
-    if (!this.fileService?.hasRunDirectory() || files.length === 0) {
+    if (!this.fileService || files.length === 0) {
       return;
     }
 
