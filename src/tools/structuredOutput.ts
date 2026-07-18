@@ -43,19 +43,11 @@ export function resolveStructuredOutput(
   input: z.ZodType | Record<string, unknown>,
   name = 'output',
 ): StructuredOutputSpec {
-  if (input instanceof z.ZodType) {
-    const zodSchema = input;
-    const jsonSchema = convertToolSchema({ name, zodSchema }) ?? {};
-    return {
-      name,
-      jsonSchema,
-      zodSchema,
-      validate: (raw) => zodSchema.safeParse(raw),
-    };
-  }
-
-  const jsonSchema = input;
-  const zodSchema = z.fromJSONSchema(jsonSchema) as z.ZodType;
+  const fromZod = input instanceof z.ZodType;
+  const zodSchema = fromZod ? input : (z.fromJSONSchema(input) as z.ZodType);
+  const jsonSchema = fromZod
+    ? (convertToolSchema({ name, zodSchema }) ?? {})
+    : input;
   return {
     name,
     jsonSchema,
