@@ -149,10 +149,14 @@ export const streamLifecycleHandlers = {
 
   [PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM]: (data, ctx) => {
     ctx.setState((prev) => {
-      const nextActiveStreamId =
-        data.activeStream && prev.streamById.has(data.activeStream)
-          ? data.activeStream
-          : firstStreamId(prev.streamById);
+      let nextActiveStreamId: StreamTabId | null;
+      if (data.activeStream === '') {
+        nextActiveStreamId = null;
+      } else if (data.activeStream && prev.streamById.has(data.activeStream)) {
+        nextActiveStreamId = data.activeStream;
+      } else {
+        nextActiveStreamId = firstStreamId(prev.streamById);
+      }
       if (nextActiveStreamId === prev.activeStreamId) {
         return prev;
       }

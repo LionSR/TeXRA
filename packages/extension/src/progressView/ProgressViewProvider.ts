@@ -2,12 +2,7 @@ import * as vscode from 'vscode';
 
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
-import {
-  buildApprovalRequestHandlerSet,
-  createProgressBackendUiConfig,
-  replayApprovalRequestHandlers,
-  type ApprovalRequestHandlerSet,
-} from '@controllers/progressView/backend/progressBackendUiConfig';
+import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
 import {
   repairRestartedStreams,
   RestartRepairRetryScheduler,
@@ -47,6 +42,10 @@ import {
 } from '@shared/schemas';
 import { agentName } from '@shared/schemas/agent';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import {
+  formatActiveStreamRetention,
+  formatStreamDeletionRetention,
+} from '@shared/copy/executionHistory';
 
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 import { createExtensionHostInteractions } from './extensionHostInteractions';
@@ -97,8 +96,6 @@ export class ProgressViewProvider
   private _mainViewProvider?: MainViewProvider;
   private readonly detachHostInteractions: () => void;
 
-  private approvalHandlers!: ApprovalRequestHandlerSet;
-
   constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
     this.logger = createChannelTrace('ProgressViewProvider');
@@ -108,42 +105,54 @@ export class ProgressViewProvider
       sendMessage: (message) => this.sendToActiveProgressWebview(message),
       hasTarget: () => this.getActiveWebview() !== undefined,
       getStreamControls: getProgressStreamControls,
-      deleteStream: (stream) =>
-        this.messageHandler.removeStreamFromHost(stream),
       getUnsupportedCommands: () =>
         this.messageHandler.getUnsupportedCommands(),
-      configureUi: ({ webviewUpdater: u }) => {
-        const canSend = () => this.canSendToWebview();
-        this.approvalHandlers = buildApprovalRequestHandlerSet({
-          webviewUpdater: u,
-          canSend,
-          logger: this.logger,
-          overrides: {
-            retry: {
-              show: (p) =>
-                u.showPermission({ kind: PERMISSION_KIND.RETRY, data: p }),
-              dismiss: (id) => u.resolvePermission(PERMISSION_KIND.RETRY, id),
-            },
-            agentProposal: {
-              show: (p) => {
-                u.showPermission({
-                  kind: PERMISSION_KIND.PROPOSAL,
-                  data: p,
-                  modelOptionsData: buildVisibleBasicModelOptionsData(),
-                });
-                void this.sendProposalModelOptions(p);
-              },
-              dismiss: (id) =>
-                u.resolvePermission(PERMISSION_KIND.PROPOSAL, id),
-            },
+      approvals: {
+        canSend: () => this.canSendToWebview(),
+        logger: this.logger,
+        overrides: {
+          retry: {
+            show: (p) =>
+              this.webviewUpdater.showPermission({
+                kind: PERMISSION_KIND.RETRY,
+                data: p,
+              }),
+            dismiss: (id) =>
+              this.webviewUpdater.resolvePermission(PERMISSION_KIND.RETRY, id),
           },
-        });
-
-        return createProgressBackendUiConfig({
-          handlers: this.approvalHandlers,
-          webviewUpdater: u,
-          canSend,
-        });
+          agentProposal: {
+            show: (p) => {
+              this.webviewUpdater.showPermission({
+                kind: PERMISSION_KIND.PROPOSAL,
+                data: p,
+                modelOptionsData: buildVisibleBasicModelOptionsData(),
+              });
+              void this.sendProposalModelOptions(p);
+            },
+            dismiss: (id) =>
+              this.webviewUpdater.resolvePermission(
+                PERMISSION_KIND.PROPOSAL,
+                id,
+              ),
+          },
+        },
+      },
+      lifecycle: {
+        stopStream: (stream, _ownerSession, options) =>
+          this.messageHandler.stopStream(stream, options),
+        cleanupDeletedStream: (stream) =>
+          this.messageHandler.cleanupDeletedStream(stream),
+        cleanupDeletedStreams: (options) =>
+          this.messageHandler.cleanupDeletedStreams(options),
+        rebuildRenderedStreams: (options) => this.syncFullView(options),
+        activateStream: (stream) => this.setActiveStream(stream),
+        notifyDeletionRetained: async (activeCount, failedCount) => {
+          await vscode.window.showInformationMessage(
+            failedCount === 0
+              ? formatActiveStreamRetention(activeCount)
+              : formatStreamDeletionRetention(activeCount, failedCount),
+          );
+        },
       },
     });
     this.state = this.backend.state;
@@ -163,11 +172,10 @@ export class ProgressViewProvider
     const interactions = createExtensionHostInteractions({
       runtimeHost: extensionAgentRuntimeHost,
       session: defaultSession(),
-      getApprovalHandlers: () => this.approvalHandlers,
+      getApprovalHandlers: () => this.backend.approvalHandlers,
     });
     this.messageHandler = new ProgressViewMessageHandler(
       this,
-      context,
       new VscodePromptHost(),
       interactions,
     );
@@ -290,7 +298,8 @@ export class ProgressViewProvider
       }).catch(() => buildVisibleBasicModelOptionsData()),
       loadAgentOptions().catch(() => undefined),
     ]);
-    if (!this.approvalHandlers.agentProposal.get(proposal.proposalId)) return;
+    if (!this.backend.approvalHandlers.agentProposal.get(proposal.proposalId))
+      return;
     this.webviewUpdater.showPermission({
       kind: PERMISSION_KIND.PROPOSAL,
       data: proposal,
@@ -389,14 +398,14 @@ export class ProgressViewProvider
   private async replayPendingPrompts(): Promise<void> {
     if (!this.webviewUpdater.isAvailable()) return;
 
-    await replayApprovalRequestHandlers(this.approvalHandlers);
+    await replayApprovalRequestHandlers(this.backend.approvalHandlers);
     // YOLO / Super YOLO state is already sent by syncFullView() before replay.
   }
 
   public getPendingAgentProposal(
     proposalId: string,
   ): AgentProposalPermission | undefined {
-    return this.approvalHandlers.agentProposal.get(proposalId);
+    return this.backend.approvalHandlers.agentProposal.get(proposalId);
   }
 
   private canSendToWebview(): boolean {
