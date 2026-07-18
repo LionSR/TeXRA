@@ -32,7 +32,7 @@ import type {
   ChildRunPorts,
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
-import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -49,7 +49,8 @@ import {
 import { subagentDeliveryMessage } from './subagentDeliveryFormat';
 
 export interface NativeToolUseStrategyParams {
-  readonly configPayload: AgentConfigPayload;
+  readonly config: AgentConfig;
+  readonly agentCategoryExplicit: boolean;
   readonly executionId: ExecutionId;
   readonly agentName: string;
   readonly orchestratorStreamId: StreamTabId;
@@ -139,11 +140,11 @@ export function createNativeToolUseStrategy(
 
     launch: (ports) =>
       runNative(ports, () =>
-        executeAgent(params.configPayload, params.executionId, {
+        executeAgent(params.config, params.executionId, {
           runtimeHost: params.runtimeHost,
           session: params.parentSession,
           isSubagent: true,
-          enforceCategory: true,
+          enforceCategory: params.agentCategoryExplicit,
           parentStreamId: params.orchestratorStreamId,
           approvalPromptsUnavailable: params.approvalPromptsUnavailable,
           runtimeUnavailableTools: params.runtimeUnavailableTools,
