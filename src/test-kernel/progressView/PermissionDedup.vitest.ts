@@ -6,38 +6,16 @@
  * existing entry and duplicate plan-approval prompts were never
  * deduplicated on `replay()`.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
-import type { MessageHandlerContext } from '@progressView/frontend/messageHandlerTypes';
-import type { PermissionState } from '@progressView/frontend/permissionState';
 import {
-  createInitialState,
-  type ProgressState,
-} from '@progressView/frontend/store';
+  permissions$,
+  resetProgressState,
+} from '@progressView/frontend/progressState';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { StreamTabId } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-
-function createSpyContext(): { ctx: MessageHandlerContext } {
-  let state: ProgressState = createInitialState();
-  let permissions: PermissionState[] = [];
-  const ctx: MessageHandlerContext = {
-    getState: () => state,
-    setState: (updater) => {
-      state = updater(state);
-    },
-    setStreamState: () => {},
-    setStreamLogs: () => {},
-    savePrefs: () => {},
-    getPermissions: () => permissions,
-    setPermissions: (next) => {
-      permissions = next;
-    },
-    setPlacement: () => {},
-  };
-  return { ctx };
-}
 
 function showPlanApproval(approvalId: string) {
   return {
@@ -56,29 +34,31 @@ function showPlanApproval(approvalId: string) {
 }
 
 describe('permission dedup by kind-specific id field', () => {
+  beforeEach(() => {
+    resetProgressState();
+  });
+
   it('does not duplicate a PLAN_APPROVAL prompt replayed with the same approvalId', () => {
-    const { ctx } = createSpyContext();
     const onError = vi.fn();
 
-    dispatchMessage(showPlanApproval('approval-1'), ctx, onError);
+    dispatchMessage(showPlanApproval('approval-1'), onError);
     expect(onError).not.toHaveBeenCalled();
-    expect(ctx.getPermissions()).toHaveLength(1);
+    expect(permissions$.get()).toHaveLength(1);
 
     // Replay of the same prompt (e.g. on view visibility change) must not
     // add a second entry.
-    dispatchMessage(showPlanApproval('approval-1'), ctx, onError);
+    dispatchMessage(showPlanApproval('approval-1'), onError);
     expect(onError).not.toHaveBeenCalled();
-    expect(ctx.getPermissions()).toHaveLength(1);
+    expect(permissions$.get()).toHaveLength(1);
   });
 
   it('still shows a second PLAN_APPROVAL prompt with a different approvalId', () => {
-    const { ctx } = createSpyContext();
     const onError = vi.fn();
 
-    dispatchMessage(showPlanApproval('approval-1'), ctx, onError);
-    dispatchMessage(showPlanApproval('approval-2'), ctx, onError);
+    dispatchMessage(showPlanApproval('approval-1'), onError);
+    dispatchMessage(showPlanApproval('approval-2'), onError);
 
     expect(onError).not.toHaveBeenCalled();
-    expect(ctx.getPermissions()).toHaveLength(2);
+    expect(permissions$.get()).toHaveLength(2);
   });
 });

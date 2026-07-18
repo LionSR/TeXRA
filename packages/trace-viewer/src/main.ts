@@ -11,8 +11,6 @@ import '@shared/wa';
 import '@progressView/frontend';
 import type { ArchivableElement } from '@progressView/frontend/contexts/streamContexts';
 import {
-  createHostEventHandlerContext,
-  createHostMessageHandlerContext,
   handleFileAction,
   handlePermissionAction,
   handleToolbarCommand,
@@ -33,13 +31,14 @@ root.append(conversationView);
 
 // Wired for defense-in-depth even though `archived` mode already makes
 // `emitAction`/toolbar dispatches no-ops — nothing here reaches a live host.
-conversationView.addEventListener('toolbar-command', ((e: CustomEvent) =>
-  handleToolbarCommand(e, createHostEventHandlerContext())) as EventListener);
-conversationView.addEventListener('permission-action', ((e: CustomEvent) =>
-  handlePermissionAction(
-    e,
-    createHostMessageHandlerContext(),
-  )) as EventListener);
+conversationView.addEventListener(
+  'toolbar-command',
+  handleToolbarCommand as EventListener,
+);
+conversationView.addEventListener(
+  'permission-action',
+  handlePermissionAction as EventListener,
+);
 conversationView.addEventListener(
   'file-action',
   handleFileAction as EventListener,
@@ -69,7 +68,7 @@ async function loadTrace(): Promise<TraceDocument> {
 }
 
 loadTrace()
-  .then((trace) => replayTrace(trace, createHostMessageHandlerContext()))
+  .then((trace) => replayTrace(trace))
   .catch((err) => {
     console.error('[trace-viewer] failed to load/replay trace', err);
   });

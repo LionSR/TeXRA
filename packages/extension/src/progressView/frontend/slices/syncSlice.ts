@@ -3,6 +3,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentCategory,
   sumUsageStats,
+  type ProgressViewOutboundHandlerRegistry,
   type StreamContentRenderPayload,
 } from '@shared/schemas';
 
@@ -12,7 +13,6 @@ import {
   updateToolUseState,
   updateWorkflowState,
 } from '../stateUtils';
-import type { HandlerRegistry } from '../messageHandlerTypes';
 
 function activeStateFields(data: StreamContentRenderPayload) {
   if (!data.activeState) return {};
@@ -27,17 +27,17 @@ function activeStateFields(data: StreamContentRenderPayload) {
   };
 }
 
-// `HandlerRegistry` is exhaustive across the assembled dispatcher. This slice
-// owns only stream-content synchronization.
+// The composed registry is exhaustive across the assembled dispatcher. This
+// slice owns only stream-content synchronization.
 export const syncHandlers = {
-  [PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT]: (data, ctx) => {
+  [PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT]: (data) => {
     if (data.action === 'clear') return;
 
     const runUsage = { ...data.runUsage };
     const sessionUsage = sumUsageStats(Object.values(runUsage));
 
     if (data.kind === AgentCategory.Workflow) {
-      updateWorkflowState(ctx, data.stream, (prev) => ({
+      updateWorkflowState(data.stream, (prev) => ({
         ...prev,
         ...activeStateFields(data),
         runUsage,
@@ -48,7 +48,7 @@ export const syncHandlers = {
       }));
     } else {
       const { workPlan, controls } = data;
-      updateToolUseState(ctx, data.stream, (prev) => ({
+      updateToolUseState(data.stream, (prev) => ({
         ...prev,
         ...activeStateFields(data),
         runUsage,
@@ -67,7 +67,7 @@ export const syncHandlers = {
     }
 
     if (data.activeState) {
-      updateParentStreamId(ctx, data.stream, data.activeState.parentStreamId);
+      updateParentStreamId(data.stream, data.activeState.parentStreamId);
     }
   },
-} satisfies Partial<HandlerRegistry>;
+} satisfies Partial<ProgressViewOutboundHandlerRegistry>;

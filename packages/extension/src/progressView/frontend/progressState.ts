@@ -36,7 +36,6 @@ import {
   getStreamState,
   isToolUseState,
   type ProcessOutputMap,
-  type StreamLogs,
   type StreamState,
 } from './store';
 import {
@@ -355,22 +354,6 @@ export function setStreamStateForId(
   appState.set(
     create(state, (draft) => {
       draft.streamStates.set(streamId, updated);
-    }),
-  );
-}
-
-export function setStreamLogsForId(
-  streamId: StreamTabId,
-  updater: (prev: StreamLogs) => StreamLogs,
-): void {
-  const state = appState.get();
-  if (!state.streamStates.has(streamId)) return;
-  const current = state.streamLogs.get(streamId) ?? EMPTY_STREAM_LOGS;
-  const updated = updater(current);
-  if (updated === current) return;
-  appState.set(
-    create(state, (draft) => {
-      draft.streamLogs.set(streamId, updated);
     }),
   );
 }

@@ -1,16 +1,14 @@
-import { create } from 'mutative';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { isStreamingTextLogMessage } from '@progressView/frontend/formatters';
-import type {
-  HandlerRegistry,
-  MessageHandlerContext,
-} from '@progressView/frontend/messageHandlerTypes';
 import { logHandlers } from '@progressView/frontend/slices/logSlice';
+import {
+  appState,
+  resetProgressState,
+} from '@progressView/frontend/progressState';
 import {
   createInitialState,
   type ProgressState,
-  type StreamLogs,
 } from '@progressView/frontend/store';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -21,51 +19,26 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   createStreamState,
+  type ProgressViewOutboundHandlerRegistry,
   type ProgressViewOutboundMessage,
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
 import { assertSupported } from '@shared/utils/dispatcher';
 
-function createContext(initialState: ProgressState): {
-  ctx: MessageHandlerContext;
-  getState: () => ProgressState;
-} {
-  let state = initialState;
-  const ctx: MessageHandlerContext = {
-    getState: () => state,
-    setState: (updater) => {
-      state = updater(state);
-    },
-    setStreamState: (streamId, updater) => {
-      const current = state.streamStates.get(streamId);
-      if (!current) return;
-      const updated = updater(current);
-      if (updated === current) return;
-      state = create(state, (draft) => {
-        draft.streamStates.set(streamId, updated);
-      });
-    },
-    setStreamLogs: (
-      _streamId,
-      _updater: (prev: StreamLogs) => StreamLogs,
-    ) => {},
-    savePrefs: () => {},
-    getPermissions: () => [],
-    setPermissions: () => {},
-    setPlacement: () => {},
-  };
-  return { ctx, getState: () => state };
+/** Seed the shared appState singleton and return a live reader over it. */
+function seedState(initialState: ProgressState): () => ProgressState {
+  appState.set(initialState);
+  return () => appState.get();
 }
 
 function dispatch(
-  handlers: Partial<HandlerRegistry>,
+  handlers: Partial<ProgressViewOutboundHandlerRegistry>,
   message: ProgressViewOutboundMessage,
-  ctx: MessageHandlerContext,
 ) {
   const handler = handlers[message.command];
   expect(handler).toBeDefined();
-  assertSupported(handler!)(message as never, ctx);
+  assertSupported(handler!)(message as never);
 }
 
 function modelResponseEntry(
@@ -85,23 +58,23 @@ function modelResponseEntry(
 }
 
 describe('LOG_DELTA text deltas', () => {
+  beforeEach(() => {
+    resetProgressState();
+  });
+
   it('accepts legacy logDelta messages with no textDeltas field', () => {
     const streamId = 'stream-a' as StreamTabId;
     const state = createInitialState();
     state.activeStreamId = streamId;
     state.streamStates.set(streamId, createStreamState(AgentCategory.Workflow));
-    const { ctx, getState } = createContext(state);
+    const getState = seedState(state);
 
-    dispatch(
-      logHandlers,
-      {
-        command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-        streamId,
-        entries: [modelResponseEntry('hello', 'running')],
-        updates: [],
-      } as unknown as ProgressViewOutboundMessage,
-      ctx,
-    );
+    dispatch(logHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+      streamId,
+      entries: [modelResponseEntry('hello', 'running')],
+      updates: [],
+    } as unknown as ProgressViewOutboundMessage);
 
     expect(getState().streamLogs.get(streamId)?.logs[0]?.text).toBe('hello');
   });
@@ -111,31 +84,23 @@ describe('LOG_DELTA text deltas', () => {
     const state = createInitialState();
     state.activeStreamId = streamId;
     state.streamStates.set(streamId, createStreamState(AgentCategory.Workflow));
-    const { ctx, getState } = createContext(state);
+    const getState = seedState(state);
 
-    dispatch(
-      logHandlers,
-      {
-        command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-        streamId,
-        entries: [modelResponseEntry('hello', 'running')],
-        updates: [],
-        textDeltas: [],
-      },
-      ctx,
-    );
+    dispatch(logHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+      streamId,
+      entries: [modelResponseEntry('hello', 'running')],
+      updates: [],
+      textDeltas: [],
+    });
 
-    dispatch(
-      logHandlers,
-      {
-        command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-        streamId,
-        entries: [],
-        updates: [],
-        textDeltas: [{ id: 'model-response', appendText: ' world' }],
-      },
-      ctx,
-    );
+    dispatch(logHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+      streamId,
+      entries: [],
+      updates: [],
+      textDeltas: [{ id: 'model-response', appendText: ' world' }],
+    });
 
     const streamedLogs = getState().streamLogs.get(streamId);
     const streamed = streamedLogs?.logs[0];
@@ -143,17 +108,13 @@ describe('LOG_DELTA text deltas', () => {
     expect(streamedLogs?.updatedMessageIndices).toEqual([0]);
     expect(streamed && isStreamingTextLogMessage(streamed)).toBe(true);
 
-    dispatch(
-      logHandlers,
-      {
-        command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-        streamId,
-        entries: [],
-        updates: [modelResponseEntry('hello world', 'completed')],
-        textDeltas: [],
-      },
-      ctx,
-    );
+    dispatch(logHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+      streamId,
+      entries: [],
+      updates: [modelResponseEntry('hello world', 'completed')],
+      textDeltas: [],
+    });
 
     const finalizedLogs = getState().streamLogs.get(streamId);
     const finalized = finalizedLogs?.logs[0];
@@ -167,29 +128,25 @@ describe('LOG_DELTA text deltas', () => {
     const state = createInitialState();
     state.activeStreamId = streamId;
     state.streamStates.set(streamId, createStreamState(AgentCategory.Workflow));
-    const { ctx, getState } = createContext(state);
+    const getState = seedState(state);
 
-    dispatch(
-      logHandlers,
-      {
-        command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-        streamId,
-        entries: [
-          {
-            seqNo: 1,
-            id: 'group-1',
-            type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-            level: LOG_LEVELS.INFO,
-            timestamp: 100,
-            text: 'Round 1',
-            data: { status: 'bogus', kind: 'round', index: 1, total: 3 },
-          },
-        ],
-        updates: [],
-        textDeltas: [],
-      },
-      ctx,
-    );
+    dispatch(logHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+      streamId,
+      entries: [
+        {
+          seqNo: 1,
+          id: 'group-1',
+          type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+          level: LOG_LEVELS.INFO,
+          timestamp: 100,
+          text: 'Round 1',
+          data: { status: 'bogus', kind: 'round', index: 1, total: 3 },
+        },
+      ],
+      updates: [],
+      textDeltas: [],
+    });
 
     const group = getState().streamStates.get(streamId)?.taskGroups[0];
     expect(group?.status).toBe(STREAM_PHASE.RUNNING);
@@ -214,6 +171,10 @@ describe('LOG_DELTA text deltas', () => {
 // same native value StreamLogStore.parsePersistedEntries would produce for
 // the same on-disk string, rather than going canonical-only.
 describe('LOG_DELTA GROUP_END task-group status (#7993 step 3)', () => {
+  beforeEach(() => {
+    resetProgressState();
+  });
+
   function groupStartEntry(id: string): StreamLogEntry {
     return {
       seqNo: 1,
@@ -265,22 +226,15 @@ describe('LOG_DELTA GROUP_END task-group status (#7993 step 3)', () => {
         streamId,
         createStreamState(AgentCategory.Workflow),
       );
-      const { ctx, getState } = createContext(state);
+      const getState = seedState(state);
 
-      dispatch(
-        logHandlers,
-        {
-          command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-          streamId,
-          entries: [
-            groupStartEntry('run-0'),
-            groupEndEntry('run-0', wireStatus),
-          ],
-          updates: [],
-          textDeltas: [],
-        },
-        ctx,
-      );
+      dispatch(logHandlers, {
+        command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+        streamId,
+        entries: [groupStartEntry('run-0'), groupEndEntry('run-0', wireStatus)],
+        updates: [],
+        textDeltas: [],
+      });
 
       const taskGroups = getState().streamStates.get(streamId)?.taskGroups;
       expect(taskGroups?.[0]?.status).toBe(expectedStatus);
