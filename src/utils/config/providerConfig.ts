@@ -17,6 +17,7 @@
 import { tryGlobalState } from '@platform/platform';
 import {
   PROVIDER_STATE_ENTRIES,
+  PROVIDER_URLS,
   type ProviderStateEntry,
 } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -104,10 +105,13 @@ export function getProviderDisplayName(
   return regionSet(provider) ? region.displayName : defaultName;
 }
 
+export function getProviderKeyUrl(provider: string): string | undefined;
+export function getProviderKeyUrl(provider: string, defaultUrl: string): string;
 export function getProviderKeyUrl(
   provider: string,
-  defaultUrl: string,
-): string {
+  defaultUrl = PROVIDER_URLS[provider],
+): string | undefined {
+  if (!defaultUrl) return undefined;
   const region = entry(provider)?.region;
   if (!region) return defaultUrl;
   const isSet = regionSet(provider);

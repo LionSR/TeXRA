@@ -143,6 +143,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Moonshot key links follow the selected region** — API-key actions now open
+  the international or China console that matches the configured Moonshot
+  endpoint.
 - **Extension history stays available if automatic updates cannot start** —
   reopening Settings refreshes the list without disrupting the extension.
 
