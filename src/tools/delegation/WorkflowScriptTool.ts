@@ -203,7 +203,7 @@ Tool inclusion is the opt-in boundary: do not add this tool to a default agent c
           script: input.script,
           args: input.args,
           name: meta.name,
-          session: runScope.session,
+          workflowControls: runScope.session.workflowControls,
           createRunAgent: (hooks) =>
             createWorkflowScriptAgentRunner(
               parent,

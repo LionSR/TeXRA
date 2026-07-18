@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setupPlatform } from '@test/support/setupPlatform';
-import { createTestSession } from '@test/support/sessionTestUtils';
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { TraceEmitter } from '@agent/trace';
 import {
@@ -12,7 +11,7 @@ import {
   type WorkflowAgentRunner,
 } from '@agent/workflowScript';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
 import type { ExecutionId } from '@shared/schemas';
 import {
   createWorkflowScriptStrategy,
@@ -58,7 +57,7 @@ function fakePorts() {
   return { notify: vi.fn(), recordCost: vi.fn() };
 }
 
-let session: SessionHandle;
+let workflowControls: WorkflowControlRegistry;
 
 function strategyParams(
   overrides: Partial<WorkflowScriptStrategyParams> & {
@@ -73,14 +72,14 @@ function strategyParams(
     checkpointId: checkpointIdFor(overrides.name),
     script,
     args: undefined,
-    session,
+    workflowControls,
     ...overrides,
   };
 }
 
 beforeEach(() => {
   clearStoreCache();
-  session = createTestSession();
+  workflowControls = new WorkflowControlRegistry();
 });
 
 describe('createWorkflowScriptStrategy', () => {
@@ -298,19 +297,41 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve };
 }
 
+/** Let queued abort/skip handling settle without resolving a hung run. */
+async function drainMacrotasks(): Promise<void> {
+  for (let tick = 0; tick < 5; tick += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+}
+
 /**
- * A fake `runAgent` that stands in for the production runner: it announces its
- * grandchild execution id through the `onChildActive` bridge and hangs the
- * first attempt until the per-call signal aborts, so a test can drive an
- * interactive skip/retry against a call that is genuinely in flight.
+ * A fake `runAgent` that stands in for the production runner. Each attempt
+ * announces the execution id it actually runs under through the `onChildActive`
+ * bridge — modeling how the real runner reports the logical id on attempt 0 and
+ * an attempt-specific id after a durable retry — and hangs until the per-call
+ * signal aborts (unless it is the designated `succeedAtAttempt`), so a test can
+ * drive an interactive skip/retry against a call that is genuinely in flight.
  */
-function controllableRunAgent(grandchildExecutionId: ExecutionId): {
+function controllableRunAgent(config: {
+  readonly attemptExecutionIds: readonly ExecutionId[];
+  /** 1-based attempt that settles with finalResult; earlier attempts hang.
+   *  Omit so every attempt hangs until a control action resolves it. */
+  readonly succeedAtAttempt?: number;
+}): {
   readonly createRunAgent: WorkflowScriptStrategyParams['createRunAgent'];
-  readonly firstAttemptStarted: Promise<void>;
+  readonly attemptStarted: (attempt: number) => Promise<void>;
   readonly attempts: () => number;
   readonly onCost: (cost: number) => void;
 } {
-  const started = deferred();
+  const attemptGates: ReturnType<typeof deferred>[] = [];
+  const gateFor = (attempt: number): ReturnType<typeof deferred> => {
+    while (attemptGates.length < attempt) attemptGates.push(deferred());
+    return attemptGates[attempt - 1]!;
+  };
+  const execIdForAttempt = (attempt: number): ExecutionId =>
+    config.attemptExecutionIds[
+      Math.min(attempt - 1, config.attemptExecutionIds.length - 1)
+    ]!;
   let attemptCount = 0;
   let reportCost: ((cost: number) => void) | undefined;
   const createRunAgent: WorkflowScriptStrategyParams['createRunAgent'] = (
@@ -319,11 +340,12 @@ function controllableRunAgent(grandchildExecutionId: ExecutionId): {
     return async (invocation) => {
       attemptCount += 1;
       const thisAttempt = attemptCount;
+      const execId = execIdForAttempt(thisAttempt);
       reportCost = (cost) => hooks.onCost(invocation, cost);
-      hooks.onChildActive(grandchildExecutionId, invocation, true);
-      started.resolve();
+      hooks.onChildActive(execId, invocation, true);
+      gateFor(thisAttempt).resolve();
       try {
-        if (thisAttempt === 1) {
+        if (config.succeedAtAttempt !== thisAttempt) {
           // Hang until a control action aborts this attempt (skip/retry).
           await new Promise<never>((_, reject) => {
             invocation.signal.addEventListener(
@@ -335,13 +357,13 @@ function controllableRunAgent(grandchildExecutionId: ExecutionId): {
         }
         return finalResult;
       } finally {
-        hooks.onChildActive(grandchildExecutionId, invocation, false);
+        hooks.onChildActive(execId, invocation, false);
       }
     };
   };
   return {
     createRunAgent,
-    firstAttemptStarted: started.promise,
+    attemptStarted: (attempt) => gateFor(attempt).promise,
     attempts: () => attemptCount,
     onCost: (cost) => reportCost?.(cost),
   };
@@ -351,7 +373,9 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
   const grandchildExecutionId = 'grandchild-exec-0' as ExecutionId;
 
   it('skips an in-flight grandchild by execution id via the session registry', async () => {
-    const fake = controllableRunAgent(grandchildExecutionId);
+    const fake = controllableRunAgent({
+      attemptExecutionIds: [grandchildExecutionId],
+    });
     const strategy = createWorkflowScriptStrategy(
       strategyParams({
         name: 'strategy-test',
@@ -360,21 +384,24 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
     );
 
     const launch = strategy.launch(fakePorts(), new AbortController());
-    await fake.firstAttemptStarted;
+    await fake.attemptStarted(1);
     // An unknown execution id no-ops (the call stays in flight)...
-    session.workflowControls.skip('not-a-grandchild' as ExecutionId);
+    workflowControls.skip('not-a-grandchild' as ExecutionId);
     // ...while the right one translates execId → index → engine skip.
-    session.workflowControls.skip(grandchildExecutionId);
+    workflowControls.skip(grandchildExecutionId);
 
     const turn = await launch;
     expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);
     expect(fake.attempts()).toBe(1);
     // The registration is dropped when the run settles.
-    session.workflowControls.skip(grandchildExecutionId);
+    workflowControls.skip(grandchildExecutionId);
   });
 
   it('retries an in-flight grandchild by execution id, re-running the call', async () => {
-    const fake = controllableRunAgent(grandchildExecutionId);
+    const fake = controllableRunAgent({
+      attemptExecutionIds: [grandchildExecutionId],
+      succeedAtAttempt: 2,
+    });
     const strategy = createWorkflowScriptStrategy(
       strategyParams({
         name: 'strategy-test',
@@ -383,8 +410,8 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
     );
 
     const launch = strategy.launch(fakePorts(), new AbortController());
-    await fake.firstAttemptStarted;
-    session.workflowControls.retry(grandchildExecutionId);
+    await fake.attemptStarted(1);
+    workflowControls.retry(grandchildExecutionId);
 
     const turn = await launch;
     // The second attempt settles with the real result, and the call ran twice.
@@ -392,8 +419,52 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
     expect(fake.attempts()).toBe(2);
   });
 
+  it('targets the attempt-specific execution id after a durable retry advances it', async () => {
+    // After a retry, the re-run registers its child stream under an
+    // attempt-specific id (not the logical id) — the id the roster exposes.
+    // The control bridge must follow that id, not the stale logical one.
+    const logicalExecutionId = grandchildExecutionId;
+    const attemptExecutionId = 'grandchild-exec-0#1' as ExecutionId;
+    const fake = controllableRunAgent({
+      attemptExecutionIds: [logicalExecutionId, attemptExecutionId],
+    });
+    const ports = fakePorts();
+    let settled = false;
+    const strategy = createWorkflowScriptStrategy(
+      strategyParams({
+        name: 'strategy-test',
+        createRunAgent: fake.createRunAgent,
+      }),
+    );
+
+    const launch = strategy
+      .launch(ports, new AbortController())
+      .then((turn) => {
+        settled = true;
+        return turn;
+      });
+    // Attempt 0 runs under the logical id; retry advances to attempt 1.
+    await fake.attemptStarted(1);
+    workflowControls.retry(logicalExecutionId);
+    await fake.attemptStarted(2);
+
+    // The stale logical id no longer maps to the in-flight attempt: a skip on
+    // it must no-op, leaving the run pending.
+    workflowControls.skip(logicalExecutionId);
+    await drainMacrotasks();
+    expect(settled).toBe(false);
+
+    // The attempt-specific id the roster exposes reaches the engine index.
+    workflowControls.skip(attemptExecutionId);
+    const turn = await launch;
+    expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);
+    expect(fake.attempts()).toBe(2);
+  });
+
   it('bills a skipped attempt that consumed cost to the parent exactly once', async () => {
-    const fake = controllableRunAgent(grandchildExecutionId);
+    const fake = controllableRunAgent({
+      attemptExecutionIds: [grandchildExecutionId],
+    });
     const ports = fakePorts();
     const strategy = createWorkflowScriptStrategy(
       strategyParams({
@@ -403,10 +474,10 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
     );
 
     const launch = strategy.launch(ports, new AbortController());
-    await fake.firstAttemptStarted;
+    await fake.attemptStarted(1);
     // Model tokens were spent before the user skipped the attempt.
     fake.onCost(0.42);
-    session.workflowControls.skip(grandchildExecutionId);
+    workflowControls.skip(grandchildExecutionId);
 
     const turn = await launch;
     expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);

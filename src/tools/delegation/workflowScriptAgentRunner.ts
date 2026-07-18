@@ -109,17 +109,25 @@ export function createWorkflowScriptAgentRunner(
   const { runScope } = parent;
 
   return async (invocation) => {
-    const grandchildExecutionId = deriveExecutionId({
+    const logicalExecutionId = deriveExecutionId({
       checkpointId,
       key: invocation.key,
       parentExecutionId: run.executionId,
     });
-    hooks?.onChildActive?.(grandchildExecutionId, invocation, true);
+    // The id this attempt actually runs (and registers its child stream)
+    // under: the logical id on attempt 0, an attempt-specific id after a
+    // durable retry. A host targets the in-flight attempt by THIS id, so
+    // report it — not the logical id — through the control bridge.
+    let activeExecutionId: ExecutionId | undefined;
     try {
       const { result } = await executeStableSubagentInBand({
-        executionId: grandchildExecutionId,
+        executionId: logicalExecutionId,
         parentExecutionId: run.executionId,
         signal: invocation.signal,
+        onActiveExecutionId: (executionId) => {
+          activeExecutionId = executionId;
+          hooks?.onChildActive?.(executionId, invocation, true);
+        },
         prepare: async () => {
           const requestedAgent =
             invocation.options.agentName ?? defaultAgentName;
@@ -209,7 +217,11 @@ export function createWorkflowScriptAgentRunner(
       }
       throw error;
     } finally {
-      hooks?.onChildActive?.(grandchildExecutionId, invocation, false);
+      // Only a live attempt registered (recovered attempts never fire the
+      // active callback), so settle exactly what was registered.
+      if (activeExecutionId !== undefined) {
+        hooks?.onChildActive?.(activeExecutionId, invocation, false);
+      }
     }
   };
 }

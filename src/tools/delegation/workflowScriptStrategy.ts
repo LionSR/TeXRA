@@ -20,8 +20,10 @@ import type {
 import type { AgentTrace } from '@agent/trace';
 import type { ExecutionKVStore } from '@agent/storage';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { WorkflowRunControl } from '@agent/runtime/workflowControlRegistry';
+import type {
+  WorkflowControlRegistry,
+  WorkflowRunControl,
+} from '@agent/runtime/workflowControlRegistry';
 
 // Local imports - shared
 import { DELIVERY_TAG } from '@shared/deliveryTags';
@@ -95,11 +97,10 @@ export interface WorkflowScriptStrategyParams {
   /** Durable identity (`meta.name`) — used in the resume hint on failure. */
   readonly name: string;
   /**
-   * Session that owns the interactive control registry. The strategy
-   * registers this run's skip/retry bridge on `session.workflowControls`
-   * while the run is in flight so a host can target a focused grandchild.
+   * Session-owned registry the strategy registers this run's skip/retry bridge
+   * on while the run is in flight, so a host can target a focused grandchild.
    */
-  readonly session: SessionHandle;
+  readonly workflowControls: WorkflowControlRegistry;
   /**
    * Build the `agent()` adapter bound to the run's ancestry, wired to the
    * supplied per-live-child cost hook so delta accounting stays local to this
@@ -190,7 +191,7 @@ export function createWorkflowScriptStrategy(
                 if (index !== undefined) control.retry(index);
               },
             };
-            unregisterControls = params.session.workflowControls.register(
+            unregisterControls = params.workflowControls.register(
               params.executionId,
               runControl,
             );

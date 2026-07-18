@@ -377,22 +377,22 @@ export function SubagentList(
     (input, key) => {
       if (key.ctrl || key.meta) return;
       const streamId = childListStreamId(props.selectedValue);
-      if (input.toLowerCase() === 'v' && streamId) {
+      const pressed = input.toLowerCase();
+      if (pressed === 'v' && streamId) {
         props.onPrintStream?.(streamId);
         return;
       }
-      const key_ = input.toLowerCase();
       // Skip/retry target only a focused subagent stream (a workflow-script
       // grandchild); the session control registry no-ops for any execution id
       // that is not an in-flight grandchild, so non-workflow rows are inert.
-      if ((key_ === 's' || key_ === 'r') && streamId) {
+      if ((pressed === 's' || pressed === 'r') && streamId) {
         const executionId = props.activeSubagentExecutionIds?.get(streamId);
         if (!executionId) return;
-        if (key_ === 's') props.onSkipExecution?.(executionId);
+        if (pressed === 's') props.onSkipExecution?.(executionId);
         else props.onRetryExecution?.(executionId);
         return;
       }
-      if (key_ !== 'k') return;
+      if (pressed !== 'k') return;
       const processId = childListProcessId(props.selectedValue);
       let executionId: string | undefined;
       if (processId && props.selectedValue) {
