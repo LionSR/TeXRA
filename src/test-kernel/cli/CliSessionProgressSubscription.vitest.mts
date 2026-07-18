@@ -608,6 +608,28 @@ describe('attachCliSessionProgressProjection', () => {
     }
   });
 
+  it('does not project run events outside the shared fact vocabulary', () => {
+    const events = new SessionEventHub();
+    const writeRecord = recordWriter();
+    const detach = attachCliSessionProgressProjection(events, writeRecord);
+
+    try {
+      events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'log',
+          level: 'info',
+          message: 'not a progress fact',
+        },
+      });
+
+      expect(writeRecord).not.toHaveBeenCalled();
+    } finally {
+      detach();
+    }
+  });
+
   it('derives updateConversationProgress from a typed conversation progress event', () => {
     const { writeRecord, trace, detachAll } = setupTraceProjection();
 
