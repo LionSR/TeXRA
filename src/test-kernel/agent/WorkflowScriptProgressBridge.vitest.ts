@@ -179,6 +179,31 @@ return await agent('Second')`;
     );
   });
 
+  it('enriches live finish lines with the reported model and duration', async () => {
+    const { trace, events } = recordingTrace();
+    let liveCostUsd = 0;
+    await runPersistedWorkflowScriptWithProgress(trace, {
+      store: getExecutionStore(executionId),
+      checkpointId: 'model-duration',
+      script: `${meta}
+return await agent('Draft')`,
+      runAgent: async (invocation: WorkflowAgentInvocation) => {
+        invocation.reportModel?.('deepseekT');
+        liveCostUsd += 0.02;
+        return 'done';
+      },
+      getLiveCostUsd: () => liveCostUsd,
+    });
+
+    const finish = events.find(
+      (event) =>
+        event.type === 'log' && event.message.startsWith('Finished: Draft'),
+    );
+    expect(finish?.type === 'log' ? finish.message : '').toMatch(
+      /^Finished: Draft · deepseekT · \d+s \(\$0\.020 total\)$/,
+    );
+  });
+
   it('marks a phase failed when an agent call fails', async () => {
     const { trace, events } = recordingTrace();
     await runPersistedWorkflowScriptWithProgress(trace, {

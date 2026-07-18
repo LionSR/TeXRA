@@ -86,14 +86,24 @@ describe('CLI workflow-script child-stream transcript', () => {
 
       syncStreamLog(STREAM_ID);
 
-      const texts = (streams.get().get(STREAM_ID)?.entries ?? []).map(
-        (entry) => entry.text,
-      );
+      const entries = streams.get().get(STREAM_ID)?.entries ?? [];
+      const texts = entries.map((entry) => entry.text);
       // The phase group row surfaces its label; the agent lines surface as
       // their own generic assistant rows — the parity bar for a focused run.
       expect(texts).toContain('Draft sections');
       expect(texts).toContain('Running: introduction');
       expect(texts).toContain('Finished: introduction ($0.002 total)');
+
+      // The phase group is a distinct `role: 'phase'` header, not a plain
+      // assistant row, so the CLI can render it as a divider between phases.
+      const phaseEntry = entries.find(
+        (entry) => entry.text === 'Draft sections',
+      );
+      expect(phaseEntry).toMatchObject({
+        role: 'phase',
+        phaseLabel: 'Draft sections',
+        finalized: true,
+      });
 
       // Finalize the stream so the settled prefix promotes into scrollback.
       patchStream(STREAM_ID, (slice) => ({
@@ -138,7 +148,8 @@ describe('CLI workflow-script child-stream transcript', () => {
       });
 
       const output = await renderStaticTranscript();
-      expect(output).toContain('Draft sections');
+      // The phase header renders with its distinct diamond divider glyph.
+      expect(output).toContain('◆ Draft sections');
       expect(output).toContain('Running: introduction');
       expect(output).toContain('Finished: introduction ($0.002 total)');
     } finally {
