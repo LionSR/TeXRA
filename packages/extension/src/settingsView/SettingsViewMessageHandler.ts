@@ -611,10 +611,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   public async sendGoalList(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-      items: [...GoalStore.list()],
-    });
+    try {
+      await webview.postMessage({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
+        items: GoalStore.list(),
+      });
+    } catch (error) {
+      await showLoggedErrorMessage(this.channel, 'Failed to load goals', error);
+    }
   }
 
   private handleRunToolCommand(

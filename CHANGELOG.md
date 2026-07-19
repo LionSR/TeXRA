@@ -38,6 +38,8 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Goal loading failures stay visible in the dashboard** — invalid saved goal
+  data now shows a clear error without interrupting unrelated settings.
 - **Malformed saved goals no longer disappear** — invalid persisted goal data
   now surfaces an error instead of being treated as no goal and overwritten.
 - **Agent reviews no longer hide unreadable untracked files** — files removed
