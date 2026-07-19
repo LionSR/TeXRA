@@ -334,25 +334,21 @@ export const SETTINGS_VIEW_CMD = {
   APPLY_AGENT_MODE_PRESET: 'applyAgentModePreset',
   SAVE_AGENT_MODE_PRESET: 'saveAgentModePreset',
   DELETE_AGENT_MODE_PRESET: 'deleteAgentModePreset',
+  // Generic state-setting write. One catalog-driven command carries {key, value}
+  // for every scalar `STATE_SETTINGS` row (git-author + external-agent controls),
+  // replacing the former per-setting SET_* commands. The backend looks the key up
+  // in the catalog, validates the value against its schema, and rebroadcasts the
+  // owning family (see stateSettings.ts / settingsAccess.ts). Modeled on the
+  // existing SET_LATEX_CONFIG_VALUE precedent.
+  UPDATE_STATE_SETTING: 'updateStateSetting',
   // Approval settings commands
   SET_BASH_APPROVAL_ENABLED: 'setBashApprovalEnabled',
-  SET_CODEX_SANDBOX_MODE: 'setCodexSandboxMode',
-  SET_CODEX_REASONING_EFFORT: 'setCodexReasoningEffort',
-  SET_CODEX_APPROVAL_POLICY: 'setCodexApprovalPolicy',
-  SET_CLAUDE_AGENT_MODEL: 'setClaudeAgentModel',
-  SET_CLAUDE_AGENT_PERMISSION_MODE: 'setClaudeAgentPermissionMode',
-  SET_CLAUDE_AGENT_EFFORT: 'setClaudeAgentEffort',
   // Tool dashboard commands
   OPEN_TOOL_INSTALL_URL: 'openToolInstallUrl',
   INSTALL_TOOL_EXTENSION: 'installToolExtension',
   RECHECK_TOOL_STATUS: 'recheckToolStatus',
   TOGGLE_TOOL: 'toggleTool',
   RUN_TOOL_COMMAND: 'runToolCommand',
-  // Git settings commands
-  SET_GIT_MARK_COMMITS: 'setGitMarkCommits',
-  SET_GIT_AUTHOR_NAME: 'setGitAuthorName',
-  SET_GIT_AUTHOR_EMAIL: 'setGitAuthorEmail',
-  SET_GIT_WORKTREE_SUPPORT: 'setGitWorktreeSupport',
   // GitHub token commands (for PR subscription tool)
   GET_GITHUB_TOKEN_STATUS: 'getGitHubTokenStatus',
   UPDATE_GITHUB_TOKEN_STATUS: 'updateGitHubTokenStatus',
