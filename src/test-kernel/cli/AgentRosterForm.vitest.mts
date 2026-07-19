@@ -1,7 +1,6 @@
-import { createRequire } from 'node:module';
-
 import { describe, expect, it } from 'vitest';
 
+import { loadInk } from '@test/support/inkTestHarness.mts';
 import type { AgentEntry } from '@agent/index';
 import {
   AgentRosterForm,
@@ -11,10 +10,6 @@ import {
   setChatDefaultAgent,
 } from '@cli/chat/tui/forms/AgentRosterForm';
 import { formatCliAgentRoster } from '@cli/runtime/agentRoster';
-
-const cliRequire = createRequire(
-  new URL('../../../packages/cli/package.json', import.meta.url),
-);
 
 const agents: AgentEntry[] = [
   {
@@ -35,8 +30,7 @@ const agents: AgentEntry[] = [
 
 describe('AgentRosterForm', () => {
   it('renders loading through the shared Ink indicator', async () => {
-    const ink = (await import(cliRequire.resolve('ink'))) as any;
-    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const { ink, React } = await loadInk();
     const output = ink.renderToString(
       React.createElement(AgentRosterForm, { onClose: () => undefined }),
     );
