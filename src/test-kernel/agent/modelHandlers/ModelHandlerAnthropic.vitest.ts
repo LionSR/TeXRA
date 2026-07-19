@@ -1,29 +1,26 @@
-// Third-party imports
-
 // Standard library imports
 import { strict as assert } from 'node:assert';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, describe, it, vi } from 'vitest';
 
 // Third-party imports
 import { APIUserAbortError as AnthropicUserAbortError } from '@anthropic-ai/sdk';
+import { afterEach, describe, it, vi } from 'vitest';
+import {
+  type ModelCapabilities,
+  ModelProvider,
+  ReasoningEffort,
+} from 'llm-zoo';
 
 // Local imports - platform
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 
 // Local imports - test support
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelCapabilities,
-  type ModelConfig,
-  ModelProvider,
-  ReasoningEffort,
-} from 'llm-zoo';
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
@@ -39,12 +36,10 @@ import {
   SHORT_CACHE_CONTROL,
 } from '@agent/modelHandlers/anthropic/anthropicContextManagement';
 
-// Type imports
-
 // Local imports - auth (stubbed via vi.spyOn)
 import * as serverKeysModule from '@auth/serverKeys';
 
-// Local imports - model config
+// Local imports - utilities
 import { pathToLocation } from '@utils/files';
 import * as configUtils from '@utils/config/configUtils';
 
@@ -76,34 +71,23 @@ function stubCompactionThresholdPercent(value: number): void {
   );
 }
 
-function buildAnthropicConfig(
-  capabilityOverrides: Partial<ModelCapabilities> = {},
-): ModelConfig {
-  const capabilities = {
-    ...DEFAULT_MODEL_CAPABILITIES,
-    supportsPromptCaching: true,
-    ...capabilityOverrides,
-  };
-
-  return {
-    name: 'test-anthropic',
-    label: 'Test Anthropic',
-    fullName: 'claude-test',
-    shortName: 'claude-test',
-    provider: ModelProvider.ANTHROPIC,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 200000,
-    capabilities,
-    openRouterOnly: false,
-  };
-}
+const ANTHROPIC_TEST_CONFIG = Object.freeze({
+  name: 'test-anthropic',
+  label: 'Test Anthropic',
+  fullName: 'claude-test',
+  shortName: 'claude-test',
+  provider: ModelProvider.ANTHROPIC,
+  capabilities: Object.freeze({ supportsPromptCaching: true }),
+});
 
 function createAnthropicHandler(
   capabilityOverrides: Partial<ModelCapabilities> = {},
 ): ModelHandlerAnthropic {
-  return new ModelHandlerAnthropic(buildAnthropicConfig(capabilityOverrides));
+  return new ModelHandlerAnthropic(
+    buildTestModelConfig(ANTHROPIC_TEST_CONFIG, {
+      capabilities: capabilityOverrides,
+    }),
+  );
 }
 
 /** A minimal single-turn "hello" user message, the shape most tests need. */
@@ -236,7 +220,9 @@ class PdfStubAnthropicHandler extends ModelHandlerAnthropic {
 describe('ModelHandlerAnthropic message guards', () => {
   it('includes native PDF document blocks when initializing messages', async () => {
     const handler = new PdfStubAnthropicHandler(
-      buildAnthropicConfig({ supportsNativePdf: true }),
+      buildTestModelConfig(ANTHROPIC_TEST_CONFIG, {
+        capabilities: { supportsNativePdf: true },
+      }),
     );
 
     handler.setMediaContent([
