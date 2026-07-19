@@ -7,6 +7,7 @@ import {
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { stateSettingByKey } from '@shared/schemas/stateSettings';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   dispatchSettingsViewInbound,
@@ -259,6 +260,28 @@ export function createDesktopSettingsIpc(
     postApprovalSettings();
   }
 
+  /**
+   * Generic write path for scalar `STATE_SETTINGS` rows (git-author + external
+   * coding-agent controls). Validates against the catalog entry's own schema —
+   * ignoring an unknown key or a value the schema rejects — then delegates to the
+   * family updater, which owns the persist + rebroadcast. Routing is by catalog
+   * `category`, mirroring the extension host.
+   */
+  async function updateStateSetting(
+    key: string,
+    value: unknown,
+  ): Promise<void> {
+    const entry = stateSettingByKey(key);
+    if (!entry) return;
+    const parsed = entry.schema.safeParse(value);
+    if (!parsed.success) return;
+    if (entry.category === 'git') {
+      await updateGitAuthorSetting(key as WorkspaceStateKey, parsed.data);
+    } else {
+      await updateAgentSetting(key as WorkspaceStateKey, parsed.data as string);
+    }
+  }
+
   async function updateBashApprovalEnabled(enabled: boolean): Promise<void> {
     await setBashApprovalEnabled(
       { workspaceState, globalState, config: options.config },
@@ -283,10 +306,6 @@ export function createDesktopSettingsIpc(
   applyCurrentGitAuthorSettings();
 
   const StateKeys = WorkspaceStateKey;
-  const setGitAuthor = (key: WorkspaceStateKey, value: boolean | string) =>
-    updateGitAuthorSetting(key, value);
-  const setAgent = (key: WorkspaceStateKey, value: string) =>
-    updateAgentSetting(key, value);
 
   const settingsActions: SettingsViewCommandActions = {
     // WEBVIEW_READY is intercepted in handleMessage below, before reaching
@@ -334,14 +353,6 @@ export function createDesktopSettingsIpc(
         ),
     },
     agentSelection: options.agentSettingsController.actions,
-    gitAuthor: {
-      setMarkCommits: (enabled) =>
-        setGitAuthor(StateKeys.GIT_MARK_COMMITS, enabled),
-      setName: (name) => setGitAuthor(StateKeys.GIT_AUTHOR_NAME, name),
-      setEmail: (email) => setGitAuthor(StateKeys.GIT_AUTHOR_EMAIL, email),
-      setWorktreeSupport: (enabled) =>
-        setGitAuthor(StateKeys.GIT_WORKTREE_SUPPORT, enabled),
-    },
     githubSubscriptions: {
       getTokenStatus: unsupported(
         'GitHub PR subscriptions are not available in the desktop app yet.',
@@ -368,18 +379,9 @@ export function createDesktopSettingsIpc(
     chatGpt: options.credentialSettingsController.chatGptActions,
     approval: {
       setBashApprovalEnabled: (enabled) => updateBashApprovalEnabled(enabled),
-      setCodexSandboxMode: (mode) =>
-        setAgent(StateKeys.CODEX_SANDBOX_MODE, mode),
-      setCodexReasoningEffort: (effort) =>
-        setAgent(StateKeys.CODEX_REASONING_EFFORT, effort),
-      setCodexApprovalPolicy: (policy) =>
-        setAgent(StateKeys.CODEX_APPROVAL_POLICY, policy),
-      setClaudeAgentModel: (model) =>
-        setAgent(StateKeys.CLAUDE_AGENT_MODEL, model),
-      setClaudeAgentPermissionMode: (mode) =>
-        setAgent(StateKeys.CLAUDE_AGENT_PERMISSION_MODE, mode),
-      setClaudeAgentEffort: (effort) =>
-        setAgent(StateKeys.CLAUDE_AGENT_EFFORT, effort),
+    },
+    stateSettings: {
+      update: (key, value) => updateStateSetting(key, value),
     },
     tools: options.toolingSettingsController.toolsActions,
     latex: options.toolingSettingsController.latexActions,

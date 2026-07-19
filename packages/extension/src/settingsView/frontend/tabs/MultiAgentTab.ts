@@ -16,6 +16,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
@@ -433,10 +434,10 @@ export class MultiAgentTab extends LitElement {
           <wa-switch
             ?checked=${this.worktreeSupport}
             @change=${(e: Event) =>
-              this.postToggle(
-                SETTINGS_VIEW_COMMANDS.SET_GIT_WORKTREE_SUPPORT,
-                e,
-              )}
+              postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
+                key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
+                value: Boolean((e.target as WaSwitch | null)?.checked),
+              })}
           >
             Allow agents to work in git worktrees
           </wa-switch>

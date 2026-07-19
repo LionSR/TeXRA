@@ -64,6 +64,7 @@ import {
 } from '@model/apiProviders';
 import { revealProgressStream } from '@progressView/progressNavigation';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { stateSettingByKey } from '@shared/schemas/stateSettings';
 import {
   dispatchSettingsViewInbound,
   type SettingsViewInboundHandlerRegistry,
@@ -353,10 +354,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   private createHandlerRegistry(): SettingsViewInboundHandlerRegistry {
     const StateKeys = WorkspaceStateKey;
-    const setGitAuthor = (key: WorkspaceStateKey, value: boolean | string) =>
-      this.updateGitAuthorSetting(key, value);
-    const setAgent = (key: WorkspaceStateKey, value: string) =>
-      this.updateAgentSetting(key, value);
 
     const actions: SettingsViewCommandActions = {
       lifecycle: {
@@ -526,14 +523,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
             presetId,
           }),
       },
-      gitAuthor: {
-        setMarkCommits: (enabled) =>
-          setGitAuthor(StateKeys.GIT_MARK_COMMITS, enabled),
-        setName: (name) => setGitAuthor(StateKeys.GIT_AUTHOR_NAME, name),
-        setEmail: (email) => setGitAuthor(StateKeys.GIT_AUTHOR_EMAIL, email),
-        setWorktreeSupport: (enabled) =>
-          setGitAuthor(StateKeys.GIT_WORKTREE_SUPPORT, enabled),
-      },
       githubSubscriptions: {
         getTokenStatus: () =>
           this.withActiveWebview((w) =>
@@ -561,18 +550,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       approval: {
         setBashApprovalEnabled: (enabled) =>
           this.handleSetApprovalEnabled(enabled),
-        setCodexSandboxMode: (mode) =>
-          setAgent(StateKeys.CODEX_SANDBOX_MODE, mode),
-        setCodexReasoningEffort: (effort) =>
-          setAgent(StateKeys.CODEX_REASONING_EFFORT, effort),
-        setCodexApprovalPolicy: (policy) =>
-          setAgent(StateKeys.CODEX_APPROVAL_POLICY, policy),
-        setClaudeAgentModel: (model) =>
-          setAgent(StateKeys.CLAUDE_AGENT_MODEL, model),
-        setClaudeAgentPermissionMode: (mode) =>
-          setAgent(StateKeys.CLAUDE_AGENT_PERMISSION_MODE, mode),
-        setClaudeAgentEffort: (effort) =>
-          setAgent(StateKeys.CLAUDE_AGENT_EFFORT, effort),
+      },
+      stateSettings: {
+        update: (key, value) => this.updateStateSetting(key, value),
       },
       tools: {
         openInstallUrl: (url) => this.openExternalUrl(url),
@@ -875,6 +855,29 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       value,
     );
     await this.withActiveWebview((w) => this.sendApprovalSettings(w));
+  }
+
+  /**
+   * Generic write path for scalar `STATE_SETTINGS` rows (git-author + external
+   * coding-agent controls). Validates the value against the catalog entry's own
+   * schema — silently ignoring an unknown key or a value the schema rejects, so
+   * a malformed webview payload can never persist junk — then delegates to the
+   * family updater, which owns the persist + rebroadcast (and, for git, the
+   * `applyGitAuthorConfig()` side effect). Routing is by catalog `category`.
+   */
+  private async updateStateSetting(key: string, value: unknown): Promise<void> {
+    const entry = stateSettingByKey(key);
+    if (!entry) return;
+    const parsed = entry.schema.safeParse(value);
+    if (!parsed.success) return;
+    if (entry.category === 'git') {
+      await this.updateGitAuthorSetting(key as WorkspaceStateKey, parsed.data);
+    } else {
+      await this.updateAgentSetting(
+        key as WorkspaceStateKey,
+        parsed.data as string,
+      );
+    }
   }
 
   // ============================================================
