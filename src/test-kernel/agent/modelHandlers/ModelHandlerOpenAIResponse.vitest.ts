@@ -6,22 +6,18 @@ import * as path from 'node:path';
 import { describe, it } from 'vitest';
 
 // Third-party imports
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelConfig,
-  ModelProvider,
-  ReasoningEffort,
-} from 'llm-zoo';
+import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 import { OpenAIError } from 'openai';
 
 // Local imports - platform
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 
 // Local imports - test support
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent
-import type { AgentTrace } from '@agent/trace';
+import { noopTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
@@ -37,8 +33,10 @@ import {
 } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
 
-// Type imports
+// Local imports - utilities
 import { pathToLocation } from '@utils/files';
+
+// Type imports
 import type {
   ResponseInputItem,
   ResponseUsage,
@@ -48,71 +46,34 @@ import type {
 // suite needs the real node fs rather than the in-memory default.
 setupPlatform({}, { fs: nodeFilesystem });
 
-type LoggerStub = Partial<AgentTrace> & {
-  streamId: string;
-};
+const OPENAI_RESPONSE_TEST_CONFIG = Object.freeze({
+  name: 'gpt-4.1',
+  fullName: 'gpt-4.1',
+  shortName: 'gpt-4.1',
+  label: 'GPT 4.1',
+  provider: ModelProvider.OPENAI,
+  capabilities: Object.freeze({
+    supportsReasoning: false,
+    supportsVision: false,
+  }),
+  openRouterOnly: true,
+});
 
-function createLoggerStub(): LoggerStub {
-  const stream = {
-    id: 'stream-test',
-    append: () => {
-      /* no-op for tests */
-    },
-    finalize: () => '',
-  };
-  return {
-    streamId: 'test-channel',
-    openStream: () => stream,
-    debug: () => {
-      /* no-op for tests */
-    },
-    info: () => {
-      /* no-op for tests */
-    },
-    warn: () => {
-      /* no-op for tests */
-    },
-    error: () => {
-      /* no-op for tests */
-    },
-    domain: () => {
-      /* no-op for tests */
-    },
-  };
-}
-
-function createConfig(overrides: Partial<ModelConfig> = {}): ModelConfig {
-  return {
-    name: 'gpt-4.1',
-    fullName: 'gpt-4.1',
-    shortName: 'gpt-4.1',
-    label: 'GPT 4.1',
-    provider: overrides.provider ?? ModelProvider.OPENAI,
-    maxOutputTokens: overrides.maxOutputTokens ?? 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: overrides.contextWindow ?? 200000,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsReasoning: false,
-      supportsVision: false,
-      ...(overrides.capabilities ?? {}),
-    },
-    openRouterOnly: overrides.openRouterOnly ?? true,
-  };
-}
+type TestModelConfigOverrides = Parameters<typeof buildTestModelConfig>[1];
 
 function setupHandler<T extends ModelHandlerOpenAIResponse>(handler: T): T {
-  handler.setLogger(createLoggerStub() as unknown as AgentTrace);
+  handler.setLogger({ ...noopTrace });
   handler.getStreamingConfig = () => false;
   return handler;
 }
 
 function createHandler(
-  configOverrides: Partial<ModelConfig> = {},
+  configOverrides: TestModelConfigOverrides = {},
 ): ModelHandlerOpenAIResponse {
   return setupHandler(
-    new ModelHandlerOpenAIResponse(createConfig(configOverrides)),
+    new ModelHandlerOpenAIResponse(
+      buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG, configOverrides),
+    ),
   );
 }
 
@@ -133,18 +94,22 @@ class StatelessResponseHandler extends ModelHandlerOpenAIResponse {
 }
 
 function createNonChainingHandler(
-  configOverrides: Partial<ModelConfig> = {},
+  configOverrides: TestModelConfigOverrides = {},
 ): ModelHandlerOpenAIResponse {
   return setupHandler(
-    new NonChainingResponseHandler(createConfig(configOverrides)),
+    new NonChainingResponseHandler(
+      buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG, configOverrides),
+    ),
   );
 }
 
 function createStatelessHandler(
-  configOverrides: Partial<ModelConfig> = {},
+  configOverrides: TestModelConfigOverrides = {},
 ): ModelHandlerOpenAIResponse {
   return setupHandler(
-    new StatelessResponseHandler(createConfig(configOverrides)),
+    new StatelessResponseHandler(
+      buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG, configOverrides),
+    ),
   );
 }
 
@@ -174,7 +139,6 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
       fullName: 'gpt-5.6-sol',
       shortName: 'gpt-5.6-pro',
       capabilities: {
-        ...DEFAULT_MODEL_CAPABILITIES,
         supportsReasoning: true,
         supportsReasoningEffort: true,
         reasoningEffort: ReasoningEffort.MEDIUM,
@@ -208,7 +172,6 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
       name: 'gpt56',
       fullName: 'gpt-5.6-sol',
       capabilities: {
-        ...DEFAULT_MODEL_CAPABILITIES,
         supportsReasoning: true,
         supportsReasoningEffort: true,
         reasoningEffort: ReasoningEffort.MAX,
@@ -240,7 +203,6 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
       name: 'reasoning-model',
       fullName: 'reasoning-model',
       capabilities: {
-        ...DEFAULT_MODEL_CAPABILITIES,
         supportsReasoning: true,
         supportsReasoningEffort: true,
         reasoningEffort: ReasoningEffort.MEDIUM,
@@ -714,7 +676,6 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
   it('preserves include fields when polling after an unhandled stream event', async () => {
     const handler = createHandler({
       capabilities: {
-        ...DEFAULT_MODEL_CAPABILITIES,
         supportsNativeWebSearch: true,
       },
     });
@@ -728,7 +689,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
       maxDurationMs: 1000,
       isPending: (response: { status?: string | null }) =>
         response.status === 'queued' || response.status === 'in_progress',
-      logger: createLoggerStub() as unknown as AgentTrace,
+      logger: { ...noopTrace },
     });
 
     const retrieveCalls: Array<{
@@ -794,7 +755,6 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     const handler = createHandler({
       openRouterOnly: false,
       capabilities: {
-        ...DEFAULT_MODEL_CAPABILITIES,
         supportsNativeWebSearch: true,
       },
     });
@@ -873,7 +833,6 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
   it('resumes fallback polling with include fields after a poll failure', async () => {
     const handler = createHandler({
       capabilities: {
-        ...DEFAULT_MODEL_CAPABILITIES,
         supportsNativeWebSearch: true,
       },
     });
@@ -887,7 +846,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
       maxDurationMs: 1000,
       isPending: (response: { status?: string | null }) =>
         response.status === 'queued' || response.status === 'in_progress',
-      logger: createLoggerStub() as unknown as AgentTrace,
+      logger: { ...noopTrace },
     });
 
     let streamCalls = 0;
@@ -1165,7 +1124,10 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     // compaction — a regression vs the old cumulative-threshold trigger.
     const handler = setupHandler(
       new NonChainingResponseHandler(
-        createConfig({ openRouterOnly: false, contextWindow: 200000 }),
+        buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG, {
+          openRouterOnly: false,
+          contextWindow: 200_000,
+        }),
       ),
     );
     const compactCalls: ResponseInputItem[][] = [];
@@ -1303,7 +1265,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     }
     const handler = setupHandler(
       new FailOnReducedBudgetHandler(
-        createConfig({
+        buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG, {
           openRouterOnly: false,
           maxOutputTokens: 200,
           contextWindow: 1000,

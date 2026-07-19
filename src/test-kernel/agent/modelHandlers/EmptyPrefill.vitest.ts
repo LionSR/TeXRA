@@ -7,14 +7,11 @@ import * as path from 'node:path';
 // Third-party imports
 import { createPartFromText, type Content } from '@google/genai';
 import { describe, it } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelConfig,
-  ModelProvider,
-} from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 
-// Local imports - agent
-import type { AgentTrace } from '@agent/trace';
+// Local imports - test support and agent
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { noopTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
@@ -27,45 +24,10 @@ import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/mo
 
 // Local imports - shared
 import type { FileLocation } from '@shared/schemas';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // Type imports
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { ChatMessages } from '@openrouter/sdk/models';
-
-function createLoggerStub(): AgentTrace {
-  return {
-    streamId: 'test-channel',
-    debug: () => {},
-    info: () => {},
-    warn: () => {},
-    error: () => {},
-  } as unknown as AgentTrace;
-}
-
-function buildConfig(
-  provider: ModelProvider,
-  overrides: Partial<ModelConfig> = {},
-): ModelConfig {
-  return {
-    name: 'test-model',
-    label: 'Test Model',
-    fullName: 'test-model',
-    shortName: 'test-model',
-    provider,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 200000,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsReasoning: false,
-      supportsVision: false,
-      ...(overrides.capabilities ?? {}),
-    },
-    openRouterOnly: false,
-    ...overrides,
-  };
-}
 
 function createAgentSetting() {
   return AgentSettingSchema.parse({
@@ -90,8 +52,13 @@ async function withMissingOutput<T>(
 describe('model handler empty prefill behavior', () => {
   it('OpenAI chat preserves user content when prefill is empty', async () => {
     await withMissingOutput(async (outputLocation) => {
-      const handler = new ModelHandlerOpenAI(buildConfig(ModelProvider.OPENAI));
-      handler.setLogger(createLoggerStub());
+      const handler = new ModelHandlerOpenAI(
+        buildTestModelConfig({
+          provider: ModelProvider.OPENAI,
+          capabilities: { supportsReasoning: false, supportsVision: false },
+        }),
+      );
+      handler.setLogger({ ...noopTrace });
       const messages: ChatCompletionMessageParam[] = [
         {
           role: 'user',
@@ -122,9 +89,12 @@ describe('model handler empty prefill behavior', () => {
   it('Google GenAI preserves user parts when prefill is empty', async () => {
     await withMissingOutput(async (outputLocation) => {
       const handler = new ModelHandlerGoogleGenAI(
-        buildConfig(ModelProvider.GOOGLE),
+        buildTestModelConfig({
+          provider: ModelProvider.GOOGLE,
+          capabilities: { supportsReasoning: false, supportsVision: false },
+        }),
       );
-      handler.setLogger(createLoggerStub());
+      handler.setLogger({ ...noopTrace });
       const messages: Content[] = [
         {
           role: 'user',
@@ -157,11 +127,13 @@ describe('model handler empty prefill behavior', () => {
   it('OpenRouter native preserves user content when prefill is empty', async () => {
     await withMissingOutput(async (outputLocation) => {
       const handler = new ModelHandlerOpenRouterNative(
-        buildConfig(ModelProvider.OPENAI, {
+        buildTestModelConfig({
+          provider: ModelProvider.OPENAI,
+          capabilities: { supportsReasoning: false, supportsVision: false },
           openrouterFullName: 'openai/test-model',
         }),
       );
-      handler.setLogger(createLoggerStub());
+      handler.setLogger({ ...noopTrace });
       const messages: ChatMessages[] = [
         {
           role: 'user',

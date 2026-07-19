@@ -1,13 +1,10 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelConfig,
-  ModelProvider,
-} from 'llm-zoo';
+import { type ModelConfig, ModelProvider } from 'llm-zoo';
 
-// Local imports - agent model handlers
-import type { AgentTrace } from '@agent/trace';
+// Local imports - test support and agent model handlers
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { noopTrace, type AgentTrace } from '@agent/trace';
 import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
   COMPACTION_SYSTEM_PROMPT,
@@ -20,49 +17,42 @@ import type { ProviderCapabilityProfile } from '@model/providerCapabilities';
 // Type imports
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
 
-function createLoggerStub(): Partial<AgentTrace> & { streamId: string } {
-  return {
-    streamId: 'test-channel',
+const COMPACTION_TEST_CONFIG = Object.freeze({
+  name: 'gpt-4.1',
+  fullName: 'gpt-4.1',
+  shortName: 'gpt-4.1',
+  label: 'GPT 4.1',
+  provider: ModelProvider.OPENAI,
+  maxOutputTokens: 100,
+  contextWindow: 1000,
+  capabilities: Object.freeze({
+    supportsReasoning: false,
+    supportsVision: false,
+  }),
+});
+
+function configureHandler(
+  handler: ModelHandlerOpenAIResponse,
+): ModelHandlerOpenAIResponse {
+  handler.setLogger({
+    ...noopTrace,
     debug: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
     domain: vi.fn(),
-  };
-}
-
-function createConfig(overrides: Partial<ModelConfig> = {}): ModelConfig {
-  return {
-    name: 'gpt-4.1',
-    fullName: 'gpt-4.1',
-    shortName: 'gpt-4.1',
-    label: 'GPT 4.1',
-    provider: ModelProvider.OPENAI,
-    maxOutputTokens: overrides.maxOutputTokens ?? 100,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: overrides.contextWindow ?? 1000,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsReasoning: false,
-      supportsVision: false,
-      ...(overrides.capabilities ?? {}),
-    },
-    openRouterOnly: overrides.openRouterOnly ?? false,
-  };
-}
-
-function configureHandler(
-  handler: ModelHandlerOpenAIResponse,
-): ModelHandlerOpenAIResponse {
-  handler.setLogger(createLoggerStub() as unknown as AgentTrace);
+  });
   (handler as { getStreamingConfig: () => boolean }).getStreamingConfig = () =>
     false;
   return handler;
 }
 
 function createHandler(): ModelHandlerOpenAIResponse {
-  return configureHandler(new ModelHandlerOpenAIResponse(createConfig()));
+  return configureHandler(
+    new ModelHandlerOpenAIResponse(
+      buildTestModelConfig(COMPACTION_TEST_CONFIG),
+    ),
+  );
 }
 
 class UnsupportedCompactionHandler extends ModelHandlerOpenAIResponse {
@@ -72,7 +62,11 @@ class UnsupportedCompactionHandler extends ModelHandlerOpenAIResponse {
 }
 
 function createUnsupportedCompactionHandler(): ModelHandlerOpenAIResponse {
-  return configureHandler(new UnsupportedCompactionHandler(createConfig()));
+  return configureHandler(
+    new UnsupportedCompactionHandler(
+      buildTestModelConfig(COMPACTION_TEST_CONFIG),
+    ),
+  );
 }
 
 /**
@@ -116,7 +110,7 @@ function createClientSideCompactionHandler(
 ): ModelHandlerOpenAIResponse {
   return configureHandler(
     new ClientSideCompactionHandler(
-      createConfig({ contextWindow }),
+      buildTestModelConfig(COMPACTION_TEST_CONFIG, { contextWindow }),
       contextWindow,
     ),
   );

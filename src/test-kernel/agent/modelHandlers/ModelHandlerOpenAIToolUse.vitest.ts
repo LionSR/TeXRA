@@ -1,56 +1,12 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelCapabilities,
-  type ModelConfig,
-  ModelProvider,
-} from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 
-// Local imports - agent
-import type { AgentTrace } from '@agent/trace';
+// Local imports - test support and agent
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
-
-function createLoggerStub(): AgentTrace {
-  const noop = () => {
-    /* no-op for tests */
-  };
-  return {
-    streamId: 'test-channel',
-    debug: noop,
-    info: noop,
-    warn: noop,
-    error: noop,
-  } as unknown as AgentTrace;
-}
-
-function buildConfig(
-  provider: ModelProvider,
-  overrides: Partial<Omit<ModelConfig, 'capabilities'>> & {
-    capabilities?: Partial<ModelCapabilities>;
-  } = {},
-): ModelConfig {
-  const { capabilities: capabilityOverrides, label, ...rest } = overrides;
-  return {
-    name: 'test-model',
-    fullName: 'test-model',
-    shortName: 'test-model',
-    provider,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 200000,
-    openRouterOnly: false,
-    ...rest,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsVision: false,
-      ...(capabilityOverrides ?? {}),
-    },
-    label: label ?? 'Test Model',
-  };
-}
 
 /** A well-formed completion with a single `function` tool call. */
 function completionWithValidToolCall() {
@@ -101,8 +57,13 @@ function completionWithMalformedToolCall() {
 
 describe('ModelHandlerOpenAI.extractToolUse', () => {
   it('extracts a well-formed function tool call', () => {
-    const handler = new ModelHandlerOpenAI(buildConfig(ModelProvider.OPENAI));
-    handler.setLogger(createLoggerStub());
+    const handler = new ModelHandlerOpenAI(
+      buildTestModelConfig({
+        provider: ModelProvider.OPENAI,
+        capabilities: { supportsVision: false },
+      }),
+    );
+    handler.setLogger({ ...noopTrace });
 
     const result = handler.extractToolUse(completionWithValidToolCall());
 
@@ -116,8 +77,13 @@ describe('ModelHandlerOpenAI.extractToolUse', () => {
     // "the model made no tool calls" and finalized the run as a successful
     // completion despite the corrupted provider payload. It must now throw
     // so the run fails loudly via the classifyAgentError boundary instead.
-    const handler = new ModelHandlerOpenAI(buildConfig(ModelProvider.OPENAI));
-    handler.setLogger(createLoggerStub());
+    const handler = new ModelHandlerOpenAI(
+      buildTestModelConfig({
+        provider: ModelProvider.OPENAI,
+        capabilities: { supportsVision: false },
+      }),
+    );
+    handler.setLogger({ ...noopTrace });
 
     assert.throws(() =>
       handler.extractToolUse(completionWithMalformedToolCall()),
@@ -127,8 +93,13 @@ describe('ModelHandlerOpenAI.extractToolUse', () => {
 
 describe('ModelHandlerOpenAI forced tool choice', () => {
   it('maps finalTool to a named function choice', async () => {
-    const handler = new ModelHandlerOpenAI(buildConfig(ModelProvider.OPENAI));
-    handler.setLogger(createLoggerStub());
+    const handler = new ModelHandlerOpenAI(
+      buildTestModelConfig({
+        provider: ModelProvider.OPENAI,
+        capabilities: { supportsVision: false },
+      }),
+    );
+    handler.setLogger({ ...noopTrace });
     handler.getStreamingConfig = () => false;
     let request: Record<string, unknown> | undefined;
 

@@ -1,3 +1,4 @@
+// Third-party imports
 import { describe, expect, it } from 'vitest';
 import {
   FinishReason,
@@ -5,13 +6,11 @@ import {
   createPartFromText,
   type Content,
 } from '@google/genai';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  ModelProvider,
-  type ModelConfig,
-} from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 
-import type { AgentTrace } from '@agent/trace';
+// Local imports - test support and agent
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { noopTrace, type AgentTrace } from '@agent/trace';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 
 type StreamRecord = {
@@ -19,31 +18,9 @@ type StreamRecord = {
   finalized?: string;
 };
 
-function createConfig(): ModelConfig {
+function createStreamRecorder(records: StreamRecord[]): AgentTrace {
   return {
-    name: 'test-google-model',
-    label: 'Test Google Model',
-    fullName: 'google/test',
-    shortName: 'google/test',
-    provider: ModelProvider.GOOGLE,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 4096,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsTokenCounting: false,
-    },
-    openRouterOnly: false,
-  };
-}
-
-function createLoggerStub(records: StreamRecord[]): AgentTrace {
-  return {
-    debug: () => undefined,
-    info: () => undefined,
-    warn: () => undefined,
-    error: () => undefined,
+    ...noopTrace,
     openStream: () => {
       const record: StreamRecord = { appends: [] };
       records.push(record);
@@ -58,7 +35,7 @@ function createLoggerStub(records: StreamRecord[]): AgentTrace {
         },
       };
     },
-  } as unknown as AgentTrace;
+  };
 }
 
 class StreamingGoogleHandler extends ModelHandlerGoogleGenAI {
@@ -70,8 +47,18 @@ class StreamingGoogleHandler extends ModelHandlerGoogleGenAI {
 function createStreamingHandler(
   records: StreamRecord[],
 ): ModelHandlerGoogleGenAI {
-  const handler = new StreamingGoogleHandler(createConfig());
-  handler.setLogger(createLoggerStub(records));
+  const handler = new StreamingGoogleHandler(
+    buildTestModelConfig({
+      name: 'test-google-model',
+      label: 'Test Google Model',
+      fullName: 'google/test',
+      shortName: 'google/test',
+      provider: ModelProvider.GOOGLE,
+      contextWindow: 4096,
+      capabilities: { supportsTokenCounting: false },
+    }),
+  );
+  handler.setLogger(createStreamRecorder(records));
   handler.setOutputStreaming(true);
   return handler;
 }
