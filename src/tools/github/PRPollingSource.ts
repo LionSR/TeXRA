@@ -25,10 +25,10 @@ import {
   formatCIComplete,
   formatCIPassed,
   formatCIStarted,
-  formatIssueComment,
   formatMergeConflictDetected,
   formatMergeConflictResolved,
   formatPRClosed,
+  formatPRIssueComment,
   formatReview,
   formatReviewComment,
   formatSubscriptionError,
@@ -529,7 +529,7 @@ export class PRPollingSource extends PollingSourceBase<
       state.etags.issueComments = commentsRes.etag;
       state.issueComments.diff(commentsRes.data, (c) => {
         if (shouldDropBotEvent(c.user)) return;
-        this.emit(state, formatIssueComment(state.slug, pr.pullNumber, c));
+        this.emit(state, formatPRIssueComment(state.slug, pr.pullNumber, c));
       });
     }
 
