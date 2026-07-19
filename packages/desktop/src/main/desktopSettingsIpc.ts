@@ -271,13 +271,19 @@ export function createDesktopSettingsIpc(
     key: string,
     value: unknown,
   ): Promise<void> {
+    // A value-less message is a no-op: no clear-to-default semantics, and the
+    // catalog schemas `.prefault()`, so parsing `undefined` would silently reset
+    // the setting to its default.
+    if (value === undefined) return;
     const entry = stateSettingByKey(key);
     if (!entry) return;
     const parsed = entry.schema.safeParse(value);
     if (!parsed.success) return;
+    // Only the two families this settings view owns are routable; any other
+    // catalog category is ignored rather than mis-persisted via the agent path.
     if (entry.category === 'git') {
       await updateGitAuthorSetting(key as WorkspaceStateKey, parsed.data);
-    } else {
+    } else if (entry.category === 'ai-agents') {
       await updateAgentSetting(key as WorkspaceStateKey, parsed.data as string);
     }
   }
