@@ -64,6 +64,63 @@ export interface TierModelConfig {
 
 export type MinTier = 'free' | 'Max' | 'Ultra';
 
+type AuthType = 'bearer' | 'x-api-key' | 'x-goog-api-key';
+
+interface ProviderConfig {
+  baseUrl: string;
+  envKey: string;
+  authType: AuthType;
+}
+
+/** Provider routing metadata shared by relay discovery and forwarding. */
+export const PROVIDER_CONFIGS = {
+  openai: {
+    baseUrl: 'https://api.openai.com',
+    envKey: 'OPENAI_API_KEY',
+    authType: 'bearer',
+  },
+  anthropic: {
+    baseUrl: 'https://api.anthropic.com',
+    envKey: 'ANTHROPIC_API_KEY',
+    authType: 'x-api-key',
+  },
+  google: {
+    baseUrl: 'https://generativelanguage.googleapis.com',
+    envKey: 'GOOGLE_API_KEY',
+    authType: 'x-goog-api-key',
+  },
+  xai: {
+    baseUrl: 'https://api.x.ai',
+    envKey: 'XAI_API_KEY',
+    authType: 'bearer',
+  },
+  deepseek: {
+    baseUrl: 'https://api.deepseek.com',
+    envKey: 'DEEPSEEK_API_KEY',
+    authType: 'bearer',
+  },
+  moonshot: {
+    baseUrl: 'https://api.moonshot.cn',
+    envKey: 'MOONSHOT_API_KEY',
+    authType: 'bearer',
+  },
+  dashscope: {
+    baseUrl: 'https://dashscope-intl.aliyuncs.com',
+    envKey: 'DASHSCOPE_API_KEY',
+    authType: 'bearer',
+  },
+  minimax: {
+    baseUrl: 'https://api.minimax.io',
+    envKey: 'MINIMAX_API_KEY',
+    authType: 'bearer',
+  },
+  glm: {
+    baseUrl: 'https://api.z.ai',
+    envKey: 'GLM_API_KEY',
+    authType: 'bearer',
+  },
+} as const satisfies Record<string, ProviderConfig>;
+
 interface RelayModel {
   shortName: string;
   apiPattern: string;
@@ -127,17 +184,7 @@ function toRelayModel(config: ModelConfig): RelayModel {
 // =============================================================================
 
 // All providers the relay can actually forward to.
-const ALL_PROVIDERS = [
-  'openai',
-  'anthropic',
-  'google',
-  'deepseek',
-  'xai',
-  'moonshot',
-  'dashscope',
-  'minimax',
-  'glm',
-] as const;
+const ALL_PROVIDERS = Object.keys(PROVIDER_CONFIGS);
 const RELAY_PROVIDERS = new Set<string>(ALL_PROVIDERS);
 
 // Kimi Code membership models are pinned to Moonshot's coding endpoint and can
