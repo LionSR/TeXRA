@@ -43,6 +43,8 @@ export interface DeviceAuthPollHooks {
   readonly sleep?: (ms: number) => Promise<void>;
   /** Injectable for tests; defaults to Date.now. */
   readonly now?: () => number;
+  /** Optional cancellation for interactive hosts. */
+  readonly signal?: AbortSignal;
 }
 
 export const CLI_DEVICE_AUTH_URL_PROMPT =
@@ -64,7 +66,11 @@ export async function requestDeviceAuthorization(
 ): Promise<DeviceAuthorization> {
   const response = await fetchWithTimeout(
     `${hooks.baseUrl ?? DEVICE_AUTH_BASE_URL}/code`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: hooks.signal,
+    },
     DEVICE_AUTH_REQUEST_TIMEOUT_MS,
     'Device sign-in request timed out',
     hooks.fetchImpl,
@@ -96,13 +102,17 @@ export async function pollForDeviceSession(
   hooks: DeviceAuthPollHooks = {},
 ): Promise<GitHubTokenExchangeResponse> {
   const now = hooks.now ?? Date.now;
-  const sleep = hooks.sleep ?? sleepMs;
+  const sleep =
+    hooks.sleep ??
+    ((ms: number) => sleepMs(ms, undefined, { signal: hooks.signal }));
   const deadline = now() + authorization.expires_in * 1000;
   let intervalSeconds = authorization.interval;
   let transientFailures = 0;
 
   for (;;) {
+    hooks.signal?.throwIfAborted();
     await sleep(intervalSeconds * 1000);
+    hooks.signal?.throwIfAborted();
     if (now() >= deadline) throw deviceCodeExpiredError();
 
     let response: Response;
@@ -113,12 +123,14 @@ export async function pollForDeviceSession(
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ device_code: authorization.device_code }),
+          signal: hooks.signal,
         },
         DEVICE_AUTH_REQUEST_TIMEOUT_MS,
         'Device sign-in poll timed out',
         hooks.fetchImpl,
       );
     } catch (error) {
+      hooks.signal?.throwIfAborted();
       // Headless/SSH connections blip; tolerate a few in a row before failing.
       transientFailures += 1;
       if (transientFailures >= MAX_TRANSIENT_POLL_FAILURES) throw error;

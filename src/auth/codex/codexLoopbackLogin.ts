@@ -39,6 +39,7 @@ export interface CodexLoopbackLoginOptions {
   /** Open the consent URL in the user's browser. */
   openBrowser: (url: string) => void | Promise<void>;
   log?: CodexLogger;
+  signal?: AbortSignal;
 }
 
 function respondHtml(
@@ -87,15 +88,19 @@ async function bindLoopbackServer(): Promise<{
 export async function loginWithLoopback(
   options: CodexLoopbackLoginOptions,
 ): Promise<CodexSession> {
-  const { coordinator, openBrowser, log } = options;
+  const { coordinator, openBrowser, log, signal } = options;
   const { server, port } = await bindLoopbackServer();
   const authorize = coordinator.buildAuthorizeRequest(port);
   let callbackTimer: ReturnType<typeof setTimeout> | undefined;
+  let abortListener: (() => void) | undefined;
 
   const codePromise = new Promise<string>((resolve, reject) => {
+    signal?.throwIfAborted();
     callbackTimer = setTimeout(() => {
       reject(new Error('Timed out waiting for the ChatGPT sign-in callback.'));
     }, CALLBACK_TIMEOUT_MS);
+    abortListener = () => reject(signal?.reason);
+    signal?.addEventListener('abort', abortListener, { once: true });
 
     const rejectCallback = (
       res: http.ServerResponse,
@@ -144,6 +149,9 @@ export async function loginWithLoopback(
       }
     });
   });
+  void codePromise.catch(() => {
+    // The browser launcher may still be resolving when cancellation rejects.
+  });
 
   try {
     log?.debug?.(`Opening ChatGPT sign-in on loopback port ${port}.`);
@@ -156,6 +164,7 @@ export async function loginWithLoopback(
     });
   } finally {
     clearTimeout(callbackTimer);
+    if (abortListener) signal?.removeEventListener('abort', abortListener);
     server.close();
   }
 }

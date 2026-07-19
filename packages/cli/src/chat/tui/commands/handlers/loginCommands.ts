@@ -58,10 +58,12 @@ export function loginStartMessage(args: CliLoginSlashArgs): string {
 async function loginToChatGptSubscription(
   args: Extract<CliLoginSlashArgs, { target: 'chatgpt' }>,
   output: SlashCommandOutput,
+  signal: AbortSignal,
 ): Promise<void> {
   const session = await signInCliChatGpt(args, {
     writeProgress: (message) =>
       output.writeProgress(message, { copyable: true }),
+    signal,
   });
   const update = await setCliCodexSubscription(true);
 
@@ -75,6 +77,7 @@ async function loginToChatGptSubscription(
 async function loginToTexraIncludedAccess(
   args: CliTexraLoginSlashArgs,
   output: SlashCommandOutput,
+  signal: AbortSignal,
 ): Promise<void> {
   const accountWarning = githubSelectAccountWarning(args);
   if (accountWarning) output.writeProgress(accountWarning);
@@ -86,6 +89,7 @@ async function loginToTexraIncludedAccess(
             copyable: true,
           });
         },
+        signal,
       })
     : await signInCliSupabase({
         provider: args.provider,
@@ -100,6 +104,7 @@ async function loginToTexraIncludedAccess(
             });
           }
         },
+        signal,
       });
   setCliSessionApiMode('included');
   output.appendOutcome(
@@ -107,10 +112,11 @@ async function loginToTexraIncludedAccess(
   );
 }
 
-export async function loginFromChat(
+async function loginFromChatWithSignal(
   input: string,
-  context?: CliContext,
-  output: SlashCommandOutput = transcriptSlashCommandOutput,
+  context: CliContext | undefined,
+  output: SlashCommandOutput,
+  signal: AbortSignal,
 ): Promise<void> {
   const args = parseChatLoginSlashArgs(input);
   if (!args) {
@@ -132,10 +138,22 @@ export async function loginFromChat(
   output.writeProgress(loginStartMessage(loginArgs));
 
   if (loginArgs.target === 'chatgpt') {
-    await loginToChatGptSubscription(loginArgs, output);
+    await loginToChatGptSubscription(loginArgs, output, signal);
     return;
   }
-  await loginToTexraIncludedAccess(loginArgs, output);
+  await loginToTexraIncludedAccess(loginArgs, output, signal);
+}
+
+export function loginFromChat(
+  input: string,
+  context?: CliContext,
+  output: SlashCommandOutput = transcriptSlashCommandOutput,
+): Promise<void> & { readonly abort: () => void } {
+  const controller = new AbortController();
+  return Object.assign(
+    loginFromChatWithSignal(input, context, output, controller.signal),
+    { abort: () => controller.abort() },
+  );
 }
 
 export async function logoutFromChat(

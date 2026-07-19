@@ -34,6 +34,7 @@ export interface CodexDeviceLoginOptions {
   /** Optional heartbeat called once per poll (e.g. to print a dot). */
   onPoll?: () => void;
   log?: CodexLogger;
+  signal?: AbortSignal;
 }
 
 /**
@@ -43,7 +44,7 @@ export interface CodexDeviceLoginOptions {
 export async function loginWithDeviceCode(
   options: CodexDeviceLoginOptions,
 ): Promise<CodexSession> {
-  const userCodeResponse = await requestDeviceUserCode();
+  const userCodeResponse = await requestDeviceUserCode(options.signal);
   const userCode = deviceUserCode(userCodeResponse);
   if (!userCode) {
     throw new Error('ChatGPT did not return a device code. Try again.');
@@ -57,13 +58,16 @@ export async function loginWithDeviceCode(
 
   const deadline = Date.now() + DEVICE_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    await sleep(intervalMs);
+    await sleep(intervalMs, undefined, { signal: options.signal });
     options.onPoll?.();
     try {
-      const token = await pollDeviceToken({
-        deviceAuthId: userCodeResponse.device_auth_id,
-        userCode,
-      });
+      const token = await pollDeviceToken(
+        {
+          deviceAuthId: userCodeResponse.device_auth_id,
+          userCode,
+        },
+        options.signal,
+      );
       return await options.coordinator.completeDeviceLogin({
         authorizationCode: token.authorization_code,
         codeVerifier: token.code_verifier,
