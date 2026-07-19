@@ -132,6 +132,9 @@ jobs:
       - name: Check extension package invariants
         run: pnpm run check:extension-package-invariants
 
+      - name: Check extension package contributions
+        run: pnpm run check:package-contributes
+
       - name: Check tsconfig paths are in sync with the root
         run: pnpm run check:tsconfig-paths
 
