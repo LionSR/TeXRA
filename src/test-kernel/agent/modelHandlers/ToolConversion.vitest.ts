@@ -17,7 +17,6 @@ import { WriteFileTool } from '@tools/WriteTool';
 import { ArxivDownloadTool } from '@tools/arxiv/ArxivDownloadTool';
 import { ArxivMetadataTool } from '@tools/arxiv/ArxivMetadataTool';
 import { ArxivSearchTool } from '@tools/arxiv/ArxivSearchTool';
-import { CrossrefDoiTool } from '@tools/citation/CrossrefDoiTool';
 import { CrossrefSearchTool } from '@tools/citation/CrossrefSearchTool';
 import { TexcountTool } from '@tools/texcount/TexcountTool';
 import { WebFetchTool } from '@tools/web/WebFetchTool';
@@ -289,10 +288,18 @@ describe('tool schema descriptions', () => {
           'sortOrder',
         ],
       },
-      { definition: new CrossrefDoiTool().definition, fields: ['doi'] },
       {
         definition: new CrossrefSearchTool().definition,
-        fields: ['query', 'rows', 'offset', 'sort', 'order', 'filter'],
+        fields: [
+          'command',
+          'query',
+          'rows',
+          'offset',
+          'sort',
+          'order',
+          'filter',
+          'doi',
+        ],
       },
       {
         definition: new DiagnosticsTool().definition,

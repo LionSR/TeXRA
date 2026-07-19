@@ -23,7 +23,6 @@ settings:
     - arxiv_metadata
     - download_arxiv_source
     - crossref_search
-    - crossref_doi
     - zotero_add
     - zotero_search
     - zotero_export
@@ -185,7 +184,7 @@ prompts:
        - grep on .lake/packages/mathlib/ for identifier lookup
        - web_search for Zulip discussions and Mathlib docs
        - arxiv_search + download_arxiv_source when working from a paper
-       - crossref_search + crossref_doi for published references (journal articles, books, proceedings)
+       - crossref_search with search or doi commands for published references (journal articles, books, proceedings)
        - zotero_search to check if the user's library already has the reference; zotero_add to save new ones; zotero_export to generate BibTeX for references.bib
 
     5. When building a blueprint from a paper: download the LaTeX source, identify all numbered results, trace which results cite which in their proofs, map each to Lean declarations if they exist, then generate the skeleton.

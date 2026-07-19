@@ -8,4 +8,10 @@ describe('tool registry aliases', () => {
       resolveToolDefinitions(['add_criticism']).map((tool) => tool.name),
     ).toEqual(['diagnostics']);
   });
+
+  it('keeps legacy crossref_doi configs on the unified Crossref tool', () => {
+    expect(
+      resolveToolDefinitions(['crossref_doi']).map((tool) => tool.name),
+    ).toEqual(['crossref_search']);
+  });
 });

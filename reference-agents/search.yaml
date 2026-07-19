@@ -15,7 +15,6 @@ settings:
     - arxiv_metadata
     - download_arxiv_source
     - crossref_search
-    - crossref_doi
     - zotero_add
     - zotero_search
     - zotero_export
@@ -33,7 +32,7 @@ prompts:
     (1) Use web_search and web_fetch to find current information, news, and general resources.
     (2) Use arxiv_search and arxiv_metadata for preprints and recent academic work.
     (3) Use download_arxiv_source to download LaTeX source files from arXiv only when explicitly requested by the user or for extremely relevant papers that require detailed analysis.
-    (4) Use crossref_search and crossref_doi for published literature and citations.
+    (4) Use crossref_search with search or doi commands for published literature and citations.
     (5) Before adding items to Zotero, check for duplicates when possible: use zotero_search (if Better BibTeX is available), or grep the project's .bib files for the title or DOI. If the reference already exists, skip it.
     (6) When adding to Zotero, prefer manual metadata with the correct itemType over saving by URL — URL-based saves often misclassify preprints as "webpage".
     (7) Use zotero_export to get BibTeX entries from Zotero (requires Better BibTeX plugin).

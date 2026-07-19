@@ -35,7 +35,6 @@ import { WebFetchTool } from './web/WebFetchTool';
 import { WebSearchTool } from './web/WebSearchTool';
 import { WolframTool } from './wolfram/WolframTool';
 import { TexcountTool } from './texcount/TexcountTool';
-import { CrossrefDoiTool } from './citation/CrossrefDoiTool';
 import { CrossrefSearchTool } from './citation/CrossrefSearchTool';
 import { PlanTool } from './plan/PlanTool';
 import { TodoWriteTool } from './todo/TodoTool';
@@ -106,7 +105,6 @@ function createDefaultTools() {
     extract_figures: new ExtractLatexFiguresTool(),
     extract_bib_entries: new ExtractBibliographyTool(),
     extract_tikz_figures: new ExtractTikzFiguresTool(),
-    crossref_doi: new CrossrefDoiTool(),
     crossref_search: new CrossrefSearchTool(),
     zotero_add: new ZoteroAddTool(),
     zotero_collections: new ZoteroCollectionsTool(),
@@ -169,6 +167,7 @@ type _CanonicalDisplayNamesAreRegistered = AssertNever<
  */
 const TOOL_ALIASES: Record<string, string> = {
   add_criticism: 'diagnostics',
+  crossref_doi: 'crossref_search',
   external_inquiry: 'inquiry',
 };
 
