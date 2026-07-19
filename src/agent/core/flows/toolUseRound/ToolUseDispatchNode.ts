@@ -513,8 +513,8 @@ export class ToolUseDispatchNode<C> extends Node<
     }
 
     const extracted = extractToolAttachments(result);
-    const editedFiles = trackedEdits.edits.map((entry) => ({
-      path: entry.path,
+    const editedFiles = trackedEdits.paths.map((path) => ({
+      path,
       ok: true,
       source: 'tool',
       sourceDisplay: 'Tool use',

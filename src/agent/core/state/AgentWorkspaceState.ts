@@ -109,14 +109,14 @@ export class FileInteractionState {
   }
 
   recordEdits(edits: EditRecord[] | undefined): {
-    edits: EditRecord[];
+    paths: string[];
     lineChanges?: LineChanges;
   } {
     if (!Array.isArray(edits)) {
-      return { edits: [] };
+      return { paths: [] };
     }
 
-    const perCallEdits = new Map<string, LineChanges>();
+    const touchedPaths = new Set<string>();
     let totalAdded = 0;
     let totalRemoved = 0;
 
@@ -128,22 +128,14 @@ export class FileInteractionState {
       const removed = entry.lineChanges?.removed ?? 0;
 
       this.updateEditMap(this.edits, path, added, removed);
-      this.updateEditMap(perCallEdits, path, added, removed);
+      touchedPaths.add(path);
 
       totalAdded += added;
       totalRemoved += removed;
     }
 
-    const editsForCall = [...perCallEdits.entries()].map(([path, diff]) => ({
-      path,
-      lineChanges:
-        diff.added || diff.removed
-          ? { added: diff.added, removed: diff.removed }
-          : undefined,
-    }));
-
     return {
-      edits: editsForCall,
+      paths: [...touchedPaths],
       lineChanges:
         totalAdded || totalRemoved
           ? { added: totalAdded, removed: totalRemoved }

@@ -125,7 +125,9 @@ export function formatZodIssuesForDiagnostics(
 
 /**
  * Schema for tool execution results.
- * Uses looseObject to allow additional properties for forward compatibility.
+ * Every field a tool wants surfaced to the model must be declared below —
+ * there is no catchall, so an undeclared field is silently stripped rather
+ * than reaching `formatToolResultAsText`.
  */
 const ToolResultSharedFields = {
   /** User instruction that was processed */
@@ -138,43 +140,39 @@ const ToolResultSharedFields = {
   attachmentSummary: z.string().optional(),
 };
 
-const ExecutedToolResultSchema = z
-  .object({
-    status: z.literal('executed'),
-    /** Detailed output from the tool */
-    output: z.string().optional(),
-    /** Brief summary of the tool execution result */
-    summary: z.string().optional(),
-    /** End the current model turn after this successful tool result is paired. */
-    endTurn: z.boolean().optional(),
-    error: z.undefined().optional(),
-    /** Statistics about line changes made */
-    lineChanges: LineChangesSchema.optional(),
-    /** Records of edits made during tool execution */
-    edits: z.array(EditRecordSchema).optional(),
-    /** File attachments (may contain binary data) */
-    files: z.array(ToolFileAttachmentSchema).optional(),
-    /** Files edited during tool execution (for logging/tracking) */
-    editedFiles: z.array(EditedFileRecordSchema).optional(),
-    ...ToolResultSharedFields,
-  })
-  .catchall(z.unknown());
+const ExecutedToolResultSchema = z.object({
+  status: z.literal('executed'),
+  /** Detailed output from the tool */
+  output: z.string().optional(),
+  /** Brief summary of the tool execution result */
+  summary: z.string().optional(),
+  /** End the current model turn after this successful tool result is paired. */
+  endTurn: z.boolean().optional(),
+  error: z.undefined().optional(),
+  /** Statistics about line changes made */
+  lineChanges: LineChangesSchema.optional(),
+  /** Records of edits made during tool execution */
+  edits: z.array(EditRecordSchema).optional(),
+  /** File attachments (may contain binary data) */
+  files: z.array(ToolFileAttachmentSchema).optional(),
+  /** Files edited during tool execution (for logging/tracking) */
+  editedFiles: z.array(EditedFileRecordSchema).optional(),
+  ...ToolResultSharedFields,
+});
 
-const ErrorToolResultSchema = z
-  .object({
-    status: z.literal('error'),
-    /** Error message if tool execution failed */
-    error: z.string().min(1),
-    /** Brief summary for human-facing logs */
-    summary: z.string().optional(),
-    output: z.undefined().optional(),
-    lineChanges: z.undefined().optional(),
-    edits: z.undefined().optional(),
-    files: z.undefined().optional(),
-    editedFiles: z.undefined().optional(),
-    ...ToolResultSharedFields,
-  })
-  .catchall(z.unknown());
+const ErrorToolResultSchema = z.object({
+  status: z.literal('error'),
+  /** Error message if tool execution failed */
+  error: z.string().min(1),
+  /** Brief summary for human-facing logs */
+  summary: z.string().optional(),
+  output: z.undefined().optional(),
+  lineChanges: z.undefined().optional(),
+  edits: z.undefined().optional(),
+  files: z.undefined().optional(),
+  editedFiles: z.undefined().optional(),
+  ...ToolResultSharedFields,
+});
 
 export const ToolResultSchema = z.discriminatedUnion('status', [
   ExecutedToolResultSchema,

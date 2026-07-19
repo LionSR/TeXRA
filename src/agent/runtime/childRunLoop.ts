@@ -45,7 +45,7 @@ import {
   type ChildRunEnqueueResult,
 } from '@tools/childRunDelivery';
 import { formatSubagentProgress } from '@tools/subagentResults';
-import type { ChildStream } from '@tools/childStream';
+import type { ChildStream, ChildStreamOutcome } from '@tools/childStream';
 import { formatDuration } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -674,9 +674,16 @@ export function startChildRunLoop<TTurn>(
         if (childStream) {
           // Agent-CLI: ChildStream.finalize owns this handle for the loop's
           // whole lifetime (one handle, tracked once by createChildStream).
+          let loopOutcome: ChildStreamOutcome;
+          if (loop.isInterrupted()) {
+            loopOutcome = { kind: 'cancelled' };
+          } else if (sawTurnFailure) {
+            loopOutcome = { kind: 'failed' };
+          } else {
+            loopOutcome = { kind: 'completed' };
+          }
           await childStream.finalize({
-            failed: sawTurnFailure,
-            cancelled: loop.isInterrupted(),
+            outcome: loopOutcome,
             stage: sessionStage,
             persistence: { kind: 'finalize', flowRecord: 'delete' },
           });
