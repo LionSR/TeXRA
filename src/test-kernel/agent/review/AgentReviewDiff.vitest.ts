@@ -1,10 +1,17 @@
 // Node imports
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import {
@@ -14,11 +21,16 @@ import {
   listBaseBranchCandidates,
   type CollectReviewDiffOptions,
 } from '@agent/review/reviewDiff';
+import { platform } from '@platform/platform';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { executeCommand } from '@utils/system/execUtils';
 
 setupPlatform({ workspacePath: process.cwd() }, { fs: nodeFilesystem });
+
+function fsError(code: string, message: string): Error {
+  return Object.assign(new Error(message), { code });
+}
 
 describe('isPathInChangeSet', () => {
   it('matches exact files and paths under changed directories', () => {
@@ -91,8 +103,20 @@ describe('collectReviewDiff (real git repository)', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await rm(repo, { recursive: true, force: true });
   });
+
+  function failUntrackedRead(file: string, error: Error): void {
+    const fs = platform().fs;
+    const readFileChunk = fs.readFileChunk.bind(fs);
+    vi.spyOn(fs, 'readFileChunk').mockImplementation(
+      async (filePath, offset, length) => {
+        if (path.basename(filePath) === file) throw error;
+        return readFileChunk(filePath, offset, length);
+      },
+    );
+  }
 
   /** Runs `collectReviewDiff` against the fixture repo and unwraps a success. */
   async function collectDiffOrFail(
@@ -121,6 +145,112 @@ describe('collectReviewDiff (real git repository)', () => {
     expect(value.changedFiles).toEqual(['paper.tex', 'scratch.txt']);
     expect(value.truncated).toBe(false);
     expect(await realpath(value.repoRoot)).toBe(await realpath(repo));
+  });
+
+  it.each(['ENOENT', 'FileNotFound', 'ENOTDIR'])(
+    'omits an untracked file that disappears with %s during collection',
+    async (code) => {
+      await writeFile(path.join(repo, 'vanished.txt'), 'temporary\n');
+      failUntrackedRead(
+        'vanished.txt',
+        fsError(code, 'untracked file disappeared'),
+      );
+
+      const value = await collectDiffOrFail({ includeUntracked: true });
+
+      expect(value.diff).toBe('');
+      expect(value.changedFiles).toEqual([]);
+    },
+  );
+
+  it('fails clearly when an untracked file cannot be read', async () => {
+    await writeFile(path.join(repo, 'secret.txt'), 'sensitive\n');
+    failUntrackedRead(
+      'secret.txt',
+      fsError('EACCES', 'untracked file is unreadable'),
+    );
+
+    const result = await collectReviewDiff({
+      cwd: repo,
+      includeUntracked: true,
+      includeSubmodules: true,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      reason:
+        'Could not read untracked file "secret.txt": untracked file is unreadable',
+    });
+  });
+
+  it('omits an untracked file replaced by a directory during collection', async () => {
+    const replacedPath = path.join(repo, 'replaced.txt');
+    await writeFile(replacedPath, 'temporary\n');
+    const fs = platform().fs;
+    const readFileChunk = fs.readFileChunk.bind(fs);
+    vi.spyOn(fs, 'readFileChunk').mockImplementation(
+      async (filePath, offset, length) => {
+        if (path.basename(filePath) === 'replaced.txt') {
+          await rm(filePath);
+          await mkdir(filePath);
+          throw fsError('EISDIR', 'untracked file became a directory');
+        }
+        return readFileChunk(filePath, offset, length);
+      },
+    );
+
+    const value = await collectDiffOrFail({ includeUntracked: true });
+
+    expect(value.diff).toBe('');
+    expect(value.changedFiles).toEqual([]);
+  });
+
+  it('includes an untracked file that reappears during the type recheck', async () => {
+    const replacedPath = path.join(repo, 'reappeared.txt');
+    await writeFile(replacedPath, 'temporary\n');
+    const fs = platform().fs;
+    const readFileChunk = fs.readFileChunk.bind(fs);
+    let firstRead = true;
+    vi.spyOn(fs, 'readFileChunk').mockImplementation(
+      async (filePath, offset, length) => {
+        if (path.basename(filePath) === 'reappeared.txt' && firstRead) {
+          firstRead = false;
+          await rm(filePath);
+          await mkdir(filePath);
+          await rm(filePath, { recursive: true });
+          await writeFile(filePath, 'current evidence\n');
+          throw fsError('EISDIR', 'untracked file briefly became a directory');
+        }
+        return readFileChunk(filePath, offset, length);
+      },
+    );
+
+    const value = await collectDiffOrFail({ includeUntracked: true });
+
+    expect(value.diff).toContain('+current evidence');
+    expect(value.changedFiles).toEqual(['reappeared.txt']);
+  });
+
+  it('does not hide an untracked symlink to a directory', async () => {
+    const target = path.join(repo, 'target-dir');
+    await mkdir(target);
+    await symlink(target, path.join(repo, 'linked-dir'));
+    failUntrackedRead(
+      'linked-dir',
+      fsError('EISDIR', 'untracked path resolves to a directory'),
+    );
+
+    const result = await collectReviewDiff({
+      cwd: repo,
+      includeUntracked: true,
+      includeSubmodules: true,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      reason:
+        'Could not read untracked file "linked-dir": untracked path resolves to a directory',
+    });
   });
 
   it('ignores inherited interactive git environment variables', async () => {

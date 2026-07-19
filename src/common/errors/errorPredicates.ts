@@ -9,6 +9,11 @@ export function isNotADirectoryError(err: unknown): boolean {
   return (err as { code?: string })?.code === 'ENOTDIR';
 }
 
+/** Check if an error represents "the path is a directory, not a file". */
+export function isADirectoryError(err: unknown): boolean {
+  return (err as { code?: string })?.code === 'EISDIR';
+}
+
 /** Check if an error is "dynamic import couldn't find the module" (Node + ESM variants). */
 export function isModuleNotFoundError(err: unknown): boolean {
   const code = (err as { code?: string })?.code;
