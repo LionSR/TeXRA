@@ -849,9 +849,13 @@ function manifestToSummary(
 }
 
 async function listAllManifests(): Promise<ExternalInquiryThreadManifest[]> {
-  // A missing/unreadable threads directory means no threads.
+  // A missing threads directory means no threads. Operational storage
+  // failures must remain observable instead of masquerading as empty history.
   const entries = await GlobalStorageFS.readDir(THREADS_DIR).catch(
-    (): [string, number][] => [],
+    (error: unknown): [string, number][] => {
+      if (isFileNotFoundError(error)) return [];
+      throw error;
+    },
   );
 
   const reads = entries.flatMap(([name, type]) => {
