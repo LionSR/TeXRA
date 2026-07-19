@@ -101,7 +101,6 @@ export const UpdateProfileMessageSchema = z.object({
   authenticated: z.boolean(),
   user: ProfileUserSchema.nullable(),
   tier: z.string(),
-  permissions: z.array(z.string()),
   remoteAgents: z.array(RemoteAgentSchema),
   apiAccessMode: ApiAccessModeSchema,
   tierConstants: TierConstantsSchema,
