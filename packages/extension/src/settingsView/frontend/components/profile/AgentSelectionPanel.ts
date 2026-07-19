@@ -354,7 +354,9 @@ export class AgentSelectionPanel extends LitElement {
     if (!agent) {
       return html`
         <div class="agent-detail-pane">
-          <div class="agent-detail-empty">Select an agent to view details</div>
+          <div class="agent-detail-empty">
+            <em class="text-secondary">Select an agent to view details</em>
+          </div>
         </div>
       `;
     }
@@ -551,7 +553,7 @@ export class AgentSelectionPanel extends LitElement {
 
   override render(): TemplateResult {
     if (this.agents.length === 0) {
-      return html` <p class="agent-empty-message">No agents available.</p> `;
+      return html` <em class="text-secondary">No agents available.</em> `;
     }
 
     const enabledCount = this.agents.filter((a) => a.enabled).length;
