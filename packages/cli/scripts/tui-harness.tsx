@@ -149,6 +149,8 @@ const HARNESS_APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
 const HARNESS_YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
 const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
+const EDIT_APPROVAL_WRAPPED_CONTEXT =
+  process.env.HARNESS_EDIT_APPROVAL_WRAPPED_CONTEXT === '1';
 const SHOW_BASH_APPROVAL = process.env.HARNESS_BASH_APPROVAL === '1';
 const SHOW_REPEATED_BASH_APPROVAL =
   process.env.HARNESS_REPEATED_BASH_APPROVAL === '1';
@@ -831,6 +833,21 @@ function harnessMessageEntry(
 }
 
 function makeEditApprovalRequest() {
+  if (EDIT_APPROVAL_WRAPPED_CONTEXT) {
+    const context = [
+      `First context paragraph ${'alpha '.repeat(18)}`,
+      `Second context paragraph ${'beta '.repeat(18)}`,
+      `Third context paragraph ${'gamma '.repeat(18)}`,
+    ];
+    return {
+      path: 'acknowledgments.tex',
+      originalContent: [...context, 'Old acknowledgment.'].join('\n'),
+      proposedContent: [...context, 'Revised acknowledgment.'].join('\n'),
+      sourceTool: 'edit_file',
+      streamId: STREAM_ID,
+    };
+  }
+
   const originalBody = Array.from(
     { length: 24 },
     (_, index) => `Line ${index + 1}: placeholder.`,
