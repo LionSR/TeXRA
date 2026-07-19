@@ -1,9 +1,7 @@
 // Third-party imports
 import { onTestFinished } from 'vitest';
 
-// Local imports - desktop types
-
-// Local imports - shared schemas
+// Local imports
 import type { DesktopAgentExecutionHost } from '@desktop/main/desktopAgentExecutionHost';
 import type { RunOutcome } from '@shared/schemas';
 import type { OutputFileSummary } from '@shared/schemas/output';

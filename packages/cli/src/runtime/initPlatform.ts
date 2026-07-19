@@ -32,7 +32,7 @@ import { setSetupPlatform } from '@tools/setup/platform';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-// Local imports - CLI runtime
+// Local file imports
 import { applyCliGitAuthorConfig } from './gitAuthor';
 import { isCliResumeInFlight, tryResumeCliStream } from './agentResume';
 import { getCliSecrets } from './cliSecrets';
@@ -41,8 +41,6 @@ import { flushNdjsonStdout, writeTextStderr } from './logSinks';
 import { initializeCliSupabaseAuth, signInCliSupabase } from './supabaseAuth';
 import { createCliStateStores } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
-
-// Type imports - platform and CLI runtime
 import type { LogBackend } from './supabaseAuth';
 import type { CliContext } from './cliContext';
 

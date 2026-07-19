@@ -8,7 +8,8 @@
  *
  * Host-neutral: uses simple-git for git operations; no vscode.
  */
-// Standard library imports
+
+// Node imports
 import * as path from 'node:path';
 
 // Third-party imports
@@ -21,6 +22,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { makeMachineGitEnv } from '@utils/system/platformPaths';
 import { splitContentLines, splitOutputLines } from '@utils/text/stringUtils';
 
+// Local file imports
 import { normalizeReviewFilePath } from './reviewIssues';
 
 const GIT_TIMEOUT_MS = 30_000;

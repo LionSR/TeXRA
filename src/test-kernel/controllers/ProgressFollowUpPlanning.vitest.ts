@@ -1,8 +1,10 @@
-// Third-party imports
+// Node imports
 import { strict as assert } from 'node:assert';
+
+// Third-party imports
 import { describe, it } from 'vitest';
 
-// Local imports - controllers
+// Local imports
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
@@ -12,11 +14,7 @@ import {
 } from '@controllers/progressView/ProgressFollowUpController';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 
-// Local imports - agent
-
-// Local imports - shared
-
-// Local imports - test support
+// Local file imports
 import {
   createOutputFile,
   type OutputFileHarnessOptions,

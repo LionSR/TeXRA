@@ -1,7 +1,7 @@
 // Third-party imports
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - history dependencies
+// Local imports
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { ChatExportInput } from '@controllers/settingsView/ChatExportController';
@@ -12,9 +12,7 @@ import { assertSupported } from '@shared/utils/dispatcher';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { StorageFS } from '@utils/files';
 
-// Local imports - desktop test support
-
-// Local imports - controller types
+// Local file imports
 import { createStubDesktopHistoryOptions } from './desktopSettingsTestSupport';
 import {
   desktopSourcePath,

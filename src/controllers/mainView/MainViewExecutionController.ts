@@ -1,4 +1,4 @@
-// Local imports - agent
+// Local imports
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   validateExecutionRequest,
@@ -9,10 +9,6 @@ import {
   DEFAULT_TOOL_CONFIG,
   ToolConfigSchema,
 } from '@shared/schemas/toolConfig';
-
-// Local imports - shared schemas
-
-// Local imports - utilities
 import { filterNotNull } from '@utils/core';
 import {
   getPastedImageFullPath,

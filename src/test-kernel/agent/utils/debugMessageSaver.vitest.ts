@@ -1,12 +1,11 @@
-// Third-party imports
+// Node imports
 import { strict as assert } from 'node:assert';
 import * as path from 'node:path';
+
+// Third-party imports
 import { describe, it, beforeEach, afterEach } from 'vitest';
 
-// Standard library imports
-
-// Local imports - agent
-// Internal imports
+// Local imports
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId } from '@shared/schemas';

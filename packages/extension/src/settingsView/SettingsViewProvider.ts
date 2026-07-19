@@ -1,7 +1,7 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - common webview
+// Local imports
 import {
   BaseWebviewProvider,
   BundledViewContentProvider,
@@ -15,7 +15,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsTab } from '@shared/schemas/settingsViewMessages';
 import type { AgentCategory } from '@shared/schemas/agent';
 
-// Local imports - settings view components
+// Local file imports
 import { SettingsViewMessageHandler } from './SettingsViewMessageHandler';
 
 export class SettingsViewProvider

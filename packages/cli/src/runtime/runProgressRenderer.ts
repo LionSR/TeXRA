@@ -1,6 +1,7 @@
+// Node imports
 import path from 'node:path';
 
-// Local imports - agent runtime and trace
+// Local imports
 import { getAgent } from '@agent/index';
 import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -19,12 +20,10 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
-
-// Local imports - shared schemas
 import { assertNever } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 
-// Local imports - CLI runtime
+// Local file imports
 import { writeRawStderr } from './logSinks';
 import type { CliContext } from './cliContext';
 

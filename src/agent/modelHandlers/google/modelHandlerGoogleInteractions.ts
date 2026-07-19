@@ -12,7 +12,7 @@ import {
   type Stream,
 } from '@google/genai';
 
-// Local imports - agent
+// Local imports
 import { logProgressStatus } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
@@ -36,10 +36,6 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
-
-// Local imports - tools
-
-// Local imports - utils
 import type { ToolDefinition } from '@model';
 import replacementEngine from '@replacement/engine';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
@@ -51,6 +47,8 @@ import { getShortDisplayPath } from '@utils/files';
 import { filterNotNull, isNonEmptyString } from '@utils/core';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
 import { getConfig } from '@utils/config/configUtils';
+
+// Local file imports
 import {
   isGemini3Model,
   resolveGeminiThinkingLevel,
@@ -58,8 +56,6 @@ import {
   supportsGoogleFileUploads,
   uploadGoogleMediaEntries,
 } from './googleHandlerShared';
-
-// Local file imports
 import {
   computeGoogleInteractionsPrice,
   normalizeGoogleInteractionsUsage,
@@ -77,8 +73,6 @@ import {
   loadAttachmentBuffer,
 } from '../utils/toolAttachmentUtils';
 import { convertToolSchema, toGoogleTools } from '../toolConversion';
-
-// Type imports
 
 // Interactions SDK aliases (public surface; the SDK re-exports these under the
 // `Interactions` namespace — the internal `_2`-suffixed types are not exported).

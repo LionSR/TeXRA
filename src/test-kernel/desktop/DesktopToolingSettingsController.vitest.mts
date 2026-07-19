@@ -1,9 +1,7 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - settings controllers
-
-// Local imports - shared settings
+// Local imports
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { DefaultDesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
@@ -14,8 +12,6 @@ import {
 } from '@shared/constants/latex';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { assertSupported } from '@shared/utils/dispatcher';
-
-// Local imports - supporting types
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
 import { isStored } from '@test/support/settingsStoresFake';
 import { FakeStateStore } from '@test/support/FakePlatform';

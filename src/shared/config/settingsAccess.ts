@@ -1,4 +1,4 @@
-// Local imports - catalog + platform interfaces (type-only; vscode-free)
+// Local imports
 import type {
   ConfigProvider,
   ConfigTarget,

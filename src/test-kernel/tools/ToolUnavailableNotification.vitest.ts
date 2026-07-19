@@ -3,7 +3,7 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - runtime and tools
+// Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { notifyUnavailableTools } from '@tools/toolUnavailableNotification';

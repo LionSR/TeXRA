@@ -1,4 +1,6 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
@@ -21,6 +23,8 @@ import {
   seedStreamStatusForTest,
 } from '@test/helpers/streamStatusTestUtils';
 import { createChildStream } from '@tools/childStream';
+
+// Local file imports
 import {
   createRecordingHost,
   recordSessionEvents,

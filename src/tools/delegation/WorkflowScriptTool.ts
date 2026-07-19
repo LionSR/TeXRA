@@ -1,7 +1,7 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - agent runtime
+// Local imports
 import {
   ExecutionLeaseActiveError,
   getExecutionStore,
@@ -22,19 +22,13 @@ import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
-
-// Local imports - shared schemas
-
-// Local imports - tools
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { createChildStream } from '@tools/childStream';
 import { defineTool } from '@tools/core/define';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { deriveExecutionId } from '@utils/core/idHash';
 
-// Local imports - utilities
-
-// Local imports - delegation
+// Local file imports
 import { createWorkflowScriptAgentRunner } from './workflowScriptAgentRunner';
 import { createWorkflowScriptStrategy } from './workflowScriptStrategy';
 

@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import { dirname } from 'node:path';
 
 // Third-party imports
@@ -68,7 +68,6 @@ import {
 } from '@model/openRouterRouting';
 import { isGpt5ModelName } from '@model/modelNames';
 import { getApiKey, type ApiProvider } from '@model/apiProviders';
-
 import { platform } from '@platform/platform';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import { MESSAGE_TYPES } from '@shared/schemas';
@@ -83,6 +82,8 @@ import {
   getGlobalStreaming,
 } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
+
+// Local file imports
 import {
   computeReducedMaxTokens,
   TOKEN_SAFETY_BUFFER,

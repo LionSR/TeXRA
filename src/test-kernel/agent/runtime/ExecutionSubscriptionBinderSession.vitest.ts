@@ -16,7 +16,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   sendFollowUp: sendFollowUpMock,
 }));
 
-// Local imports - runtime
+// Local imports
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
@@ -27,6 +27,7 @@ import type { StreamTabId } from '@shared/schemas';
 // Test support imports
 import { createTestSession } from '@test/support/sessionTestUtils';
 
+// Local file imports
 import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 
 const streamId = 'stream:subscription-session' as StreamTabId;

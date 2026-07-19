@@ -1,18 +1,20 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
-// Third-party imports
+// Node imports
 import { strict as assert } from 'node:assert';
+
+// Third-party imports
 import { describe, it, afterEach, vi } from 'vitest';
-
-// Local imports - tests
-
-// Local imports - agent core
 import {
   DEFAULT_MODEL_CAPABILITIES,
   type ModelConfig,
   ModelProvider,
 } from 'llm-zoo';
+
+// Local imports
 import type { AgentEvent } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -30,20 +32,14 @@ import {
   createToolUseRoundFlow,
   type ToolUseRoundShared,
 } from '@agent/core/flows/ToolUseRoundFlow';
-// Type imports
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
-
-// Local imports - agent runtime
 import { withToolEnvironment } from '@agent/followUp/ToolFileInteractionContext';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-// Type imports
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
-
-// Internal imports
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/modelHandlers/contextManagementConstants';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
@@ -63,13 +59,14 @@ import { createRunTrace, StreamLogStore } from '@transcript';
 import { TaskRunFileService } from '@utils/files';
 import * as execUtils from '@utils/system/execUtils';
 
+// Local file imports
 import {
   createRecordingHost,
   recordSessionEvents,
   withTestRunContext,
 } from '../agent/progressTestUtils';
 
-// Type imports
+// Third-party imports
 import type OpenAI from 'openai';
 
 const testModelConfig: ModelConfig = {

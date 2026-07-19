@@ -1,7 +1,7 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - component type
+// Local imports
 import type { StreamHeader } from '@progressView/frontend/components/StreamHeader';
 import { ELEMENT_IDS } from '@progressView/frontend/constants';
 import type { StreamEventDetail } from '@progressView/frontend/events';
@@ -11,9 +11,7 @@ import {
   type StreamTabInfo,
 } from '@shared/schemas';
 
-// Local imports - shared schemas
-
-// Local imports - test utilities
+// Local file imports
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 function baseStream(overrides: Partial<StreamTabInfo> = {}): StreamTabInfo {

@@ -1,8 +1,4 @@
-// Local imports - settings controllers
-
-// Local imports - agent registry
-
-// Local imports - shared settings
+// Local imports
 import type {
   computeAgentOptionsData,
   loadAgents,
@@ -22,8 +18,6 @@ import {
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { unsupported } from '@shared/utils/dispatcher';
-
-// Local imports - controller types
 
 export interface DesktopAgentRegistryPort {
   readonly loadAgents: typeof loadAgents;

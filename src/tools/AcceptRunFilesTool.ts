@@ -12,11 +12,7 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - agent
-
-// Local imports - event bus
-
-// Local imports - shared
+// Local imports
 import { getExecutionStore } from '@agent/storage';
 import { appSignals } from '@eventBus/AppSignals';
 import { diffFileLocation } from '@latex/acceptedFileTarget';
@@ -28,10 +24,6 @@ import {
   type EditRecord,
   type ToolResult,
 } from '@shared/schemas/toolResult';
-
-// Local imports - tools
-
-// Local imports - utils
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import {

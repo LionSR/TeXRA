@@ -1,17 +1,15 @@
-// Standard library imports
+// Node imports
 import { strict as assert } from 'node:assert';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { describe, it } from 'vitest';
 
 // Third-party imports
+import { describe, it } from 'vitest';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 import { OpenAIError } from 'openai';
 
-// Local imports - test support
-
-// Local imports - agent
+// Local imports
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
@@ -27,15 +25,12 @@ import {
   isContextWindowError,
 } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
-
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-
-// Local imports - utilities
 import { pathToLocation } from '@utils/files';
 
-// Type imports
+// Third-party imports
 import type {
   ResponseInputItem,
   ResponseUsage,

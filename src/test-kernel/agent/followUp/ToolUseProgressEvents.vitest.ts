@@ -53,6 +53,8 @@ import {
 import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 import { isObject } from '@utils/core';
+
+// Local file imports
 import {
   createRecordingHost,
   recordSessionEvents,

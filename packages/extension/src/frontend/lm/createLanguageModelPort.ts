@@ -1,7 +1,7 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - platform
+// Local imports
 import { warn } from '@logger/logUtils';
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
@@ -15,8 +15,6 @@ import {
   type LanguageModelResponsePart,
   type LanguageModelTokenCountInput,
 } from '@platform/languageModel';
-
-// Local imports - logger
 
 function translateLanguageModelError(
   error: unknown,

@@ -1,20 +1,16 @@
-// Third-party imports
-
-// Node.js built-in imports
+// Node imports
 import * as assert from 'node:assert';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
+// Third-party imports
 import { describe, it, afterEach } from 'vitest';
 
-// Local imports - platform
+// Local imports
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-
-// Local imports - tests
 import { setupPlatform } from '@test/support/setupPlatform';
 import { findCodexBinaryInElectronResources } from '@tools/codexImport';
-
-// Local imports - tools
 
 const PLATFORM_PACKAGES: Record<
   string,

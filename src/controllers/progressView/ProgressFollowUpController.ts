@@ -1,21 +1,16 @@
-// Local imports - agent
+// Local imports
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   ToolUseAgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { ExecutionRequest } from '@agent/core/state/executionRequests';
-
 import {
   isWorkflowTaskState,
   type TaskState,
   type WorkflowTaskState,
 } from '@agent/core/state/TaskState';
-
-// Local imports - latex
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
-
-// Local imports - model
 import { decideRunModel } from '@model/runModelDecision';
 import type {
   CompileFailure,
@@ -25,8 +20,6 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 import { pluralize } from '@utils/text/stringUtils';
-
-// Local imports - shared
 
 export interface ProgressFollowUpModelOption {
   value: string;

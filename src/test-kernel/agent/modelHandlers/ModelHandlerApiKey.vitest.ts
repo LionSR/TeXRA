@@ -1,17 +1,17 @@
-// Third-party imports
+// Node imports
 import { strict as assert } from 'node:assert';
+
+// Third-party imports
 import { afterEach, beforeEach, describe, it, vi } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports - test support and handler under test
+// Local imports
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import * as serverKeysModule from '@auth/serverKeys';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
-
-// Local imports - modules stubbed by these tests
 import * as providerConfigModule from '@utils/config/providerConfig';
 import * as configUtilsModule from '@utils/config/configUtils';
 

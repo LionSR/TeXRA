@@ -2,7 +2,7 @@
 import { JSDOM } from 'jsdom';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-// Local imports - node/flow primitives under test
+// Local imports
 import { BaseNode } from '@agent/node';
 import {
   RoundPersistedFlow,

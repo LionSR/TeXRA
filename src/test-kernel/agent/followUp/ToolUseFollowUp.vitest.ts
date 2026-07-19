@@ -1,16 +1,18 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
+
+// Node imports
 import { strict as assert } from 'node:assert';
-import { describe, it, afterEach } from 'vitest';
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 
 // Third-party imports
+import { describe, it, afterEach } from 'vitest';
 
-// Standard library imports
-
-// Local imports - agent
+// Local imports
+import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {

@@ -2,7 +2,7 @@
 import { glob } from 'glob';
 import { z } from 'zod';
 
-// Local imports - tools
+// Local imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError, ToolResult } from '@shared/schemas/toolResult';
 import { getGitignoreMatcher } from '@tools/gitignore';

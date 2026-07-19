@@ -1,6 +1,4 @@
-// Local imports - controllers
-
-// Local imports - shared
+// Local imports
 import {
   commitTeamRoster,
   resolveTeamRoster,

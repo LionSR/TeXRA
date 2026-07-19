@@ -1,4 +1,6 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
@@ -12,19 +14,13 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   sendFollowUp: sendFollowUpMock,
 }));
 
-// Local imports - runtime
+// Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-
-// Local imports - event bus
 import { appSignals, type AppSignalPayloads } from '@eventBus/AppSignals';
-
-// Local imports - shared schemas
 import type { StreamTabId } from '@shared/schemas';
 
 // Test support imports
 import { createTestSession } from '@test/support/sessionTestUtils';
-
-// Local imports - tools
 import { emitGitHubSubscriptionChanged } from '@tools/github/subscriptionEventEmitter';
 import { GitHubAuthError } from '@tools/github/githubClient';
 import {
@@ -33,7 +29,7 @@ import {
 } from '@tools/github/PollingSourceBase';
 import { StreamSubscriptionRegistry } from '@tools/github/StreamSubscriptionRegistry';
 
-// Local imports - test
+// Local file imports
 import { createRecordingHost } from '../progressTestUtils';
 
 function recordAppSignal<K extends keyof AppSignalPayloads>(

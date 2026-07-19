@@ -1,7 +1,10 @@
+// Node imports
 import * as path from 'node:path';
 
+// Third-party imports
 import pMap from 'p-map';
 
+// Local imports
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { platform } from '@platform/platform';
 import type { FileLocation } from '@shared/schemas';

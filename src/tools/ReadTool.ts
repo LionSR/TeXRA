@@ -1,10 +1,10 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - tools
+// Local imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { isOversizedImage, MANY_IMAGE_MAX_DIMENSION } from '@tools/imageUtils';

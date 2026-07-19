@@ -4,7 +4,7 @@
  * stream-tab metadata from a matching execution.
  */
 
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
 // Local imports
@@ -34,6 +34,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
 
+// Local file imports
 import { CHANNEL } from './service';
 
 /**

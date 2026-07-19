@@ -1,11 +1,13 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - runtime
+// Local imports
 import type { FinalizeExecutionResult } from '@agent/storage';
 import { noopTrace, TraceEmitter } from '@agent/trace';
 import {
@@ -54,6 +56,7 @@ import {
 } from '@test/helpers/streamStatusTestUtils';
 import { StorageFS } from '@utils/files';
 
+// Local file imports
 import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 
 const storageMocks = vi.hoisted(() => ({

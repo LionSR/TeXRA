@@ -3,7 +3,7 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - runtime
+// Local imports
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   type HostBashApprovalResult,

@@ -1,8 +1,8 @@
-// Node.js imports
+// Node imports
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 
-// Local imports - history domain
+// Local imports
 import {
   deleteAllExecutions,
   deleteExecution,
@@ -15,11 +15,7 @@ import {
 } from '@agent/core/state/executionRequests';
 import type { TaskState } from '@agent/core/state/TaskState';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-
-// Local imports - IPC contracts
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
-
-// Local imports - controller types
 import type {
   ChatExportController,
   ExportInputStatus,

@@ -1,4 +1,6 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
@@ -32,6 +34,8 @@ import {
 import { installPlatform } from '@test/support/setupPlatform';
 import { cleanupApprovalsForStream } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
+
+// Local file imports
 import {
   recordSessionEvents,
   runEventsOfType,

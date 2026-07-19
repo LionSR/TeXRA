@@ -1,19 +1,13 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - runtime
-
-// Type imports
+// Local imports
 import {
   getRunContextExecutionId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import type { FileLocation } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-
-// Local imports - tools
-
-// Local imports - utilities
 import {
   currentToolRoot,
   resolveWorkspaceRelativePath,

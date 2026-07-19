@@ -1,10 +1,7 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - agent
-
-// Local imports - common
-
+// Local imports
 import { refresh, computeAgentOptionsData, getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { hasAnyUsableSetupCredential } from '@commands/setup';
@@ -41,7 +38,6 @@ import { debounce } from '@utils/core';
 
 // Local file imports
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
-
 import type { ProgressViewProvider } from './progressView/ProgressViewProvider';
 
 export type SidebarMode = 'main' | 'progress';

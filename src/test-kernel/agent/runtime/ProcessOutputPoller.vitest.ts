@@ -6,15 +6,13 @@ import * as path from 'node:path';
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - runtime
+// Local imports
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { ProcessExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import {
   ProcessOutputPoller,
   type ProcessOutputEmitter,
 } from '@agent/runtime/ProcessOutputPoller';
-
-// Local imports - shared
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { StreamTabId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';

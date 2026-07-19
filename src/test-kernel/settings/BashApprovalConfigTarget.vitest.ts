@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import { strict as assert } from 'node:assert';
 import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
@@ -6,6 +6,7 @@ import * as path from 'node:path';
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
+// Local imports
 import type {
   ConfigInspection,
   ConfigTarget,

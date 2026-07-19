@@ -1,7 +1,5 @@
-// Local imports - controllers
+// Local imports
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-
-// Local imports - agent
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -18,8 +16,6 @@ import type {
   RoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
-
-// Local imports - shared
 
 export function createAgentConfig(
   overrides: Partial<AgentConfig> = {},

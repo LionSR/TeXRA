@@ -12,7 +12,7 @@ import ky, { HTTPError } from 'ky';
 import { StatusCodes } from 'http-status-codes';
 import { z } from 'zod';
 
-// Local imports - core
+// Local imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError } from '@shared/schemas/toolResult';
 import { isTimeoutError, joinAbortSignal } from '@tools/timeouts';

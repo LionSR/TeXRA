@@ -18,7 +18,7 @@ import {
 } from 'openai';
 import { describe, expect, it } from 'vitest';
 
-// Local imports - agent model handlers
+// Local imports
 import { tagAnthropicSdkError } from '@agent/modelHandlers/anthropic/anthropicSdkError';
 import { tagGoogleSdkError } from '@agent/modelHandlers/google/googleSdkError';
 import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
@@ -43,10 +43,6 @@ import {
   toProviderErrorFromRetry,
   toRetryErrorInfo,
 } from '@shared/schemas/errors';
-
-// Local imports - common errors
-
-// Local imports - shared schemas
 
 class APIError extends Error {}
 

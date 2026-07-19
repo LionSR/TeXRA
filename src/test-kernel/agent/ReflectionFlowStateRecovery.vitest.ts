@@ -1,10 +1,8 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - test support
+// Local imports
 import { getExecutionStore } from '@agent/storage';
-
-// Local imports - agent
 import { noopTrace } from '@agent/trace';
 import {
   AgentCategory,

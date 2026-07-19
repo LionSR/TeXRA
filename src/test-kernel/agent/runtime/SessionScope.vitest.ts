@@ -1,4 +1,6 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
@@ -6,7 +8,7 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - runtime
+// Local imports
 import {
   SessionHandle,
   defaultSession,
@@ -24,6 +26,7 @@ import {
   StreamLogStore,
 } from '@transcript';
 
+// Local file imports
 import { createRecordingHost } from '../progressTestUtils';
 
 const plan: Plan = { objective: 'Scope session-owned state.' };

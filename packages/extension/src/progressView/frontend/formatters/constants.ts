@@ -2,16 +2,12 @@
  * Constants and configuration for progress view formatters.
  */
 
-// Local imports - progress view helpers
-
-// Local imports - shared schemas
+// Local imports
 import {
   languageForPath,
   SPECIAL_BASENAME_LANGUAGES,
 } from '@progressView/frontend/languageForPath';
 import type { LogLevel } from '@shared/schemas';
-
-// Local imports - shared utilities
 import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 /**

@@ -1,8 +1,11 @@
+// Node imports
 import { access, constants } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
+// Third-party imports
 import { app } from 'electron';
 
+// Local imports
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { isFileNotFoundError } from '@common/errors';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/workspacePath.js';
@@ -25,6 +28,7 @@ import { configKeyVariants } from '@shared/config/configKeys';
 import { StreamSnapshotStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+// Local file imports
 import {
   migrateLegacyDesktopDataRoot,
   migrateLegacyDesktopWorkspaceBucket,
@@ -42,8 +46,6 @@ import {
   isDesktopResumeInFlight,
   tryResumeDesktopStream,
 } from '../desktopAgentResume.js';
-
-// Type imports - platform
 
 export interface ElectronPlatformInitResult {
   workspacePath: string | undefined;

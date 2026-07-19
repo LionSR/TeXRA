@@ -1,4 +1,6 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
@@ -7,7 +9,7 @@ import '@test/support/defaultSessionTestSetup';
 import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - runtime
+// Local imports
 import { noopTrace } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -37,6 +39,7 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { clearStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
+// Local file imports
 import { createRecordingHost } from '../progressTestUtils';
 
 const storageMocks = vi.hoisted(() => ({

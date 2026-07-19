@@ -1,13 +1,9 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
-// Local imports - agent
+// Local imports
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import type { FileLocation } from '@shared/schemas';
-
-// Local imports - shared
-
-// Local imports - utilities
 import { normalizeLatexPath, getPathSegments } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { FlexibleFS } from '@utils/files/flexibleFS';

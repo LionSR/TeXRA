@@ -1,8 +1,4 @@
-// Local imports - shared settings controllers
-
-// Local imports - authentication and models
-
-// Local imports - shared schemas and messages
+// Local imports
 import {
   codexCoordinator,
   getChatGptAuthStatus,
@@ -42,8 +38,6 @@ import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { unsupported } from '@shared/utils/dispatcher';
-
-// Local imports - platform and host ports
 import {
   getProviderDisplayName,
   getProviderEndpoint,
@@ -55,8 +49,6 @@ import {
   supportsCustomEndpoint,
 } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-
-// Local imports - utilities
 
 interface DesktopCredentialRendererPort {
   postToRenderer(message: unknown): void;

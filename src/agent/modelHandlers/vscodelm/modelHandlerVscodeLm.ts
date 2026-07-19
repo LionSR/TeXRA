@@ -1,6 +1,4 @@
-// Local imports - platform
-
-// Local imports - agent
+// Local imports
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type {
@@ -19,11 +17,7 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
   takeTail,
 } from '@common/errors/sdkErrorUtils';
-
-// Local imports - common and model
 import type { ToolDefinition } from '@model';
-
-// Local imports - utilities
 import { platform } from '@platform/platform';
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
@@ -43,7 +37,7 @@ import type {
 } from '@shared/schemas/toolResult';
 import { getMimeType } from '@utils/files';
 
-// Local imports - model handlers
+// Local file imports
 import { ModelHandler } from '../ModelHandler';
 import { toVscodeLmTools } from '../toolConversion';
 import {
@@ -51,7 +45,7 @@ import {
   formatToolResultAsText,
 } from '../utils/toolAttachmentUtils';
 
-// Type imports - third-party
+// Third-party imports
 import type { ModelConfig } from 'llm-zoo';
 
 type VscodeLmUsage = undefined;

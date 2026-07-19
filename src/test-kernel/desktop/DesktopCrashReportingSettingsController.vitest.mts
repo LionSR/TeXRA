@@ -1,15 +1,13 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - desktop crash reporting
+// Local imports
 import { DefaultDesktopCrashReportingSettingsController } from '@desktop/main/desktopCrashReportingSettingsController';
 import { DESKTOP_CRASH_REPORTING_DSN_SECRET } from '@desktop/main/desktopCrashReporting';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
-
-// Local imports - shared settings
 
 type ControllerOptions = ConstructorParameters<
   typeof DefaultDesktopCrashReportingSettingsController

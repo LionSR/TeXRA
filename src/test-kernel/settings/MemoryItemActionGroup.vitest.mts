@@ -9,14 +9,12 @@ vi.mock('@shared/hostBridge', () => ({
   postMessage: mocks.postMessage,
 }));
 
-// Local imports - component type
-
-// Local imports - shared schemas
+// Local imports
 import type { MemoryItem } from '@settingsView/frontend/components/memory/MemoryItem';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { MemoryViewItem } from '@shared/schemas/memoryViewMessages';
 
-// Local imports - test utilities
+// Local file imports
 import { useLitComponentTestDom } from './litComponentTestUtils';
 
 function makeItem(overrides: Partial<MemoryViewItem> = {}): MemoryViewItem {

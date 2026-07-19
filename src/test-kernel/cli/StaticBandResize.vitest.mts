@@ -14,7 +14,6 @@ const ORIGINAL_COLOR_ENV = {
 delete process.env.NO_COLOR;
 process.env.FORCE_COLOR = '3';
 
-// Node.js imports
 // Third-party imports
 import stripAnsi from 'strip-ansi';
 import { afterAll, describe, expect, it } from 'vitest';

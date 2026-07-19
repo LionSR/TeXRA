@@ -4,6 +4,8 @@ import { tryPlatform } from '@platform/platform';
 import type { ConfigTarget, Disposable } from '@platform/interfaces';
 import { ensureArray } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+
+// Third-party imports
 import type { ZodType } from 'zod';
 
 const CHANNEL = 'configUtils';

@@ -1,13 +1,11 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - component type
+// Local imports
 import type { UserMessage } from '@progressView/frontend/components/UserMessage';
 import { DELIVERY_TAGS } from '@shared/deliveryTags';
 
-// Local imports - single owned delivery-tag list this suite pins against
-
-// Local imports - test utilities
+// Local file imports
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 async function mount(text: string): Promise<UserMessage> {

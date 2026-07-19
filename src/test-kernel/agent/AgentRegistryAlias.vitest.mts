@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';

@@ -1,11 +1,10 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Platform imports
-
+// Local imports
 import * as logUtils from '@logger/logUtils';
 import { FileType, type FileStat } from '@platform/interfaces';
 import {

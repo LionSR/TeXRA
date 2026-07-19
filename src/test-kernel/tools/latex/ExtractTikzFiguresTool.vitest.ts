@@ -1,14 +1,14 @@
-// Third-party imports
+// Node imports
 import * as assert from 'node:assert';
+
+// Third-party imports
 import { describe, it, afterEach, vi } from 'vitest';
 
-// Local imports - tests
+// Local imports
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { ExtractTikzFiguresTool } from '@tools/latex';
 import { pathToLocation } from '@utils/files';
-
-// Local imports - tools
 
 function installPlatform(files: Record<string, string>) {
   return installFakePlatform({ workspacePath: '/workspace', files });

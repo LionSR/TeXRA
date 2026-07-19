@@ -1,16 +1,12 @@
-// Local imports - agent registry
+// Local imports
 import { resolveAgentKey } from '@agent/index';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-
-// Local imports - task state
 import type { TaskState } from '@agent/core/state/TaskState';
 import {
   MainViewPersistedStateSchema,
   type MainViewPersistedState,
 } from '@shared/schemas';
-
-// Local imports - shared schemas
 
 /** Convert a TaskState payload into a full main view state snapshot. */
 export function buildMainViewState(

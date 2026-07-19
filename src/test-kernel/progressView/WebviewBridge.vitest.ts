@@ -1,7 +1,7 @@
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - common webview
+// Local imports
 import { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -11,10 +11,6 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { StreamLogStore, type StreamLogAppendInput } from '@transcript';
-
-// Local imports - progress view
-
-// Local imports - shared schemas
 
 function logEntry(
   id: string,

@@ -1,10 +1,12 @@
+// Node imports
 import { createHash } from 'node:crypto';
 import { access } from 'node:fs/promises';
 import * as path from 'node:path';
 
+// Third-party imports
 import { execa } from 'execa';
 
-// Local imports - agent config
+// Local imports
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -25,6 +27,8 @@ import {
   type ClaudeAgentPermissionMode,
 } from '@shared/schemas/agentCliSettings';
 import { safeHomedir } from '@utils/system/platformPaths';
+
+// Local file imports
 import { createEnumStateGetter } from './support/enumConfig';
 import {
   CLAUDE_AGENT_NAME,

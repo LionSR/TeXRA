@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
@@ -22,6 +22,7 @@ import { createFakePlatform } from '@test/support/FakePlatform';
 import { createRunTrace, StreamLogStore } from '@transcript';
 import { delay } from '@utils/core';
 
+// Local file imports
 import { withTestRunContext } from './progressTestUtils';
 
 interface DispatchProbe {

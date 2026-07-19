@@ -7,15 +7,13 @@ import { fileURLToPath } from 'node:url';
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - platform
+// Local imports
 import {
   initializePolishModel,
   renderPolishPrompt,
 } from '@agent/runtime/polishModel';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createFakePlatform } from '@test/support/FakePlatform';
-
-// Local imports - agent runtime
 
 const REPO_ROOT = resolve(
   fileURLToPath(new URL('.', import.meta.url)),

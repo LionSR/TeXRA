@@ -10,11 +10,9 @@
  * with no anchor — append the block instead.
  */
 
-// Type imports
+// Local imports
 import type { ToolDefinition } from '@model';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
-
-// Local imports
 
 /**
  * Replace `pattern`'s match in a delegation tool's description with

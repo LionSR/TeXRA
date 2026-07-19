@@ -1,7 +1,7 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - auth
+// Local imports
 import { ULTRA_TIER } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ServerSideKeyService } from '@auth/serverKeys/ServerSideKeyService';

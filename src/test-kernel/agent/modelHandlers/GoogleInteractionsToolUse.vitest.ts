@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports - test support, agent, and config
+// Local imports
 import { noopTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
@@ -11,7 +11,7 @@ import type { ToolResult } from '@shared/schemas/toolResult';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import * as configModule from '@utils/config/configUtils';
 
-// Type imports
+// Third-party imports
 import type { Interactions } from '@google/genai';
 
 const originalGetConfig = configModule.getConfig;

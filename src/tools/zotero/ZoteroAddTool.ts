@@ -21,9 +21,9 @@ import ky from 'ky';
 import { type Work } from '@jamesgopsill/crossref-client';
 import { StatusCodes } from 'http-status-codes';
 import { z } from 'zod';
-
-// Local imports - core
 import pTimeout from 'p-timeout';
+
+// Local imports
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { isTimeoutError } from '@tools/timeouts';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
@@ -32,7 +32,7 @@ import { defineTool } from '@tools/core/define';
 import { pluralize } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-// Local imports - zotero
+// Local file imports
 import { type CslCreator, getZoteroPort } from './bbtClient';
 
 const ZOTERO_PING_TIMEOUT_MS = 2_000; // 2 s

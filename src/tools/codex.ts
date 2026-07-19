@@ -82,7 +82,7 @@ import {
   buildCodexUsageStats,
 } from './codexShared';
 
-// Type-only imports (kept separate for bundler efficiency)
+// Third-party imports
 import type {
   RunResult,
   Thread,

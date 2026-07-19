@@ -85,6 +85,8 @@ import {
   type ClaudeMessageBlock,
   type ClaudeTurnUsage,
 } from './claudeAgentShared';
+
+// Third-party imports
 import type { Options as ClaudeAgentSdkOptions } from '@anthropic-ai/claude-agent-sdk';
 
 let _configModule: typeof import('./claudeAgentConfig') | null = null;

@@ -1,4 +1,4 @@
-// Local imports - agent
+// Local imports
 import type { TaskState } from '@agent/core/state/TaskState';
 import {
   polishTextWithAI,
@@ -6,8 +6,6 @@ import {
 } from '@agent/runtime/textEnhancement';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewOutboundMessage, StreamTabId } from '@shared/schemas';
-
-// Local imports - shared
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 type UpdateFollowUpTextMessage = Extract<

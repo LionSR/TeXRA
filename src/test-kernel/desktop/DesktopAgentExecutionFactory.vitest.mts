@@ -6,7 +6,7 @@ import * as path from 'node:path';
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - platform
+// Local imports
 import type { FileSystemProvider } from '@platform/interfaces';
 import type { Platform } from '@platform/platform';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
@@ -19,9 +19,7 @@ import { cleanupTempDirs } from '@test/support/tempDirPlatform';
 import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
 
-// Local imports - shared schemas and tools
-
-// Local imports - desktop test support
+// Local file imports
 import {
   createStubDesktopAgentExecutionHost,
   disposeAfterTest,

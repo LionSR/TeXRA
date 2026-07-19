@@ -1,7 +1,7 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - agent
+// Local imports
 import { TraceEmitter } from '@agent/trace';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type {
@@ -11,18 +11,14 @@ import type {
   TokenUsageStats,
 } from '@shared/schemas';
 import { MESSAGE_TYPES } from '@shared/schemas';
-
-// Local imports - shared
-
-// Local imports - tools
 import { publishAgentCliStreamUsage } from '@tools/agentCliShared';
 import { publishCodexTodos, runStreamedTurn } from '@tools/codex';
 import { createRunTrace, StreamLogStore } from '@transcript';
 
-// Local imports - test
+// Local file imports
 import { recordSessionEvents, runEventsOfType } from '../progressTestUtils';
 
-// Type-only imports
+// Third-party imports
 import type {
   CommandExecutionItem,
   Thread,

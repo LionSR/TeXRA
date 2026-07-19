@@ -1,16 +1,15 @@
+// Node imports
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
 import { toFile } from '@anthropic-ai/sdk';
 
-// Local imports - common
+// Local imports
 import type { AgentTrace } from '@agent/trace';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
-
-// Type imports - agent and tools
 import { extractMimeSubtype } from '@utils/text/stringUtils';
 
-// Local imports - model handlers
+// Local file imports
 import { FILES_API_BETA } from './anthropicContextManagement';
 import {
   countPdfPagesFromBuffer,
@@ -19,7 +18,7 @@ import {
 import { loadAttachmentBuffer, wipeBuffer } from '../utils/toolAttachmentUtils';
 import { reportMediaAttachmentFailure } from '../support/mediaAttachmentPolicy';
 
-// Type imports - Anthropic SDK
+// Third-party imports
 import type { Base64ImageSource } from '@anthropic-ai/sdk/resources/messages';
 import type { Anthropic } from '@anthropic-ai/sdk';
 

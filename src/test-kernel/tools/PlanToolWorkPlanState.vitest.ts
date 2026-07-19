@@ -1,4 +1,6 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
@@ -23,6 +25,8 @@ import {
   isBashApprovalBypassedForStream,
 } from '@tools/approval';
 import { PlanTool } from '@tools/plan/PlanTool';
+
+// Local file imports
 import {
   createRecordingHost,
   sessionWithInteractions,

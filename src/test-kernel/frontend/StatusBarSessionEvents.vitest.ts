@@ -3,7 +3,7 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - status bar state
+// Local imports
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { subscribeStatusBarSessionEvents } from '@frontend/statusBar/statusBarSessionEvents';
 import { STREAM_PHASE, type StorageKey } from '@shared/schemas';

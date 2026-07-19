@@ -8,9 +8,7 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - agent
-
-// Local imports - utils
+// Local imports
 import {
   deriveResumability,
   getExecutionStore,
@@ -55,6 +53,8 @@ import { isDirectory } from '@utils/files/fsEntryType';
 import { findExistingRunStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 import { splitContentLines } from '@utils/text/stringUtils';
+
+// Local file imports
 import {
   formatListingLine,
   formatTodoHeader,

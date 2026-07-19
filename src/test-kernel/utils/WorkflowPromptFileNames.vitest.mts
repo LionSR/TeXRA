@@ -1,18 +1,14 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - test support
-
-// Local imports - agent output
+// Local imports
 import {
   getExtractedDocOutputFileName,
   getSafeDocumentRelativePath,
 } from '@agent/utils/outputFileUtils';
-
-// Local imports - prompt utilities
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   getListOfFiles,

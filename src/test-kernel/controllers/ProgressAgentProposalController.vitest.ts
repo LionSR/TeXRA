@@ -1,12 +1,10 @@
-// Standard library imports
+// Node imports
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
 import { describe, it } from 'vitest';
 
-// Local imports - controllers
-
-// Local imports - shared
+// Local imports
 import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
 import { AgentCategory, type AgentProposalPermission } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';

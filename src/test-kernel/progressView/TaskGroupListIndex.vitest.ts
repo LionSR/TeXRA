@@ -1,7 +1,7 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - progressView frontend
+// Local imports
 import { GROUP_DOM_IDS } from '@progressView/frontend/constants';
 import type {
   GroupTree,
@@ -15,9 +15,7 @@ import {
   type TaskGroup,
 } from '@shared/schemas';
 
-// Local imports - shared schemas
-
-// Local imports - test utilities
+// Local file imports
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 const audio = vi.hoisted(() => ({

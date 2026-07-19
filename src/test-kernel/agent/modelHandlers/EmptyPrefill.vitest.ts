@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import { strict as assert } from 'node:assert';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -9,7 +9,7 @@ import { createPartFromText, type Content } from '@google/genai';
 import { describe, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports - test support and agent
+// Local imports
 import { noopTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
@@ -23,7 +23,7 @@ import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/mo
 import type { FileLocation } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
-// Type imports
+// Third-party imports
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { ChatMessages } from '@openrouter/sdk/models';
 

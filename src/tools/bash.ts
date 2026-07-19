@@ -1,9 +1,7 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - platform
-
-// Local imports - agent
+// Local imports
 import {
   finalizeExecution,
   getExecutionStore,
@@ -28,10 +26,6 @@ import { currentSession } from '@agent/runtime/SessionHandle';
 import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-
-// Local imports - tools
-
-// Local imports - utils
 import { tryPlatform } from '@platform/platform';
 import { BASH_TOOL_DEFAULT_TIMEOUT_MS } from '@shared/toolUse';
 import { type StreamTabId, type ExecutionId } from '@shared/schemas';

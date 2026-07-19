@@ -1,7 +1,7 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - agent
+// Local imports
 import { deriveResumability } from '@agent/storage';
 import { createChannelTrace } from '@agent/trace';
 import {

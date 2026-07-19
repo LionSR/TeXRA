@@ -1,9 +1,7 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
-// Local imports - common
-
-// Local imports - utils
+// Local imports
 import {
   LaTeXCompileOptionsSchema,
   type LaTeXCompileOptions,

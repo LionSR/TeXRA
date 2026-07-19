@@ -10,9 +10,11 @@
  * config stay VS Code-native.
  */
 // VS Code imports
+
+// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - platform
+// Local imports
 import * as logger from '@logger/logUtils';
 import type { StorageProvider } from '@platform/interfaces';
 import {
@@ -23,8 +25,6 @@ import {
   CUSTOM_AGENTS_STORAGE_DIR,
   EXTERNAL_INQUIRY_THREADS_DIR,
 } from '@platform/defaults/globalStorage';
-
-// Type imports
 import type { LegacyDataMigrationLogger } from '@platform/defaults/legacyDataMigration';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

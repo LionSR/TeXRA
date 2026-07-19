@@ -1,17 +1,15 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - storage
+// Local imports
 import type { ExecutionListingEntry } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { STATUS_DISPLAY, TODO_STATUS } from '@shared/schemas';
-
-// Local imports - schemas
-
-// Local imports - tools
 import {
   formatListingLine,
   formatTodoSection,

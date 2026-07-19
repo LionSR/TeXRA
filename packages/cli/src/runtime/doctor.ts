@@ -1,11 +1,11 @@
-// Standard library imports
+// Node imports
 import { constants as fsConstants } from 'node:fs';
 import { access, stat } from 'node:fs/promises';
 
 // Third-party imports
 import { satisfies as semverSatisfies } from 'semver';
 
-// Local imports - platform
+// Local imports
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   probeLatexToolchain,
@@ -19,11 +19,7 @@ import {
 import { extractErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-// Local imports - CLI schemas
-
-// Local imports - LaTeX
-
-// Local imports - CLI runtime
+// Local file imports
 import { CliExitCode } from './exitCodes';
 import {
   writeNdjsonStdout,
@@ -33,8 +29,6 @@ import {
 import { getCliModelAccessList } from './modelAccess';
 import { createCliStyle } from './style';
 import { getCliAuthProfile } from './supabaseAuth';
-
-// Type imports - CLI runtime
 import type { CliContext } from './cliContext';
 import type { CliStyle } from './style';
 import type { CliModelAccess } from './modelAccess';

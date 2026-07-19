@@ -2,7 +2,7 @@
 import { NotFoundError as OpenAINotFoundError } from 'openai';
 import { describe, expect, it } from 'vitest';
 
-// Local imports - agent model handlers
+// Local imports
 import {
   classifyOpenAIBackgroundResumeError,
   createOpenAIBackgroundPollingError,
@@ -15,8 +15,6 @@ import {
   normalizeProviderError,
   requiresFlowAutoRetry,
 } from '@common/errors/sdkErrorUtils';
-
-// Local imports - common errors
 
 describe('OpenAI Responses error normalization', () => {
   it('normalizes provider errors at the OpenAI Responses boundary', () => {

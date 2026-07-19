@@ -1,4 +1,4 @@
-// Local imports - shared
+// Local imports
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentCategoryFilter, StreamTabId } from '@shared/schemas';
@@ -20,8 +20,6 @@ import {
 } from '@tools/inquiry';
 import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
-
-// Local imports - utilities
 
 type ProgressViewMessage<C extends ProgressViewInboundMessage['command']> =
   Extract<ProgressViewInboundMessage, { command: C }>;

@@ -7,7 +7,7 @@
  * the existing delegation tool.
  */
 
-// Local imports - agent runtime and storage
+// Local imports
 import {
   getExecutionStore,
   registerExecution,
@@ -45,7 +45,7 @@ import { generateExecutionId, KeyedMutex } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { deriveExecutionId } from '@utils/core/idHash';
 
-// Local imports - delegation
+// Local file imports
 import {
   buildSubagentResult,
   formatBuiltSubagentDelivery,

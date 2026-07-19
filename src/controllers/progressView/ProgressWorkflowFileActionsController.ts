@@ -1,16 +1,13 @@
+// Node imports
 import path from 'node:path';
 
-// Local imports - common
-
-// Local imports - shared
+// Local imports
 import * as logger from '@logger/logUtils';
 import type {
   OutputFileInfo,
   RoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
-
-// Local imports - utilities
 import { ensureRunDir, findRunDir, getRunDir } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

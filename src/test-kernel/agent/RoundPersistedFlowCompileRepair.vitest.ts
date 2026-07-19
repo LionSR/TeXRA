@@ -1,7 +1,7 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - node/flow primitives under test
+// Local imports
 import { TraceEmitter } from '@agent/trace';
 import { BaseNode } from '@agent/node';
 import {

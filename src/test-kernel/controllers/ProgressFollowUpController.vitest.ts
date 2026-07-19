@@ -1,10 +1,8 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - controllers
+// Local imports
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-
-// Local imports - agent
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -15,8 +13,6 @@ import {
   type ProgressFollowUpState,
 } from '@controllers/progressView/ProgressFollowUpController';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
-
-// Local imports - shared
 
 function createWorkflowTaskState(
   overrides: Omit<Partial<AgentConfig>, 'agentCategory'> = {},

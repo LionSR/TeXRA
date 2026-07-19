@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
 // Third-party imports

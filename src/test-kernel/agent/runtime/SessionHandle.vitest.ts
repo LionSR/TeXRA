@@ -1,4 +1,6 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
@@ -6,7 +8,7 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - runtime
+// Local imports
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   SessionHandle,
@@ -18,6 +20,7 @@ import { type Plan, type StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { getActiveFlushers, StreamLogStore } from '@transcript';
 
+// Local file imports
 import { createRecordingHost } from '../progressTestUtils';
 
 const plan: Plan = { objective: 'Compose the per-session runtime owners.' };

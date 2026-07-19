@@ -1,11 +1,7 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - transcript
-
-// Local imports - agent state
-
-// Local imports - desktop and progress schemas
+// Local imports
 import { noopTrace, type AgentEvent, type AgentTrace } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent, SessionFact } from '@agent/runtime/SessionEventHub';
@@ -50,7 +46,7 @@ import {
   type StreamSnapshotStore as ProgressSnapshotStore,
 } from '@transcript';
 
-// Local imports - desktop test support
+// Local file imports
 import {
   createStubDesktopAgentExecutionHost,
   disposeAfterTest,

@@ -1,16 +1,18 @@
-// Third-party imports
+// Node imports
 import { strict as assert } from 'node:assert';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
+// Third-party imports
 import { describe, it } from 'vitest';
 
-// Local imports - platform
+// Local imports
 import { FileType, type FileSystemProvider } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 
-// Local imports - test support
+// Local file imports
 import {
   FakeFileSystemProvider,
   createFakePlatform,

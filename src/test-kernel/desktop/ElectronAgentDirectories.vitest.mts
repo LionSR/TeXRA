@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - platform
+// Local imports
 import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { StorageProvider } from '@platform/interfaces';
@@ -16,10 +16,9 @@ import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-
-// Local imports - test support
 import { FakeConfigProvider, FakeSecrets } from '@test/support/FakePlatform';
 
+// Local file imports
 import { loadPlatformDefaultsModule } from './loadPlatformDefaultsModule.mjs';
 
 interface JsonStore {

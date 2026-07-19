@@ -2,14 +2,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports - test support, agent, and config
+// Local imports
 import { noopTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import * as configModule from '@utils/config/configUtils';
 
-// Type imports
+// Third-party imports
 import type { Interactions } from '@google/genai';
 
 type Step = Interactions.Step;

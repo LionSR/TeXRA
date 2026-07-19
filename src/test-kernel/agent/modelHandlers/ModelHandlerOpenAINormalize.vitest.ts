@@ -1,9 +1,11 @@
-// Third-party imports
+// Node imports
 import { strict as assert } from 'node:assert';
+
+// Third-party imports
 import { describe, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports - test support and agent
+// Local imports
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerDashScope } from '@agent/modelHandlers/openai/modelHandlerDashScope';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/openai/modelHandlerDeepSeek';

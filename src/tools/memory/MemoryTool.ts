@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
 // Third-party imports
@@ -19,7 +19,7 @@ import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { splitContentLines } from '@utils/text/stringUtils';
 
-// Local imports - tool core
+// Local file imports
 import { defineTool } from '../core/define';
 import {
   recordToolFileRead,
@@ -33,8 +33,6 @@ import {
   ViewRangeSchema,
 } from '../formatting';
 import { requireField } from '../utils';
-
-// Local imports - shared memory constants and utilities
 import {
   MAX_VIEW_LINES,
   MAX_PINNED_MEMORIES,

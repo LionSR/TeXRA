@@ -1,7 +1,7 @@
 // Third-party imports
 import { toJSONSchema, z } from 'zod';
 
-// Internal imports
+// Local imports
 import {
   getRunContextWorkingDirectory,
   tryUseRunContext,

@@ -16,7 +16,7 @@ import {
   createModelContent,
 } from '@google/genai';
 
-// Local imports - agent
+// Local imports
 import type { StreamHandle } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
@@ -36,9 +36,6 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
-
-// Local imports - tools
-// Local imports - utils
 import replacementEngine from '@replacement/engine';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
@@ -47,6 +44,8 @@ import type {
 } from '@shared/schemas/toolResult';
 import { getShortDisplayPath } from '@utils/files';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
+
+// Local file imports
 import {
   isGemini3Model,
   resolveGeminiThinkingLevel,
@@ -61,8 +60,6 @@ import {
   isTextPart,
   validateGoogleMessageHistory,
 } from './googleMessageHelpers';
-
-// Local file imports
 import {
   DEFAULT_ATTACHMENT_MIME_TYPE,
   formatAttachmentSummary,
@@ -70,6 +67,8 @@ import {
   loadAttachmentBuffer,
 } from '../utils/toolAttachmentUtils';
 import { toGoogleTools } from '../toolConversion';
+
+// Third-party imports
 import type {
   Part,
   Content,
@@ -82,8 +81,6 @@ import type {
   CreateChatParameters,
   SendMessageParameters,
 } from '@google/genai';
-
-// Type imports
 
 /**
  * Handler for Google models using the native @google/genai SDK and Chat API.

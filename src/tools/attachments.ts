@@ -1,4 +1,4 @@
-// Local imports - tools
+// Local imports
 import { ToolError, type ToolFileAttachment } from '@shared/schemas/toolResult';
 import { isOversizedImage, MANY_IMAGE_MAX_DIMENSION } from '@tools/imageUtils';
 import {
@@ -9,8 +9,6 @@ import { wrapApiCall } from '@tools/utils';
 import { isNonEmptyString } from '@utils/core';
 import { WorkspaceFS, getMimeType } from '@utils/files';
 import { toPosixPath } from '@utils/core/pathCore';
-
-// Local imports - core utilities
 
 export interface BuildFileAttachmentOptions {
   /** Path to a workspace file (relative or absolute) */

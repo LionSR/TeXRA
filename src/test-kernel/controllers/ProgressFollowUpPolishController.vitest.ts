@@ -1,13 +1,11 @@
-// Standard library imports
+// Node imports
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
 import { describe, it } from 'vitest';
 
-// Local imports - controllers
+// Local imports
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-
-// Local imports - agent
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -16,8 +14,6 @@ import type { WorkflowTaskState } from '@agent/core/state/TaskState';
 import type { FileContext } from '@agent/runtime/textEnhancement';
 import { ProgressFollowUpPolishController } from '@controllers/progressView/ProgressFollowUpPolishController';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-
-// Local imports - shared
 
 function createWorkflowTaskState(
   overrides: Omit<Partial<AgentConfig>, 'agentCategory'> = {},

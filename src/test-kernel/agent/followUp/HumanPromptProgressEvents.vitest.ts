@@ -1,4 +1,6 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
@@ -25,6 +27,8 @@ import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
+
+// Local file imports
 import { createRecordingHost } from '../progressTestUtils';
 
 let testApprovalHandler:

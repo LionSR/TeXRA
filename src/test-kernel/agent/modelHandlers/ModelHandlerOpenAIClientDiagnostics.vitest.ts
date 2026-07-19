@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type ModelConfig, ModelProvider } from 'llm-zoo';
 
-// Local imports - test support, agent, and model config
+// Local imports
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';

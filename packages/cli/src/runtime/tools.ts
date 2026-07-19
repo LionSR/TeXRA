@@ -1,4 +1,4 @@
-// Local imports - tools
+// Local imports
 import {
   EXTERNAL_TOOL_DEFS,
   type ExternalToolDef,
@@ -8,8 +8,6 @@ import {
   type ExternalToolCheckResult,
 } from '@tools/toolAvailability';
 import { getDisabledToolIds, setToolEnabled } from '@utils/config/constants';
-
-// Local imports - config
 
 export interface CliToolStatusRecord {
   readonly id: string;

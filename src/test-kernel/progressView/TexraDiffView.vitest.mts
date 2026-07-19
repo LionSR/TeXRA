@@ -2,11 +2,9 @@
 import { JSDOM } from 'jsdom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - progress view component type
+// Local imports
 import type { TexraDiffView } from '@progressView/frontend/components/TexraDiffView';
 import { DESKTOP_THEME_KIND } from '@shared/schemas/commonViewMessages';
-
-// Local imports - shared constants
 
 const workerModuleIds = [
   'monaco-editor/esm/vs/editor/editor.worker?worker',

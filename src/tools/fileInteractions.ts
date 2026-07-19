@@ -1,8 +1,6 @@
-// Local imports - agent
+// Local imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { type ToolResult } from '@shared/schemas/toolResult';
-
-// Local imports - tools
 
 export function recordToolFileRead(path: string): void {
   const context = getCurrentToolCallContext();

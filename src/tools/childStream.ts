@@ -1,4 +1,4 @@
-// Local imports - agent
+// Local imports
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -16,14 +16,6 @@ import { classifyAgentError } from '@common/errors';
 import { RUN_OUTCOME, STREAM_PHASE, buildRunDescriptor } from '@shared/schemas';
 import type { ExecutionId, StreamTabId, StorageKey } from '@shared/schemas';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
-
-// Local imports - errors
-
-// Local imports - constants
-
-// Local imports - shared
-
-// Local imports - utils
 import { createRunTrace } from '@transcript';
 import { formatDuration } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';

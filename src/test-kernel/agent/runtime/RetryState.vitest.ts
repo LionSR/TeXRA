@@ -1,4 +1,6 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
@@ -7,7 +9,7 @@ import '@test/support/defaultSessionTestSetup';
 import { APIError as OpenAIAPIError } from 'openai';
 import { describe, expect, it, vi, type Mock } from 'vitest';
 
-// Local imports - agent runtime
+// Local imports
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { BaseCycleFields } from '@agent/core/flows/CommonCycleTypes';
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
@@ -41,6 +43,8 @@ import {
   seedStreamStatusForTest,
 } from '@test/helpers/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
+
+// Local file imports
 import {
   createRecordingHost,
   sessionWithInteractions,

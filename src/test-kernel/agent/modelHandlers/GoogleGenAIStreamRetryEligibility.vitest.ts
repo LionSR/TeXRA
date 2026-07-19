@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createPartFromText, type Content } from '@google/genai';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports - test support and agent
+// Local imports
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 import {

@@ -1,10 +1,11 @@
+// Node imports
 import * as path from 'node:path';
 
-// Platform imports
+// Local imports
 import { platform } from '@platform/platform';
 import { normalizeFilePath } from '@utils/core';
 
-// Local imports - filesystem
+// Local file imports
 import { RelativeFS } from './relativeFS';
 import {
   annotateExternal,

@@ -3,18 +3,12 @@
  * Consolidates duplicated patterns across Anthropic, OpenAI, and Google handlers.
  */
 
-// Local imports - agent workspace
+// Local imports
 import { type AgentTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import replacementEngine from '@replacement/engine';
 import type { FileLocation } from '@shared/schemas';
-
-// Local imports - replacement
-
-// Local imports - files
 import { FlexibleFS } from '@utils/files';
-
-// Local imports - xml
 import { extractScratchpad } from '@utils/text/xmlUtils';
 
 /**

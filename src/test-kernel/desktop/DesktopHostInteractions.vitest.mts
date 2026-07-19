@@ -3,9 +3,7 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - progress backend
-
-// Local imports - runtime
+// Local imports
 import type {
   BashSettlement,
   HostBashApprovalResult,
@@ -17,13 +15,7 @@ import type {
 } from '@agent/runtime/HostInteractions';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
-
-// Local imports - shared
 import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
-
-// Local imports - desktop test paths
-
-// Local type imports - progress backend
 import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 import type {
   AgentProposalPermission,
@@ -36,6 +28,8 @@ import type {
   UserQuestionPermission,
 } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
+
+// Local file imports
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
 interface DesktopHostInteractions {

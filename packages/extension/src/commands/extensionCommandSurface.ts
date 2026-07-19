@@ -63,6 +63,8 @@ import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { AgentCategory } from '@shared/schemas/agent';
 import { dispatchCommandFromRegistry } from '@shared/commands/registry';
 import { SETTINGS_QUERY } from '@utils/config';
+
+// Local file imports
 import {
   EXTENSION_COMMAND_HANDLERS,
   EXTENSION_PARAMETERIZED_HANDLERS,

@@ -1,5 +1,7 @@
-// Third-party imports
+// Node imports
 import * as assert from 'node:assert';
+
+// Third-party imports
 import { describe, it, afterEach, vi } from 'vitest';
 
 const gitignoreMock = vi.hoisted(() => ({
@@ -12,7 +14,7 @@ vi.mock('@tools/gitignore', () => ({
   }),
 }));
 
-// Local imports - tools
+// Local imports
 import * as arxivModule from '@latex/arxivProcessor';
 import { FileType } from '@platform/interfaces';
 import { ArxivDownloadTool } from '@tools/arxiv/ArxivDownloadTool';

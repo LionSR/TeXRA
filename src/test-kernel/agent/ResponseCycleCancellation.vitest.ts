@@ -22,20 +22,16 @@ vi.mock('@agent/core/flows/CycleServices', () => ({
   withModelClient: async (services: unknown) => services,
 }));
 
-// Local imports - reflection flow
+// Local imports
 import { ResponseCycleNode } from '@agent/implementations/flows/reflection/nodes/ResponseCycleNode';
 import type { ReflectionFlowShared } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import type { ReflectionServices } from '@agent/implementations/flows/reflection/ReflectionServices';
-
-// Local imports - agent state
 import {
   AgentRunStateSnapshotSchema,
   ConversationRoundStateSnapshotSchema,
 } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { AgentFileLocation } from '@shared/schemas';
-
-// Local imports - shared schemas
 
 const outputLocation: AgentFileLocation = {
   kind: 'workspace',

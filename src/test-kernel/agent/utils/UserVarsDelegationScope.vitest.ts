@@ -60,9 +60,7 @@ vi.mock('@agent/index/agentRegistry', () => ({
   },
 }));
 
-// Local imports - test support
-
-// Local imports - agent components
+// Local imports
 import { noopTrace } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {

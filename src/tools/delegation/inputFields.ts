@@ -5,13 +5,9 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - tools
+// Local imports
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { formatBytes } from '@shared/utils/string';
-
-// Local imports - memory
-
-// Local imports - utils
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';

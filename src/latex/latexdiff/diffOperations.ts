@@ -3,7 +3,7 @@
  * (`OutputFileInfo` per round) or a workspace scan of legacy/mid-era layouts.
  */
 
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
 // Local imports
@@ -26,6 +26,7 @@ import { WorkspaceFS, FlexibleFS, pathToLocation } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
 import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 
+// Local file imports
 import { CHANNEL, LaTeXdiffService } from './service';
 import type {
   DiffOperation,

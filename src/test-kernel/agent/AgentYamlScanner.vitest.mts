@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 // Third-party imports
 import { beforeAll, describe, expect, it } from 'vitest';
 
-// Local imports - test setup
+// Local imports
 import { scanDirectory } from '@agent/index/agentYamlScanner';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createFakePlatform } from '@test/support/FakePlatform';

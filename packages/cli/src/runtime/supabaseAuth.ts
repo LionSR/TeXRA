@@ -1,6 +1,5 @@
 // Local imports
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
-
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 import { createHostAuthCoordinator } from '@auth/SupabaseAuthCoordinator';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -19,7 +18,7 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import { tryPlatform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 
-// Local imports - CLI runtime
+// Local file imports
 import { readCliEnv } from './cliContext';
 import { getCliSecrets } from './cliSecrets';
 import { openBrowser } from './browser';
@@ -29,7 +28,6 @@ import {
   requestDeviceAuthorization,
   type DeviceAuthorization,
 } from './supabaseAuthDeviceCode';
-
 import { enableCliIncludedModelAccess } from './apiAccessMode';
 
 /**

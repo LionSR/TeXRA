@@ -14,7 +14,7 @@ vi.mock('@progressView/frontend/components/ExternalInquiryPanel', () => ({
   clearInquiryDraft: vi.fn(),
 }));
 
-// Local imports - progress view
+// Local imports
 import {
   handleFollowUpChange,
   handleFollowUpSend,
@@ -35,8 +35,6 @@ import {
   createStreamState,
   type StreamTabId,
 } from '@shared/schemas';
-
-// Local imports - shared schemas
 
 function createToolUseState(text: string): StreamState {
   const state = createStreamState(AgentCategory.ToolUse);

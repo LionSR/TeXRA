@@ -1,17 +1,10 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - common
-// Local imports - frontend
+// Local imports
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { getFileLister } from '@frontend/files';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-
-// Local imports - latex
-
-// Local imports - logging
-
-// Local imports - utilities
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';

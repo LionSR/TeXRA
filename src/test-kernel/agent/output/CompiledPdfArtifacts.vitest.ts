@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -6,15 +6,11 @@ import * as path from 'node:path';
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - agent output
-
-// Local imports - platform
+// Local imports
 import { publishCompiledPdfArtifact } from '@agent/output/compiledPdfArtifacts';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createExternalLocation, createRunStorageLocation } from '@utils/files';
-
-// Local imports - file utilities
 
 async function writePdf(filePath: string, contents: string): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });

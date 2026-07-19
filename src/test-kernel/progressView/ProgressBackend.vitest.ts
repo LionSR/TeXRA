@@ -1,18 +1,18 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
-import * as path from 'node:path';
 
-// Standard library imports
+// Node imports
+import * as path from 'node:path';
 
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - transcript
+// Local imports
 import type { AgentEvent } from '@agent/trace';
-
-// Local imports - agent
 import {
   getExecutionStore,
   type DeleteExecutionOptions,
@@ -24,10 +24,6 @@ import {
   type RunFactPayloads,
 } from '@agent/runtime/runFactEvents';
 import type { TaskState } from '@agent/core/state/TaskState';
-
-// Local imports - logger
-
-// Local imports - shared
 import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
 import {
   ProgressBackend,

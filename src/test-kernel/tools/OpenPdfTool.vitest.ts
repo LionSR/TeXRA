@@ -1,13 +1,9 @@
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - tests
-
-// Local imports - runtime
+// Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-
-// Local imports - tools
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   OpenPdfTool,

@@ -1,4 +1,4 @@
-// Local imports - agent
+// Local imports
 import type { ExecutionRequest } from '@agent/core/state/executionRequests';
 import {
   isWorkflowTaskState,
@@ -6,9 +6,7 @@ import {
 } from '@agent/core/state/TaskState';
 import type { StreamTabId } from '@shared/schemas';
 
-// Local imports - shared
-
-// Local imports - controllers
+// Local file imports
 import {
   createProgressViewCommandHandlers,
   type ProgressViewApprovalCommandActions,

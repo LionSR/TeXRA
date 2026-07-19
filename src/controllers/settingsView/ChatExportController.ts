@@ -12,7 +12,7 @@
  * constructor instead of the controller importing `@resources`.
  */
 
-// Local imports - agent
+// Local imports
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 import {
   formatChatAsMarkdown,
@@ -20,21 +20,13 @@ import {
   generateExportFilename,
   type ChatExportInput,
 } from '@agent/export/chatExportFormatter';
-
-// Local imports - LaTeX
 import { compileLatex2Pdf } from '@latex/texTools';
-
-// Local imports - schemas
 import type { ExecutionId } from '@shared/schemas';
-
-// Local imports - transcript / trace-viewer
 import {
   assembleTrace,
   injectStandaloneTrace,
   type AssembleTraceResult,
 } from '@transcript';
-
-// Local imports - utils
 import { StorageFS, pathToLocation } from '@utils/files';
 
 export type { ChatExportInput };

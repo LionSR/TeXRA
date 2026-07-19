@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
@@ -15,9 +15,7 @@ import {
 import { describe, it } from 'vitest';
 import { type ModelConfig, ModelProvider } from 'llm-zoo';
 
-// Local imports - test support
-
-// Local imports - agent
+// Local imports
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import { validateGoogleMessageHistory } from '@agent/modelHandlers/google/googleMessageHelpers';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
@@ -25,8 +23,6 @@ import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtracti
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { FileLocation } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-
-// Local imports - utilities
 import { pathToLocation } from '@utils/files';
 
 interface LogRecorder extends AgentTrace {

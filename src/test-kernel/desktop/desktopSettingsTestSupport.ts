@@ -1,4 +1,6 @@
 // Desktop imports
+
+// Local imports
 import { createModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
 import type { DesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
 import type { DesktopCrashReportingSettingsController } from '@desktop/main/desktopCrashReportingSettingsController';
@@ -16,7 +18,7 @@ import type { SettingsStatePorts } from '@shared/settingsView/types';
 
 // Shared imports
 
-// Local imports - desktop test paths
+// Local file imports
 import { repoPath } from './desktopTestPaths.mjs';
 
 const noOp = async (): Promise<void> => undefined;

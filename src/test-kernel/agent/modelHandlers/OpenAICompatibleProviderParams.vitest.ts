@@ -1,11 +1,11 @@
-// Standard library imports
+// Node imports
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
 import { describe, it } from 'vitest';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
-// Local imports - test support and agent
+// Local imports
 import { noopTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerGLM } from '@agent/modelHandlers/openai/modelHandlerGLM';

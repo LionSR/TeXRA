@@ -1,7 +1,7 @@
 // Third-party imports
 import { beforeEach, describe, expect, it } from 'vitest';
 
-// Local imports - progress view frontend
+// Local imports
 import { streamLifecycleHandlers } from '@progressView/frontend/slices/streamLifecycleSlice';
 import { streamMetaHandlers } from '@progressView/frontend/slices/streamMetaSlice';
 import { syncHandlers } from '@progressView/frontend/slices/syncSlice';
@@ -26,8 +26,6 @@ import {
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { assertSupported } from '@shared/utils/dispatcher';
-
-// Local imports - shared schemas
 
 /** Seed the shared appState singleton and return a live reader over it. */
 function seedState(initialState: ProgressState): () => ProgressState {

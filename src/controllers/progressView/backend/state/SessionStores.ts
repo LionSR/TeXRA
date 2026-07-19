@@ -1,6 +1,4 @@
-// Local imports - transcript
-
-// Local imports - agent
+// Local imports
 import {
   deleteExecution as deleteStoredExecution,
   type DeleteExecutionOptions,
@@ -8,16 +6,8 @@ import {
 } from '@agent/storage/executionListing';
 import { executionIdFromStream } from '@agent/storage/executionIdFromStream';
 import { waitForOwnedExecutionLeaseRelease } from '@agent/storage/executionLease';
-
-// Local imports - logger
-
-// Local imports - shared
-
-// Local imports - utils
 import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-
-// Local imports - transcript types
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 import { unique } from '@utils/core';

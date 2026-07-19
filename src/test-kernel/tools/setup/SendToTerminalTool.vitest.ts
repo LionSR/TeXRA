@@ -1,10 +1,12 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
-// Third-party imports
-
-// Node.js built-in imports
+// Node imports
 import { strict as assert } from 'node:assert';
+
+// Third-party imports
 import { describe, it, beforeAll } from 'vitest';
 
 // Local imports
@@ -18,6 +20,7 @@ import {
   type TerminalRunResult,
 } from '@tools/setup/platform';
 
+// Local file imports
 import { createFakeSetupPlatform } from './fixtures';
 
 /**

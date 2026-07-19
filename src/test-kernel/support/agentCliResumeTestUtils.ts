@@ -1,9 +1,7 @@
-// Local imports - transcript
+// Local imports
 import type { StreamTabId } from '@shared/schemas';
 import type { ChildStream } from '@tools/childStream';
 import { createRunTrace, StreamLogStore } from '@transcript';
-
-// Type imports
 
 export function createFakeAgentCliChildStream(
   childStreamId: StreamTabId,

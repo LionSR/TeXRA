@@ -1,16 +1,12 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
-// Local imports - runtime
+// Local imports
 import {
   getRunContextWorkingDirectory,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { ToolError } from '@shared/schemas/toolResult';
-
-// Local imports - tools
-
-// Local imports - core utilities
 import { WorkspaceFS } from '@utils/files';
 import { findExternalRoot } from '@utils/files/externalRoots';
 import { locatePathInRoot } from '@utils/files/workspaceRoot';

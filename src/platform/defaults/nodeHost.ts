@@ -16,10 +16,8 @@
 // Node imports
 import { join } from 'node:path';
 
-// Local imports - skills
+// Local imports
 import { registerAgentFeatures } from '@agent/features';
-
-// Local imports - agent + tools (composition wiring)
 import { initializeGoalPrompts } from '@agent/goal/promptLoader';
 import { PathAgentDirectoryBundleSource } from '@agent/index/AgentDirectorySync';
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
@@ -27,7 +25,7 @@ import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
 import type { SkillSourceOptions } from '@skills/index';
 import { registerDirectLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 
-// Local imports - platform
+// Local file imports
 import { JsonConfigProvider } from './jsonConfigProvider';
 import { nodeFileLocks } from './fileLocks';
 import { nodeFilesystem } from './nodeFilesystem';
@@ -35,8 +33,6 @@ import { createNodeWorkspace } from './nodeWorkspace';
 import { NO_TOOL_AVAILABILITY_HOST } from '../interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '../languageModel';
 import { platform } from '../platform';
-
-// Type imports
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
 import type {
   AgentDirectoriesPort,

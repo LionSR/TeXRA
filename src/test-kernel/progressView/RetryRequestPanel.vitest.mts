@@ -1,16 +1,12 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - progress view component types
-
-// Local imports - shared schemas
+// Local imports
 import type { RetryRequestPanel } from '@progressView/frontend/components/RetryRequestPanel';
 import type { ProviderErrorPartial } from '@shared/schemas';
-
-// Local imports - shared constants
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
-// Local imports - test utilities
+// Local file imports
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 useLitComponentTestDom(

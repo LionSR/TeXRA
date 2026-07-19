@@ -6,7 +6,7 @@
  * follow-up enqueue, and optional wake-or-release of a force-opened queue.
  */
 
-// Local imports - agent
+// Local imports
 import { getExecutionStore, type ResultMeta } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -16,8 +16,6 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-
-// Local imports - shared
 
 export type ChildRunDeliveryResult =
   | { kind: 'delivered' }

@@ -1,4 +1,4 @@
-// Local imports - agent runtime and shared utilities
+// Local imports
 import { resolveChildRunOutput } from '@agent/storage';
 import {
   WorkflowRunAbortError,
@@ -14,7 +14,7 @@ import { configureDelegatedChildApprovals } from '@tools/approval';
 import { deriveExecutionId } from '@utils/core/idHash';
 import { runStorageLocationFromAnyAbsolutePath } from '@utils/files/taskRunStorage';
 
-// Local imports - delegation
+// Local file imports
 import {
   executeStableSubagentInBand,
   SubagentDurabilityError,

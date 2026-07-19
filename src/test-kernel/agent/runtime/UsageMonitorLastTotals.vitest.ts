@@ -21,6 +21,7 @@ import {
   UsageLogService,
 } from '@telemetry/UsageLogService';
 
+// Local file imports
 import { recordSessionEvents, runEventsOfType } from '../progressTestUtils';
 
 const modelInfo = {

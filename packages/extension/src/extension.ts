@@ -1,11 +1,11 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
 // Third-party imports
 import * as vscode from 'vscode';
 import dotenv from 'dotenv';
 
-// Local imports - core
+// Local imports
 import { loadAgents } from '@agent/index';
 import { clearStoreCache, listExecutions } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
@@ -110,7 +110,7 @@ import { getConfig } from '@utils/config';
 import { StorageFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-// Local imports - components
+// Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands } from './commands';
 

@@ -1,13 +1,12 @@
 /**
  * AgentTrace adapters for channel-backed logging without a transcript.
  */
-// Local imports - logger
+
+// Local imports
 import { createChannelWriter, type ChannelWriter } from '@logger/logUtils';
 import { MESSAGE_TYPES, type LogLevel } from '@shared/schemas';
 
-// Local imports - shared schemas
-
-// Local imports - trace
+// Local file imports
 import { noopTrace } from './noopTrace';
 import type {
   AgentTrace,

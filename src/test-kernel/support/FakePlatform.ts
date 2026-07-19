@@ -1,10 +1,10 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
 // Third-party imports
 import { createFsFromVolume, Volume, type IFs } from 'memfs';
 
-// Local imports - platform
+// Local imports
 import {
   FileType,
   NO_TOOL_AVAILABILITY_HOST,

@@ -1,21 +1,15 @@
-// Standard library imports
+// Node imports
 import path from 'node:path';
 
 // Third-party imports
 import { beforeEach, describe, expect, it } from 'vitest';
 
-// Local imports - tests
-
-// Local imports - agent output
+// Local imports
 import { computeOutputDiffStats } from '@agent/output/diffComputation';
 import { assignByContentSimilarity } from '@agent/output/extraction/contentSimilarity';
 import { createOutputState, ensureRoundData } from '@agent/output/outputState';
 import type { RoundFileMapping } from '@agent/output/types';
 import type { ExecutionId } from '@shared/schemas';
-
-// Local imports - shared schemas
-
-// Local imports - tools
 import { installPlatform } from '@test/support/setupPlatform';
 import { computeAndWriteWorkflowDiffs } from '@tools/subagentDiffs';
 import {
@@ -24,8 +18,6 @@ import {
   firstChangedLine,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-
-// Local imports - utils
 import {
   AbsoluteFS,
   createExternalLocation,

@@ -2,15 +2,13 @@
 import { JSDOM } from 'jsdom';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-// Local imports - progress view component types
+// Local imports
 import type { FileList } from '@progressView/frontend/components/FileList';
 import type { ProgressFileActionDetail } from '@progressView/frontend/events';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { OutputFileInfo } from '@shared/schemas';
 
-// Local imports - shared schemas
-
-// Local imports - test utilities
+// Local file imports
 import { installAttachInternalsFallback } from '../settings/litComponentTestUtils';
 
 const originalGlobals = {

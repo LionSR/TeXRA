@@ -1,14 +1,18 @@
-// Standard library imports
+// Node imports
 import { mkdtemp, rm } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Platform defaults
+
+// Local imports
 import type { Platform } from '@platform/platform';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+
+// Local file imports
 import { createFakePlatform } from './FakePlatform';
 
 /**

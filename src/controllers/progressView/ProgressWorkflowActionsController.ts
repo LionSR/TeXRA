@@ -1,3 +1,4 @@
+// Local imports
 import {
   isWorkflowTaskState,
   type TaskState,
@@ -8,8 +9,6 @@ import type {
   RoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
-
-// Local imports - shared
 
 export interface WorkflowDiffRequest {
   agent: string;

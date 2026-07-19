@@ -9,9 +9,7 @@ vi.mock('@shared/hostBridge', () => ({
   postMessage: mocks.postMessage,
 }));
 
-// Local imports - component type
-
-// Local imports - shared schemas
+// Local imports
 import type { MultiAgentTab } from '@settingsView/frontend/tabs/MultiAgentTab';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -19,7 +17,7 @@ import {
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
 
-// Local imports - test utilities
+// Local file imports
 import { useLitComponentTestDom } from './litComponentTestUtils';
 
 async function mount(

@@ -1,6 +1,4 @@
-// Local imports - shared settings controllers
-
-// Local imports - shared settings types
+// Local imports
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
@@ -11,8 +9,6 @@ import {
 } from '@shared/constants/latex';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
-
-// Local imports - controller and tool dashboard types
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 

@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,6 +27,7 @@ import {
 } from '@tools/setup/platform';
 import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
 
+// Local file imports
 import { createFakeSetupPlatform } from './fixtures';
 
 const REPO_ROOT = resolve(

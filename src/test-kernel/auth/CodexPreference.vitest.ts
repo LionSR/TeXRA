@@ -1,17 +1,13 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - test support
-
-// Local imports - auth
+// Local imports
 import {
   CODEX_PREFER_SUBSCRIPTION_KEY,
   isPreferCodexSubscription,
   setPreferCodexSubscription,
 } from '@auth/codex';
 import { platform } from '@platform/platform';
-
-// Local imports - platform types
 import type {
   ConfigInspection,
   ConfigProvider,

@@ -17,7 +17,7 @@
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
-// Local imports - tools
+// Local imports
 import { createChannelTrace } from '@agent/trace';
 import type { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
 import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';

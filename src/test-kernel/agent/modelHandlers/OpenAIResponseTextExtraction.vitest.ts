@@ -2,12 +2,12 @@
 import { describe, expect, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports - test support and agent
+// Local imports
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
-// Type imports
+// Third-party imports
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
 
 function createHandler(): ModelHandlerOpenAIResponse {

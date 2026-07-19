@@ -1,7 +1,7 @@
+// Node imports
 import { isDeepStrictEqual } from 'node:util';
 
-// Third-party imports
-// Local imports - agent
+// Local imports
 import { getExecutionStore } from '@agent/storage';
 import {
   activeModelHandlerCompatibilityKey,
@@ -44,14 +44,14 @@ import {
   type RunOutcome,
 } from '@shared/schemas';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
-
-// Local imports - tools and flow
 import { getDefaultToolRegistry } from '@tools/registry';
 import {
   buildTerminalTool,
   buildTerminalToolRegistry,
 } from '@tools/structuredOutput';
 import { TaskRunFileService } from '@utils/files';
+
+// Local file imports
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';

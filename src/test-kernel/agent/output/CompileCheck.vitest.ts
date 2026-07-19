@@ -1,15 +1,13 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - agent
+// Local imports
 import type { AgentTrace } from '@agent/trace';
 import { runCompileCheck } from '@agent/output/compileCheck';
 import { createOutputState, ensureRoundData } from '@agent/output/outputState';
-
-// Local imports - shared
 import type { CompileLatex2PdfResult } from '@latex/texTools';
 import type {
   ExecutionId,
@@ -17,8 +15,6 @@ import type {
   OutputFileInfo,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-
-// Local imports - file utilities
 import { installPlatform } from '@test/support/setupPlatform';
 import {
   TaskRunFileService,

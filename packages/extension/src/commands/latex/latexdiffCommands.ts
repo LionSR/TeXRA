@@ -1,11 +1,10 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
 // Third-party imports
 import * as vscode from 'vscode';
 
 // Local imports
-
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -39,6 +38,7 @@ import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { FlexibleFS, pathToLocation } from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
 
+// Local file imports
 import { getLatexdiffPackNotifications } from './latexHousekeepingNotifications';
 
 type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';

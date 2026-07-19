@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
@@ -9,7 +9,7 @@ import {
 } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - platform and agent
+// Local imports
 import {
   foldSystemPromptIntoVscodeLmMessages,
   ModelHandlerVscodeLm,

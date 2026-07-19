@@ -1,10 +1,10 @@
-// Third-party imports
+// Node imports
 import * as assert from 'node:assert';
+
+// Third-party imports
 import { describe, it, afterEach, vi } from 'vitest';
 
-// Local imports - tests
-
-// Local imports - tools
+// Local imports
 import * as bibliographyModule from '@latex/extractBibliography';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { ExtractBibliographyTool } from '@tools/latex';

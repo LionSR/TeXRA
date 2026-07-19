@@ -1,14 +1,10 @@
-// Local imports - hosts
-
-// Local imports - shared
+// Local imports
 import type { PromptHost } from '@hosts/uiHosts';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   MemoryPreview,
   MemoryViewItem,
 } from '@shared/schemas/settingsViewMessages';
-
-// Local imports - memory
 import type { MemoryFileMeta } from '@tools/memory/memoryMeta';
 
 export interface SettingsMemoryStorage {

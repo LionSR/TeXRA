@@ -1,4 +1,6 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
@@ -35,6 +37,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { clearStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
+// Local file imports
 import { createRecordingHost } from '../progressTestUtils';
 
 const storageMocks = vi.hoisted(() => ({

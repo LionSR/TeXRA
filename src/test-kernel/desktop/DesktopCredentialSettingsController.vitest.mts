@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-// Local imports - tests
+// Local imports
 import * as serverKeysModule from '@auth/serverKeys';
 import { refreshDesktopModelListStateIfNeeded } from '@desktop/main/desktopModelListRefresh';
 import { DefaultDesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
@@ -16,10 +16,6 @@ import {
   FakeStateStore,
 } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
-
-// Local imports - authentication and models
-
-// Local imports - shared
 
 const codexMocks = vi.hoisted(() => ({
   getStatus: vi.fn(async () => ({

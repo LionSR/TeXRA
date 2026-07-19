@@ -1,16 +1,14 @@
 // Third-party imports
 import { beforeEach, describe, expect, it } from 'vitest';
 
-// Local imports - progress view component types
-
-// Local imports - shared schemas
+// Local imports
 import type { ProposalRequestPanel } from '@progressView/frontend/components/ProposalRequestPanel';
 import { AgentCategory } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
-// Local imports - test utilities
+// Local file imports
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 type PostedMessage = { command: string; file?: string };
