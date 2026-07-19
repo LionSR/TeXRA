@@ -325,6 +325,25 @@ describe('CLI Select disabled-row focus', () => {
     ).toBe(1);
   });
 
+  it('reports disabled outer rows as non-wrapping boundaries', () => {
+    expect(
+      nextSelectHighlightIndex({
+        direction: -1,
+        highlight: 1,
+        items,
+        wrap: false,
+      }),
+    ).toBe(1);
+    expect(
+      nextSelectHighlightIndex({
+        direction: 1,
+        highlight: 2,
+        items,
+        wrap: false,
+      }),
+    ).toBe(2);
+  });
+
   it('keeps wraparound navigation for all-enabled lists', () => {
     const enabledItems = [
       { value: 'gemini', label: 'Gemini' },

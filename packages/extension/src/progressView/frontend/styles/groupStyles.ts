@@ -102,7 +102,7 @@ export const groupStyles = css`
       .log-group-content,
       .log-line,
       .banner-details,
-      statistics-panel,
+      context-management,
       latexdiff-results
     ) {
     margin-left: var(--wa-space-2xs);
@@ -114,7 +114,7 @@ export const groupStyles = css`
 
   .log-group-content
     .log-group-content
-    :is(.log-line, .banner-details, statistics-panel, latexdiff-results) {
+    :is(.log-line, .banner-details, context-management, latexdiff-results) {
     margin-left: 0;
   }
 `;

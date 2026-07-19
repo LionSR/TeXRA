@@ -29,6 +29,11 @@ const planApprovalRequestPanelStyles: CSSResult = css`
     white-space: pre-wrap;
     word-break: break-word;
   }
+
+  .plan-approval-request__goal-explanation {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+  }
 `;
 
 @customElement('plan-approval-request-panel')
@@ -59,14 +64,27 @@ export class PlanApprovalRequestPanel extends BaseApprovalPanel<'planApproval'> 
 
     return this.renderRequestShell({
       prefix: 'plan-approval-request',
-      details: this.renderObjective(plan.objective),
+      details: html`
+        ${this.renderObjective(plan.objective)}
+        ${
+          goalEnabled
+            ? html`<div class="plan-approval-request__goal-explanation">
+                <strong>Run as Goal</strong> keeps the agent working across
+                turns until it completes the plan, needs your input, or you stop
+                it. Only Bash commands are auto-approved; edits and other
+                actions still ask.
+              </div>`
+            : nothing
+        }
+      `,
       approveTitle: 'Approve this plan (y)',
       rejectTitle: 'Reject this plan (n)',
       middleActions: goalEnabled
         ? renderLabeledActionButton({
             icon: 'rocket',
-            text: 'Approve & Run',
-            title: 'Approve and run this plan autonomously via goal mode (r)',
+            text: 'Run as Goal',
+            title:
+              'Approve this plan and keep working across turns until it completes or needs your input (r)',
             action: 'approve_and_goal',
             onClick: () => this.emitAction({ action: 'approve_and_goal' }),
           })

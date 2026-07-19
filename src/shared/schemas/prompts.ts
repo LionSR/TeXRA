@@ -210,7 +210,7 @@ export const PlanApprovalPermissionSchema = z.strictObject({
   /**
    * True when the goal experimental feature flag is enabled at request
    * time. Frontend uses this to decide whether to render the
-   * "Approve & Run Autonomously" button.
+   * "Run as Goal" button.
    */
   goalEnabled: z.boolean().prefault(false),
 });
