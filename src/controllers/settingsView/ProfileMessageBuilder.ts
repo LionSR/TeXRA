@@ -60,7 +60,6 @@ export async function buildProfileMessage(
       authenticated: false,
       user: null,
       tier: FREE_TIER,
-      permissions: [],
       remoteAgents: [],
       apiAccessMode: 'personal',
       accessExpiresAt: null,
@@ -72,11 +71,8 @@ export async function buildProfileMessage(
   const user = await SupabaseClient.getUser();
 
   let tier = FREE_TIER;
-  let permissions: string[] = [];
   try {
-    const authContext = await SupabaseClient.getUserAuthContext();
-    tier = authContext.tier;
-    permissions = authContext.permissions;
+    tier = await SupabaseClient.getUserTier();
   } catch {
     // Keep the UI signed in even if profile metadata is temporarily unavailable.
   }
@@ -121,7 +117,6 @@ export async function buildProfileMessage(
     authenticated: true,
     user: { email: user?.email ?? 'N/A', id: user?.id ?? '' },
     tier,
-    permissions,
     remoteAgents,
     apiAccessMode,
     accessExpiresAt,

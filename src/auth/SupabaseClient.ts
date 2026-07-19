@@ -5,18 +5,14 @@ import {
 } from '@supabase/supabase-js';
 import * as logger from '@logger/logUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  type UserAuthContext,
-  type UserTier,
-  UserAuthContextSchema,
-  TOKEN_REFRESH_THRESHOLD_MS,
-} from './config';
+import { type UserTier, TOKEN_REFRESH_THRESHOLD_MS } from './config';
 import {
   fetchRelayTokenStatus,
   getCachedRelayTokenState,
   getConfiguredRelayToken,
   markRelayTokenRejected,
 } from './relayToken';
+import { UserTierSchema } from './sharedConfig';
 import type { AuthTokenProvider, SessionTokens } from './TokenProvider';
 
 /**
@@ -292,16 +288,6 @@ export class SupabaseClient {
    * Returns the actual tier value: 'free', 'Max', or 'Ultra'.
    */
   static async getUserTier(): Promise<UserTier> {
-    const authContext = await this.getUserAuthContext();
-    return authContext.tier;
-  }
-
-  /**
-   * Get the user's authorization context including permissions.
-   * Permissions are visibility values the user can access.
-   * Tier is reserved for future API key access levels.
-   */
-  static async getUserAuthContext(): Promise<UserAuthContext> {
     // CI relay tokens are not GoTrue sessions, so the session profile query
     // can't run on them. The relay's tier-config endpoint resolves the token
     // to its owning user's tier — the only profile surface a relay-scoped
@@ -312,10 +298,7 @@ export class SupabaseClient {
       // A rejected token behaves as if unset (a stored session may still
       // provide the context); an unverifiable one gates conservatively.
       if (status.state !== 'invalid') {
-        return {
-          permissions: [],
-          tier: status.state === 'valid' ? status.tier : 'free',
-        };
+        return status.state === 'valid' ? status.tier : 'free';
       }
     }
 
@@ -323,16 +306,16 @@ export class SupabaseClient {
   }
 
   /**
-   * Authorization context from the stored GoTrue session only, ignoring any
+   * User tier from the stored GoTrue session only, ignoring any
    * configured CI relay token. Use when the operation itself runs on the
    * session (e.g. PostgREST usage reads), so its tier describes the account
    * whose data is being read rather than the relay credential.
    */
-  static async getSessionAuthContext(): Promise<UserAuthContext> {
-    const defaultContext: UserAuthContext = { permissions: [], tier: 'free' };
+  static async getSessionAuthContext(): Promise<UserTier> {
+    const defaultTier: UserTier = 'free';
 
     const tokens = await this.getSessionTokens();
-    if (!tokens) return defaultContext;
+    if (!tokens) return defaultTier;
 
     try {
       const client = this.getClient();
@@ -341,10 +324,10 @@ export class SupabaseClient {
         refresh_token: tokens.refreshToken,
       });
 
-      // Fetch tier and permissions from profiles
+      // Fetch the tier from profiles.
       const { data, error } = await client
         .from('profiles')
-        .select('tier, permissions')
+        .select('tier')
         .single();
 
       if (error || !data) {
@@ -352,26 +335,17 @@ export class SupabaseClient {
           'SupabaseClient',
           `Error fetching profile: ${error?.message || 'No data'}`,
         );
-        return defaultContext;
+        return defaultTier;
       }
 
-      // Parse with Zod schema - field-level .catch() preserves valid fields
-      return UserAuthContextSchema.parse(data);
+      return UserTierSchema.catch('free').parse(data.tier);
     } catch (error) {
       logger.error(
         'SupabaseClient',
-        `Error getting user auth context: ${toErrorMessage(error)}`,
+        `Error getting user tier: ${toErrorMessage(error)}`,
       );
-      return defaultContext;
+      return defaultTier;
     }
-  }
-
-  /**
-   * Get user's permissions as a flat array.
-   */
-  static async getUserPermissions(): Promise<string[]> {
-    const context = await this.getUserAuthContext();
-    return context.permissions;
   }
 
   /**
