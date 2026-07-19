@@ -32,10 +32,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { initializePolishModel } from '@agent/runtime/polishModel';
-import {
-  getServerSideKeyService,
-  initializeServerSideKeyAccess,
-} from '@auth/serverKeys';
+import { initializeServerSideKeyAccess } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   getAuthCallbackUri,
@@ -314,8 +311,10 @@ export async function activate(context: vscode.ExtensionContext) {
   FileLister.initialize(context);
   initializeServerSideKeyAccess({
     state: context.globalState,
-    subscriptions: context.subscriptions,
     logger,
+    notifyIncludedModelAccessChanged: (enabled) => {
+      appSignals.emit('includedModelAccessChanged', enabled);
+    },
   });
 
   // Seed first-install defaults (e.g. disabled tools) before anything writes
@@ -655,11 +654,11 @@ export async function activate(context: vscode.ExtensionContext) {
   onTexraAuthSessionsChanged(context, () => {
     void safeRefreshApiKeyStatus();
   });
-  context.subscriptions.push(
-    getServerSideKeyService().onDidChangeModelAccess(() => {
+  context.subscriptions.push({
+    dispose: appSignals.on('includedModelAccessChanged', () => {
       void safeRefreshApiKeyStatus();
     }),
-  );
+  });
 
   const statusBarUsageTracker = new StatusBarUsageTracker();
   const updateStatusBarTooltip = () => {

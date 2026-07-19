@@ -39,6 +39,9 @@ export interface AppSignalPayloads {
   /** The editor's language-model catalogue or access permissions changed. */
   languageModelsChanged: undefined;
 
+  /** The included-model-access preference changed. */
+  includedModelAccessChanged: boolean;
+
   /**
    * One or more files were written directly to the workspace. Frontends can
    * badge or refresh those files without routing through a run-scoped channel.
@@ -77,7 +80,17 @@ class AppSignals implements AppSignalsLike {
   }
 
   emit<K extends AppSignal>(event: K, payload: AppSignalPayloads[K]): void {
-    this.emitter.emit(event, payload);
+    let listenerFailed = false;
+    let firstError: unknown;
+    for (const listener of this.emitter.rawListeners(event)) {
+      try {
+        listener(payload);
+      } catch (error) {
+        if (!listenerFailed) firstError = error;
+        listenerFailed = true;
+      }
+    }
+    if (listenerFailed) throw firstError;
   }
 }
 
