@@ -16,17 +16,14 @@ import {
   RUN_OUTCOME,
   executionStatusToRunOutcome,
   type ExecutionId,
+  type ExecutionMeta,
   type ExecutionStatus,
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  type ExecutionMeta,
-  type ExecutionMetaInput,
-  getExecutionStore,
-} from './ExecutionKVStore';
+import { getExecutionStore } from './ExecutionKVStore';
 import {
   acquireFreshExecutionLease,
   releaseOwnedExecutionLease,
@@ -129,8 +126,11 @@ export async function registerExecution(
   try {
     const timestamp = new Date().toISOString();
     const store = getExecutionStore(executionId);
-    const meta: ExecutionMetaInput = { timestamp, parentExecutionId };
-    if (category) meta.category = category;
+    const meta = {
+      timestamp,
+      parentExecutionId,
+      ...(category ? { category } : {}),
+    };
     const persistedConfig = normalizeWriterCategory(
       pinExecutionWorkingDirectory(config),
       agentName,
