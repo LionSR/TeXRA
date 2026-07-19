@@ -102,7 +102,7 @@ export class PlanTool extends defineTool({
   description: `Manage the plan document and (optionally) the autonomous goal pursuing it.
 
 Commands:
-- update: Propose or replace the plan. Required field: \`objective\` - a plain document stating what to achieve, the intended approach, and a verifiable stopping condition. Every update is presented to the user for approval; they may approve, approve & run autonomously (starts a goal), or reject.
+- update: Propose or replace the plan. Required field: \`objective\` - a plain document stating what to achieve, the intended approach, and a verifiable stopping condition. Every update is presented to the user for approval; they may approve, run the plan as a goal, or reject.
 - pause: Self-pause the goal pursuing this plan when you genuinely need user input to proceed. Required field: \`reason\` describing what you need.
 - complete: Mark the goal pursuing this plan complete. Required field: \`reason\` describing HOW you verified completion against current external state. Only call this once the objective's stopping condition is verifiably true.
 
@@ -325,14 +325,14 @@ Best practices:
   ): Promise<ToolResult> {
     if (!isGoalEnabled()) {
       logger.warn(
-        'Approve & Run Autonomously requested but goal feature flag is off; ' +
+        'Run as Goal requested but goal feature flag is off; ' +
           'continuing without an autonomous goal.',
       );
       return {
         status: 'executed',
         summary: 'Plan approved — autonomous run unavailable',
         output:
-          `The user selected Approve & Run, but the goal feature flag is ` +
+          `The user selected Run as Goal, but the goal feature flag is ` +
           `currently disabled. The plan is approved, but no autonomous ` +
           `goal was started.\n\n` +
           `Work toward the objective as a normal turn-by-turn workflow, ` +
