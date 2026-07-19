@@ -305,12 +305,16 @@ function statusBarInnerWidth(width: number | undefined): number | undefined {
 function fitTransientNoticeStatusBarLeftSegments(
   segments: readonly StatusBarSegment[],
   noticeIndex: number,
+  livenessIndex: number | undefined,
   width: number | undefined,
 ): readonly StatusBarSegment[] {
   const innerWidth = statusBarInnerWidth(width);
   if (innerWidth === undefined) return segments;
 
   const fitted = [...segments];
+  const notice = fitted[noticeIndex];
+  const liveness =
+    livenessIndex === undefined ? undefined : fitted[livenessIndex];
   while (
     fitted.length > noticeIndex + 1 &&
     statusBarSegmentsWidth(fitted) > innerWidth
@@ -318,19 +322,31 @@ function fitTransientNoticeStatusBarLeftSegments(
     fitted.pop();
   }
 
-  if (noticeIndex > 1 && statusBarSegmentsWidth(fitted) > innerWidth) {
-    fitted.splice(1, noticeIndex - 1);
+  if (statusBarSegmentsWidth(fitted) > innerWidth) {
+    for (let index = noticeIndex - 1; index > 0; index -= 1) {
+      if (fitted[index] !== liveness) fitted.splice(index, 1);
+    }
   }
 
-  const icon = fitted[0];
-  const prompt = fitted[1];
-  if (icon && prompt && statusBarSegmentsWidth(fitted) > innerWidth) {
-    const iconAndGapWidth = statusBarSegmentWidth(icon) + 1;
-    fitted[1] = {
-      ...prompt,
+  if (liveness?.compactText && statusBarSegmentsWidth(fitted) > innerWidth) {
+    const index = fitted.indexOf(liveness);
+    fitted[index] = { ...liveness, text: liveness.compactText };
+  }
+
+  const fittedNoticeIndex = notice ? fitted.indexOf(notice) : -1;
+  if (fittedNoticeIndex >= 0 && statusBarSegmentsWidth(fitted) > innerWidth) {
+    const fixedWidth = fitted.reduce(
+      (total, segment, index) =>
+        index === fittedNoticeIndex
+          ? total
+          : total + statusBarSegmentWidth(segment),
+      fitted.length - 1,
+    );
+    fitted[fittedNoticeIndex] = {
+      ...notice,
       text: truncateSummaryToWidth(
-        prompt.text,
-        Math.max(0, innerWidth - iconAndGapWidth),
+        notice.text,
+        Math.max(0, innerWidth - fixedWidth),
       ),
     };
   }
@@ -794,13 +810,19 @@ export function buildStatusBarDisplay(
 
   // A notice must not hide the only indication that an active run is still
   // alive. Keep that liveness compact so the notice remains the focal text.
+  let transientLivenessIndex: number | undefined;
   if (input.transientNotice && isActivePhase(input.status)) {
     const elapsed =
       input.elapsedMs === undefined
         ? ''
         : ` ${formatCompactDuration(input.elapsedMs)}`;
+    transientLivenessIndex = left.length;
     left.push({
       text: `${spinPrefix}${statusLabel}${elapsed}`,
+      compactText:
+        input.elapsedMs === undefined
+          ? 'run'
+          : `run ${formatCompactDuration(input.elapsedMs)}`,
       color: 'dim',
     });
   }
@@ -888,6 +910,7 @@ export function buildStatusBarDisplay(
       ? fitTransientNoticeStatusBarLeftSegments(
           left,
           transientNoticeIndex,
+          transientLivenessIndex,
           input.width,
         )
       : fitStatusBarLeftSegments(left, input.width);
