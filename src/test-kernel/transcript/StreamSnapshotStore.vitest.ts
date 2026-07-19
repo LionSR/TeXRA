@@ -1722,8 +1722,8 @@ describe('StreamSnapshotStore', () => {
 
     await expect(store.stageDeleteStream(STREAM)).rejects.toBe(statError);
 
-    expect(await StorageFS.exists(liveDir)).toBe(true);
     statSpy.mockRestore();
+    expect(await StorageFS.exists(liveDir)).toBe(true);
     await store.deleteStream(STREAM);
   });
 
