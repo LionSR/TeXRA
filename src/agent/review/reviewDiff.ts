@@ -16,7 +16,11 @@ import * as path from 'node:path';
 import simpleGit, { type SimpleGit } from 'simple-git';
 
 // Local imports
-import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import {
+  isADirectoryError,
+  isFileNotFoundError,
+  isNotADirectoryError,
+} from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -349,16 +353,20 @@ async function collectUntrackedDiffs(
         return { file, content };
       } catch (error) {
         if (isFileNotFoundError(error) || isNotADirectoryError(error)) {
+          // The path disappeared after Git listed it, so there is no evidence
+          // left for this review to collect.
           return undefined;
         }
-        if ((error as { code?: string })?.code === 'EISDIR') {
+        if (isADirectoryError(error)) {
           try {
+            // A non-symlink directory means the listed file was replaced.
             if (!(await platform().fs.isSymlink(filePath))) return undefined;
           } catch (recheckError) {
             if (
               isFileNotFoundError(recheckError) ||
               isNotADirectoryError(recheckError)
             ) {
+              // The path disappeared again while its type was rechecked.
               return undefined;
             }
             throw new Error(
