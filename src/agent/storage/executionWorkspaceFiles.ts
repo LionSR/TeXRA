@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { AbsoluteFS } from '@utils/files';
 import { byStringProp, normalizeFilePath } from '@utils/core';
 import { isStrictlyWithin } from '@utils/core/pathCore';
@@ -15,7 +16,7 @@ export interface ExecutionWorkspaceFile {
 }
 
 export function resolveExecutionWorkspaceFilePath(
-  config: AgentConfig | null,
+  config: Pick<AgentConfig, 'workingDirectory'> | null,
   filePath: string,
 ): { readonly absolutePath: string; readonly path: string } | undefined {
   const workspaceRoot = config?.workingDirectory?.trim();
@@ -38,7 +39,7 @@ export function resolveExecutionWorkspaceFilePath(
 }
 
 export async function listExecutionWorkspaceFiles(
-  config: AgentConfig | null,
+  config: Pick<AgentConfig, 'workingDirectory'> | null,
   filePaths: readonly string[],
 ): Promise<ExecutionWorkspaceFile[]> {
   const files = new Map<string, ExecutionWorkspaceFile>();
@@ -46,10 +47,13 @@ export async function listExecutionWorkspaceFiles(
     const resolved = resolveExecutionWorkspaceFilePath(config, filePath);
     if (!resolved || files.has(resolved.path)) continue;
 
-    const stat = await AbsoluteFS.stat(resolved.absolutePath).catch(
-      () => undefined,
-    );
-    if (!stat) continue;
+    let stat;
+    try {
+      stat = await AbsoluteFS.stat(resolved.absolutePath);
+    } catch (error) {
+      if (isFileNotFoundError(error) || isNotADirectoryError(error)) continue;
+      throw error;
+    }
 
     files.set(resolved.path, {
       path: resolved.path,
