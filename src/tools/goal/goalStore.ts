@@ -251,7 +251,7 @@ export const GoalStore = {
   },
 
   /**
-   * Replace the objective. Used by the Approve & Run path when a goal is
+   * Replace the objective. Used by the Run as Goal path when a goal is
    * already in flight — re-targeting an active loop is preferable to
    * silently leaving it pointed at a stale objective.
    */

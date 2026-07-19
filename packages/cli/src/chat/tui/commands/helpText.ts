@@ -14,7 +14,7 @@ import type { SlashCommand, SlashCommandCategory } from './slashRegistry';
 export const GOAL_MODE_HELP = [
   'Goal mode starts from an approved plan, not a standalone prompt.',
   '',
-  'Ask the agent to create a plan, then choose `r approve & run` in the plan approval panel. ' +
+  'Ask the agent to create a plan, then choose `r run as goal` in the plan approval panel. ' +
     'The active goal keeps the agent working across turns until it verifies completion, pauses, or you stop it.',
   '',
   'Use `/status` to inspect the active session. Goal mode auto-approves bash only; edits and other approvals still ask.',

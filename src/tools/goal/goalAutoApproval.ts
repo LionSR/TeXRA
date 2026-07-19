@@ -5,7 +5,7 @@ import type { StreamTabId } from '@shared/schemas/identifiers';
 /**
  * Engage or clear the per-stream bash approval bypass for an autonomous goal.
  *
- * "Approve & Run Autonomously" is the user's explicit consent to unattended
+ * "Run as Goal" is the user's explicit consent to unattended
  * command execution; without the bypass, the first verification/build command
  * silently parks the loop, which reads as the goal "stopping early". File edits
  * keep their normal diff approval prompt because an approved plan is not an
