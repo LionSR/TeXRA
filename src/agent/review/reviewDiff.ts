@@ -16,6 +16,7 @@ import * as path from 'node:path';
 import simpleGit, { type SimpleGit } from 'simple-git';
 
 // Local imports
+import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -345,8 +346,12 @@ async function collectUntrackedDiffs(
           MAX_UNTRACKED_FILE_BYTES + 1,
         );
         return { file, content };
-      } catch {
-        return undefined; // Vanished or unreadable; skip.
+      } catch (error) {
+        if (isFileNotFoundError(error)) return undefined;
+        throw new Error(
+          `Could not read untracked file "${file}": ${toErrorMessage(error)}`,
+          { cause: error },
+        );
       }
     }),
   );
@@ -442,13 +447,23 @@ export async function collectReviewDiff(
   const submoduleFlag = includeSubmodules
     ? '--submodule=diff'
     : '--ignore-submodules=all';
-  const [diffText, nameOnly, untracked] = await Promise.all([
-    rawGit(sgRoot, ['diff', '--no-color', submoduleFlag, baseRef, '--']),
-    rawGit(sgRoot, ['diff', '--name-only', submoduleFlag, baseRef, '--']),
-    includeUntracked
-      ? collectUntrackedDiffs(sgRoot, repoRoot)
-      : Promise.resolve({ diff: '', files: [] }),
-  ]);
+  let collected: [
+    string | null,
+    string | null,
+    Awaited<ReturnType<typeof collectUntrackedDiffs>>,
+  ];
+  try {
+    collected = await Promise.all([
+      rawGit(sgRoot, ['diff', '--no-color', submoduleFlag, baseRef, '--']),
+      rawGit(sgRoot, ['diff', '--name-only', submoduleFlag, baseRef, '--']),
+      includeUntracked
+        ? collectUntrackedDiffs(sgRoot, repoRoot)
+        : Promise.resolve({ diff: '', files: [] }),
+    ]);
+  } catch (error) {
+    return { ok: false, reason: toErrorMessage(error) };
+  }
+  const [diffText, nameOnly, untracked] = collected;
   // A failed name-only diff must fail the collection too: issue reports are
   // validated against `changedFiles`, so an empty list alongside real diff
   // text would reject every finding as outside the change set.

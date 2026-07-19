@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import {
@@ -14,11 +14,16 @@ import {
   listBaseBranchCandidates,
   type CollectReviewDiffOptions,
 } from '@agent/review/reviewDiff';
+import { platform } from '@platform/platform';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { executeCommand } from '@utils/system/execUtils';
 
 setupPlatform({ workspacePath: process.cwd() }, { fs: nodeFilesystem });
+
+function fsError(code: string, message: string): Error {
+  return Object.assign(new Error(message), { code });
+}
 
 describe('isPathInChangeSet', () => {
   it('matches exact files and paths under changed directories', () => {
@@ -91,8 +96,20 @@ describe('collectReviewDiff (real git repository)', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await rm(repo, { recursive: true, force: true });
   });
+
+  function failUntrackedRead(file: string, error: Error): void {
+    const fs = platform().fs;
+    const readFileChunk = fs.readFileChunk.bind(fs);
+    vi.spyOn(fs, 'readFileChunk').mockImplementation(
+      async (filePath, offset, length) => {
+        if (path.basename(filePath) === file) throw error;
+        return readFileChunk(filePath, offset, length);
+      },
+    );
+  }
 
   /** Runs `collectReviewDiff` against the fixture repo and unwraps a success. */
   async function collectDiffOrFail(
@@ -121,6 +138,42 @@ describe('collectReviewDiff (real git repository)', () => {
     expect(value.changedFiles).toEqual(['paper.tex', 'scratch.txt']);
     expect(value.truncated).toBe(false);
     expect(await realpath(value.repoRoot)).toBe(await realpath(repo));
+  });
+
+  it.each(['ENOENT', 'FileNotFound'])(
+    'omits an untracked file that disappears with %s during collection',
+    async (code) => {
+      await writeFile(path.join(repo, 'vanished.txt'), 'temporary\n');
+      failUntrackedRead(
+        'vanished.txt',
+        fsError(code, 'untracked file disappeared'),
+      );
+
+      const value = await collectDiffOrFail({ includeUntracked: true });
+
+      expect(value.diff).toBe('');
+      expect(value.changedFiles).toEqual([]);
+    },
+  );
+
+  it('fails clearly when an untracked file cannot be read', async () => {
+    await writeFile(path.join(repo, 'secret.txt'), 'sensitive\n');
+    failUntrackedRead(
+      'secret.txt',
+      fsError('EACCES', 'untracked file is unreadable'),
+    );
+
+    const result = await collectReviewDiff({
+      cwd: repo,
+      includeUntracked: true,
+      includeSubmodules: true,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      reason:
+        'Could not read untracked file "secret.txt": untracked file is unreadable',
+    });
   });
 
   it('ignores inherited interactive git environment variables', async () => {
