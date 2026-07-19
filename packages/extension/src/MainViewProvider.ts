@@ -8,7 +8,6 @@ import {
 } from '@controllers/onboarding/onboardingFunnel';
 import { refresh, computeAgentOptionsData, getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - common
 import { hasAnyUsableSetupCredential } from '@commands/setup';
@@ -21,6 +20,7 @@ import {
 } from '@common/webview';
 import { consumePendingState } from '@common/state';
 import { EXTENSION_CATEGORIES, getFilterExtensions } from '@common/files';
+import { appSignals } from '@eventBus/AppSignals';
 
 import { agentDirectories } from '@frontend/agents';
 import { loadMainViewModelOptions } from '@frontend/agents/optionsLoader';
@@ -132,11 +132,11 @@ export class MainViewProvider
       }
       void this.refreshOptionsAndView();
     });
-    this.context.subscriptions.push(
-      getServerSideKeyService().onDidChangeModelAccess(() => {
+    this.context.subscriptions.push({
+      dispose: appSignals.on('includedModelAccessChanged', () => {
         void this.refreshOptionsAndView();
       }),
-    );
+    });
   }
 
   /** Returns the sidebar webview, but only when in main mode. */
