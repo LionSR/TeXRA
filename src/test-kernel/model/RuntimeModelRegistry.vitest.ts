@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { noopTrace } from '@agent/trace';
 import { inferPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import {
   computeModelOptionsData,
@@ -132,7 +133,11 @@ describe('runtime model registry', () => {
       },
     });
     expect(
-      inferPersistedModelHandlerCompatibilityKey('copilot:sonnet46', []),
+      inferPersistedModelHandlerCompatibilityKey(
+        'copilot:sonnet46',
+        [],
+        noopTrace,
+      ),
     ).toBe('ModelHandlerVscodeLm');
   });
 

@@ -183,7 +183,11 @@ async function retrieveToolUseResumeData(
     };
     const modelHandlerCompatibilityKey =
       migrationResult.data.modelHandlerCompatibilityKey ??
-      inferPersistedModelHandlerCompatibilityKey(currentConfig.model, messages);
+      inferPersistedModelHandlerCompatibilityKey(
+        currentConfig.model,
+        messages,
+        logger,
+      );
 
     const shared: PreparedShared = {
       ...migrationResult.data,
@@ -263,6 +267,7 @@ async function retrieveWorkflowResumeData(
       inferPersistedModelHandlerCompatibilityKey(
         agentConfig.model,
         parseResult.data.conversation,
+        logger,
       );
     return {
       type: 'workflow',

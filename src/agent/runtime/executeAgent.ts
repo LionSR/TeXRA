@@ -494,6 +494,7 @@ export async function resumeToolUseFromResumeData(
     inferPersistedModelHandlerCompatibilityKey(
       resume.agentConfig.model,
       resume.shared.messages,
+      logger,
     );
   // Resolve persisted lineage before launch assembly activates the stream and
   // transfers its resources. Storage failures must propagate without leaving

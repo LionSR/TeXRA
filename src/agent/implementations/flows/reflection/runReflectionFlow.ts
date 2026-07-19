@@ -207,6 +207,7 @@ export async function runReflectionFlow<C = unknown>(
         inferPersistedModelHandlerCompatibilityKey(
           config.model,
           shared.conversation,
+          logger,
         ) ?? compatibilityKey;
       // Always sync totalRounds from the current agent config so that changes
       // to the YAML (e.g. rounds: 2 → 1) take effect on resume.

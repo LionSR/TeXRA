@@ -1,5 +1,6 @@
 import { ModelProvider } from 'llm-zoo';
 
+import type { AgentTrace } from '@agent/trace';
 import {
   normalizeProviderMessages,
   type ProviderMessage,
@@ -54,27 +55,42 @@ function isOpenRouterChatMessage(message: ProviderMessage): boolean {
 export function inferPersistedModelHandlerCompatibilityKey(
   model: string,
   messages: readonly ProviderMessage[],
+  logger: Pick<AgentTrace, 'info'>,
 ): ModelHandlerCompatibilityKey | undefined {
   const modelConfig = getRuntimeModelConfig(model);
-  if (isRuntimeModel(model)) return 'ModelHandlerVscodeLm';
+  let compatibilityKey: ModelHandlerCompatibilityKey | undefined;
+  if (isRuntimeModel(model)) {
+    compatibilityKey = 'ModelHandlerVscodeLm';
+  }
 
   // Copilot had no direct handler before ModelHandlerVscodeLm. Its only
   // runnable legacy route was OpenRouter, so a keyless persisted transcript
   // necessarily uses the OpenRouter message format. New Copilot sessions
   // persist their explicit compatibility key and do not enter this inference.
-  if (modelConfig?.provider === ModelProvider.COPILOT) {
-    return 'ModelHandlerOpenRouterNative';
+  if (!compatibilityKey && modelConfig?.provider === ModelProvider.COPILOT) {
+    compatibilityKey = 'ModelHandlerOpenRouterNative';
+  } else if (
+    !compatibilityKey &&
+    modelConfig?.provider === ModelProvider.GOOGLE
+  ) {
+    if (messages.some(isGoogleGenAIContentMessage)) {
+      compatibilityKey = 'ModelHandlerGoogleGenAI';
+    } else if (messages.some(isGoogleInteractionsStepMessage)) {
+      compatibilityKey = 'ModelHandlerGoogleInteractions';
+    } else if (messages.some(isOpenRouterChatMessage)) {
+      compatibilityKey = 'ModelHandlerOpenRouterNative';
+    }
   }
-  if (modelConfig?.provider !== ModelProvider.GOOGLE) return undefined;
-  if (messages.some(isGoogleGenAIContentMessage)) {
-    return 'ModelHandlerGoogleGenAI';
+
+  if (compatibilityKey) {
+    logger.info(
+      'Inferred model-handler compatibility for keyless persisted run',
+      {
+        data: { model, compatibilityKey },
+      },
+    );
   }
-  if (messages.some(isGoogleInteractionsStepMessage)) {
-    return 'ModelHandlerGoogleInteractions';
-  }
-  return messages.some(isOpenRouterChatMessage)
-    ? 'ModelHandlerOpenRouterNative'
-    : undefined;
+  return compatibilityKey;
 }
 
 function stringValue(value: unknown): string | undefined {
@@ -106,6 +122,7 @@ function unwrapSharedState(shared: unknown): Record<string, unknown> | null {
 export function inferPersistedFlowModelHandlerCompatibilityKey(
   model: string,
   shared: unknown,
+  logger: Pick<AgentTrace, 'info'>,
 ): ModelHandlerCompatibilityKey | undefined {
   const record = unwrapSharedState(shared);
   if (!record) return undefined;
@@ -124,5 +141,6 @@ export function inferPersistedFlowModelHandlerCompatibilityKey(
   return inferPersistedModelHandlerCompatibilityKey(
     currentModelFromRawSharedState(record) ?? model,
     messages,
+    logger,
   );
 }

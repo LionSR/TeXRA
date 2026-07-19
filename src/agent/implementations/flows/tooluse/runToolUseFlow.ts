@@ -459,6 +459,7 @@ export async function runToolUseFlow<C = unknown>(
           inferPersistedModelHandlerCompatibilityKey(
             sharedModel,
             migratedData.messages,
+            logger,
           ) ?? compatibilityKey;
         if (
           !migratedData.modelHandlerCompatibilityKey &&
