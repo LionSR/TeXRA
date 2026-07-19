@@ -561,7 +561,7 @@ export const SUPABASE_CONFIG: SupabaseConfig = {
 ### 2. Build Extension
 
 ```bash
-npm run build
+npm run build:fast
 ```
 
 The extension will now use the configured credentials. Users don't need to configure anything - they just sign in!
