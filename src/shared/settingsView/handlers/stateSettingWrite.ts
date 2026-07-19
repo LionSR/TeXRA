@@ -22,7 +22,7 @@ import type { WorkspaceStateKey } from '@shared/state/stateKeys';
  * (boolean or string); `agent` values are the string/enum the six external-agent
  * settings all use.
  */
-export type StateSettingWrite =
+type StateSettingWrite =
   | {
       readonly family: 'git';
       readonly key: WorkspaceStateKey;
