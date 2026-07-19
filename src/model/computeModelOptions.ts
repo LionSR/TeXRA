@@ -16,7 +16,7 @@ import {
   apiKeyExistsUncached,
   type ApiProvider,
 } from './apiProviders';
-import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from './codexSubscriptionRouting';
+import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from './providerCapabilities';
 import {
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,

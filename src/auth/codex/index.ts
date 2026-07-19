@@ -5,50 +5,37 @@
  * model handler, and the model-availability gate. Rides an UNOFFICIAL OpenAI
  * endpoint + borrowed client id — opt-in, off by default, personal use only.
  */
-export * from './codexConstants';
+export {
+  CODEX_ACCOUNT_ID_HEADER,
+  CODEX_BACKEND_BASE_URL,
+  CODEX_BETA_HEADER,
+  CODEX_BETA_VALUE,
+  CODEX_CALLBACK_PATH,
+  CODEX_ORIGINATOR,
+  CODEX_ORIGINATOR_HEADER,
+  CODEX_PREFER_SUBSCRIPTION_KEY,
+  CODEX_SESSION_SECRET_KEY,
+} from './codexConstants';
 export {
   generateCodeVerifier,
   computeCodeChallenge,
   generatePkcePair,
   generateOAuthState,
-  type PkcePair,
 } from './codexPkce';
-export {
-  decodeJwtPayload,
-  extractCodexClaims,
-  type CodexJwtClaims,
-} from './codexJwt';
+export { extractCodexClaims } from './codexJwt';
 export {
   CodexAuthError,
   formatCodexAuthUnavailableMessage,
-  CodexSessionSchema,
   type CodexSession,
   type CodexTokenResponse,
-  type CodexDeviceUserCode,
-  type CodexDeviceToken,
-  type CodexAuthErrorKind,
 } from './codexSessionTypes';
 export {
-  exchangeAuthorizationCode,
-  refreshTokens,
-  requestDeviceUserCode,
-  pollDeviceToken,
-  deviceUserCode,
-} from './codexOAuthClient';
-export {
   CodexSessionCoordinator,
-  type CodexSessionCoordinatorInit,
   type CodexSessionStorage,
   type CodexOAuthClient,
   type CodexSessionStatus,
   type CodexAuthorizeRequest,
-  type CodexLogger,
 } from './CodexSessionCoordinator';
-export {
-  createCodexAuthCoordinator,
-  type CodexAuthCoordinatorInit,
-  type CodexSecretStore,
-} from './CodexAuthCoordinator';
 export {
   codexCoordinator,
   resetCodexCoordinator,
@@ -64,12 +51,5 @@ export {
   setCodexSubscriptionToolUseOnly,
   type CodexSubscriptionPreferenceUpdate,
 } from './codexPreference';
-export {
-  loginWithLoopback,
-  type CodexLoopbackLoginOptions,
-} from './codexLoopbackLogin';
-export {
-  loginWithDeviceCode,
-  type CodexDeviceLoginOptions,
-  type CodexDevicePrompt,
-} from './codexDeviceLogin';
+export { loginWithLoopback } from './codexLoopbackLogin';
+export { loginWithDeviceCode } from './codexDeviceLogin';
