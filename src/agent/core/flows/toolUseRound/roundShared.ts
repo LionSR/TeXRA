@@ -3,7 +3,10 @@ import { z } from 'zod';
 
 // Local imports - core flow primitives
 import { BaseCycleFieldsSchema } from '@agent/core/flows/CommonCycleTypes';
-import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
+import type {
+  FinalTool,
+  SdkToolCall,
+} from '@agent/types/ModelHandlerContracts';
 import { NormalizedUsageSchema } from '@agent/types/NormalizedUsage';
 
 /**
@@ -78,4 +81,6 @@ export interface ToolUseRoundShared extends ToolUseRoundFields {
   toolCalls?: SdkToolCall[];
   /** Current user instruction, refreshed when the round consumes user input. */
   currentUserInstruction?: string;
+  /** Named tool forced on this round's model request. */
+  finalTool?: FinalTool;
 }

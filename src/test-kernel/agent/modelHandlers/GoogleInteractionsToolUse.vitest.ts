@@ -125,6 +125,42 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
     vi.restoreAllMocks();
   });
 
+  it('maps finalTool to the Interactions generation config', async () => {
+    disableServerState();
+    const handler = createHandler();
+    let captured:
+      Interactions.CreateModelInteractionParamsStreaming | undefined;
+    const client = {
+      interactions: {
+        create: async (
+          params: Interactions.CreateModelInteractionParamsStreaming,
+        ) => {
+          captured = params;
+          return (async function* () {
+            yield {
+              event_type: 'interaction.completed',
+              interaction: { id: 'int_final', status: 'completed', steps: [] },
+            } as Interactions.InteractionSSEEvent;
+          })();
+        },
+      },
+      models: {},
+    };
+
+    await handler.createResponse({
+      client: client as never,
+      messages: [
+        { type: 'user_input', content: [{ type: 'text', text: 'finish' }] },
+      ],
+      temperature: 0,
+      tools: [{ name: 'submit_output', description: 'Submit output' }],
+      finalTool: { name: 'submit_output' },
+    });
+
+    expect(captured?.generation_config?.tool_choice).toBe('submit_output');
+    expect(handler.supportsForcedToolChoice).toBe(true);
+  });
+
   it('accumulates parallel arguments_delta chunks and extracts tool calls', async () => {
     const handler = createHandler();
 

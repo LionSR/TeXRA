@@ -61,6 +61,7 @@ export function createToolUseRoundFlow<C>(): Flow<
       services.modelHandler.requiresPerCallSystemPrompt
         ? shared.systemPrompt
         : undefined,
+    getFinalTool: (shared) => shared.finalTool,
     storeResponse: (shared, response) => {
       shared.response = response;
     },

@@ -138,6 +138,30 @@ function getCacheMarker(block?: ContentBlockParam | ContentBlock): unknown {
   return (block as { cache_control?: unknown }).cache_control;
 }
 
+describe('ModelHandlerAnthropic forced tool choice', () => {
+  it('maps finalTool to a named Anthropic tool choice', async () => {
+    const handler = createAnthropicHandler();
+    stubHandlerForTest(handler);
+    const { client, messageOptions } = createCapturingAnthropicClient(
+      handler.config.fullName,
+    );
+
+    await handler.createResponse({
+      client,
+      messages: helloMessages(),
+      temperature: 0,
+      tools: [{ name: 'submit_output', description: 'Submit output' }],
+      finalTool: { name: 'submit_output' },
+    });
+
+    assert.deepEqual(messageOptions[0].tool_choice, {
+      type: 'tool',
+      name: 'submit_output',
+    });
+    assert.equal(handler.supportsForcedToolChoice, true);
+  });
+});
+
 /** Create a no-op logger stub for handler tests, with optional overrides. */
 function createLoggerStub(
   overrides?: Partial<Record<string, unknown>>,

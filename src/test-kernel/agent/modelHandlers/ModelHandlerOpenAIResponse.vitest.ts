@@ -294,6 +294,35 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.equal(request?.parallel_tool_calls, true);
   });
 
+  it('maps finalTool to a named Responses function choice', async () => {
+    const handler = createHandler();
+    let request: Record<string, unknown> | undefined;
+    const tools: ToolDefinition[] = [
+      { name: 'submit_output', description: 'Submit output' },
+    ];
+
+    await handler.createResponse({
+      client: {
+        responses: {
+          create: async (params: Record<string, unknown>) => {
+            request = params;
+            return createResponse('resp-forced-tool', { input_tokens: 12 });
+          },
+        },
+      } as any,
+      messages: createMessages(1),
+      temperature: 0,
+      tools,
+      finalTool: { name: 'submit_output' },
+    });
+
+    assert.deepEqual(request?.tool_choice, {
+      type: 'function',
+      name: 'submit_output',
+    });
+    assert.equal(handler.supportsForcedToolChoice, true);
+  });
+
   it('rejects concurrent calls on the same handler instance', async () => {
     const handler = createHandler();
     let resolveCreate: (response: any) => void = () => undefined;

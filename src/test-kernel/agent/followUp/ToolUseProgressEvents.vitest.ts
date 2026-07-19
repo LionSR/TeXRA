@@ -6,6 +6,7 @@ const roundFlowState = vi.hoisted(() => ({
   endTurn: false,
   lastError: undefined as
     { message: string; userRetryable: boolean } | undefined,
+  finalTool: undefined as { name: string } | undefined,
 }));
 
 vi.mock('@agent/core/flows/ToolUseRoundFlow', () => ({
@@ -15,7 +16,9 @@ vi.mock('@agent/core/flows/ToolUseRoundFlow', () => ({
       shouldStop: boolean;
       endTurn: boolean;
       lastError?: { message: string; userRetryable: boolean };
+      finalTool?: { name: string };
     }) {
+      roundFlowState.finalTool = shared.finalTool;
       shared.shouldStop = roundFlowState.shouldStop;
       shared.endTurn = roundFlowState.endTurn;
       shared.lastError = roundFlowState.lastError;
@@ -83,6 +86,38 @@ function createPrepResult(
 }
 
 describe('tool-use progress events', () => {
+  it('collapses a single-shot run to one forced final-tool round', async () => {
+    roundFlowState.shouldStop = false;
+    roundFlowState.endTurn = true;
+    roundFlowState.lastError = undefined;
+    roundFlowState.finalTool = undefined;
+    const { host } = createRecordingHost();
+    const logger = new TraceEmitter();
+    const streamId = 'stream:single-shot-final-tool' as StreamTabId;
+    const node = new ToolUseCycleNode().setServices({
+      streamId,
+      runtimeHost: host,
+      logger,
+      modelHandler: {
+        getClient: vi.fn(),
+        supportsForcedToolChoice: true,
+      },
+      finalTool: { name: 'submit_output' },
+      onRoundFinalized: vi.fn(),
+      config: { model: 'test-model', agent: 'test-agent' },
+      setting: { tools: [] },
+    } as unknown as ToolUseServices);
+
+    await withTestRunContext(
+      host,
+      streamId,
+      () => node.exec(createPrepResult(AgentWorkspaceState.create(), false)),
+      { stopAfterCycle: true },
+    );
+
+    expect(roundFlowState.finalTool).toEqual({ name: 'submit_output' });
+  });
+
   it('publishes skipped-cycle todo and plan events through the runtime host', async () => {
     const { host } = createRecordingHost();
     const logger = new TraceEmitter();
