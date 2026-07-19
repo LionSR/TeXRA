@@ -267,6 +267,33 @@ describe('CLI Supabase auth', () => {
     expect(callbackServer.close).toHaveBeenCalledOnce();
   });
 
+  it('keeps a completed callback successful if the browser launcher later fails', async () => {
+    let failBrowserLaunch!: (error: Error) => void;
+    const session = { access_token: 'token' };
+    const callbackServer = {
+      close: vi.fn().mockResolvedValue(undefined),
+      redirectTo: 'http://127.0.0.1:0/callback',
+      waitForSession: vi.fn().mockResolvedValue(session),
+    };
+    mocks.startLoopbackCallbackServer.mockResolvedValue(callbackServer);
+    mocks.signInWithOAuth.mockResolvedValue({
+      data: { url: 'https://auth.example/login' },
+      error: null,
+    });
+    mocks.openBrowser.mockReturnValue(
+      new Promise((_resolve, reject) => {
+        failBrowserLaunch = reject;
+      }),
+    );
+    const { signInCliSupabase } = await loadSupabaseAuth();
+
+    await expect(signInCliSupabase()).resolves.toBe(session);
+    failBrowserLaunch(new Error('launcher exited late'));
+    await Promise.resolve();
+
+    expect(callbackServer.close).toHaveBeenCalledOnce();
+  });
+
   it('removes cached remote agents after sign-out', async () => {
     const { signOutCliSupabase } = await loadSupabaseAuth();
 

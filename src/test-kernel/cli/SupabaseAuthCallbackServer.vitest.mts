@@ -70,4 +70,41 @@ describe('CLI Supabase authentication callback server', () => {
     expect(storeSession).not.toHaveBeenCalled();
     await server.close();
   });
+
+  it('finishes a callback whose storage commit began before cancellation', async () => {
+    let finishStorage!: () => void;
+    const session = { account: { label: 'person@example.edu' } };
+    const createSessionFromCallback = vi
+      .fn()
+      .mockResolvedValue({ success: true, session });
+    const storeSession = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishStorage = resolve;
+        }),
+    );
+    const coordinator = {
+      createSessionFromCallback,
+      storeSession,
+    } as unknown as SupabaseSessionCoordinator;
+    const server = await startLoopbackCallbackServer(coordinator);
+    const callbackPage = await fetch(`${server.redirectTo}?code=oauth-code`);
+    const nonce = (await callbackPage.text()).match(/nonce: "([^"]+)"/)?.[1];
+    expect(nonce).toBeDefined();
+    const controller = new AbortController();
+    const completion = server.waitForSession(controller.signal);
+    const callbackResponse = fetch(`${server.redirectTo}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: '?code=oauth-code', nonce }),
+    });
+    await vi.waitFor(() => expect(storeSession).toHaveBeenCalled());
+
+    controller.abort();
+    finishStorage();
+
+    await expect(completion).resolves.toBe(session);
+    expect((await callbackResponse).status).toBe(200);
+    await server.close();
+  });
 });
