@@ -288,64 +288,45 @@ interface WriteApprovedContentResult {
   baseContent: string;
 }
 
+/**
+ * Reconcile approved content with the current workspace file and mark the path
+ * as read after the operation succeeds, so every approved-write caller keeps
+ * the later-edit guard in sync.
+ */
 export async function writeApprovedContent(
   path: string,
   originalContent: string,
   finalContent: string,
 ): Promise<WriteApprovedContentResult> {
   const exists = await WorkspaceFS.exists(path);
-  if (!exists) {
-    await WorkspaceFS.write(path, finalContent);
-    return { appliedContent: finalContent, baseContent: '' };
+  let baseContent = '';
+  let appliedContent = finalContent;
+  let shouldWrite = true;
+
+  if (exists) {
+    // All content is already LF-normalized at the FS read boundary,
+    // so comparisons work directly without extra normalization.
+    const currentContent = await WorkspaceFS.read(path);
+    baseContent = currentContent;
+
+    if (currentContent === finalContent || originalContent === finalContent) {
+      appliedContent = currentContent;
+      shouldWrite = false;
+    } else if (currentContent !== originalContent) {
+      const { content: patchedContent, results } = applyPatchToText(
+        originalContent,
+        finalContent,
+        currentContent,
+      );
+      appliedContent = results.every(Boolean) ? patchedContent : finalContent;
+    }
   }
 
-  // All content is already LF-normalized at the FS read boundary,
-  // so comparisons work directly without extra normalization.
-  const currentContent = await WorkspaceFS.read(path);
-
-  if (currentContent === finalContent || originalContent === finalContent) {
-    return { appliedContent: currentContent, baseContent: currentContent };
+  if (shouldWrite) {
+    await WorkspaceFS.write(path, appliedContent);
   }
-
-  if (currentContent === originalContent) {
-    await WorkspaceFS.write(path, finalContent);
-    return { appliedContent: finalContent, baseContent: currentContent };
-  }
-
-  const { content: patchedContent, results } = applyPatchToText(
-    originalContent,
-    finalContent,
-    currentContent,
-  );
-
-  if (results.every(Boolean)) {
-    await WorkspaceFS.write(path, patchedContent);
-    return { appliedContent: patchedContent, baseContent: currentContent };
-  }
-
-  await WorkspaceFS.write(path, finalContent);
-  return { appliedContent: finalContent, baseContent: currentContent };
-}
-
-/**
- * `writeApprovedContent` plus the `recordToolFileRead` that must always
- * follow it — every edit tool marks the file "read" immediately after a
- * successful approved write so a later edit in the same run doesn't hit the
- * read-before-edit gate. Centralized because every call site paired these two
- * calls by hand and it's an easy one to forget.
- */
-async function writeAndRecordApprovedEdit(
-  path: string,
-  originalContent: string,
-  finalContent: string,
-): Promise<WriteApprovedContentResult> {
-  const result = await writeApprovedContent(
-    path,
-    originalContent,
-    finalContent,
-  );
   recordToolFileRead(path);
-  return result;
+  return { appliedContent, baseContent };
 }
 
 /**
@@ -440,9 +421,8 @@ interface WrittenApprovedEdit extends WriteApprovedContentResult {
 
 /**
  * Full approve-then-write handshake for a proposed edit: request approval,
- * then write the resolved content and record the file as read. Combines
- * `requestApprovedEditContent` + `writeAndRecordApprovedEdit`, the exact
- * pairing every straight-through edit call site previously hand-rolled.
+ * then write the resolved content. Combines the exact pairing every
+ * straight-through edit call site previously hand-rolled.
  * `beforeWrite` covers work that must happen only after acceptance, such as
  * creating a new file's parent directory.
  */
@@ -462,7 +442,7 @@ export async function requestAndWriteApprovedEdit(request: {
 
   await request.beforeWrite?.();
 
-  const written = await writeAndRecordApprovedEdit(
+  const written = await writeApprovedContent(
     request.path,
     request.originalContent,
     finalContent,
