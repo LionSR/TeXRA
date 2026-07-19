@@ -9,23 +9,18 @@
 
 import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
 import { handleCors } from '../_shared/cors.ts';
-import {
-  createEdgeClient,
-  versionedJsonResponse,
-} from '../_shared/responses.ts';
+import { createEdgeClient, jsonResponse } from '../_shared/responses.ts';
 
 // =============================================================================
 // Constants
 // =============================================================================
-
-const VERSION = '1.1.1';
 
 // =============================================================================
 // Helpers
 // =============================================================================
 
 function errorResponse(req: Request, error: string, status: number): Response {
-  return versionedJsonResponse(req, VERSION, { error }, status);
+  return jsonResponse(req, { error }, status);
 }
 
 // =============================================================================
@@ -111,9 +106,8 @@ Deno.serve(async (req: Request) => {
     // 6. Return config (client parses YAML and extracts description)
     const yamlContent = await fileData.text();
 
-    return versionedJsonResponse(
+    return jsonResponse(
       req,
-      VERSION,
       {
         config: yamlContent,
         name: agent.name,

@@ -26,14 +26,13 @@ export function createEdgeClient(
   });
 }
 
-/** JSON response carrying CORS headers and the function's `_version` stamp. */
-export function versionedJsonResponse(
+/** JSON response carrying CORS headers. */
+export function jsonResponse(
   req: Request,
-  version: string,
   body: Record<string, unknown>,
   status: number,
 ): Response {
-  return new Response(JSON.stringify({ _version: version, ...body }), {
+  return new Response(JSON.stringify(body), {
     status,
     headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' },
   });
