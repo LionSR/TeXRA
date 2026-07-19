@@ -297,66 +297,6 @@
       "name": "src/test-kernel/support/setupFakePlatform.ts"
     },
     {
-      "file": "src/tools/approval/index.ts",
-      "category": "types",
-      "name": "BashApprovalRequest"
-    },
-    {
-      "file": "src/tools/approval/index.ts",
-      "category": "types",
-      "name": "BashApprovalResult"
-    },
-    {
-      "file": "src/tools/approval/index.ts",
-      "category": "types",
-      "name": "WriteApprovedContentResult"
-    },
-    {
-      "file": "src/tools/approval/toolEditApproval.ts",
-      "category": "types",
-      "name": "ApprovedEditContent"
-    },
-    {
-      "file": "src/tools/github/checkRunsClient.ts",
-      "category": "types",
-      "name": "CheckRunsCachePage"
-    },
-    {
-      "file": "src/tools/goal/goalStore.ts",
-      "category": "types",
-      "name": "GoalStateChange"
-    },
-    {
-      "file": "src/tools/goal/index.ts",
-      "category": "types",
-      "name": "GoalStateChange"
-    },
-    {
-      "file": "src/tools/goal/index.ts",
-      "category": "types",
-      "name": "GoalStateChangeListener"
-    },
-    {
-      "file": "src/tools/lean/lspTypes.ts",
-      "category": "types",
-      "name": "LspMarkedString"
-    },
-    {
-      "file": "src/tools/lean/lspTypes.ts",
-      "category": "types",
-      "name": "LspMarkupContent"
-    },
-    {
-      "file": "src/tools/lean/lspTypes.ts",
-      "category": "types",
-      "name": "LspPosition"
-    },
-    {
-      "file": "src/tools/lean/lspTypes.ts",
-      "category": "types",
-      "name": "LspRange"
-    },
-    {
       "file": "src/transcript/index.ts",
       "category": "exports",
       "name": "unregisterFlushers"

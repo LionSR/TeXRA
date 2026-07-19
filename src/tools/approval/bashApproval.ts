@@ -23,7 +23,7 @@ const BashApprovalRequestSchema = z.object({
   cwd: z.string().nullish(),
   streamId: StreamTabIdSchema.nullish(),
 });
-export type BashApprovalRequest = z.infer<typeof BashApprovalRequestSchema>;
+type BashApprovalRequest = z.infer<typeof BashApprovalRequestSchema>;
 
 const BashApprovalResultSchema = z.object({
   accepted: z.boolean(),
@@ -31,7 +31,7 @@ const BashApprovalResultSchema = z.object({
   /** Distinguishes a host-side interaction timeout from an explicit reject. */
   timedOut: z.boolean().optional(),
 });
-export type BashApprovalResult = z.infer<typeof BashApprovalResultSchema>;
+type BashApprovalResult = z.infer<typeof BashApprovalResultSchema>;
 
 const DEFAULT_BASH_REJECTION_INSTRUCTION =
   'Do not retry this rejected command or another approval-gated shell command for the same check. ' +

@@ -143,8 +143,6 @@ export {
   // Bash approval
   setBashApprovalSessionBypass,
   isBashApprovalBypassedForStream,
-  type BashApprovalRequest,
-  type BashApprovalResult,
 } from './bashApproval';
 
 export {
@@ -159,5 +157,4 @@ export {
   isApprovalBypassedForStream,
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
-  type WriteApprovedContentResult,
 } from './toolEditApproval';
