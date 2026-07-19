@@ -69,7 +69,7 @@ describe('CLI plan approval layout', () => {
       }),
     ).toBe(8);
 
-    for (const columns of [67, 68]) {
+    for (const columns of [65, 66]) {
       expect(
         planApprovalCompactBodyRowsBudget({
           availableRows: 9,
@@ -81,13 +81,13 @@ describe('CLI plan approval layout', () => {
     expect(
       planApprovalCompactBodyRowsBudget({
         availableRows: 9,
-        columns: 69,
+        columns: 67,
         goalEnabled: true,
       }),
     ).toBe(8);
   });
 
-  it('hides approve-and-run when compact mode cannot show its scope notice', () => {
+  it('hides run-as-goal when compact mode cannot show its scope notice', () => {
     expect(
       isPlanApprovalGoalActionVisible({
         compact: true,
@@ -122,18 +122,18 @@ describe('CLI plan approval layout', () => {
     ).toBeGreaterThan(2);
   });
 
-  it('keeps the autonomous warning concise enough for the approval card', () => {
-    expect(PLAN_APPROVAL_GOAL_NOTICE).toContain('Approve & run only');
-    expect(PLAN_APPROVAL_GOAL_NOTICE).toContain('auto-approves bash');
+  it('explains goal continuation and approval scope concisely', () => {
+    expect(PLAN_APPROVAL_GOAL_NOTICE).toContain('until done');
+    expect(PLAN_APPROVAL_GOAL_NOTICE).toContain('only Bash');
     expect(PLAN_APPROVAL_GOAL_NOTICE.length).toBeLessThanOrEqual(40);
   });
 
-  it('keeps the autonomous warning to one display row on narrow cards', () => {
+  it('keeps the goal explanation to one display row on narrow cards', () => {
     const notice = planApprovalGoalNoticeLine(40);
 
     expect(textDisplayWidth(notice)).toBe(40);
-    expect(notice).toContain('Approve & run only');
-    expect(notice).toContain('auto-approves bash');
+    expect(notice).toContain('until done');
+    expect(notice).toContain('only Bash');
     expect(notice).not.toContain('…');
   });
 });
