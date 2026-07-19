@@ -126,17 +126,3 @@ export async function runPackLatexdiffvcMultiple(
   }
   return results;
 }
-
-export async function runCleanLatexdiffvc(
-  inputFile: string,
-  commitHash: string,
-): Promise<LatexdiffPackResult> {
-  return runPackLatexdiffvc(inputFile, commitHash, true);
-}
-
-export async function runCleanLatexdiffvcMultiple(
-  inputFiles: string[],
-  commitHash: string,
-): Promise<LatexdiffPackResult[]> {
-  return runPackLatexdiffvcMultiple(inputFiles, commitHash, true);
-}
