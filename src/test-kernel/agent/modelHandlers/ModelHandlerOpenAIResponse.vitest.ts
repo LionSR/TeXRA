@@ -6,17 +6,17 @@ import * as path from 'node:path';
 import { describe, it } from 'vitest';
 
 // Third-party imports
-import { type ModelConfig, ModelProvider, ReasoningEffort } from 'llm-zoo';
+import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 import { OpenAIError } from 'openai';
 
 // Local imports - platform
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 
 // Local imports - test support
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
-// Local imports - test support and agent
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+// Local imports - agent
 import { noopTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
@@ -59,9 +59,7 @@ const OPENAI_RESPONSE_TEST_CONFIG = Object.freeze({
   openRouterOnly: true,
 });
 
-type TestModelConfigOverrides = Partial<Omit<ModelConfig, 'capabilities'>> & {
-  capabilities?: Partial<ModelConfig['capabilities']>;
-};
+type TestModelConfigOverrides = Parameters<typeof buildTestModelConfig>[1];
 
 function setupHandler<T extends ModelHandlerOpenAIResponse>(handler: T): T {
   handler.setLogger({ ...noopTrace });
