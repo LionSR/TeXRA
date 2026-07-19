@@ -2,12 +2,10 @@
 import { describe, expect, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports - agent
+// Local imports - test support and agent
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { noopTrace } from '@agent/trace/noopTrace';
-
-// Local imports - test fixtures
-import { buildTestModelConfig } from './testFixtures';
 
 // Type imports
 import type { ResponseInputItem } from 'openai/resources/responses/responses';

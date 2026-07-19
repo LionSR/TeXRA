@@ -12,16 +12,14 @@ import {
   ReasoningEffort,
 } from 'llm-zoo';
 
-// Local imports - agent
+// Local imports - test support and agent
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/openai/modelHandlerDeepSeek';
 import { noopTrace } from '@agent/trace/noopTrace';
 
 // Type imports
 import type { ToolDefinition } from '@model';
-
-// Local imports - test fixtures
-import { buildTestModelConfig } from './testFixtures';
 
 function thinkingFor(
   fullName: string,
@@ -35,14 +33,17 @@ function thinkingFor(
   return (handler as any).getThinkingParameter();
 }
 
-const DEEPSEEK_TEST_CONFIG = {
+const DEEPSEEK_TEST_CONFIG = Object.freeze({
   name: 'deepseek-chat',
   fullName: 'deepseek-chat',
   shortName: 'deepseek-chat',
   provider: ModelProvider.DEEPSEEK,
   label: 'DeepSeek Chat',
-  capabilities: { supportsReasoning: false, supportsVision: false },
-};
+  capabilities: Object.freeze({
+    supportsReasoning: false,
+    supportsVision: false,
+  }),
+});
 
 function stubHandlerForTest(handler: ModelHandlerDeepSeek): void {
   handler.setLogger({ ...noopTrace });

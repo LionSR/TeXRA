@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { createPartFromText, type Content } from '@google/genai';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports - agent
+// Local imports - test support and agent
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 import { noopTrace } from '@agent/trace/noopTrace';
 
@@ -12,9 +13,6 @@ import {
   detectPartialText,
   requiresFlowAutoRetry,
 } from '@common/errors/sdkErrorUtils';
-
-// Local imports - test fixtures
-import { buildTestModelConfig } from './testFixtures';
 
 class StreamingGoogleHandler extends ModelHandlerGoogleGenAI {
   override getStreamingConfig(): boolean {

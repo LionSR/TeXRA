@@ -2,15 +2,13 @@
 import { describe, expect, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports - agent
+// Local imports - test support and agent
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import type { AgentTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { noopTrace } from '@agent/trace/noopTrace';
 import { GOOGLE_FINISH } from '@agent/types/StopReasonTypes';
-
-// Local imports - test fixtures
-import { buildTestModelConfig } from './testFixtures';
 
 // Type imports
 import type { Interactions } from '@google/genai';

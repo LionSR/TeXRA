@@ -2,7 +2,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { type ModelConfig, ModelProvider } from 'llm-zoo';
 
-// Local imports - agent model handlers
+// Local imports - test support and agent model handlers
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import type { AgentTrace } from '@agent/trace';
 import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
@@ -14,13 +15,10 @@ import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHan
 import { noopTrace } from '@agent/trace/noopTrace';
 import type { ProviderCapabilityProfile } from '@model/providerCapabilities';
 
-// Local imports - test fixtures
-import { buildTestModelConfig } from './testFixtures';
-
 // Type imports
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
 
-const COMPACTION_TEST_CONFIG = {
+const COMPACTION_TEST_CONFIG = Object.freeze({
   name: 'gpt-4.1',
   fullName: 'gpt-4.1',
   shortName: 'gpt-4.1',
@@ -28,8 +26,11 @@ const COMPACTION_TEST_CONFIG = {
   provider: ModelProvider.OPENAI,
   maxOutputTokens: 100,
   contextWindow: 1000,
-  capabilities: { supportsReasoning: false, supportsVision: false },
-};
+  capabilities: Object.freeze({
+    supportsReasoning: false,
+    supportsVision: false,
+  }),
+});
 
 function configureHandler(
   handler: ModelHandlerOpenAIResponse,

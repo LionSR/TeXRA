@@ -3,8 +3,9 @@ import { strict as assert } from 'node:assert';
 import { afterEach, beforeEach, describe, it, vi } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports - handler under test
+// Local imports - test support and handler under test
 import { installPlatform } from '@test/support/setupPlatform';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import * as serverKeysModule from '@auth/serverKeys';
@@ -14,16 +15,13 @@ import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import * as configUtilsModule from '@utils/config/configUtils';
 import * as providerConfigModule from '@utils/config/providerConfig';
 
-// Local imports - test fixtures
-import { buildTestModelConfig } from './testFixtures';
-
 class ExposedKeyHandler extends ModelHandlerOpenRouterNative {
   exposeGetApiKey(): Promise<string> {
     return this.getApiKey();
   }
 }
 
-const API_KEY_TEST_CONFIG = {
+const API_KEY_TEST_CONFIG = Object.freeze({
   name: 'gpt-5.5',
   label: 'GPT-5.5',
   fullName: 'gpt-5.5-2026-04-15',
@@ -31,7 +29,7 @@ const API_KEY_TEST_CONFIG = {
   provider: ModelProvider.OPENAI,
   maxOutputTokens: 16_384,
   openrouterFullName: 'openai/gpt-5.5',
-};
+});
 
 function stubServerSideKeyService(
   options: {

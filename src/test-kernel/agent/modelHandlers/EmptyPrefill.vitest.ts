@@ -9,7 +9,8 @@ import { createPartFromText, type Content } from '@google/genai';
 import { describe, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports - agent
+// Local imports - test support and agent
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
@@ -23,9 +24,6 @@ import { noopTrace } from '@agent/trace/noopTrace';
 
 // Local imports - shared
 import type { FileLocation } from '@shared/schemas';
-
-// Local imports - test fixtures
-import { buildTestModelConfig } from './testFixtures';
 
 // Type imports
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';

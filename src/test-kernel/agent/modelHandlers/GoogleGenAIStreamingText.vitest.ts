@@ -8,13 +8,11 @@ import {
 } from '@google/genai';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports - agent
+// Local imports - test support and agent
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 import { noopTrace } from '@agent/trace/noopTrace';
-
-// Local imports - test fixtures
-import { buildTestModelConfig } from './testFixtures';
 
 type StreamRecord = {
   appends: string[];

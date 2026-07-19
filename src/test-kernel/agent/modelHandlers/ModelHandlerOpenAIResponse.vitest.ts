@@ -15,7 +15,8 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 // Local imports - test support
 import { setupPlatform } from '@test/support/setupPlatform';
 
-// Local imports - agent
+// Local imports - test support and agent
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
@@ -35,9 +36,6 @@ import type { ToolDefinition } from '@model';
 // Local imports - utilities
 import { pathToLocation } from '@utils/files';
 
-// Local imports - test fixtures
-import { buildTestModelConfig } from './testFixtures';
-
 // Type imports
 import type {
   ResponseInputItem,
@@ -48,14 +46,21 @@ import type {
 // suite needs the real node fs rather than the in-memory default.
 setupPlatform({}, { fs: nodeFilesystem });
 
-const OPENAI_RESPONSE_TEST_CONFIG = {
+const OPENAI_RESPONSE_TEST_CONFIG = Object.freeze({
   name: 'gpt-4.1',
   fullName: 'gpt-4.1',
   shortName: 'gpt-4.1',
   label: 'GPT 4.1',
   provider: ModelProvider.OPENAI,
-  capabilities: { supportsReasoning: false, supportsVision: false },
+  capabilities: Object.freeze({
+    supportsReasoning: false,
+    supportsVision: false,
+  }),
   openRouterOnly: true,
+});
+
+type TestModelConfigOverrides = Partial<Omit<ModelConfig, 'capabilities'>> & {
+  capabilities?: Partial<ModelConfig['capabilities']>;
 };
 
 function setupHandler<T extends ModelHandlerOpenAIResponse>(handler: T): T {
@@ -65,7 +70,7 @@ function setupHandler<T extends ModelHandlerOpenAIResponse>(handler: T): T {
 }
 
 function createHandler(
-  configOverrides: Partial<ModelConfig> = {},
+  configOverrides: TestModelConfigOverrides = {},
 ): ModelHandlerOpenAIResponse {
   return setupHandler(
     new ModelHandlerOpenAIResponse(
@@ -91,7 +96,7 @@ class StatelessResponseHandler extends ModelHandlerOpenAIResponse {
 }
 
 function createNonChainingHandler(
-  configOverrides: Partial<ModelConfig> = {},
+  configOverrides: TestModelConfigOverrides = {},
 ): ModelHandlerOpenAIResponse {
   return setupHandler(
     new NonChainingResponseHandler(
@@ -101,7 +106,7 @@ function createNonChainingHandler(
 }
 
 function createStatelessHandler(
-  configOverrides: Partial<ModelConfig> = {},
+  configOverrides: TestModelConfigOverrides = {},
 ): ModelHandlerOpenAIResponse {
   return setupHandler(
     new StatelessResponseHandler(

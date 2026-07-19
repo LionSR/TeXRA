@@ -6,7 +6,8 @@ import { createPartFromText, type Content } from '@google/genai';
 import { describe, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports - agent
+// Local imports - test support and agent
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
   AgentCategory,
   AgentSettingSchema,
@@ -20,9 +21,6 @@ import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHan
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { noopTrace } from '@agent/trace/noopTrace';
 
-// Local imports - test fixtures
-import { buildTestModelConfig } from './testFixtures';
-
 // Type imports
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 import type { ChatMessages } from '@openrouter/sdk/models';
@@ -35,12 +33,12 @@ type ContinuationCase = {
   run: () => void;
 };
 
-const CONTINUATION_CAPABILITIES = {
+const CONTINUATION_CAPABILITIES = Object.freeze({
   supportsAssistantPrefill: false,
   supportsIntermDevMsgs: false,
   supportsReasoning: false,
   supportsVision: false,
-};
+});
 
 const agentSetting = AgentSettingSchema.parse({
   agentCategory: AgentCategory.Workflow,

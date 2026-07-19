@@ -5,29 +5,27 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
-// Local imports - agent
+// Local imports - test support and agent
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerGLM } from '@agent/modelHandlers/openai/modelHandlerGLM';
 import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
 import { ModelHandlerXAI } from '@agent/modelHandlers/openai/modelHandlerXAI';
 import { noopTrace } from '@agent/trace/noopTrace';
 
-// Local imports - test fixtures
-import { buildTestModelConfig } from './testFixtures';
-
-const NO_VISION_CAPABILITIES = { supportsVision: false };
-const MOONSHOT_TEST_CONFIG = {
+const NO_VISION_CAPABILITIES = Object.freeze({ supportsVision: false });
+const MOONSHOT_TEST_CONFIG = Object.freeze({
   provider: ModelProvider.MOONSHOT,
   capabilities: NO_VISION_CAPABILITIES,
-};
-const GLM_TEST_CONFIG = {
+});
+const GLM_TEST_CONFIG = Object.freeze({
   provider: ModelProvider.GLM,
   capabilities: NO_VISION_CAPABILITIES,
-};
-const XAI_TEST_CONFIG = {
+});
+const XAI_TEST_CONFIG = Object.freeze({
   provider: ModelProvider.XAI,
   capabilities: NO_VISION_CAPABILITIES,
-};
+});
 
 function createClientStub() {
   const createCalls: any[] = [];

@@ -3,13 +3,11 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports - agent
+// Local imports - test support and agent
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerXAI } from '@agent/modelHandlers/openai/modelHandlerXAI';
 import { noopTrace } from '@agent/trace/noopTrace';
-
-// Local imports - test fixtures
-import { buildTestModelConfig } from './testFixtures';
 
 const END_TAG = '</document>';
 

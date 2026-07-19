@@ -2,28 +2,29 @@
 import { describe, expect, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports - agent
+// Local imports - test support and agent
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { noopTrace } from '@agent/trace/noopTrace';
 import { GOOGLE_FINISH } from '@agent/types/StopReasonTypes';
-
-// Local imports - test fixtures
-import { buildTestModelConfig } from './testFixtures';
 
 // Type imports
 import type { Interactions } from '@google/genai';
 
 type Step = Interactions.Step;
 
-const GOOGLE_INTERACTIONS_TEST_CONFIG = {
+const GOOGLE_INTERACTIONS_TEST_CONFIG = Object.freeze({
   name: 'test-google-interactions',
   label: 'Test Google Interactions',
   fullName: 'gemini-3-pro-test',
   shortName: 'gemini-3-pro-test',
   provider: ModelProvider.GOOGLE,
   contextWindow: 4096,
-  capabilities: { supportsVision: true, supportsTokenCounting: false },
-};
+  capabilities: Object.freeze({
+    supportsVision: true,
+    supportsTokenCounting: false,
+  }),
+});
 
 function createHandler(): ModelHandlerGoogleInteractions {
   const handler = new ModelHandlerGoogleInteractions(

@@ -2,15 +2,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type ModelConfig, ModelProvider } from 'llm-zoo';
 
-// Local imports - agent and model config
+// Local imports - test support, agent, and model config
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import * as serverKeysModule from '@auth/serverKeys';
 import { KIMI_CODE_BASE_URL } from '@model/kimiCodeSubscriptionRouting';
-
-// Local imports - test fixtures
-import { buildTestModelConfig } from './testFixtures';
 
 const MOONSHOT_BASE_URL = 'https://api.moonshot.ai/v1';
 const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
@@ -18,7 +16,7 @@ const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 const RELAY_BASE_URL = 'https://relay.example.test/openai';
 const TEST_API_KEY = 'test-secret-key';
 
-const KIMI_DIAGNOSTICS_CONFIG = {
+const KIMI_DIAGNOSTICS_CONFIG = Object.freeze({
   name: 'kimi-test',
   fullName: 'kimi-k2.5',
   shortName: 'kimi-k2.5',
@@ -26,7 +24,7 @@ const KIMI_DIAGNOSTICS_CONFIG = {
   provider: ModelProvider.MOONSHOT,
   contextWindow: 262_144,
   baseUrl: MOONSHOT_BASE_URL,
-};
+});
 
 class TestModelHandlerOpenAI extends ModelHandlerOpenAI {
   constructor(

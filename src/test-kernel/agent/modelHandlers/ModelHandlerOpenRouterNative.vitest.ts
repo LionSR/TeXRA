@@ -7,7 +7,8 @@ import {
 import { describe, it, afterEach, vi } from 'vitest';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
-// Local imports - handler under test
+// Local imports - test support and handler under test
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { noopTrace } from '@agent/trace/noopTrace';
 
@@ -15,10 +16,7 @@ import { noopTrace } from '@agent/trace/noopTrace';
 import * as serverKeysModule from '@auth/serverKeys';
 import * as providerConfigModule from '@utils/config/providerConfig';
 
-// Local imports - test fixtures
-import { buildTestModelConfig } from './testFixtures';
-
-const OPENROUTER_TEST_CONFIG = {
+const OPENROUTER_TEST_CONFIG = Object.freeze({
   name: 'gpt-5.5',
   label: 'GPT-5.5',
   fullName: 'gpt-5.5-2026-04-15',
@@ -26,7 +24,7 @@ const OPENROUTER_TEST_CONFIG = {
   provider: ModelProvider.OPENAI,
   maxOutputTokens: 16_384,
   openrouterFullName: 'openai/gpt-5.5',
-};
+});
 
 function stubServerSideKeyService(): void {
   vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
