@@ -11,7 +11,7 @@ import {
 } from '@auth/relayToken';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import * as codexAuth from '@auth/codex';
-import * as codexSubscription from '@model/codexSubscriptionActive';
+import * as providerCapabilities from '@model/providerCapabilities';
 import {
   __resetSetupPlatformForTests,
   getChatGptSubscriptionStatus,
@@ -165,9 +165,10 @@ describe('shared setup capabilities', () => {
       signedIn: true,
       email: 'researcher@example.com',
     });
-    vi.spyOn(codexSubscription, 'isCodexSubscriptionActive').mockResolvedValue(
-      false,
-    );
+    vi.spyOn(
+      providerCapabilities,
+      'isCodexSubscriptionActive',
+    ).mockResolvedValue(false);
 
     await expect(getChatGptSubscriptionStatus()).resolves.toEqual({
       signedIn: true,

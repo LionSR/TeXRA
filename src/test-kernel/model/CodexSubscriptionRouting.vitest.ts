@@ -7,11 +7,10 @@ import {
   resetCodexCoordinator,
   type CodexSession,
 } from '@auth/codex';
-import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
 import {
-  resolveCodexSubscriptionCapabilities,
+  isCodexSubscriptionActive,
   resolveCodexSubscriptionCapabilitiesForAgentCategory,
-} from '@model/codexSubscriptionRouting';
+} from '@model/providerCapabilities';
 import { AgentCategory } from '@shared/schemas/agent';
 
 const signedInSession: CodexSession = {
@@ -51,7 +50,11 @@ describe('ChatGPT subscription model routing', () => {
     await installPlatform();
 
     expect(
-      resolveCodexSubscriptionCapabilities(MODEL_CONFIGS.gpt55, false),
+      resolveCodexSubscriptionCapabilitiesForAgentCategory(
+        MODEL_CONFIGS.gpt55,
+        false,
+        AgentCategory.ToolUse,
+      ),
     ).toBeNull();
   });
 
@@ -59,7 +62,11 @@ describe('ChatGPT subscription model routing', () => {
     await installSubscriptionPlatform({ useOpenRouter: true });
 
     expect(
-      resolveCodexSubscriptionCapabilities(MODEL_CONFIGS.gpt55, true),
+      resolveCodexSubscriptionCapabilitiesForAgentCategory(
+        MODEL_CONFIGS.gpt55,
+        true,
+        AgentCategory.ToolUse,
+      ),
     ).toBeNull();
     await expect(
       isCodexSubscriptionActive('gpt55', AgentCategory.ToolUse),
@@ -70,7 +77,11 @@ describe('ChatGPT subscription model routing', () => {
     await installSubscriptionPlatform();
 
     expect(
-      resolveCodexSubscriptionCapabilities(MODEL_CONFIGS.gpt55, false),
+      resolveCodexSubscriptionCapabilitiesForAgentCategory(
+        MODEL_CONFIGS.gpt55,
+        false,
+        AgentCategory.ToolUse,
+      ),
     ).not.toBeNull();
   });
 

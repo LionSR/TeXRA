@@ -26,7 +26,7 @@ import {
   type ApiProvider,
 } from '@model/apiProviders';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
+import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import { AgentCategory } from '@shared/schemas/agent';
 import { resolveGitHubTokenSource } from '@tools/github/githubAuth';

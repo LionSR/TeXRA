@@ -6,9 +6,14 @@ const mocks = vi.hoisted(() => ({
   lookupApiKey: vi.fn(),
 }));
 
-vi.mock('@model/codexSubscriptionActive', () => ({
-  isCodexSubscriptionActive: mocks.isCodexSubscriptionActive,
-}));
+vi.mock('@model/providerCapabilities', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@model/providerCapabilities')>();
+  return {
+    ...actual,
+    isCodexSubscriptionActive: mocks.isCodexSubscriptionActive,
+  };
+});
 
 vi.mock('@cli/runtime/supabaseAuth', () => ({
   getCliAuthProfile: mocks.getCliAuthProfile,

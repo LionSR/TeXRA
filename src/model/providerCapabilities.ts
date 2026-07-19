@@ -1,6 +1,15 @@
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
+import {
+  isCodexSignedIn,
+  isCodexSubscriptionToolUseOnly,
+  isPreferCodexSubscription,
+} from '@auth/codex';
 import type { UsageRoute } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas/agent';
+import { getUseOpenRouter } from '@utils/config/providerConfig';
+
+import { resolveRuntimeModelConfig } from './runtimeModelRegistry';
 
 type ProviderAuthMode = 'chatgpt-subscription';
 
@@ -137,4 +146,36 @@ export function resolveProviderCapabilities({
       failWhenFallbackOutputBudgetIsReduced: true,
     },
   };
+}
+
+/** Resolve ChatGPT-subscription capabilities for the requested agent kind. */
+export function resolveCodexSubscriptionCapabilitiesForAgentCategory(
+  config: ModelConfig,
+  useOpenRouter: boolean,
+  agentCategory: AgentCategory | undefined,
+): ProviderCapabilityProfile | null {
+  if (!isPreferCodexSubscription()) return null;
+  const capabilities = resolveProviderCapabilities({
+    model: config,
+    useOpenRouter,
+  });
+  if (!capabilities) return null;
+  if (!isCodexSubscriptionToolUseOnly()) return capabilities;
+  return agentCategory === AgentCategory.ToolUse ? capabilities : null;
+}
+
+/** Whether the model currently routes through a signed-in ChatGPT subscription. */
+export async function isCodexSubscriptionActive(
+  modelId: string,
+  agentCategory: AgentCategory,
+): Promise<boolean> {
+  const config = await resolveRuntimeModelConfig(modelId);
+  if (!config) return false;
+  const capabilities = resolveCodexSubscriptionCapabilitiesForAgentCategory(
+    config,
+    getUseOpenRouter(),
+    agentCategory,
+  );
+  if (!capabilities) return false;
+  return isCodexSignedIn();
 }
