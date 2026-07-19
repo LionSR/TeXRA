@@ -1,4 +1,9 @@
 // Local imports
+import type {
+  NonRegexReplacementCategory as NonRegexReplacementCategoryName,
+  RegexReplacementCategory as RegexReplacementCategoryName,
+} from '@shared/schemas/coreSettings';
+import { GREEK_LETTERS } from './constants';
 import { NonRegexReplacementCategory, RegexReplacementCategory } from './types';
 import {
   generateMathCommandShortcuts,
@@ -13,7 +18,6 @@ import {
   generateArrowRelationShortcuts,
   generateBackslashFixes,
   generateLegacyTextCommandNormalization,
-  GREEK_LETTERS,
 } from './helpers';
 
 // Greek letter shortcut mappings
@@ -445,7 +449,7 @@ const MAX_MANUAL_REPLACEMENTS: NonRegexReplacementCategory = {
 
 // Combined replacements for backward compatibility
 export const MAX_STYLE_REPLACEMENTS: NonRegexReplacementCategory = {
-  name: 'max_style',
+  name: 'max_style' satisfies NonRegexReplacementCategoryName,
   description: 'Maximum style replacements for LaTeX commands and symbols',
   isRegex: false,
   patterns: {
@@ -555,7 +559,7 @@ const GEP_WORDS_PAREN_EQREF_EQN_PATTERN = `(${GEP_WORDS_REGEX_PART_INTERNAL})(?:
 const FULL_WORDS_CREF_FIG_PATTERN = `(${FULL_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\\\cref\\{(fig:[^,}]+)\\}`;
 
 export const MAX_REGEX_REPLACEMENTS: RegexReplacementCategory = {
-  name: 'max_style_regex',
+  name: 'max_style_regex' satisfies RegexReplacementCategoryName,
   description:
     'Maximum style regex replacements for LaTeX commands and symbols',
   isRegex: true,
