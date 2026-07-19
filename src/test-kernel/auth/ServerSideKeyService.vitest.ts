@@ -4,16 +4,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Local imports - auth
 import { ULTRA_TIER } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import {
-  ServerSideKeyService,
-  type ServerSideKeyState,
-} from '@auth/serverKeys/ServerSideKeyService';
+import { ServerSideKeyService } from '@auth/serverKeys/ServerSideKeyService';
 import type { TierService } from '@auth/tier/TierService';
 import { delay } from '@utils/core';
+import type { StateStore } from '@platform/interfaces';
 
 const USE_INCLUDED_ACCESS_KEY = 'texra.useIncludedModelAccess';
 
-class MemoryState implements ServerSideKeyState {
+class MemoryState implements StateStore {
   private readonly values = new Map<string, unknown>();
 
   constructor(initialValues: Record<string, unknown> = {}) {
@@ -110,9 +108,8 @@ function createQuotaExceededSetup(): {
   const service = new ServerSideKeyService(
     'https://example.test',
     tier.service,
+    state,
   );
-
-  service.initialize({ state });
 
   return { state, tier, service };
 }
