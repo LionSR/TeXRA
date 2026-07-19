@@ -160,6 +160,26 @@ describe('ModelHandlerAnthropic forced tool choice', () => {
     });
     assert.equal(handler.supportsForcedToolChoice, true);
   });
+
+  it('uses the unforced floor when Anthropic thinking is enabled', async () => {
+    const handler = createAnthropicHandler({ supportsReasoning: true });
+    stubHandlerForTest(handler);
+    const { client, messageOptions } = createCapturingAnthropicClient(
+      handler.config.fullName,
+    );
+
+    await handler.createResponse({
+      client,
+      messages: helloMessages(),
+      temperature: 0,
+      tools: [{ name: 'submit_output', description: 'Submit output' }],
+      finalTool: { name: 'submit_output' },
+    });
+
+    assert.deepEqual(messageOptions[0].tool_choice, { type: 'auto' });
+    assert.equal(handler.supportsForcedToolChoice, false);
+    assert.ok(messageOptions[0].thinking);
+  });
 });
 
 /** Create a no-op logger stub for handler tests, with optional overrides. */

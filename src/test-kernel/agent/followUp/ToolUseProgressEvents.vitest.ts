@@ -86,7 +86,7 @@ function createPrepResult(
 }
 
 describe('tool-use progress events', () => {
-  it('collapses a single-shot run to one forced final-tool round', async () => {
+  it('collapses a run whose only tool is the terminal tool to one forced round', async () => {
     roundFlowState.shouldStop = false;
     roundFlowState.endTurn = true;
     roundFlowState.lastError = undefined;
@@ -105,7 +105,38 @@ describe('tool-use progress events', () => {
       finalTool: { name: 'submit_output' },
       onRoundFinalized: vi.fn(),
       config: { model: 'test-model', agent: 'test-agent' },
-      setting: { tools: [] },
+      setting: { tools: [{ name: 'submit_output' }] },
+    } as unknown as ToolUseServices);
+
+    await withTestRunContext(host, streamId, () =>
+      node.exec(createPrepResult(AgentWorkspaceState.create(), false)),
+    );
+
+    expect(roundFlowState.finalTool).toEqual({ name: 'submit_output' });
+  });
+
+  it('does not force the first round of a headless run with exploration tools', async () => {
+    roundFlowState.shouldStop = false;
+    roundFlowState.endTurn = true;
+    roundFlowState.lastError = undefined;
+    roundFlowState.finalTool = undefined;
+    const { host } = createRecordingHost();
+    const logger = new TraceEmitter();
+    const streamId = 'stream:headless-final-tool' as StreamTabId;
+    const node = new ToolUseCycleNode().setServices({
+      streamId,
+      runtimeHost: host,
+      logger,
+      modelHandler: {
+        getClient: vi.fn(),
+        supportsForcedToolChoice: true,
+      },
+      finalTool: { name: 'submit_output' },
+      onRoundFinalized: vi.fn(),
+      config: { model: 'test-model', agent: 'test-agent' },
+      setting: {
+        tools: [{ name: 'read_file' }, { name: 'submit_output' }],
+      },
     } as unknown as ToolUseServices);
 
     await withTestRunContext(
@@ -115,7 +146,7 @@ describe('tool-use progress events', () => {
       { stopAfterCycle: true },
     );
 
-    expect(roundFlowState.finalTool).toEqual({ name: 'submit_output' });
+    expect(roundFlowState.finalTool).toBeUndefined();
   });
 
   it('publishes skipped-cycle todo and plan events through the runtime host', async () => {

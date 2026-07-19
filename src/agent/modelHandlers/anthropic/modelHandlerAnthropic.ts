@@ -364,7 +364,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   override get supportsForcedToolChoice(): boolean {
-    return true;
+    // Anthropic rejects named tool_choice when extended/adaptive thinking is
+    // enabled. Keep reasoning models on the ordinary terminal-tool floor.
+    return !this.capabilities.supportsReasoning;
   }
 
   /** Enriches an Anthropic stream failure without hiding SDK or abort identity. */
@@ -576,9 +578,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
         useDynamicFiltering: getAnthropicDynamicFiltering(),
       });
 
-      options.tool_choice = finalTool
-        ? { type: 'tool', name: finalTool.name }
-        : { type: 'auto' };
+      options.tool_choice =
+        finalTool && this.supportsForcedToolChoice
+          ? { type: 'tool', name: finalTool.name }
+          : { type: 'auto' };
 
       // Models using adaptive thinking get interleaved thinking automatically.
       // Only add the beta header for older models that need it explicitly.
