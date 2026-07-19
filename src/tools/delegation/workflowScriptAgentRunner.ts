@@ -242,19 +242,6 @@ export function createWorkflowScriptAgentRunner(
           `Workflow subagent ended with ${result.outcome} outcome.`,
         );
       }
-      // Floor guarantee: a schema call that completes without the agent ever
-      // calling submit_output yields no structured value. Fail the run clearly
-      // rather than resolving the call to an envelope with `structured`
-      // undefined (reliable forcing/repair is the deferred accelerator, #8831).
-      if (
-        invocation.options.schema !== undefined &&
-        result.structured === undefined
-      ) {
-        throw new WorkflowRunAbortError(
-          `agent '${invocation.options.agentName}' did not call submit_output; ` +
-            `no structured result was produced.`,
-        );
-      }
       return result;
     } catch (error) {
       if (error instanceof SubagentDurabilityError) {
