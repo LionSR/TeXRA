@@ -211,11 +211,11 @@ export async function runToolUseFlow<C = unknown>(
     input.config.agentCategory === AgentCategory.ToolUse
       ? input.config.outputSchema
       : undefined;
-  let capturedStructured: unknown;
+  let pendingStructuredOutput: ToolUseRunShared['structured'];
   let registry = baseRegistry;
   if (outputSchema) {
     const terminalTool = buildTerminalTool(outputSchema, (value) => {
-      capturedStructured = value;
+      pendingStructuredOutput = value;
     });
     resolvedTools.push(terminalTool.definition);
     registry = buildTerminalToolRegistry(baseRegistry, terminalTool);
@@ -230,6 +230,7 @@ export async function runToolUseFlow<C = unknown>(
     toolRegistry: registry,
     resumeShared: input.resume?.shared ?? null,
     persistTodos: (todos) => kv.writeTodos(todos),
+    getPendingStructuredOutput: () => pendingStructuredOutput,
     fileService: new TaskRunFileService(executionId),
   };
   const switchedHandlers = new Set<ToolUseServices<C>['modelHandler']>();
@@ -637,7 +638,7 @@ export async function runToolUseFlow<C = unknown>(
   if (
     outputSchema !== undefined &&
     outcome === RUN_OUTCOME.COMPLETED &&
-    capturedStructured === undefined
+    shared.structured === undefined
   ) {
     throw new Error(
       'Structured-output run completed without calling submit_output.',
@@ -649,6 +650,6 @@ export async function runToolUseFlow<C = unknown>(
     lastResponse,
     touchedFiles,
     totalCostUsd,
-    structured: capturedStructured,
+    structured: shared.structured,
   };
 }

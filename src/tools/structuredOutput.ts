@@ -15,6 +15,7 @@ type StructuredOutputSchema = {
 };
 
 const JsonValueSchema = z.json();
+type JsonValue = z.infer<typeof JsonValueSchema>;
 
 /** Name of the synthetic tool the model calls to submit its final result. */
 const SUBMIT_OUTPUT_TOOL_NAME = 'submit_output';
@@ -26,7 +27,10 @@ const SUBMIT_OUTPUT_TOOL_NAME = 'submit_output';
  */
 function assertNoHostRegex(schema: unknown): void {
   if (schema === null || typeof schema !== 'object') return;
-  if (Array.isArray(schema)) return;
+  if (Array.isArray(schema)) {
+    for (const child of schema) assertNoHostRegex(child);
+    return;
+  }
   const record = schema as Record<string, unknown>;
   if ('pattern' in record || 'patternProperties' in record) {
     throw new Error(
@@ -109,7 +113,7 @@ export function normalizeStructuredOutputSchema(
  */
 export function buildTerminalTool(
   input: z.ZodType | Record<string, unknown>,
-  capture: (value: unknown) => void,
+  capture: (value: JsonValue) => void,
 ): ITool {
   const { zodSchema } = normalizeStructuredOutputSchema(input);
 
@@ -123,10 +127,10 @@ export function buildTerminalTool(
   class TerminalTool extends GeneratedTool {
     // Run-scoped capture slot bound to instance state, so concurrent workflow
     // runs never race on a shared sink.
-    private readonly capture: (value: unknown) => void;
+    private readonly capture: (value: JsonValue) => void;
     private captured = false;
 
-    constructor(capture: (value: unknown) => void) {
+    constructor(capture: (value: JsonValue) => void) {
       super();
       this.capture = capture;
     }
