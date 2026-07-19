@@ -1,12 +1,19 @@
+// Node imports
 import { mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
+// Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
+// Local imports - platform
 import { platform } from '@platform/platform';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+
+// Local imports - test support
 import { installPlatform } from '@test/support/setupPlatform';
+
+// Local imports - tools
 import { GlobTool } from '@tools/glob';
 
 function fsError(code: string, message: string): Error {
@@ -58,9 +65,10 @@ describe('GlobTool match metadata', () => {
       const result = await new GlobTool().call({ pattern: '{old,new}.tex' });
 
       expect(result.status).toBe('executed');
-      expect(result.output?.indexOf('new.tex')).toBeLessThan(
-        result.output?.indexOf('old.tex') ?? -1,
-      );
+      expect(result.output).toContain('new.tex');
+      expect(result.output).toContain('old.tex');
+      const output = result.output ?? '';
+      expect(output.indexOf('new.tex')).toBeLessThan(output.indexOf('old.tex'));
     });
   });
 
