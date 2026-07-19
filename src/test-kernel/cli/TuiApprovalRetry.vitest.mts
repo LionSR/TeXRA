@@ -457,7 +457,7 @@ describe('TUI retry approvals', () => {
     expect(currentApproval.get()).toBeUndefined();
   });
 
-  it('auto-switches ChatGPT subscription retries to an OpenAI API key', async () => {
+  it('requires an explicit decision before switching a ChatGPT subscription retry to an API key', async () => {
     mocks.lookupApiKey.mockImplementation(
       async (_secrets, provider: ApiProvider) =>
         provider === 'openai' ? 'sk-openai' : undefined,
@@ -467,17 +467,54 @@ describe('TUI retry approvals', () => {
     const result = interactions.requestRetry?.(chatGptSubscriptionRetry('s3'));
 
     await vi.waitFor(() => {
-      expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
-      expect(mocks.setCliCodexSubscription).toHaveBeenCalledWith(false);
+      expect(currentApproval.get()?.payload).toMatchObject({
+        kind: 'retry',
+        payload: {
+          streamId: 's3',
+          errorMessage: 'ChatGPT subscription usage limit reached.',
+        },
+      });
     });
+    expect(mocks.lookupApiKey).not.toHaveBeenCalled();
+    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
+    expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
+
+    currentApproval.get()?.decide({
+      accepted: true,
+      apiMode: 'personal',
+      disableChatGptSubscription: true,
+    });
+
     await expect(result).resolves.toEqual({
       action: 'retry',
       feedback: undefined,
     });
+    expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
+    expect(mocks.setCliCodexSubscription).toHaveBeenCalledWith(false);
     expect(currentApproval.get()).toBeUndefined();
-    expect(mocks.lookupApiKey.mock.calls.map((call) => call[1])).toEqual([
-      'openai',
-    ]);
+  });
+
+  it('retries ChatGPT subscription access without changing credentials when the ordinary retry action is chosen', async () => {
+    const { interactions } = tui();
+    const result = interactions.requestRetry?.(
+      chatGptSubscriptionRetry('subscription-retry'),
+    );
+
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toMatchObject({
+        kind: 'retry',
+        payload: { streamId: 'subscription-retry' },
+      });
+    });
+    currentApproval.get()?.decide({ accepted: true });
+
+    await expect(result).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
+    expect(mocks.lookupApiKey).not.toHaveBeenCalled();
+    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
+    expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
   });
 
   it('invalidates pre-queue retry lookups when approvals are cleared', async () => {

@@ -115,6 +115,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **ChatGPT limits no longer switch credentials silently** — when subscription
+  usage is exhausted, the CLI shows the limit and reset warning and waits for
+  confirmation before retrying with a personal OpenAI API key.
 - **Edit previews open on the change** — approval previews now begin near the
   first added or removed line, so long wrapped context no longer hides the
   proposed edit below the fold.
