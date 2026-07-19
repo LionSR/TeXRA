@@ -16,7 +16,7 @@ import * as path from 'node:path';
 import simpleGit, { type SimpleGit } from 'simple-git';
 
 // Local imports
-import { isFileNotFoundError } from '@common/errors';
+import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -347,7 +347,9 @@ async function collectUntrackedDiffs(
         );
         return { file, content };
       } catch (error) {
-        if (isFileNotFoundError(error)) return undefined;
+        if (isFileNotFoundError(error) || isNotADirectoryError(error)) {
+          return undefined;
+        }
         throw new Error(
           `Could not read untracked file "${file}": ${toErrorMessage(error)}`,
           { cause: error },

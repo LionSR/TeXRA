@@ -140,7 +140,7 @@ describe('collectReviewDiff (real git repository)', () => {
     expect(await realpath(value.repoRoot)).toBe(await realpath(repo));
   });
 
-  it.each(['ENOENT', 'FileNotFound'])(
+  it.each(['ENOENT', 'FileNotFound', 'ENOTDIR'])(
     'omits an untracked file that disappears with %s during collection',
     async (code) => {
       await writeFile(path.join(repo, 'vanished.txt'), 'temporary\n');
