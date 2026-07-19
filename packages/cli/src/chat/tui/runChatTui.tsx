@@ -14,7 +14,7 @@ import { render, type Instance as InkInstance } from 'ink';
 import PQueue from 'p-queue';
 
 import { StreamSnapshotStore } from '@transcript';
-import { platform, tryPlatform } from '@platform/platform';
+import { platform } from '@platform/platform';
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
@@ -32,9 +32,7 @@ import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
-  handOffCliShutdownSignalHandlers,
   initInteractiveCliPlatform,
-  runCliPlatformShutdownSequence,
   setCliHelperModel,
 } from '@cli/runtime/initPlatform';
 import {
@@ -43,7 +41,7 @@ import {
   type CliNoAvailableModelsRecoveryOptions,
   type CliRunnableModelResolution,
 } from '@cli/runtime/modelAccess';
-import { writeTextStderr, writeTextStdout } from '@cli/runtime/logSinks';
+import { writeTextStderr } from '@cli/runtime/logSinks';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
 import { initializeInteractiveTranscriptSession } from '@cli/runtime/transcriptSession';
 import { cliSettingsStores } from '@cli/runtime/settingsStores';
@@ -63,7 +61,6 @@ import { isActivePhase } from '@shared/streams/streamStatus';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { escapeText } from '@shared/utils/xmlEscape';
-import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -104,23 +101,13 @@ import {
   patchSessionMeta,
   sessionMeta as sessionMetaSignal,
   streams as streamsSignal,
-  clearTransientNotice,
-  setTransientNotice,
 } from './state/cliState';
-import {
-  childStreamEntries as childStreamEntriesSignal,
-  parentStream as parentStreamSignal,
-} from './state/childExecutions';
+import { parentStream as parentStreamSignal } from './state/childExecutions';
 import {
   focusedChildFollowUpRoute,
   stoppedFocusedChildFollowUpMessage as focusedChildStoppedMessage,
   type FocusedChildFollowUpRoute,
 } from './state/focusedChildFollowUp';
-import {
-  collectResumeTargets,
-  collectResumeUsage,
-  formatResumeHint,
-} from './state/resumeHint';
 import { subscribeStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
 import { onStreamStatusChange } from './state/streamStatus';
@@ -131,12 +118,9 @@ import {
   appendLocalUserTranscript,
 } from './state/transcript';
 import {
-  cleanupTerminalModes,
   clearTerminalScrollback,
   installTerminalRestoreOnExit,
-  restoreTuiInputModes,
   setTerminalTitle,
-  supportsTerminalJobControl,
 } from './terminalCleanup';
 import {
   chatTuiCanInterruptActiveRun,
@@ -144,15 +128,16 @@ import {
   chatTuiCanStartRootRun,
   chatTuiCanStopVisibleRun,
   chatTuiIsResumableIdleOnExit,
-  chatTuiSigintAction,
   clearTuiSessionRunState,
   markChatTuiRunCompleted,
   markChatTuiRunPending,
   type TuiSession,
 } from './state/sessionRunState';
+import {
+  createSessionExitController,
+  type SessionExitController,
+} from './sessionExitController';
 import type { SkillActivation } from './forms/SkillsListForm';
-
-const EXIT_CONFIRMATION_TTL_MS = 800;
 
 export interface ChatResult {
   exitCode: number;
@@ -367,6 +352,14 @@ export async function runChat(
     activeApprovalPolicy = policy;
     patchSessionMeta({ approvalPolicy: policy });
   };
+  // Owns signal handling + exit teardown; assigned once Ink has mounted (below).
+  // The lazily-invoked closures here reach it through this binding, so they see
+  // the initialized controller by the time the user can trigger them. `let` is
+  // required — the controller can't be built until Ink is mounted, which is far
+  // below these forward references — so prefer-const's single-write heuristic
+  // misfires here.
+  // eslint-disable-next-line prefer-const
+  let exitController: SessionExitController;
   // The slash-command context is identical at every call site; build it once
   // lazily so the closures it captures (interruptActive, resetSessionForClear,
   // chatController.resume) are all defined before the first use.
@@ -379,7 +372,7 @@ export async function runChat(
     initialAgent: agent,
     initialModel: model,
     interruptActive,
-    requestInputExit,
+    requestInputExit: () => exitController.requestInputExit(),
     getApprovalPolicy,
     setApprovalPolicy,
     canSelectModel: canSelectCurrentModel,
@@ -827,8 +820,8 @@ export async function runChat(
       commandName={context.commandName}
       onInterruptActive={interruptActive}
       onStaticTranscriptChange={viewportController.repaintTranscript}
-      onCtrlC={() => handleSigint()}
-      onSuspend={() => handleSigtstp()}
+      onCtrlC={() => exitController.handleSigint()}
+      onSuspend={() => exitController.handleSigtstp()}
       onKillExecution={(executionId) => {
         clearApprovals();
         defaultSession().executions.kill(executionId, {
@@ -870,184 +863,30 @@ export async function runChat(
   );
   inkRef.current = ink;
 
-  // The notice is regenerable display state; replacing it must not change
-  // whether a second Ctrl-C confirms the exit already requested by the first.
-  let exitConfirmationExpiresAt = 0;
-  const terminalJobControlSupported = supportsTerminalJobControl();
-  // Set once a signal exit (exitNow) starts: its ink.unmount() resolves
-  // waitUntilExit and re-enters the post-waitUntilExit finally, so the finally
-  // guards on this to avoid draining persistence / printing the resume hint a
-  // second time.
-  let exiting = false;
-  const clearExitConfirmation = (): void => {
-    exitConfirmationExpiresAt = 0;
-    clearTransientNotice();
-  };
-  const removeProcessHandlers = (): void => {
-    process.off('SIGINT', handleSigint);
-    process.off('SIGTERM', handleSigterm);
-    process.off('SIGHUP', handleSighup);
-    if (terminalJobControlSupported) {
-      process.off('SIGTSTP', handleSigtstp);
-      process.off('SIGCONT', handleSigcont);
-    }
-  };
-  // Persist the reopen hint to native scrollback: the main session plus each
-  // resumable tool-use subagent, so any route can be continued by its own id.
-  // Read the streams slice before resetCliState() clears it.
-  const printResumeHintOnExit = (): void => {
-    if (!transcriptLifecycle.canResume || !session.executionId) return;
-    const streams = streamsSignal.get();
-    const hint = formatResumeHint(
-      collectResumeTargets({
-        childStreamEntries: childStreamEntriesSignal.get(),
-        rootExecutionId: session.executionId,
-        streams,
-      }),
-      collectResumeUsage(streams),
-      context.commandName,
-      {
-        cwd: context.cwd,
-        processCwd: process.cwd(),
-        approvalPolicy: activeApprovalPolicy,
-      },
-    );
-    if (hint) writeTextStdout(`\n${hint}`);
-  };
-  // Materialize buffered trace chunks, then drain the debounced StreamLog disk
-  // writes so the tail of the session isn't lost (SAVE_DEBOUNCE_MS window).
-  // Persistent flushes have bounded retries; an explicitly ephemeral session
-  // has no disk work to drain.
-  const drainPersistence = async (): Promise<void> => {
-    try {
-      await artifactSession.flushArtifacts();
-    } finally {
-      detachSnapshotPersistence();
-    }
-  };
-  // These TUI exit paths call process.exit() directly, so bin/texra.ts's
-  // `finally` (which runs platform shutdown) never fires. Run the same
-  // shutdown sequence the (suppressed) platform SIGINT/SIGTERM handlers
-  // would have run — lifecycle shutdown (notably UsageLogService.dispose(),
-  // which flushes any queued usage entries) then the NDJSON flush — so it
-  // still happens once before the process dies. runCliPlatformShutdownSequence
-  // is idempotent-safe to call again, so the normal return path can still
-  // rely on bin/texra.ts's own `finally`.
-  const runPlatformShutdown = (): Promise<void> =>
-    runCliPlatformShutdownSequence(tryPlatform()?.lifecycle);
-  const exitNow = (exitCode: number): void => {
-    exiting = true;
-    removeProcessHandlers();
-    clearExitConfirmation();
-    ink.unmount();
-    cleanupTerminalModes({ clearItermProgress });
-    // Print the resume hint last, after Ink has torn down and the terminal modes
-    // are restored, so it lands at the bottom of the transcript and stays in
-    // scrollback (copyable). cleanupTerminalModes no longer disturbs the screen.
-    printResumeHintOnExit();
-    // Synchronous signal exits (SIGINT double-tap / SIGTERM / SIGHUP) own the
-    // whole teardown here (the finally skips when `exiting`), so drain
-    // persistence and run platform shutdown before exiting. allSettled never
-    // rejects, so a flush failure can't become an unhandled rejection under
-    // --unhandled-rejections=strict.
-    void Promise.allSettled([
-      drainPersistence(),
-      runPlatformShutdown(),
-    ]).finally(() => process.exit(exitCode));
-  };
-  const armExit = (): void => {
-    exitConfirmationExpiresAt = Date.now() + EXIT_CONFIRMATION_TTL_MS;
-    setTransientNotice('Press Ctrl-C again to exit', {
-      kind: 'exit',
-      resumeId: transcriptLifecycle.canResume ? session.executionId : undefined,
-      ttlMs: EXIT_CONFIRMATION_TTL_MS,
-    });
-  };
-  const handleSigint = (): void => {
-    const sigintAction = chatTuiSigintAction({
-      exitArmed: Date.now() < exitConfirmationExpiresAt,
-      canStopActiveRun: canStopActiveRun(),
-      resumableIdle: isResumableIdle(),
-    });
-    switch (sigintAction) {
-      case 'clean-exit':
-        session.stopRequested = true;
-        interruptActive();
-        requestInputExit();
-        return;
-      case 'force-exit':
-        exitNow(CliExitCode.Interrupted);
-        return;
-      case 'preserve-exit':
-        // Resumable-idle: exit WITHOUT interrupting. This preserves the
-        // suspended tool-use flow record (executions/<id>/flow-*.json) so
-        // `texra resume` can continue it. Preserve the session's current
-        // terminal status too; an intentional idle exit after a successful turn
-        // should not report SIGINT/130.
-        //
-        // exitNow() calls process.exit, leaving the flow on disk.
-        exitNow(session.runExitCode);
-        return;
-      case 'interrupt-and-arm-exit':
-        session.stopRequested = true;
-        interruptActive();
-        armExit();
-        return;
-      default:
-        assertNever(sigintAction, 'Unhandled chat TUI SIGINT action');
-    }
-  };
-  // Only interrupt an actively-running turn; an idle/WAITING session is left
-  // suspended so its flow record survives for resume (see handleSigint).
-  const handleTermSignal = (exitCode: number): void => {
-    if (canStopActiveRun()) {
-      session.stopRequested = true;
-      interruptActive();
-    }
-    exitNow(exitCode);
-  };
-  const handleSigterm = (): void => handleTermSignal(143);
-  const handleSighup = (): void => handleTermSignal(129);
-  // Suspend/resume (Ctrl-Z / `kill -TSTP` / `fg`). Raw mode keeps the tty
-  // driver from ever turning ^Z into a signal, so App's unified useInput
-  // routes the parsed Ctrl-Z here explicitly; external SIGTSTP lands in the
-  // same handler. Restore the terminal for the shell before stopping, then
-  // stop with SIGSTOP — this handler replaced the default stop action, so
-  // re-raising SIGTSTP would just recurse.
-  const handleSigtstp = (): void => {
-    if (!terminalJobControlSupported) return;
-    cleanupTerminalModes({ clearItermProgress });
-    if (process.stdin.isTTY) process.stdin.setRawMode(false);
-    process.kill(process.pid, 'SIGSTOP');
-  };
-  // On resume the shell restores only the termios snapshot from suspend time
-  // (non-raw, since handleSigtstp dropped raw mode first); the emulator-side
-  // modes were popped outright. Re-arm both, then repaint from a known origin
-  // — the shell prompt and `fg` echo have polluted the screen, so the same
-  // clear-and-reprint path as a width change is the only safe redraw.
-  const handleSigcont = (): void => {
-    if (process.stdin.isTTY) process.stdin.setRawMode(true);
-    restoreTuiInputModes({ kittyKeyboard: terminalCaps.kittyKeyboard });
-    viewportController.repaintAfterTerminalResume();
-  };
-  function requestInputExit(): void {
-    removeProcessHandlers();
-    clearExitConfirmation();
-    ink.unmount();
-  }
-  // Ownership transfers right here, not any earlier: everything above this
-  // line (initInteractiveCliPlatform, onboarding, model resolution) ran with
-  // the platform's own handler still live, so a signal during that window
-  // still got a graceful shutdown. This removes it and makes the handlers
-  // installed below the sole owner.
-  handOffCliShutdownSignalHandlers();
-  process.on('SIGINT', handleSigint);
-  process.on('SIGTERM', handleSigterm);
-  process.on('SIGHUP', handleSighup);
-  if (terminalJobControlSupported) {
-    process.on('SIGTSTP', handleSigtstp);
-    process.on('SIGCONT', handleSigcont);
-  }
+  exitController = createSessionExitController({
+    ink,
+    session,
+    commandName: context.commandName,
+    cwd: context.cwd,
+    canResume: transcriptLifecycle.canResume,
+    clearItermProgress,
+    kittyKeyboardEnabled: terminalCaps.kittyKeyboard,
+    disposers,
+    followUpQueue,
+    getApprovalPolicy,
+    flushArtifacts: () => artifactSession.flushArtifacts(),
+    detachSnapshotPersistence,
+    repaintAfterTerminalResume: () =>
+      viewportController.repaintAfterTerminalResume(),
+    canStopActiveRun,
+    isResumableIdle,
+    interruptActive,
+  });
+  // Transfer signal ownership from the platform handler and arm this session's
+  // handlers — not any earlier: everything above (initInteractiveCliPlatform,
+  // onboarding, model resolution) ran with the platform's own handler still
+  // live, so a signal during that window still got a graceful shutdown.
+  exitController.install();
 
   // Interactive resume: kick off the continued tool-use run now that Ink is
   // mounted (so the rehydrated transcript + streamed continuation render) and
@@ -1076,46 +915,7 @@ export async function runChat(
   try {
     await ink.waitUntilExit();
   } finally {
-    // A signal exit (SIGINT/SIGTERM/SIGHUP) runs exitNow(), which does the full
-    // teardown and process.exit()s itself; its ink.unmount() resolves
-    // waitUntilExit and re-enters this finally. Skip the entire graceful
-    // teardown in that case — re-running it would duplicate the drain / hint /
-    // cleanup, and the resumableIdle process.exit() below would race exitNow's
-    // async exit, dropping the flush and the signal exit code.
-    if (!exiting) {
-      removeProcessHandlers();
-      clearExitConfirmation();
-      for (const dispose of disposers) dispose();
-      await followUpQueue.onIdle();
-      // A suspended (idle/WAITING) root session is resumable: its flow record
-      // survives only if we DON'T interrupt the flow (interrupt clears it). See
-      // chatTuiIsResumableIdleOnExit for the live-flow check that distinguishes
-      // this state from a resume slot that is still rehydrating.
-      const resumableIdle = isResumableIdle();
-      if (session.runPromise && !session.runCompleted && !resumableIdle) {
-        session.stopRequested = true;
-        interruptActive();
-        // Only await a run we actually interrupted/finished. A resumableIdle run
-        // is parked at the WAIT node and its runPromise NEVER resolves, so
-        // awaiting it would hang the process here.
-        await session.runPromise;
-      }
-      await drainPersistence();
-      cleanupTerminalModes({ clearItermProgress });
-      // Print the resume hint after the terminal modes are restored, but before
-      // resetCliState() clears the stream tree the hint is built from.
-      printResumeHintOnExit();
-      resetCliState();
-      if (resumableIdle) {
-        // The dangling runPromise keeps the event loop alive, so a normal return
-        // would never let the process exit. Force-exit here, AFTER persistence
-        // is flushed and the resume hint is printed, preserving the suspended
-        // flow record on disk for `texra resume`. Run platform shutdown first
-        // so queued usage logs flush — bin/texra.ts's finally won't on exit().
-        await runPlatformShutdown();
-        process.exit(session.runExitCode);
-      }
-    }
+    await exitController.gracefulTeardown();
   }
   return { exitCode: session.runExitCode };
 }
