@@ -2,6 +2,7 @@ import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass'
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
+import type { FinalTool } from '@agent/types/ModelHandlerContracts';
 import type { SubagentProgressUpdate, TodoItem } from '@shared/schemas';
 import type { TaskRunFileService } from '@utils/files';
 import type { PreparedShared, ToolUseRunShared } from './nodes/types';
@@ -12,6 +13,8 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   /** Run-storage-aware file locator; used to attach follow-up media files. */
   readonly fileService: TaskRunFileService;
   readonly toolRegistry: IToolRegistry;
+  /** Terminal tool available for the optional provider-native final turn. */
+  readonly finalTool?: FinalTool;
   readonly resumeShared: PreparedShared | null;
   readonly onFollowUpConsumed?: () => void;
   readonly onProgress?: (update: SubagentProgressUpdate) => void;

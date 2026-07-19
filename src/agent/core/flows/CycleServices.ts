@@ -9,7 +9,10 @@ import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import type { IModelHandler } from '@agent/types/IModelHandler';
-import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
+import type {
+  FinalTool,
+  SdkToolCall,
+} from '@agent/types/ModelHandlerContracts';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type { TaskRunFileService } from '@utils/files';
 
@@ -86,6 +89,8 @@ export interface ResponseCycleServices<
  * fields before running the round.
  */
 export interface ToolUseRoundServices<C = unknown> extends CycleRunServices<C> {
+  /** Terminal tool available for the optional provider-native final turn. */
+  readonly finalTool?: FinalTool;
   /** Session for injecting queued user messages after tool dispatch. */
   readonly session?: IToolUseSession;
   /** Callback when a queued follow-up is consumed (clears UI display). */
