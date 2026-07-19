@@ -4,7 +4,7 @@ import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { SubagentProgressUpdate, TodoItem } from '@shared/schemas';
 import type { TaskRunFileService } from '@utils/files';
-import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
+import type { PreparedShared } from './nodes/types';
 
 export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly setting: AgentToolUseSetting;
@@ -12,7 +12,7 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   /** Run-storage-aware file locator; used to attach follow-up media files. */
   readonly fileService: TaskRunFileService;
   readonly toolRegistry: IToolRegistry;
-  readonly snapshot: ToolUseSessionSnapshot | null;
+  readonly resumeShared: PreparedShared | null;
   readonly onFollowUpConsumed?: () => void;
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
   /** Persist todos to the execution KV store. Injected by runToolUseFlow. */

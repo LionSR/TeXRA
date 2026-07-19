@@ -2,7 +2,6 @@ import * as path from 'node:path';
 
 import { logConversationProgress } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
-import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import {
   getToolUseFlowErrorResult,
   runToolUseFlow,
@@ -65,6 +64,7 @@ import type { SessionHandle } from './SessionHandle';
 import type { AgentExecutionHandle, AgentRunHandle } from './ExecutionHandle';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
+import type { ToolUseResumeData } from './SessionResumeRetrieval';
 
 const CHANNEL = 'executeAgent';
 const logger = createChannelTrace(CHANNEL);
@@ -283,8 +283,8 @@ function buildFallbackNotification(config: AgentConfig): FallbackNotification {
 
 /**
  * Callback and host-context fields shared by every entry point that drives one
- * subagent run (`executeAgent`, `resumeToolUseFromSnapshot`, and
- * `resumeQueuedToolUseSnapshot`). Extracted so the three option bags describing
+ * subagent run (`executeAgent`, `resumeToolUseFromResumeData`, and
+ * `resumeQueuedToolUseFromResumeData`). Extracted so the three option bags describing
  * the same run can't silently drift out of sync or re-declare the same field
  * under a different name.
  */
@@ -337,7 +337,7 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    * a fresh launch of a persistent native subagent (`isSubagent` without
    * `stopAfterCycle`) can produce one, so only such drivers opt in. Resume
    * paths have no equivalent flag: whether a resumed run is a subagent comes
-   * from persisted lineage, so `resumeToolUseFromSnapshot` always admits
+   * from persisted lineage, so `resumeToolUseFromResumeData` always admits
    * WAITING and callers narrow with `isWaitingFlowResult`.
    */
   allowWaitingResult?: boolean;
@@ -457,7 +457,7 @@ export async function executeAgent(
   });
 }
 
-export interface ResumeToolUseFromSnapshotOptions extends SubagentRunOptions {
+export interface ResumeToolUseFromResumeDataOptions extends SubagentRunOptions {
   /**
    * Take messages queued after the initial drain. The flow invokes this once
    * after attaching its live context and before resuming the persisted cursor.
@@ -480,17 +480,17 @@ export interface ResumeToolUseFromSnapshotOptions extends SubagentRunOptions {
  * is a subagent — and can therefore legitimately resolve WAITING again — comes
  * from persisted lineage (`hasPersistedParent`), never from the caller.
  */
-export async function resumeToolUseFromSnapshot(
-  snapshot: ToolUseSessionSnapshot,
+export async function resumeToolUseFromResumeData(
+  resume: ToolUseResumeData,
   runtimeHost: AgentRuntimeHost,
-  options: ResumeToolUseFromSnapshotOptions = {},
+  options: ResumeToolUseFromResumeDataOptions = {},
 ): Promise<AgentRuntimeFlowResult> {
-  await acquireResumedExecutionLease(snapshot.executionId);
+  await acquireResumedExecutionLease(resume.executionId);
   const modelHandlerCompatibilityKey =
-    snapshot.modelHandlerCompatibilityKey ??
+    resume.shared.modelHandlerCompatibilityKey ??
     inferPersistedModelHandlerCompatibilityKey(
-      snapshot.agentConfig.model,
-      snapshot.messages,
+      resume.agentConfig.model,
+      resume.shared.messages,
     );
   // Resolve persisted lineage before launch assembly activates the stream and
   // transfers its resources. Storage failures must propagate without leaving
@@ -498,12 +498,12 @@ export async function resumeToolUseFromSnapshot(
   let isSubagent: boolean;
   let ctx: AgentLaunchContext;
   try {
-    isSubagent = await hasPersistedParent(snapshot.executionId);
+    isSubagent = await hasPersistedParent(resume.executionId);
     ctx = await buildAgentLaunchContext({
-      config: snapshot.agentConfig,
-      executionId: snapshot.executionId,
+      config: resume.agentConfig,
+      executionId: resume.executionId,
       runtimeHost,
-      streamTabIdOverride: snapshot.streamId,
+      streamTabIdOverride: resume.streamId,
       modelHandlerCompatibilityKey,
       // resumeCommand surfaces its own warning toast on failure; skip the
       // bus-level error to avoid double-notifying.
@@ -512,7 +512,7 @@ export async function resumeToolUseFromSnapshot(
     });
   } catch (error) {
     throw await releaseOwnedExecutionLeaseAfterFailure(
-      snapshot.executionId,
+      resume.executionId,
       error,
     );
   }
@@ -533,6 +533,7 @@ export async function resumeToolUseFromSnapshot(
       runContextOptions,
       async () => {
         if (setting.agentCategory !== AgentCategory.ToolUse) {
+          // Keep this historical diagnostic byte-for-byte for external monitors.
           throw new AgentError(
             'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
           );
@@ -547,7 +548,7 @@ export async function resumeToolUseFromSnapshot(
                 ...createInterruptCallbacks(),
                 onRoundFinalized: createUsageRecordingCallback(ctx),
                 setting,
-                resumeSnapshot: snapshot,
+                resume,
                 drainedFollowUps: options.drainedFollowUps,
                 takePendingFollowUps: options.takePendingFollowUps,
                 // A persisted parent marks this execution as a subagent. Without
@@ -591,21 +592,21 @@ export async function resumeToolUseFromSnapshot(
       },
     );
     if (!isWaitingFlowResult(result)) {
-      await flushOwnedExecutionArtifacts(runSession, snapshot.executionId);
-      await completeOwnedExecutionLease(snapshot.executionId);
+      await flushOwnedExecutionArtifacts(runSession, resume.executionId);
+      await completeOwnedExecutionLease(resume.executionId);
     }
     return result;
   } catch (error) {
     try {
-      await flushOwnedExecutionArtifacts(runSession, snapshot.executionId);
+      await flushOwnedExecutionArtifacts(runSession, resume.executionId);
     } catch (artifactError) {
-      abandonOwnedExecutionLease(snapshot.executionId);
+      abandonOwnedExecutionLease(resume.executionId);
       throw new AggregateError(
         [error, artifactError],
-        `Execution ${snapshot.executionId} failed and its final artifacts could not be persisted`,
+        `Execution ${resume.executionId} failed and its final artifacts could not be persisted`,
       );
     }
-    await completeOwnedExecutionLease(snapshot.executionId);
+    await completeOwnedExecutionLease(resume.executionId);
     throw error;
   }
 }

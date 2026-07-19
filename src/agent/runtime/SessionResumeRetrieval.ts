@@ -5,7 +5,7 @@
  * enabling automatic resumption of WAITING sessions for both workflow and tool-use agents.
  *
  * Resume strategies differ by agent type:
- * - Tool-use: Full snapshot needed (messages, state slices, etc.)
+ * - Tool-use: Canonical shared state plus resume identity
  * - Workflow: agentConfig + executionId + transcript-format key
  */
 
@@ -17,50 +17,48 @@ import {
   type ResumabilityDecision,
 } from '@agent/storage';
 import { createChannelTrace } from '@agent/trace';
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { ProviderMessageArraySchema } from '@agent/types/ProviderMessage';
-import { migrateSharedState } from '@agent/implementations/flows/tooluse/nodes/types';
 import {
-  TOOL_USE_SNAPSHOT_VERSION,
-  ToolUseSessionSnapshotSchema,
-} from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
+  migrateSharedState,
+  type PreparedShared,
+} from '@agent/implementations/flows/tooluse/nodes/types';
 import { currentModelFromUserChannels } from '@agent/implementations/flows/tooluse/modelSwitchState';
 import type { TaskState } from '@agent/core/state/TaskState';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import {
-  ExecutionIdSchema,
-  type StreamTabId,
-  type ExecutionId,
-} from '@shared/schemas';
+import type { StreamTabId, ExecutionId } from '@shared/schemas';
 import { inferPersistedModelHandlerCompatibilityKey } from './modelHandlerCompatibilityInference';
-import { ModelHandlerCompatibilityKeySchema } from './modelHandlerCompatibilityKey';
+import {
+  ModelHandlerCompatibilityKeySchema,
+  type ModelHandlerCompatibilityKey,
+} from './modelHandlerCompatibilityKey';
 
 const logger = createChannelTrace('SessionResumeRetrieval');
 
-/** Tool-use session resume data: full snapshot with messages, state slices. */
-const ToolUseResumeDataSchema = z.object({
-  type: z.literal('toolUse'),
-  snapshot: ToolUseSessionSnapshotSchema,
-});
+/** Canonical tool-use shared state plus the identity needed to resume it. */
+export interface ToolUseResumeData {
+  readonly type: 'toolUse';
+  readonly shared: PreparedShared;
+  /** Exact persisted value observed before one-time migration/self-heal. */
+  readonly sourceShared: unknown;
+  readonly agentConfig: AgentConfig;
+  readonly executionId: ExecutionId;
+  readonly streamId: StreamTabId;
+  readonly parentStreamId?: StreamTabId;
+}
 
 /** Workflow session resume data: flow reads full state via executionId. */
-const WorkflowResumeDataSchema = z.object({
-  type: z.literal('workflow'),
-  agentConfig: AgentConfigSchema,
-  executionId: ExecutionIdSchema,
-  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
-});
-
-type ToolUseResumeData = z.infer<typeof ToolUseResumeDataSchema>;
-type WorkflowResumeData = z.infer<typeof WorkflowResumeDataSchema>;
+interface WorkflowResumeData {
+  readonly type: 'workflow';
+  readonly agentConfig: AgentConfig;
+  readonly executionId: ExecutionId;
+  readonly modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
+}
 
 export type SessionResumeData = ToolUseResumeData | WorkflowResumeData;
 
 export interface SessionResumeRetrievalOptions {
-  readonly parentStreamId?: StreamTabId;
+  readonly parentStreamId?: StreamTabId | undefined;
 }
 
 function throwIfResumeStorageUnreadable(
@@ -98,10 +96,10 @@ const WorkflowFlowRecordStateSchema = z
  * Retrieve resume data for a WAITING session.
  *
  * Returns appropriate resume data based on task type:
- * - Tool-use: Full snapshot with messages and state
+ * - Tool-use: Canonical shared state with launch metadata
  * - Workflow: agentConfig, executionId, and transcript-format key
  *
- * @param streamId - Stream tab ID (used for logging and tool-use snapshot)
+ * @param streamId - Stream tab ID used for logging and resume identity
  * @param executionId - The execution ID for the stream
  * @param state - Current run config, or legacy TaskState compatibility input
  * @returns The resume data, or `null` when there is no resumable session
@@ -187,35 +185,26 @@ async function retrieveToolUseResumeData(
       migrationResult.data.modelHandlerCompatibilityKey ??
       inferPersistedModelHandlerCompatibilityKey(currentConfig.model, messages);
 
-    // Construct and validate the complete snapshot.
-    // Validation provides defense-in-depth: even if flow record is valid,
-    // we ensure the assembled snapshot matches the expected schema.
-    const rawSnapshot = {
-      version: TOOL_USE_SNAPSHOT_VERSION,
+    const shared: PreparedShared = {
+      ...migrationResult.data,
+      stateSlices,
+      ...(modelHandlerCompatibilityKey !== undefined && {
+        modelHandlerCompatibilityKey,
+      }),
+    };
+
+    logger.debug(`Retrieved tool-use resume data for stream: ${streamId}`);
+    return {
+      type: 'toolUse',
+      shared,
+      sourceShared: structuredClone(flowRecord.shared),
       executionId,
       streamId,
       ...(options.parentStreamId !== undefined && {
         parentStreamId: options.parentStreamId,
       }),
       agentConfig: currentConfig,
-      modelHandlerCompatibilityKey,
-      messages,
-      run: stateSlices.runStateSnapshot,
-      workspace: stateSlices.workspaceSnapshot,
-      user: stateSlices.userChannels,
-      lastUpdated: Date.now(),
     };
-
-    const snapshotResult = ToolUseSessionSnapshotSchema.safeParse(rawSnapshot);
-    if (!snapshotResult.success) {
-      logger.warn('Invalid snapshot structure for stream', {
-        data: { streamId, error: z.prettifyError(snapshotResult.error) },
-      });
-      return null;
-    }
-
-    logger.debug(`Retrieved tool-use resume data for stream: ${streamId}`);
-    return { type: 'toolUse', snapshot: snapshotResult.data };
   } catch (error) {
     // An unexpected failure here (KV/IO error) is NOT the same as "no session
     // to resume" — propagate it so the resume boundary surfaces it rather than
