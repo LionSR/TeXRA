@@ -276,7 +276,7 @@ export async function getCliSessionAccessToken(): Promise<string | null> {
  * env token's account instead.
  */
 export async function getCliSessionTier(): Promise<string> {
-  return SupabaseClient.getSessionAuthContext();
+  return SupabaseClient.getSessionTier();
 }
 
 /**

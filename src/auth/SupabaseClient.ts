@@ -302,7 +302,7 @@ export class SupabaseClient {
       }
     }
 
-    return this.getSessionAuthContext();
+    return this.getSessionTier();
   }
 
   /**
@@ -311,7 +311,7 @@ export class SupabaseClient {
    * session (e.g. PostgREST usage reads), so its tier describes the account
    * whose data is being read rather than the relay credential.
    */
-  static async getSessionAuthContext(): Promise<UserTier> {
+  static async getSessionTier(): Promise<UserTier> {
     const defaultTier: UserTier = 'free';
 
     const tokens = await this.getSessionTokens();
