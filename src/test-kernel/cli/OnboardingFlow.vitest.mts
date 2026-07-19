@@ -3,6 +3,8 @@ import { EventEmitter } from 'node:events';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { waitForCondition } from '@test/support/asyncTestUtils';
+
 const mocks = vi.hoisted(() => ({
   selectCliApiModelAccessRoute: vi.fn(),
   saveProviderApiKey: vi.fn(),
@@ -90,14 +92,10 @@ class FakeInput extends EventEmitter {
   }
 }
 
-async function waitFor(predicate: () => boolean): Promise<void> {
-  const deadline = Date.now() + 15_000;
-  while (Date.now() < deadline) {
-    if (predicate()) return;
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  throw new Error('Timed out waiting for onboarding interaction');
-}
+const ONBOARDING_WAIT_OPTIONS = Object.freeze({
+  timeoutMs: 15_000,
+  timeoutMessage: 'Timed out waiting for onboarding interaction',
+});
 
 const originalStdin = Object.getOwnPropertyDescriptor(process, 'stdin');
 const originalStdout = Object.getOwnPropertyDescriptor(process, 'stdout');
@@ -162,17 +160,27 @@ describe('provider-key onboarding flow', () => {
     // Ink attaches its input stream before the active Select handler has
     // necessarily committed. Wait for both input attachment and the rendered
     // picker so the shortcut cannot be discarded during a loaded CI run.
-    await waitFor(
+    await waitForCondition(
       () =>
         stdin.listenerCount('readable') > 0 &&
         stdout.output.includes('Choose how to power model calls'),
+      ONBOARDING_WAIT_OPTIONS,
     );
     stdin.write('3');
-    await waitFor(() => stdout.output.includes('Choose your provider:'));
+    await waitForCondition(
+      () => stdout.output.includes('Choose your provider:'),
+      ONBOARDING_WAIT_OPTIONS,
+    );
     stdin.write('\r');
-    await waitFor(() => stdout.output.includes('enter your API key (hidden)'));
+    await waitForCondition(
+      () => stdout.output.includes('enter your API key (hidden)'),
+      ONBOARDING_WAIT_OPTIONS,
+    );
     stdin.write(providerKey);
-    await waitFor(() => stdout.output.includes('•'));
+    await waitForCondition(
+      () => stdout.output.includes('•'),
+      ONBOARDING_WAIT_OPTIONS,
+    );
     stdin.write('\r');
 
     await expect(resultPromise).resolves.toEqual({

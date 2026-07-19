@@ -15,22 +15,20 @@ delete process.env.NO_COLOR;
 process.env.FORCE_COLOR = '3';
 
 // Node.js imports
-import { EventEmitter } from 'node:events';
-import { createRequire } from 'node:module';
-
 // Third-party imports
 import stripAnsi from 'strip-ansi';
 import { afterAll, describe, expect, it } from 'vitest';
 
 // Local imports
+import { pollForCondition } from '@test/support/asyncTestUtils';
+import {
+  FakeStdin,
+  FakeStdout,
+  loadInk,
+} from '@test/support/inkTestHarness.mts';
 import type { TuiRepaintOptions } from '@cli/chat/tui/render/tuiViewportController';
 import type { ConversationEntry } from '@cli/chat/tui/state/cliState';
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
-import { delay } from '@utils/core';
-
-const cliRequire = createRequire(
-  new URL('../../../packages/cli/package.json', import.meta.url),
-);
 
 afterAll(() => {
   for (const [name, value] of Object.entries(ORIGINAL_COLOR_ENV)) {
@@ -38,34 +36,6 @@ afterAll(() => {
     else process.env[name] = value;
   }
 });
-
-class FakeStdout extends EventEmitter {
-  isTTY = true;
-  rows = 12;
-  buf = '';
-  constructor(public columns: number) {
-    super();
-  }
-  write(chunk: string): boolean {
-    this.buf += chunk;
-    return true;
-  }
-  getColorDepth(): number {
-    return 24;
-  }
-}
-
-class FakeStdin extends EventEmitter {
-  isTTY = false;
-  ref(): void {}
-  unref(): void {}
-  pause(): void {}
-  resume(): void {}
-  setEncoding(): void {}
-  read(): null {
-    return null;
-  }
-}
 
 function inverseBandWidths(output: string, text: string): readonly number[] {
   const widths: number[] = [];
@@ -97,24 +67,11 @@ function occurrences(text: string, needle: string): number {
   return text.split(needle).length - 1;
 }
 
-async function waitFor(
-  predicate: () => boolean,
-  timeoutMs: number,
-): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (predicate()) return true;
-    await delay(25);
-  }
-  return predicate();
-}
-
 describe('Static band resize', () => {
   it('replaces finalized transcript geometry at the new width', async () => {
     // Dynamic import so FORCE_COLOR is set first and the patched workspace Ink
     // (not a hoisted copy) is loaded.
-    const ink = (await import(cliRequire.resolve('ink'))) as any;
-    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const { ink, React, requireFromInk } = await loadInk();
     const { createElement } = React;
     const { StaticConversationTranscript } =
       await import('@cli/chat/tui/panes/StaticConversationTranscript');
@@ -122,8 +79,7 @@ describe('Static band resize', () => {
       await import('@cli/chat/tui/state/cliState');
     const { createTranscriptPrintRequest } =
       await import('@cli/chat/tui/state/transcriptLines');
-    const inkRequire = createRequire(cliRequire.resolve('ink'));
-    const { clearTerminal } = inkRequire('ansi-escapes') as {
+    const { clearTerminal } = requireFromInk('ansi-escapes') as {
       readonly clearTerminal: string;
     };
     const streamId = 'resize-static-stream' as StreamTabId;
@@ -197,10 +153,10 @@ describe('Static band resize', () => {
       });
     }
 
-    const out = new FakeStdout(40);
+    const out = new FakeStdout(40, 12);
     const inst = ink.render(createElement(App), {
       stdout: out,
-      stdin: new FakeStdin(),
+      stdin: new FakeStdin(false),
       interactive: true,
       exitOnCtrlC: false,
       patchConsole: false,
@@ -208,26 +164,29 @@ describe('Static band resize', () => {
 
     try {
       expect(
-        await waitFor(
+        await pollForCondition(
           () =>
-            horizontalRuleWidths(out.buf).includes(40) &&
-            inverseBandWidths(out.buf, prompt).includes(38) &&
-            out.buf.includes(hiddenPrintLine),
-          5000,
+            horizontalRuleWidths(out.output).includes(40) &&
+            inverseBandWidths(out.output, prompt).includes(38) &&
+            out.output.includes(hiddenPrintLine),
+          { timeoutMs: 5000, intervalMs: 25 },
         ),
       ).toBe(true);
 
       // Widen: bump columns and fire the resize the patched Ink handler listens
       // for. Clear the recording so the final frame cannot pass using initial
       // output.
-      out.buf = '';
+      out.output = '';
       out.columns = 80;
       out.emit('resize');
 
-      expect(await waitFor(() => out.buf.includes(clearTerminal), 5000)).toBe(
-        true,
-      );
-      const frame = latestRepaintFrame(out.buf, clearTerminal);
+      expect(
+        await pollForCondition(() => out.output.includes(clearTerminal), {
+          timeoutMs: 5000,
+          intervalMs: 25,
+        }),
+      ).toBe(true);
+      const frame = latestRepaintFrame(out.output, clearTerminal);
       const ruleWidths = horizontalRuleWidths(frame);
       const bandWidths = inverseBandWidths(frame, prompt);
       const visibleFrame = stripAnsi(frame);
@@ -247,15 +206,13 @@ describe('Static band resize', () => {
   });
 
   it('replaces finalized execution rows when subagent labels arrive', async () => {
-    const ink = (await import(cliRequire.resolve('ink'))) as any;
-    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const { ink, React, requireFromInk } = await loadInk();
     const { createElement } = React;
     const { StaticConversationTranscript } =
       await import('@cli/chat/tui/panes/StaticConversationTranscript');
     const { patchStream, resetCliState } =
       await import('@cli/chat/tui/state/cliState');
-    const inkRequire = createRequire(cliRequire.resolve('ink'));
-    const { clearTerminal } = inkRequire('ansi-escapes') as {
+    const { clearTerminal } = requireFromInk('ansi-escapes') as {
       readonly clearTerminal: string;
     };
     const streamId = 'execution-label-stream' as StreamTabId;
@@ -317,10 +274,10 @@ describe('Static band resize', () => {
       });
     }
 
-    const out = new FakeStdout(80);
+    const out = new FakeStdout(80, 12);
     const inst = ink.render(createElement(App, { labels: new Map() }), {
       stdout: out,
-      stdin: new FakeStdin(),
+      stdin: new FakeStdin(false),
       interactive: true,
       exitOnCtrlC: false,
       patchConsole: false,
@@ -328,21 +285,27 @@ describe('Static band resize', () => {
     inkRef.current = inst;
 
     try {
-      expect(await waitFor(() => out.buf.includes(executionPath), 5000)).toBe(
-        true,
-      );
+      expect(
+        await pollForCondition(() => out.output.includes(executionPath), {
+          timeoutMs: 5000,
+          intervalMs: 25,
+        }),
+      ).toBe(true);
 
-      out.buf = '';
+      out.output = '';
       inst.rerender(
         createElement(App, {
           labels: new Map([[executionId, 'reviewer']]),
         }),
       );
 
-      expect(await waitFor(() => out.buf.includes(clearTerminal), 5000)).toBe(
-        true,
-      );
-      const frame = stripAnsi(latestRepaintFrame(out.buf, clearTerminal));
+      expect(
+        await pollForCondition(() => out.output.includes(clearTerminal), {
+          timeoutMs: 5000,
+          intervalMs: 25,
+        }),
+      ).toBe(true);
+      const frame = stripAnsi(latestRepaintFrame(out.output, clearTerminal));
       expect(frame).toContain('executions (view: reviewer/report)');
       expect(frame).not.toContain(executionPath);
       expect(occurrences(frame, 'executions (view: reviewer/report)')).toBe(1);
@@ -353,8 +316,7 @@ describe('Static band resize', () => {
   });
 
   it('keeps resize subscriptions constant as tool history grows', async () => {
-    const ink = (await import(cliRequire.resolve('ink'))) as any;
-    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const { ink, React } = await loadInk();
     const { createElement } = React;
     const { StaticConversationTranscript } =
       await import('@cli/chat/tui/panes/StaticConversationTranscript');
@@ -406,7 +368,7 @@ describe('Static band resize', () => {
       });
     }
 
-    const out = new FakeStdout(80);
+    const out = new FakeStdout(80, 12);
     let peakResizeListeners = 0;
     out.on('newListener', (event) => {
       if (event === 'resize') {
@@ -418,16 +380,19 @@ describe('Static band resize', () => {
     });
     const inst = ink.render(createElement(App), {
       stdout: out,
-      stdin: new FakeStdin(),
+      stdin: new FakeStdin(false),
       interactive: true,
       exitOnCtrlC: false,
       patchConsole: false,
     });
 
     try {
-      expect(await waitFor(() => out.buf.includes('result 69'), 5000)).toBe(
-        true,
-      );
+      expect(
+        await pollForCondition(() => out.output.includes('result 69'), {
+          timeoutMs: 5000,
+          intervalMs: 25,
+        }),
+      ).toBe(true);
       // One listener belongs to Ink's renderer and one to the App-level
       // useWindowSize subscription. Transcript length must not affect it.
       expect(peakResizeListeners).toBe(2);

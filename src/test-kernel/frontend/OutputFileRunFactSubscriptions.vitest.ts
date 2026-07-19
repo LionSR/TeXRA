@@ -1,8 +1,8 @@
 import { join } from 'node:path';
-import { setTimeout as sleep } from 'node:timers/promises';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { waitForCondition } from '@test/support/asyncTestUtils';
 import type {
   AddOutputFilesPayload,
   OutputFileInfo,
@@ -173,17 +173,6 @@ function disposeContext(context: {
   }
 }
 
-async function waitFor(
-  predicate: () => boolean,
-  message: string,
-): Promise<void> {
-  for (let i = 0; i < 20; i += 1) {
-    if (predicate()) return;
-    await sleep(10);
-  }
-  throw new Error(message);
-}
-
 describe('output-file run fact frontend subscriptions', () => {
   let tempDir: string | undefined;
 
@@ -245,11 +234,14 @@ describe('output-file run fact frontend subscriptions', () => {
     );
 
     emitAddOutputFilesRunFact(hub, addOutputFilesPayload(outputPath));
-    await waitFor(
+    await waitForCondition(
       () =>
         (mocks.diagnosticCollections.at(-1)?.items.get(outputPath) ?? [])
           .length > 0,
-      'inline criticism diagnostics were not refreshed',
+      {
+        timeoutMs: 200,
+        timeoutMessage: 'inline criticism diagnostics were not refreshed',
+      },
     );
     expect(
       mocks.diagnosticCollections.at(-1)?.items.get(outputPath),
