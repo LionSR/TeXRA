@@ -283,7 +283,7 @@ function formatUnifiedApprovalUserDiff(
   return `User adjustments to ${path}:\n\n\`\`\`diff\n${diffBody}\n\`\`\``;
 }
 
-export interface WriteApprovedContentResult {
+interface WriteApprovedContentResult {
   appliedContent: string;
   baseContent: string;
 }
@@ -386,7 +386,7 @@ export function buildApprovalRejectedResult(
   return result;
 }
 
-export interface ApprovedEditContent {
+interface ApprovedEditContent {
   approval: ToolEditApprovalResult;
   /** Content to write: the user's adjustments if any, else the proposal. */
   finalContent: string;
