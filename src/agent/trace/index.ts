@@ -12,7 +12,6 @@
  */
 export type {
   AgentEvent,
-  LogEvent,
   ResultEvent,
   StageStartEvent,
   StatusEvent,
@@ -28,11 +27,7 @@ export type {
 
 export { TraceEmitter } from './TraceEmitter';
 export { noopTrace } from './noopTrace';
-export {
-  attachChannelSubscriber,
-  createChannelTrace,
-  type ChannelSubscriberOptions,
-} from './channelTrace';
+export { attachChannelSubscriber, createChannelTrace } from './channelTrace';
 export {
   startToolUseCard,
   endToolUseCard,

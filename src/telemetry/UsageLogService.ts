@@ -28,7 +28,7 @@ export const USAGE_LOG_FLUSH_OUTCOME = {
   REJECTED: 'rejected',
 } as const;
 
-export type UsageLogFlushOutcome =
+type UsageLogFlushOutcome =
   (typeof USAGE_LOG_FLUSH_OUTCOME)[keyof typeof USAGE_LOG_FLUSH_OUTCOME];
 
 interface UsageLogConfig {

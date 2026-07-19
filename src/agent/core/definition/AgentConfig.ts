@@ -111,14 +111,6 @@ export const AgentConfigSchema = z.preprocess(
 );
 
 export type AgentConfig = z.output<typeof AgentConfigSchema>;
-export type WorkflowAgentConfig = Extract<
-  AgentConfig,
-  { agentCategory: typeof AgentCategory.Workflow }
->;
-export type ToolUseAgentConfig = Extract<
-  AgentConfig,
-  { agentCategory: typeof AgentCategory.ToolUse }
->;
 export const WorkflowAgentConfigSchema = z.preprocess(
   normalizeAgentConfigInput,
   WorkflowAgentConfigFieldsSchema.superRefine(validateOutputFileCount),

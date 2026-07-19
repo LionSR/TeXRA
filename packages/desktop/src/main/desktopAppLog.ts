@@ -50,7 +50,7 @@ export function getDesktopLogDirectory(): string {
   }
 }
 
-export function getDesktopLogFilePath(): string {
+function getDesktopLogFilePath(): string {
   return logFilePath ?? join(getDesktopLogDirectory(), LOG_FILE_NAME);
 }
 
