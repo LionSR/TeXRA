@@ -30,7 +30,7 @@ import {
   type TierModelConfig,
   type TierModelsConfig,
   type UserAccessStatus,
-} from './types';
+} from './tierTypes';
 import type { SupabaseSessionLog } from '../supabaseSessionTypes';
 
 const CHANNEL = 'TierService';

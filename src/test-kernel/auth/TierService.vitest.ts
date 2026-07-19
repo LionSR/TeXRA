@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - auth
-import { TierService } from '@auth/tier/TierService';
+import { TierService } from '@auth/serverKeys/TierService';
 
 interface PendingFetch {
   readonly hasAuth: boolean;

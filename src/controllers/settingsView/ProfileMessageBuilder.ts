@@ -21,7 +21,6 @@ import {
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { FREE_TIER, ULTRA_TIER, MAX_TIER } from '@auth/config';
 import { getServerSideKeyService } from '@auth/serverKeys';
-import { getTierService } from '@auth/tier';
 import { PROFILE_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   ApiAccessMode,
@@ -99,7 +98,7 @@ export async function buildProfileMessage(
     accessExpiresAt =
       serverSideKeyService.getAccessExpirationDate()?.toISOString() ?? null;
     quotaAutoSwitched = serverSideKeyService.wasQuotaAutoSwitched();
-    spendingStatus = getTierService().getSpendingStatus();
+    spendingStatus = serverSideKeyService.getSpendingStatus();
   } catch {
     // Server-side key / tier access is optional; personal provider keys work.
   }
