@@ -1,10 +1,12 @@
-import { createRequire } from 'node:module';
+// Node.js imports
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 
+// Third-party imports
 import { build } from 'esbuild';
 
 // Code-generate the catalog-derived parts of the VS Code manifest
@@ -34,6 +36,7 @@ try {
     bundle: true,
     format: 'cjs',
     platform: 'node',
+    target: 'node22',
     outdir: bundleDir,
     tsconfig: 'tsconfig.json',
   });
