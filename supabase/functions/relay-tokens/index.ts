@@ -27,14 +27,12 @@ import { RELAY_CI_TOKEN_PREFIX, sha256Hex } from '../_shared/relayCiToken.ts';
 import {
   createEdgeClient,
   randomBase64Url,
-  versionedJsonResponse,
+  jsonResponse,
 } from '../_shared/responses.ts';
 
 // =============================================================================
 // Constants
 // =============================================================================
-
-const VERSION = '1.0.0';
 
 const TOKEN_RANDOM_BYTES = 32;
 const DEFAULT_EXPIRES_IN_DAYS = 30;
@@ -77,18 +75,16 @@ app.use('*', async (c, next) => {
 // fail here by construction — a leaked CI token cannot mint or revoke tokens.
 app.use('*', async (c, next) => {
   if (!adminSupabase) {
-    return versionedJsonResponse(
+    return jsonResponse(
       c.req.raw,
-      VERSION,
       { error: 'Server configuration error' },
       500,
     );
   }
   const auth = await authenticateJwt(bearerToken(c.req.raw));
   if (!auth) {
-    return versionedJsonResponse(
+    return jsonResponse(
       c.req.raw,
-      VERSION,
       { error: 'Sign in before managing CI tokens' },
       401,
     );
@@ -105,7 +101,7 @@ app.use('*', async (c, next) => {
 type Context = HonoContext<{ Variables: Variables }>;
 
 function errorResponse(c: Context, error: string, status: number) {
-  return versionedJsonResponse(c.req.raw, VERSION, { error }, status);
+  return jsonResponse(c.req.raw, { error }, status);
 }
 
 function tokenHint(token: string): string {
@@ -185,7 +181,7 @@ app.post('/mint', async (c) => {
     }
 
     console.log(`[RELAY_TOKENS] minted token ${data.id} for user ${userId}`);
-    return versionedJsonResponse(c.req.raw, VERSION, { ...data, token }, 200);
+    return jsonResponse(c.req.raw, { ...data, token }, 200);
   } catch (error) {
     console.error('[RELAY_TOKENS] mint error:', error);
     return errorResponse(c, 'Internal server error', 500);
@@ -207,12 +203,7 @@ app.get('/list', async (c) => {
       console.error('[RELAY_TOKENS] list failed:', error.message);
       return errorResponse(c, 'Failed to list tokens', 500);
     }
-    return versionedJsonResponse(
-      c.req.raw,
-      VERSION,
-      { tokens: data ?? [] },
-      200,
-    );
+    return jsonResponse(c.req.raw, { tokens: data ?? [] }, 200);
   } catch (error) {
     console.error('[RELAY_TOKENS] list error:', error);
     return errorResponse(c, 'Internal server error', 500);
@@ -246,7 +237,7 @@ app.post('/revoke', async (c) => {
     }
 
     console.log(`[RELAY_TOKENS] revoked token ${id} for user ${userId}`);
-    return versionedJsonResponse(c.req.raw, VERSION, { revoked: data[0] }, 200);
+    return jsonResponse(c.req.raw, { revoked: data[0] }, 200);
   } catch (error) {
     console.error('[RELAY_TOKENS] revoke error:', error);
     return errorResponse(c, 'Internal server error', 500);
