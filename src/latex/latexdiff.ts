@@ -2,7 +2,6 @@ import * as path from 'node:path';
 
 import { z } from 'zod';
 
-import { extractLastRoundMatch } from '@agent/utils/mergeFileUtils';
 import { formatError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
@@ -251,6 +250,8 @@ export class LaTeXdiffService {
   async runDiffBetweenRounds(
     firstLocation: FileLocation,
     secondLocation: FileLocation,
+    fromRound: number,
+    toRound: number,
     mathMarkup?: MathMarkupOption,
     options?: { cwd?: string; outputDirectory?: string },
   ): Promise<LaTeXdiffResult> {
@@ -261,21 +262,7 @@ export class LaTeXdiffService {
         return { success: false, message };
       }
 
-      const firstRoundMatch = extractLastRoundMatch(firstLocation.absolutePath);
-      const secondRoundMatch = extractLastRoundMatch(
-        secondLocation.absolutePath,
-      );
-
-      if (!firstRoundMatch || !secondRoundMatch) {
-        const message = 'Could not extract round numbers from file names';
-        logger.warn(this.channel, message);
-        return { success: false, message };
-      }
-
-      const diffSuffix = buildBetweenRoundDiffSuffix(
-        secondRoundMatch[1],
-        firstRoundMatch[1],
-      );
+      const diffSuffix = buildBetweenRoundDiffSuffix(toRound, fromRound);
       return await this.runDiff(
         firstLocation,
         secondLocation,
