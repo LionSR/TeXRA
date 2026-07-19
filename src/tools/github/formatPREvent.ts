@@ -97,7 +97,16 @@ const annotationBlock = (a: GhCheckAnnotation): string => {
   return `[${level}] ${annotationLocation(a)}\n${title}${message}`;
 };
 
-export function formatIssueComment(
+/**
+ * GitHub delivers general PR comments over the same `issue_comment` webhook
+ * as plain-issue comments (a PR *is* an issue under the REST API). Named
+ * `formatPRIssueComment` — not `formatIssueComment` — to stay distinct from
+ * `formatIssueEvent.ts`'s same-signature `formatIssueComment`; the two are
+ * not interchangeable (wrong one renders `pulls/N` where `issues/N` is
+ * expected, or vice versa) and TypeScript can't catch the swap since both
+ * take `(slug: string, number: number, c: GhIssueComment): string`.
+ */
+export function formatPRIssueComment(
   slug: string,
   prNumber: number,
   c: GhIssueComment,
