@@ -669,7 +669,9 @@ export function App(props: AppProps): React.JSX.Element {
               disabled={inputDisabled}
               history={props.history}
               keyboardActive={!childListFocused}
-              onFocusChildList={focusChildList}
+              onFocusChildList={
+                focusShortcutsActive ? focusChildList : undefined
+              }
             />
             <StatusBar
               agentSelectionAvailable={agentSelectionAvailable}
