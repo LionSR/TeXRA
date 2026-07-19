@@ -63,6 +63,9 @@ export interface InputBarProps {
   readonly history?: InputHistory;
   /** Whether the input currently owns terminal keys. */
   readonly keyboardActive?: boolean;
+  /** Called when ↑/↓ history browsing hits its boundary (nothing further to
+   *  recall) with a child list available — hands keyboard ownership to it. */
+  readonly onFocusChildList?: () => void;
   /** Root-owned handle for draft-aware keyboard policy. */
   readonly controlRef?: React.Ref<InputBarHandle>;
 }
@@ -137,12 +140,22 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   }, []);
   const historyRef = useRef(history);
   historyRef.current = history;
+  const onFocusChildListRef = useRef(props.onFocusChildList);
+  onFocusChildListRef.current = props.onFocusChildList;
   const browseHistory = useCallback((direction: -1 | 1) => {
     const entries = historyRef.current;
     const browse = historyBrowseRef.current;
-    if (!entries || (!browse && direction === 1)) return;
+    // Nothing further to recall in this direction — hand off to the child
+    // list rather than silently no-op-ing.
+    if (!entries || (!browse && direction === 1)) {
+      onFocusChildListRef.current?.();
+      return;
+    }
     const index = (browse?.index ?? entries.length()) + direction;
-    if (index < 0) return;
+    if (index < 0) {
+      onFocusChildListRef.current?.();
+      return;
+    }
     const savedDraft = browse?.savedDraft ?? draftValueRef.current;
     // Walking ↓ past the newest entry restores the pre-browse draft.
     const entry = entries.at(index);
