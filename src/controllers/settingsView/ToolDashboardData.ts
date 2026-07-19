@@ -41,15 +41,7 @@ const BUILTIN_TOOLS: (Omit<ToolDashboardItem, 'status' | 'tools'> & {
     category: 'file',
     description:
       'Read, write, edit files and run shell commands. Includes glob/grep search.',
-    toolNames: [
-      'bash',
-      'read_file',
-      'write_file',
-      'edit_file',
-      'glob',
-      'grep',
-      'apply_path',
-    ],
+    toolNames: ['bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep'],
     requiresSetup: false,
   },
   {

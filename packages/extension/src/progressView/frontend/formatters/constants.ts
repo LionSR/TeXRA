@@ -142,7 +142,6 @@ export const TOOL_ICON_MAP: Record<string, string> = {
   write_file: 'new-file',
   edit_file: 'edit',
   str_replace_editor: 'edit',
-  apply_path: 'diff',
 
   // Search/find
   glob: 'search',
