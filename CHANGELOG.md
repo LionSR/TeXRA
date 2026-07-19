@@ -35,6 +35,8 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Accepted run files remain editable** — agents can continue editing accepted
+  workflow output without an unnecessary intervening file read.
 - **Credential setup stays private and matches the current app** — the setup
   assistant now distinguishes saved keys, environment variables, ChatGPT
   access, and included TeXRA access; it directs API-key entry to the current
