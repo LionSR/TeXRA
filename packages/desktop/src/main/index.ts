@@ -948,7 +948,6 @@ function createWindow(options: {
   settingsIpcRef.current = settingsIpc;
   const progressIpc = createDesktopProgressIpc({
     source: {
-      kind: 'lazy',
       get: () => agentExecution?.progress,
       ensure: async () => (await getAgentExecution()).progress,
     },
