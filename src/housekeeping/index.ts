@@ -9,7 +9,5 @@ export { runPackRunDir, runCleanRunDir } from './runDirOps';
 export {
   runPackLatexdiffvc,
   runPackLatexdiffvcMultiple,
-  runCleanLatexdiffvc,
-  runCleanLatexdiffvcMultiple,
   type LatexdiffPackResult,
 } from './latexdiff';
