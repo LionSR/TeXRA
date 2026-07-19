@@ -139,12 +139,6 @@ export interface SettingsViewCommandActions {
     readonly saveModePreset: HandlerOrUnsupported;
     readonly deleteModePreset: StringAction;
   };
-  readonly gitAuthor: {
-    readonly setMarkCommits: EnabledAction;
-    readonly setName: StringAction;
-    readonly setEmail: StringAction;
-    readonly setWorktreeSupport: EnabledAction;
-  };
   readonly githubSubscriptions: {
     readonly getTokenStatus: HandlerOrUnsupported;
     readonly setToken: HandlerOrUnsupported;
@@ -164,12 +158,15 @@ export interface SettingsViewCommandActions {
   };
   readonly approval: {
     readonly setBashApprovalEnabled: EnabledAction;
-    readonly setCodexSandboxMode: StringAction;
-    readonly setCodexReasoningEffort: StringAction;
-    readonly setCodexApprovalPolicy: StringAction;
-    readonly setClaudeAgentModel: StringAction;
-    readonly setClaudeAgentPermissionMode: StringAction;
-    readonly setClaudeAgentEffort: StringAction;
+  };
+  /**
+   * Generic catalog-driven scalar-setting write. One action replaces the former
+   * per-setting `gitAuthor.*` and `approval.setCodex*`/`setClaude*` handlers: the
+   * host looks the key up in `STATE_SETTINGS`, validates the value, persists it,
+   * and rebroadcasts the owning family (git-author vs approval) by category.
+   */
+  readonly stateSettings: {
+    readonly update: HandlerOrUnsupported<[string, unknown]>;
   };
   readonly tools: {
     readonly openInstallUrl: StringAction;
@@ -374,20 +371,6 @@ export function createSettingsViewCommandHandlers(
       (data) => [data.presetId],
     ),
 
-    setGitMarkCommits: mapAction(actions.gitAuthor.setMarkCommits, (data) => [
-      data.enabled,
-    ]),
-    setGitAuthorName: mapAction(actions.gitAuthor.setName, (data) => [
-      data.name,
-    ]),
-    setGitAuthorEmail: mapAction(actions.gitAuthor.setEmail, (data) => [
-      data.email,
-    ]),
-    setGitWorktreeSupport: mapAction(
-      actions.gitAuthor.setWorktreeSupport,
-      (data) => [data.enabled],
-    ),
-
     getGitHubTokenStatus: actions.githubSubscriptions.getTokenStatus,
     setGitHubToken: actions.githubSubscriptions.setToken,
     removeGitHubToken: actions.githubSubscriptions.removeToken,
@@ -417,30 +400,10 @@ export function createSettingsViewCommandHandlers(
       actions.approval.setBashApprovalEnabled,
       (data) => [data.enabled],
     ),
-    setCodexSandboxMode: mapAction(
-      actions.approval.setCodexSandboxMode,
-      (data) => [data.mode],
-    ),
-    setCodexReasoningEffort: mapAction(
-      actions.approval.setCodexReasoningEffort,
-      (data) => [data.effort],
-    ),
-    setCodexApprovalPolicy: mapAction(
-      actions.approval.setCodexApprovalPolicy,
-      (data) => [data.policy],
-    ),
-    setClaudeAgentModel: mapAction(
-      actions.approval.setClaudeAgentModel,
-      (data) => [data.model],
-    ),
-    setClaudeAgentPermissionMode: mapAction(
-      actions.approval.setClaudeAgentPermissionMode,
-      (data) => [data.mode],
-    ),
-    setClaudeAgentEffort: mapAction(
-      actions.approval.setClaudeAgentEffort,
-      (data) => [data.effort],
-    ),
+    updateStateSetting: mapAction(actions.stateSettings.update, (data) => [
+      data.key,
+      data.value,
+    ]),
 
     openToolInstallUrl: mapAction(actions.tools.openInstallUrl, (data) => [
       data.url,
