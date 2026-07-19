@@ -10,9 +10,30 @@ describe('tool registry aliases', () => {
   });
 
   it('keeps legacy crossref_doi configs on the unified Crossref tool', () => {
-    expect(
-      resolveToolDefinitions(['crossref_doi']).map((tool) => tool.name),
-    ).toEqual(['crossref_search']);
+    const [tool] = resolveToolDefinitions(['crossref_doi']);
+    const [canonicalTool] = resolveToolDefinitions(['crossref_search']);
+
+    expect(tool?.name).toBe('crossref_search');
+    expect(tool?.parameters).toEqual(canonicalTool?.parameters);
+  });
+
+  it('replaces legacy object-form schemas with the canonical tool contract', () => {
+    const [tool] = resolveToolDefinitions([
+      {
+        name: 'crossref_doi',
+        description: 'Retired DOI-only contract',
+        parameters: {
+          type: 'object',
+          properties: { doi: { type: 'string' } },
+          required: ['doi'],
+        },
+      },
+    ]);
+    const [canonicalTool] = resolveToolDefinitions(['crossref_search']);
+
+    expect(tool?.name).toBe('crossref_search');
+    expect(tool?.description).not.toBe('Retired DOI-only contract');
+    expect(tool?.parameters).toEqual(canonicalTool?.parameters);
   });
 
   it('deduplicates aliases that resolve to the same canonical tool', () => {

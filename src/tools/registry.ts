@@ -226,6 +226,14 @@ export function resolveToolDefinitions(
       warnOnMissing?.(name);
     }
 
+    // Aliases are compatibility names, not independent tool contracts. Legacy
+    // object-form configs may carry the retired tool's parameter schema, so
+    // normalize the whole definition at this boundary instead of only renaming
+    // it and exposing a stale contract to the model.
+    if (name !== canonicalName && tool) {
+      return [tool.definition];
+    }
+
     // String items: return tool definition or minimal fallback
     if (typeof item === 'string') {
       return [tool?.definition ?? { name: canonicalName }];
