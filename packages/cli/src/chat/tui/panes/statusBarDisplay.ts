@@ -314,6 +314,7 @@ function fitTransientNoticeStatusBarLeftSegments(
 
   const fitted = [...segments];
   const notice = fitted[noticeIndex];
+  let fittedNotice = notice;
   let liveness =
     livenessIndex === undefined ? undefined : fitted[livenessIndex];
   const discardWarning =
@@ -342,8 +343,11 @@ function fitTransientNoticeStatusBarLeftSegments(
     }
   }
 
-  const fittedNoticeIndex = notice ? fitted.indexOf(notice) : -1;
-  if (fittedNoticeIndex >= 0 && statusBarSegmentsWidth(fitted) > innerWidth) {
+  const fitNotice = (): void => {
+    const fittedNoticeIndex = fittedNotice ? fitted.indexOf(fittedNotice) : -1;
+    if (fittedNoticeIndex < 0 || statusBarSegmentsWidth(fitted) <= innerWidth) {
+      return;
+    }
     const fixedWidth = fitted.reduce(
       (total, segment, index) =>
         index === fittedNoticeIndex
@@ -351,10 +355,48 @@ function fitTransientNoticeStatusBarLeftSegments(
           : total + statusBarSegmentWidth(segment),
       fitted.length - 1,
     );
-    fitted[fittedNoticeIndex] = {
+    fittedNotice = {
       ...notice,
       text: truncateSummaryToWidth(
         notice.text,
+        Math.max(0, innerWidth - fixedWidth),
+      ),
+    };
+    fitted[fittedNoticeIndex] = fittedNotice;
+  };
+
+  fitNotice();
+
+  // At widths where the safety warning and liveness cannot coexist, the
+  // destructive-action warning wins. Refit the notice into the released room.
+  if (
+    discardWarning &&
+    liveness &&
+    statusBarSegmentsWidth(fitted) > innerWidth
+  ) {
+    fitted.splice(fitted.indexOf(liveness), 1);
+    liveness = undefined;
+    fitNotice();
+  }
+
+  // Extremely narrow terminals may not fit even the full discard warning.
+  // Drop the lower-priority confirmation text and truncate the warning so the
+  // status row never exceeds its layout budget.
+  if (discardWarning && statusBarSegmentsWidth(fitted) > innerWidth) {
+    const fittedNoticeIndex = fittedNotice ? fitted.indexOf(fittedNotice) : -1;
+    if (fittedNoticeIndex >= 0) fitted.splice(fittedNoticeIndex, 1);
+    const fittedWarningIndex = fitted.indexOf(discardWarning);
+    const fixedWidth = fitted.reduce(
+      (total, segment, index) =>
+        index === fittedWarningIndex
+          ? total
+          : total + statusBarSegmentWidth(segment),
+      fitted.length - 1,
+    );
+    fitted[fittedWarningIndex] = {
+      ...discardWarning,
+      text: truncateSummaryToWidth(
+        discardWarning.text,
         Math.max(0, innerWidth - fixedWidth),
       ),
     };
