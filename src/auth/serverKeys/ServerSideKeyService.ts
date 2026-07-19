@@ -14,7 +14,7 @@
  * - free tier: Included non-premium models (up to $3/M input)
  */
 
-import { EventEmitter } from 'node:events';
+import { appSignals } from '@eventBus/AppSignals';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { SupabaseClient } from '../SupabaseClient';
 import {
@@ -47,26 +47,6 @@ const RELAY_PATH_SUFFIXES: Partial<Record<ServerSideProvider, string>> = {
 /** Global state key for the "use included model access" preference. */
 const USE_INCLUDED_ACCESS_KEY = 'texra.useIncludedModelAccess';
 
-const SERVICE_EVENT = 'event';
-
-export interface ServerSideKeyDisposable {
-  dispose(): void;
-}
-
-export type ServerSideKeyEvent<T> = (
-  listener: (event: T) => unknown,
-  thisArgs?: unknown,
-  disposables?: ServerSideKeyDisposable[],
-) => ServerSideKeyDisposable;
-
-export type ServerSideKeyState = StateStore;
-
-export interface ServerSideKeyServiceInit {
-  state?: ServerSideKeyState;
-  subscriptions?: ServerSideKeyDisposable[];
-  logger?: AuthServiceLogger;
-}
-
 export interface ClearServerSideKeyCachesOptions {
   /**
    * Reset the per-session quota auto-switch guard. Use this only when the
@@ -80,40 +60,6 @@ export interface ClearServerSideKeyCachesOptions {
   preserveTierCache?: boolean;
   /** True when included access is being disabled by quota fallback. */
   quotaAutoSwitch?: boolean;
-}
-
-class NodeEventEmitter<T> implements ServerSideKeyDisposable {
-  private readonly emitter = new EventEmitter();
-
-  constructor(private readonly logger: AuthServiceLogger) {}
-
-  readonly event: ServerSideKeyEvent<T> = (listener, thisArgs, disposables) => {
-    const boundListener =
-      thisArgs === undefined ? listener : listener.bind(thisArgs);
-    this.emitter.on(SERVICE_EVENT, boundListener);
-    const disposable = {
-      dispose: () => this.emitter.off(SERVICE_EVENT, boundListener),
-    };
-    disposables?.push(disposable);
-    return disposable;
-  };
-
-  fire(event: T): void {
-    for (const listener of this.emitter.listeners(SERVICE_EVENT)) {
-      try {
-        listener(event);
-      } catch (error) {
-        this.logger.error(
-          CHANNEL,
-          `Event listener failed: ${toErrorMessage(error)}`,
-        );
-      }
-    }
-  }
-
-  dispose(): void {
-    this.emitter.removeAllListeners();
-  }
 }
 
 /**
@@ -145,52 +91,16 @@ export class ServerSideKeyService {
   private quotaAutoSwitchActive = false;
 
   // Settings
-  private useIncludedModelAccess = true;
-  private globalState: ServerSideKeyState | null = null;
-  private readonly _onDidChangeModelAccess: NodeEventEmitter<boolean>;
-  private readonly _onCacheCleared: NodeEventEmitter<ClearServerSideKeyCachesOptions>;
-  private readonly _tierServiceClearSubscription: ServerSideKeyDisposable;
-
-  readonly onDidChangeModelAccess: ServerSideKeyEvent<boolean>;
-  readonly onCacheCleared: ServerSideKeyEvent<ClearServerSideKeyCachesOptions>;
+  private useIncludedModelAccess: boolean;
 
   constructor(
     private readonly baseUrl: string,
     private readonly tierService: TierService,
+    private readonly globalState: StateStore | null = null,
     private readonly logger: AuthServiceLogger = NOOP_AUTH_SERVICE_LOGGER,
   ) {
-    this._onDidChangeModelAccess = new NodeEventEmitter<boolean>(this.logger);
-    this._onCacheCleared =
-      new NodeEventEmitter<ClearServerSideKeyCachesOptions>(this.logger);
-    this.onDidChangeModelAccess = this._onDidChangeModelAccess.event;
-    this.onCacheCleared = this._onCacheCleared.event;
-    this._tierServiceClearSubscription = this._onCacheCleared.event(
-      (options) => {
-        if (options.preserveTierCache) return;
-        this.tierService.clearCache();
-      },
-    );
-  }
-
-  /**
-   * Initialize the service with host-provided state and subscriptions.
-   * This enables settings persistence without coupling the service to VS Code.
-   */
-  initialize(options: ServerSideKeyServiceInit): void {
-    options.subscriptions?.push(
-      this._onDidChangeModelAccess,
-      this._onCacheCleared,
-      this._tierServiceClearSubscription,
-    );
-    this.globalState = options.state ?? null;
     this.useIncludedModelAccess =
       this.globalState?.get<boolean>(USE_INCLUDED_ACCESS_KEY, true) ?? true;
-  }
-
-  dispose(): void {
-    this._onDidChangeModelAccess.dispose();
-    this._onCacheCleared.dispose();
-    this._tierServiceClearSubscription.dispose();
   }
 
   private hasFullAccess(): boolean {
@@ -232,7 +142,7 @@ export class ServerSideKeyService {
       // its own auth'd fetch in parallel with fetchAccessStatus(), and
       // an anonymous pre-fetch here would populate the 'anon' cache slot
       // rather than the 'auth' slot needed for the access check.
-      this._onDidChangeModelAccess.fire(value);
+      appSignals.emit('includedModelAccessChanged', value);
     }
   }
 
@@ -250,7 +160,7 @@ export class ServerSideKeyService {
       this.quotaFlipApplied = false;
       this.quotaAutoSwitchActive = false;
     }
-    this._onCacheCleared.fire(options);
+    if (!options.preserveTierCache) this.tierService.clearCache();
   }
 
   isProviderOnServer(provider: string): boolean {

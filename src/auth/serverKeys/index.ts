@@ -15,10 +15,9 @@
 
 import { SUPABASE_CUSTOM_DOMAIN } from '../config';
 import { getTierService } from '../tier';
-import {
-  ServerSideKeyService,
-  type ServerSideKeyServiceInit,
-} from './ServerSideKeyService';
+import { ServerSideKeyService } from './ServerSideKeyService';
+import type { AuthServiceLogger } from '../serviceLogger';
+import type { StateStore } from '@platform/interfaces';
 
 // Types
 export { SERVER_SIDE_PROVIDERS, type ServerSideProvider } from './types';
@@ -56,15 +55,16 @@ export function setServerSideKeyService(service: ServerSideKeyService): void {
  * Initialize the server-side key access module.
  * Call this during extension activation.
  *
- * @param options - Host-provided state and subscriptions
+ * @param options - Host-provided state and logger
  */
-export function initializeServerSideKeyAccess(
-  options: ServerSideKeyServiceInit,
-): void {
+export function initializeServerSideKeyAccess(options: {
+  state?: StateStore;
+  logger?: AuthServiceLogger;
+}): void {
   _instance = new ServerSideKeyService(
     `https://${SUPABASE_CUSTOM_DOMAIN}`,
     getTierService(options.logger),
+    options.state ?? null,
     options.logger,
   );
-  _instance.initialize(options);
 }
