@@ -95,14 +95,6 @@ const deferredAuthLog: LogBackend = {
   warn: (channel, message) => activeAuthLog?.warn(channel, message),
   error: (channel, message) => activeAuthLog?.error(channel, message),
 };
-const cliAuthProvider = {
-  isAuthenticated: () => SupabaseClient.isAuthenticated(),
-  canAccessRemoteAgentCatalog: () =>
-    SupabaseClient.canAccessRemoteAgentCatalog(),
-  getUserTier: () => SupabaseClient.getUserTier(),
-  getAccessToken: () => SupabaseClient.getRelayAccessToken(),
-};
-
 function getCliSupabaseAuthCoordinator(): SupabaseSessionCoordinator {
   return initializeCliSupabaseAuth();
 }
@@ -121,10 +113,6 @@ export function initializeCliSupabaseAuth(
     coordinatorSecrets = secrets;
   }
   return coordinator;
-}
-
-export function getCliAuthProvider() {
-  return cliAuthProvider;
 }
 
 export async function signInCliSupabase(

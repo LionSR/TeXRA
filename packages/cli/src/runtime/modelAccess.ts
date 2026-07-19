@@ -1,3 +1,6 @@
+// Local imports - auth
+import { SupabaseClient } from '@auth/SupabaseClient';
+
 // Local imports - model surfaces
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
@@ -9,7 +12,6 @@ import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import type { AgentCategory } from '@shared/schemas/agent';
 
 import { resolveKnownCliModelId } from './cliConfig';
-import { getCliAuthProvider } from './supabaseAuth';
 import type { CliApiMode } from './apiAccessMode';
 
 export interface CliModelAccess {
@@ -377,9 +379,9 @@ async function includedAccessRequiresLogin(
 ): Promise<boolean> {
   if (options.apiMode !== 'included') return false;
   // An auth-state read failure means we can't prove a session, so require login.
-  const authenticated = await getCliAuthProvider()
-    .isAuthenticated()
-    .catch(() => false);
+  const authenticated = await SupabaseClient.isAuthenticated().catch(
+    () => false,
+  );
   return !authenticated;
 }
 
