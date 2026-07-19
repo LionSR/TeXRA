@@ -136,6 +136,18 @@ describe('normalizeStructuredOutputSchema', () => {
       normalizeStructuredOutputSchema({ type: 'object', properties: wide }),
     ).toThrow(/exceeds the .* limit/);
   });
+
+  it('rejects scalar-heavy schemas past the serialized-size cap', () => {
+    // A giant enum is only a couple of object nodes but a huge payload; the
+    // size cap catches what the node/depth caps cannot.
+    const choice = { enum: Array.from({ length: 200_000 }, (_, i) => `v${i}`) };
+    expect(() =>
+      normalizeStructuredOutputSchema({
+        type: 'object',
+        properties: { choice },
+      }),
+    ).toThrow(/byte size limit/);
+  });
 });
 
 describe('buildTerminalTool', () => {

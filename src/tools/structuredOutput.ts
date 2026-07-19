@@ -26,6 +26,11 @@ const SUBMIT_OUTPUT_TOOL_NAME = 'submit_output';
 // pathological input.
 const MAX_SANDBOX_SCHEMA_DEPTH = 12;
 const MAX_SANDBOX_SCHEMA_NODES = 1000;
+// The node/depth caps count object nodes only, so scalar-heavy keywords the
+// walker does not recurse into (a million-element `enum`, huge `required` /
+// `examples` / `description`) would still reach z.fromJSONSchema unbounded. A
+// serialized-size cap bounds the whole payload; 128 KiB dwarfs any real schema.
+const MAX_SANDBOX_SCHEMA_BYTES = 128 * 1024;
 
 // Property names that could reach Object.prototype when z.fromJSONSchema builds
 // the schema object.
@@ -44,6 +49,11 @@ const FORBIDDEN_SCHEMA_PROPERTY_KEYS = [
  * prototype-polluting property keys; and trees past the node/depth caps.
  */
 function assertSafeSandboxSchema(schema: unknown): void {
+  if (JSON.stringify(schema).length > MAX_SANDBOX_SCHEMA_BYTES) {
+    throw new Error(
+      `Structured output JSON Schema exceeds the ${MAX_SANDBOX_SCHEMA_BYTES}-byte size limit.`,
+    );
+  }
   let nodeCount = 0;
   const walk = (node: unknown, depth: number): void => {
     if (node === null || typeof node !== 'object') return;
