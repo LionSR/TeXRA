@@ -223,6 +223,23 @@ describe('retrieveSessionResumeData', () => {
     });
   });
 
+  it('preserves structured output at the persisted shared-state boundary', () => {
+    const result = migrateSharedState({
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: null,
+      structured: { title: 'Durable result' },
+    });
+
+    expect(result).toEqual({
+      success: true,
+      data: expect.objectContaining({
+        structured: { title: 'Durable result' },
+      }),
+      migrated: false,
+    });
+  });
+
   it('uses the persisted current model while preserving the original stream id', async () => {
     const executionId = 'abc123' as ExecutionId;
     const streamId = 'chat@gpt54#abc123' as StreamTabId;

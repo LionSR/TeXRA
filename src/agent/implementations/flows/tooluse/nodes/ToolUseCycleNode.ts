@@ -215,9 +215,12 @@ export class ToolUseCycleNode<C> extends Node<
     // Tool-use agents are conversational — the user can send a
     // follow-up to retry after a failure, unlike workflows.
     switch (execRes.outcome) {
-      case 'completed':
+      case 'completed': {
         shared.messages = execRes.messages;
+        const structured = this.services.getPendingStructuredOutput?.();
+        if (structured !== undefined) shared.structured = structured;
         break;
+      }
       case 'skipped':
         break;
       case 'failed':

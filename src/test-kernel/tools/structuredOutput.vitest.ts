@@ -73,6 +73,17 @@ describe('normalizeStructuredOutputSchema', () => {
         properties: { value: { type: 'string', pattern: '(a+)+$' } },
       }),
     ).toThrow(/cannot use pattern/);
+    expect(() =>
+      normalizeStructuredOutputSchema({
+        type: 'object',
+        properties: {
+          tuple: {
+            type: 'array',
+            items: [{ type: 'string', pattern: '(a+)+$' }],
+          },
+        },
+      }),
+    ).toThrow(/cannot use pattern/);
   });
 
   it('allows output fields whose names match JSON Schema keywords', () => {
