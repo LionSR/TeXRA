@@ -41,10 +41,10 @@ const MAX_ANNOTATION_PAGES_PER_RUN = 50;
  * `lastTotalCount` is the most recent `total_count` from a 200 response; it
  * tells us how many pages to walk when page 1 returns 304.
  *
- * Exported as a standalone type so `SubscriptionState` can reference it
- * without `checkRunsClient` importing back from `PRPollingSource` (cycle).
+ * Kept as a standalone type so the per-page cache shape remains explicit
+ * without coupling it to poller subscription state.
  */
-export interface CheckRunsCachePage {
+interface CheckRunsCachePage {
   etag?: string;
   runs: GhCheckRun[];
 }

@@ -25,11 +25,11 @@ const INDEX_KEY = 'goals:index';
 // without calling `forget()` leave dangling entries until next manual cleanup.
 const indexMutex = new Mutex();
 
-export interface GoalStateChange {
+interface GoalStateChange {
   readonly streamId: StreamTabId;
 }
 
-export type GoalStateChangeListener = (change: GoalStateChange) => void;
+type GoalStateChangeListener = (change: GoalStateChange) => void;
 
 function streamKey(streamId: StreamTabId): string {
   return `${STREAM_KEY_PREFIX}${streamId}`;

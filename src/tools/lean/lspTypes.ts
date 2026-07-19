@@ -5,12 +5,12 @@
  * details of `vscode-languageserver-protocol`.
  */
 
-export type LspMarkupContent = {
+type LspMarkupContent = {
   kind: 'plaintext' | 'markdown' | string;
   value: string;
 };
 
-export type LspMarkedString = string | { language: string; value: string };
+type LspMarkedString = string | { language: string; value: string };
 
 export interface LspHover {
   contents: LspMarkedString | LspMarkupContent | LspMarkedString[];
@@ -29,12 +29,12 @@ export interface LspPublishDiagnosticsParams {
   diagnostics: LspDiagnostic[];
 }
 
-export interface LspRange {
+interface LspRange {
   start: LspPosition;
   end: LspPosition;
 }
 
-export interface LspPosition {
+interface LspPosition {
   line: number;
   character: number;
 }
