@@ -189,6 +189,48 @@ describe('CLI Supabase auth', () => {
     );
   });
 
+  it('forwards interactive cancellation to both TeXRA transports', async () => {
+    const controller = new AbortController();
+    const session = { access_token: 'token' };
+    const callbackServer = {
+      close: vi.fn().mockResolvedValue(undefined),
+      redirectTo: 'http://127.0.0.1:0/callback',
+      waitForSession: vi.fn().mockResolvedValue(session),
+    };
+    const authorization = {
+      device_code: 'device-code',
+      expires_in: 600,
+      interval: 5,
+      user_code: 'ABCD-EFGH',
+      verification_uri: 'https://auth.example/device',
+    };
+    mocks.startLoopbackCallbackServer.mockResolvedValue(callbackServer);
+    mocks.signInWithOAuth.mockResolvedValue({
+      data: { url: 'https://auth.example/login' },
+      error: null,
+    });
+    mocks.requestDeviceAuthorization.mockResolvedValue(authorization);
+    mocks.pollForDeviceSession.mockResolvedValue(session);
+    const { signInCliSupabase, signInCliSupabaseDeviceCode } =
+      await loadSupabaseAuth();
+
+    await signInCliSupabase({
+      openBrowser: false,
+      signal: controller.signal,
+    });
+    await signInCliSupabaseDeviceCode({ signal: controller.signal });
+
+    expect(callbackServer.waitForSession).toHaveBeenCalledWith(
+      controller.signal,
+    );
+    expect(mocks.requestDeviceAuthorization).toHaveBeenCalledWith({
+      signal: controller.signal,
+    });
+    expect(mocks.pollForDeviceSession).toHaveBeenCalledWith(authorization, {
+      signal: controller.signal,
+    });
+  });
+
   it('removes cached remote agents after sign-out', async () => {
     const { signOutCliSupabase } = await loadSupabaseAuth();
 

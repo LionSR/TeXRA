@@ -2,13 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   codexCoordinator: vi.fn(() => ({})),
+  loginWithDeviceCode: vi.fn(),
   loginWithLoopback: vi.fn(),
   tryOpenBrowser: vi.fn(),
 }));
 
 vi.mock('@auth/codex', () => ({
   codexCoordinator: mocks.codexCoordinator,
-  loginWithDeviceCode: vi.fn(),
+  loginWithDeviceCode: mocks.loginWithDeviceCode,
   loginWithLoopback: mocks.loginWithLoopback,
   setPreferCodexSubscription: vi.fn(),
 }));
@@ -84,5 +85,26 @@ describe('signInCliChatGpt browser choice', () => {
     expect(progress).toEqual([
       'Open this URL to sign in with ChatGPT:\nhttps://auth.openai.com/authorize?x=3',
     ]);
+  });
+
+  it('forwards interactive cancellation to both ChatGPT transports', async () => {
+    const loopbackSessionResult = loopbackSession();
+    mocks.loginWithLoopback.mockResolvedValue(loopbackSessionResult);
+    mocks.loginWithDeviceCode.mockResolvedValue(loopbackSessionResult);
+    const controller = new AbortController();
+    const options = {
+      signal: controller.signal,
+      writeProgress: vi.fn(),
+    };
+
+    await signInCliChatGpt({ device: false, noBrowser: true }, options);
+    await signInCliChatGpt({ device: true, noBrowser: false }, options);
+
+    expect(mocks.loginWithLoopback).toHaveBeenCalledWith(
+      expect.objectContaining({ signal: controller.signal }),
+    );
+    expect(mocks.loginWithDeviceCode).toHaveBeenCalledWith(
+      expect.objectContaining({ signal: controller.signal }),
+    );
   });
 });

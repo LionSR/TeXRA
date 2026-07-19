@@ -70,6 +70,9 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
+- **Interactive sign-in can be cancelled immediately** — pressing Esc or
+  Ctrl-C in an account form now stops an active browser or device-code sign-in
+  attempt instead of leaving its callback wait or polling loop running.
 - **Account changes stay visible without filling chat history** — sign-in,
   sign-out, and model-access forms now show their progress in place and leave
   only the final result in the conversation.
