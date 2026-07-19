@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 // Local imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
+import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { ToolError, ToolResult } from '@shared/schemas/toolResult';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
@@ -95,8 +96,15 @@ export class GlobTool extends defineTool({
           return null;
         }
 
-        const stat = await WorkspaceFS.stat(resolved.fsPath).catch(() => null);
-        return { relativePath, mtime: stat?.mtime ?? 0 };
+        try {
+          const stat = await WorkspaceFS.stat(resolved.fsPath);
+          return { relativePath, mtime: stat.mtime };
+        } catch (error) {
+          if (isFileNotFoundError(error) || isNotADirectoryError(error)) {
+            return null;
+          }
+          throw error;
+        }
       },
     );
 
