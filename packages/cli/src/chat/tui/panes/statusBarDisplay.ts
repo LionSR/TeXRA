@@ -92,44 +92,61 @@ export interface StatusBarDisplayInput {
   readonly activeProcesses: number;
   readonly approvalDepth: number;
   readonly approvalKind?: ApprovalQueueStatusKind;
-  readonly agentSelectionAvailable?: boolean;
-  /** True when the persistent child list has a session or process row. */
-  readonly childNavigationAvailable?: boolean;
-  /** True when Alt/Esc-1..9 has at least one stream target. */
-  readonly streamFocusAvailable?: boolean;
   readonly model: string;
   readonly modelAccess: CliModelAccessRoute;
   /** Ephemeral transcripts cannot be resumed and require a persistent warning. */
   readonly transcriptMode?: 'persistent' | 'ephemeral';
   readonly approvalPolicy?: CliApprovalPolicy;
-  readonly shortcutModifierLabel?: string;
-  /** Advertise Shift+Enter for newline when the Kitty keyboard protocol is
-   *  active; otherwise the universal Ctrl-J is the only reliable binding. */
-  readonly shiftEnterNewline?: boolean;
-  /** True when the focused stream has output that can be printed in full. */
-  readonly transcriptAvailable?: boolean;
   /** Terminal width in columns. */
   readonly width?: number;
   readonly ctrlCAction?: CtrlCAction;
   /** True when `status` belongs to a focused child/subagent stream rather
    *  than the root session — see `statusBarStreamTarget`. */
   readonly isChildStream?: boolean;
-  /** False while a foreground surface (approval, detail, form, slash palette,
-   *  or reverse search) owns input and global chat shortcuts are intentionally
-   *  inactive. */
-  readonly shortcutsActive?: boolean;
-  /** Label for the foreground surface's Escape action while shortcutsActive is
-   *  false. */
-  readonly foregroundEscapeAction?: string;
+  /** Which surface currently owns input and global chat shortcuts: a
+   *  foreground surface (approval, detail, form, slash palette, reverse
+   *  search) or the persistent child list. Neither active means the normal
+   *  chat shortcuts row (`shortcuts`) applies. */
+  readonly foreground: StatusBarForegroundInput;
+  readonly childList: StatusBarChildListInput;
+  /** Availability/labels for the normal chat shortcuts row, shown when
+   *  neither `foreground` nor `childList` owns input. */
+  readonly shortcuts: StatusBarShortcutsInput;
+}
+
+interface StatusBarForegroundInput {
   /** True while a modal, form, palette, or search surface owns input. */
-  readonly foregroundInputActive?: boolean;
+  readonly inputActive?: boolean;
+  /** Label for the foreground surface's Escape action while `shortcutsActive`
+   *  is false. */
+  readonly escapeAction?: string;
+  /** False while a foreground surface owns input and global chat shortcuts
+   *  are intentionally inactive. */
+  readonly shortcutsActive?: boolean;
+}
+
+interface StatusBarChildListInput {
   /** True while the persistent child list, rather than the input, owns keys. */
-  readonly childListFocused?: boolean;
-  readonly childListSelectionKind?: 'stream' | 'process';
-  readonly childListSelectionKillable?: boolean;
+  readonly focused?: boolean;
+  readonly selectionKind?: 'stream' | 'process';
+  readonly selectionKillable?: boolean;
   /** True while the focused row is an in-flight workflow-script grandchild
    *  that can be skipped or retried. */
-  readonly childListSelectionWorkflowControllable?: boolean;
+  readonly selectionWorkflowControllable?: boolean;
+}
+
+interface StatusBarShortcutsInput {
+  readonly agentSelectionAvailable?: boolean;
+  /** True when the persistent child list has a session or process row. */
+  readonly childNavigationAvailable?: boolean;
+  /** True when Alt/Esc-1..9 has at least one stream target. */
+  readonly streamFocusAvailable?: boolean;
+  readonly modifierLabel?: string;
+  /** Advertise Shift+Enter for newline when the Kitty keyboard protocol is
+   *  active; otherwise the universal Ctrl-J is the only reliable binding. */
+  readonly shiftEnterNewline?: boolean;
+  /** True when the focused stream has output that can be printed in full. */
+  readonly transcriptAvailable?: boolean;
 }
 
 interface StatusBarDisplay {
@@ -716,36 +733,36 @@ function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
 
   const maxColumns = statusBarInnerWidth(input.width);
   const ctrlCAction = input.ctrlCAction ?? 'exit';
-  if (input.foregroundInputActive) {
+  if (input.foreground.inputActive) {
     return foregroundBindingsText(
       ctrlCAction,
       maxColumns,
-      input.foregroundEscapeAction,
+      input.foreground.escapeAction,
     );
   }
-  if (input.childListFocused) {
+  if (input.childList.focused) {
     return childListBindingsText(
       ctrlCAction,
-      input.childListSelectionKind,
-      input.childListSelectionKillable ?? false,
-      input.childListSelectionWorkflowControllable ?? false,
+      input.childList.selectionKind,
+      input.childList.selectionKillable ?? false,
+      input.childList.selectionWorkflowControllable ?? false,
       maxColumns,
     );
   }
-  if (input.shortcutsActive === false) {
+  if (input.foreground.shortcutsActive === false) {
     return foregroundBindingsText(
       ctrlCAction,
       maxColumns,
-      input.foregroundEscapeAction,
+      input.foreground.escapeAction,
     );
   }
   return statusBarBindingsText(
-    input.agentSelectionAvailable ?? false,
-    input.childNavigationAvailable,
-    input.streamFocusAvailable,
-    input.shortcutModifierLabel,
-    input.shiftEnterNewline,
-    input.transcriptAvailable,
+    input.shortcuts.agentSelectionAvailable ?? false,
+    input.shortcuts.childNavigationAvailable,
+    input.shortcuts.streamFocusAvailable,
+    input.shortcuts.modifierLabel,
+    input.shortcuts.shiftEnterNewline,
+    input.shortcuts.transcriptAvailable,
     ctrlCAction,
     maxColumns,
   );

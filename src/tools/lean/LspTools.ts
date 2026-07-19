@@ -278,10 +278,9 @@ Types:
 - "term_goal": Get expected type at cursor in term mode
 - "hover": Get type signature and documentation for an identifier
 
-Goal results include a goalState payload with:
-- count: number of goals
-- status: "noGoals" when count is 0 (proof may be complete, or cursor may be outside a tactic block), "open" when goals remain
-- goals: raw goal list from Lean
+Goal results render Lean's own proof-state text, or a "no goals" message
+when none remain (the proof may be complete, or the cursor may be outside
+a tactic block).
 
 Line and column are 1-indexed.
 
@@ -338,7 +337,6 @@ Requires: Lean 4 VS Code extension installed and active.`,
         status: 'executed',
         summary: 'No goals',
         output: 'No goals at this position. The proof may be complete here.',
-        goalState: { goals: [], count: 0, status: 'noGoals' as const },
       };
     }
 
@@ -347,11 +345,6 @@ Requires: Lean 4 VS Code extension installed and active.`,
       status: 'executed',
       summary: formatResultCount(goalCount, 'goal'),
       output: data.rendered,
-      goalState: {
-        goals: data.goals,
-        count: goalCount,
-        status: 'open' as const,
-      },
     };
   }
 

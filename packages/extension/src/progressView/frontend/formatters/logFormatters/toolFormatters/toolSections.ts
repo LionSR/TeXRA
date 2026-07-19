@@ -104,13 +104,13 @@ function buildEditDiffInputSections(ctx: ToolSectionContext): TemplateResult[] {
 function buildFileLinkSections(ctx: ToolSectionContext): TemplateResult[] {
   const { input, filePath } = ctx;
   if (!filePath) return [];
-  const readInput = input as ReadInput;
+  const readInput = isObject(input) ? (input as ReadInput) : undefined;
   return [
     buildToolUseSection(
       'File:',
       buildFileLinkWithLines(filePath, {
-        startLine: readInput.range?.start,
-        endLine: readInput.range?.end ?? undefined,
+        startLine: readInput?.range?.start,
+        endLine: readInput?.range?.end ?? undefined,
       }),
     ),
   ];
@@ -119,12 +119,12 @@ function buildFileLinkSections(ctx: ToolSectionContext): TemplateResult[] {
 function buildFileContentSections(ctx: ToolSectionContext): TemplateResult[] {
   const { toolName, input, filePath } = ctx;
   if (!filePath) return [];
-  const writeInput = input as WriteInput;
+  const writeInput = isObject(input) ? (input as WriteInput) : undefined;
   const contentLanguage = getLanguageFromPath(filePath);
   const sections = [
     buildToolUseSection('File:', buildFileLinkWithLines(filePath)),
   ];
-  if (typeof writeInput.content === 'string') {
+  if (typeof writeInput?.content === 'string') {
     sections.push(
       buildToolSection('', writeInput.content, {
         toolName,

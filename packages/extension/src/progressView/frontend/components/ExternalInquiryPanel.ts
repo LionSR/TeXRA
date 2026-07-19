@@ -41,12 +41,18 @@ import {
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { createFlushableDebounce, tryParseUrl } from '@utils/core';
 import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 import { externalInquiryPanelStyles } from './ExternalInquiryPanel.styles';
 import type { PermissionState } from '../permissionState';
+
+type ExternalInquiryPermissionState = Extract<
+  PermissionState,
+  { kind: typeof PERMISSION_KIND.EXTERNAL_INQUIRY }
+>;
 
 // ── Draft persistence ──
 
@@ -65,12 +71,12 @@ interface PendingDraftSave extends InquiryPermissionIds {
   draft: InquiryDraft | null;
 }
 
-function getRequestId(permission: { data: unknown }): string {
-  return (permission.data as ExternalInquiryPermission).requestId;
+function getRequestId(permission: ExternalInquiryPermissionState): string {
+  return permission.data.requestId;
 }
 
-function getThreadId(permission: { data: unknown }): string {
-  const data = permission.data as ExternalInquiryPermission;
+function getThreadId(permission: ExternalInquiryPermissionState): string {
+  const { data } = permission;
   return data.threadId ?? data.requestId;
 }
 
@@ -127,7 +133,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
     super.willUpdate(changed);
     if (changed.has('permission')) {
       const previousPermission = changed.get('permission') as
-        PermissionState | undefined;
+        ExternalInquiryPermissionState | undefined;
       if (previousPermission) this.flushDraft(previousPermission);
       this.answerText = '';
       this.sessionLinksText = '';
@@ -154,7 +160,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
   }
 
   private getPermissionIds(
-    permission: { data: unknown } = this.permission,
+    permission: ExternalInquiryPermissionState = this.permission,
   ): InquiryPermissionIds {
     return {
       requestId: getRequestId(permission),
@@ -192,7 +198,9 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
     this.draftSaveDebounce.schedule();
   }
 
-  private flushDraft(permission: { data: unknown } = this.permission): void {
+  private flushDraft(
+    permission: ExternalInquiryPermissionState = this.permission,
+  ): void {
     const ids = this.getPermissionIds(permission);
     const pending = this.pendingDraftSave;
     if (pending && idsEqual(pending, ids)) {

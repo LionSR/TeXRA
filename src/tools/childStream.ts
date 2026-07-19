@@ -40,17 +40,26 @@ interface CreateChildStreamOptions {
   toolName?: string;
 }
 
+/**
+ * How the child stream's own caller believes its run ended. `finalize` still
+ * cross-checks the execution registry for an already-CANCELLED status (an
+ * explicit stop/kill can land between the caller deciding this and the call
+ * landing here), so `cancelled` always wins regardless of what the registry
+ * later confirms.
+ */
+export type ChildStreamOutcome =
+  | { kind: 'completed' }
+  | { kind: 'failed'; error?: unknown; errorMessage?: string }
+  | { kind: 'cancelled' };
+
 interface FinalizeChildStreamOptions {
   wallTimeMs?: number;
   usage?: {
     input_tokens: number;
     output_tokens: number;
   } | null;
-  error?: unknown;
-  errorMessage?: string;
-  /** Terminal facts reported by a child session loop (agent-CLI). */
-  failed?: boolean;
-  cancelled?: boolean;
+  /** Defaults to `{ kind: 'completed' }` when omitted. */
+  outcome?: ChildStreamOutcome;
   /** Session stage closed with the derived outcome (agent-CLI loop's stage). */
   stage?: Pick<StageHandle, 'end'>;
   /** Durable execution-state action; background bash owns its richer block. */
@@ -214,10 +223,14 @@ async function finalizeChildStream(
   args: FinalizeChildStreamArgs,
 ): Promise<void> {
   const { handle, session, logger, disposeTrace, options } = args;
-  const hasError = options?.error != null || options?.errorMessage != null;
+  const outcomeOption = options?.outcome ?? { kind: 'completed' as const };
   const errorMessage =
-    options?.errorMessage ??
-    (options?.error != null ? toErrorMessage(options.error) : undefined);
+    outcomeOption.kind === 'failed'
+      ? (outcomeOption.errorMessage ??
+        (outcomeOption.error != null
+          ? toErrorMessage(outcomeOption.error)
+          : undefined))
+      : undefined;
 
   if (errorMessage) {
     logger.error(errorMessage);
@@ -241,16 +254,18 @@ async function finalizeChildStream(
   // non-zero), and long-lived child loops finalize after an interrupt. Clean
   // exits project to `completed` so the tab clears.
   const stopped =
-    options?.cancelled === true ||
+    outcomeOption.kind === 'cancelled' ||
     session.executions.getStatus(handle).status === STREAM_PHASE.CANCELLED;
   const outcome = deriveRunOutcome({
-    failed: !stopped && (options?.failed === true || hasError),
+    failed: !stopped && outcomeOption.kind === 'failed',
     cancelled: stopped,
   });
   const error =
     outcome === RUN_OUTCOME.FAILED
       ? {
-          kind: classifyAgentError(options?.error),
+          kind: classifyAgentError(
+            outcomeOption.kind === 'failed' ? outcomeOption.error : undefined,
+          ),
           message: errorMessage ?? 'Child stream failed',
         }
       : undefined;

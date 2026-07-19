@@ -42,7 +42,6 @@ function slice(overrides: Partial<StreamSlice> = {}): StreamSlice {
     cumulativeUsage: undefined,
     conversation: undefined,
     entries: [],
-    queuedFollowUps: 0,
     queuedFollowUpMessages: [],
     activeProcesses: [],
     todos: [],

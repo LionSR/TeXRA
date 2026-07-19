@@ -118,6 +118,55 @@ type ErrorWithRequestId = Error & { request_id?: string };
 const DEEPSEEK_OFFICIAL_API_MAX_TOKENS = 8192;
 
 /**
+ * The raw shapes `extractResponse` can receive across every OpenAI-compatible
+ * provider this handler serves (DeepSeek, Kimi, GLM, MiniMax, xAI, DashScope,
+ * …). Most return a strict `ChatCompletion`, but the reasoning stream
+ * aggregator finalizes to a streaming-style `{ role, content }` object with
+ * no `choices`, and some relays return a bare `{ error }` payload.
+ */
+type OpenAIClassifiedResponse =
+  | { kind: 'chat'; choice: ChatCompletion.Choice }
+  | {
+      kind: 'streamingFallback';
+      content: string;
+      stopReason: string;
+      usage: ChatCompletion['usage'];
+    }
+  | { kind: 'errorPayload'; error: unknown }
+  | { kind: 'malformed' };
+
+/**
+ * Classifies a raw OpenAI-family response `any` exactly once, so the rest of
+ * `extractResponse` reads typed fields off a tagged union instead of
+ * re-checking `any` properties per branch.
+ */
+function classifyOpenAIResponse(responseObject: any): OpenAIClassifiedResponse {
+  if (responseObject?.choices?.length) {
+    return { kind: 'chat', choice: responseObject.choices[0] };
+  }
+  if (responseObject?.role && responseObject?.content) {
+    return {
+      kind: 'streamingFallback',
+      content: responseObject.content,
+      // Use finish_reason from choices if available, otherwise assume stop.
+      // `choices` is already known empty/absent here, so this is always STOP
+      // in practice; kept for parity with a `finish_reason` a caller might
+      // still attach alongside a choices-less fallback payload.
+      stopReason:
+        responseObject.choices?.[0]?.finish_reason ?? OPENAI_CHAT_FINISH.STOP,
+      usage: responseObject.usage ?? {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+      },
+    };
+  }
+  if (responseObject?.error) {
+    return { kind: 'errorPayload', error: responseObject.error };
+  }
+  return { kind: 'malformed' };
+}
+
+/**
  * OpenAI-specific handlers.
  */
 export class ModelHandlerOpenAI<
@@ -830,59 +879,54 @@ export class ModelHandlerOpenAI<
    * xAI, DashScope, …), which in practice don't all return a strict
    * `ChatCompletion`. The reasoning stream aggregator finalizes to a
    * streaming-style `{ role, content }` object with no `choices`, and some
-   * relays return a bare `{ error }` payload — the branches below read those
-   * off-spec shapes directly. Typing this as `ChatCompletion` would
-   * misrepresent them and just push the looseness into per-branch casts.
+   * relays return a bare `{ error }` payload. `classifyOpenAIResponse` sniffs
+   * the raw shape exactly once and returns a tagged union, so the rest of
+   * this method reads typed fields instead of re-checking `any` properties
+   * per branch.
    */
   extractResponse(responseObject: any, endTag: string): ExtractResponseResult {
-    if (!responseObject.choices?.length) {
+    const classified = classifyOpenAIResponse(responseObject);
+
+    if (classified.kind === 'errorPayload') {
       this.logger.debug('Response object', { data: responseObject });
+      const errorMsg = `API error: ${JSON.stringify(classified.error)}`;
+      this.logger.error(errorMsg);
+      throw new Error(errorMsg);
+    }
 
-      // Add fallback for streaming which returns content directly in responseObject
-      if (responseObject.role && responseObject.content) {
-        this.logger.warn(
-          'Using direct response format (streaming style) as fallback',
-        );
-        let newResponse = responseObject.content.trim();
-        // Use finish_reason from choices if available, otherwise assume stop
-        const stopReason =
-          responseObject.choices?.[0]?.finish_reason ?? OPENAI_CHAT_FINISH.STOP;
-
-        const usage = responseObject.usage ?? {
-          prompt_tokens: 0,
-          completion_tokens: 0,
-        };
-
-        // Only restore the end tag when it was configured as an API-level
-        // stop sequence (see `configuresEndTagStopSequence`). o-series/Grok
-        // reasoning models never set `stop`, so a natural STOP there doesn't
-        // imply the provider stripped the tag — forging it could mask
-        // incomplete output as complete.
-        newResponse = this.appendEndTagIfNeeded(
-          newResponse,
-          endTag,
-          stopReason === OPENAI_CHAT_FINISH.STOP &&
-            this.configuresEndTagStopSequence,
-        );
-        newResponse = replacementEngine.applyAll(newResponse);
-
-        return { text: newResponse, usage, stopReason };
-      }
-
-      if (responseObject.error) {
-        const errorMsg = `API error: ${JSON.stringify(responseObject.error)}`;
-        this.logger.error(errorMsg);
-        throw new Error(errorMsg);
-      }
-
+    if (classified.kind === 'malformed') {
       const errorMsg = 'Invalid response from API: missing choices';
       this.logger.error(errorMsg);
       this.logger.error('Response object', { data: responseObject });
       throw new Error(errorMsg);
     }
 
+    if (classified.kind === 'streamingFallback') {
+      this.logger.debug('Response object', { data: responseObject });
+      this.logger.warn(
+        'Using direct response format (streaming style) as fallback',
+      );
+      let newResponse = classified.content.trim();
+      const { stopReason, usage } = classified;
+
+      // Only restore the end tag when it was configured as an API-level
+      // stop sequence (see `configuresEndTagStopSequence`). o-series/Grok
+      // reasoning models never set `stop`, so a natural STOP there doesn't
+      // imply the provider stripped the tag — forging it could mask
+      // incomplete output as complete.
+      newResponse = this.appendEndTagIfNeeded(
+        newResponse,
+        endTag,
+        stopReason === OPENAI_CHAT_FINISH.STOP &&
+          this.configuresEndTagStopSequence,
+      );
+      newResponse = replacementEngine.applyAll(newResponse);
+
+      return { text: newResponse, usage, stopReason };
+    }
+
     // Extract base response
-    const choice = responseObject.choices[0];
+    const { choice } = classified;
     const stopReason = choice.finish_reason;
     this.logger.debug(`Stop reason: ${stopReason}`);
     let newResponse = '';
