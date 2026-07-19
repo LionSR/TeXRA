@@ -160,8 +160,12 @@ describe('LaTeXdiffService shadow output', () => {
       'r2/paper.tex',
       executionId,
     );
-    const output = (round: number, location: typeof first): OutputFileInfo => ({
-      source: 'paper.tex',
+    const output = (
+      round: number,
+      location: typeof first,
+      source = 'paper.tex',
+    ): OutputFileInfo => ({
+      source,
       location,
       round,
       lineage: { original: base, diffBase: null, diffFile: null },
@@ -171,7 +175,7 @@ describe('LaTeXdiffService shadow output', () => {
       await import('@latex/latexdiff/diffOperations');
 
     const result = await runLatexdiffFromMetadata({
-      rounds: { 1: [output(1, first)], 2: [output(2, second)] },
+      rounds: { 1: [output(1, first)], 2: [output(2, second, './paper.tex')] },
       generateBetweenRoundDiffs: true,
       progress: { report: vi.fn() },
     });
