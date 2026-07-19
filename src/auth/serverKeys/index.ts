@@ -13,7 +13,7 @@
  * - free tier: Included non-premium models (up to $3/M input)
  */
 
-import { SUPABASE_CUSTOM_DOMAIN } from '../sharedConfig';
+import { SUPABASE_CUSTOM_DOMAIN } from '../config';
 import { getTierService } from '../tier';
 import {
   ServerSideKeyService,

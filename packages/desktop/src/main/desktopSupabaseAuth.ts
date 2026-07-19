@@ -4,7 +4,11 @@ import { z } from 'zod';
 
 import { platform } from '@platform/platform';
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
-import { DEFAULT_OAUTH_PROVIDER, getAuthCallbackUri } from '@auth/config';
+import {
+  DEFAULT_OAUTH_PROVIDER,
+  getAuthCallbackUri,
+  type OAuthProvider,
+} from '@auth/config';
 import { createHostAuthCoordinator } from '@auth/SupabaseAuthCoordinator';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
@@ -17,7 +21,6 @@ import {
   initializeServerSideKeyAccess,
 } from '@auth/serverKeys';
 import type { AuthServiceLogger } from '@auth/serviceLogger';
-import { type OAuthProvider } from '@auth/sharedConfig';
 import type { AuthCallbackUriParts } from '@auth/core/authCallback';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { TEXRA_PROTOCOL } from '../desktopProtocol.js';

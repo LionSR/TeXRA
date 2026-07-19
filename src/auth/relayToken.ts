@@ -17,7 +17,7 @@ import {
   SERVER_SIDE_CACHE_TTL_MS,
   UserTierSchema,
   type UserTier,
-} from './sharedConfig';
+} from './config';
 import { fetchWithTimeout } from './fetchWithTimeout';
 
 export const RELAY_TOKEN_ENV_VAR = 'TEXRA_RELAY_TOKEN';
