@@ -22,10 +22,7 @@ import {
   FREE_TIER,
   type UserTier,
 } from '../config';
-import {
-  NOOP_AUTH_SERVICE_LOGGER,
-  type AuthServiceLogger,
-} from '../serviceLogger';
+import type { SupabaseSessionLog } from '../supabaseSessionTypes';
 import type { StateStore } from '@platform/interfaces';
 import type { TierService } from '../tier/TierService';
 import type { ServerSideProvider } from './types';
@@ -96,7 +93,7 @@ export class ServerSideKeyService {
     private readonly baseUrl: string,
     private readonly tierService: TierService,
     private readonly globalState: StateStore | null = null,
-    private readonly logger: AuthServiceLogger = NOOP_AUTH_SERVICE_LOGGER,
+    private readonly logger: SupabaseSessionLog = {},
     private readonly notifyIncludedModelAccessChanged: (
       enabled: boolean,
     ) => void = () => {},
@@ -147,7 +144,7 @@ export class ServerSideKeyService {
       try {
         this.notifyIncludedModelAccessChanged(value);
       } catch (error) {
-        this.logger.error(
+        this.logger.error?.(
           CHANNEL,
           `Event listener failed: ${toErrorMessage(error)}`,
         );
@@ -195,7 +192,7 @@ export class ServerSideKeyService {
     } catch (error) {
       // Denied by error (auth/network failure), not by policy — log so the two
       // are distinguishable. The interface exposes only info/error levels.
-      this.logger.error(
+      this.logger.error?.(
         CHANNEL,
         `Access check failed, treating as denied: ${toErrorMessage(error)}`,
       );
@@ -236,13 +233,13 @@ export class ServerSideKeyService {
       ]);
 
       if (this.tierService.isAccessExpired()) {
-        this.logger.info(CHANNEL, 'User access has expired');
+        this.logger.info?.(CHANNEL, 'User access has expired');
         this.accessResult = false;
         return false;
       }
 
       if (!this.hasFullAccess() && tierConfig === null) {
-        this.logger.info(
+        this.logger.info?.(
           CHANNEL,
           'Tier config unavailable for non-Ultra user, denying access',
         );
@@ -269,7 +266,7 @@ export class ServerSideKeyService {
         this.tierService.isQuotaExceeded()
       ) {
         this.quotaFlipApplied = true;
-        this.logger.info(
+        this.logger.info?.(
           CHANNEL,
           'Relay quota exhausted; switching useIncludedModelAccess off',
         );

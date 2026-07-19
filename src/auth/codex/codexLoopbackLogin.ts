@@ -14,10 +14,7 @@ import {
   CODEX_CALLBACK_PATH,
   CODEX_CALLBACK_PORT,
 } from './codexConstants';
-import {
-  type CodexLogger,
-  type CodexSessionCoordinator,
-} from './CodexSessionCoordinator';
+import { type CodexSessionCoordinator } from './CodexSessionCoordinator';
 import { type CodexSession } from './codexSessionTypes';
 
 const CALLBACK_TIMEOUT_MS = 5 * 60 * 1000;
@@ -38,7 +35,6 @@ export interface CodexLoopbackLoginOptions {
   coordinator: CodexSessionCoordinator;
   /** Open the consent URL in the user's browser. */
   openBrowser: (url: string) => void | Promise<void>;
-  log?: CodexLogger;
   signal?: AbortSignal;
 }
 
@@ -88,7 +84,7 @@ async function bindLoopbackServer(): Promise<{
 export async function loginWithLoopback(
   options: CodexLoopbackLoginOptions,
 ): Promise<CodexSession> {
-  const { coordinator, openBrowser, log, signal } = options;
+  const { coordinator, openBrowser, signal } = options;
   const { server, port } = await bindLoopbackServer();
   const authorize = coordinator.buildAuthorizeRequest(port);
   let callbackTimer: ReturnType<typeof setTimeout> | undefined;
@@ -157,7 +153,6 @@ export async function loginWithLoopback(
   });
 
   try {
-    log?.debug?.(`Opening ChatGPT sign-in on loopback port ${port}.`);
     await Promise.race([
       Promise.resolve(openBrowser(authorize.url)),
       cancellationPromise,

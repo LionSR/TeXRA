@@ -25,16 +25,13 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { SERVER_SIDE_CACHE_TTL_MS, type UserTier } from '../config';
 import {
-  NOOP_AUTH_SERVICE_LOGGER,
-  type AuthServiceLogger,
-} from '../serviceLogger';
-import {
   TierModelConfigSchema,
   UserAccessStatusSchema,
   type TierModelConfig,
   type TierModelsConfig,
   type UserAccessStatus,
 } from './types';
+import type { SupabaseSessionLog } from '../supabaseSessionTypes';
 
 const CHANNEL = 'TierService';
 
@@ -91,7 +88,7 @@ export class TierService {
    */
   constructor(
     private readonly baseUrl: string,
-    private readonly logger: AuthServiceLogger = NOOP_AUTH_SERVICE_LOGGER,
+    private readonly logger: SupabaseSessionLog = {},
   ) {
     this.configCache = new LRUCache<
       TierCacheKey,
@@ -152,7 +149,7 @@ export class TierService {
     if (raw === undefined || raw === null) return null;
     const parsed = schema.safeParse(raw);
     if (parsed.success) return parsed.data;
-    this.logger.error(
+    this.logger.error?.(
       CHANNEL,
       `Invalid ${label} payload: ${z.prettifyError(parsed.error)}`,
     );
@@ -192,7 +189,7 @@ export class TierService {
       // A sign-out (clearCache) aborts the request; that is expected, so stay
       // quiet. Genuine network failures keep the previous error log.
       if (!signal.aborted) {
-        this.logger.error(
+        this.logger.error?.(
           CHANNEL,
           `Error fetching tier config: ${toErrorMessage(error)}`,
         );
@@ -202,12 +199,12 @@ export class TierService {
 
     if (!response.ok) {
       if (response.status === 404) {
-        this.logger.info(
+        this.logger.info?.(
           CHANNEL,
           'Tier-config endpoint not available, using defaults',
         );
       } else {
-        this.logger.error(
+        this.logger.error?.(
           CHANNEL,
           `Failed to fetch tier config: ${response.status}`,
         );
@@ -219,7 +216,7 @@ export class TierService {
     try {
       data = await response.json();
     } catch (error) {
-      this.logger.error(
+      this.logger.error?.(
         CHANNEL,
         `Failed to parse tier config JSON: ${toErrorMessage(error)}`,
       );
@@ -244,7 +241,7 @@ export class TierService {
 
     const parsed = TierModelConfigSchema.safeParse(data);
     if (!parsed.success) {
-      this.logger.error(
+      this.logger.error?.(
         CHANNEL,
         `Invalid tier config response: ${z.prettifyError(parsed.error)}`,
       );

@@ -19,7 +19,7 @@
 
 import { SUPABASE_CUSTOM_DOMAIN } from '../config';
 import { TierService } from './TierService';
-import type { AuthServiceLogger } from '../serviceLogger';
+import type { SupabaseSessionLog } from '../supabaseSessionTypes';
 
 // Service class (internal use only)
 export { TierService };
@@ -33,7 +33,7 @@ let _instance: TierService | null = null;
 /**
  * Get the singleton TierService instance.
  */
-export function getTierService(logger?: AuthServiceLogger): TierService {
+export function getTierService(logger?: SupabaseSessionLog): TierService {
   if (!_instance) {
     _instance = new TierService(`https://${SUPABASE_CUSTOM_DOMAIN}`, logger);
   }
