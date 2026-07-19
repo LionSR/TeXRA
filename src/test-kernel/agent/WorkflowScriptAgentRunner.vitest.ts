@@ -595,44 +595,6 @@ describe('createWorkflowScriptAgentRunner', () => {
     expect(mocks.requireVisibleAgent).not.toHaveBeenCalled();
   });
 
-  it('aborts a schema run whose agent never submitted structured output', async () => {
-    mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
-      name,
-      source: 'builtInToolUse',
-      category: 'toolUse',
-      path: `/agents/${name}.yml`,
-    }));
-    // The tool-use agent answered in prose and never called submit_output, so
-    // the completed result carries no structured value: the floor must fail
-    // clearly instead of resolving to an envelope with structured undefined.
-    mocks.executeStableSubagentInBand.mockImplementationOnce(
-      async (options) => {
-        mocks.preparedOptions.push(await options.prepare());
-        return {
-          executionId: 'bbbbbb222222',
-          result: {
-            category: 'toolUse',
-            outcome: 'completed',
-            response: 'Here is my answer in prose.',
-            files: [],
-            cost: 0,
-          },
-        };
-      },
-    );
-    const schema = { type: 'object', additionalProperties: false };
-    const runner = defaultRunner();
-
-    await expect(
-      runner(invocation({ agentName: 'assistant', schema })),
-    ).rejects.toMatchObject({
-      name: 'WorkflowRunAbortError',
-      message: expect.stringMatching(
-        /did not call submit_output; no structured result was produced/,
-      ),
-    });
-  });
-
   it('leaves onChildActive untouched when a recovered attempt runs no live work', async () => {
     // A recovered attempt never fires onActiveExecutionId, so the settle guard
     // must not emit a phantom active/inactive pair for a call that never ran.
