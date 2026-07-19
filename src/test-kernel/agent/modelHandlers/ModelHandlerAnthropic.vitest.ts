@@ -1,30 +1,27 @@
-// Third-party imports
-
 // Standard library imports
 import { strict as assert } from 'node:assert';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, describe, it, vi } from 'vitest';
 
 // Third-party imports
 import { APIUserAbortError as AnthropicUserAbortError } from '@anthropic-ai/sdk';
+import { afterEach, describe, it, vi } from 'vitest';
+import {
+  type ModelCapabilities,
+  ModelProvider,
+  ReasoningEffort,
+} from 'llm-zoo';
 
 // Local imports - platform
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 
 // Local imports - test support
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelCapabilities,
-  type ModelConfig,
-  ModelProvider,
-  ReasoningEffort,
-} from 'llm-zoo';
-import type { AgentTrace } from '@agent/trace';
+import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
@@ -39,12 +36,10 @@ import {
   SHORT_CACHE_CONTROL,
 } from '@agent/modelHandlers/anthropic/anthropicContextManagement';
 
-// Type imports
-
 // Local imports - auth (stubbed via vi.spyOn)
 import * as serverKeysModule from '@auth/serverKeys';
 
-// Local imports - model config
+// Local imports - utilities
 import { pathToLocation } from '@utils/files';
 import * as configUtils from '@utils/config/configUtils';
 
@@ -76,34 +71,23 @@ function stubCompactionThresholdPercent(value: number): void {
   );
 }
 
-function buildAnthropicConfig(
-  capabilityOverrides: Partial<ModelCapabilities> = {},
-): ModelConfig {
-  const capabilities = {
-    ...DEFAULT_MODEL_CAPABILITIES,
-    supportsPromptCaching: true,
-    ...capabilityOverrides,
-  };
-
-  return {
-    name: 'test-anthropic',
-    label: 'Test Anthropic',
-    fullName: 'claude-test',
-    shortName: 'claude-test',
-    provider: ModelProvider.ANTHROPIC,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 200000,
-    capabilities,
-    openRouterOnly: false,
-  };
-}
+const ANTHROPIC_TEST_CONFIG = Object.freeze({
+  name: 'test-anthropic',
+  label: 'Test Anthropic',
+  fullName: 'claude-test',
+  shortName: 'claude-test',
+  provider: ModelProvider.ANTHROPIC,
+  capabilities: Object.freeze({ supportsPromptCaching: true }),
+});
 
 function createAnthropicHandler(
   capabilityOverrides: Partial<ModelCapabilities> = {},
 ): ModelHandlerAnthropic {
-  return new ModelHandlerAnthropic(buildAnthropicConfig(capabilityOverrides));
+  return new ModelHandlerAnthropic(
+    buildTestModelConfig(ANTHROPIC_TEST_CONFIG, {
+      capabilities: capabilityOverrides,
+    }),
+  );
 }
 
 /** A minimal single-turn "hello" user message, the shape most tests need. */
@@ -182,27 +166,12 @@ describe('ModelHandlerAnthropic forced tool choice', () => {
   });
 });
 
-/** Create a no-op logger stub for handler tests, with optional overrides. */
-function createLoggerStub(
-  overrides?: Partial<Record<string, unknown>>,
-): unknown {
-  return {
-    streamId: 'test',
-    debug: () => {},
-    info: () => {},
-    warn: () => {},
-    error: () => {},
-    domain: () => {},
-    ...overrides,
-  };
-}
-
 /** Attach a logger stub and disable streaming for a handler under test. */
 function stubHandlerForTest(
   handler: ModelHandlerAnthropic,
   loggerOverrides?: Partial<Record<string, unknown>>,
 ): void {
-  handler.setLogger(createLoggerStub(loggerOverrides) as unknown as AgentTrace);
+  handler.setLogger({ ...noopTrace, ...loggerOverrides } as AgentTrace);
   (handler as any).getStreamingConfig = () => false;
 }
 
@@ -251,7 +220,9 @@ class PdfStubAnthropicHandler extends ModelHandlerAnthropic {
 describe('ModelHandlerAnthropic message guards', () => {
   it('includes native PDF document blocks when initializing messages', async () => {
     const handler = new PdfStubAnthropicHandler(
-      buildAnthropicConfig({ supportsNativePdf: true }),
+      buildTestModelConfig(ANTHROPIC_TEST_CONFIG, {
+        capabilities: { supportsNativePdf: true },
+      }),
     );
 
     handler.setMediaContent([
@@ -1236,13 +1207,14 @@ describe('ModelHandlerAnthropic message guards', () => {
   it('logs server-side compaction events from compaction blocks', () => {
     const events: Array<{ message: string; data: unknown }> = [];
 
-    const logger = createLoggerStub({
+    const logger = {
+      ...noopTrace,
       domain: (event: { key: string; text?: string; data?: unknown }) => {
         if (event.key === 'contextManagement') {
           events.push({ message: event.text ?? '', data: event.data });
         }
       },
-    }) as unknown as AgentTrace;
+    } as AgentTrace;
 
     logContextManagementFromResponse(
       {
@@ -1537,7 +1509,7 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
       supportsTokenCounting: false,
       supportsReasoning: false,
     });
-    handler.setLogger(createLoggerStub() as unknown as AgentTrace);
+    handler.setLogger({ ...noopTrace });
     // Force streaming path so we exercise the pre-message_start catch block.
     (handler as any).getStreamingConfig = () => true;
 
@@ -1596,7 +1568,7 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
       supportsTokenCounting: false,
       supportsReasoning: false,
     });
-    handler.setLogger(createLoggerStub() as unknown as AgentTrace);
+    handler.setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => true;
 
     // Simulates the message_stop guard above: message_start (and content)

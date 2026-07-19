@@ -1,14 +1,15 @@
+// Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  ModelProvider,
-  type ModelConfig,
-} from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 
-import type { AgentTrace } from '@agent/trace';
+// Local imports - test support, agent, and config
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { noopTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import * as configModule from '@utils/config/configUtils';
+
+// Type imports
 import type { Interactions } from '@google/genai';
 
 type Step = Interactions.Step;
@@ -83,42 +84,6 @@ function completedEvents(
   ];
 }
 
-function createConfig(): ModelConfig {
-  return {
-    name: 'test-google-interactions',
-    label: 'Test Google Interactions',
-    fullName: 'gemini-3-pro-test',
-    shortName: 'gemini-3-pro-test',
-    provider: ModelProvider.GOOGLE,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 4096,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsReasoning: true,
-      supportsTokenCounting: false,
-    },
-    openRouterOnly: false,
-  };
-}
-
-function silentLogger(): AgentTrace {
-  return {
-    debug: () => undefined,
-    info: () => undefined,
-    warn: () => undefined,
-    error: () => undefined,
-    // Context-management cards (emitted during compaction) route through domain().
-    domain: () => undefined,
-    openStream: () => ({
-      id: 'stream',
-      append: () => undefined,
-      finalize: (text?: string) => text ?? '',
-    }),
-  } as unknown as AgentTrace;
-}
-
 class StreamingHandler extends ModelHandlerGoogleInteractions {
   override getStreamingConfig(): boolean {
     return true;
@@ -126,8 +91,21 @@ class StreamingHandler extends ModelHandlerGoogleInteractions {
 }
 
 function createHandler(): ModelHandlerGoogleInteractions {
-  const handler = new StreamingHandler(createConfig());
-  handler.setLogger(silentLogger());
+  const handler = new StreamingHandler(
+    buildTestModelConfig({
+      name: 'test-google-interactions',
+      label: 'Test Google Interactions',
+      fullName: 'gemini-3-pro-test',
+      shortName: 'gemini-3-pro-test',
+      provider: ModelProvider.GOOGLE,
+      contextWindow: 4096,
+      capabilities: {
+        supportsReasoning: true,
+        supportsTokenCounting: false,
+      },
+    }),
+  );
+  handler.setLogger({ ...noopTrace });
   handler.setOutputStreaming(true);
   return handler;
 }
@@ -360,7 +338,7 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
   it('T6: compaction clears the chain and returns updatedMessages', async () => {
     const handler = createHandler();
     handler.setAgentCategory(AgentCategory.ToolUse);
-    handler.setLogger(silentLogger());
+    handler.setLogger({ ...noopTrace });
     const calls: RecordedCall[] = [];
     const client: any = capturingClient(calls, (i) =>
       completedEvents(i === 0 ? 'int_1' : 'int_2'),

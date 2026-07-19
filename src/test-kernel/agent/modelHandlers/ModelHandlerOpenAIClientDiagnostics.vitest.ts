@@ -1,10 +1,9 @@
+// Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelConfig,
-  ModelProvider,
-} from 'llm-zoo';
+import { type ModelConfig, ModelProvider } from 'llm-zoo';
 
+// Local imports - test support, agent, and model config
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
@@ -17,23 +16,15 @@ const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 const RELAY_BASE_URL = 'https://relay.example.test/openai';
 const TEST_API_KEY = 'test-secret-key';
 
-function createConfig(overrides: Partial<ModelConfig> = {}): ModelConfig {
-  return {
-    name: 'kimi-test',
-    fullName: 'kimi-k2.5',
-    shortName: 'kimi-k2.5',
-    label: 'Kimi Test',
-    provider: ModelProvider.MOONSHOT,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 262_144,
-    openRouterOnly: false,
-    baseUrl: MOONSHOT_BASE_URL,
-    capabilities: DEFAULT_MODEL_CAPABILITIES,
-    ...overrides,
-  };
-}
+const KIMI_DIAGNOSTICS_CONFIG = Object.freeze({
+  name: 'kimi-test',
+  fullName: 'kimi-k2.5',
+  shortName: 'kimi-k2.5',
+  label: 'Kimi Test',
+  provider: ModelProvider.MOONSHOT,
+  contextWindow: 262_144,
+  baseUrl: MOONSHOT_BASE_URL,
+});
 
 class TestModelHandlerOpenAI extends ModelHandlerOpenAI {
   constructor(
@@ -112,7 +103,9 @@ describe('OpenAI-compatible client diagnostics', () => {
   });
 
   it('reports the Moonshot credential owner and request model', async () => {
-    const messages = await clientDiagnostics(createConfig());
+    const messages = await clientDiagnostics(
+      buildTestModelConfig(KIMI_DIAGNOSTICS_CONFIG),
+    );
 
     expectBothHandlers(
       messages,
@@ -122,7 +115,7 @@ describe('OpenAI-compatible client diagnostics', () => {
 
   it('reports the Kimi Code credential owner and final k3 wire model', async () => {
     const messages = await clientDiagnostics(
-      createConfig({
+      buildTestModelConfig(KIMI_DIAGNOSTICS_CONFIG, {
         fullName: 'k3',
         shortName: 'k3',
         kimiSubscription: true,
@@ -138,7 +131,7 @@ describe('OpenAI-compatible client diagnostics', () => {
 
   it('reports the exclusive Kimi Code alias without rewriting its wire model', async () => {
     const messages = await clientDiagnostics(
-      createConfig({
+      buildTestModelConfig(KIMI_DIAGNOSTICS_CONFIG, {
         name: 'kimi-for-coding',
         fullName: 'kimi-for-coding',
         shortName: 'kimi-for-coding',
@@ -155,7 +148,7 @@ describe('OpenAI-compatible client diagnostics', () => {
 
   it('reports OpenRouter credentials and endpoint for OpenRouter-only models', async () => {
     const messages = await clientDiagnostics(
-      createConfig({
+      buildTestModelConfig(KIMI_DIAGNOSTICS_CONFIG, {
         fullName: 'moonshotai/kimi-k2.5',
         shortName: 'moonshotai/kimi-k2.5',
         openRouterOnly: true,
@@ -176,7 +169,7 @@ describe('OpenAI-compatible client diagnostics', () => {
       typeof serverKeysModule.getServerSideKeyService
     >);
     const messages = await clientDiagnostics(
-      createConfig({
+      buildTestModelConfig(KIMI_DIAGNOSTICS_CONFIG, {
         name: 'gpt-test',
         fullName: 'gpt-test',
         shortName: 'gpt-test',
@@ -194,7 +187,7 @@ describe('OpenAI-compatible client diagnostics', () => {
 
   it('reports the OpenAI client default when no base URL is configured', async () => {
     const messages = await clientDiagnostics(
-      createConfig({
+      buildTestModelConfig(KIMI_DIAGNOSTICS_CONFIG, {
         name: 'gpt-test',
         fullName: 'gpt-test',
         shortName: 'gpt-test',
