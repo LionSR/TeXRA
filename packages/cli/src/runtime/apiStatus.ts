@@ -1,5 +1,5 @@
-import { platform } from '@platform/platform';
 import { API_PROVIDERS, lookupApiKeyOrigin } from '@model/apiProviders';
+import { platform } from '@platform/platform';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatPercent } from '@utils/text/stringUtils';

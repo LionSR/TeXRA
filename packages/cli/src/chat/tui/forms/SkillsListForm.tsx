@@ -4,17 +4,17 @@
 
 import { Text } from 'ink';
 
-import { formatRuntimeSkillActivation } from '@skills/runtimeSkills';
 import { readCliRuntimeSkills, skillListRecord } from '@cli/runtime/skills';
 import { escapeText } from '@shared/utils/xmlEscape';
-import { formatResultCount } from '@utils/text/stringUtils';
-
-import { AsyncListForm } from './_shared/ListForm';
-import type { SelectItem } from '../ui/Select';
+import { formatRuntimeSkillActivation } from '@skills/runtimeSkills';
 import type {
   DiscoverSkillSourcesResult,
   SourcedSkill,
 } from '@skills/loadSkills';
+import { formatResultCount } from '@utils/text/stringUtils';
+
+import { AsyncListForm } from './_shared/ListForm';
+import type { SelectItem } from '../ui/Select';
 
 export interface SkillsListFormProps {
   readonly availableRows?: number;

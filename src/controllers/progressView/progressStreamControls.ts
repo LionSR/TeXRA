@@ -1,11 +1,11 @@
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { ProgressStreamControls } from '@controllers/progressView/backend/events/ProgressFactApplier';
 import type { StreamTabId } from '@shared/schemas';
 import {
   isApprovalBypassedForStream,
   proposalApprovals,
 } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
-import type { ProgressStreamControls } from '@controllers/progressView/backend/events/ProgressFactApplier';
 
 export function getProgressStreamControls(
   streamId: StreamTabId,

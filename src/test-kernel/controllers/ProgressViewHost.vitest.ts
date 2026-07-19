@@ -1,15 +1,15 @@
-// Third-party imports
+// Node imports
 import { strict as assert } from 'node:assert';
+
+// Third-party imports
 import { describe, it, vi } from 'vitest';
 
-// Local imports - controllers
-import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
+// Local imports
 import type { TaskState } from '@agent/core/state/TaskState';
-
-// Local imports - shared
+import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
-// Local imports - test support
+// Local file imports
 import { createWorkflowTaskState } from '../support/ProgressControllerHarnesses';
 
 function createTaskState(): TaskState {

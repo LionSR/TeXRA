@@ -2,24 +2,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-// Local imports - tests
+// Local imports
+import * as serverKeysModule from '@auth/serverKeys';
+import { refreshDesktopModelListStateIfNeeded } from '@desktop/main/desktopModelListRefresh';
+import { DefaultDesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
+import { apiKeySecretName } from '@model/apiProviders';
+import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
+import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   FakeConfigProvider,
   FakeSecrets,
   FakeStateStore,
 } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
-
-// Local imports - authentication and models
-import * as serverKeysModule from '@auth/serverKeys';
-import { refreshDesktopModelListStateIfNeeded } from '@desktop/main/desktopModelListRefresh';
-import { DefaultDesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
-import { apiKeySecretName } from '@model/apiProviders';
-import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
-
-// Local imports - shared
-import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 
 const codexMocks = vi.hoisted(() => ({
   getStatus: vi.fn(async () => ({

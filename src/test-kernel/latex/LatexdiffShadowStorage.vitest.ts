@@ -8,9 +8,9 @@ import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { cleanupTempDirs } from '@test/support/tempDirPlatform';
-import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
 import {
   createExternalLocation,
   createRunStorageLocation,

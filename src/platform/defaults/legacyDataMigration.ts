@@ -28,13 +28,11 @@ import {
 } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
-// Local imports - storage layout
+// Local imports
 import { WORKSPACE_STORAGE_COLLECTIONS_MERGED_PER_CHILD } from '@platform/defaults/workspaceStorage';
-
-// Local imports - utils
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-// Type imports - node
+// Node imports
 import type { Dirent } from 'node:fs';
 
 export interface LegacyDataMigrationLogger {

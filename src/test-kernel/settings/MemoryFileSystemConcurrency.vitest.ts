@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import { Buffer } from 'node:buffer';
 import * as path from 'node:path';
 import { Readable } from 'node:stream';
@@ -6,11 +6,9 @@ import { Readable } from 'node:stream';
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Platform imports
+// Local imports
 import { FileType, type FileStat } from '@platform/interfaces';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-
-// Local imports - settings memory
 import { walkMemoryDirectory } from '@tools/memory/memoryFileSystem';
 import { StorageFS } from '@utils/files';
 import { delay } from '@utils/core';

@@ -1,7 +1,6 @@
 import { Box, Text } from 'ink';
 import { useEffect, useState } from 'react';
 
-import { platform } from '@platform/platform';
 import { getAgentsByCategory, loadAgents, type AgentEntry } from '@agent/index';
 import {
   cliAgentRosterController,
@@ -9,6 +8,7 @@ import {
   type CliAgentRosterRecord,
 } from '@cli/runtime/agentRoster';
 import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
+import { platform } from '@platform/platform';
 import {
   agentKeyOf,
   agentMatchesIdentifier,

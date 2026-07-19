@@ -10,10 +10,8 @@
  * with no anchor — append the block instead.
  */
 
-// Type imports
-import type { ToolDefinition } from '@model';
-
 // Local imports
+import type { ToolDefinition } from '@model';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 
 /**

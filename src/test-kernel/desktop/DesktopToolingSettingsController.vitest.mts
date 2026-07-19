@@ -1,14 +1,10 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - settings controllers
-import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
+// Local imports
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
-import { FakeStateStore } from '@test/support/FakePlatform';
-import { isStored } from '@test/support/settingsStoresFake';
+import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { DefaultDesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
-
-// Local imports - shared settings
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   HOMEBREW_INSTALL_COMMAND,
@@ -16,9 +12,9 @@ import {
 } from '@shared/constants/latex';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { assertSupported } from '@shared/utils/dispatcher';
-
-// Local imports - supporting types
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
+import { isStored } from '@test/support/settingsStoresFake';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 
 /**

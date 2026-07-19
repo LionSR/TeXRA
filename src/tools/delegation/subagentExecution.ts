@@ -7,7 +7,7 @@
  * interactive follow-up turn to consume async delivery.
  */
 
-// Local imports - agent
+// Local imports
 import {
   registerExecution,
   releaseOwnedExecutionLeaseAfterFailure,
@@ -25,8 +25,6 @@ import {
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { startChildRunLoop } from '@agent/runtime/childRunLoop';
-
-// Local imports - tools
 import {
   AgentCategory,
   type ExecutionId,
@@ -37,6 +35,7 @@ import { configureDelegatedChildApprovals } from '@tools/approval';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+// Local file imports
 import { executeSubagentForDeliveryInBand } from './inBandSubagentExecution';
 
 // `createNativeToolUseStrategy`/`createNativeWorkflowStrategy` are lazy-

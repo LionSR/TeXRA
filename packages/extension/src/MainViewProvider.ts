@@ -1,16 +1,11 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - agent
-import {
-  planOnboardingFunnelTransition,
-  type OnboardingFunnelState,
-} from '@controllers/onboarding/onboardingFunnel';
+// Local imports
 import { refresh, computeAgentOptionsData, getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-
-// Local imports - common
 import { hasAnyUsableSetupCredential } from '@commands/setup';
+import { consumePendingState } from '@common/state';
 import {
   BaseWebviewProvider,
   BundledViewContentProvider,
@@ -18,17 +13,19 @@ import {
   SIDEBAR_VIEWS,
   setActiveSidebarView,
 } from '@common/webview';
-import { consumePendingState } from '@common/state';
 import { EXTENSION_CATEGORIES, getFilterExtensions } from '@common/files';
+import {
+  planOnboardingFunnelTransition,
+  type OnboardingFunnelState,
+} from '@controllers/onboarding/onboardingFunnel';
 import { appSignals } from '@eventBus/AppSignals';
-
 import { agentDirectories } from '@frontend/agents';
-import { loadMainViewModelOptions } from '@frontend/agents/optionsLoader';
-import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import {
   isAgentCatalogAuthRefreshDeferred,
   runAfterAgentCatalogAuthRefresh,
 } from '@frontend/auth/agentCatalogRefreshScope';
+import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
+import { loadMainViewModelOptions } from '@frontend/agents/optionsLoader';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { MainViewPersistedStateSchema } from '@shared/schemas';
 import { agentKeyOf } from '@shared/schemas/agent';
@@ -41,7 +38,6 @@ import { debounce } from '@utils/core';
 
 // Local file imports
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
-
 import type { ProgressViewProvider } from './progressView/ProgressViewProvider';
 
 export type SidebarMode = 'main' | 'progress';

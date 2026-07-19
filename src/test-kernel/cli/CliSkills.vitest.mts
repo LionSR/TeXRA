@@ -4,14 +4,14 @@ import * as path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { defaultSkillSources } from '@skills/skillSources';
-import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 import {
   formatCliSkillList,
   readCliRuntimeSkills,
   readCliSkills,
   skillListRecord,
 } from '@cli/runtime/skills';
+import { defaultSkillSources } from '@skills/skillSources';
+import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 
 const tempRoots: string[] = [];
 

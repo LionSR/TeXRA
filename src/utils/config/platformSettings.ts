@@ -1,5 +1,4 @@
 import { tryPlatform } from '@platform/platform';
-
 import {
   readSetting,
   settingDefault,

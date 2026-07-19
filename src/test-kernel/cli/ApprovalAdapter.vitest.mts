@@ -10,7 +10,6 @@ vi.mock('@tools/inquiry/ExternalInquiryTool', () => ({
   handleExternalInquiryAction: handleExternalInquiryActionMock,
 }));
 
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { HostRetryRequest } from '@agent/runtime/HostInteractions';
@@ -34,6 +33,7 @@ import {
   DEFAULT_TOOL_CONFIG,
   type StreamTabId,
 } from '@shared/schemas';
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {

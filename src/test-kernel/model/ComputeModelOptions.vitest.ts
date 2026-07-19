@@ -1,21 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
-import {
-  ServerSideKeyService,
-  setServerSideKeyService,
-} from '@auth/serverKeys';
 import {
   CODEX_SESSION_SECRET_KEY,
   resetCodexCoordinator,
   type CodexSession,
 } from '@auth/codex';
-import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import {
-  CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
-  isCodexSubscriptionEligible,
-} from '@model/providerCapabilities';
+  ServerSideKeyService,
+  setServerSideKeyService,
+} from '@auth/serverKeys';
 import {
   computeModelOptionsData,
   getModelUnavailableReason,
@@ -23,10 +17,16 @@ import {
   type ModelOptionsAccess,
   type ModelOptionsServerAccess,
 } from '@model/computeModelOptions';
+import {
+  CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
+  isCodexSubscriptionEligible,
+} from '@model/providerCapabilities';
+import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import type { ModelOptionData } from '@shared/schemas';
 import { FAST_FIRST_RESPONSE_HINT } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { AgentCategory } from '@shared/schemas/agent';
+import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 
 function createServerSideKeyService(options: {
   useIncludedAccess: boolean;

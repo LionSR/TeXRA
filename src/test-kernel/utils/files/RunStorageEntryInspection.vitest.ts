@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { FileType, type FileStat } from '@platform/interfaces';
-import { setupPlatform } from '@test/support/setupPlatform';
 import type { ExecutionId } from '@shared/schemas';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { StorageFS } from '@utils/files';
 import {
   inspectRunStorageEntry,

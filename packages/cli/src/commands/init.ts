@@ -1,6 +1,6 @@
-import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 
 import { CLI_BUILTIN_DEFAULT_MODEL } from '../runtime/cliConfig';
 import {

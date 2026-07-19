@@ -1,10 +1,10 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
 // Third-party imports
 import { createFsFromVolume, Volume, type IFs } from 'memfs';
 
-// Local imports - platform
+// Local imports
 import {
   FileType,
   NO_TOOL_AVAILABILITY_HOST,
@@ -19,10 +19,10 @@ import {
   type WorkspaceProvider,
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
+import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 
 function fakeFsError(code: string, message: string): Error {
   return Object.assign(new Error(message), { code });

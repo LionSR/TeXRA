@@ -2,10 +2,18 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
+import { defaultSession } from '@agent/runtime/SessionHandle';
+import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
+import {
+  RUN_OUTCOME,
+  STREAM_PHASE,
+  STREAM_STATUS,
+  type StreamTabId,
+} from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
-
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const resumeToolUseFromResumeDataMock = vi.hoisted(() =>
   vi.fn(async (..._args: unknown[]): Promise<unknown> => undefined),
@@ -19,15 +27,6 @@ import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
 } from '@test/helpers/streamStatusTestUtils';
-import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
-import { defaultSession } from '@agent/runtime/SessionHandle';
-import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
-import {
-  RUN_OUTCOME,
-  STREAM_PHASE,
-  STREAM_STATUS,
-  type StreamTabId,
-} from '@shared/schemas';
 import { recordSessionEvents, sessionFactPayloads } from '../progressTestUtils';
 
 const STREAM = 'stream:tooluse-resume' as StreamTabId;

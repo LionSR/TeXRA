@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { setupPlatform } from '@test/support/setupPlatform';
 import { getExecutionStore } from '@agent/storage';
 import { hasPersistedParent } from '@agent/storage/executionLifecycle';
 import type { ExecutionId } from '@shared/schemas';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 async function writeParentLink(
   executionId: ExecutionId,

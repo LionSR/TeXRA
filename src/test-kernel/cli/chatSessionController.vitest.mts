@@ -121,9 +121,6 @@ vi.mock('@cli/runtime/sessionResume', () => ({
   ): string => `not resumable (${resolution.type}): ${id}`,
 }));
 
-import { StreamSnapshotStore } from '@transcript';
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { wakeQueuedFollowUpStream } from '@agent/followUp/ToolUseFollowUp';
 import type { ResumeStreamPorts } from '@agent/runtime/resolveAndResumeStream';
@@ -155,6 +152,9 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { StreamSnapshotStore } from '@transcript';
 
 // ---------------------------------------------------------------------------
 // Helpers

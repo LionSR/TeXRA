@@ -12,9 +12,9 @@ import {
   lookupApiKeyOrigin,
   type ApiProvider,
 } from '@model/apiProviders';
+import type { PlatformSecrets } from '@platform/secrets';
 import { UnsetApiKeyTool } from '@tools/setup/UnsetApiKeyTool';
 import { setSetupPlatform, setupSecrets } from '@tools/setup/platform';
-import type { PlatformSecrets } from '@platform/secrets';
 
 function createSecrets(
   initial: Record<string, string> = {},

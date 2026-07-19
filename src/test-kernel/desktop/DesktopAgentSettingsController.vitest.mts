@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { FakeStateStore } from '@test/support/FakePlatform';
-import { isStored } from '@test/support/settingsStoresFake';
 import type { AgentEntry } from '@agent/index/agentRegistry';
 import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -9,6 +7,8 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { isUnsupported } from '@shared/utils/dispatcher';
 
 import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
+import { isStored } from '@test/support/settingsStoresFake';
+import { FakeStateStore } from '@test/support/FakePlatform';
 
 type AgentCatalog = Record<AgentCategory, AgentEntry[]>;
 

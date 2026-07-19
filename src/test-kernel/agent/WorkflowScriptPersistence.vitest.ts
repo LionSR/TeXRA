@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { setupPlatform } from '@test/support/setupPlatform';
 import {
   readWorkflowScriptCheckpoint,
   runPersistedWorkflowScript,
@@ -10,6 +9,7 @@ import {
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { workflowScriptCheckpointKvKey } from '@agent/workflowScript/checkpointKey';
 import type { ExecutionId } from '@shared/schemas';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { delay } from '@utils/core';
 
 const executionId = 'aaaaaa111111' as ExecutionId;

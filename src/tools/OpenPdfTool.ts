@@ -1,23 +1,17 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - runtime
+// Local imports
 import {
   getRunContextExecutionId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-
-// Type imports
 import type { FileLocation } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-
-// Local imports - tools
 import {
   currentToolRoot,
   resolveWorkspaceRelativePath,
 } from '@tools/pathResolution';
-
-// Local imports - utilities
 import {
   AbsoluteFS,
   pathToLocation,

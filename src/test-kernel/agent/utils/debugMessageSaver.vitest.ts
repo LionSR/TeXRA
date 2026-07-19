@@ -1,16 +1,15 @@
-// Third-party imports
+// Node imports
 import { strict as assert } from 'node:assert';
 import * as path from 'node:path';
+
+// Third-party imports
 import { describe, it, beforeEach, afterEach } from 'vitest';
 
-// Standard library imports
-
-// Local imports - agent
-// Internal imports
-import { setupPlatform } from '@test/support/setupPlatform';
-import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
+// Local imports
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
+import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId } from '@shared/schemas';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { WorkspaceFS, StorageFS } from '@utils/files';
 
 // getConfig reads through the platform config provider; enable the

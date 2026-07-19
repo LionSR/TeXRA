@@ -3,7 +3,6 @@
 
 import { strict as assert } from 'node:assert';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createRunTrace, StreamLogStore } from '@transcript';
 import {
   type AgentEvent,
   type AgentTrace,
@@ -14,6 +13,7 @@ import {
   TraceEmitter,
 } from '@agent/trace';
 import { MESSAGE_TYPES } from '@shared/schemas';
+import { createRunTrace, StreamLogStore } from '@transcript';
 
 // ---------------------------------------------------------------------------
 // StageMetadata

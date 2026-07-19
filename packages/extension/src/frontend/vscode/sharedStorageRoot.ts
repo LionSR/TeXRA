@@ -10,9 +10,13 @@
  * config stay VS Code-native.
  */
 // VS Code imports
+
+// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - platform
+// Local imports
+import * as logger from '@logger/logUtils';
+import type { StorageProvider } from '@platform/interfaces';
 import {
   mergeLegacyStorageBucket,
   mergeLegacyWorkspaceStorageBucket,
@@ -21,12 +25,8 @@ import {
   CUSTOM_AGENTS_STORAGE_DIR,
   EXTERNAL_INQUIRY_THREADS_DIR,
 } from '@platform/defaults/globalStorage';
-import * as logger from '@logger/logUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-
-// Type imports
 import type { LegacyDataMigrationLogger } from '@platform/defaults/legacyDataMigration';
-import type { StorageProvider } from '@platform/interfaces';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 type BucketMigration = (
   sourcePath: string,

@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import {
   buildHeadlessRunContext,
   selectCliRunModel,
@@ -12,6 +11,7 @@ import {
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { selectCliRunnableModel } from '@cli/runtime/modelAccess';
 import { AgentCategory } from '@shared/schemas/agent';
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => ({
   initCliPlatform: vi.fn(),

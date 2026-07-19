@@ -1,17 +1,13 @@
 // Third-party imports
 import { afterEach, describe, expect, it } from 'vitest';
 
-// Local imports - agent trace
+// Local imports
 import {
   attachChannelSubscriber,
   createChannelTrace,
   TraceEmitter,
 } from '@agent/trace';
-
-// Local imports - logger
 import * as logUtils from '@logger/logUtils';
-
-// Local imports - shared schemas
 import { MESSAGE_TYPES } from '@shared/schemas';
 
 describe('channel trace adapters', () => {

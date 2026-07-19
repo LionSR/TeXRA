@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import { dirname } from 'node:path';
 
 // Third-party imports
@@ -9,8 +9,7 @@ import {
   ReasoningEffort,
 } from 'llm-zoo';
 
-// Local imports - agent
-import { platform } from '@platform/platform';
+// Local imports
 import type { AgentTrace } from '@agent/trace';
 import {
   attachChannelSubscriber,
@@ -62,35 +61,29 @@ import {
   isContextWindowError,
   attachContextWindowError,
 } from '@common/errors/sdkErrorUtils';
-
-// Local imports - platform
-
-// Local imports - model
-import { getApiKey, type ApiProvider } from '@model/apiProviders';
-import { isGpt5ModelName } from '@model/modelNames';
 import {
   allowsModelRelay,
   resolveDirectModelApiKeyProvider,
   resolveModelSource,
 } from '@model/openRouterRouting';
-
-// Local imports - logger
-import { MESSAGE_TYPES } from '@shared/schemas';
+import { isGpt5ModelName } from '@model/modelNames';
+import { getApiKey, type ApiProvider } from '@model/apiProviders';
+import { platform } from '@platform/platform';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
-import { OUTPUT_END_TAG } from '@shared/schemas/output';
-
-// Local imports - tools
+import { MESSAGE_TYPES } from '@shared/schemas';
 import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas/toolResult';
-
+import { OUTPUT_END_TAG } from '@shared/schemas/output';
 import { AbsoluteFS, FlexibleFS } from '@utils/files';
-import { getConfig } from '@utils/config/configUtils';
 import {
   getProviderStreaming,
   getGlobalStreaming,
 } from '@utils/config/providerConfig';
+import { getConfig } from '@utils/config/configUtils';
+
+// Local file imports
 import {
   computeReducedMaxTokens,
   TOKEN_SAFETY_BUFFER,
@@ -114,8 +107,6 @@ import {
   usesServerSideKeysRoute,
 } from './support/ProxyConfigResolver';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
-
-// Type imports
 
 /**
  * Generic SDK error tagging wrapper used by the base model handler.

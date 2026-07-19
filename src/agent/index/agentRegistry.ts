@@ -2,10 +2,10 @@
 
 import * as path from 'node:path';
 
-import { platform } from '@platform/platform';
-import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import * as logger from '@logger/logUtils';
+import { platform } from '@platform/platform';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { parseAgentModePresets } from '@shared/schemas/agentPresets';
 import type {

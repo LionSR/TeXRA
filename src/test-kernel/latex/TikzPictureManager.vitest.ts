@@ -1,14 +1,12 @@
-// Third-party imports
+// Node imports
 import * as assert from 'node:assert';
+
+// Third-party imports
 import { describe, it } from 'vitest';
 
-// Local imports - tests
-import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
-
-// Local imports - latex
+// Local imports
 import { TikzPictureManager } from '@latex/TikzPictureManager';
-
-// Local imports - utils
+import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { pathToLocation } from '@utils/files';
 
 function installPlatform(files: Record<string, string>) {

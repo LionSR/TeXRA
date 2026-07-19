@@ -1,6 +1,5 @@
 import { isAbsolute, relative, resolve } from 'node:path';
 
-import { platform } from '@platform/platform';
 import {
   getEditedFileListConfig,
   getFileListConfig,
@@ -10,6 +9,7 @@ import {
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
+import { platform } from '@platform/platform';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { normalizeFilePath } from '@utils/core';
 import { isPathWithin } from '@utils/core/pathCore';

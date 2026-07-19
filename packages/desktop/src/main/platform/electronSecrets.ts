@@ -1,9 +1,9 @@
 import { safeStorage } from 'electron';
 
+import type { PlatformSecrets } from '@platform/secrets';
+import type { JsonStore } from '@platform/defaults/jsonStore';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { JsonStore } from '@platform/defaults/jsonStore';
-import type { PlatformSecrets } from '@platform/secrets';
 
 type StoredSecret = { encrypted: true; value: string };
 type SecretStorageMode = 'encrypted' | 'basic_text' | 'unavailable';

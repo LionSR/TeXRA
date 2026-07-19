@@ -2,10 +2,8 @@
 import { JSDOM } from 'jsdom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - progress view component type
+// Local imports
 import type { TexraDiffView } from '@progressView/frontend/components/TexraDiffView';
-
-// Local imports - shared constants
 import { DESKTOP_THEME_KIND } from '@shared/schemas/commonViewMessages';
 
 const workerModuleIds = [

@@ -1,11 +1,7 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - test support
-import { setupPlatform } from '@test/support/setupPlatform';
-import { createTestSession } from '@test/support/sessionTestUtils';
-
-// Local imports - agent
+// Local imports
 import { getExecutionStore } from '@agent/storage';
 import { noopTrace } from '@agent/trace';
 import {
@@ -37,6 +33,8 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import { createTestSession } from '@test/support/sessionTestUtils';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 const CONFIG: AgentConfig = {
   inputFiles: [],

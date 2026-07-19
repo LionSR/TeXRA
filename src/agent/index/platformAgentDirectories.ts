@@ -1,6 +1,7 @@
-import { platform } from '@platform/platform';
 import { isFileNotFoundError } from '@common/errors/errorPredicates';
 import * as logger from '@logger/logUtils';
+import { platform } from '@platform/platform';
+import type { AgentDirectoriesPort } from '@platform/interfaces';
 import { AgentDirectoryService } from './AgentDirectoryService';
 import {
   BundledAgentDirectorySync,
@@ -8,7 +9,6 @@ import {
   type AgentDirectoryBundleSource,
   type AgentDirectoryVersionStore,
 } from './AgentDirectorySync';
-import type { AgentDirectoriesPort } from '@platform/interfaces';
 
 interface PlatformAgentDirectoryOptions {
   channel: string;

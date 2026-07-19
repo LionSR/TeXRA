@@ -6,19 +6,15 @@ import '@test/support/defaultSessionTestSetup';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { createTestSession } from '@test/support/sessionTestUtils';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
-import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
-import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
-import { StreamSnapshotStore, streamDataDir } from '@transcript';
 import { flowKey } from '@agent/node/persistedFlow';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   RUN_DESCRIPTOR_SCHEMA_VERSION,
   STREAM_PHASE,
@@ -27,7 +23,11 @@ import {
   type TodoItem,
 } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
+import { StreamSnapshotStore, streamDataDir } from '@transcript';
 import { StorageFS } from '@utils/files';
 
 import { createRecordingHost } from '../agent/progressTestUtils';

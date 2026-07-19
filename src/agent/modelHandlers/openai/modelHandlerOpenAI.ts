@@ -1,8 +1,6 @@
 // Third-party imports
 import OpenAI from 'openai';
 import { ModelProvider } from 'llm-zoo';
-
-// Local imports - core utilities
 import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 import {
   ChatCompletionStream,
@@ -10,7 +8,7 @@ import {
 } from 'openai/lib/ChatCompletionStream';
 import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/parser';
 
-// Local imports - agent components
+// Local imports
 import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { ExtendedCompletionUsage } from '@agent/core/usage/ResponseUsage';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -35,26 +33,24 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
-
-// Local imports - tools and utils
 import replacementEngine from '@replacement/engine';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
-import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas/toolResult';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { isNonEmptyString } from '@utils/core';
-import { getConfig } from '@utils/config/configUtils';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
+import { getConfig } from '@utils/config/configUtils';
+
+// Local file imports
 import { toDataUrl } from '../support/dataUrl';
 import {
   getDeclaredMaxReasoningEffort,
   toOpenAIReasoningEffort,
 } from '../support/reasoningEffort';
 import { tagOpenAISdkError } from './openAISdkError';
-
-// Local file imports
 import { computeOpenAIPrice, normalizeOpenAIUsage } from './openAIUsage';
 import {
   appendUserTextToChatMessages,
@@ -82,6 +78,8 @@ import {
 } from './BaseReasoningStreamAggregator';
 import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
+
+// Third-party imports
 import type {
   ChatCompletion,
   ChatCompletionChunk,

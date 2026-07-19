@@ -6,11 +6,11 @@ import {
   ReasoningEffort,
 } from 'llm-zoo';
 
-import { setupPlatform } from '@test/support/setupPlatform';
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
 import { AgentCategory } from '@shared/schemas/agent';
+import { setupPlatform } from '@test/support/setupPlatform';
 import type { Response } from 'openai/resources/responses/responses';
 
 function loggerStub(): AgentTrace {

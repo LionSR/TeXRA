@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { platform } from '@platform/platform';
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
@@ -26,6 +25,7 @@ import {
 } from '@auth/SupabaseSession';
 import { fetchWithTimeout } from '@auth/fetchWithTimeout';
 import * as logger from '@logger/logUtils';
+import { platform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { SupabaseUriHandler } from './UriHandler';
 

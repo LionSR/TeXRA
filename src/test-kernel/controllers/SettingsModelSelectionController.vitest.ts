@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
+import { MAX_TIER } from '@auth/config';
 import {
   SettingsModelSelectionController,
   type SettingsModelSelectionState,
 } from '@controllers/settingsView/SettingsModelSelectionController';
-import { MAX_TIER } from '@auth/config';
 import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
 import type { ModelOptionData } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';

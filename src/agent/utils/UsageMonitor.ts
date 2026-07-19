@@ -1,7 +1,3 @@
-import {
-  USAGE_LOG_FLUSH_OUTCOME,
-  UsageLogService,
-} from '@telemetry/UsageLogService';
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
@@ -14,8 +10,12 @@ import type {
   UsageRoute,
 } from '@shared/schemas';
 import { UsageProviderSchema } from '@shared/schemas/usage';
-import { roundTo } from '@utils/core';
+import {
+  USAGE_LOG_FLUSH_OUTCOME,
+  UsageLogService,
+} from '@telemetry/UsageLogService';
 import type { UsageLogStats } from '@telemetry/UsageLogTypes';
+import { roundTo } from '@utils/core';
 import type { ModelCapabilities, ModelConfig } from 'llm-zoo';
 
 /**

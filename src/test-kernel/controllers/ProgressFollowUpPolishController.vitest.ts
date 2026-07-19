@@ -1,13 +1,10 @@
-// Standard library imports
+// Node imports
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
 import { describe, it } from 'vitest';
 
-// Local imports - controllers
-import { ProgressFollowUpPolishController } from '@controllers/progressView/ProgressFollowUpPolishController';
-
-// Local imports - agent
+// Local imports
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AgentConfigSchema,
@@ -15,8 +12,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import type { WorkflowTaskState } from '@agent/core/state/TaskState';
 import type { FileContext } from '@agent/runtime/textEnhancement';
-
-// Local imports - shared
+import { ProgressFollowUpPolishController } from '@controllers/progressView/ProgressFollowUpPolishController';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
 function createWorkflowTaskState(

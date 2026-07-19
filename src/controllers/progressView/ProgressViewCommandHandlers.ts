@@ -1,8 +1,8 @@
-// Local imports - shared
+// Local imports
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { AgentCategoryFilter, StreamTabId } from '@shared/schemas';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   ProgressViewInboundHandlerRegistry,
   ProgressViewInboundMessage,
@@ -19,8 +19,6 @@ import {
   persistExternalInquiryAction,
 } from '@tools/inquiry';
 import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
-
-// Local imports - utilities
 import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
 
 type ProgressViewMessage<C extends ProgressViewInboundMessage['command']> =

@@ -1,9 +1,8 @@
-// Node.js imports
+// Node imports
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 
-// Local imports - history domain
-import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
+// Local imports
 import {
   deleteAllExecutions,
   deleteExecution,
@@ -16,18 +15,15 @@ import {
 } from '@agent/core/state/executionRequests';
 import type { TaskState } from '@agent/core/state/TaskState';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-
-// Local imports - IPC contracts
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { ExecutionId } from '@shared/schemas';
-import { formatExecutionHistoryRetention } from '@shared/copy/executionHistory';
-
-// Local imports - controller types
+import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
 import type {
   ChatExportController,
   ExportInputStatus,
 } from '@controllers/settingsView/ChatExportController';
 import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
+import type { ExecutionId } from '@shared/schemas';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { formatExecutionHistoryRetention } from '@shared/copy/executionHistory';
 
 type HistoryExportFormat = 'md' | 'tex' | 'html';
 

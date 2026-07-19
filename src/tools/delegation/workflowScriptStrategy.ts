@@ -10,7 +10,7 @@
  * Host-agnostic, VS Code-free.
  */
 
-// Local imports - agent runtime
+// Local imports
 import { readWorkflowScriptCheckpoint } from '@agent/workflowScript';
 import type {
   WorkflowAgentInvocation,
@@ -24,23 +24,17 @@ import type {
   WorkflowControlRegistry,
   WorkflowRunControl,
 } from '@agent/runtime/workflowControlRegistry';
-
-// Local imports - shared
-import { DELIVERY_TAG } from '@shared/deliveryTags';
 import type { ExecutionId } from '@shared/schemas';
+import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
-
-// Local imports - tools
 import {
   formatChildRunDelivery,
   formatChildRunError,
 } from '@tools/deliveryEnvelope';
-
-// Local imports - utilities
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateSummary } from '@utils/text/stringUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
-// Local imports - delegation
+// Local file imports
 import {
   runPersistedWorkflowScriptWithProgress,
   sumCurrentWorkflowRunCost,

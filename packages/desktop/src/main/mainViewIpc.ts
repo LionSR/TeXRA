@@ -1,3 +1,5 @@
+import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
+import type { MainViewStartupOptions } from '@controllers/mainView/MainViewStartupController';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import { installDesktopHostBridge } from './hostBridge.js';
 import { createDesktopExecutionIpc } from './desktopExecutionIpc.js';
@@ -23,8 +25,6 @@ import type { DesktopProgressIpc } from './desktopProgressIpc.js';
 import type { DesktopPromptIpc } from './desktopPromptController.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
-import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
-import type { MainViewStartupOptions } from '@controllers/mainView/MainViewStartupController';
 
 export interface DesktopMainViewIpcOptions {
   debugMode?: boolean;

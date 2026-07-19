@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { setupPlatform } from '@test/support/setupPlatform';
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { TraceEmitter } from '@agent/trace';
 import {
@@ -13,6 +12,7 @@ import {
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
 import type { ExecutionId } from '@shared/schemas';
+import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createWorkflowScriptStrategy,
   type WorkflowScriptStrategyParams,

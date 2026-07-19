@@ -29,8 +29,8 @@ import { parseCriticismAnnotations } from '@latex/criticismParser';
 import * as logger from '@logger/logUtils';
 import type { AddOutputFilesPayload, OutputFileInfo } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'InlineCriticism';
 const COLLECTION_NAME = 'texra-criticism';

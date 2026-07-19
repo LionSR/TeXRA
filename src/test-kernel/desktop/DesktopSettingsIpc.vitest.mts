@@ -1,16 +1,16 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { FakeStateStore } from '@test/support/FakePlatform';
 import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
+import type { StateStore } from '@platform/interfaces';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_GIT_MARK_COMMITS } from '@shared/schemas/stateSettings';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import {
   isWorktreeSupportEnabled,
   setWorktreeSupportEnabled,
 } from '@utils/config/worktreeConfig';
 import { getGitAuthorEnv, setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 import {
   createStubDesktopAgentSettingsController,
   createStubDesktopCrashReportingSettingsController,
@@ -19,7 +19,7 @@ import {
   createStubDesktopSettingsUiHost,
   createStubDesktopToolingSettingsController,
 } from './desktopSettingsTestSupport';
-import type { StateStore } from '@platform/interfaces';
+import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
 const computeModelOptionsData = vi.hoisted(() =>
   vi.fn(async (models: readonly string[] = []) =>

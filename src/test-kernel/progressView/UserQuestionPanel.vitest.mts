@@ -2,14 +2,12 @@
 import { JSDOM } from 'jsdom';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-// Local imports - progress view component types
+// Local imports
 import type { UserQuestionPanel } from '@progressView/frontend/components/UserQuestionPanel';
-
-// Local imports - shared constants
 import type { UserQuestionPrompt } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
-// Local imports - test utilities
+// Local file imports
 import { installAttachInternalsFallback } from '../settings/litComponentTestUtils';
 
 const originalGlobals = {

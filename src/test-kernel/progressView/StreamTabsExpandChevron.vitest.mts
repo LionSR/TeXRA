@@ -1,13 +1,11 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - progressView frontend
+// Local imports
 import type { StreamTabs } from '@progressView/frontend/components/StreamTabs';
-
-// Local imports - shared schemas
 import { AgentCategory, type StreamTabInfo } from '@shared/schemas';
 
-// Local imports - test utilities
+// Local file imports
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 function makeStream(name: string): StreamTabInfo {

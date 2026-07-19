@@ -1,13 +1,9 @@
 // Test support imports
-import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - progress backend
-import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
-
-// Local imports - runtime
+// Local imports
 import type {
   BashSettlement,
   HostBashApprovalResult,
@@ -19,8 +15,8 @@ import type {
 } from '@agent/runtime/HostInteractions';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
-
-// Local imports - shared
+import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
+import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 import type {
   AgentProposalPermission,
   BashPermission,
@@ -31,12 +27,10 @@ import type {
   ToolEditPermission,
   UserQuestionPermission,
 } from '@shared/schemas';
+import { createTestSession } from '@test/support/sessionTestUtils';
 
-// Local imports - desktop test paths
+// Local file imports
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
-
-// Local type imports - progress backend
-import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 
 interface DesktopHostInteractions {
   approvePendingDelegatedWork(

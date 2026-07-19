@@ -1,21 +1,21 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
-// Third-party imports
+// Node imports
 import * as assert from 'node:assert';
+
+// Third-party imports
 import pDefer from 'p-defer';
 import { describe, it, beforeEach, afterEach } from 'vitest';
 
-// Local imports - tests
-import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
-
-// Local imports - agent types
+// Local imports
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-
-// Local imports - tools
 import type { StreamTabId } from '@shared/schemas';
+import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { TextEditorTool } from '@tools/TextEditorTool';
 import { WriteFileTool } from '@tools/WriteTool';
 import {

@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import { strict as assert } from 'node:assert';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -13,14 +13,7 @@ import {
   ReasoningEffort,
 } from 'llm-zoo';
 
-// Local imports - platform
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-
-// Local imports - test support
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
-
-// Local imports - agent
+// Local imports
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
@@ -35,15 +28,14 @@ import {
   logContextManagementFromResponse,
   SHORT_CACHE_CONTROL,
 } from '@agent/modelHandlers/anthropic/anthropicContextManagement';
-
-// Local imports - auth (stubbed via vi.spyOn)
 import * as serverKeysModule from '@auth/serverKeys';
-
-// Local imports - utilities
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { setupPlatform } from '@test/support/setupPlatform';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { pathToLocation } from '@utils/files';
 import * as configUtils from '@utils/config/configUtils';
 
-// Type imports
+// Third-party imports
 import type {
   ContentBlock,
   ContentBlockParam,

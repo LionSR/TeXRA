@@ -18,14 +18,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ZodError } from 'zod';
 
-import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
+import type { PermissionState } from '@progressView/frontend/permissionState';
 import {
   appState,
   permissions$,
   placement,
   resetProgressState,
 } from '@progressView/frontend/progressState';
-import type { PermissionState } from '@progressView/frontend/permissionState';
+import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
 import type { StreamTabId } from '@shared/schemas';
 import { MAIN_VIEW_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {

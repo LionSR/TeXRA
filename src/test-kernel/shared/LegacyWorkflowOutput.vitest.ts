@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
@@ -7,7 +7,6 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
-import { installPlatform } from '@test/support/setupPlatform';
 import {
   findFilesFromPatterns,
   resolveHousekeepingTargets,
@@ -19,6 +18,7 @@ import {
   midEraWorkflowOutputStem,
   normalizeLegacyModel,
 } from '@shared/constants/workflowOutput';
+import { installPlatform } from '@test/support/setupPlatform';
 
 describe('filename-era workflow output grammar', () => {
   let workspacePath: string;

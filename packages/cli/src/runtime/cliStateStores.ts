@@ -1,9 +1,8 @@
 import * as path from 'node:path';
 
+import type { StateStore, StorageProvider } from '@platform/interfaces';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
-
-import type { StateStore, StorageProvider } from '@platform/interfaces';
 
 export interface CliStateStores {
   readonly storage: StorageProvider;

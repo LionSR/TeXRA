@@ -4,9 +4,9 @@ import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemo
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { ModelOptionData } from '@shared/schemas';
 import type { StateStore } from '@platform/interfaces';
+import type { ModelOptionData } from '@shared/schemas';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
 function createStateStore(): StateStore {
   const values = new Map<string, unknown>();

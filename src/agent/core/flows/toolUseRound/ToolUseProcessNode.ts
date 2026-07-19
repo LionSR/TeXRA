@@ -1,4 +1,4 @@
-// Local imports - core flow primitives
+// Local imports
 import { BaseNode } from '@agent/node';
 import { logWebFetch, logWebSearch } from '@agent/trace';
 import { recordCycleMetrics } from '@agent/core/state/AgentState';
@@ -9,8 +9,6 @@ import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type { ServerToolContentBlock } from '@agent/types/ServerToolTypes';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-
-// Local imports - logging
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { isNonEmptyString, isObject } from '@utils/core';
 import { formatContent } from '@utils/text/xmlUtils';

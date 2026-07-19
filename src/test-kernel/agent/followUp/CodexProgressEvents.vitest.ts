@@ -1,28 +1,24 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - agent
-import { createRunTrace, StreamLogStore } from '@transcript';
+// Local imports
 import { TraceEmitter } from '@agent/trace';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-
-// Local imports - shared
-import { MESSAGE_TYPES } from '@shared/schemas';
 import type {
   ExecutionId,
   StreamTabId,
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
-
-// Local imports - tools
+import { MESSAGE_TYPES } from '@shared/schemas';
 import { publishAgentCliStreamUsage } from '@tools/agentCliShared';
 import { publishCodexTodos, runStreamedTurn } from '@tools/codex';
+import { createRunTrace, StreamLogStore } from '@transcript';
 
-// Local imports - test
+// Local file imports
 import { recordSessionEvents, runEventsOfType } from '../progressTestUtils';
 
-// Type-only imports
+// Third-party imports
 import type {
   CommandExecutionItem,
   Thread,

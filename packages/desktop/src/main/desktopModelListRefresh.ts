@@ -1,6 +1,6 @@
-import { platform } from '@platform/platform';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
+import { platform } from '@platform/platform';
 import type { StateStore } from '@platform/interfaces';
 
 export interface DesktopModelListRefreshOptions {

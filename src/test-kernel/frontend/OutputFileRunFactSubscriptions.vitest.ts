@@ -2,12 +2,12 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { waitForCondition } from '@test/support/asyncTestUtils';
 import type {
   AddOutputFilesPayload,
   OutputFileInfo,
   StreamTabId,
 } from '@shared/schemas';
+import { waitForCondition } from '@test/support/asyncTestUtils';
 import type * as VSCode from 'vscode';
 
 const mocks = vi.hoisted(() => ({

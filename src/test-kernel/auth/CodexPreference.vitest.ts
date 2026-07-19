@@ -1,24 +1,20 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - test support
-import { installPlatform } from '@test/support/setupPlatform';
-
-// Local imports - auth
-import { platform } from '@platform/platform';
+// Local imports
 import {
   CODEX_PREFER_SUBSCRIPTION_KEY,
   isPreferCodexSubscription,
   setPreferCodexSubscription,
 } from '@auth/codex';
-
-// Local imports - platform types
+import { platform } from '@platform/platform';
 import type {
   ConfigInspection,
   ConfigProvider,
   ConfigTarget,
   Disposable,
 } from '@platform/interfaces';
+import { installPlatform } from '@test/support/setupPlatform';
 
 class FolderOverrideConfigProvider implements ConfigProvider {
   private readonly globalValues = new Map<string, unknown>();

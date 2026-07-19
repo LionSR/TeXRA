@@ -1,8 +1,9 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
-import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
@@ -10,6 +11,7 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import {
   cleanupApprovalsForStream,
   cleanupUnscopedApprovals,

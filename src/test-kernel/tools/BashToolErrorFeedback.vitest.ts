@@ -1,26 +1,22 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 
-// Local imports - agent state
+// Local imports
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-
-// Local imports - model handlers
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
 import type { OpenAIResponseToolCall } from '@agent/types/ModelHandlerContracts';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
-
-// Local imports - tools
 import { BashTool } from '@tools/bash';
 import { requestBashApproval } from '@tools/approval/bashApproval';
-import * as agentConfig from '@utils/config/configUtils';
-
-// Local imports - system utilities
 import * as execUtils from '@utils/system/execUtils';
+import * as agentConfig from '@utils/config/configUtils';
 
 vi.mock('@tools/approval/bashApproval', async (importActual) => {
   const actual =

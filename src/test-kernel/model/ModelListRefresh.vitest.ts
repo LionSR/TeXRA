@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import type { StateStore } from '@platform/interfaces';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
 function fakeStateStore(initial: Record<string, unknown> = {}): StateStore {
   const store = new Map<string, unknown>(Object.entries(initial));

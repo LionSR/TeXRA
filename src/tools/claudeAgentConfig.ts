@@ -1,17 +1,20 @@
+// Node imports
 import { createHash } from 'node:crypto';
 import { access } from 'node:fs/promises';
 import * as path from 'node:path';
 
+// Third-party imports
 import { execa } from 'execa';
 
-// Local imports - agent config
-import { platform } from '@platform/platform';
+// Local imports
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
+import { platform } from '@platform/platform';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   CLAUDE_AGENT_DEFAULT_EFFORT,
   CLAUDE_AGENT_DEFAULT_MODEL,
@@ -23,8 +26,9 @@ import {
   type ClaudeAgentModel,
   type ClaudeAgentPermissionMode,
 } from '@shared/schemas/agentCliSettings';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { safeHomedir } from '@utils/system/platformPaths';
+
+// Local file imports
 import { createEnumStateGetter } from './support/enumConfig';
 import {
   CLAUDE_AGENT_NAME,

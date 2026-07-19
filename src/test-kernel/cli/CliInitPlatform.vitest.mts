@@ -2,7 +2,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { UsageLogService } from '@telemetry/UsageLogService';
 import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
@@ -10,6 +9,7 @@ import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { setOutputChannelFactory } from '@logger/logUtils';
 import type { StreamTabId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { UsageLogService } from '@telemetry/UsageLogService';
 import { getSetupPlatform } from '@tools/setup/platform';
 
 type SignalSpyEvent = 'SIGINT' | 'SIGTERM';

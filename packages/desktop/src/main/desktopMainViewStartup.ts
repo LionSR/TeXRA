@@ -1,8 +1,9 @@
+import { computeAgentOptionsData } from '@agent/index/agentRegistry';
 import {
   MainViewStartupController,
   type MainViewStartupOptions,
 } from '@controllers/mainView/MainViewStartupController';
-import { computeAgentOptionsData } from '@agent/index/agentRegistry';
+import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory } from '@shared/schemas/agent';
@@ -13,7 +14,6 @@ import {
   type DesktopMessageHandler,
   type DesktopRenderer,
 } from './desktopIpcTypes.js';
-import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
 
 async function defaultGetAuthStatus(): Promise<MainViewAuthStatus> {
   return { authenticated: false };

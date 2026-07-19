@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { loadInk } from '@test/support/inkTestHarness.mts';
 import { toolDisplaySpanTextProps } from '@cli/chat/tui/panes/ToolUseRow';
 import {
   toolUseDisplayLines,
@@ -8,6 +7,7 @@ import {
 } from '@cli/chat/tui/panes/toolRenderers';
 import type { ConversationEntry } from '@cli/chat/tui/state/cliState';
 import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
+import { loadInk } from '@test/support/inkTestHarness.mts';
 
 function toolUse(
   toolName: string,

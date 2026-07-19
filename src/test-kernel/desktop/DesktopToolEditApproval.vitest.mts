@@ -3,7 +3,6 @@
 import { access, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,15 +11,16 @@ import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInte
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import type { DiffOptions, DiffSession, DiffSource } from '@hosts/uiHosts';
-import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
-import { delay } from '@utils/core';
 
-import { createStubDesktopAgentExecutionHost } from './desktopAgentExecutionTestHarness.mjs';
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
 } from '@platform/interfaces';
+import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
+import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
+import { delay } from '@utils/core';
+import { createStubDesktopAgentExecutionHost } from './desktopAgentExecutionTestHarness.mjs';
+import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
 const approvalTest = (name: string, fn: () => Promise<void>): void => {
   it(name, fn, 30_000);

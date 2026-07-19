@@ -28,8 +28,8 @@ import {
   type DiffViewHost,
 } from '@hosts/uiHosts';
 import type { StreamTabId } from '@shared/schemas';
-import type { LineChanges } from '@shared/schemas/lineChanges';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
+import type { LineChanges } from '@shared/schemas/lineChanges';
 import {
   type LatexPreviewEntry,
   previewProposedLatex,
@@ -45,8 +45,8 @@ import {
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings, pluralize } from '@utils/text/stringUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'nativeToolEditApproval';
 
