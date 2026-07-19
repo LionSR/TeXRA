@@ -101,8 +101,6 @@ export interface SessionExitController {
   readonly install: () => void;
   /** The post-`waitUntilExit` graceful teardown (no-ops after a signal exit). */
   readonly gracefulTeardown: () => Promise<void>;
-  /** Whether a signal exit has already begun (owns its own teardown). */
-  readonly isExiting: () => boolean;
 }
 
 export function createSessionExitController(
@@ -339,6 +337,5 @@ export function createSessionExitController(
     requestInputExit,
     install,
     gracefulTeardown,
-    isExiting: () => exiting,
   };
 }
