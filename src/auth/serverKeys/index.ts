@@ -60,11 +60,13 @@ export function setServerSideKeyService(service: ServerSideKeyService): void {
 export function initializeServerSideKeyAccess(options: {
   state?: StateStore;
   logger?: AuthServiceLogger;
+  notifyIncludedModelAccessChanged?: (enabled: boolean) => void;
 }): void {
   _instance = new ServerSideKeyService(
     `https://${SUPABASE_CUSTOM_DOMAIN}`,
     getTierService(options.logger),
     options.state ?? null,
     options.logger,
+    options.notifyIncludedModelAccessChanged,
   );
 }

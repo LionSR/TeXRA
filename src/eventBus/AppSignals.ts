@@ -80,7 +80,17 @@ class AppSignals implements AppSignalsLike {
   }
 
   emit<K extends AppSignal>(event: K, payload: AppSignalPayloads[K]): void {
-    this.emitter.emit(event, payload);
+    let listenerFailed = false;
+    let firstError: unknown;
+    for (const listener of this.emitter.rawListeners(event)) {
+      try {
+        listener(payload);
+      } catch (error) {
+        if (!listenerFailed) firstError = error;
+        listenerFailed = true;
+      }
+    }
+    if (listenerFailed) throw firstError;
   }
 }
 

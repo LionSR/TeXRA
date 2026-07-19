@@ -81,8 +81,15 @@ function createTierService(): FakeTierService {
 function createService(
   tierService: TierService,
   state: StateStore | null = null,
+  notifyIncludedModelAccessChanged?: (enabled: boolean) => void,
 ): ServerSideKeyService {
-  return new ServerSideKeyService('https://example.test', tierService, state);
+  return new ServerSideKeyService(
+    'https://example.test',
+    tierService,
+    state,
+    undefined,
+    notifyIncludedModelAccessChanged,
+  );
 }
 
 describe('ServerSideKeyService', () => {
@@ -97,21 +104,41 @@ describe('ServerSideKeyService', () => {
   it('persists setting changes and fires change events', async () => {
     const tier = createTierService();
     const state = new MemoryState({ [USE_INCLUDED_ACCESS_KEY]: false });
-    const service = createService(tier.service, state);
     const changes: boolean[] = [];
-    const dispose = appSignals.on('includedModelAccessChanged', (value) => {
+    const service = createService(tier.service, state, (value) => {
       changes.push(value);
     });
 
-    try {
-      await service.setUseIncludedModelAccess(true);
+    await service.setUseIncludedModelAccess(true);
 
-      assert.equal(state.get(USE_INCLUDED_ACCESS_KEY, false), true);
-      assert.deepEqual(changes, [true]);
-      assert.equal(tier.clearCacheCalls, 1);
-      assert.equal(tier.getConfigCalls, 0);
+    assert.equal(state.get(USE_INCLUDED_ACCESS_KEY, false), true);
+    assert.deepEqual(changes, [true]);
+    assert.equal(tier.clearCacheCalls, 1);
+    assert.equal(tier.getConfigCalls, 0);
+  });
+
+  it('continues notifying after a listener fails', async () => {
+    const tier = createTierService();
+    const changes: boolean[] = [];
+    const service = createService(tier.service, null, (value) => {
+      appSignals.emit('includedModelAccessChanged', value);
+    });
+    const disposeFailing = appSignals.on('includedModelAccessChanged', () => {
+      throw new Error('listener failed');
+    });
+    const disposeRecording = appSignals.on(
+      'includedModelAccessChanged',
+      (value) => {
+        changes.push(value);
+      },
+    );
+
+    try {
+      await service.setUseIncludedModelAccess(false);
+      assert.deepEqual(changes, [false]);
     } finally {
-      dispose();
+      disposeFailing();
+      disposeRecording();
     }
   });
 });

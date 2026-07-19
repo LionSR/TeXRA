@@ -312,6 +312,9 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeServerSideKeyAccess({
     state: context.globalState,
     logger,
+    notifyIncludedModelAccessChanged: (enabled) => {
+      appSignals.emit('includedModelAccessChanged', enabled);
+    },
   });
 
   // Seed first-install defaults (e.g. disabled tools) before anything writes

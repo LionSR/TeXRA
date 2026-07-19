@@ -14,7 +14,6 @@
  * - free tier: Included non-premium models (up to $3/M input)
  */
 
-import { appSignals } from '@eventBus/AppSignals';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { SupabaseClient } from '../SupabaseClient';
 import {
@@ -98,6 +97,9 @@ export class ServerSideKeyService {
     private readonly tierService: TierService,
     private readonly globalState: StateStore | null = null,
     private readonly logger: AuthServiceLogger = NOOP_AUTH_SERVICE_LOGGER,
+    private readonly notifyIncludedModelAccessChanged: (
+      enabled: boolean,
+    ) => void = () => {},
   ) {
     this.useIncludedModelAccess =
       this.globalState?.get<boolean>(USE_INCLUDED_ACCESS_KEY, true) ?? true;
@@ -142,7 +144,14 @@ export class ServerSideKeyService {
       // its own auth'd fetch in parallel with fetchAccessStatus(), and
       // an anonymous pre-fetch here would populate the 'anon' cache slot
       // rather than the 'auth' slot needed for the access check.
-      appSignals.emit('includedModelAccessChanged', value);
+      try {
+        this.notifyIncludedModelAccessChanged(value);
+      } catch (error) {
+        this.logger.error(
+          CHANNEL,
+          `Event listener failed: ${toErrorMessage(error)}`,
+        );
+      }
     }
   }
 
