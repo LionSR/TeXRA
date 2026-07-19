@@ -327,7 +327,7 @@ state — it always no-op'd. It also contradicted the suite's documented intent
 (`runCoordinators.vitest.ts`: "does not fall back to default coordinators when a run
 has none"). Removed the `legacyCoordinators` object and the three now-dead exported
 singletons (`planApprovalCoordinator`/`proposalCoordinator`/`retryCoordinator`);
-resolve-side misses now no-op via optional chaining. Verified: `test:kernel`
+resolve-side misses now no-op via optional chaining. Verified: `test`
 runtime suite (13 tests) + root/test-kernel typecheck + eslint all green.
 
 **Still pending (verified present):**
