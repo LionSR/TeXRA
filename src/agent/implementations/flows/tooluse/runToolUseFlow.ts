@@ -21,7 +21,10 @@ import {
   readPersistedFlowRecord,
   stampFlowRecordSchemaVersion,
 } from '@agent/node/persistedFlow';
-import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
+import {
+  AgentCategory,
+  type AgentToolUseSetting,
+} from '@agent/core/definition/AgentDataclass';
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
@@ -44,6 +47,10 @@ import { deriveRunOutcome } from '@shared/streams/streamStatus';
 
 // Local imports - tools and flow
 import { getDefaultToolRegistry } from '@tools/registry';
+import {
+  buildTerminalTool,
+  buildTerminalToolRegistry,
+} from '@tools/structuredOutput';
 import { TaskRunFileService } from '@utils/files';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
@@ -110,6 +117,12 @@ export interface RunToolUseFlowResult {
    * runs.
    */
   totalCostUsd?: number;
+  /**
+   * Value the model submitted through the synthetic `submit_output` terminal
+   * tool, already validated by that tool's Zod schema. Present only when the
+   * run's config carried an `outputSchema` and the model called the tool.
+   */
+  structured?: unknown;
 }
 
 class ToolUseFlowError extends Error {
@@ -178,15 +191,35 @@ export async function runToolUseFlow<C = unknown>(
     streamId,
     runSession.followUps,
   );
-  const registry = toolRegistry ?? getDefaultToolRegistry();
+  const baseRegistry = toolRegistry ?? getDefaultToolRegistry();
   const { tools: resolvedTools } = await resolveAgentTools({
     tools: setting.tools,
-    registry,
+    registry: baseRegistry,
     logger,
     approvalPromptsUnavailable: runContext.approvalPromptsUnavailable,
     runtimeUnavailableTools: runContext.runtimeUnavailableTools,
     toolInjections: input.toolInjections,
   });
+
+  // Unforced structured-output floor: when the config declares an output
+  // schema, append a synthetic `submit_output` terminal tool to the
+  // model-facing list and route lookups for it through a per-run registry
+  // overlay. The model finishes by calling the tool; its own Zod schema
+  // validates the call (with the existing ZodError -> retry repair), and
+  // `capture` records the validated value into this flow-local slot.
+  const outputSchema =
+    input.config.agentCategory === AgentCategory.ToolUse
+      ? input.config.outputSchema
+      : undefined;
+  let pendingStructuredOutput: ToolUseRunShared['structured'];
+  let registry = baseRegistry;
+  if (outputSchema) {
+    const terminalTool = buildTerminalTool(outputSchema, (value) => {
+      pendingStructuredOutput = value;
+    });
+    resolvedTools.push(terminalTool.definition);
+    registry = buildTerminalToolRegistry(baseRegistry, terminalTool);
+  }
 
   const kv = getExecutionStore(executionId);
 
@@ -197,6 +230,7 @@ export async function runToolUseFlow<C = unknown>(
     toolRegistry: registry,
     resumeShared: input.resume?.shared ?? null,
     persistTodos: (todos) => kv.writeTodos(todos),
+    getPendingStructuredOutput: () => pendingStructuredOutput,
     fileService: new TaskRunFileService(executionId),
   };
   const switchedHandlers = new Set<ToolUseServices<C>['modelHandler']>();
@@ -601,10 +635,21 @@ export async function runToolUseFlow<C = unknown>(
     }
   }
 
+  if (
+    outputSchema !== undefined &&
+    outcome === RUN_OUTCOME.COMPLETED &&
+    shared.structured === undefined
+  ) {
+    throw new Error(
+      'Structured-output run completed without calling submit_output.',
+    );
+  }
+
   return {
     outcome,
     lastResponse,
     touchedFiles,
     totalCostUsd,
+    structured: shared.structured,
   };
 }

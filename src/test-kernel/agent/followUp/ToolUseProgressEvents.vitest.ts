@@ -32,6 +32,7 @@ import { StreamLogStore } from '@transcript/StreamLogStore';
 import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
 import { TraceEmitter } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ToolUseCycleNode } from '@agent/implementations/flows/tooluse/nodes/ToolUseCycleNode';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
@@ -75,7 +76,7 @@ function createPrepResult(
   return {
     shouldSkipCycle,
     messages: [],
-    runState: { totalRounds: 0 } as CyclePrepResult['runState'],
+    runState: AgentRunStateSnapshotSchema.parse({}),
     workspaceState,
     userChannels: { input: {}, transient: {} },
   };
@@ -146,6 +147,22 @@ describe('tool-use progress events', () => {
     expect(error).toHaveBeenCalledWith('Model claude-opus-4-7 not found', {
       messageType: MESSAGE_TYPES.ERROR,
     });
+  });
+
+  it('persists a completed cycle structured result in shared state', async () => {
+    const prepRes = createPrepResult(AgentWorkspaceState.create());
+    const shared: Partial<ToolUseRunShared> = {};
+    const structured = { title: 'Durable result' };
+    const node = new ToolUseCycleNode().setServices({
+      getPendingStructuredOutput: () => structured,
+    } as unknown as ToolUseServices);
+
+    await node.post(shared as ToolUseRunShared, prepRes, {
+      outcome: 'completed',
+      messages: [],
+    });
+
+    expect(shared.structured).toEqual(structured);
   });
 });
 

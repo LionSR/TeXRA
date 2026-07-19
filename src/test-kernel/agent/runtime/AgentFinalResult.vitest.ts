@@ -109,6 +109,57 @@ describe('AgentFinalResult', () => {
     });
   });
 
+  it('surfaces structured output on the workflow envelope', () => {
+    const flowResult: AgentFlowResult = {
+      category: 'workflow',
+      outcome: 'completed',
+      executionId: 'abcdefabcdef' as ExecutionId,
+      streamId: 'stream:workflow' as StreamTabId,
+      outputs: [],
+      compileFailures: [],
+    };
+
+    expect(
+      buildAgentFinalResult({ flowResult, structured: { title: 'Lemma 1' } }),
+    ).toMatchObject({
+      category: 'workflow',
+      structured: { title: 'Lemma 1' },
+    });
+  });
+
+  it('surfaces structured output on the tool-use envelope', () => {
+    const flowResult: AgentFlowResult = {
+      category: 'toolUse',
+      outcome: 'completed',
+      executionId: 'abcdefabcdef' as ExecutionId,
+      streamId: 'stream:tool-use' as StreamTabId,
+    };
+
+    expect(
+      buildAgentFinalResult({ flowResult, structured: [1, 2, 3] }),
+    ).toMatchObject({
+      category: 'toolUse',
+      structured: [1, 2, 3],
+    });
+  });
+
+  it('surfaces the flow result own structured value when the source omits it', () => {
+    const flowResult: AgentFlowResult = {
+      category: 'toolUse',
+      outcome: 'completed',
+      executionId: 'abcdefabcdef' as ExecutionId,
+      streamId: 'stream:tool-use' as StreamTabId,
+      structured: { title: 'Captured' },
+    };
+
+    // The caller passed no `structured`, so the flow result's own captured
+    // value must surface without the caller re-threading it.
+    expect(buildAgentFinalResult({ flowResult })).toMatchObject({
+      category: 'toolUse',
+      structured: { title: 'Captured' },
+    });
+  });
+
   it.each(['failed', 'cancelled'] as RunOutcome[])(
     'allows an error path to preserve the %s outcome',
     (outcome) => {
@@ -124,6 +175,16 @@ describe('AgentFinalResult', () => {
         category: 'toolUse',
         outcome: 'completed',
         executionId: 'abcdefabcdef',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects structured values that cannot be persisted as JSON', () => {
+    expect(
+      AgentFinalResultSchema.safeParse({
+        category: 'toolUse',
+        outcome: 'completed',
+        structured: { count: 1n },
       }).success,
     ).toBe(false);
   });
