@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const MODEL_HANDLER_COMPATIBILITY_KEYS = [
+const MODEL_HANDLER_COMPATIBILITY_KEYS = [
   'ModelHandlerValidation',
   'ModelHandlerOpenAIResponse',
   'ModelHandlerOpenRouterNative',

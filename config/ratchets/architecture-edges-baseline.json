@@ -62,7 +62,6 @@
     { "from": "replacement", "to": "logger", "kind": "value" },
     { "from": "replacement", "to": "shared", "kind": "value" },
     { "from": "replacement", "to": "utils", "kind": "value" },
-    { "from": "shared", "to": "agent", "kind": "type-only" },
     { "from": "shared", "to": "common", "kind": "value" },
     { "from": "shared", "to": "logger", "kind": "value" },
     { "from": "shared", "to": "platform", "kind": "type-only" },

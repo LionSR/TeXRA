@@ -30,7 +30,7 @@ type ApprovalBypassEvent =
   | 'updateSuperYoloBypassState';
 
 /** The three independently-tracked bypass kinds `SessionApprovals` owns. */
-export type BypassAncestryKind = 'toolEdit' | 'bash' | 'proposal';
+type BypassAncestryKind = 'toolEdit' | 'bash' | 'proposal';
 
 const ALL_BYPASS_ANCESTRY_KINDS: readonly BypassAncestryKind[] = [
   'toolEdit',

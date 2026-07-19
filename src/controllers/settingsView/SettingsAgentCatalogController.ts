@@ -65,7 +65,7 @@ export type SettingsAgentPresetApplyResult =
  * stores each agent as its resolved `source:name` key, but older workspaces
  * persisted bare agent names — match either so a legacy roster keeps working.
  */
-export function enabledKeysIncludeAgent(
+function enabledKeysIncludeAgent(
   enabledKeys: readonly string[],
   entry: { source: AgentSource; name: string },
 ): boolean {
