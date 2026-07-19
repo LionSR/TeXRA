@@ -73,53 +73,53 @@ interface ProviderConfig {
 }
 
 /** Provider routing metadata shared by relay discovery and forwarding. */
-export const PROVIDER_CONFIGS = {
-  openai: {
+export const PROVIDER_CONFIGS = Object.freeze({
+  openai: Object.freeze({
     baseUrl: 'https://api.openai.com',
     envKey: 'OPENAI_API_KEY',
     authType: 'bearer',
-  },
-  anthropic: {
+  }),
+  anthropic: Object.freeze({
     baseUrl: 'https://api.anthropic.com',
     envKey: 'ANTHROPIC_API_KEY',
     authType: 'x-api-key',
-  },
-  google: {
+  }),
+  google: Object.freeze({
     baseUrl: 'https://generativelanguage.googleapis.com',
     envKey: 'GOOGLE_API_KEY',
     authType: 'x-goog-api-key',
-  },
-  xai: {
+  }),
+  xai: Object.freeze({
     baseUrl: 'https://api.x.ai',
     envKey: 'XAI_API_KEY',
     authType: 'bearer',
-  },
-  deepseek: {
+  }),
+  deepseek: Object.freeze({
     baseUrl: 'https://api.deepseek.com',
     envKey: 'DEEPSEEK_API_KEY',
     authType: 'bearer',
-  },
-  moonshot: {
+  }),
+  moonshot: Object.freeze({
     baseUrl: 'https://api.moonshot.cn',
     envKey: 'MOONSHOT_API_KEY',
     authType: 'bearer',
-  },
-  dashscope: {
+  }),
+  dashscope: Object.freeze({
     baseUrl: 'https://dashscope-intl.aliyuncs.com',
     envKey: 'DASHSCOPE_API_KEY',
     authType: 'bearer',
-  },
-  minimax: {
+  }),
+  minimax: Object.freeze({
     baseUrl: 'https://api.minimax.io',
     envKey: 'MINIMAX_API_KEY',
     authType: 'bearer',
-  },
-  glm: {
+  }),
+  glm: Object.freeze({
     baseUrl: 'https://api.z.ai',
     envKey: 'GLM_API_KEY',
     authType: 'bearer',
-  },
-} as const satisfies Record<string, ProviderConfig>;
+  }),
+} as const satisfies Record<string, ProviderConfig>);
 
 interface RelayModel {
   shortName: string;
