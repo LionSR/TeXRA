@@ -10,6 +10,7 @@ describe('tool registry aliases', () => {
   });
 
   it('keeps legacy crossref_doi configs on the unified Crossref tool', () => {
+    // Remove with the dated Crossref alias row in #6981 (2026-08-19).
     const [tool] = resolveToolDefinitions(['crossref_doi']);
     const [canonicalTool] = resolveToolDefinitions(['crossref_search']);
 
@@ -18,6 +19,7 @@ describe('tool registry aliases', () => {
   });
 
   it('replaces legacy object-form schemas with the canonical tool contract', () => {
+    // Remove with the dated Crossref alias row in #6981 (2026-08-19).
     const [tool] = resolveToolDefinitions([
       {
         name: 'crossref_doi',
@@ -37,6 +39,7 @@ describe('tool registry aliases', () => {
   });
 
   it('deduplicates aliases that resolve to the same canonical tool', () => {
+    // Remove with the dated Crossref alias row in #6981 (2026-08-19).
     expect(
       resolveToolDefinitions(['crossref_search', 'crossref_doi']).map(
         (tool) => tool.name,
