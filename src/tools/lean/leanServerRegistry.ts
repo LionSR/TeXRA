@@ -17,7 +17,7 @@ import {
   formatResultCount,
 } from '@utils/text/stringUtils';
 
-import { LEAN_SERVER_MODE_LABELS } from './leanConstants';
+import { LEAN_SERVER_MODE_LABELS } from './leanTypes';
 
 type LeanServerMode = keyof typeof LEAN_SERVER_MODE_LABELS;
 

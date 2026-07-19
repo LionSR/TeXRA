@@ -11,10 +11,11 @@
  * LSP requests).
  */
 
-import type { LeanFileCommand, LeanProjectCommand } from './leanConstants';
-import type { LspHover } from './lspTypes';
 import type {
+  LeanFileCommand,
+  LeanProjectCommand,
   LeanDiagnostic,
+  LspHover,
   LspResult,
   PlainGoal,
   PlainTermGoal,
