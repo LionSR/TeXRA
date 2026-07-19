@@ -187,11 +187,13 @@ Useful for finding the right lemma when you know roughly what type it should hav
 
   /**
    * Execute a single Loogle query and return a per-query result.
+   * `hits` carries the raw matches for batched-query aggregation; it is
+   * intentionally kept off `ToolResult`, which only exposes the rendered text.
    */
   private async executeSingle(
     query: string,
     limit: number,
-  ): Promise<{ query: string; result: ToolResult }> {
+  ): Promise<{ query: string; result: ToolResult; hits: LoogleHit[] }> {
     try {
       const data = await this.fetchLoogle(query);
 
@@ -203,6 +205,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
             : '';
         return {
           query,
+          hits: [],
           result: {
             status: 'error',
             summary: 'No results',
@@ -216,6 +219,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
       if (hits.length === 0) {
         return {
           query,
+          hits: [],
           result: {
             status: 'executed',
             summary: 'No results',
@@ -230,11 +234,11 @@ Useful for finding the right lemma when you know roughly what type it should hav
 
       return {
         query,
+        hits,
         result: {
           status: 'executed',
           summary: formatResultCount(hits.length, 'result'),
           output: formatted,
-          results: hits,
         },
       };
     } catch (error) {
@@ -245,6 +249,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
       if (isTimeoutError(err)) {
         return {
           query,
+          hits: [],
           result: {
             status: 'error',
             summary: 'Timeout',
@@ -257,6 +262,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
       }
       return {
         query,
+        hits: [],
         result: {
           status: 'error',
           summary: 'Loogle search failed',
@@ -285,16 +291,14 @@ Useful for finding the right lemma when you know roughly what type it should hav
     const sections: string[] = [];
     let errorCount = 0;
 
-    for (const { query: q, result } of results) {
+    for (const { query: q, result, hits } of results) {
       const resultText =
         result.status === 'error' ? result.error : (result.output ?? '');
       sections.push(`## Query: \`${q}\`\n\n${resultText}`);
       if (result.status === 'error') {
         errorCount++;
       }
-      if (result.results) {
-        allResults.push(...(result.results as LoogleHit[]));
-      }
+      allResults.push(...hits);
     }
 
     const totalHits = allResults.length;
@@ -314,7 +318,6 @@ Useful for finding the right lemma when you know roughly what type it should hav
         status: 'error',
         summary,
         error: output,
-        results: totalHits > 0 ? allResults : undefined,
       };
     }
 
@@ -322,7 +325,6 @@ Useful for finding the right lemma when you know roughly what type it should hav
       status: 'executed',
       summary,
       output,
-      results: totalHits > 0 ? allResults : undefined,
     };
   }
 }

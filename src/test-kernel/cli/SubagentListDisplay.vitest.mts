@@ -53,7 +53,6 @@ function workflowAgentSlice(
     conversation: undefined,
     roundStage: undefined,
     entries: [],
-    queuedFollowUps: 0,
     queuedFollowUpMessages: [],
     activeProcesses: [],
     todos: [],
