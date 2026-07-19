@@ -3,23 +3,22 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports - agent
-import type { AgentTrace } from '@agent/trace';
+import { noopTrace, type AgentTrace } from '@agent/trace';
 import { uploadToolAttachments } from '@agent/modelHandlers/anthropic/anthropicTools';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
-function createLoggerStub(): { logger: AgentTrace; warnMessages: string[] } {
+function createWarningRecorder(): {
+  logger: AgentTrace;
+  warnMessages: string[];
+} {
   const warnMessages: string[] = [];
-  const logger: Partial<AgentTrace> = {
-    streamId: 'test-channel',
-    debug: () => {},
-    info: () => {},
+  const logger: AgentTrace = {
+    ...noopTrace,
     warn: (message: string) => {
       warnMessages.push(message);
     },
-    error: () => {},
-    domain: () => {},
-  } as Partial<AgentTrace>;
-  return { logger: logger as AgentTrace, warnMessages };
+  };
+  return { logger, warnMessages };
 }
 
 /**
@@ -33,7 +32,7 @@ function createLoggerStub(): { logger: AgentTrace; warnMessages: string[] } {
  */
 describe('anthropicTools.uploadToolAttachments attachment failure policy (#7465)', () => {
   it('degrades a failed upload to unsupported, reports it, and still uploads the rest', async () => {
-    const { logger, warnMessages } = createLoggerStub();
+    const { logger, warnMessages } = createWarningRecorder();
 
     const attachments: ToolFileAttachment[] = [
       {

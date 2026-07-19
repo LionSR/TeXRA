@@ -3,60 +3,29 @@ import { strict as assert } from 'node:assert';
 
 // Third-party imports
 import { describe, it } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelConfig,
-  ModelProvider,
-  ReasoningEffort,
-} from 'llm-zoo';
+import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
-// Local imports - agent
-import type { AgentTrace } from '@agent/trace';
+// Local imports - test support and agent
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { noopTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerGLM } from '@agent/modelHandlers/openai/modelHandlerGLM';
 import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
 import { ModelHandlerXAI } from '@agent/modelHandlers/openai/modelHandlerXAI';
 
-function buildConfig(
-  provider: ModelProvider,
-  overrides: Partial<ModelConfig> = {},
-): ModelConfig {
-  return {
-    name: 'test-model',
-    fullName: 'test-model',
-    shortName: 'test-model',
-    provider,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 200000,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsVision: false,
-      ...(overrides.capabilities ?? {}),
-    },
-    openRouterOnly: false,
-    label: 'Test Model',
-    ...overrides,
-  };
-}
-
-function createLoggerStub(): Partial<AgentTrace> {
-  return {
-    debug: () => {
-      /* no-op */
-    },
-    info: () => {
-      /* no-op */
-    },
-    warn: () => {
-      /* no-op */
-    },
-    error: () => {
-      /* no-op */
-    },
-  };
-}
+const NO_VISION_CAPABILITIES = Object.freeze({ supportsVision: false });
+const MOONSHOT_TEST_CONFIG = Object.freeze({
+  provider: ModelProvider.MOONSHOT,
+  capabilities: NO_VISION_CAPABILITIES,
+});
+const GLM_TEST_CONFIG = Object.freeze({
+  provider: ModelProvider.GLM,
+  capabilities: NO_VISION_CAPABILITIES,
+});
+const XAI_TEST_CONFIG = Object.freeze({
+  provider: ModelProvider.XAI,
+  capabilities: NO_VISION_CAPABILITIES,
+});
 
 function createClientStub() {
   const createCalls: any[] = [];
@@ -97,17 +66,16 @@ describe('OpenAI-compatible provider request params', () => {
     'keeps Kimi K2.7 Code alias %s on required defaults',
     async (fullName) => {
       const handler = new ModelHandlerKimi(
-        buildConfig(ModelProvider.MOONSHOT, {
+        buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
           name: 'kimi27codeT',
           fullName,
           capabilities: {
-            ...DEFAULT_MODEL_CAPABILITIES,
             supportsReasoning: true,
             supportsVision: true,
           },
         }),
       );
-      handler.setLogger(createLoggerStub() as AgentTrace);
+      handler.setLogger({ ...noopTrace });
       (handler as any).getStreamingConfig = () => false;
       (handler as any).estimateTokenCount = async () => 100;
 
@@ -127,17 +95,16 @@ describe('OpenAI-compatible provider request params', () => {
     'does not disable Kimi K2.7 alias %s during compaction',
     async (fullName) => {
       const handler = new ModelHandlerKimi(
-        buildConfig(ModelProvider.MOONSHOT, {
+        buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
           name: 'kimi27codeT',
           fullName,
           capabilities: {
-            ...DEFAULT_MODEL_CAPABILITIES,
             supportsReasoning: true,
             supportsVision: true,
           },
         }),
       );
-      handler.setLogger(createLoggerStub() as AgentTrace);
+      handler.setLogger({ ...noopTrace });
       handler.setAgentCategory(AgentCategory.ToolUse);
       handler.requestCompaction();
       (handler as any).getStreamingConfig = () => false;
@@ -162,16 +129,15 @@ describe('OpenAI-compatible provider request params', () => {
 
   it('uses the fixed Kimi K2.5 temperature during client-side compaction', async () => {
     const handler = new ModelHandlerKimi(
-      buildConfig(ModelProvider.MOONSHOT, {
+      buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
         name: 'kimi25T',
         fullName: 'kimi-k2.5',
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
         },
       }),
     );
-    handler.setLogger(createLoggerStub() as AgentTrace);
+    handler.setLogger({ ...noopTrace });
     handler.setAgentCategory(AgentCategory.ToolUse);
     handler.requestCompaction();
     (handler as any).getStreamingConfig = () => false;
@@ -194,16 +160,15 @@ describe('OpenAI-compatible provider request params', () => {
 
   it('pins Kimi K2.5 non-reasoning chat requests to temperature 0.6 and disables thinking (#7081)', async () => {
     const handler = new ModelHandlerKimi(
-      buildConfig(ModelProvider.MOONSHOT, {
+      buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
         name: 'kimi25',
         fullName: 'kimi-k2.5',
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: false,
         },
       }),
     );
-    handler.setLogger(createLoggerStub() as AgentTrace);
+    handler.setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => false;
     (handler as any).estimateTokenCount = async () => 100;
 
@@ -220,16 +185,15 @@ describe('OpenAI-compatible provider request params', () => {
 
   it('pins Kimi K2.5 thinking chat requests to temperature 1 and leaves the API default (#7081)', async () => {
     const handler = new ModelHandlerKimi(
-      buildConfig(ModelProvider.MOONSHOT, {
+      buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
         name: 'kimi25T',
         fullName: 'kimi-k2.5',
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
         },
       }),
     );
-    handler.setLogger(createLoggerStub() as AgentTrace);
+    handler.setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => false;
     (handler as any).estimateTokenCount = async () => 100;
 
@@ -251,11 +215,10 @@ describe('OpenAI-compatible provider request params', () => {
       // its reasoning_effort field accepts only 'max' — the shared OpenAI clamp
       // would otherwise lower our MAX tier to 'xhigh', which Moonshot rejects.
       const handler = new ModelHandlerKimi(
-        buildConfig(ModelProvider.MOONSHOT, {
+        buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
           name: 'kimi3',
           fullName,
           capabilities: {
-            ...DEFAULT_MODEL_CAPABILITIES,
             supportsReasoning: true,
             supportsReasoningEffort: true,
             reasoningEffort: ReasoningEffort.MAX,
@@ -263,7 +226,7 @@ describe('OpenAI-compatible provider request params', () => {
           },
         }),
       );
-      handler.setLogger(createLoggerStub() as AgentTrace);
+      handler.setLogger({ ...noopTrace });
       (handler as any).getStreamingConfig = () => false;
       (handler as any).estimateTokenCount = async () => 100;
 
@@ -284,11 +247,10 @@ describe('OpenAI-compatible provider request params', () => {
     'preserves thinking in Kimi K3 alias %s compaction summaries',
     async (fullName) => {
       const handler = new ModelHandlerKimi(
-        buildConfig(ModelProvider.MOONSHOT, {
+        buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
           name: 'kimi3',
           fullName,
           capabilities: {
-            ...DEFAULT_MODEL_CAPABILITIES,
             supportsReasoning: true,
             supportsReasoningEffort: true,
             reasoningEffort: ReasoningEffort.MAX,
@@ -296,7 +258,7 @@ describe('OpenAI-compatible provider request params', () => {
           },
         }),
       );
-      handler.setLogger(createLoggerStub() as AgentTrace);
+      handler.setLogger({ ...noopTrace });
       handler.setAgentCategory(AgentCategory.ToolUse);
       handler.requestCompaction();
       (handler as any).getStreamingConfig = () => false;
@@ -325,16 +287,15 @@ describe('OpenAI-compatible provider request params', () => {
     // this fix only 'kimi-k2.5' was hardcoded here, so this non-reasoning
     // entry silently kept thinking on at the Moonshot API default.
     const handler = new ModelHandlerKimi(
-      buildConfig(ModelProvider.MOONSHOT, {
+      buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
         name: 'kimi26',
         fullName: 'kimi-k2.6',
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: false,
         },
       }),
     );
-    handler.setLogger(createLoggerStub() as AgentTrace);
+    handler.setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => false;
     (handler as any).estimateTokenCount = async () => 100;
 
@@ -353,16 +314,15 @@ describe('OpenAI-compatible provider request params', () => {
 
   it('leaves Kimi K2.6 thinking requests on the API default (#7081)', async () => {
     const handler = new ModelHandlerKimi(
-      buildConfig(ModelProvider.MOONSHOT, {
+      buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
         name: 'kimi26T',
         fullName: 'kimi-k2.6',
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
         },
       }),
     );
-    handler.setLogger(createLoggerStub() as AgentTrace);
+    handler.setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => false;
     (handler as any).estimateTokenCount = async () => 100;
 
@@ -378,18 +338,17 @@ describe('OpenAI-compatible provider request params', () => {
 
   it('maps GLM low reasoning effort to the provider minimum', async () => {
     const handler = new ModelHandlerGLM(
-      buildConfig(ModelProvider.GLM, {
+      buildTestModelConfig(GLM_TEST_CONFIG, {
         name: 'glm52',
         fullName: 'glm-5.2',
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsReasoningEffort: true,
           reasoningEffort: ReasoningEffort.LOW,
         },
       }),
     );
-    handler.setLogger(createLoggerStub() as AgentTrace);
+    handler.setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => false;
 
     const { client, createCalls } = createClientStub();
@@ -405,18 +364,17 @@ describe('OpenAI-compatible provider request params', () => {
 
   it('maps GLM max reasoning effort to the provider maximum', async () => {
     const handler = new ModelHandlerGLM(
-      buildConfig(ModelProvider.GLM, {
+      buildTestModelConfig(GLM_TEST_CONFIG, {
         name: 'glm52',
         fullName: 'glm-5.2',
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsReasoningEffort: true,
           reasoningEffort: ReasoningEffort.MAX,
         },
       }),
     );
-    handler.setLogger(createLoggerStub() as AgentTrace);
+    handler.setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => false;
 
     const { client, createCalls } = createClientStub();
@@ -431,18 +389,17 @@ describe('OpenAI-compatible provider request params', () => {
 
   it('passes medium reasoning effort through for current Grok models', async () => {
     const handler = new ModelHandlerXAI(
-      buildConfig(ModelProvider.XAI, {
+      buildTestModelConfig(XAI_TEST_CONFIG, {
         name: 'grok45',
         fullName: 'grok-4.5',
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsReasoningEffort: true,
           reasoningEffort: ReasoningEffort.MEDIUM,
         },
       }),
     );
-    handler.setLogger(createLoggerStub() as AgentTrace);
+    handler.setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => false;
 
     const { client, createCalls } = createClientStub();
@@ -457,18 +414,17 @@ describe('OpenAI-compatible provider request params', () => {
 
   it('clamps above-high reasoning effort to high for Grok models', async () => {
     const handler = new ModelHandlerXAI(
-      buildConfig(ModelProvider.XAI, {
+      buildTestModelConfig(XAI_TEST_CONFIG, {
         name: 'grok45',
         fullName: 'grok-4.5',
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsReasoningEffort: true,
           reasoningEffort: ReasoningEffort.XHIGH,
         },
       }),
     );
-    handler.setLogger(createLoggerStub() as AgentTrace);
+    handler.setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => false;
 
     const { client, createCalls } = createClientStub();
