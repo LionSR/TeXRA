@@ -5,18 +5,15 @@ import { tryPlatform } from '@platform/platform';
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 
 // Local imports - auth
-import {
-  DEFAULT_OAUTH_PROVIDER,
-  DEFAULT_SESSION_EXPIRY_MS,
-} from '@auth/config';
+import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 import { createHostAuthCoordinator } from '@auth/SupabaseAuthCoordinator';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
+  DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
   toStorableSupabaseSession,
   type SupabaseSession,
   type SupabaseSessionCoordinator,
 } from '@auth/SupabaseSession';
-import { type OAuthProvider } from '@auth/sharedConfig';
 import {
   RELAY_TOKEN_ENV_VAR,
   fetchRelayTokenStatus,
@@ -207,7 +204,7 @@ export async function signInCliSupabaseDeviceCode(
   // The token endpoint mints a native GoTrue session (auth-github shape), so
   // standard Supabase refresh applies — no custom refresh flag.
   const session = toStorableSupabaseSession(exchange, {
-    defaultExpiryMs: DEFAULT_SESSION_EXPIRY_MS,
+    defaultExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
   });
   await authCoordinator.storeSession(session);
   getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });

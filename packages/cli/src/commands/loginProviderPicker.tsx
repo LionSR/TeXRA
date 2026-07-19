@@ -1,7 +1,7 @@
 import { render, Box, Text, useApp } from 'ink';
 
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
-import type { OAuthProvider } from '@auth/sharedConfig';
+import type { OAuthProvider } from '@auth/config';
 
 import { tuiOutputStreamForColor } from '../chat/tui/render/noColorOutput';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';

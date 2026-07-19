@@ -19,7 +19,7 @@ import { platform } from '@platform/platform';
 import { listExecutions } from '@agent/storage';
 import { setPreferCodexSubscription, type CodexSession } from '@auth/codex';
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
-import { type OAuthProvider } from '@auth/sharedConfig';
+import { type OAuthProvider } from '@auth/config';
 import { type SupabaseSession } from '@auth/SupabaseSession';
 import { useCancellableEffect } from '@cli/chat/tui/state/useCancellableEffect';
 import { LoadingIndicator } from '@cli/chat/tui/ui/LoadingIndicator';

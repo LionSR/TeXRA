@@ -12,7 +12,7 @@ import {
   getConfiguredRelayToken,
   markRelayTokenRejected,
 } from './relayToken';
-import { UserTierSchema } from './sharedConfig';
+import { UserTierSchema } from './config';
 import type { AuthTokenProvider, SessionTokens } from './TokenProvider';
 
 /**

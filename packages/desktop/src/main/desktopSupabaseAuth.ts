@@ -17,7 +17,7 @@ import {
   initializeServerSideKeyAccess,
 } from '@auth/serverKeys';
 import type { AuthServiceLogger } from '@auth/serviceLogger';
-import { type OAuthProvider } from '@auth/sharedConfig';
+import { type OAuthProvider } from '@auth/config';
 import type { AuthCallbackUriParts } from '@auth/core/authCallback';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { TEXRA_PROTOCOL } from '../desktopProtocol.js';

@@ -5,7 +5,7 @@ import {
   LEVEL_TO_EFFORT,
 } from '@agent/modelHandlers/support/reasoningEffort';
 import { resolveEffectiveHelperModel } from '@agent/runtime/helperModelName';
-import { FREE_TIER, MAX_TIER } from '@auth/sharedConfig';
+import { FREE_TIER, MAX_TIER } from '@auth/config';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { isGpt5ModelName } from '@model/modelNames';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';

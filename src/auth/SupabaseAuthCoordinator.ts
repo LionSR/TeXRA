@@ -1,7 +1,6 @@
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
-  DEFAULT_SESSION_EXPIRY_MS,
   GITHUB_TOKEN_REFRESH_URL,
   SUPABASE_CONFIG,
   SUPABASE_SESSION_KEY,
@@ -9,6 +8,7 @@ import {
 } from './config';
 import { SupabaseClient } from './SupabaseClient';
 import {
+  DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
   SupabaseSessionCoordinator,
   type SupabaseSessionLog,
   type SupabaseSessionStorage,
@@ -52,7 +52,7 @@ export function createHostAuthCoordinator(
     getClient: () => SupabaseClient.getClient(),
     whenReady: init.whenReady ?? (async () => {}),
     tokenRefreshThresholdMs: TOKEN_REFRESH_THRESHOLD_MS,
-    defaultSessionExpiryMs: DEFAULT_SESSION_EXPIRY_MS,
+    defaultSessionExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
     githubTokenRefreshUrl: GITHUB_TOKEN_REFRESH_URL,
     edgeFunctionTimeoutMs: DEFAULT_AUTH_EDGE_FUNCTION_TIMEOUT_MS,
     log: init.log,

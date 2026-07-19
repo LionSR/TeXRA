@@ -23,7 +23,7 @@ import {
 } from '@shared/schemas/spendingStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
-import { SERVER_SIDE_CACHE_TTL_MS, type UserTier } from '../sharedConfig';
+import { SERVER_SIDE_CACHE_TTL_MS, type UserTier } from '../config';
 import {
   NOOP_AUTH_SERVICE_LOGGER,
   type AuthServiceLogger,

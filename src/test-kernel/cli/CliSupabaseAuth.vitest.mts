@@ -34,7 +34,6 @@ vi.mock('@agent/index', () => ({
 
 vi.mock('@auth/config', () => ({
   DEFAULT_OAUTH_PROVIDER: 'github',
-  DEFAULT_SESSION_EXPIRY_MS: 60_000,
 }));
 
 vi.mock('@auth/SupabaseAuthCoordinator', () => ({
@@ -55,6 +54,7 @@ vi.mock('@auth/SupabaseClient', () => ({
 }));
 
 vi.mock('@auth/SupabaseSession', () => ({
+  DEFAULT_SUPABASE_SESSION_EXPIRY_MS: 60_000,
   toStorableSupabaseSession: mocks.toStorableSupabaseSession,
 }));
 

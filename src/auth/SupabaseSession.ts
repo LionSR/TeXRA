@@ -20,12 +20,10 @@ import {
 import type { AuthTokenProvider, SessionTokens } from './TokenProvider';
 import type { SupabaseClient as Client } from '@supabase/supabase-js';
 
-// Public entry point: external consumers import the session value-object
-// helpers, the fetch-with-timeout utility, and this coordinator through
-// `@auth/SupabaseSession`. Implementation is split into the modules above. Only
-// the symbols consumers actually use are forwarded; the Zod schemas and the
-// callback/parse-option types stay internal to `supabaseSessionTypes`.
-export { fetchWithTimeout } from './fetchWithTimeout';
+// Public entry point for the session value-object helpers and coordinator.
+// Fetch timeout behavior is owned by `@auth/fetchWithTimeout`. Only the symbols
+// consumers actually use are forwarded; the Zod schemas and callback/parse
+// option types stay internal to `supabaseSessionTypes`.
 export {
   DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
   parseStoredSupabaseSession,
