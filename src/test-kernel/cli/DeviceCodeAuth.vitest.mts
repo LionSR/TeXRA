@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   CLI_DEVICE_AUTH_URL_PROMPT,
@@ -78,6 +78,20 @@ function pollDeps(
 }
 
 describe('CLI device-code sign-in (texra login --device)', () => {
+  it('cancels a pending poll before its first network request', async () => {
+    const controller = new AbortController();
+    const fetchImpl = vi.fn() as unknown as typeof fetch;
+    const completion = pollForDeviceSession(AUTHORIZATION, {
+      fetchImpl,
+      signal: controller.signal,
+    });
+
+    controller.abort();
+
+    await expect(completion).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it('parses a device authorization and defaults a missing interval', () => {
     const parsed = DeviceAuthorizationSchema.parse({
       ...AUTHORIZATION,

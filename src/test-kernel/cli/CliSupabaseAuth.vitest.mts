@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
     })),
     clearServerKeyCaches: vi.fn(),
     getCliSecrets: vi.fn(),
+    openBrowser: vi.fn(),
     pollForDeviceSession: vi.fn(),
     requestDeviceAuthorization: vi.fn(),
     setUseIncludedModelAccess: vi.fn(),
@@ -88,7 +89,7 @@ vi.mock('@cli/runtime/cliSecrets', () => ({
 }));
 
 vi.mock('@cli/runtime/browser', () => ({
-  openBrowser: vi.fn(),
+  openBrowser: mocks.openBrowser,
 }));
 
 vi.mock('@cli/runtime/supabaseAuthCallbackServer', () => ({
@@ -187,6 +188,132 @@ describe('CLI Supabase auth', () => {
       GlobalStateKey.USE_OPENROUTER,
       false,
     );
+  });
+
+  it('does not store a device session when cancellation follows polling', async () => {
+    const controller = new AbortController();
+    mocks.requestDeviceAuthorization.mockResolvedValue({
+      device_code: 'device-code',
+      expires_in: 600,
+      interval: 5,
+      user_code: 'ABCD-EFGH',
+      verification_uri: 'https://auth.example/device',
+    });
+    mocks.pollForDeviceSession.mockImplementation(async () => {
+      controller.abort();
+      return { access_token: 'device-token' };
+    });
+    const { signInCliSupabaseDeviceCode } = await loadSupabaseAuth();
+
+    await expect(
+      signInCliSupabaseDeviceCode({ signal: controller.signal }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+
+    expect(mocks.authCoordinator.storeSession).not.toHaveBeenCalled();
+  });
+
+  it('forwards interactive cancellation to both TeXRA transports', async () => {
+    const controller = new AbortController();
+    const session = { access_token: 'token' };
+    const callbackServer = {
+      close: vi.fn().mockResolvedValue(undefined),
+      redirectTo: 'http://127.0.0.1:0/callback',
+      waitForSession: vi.fn().mockResolvedValue(session),
+    };
+    const authorization = {
+      device_code: 'device-code',
+      expires_in: 600,
+      interval: 5,
+      user_code: 'ABCD-EFGH',
+      verification_uri: 'https://auth.example/device',
+    };
+    mocks.startLoopbackCallbackServer.mockResolvedValue(callbackServer);
+    mocks.signInWithOAuth.mockResolvedValue({
+      data: { url: 'https://auth.example/login' },
+      error: null,
+    });
+    mocks.requestDeviceAuthorization.mockResolvedValue(authorization);
+    mocks.pollForDeviceSession.mockResolvedValue(session);
+    const { signInCliSupabase, signInCliSupabaseDeviceCode } =
+      await loadSupabaseAuth();
+
+    await signInCliSupabase({
+      openBrowser: false,
+      signal: controller.signal,
+    });
+    await signInCliSupabaseDeviceCode({ signal: controller.signal });
+
+    expect(callbackServer.waitForSession).toHaveBeenCalledWith(
+      controller.signal,
+    );
+    expect(mocks.requestDeviceAuthorization).toHaveBeenCalledWith({
+      signal: controller.signal,
+    });
+    expect(mocks.pollForDeviceSession).toHaveBeenCalledWith(authorization, {
+      signal: controller.signal,
+    });
+  });
+
+  it('settles browser sign-in cancellation while its launcher remains pending', async () => {
+    const controller = new AbortController();
+    const callbackServer = {
+      close: vi.fn().mockResolvedValue(undefined),
+      redirectTo: 'http://127.0.0.1:0/callback',
+      waitForSession: vi.fn(
+        (signal: AbortSignal | undefined) =>
+          new Promise((_resolve, reject) => {
+            signal?.addEventListener('abort', () => reject(signal.reason), {
+              once: true,
+            });
+          }),
+      ),
+    };
+    mocks.startLoopbackCallbackServer.mockResolvedValue(callbackServer);
+    mocks.signInWithOAuth.mockResolvedValue({
+      data: { url: 'https://auth.example/login' },
+      error: null,
+    });
+    mocks.openBrowser.mockReturnValue(new Promise(() => {}));
+    const { signInCliSupabase } = await loadSupabaseAuth();
+    const completion = signInCliSupabase({ signal: controller.signal });
+    const rejection = expect(completion).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+
+    await vi.waitFor(() =>
+      expect(callbackServer.waitForSession).toHaveBeenCalledOnce(),
+    );
+    controller.abort();
+
+    await rejection;
+    expect(callbackServer.close).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a completed callback successful if the browser launcher later fails', async () => {
+    let failBrowserLaunch!: (error: Error) => void;
+    const session = { access_token: 'token' };
+    const callbackServer = {
+      close: vi.fn().mockResolvedValue(undefined),
+      redirectTo: 'http://127.0.0.1:0/callback',
+      waitForSession: vi.fn().mockResolvedValue(session),
+    };
+    mocks.startLoopbackCallbackServer.mockResolvedValue(callbackServer);
+    mocks.signInWithOAuth.mockResolvedValue({
+      data: { url: 'https://auth.example/login' },
+      error: null,
+    });
+    mocks.openBrowser.mockReturnValue(
+      new Promise((_resolve, reject) => {
+        failBrowserLaunch = reject;
+      }),
+    );
+    const { signInCliSupabase } = await loadSupabaseAuth();
+
+    await expect(signInCliSupabase()).resolves.toBe(session);
+    failBrowserLaunch(new Error('launcher exited late'));
+    await Promise.resolve();
+
+    expect(callbackServer.close).toHaveBeenCalledOnce();
   });
 
   it('removes cached remote agents after sign-out', async () => {

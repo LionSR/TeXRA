@@ -24,6 +24,11 @@ const CALLBACK_PATH = '/auth-callback';
 const CALLBACK_NONCE_BYTES = 24;
 const MAX_CALLBACK_BODY_BYTES = 8 * 1024;
 
+interface CallbackAttemptState {
+  acceptingCallbacks: boolean;
+  commitStarted: boolean;
+}
+
 class RecoverableCallbackRequestError extends Error {
   constructor(message: string) {
     super(message);
@@ -39,7 +44,7 @@ function isRecoverableCallbackRequestError(
 
 export interface LoopbackCallbackServer {
   readonly redirectTo: string;
-  waitForSession(): Promise<SupabaseSession>;
+  waitForSession(signal?: AbortSignal): Promise<SupabaseSession>;
   close(): Promise<void>;
 }
 
@@ -52,9 +57,19 @@ export async function startLoopbackCallbackServer(
     resolve: resolveSession,
     reject: rejectSession,
   } = pDefer<SupabaseSession>();
+  const attemptState: CallbackAttemptState = {
+    acceptingCallbacks: true,
+    commitStarted: false,
+  };
 
   const server = createServer((request, response) => {
-    void handleCallbackRequest(request, response, authCoordinator, nonce)
+    void handleCallbackRequest(
+      request,
+      response,
+      authCoordinator,
+      nonce,
+      attemptState,
+    )
       .then((session) => {
         if (session) resolveSession(session);
       })
@@ -94,10 +109,20 @@ export async function startLoopbackCallbackServer(
 
   return {
     redirectTo: `http://${LOOPBACK_HOST}:${address.port}${CALLBACK_PATH}`,
-    waitForSession: () =>
-      sessionPromise.finally(() => {
+    waitForSession: (signal) => {
+      if (!signal) return sessionPromise.finally(cleanup);
+      signal.throwIfAborted();
+      const onAbort = (): void => {
+        if (attemptState.commitStarted) return;
+        attemptState.acceptingCallbacks = false;
+        rejectSession(signal.reason);
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      return sessionPromise.finally(() => {
+        signal.removeEventListener('abort', onAbort);
         cleanup();
-      }),
+      });
+    },
     close: async () => {
       cleanup();
       await closeServer(server);
@@ -110,7 +135,13 @@ async function handleCallbackRequest(
   response: ServerResponse,
   authCoordinator: SupabaseSessionCoordinator,
   nonce: string,
+  attemptState: CallbackAttemptState,
 ): Promise<SupabaseSession | undefined> {
+  if (!attemptState.acceptingCallbacks) {
+    throw new RecoverableCallbackRequestError(
+      'This authentication attempt was cancelled.',
+    );
+  }
   const url = new URL(request.url ?? '/', `http://${LOOPBACK_HOST}`);
   if (request.method === 'GET' && url.pathname === CALLBACK_PATH) {
     writeHtml(response, 200, callbackHtml(nonce));
@@ -127,13 +158,25 @@ async function handleCallbackRequest(
         'Authentication callback did not match this login attempt.',
       );
     }
+    if (!attemptState.acceptingCallbacks) {
+      throw new RecoverableCallbackRequestError(
+        'This authentication attempt was cancelled.',
+      );
+    }
     const result = await authCoordinator.createSessionFromCallback({
       path: CALLBACK_PATH,
       query: trimUrlMarker(body.query, '?'),
       fragment: trimUrlMarker(body.fragment, '#'),
     });
     if (!result.success) throw new Error(result.error);
+    if (!attemptState.acceptingCallbacks) {
+      throw new RecoverableCallbackRequestError(
+        'This authentication attempt was cancelled.',
+      );
+    }
 
+    attemptState.commitStarted = true;
+    attemptState.acceptingCallbacks = false;
     await authCoordinator.storeSession(result.session);
     writeHtml(response, 200, successHtml(result.session.account.label));
     return result.session;
