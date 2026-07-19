@@ -325,8 +325,9 @@ describe('desktop settings IPC', () => {
 
     expect(
       settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_NAME,
-        name: 'Desktop TeXRA',
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+        key: WorkspaceStateKey.GIT_AUTHOR_NAME,
+        value: 'Desktop TeXRA',
       }),
     ).toBe(true);
     await Promise.resolve();
@@ -341,8 +342,9 @@ describe('desktop settings IPC', () => {
 
     expect(
       settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_GIT_MARK_COMMITS,
-        enabled: false,
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+        key: WorkspaceStateKey.GIT_MARK_COMMITS,
+        value: false,
       }),
     ).toBe(true);
     await Promise.resolve();
@@ -351,8 +353,9 @@ describe('desktop settings IPC', () => {
 
     expect(
       settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_GIT_WORKTREE_SUPPORT,
-        enabled: true,
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+        key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
+        value: true,
       }),
     ).toBe(true);
     await Promise.resolve();
@@ -889,9 +892,11 @@ describe('desktop settings IPC', () => {
     const { settings, posted } = createCapturedSettingsFixture();
 
     expect(settings.handleMessage({ command: 'unknown' })).toBe(false);
+    // Missing the required `key` — the inbound schema rejects it, so the
+    // dispatcher never claims the message.
     expect(
       settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_NAME,
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
       }),
     ).toBe(false);
     expect(posted).toEqual([]);
