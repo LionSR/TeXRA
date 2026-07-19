@@ -34,6 +34,7 @@ vi.mock('llm-zoo', async (importOriginal) => {
 import {
   FREE_TIER,
   MAX_TIER,
+  PROVIDER_CONFIGS,
   TIER_CONFIG,
   ULTRA_ONLY_PROVIDER_SET,
   ULTRA_TIER,
@@ -47,6 +48,10 @@ describe('relay tier model access', () => {
       SERVER_SIDE_PROVIDER_IDS.toSorted(),
       TIER_CONFIG.providers.toSorted(),
     );
+    assert.equal(Object.isFrozen(PROVIDER_CONFIGS), true);
+    for (const config of Object.values(PROVIDER_CONFIGS)) {
+      assert.equal(Object.isFrozen(config), true);
+    }
   });
 
   it('limits Max to non-Ultra providers and keeps Ultra passthrough', () => {
