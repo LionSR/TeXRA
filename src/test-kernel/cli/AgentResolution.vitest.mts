@@ -2,12 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { SupabaseClient } from '@auth/SupabaseClient';
 
 const mocks = vi.hoisted(() => ({
-  authProvider: {
-    isAuthenticated: vi.fn(),
-    canAccessRemoteAgentCatalog: vi.fn(),
-  },
   getAgent: vi.fn(),
   getAgentsByCategory: vi.fn(),
   getVisibleAgents: vi.fn(),
@@ -21,9 +18,11 @@ vi.mock('@agent/index', () => ({
   loadAgents: mocks.loadAgents,
 }));
 
-vi.mock('@cli/runtime/supabaseAuth', () => ({
-  getCliAuthProvider: () => mocks.authProvider,
-}));
+const isAuthenticatedSpy = vi.spyOn(SupabaseClient, 'isAuthenticated');
+const canAccessRemoteAgentCatalogSpy = vi.spyOn(
+  SupabaseClient,
+  'canAccessRemoteAgentCatalog',
+);
 
 function agent(
   name: string,
@@ -40,10 +39,10 @@ function agent(
 
 describe('CLI agent resolution', () => {
   beforeEach(() => {
-    mocks.authProvider.isAuthenticated.mockReset();
-    mocks.authProvider.isAuthenticated.mockResolvedValue(false);
-    mocks.authProvider.canAccessRemoteAgentCatalog.mockReset();
-    mocks.authProvider.canAccessRemoteAgentCatalog.mockResolvedValue(false);
+    isAuthenticatedSpy.mockReset();
+    isAuthenticatedSpy.mockResolvedValue(false);
+    canAccessRemoteAgentCatalogSpy.mockReset();
+    canAccessRemoteAgentCatalogSpy.mockResolvedValue(false);
     mocks.getAgent.mockReset();
     mocks.getAgentsByCategory.mockReset();
     mocks.getVisibleAgents.mockReset();
@@ -59,9 +58,7 @@ describe('CLI agent resolution', () => {
 
     expect(mocks.loadAgents).toHaveBeenCalledOnce();
     expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
-    expect(
-      mocks.authProvider.canAccessRemoteAgentCatalog,
-    ).toHaveBeenCalledOnce();
+    expect(canAccessRemoteAgentCatalogSpy).toHaveBeenCalledOnce();
   });
 
   it('does a full registry load when the local registry misses', async () => {
@@ -75,15 +72,13 @@ describe('CLI agent resolution', () => {
       includeRemote: false,
     });
     expect(mocks.loadAgents).toHaveBeenNthCalledWith(2);
-    expect(
-      mocks.authProvider.canAccessRemoteAgentCatalog,
-    ).not.toHaveBeenCalled();
+    expect(canAccessRemoteAgentCatalogSpy).not.toHaveBeenCalled();
   });
 
   it('does not treat relay-only model access as remote-catalog access', async () => {
     const local = agent('lean');
-    mocks.authProvider.isAuthenticated.mockResolvedValue(true);
-    mocks.authProvider.canAccessRemoteAgentCatalog.mockResolvedValue(false);
+    isAuthenticatedSpy.mockResolvedValue(true);
+    canAccessRemoteAgentCatalogSpy.mockResolvedValue(false);
     mocks.getAgent.mockReturnValue(local);
     const { resolveCliAgent } = await import('@cli/runtime/agents');
 
@@ -93,13 +88,13 @@ describe('CLI agent resolution', () => {
     expect(mocks.loadAgents).toHaveBeenCalledWith({
       includeRemote: false,
     });
-    expect(mocks.authProvider.isAuthenticated).not.toHaveBeenCalled();
+    expect(isAuthenticatedSpy).not.toHaveBeenCalled();
   });
 
   it('uses launch target category for authenticated remote-priority reloads', async () => {
     const local = agent('lean');
     const remote = agent('lean', 'remote');
-    mocks.authProvider.canAccessRemoteAgentCatalog.mockResolvedValue(true);
+    canAccessRemoteAgentCatalogSpy.mockResolvedValue(true);
     mocks.getAgent.mockReturnValueOnce(local).mockReturnValueOnce(remote);
     const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
 
@@ -123,7 +118,7 @@ describe('CLI agent resolution', () => {
 
   it('does not apply remote priority to source-qualified agent names', async () => {
     const local = agent('local:lean');
-    mocks.authProvider.canAccessRemoteAgentCatalog.mockResolvedValue(true);
+    canAccessRemoteAgentCatalogSpy.mockResolvedValue(true);
     mocks.getAgent.mockReturnValue(local);
     const { resolveCliAgent } = await import('@cli/runtime/agents');
 
@@ -131,9 +126,7 @@ describe('CLI agent resolution', () => {
 
     expect(mocks.loadAgents).toHaveBeenCalledOnce();
     expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
-    expect(
-      mocks.authProvider.canAccessRemoteAgentCatalog,
-    ).not.toHaveBeenCalled();
+    expect(canAccessRemoteAgentCatalogSpy).not.toHaveBeenCalled();
   });
 
   it('uses launch target category for local and remote-fallback lookups', async () => {
