@@ -12,11 +12,11 @@ import {
 import {
   LEAN_FILE_COMMANDS,
   LEAN_PROJECT_COMMANDS,
+  extractHoverText,
   type LeanFileCommand,
   type LeanProjectCommand,
-} from './leanConstants';
+} from './leanTypes';
 import { getLeanLanguageServices } from './leanLanguageServices';
-import { extractHoverText } from './leanTypes';
 
 const LeanDiagnosticsInputSchema = z.strictObject({
   /** Command: list for full messages, count for summary */
