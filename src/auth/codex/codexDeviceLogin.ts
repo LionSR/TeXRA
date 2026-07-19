@@ -68,6 +68,7 @@ export async function loginWithDeviceCode(
         },
         options.signal,
       );
+      options.signal?.throwIfAborted();
       return await options.coordinator.completeDeviceLogin({
         authorizationCode: token.authorization_code,
         codeVerifier: token.code_verifier,
