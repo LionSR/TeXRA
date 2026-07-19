@@ -877,6 +877,7 @@ export class ModelHandlerOpenAI<
     const classified = classifyOpenAIResponse(responseObject);
 
     if (classified.kind === 'errorPayload') {
+      this.logger.debug('Response object', { data: responseObject });
       const errorMsg = `API error: ${JSON.stringify(classified.error)}`;
       this.logger.error(errorMsg);
       throw new Error(errorMsg);
