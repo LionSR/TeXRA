@@ -81,7 +81,7 @@ const BUILTIN_TOOLS: (Omit<ToolDashboardItem, 'status' | 'tools'> & {
     category: 'academic',
     description:
       'Search Crossref for academic publications by query or resolve DOIs to full metadata.',
-    toolNames: ['crossref_doi', 'crossref_search'],
+    toolNames: ['crossref_search'],
     requiresSetup: false,
   },
   {

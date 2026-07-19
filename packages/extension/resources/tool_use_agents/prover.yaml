@@ -18,7 +18,6 @@ settings:
     - arxiv_metadata
     - download_arxiv_source
     - crossref_search
-    - crossref_doi
     - memory
 prompts:
   systemPrompt: |
