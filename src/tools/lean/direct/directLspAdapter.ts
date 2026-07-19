@@ -18,11 +18,12 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { runLakeCommand } from './lakeCommands';
 import { LeanSession } from './leanSession';
 import { setLeanLanguageServices } from '../leanLanguageServices';
-import type { LeanFileCommand, LeanProjectCommand } from '../leanConstants';
 import type { LeanLanguageServices } from '../leanLanguageServices';
-import type { LspHover } from '../lspTypes';
 import type {
+  LeanFileCommand,
+  LeanProjectCommand,
   LeanDiagnostic,
+  LspHover,
   LspResult,
   PlainGoal,
   PlainTermGoal,
