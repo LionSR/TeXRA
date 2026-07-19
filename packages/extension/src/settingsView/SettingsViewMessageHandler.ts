@@ -612,10 +612,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   public async sendGoalList(webview: vscode.Webview): Promise<void> {
     try {
-      await webview.postMessage({
+      const delivered = await webview.postMessage({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
         items: GoalStore.list(),
       });
+      if (!delivered) {
+        throw new Error('settings webview is no longer available');
+      }
     } catch (error) {
       await showLoggedErrorMessage(this.channel, 'Failed to load goals', error);
     }

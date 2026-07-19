@@ -65,7 +65,21 @@ describe('settings goal list', () => {
     expect(platform().workspaceState.get(GOAL_KEY)).toEqual(malformed);
   });
 
-  it('reports goal-list delivery failures through the same boundary', async () => {
+  it('reports a dropped goal-list delivery through the same boundary', async () => {
+    const webview = createWebview();
+    vi.mocked(webview.postMessage).mockResolvedValue(false);
+    const showErrorMessage = vi.spyOn(vscode.window, 'showErrorMessage');
+
+    await expect(
+      createHandlerHarness().sendGoalList(webview),
+    ).resolves.toBeUndefined();
+
+    expect(showErrorMessage).toHaveBeenCalledWith(
+      'Failed to load goals: settings webview is no longer available',
+    );
+  });
+
+  it('reports rejected goal-list deliveries through the same boundary', async () => {
     const webview = createWebview();
     vi.mocked(webview.postMessage).mockRejectedValue(
       new Error('webview disposed'),
