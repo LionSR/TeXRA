@@ -862,19 +862,40 @@ export function buildStatusBarDisplay(
   // A notice must not hide the only indication that an active run is still
   // alive. Keep that liveness compact so the notice remains the focal text.
   let transientLivenessIndex: number | undefined;
-  if (input.transientNotice && isActivePhase(input.status)) {
-    const elapsed =
-      input.elapsedMs === undefined
-        ? ''
-        : ` ${formatCompactDuration(input.elapsedMs)}`;
-    transientLivenessIndex = left.length;
-    left.push({
-      text: `${spinPrefix}${statusLabel}${elapsed}`,
-      compactText:
+  if (input.transientNotice) {
+    if (isActivePhase(input.status)) {
+      const elapsed =
         input.elapsedMs === undefined
-          ? 'run'
-          : `run ${formatCompactDuration(input.elapsedMs)}`,
+          ? ''
+          : ` ${formatCompactDuration(input.elapsedMs)}`;
+      transientLivenessIndex = left.length;
+      left.push({
+        text: `${spinPrefix}${statusLabel}${elapsed}`,
+        compactText:
+          input.elapsedMs === undefined
+            ? 'run'
+            : `run ${formatCompactDuration(input.elapsedMs)}`,
+        color: 'dim',
+      });
+    }
+  } else {
+    left.push({
+      text: `${spinPrefix}${statusLabel}`,
       color: 'dim',
+    });
+    if (isActivePhase(input.status) && input.elapsedMs !== undefined) {
+      left.push({
+        text: formatCompactDuration(input.elapsedMs),
+        color: 'dim',
+        compactPriority: STATUS_BAR_COMPACT_PRIORITY.elapsed,
+      });
+    }
+  }
+  if (input.thinkingActive === true && isActivePhase(input.status)) {
+    left.push({
+      text: 'thinking...',
+      color: COLOR_WARNING,
+      compactPriority: STATUS_BAR_COMPACT_PRIORITY.thinking,
     });
   }
 
@@ -891,25 +912,6 @@ export function buildStatusBarDisplay(
       left.push({
         text: `${formatResultCount(queuedCount, 'queued follow-up')} will be discarded`,
         color: COLOR_ERROR,
-      });
-    }
-  } else {
-    left.push({
-      text: `${spinPrefix}${statusLabel}`,
-      color: 'dim',
-    });
-    if (isActivePhase(input.status) && input.elapsedMs !== undefined) {
-      left.push({
-        text: formatCompactDuration(input.elapsedMs),
-        color: 'dim',
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.elapsed,
-      });
-    }
-    if (input.thinkingActive === true && isActivePhase(input.status)) {
-      left.push({
-        text: 'thinking...',
-        color: COLOR_WARNING,
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.thinking,
       });
     }
   }
