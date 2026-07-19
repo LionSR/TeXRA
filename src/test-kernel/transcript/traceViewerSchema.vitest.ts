@@ -17,6 +17,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   type ExecutionId,
 } from '@shared/schemas';
+import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import {
   parseTraceData,
@@ -107,13 +108,35 @@ describe('trace-viewer TraceDataSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('ignores obsolete delegation depth in exported metadata', () => {
+  it('applies source config defaults to legacy traces', () => {
+    const legacyConfig: Partial<AgentConfig> = config();
+    delete legacyConfig.agent;
+    delete legacyConfig.model;
+    delete legacyConfig.instruction;
+
+    const parsed = TraceDataSchema.parse({
+      executionId: 'abcdef',
+      streamId: 'stream-1',
+      config: legacyConfig,
+      meta: null,
+      entries: [],
+      snapshot: { streamId: 'stream-1' },
+      terminalStatus: null,
+    });
+
+    expect(parsed.config.agent).toBe('correct');
+    expect(parsed.config.model).toBe(DEFAULT_AGENT_MODEL);
+    expect(parsed.config.instruction).toBe('');
+  });
+
+  it('normalizes legacy execution metadata', () => {
     const legacyTrace = {
       executionId: 'abcdef',
       streamId: 'stream-1',
       config: config(),
       meta: {
         timestamp: '2026-07-05T00:00:00.000Z',
+        terminalStatus: EXECUTION_STATUS.ERROR,
         delegationDepth: 2,
       },
       entries: [],
@@ -123,6 +146,7 @@ describe('trace-viewer TraceDataSchema', () => {
 
     const parsed = TraceDataSchema.parse(legacyTrace);
     expect(parsed.meta).not.toHaveProperty('delegationDepth');
+    expect(parsed.meta?.outcome).toBe('failed');
   });
 
   it('throws a clear, identifying error via parseTraceData for a malformed trace', () => {

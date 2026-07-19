@@ -7,7 +7,7 @@
  * comment). `main.ts`'s `loadTrace()` reads this global if present, before
  * falling back to fetching `trace.json`.
  */
-import type { TraceDocument } from './traceAssembler';
+import type { TraceDocument } from './traceDocumentSchema';
 
 const MODULE_SCRIPT_MARKER = '<script type="module"';
 

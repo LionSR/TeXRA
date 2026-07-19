@@ -5,15 +5,17 @@
  */
 
 export {
-  EXECUTION_META_SCHEMA_VERSION,
   type ExecutionKVStore,
-  type ExecutionMeta,
   type TodoEntry,
   type ChildRecord,
   getExecutionStore,
   clearStoreCache,
   isReservedKvKeyName,
 } from './ExecutionKVStore';
+export {
+  EXECUTION_META_SCHEMA_VERSION,
+  type ExecutionMeta,
+} from '@shared/schemas/stream';
 export {
   buildCliWorkflowResultMeta,
   unwrapResultMeta,

@@ -9,32 +9,15 @@
  * discriminated-status pattern so callers can show a precise error instead of
  * a generic failure.
  */
-import { getExecutionStore, type ExecutionMeta } from '@agent/storage';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { getExecutionStore } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
-import type {
-  ExecutionId,
-  ExecutionStatus,
-  StreamLogEntry,
-  StreamSnapshot,
-  StreamTabId,
-} from '@shared/schemas';
+import type { ExecutionId } from '@shared/schemas';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 
 import { StreamLogStore } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
 import { resolvePersistedStreamIdForExecution } from './executionStreamResolver';
-
-export interface TraceDocument {
-  readonly executionId: ExecutionId;
-  readonly streamId: StreamTabId;
-  readonly config: AgentConfig;
-  readonly meta: ExecutionMeta | null;
-  readonly entries: StreamLogEntry[];
-  readonly snapshot: StreamSnapshot;
-  /** `null` when the execution predates outcome tracking or never reached a terminal state. */
-  readonly terminalStatus: ExecutionStatus | null;
-}
+import type { TraceDocument } from './traceDocumentSchema';
 
 export type AssembleTraceResult =
   | { readonly status: 'ok'; readonly trace: TraceDocument }
