@@ -17,6 +17,86 @@ function testSession(): CodexSession {
 }
 
 describe('Codex loopback login', () => {
+  it('closes the callback wait when its host cancels', async () => {
+    const controller = new AbortController();
+    const coordinator = {
+      buildAuthorizeRequest: (port: number): CodexAuthorizeRequest => ({
+        url: 'https://auth.example.test/oauth/authorize',
+        verifier: 'verifier',
+        state: 'state',
+        redirectUri: `http://127.0.0.1:${port}${CODEX_CALLBACK_PATH}`,
+      }),
+    } as unknown as CodexSessionCoordinator;
+    const completion = loginWithLoopback({
+      coordinator,
+      openBrowser: () => controller.abort(),
+      signal: controller.signal,
+    });
+
+    await expect(completion).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('settles cancellation while the browser launcher remains pending', async () => {
+    const controller = new AbortController();
+    let finishBrowserLaunch!: () => void;
+    const coordinator = {
+      buildAuthorizeRequest: (port: number): CodexAuthorizeRequest => ({
+        url: 'https://auth.example.test/oauth/authorize',
+        verifier: 'verifier',
+        state: 'state',
+        redirectUri: `http://127.0.0.1:${port}${CODEX_CALLBACK_PATH}`,
+      }),
+    } as unknown as CodexSessionCoordinator;
+    const completion = loginWithLoopback({
+      coordinator,
+      openBrowser: () =>
+        new Promise<void>((resolve) => {
+          finishBrowserLaunch = resolve;
+        }),
+      signal: controller.signal,
+    });
+    const rejection = expect(completion).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+
+    controller.abort();
+
+    await rejection;
+    finishBrowserLaunch();
+  });
+
+  it('does not exchange a code when cancellation follows its callback', async () => {
+    const controller = new AbortController();
+    let request!: CodexAuthorizeRequest;
+    const completeLoginWithCode = vi.fn();
+    const coordinator = {
+      buildAuthorizeRequest: (port: number): CodexAuthorizeRequest => {
+        request = {
+          url: 'https://auth.example.test/oauth/authorize',
+          verifier: 'verifier',
+          state: 'state',
+          redirectUri: `http://127.0.0.1:${port}${CODEX_CALLBACK_PATH}`,
+        };
+        return request;
+      },
+      completeLoginWithCode,
+    } as unknown as CodexSessionCoordinator;
+    const completion = loginWithLoopback({
+      coordinator,
+      openBrowser: async () => {
+        const callback = new URL(request.redirectUri);
+        callback.searchParams.set('state', request.state);
+        callback.searchParams.set('code', 'authorization-code');
+        await fetch(callback);
+        controller.abort();
+      },
+      signal: controller.signal,
+    });
+
+    await expect(completion).rejects.toMatchObject({ name: 'AbortError' });
+    expect(completeLoginWithCode).not.toHaveBeenCalled();
+  });
+
   it('ignores stale callback errors and accepts a later valid callback', async () => {
     const state = 'expected-state';
     const verifier = 'verifier';

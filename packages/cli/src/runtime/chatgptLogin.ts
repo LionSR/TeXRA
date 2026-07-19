@@ -20,6 +20,7 @@ export interface CliChatGptLoginInit {
 
 export interface CliChatGptLoginOptions {
   readonly writeProgress: (message: string) => void;
+  readonly signal?: AbortSignal;
 }
 
 export type CliChatGptSignOutResult =
@@ -69,6 +70,7 @@ export async function signInCliChatGpt(
           `To sign in with ChatGPT:\n  1. Open ${verificationUrl}\n  2. Enter the one-time code: ${userCode}\nWaiting for approval... (Ctrl-C cancels)`,
         );
       },
+      signal: options.signal,
     });
   }
 
@@ -87,6 +89,7 @@ export async function signInCliChatGpt(
       }
       options.writeProgress(`Open this URL to sign in with ChatGPT:\n${url}`);
     },
+    signal: options.signal,
   });
 }
 

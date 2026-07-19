@@ -67,7 +67,10 @@ export async function selectCliApiModelAccessRoute(
 export async function selectCliModelAccessRoute(
   context: CliContext,
   route: CliModelAccessRoute,
-  options: { readonly writeProgress: (message: string) => void },
+  options: {
+    readonly writeProgress: (message: string) => void;
+    readonly signal?: AbortSignal;
+  },
 ): Promise<CliModelAccessSelectionResult> {
   if (route !== 'chatgpt') {
     return selectCliApiModelAccessRoute(route);

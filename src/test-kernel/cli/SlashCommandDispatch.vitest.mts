@@ -8,11 +8,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import * as codexAuth from '@auth/codex';
 import { handleTuiSlashCommand } from '@cli/chat/tui/commands/handleSlashCommand';
+import { applyCliModelAccessSelection } from '@cli/chat/tui/commands/handlers/apiModeCommands';
 import {
   showCliMemoryList,
   showCliMemoryPreview,
 } from '@cli/chat/tui/commands/handlers/memoryCommands';
-import { type SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashContext';
+import { loginFromChat } from '@cli/chat/tui/commands/handlers/loginCommands';
+import {
+  type SlashCommandContext,
+  type SlashCommandOutput,
+} from '@cli/chat/tui/commands/handlers/slashContext';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import {
   listSlashCommands,
@@ -388,6 +393,40 @@ describe('handleTuiSlashCommand', () => {
     );
   });
 
+  it('exposes cancellation for an interactive sign-in', async () => {
+    let receivedSignal: AbortSignal | undefined;
+    vi.spyOn(chatGptLogin, 'signInCliChatGpt').mockImplementation(
+      (_args, options) => {
+        receivedSignal = options.signal;
+        return new Promise((_resolve, reject) => {
+          options.signal?.addEventListener(
+            'abort',
+            () => reject(options.signal?.reason),
+            { once: true },
+          );
+        });
+      },
+    );
+    const output: SlashCommandOutput = {
+      appendOutcome: vi.fn(),
+      setNotice: vi.fn(),
+      writeProgress: vi.fn(),
+    };
+
+    const completion = loginFromChat(
+      'chatgpt --no-browser',
+      createCliContext(),
+      output,
+    );
+    const rejection = expect(completion).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    completion.abort();
+
+    await rejection;
+    expect(receivedSignal?.aborted).toBe(true);
+  });
+
   it('derives /auth and /api status from the same access overview', async () => {
     registerBuiltinSlashCommands();
     const overview = vi
@@ -454,6 +493,41 @@ describe('handleTuiSlashCommand', () => {
       'Model access: ChatGPT subscription. · This model access setting applies to new chats. The current chat keeps its existing model connection.',
     );
     expect(codexPreferenceVersion.get()).toBe(previousPreferenceVersion + 1);
+  });
+
+  it('exposes cancellation while model access is signing in to ChatGPT', async () => {
+    let receivedSignal: AbortSignal | undefined;
+    vi.spyOn(
+      modelAccessSelection,
+      'selectCliModelAccessRoute',
+    ).mockImplementation((_context, _route, options) => {
+      receivedSignal = options.signal;
+      return new Promise((_resolve, reject) => {
+        options.signal?.addEventListener(
+          'abort',
+          () => reject(options.signal?.reason),
+          { once: true },
+        );
+      });
+    });
+    const output: SlashCommandOutput = {
+      appendOutcome: vi.fn(),
+      setNotice: vi.fn(),
+      writeProgress: vi.fn(),
+    };
+    const completion = applyCliModelAccessSelection(
+      'chatgpt',
+      createContext(createSession()),
+      output,
+    );
+    const rejection = expect(completion).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+
+    completion.abort();
+
+    await rejection;
+    expect(receivedSignal?.aborted).toBe(true);
   });
 
   it('clears TeXRA and ChatGPT credentials on /logout', async () => {
