@@ -9,9 +9,9 @@ import type { ToolResult } from '@shared/schemas/toolResult';
 // Local file imports
 import { defineTool } from './core/define';
 
-type StructuredOutputSchema = {
+type StructuredOutputSchema<TSchema extends z.ZodType = z.ZodType> = {
   readonly jsonSchema: Record<string, unknown>;
-  readonly zodSchema: z.ZodType;
+  readonly zodSchema: TSchema;
 };
 
 const JsonValueSchema = z.json();
@@ -78,6 +78,12 @@ function assertNoHostRegex(schema: unknown): void {
  * and sandbox JSON Schema land on the same Zod validation path and the same
  * provider-facing object schema conversion.
  */
+export function normalizeStructuredOutputSchema<TSchema extends z.ZodType>(
+  input: TSchema,
+): StructuredOutputSchema<TSchema>;
+export function normalizeStructuredOutputSchema(
+  input: z.ZodType | Record<string, unknown>,
+): StructuredOutputSchema;
 export function normalizeStructuredOutputSchema(
   input: z.ZodType | Record<string, unknown>,
 ): StructuredOutputSchema {
