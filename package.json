@@ -7,9 +7,6 @@
     "packages/*"
   ],
   "scripts": {
-    "compile": "corepack pnpm --filter texra compile",
-    "watch": "corepack pnpm --filter texra watch",
-    "package": "corepack pnpm --filter texra package",
     "lint": "node --max-old-space-size=4096 ./node_modules/eslint/bin/eslint.js src packages/extension/src packages/desktop/src packages/cli/src",
     "test": "vitest run --config vitest.config.mjs",
     "test:watch": "vitest --config vitest.config.mjs",
