@@ -5,8 +5,8 @@
 
 import { z } from 'zod';
 
-import { RELAY_TOKENS_BASE_URL } from '@auth/sharedConfig';
-import { fetchWithTimeout } from '@auth/SupabaseSession';
+import { RELAY_TOKENS_BASE_URL } from '@auth/config';
+import { fetchWithTimeout } from '@auth/fetchWithTimeout';
 
 const RELAY_TOKENS_REQUEST_TIMEOUT_MS = 30000;
 

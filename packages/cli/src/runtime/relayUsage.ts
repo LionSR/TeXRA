@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { SUPABASE_CONFIG, getRelaySpendingLimit } from '@auth/sharedConfig';
+import { SUPABASE_CONFIG, getRelaySpendingLimit } from '@auth/config';
 
 const USAGE_PAGE_SIZE = 1000;
 

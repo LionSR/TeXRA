@@ -5,13 +5,13 @@ import { describe, it } from 'vitest';
 // Local imports - auth
 import {
   DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
-  fetchWithTimeout,
   parseStoredSupabaseSession,
   SupabaseSessionCoordinator,
   toStorableSupabaseSession,
   type SupabaseSession,
   type SupabaseSessionStorage,
 } from '@auth/SupabaseSession';
+import { fetchWithTimeout } from '@auth/fetchWithTimeout';
 
 // Third-party imports
 import type {
