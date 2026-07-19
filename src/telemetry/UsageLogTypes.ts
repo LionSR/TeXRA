@@ -20,16 +20,13 @@ const UsageLogStatsSchema = z.object({
   cost: z.number().nonnegative(),
   responseTimeMs: z.number().nonnegative().optional(),
   cachedInputTokens: z.int().nonnegative().optional(),
-  cacheMissInputTokens: z.int().nonnegative().optional(),
-  cacheCreationInputTokens: z.int().nonnegative().optional(),
   reasoningTokens: z.int().nonnegative().optional(),
 });
 
 /**
  * Field names here intentionally follow this wire schema, not
- * `NormalizedUsage`'s (e.g. `cacheCreationInputTokens` vs.
- * `cacheCreationTokens`) — this is the persisted/billing log contract, so
- * renaming it isn't free. Callers building a log payload from
+ * `NormalizedUsage`'s — this is the persisted/billing log contract, so
+ * renaming fields isn't free. Callers building a log payload from
  * `NormalizedUsage` should type their intermediate object as (a `Pick` of)
  * `UsageLogStats` rather than hand-duplicating this field list.
  */
