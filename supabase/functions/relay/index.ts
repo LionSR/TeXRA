@@ -72,6 +72,7 @@ import { cors } from '@hono/hono/cors';
 import { createClient } from '@supabase/supabase-js';
 import { resolveRelayCredential } from '../_shared/relayCiToken.ts';
 import {
+  PROVIDER_CONFIGS,
   TIER_CONFIG,
   TIER_SPENDING_LIMITS,
   getSpendingLimit,
@@ -179,76 +180,7 @@ const SKIP_RESPONSE_HEADERS = new Set([
 // Types
 // =============================================================================
 
-type AuthType = 'bearer' | 'x-api-key' | 'x-goog-api-key';
-
-interface ProviderConfig {
-  baseUrl: string;
-  envKey: string;
-  authType: AuthType;
-}
-
-type ProviderKey =
-  | 'openai'
-  | 'anthropic'
-  | 'google'
-  | 'xai'
-  | 'deepseek'
-  | 'moonshot'
-  | 'dashscope'
-  | 'minimax'
-  | 'glm';
-
-// =============================================================================
-// Provider Configuration
-// =============================================================================
-
-const PROVIDER_CONFIGS: Record<ProviderKey, ProviderConfig> = {
-  openai: {
-    baseUrl: 'https://api.openai.com',
-    envKey: 'OPENAI_API_KEY',
-    authType: 'bearer',
-  },
-  anthropic: {
-    baseUrl: 'https://api.anthropic.com',
-    envKey: 'ANTHROPIC_API_KEY',
-    authType: 'x-api-key',
-  },
-  google: {
-    baseUrl: 'https://generativelanguage.googleapis.com',
-    envKey: 'GOOGLE_API_KEY',
-    authType: 'x-goog-api-key',
-  },
-  xai: {
-    baseUrl: 'https://api.x.ai',
-    envKey: 'XAI_API_KEY',
-    authType: 'bearer',
-  },
-  deepseek: {
-    baseUrl: 'https://api.deepseek.com',
-    envKey: 'DEEPSEEK_API_KEY',
-    authType: 'bearer',
-  },
-  moonshot: {
-    baseUrl: 'https://api.moonshot.cn',
-    envKey: 'MOONSHOT_API_KEY',
-    authType: 'bearer',
-  },
-  dashscope: {
-    baseUrl: 'https://dashscope-intl.aliyuncs.com',
-    envKey: 'DASHSCOPE_API_KEY',
-    authType: 'bearer',
-  },
-  minimax: {
-    baseUrl: 'https://api.minimax.io',
-    envKey: 'MINIMAX_API_KEY',
-    authType: 'bearer',
-  },
-  glm: {
-    baseUrl: 'https://api.z.ai',
-    envKey: 'GLM_API_KEY',
-    authType: 'bearer',
-  },
-};
+type ProviderKey = keyof typeof PROVIDER_CONFIGS;
 
 // =============================================================================
 // Helper Functions
