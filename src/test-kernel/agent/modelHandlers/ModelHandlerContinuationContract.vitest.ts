@@ -20,14 +20,15 @@ import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHan
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { noopTrace } from '@agent/trace/noopTrace';
 
-// Type imports
+// Local imports - test fixtures
 import { buildTestModelConfig } from './testFixtures';
+
+// Type imports
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 import type { ChatMessages } from '@openrouter/sdk/models';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
 import type { Interactions } from '@google/genai';
-
 
 type ContinuationCase = {
   name: string;
@@ -221,13 +222,11 @@ const cases: ContinuationCase[] = [
     name: 'OpenRouter native',
     run: () => {
       const handler = new ModelHandlerOpenRouterNative(
-        buildTestModelConfig(
-          {
-            provider: ModelProvider.OPENAI,
-            capabilities: CONTINUATION_CAPABILITIES,
-          },
-          { openrouterFullName: 'openai/test-model' },
-        ),
+        buildTestModelConfig({
+          provider: ModelProvider.OPENAI,
+          capabilities: CONTINUATION_CAPABILITIES,
+          openrouterFullName: 'openai/test-model',
+        }),
       );
       handler.setLogger({ ...noopTrace });
       const messages: ChatMessages[] = [

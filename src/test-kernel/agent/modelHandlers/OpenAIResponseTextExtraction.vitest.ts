@@ -1,11 +1,16 @@
+// Third-party imports
 import { describe, expect, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
+// Local imports - agent
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { noopTrace } from '@agent/trace/noopTrace';
-import { buildTestModelConfig } from './testFixtures';
-import type { ResponseInputItem } from 'openai/resources/responses/responses';
 
+// Local imports - test fixtures
+import { buildTestModelConfig } from './testFixtures';
+
+// Type imports
+import type { ResponseInputItem } from 'openai/resources/responses/responses';
 
 function createHandler(): ModelHandlerOpenAIResponse {
   const handler = new ModelHandlerOpenAIResponse(

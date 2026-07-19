@@ -20,6 +20,7 @@ import { noopTrace } from '@agent/trace/noopTrace';
 // Type imports
 import type { ToolDefinition } from '@model';
 
+// Local imports - test fixtures
 import { buildTestModelConfig } from './testFixtures';
 
 function thinkingFor(
@@ -209,7 +210,6 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
     const handler = new ModelHandlerDeepSeek(
       buildTestModelConfig(DEEPSEEK_TEST_CONFIG, {
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsVision: false,
           reasoningEffort: ReasoningEffort.LOW,
@@ -237,7 +237,6 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
       buildTestModelConfig(DEEPSEEK_TEST_CONFIG, {
         fullName: 'deepseek-v4-pro',
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsVision: false,
           reasoningEffort: ReasoningEffort.XHIGH,
@@ -264,7 +263,6 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
       buildTestModelConfig(DEEPSEEK_TEST_CONFIG, {
         fullName: 'deepseek-v4-pro',
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsVision: false,
           reasoningEffort: ReasoningEffort.MAX,
@@ -292,7 +290,6 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
     const handler = new ModelHandlerDeepSeek(
       buildTestModelConfig(DEEPSEEK_TEST_CONFIG, {
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsVision: false,
         },
@@ -355,7 +352,6 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
     const handler = new ModelHandlerDeepSeek(
       buildTestModelConfig(DEEPSEEK_TEST_CONFIG, {
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsVision: false,
         },
@@ -398,7 +394,6 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
     const handler = new ModelHandlerDeepSeek(
       buildTestModelConfig(DEEPSEEK_TEST_CONFIG, {
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsVision: false,
         },
@@ -433,7 +428,6 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
     const handler = new ModelHandlerDeepSeek(
       buildTestModelConfig(DEEPSEEK_TEST_CONFIG, {
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsVision: false,
         },
@@ -511,7 +505,6 @@ describe('ModelHandlerOpenAI DeepSeek official max_tokens ceiling (#7081)', () =
         fullName: 'deepseek-legacy-chat',
         maxOutputTokens: 8192,
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: false,
         },
       }),
@@ -535,7 +528,6 @@ describe('ModelHandlerOpenAI DeepSeek official max_tokens ceiling (#7081)', () =
         fullName: 'deepseek-v4-flash',
         maxOutputTokens: 393216,
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: false,
         },
       }),
@@ -559,7 +551,6 @@ describe('ModelHandlerOpenAI DeepSeek official max_tokens ceiling (#7081)', () =
         fullName: 'deepseek-legacy-reasoner',
         maxOutputTokens: 8192,
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
         },
       }),

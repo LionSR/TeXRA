@@ -5,11 +5,7 @@ import {
   RequestTimeoutError as OpenRouterRequestTimeoutError,
 } from '@openrouter/sdk/models/errors';
 import { describe, it, afterEach, vi } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  ModelProvider,
-  ReasoningEffort,
-} from 'llm-zoo';
+import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 // Local imports - handler under test
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
@@ -19,6 +15,7 @@ import { noopTrace } from '@agent/trace/noopTrace';
 import * as serverKeysModule from '@auth/serverKeys';
 import * as providerConfigModule from '@utils/config/providerConfig';
 
+// Local imports - test fixtures
 import { buildTestModelConfig } from './testFixtures';
 
 const OPENROUTER_TEST_CONFIG = {
@@ -140,7 +137,6 @@ describe('ModelHandlerOpenRouterNative Moonshot fixed temperature', () => {
         openrouterFullName: 'moonshotai/kimi-k3',
         provider: ModelProvider.MOONSHOT,
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsReasoningEffort: true,
           reasoningEffort: ReasoningEffort.MAX,
@@ -269,7 +265,6 @@ describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
       buildTestModelConfig(OPENROUTER_TEST_CONFIG, {
         provider: ModelProvider.MOONSHOT,
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsReasoningEffort: true,
           reasoningEffort: ReasoningEffort.MAX,
@@ -284,7 +279,6 @@ describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
     const handler = new ModelHandlerOpenRouterNative(
       buildTestModelConfig(OPENROUTER_TEST_CONFIG, {
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsReasoningEffort: true,
           reasoningEffort: ReasoningEffort.MEDIUM,
@@ -300,7 +294,6 @@ describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
     const handler = new ModelHandlerOpenRouterNative(
       buildTestModelConfig(OPENROUTER_TEST_CONFIG, {
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsReasoningEffort: true,
           reasoningEffort: ReasoningEffort.XHIGH,
@@ -341,7 +334,6 @@ describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
         buildTestModelConfig(OPENROUTER_TEST_CONFIG, {
           provider,
           capabilities: {
-            ...DEFAULT_MODEL_CAPABILITIES,
             supportsReasoning,
             supportsReasoningEffort,
           },

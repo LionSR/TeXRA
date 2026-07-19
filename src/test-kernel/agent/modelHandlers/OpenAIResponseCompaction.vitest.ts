@@ -14,10 +14,11 @@ import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHan
 import { noopTrace } from '@agent/trace/noopTrace';
 import type { ProviderCapabilityProfile } from '@model/providerCapabilities';
 
-// Type imports
+// Local imports - test fixtures
 import { buildTestModelConfig } from './testFixtures';
-import type { ResponseInputItem } from 'openai/resources/responses/responses';
 
+// Type imports
+import type { ResponseInputItem } from 'openai/resources/responses/responses';
 
 const COMPACTION_TEST_CONFIG = {
   name: 'gpt-4.1',

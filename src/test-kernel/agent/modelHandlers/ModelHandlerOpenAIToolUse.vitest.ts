@@ -7,6 +7,7 @@ import { ModelProvider } from 'llm-zoo';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { noopTrace } from '@agent/trace/noopTrace';
 
+// Local imports - test fixtures
 import { buildTestModelConfig } from './testFixtures';
 
 /** A well-formed completion with a single `function` tool call. */

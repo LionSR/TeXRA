@@ -1,26 +1,33 @@
+// Third-party imports
 import { describe, expect, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
+// Local imports - agent
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { noopTrace } from '@agent/trace/noopTrace';
 import { GOOGLE_FINISH } from '@agent/types/StopReasonTypes';
-import { buildTestModelConfig } from './testFixtures';
-import type { Interactions } from '@google/genai';
 
+// Local imports - test fixtures
+import { buildTestModelConfig } from './testFixtures';
+
+// Type imports
+import type { Interactions } from '@google/genai';
 
 type Step = Interactions.Step;
 
+const GOOGLE_INTERACTIONS_TEST_CONFIG = {
+  name: 'test-google-interactions',
+  label: 'Test Google Interactions',
+  fullName: 'gemini-3-pro-test',
+  shortName: 'gemini-3-pro-test',
+  provider: ModelProvider.GOOGLE,
+  contextWindow: 4096,
+  capabilities: { supportsVision: true, supportsTokenCounting: false },
+};
+
 function createHandler(): ModelHandlerGoogleInteractions {
   const handler = new ModelHandlerGoogleInteractions(
-    buildTestModelConfig({
-      name: 'test-google-interactions',
-      label: 'Test Google Interactions',
-      fullName: 'gemini-3-pro-test',
-      shortName: 'gemini-3-pro-test',
-      provider: ModelProvider.GOOGLE,
-      contextWindow: 4096,
-      capabilities: { supportsVision: true, supportsTokenCounting: false },
-    }),
+    buildTestModelConfig(GOOGLE_INTERACTIONS_TEST_CONFIG),
   );
   handler.setLogger({ ...noopTrace });
   return handler;
@@ -123,15 +130,7 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
       }
     }
     const handler = new TinyInlineLimitHandler(
-      buildTestModelConfig({
-        name: 'test-google-interactions',
-        label: 'Test Google Interactions',
-        fullName: 'gemini-3-pro-test',
-        shortName: 'gemini-3-pro-test',
-        provider: ModelProvider.GOOGLE,
-        contextWindow: 4096,
-        capabilities: { supportsVision: true, supportsTokenCounting: false },
-      }),
+      buildTestModelConfig(GOOGLE_INTERACTIONS_TEST_CONFIG),
     );
     handler.setLogger({ ...noopTrace });
 

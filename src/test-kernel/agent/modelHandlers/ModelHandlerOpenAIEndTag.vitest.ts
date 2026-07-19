@@ -8,6 +8,7 @@ import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpen
 import { ModelHandlerXAI } from '@agent/modelHandlers/openai/modelHandlerXAI';
 import { noopTrace } from '@agent/trace/noopTrace';
 
+// Local imports - test fixtures
 import { buildTestModelConfig } from './testFixtures';
 
 const END_TAG = '</document>';
@@ -32,13 +33,10 @@ describe('ModelHandlerOpenAI.extractResponse end-tag restoration', () => {
     // A plain OpenAI chat model sets `stop: [endTag]`, so the SDK strips the
     // matched tag from the completion — extractResponse must put it back.
     const handler = new ModelHandlerOpenAI(
-      buildTestModelConfig(
-        {
-          provider: ModelProvider.OPENAI,
-          capabilities: { supportsVision: false },
-        },
-        { capabilities: { supportsReasoning: false } },
-      ),
+      buildTestModelConfig({
+        provider: ModelProvider.OPENAI,
+        capabilities: { supportsReasoning: false, supportsVision: false },
+      }),
     );
     handler.setLogger({ ...noopTrace });
 
@@ -52,13 +50,10 @@ describe('ModelHandlerOpenAI.extractResponse end-tag restoration', () => {
     // not imply the provider stripped the tag — forging it could mask
     // genuinely incomplete output as complete.
     const handler = new ModelHandlerOpenAI(
-      buildTestModelConfig(
-        {
-          provider: ModelProvider.OPENAI,
-          capabilities: { supportsVision: false },
-        },
-        { capabilities: { supportsReasoning: true } },
-      ),
+      buildTestModelConfig({
+        provider: ModelProvider.OPENAI,
+        capabilities: { supportsReasoning: true, supportsVision: false },
+      }),
     );
     handler.setLogger({ ...noopTrace });
 
@@ -70,13 +65,10 @@ describe('ModelHandlerOpenAI.extractResponse end-tag restoration', () => {
   it('does not forge an end tag for a Grok reasoning model (no stop configured)', () => {
     // ModelHandlerXAI inherits the gated behavior via super.extractResponse().
     const handler = new ModelHandlerXAI(
-      buildTestModelConfig(
-        {
-          provider: ModelProvider.XAI,
-          capabilities: { supportsVision: false },
-        },
-        { capabilities: { supportsReasoning: true } },
-      ),
+      buildTestModelConfig({
+        provider: ModelProvider.XAI,
+        capabilities: { supportsReasoning: true, supportsVision: false },
+      }),
     );
     handler.setLogger({ ...noopTrace });
 

@@ -6,12 +6,7 @@ import * as path from 'node:path';
 import { describe, it } from 'vitest';
 
 // Third-party imports
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelConfig,
-  ModelProvider,
-  ReasoningEffort,
-} from 'llm-zoo';
+import { type ModelConfig, ModelProvider, ReasoningEffort } from 'llm-zoo';
 import { OpenAIError } from 'openai';
 
 // Local imports - platform
@@ -37,14 +32,17 @@ import {
 } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
 
-// Type imports
+// Local imports - utilities
 import { pathToLocation } from '@utils/files';
+
+// Local imports - test fixtures
 import { buildTestModelConfig } from './testFixtures';
+
+// Type imports
 import type {
   ResponseInputItem,
   ResponseUsage,
 } from 'openai/resources/responses/responses';
-
 
 // pathToLocation and FlexibleFS resolve through platform services, so this
 // suite needs the real node fs rather than the in-memory default.
@@ -138,7 +136,6 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
       fullName: 'gpt-5.6-sol',
       shortName: 'gpt-5.6-pro',
       capabilities: {
-        ...DEFAULT_MODEL_CAPABILITIES,
         supportsReasoning: true,
         supportsReasoningEffort: true,
         reasoningEffort: ReasoningEffort.MEDIUM,
@@ -172,7 +169,6 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
       name: 'gpt56',
       fullName: 'gpt-5.6-sol',
       capabilities: {
-        ...DEFAULT_MODEL_CAPABILITIES,
         supportsReasoning: true,
         supportsReasoningEffort: true,
         reasoningEffort: ReasoningEffort.MAX,
@@ -204,7 +200,6 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
       name: 'reasoning-model',
       fullName: 'reasoning-model',
       capabilities: {
-        ...DEFAULT_MODEL_CAPABILITIES,
         supportsReasoning: true,
         supportsReasoningEffort: true,
         reasoningEffort: ReasoningEffort.MEDIUM,
@@ -678,7 +673,6 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
   it('preserves include fields when polling after an unhandled stream event', async () => {
     const handler = createHandler({
       capabilities: {
-        ...DEFAULT_MODEL_CAPABILITIES,
         supportsNativeWebSearch: true,
       },
     });
@@ -758,7 +752,6 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     const handler = createHandler({
       openRouterOnly: false,
       capabilities: {
-        ...DEFAULT_MODEL_CAPABILITIES,
         supportsNativeWebSearch: true,
       },
     });
@@ -837,7 +830,6 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
   it('resumes fallback polling with include fields after a poll failure', async () => {
     const handler = createHandler({
       capabilities: {
-        ...DEFAULT_MODEL_CAPABILITIES,
         supportsNativeWebSearch: true,
       },
     });

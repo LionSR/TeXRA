@@ -14,6 +14,7 @@ import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import * as configUtilsModule from '@utils/config/configUtils';
 import * as providerConfigModule from '@utils/config/providerConfig';
 
+// Local imports - test fixtures
 import { buildTestModelConfig } from './testFixtures';
 
 class ExposedKeyHandler extends ModelHandlerOpenRouterNative {

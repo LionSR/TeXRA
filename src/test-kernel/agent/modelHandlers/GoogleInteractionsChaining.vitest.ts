@@ -1,13 +1,18 @@
+// Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
+// Local imports - agent and config
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { noopTrace } from '@agent/trace/noopTrace';
 import * as configModule from '@utils/config/configUtils';
-import { buildTestModelConfig } from './testFixtures';
-import type { Interactions } from '@google/genai';
 
+// Local imports - test fixtures
+import { buildTestModelConfig } from './testFixtures';
+
+// Type imports
+import type { Interactions } from '@google/genai';
 
 type Step = Interactions.Step;
 type SSEEvent = Interactions.InteractionSSEEvent;

@@ -3,11 +3,7 @@ import { strict as assert } from 'node:assert';
 
 // Third-party imports
 import { describe, it } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  ModelProvider,
-  ReasoningEffort,
-} from 'llm-zoo';
+import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 // Local imports - agent
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -16,9 +12,22 @@ import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
 import { ModelHandlerXAI } from '@agent/modelHandlers/openai/modelHandlerXAI';
 import { noopTrace } from '@agent/trace/noopTrace';
 
+// Local imports - test fixtures
 import { buildTestModelConfig } from './testFixtures';
 
 const NO_VISION_CAPABILITIES = { supportsVision: false };
+const MOONSHOT_TEST_CONFIG = {
+  provider: ModelProvider.MOONSHOT,
+  capabilities: NO_VISION_CAPABILITIES,
+};
+const GLM_TEST_CONFIG = {
+  provider: ModelProvider.GLM,
+  capabilities: NO_VISION_CAPABILITIES,
+};
+const XAI_TEST_CONFIG = {
+  provider: ModelProvider.XAI,
+  capabilities: NO_VISION_CAPABILITIES,
+};
 
 function createClientStub() {
   const createCalls: any[] = [];
@@ -59,21 +68,14 @@ describe('OpenAI-compatible provider request params', () => {
     'keeps Kimi K2.7 Code alias %s on required defaults',
     async (fullName) => {
       const handler = new ModelHandlerKimi(
-        buildTestModelConfig(
-          {
-            provider: ModelProvider.MOONSHOT,
-            capabilities: NO_VISION_CAPABILITIES,
+        buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
+          name: 'kimi27codeT',
+          fullName,
+          capabilities: {
+            supportsReasoning: true,
+            supportsVision: true,
           },
-          {
-            name: 'kimi27codeT',
-            fullName,
-            capabilities: {
-              ...DEFAULT_MODEL_CAPABILITIES,
-              supportsReasoning: true,
-              supportsVision: true,
-            },
-          },
-        ),
+        }),
       );
       handler.setLogger({ ...noopTrace });
       (handler as any).getStreamingConfig = () => false;
@@ -95,21 +97,14 @@ describe('OpenAI-compatible provider request params', () => {
     'does not disable Kimi K2.7 alias %s during compaction',
     async (fullName) => {
       const handler = new ModelHandlerKimi(
-        buildTestModelConfig(
-          {
-            provider: ModelProvider.MOONSHOT,
-            capabilities: NO_VISION_CAPABILITIES,
+        buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
+          name: 'kimi27codeT',
+          fullName,
+          capabilities: {
+            supportsReasoning: true,
+            supportsVision: true,
           },
-          {
-            name: 'kimi27codeT',
-            fullName,
-            capabilities: {
-              ...DEFAULT_MODEL_CAPABILITIES,
-              supportsReasoning: true,
-              supportsVision: true,
-            },
-          },
-        ),
+        }),
       );
       handler.setLogger({ ...noopTrace });
       handler.setAgentCategory(AgentCategory.ToolUse);
@@ -136,20 +131,13 @@ describe('OpenAI-compatible provider request params', () => {
 
   it('uses the fixed Kimi K2.5 temperature during client-side compaction', async () => {
     const handler = new ModelHandlerKimi(
-      buildTestModelConfig(
-        {
-          provider: ModelProvider.MOONSHOT,
-          capabilities: NO_VISION_CAPABILITIES,
+      buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
+        name: 'kimi25T',
+        fullName: 'kimi-k2.5',
+        capabilities: {
+          supportsReasoning: true,
         },
-        {
-          name: 'kimi25T',
-          fullName: 'kimi-k2.5',
-          capabilities: {
-            ...DEFAULT_MODEL_CAPABILITIES,
-            supportsReasoning: true,
-          },
-        },
-      ),
+      }),
     );
     handler.setLogger({ ...noopTrace });
     handler.setAgentCategory(AgentCategory.ToolUse);
@@ -174,20 +162,13 @@ describe('OpenAI-compatible provider request params', () => {
 
   it('pins Kimi K2.5 non-reasoning chat requests to temperature 0.6 and disables thinking (#7081)', async () => {
     const handler = new ModelHandlerKimi(
-      buildTestModelConfig(
-        {
-          provider: ModelProvider.MOONSHOT,
-          capabilities: NO_VISION_CAPABILITIES,
+      buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
+        name: 'kimi25',
+        fullName: 'kimi-k2.5',
+        capabilities: {
+          supportsReasoning: false,
         },
-        {
-          name: 'kimi25',
-          fullName: 'kimi-k2.5',
-          capabilities: {
-            ...DEFAULT_MODEL_CAPABILITIES,
-            supportsReasoning: false,
-          },
-        },
-      ),
+      }),
     );
     handler.setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => false;
@@ -206,20 +187,13 @@ describe('OpenAI-compatible provider request params', () => {
 
   it('pins Kimi K2.5 thinking chat requests to temperature 1 and leaves the API default (#7081)', async () => {
     const handler = new ModelHandlerKimi(
-      buildTestModelConfig(
-        {
-          provider: ModelProvider.MOONSHOT,
-          capabilities: NO_VISION_CAPABILITIES,
+      buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
+        name: 'kimi25T',
+        fullName: 'kimi-k2.5',
+        capabilities: {
+          supportsReasoning: true,
         },
-        {
-          name: 'kimi25T',
-          fullName: 'kimi-k2.5',
-          capabilities: {
-            ...DEFAULT_MODEL_CAPABILITIES,
-            supportsReasoning: true,
-          },
-        },
-      ),
+      }),
     );
     handler.setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => false;
@@ -243,23 +217,16 @@ describe('OpenAI-compatible provider request params', () => {
       // its reasoning_effort field accepts only 'max' — the shared OpenAI clamp
       // would otherwise lower our MAX tier to 'xhigh', which Moonshot rejects.
       const handler = new ModelHandlerKimi(
-        buildTestModelConfig(
-          {
-            provider: ModelProvider.MOONSHOT,
-            capabilities: NO_VISION_CAPABILITIES,
+        buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
+          name: 'kimi3',
+          fullName,
+          capabilities: {
+            supportsReasoning: true,
+            supportsReasoningEffort: true,
+            reasoningEffort: ReasoningEffort.MAX,
+            supportsVision: true,
           },
-          {
-            name: 'kimi3',
-            fullName,
-            capabilities: {
-              ...DEFAULT_MODEL_CAPABILITIES,
-              supportsReasoning: true,
-              supportsReasoningEffort: true,
-              reasoningEffort: ReasoningEffort.MAX,
-              supportsVision: true,
-            },
-          },
-        ),
+        }),
       );
       handler.setLogger({ ...noopTrace });
       (handler as any).getStreamingConfig = () => false;
@@ -282,23 +249,16 @@ describe('OpenAI-compatible provider request params', () => {
     'preserves thinking in Kimi K3 alias %s compaction summaries',
     async (fullName) => {
       const handler = new ModelHandlerKimi(
-        buildTestModelConfig(
-          {
-            provider: ModelProvider.MOONSHOT,
-            capabilities: NO_VISION_CAPABILITIES,
+        buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
+          name: 'kimi3',
+          fullName,
+          capabilities: {
+            supportsReasoning: true,
+            supportsReasoningEffort: true,
+            reasoningEffort: ReasoningEffort.MAX,
+            supportsVision: true,
           },
-          {
-            name: 'kimi3',
-            fullName,
-            capabilities: {
-              ...DEFAULT_MODEL_CAPABILITIES,
-              supportsReasoning: true,
-              supportsReasoningEffort: true,
-              reasoningEffort: ReasoningEffort.MAX,
-              supportsVision: true,
-            },
-          },
-        ),
+        }),
       );
       handler.setLogger({ ...noopTrace });
       handler.setAgentCategory(AgentCategory.ToolUse);
@@ -329,20 +289,13 @@ describe('OpenAI-compatible provider request params', () => {
     // this fix only 'kimi-k2.5' was hardcoded here, so this non-reasoning
     // entry silently kept thinking on at the Moonshot API default.
     const handler = new ModelHandlerKimi(
-      buildTestModelConfig(
-        {
-          provider: ModelProvider.MOONSHOT,
-          capabilities: NO_VISION_CAPABILITIES,
+      buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
+        name: 'kimi26',
+        fullName: 'kimi-k2.6',
+        capabilities: {
+          supportsReasoning: false,
         },
-        {
-          name: 'kimi26',
-          fullName: 'kimi-k2.6',
-          capabilities: {
-            ...DEFAULT_MODEL_CAPABILITIES,
-            supportsReasoning: false,
-          },
-        },
-      ),
+      }),
     );
     handler.setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => false;
@@ -363,20 +316,13 @@ describe('OpenAI-compatible provider request params', () => {
 
   it('leaves Kimi K2.6 thinking requests on the API default (#7081)', async () => {
     const handler = new ModelHandlerKimi(
-      buildTestModelConfig(
-        {
-          provider: ModelProvider.MOONSHOT,
-          capabilities: NO_VISION_CAPABILITIES,
+      buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
+        name: 'kimi26T',
+        fullName: 'kimi-k2.6',
+        capabilities: {
+          supportsReasoning: true,
         },
-        {
-          name: 'kimi26T',
-          fullName: 'kimi-k2.6',
-          capabilities: {
-            ...DEFAULT_MODEL_CAPABILITIES,
-            supportsReasoning: true,
-          },
-        },
-      ),
+      }),
     );
     handler.setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => false;
@@ -394,22 +340,15 @@ describe('OpenAI-compatible provider request params', () => {
 
   it('maps GLM low reasoning effort to the provider minimum', async () => {
     const handler = new ModelHandlerGLM(
-      buildTestModelConfig(
-        {
-          provider: ModelProvider.GLM,
-          capabilities: NO_VISION_CAPABILITIES,
+      buildTestModelConfig(GLM_TEST_CONFIG, {
+        name: 'glm52',
+        fullName: 'glm-5.2',
+        capabilities: {
+          supportsReasoning: true,
+          supportsReasoningEffort: true,
+          reasoningEffort: ReasoningEffort.LOW,
         },
-        {
-          name: 'glm52',
-          fullName: 'glm-5.2',
-          capabilities: {
-            ...DEFAULT_MODEL_CAPABILITIES,
-            supportsReasoning: true,
-            supportsReasoningEffort: true,
-            reasoningEffort: ReasoningEffort.LOW,
-          },
-        },
-      ),
+      }),
     );
     handler.setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => false;
@@ -427,22 +366,15 @@ describe('OpenAI-compatible provider request params', () => {
 
   it('maps GLM max reasoning effort to the provider maximum', async () => {
     const handler = new ModelHandlerGLM(
-      buildTestModelConfig(
-        {
-          provider: ModelProvider.GLM,
-          capabilities: NO_VISION_CAPABILITIES,
+      buildTestModelConfig(GLM_TEST_CONFIG, {
+        name: 'glm52',
+        fullName: 'glm-5.2',
+        capabilities: {
+          supportsReasoning: true,
+          supportsReasoningEffort: true,
+          reasoningEffort: ReasoningEffort.MAX,
         },
-        {
-          name: 'glm52',
-          fullName: 'glm-5.2',
-          capabilities: {
-            ...DEFAULT_MODEL_CAPABILITIES,
-            supportsReasoning: true,
-            supportsReasoningEffort: true,
-            reasoningEffort: ReasoningEffort.MAX,
-          },
-        },
-      ),
+      }),
     );
     handler.setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => false;
@@ -459,22 +391,15 @@ describe('OpenAI-compatible provider request params', () => {
 
   it('passes medium reasoning effort through for current Grok models', async () => {
     const handler = new ModelHandlerXAI(
-      buildTestModelConfig(
-        {
-          provider: ModelProvider.XAI,
-          capabilities: NO_VISION_CAPABILITIES,
+      buildTestModelConfig(XAI_TEST_CONFIG, {
+        name: 'grok45',
+        fullName: 'grok-4.5',
+        capabilities: {
+          supportsReasoning: true,
+          supportsReasoningEffort: true,
+          reasoningEffort: ReasoningEffort.MEDIUM,
         },
-        {
-          name: 'grok45',
-          fullName: 'grok-4.5',
-          capabilities: {
-            ...DEFAULT_MODEL_CAPABILITIES,
-            supportsReasoning: true,
-            supportsReasoningEffort: true,
-            reasoningEffort: ReasoningEffort.MEDIUM,
-          },
-        },
-      ),
+      }),
     );
     handler.setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => false;
@@ -491,22 +416,15 @@ describe('OpenAI-compatible provider request params', () => {
 
   it('clamps above-high reasoning effort to high for Grok models', async () => {
     const handler = new ModelHandlerXAI(
-      buildTestModelConfig(
-        {
-          provider: ModelProvider.XAI,
-          capabilities: NO_VISION_CAPABILITIES,
+      buildTestModelConfig(XAI_TEST_CONFIG, {
+        name: 'grok45',
+        fullName: 'grok-4.5',
+        capabilities: {
+          supportsReasoning: true,
+          supportsReasoningEffort: true,
+          reasoningEffort: ReasoningEffort.XHIGH,
         },
-        {
-          name: 'grok45',
-          fullName: 'grok-4.5',
-          capabilities: {
-            ...DEFAULT_MODEL_CAPABILITIES,
-            supportsReasoning: true,
-            supportsReasoningEffort: true,
-            reasoningEffort: ReasoningEffort.XHIGH,
-          },
-        },
-      ),
+      }),
     );
     handler.setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => false;

@@ -9,6 +9,7 @@ import { ModelHandlerDeepSeek } from '@agent/modelHandlers/openai/modelHandlerDe
 import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
 import { noopTrace } from '@agent/trace/noopTrace';
 
+// Local imports - test fixtures
 import { buildTestModelConfig } from './testFixtures';
 
 function createClientStub() {
@@ -96,13 +97,12 @@ async function runNormalize(handler: NormalizingHandler) {
 
 describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
   it('DeepSeek handler merges consecutive user messages into string content', async () => {
-    const config = buildTestModelConfig(
-      {
-        provider: ModelProvider.DEEPSEEK,
-        capabilities: { supportsVision: false },
-      },
-      { name: 'deepseek-chat', fullName: 'deepseek-chat' },
-    );
+    const config = buildTestModelConfig({
+      name: 'deepseek-chat',
+      fullName: 'deepseek-chat',
+      provider: ModelProvider.DEEPSEEK,
+      capabilities: { supportsVision: false },
+    });
     const { createCalls, loggerStub } = await runNormalize(
       new ModelHandlerDeepSeek(config),
     );
@@ -145,26 +145,24 @@ describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
       name: 'Kimi',
       makeHandler: () =>
         new ModelHandlerKimi(
-          buildTestModelConfig(
-            {
-              provider: ModelProvider.MOONSHOT,
-              capabilities: { supportsVision: false },
-            },
-            { name: 'kimi128k', fullName: 'moonshot-v1-128k' },
-          ),
+          buildTestModelConfig({
+            name: 'kimi128k',
+            fullName: 'moonshot-v1-128k',
+            provider: ModelProvider.MOONSHOT,
+            capabilities: { supportsVision: false },
+          }),
         ),
     },
     {
       name: 'DashScope',
       makeHandler: () =>
         new ModelHandlerDashScope(
-          buildTestModelConfig(
-            {
-              provider: ModelProvider.DASHSCOPE,
-              capabilities: { supportsVision: false },
-            },
-            { name: 'qwen', fullName: 'qwen-plus' },
-          ),
+          buildTestModelConfig({
+            name: 'qwen',
+            fullName: 'qwen-plus',
+            provider: ModelProvider.DASHSCOPE,
+            capabilities: { supportsVision: false },
+          }),
         ),
     },
   ])(

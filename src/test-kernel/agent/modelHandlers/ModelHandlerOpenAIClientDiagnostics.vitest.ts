@@ -1,12 +1,15 @@
+// Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type ModelConfig, ModelProvider } from 'llm-zoo';
 
+// Local imports - agent and model config
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import * as serverKeysModule from '@auth/serverKeys';
 import { KIMI_CODE_BASE_URL } from '@model/kimiCodeSubscriptionRouting';
 
+// Local imports - test fixtures
 import { buildTestModelConfig } from './testFixtures';
 
 const MOONSHOT_BASE_URL = 'https://api.moonshot.ai/v1';

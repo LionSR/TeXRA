@@ -23,12 +23,13 @@ import { noopTrace } from '@agent/trace/noopTrace';
 
 // Local imports - shared
 import type { FileLocation } from '@shared/schemas';
+
+// Local imports - test fixtures
 import { buildTestModelConfig } from './testFixtures';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // Type imports
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { ChatMessages } from '@openrouter/sdk/models';
-
 
 function createAgentSetting() {
   return AgentSettingSchema.parse({
@@ -128,13 +129,11 @@ describe('model handler empty prefill behavior', () => {
   it('OpenRouter native preserves user content when prefill is empty', async () => {
     await withMissingOutput(async (outputLocation) => {
       const handler = new ModelHandlerOpenRouterNative(
-        buildTestModelConfig(
-          {
-            provider: ModelProvider.OPENAI,
-            capabilities: { supportsReasoning: false, supportsVision: false },
-          },
-          { openrouterFullName: 'openai/test-model' },
-        ),
+        buildTestModelConfig({
+          provider: ModelProvider.OPENAI,
+          capabilities: { supportsReasoning: false, supportsVision: false },
+          openrouterFullName: 'openai/test-model',
+        }),
       );
       handler.setLogger({ ...noopTrace });
       const messages: ChatMessages[] = [
