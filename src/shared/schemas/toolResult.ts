@@ -145,6 +145,8 @@ const ExecutedToolResultSchema = z
     output: z.string().optional(),
     /** Brief summary of the tool execution result */
     summary: z.string().optional(),
+    /** End the current model turn after this successful tool result is paired. */
+    endTurn: z.boolean().optional(),
     error: z.undefined().optional(),
     /** Statistics about line changes made */
     lineChanges: LineChangesSchema.optional(),

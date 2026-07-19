@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 import stableStringify from 'fast-json-stable-stringify';
 import PQueue from 'p-queue';
+import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { isNonEmptyString } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -659,7 +660,15 @@ function normalizeAgentOptions(
         'agent() option "schema" must be a plain JSON Schema object.',
       );
     }
-    options.schema = schema as Record<string, unknown>;
+    try {
+      options.schema = normalizeStructuredOutputSchema(
+        schema as Record<string, unknown>,
+      ).jsonSchema;
+    } catch (error) {
+      throw new Error(
+        `agent() option "schema" is not a supported object-root JSON Schema: ${toErrorMessage(error)}`,
+      );
+    }
   }
   if (source.inputFiles !== undefined) {
     if (

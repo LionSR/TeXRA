@@ -50,7 +50,6 @@ import { getDefaultToolRegistry } from '@tools/registry';
 import {
   buildTerminalTool,
   buildTerminalToolRegistry,
-  resolveStructuredOutput,
 } from '@tools/structuredOutput';
 import { TaskRunFileService } from '@utils/files';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
@@ -215,8 +214,7 @@ export async function runToolUseFlow<C = unknown>(
   let capturedStructured: unknown;
   let registry = baseRegistry;
   if (outputSchema) {
-    const spec = resolveStructuredOutput(outputSchema);
-    const terminalTool = buildTerminalTool(spec, (value) => {
+    const terminalTool = buildTerminalTool(outputSchema, (value) => {
       capturedStructured = value;
     });
     resolvedTools.push(terminalTool.definition);
@@ -634,6 +632,16 @@ export async function runToolUseFlow<C = unknown>(
     for (const handler of switchedHandlers) {
       handler.dispose();
     }
+  }
+
+  if (
+    outputSchema !== undefined &&
+    outcome === RUN_OUTCOME.COMPLETED &&
+    capturedStructured === undefined
+  ) {
+    throw new Error(
+      'Structured-output run completed without calling submit_output.',
+    );
   }
 
   return {

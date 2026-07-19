@@ -37,7 +37,7 @@ export const WorkflowAgentFinalResultSchema = WorkflowFlowResultSchema.pick({
     diffs: z.array(ResultDiffSummarySchema).prefault(() => []),
     cost: CostSchema,
     diffsUnavailable: z.string().optional(),
-    structured: z.unknown().optional(),
+    structured: z.json().optional(),
   })
   .strict();
 
@@ -51,7 +51,7 @@ const ToolUseAgentFinalResultSchema = ToolUseFlowResultSchema.pick({
       .unwrap()
       .prefault(() => []),
     cost: CostSchema,
-    structured: z.unknown().optional(),
+    structured: z.json().optional(),
   })
   .strict();
 
