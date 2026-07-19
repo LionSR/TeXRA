@@ -7,7 +7,7 @@ import {
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { stateSettingByKey } from '@shared/schemas/stateSettings';
+import { resolveStateSettingWrite } from '@shared/settingsView/handlers/stateSettingWrite';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   dispatchSettingsViewInbound,
@@ -262,29 +262,20 @@ export function createDesktopSettingsIpc(
 
   /**
    * Generic write path for scalar `STATE_SETTINGS` rows (git-author + external
-   * coding-agent controls). Validates against the catalog entry's own schema —
-   * ignoring an unknown key or a value the schema rejects — then delegates to the
-   * family updater, which owns the persist + rebroadcast. Routing is by catalog
-   * `category`, mirroring the extension host.
+   * coding-agent controls). The shared {@link resolveStateSettingWrite} owns the
+   * value validation + family classification (shared with the extension host);
+   * this host only dispatches the resolved family to its updater.
    */
   async function updateStateSetting(
     key: string,
     value: unknown,
   ): Promise<void> {
-    // A value-less message is a no-op: no clear-to-default semantics, and the
-    // catalog schemas `.prefault()`, so parsing `undefined` would silently reset
-    // the setting to its default.
-    if (value === undefined) return;
-    const entry = stateSettingByKey(key);
-    if (!entry) return;
-    const parsed = entry.schema.safeParse(value);
-    if (!parsed.success) return;
-    // Only the two families this settings view owns are routable; any other
-    // catalog category is ignored rather than mis-persisted via the agent path.
-    if (entry.category === 'git') {
-      await updateGitAuthorSetting(key as WorkspaceStateKey, parsed.data);
-    } else if (entry.category === 'ai-agents') {
-      await updateAgentSetting(key as WorkspaceStateKey, parsed.data as string);
+    const write = resolveStateSettingWrite(key, value);
+    if (!write) return;
+    if (write.family === 'git') {
+      await updateGitAuthorSetting(write.key, write.value);
+    } else {
+      await updateAgentSetting(write.key, write.value);
     }
   }
 
