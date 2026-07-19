@@ -182,10 +182,7 @@ async function runPersistedFlow(
           },
           setAbortController: () => {},
           onRoundFinalized: () => {},
-          ...(resume !== undefined && {
-            resumeShared: resume.shared,
-            resumeSourceShared: resume.sourceShared,
-          }),
+          ...(resume !== undefined && { resume }),
           isSubagent: options.isSubagent ?? true,
           onIdle: options.onIdle,
           takePendingFollowUps: options.takePendingFollowUps,
@@ -1036,7 +1033,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('skips the resume self-heal write when the persisted record is already canonical (issue #8018)', async () => {
-    // `resumeToolUseFromResumeData` passes `resumeShared` on every
+    // `resumeToolUseFromResumeData` passes the resume handoff on every
     // native-subagent turn, so the resume-branch self-heal write must not
     // fire when the persisted record already matches what would be
     // written -- otherwise every turn costs a `StorageFSKVStore` disk

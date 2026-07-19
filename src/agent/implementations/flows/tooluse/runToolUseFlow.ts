@@ -67,9 +67,8 @@ export interface RunToolUseFlowInput<
   C = unknown,
 > extends BaseFlowContextInit<C> {
   setting: AgentToolUseSetting;
-  resumeShared?: PreparedShared | null;
-  /** Persisted shared value from the retrieval read, used as a freshness token. */
-  resumeSourceShared?: unknown;
+  /** Canonical shared state and the persisted value observed during retrieval. */
+  resume?: Readonly<{ shared: PreparedShared; sourceShared: unknown }>;
   /** One batch already drained by an external child-turn owner. */
   drainedFollowUps?: readonly FollowUpQueueBatchItem[];
   /**
@@ -196,7 +195,7 @@ export async function runToolUseFlow<C = unknown>(
     setting: { ...setting, tools: resolvedTools },
     session: sessionLifecycle,
     toolRegistry: registry,
-    resumeShared: input.resumeShared ?? null,
+    resumeShared: input.resume?.shared ?? null,
     persistTodos: (todos) => kv.writeTodos(todos),
     fileService: new TaskRunFileService(executionId),
   };
@@ -296,7 +295,7 @@ export async function runToolUseFlow<C = unknown>(
   // this window, matching `preserveResumeRecord`'s finally guard.
   // Cleared once the flow has passed both guards and moved into real work,
   // so a later mid-run cancellation keeps the normal destructive clear.
-  let inResumeStartupWindow = input.resumeShared !== undefined;
+  let inResumeStartupWindow = input.resume !== undefined;
 
   const flowContext: ToolUseFlowContext = {
     ownerSession: runSession,
@@ -358,7 +357,7 @@ export async function runToolUseFlow<C = unknown>(
     // A host can hand off a cancellation synchronously during setup. Observe
     // it before touching the persisted resume record.
     if (input.checkInterruption()) {
-      preserveResumeRecord = input.resumeShared !== undefined;
+      preserveResumeRecord = input.resume !== undefined;
       return { outcome };
     }
 
@@ -368,7 +367,7 @@ export async function runToolUseFlow<C = unknown>(
     // start a migration or repair write after that handoff.
     if (input.checkInterruption()) {
       persistenceRecoveryPending = false;
-      preserveResumeRecord = input.resumeShared !== undefined;
+      preserveResumeRecord = input.resume !== undefined;
       return { outcome };
     }
     // Past both startup cancellation guards: any later interrupt() is a
@@ -376,18 +375,18 @@ export async function runToolUseFlow<C = unknown>(
     // queue clear instead of the resume-startup rescue above.
     inResumeStartupWindow = false;
 
-    if (flowRecord && input.resumeShared) {
+    if (flowRecord && input.resume) {
       logger.debug('Resuming tool-use flow from persistence');
       // Retrieval owns the single migration/validation boundary. The second
       // read may be self-healed only when it still matches the exact value
       // retrieval observed; any intervening drift must fail loudly instead of
       // being overwritten by the earlier canonical copy.
-      if (!isDeepStrictEqual(flowRecord.shared, input.resumeSourceShared)) {
+      if (!isDeepStrictEqual(flowRecord.shared, input.resume.sourceShared)) {
         throw new PersistedFlowStateError(executionId, 'invalid-shared');
       }
       const resumedShared: PreparedShared = {
-        ...input.resumeShared,
-        ...(input.resumeShared.modelHandlerCompatibilityKey === undefined &&
+        ...input.resume.shared,
+        ...(input.resume.shared.modelHandlerCompatibilityKey === undefined &&
           compatibilityKey !== undefined && {
             modelHandlerCompatibilityKey: compatibilityKey,
           }),
@@ -407,7 +406,7 @@ export async function runToolUseFlow<C = unknown>(
           cause: migrationResult.error,
         });
       } else {
-        // Defensive fallback only: no resumeShared means the resume
+        // Defensive fallback only: no resume handoff means the resume
         // boundary above was never consulted for this call (e.g. a fresh
         // launch that happens to find a leftover record for its execution
         // id). Migrate/backfill here so PersistedFlow.ensureRecord never sees

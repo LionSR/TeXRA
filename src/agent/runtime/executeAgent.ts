@@ -547,8 +547,7 @@ export async function resumeToolUseFromResumeData(
                 ...createInterruptCallbacks(),
                 onRoundFinalized: createUsageRecordingCallback(ctx),
                 setting,
-                resumeShared: resume.shared,
-                resumeSourceShared: resume.sourceShared,
+                resume,
                 drainedFollowUps: options.drainedFollowUps,
                 takePendingFollowUps: options.takePendingFollowUps,
                 // A persisted parent marks this execution as a subagent. Without

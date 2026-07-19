@@ -23,7 +23,7 @@ import type { StreamTabId } from '@shared/schemas';
 import { runExecuteCommand } from './executeCommand';
 import { resumeExtensionToolUseFromResumeData } from './resumeCommand';
 
-const logger = createChannelTrace('resumeFromSnapshot');
+const logger = createChannelTrace('resumeFromResumeData');
 
 export { isResumeInFlight };
 
