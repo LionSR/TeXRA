@@ -115,7 +115,7 @@ export async function runLatexdiffFromMetadata(params: {
   const workspaceCwd = WorkspaceFS.getPath();
   const immediateResults: DiffRunResult[] = [];
   const operations: DiffOperation[] = [];
-  const groupedByRelative = new Map<
+  const groupedBySource = new Map<
     string,
     Array<{ round: number; info: OutputFileInfo }>
   >();
@@ -144,14 +144,14 @@ export async function runLatexdiffFromMetadata(params: {
       });
 
       const key = info.source;
-      const group = groupedByRelative.get(key) ?? [];
+      const group = groupedBySource.get(key) ?? [];
       group.push({ round, info });
-      groupedByRelative.set(key, group);
+      groupedBySource.set(key, group);
     }
   }
 
   if (generateBetweenRoundDiffs) {
-    for (const group of groupedByRelative.values()) {
+    for (const group of groupedBySource.values()) {
       group.sort((a, b) => a.round - b.round);
       for (let index = 1; index < group.length; index += 1) {
         const previous = group[index - 1];
