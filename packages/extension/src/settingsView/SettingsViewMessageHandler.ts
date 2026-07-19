@@ -866,13 +866,21 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
    * `applyGitAuthorConfig()` side effect). Routing is by catalog `category`.
    */
   private async updateStateSetting(key: string, value: unknown): Promise<void> {
+    // A value-less message is a no-op. This command has no clear-to-default
+    // semantics (unlike SET_LATEX_CONFIG_VALUE), and the catalog schemas use
+    // `.prefault()`, so parsing `undefined` would resolve to the default and
+    // silently reset the setting — reject it up front instead.
+    if (value === undefined) return;
     const entry = stateSettingByKey(key);
     if (!entry) return;
     const parsed = entry.schema.safeParse(value);
     if (!parsed.success) return;
+    // Only the two families this settings view owns are routable; any other
+    // catalog category (workflow, model, tools, …) is ignored rather than
+    // mis-persisted through the agent path or refreshing the wrong UI.
     if (entry.category === 'git') {
       await this.updateGitAuthorSetting(key as WorkspaceStateKey, parsed.data);
-    } else {
+    } else if (entry.category === 'ai-agents') {
       await this.updateAgentSetting(
         key as WorkspaceStateKey,
         parsed.data as string,
