@@ -1,10 +1,13 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import type { StateStore } from '@platform/interfaces';
+import { platform } from '@platform/platform';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import type { StreamTabId } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_GIT_MARK_COMMITS } from '@shared/schemas/stateSettings';
 import { FakeStateStore } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import {
   isWorktreeSupportEnabled,
   setWorktreeSupportEnabled,
@@ -425,6 +428,71 @@ describe('desktop settings IPC', () => {
     expect(posted.at(-1)).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
       items: [],
+    });
+  });
+
+  describe('goal-list failures', () => {
+    setupPlatform();
+
+    const streamId = 'stream:desktop-settings-goal-list' as StreamTabId;
+    const goalKey = `goals:byStream:${streamId}`;
+    const malformed = { goalId: 'not-valid' };
+
+    async function seedMalformedGoal(): Promise<void> {
+      await platform().workspaceState.update('goals:index', [streamId]);
+      await platform().workspaceState.update(goalKey, malformed);
+    }
+
+    it('reports a malformed goal without throwing or posting a fallback list', async () => {
+      await seedMalformedGoal();
+      const showErrorMessage = vi.fn(async () => undefined);
+      const onError = vi.fn();
+      const { settings, posted } = createCapturedSettingsFixture({
+        ui: { showErrorMessage, onError },
+      });
+
+      expect(
+        settings.handleMessage({
+          command: SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
+        }),
+      ).toBe(true);
+      await flushAsyncWork();
+
+      expect(onError).toHaveBeenCalledOnce();
+      expect(showErrorMessage).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `Failed to load goals: Failed to parse persisted goal for stream "${streamId}"`,
+        ),
+      );
+      expect(posted).not.toContainEqual(
+        expect.objectContaining({
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
+        }),
+      );
+      expect(platform().workspaceState.get(goalKey)).toEqual(malformed);
+    });
+
+    it('continues initial settings delivery after a malformed goal', async () => {
+      await seedMalformedGoal();
+      const showErrorMessage = vi.fn(async () => undefined);
+      const postHistoryData = vi.fn(async () => undefined);
+      const { settings } = createSettingsFixture({
+        historySettingsController: createStubDesktopHistorySettingsController({
+          postHistoryData,
+        }),
+        ui: { showErrorMessage },
+      });
+
+      expect(
+        settings.handleMessage({
+          command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
+          view: 'settings',
+        }),
+      ).toBe(false);
+      await flushAsyncWork();
+
+      expect(showErrorMessage).toHaveBeenCalledOnce();
+      expect(postHistoryData).toHaveBeenCalledOnce();
     });
   });
 
