@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildHunks,
   diffVisualRowCount,
+  initialDiffScrollOffset,
   maxDiffScrollOffset,
   scrollBoundedDiffDisplayLines,
   wrappedDiffDisplayLines,
@@ -92,6 +93,159 @@ describe('CLI diff display', () => {
       kind: 'overflow',
       text: expect.stringContaining('hidden'),
     });
+  });
+
+  it('opens a scrollable diff at the edit when wrapped context would hide it', () => {
+    const context = [
+      `First context paragraph ${'alpha '.repeat(18)}`,
+      `Second context paragraph ${'beta '.repeat(18)}`,
+      `Third context paragraph ${'gamma '.repeat(18)}`,
+    ];
+    const hunks = buildHunks(
+      'acknowledgments.tex',
+      [...context, 'Old acknowledgment.'].join('\n'),
+      [...context, 'Revised acknowledgment.'].join('\n'),
+    );
+    const width = 40;
+    const maxDisplayLines = 7;
+
+    const topLines = scrollBoundedDiffDisplayLines(
+      hunks,
+      0,
+      maxDisplayLines,
+      0,
+      width,
+    );
+    expect(topLines.every((line) => line.kind !== 'added')).toBe(true);
+    expect(topLines.every((line) => line.kind !== 'removed')).toBe(true);
+
+    const initialOffset = initialDiffScrollOffset(
+      hunks,
+      width,
+      maxDisplayLines,
+    );
+    const initialLines = scrollBoundedDiffDisplayLines(
+      hunks,
+      0,
+      maxDisplayLines,
+      initialOffset,
+      width,
+    );
+
+    expect(initialOffset).toBeGreaterThan(0);
+    expect(initialLines.some((line) => line.kind === 'removed')).toBe(true);
+    expect(initialLines.some((line) => line.kind === 'added')).toBe(true);
+  });
+
+  it('keeps both rows of a replacement visible at the viewport boundary', () => {
+    const hunks = buildHunks(
+      'draft.tex',
+      ['alpha', 'beta', 'gamma', 'old result', 'epsilon', 'zeta', 'eta'].join(
+        '\n',
+      ),
+      ['alpha', 'beta', 'gamma', 'new result', 'epsilon', 'zeta', 'eta'].join(
+        '\n',
+      ),
+    );
+    const maxDisplayLines = 6;
+
+    const initialOffset = initialDiffScrollOffset(hunks, 80, maxDisplayLines);
+    const initialLines = scrollBoundedDiffDisplayLines(
+      hunks,
+      0,
+      maxDisplayLines,
+      initialOffset,
+      80,
+    );
+
+    expect(initialOffset).toBeGreaterThan(0);
+    expect(initialLines.some((line) => line.kind === 'removed')).toBe(true);
+    expect(initialLines.some((line) => line.kind === 'added')).toBe(true);
+  });
+
+  it('anchors a wrapped replacement on its added side', () => {
+    const hunks = buildHunks(
+      'draft.tex',
+      [
+        'alpha',
+        'beta',
+        'gamma',
+        `old result ${'continuation '.repeat(12)}`,
+        'epsilon',
+        'zeta',
+        'eta',
+      ].join('\n'),
+      [
+        'alpha',
+        'beta',
+        'gamma',
+        `new result ${'continuation '.repeat(12)}`,
+        'epsilon',
+        'zeta',
+        'eta',
+      ].join('\n'),
+    );
+    const maxDisplayLines = 7;
+
+    const initialLines = scrollBoundedDiffDisplayLines(
+      hunks,
+      0,
+      maxDisplayLines,
+      initialDiffScrollOffset(hunks, 32, maxDisplayLines),
+      32,
+    );
+
+    expect(initialLines.some((line) => line.kind === 'added')).toBe(true);
+  });
+
+  it('does not skip a standalone deletion to a later hunk addition', () => {
+    const hunks = buildHunks(
+      'draft.tex',
+      [
+        'alpha',
+        'beta',
+        'gamma',
+        'remove this observation',
+        'delta',
+        'epsilon',
+        'zeta',
+        'eta',
+        'theta',
+        'replace this observation',
+        'iota',
+        'kappa',
+        'lambda',
+      ].join('\n'),
+      [
+        'alpha',
+        'beta',
+        'gamma',
+        'delta',
+        'epsilon',
+        'zeta',
+        'eta',
+        'theta',
+        'revised observation',
+        'iota',
+        'kappa',
+        'lambda',
+      ].join('\n'),
+    );
+    const maxDisplayLines = 6;
+    const initialLines = scrollBoundedDiffDisplayLines(
+      hunks,
+      0,
+      maxDisplayLines,
+      initialDiffScrollOffset(hunks, 80, maxDisplayLines),
+      80,
+    );
+
+    expect(initialLines.some((line) => line.text.includes('remove this'))).toBe(
+      true,
+    );
+    expect(
+      initialLines.some((line) => line.text.includes('revised observation')),
+    ).toBe(false);
   });
 
   it('wraps long changed lines instead of replacing the tail with an ellipsis', () => {
