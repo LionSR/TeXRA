@@ -2,11 +2,6 @@
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local imports - tools
-import {
-  findOccurrenceLineNumbers,
-  replaceAllLiteral,
-  replaceFirstLiteral,
-} from '@tools/editPrimitives';
 import { requireFileReadForEdit } from '@tools/fileInteractions';
 import {
   assertWritable,
@@ -20,6 +15,67 @@ import {
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
+
+/**
+ * Replace the first literal occurrence of `oldStr` with `newStr`.
+ *
+ * `newStr` is inserted verbatim — replacement patterns are NOT interpreted.
+ * Returns the content unchanged when `oldStr` does not occur; callers that
+ * require a match should validate occurrences first with `countOccurrences`.
+ */
+export function replaceFirstLiteral(
+  content: string,
+  oldStr: string,
+  newStr: string,
+): string {
+  if (oldStr.length === 0) {
+    throw new ToolError(
+      'replaceFirstLiteral requires a non-empty search string.',
+    );
+  }
+  const idx = content.indexOf(oldStr);
+  if (idx === -1) {
+    return content;
+  }
+  return content.slice(0, idx) + newStr + content.slice(idx + oldStr.length);
+}
+
+/**
+ * Replace every literal occurrence of `oldStr` with `newStr`.
+ *
+ * `newStr` is inserted verbatim — replacement patterns are NOT interpreted.
+ * `oldStr` must be non-empty; an empty needle throws to avoid the pathological
+ * `''.split('')` behavior.
+ */
+export function replaceAllLiteral(
+  content: string,
+  oldStr: string,
+  newStr: string,
+): string {
+  if (oldStr.length === 0) {
+    throw new ToolError(
+      'replaceAllLiteral requires a non-empty search string.',
+    );
+  }
+  return content.split(oldStr).join(newStr);
+}
+
+/**
+ * 1-indexed line numbers of every line that contains `needle`. Used to build
+ * the "not unique — found in lines X, Y" guidance when a search string matches
+ * more than once.
+ */
+export function findOccurrenceLineNumbers(
+  content: string,
+  needle: string,
+): number[] {
+  if (needle.length === 0) {
+    return [];
+  }
+  return content
+    .split('\n')
+    .flatMap((line, index) => (line.includes(needle) ? [index + 1] : []));
+}
 
 interface WritableFileTarget {
   path: string;
