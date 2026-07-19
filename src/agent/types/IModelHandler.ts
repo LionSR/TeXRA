@@ -46,6 +46,7 @@ export type IModelHandler<
   | 'setOutputStreaming'
   | 'isBackgroundModeActive'
   | 'supportsManualCompaction'
+  | 'supportsForcedToolChoice'
   | 'requiresPerCallSystemPrompt'
   | 'isAutoRetryManagedByProvider'
   | 'requestCompaction'

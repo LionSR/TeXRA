@@ -124,3 +124,35 @@ describe('ModelHandlerOpenAI.extractToolUse', () => {
     );
   });
 });
+
+describe('ModelHandlerOpenAI forced tool choice', () => {
+  it('maps finalTool to a named function choice', async () => {
+    const handler = new ModelHandlerOpenAI(buildConfig(ModelProvider.OPENAI));
+    handler.setLogger(createLoggerStub());
+    handler.getStreamingConfig = () => false;
+    let request: Record<string, unknown> | undefined;
+
+    await handler.createResponse({
+      client: {
+        chat: {
+          completions: {
+            create: async (params: Record<string, unknown>) => {
+              request = params;
+              return completionWithValidToolCall();
+            },
+          },
+        },
+      } as never,
+      messages: [{ role: 'user', content: 'finish' }],
+      temperature: 0,
+      tools: [{ name: 'submit_output', description: 'Submit output' }],
+      finalTool: { name: 'submit_output' },
+    });
+
+    assert.deepEqual(request?.tool_choice, {
+      type: 'function',
+      function: { name: 'submit_output' },
+    });
+    assert.equal(handler.supportsForcedToolChoice, true);
+  });
+});
