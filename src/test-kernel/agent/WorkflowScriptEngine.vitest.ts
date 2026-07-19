@@ -116,6 +116,72 @@ return [a, b]`,
     expect(run.meta.name).toBe('test-flow');
   });
 
+  it('passes a structured result from agent({ schema }) to the script and keys the journal by schema', async () => {
+    const schema = {
+      type: 'object',
+      properties: { title: { type: 'string' } },
+      required: ['title'],
+      additionalProperties: false,
+    };
+    const keys: string[] = [];
+    const run = await runWorkflowScript({
+      script: `${META}
+const withSchema = await agent('draft', { schema: args.schema })
+const plain = await agent('draft')
+return { structured: withSchema.structured, plain }`,
+      args: { schema },
+      runAgent: (invocation) => {
+        keys.push(invocation.key);
+        return Promise.resolve(
+          invocation.options.schema
+            ? {
+                category: 'toolUse',
+                outcome: 'completed',
+                response: '',
+                files: [],
+                cost: 0,
+                structured: { title: 'Lemma' },
+              }
+            : `result:${invocation.prompt}`,
+        );
+      },
+    });
+
+    // The `.structured` envelope reaches the script unchanged.
+    expect(run.result).toMatchObject({
+      structured: { title: 'Lemma' },
+      plain: 'result:draft',
+    });
+    // Same prompt, differing only by the schema option, must yield distinct
+    // journal keys so resume identity tracks the schema.
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).not.toBe(keys[1]);
+  });
+
+  it('rejects a non-object schema option', async () => {
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await agent('draft', { schema: 'nope' })`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/schema.*must be a plain JSON Schema object/i);
+  });
+
+  it('rejects an empty or regex-bearing structured-output schema', async () => {
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await agent('draft', { schema: {} })`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/schema.*object-root JSON Schema/i);
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await agent('draft', { schema: { type: 'object', properties: { value: { type: 'string', pattern: '(a+)+$' } } } })`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/cannot use pattern/i);
+  });
+
   it('requires explicit identities for otherwise-repeated calls', async () => {
     const invocations: WorkflowAgentInvocation[] = [];
     await runWorkflowScript({
@@ -568,19 +634,28 @@ return null`,
     ).rejects.toThrow(/inputFiles.*array of non-empty strings/);
   });
 
-  it.each(['schema', 'outputSchema'] as const)(
-    'rejects the obsolete %s option instead of silently ignoring it',
-    async (field) => {
-      const runner = vi.fn(echoRunner);
-      await expect(
-        runWorkflowScript({
-          script: `${META}return await agent('x', { ${field}: { type: 'object' } })`,
-          runAgent: runner,
-        }),
-      ).rejects.toThrow(/structured data.*JSON output file/);
-      expect(runner).not.toHaveBeenCalled();
-    },
-  );
+  it('accepts a schema option and drops the obsolete outputSchema option', async () => {
+    const seen: WorkflowAgentInvocation[] = [];
+    const runner = vi.fn((invocation: WorkflowAgentInvocation) => {
+      seen.push(invocation);
+      return echoRunner(invocation);
+    });
+    await runWorkflowScript({
+      script: `${META}
+await agent('a', { schema: { type: 'object' } })
+return await agent('b', { outputSchema: { type: 'object' } })`,
+      runAgent: runner,
+    });
+
+    // schema is a first-class option now; outputSchema is no longer recognized
+    // and is silently dropped like any other unknown option.
+    expect(seen[0]?.options.schema).toMatchObject({
+      type: 'object',
+      properties: {},
+    });
+    expect(seen[1]?.options.schema).toBeUndefined();
+    expect(seen[1]?.options).not.toHaveProperty('outputSchema');
+  });
 
   it('blocks Function-constructor escapes through injected primitives', async () => {
     // agent is a realm-local wrapper, so its .constructor is the sandbox's

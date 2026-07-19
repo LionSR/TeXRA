@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 import stableStringify from 'fast-json-stable-stringify';
 import PQueue from 'p-queue';
+import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { isNonEmptyString } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -648,11 +649,26 @@ function normalizeAgentOptions(
     }
     options[field] = field === 'id' ? value.trim() : value;
   }
-  for (const field of ['schema', 'outputSchema'] as const) {
-    if (!Object.hasOwn(source, field)) continue;
-    throw new Error(
-      `agent() option "${field}" is unsupported. Pass structured data between stages through a JSON output file.`,
-    );
+  if (Object.hasOwn(source, 'schema')) {
+    const schema = source.schema;
+    if (
+      schema === null ||
+      typeof schema !== 'object' ||
+      Array.isArray(schema)
+    ) {
+      throw new Error(
+        'agent() option "schema" must be a plain JSON Schema object.',
+      );
+    }
+    try {
+      options.schema = normalizeStructuredOutputSchema(
+        schema as Record<string, unknown>,
+      ).jsonSchema;
+    } catch (error) {
+      throw new Error(
+        `agent() option "schema" is not a supported object-root JSON Schema: ${toErrorMessage(error)}`,
+      );
+    }
   }
   if (source.inputFiles !== undefined) {
     if (
