@@ -608,7 +608,7 @@ describe('executionRegistry', () => {
   });
 
   it('tears down and aligns a suspended handle killed during RESUMING', async () => {
-    // Regression: `resumeQueuedToolUseSnapshot` flips `streamStatus` to
+    // Regression: `resumeQueuedToolUseFromResumeData` flips `streamStatus` to
     // RUNNING with a RESUMING substate *before* the resumed run installs its
     // own interrupt context. A kill landing in that window would otherwise
     // find this same still-suspended handle (its waiting-cleanup from the
@@ -648,7 +648,7 @@ describe('executionRegistry', () => {
       );
       registry.track(handle);
       handle.registerWaitingCleanup(cleanup);
-      // Mirrors resumeQueuedToolUseSnapshot's status flip that runs ahead of
+      // Mirrors resumeQueuedToolUseFromResumeData's status flip that runs ahead of
       // the resumed run's own context — RUNNING phase, RESUMING substate.
       seedStreamStatusForTest(
         streamStatus,

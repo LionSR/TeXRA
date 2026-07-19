@@ -2,9 +2,12 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
+import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
+import {
+  retrieveSessionResumeData,
+  type ToolUseResumeData,
+} from '@agent/runtime/SessionResumeRetrieval';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -15,15 +18,27 @@ interface ResumeAgentResult {
 }
 
 interface ResumeAgentCommandPayload {
-  snapshot: ToolUseSessionSnapshot;
+  snapshot: Pick<
+    ToolUseResumeData,
+    'streamId' | 'executionId' | 'agentConfig' | 'parentStreamId'
+  >;
   followUp?: string;
 }
 
 const CHANNEL = 'resumeCommand';
 
+async function showResumeError(error: unknown): Promise<void> {
+  const message = logErrorMessage(
+    CHANNEL,
+    'Failed to resume tool-use session',
+    error,
+  );
+  await vscode.window.showWarningMessage(message);
+}
+
 /**
  * Extension wrapper around the host-neutral
- * {@link resumeQueuedToolUseSnapshot}: it supplies the extension runtime host
+ * {@link resumeQueuedToolUseFromResumeData}: it supplies the extension runtime host
  * and surfaces failures as a warning toast.
  * Used by both the `texra.resumeAgent` command and the resume orchestrator.
  *
@@ -31,29 +46,22 @@ const CHANNEL = 'resumeCommand';
  * never honored this setting, so it stays out of the shared leaf and lives in
  * this adapter to preserve each host's pre-unification resume behavior.
  */
-export function resumeExtensionToolUseSnapshot(
-  snapshot: ToolUseSessionSnapshot,
+export function resumeExtensionToolUseFromResumeData(
+  resume: ToolUseResumeData,
   followUp?: string,
 ): Promise<boolean> {
   if (!getToolUsePersistenceEnabled()) {
     return Promise.resolve(false);
   }
-  return resumeQueuedToolUseSnapshot(
-    snapshot.streamId,
-    snapshot,
+  return resumeQueuedToolUseFromResumeData(
+    resume.streamId,
+    resume,
     extensionAgentRuntimeHost,
     {
       ...(followUp !== undefined && {
         extraFollowUps: [{ text: followUp, origin: 'user' as const }],
       }),
-      onError: async (error) => {
-        const baseMessage = logErrorMessage(
-          CHANNEL,
-          'Failed to resume tool-use session',
-          error,
-        );
-        await vscode.window.showWarningMessage(baseMessage);
-      },
+      onError: showResumeError,
     },
   );
 }
@@ -67,16 +75,33 @@ export function registerResumeAgentCommand(
       handler: async (
         payload: ResumeAgentCommandPayload | undefined,
       ): Promise<ResumeAgentResult> => {
-        const snapshot = payload?.snapshot;
-        if (!snapshot) {
+        const identity = payload?.snapshot;
+        if (!identity) {
           return { success: false };
         }
-        if (defaultSession().status.isActiveOrResuming(snapshot.streamId)) {
+        if (defaultSession().status.isActiveOrResuming(identity.streamId)) {
           return { success: false };
         }
+        if (!getToolUsePersistenceEnabled()) return { success: false };
 
-        const success = await resumeExtensionToolUseSnapshot(
-          snapshot,
+        let resume;
+        try {
+          resume = await retrieveSessionResumeData(
+            identity.streamId,
+            identity.executionId,
+            identity.agentConfig,
+            { parentStreamId: identity.parentStreamId },
+          );
+        } catch (error) {
+          await showResumeError(error);
+          return { success: false };
+        }
+        if (resume?.type !== 'toolUse') return { success: false };
+        if (defaultSession().status.isActiveOrResuming(identity.streamId))
+          return { success: false };
+
+        const success = await resumeExtensionToolUseFromResumeData(
+          resume,
           payload?.followUp,
         );
         return { success };

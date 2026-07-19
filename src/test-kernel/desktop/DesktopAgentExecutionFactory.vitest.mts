@@ -186,7 +186,7 @@ async function createExecution(options: {
     retrieveSessionResumeData: vi.fn(async () => null),
   }));
   vi.doMock('@agent/runtime/executeAgent', () => ({
-    resumeToolUseFromSnapshot: vi.fn(async () => {}),
+    resumeToolUseFromResumeData: vi.fn(async () => {}),
   }));
   vi.doMock('@agent/runtime/runAgent', () => ({
     runAgent: options.runAgent ?? vi.fn(async () => {}),

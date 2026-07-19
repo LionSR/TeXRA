@@ -306,7 +306,7 @@ export async function runChat(
   // only when the user didn't pin an agent (--agent, resume, or env) — an
   // explicit choice always wins.
   const explicitAgent =
-    initialResume?.resolution.config.agent ?? init.agentOverride;
+    initialResume?.resolution.agentConfig.agent ?? init.agentOverride;
   const setupAgentOverride = firstRunSetupAgentOverride({
     onboardingConfigured: onboarding.configured,
     firstRunDone: getFirstRunDone(platform().globalState),
@@ -317,7 +317,8 @@ export async function runChat(
   const defaults = await resolveChatDefaults({
     cwd: context.cwd,
     agentOverride: explicitAgent ?? setupAgentOverride,
-    modelOverride: initialResume?.resolution.config.model ?? init.modelOverride,
+    modelOverride:
+      initialResume?.resolution.agentConfig.model ?? init.modelOverride,
     envAgent: context.envAgent,
     envModel: context.envModel,
     visibleToolUseAgents,
@@ -386,7 +387,7 @@ export async function runChat(
     resumeExecution: (id: ExecutionId) => chatController.resume(id),
   });
   const initialPresetId = initialResume
-    ? (initialResume.resolution.config.cliMultiAgentPresetId ?? undefined)
+    ? (initialResume.resolution.agentConfig.cliMultiAgentPresetId ?? undefined)
     : init.cliMultiAgentPresetId;
   sessionMetaSignal.set({
     agent,
@@ -403,7 +404,7 @@ export async function runChat(
       : (init.teamName ?? readCliMultiAgentPresetName(initialPresetId)),
     cliMultiAgentPresetId: initialPresetId,
     delegationAgentScope: initialResume
-      ? (initialResume.resolution.config.delegationAgentScope ?? undefined)
+      ? (initialResume.resolution.agentConfig.delegationAgentScope ?? undefined)
       : init.delegationAgentScope,
     version,
   });

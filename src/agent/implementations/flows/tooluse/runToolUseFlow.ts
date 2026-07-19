@@ -52,8 +52,8 @@ import {
   findLastAssistantText,
   extractTouchedFiles,
   migrateSharedState,
-  ToolUseRunSharedSchema,
   ToolUseRunSharedCanonicalSchema,
+  type PreparedShared,
   type ToolUseRunShared,
 } from './nodes/types';
 import {
@@ -61,14 +61,14 @@ import {
   setToolUseSharedModel,
 } from './modelSwitchState';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
-import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { ToolUseServices } from './ToolUseServices';
 
 export interface RunToolUseFlowInput<
   C = unknown,
 > extends BaseFlowContextInit<C> {
   setting: AgentToolUseSetting;
-  resumeSnapshot?: ToolUseSessionSnapshot | null;
+  /** Canonical shared state and the persisted value observed during retrieval. */
+  resume?: Readonly<{ shared: PreparedShared; sourceShared: unknown }>;
   /** One batch already drained by an external child-turn owner. */
   drainedFollowUps?: readonly FollowUpQueueBatchItem[];
   /**
@@ -127,36 +127,6 @@ export function getToolUseFlowErrorResult(
   error: unknown,
 ): RunToolUseFlowResult | undefined {
   return error instanceof ToolUseFlowError ? error.result : undefined;
-}
-
-/**
- * Build the canonical self-heal payload for a resumed flow record's `shared`
- * blob from the resume boundary's already-validated snapshot
- * (`SessionResumeRetrieval.retrieveToolUseResumeData` -- the single owner of
- * FlowRecord.shared's legacy-format migration and persisted-format
- * modelHandlerCompatibilityKey inference). The snapshot's key is authoritative
- * when present; otherwise the active handler's key preserves the legacy
- * self-heal fallback. `structuralBase` is the record's fully validated
- * `migrateSharedState` output, which supplies any pass-through fields the
- * snapshot's narrower resume contract doesn't carry (e.g. `systemPrompt`,
- * `lastError`) so they survive the write-back untouched.
- */
-function buildResumedSharedFromSnapshot(
-  structuralBase: ToolUseRunShared,
-  snapshot: ToolUseSessionSnapshot,
-  activeCompatibilityKey: ModelHandlerCompatibilityKey | undefined,
-): ToolUseRunShared {
-  return ToolUseRunSharedSchema.parse({
-    ...structuralBase,
-    messages: snapshot.messages,
-    modelHandlerCompatibilityKey:
-      snapshot.modelHandlerCompatibilityKey ?? activeCompatibilityKey,
-    stateSlices: {
-      runStateSnapshot: snapshot.run,
-      workspaceSnapshot: snapshot.workspace,
-      userChannels: snapshot.user,
-    },
-  });
 }
 
 interface ToolUseFlowContext {
@@ -225,7 +195,7 @@ export async function runToolUseFlow<C = unknown>(
     setting: { ...setting, tools: resolvedTools },
     session: sessionLifecycle,
     toolRegistry: registry,
-    snapshot: input.resumeSnapshot ?? null,
+    resumeShared: input.resume?.shared ?? null,
     persistTodos: (todos) => kv.writeTodos(todos),
     fileService: new TaskRunFileService(executionId),
   };
@@ -325,7 +295,7 @@ export async function runToolUseFlow<C = unknown>(
   // this window, matching `preserveResumeRecord`'s finally guard.
   // Cleared once the flow has passed both guards and moved into real work,
   // so a later mid-run cancellation keeps the normal destructive clear.
-  let inResumeStartupWindow = input.resumeSnapshot !== undefined;
+  let inResumeStartupWindow = input.resume !== undefined;
 
   const flowContext: ToolUseFlowContext = {
     ownerSession: runSession,
@@ -387,7 +357,7 @@ export async function runToolUseFlow<C = unknown>(
     // A host can hand off a cancellation synchronously during setup. Observe
     // it before touching the persisted resume record.
     if (input.checkInterruption()) {
-      preserveResumeRecord = input.resumeSnapshot !== undefined;
+      preserveResumeRecord = input.resume !== undefined;
       return { outcome };
     }
 
@@ -397,7 +367,7 @@ export async function runToolUseFlow<C = unknown>(
     // start a migration or repair write after that handoff.
     if (input.checkInterruption()) {
       persistenceRecoveryPending = false;
-      preserveResumeRecord = input.resumeSnapshot !== undefined;
+      preserveResumeRecord = input.resume !== undefined;
       return { outcome };
     }
     // Past both startup cancellation guards: any later interrupt() is a
@@ -405,45 +375,38 @@ export async function runToolUseFlow<C = unknown>(
     // queue clear instead of the resume-startup rescue above.
     inResumeStartupWindow = false;
 
-    if (flowRecord) {
+    if (flowRecord && input.resume) {
+      logger.debug('Resuming tool-use flow from persistence');
+      // Retrieval owns the single migration/validation boundary. The second
+      // read may be self-healed only when it still matches the exact value
+      // retrieval observed; any intervening drift must fail loudly instead of
+      // being overwritten by the earlier canonical copy.
+      if (!isDeepStrictEqual(flowRecord.shared, input.resume.sourceShared)) {
+        throw new PersistedFlowStateError(executionId, 'invalid-shared');
+      }
+      const resumedShared: PreparedShared = {
+        ...input.resume.shared,
+        ...(input.resume.shared.modelHandlerCompatibilityKey === undefined &&
+          compatibilityKey !== undefined && {
+            modelHandlerCompatibilityKey: compatibilityKey,
+          }),
+      };
+      if (!isDeepStrictEqual(flowRecord.shared, resumedShared)) {
+        flowRecord.shared = resumedShared;
+        await kv.write(
+          flowKey(executionId),
+          stampFlowRecordSchemaVersion(flowRecord),
+        );
+      }
+    } else if (flowRecord) {
       logger.debug('Resuming tool-use flow from persistence');
       const migrationResult = migrateSharedState(flowRecord.shared);
       if (!migrationResult.success) {
         throw new PersistedFlowStateError(executionId, 'invalid-shared', {
           cause: migrationResult.error,
         });
-      } else if (input.resumeSnapshot) {
-        // The resume boundary (SessionResumeRetrieval.retrieveToolUseResumeData)
-        // already migrated this record's legacy shapes and strictly validated
-        // the result into `input.resumeSnapshot` before this flow was ever
-        // launched -- it is the single owner of FlowRecord.shared's
-        // legacy-format parsing and persisted-format compatibility-key
-        // inference. Consume its canonical fields directly here instead of
-        // re-deriving them; `migrateSharedState` preserves pass-through fields
-        // the snapshot's narrower contract doesn't carry (systemPrompt,
-        // lastError, ...) so they survive this self-heal write.
-        const resumedShared = buildResumedSharedFromSnapshot(
-          migrationResult.data,
-          input.resumeSnapshot,
-          compatibilityKey,
-        );
-        // `resumeToolUseFromSnapshot` passes `resumeSnapshot` on every
-        // native-subagent turn, so this self-heal write must skip whenever
-        // the record was already canonical: no legacy shape to migrate, and
-        // the snapshot-derived fields match what is already persisted.
-        // Otherwise this becomes a `StorageFSKVStore` disk write per turn.
-        const writeNeeded =
-          migrationResult.migrated ||
-          !isDeepStrictEqual(migrationResult.data, resumedShared);
-        flowRecord.shared = resumedShared;
-        if (writeNeeded) {
-          await kv.write(
-            flowKey(executionId),
-            stampFlowRecordSchemaVersion(flowRecord),
-          );
-        }
       } else {
-        // Defensive fallback only: no resumeSnapshot means the resume
+        // Defensive fallback only: no resume handoff means the resume
         // boundary above was never consulted for this call (e.g. a fresh
         // launch that happens to find a leftover record for its execution
         // id). Migrate/backfill here so PersistedFlow.ensureRecord never sees

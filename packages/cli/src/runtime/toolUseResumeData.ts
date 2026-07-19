@@ -1,25 +1,21 @@
 import { createChannelTrace } from '@agent/trace';
 import { isToolUseTaskState } from '@agent/core/state/TaskState';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
-import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
+import {
+  retrieveSessionResumeData,
+  type ToolUseResumeData,
+} from '@agent/runtime/SessionResumeRetrieval';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { ExecutionId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const logger = createChannelTrace('CliToolUseResumeData');
 
-export interface CliToolUseResumeData {
-  readonly snapshot: ToolUseSessionSnapshot;
-  readonly streamId: StreamTabId;
-  readonly config: AgentConfig;
-}
-
 export async function readCliToolUseResumeData(
   id: ExecutionId,
   config: AgentConfig,
-): Promise<CliToolUseResumeData | null> {
+): Promise<ToolUseResumeData | null> {
   const taskState = agentConfigToTaskState(config);
   if (!isToolUseTaskState(taskState)) return null;
 
@@ -28,11 +24,7 @@ export async function readCliToolUseResumeData(
   });
   const resume = await retrieveSessionResumeData(streamId, id, taskState);
   if (resume?.type !== 'toolUse') return null;
-  return {
-    snapshot: resume.snapshot,
-    streamId,
-    config: resume.snapshot.agentConfig,
-  };
+  return resume;
 }
 
 /**
@@ -44,7 +36,7 @@ export async function readCliToolUseResumeData(
 export async function readCliToolUseResumeDataForListing(
   id: ExecutionId,
   config: AgentConfig,
-): Promise<CliToolUseResumeData | null> {
+): Promise<ToolUseResumeData | null> {
   try {
     return await readCliToolUseResumeData(id, config);
   } catch (error) {

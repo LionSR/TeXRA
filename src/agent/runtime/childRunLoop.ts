@@ -172,7 +172,7 @@ export interface ChildRunStrategy<TTurn> {
 export interface ChildRunLoopParams<TTurn> {
   /**
    * Presentation/lifecycle wrapper for agent-CLI child streams. Native
-   * strategies omit this — `executeAgent`/`resumeToolUseFromSnapshot`
+   * strategies omit this — `executeAgent`/`resumeToolUseFromResumeData`
    * already own handle creation, tracking, and terminal finalization for
    * every turn via `runFlowWithLifecycle`, so there is no separate stream tab
    * for this loop to finalize.
@@ -352,7 +352,7 @@ async function persistResultMetaBestEffort(
 /**
  * A turn's parent-follow-up enqueue, still pending its wake step. Waking can
  * await the resumed parent's entire turn (`agentResume.tryResumeStream` → …
- * → `resumeToolUseFromSnapshot`), so callers that are about to finalize this
+ * → `resumeToolUseFromResumeData`), so callers that are about to finalize this
  * child (terminal/failed turns) must resolve the wake only AFTER that
  * finalize completes — otherwise a resumed parent that immediately waits on
  * this still-RUNNING execution self-stalls (#8093). Callers that continue to

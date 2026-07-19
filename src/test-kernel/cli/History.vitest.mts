@@ -9,6 +9,7 @@ import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
@@ -388,11 +389,11 @@ describe('CLI history runtime', () => {
       resumable: true,
       cause: 'interrupted-with-flow',
     });
-    mocks.readCliToolUseResumeDataForListing.mockResolvedValue({
-      streamId: 'chat@gpt54#a1',
-      config: toolUseConfig,
-      snapshot: { agentConfig: { ...toolUseConfig, model: 'gpt55' } },
-    });
+    mocks.readCliToolUseResumeDataForListing.mockResolvedValue(
+      createToolUseResumeData({
+        agentConfig: { ...toolUseConfig, model: 'gpt55' },
+      }),
+    );
 
     const details = await readCliHistoryDetails('a1' as ExecutionId);
     const text = formatCliHistoryDetailsText(details!);
