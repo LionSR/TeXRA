@@ -41,14 +41,12 @@ import { sha256Hex } from '../_shared/relayCiToken.ts';
 import {
   createEdgeClient,
   randomBase64Url,
-  versionedJsonResponse,
+  jsonResponse,
 } from '../_shared/responses.ts';
 
 // =============================================================================
 // Constants
 // =============================================================================
-
-const VERSION = '1.0.0';
 
 /** Device authorization lifetime. */
 const DEVICE_CODE_TTL_SECONDS = 15 * 60;
@@ -112,9 +110,8 @@ app.use('*', async (c, next) => {
 
 app.use('*', async (c, next) => {
   if (!adminSupabase || !anonSupabase) {
-    return versionedJsonResponse(
+    return jsonResponse(
       c.req.raw,
-      VERSION,
       { error: 'Server configuration error' },
       500,
     );
@@ -131,7 +128,7 @@ app.use('*', async (c, next) => {
 type Context = HonoContext<{ Variables: Variables }>;
 
 function errorResponse(c: Context, error: string, status: number) {
-  return versionedJsonResponse(c.req.raw, VERSION, { error }, status);
+  return jsonResponse(c.req.raw, { error }, status);
 }
 
 function randomUserCode(): string {
@@ -210,9 +207,8 @@ app.post('/code', async (c) => {
 
     const verifyUri = verificationUri(c);
     const displayCode = formatUserCode(userCode);
-    return versionedJsonResponse(
+    return jsonResponse(
       c.req.raw,
-      VERSION,
       {
         device_code: deviceCode,
         user_code: displayCode,
@@ -279,9 +275,8 @@ app.post('/approve', async (c) => {
         approve ? 'approved' : 'denied'
       } by user ${auth.user.id}`,
     );
-    return versionedJsonResponse(
+    return jsonResponse(
       c.req.raw,
-      VERSION,
       { status: approve ? 'approved' : 'denied' },
       200,
     );
@@ -404,12 +399,7 @@ app.post('/token', async (c) => {
     }
 
     console.log(`[DEVICE] token issued for user ${row.user_id}`);
-    return versionedJsonResponse(
-      c.req.raw,
-      VERSION,
-      sessionResponseBody(session),
-      200,
-    );
+    return jsonResponse(c.req.raw, sessionResponseBody(session), 200);
   } catch (error) {
     console.error('[DEVICE] token error:', error);
     return errorResponse(c, 'Internal server error', 500);
