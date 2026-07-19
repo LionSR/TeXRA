@@ -122,7 +122,9 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
     const { platform } = await import('@platform/platform');
     const state = platform().workspaceState;
     await state.update(`goals:byStream:${STREAM_A}`, { goalId: 'not-valid' });
-    expect(() => GoalStore.getForStream(STREAM_A)).toThrow();
+    expect(() => GoalStore.getForStream(STREAM_A)).toThrow(
+      `Failed to parse persisted goal for stream "${STREAM_A}"`,
+    );
 
     await GoalStore.forget(STREAM_A);
 
@@ -139,6 +141,17 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
 
     await expect(GoalStore.start(STREAM_A, 'replacement')).rejects.toThrow();
     expect(state.get(key)).toEqual(malformed);
+  });
+
+  it('identifies the malformed stream when listing goals', async () => {
+    const { platform } = await import('@platform/platform');
+    const state = platform().workspaceState;
+    await state.update('goals:index', [STREAM_A]);
+    await state.update(`goals:byStream:${STREAM_A}`, { goalId: 'not-valid' });
+
+    expect(() => GoalStore.list()).toThrow(
+      `Failed to parse persisted goal for stream "${STREAM_A}"`,
+    );
   });
 
   it('forgetMany clears records and unparseable blobs', async () => {

@@ -68,9 +68,17 @@ function readRaw(streamId: StreamTabId): Goal | null {
   // does throw, surfacing the misuse.
   const state = tryWorkspaceState();
   if (!state) return null;
-  return (
-    GoalSchema.nullish().parse(state.get<unknown>(streamKey(streamId))) ?? null
-  );
+  const key = streamKey(streamId);
+  const raw = state.get<unknown>(key);
+  if (raw == null) return null;
+  const parsed = GoalSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new Error(
+      `Failed to parse persisted goal for stream "${streamId}" at storage key "${key}".`,
+      { cause: parsed.error },
+    );
+  }
+  return parsed.data;
 }
 
 async function writeRaw(goal: Goal): Promise<void> {
@@ -186,7 +194,11 @@ export function subscribeGoalStateChanges(
 }
 
 export const GoalStore = {
-  /** Get the goal for a stream, or null when none exists. */
+  /**
+   * Get the goal for a stream, or null when none exists.
+   *
+   * @throws When a present saved record does not match {@link GoalSchema}.
+   */
   getForStream(streamId: StreamTabId): Goal | null {
     return readRaw(streamId);
   },
