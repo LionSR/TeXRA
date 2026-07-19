@@ -14,4 +14,12 @@ describe('tool registry aliases', () => {
       resolveToolDefinitions(['crossref_doi']).map((tool) => tool.name),
     ).toEqual(['crossref_search']);
   });
+
+  it('deduplicates aliases that resolve to the same canonical tool', () => {
+    expect(
+      resolveToolDefinitions(['crossref_search', 'crossref_doi']).map(
+        (tool) => tool.name,
+      ),
+    ).toEqual(['crossref_search']);
+  });
 });

@@ -206,14 +206,19 @@ export function resolveToolDefinitions(
   warnOnMissing?: (toolName: string) => void,
 ): ToolDefinition[] {
   const registry = getDefaultToolRegistry();
+  const seenNames = new Set<string>();
 
-  return tools.map((item): ToolDefinition => {
+  return tools.flatMap((item): ToolDefinition[] => {
     const name = typeof item === 'string' ? item : item.name;
     const canonicalName = canonicalToolName(name);
+    if (seenNames.has(canonicalName)) {
+      return [];
+    }
+    seenNames.add(canonicalName);
 
     if (!VALID_TOOL_NAME.test(canonicalName)) {
       warnOnMissing?.(name);
-      return { name: canonicalName };
+      return [{ name: canonicalName }];
     }
 
     const tool = registry.get(canonicalName);
@@ -223,13 +228,15 @@ export function resolveToolDefinitions(
 
     // String items: return tool definition or minimal fallback
     if (typeof item === 'string') {
-      return tool?.definition ?? { name: canonicalName };
+      return [tool?.definition ?? { name: canonicalName }];
     }
 
     // Object items: always parse with schema to validate/merge overrides
-    return ToolDefinitionSchema.catch({ name: canonicalName }).parse({
-      ...item,
-      name: canonicalName,
-    });
+    return [
+      ToolDefinitionSchema.catch({ name: canonicalName }).parse({
+        ...item,
+        name: canonicalName,
+      }),
+    ];
   });
 }
