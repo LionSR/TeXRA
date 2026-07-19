@@ -169,7 +169,6 @@ export const ExecutionMetaSchema = ExecutionMetaBaseSchema.transform(
   },
 );
 export type ExecutionMeta = z.infer<typeof ExecutionMetaSchema>;
-export type ExecutionMetaInput = z.input<typeof ExecutionMetaSchema>;
 
 export const STREAM_PHASE = {
   RUNNING: STREAM_STATUS.RUNNING,

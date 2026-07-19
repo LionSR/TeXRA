@@ -14,9 +14,7 @@ export {
 } from './ExecutionKVStore';
 export {
   EXECUTION_META_SCHEMA_VERSION,
-  ExecutionMetaSchema,
   type ExecutionMeta,
-  type ExecutionMetaInput,
 } from '@shared/schemas/stream';
 export {
   buildCliWorkflowResultMeta,

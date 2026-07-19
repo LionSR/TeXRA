@@ -17,7 +17,6 @@ import {
   executionStatusToRunOutcome,
   type ExecutionId,
   type ExecutionMeta,
-  type ExecutionMetaInput,
   type ExecutionStatus,
   type RunOutcome,
   type StreamTabId,
@@ -127,8 +126,11 @@ export async function registerExecution(
   try {
     const timestamp = new Date().toISOString();
     const store = getExecutionStore(executionId);
-    const meta: ExecutionMetaInput = { timestamp, parentExecutionId };
-    if (category) meta.category = category;
+    const meta = {
+      timestamp,
+      parentExecutionId,
+      ...(category ? { category } : {}),
+    };
     const persistedConfig = normalizeWriterCategory(
       pinExecutionWorkingDirectory(config),
       agentName,

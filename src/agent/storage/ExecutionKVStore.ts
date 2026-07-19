@@ -24,7 +24,6 @@ import {
   ExecutionMetaSchema,
   type ExecutionId,
   type ExecutionMeta,
-  type ExecutionMetaInput,
 } from '@shared/schemas';
 import { byString, filterNotNull, normalizeFilePath } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -74,6 +73,7 @@ export function isReservedKvKeyName(key: string): boolean {
 }
 
 const CHANNEL = 'ExecutionKVStore';
+type ExecutionMetaInput = z.input<typeof ExecutionMetaSchema>;
 
 // ============================================================================
 // Domain types — Zod schemas as source of truth
