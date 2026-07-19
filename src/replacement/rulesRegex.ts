@@ -1,4 +1,6 @@
 // Local imports
+import type { RegexReplacementCategory as RegexReplacementCategoryName } from '@shared/schemas/coreSettings';
+
 import { RegexReplacementCategory, ReplacementFunction } from './types';
 import {
   FENCED_LATEX_BLOCK_PATTERN_INLINE,
@@ -58,8 +60,42 @@ function createCaptionTrimmer(
 
 // ===== Regex replacements =====
 
+const MACRO_TO_ENVIRONMENT: Record<string, string> = {
+  be: '\\begin{equation}',
+  ee: '\\end{equation}',
+  bea: '\\begin{eqnarray}',
+  eea: '\\end{eqnarray}',
+  bse: '\\begin{subequations}',
+  ese: '\\end{subequations}',
+};
+
+const expandEquationMacro: ReplacementFunction = (
+  match,
+  leading = '',
+  macro = '',
+  trailing = '',
+) => {
+  const replacement = MACRO_TO_ENVIRONMENT[macro];
+  return replacement ? `${leading}${replacement}${trailing}` : match;
+};
+
+export const EQUATION_MACRO_REPLACEMENTS: RegexReplacementCategory = {
+  name: 'equation_macros' satisfies RegexReplacementCategoryName,
+  description:
+    'Expands short equation helpers like \\be into full environments',
+  isRegex: true,
+  flags: 'gm',
+  patterns: {
+    // Require macros to be on their own line so inline uses like "foo \\be bar"
+    // remain untouched. We only support lowercase helpers here for backwards
+    // compatibility with legacy documents that relied on these shorthands
+    // (including the deprecated eqnarray environment).
+    '^(\\s*)\\\\([a-z]+)(\\s*)$': expandEquationMacro,
+  },
+};
+
 export const FENCED_LATEX_BLOCK_REPLACEMENTS: RegexReplacementCategory = {
-  name: 'fenced_latex_blocks',
+  name: 'fenced_latex_blocks' satisfies RegexReplacementCategoryName,
   description:
     'Convert Markdown-style fenced math blocks into proper LaTeX environments',
   isRegex: true,
@@ -72,7 +108,7 @@ export const FENCED_LATEX_BLOCK_REPLACEMENTS: RegexReplacementCategory = {
 
 // Parentheses sizing standardization
 export const PARENTHESES_REPLACEMENTS: RegexReplacementCategory = {
-  name: 'parentheses',
+  name: 'parentheses' satisfies RegexReplacementCategoryName,
   description: 'Standardize parentheses sizing using regex patterns',
   isRegex: true,
   flags: 'g',
@@ -112,7 +148,7 @@ export const PARENTHESES_REPLACEMENTS: RegexReplacementCategory = {
 
 // LaTeX inline math formatting fixes
 export const INLINE_MATH_REPLACEMENTS: RegexReplacementCategory = {
-  name: 'inline_math',
+  name: 'inline_math' satisfies RegexReplacementCategoryName,
   description: 'Fixes for LaTeX inline math formatting',
   isRegex: true,
   flags: 'g',
@@ -140,7 +176,7 @@ export const INLINE_MATH_REPLACEMENTS: RegexReplacementCategory = {
 // Context-aware personal style conversions
 export const PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS: RegexReplacementCategory =
   {
-    name: 'personal_style_contextual',
+    name: 'personal_style_contextual' satisfies RegexReplacementCategoryName,
     description:
       'Context-aware replacements for personal style rules that avoid macro definitions',
     isRegex: true,
@@ -180,7 +216,7 @@ export const PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS: RegexReplacementCategory =
 
 // Latexdiff markup fixes using regex
 export const LATEXDIFF_MARKUP_REPLACEMENTS: RegexReplacementCategory = {
-  name: 'latexdiff_markup',
+  name: 'latexdiff_markup' satisfies RegexReplacementCategoryName,
   description: 'Fixes for redundant braces and whitespace in latexdiff markup',
   isRegex: true,
   flags: 'gs',
@@ -298,7 +334,7 @@ export const LATEXDIFF_MARKUP_REPLACEMENTS: RegexReplacementCategory = {
 };
 
 export const EQUATION_STYLE_REPLACEMENTS: RegexReplacementCategory = {
-  name: 'equation_style',
+  name: 'equation_style' satisfies RegexReplacementCategoryName,
   description: 'Fixes for equation style formatting',
   isRegex: true,
   flags: 'g',
