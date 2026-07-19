@@ -533,6 +533,7 @@ export async function resumeToolUseFromResumeData(
       runContextOptions,
       async () => {
         if (setting.agentCategory !== AgentCategory.ToolUse) {
+          // Keep this historical diagnostic byte-for-byte for external monitors.
           throw new AgentError(
             'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
           );
