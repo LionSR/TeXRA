@@ -1,10 +1,10 @@
 /**
  * Utilities for deriving build-tool aliases from a package tsconfig.
  *
- * Note: callers (esbuild + Vite configs) pass the *root* repo dir, so the
- * single source of truth for build-time aliases is the root `tsconfig.json`.
- * `packages/extension/tsconfig.json` is only consulted by `tsc` for typecheck;
- * if the two diverge, builds will silently follow the root.
+ * Vite callers pass the *root* repo dir, so `loadAliases` reads the root
+ * `tsconfig.json` directly. Extension esbuild instead reads its generated
+ * package tsconfig; `sync-tsconfig-paths.mjs` keeps that map aligned with the
+ * root source of truth and its check mode rejects drift.
  */
 
 import { readFileSync } from 'node:fs';
