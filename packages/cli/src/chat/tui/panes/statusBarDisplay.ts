@@ -306,6 +306,7 @@ function fitTransientNoticeStatusBarLeftSegments(
   segments: readonly StatusBarSegment[],
   noticeIndex: number,
   livenessIndex: number | undefined,
+  discardWarningIndex: number | undefined,
   width: number | undefined,
 ): readonly StatusBarSegment[] {
   const innerWidth = statusBarInnerWidth(width);
@@ -313,24 +314,32 @@ function fitTransientNoticeStatusBarLeftSegments(
 
   const fitted = [...segments];
   const notice = fitted[noticeIndex];
-  const liveness =
+  let liveness =
     livenessIndex === undefined ? undefined : fitted[livenessIndex];
-  while (
-    fitted.length > noticeIndex + 1 &&
-    statusBarSegmentsWidth(fitted) > innerWidth
-  ) {
-    fitted.pop();
+  const discardWarning =
+    discardWarningIndex === undefined ? undefined : fitted[discardWarningIndex];
+
+  // Compact liveness before removing content. In particular, the queued-input
+  // discard warning is safety-critical and must not be displaced by the wider
+  // animated form of the running marker.
+  if (liveness?.compactText && statusBarSegmentsWidth(fitted) > innerWidth) {
+    const index = fitted.indexOf(liveness);
+    liveness = { ...liveness, text: liveness.compactText };
+    fitted[index] = liveness;
+  }
+
+  while (statusBarSegmentsWidth(fitted) > innerWidth) {
+    const removableIndex = fitted.findLastIndex(
+      (segment, index) => index > noticeIndex && segment !== discardWarning,
+    );
+    if (removableIndex < 0) break;
+    fitted.splice(removableIndex, 1);
   }
 
   if (statusBarSegmentsWidth(fitted) > innerWidth) {
     for (let index = noticeIndex - 1; index > 0; index -= 1) {
       if (fitted[index] !== liveness) fitted.splice(index, 1);
     }
-  }
-
-  if (liveness?.compactText && statusBarSegmentsWidth(fitted) > innerWidth) {
-    const index = fitted.indexOf(liveness);
-    fitted[index] = { ...liveness, text: liveness.compactText };
   }
 
   const fittedNoticeIndex = notice ? fitted.indexOf(notice) : -1;
@@ -828,6 +837,7 @@ export function buildStatusBarDisplay(
   }
 
   let transientNoticeIndex: number | undefined;
+  let discardWarningIndex: number | undefined;
   if (input.transientNotice) {
     transientNoticeIndex = left.length;
     left.push({ text: input.transientNotice.text, color: COLOR_WARNING });
@@ -835,6 +845,7 @@ export function buildStatusBarDisplay(
     if (input.transientNotice.kind === 'exit' && queuedCount > 0) {
       // Exiting drops queued follow-ups silently — warn before the user
       // confirms with the second Ctrl-C.
+      discardWarningIndex = left.length;
       left.push({
         text: `${formatResultCount(queuedCount, 'queued follow-up')} will be discarded`,
         color: COLOR_ERROR,
@@ -911,6 +922,7 @@ export function buildStatusBarDisplay(
           left,
           transientNoticeIndex,
           transientLivenessIndex,
+          discardWarningIndex,
           input.width,
         )
       : fitStatusBarLeftSegments(left, input.width);
