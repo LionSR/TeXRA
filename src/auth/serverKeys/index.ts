@@ -17,7 +17,6 @@ import { SUPABASE_CUSTOM_DOMAIN } from '../sharedConfig';
 import { getTierService } from '../tier';
 import {
   ServerSideKeyService,
-  type AuthProvider,
   type ServerSideKeyServiceInit,
 } from './ServerSideKeyService';
 
@@ -25,7 +24,7 @@ import {
 export { SERVER_SIDE_PROVIDERS, type ServerSideProvider } from './types';
 
 // Service class
-export { ServerSideKeyService, type AuthProvider };
+export { ServerSideKeyService };
 
 // ==========================================================================
 // Singleton Instance
@@ -58,15 +57,12 @@ export function setServerSideKeyService(service: ServerSideKeyService): void {
  * Call this during extension activation.
  *
  * @param options - Host-provided state and subscriptions
- * @param authProvider - Provider for authentication state checks
  */
 export function initializeServerSideKeyAccess(
   options: ServerSideKeyServiceInit,
-  authProvider: AuthProvider,
 ): void {
   _instance = new ServerSideKeyService(
     `https://${SUPABASE_CUSTOM_DOMAIN}`,
-    authProvider,
     getTierService(options.logger),
     options.logger,
   );

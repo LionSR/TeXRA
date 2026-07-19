@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { setOutputChannelFactory } from '@logger/logUtils';
@@ -69,10 +70,6 @@ function spyOnSignalRegistration(): {
 }
 
 const mocks = vi.hoisted(() => ({
-  authProvider: {
-    isAuthenticated: vi.fn(),
-    canAccessRemoteAgentCatalog: vi.fn(),
-  },
   signInCliSupabase: vi.fn(),
   bootstrapNodeAgentDirectories: vi.fn(),
   createPlatformAgentDirectories: vi.fn(() => ({
@@ -107,7 +104,6 @@ vi.mock('@auth/serverKeys', () => ({
 }));
 
 vi.mock('@cli/runtime/supabaseAuth', () => ({
-  getCliAuthProvider: () => mocks.authProvider,
   initializeCliSupabaseAuth: mocks.initializeCliSupabaseAuth,
   signInCliSupabase: mocks.signInCliSupabase,
 }));
@@ -193,6 +189,12 @@ vi.mock('@tools/lean/direct/directLspAdapter', () => ({
   registerDirectLeanLanguageServices: vi.fn(),
 }));
 
+const isAuthenticatedSpy = vi.spyOn(SupabaseClient, 'isAuthenticated');
+const canAccessRemoteAgentCatalogSpy = vi.spyOn(
+  SupabaseClient,
+  'canAccessRemoteAgentCatalog',
+);
+
 function cliContext(
   overrides: Partial<Parameters<typeof initCliPlatform>[0]> = {},
 ): Parameters<typeof initCliPlatform>[0] {
@@ -218,7 +220,8 @@ describe('CLI platform init', () => {
       },
     });
     mocks.bootstrapNodeAgentDirectories.mockResolvedValue(undefined);
-    mocks.authProvider.canAccessRemoteAgentCatalog.mockResolvedValue(false);
+    isAuthenticatedSpy.mockResolvedValue(false);
+    canAccessRemoteAgentCatalogSpy.mockResolvedValue(false);
     mocks.serverSideKeyService.setUseIncludedModelAccess.mockResolvedValue(
       undefined,
     );
@@ -226,7 +229,7 @@ describe('CLI platform init', () => {
 
   it('uses the configured storage root for CLI secrets', async () => {
     mocks.tryPlatform.mockReturnValueOnce(undefined);
-    mocks.authProvider.isAuthenticated.mockResolvedValue(false);
+    isAuthenticatedSpy.mockResolvedValue(false);
 
     await initCliPlatform(
       cliContext({
@@ -252,7 +255,7 @@ describe('CLI platform init', () => {
     };
     mocks.tryPlatform.mockReturnValue({ globalState });
     mocks.tryPlatform.mockReturnValueOnce(undefined);
-    mocks.authProvider.isAuthenticated.mockResolvedValue(false);
+    isAuthenticatedSpy.mockResolvedValue(false);
 
     await initCliPlatform(
       cliContext({ version: '1.2.3', installSignalHandlers: false }),
@@ -271,7 +274,7 @@ describe('CLI platform init', () => {
   });
 
   it('marks the operator-terminal console sink as trusted', async () => {
-    mocks.authProvider.isAuthenticated.mockResolvedValue(false);
+    isAuthenticatedSpy.mockResolvedValue(false);
 
     await initCliPlatform(cliContext({ quietLogs: false }));
 
@@ -282,7 +285,7 @@ describe('CLI platform init', () => {
 
   it('installs a CLI agent resume port that delegates to the active handler', async () => {
     mocks.tryPlatform.mockReturnValueOnce(undefined);
-    mocks.authProvider.isAuthenticated.mockResolvedValue(false);
+    isAuthenticatedSpy.mockResolvedValue(false);
 
     await initCliPlatform(cliContext({ installSignalHandlers: false }));
 
@@ -345,7 +348,7 @@ describe('CLI platform init', () => {
       update: vi.fn().mockResolvedValue(undefined),
     };
     mocks.tryPlatform.mockReturnValue({ globalState });
-    mocks.authProvider.isAuthenticated.mockResolvedValueOnce(false);
+    isAuthenticatedSpy.mockResolvedValueOnce(false);
 
     await initCliPlatform(
       cliContext({
@@ -366,9 +369,7 @@ describe('CLI platform init', () => {
   });
 
   it('surfaces included-access auth probe failures by default', async () => {
-    mocks.authProvider.isAuthenticated.mockRejectedValueOnce(
-      new Error('auth offline'),
-    );
+    isAuthenticatedSpy.mockRejectedValueOnce(new Error('auth offline'));
 
     await expect(initCliPlatform(cliContext())).rejects.toThrow('auth offline');
     expect(
@@ -377,9 +378,7 @@ describe('CLI platform init', () => {
   });
 
   it('lets launcher init treat auth probe failures as no included access', async () => {
-    mocks.authProvider.isAuthenticated.mockRejectedValueOnce(
-      new Error('auth offline'),
-    );
+    isAuthenticatedSpy.mockRejectedValueOnce(new Error('auth offline'));
 
     await expect(
       initCliPlatform(cliContext({ bestEffortIncludedModelAccess: true })),
@@ -397,11 +396,11 @@ describe('CLI platform init', () => {
       update: vi.fn(),
     };
     mocks.tryPlatform.mockReturnValue({ globalState });
-    mocks.authProvider.isAuthenticated.mockResolvedValueOnce(true);
+    isAuthenticatedSpy.mockResolvedValueOnce(true);
 
     await initCliPlatform(cliContext());
 
-    expect(mocks.authProvider.isAuthenticated).not.toHaveBeenCalled();
+    expect(isAuthenticatedSpy).not.toHaveBeenCalled();
     expect(
       mocks.serverSideKeyService.setUseIncludedModelAccess,
     ).toHaveBeenCalledWith(false);
@@ -415,7 +414,7 @@ describe('CLI platform init', () => {
       update: vi.fn().mockResolvedValue(undefined),
     };
     mocks.tryPlatform.mockReturnValue({ globalState });
-    mocks.authProvider.isAuthenticated.mockResolvedValueOnce(true);
+    isAuthenticatedSpy.mockResolvedValueOnce(true);
 
     await initCliPlatform(cliContext({ apiMode: 'included' }));
 
@@ -424,14 +423,14 @@ describe('CLI platform init', () => {
       false,
     );
     expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
-    expect(mocks.authProvider.isAuthenticated).toHaveBeenCalledOnce();
+    expect(isAuthenticatedSpy).toHaveBeenCalledOnce();
     expect(
       mocks.serverSideKeyService.setUseIncludedModelAccess,
     ).toHaveBeenCalledWith(true);
   });
 
   it('registers CLI runtime skill sources through the shared Node host helper', async () => {
-    mocks.authProvider.isAuthenticated.mockResolvedValueOnce(false);
+    isAuthenticatedSpy.mockResolvedValueOnce(false);
 
     await initCliPlatform(
       cliContext({
@@ -453,8 +452,8 @@ describe('CLI platform init', () => {
   });
 
   it('wires setup sign-in to the existing CLI login implementation', async () => {
-    mocks.authProvider.isAuthenticated.mockResolvedValue(false);
-    mocks.authProvider.canAccessRemoteAgentCatalog.mockResolvedValue(true);
+    isAuthenticatedSpy.mockResolvedValue(false);
+    canAccessRemoteAgentCatalogSpy.mockResolvedValue(true);
     mocks.signInCliSupabase.mockResolvedValue({ account: { label: 'User' } });
 
     await initCliPlatform(cliContext());
@@ -492,7 +491,7 @@ describe('CLI platform interactive signal ownership', () => {
     vi.clearAllMocks();
     mocks.tryPlatform.mockReset();
     mocks.bootstrapNodeAgentDirectories.mockResolvedValue(undefined);
-    mocks.authProvider.isAuthenticated.mockResolvedValue(false);
+    isAuthenticatedSpy.mockResolvedValue(false);
   });
 
   it('initInteractiveCliPlatform keeps the platform handler live until an explicit handoff', async () => {
