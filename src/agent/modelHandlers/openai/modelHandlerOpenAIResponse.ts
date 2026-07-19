@@ -1494,11 +1494,22 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
   }
 
+  override get supportsForcedToolChoice(): boolean {
+    return true;
+  }
+
   protected override async createResponseImpl(
     options: CreateResponseOptions<ResponseInputItem, OpenAI>,
   ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
-    const { client, messages, temperature, systemPrompt, signal, tools } =
-      options;
+    const {
+      client,
+      messages,
+      temperature,
+      systemPrompt,
+      signal,
+      tools,
+      finalTool,
+    } = options;
 
     if (this.backgroundLifecycle.hasPendingResume()) {
       const resumeContext: ResponseFinalizeContext = {
@@ -1798,7 +1809,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       max_output_tokens: maxOutputTokens,
       store: this.storesResponsesServerSide,
       ...(convertedTools?.length && {
-        tool_choice: 'auto' as const,
+        tool_choice: finalTool
+          ? ({ type: 'function', name: finalTool.name } as const)
+          : ('auto' as const),
         parallel_tool_calls: parallelToolCalls,
       }),
     };

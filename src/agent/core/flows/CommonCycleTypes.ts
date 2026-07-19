@@ -13,6 +13,7 @@ import {
 } from '@agent/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
 import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
+import type { FinalTool } from '@agent/types/ModelHandlerContracts';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import { RetryErrorInfoSchema } from '@shared/schemas';
@@ -58,6 +59,7 @@ export interface BaseInvocationPrepResult {
   shouldStop: boolean;
   messages: ProviderMessage[];
   systemPrompt?: string;
+  finalTool?: FinalTool;
 }
 
 /** Base success data returned from model/tool invocations. */

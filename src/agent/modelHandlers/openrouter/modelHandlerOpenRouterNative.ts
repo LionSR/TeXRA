@@ -193,6 +193,10 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     return tagOpenRouterSdkError;
   }
 
+  override get supportsForcedToolChoice(): boolean {
+    return true;
+  }
+
   /** Creates an OpenRouter response after SDK-boundary error tagging is installed. */
   protected override async createResponseImpl(
     options: CreateResponseOptions<ChatMessages, OpenRouter>,
@@ -204,6 +208,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       endTag,
       signal,
       tools,
+      finalTool,
     } = options;
 
     // Phase 0: COMPACT - Apply the shared trigger before building the request.
@@ -245,7 +250,9 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
 
     if (tools && tools.length > 0) {
       request.tools = toOpenAITools(tools);
-      request.toolChoice = 'auto';
+      request.toolChoice = finalTool
+        ? { type: 'function', function: { name: finalTool.name } }
+        : 'auto';
     }
 
     if (endTag) {

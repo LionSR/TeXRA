@@ -61,7 +61,7 @@ export class ToolUseCycleNode<C> extends Node<
 
   async exec(prepRes: CyclePrepResult): Promise<ToolUseCycleOutcome> {
     const { modelHandler } = this.services;
-    const { runScope } = useLaunchRunContext();
+    const { runScope, stopAfterCycle } = useLaunchRunContext();
     const { streamId } = runScope;
 
     if (prepRes.shouldSkipCycle) {
@@ -85,6 +85,10 @@ export class ToolUseCycleNode<C> extends Node<
       currentUserInstruction:
         typeof prepRes.userChannels.transient.INSTRUCTION === 'string'
           ? prepRes.userChannels.transient.INSTRUCTION
+          : undefined,
+      finalTool:
+        stopAfterCycle && modelHandler.supportsForcedToolChoice
+          ? this.services.finalTool
           : undefined,
     };
 

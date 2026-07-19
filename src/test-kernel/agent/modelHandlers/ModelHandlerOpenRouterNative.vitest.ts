@@ -191,6 +191,27 @@ describe('ModelHandlerOpenRouterNative Moonshot fixed temperature', () => {
 
     assert.equal(sendCalls[0].temperature, 0.3);
   });
+
+  it('maps finalTool to a named OpenRouter function choice', async () => {
+    const handler = new ModelHandlerOpenRouterNative(buildConfig());
+    (handler as any).setLogger(createLoggerStub());
+    (handler as any).getStreamingConfig = () => false;
+    const { client, sendCalls } = createSendStub();
+
+    await handler.createResponse({
+      client: client as any,
+      messages: [{ role: 'user', content: 'finish' }],
+      temperature: 0,
+      tools: [{ name: 'submit_output', description: 'Submit output' }],
+      finalTool: { name: 'submit_output' },
+    });
+
+    assert.deepEqual(sendCalls[0].toolChoice, {
+      type: 'function',
+      function: { name: 'submit_output' },
+    });
+    assert.equal(handler.supportsForcedToolChoice, true);
+  });
 });
 
 describe('ModelHandlerOpenRouterNative response mode discrimination', () => {
