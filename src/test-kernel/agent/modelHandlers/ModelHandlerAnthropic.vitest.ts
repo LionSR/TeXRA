@@ -33,6 +33,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
+import { noopTrace } from '@agent/trace/noopTrace';
 import {
   enforceCacheControlLimit,
   logContextManagementFromResponse,
@@ -182,27 +183,12 @@ describe('ModelHandlerAnthropic forced tool choice', () => {
   });
 });
 
-/** Create a no-op logger stub for handler tests, with optional overrides. */
-function createLoggerStub(
-  overrides?: Partial<Record<string, unknown>>,
-): unknown {
-  return {
-    streamId: 'test',
-    debug: () => {},
-    info: () => {},
-    warn: () => {},
-    error: () => {},
-    domain: () => {},
-    ...overrides,
-  };
-}
-
 /** Attach a logger stub and disable streaming for a handler under test. */
 function stubHandlerForTest(
   handler: ModelHandlerAnthropic,
   loggerOverrides?: Partial<Record<string, unknown>>,
 ): void {
-  handler.setLogger(createLoggerStub(loggerOverrides) as unknown as AgentTrace);
+  handler.setLogger({ ...noopTrace, ...loggerOverrides } as AgentTrace);
   (handler as any).getStreamingConfig = () => false;
 }
 
@@ -1236,13 +1222,14 @@ describe('ModelHandlerAnthropic message guards', () => {
   it('logs server-side compaction events from compaction blocks', () => {
     const events: Array<{ message: string; data: unknown }> = [];
 
-    const logger = createLoggerStub({
+    const logger = {
+      ...noopTrace,
       domain: (event: { key: string; text?: string; data?: unknown }) => {
         if (event.key === 'contextManagement') {
           events.push({ message: event.text ?? '', data: event.data });
         }
       },
-    }) as unknown as AgentTrace;
+    } as AgentTrace;
 
     logContextManagementFromResponse(
       {
@@ -1537,7 +1524,7 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
       supportsTokenCounting: false,
       supportsReasoning: false,
     });
-    handler.setLogger(createLoggerStub() as unknown as AgentTrace);
+    handler.setLogger({ ...noopTrace });
     // Force streaming path so we exercise the pre-message_start catch block.
     (handler as any).getStreamingConfig = () => true;
 
@@ -1596,7 +1583,7 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
       supportsTokenCounting: false,
       supportsReasoning: false,
     });
-    handler.setLogger(createLoggerStub() as unknown as AgentTrace);
+    handler.setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => true;
 
     // Simulates the message_stop guard above: message_start (and content)

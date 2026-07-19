@@ -24,6 +24,7 @@ import {
   MediaAttachmentProcessor,
   type MediaFileResult,
 } from '@agent/modelHandlers/support/MediaAttachmentProcessor';
+import { noopTrace } from '@agent/trace/noopTrace';
 import { attachProviderError } from '@common/errors/sdkErrorUtils';
 
 // Type imports
@@ -31,26 +32,25 @@ import { attachProviderError } from '@common/errors/sdkErrorUtils';
 // Internal imports
 import { AbsoluteFS, pathToLocation, getShortDisplayPath } from '@utils/files';
 
-interface LoggerStub extends Partial<AgentTrace> {
-  streamId: string;
+interface MediaLogRecorder extends AgentTrace {
   debugMessages: string[];
   warnMessages: string[];
   errorMessages: string[];
   fileListEntries: MediaFileResult[][];
 }
 
-function createLoggerStub(): { logger: AgentTrace; stub: LoggerStub } {
-  const stub: LoggerStub = {
-    streamId: 'media-test',
+function createMediaLogRecorder(): {
+  logger: AgentTrace;
+  stub: MediaLogRecorder;
+} {
+  const stub: MediaLogRecorder = {
+    ...noopTrace,
     debugMessages: [],
     warnMessages: [],
     errorMessages: [],
     fileListEntries: [],
     debug(message: string) {
       this.debugMessages.push(message);
-    },
-    info: () => {
-      /* no-op */
     },
     warn(message: string) {
       this.warnMessages.push(message);
@@ -66,7 +66,7 @@ function createLoggerStub(): { logger: AgentTrace; stub: LoggerStub } {
     },
   };
 
-  return { logger: stub as unknown as AgentTrace, stub };
+  return { logger: stub, stub };
 }
 
 describe('MediaAttachmentProcessor', () => {
@@ -187,7 +187,7 @@ describe('MediaAttachmentProcessor', () => {
     const pdfPath = await createPdfFixture();
     const pdfLocation = pathToLocation(pdfPath);
     const displayPath = getShortDisplayPath(pdfLocation);
-    const { logger, stub } = createLoggerStub();
+    const { logger, stub } = createMediaLogRecorder();
     const processor = createProcessor(logger, {
       supportsVision: true,
       supportsNativePdf: true,
@@ -218,7 +218,7 @@ describe('MediaAttachmentProcessor', () => {
     const audioPath = createAudioFixture();
     const audioLocation = pathToLocation(audioPath);
     const displayPath = getShortDisplayPath(audioLocation);
-    const { logger, stub } = createLoggerStub();
+    const { logger, stub } = createMediaLogRecorder();
     const processor = createProcessor(
       logger,
       {
@@ -253,7 +253,7 @@ describe('MediaAttachmentProcessor', () => {
       const audioPath = createRawAudioFixture(extension);
       const audioLocation = pathToLocation(audioPath);
       const displayPath = getShortDisplayPath(audioLocation);
-      const { logger } = createLoggerStub();
+      const { logger } = createMediaLogRecorder();
       const processor = createProcessor(
         logger,
         {
@@ -280,7 +280,7 @@ describe('MediaAttachmentProcessor', () => {
     const emptyPath = createEmptyFixture();
     const emptyLocation = pathToLocation(emptyPath);
     const displayPath = getShortDisplayPath(emptyLocation);
-    const { logger, stub } = createLoggerStub();
+    const { logger, stub } = createMediaLogRecorder();
     const processor = createProcessor(logger, { supportsVision: true });
 
     const { entries, results } = await processor.loadEntries([emptyLocation]);
@@ -304,7 +304,7 @@ describe('MediaAttachmentProcessor', () => {
     const mediaPath = createTempFile('sdk-error.png', Buffer.from('not-png'));
     const mediaLocation = pathToLocation(mediaPath);
     const displayPath = getShortDisplayPath(mediaLocation);
-    const { logger, stub } = createLoggerStub();
+    const { logger, stub } = createMediaLogRecorder();
     const processor = createProcessor(logger, { supportsVision: true });
     const originalExists = absoluteFsAny.exists;
 

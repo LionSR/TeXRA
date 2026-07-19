@@ -20,6 +20,7 @@ import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
+import { noopTrace } from '@agent/trace/noopTrace';
 
 // Type imports
 import { pathToLocation } from '@utils/files';
@@ -27,26 +28,23 @@ import { pathToLocation } from '@utils/files';
 // pathToLocation resolves through platform services.
 setupPlatform({}, { fs: nodeFilesystem });
 
-function createLoggerStub(): {
+function createFailureRecorder(): {
   logger: AgentTrace;
   errorMessages: string[];
   warnMessages: string[];
 } {
   const errorMessages: string[] = [];
   const warnMessages: string[] = [];
-  const logger: Partial<AgentTrace> = {
-    streamId: 'test-channel',
-    debug: () => {},
-    info: () => {},
+  const logger: AgentTrace = {
+    ...noopTrace,
     warn: (message: string) => {
       warnMessages.push(message);
     },
     error: (message: string) => {
       errorMessages.push(message);
     },
-    domain: () => {},
-  } as Partial<AgentTrace>;
-  return { logger: logger as AgentTrace, errorMessages, warnMessages };
+  };
+  return { logger, errorMessages, warnMessages };
 }
 
 const MEDIA_FAILURE = new Error('media processing exploded');
@@ -120,7 +118,7 @@ describe('media attachment failure policy (#7465)', () => {
     const handler = new ThrowingMediaOpenAIResponseHandler(
       buildOpenAIResponseConfig(),
     );
-    const { logger } = createLoggerStub();
+    const { logger } = createFailureRecorder();
     handler.setLogger(logger);
 
     await assert.rejects(
@@ -133,7 +131,7 @@ describe('media attachment failure policy (#7465)', () => {
     const handler = new ThrowingMediaOpenAIResponseHandler(
       buildOpenAIResponseConfig(),
     );
-    const { logger, errorMessages } = createLoggerStub();
+    const { logger, errorMessages } = createFailureRecorder();
     handler.setLogger(logger);
 
     const messages = await handler.createRoundMessages(
@@ -153,7 +151,7 @@ describe('media attachment failure policy (#7465)', () => {
     const handler = new ThrowingMediaGoogleGenAIHandler(
       buildGoogleGenAIConfig(),
     );
-    const { logger, errorMessages } = createLoggerStub();
+    const { logger, errorMessages } = createFailureRecorder();
     handler.setLogger(logger);
 
     const messages = await handler.createRoundMessages(
@@ -173,7 +171,7 @@ describe('media attachment failure policy (#7465)', () => {
     const handler = new ThrowingMediaGoogleGenAIHandler(
       buildGoogleGenAIConfig(),
     );
-    const { logger } = createLoggerStub();
+    const { logger } = createFailureRecorder();
     handler.setLogger(logger);
 
     await assert.rejects(
@@ -189,7 +187,7 @@ describe('media attachment failure policy (#7465)', () => {
   // common enough that it shouldn't render as a red error in the progress
   // view, unlike followUp/insert media failures which do stay error-level.
   it('reports a toolAttachment failure as a warning, not an error', () => {
-    const { logger, errorMessages, warnMessages } = createLoggerStub();
+    const { logger, errorMessages, warnMessages } = createFailureRecorder();
 
     reportMediaAttachmentFailure(logger, 'toolAttachment', MEDIA_FAILURE);
 
@@ -199,7 +197,7 @@ describe('media attachment failure policy (#7465)', () => {
   });
 
   it('still reports a followUp failure as an error', () => {
-    const { logger, errorMessages, warnMessages } = createLoggerStub();
+    const { logger, errorMessages, warnMessages } = createFailureRecorder();
 
     reportMediaAttachmentFailure(logger, 'followUp', MEDIA_FAILURE);
 

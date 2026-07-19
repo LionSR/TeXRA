@@ -1,15 +1,11 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 import { createPartFromText, type Content } from '@google/genai';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  ModelProvider,
-  type ModelConfig,
-} from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
-import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
+import { noopTrace } from '@agent/trace/noopTrace';
 
 // Local imports - common errors
 import {
@@ -17,38 +13,7 @@ import {
   requiresFlowAutoRetry,
 } from '@common/errors/sdkErrorUtils';
 
-function createConfig(): ModelConfig {
-  return {
-    name: 'test-google-model',
-    label: 'Test Google Model',
-    fullName: 'google/test',
-    shortName: 'google/test',
-    provider: ModelProvider.GOOGLE,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 4096,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsTokenCounting: false,
-    },
-    openRouterOnly: false,
-  };
-}
-
-function createLoggerStub(): AgentTrace {
-  return {
-    debug: () => undefined,
-    info: () => undefined,
-    warn: () => undefined,
-    error: () => undefined,
-    openStream: () => ({
-      id: 'stream-1',
-      append: () => undefined,
-      finalize: (text?: string) => text ?? '',
-    }),
-  } as unknown as AgentTrace;
-}
+import { buildTestModelConfig } from './testFixtures';
 
 class StreamingGoogleHandler extends ModelHandlerGoogleGenAI {
   override getStreamingConfig(): boolean {
@@ -57,8 +22,25 @@ class StreamingGoogleHandler extends ModelHandlerGoogleGenAI {
 }
 
 function createStreamingHandler(): ModelHandlerGoogleGenAI {
-  const handler = new StreamingGoogleHandler(createConfig());
-  handler.setLogger(createLoggerStub());
+  const handler = new StreamingGoogleHandler(
+    buildTestModelConfig({
+      name: 'test-google-model',
+      label: 'Test Google Model',
+      fullName: 'google/test',
+      shortName: 'google/test',
+      provider: ModelProvider.GOOGLE,
+      contextWindow: 4096,
+      capabilities: { supportsTokenCounting: false },
+    }),
+  );
+  handler.setLogger({
+    ...noopTrace,
+    openStream: () => ({
+      id: 'stream-1',
+      append: () => undefined,
+      finalize: (text?: string) => text ?? '',
+    }),
+  });
   handler.setOutputStreaming(true);
   return handler;
 }

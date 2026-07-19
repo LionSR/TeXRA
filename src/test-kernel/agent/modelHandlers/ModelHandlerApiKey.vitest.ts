@@ -1,11 +1,7 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
 import { afterEach, beforeEach, describe, it, vi } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelConfig,
-  ModelProvider,
-} from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 
 // Local imports - handler under test
 import { installPlatform } from '@test/support/setupPlatform';
@@ -18,29 +14,23 @@ import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import * as configUtilsModule from '@utils/config/configUtils';
 import * as providerConfigModule from '@utils/config/providerConfig';
 
+import { buildTestModelConfig } from './testFixtures';
+
 class ExposedKeyHandler extends ModelHandlerOpenRouterNative {
   exposeGetApiKey(): Promise<string> {
     return this.getApiKey();
   }
 }
 
-function buildConfig(overrides: Partial<ModelConfig> = {}): ModelConfig {
-  return {
-    name: 'gpt-5.5',
-    label: 'GPT-5.5',
-    fullName: 'gpt-5.5-2026-04-15',
-    shortName: 'gpt-5.5',
-    provider: ModelProvider.OPENAI,
-    maxOutputTokens: 16384,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 200000,
-    capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
-    openRouterOnly: false,
-    openrouterFullName: 'openai/gpt-5.5',
-    ...overrides,
-  };
-}
+const API_KEY_TEST_CONFIG = {
+  name: 'gpt-5.5',
+  label: 'GPT-5.5',
+  fullName: 'gpt-5.5-2026-04-15',
+  shortName: 'gpt-5.5',
+  provider: ModelProvider.OPENAI,
+  maxOutputTokens: 16_384,
+  openrouterFullName: 'openai/gpt-5.5',
+};
 
 function stubServerSideKeyService(
   options: {
@@ -91,7 +81,9 @@ describe('ModelHandler.getApiKey resolution', () => {
       .spyOn(SupabaseClient, 'getRelayAccessToken')
       .mockResolvedValue('relay-token');
 
-    const handler = new ExposedKeyHandler(buildConfig());
+    const handler = new ExposedKeyHandler(
+      buildTestModelConfig(API_KEY_TEST_CONFIG),
+    );
 
     assert.equal(await handler.exposeGetApiKey(), 'relay-token');
     assert.equal(canUseServerSideKeys.mock.calls.length, 1);
@@ -110,7 +102,9 @@ describe('ModelHandler.getApiKey resolution', () => {
       .spyOn(SupabaseClient, 'getRelayAccessToken')
       .mockResolvedValue('relay-token');
 
-    const handler = new ExposedKeyHandler(buildConfig());
+    const handler = new ExposedKeyHandler(
+      buildTestModelConfig(API_KEY_TEST_CONFIG),
+    );
 
     await assert.rejects(
       handler.exposeGetApiKey(),
@@ -132,7 +126,7 @@ describe('ModelHandler.getApiKey resolution', () => {
     });
 
     const handler = new ExposedKeyHandler(
-      buildConfig({ openRouterOnly: true }),
+      buildTestModelConfig(API_KEY_TEST_CONFIG, { openRouterOnly: true }),
     );
 
     assert.equal(await handler.exposeGetApiKey(), 'openrouter-key');
@@ -159,7 +153,7 @@ describe('ModelHandler.getApiKey resolution', () => {
       .spyOn(SupabaseClient, 'getRelayAccessToken')
       .mockResolvedValue('relay-token');
     const handler = new ExposedKeyHandler(
-      buildConfig({
+      buildTestModelConfig(API_KEY_TEST_CONFIG, {
         provider: ModelProvider.MOONSHOT,
         kimiSubscription: true,
         baseUrl: 'https://api.kimi.com/coding/v1',
@@ -181,7 +175,9 @@ describe('ModelHandler.getApiKey resolution', () => {
       shouldUseServerSideKeys: false,
     });
 
-    const handler = new ExposedKeyHandler(buildConfig());
+    const handler = new ExposedKeyHandler(
+      buildTestModelConfig(API_KEY_TEST_CONFIG),
+    );
 
     await assert.rejects(
       handler.exposeGetApiKey(),
@@ -200,7 +196,9 @@ describe('ModelHandler.getApiKey resolution', () => {
       shouldUseServerSideKeys: false,
     });
 
-    const handler = new ExposedKeyHandler(buildConfig());
+    const handler = new ExposedKeyHandler(
+      buildTestModelConfig(API_KEY_TEST_CONFIG),
+    );
 
     assert.equal(await handler.exposeGetApiKey(), 'personal-key');
     assert.equal(canUseServerSideKeys.mock.calls.length, 1);

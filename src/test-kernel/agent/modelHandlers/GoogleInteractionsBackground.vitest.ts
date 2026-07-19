@@ -1,16 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  ModelProvider,
-  type ModelConfig,
-} from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 
-import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
+import { noopTrace } from '@agent/trace/noopTrace';
 import * as configModule from '@utils/config/configUtils';
 import * as providerConfigModule from '@utils/config/providerConfig';
+import { buildTestModelConfig } from './testFixtures';
 import type { Interactions } from '@google/genai';
+
 
 type Step = Interactions.Step;
 
@@ -105,47 +103,25 @@ function bgClient(opts: {
   return { client, calls };
 }
 
-function createConfig(): ModelConfig {
-  return {
-    name: 'test-google-interactions',
-    label: 'Test Google Interactions',
-    fullName: 'gemini-3-pro-test',
-    shortName: 'gemini-3-pro-test',
-    provider: ModelProvider.GOOGLE,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 4096,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsReasoning: true,
-      supportsTokenCounting: false,
-    },
-    openRouterOnly: false,
-  };
-}
-
-function silentLogger(): AgentTrace {
-  return {
-    debug: () => undefined,
-    info: () => undefined,
-    warn: () => undefined,
-    error: () => undefined,
-    domain: () => undefined,
-    openStream: () => ({
-      id: 'stream',
-      append: () => undefined,
-      finalize: (text?: string) => text ?? '',
-    }),
-  } as unknown as AgentTrace;
-}
-
 /** Workflow-mode handler so isBackgroundModeEligible() is true. */
 function createHandler(
   category: AgentCategory = AgentCategory.Workflow,
 ): ModelHandlerGoogleInteractions {
-  const handler = new ModelHandlerGoogleInteractions(createConfig());
-  handler.setLogger(silentLogger());
+  const handler = new ModelHandlerGoogleInteractions(
+    buildTestModelConfig({
+      name: 'test-google-interactions',
+      label: 'Test Google Interactions',
+      fullName: 'gemini-3-pro-test',
+      shortName: 'gemini-3-pro-test',
+      provider: ModelProvider.GOOGLE,
+      contextWindow: 4096,
+      capabilities: {
+        supportsReasoning: true,
+        supportsTokenCounting: false,
+      },
+    }),
+  );
+  handler.setLogger({ ...noopTrace });
   handler.setAgentCategory(category);
   return handler;
 }

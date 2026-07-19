@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  ModelProvider,
-  type ModelConfig,
-} from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 
 import type { AgentTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
+import { noopTrace } from '@agent/trace/noopTrace';
 import { GOOGLE_FINISH } from '@agent/types/StopReasonTypes';
+import { buildTestModelConfig } from './testFixtures';
 import type { Interactions } from '@google/genai';
+
 
 type StreamRecord = {
   type: string;
@@ -17,33 +16,10 @@ type StreamRecord = {
   finalized?: string;
 };
 
-function createConfig(): ModelConfig {
-  return {
-    name: 'test-google-interactions',
-    label: 'Test Google Interactions',
-    fullName: 'gemini-3-pro-test',
-    shortName: 'gemini-3-pro-test',
-    provider: ModelProvider.GOOGLE,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 4096,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsReasoning: true,
-      supportsTokenCounting: false,
-    },
-    openRouterOnly: false,
-  };
-}
-
-function createLoggerStub(records: StreamRecord[]): AgentTrace {
+function createStreamRecorder(records: StreamRecord[]): AgentTrace {
   let counter = 0;
   return {
-    debug: () => undefined,
-    info: () => undefined,
-    warn: () => undefined,
-    error: () => undefined,
+    ...noopTrace,
     openStream: (type: string) => {
       counter += 1;
       const record: StreamRecord = { type, appends: [] };
@@ -57,7 +33,7 @@ function createLoggerStub(records: StreamRecord[]): AgentTrace {
         },
       };
     },
-  } as unknown as AgentTrace;
+  };
 }
 
 class StreamingInteractionsHandler extends ModelHandlerGoogleInteractions {
@@ -69,8 +45,21 @@ class StreamingInteractionsHandler extends ModelHandlerGoogleInteractions {
 function createHandler(
   records: StreamRecord[],
 ): ModelHandlerGoogleInteractions {
-  const handler = new StreamingInteractionsHandler(createConfig());
-  handler.setLogger(createLoggerStub(records));
+  const handler = new StreamingInteractionsHandler(
+    buildTestModelConfig({
+      name: 'test-google-interactions',
+      label: 'Test Google Interactions',
+      fullName: 'gemini-3-pro-test',
+      shortName: 'gemini-3-pro-test',
+      provider: ModelProvider.GOOGLE,
+      contextWindow: 4096,
+      capabilities: {
+        supportsReasoning: true,
+        supportsTokenCounting: false,
+      },
+    }),
+  );
+  handler.setLogger(createStreamRecorder(records));
   handler.setOutputStreaming(true);
   return handler;
 }

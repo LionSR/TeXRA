@@ -1,17 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  ModelProvider,
-  type ModelConfig,
-} from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 
-import type { AgentTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
+import { noopTrace } from '@agent/trace/noopTrace';
 import type { GoogleToolCall } from '@agent/types/ModelHandlerContracts';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import * as configModule from '@utils/config/configUtils';
+import { buildTestModelConfig } from './testFixtures';
 import type { Interactions } from '@google/genai';
+
 
 const originalGetConfig = configModule.getConfig;
 
@@ -48,39 +46,6 @@ function fakeWorkspace(): AgentWorkspaceState {
   } as unknown as AgentWorkspaceState;
 }
 
-function createConfig(): ModelConfig {
-  return {
-    name: 'test-google-interactions',
-    label: 'Test Google Interactions',
-    fullName: 'gemini-3-pro-test',
-    shortName: 'gemini-3-pro-test',
-    provider: ModelProvider.GOOGLE,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 4096,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsTokenCounting: false,
-    },
-    openRouterOnly: false,
-  };
-}
-
-function silentLogger(): AgentTrace {
-  return {
-    debug: () => undefined,
-    info: () => undefined,
-    warn: () => undefined,
-    error: () => undefined,
-    openStream: () => ({
-      id: 'stream',
-      append: () => undefined,
-      finalize: (text?: string) => text ?? '',
-    }),
-  } as unknown as AgentTrace;
-}
-
 class StreamingHandler extends ModelHandlerGoogleInteractions {
   override getStreamingConfig(): boolean {
     return true;
@@ -88,8 +53,18 @@ class StreamingHandler extends ModelHandlerGoogleInteractions {
 }
 
 function createHandler(): ModelHandlerGoogleInteractions {
-  const handler = new StreamingHandler(createConfig());
-  handler.setLogger(silentLogger());
+  const handler = new StreamingHandler(
+    buildTestModelConfig({
+      name: 'test-google-interactions',
+      label: 'Test Google Interactions',
+      fullName: 'gemini-3-pro-test',
+      shortName: 'gemini-3-pro-test',
+      provider: ModelProvider.GOOGLE,
+      contextWindow: 4096,
+      capabilities: { supportsTokenCounting: false },
+    }),
+  );
+  handler.setLogger({ ...noopTrace });
   return handler;
 }
 

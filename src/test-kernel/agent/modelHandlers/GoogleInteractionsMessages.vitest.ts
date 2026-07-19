@@ -1,54 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  ModelProvider,
-  type ModelConfig,
-} from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 
-import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
+import { noopTrace } from '@agent/trace/noopTrace';
 import { GOOGLE_FINISH } from '@agent/types/StopReasonTypes';
+import { buildTestModelConfig } from './testFixtures';
 import type { Interactions } from '@google/genai';
+
 
 type Step = Interactions.Step;
 
-function createConfig(): ModelConfig {
-  return {
-    name: 'test-google-interactions',
-    label: 'Test Google Interactions',
-    fullName: 'gemini-3-pro-test',
-    shortName: 'gemini-3-pro-test',
-    provider: ModelProvider.GOOGLE,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 4096,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsVision: true,
-      supportsTokenCounting: false,
-    },
-    openRouterOnly: false,
-  };
-}
-
-function silentLogger(): AgentTrace {
-  return {
-    debug: () => undefined,
-    info: () => undefined,
-    warn: () => undefined,
-    error: () => undefined,
-    openStream: () => ({
-      id: 'stream',
-      append: () => undefined,
-      finalize: (text?: string) => text ?? '',
-    }),
-  } as unknown as AgentTrace;
-}
-
 function createHandler(): ModelHandlerGoogleInteractions {
-  const handler = new ModelHandlerGoogleInteractions(createConfig());
-  handler.setLogger(silentLogger());
+  const handler = new ModelHandlerGoogleInteractions(
+    buildTestModelConfig({
+      name: 'test-google-interactions',
+      label: 'Test Google Interactions',
+      fullName: 'gemini-3-pro-test',
+      shortName: 'gemini-3-pro-test',
+      provider: ModelProvider.GOOGLE,
+      contextWindow: 4096,
+      capabilities: { supportsVision: true, supportsTokenCounting: false },
+    }),
+  );
+  handler.setLogger({ ...noopTrace });
   return handler;
 }
 
@@ -148,8 +122,18 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
         return 4;
       }
     }
-    const handler = new TinyInlineLimitHandler(createConfig());
-    handler.setLogger(silentLogger());
+    const handler = new TinyInlineLimitHandler(
+      buildTestModelConfig({
+        name: 'test-google-interactions',
+        label: 'Test Google Interactions',
+        fullName: 'gemini-3-pro-test',
+        shortName: 'gemini-3-pro-test',
+        provider: ModelProvider.GOOGLE,
+        contextWindow: 4096,
+        capabilities: { supportsVision: true, supportsTokenCounting: false },
+      }),
+    );
+    handler.setLogger({ ...noopTrace });
 
     let uploadCalls = 0;
     (handler as unknown as { getClient: () => Promise<unknown> }).getClient =

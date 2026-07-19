@@ -5,45 +5,22 @@ import {
   createPartFromText,
   type Content,
 } from '@google/genai';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  ModelProvider,
-  type ModelConfig,
-} from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
+import { noopTrace } from '@agent/trace/noopTrace';
 
 type StreamRecord = {
   appends: string[];
   finalized?: string;
 };
 
-function createConfig(): ModelConfig {
-  return {
-    name: 'test-google-model',
-    label: 'Test Google Model',
-    fullName: 'google/test',
-    shortName: 'google/test',
-    provider: ModelProvider.GOOGLE,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 4096,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsTokenCounting: false,
-    },
-    openRouterOnly: false,
-  };
-}
+import { buildTestModelConfig } from './testFixtures';
 
-function createLoggerStub(records: StreamRecord[]): AgentTrace {
+function createStreamRecorder(records: StreamRecord[]): AgentTrace {
   return {
-    debug: () => undefined,
-    info: () => undefined,
-    warn: () => undefined,
-    error: () => undefined,
+    ...noopTrace,
     openStream: () => {
       const record: StreamRecord = { appends: [] };
       records.push(record);
@@ -58,7 +35,7 @@ function createLoggerStub(records: StreamRecord[]): AgentTrace {
         },
       };
     },
-  } as unknown as AgentTrace;
+  };
 }
 
 class StreamingGoogleHandler extends ModelHandlerGoogleGenAI {
@@ -70,8 +47,18 @@ class StreamingGoogleHandler extends ModelHandlerGoogleGenAI {
 function createStreamingHandler(
   records: StreamRecord[],
 ): ModelHandlerGoogleGenAI {
-  const handler = new StreamingGoogleHandler(createConfig());
-  handler.setLogger(createLoggerStub(records));
+  const handler = new StreamingGoogleHandler(
+    buildTestModelConfig({
+      name: 'test-google-model',
+      label: 'Test Google Model',
+      fullName: 'google/test',
+      shortName: 'google/test',
+      provider: ModelProvider.GOOGLE,
+      contextWindow: 4096,
+      capabilities: { supportsTokenCounting: false },
+    }),
+  );
+  handler.setLogger(createStreamRecorder(records));
   handler.setOutputStreaming(true);
   return handler;
 }

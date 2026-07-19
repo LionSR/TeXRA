@@ -21,7 +21,6 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent
-import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
@@ -30,6 +29,7 @@ import {
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller';
+import { noopTrace } from '@agent/trace/noopTrace';
 import {
   attachContextWindowError,
   hasContextWindowErrorMarker,
@@ -39,71 +39,29 @@ import type { ToolDefinition } from '@model';
 
 // Type imports
 import { pathToLocation } from '@utils/files';
+import { buildTestModelConfig } from './testFixtures';
 import type {
   ResponseInputItem,
   ResponseUsage,
 } from 'openai/resources/responses/responses';
 
+
 // pathToLocation and FlexibleFS resolve through platform services, so this
 // suite needs the real node fs rather than the in-memory default.
 setupPlatform({}, { fs: nodeFilesystem });
 
-type LoggerStub = Partial<AgentTrace> & {
-  streamId: string;
+const OPENAI_RESPONSE_TEST_CONFIG = {
+  name: 'gpt-4.1',
+  fullName: 'gpt-4.1',
+  shortName: 'gpt-4.1',
+  label: 'GPT 4.1',
+  provider: ModelProvider.OPENAI,
+  capabilities: { supportsReasoning: false, supportsVision: false },
+  openRouterOnly: true,
 };
 
-function createLoggerStub(): LoggerStub {
-  const stream = {
-    id: 'stream-test',
-    append: () => {
-      /* no-op for tests */
-    },
-    finalize: () => '',
-  };
-  return {
-    streamId: 'test-channel',
-    openStream: () => stream,
-    debug: () => {
-      /* no-op for tests */
-    },
-    info: () => {
-      /* no-op for tests */
-    },
-    warn: () => {
-      /* no-op for tests */
-    },
-    error: () => {
-      /* no-op for tests */
-    },
-    domain: () => {
-      /* no-op for tests */
-    },
-  };
-}
-
-function createConfig(overrides: Partial<ModelConfig> = {}): ModelConfig {
-  return {
-    name: 'gpt-4.1',
-    fullName: 'gpt-4.1',
-    shortName: 'gpt-4.1',
-    label: 'GPT 4.1',
-    provider: overrides.provider ?? ModelProvider.OPENAI,
-    maxOutputTokens: overrides.maxOutputTokens ?? 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: overrides.contextWindow ?? 200000,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsReasoning: false,
-      supportsVision: false,
-      ...(overrides.capabilities ?? {}),
-    },
-    openRouterOnly: overrides.openRouterOnly ?? true,
-  };
-}
-
 function setupHandler<T extends ModelHandlerOpenAIResponse>(handler: T): T {
-  handler.setLogger(createLoggerStub() as unknown as AgentTrace);
+  handler.setLogger({ ...noopTrace });
   handler.getStreamingConfig = () => false;
   return handler;
 }
@@ -112,7 +70,9 @@ function createHandler(
   configOverrides: Partial<ModelConfig> = {},
 ): ModelHandlerOpenAIResponse {
   return setupHandler(
-    new ModelHandlerOpenAIResponse(createConfig(configOverrides)),
+    new ModelHandlerOpenAIResponse(
+      buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG, configOverrides),
+    ),
   );
 }
 
@@ -136,7 +96,9 @@ function createNonChainingHandler(
   configOverrides: Partial<ModelConfig> = {},
 ): ModelHandlerOpenAIResponse {
   return setupHandler(
-    new NonChainingResponseHandler(createConfig(configOverrides)),
+    new NonChainingResponseHandler(
+      buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG, configOverrides),
+    ),
   );
 }
 
@@ -144,7 +106,9 @@ function createStatelessHandler(
   configOverrides: Partial<ModelConfig> = {},
 ): ModelHandlerOpenAIResponse {
   return setupHandler(
-    new StatelessResponseHandler(createConfig(configOverrides)),
+    new StatelessResponseHandler(
+      buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG, configOverrides),
+    ),
   );
 }
 
@@ -728,7 +692,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
       maxDurationMs: 1000,
       isPending: (response: { status?: string | null }) =>
         response.status === 'queued' || response.status === 'in_progress',
-      logger: createLoggerStub() as unknown as AgentTrace,
+      logger: { ...noopTrace },
     });
 
     const retrieveCalls: Array<{
@@ -887,7 +851,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
       maxDurationMs: 1000,
       isPending: (response: { status?: string | null }) =>
         response.status === 'queued' || response.status === 'in_progress',
-      logger: createLoggerStub() as unknown as AgentTrace,
+      logger: { ...noopTrace },
     });
 
     let streamCalls = 0;
@@ -1165,7 +1129,10 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     // compaction — a regression vs the old cumulative-threshold trigger.
     const handler = setupHandler(
       new NonChainingResponseHandler(
-        createConfig({ openRouterOnly: false, contextWindow: 200000 }),
+        buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG, {
+          openRouterOnly: false,
+          contextWindow: 200_000,
+        }),
       ),
     );
     const compactCalls: ResponseInputItem[][] = [];
@@ -1303,7 +1270,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     }
     const handler = setupHandler(
       new FailOnReducedBudgetHandler(
-        createConfig({
+        buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG, {
           openRouterOnly: false,
           maxOutputTokens: 200,
           contextWindow: 1000,

@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports - agent model handlers
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
+import { noopTrace } from '@agent/trace/noopTrace';
 
 // Type imports
 import type Anthropic from '@anthropic-ai/sdk';
@@ -36,17 +37,6 @@ function createHandler(): ModelHandlerAnthropic {
   return handler;
 }
 
-function createLoggerStub() {
-  return {
-    streamId: 'test',
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    domain: vi.fn(),
-  };
-}
-
 function createStreamStub(error: unknown): unknown {
   return {
     on: vi.fn(),
@@ -62,7 +52,14 @@ function createStreamStub(error: unknown): unknown {
 describe('Anthropic stream failure logging', () => {
   it('keeps raw stream failures out of visible warning logs', async () => {
     const handler = createHandler();
-    const logger = createLoggerStub();
+    const logger = {
+      ...noopTrace,
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      domain: vi.fn(),
+    };
     handler.setLogger(logger as unknown as AgentTrace);
 
     const providerError = new AnthropicBadRequestError(

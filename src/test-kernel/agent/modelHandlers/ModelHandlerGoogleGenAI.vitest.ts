@@ -21,6 +21,7 @@ import {
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 import { validateGoogleMessageHistory } from '@agent/modelHandlers/google/googleMessageHelpers';
+import { noopTrace } from '@agent/trace/noopTrace';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
@@ -39,28 +40,18 @@ import type {
   Content,
 } from '@google/genai';
 
-interface LoggerStub extends Partial<AgentTrace> {
-  streamId: string;
+interface LogRecorder extends AgentTrace {
   fileListEntries: Array<Array<{ path: string; ok: boolean }>>;
   warnMessages: string[];
 }
 
-function createLoggerStub(): { logger: AgentTrace; stub: LoggerStub } {
-  const stub: LoggerStub = {
-    streamId: 'test-channel',
+function createLogRecorder(): { logger: AgentTrace; stub: LogRecorder } {
+  const stub: LogRecorder = {
+    ...noopTrace,
     fileListEntries: [],
     warnMessages: [],
-    debug: () => {
-      /* no-op for tests */
-    },
-    info: () => {
-      /* no-op for tests */
-    },
     warn(message: string) {
       this.warnMessages.push(message);
-    },
-    error: () => {
-      /* no-op for tests */
     },
     domain(event) {
       if (event.key === 'filesLoaded') {
@@ -72,7 +63,7 @@ function createLoggerStub(): { logger: AgentTrace; stub: LoggerStub } {
     },
   };
 
-  return { logger: stub as unknown as AgentTrace, stub };
+  return { logger: stub, stub };
 }
 
 function buildGoogleConfig(
@@ -102,7 +93,7 @@ function buildGoogleConfig(
 
 function createGoogleGenAIHandler(): ModelHandlerGoogleGenAI {
   const handler = new ModelHandlerGoogleGenAI(buildGoogleConfig());
-  const { logger } = createLoggerStub();
+  const { logger } = createLogRecorder();
   handler.setLogger(logger);
   return handler;
 }
@@ -146,7 +137,7 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
       buildGoogleConfig(),
       clientStub,
     );
-    const { logger } = createLoggerStub();
+    const { logger } = createLogRecorder();
     handler.setLogger(logger);
 
     const entry: MediaEntry = {
@@ -178,7 +169,7 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
       buildGoogleConfig(),
       clientStub,
     );
-    const { logger, stub } = createLoggerStub();
+    const { logger, stub } = createLogRecorder();
     handler.setLogger(logger);
 
     const entry: MediaEntry = {
@@ -220,7 +211,7 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
     }
 
     const handler = new LimitedInlineHandler(buildGoogleConfig(), clientStub);
-    const { logger } = createLoggerStub();
+    const { logger } = createLogRecorder();
     handler.setLogger(logger);
 
     const oversized = Buffer.from([0, 1]).toString('base64');
@@ -256,7 +247,7 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
     }
 
     const handler = new LimitedInlineHandler(buildGoogleConfig(), clientStub);
-    const { logger, stub } = createLoggerStub();
+    const { logger, stub } = createLogRecorder();
     handler.setLogger(logger);
 
     const oversized = Buffer.from([0, 1]).toString('base64');
@@ -295,7 +286,7 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
     }
 
     const handler = new RecordingHandler(buildGoogleConfig());
-    const { logger, stub } = createLoggerStub();
+    const { logger, stub } = createLogRecorder();
     handler.setLogger(logger);
 
     const handlerMediaProcessor = handler as unknown as {

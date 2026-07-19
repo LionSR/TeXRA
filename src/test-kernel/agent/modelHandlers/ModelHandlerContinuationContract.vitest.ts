@@ -4,14 +4,9 @@ import { strict as assert } from 'node:assert';
 // Third-party imports
 import { createPartFromText, type Content } from '@google/genai';
 import { describe, it } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelConfig,
-  ModelProvider,
-} from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
-import type { AgentTrace } from '@agent/trace';
 import {
   AgentCategory,
   AgentSettingSchema,
@@ -23,55 +18,28 @@ import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/mode
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
+import { noopTrace } from '@agent/trace/noopTrace';
 
 // Type imports
+import { buildTestModelConfig } from './testFixtures';
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 import type { ChatMessages } from '@openrouter/sdk/models';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
 import type { Interactions } from '@google/genai';
 
+
 type ContinuationCase = {
   name: string;
   run: () => void;
 };
 
-function createLoggerStub(): AgentTrace {
-  return {
-    streamId: 'test-channel',
-    debug: () => {},
-    info: () => {},
-    warn: () => {},
-    error: () => {},
-  } as unknown as AgentTrace;
-}
-
-function buildConfig(
-  provider: ModelProvider,
-  overrides: Partial<ModelConfig> = {},
-): ModelConfig {
-  return {
-    name: 'test-model',
-    label: 'Test Model',
-    fullName: 'test-model',
-    shortName: 'test-model',
-    provider,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 200000,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsAssistantPrefill: false,
-      supportsIntermDevMsgs: false,
-      supportsReasoning: false,
-      supportsVision: false,
-      ...(overrides.capabilities ?? {}),
-    },
-    openRouterOnly: false,
-    ...overrides,
-  };
-}
+const CONTINUATION_CAPABILITIES = {
+  supportsAssistantPrefill: false,
+  supportsIntermDevMsgs: false,
+  supportsReasoning: false,
+  supportsVision: false,
+};
 
 const agentSetting = AgentSettingSchema.parse({
   agentCategory: AgentCategory.Workflow,
@@ -126,8 +94,13 @@ const cases: ContinuationCase[] = [
   {
     name: 'OpenAI chat',
     run: () => {
-      const handler = new ModelHandlerOpenAI(buildConfig(ModelProvider.OPENAI));
-      handler.setLogger(createLoggerStub());
+      const handler = new ModelHandlerOpenAI(
+        buildTestModelConfig({
+          provider: ModelProvider.OPENAI,
+          capabilities: CONTINUATION_CAPABILITIES,
+        }),
+      );
+      handler.setLogger({ ...noopTrace });
       const messages: ChatCompletionMessageParam[] = [
         handler.createAssistantMessage('partial'),
       ];
@@ -148,9 +121,12 @@ const cases: ContinuationCase[] = [
     name: 'OpenAI Responses',
     run: () => {
       const handler = new ModelHandlerOpenAIResponse(
-        buildConfig(ModelProvider.OPENAI),
+        buildTestModelConfig({
+          provider: ModelProvider.OPENAI,
+          capabilities: CONTINUATION_CAPABILITIES,
+        }),
       );
-      handler.setLogger(createLoggerStub());
+      handler.setLogger({ ...noopTrace });
       const messages: ResponseInputItem[] = [
         handler.createAssistantMessage('partial'),
       ];
@@ -170,9 +146,12 @@ const cases: ContinuationCase[] = [
     name: 'Anthropic',
     run: () => {
       const handler = new ModelHandlerAnthropic(
-        buildConfig(ModelProvider.ANTHROPIC),
+        buildTestModelConfig({
+          provider: ModelProvider.ANTHROPIC,
+          capabilities: CONTINUATION_CAPABILITIES,
+        }),
       );
-      handler.setLogger(createLoggerStub());
+      handler.setLogger({ ...noopTrace });
       const messages: MessageParam[] = [
         handler.createAssistantMessage('partial'),
       ];
@@ -193,9 +172,12 @@ const cases: ContinuationCase[] = [
     name: 'Google GenAI',
     run: () => {
       const handler = new ModelHandlerGoogleGenAI(
-        buildConfig(ModelProvider.GOOGLE),
+        buildTestModelConfig({
+          provider: ModelProvider.GOOGLE,
+          capabilities: CONTINUATION_CAPABILITIES,
+        }),
       );
-      handler.setLogger(createLoggerStub());
+      handler.setLogger({ ...noopTrace });
       const messages: Content[] = [
         { role: 'model', parts: [createPartFromText('partial')] },
       ];
@@ -213,9 +195,12 @@ const cases: ContinuationCase[] = [
     name: 'Google Interactions',
     run: () => {
       const handler = new ModelHandlerGoogleInteractions(
-        buildConfig(ModelProvider.GOOGLE),
+        buildTestModelConfig({
+          provider: ModelProvider.GOOGLE,
+          capabilities: CONTINUATION_CAPABILITIES,
+        }),
       );
-      handler.setLogger(createLoggerStub());
+      handler.setLogger({ ...noopTrace });
       const messages: Interactions.Step[] = [
         handler.createAssistantMessage('partial'),
       ];
@@ -236,11 +221,15 @@ const cases: ContinuationCase[] = [
     name: 'OpenRouter native',
     run: () => {
       const handler = new ModelHandlerOpenRouterNative(
-        buildConfig(ModelProvider.OPENAI, {
-          openrouterFullName: 'openai/test-model',
-        }),
+        buildTestModelConfig(
+          {
+            provider: ModelProvider.OPENAI,
+            capabilities: CONTINUATION_CAPABILITIES,
+          },
+          { openrouterFullName: 'openai/test-model' },
+        ),
       );
-      handler.setLogger(createLoggerStub());
+      handler.setLogger({ ...noopTrace });
       const messages: ChatMessages[] = [
         handler.createAssistantMessage('partial'),
       ];
@@ -270,9 +259,12 @@ describe('model handler continuation contract', () => {
 
   it('keeps Google GenAI continuation prompts separate from trailing user turns', () => {
     const handler = new ModelHandlerGoogleGenAI(
-      buildConfig(ModelProvider.GOOGLE),
+      buildTestModelConfig({
+        provider: ModelProvider.GOOGLE,
+        capabilities: CONTINUATION_CAPABILITIES,
+      }),
     );
-    handler.setLogger(createLoggerStub());
+    handler.setLogger({ ...noopTrace });
     const messages: Content[] = [
       { role: 'model', parts: [createPartFromText('partial')] },
       { role: 'user', parts: [createPartFromText('follow-up')] },
@@ -298,9 +290,12 @@ describe('model handler continuation contract', () => {
 
   it('falls back to accumulated output when OpenAI Responses continuation follows a user turn', () => {
     const handler = new ModelHandlerOpenAIResponse(
-      buildConfig(ModelProvider.OPENAI),
+      buildTestModelConfig({
+        provider: ModelProvider.OPENAI,
+        capabilities: CONTINUATION_CAPABILITIES,
+      }),
     );
-    handler.setLogger(createLoggerStub());
+    handler.setLogger({ ...noopTrace });
     const messages: ResponseInputItem[] = [
       handler.createAssistantMessage('partial'),
       {
@@ -329,9 +324,12 @@ describe('model handler continuation contract', () => {
 
   it('keeps Google Interactions continuation prompts separate from trailing user turns', () => {
     const handler = new ModelHandlerGoogleInteractions(
-      buildConfig(ModelProvider.GOOGLE),
+      buildTestModelConfig({
+        provider: ModelProvider.GOOGLE,
+        capabilities: CONTINUATION_CAPABILITIES,
+      }),
     );
-    handler.setLogger(createLoggerStub());
+    handler.setLogger({ ...noopTrace });
     const messages: Interactions.Step[] = [
       handler.createAssistantMessage('partial'),
       { type: 'user_input', content: [{ type: 'text', text: 'follow-up' }] },
