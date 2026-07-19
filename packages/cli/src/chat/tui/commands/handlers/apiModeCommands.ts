@@ -93,10 +93,11 @@ export function setCliSessionApiMode(apiMode: CliApiMode): void {
   refreshCodexPreferenceViews();
 }
 
-export async function applyCliModelAccessSelection(
+async function applyCliModelAccessSelectionWithSignal(
   routeInput: string,
   context: SlashCommandContext,
-  output: SlashCommandOutput = transcriptSlashCommandOutput,
+  output: SlashCommandOutput,
+  signal: AbortSignal,
 ): Promise<void> {
   const normalized = routeInput.trim().toLowerCase();
 
@@ -118,6 +119,7 @@ export async function applyCliModelAccessSelection(
       {
         writeProgress: (message) =>
           output.writeProgress(message, { copyable: true }),
+        signal,
       },
     );
     output.appendOutcome(await completeModelAccessSelection(access, context));
@@ -125,6 +127,23 @@ export async function applyCliModelAccessSelection(
   }
 
   output.setNotice(MODEL_ACCESS_USAGE);
+}
+
+export function applyCliModelAccessSelection(
+  routeInput: string,
+  context: SlashCommandContext,
+  output: SlashCommandOutput = transcriptSlashCommandOutput,
+): Promise<void> & { readonly abort: () => void } {
+  const controller = new AbortController();
+  return Object.assign(
+    applyCliModelAccessSelectionWithSignal(
+      routeInput,
+      context,
+      output,
+      controller.signal,
+    ),
+    { abort: () => controller.abort() },
+  );
 }
 
 export async function showCliAuthStatus(): Promise<void> {
