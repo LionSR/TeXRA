@@ -143,10 +143,8 @@ All notable changes to this project will be documented in this file.
   now scrolls with the same ↑/↓ and PgUp/PgDn keys as command and delegation
   approvals, instead of silently truncating tall plans; all three approval
   bodies share identical scroll and overflow behavior.
-- **The chat transcript breathes and shows run activity** — a blank line now
-  always follows your message, and while the agent runs, an animated indicator
-  with elapsed time makes clear it is still working — not just while the model
-  is thinking.
+- **The chat transcript breathes** — a blank line now always follows your
+  message, keeping prompts visually separate from the agent's first action.
 - **Ctrl+C clears dialog text before stopping or exiting** — pressing Ctrl+C
   with text in a foreground dialog now clears that text; pressing it again
   keeps the existing response-stop or exit behavior.

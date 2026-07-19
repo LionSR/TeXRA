@@ -52,8 +52,8 @@ export interface ConfirmCardCompactHintLayout {
 /**
  * A pending approval always needs the user's eyes on it — prefix the title
  * with a 1 Hz solid/hollow blink (see `ui/glyphs.APPROVAL_PULSE_FRAMES`) off
- * the shared clock, same pattern as `LoadingIndicator`/`LivenessRow`, so the
- * card is harder to miss than a static line.
+ * the shared clock, same pattern as `LoadingIndicator` and the status bar's
+ * running marker, so the card is harder to miss than a static line.
  */
 export function confirmCardPulsedTitle(nowMs: number, title: string): string {
   return `${loadingFrameAt(nowMs, APPROVAL_PULSE_FRAMES)} ${title}`;

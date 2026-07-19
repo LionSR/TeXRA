@@ -181,23 +181,6 @@ export function streamAccessTarget(
   };
 }
 
-/**
- * Shared gate for the "model is thinking" indicators (the StatusBar segment
- * and the conversation pane's liveness row) so the two can never disagree:
- * the hidden reasoning phase is only worth surfacing while the stream is
- * actually running — any final or waiting status supersedes it.
- */
-export function thinkingIndicatorVisible(
-  slice:
-    | {
-        readonly status: StreamPhase | undefined;
-        readonly thinkingActive: boolean;
-      }
-    | undefined,
-): boolean {
-  return slice?.thinkingActive === true && isActivePhase(slice.status);
-}
-
 export const NO_BYPASS: BypassState = {
   bash: false,
   toolEdit: false,
