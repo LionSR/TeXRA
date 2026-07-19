@@ -5,14 +5,17 @@ import {
 } from '@supabase/supabase-js';
 import * as logger from '@logger/logUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { type UserTier, TOKEN_REFRESH_THRESHOLD_MS } from './config';
+import {
+  TOKEN_REFRESH_THRESHOLD_MS,
+  UserTierSchema,
+  type UserTier,
+} from './config';
 import {
   fetchRelayTokenStatus,
   getCachedRelayTokenState,
   getConfiguredRelayToken,
   markRelayTokenRejected,
 } from './relayToken';
-import { UserTierSchema } from './config';
 import type { AuthTokenProvider, SessionTokens } from './TokenProvider';
 
 /**
