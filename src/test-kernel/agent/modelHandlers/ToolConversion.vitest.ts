@@ -377,3 +377,38 @@ describe('tool schema descriptions', () => {
     }
   });
 });
+
+describe('Crossref provider schema compatibility', () => {
+  it('accepts flattened fields from the inactive command branch', () => {
+    const schema = new CrossrefSearchTool().definition.zodSchema;
+
+    expect(
+      schema?.safeParse({
+        command: 'search',
+        query: 'attention',
+        doi: '10.1000/ignored',
+      }).success,
+    ).toBe(true);
+    expect(
+      schema?.safeParse({
+        command: 'doi',
+        doi: '10.1000/example',
+        query: 'ignored',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('still requires the selected branch and rejects unknown fields', () => {
+    const schema = new CrossrefSearchTool().definition.zodSchema;
+
+    expect(schema?.safeParse({ command: 'search' }).success).toBe(false);
+    expect(schema?.safeParse({ command: 'doi' }).success).toBe(false);
+    expect(
+      schema?.safeParse({
+        command: 'search',
+        query: 'attention',
+        unknown: true,
+      }).success,
+    ).toBe(false);
+  });
+});

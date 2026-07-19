@@ -17,38 +17,51 @@ import { pluralize } from '@utils/text/stringUtils';
 import { CROSSREF_CONSTANTS, CrossrefClient } from './constants';
 import { rateLimitedRequest } from './rateLimiter';
 
+const CROSSREF_SEARCH_FIELDS = {
+  query: z.string().describe('Bibliographic search query for Crossref works.'),
+  rows: z
+    .int()
+    .positive()
+    .max(CROSSREF_CONSTANTS.MAX_ROWS)
+    .nullish()
+    .transform((v) => v ?? CROSSREF_CONSTANTS.DEFAULT_ROWS)
+    .describe('Maximum number of works to return.'),
+  offset: z
+    .int()
+    .min(0)
+    .nullish()
+    .describe('Zero-based result offset for pagination.'),
+  sort: z.string().nullish().describe('Crossref sort field to apply.'),
+  order: z.enum(['asc', 'desc']).nullish().describe('Crossref sort order.'),
+  // Filter as Crossref filter string format (e.g., "from-pub-date:2023,has-orcid:true")
+  // Object format removed due to OpenAI JSON Schema limitations with z.record()
+  filter: z
+    .string()
+    .nullish()
+    .describe('Crossref filter string, e.g. "from-pub-date:2023".'),
+};
+const CROSSREF_DOI_DESCRIPTION =
+  'DOI to look up, with or without a DOI URL prefix.';
+const CROSSREF_DOI_FIELD = z.string().describe(CROSSREF_DOI_DESCRIPTION);
+
+// Provider conversion flattens top-level unions into one object. Keep both
+// declared field sets in each strict branch so provider-valid inactive fields
+// are accepted and ignored while unknown fields remain rejected.
 const CrossrefSearchInputSchema = z.discriminatedUnion('command', [
   z.strictObject({
     command: z.literal('search').describe('Search Crossref works.'),
-    query: z
-      .string()
-      .describe('Bibliographic search query for Crossref works.'),
-    rows: z
-      .int()
-      .positive()
-      .max(CROSSREF_CONSTANTS.MAX_ROWS)
-      .nullish()
-      .transform((v) => v ?? CROSSREF_CONSTANTS.DEFAULT_ROWS)
-      .describe('Maximum number of works to return.'),
-    offset: z
-      .int()
-      .min(0)
-      .nullish()
-      .describe('Zero-based result offset for pagination.'),
-    sort: z.string().nullish().describe('Crossref sort field to apply.'),
-    order: z.enum(['asc', 'desc']).nullish().describe('Crossref sort order.'),
-    // Filter as Crossref filter string format (e.g., "from-pub-date:2023,has-orcid:true")
-    // Object format removed due to OpenAI JSON Schema limitations with z.record()
-    filter: z
-      .string()
-      .nullish()
-      .describe('Crossref filter string, e.g. "from-pub-date:2023".'),
+    ...CROSSREF_SEARCH_FIELDS,
+    doi: CROSSREF_DOI_FIELD.nullish().describe(CROSSREF_DOI_DESCRIPTION),
   }),
   z.strictObject({
     command: z.literal('doi').describe('Look up one DOI in Crossref.'),
-    doi: z
-      .string()
-      .describe('DOI to look up, with or without a DOI URL prefix.'),
+    query: CROSSREF_SEARCH_FIELDS.query.nullish(),
+    rows: CROSSREF_SEARCH_FIELDS.rows,
+    offset: CROSSREF_SEARCH_FIELDS.offset,
+    sort: CROSSREF_SEARCH_FIELDS.sort,
+    order: CROSSREF_SEARCH_FIELDS.order,
+    filter: CROSSREF_SEARCH_FIELDS.filter,
+    doi: CROSSREF_DOI_FIELD,
   }),
 ]);
 
