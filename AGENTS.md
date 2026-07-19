@@ -30,7 +30,7 @@ When updating CHANGELOG.md:
 
 ### Build system: esbuild + Vite
 
-The extension host is bundled with esbuild and the webviews with Vite (`compile:fast`, `package:fast`, `build:fast`; `compile`, `watch`, and `package` are aliases of the fast variants).
+The extension host is bundled with esbuild and the webviews with Vite (`compile:fast`, `watch:fast`, `package:fast`, and `build:fast`).
 
 **Why the build doesn't catch type errors**: Vite and esbuild only strip TypeScript types without checking them. They treat TypeScript as "JavaScript with type annotations to remove."
 

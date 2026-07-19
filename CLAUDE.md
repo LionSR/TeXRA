@@ -50,7 +50,7 @@ npm run check:dead-code-ratchet
 
 ### Builds and Type Checking
 
-All builds use esbuild (for the extension host) and Vite (for webviews); the legacy webpack pipeline has been removed, and `npm run compile` / `watch` / `package` are aliases for the `:fast` variants listed above.
+All builds use esbuild (for the extension host) and Vite (for webviews); the legacy webpack pipeline has been removed. Use the canonical `npm run compile:fast`, `watch:fast`, and `package:fast` commands listed above.
 
 **Important:** These builds do NOT perform TypeScript type checking (esbuild only strips types). Run `npm run typecheck`, or use the `:safe` variants (`compile:safe`, `package:safe`, `build:safe`) that type check before building. Build-system rationale and the full safe-script table: AGENTS.md "Build system: esbuild + Vite".
 

@@ -236,7 +236,7 @@ We've successfully implemented a complete authentication and remote agents syste
 ### Code compiled successfully! ✅
 
 ```bash
-npm run compile
+npm run compile:fast
 # ✓ No errors, only 1 warning (unrelated to our changes)
 ```
 
