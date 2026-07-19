@@ -1,6 +1,6 @@
-import type { AppSignalsLike } from '@eventBus/AppSignals';
 import type { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
 import type { ProgressEventSubscription } from '@controllers/progressView/backend/events/ProgressFactApplier';
+import type { AppSignalsLike } from '@eventBus/AppSignals';
 
 /**
  * Attach extension app-lifecycle signals to the shared progress backend.

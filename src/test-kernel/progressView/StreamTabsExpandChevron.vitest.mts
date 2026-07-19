@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - progressView frontend
 import type { StreamTabs } from '@progressView/frontend/components/StreamTabs';
+import { AgentCategory, type StreamTabInfo } from '@shared/schemas';
 
 // Local imports - shared schemas
-import { AgentCategory, type StreamTabInfo } from '@shared/schemas';
 
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';

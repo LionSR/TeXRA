@@ -9,12 +9,12 @@ import type {
 } from '@desktop/main/desktopHistoryHandlers';
 import type { DesktopSettingsUiHost } from '@desktop/main/desktopSettingsIpc';
 import type { DesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
-
-// Shared imports - settings controllers
+import { unsupported } from '@shared/utils/dispatcher';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 
+// Shared imports - settings controllers
+
 // Shared imports
-import { unsupported } from '@shared/utils/dispatcher';
 
 // Local imports - desktop test paths
 import { repoPath } from './desktopTestPaths.mjs';

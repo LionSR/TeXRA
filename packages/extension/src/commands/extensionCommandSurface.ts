@@ -54,14 +54,14 @@ import { handleParseXml as sysParseXml } from '@commands/system/xmlCommands';
 import { handleParseYaml as sysParseYaml } from '@commands/system/yamlCommands';
 import { handleTestTextEditor as sysTestTextEditor } from '@commands/system/textEditorCommands';
 import { SIDEBAR_VIEWS, getActiveSidebarView } from '@common/webview';
-import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
-import { getMainWebview } from '@frontend/system/commandUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import { getMainWebview } from '@frontend/system/commandUtils';
+import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
 import { runCleanBuild, runCleanOutput } from '@housekeeping';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { dispatchCommandFromRegistry } from '@shared/commands/registry';
 import type { AgentCategory } from '@shared/schemas/agent';
+import { dispatchCommandFromRegistry } from '@shared/commands/registry';
 import { SETTINGS_QUERY } from '@utils/config';
 import {
   EXTENSION_COMMAND_HANDLERS,

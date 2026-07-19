@@ -5,15 +5,15 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { FakeConfigProvider } from '@test/support/FakePlatform';
-import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
-import { platform, type Platform } from '@platform/platform';
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
+import { platform, type Platform } from '@platform/platform';
 import type { StreamTabId } from '@shared/schemas';
 import {
   LEGACY_GOAL_FEATURE_FLAG_KEYS,
   GOAL_FEATURE_FLAG_KEY,
 } from '@shared/schemas/goal';
+import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
+import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { GoalStore, isGoalEnabled } from '@tools/goal';
 
 const STREAM_ID = 'stream:goal-cont' as StreamTabId;

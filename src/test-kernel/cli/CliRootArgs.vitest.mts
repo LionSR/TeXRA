@@ -5,8 +5,6 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import stripAnsi from 'strip-ansi';
 
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   detectUnknownCliCommand,
@@ -54,6 +52,8 @@ import {
 import type { CliContext } from '@cli/runtime/cliContext';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
 import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
+import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   return createTestCliContext({

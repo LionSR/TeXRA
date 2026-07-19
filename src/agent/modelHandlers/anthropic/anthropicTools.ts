@@ -5,9 +5,9 @@ import { toFile } from '@anthropic-ai/sdk';
 
 // Local imports - common
 import type { AgentTrace } from '@agent/trace';
+import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
 // Type imports - agent and tools
-import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
 
 // Local imports - model handlers

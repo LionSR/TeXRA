@@ -8,10 +8,6 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
-import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
-import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
-import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
-import { applyTeamRosterWithPreflight } from '@controllers/teams/TeamRosterApplication';
 import {
   createKey,
   getAgent,
@@ -19,30 +15,34 @@ import {
   refresh as refreshAgents,
 } from '@agent/index';
 import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
-import { SupabaseClient } from '@auth/SupabaseClient';
 import { AUTH_COMMANDS } from '@auth/constants';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import { workspaceSM, globalSM } from '@common/state';
+import { applyTeamRosterWithPreflight } from '@controllers/teams/TeamRosterApplication';
+import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
+import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
+import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
+import type { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
+import type { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
+import type { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
+import { renderAgentTemplateFromBundle } from '@frontend/agents/agentTemplateBundle';
+import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalogRefreshScope';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalogRefreshScope';
-import { renderAgentTemplateFromBundle } from '@frontend/agents/agentTemplateBundle';
+import {
+  SETTINGS_VIEW_CMD,
+  type SettingsMessageFor,
+} from '@shared/schemas/settingsViewMessages';
 import {
   buildAgentSelectionMessage,
   buildCustomAgentDirMessage,
   buildAgentModePresetsMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
-import {
-  SETTINGS_VIEW_CMD,
-  type SettingsMessageFor,
-} from '@shared/schemas/settingsViewMessages';
 import { AbsoluteFS } from '@utils/files';
 import { formatResultCount } from '@utils/text/stringUtils';
-import type { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
-import type { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
-import type { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
 

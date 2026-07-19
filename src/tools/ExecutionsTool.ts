@@ -8,13 +8,9 @@
 // Third-party imports
 import { z } from 'zod';
 
-import { platform } from '@platform/platform';
-import {
-  readCompletedRunConversation,
-  readCompletedRunTodos,
-} from '@transcript';
-
 // Local imports - agent
+
+// Local imports - utils
 import {
   deriveResumability,
   getExecutionStore,
@@ -25,20 +21,19 @@ import {
   listExecutions,
   resolveExecutionWorkspaceFilePath,
 } from '@agent/storage';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { currentSession } from '@agent/runtime/SessionHandle';
+import {
+  AgentExecutionHandle,
+  ProcessExecutionHandle,
+} from '@agent/runtime/ExecutionHandle';
+import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import {
   getRunContextExecutionId,
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import {
-  AgentExecutionHandle,
-  ProcessExecutionHandle,
-} from '@agent/runtime/ExecutionHandle';
-import { currentSession } from '@agent/runtime/SessionHandle';
-
-// Local imports - utils
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { platform } from '@platform/platform';
 import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
 import {
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
@@ -49,6 +44,10 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream, requireStreamId } from '@tools/contextHelpers';
 import { assertNoParentTraversal } from '@tools/pathResolution';
+import {
+  readCompletedRunConversation,
+  readCompletedRunTodos,
+} from '@transcript';
 import { AbsoluteFS, StorageFS } from '@utils/files';
 import { clamp, unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';

@@ -5,13 +5,13 @@ import { describe, expect, it } from 'vitest';
 import type { StreamHeader } from '@progressView/frontend/components/StreamHeader';
 import { ELEMENT_IDS } from '@progressView/frontend/constants';
 import type { StreamEventDetail } from '@progressView/frontend/events';
-
-// Local imports - shared schemas
 import {
   AgentCategory,
   STREAM_PHASE,
   type StreamTabInfo,
 } from '@shared/schemas';
+
+// Local imports - shared schemas
 
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';

@@ -2,18 +2,18 @@
 import * as vscode from 'vscode';
 
 // Local imports - common
-import { registerCommands } from '@commands/_shared/registerCommands';
 // Local imports - frontend
+import { registerCommands } from '@commands/_shared/registerCommands';
 import { getFileLister } from '@frontend/files';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 
 // Local imports - latex
-import { openFirstLabelMatch } from '@latex/labelSearch';
 
 // Local imports - logging
-import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
+import { openFirstLabelMatch } from '@latex/labelSearch';
+import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

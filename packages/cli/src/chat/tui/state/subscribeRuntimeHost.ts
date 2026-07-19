@@ -15,11 +15,11 @@ import {
   type UpdateRoundStagePayload,
   type UpdateStreamUsagePayload,
 } from '@shared/schemas';
-import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import {
   reduceStreamMeta,
   type StreamMetaCommand,
 } from '@shared/streams/streamMetaReducer';
+import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import { assertNever } from '@utils/core';
 
 import {

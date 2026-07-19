@@ -1,10 +1,6 @@
-// Local imports - platform
-import { tryPlatform } from '@platform/platform';
-
-// Local imports - agent
+// Local imports
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 
-// Local imports - auth
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 import { createHostAuthCoordinator } from '@auth/SupabaseAuthCoordinator';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -20,9 +16,10 @@ import {
   getConfiguredRelayToken,
 } from '@auth/relayToken';
 import { getServerSideKeyService } from '@auth/serverKeys';
+import { tryPlatform } from '@platform/platform';
+import type { PlatformSecrets } from '@platform/secrets';
 
 // Local imports - CLI runtime
-import { enableCliIncludedModelAccess } from './apiAccessMode';
 import { readCliEnv } from './cliContext';
 import { getCliSecrets } from './cliSecrets';
 import { openBrowser } from './browser';
@@ -33,8 +30,7 @@ import {
   type DeviceAuthorization,
 } from './supabaseAuthDeviceCode';
 
-// Type imports - platform
-import type { PlatformSecrets } from '@platform/secrets';
+import { enableCliIncludedModelAccess } from './apiAccessMode';
 
 /**
  * Channel-logger contract used by the CLI auth coordinator and supporting

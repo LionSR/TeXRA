@@ -3,12 +3,12 @@ import { z } from 'zod';
 import * as vscode from 'vscode';
 
 // Local imports - controllers
-import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
-
-// Local imports
 import { TaskStateSchema } from '@agent/core/state/TaskState';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { setPendingState } from '@common/state';
+
+// Local imports
+import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';

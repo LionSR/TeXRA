@@ -1,15 +1,4 @@
 // Local imports - platform
-import {
-  LANGUAGE_MODEL_PORT_ERROR_CODE,
-  LanguageModelPortError,
-  type LanguageModelDataPart,
-  type LanguageModelMessage,
-  type LanguageModelPort,
-  type LanguageModelTextPart,
-  type LanguageModelToolCallPart,
-  type LanguageModelToolResultPart,
-} from '@platform/languageModel';
-import { platform } from '@platform/platform';
 
 // Local imports - agent
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -23,24 +12,35 @@ import type {
 } from '@agent/types/ModelHandlerContracts';
 import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
-
-// Local imports - common and model
+import type { SdkErrorKind } from '@common/errors/sdkErrorUtils';
 import {
   attachSdkErrorMetadata,
   handleStreamingFailure,
   PARTIAL_TEXT_TAIL_MAX,
   takeTail,
 } from '@common/errors/sdkErrorUtils';
-import type { SdkErrorKind } from '@common/errors/sdkErrorUtils';
+
+// Local imports - common and model
 import type { ToolDefinition } from '@model';
+
+// Local imports - utilities
+import { platform } from '@platform/platform';
+import {
+  LANGUAGE_MODEL_PORT_ERROR_CODE,
+  LanguageModelPortError,
+  type LanguageModelDataPart,
+  type LanguageModelMessage,
+  type LanguageModelPort,
+  type LanguageModelTextPart,
+  type LanguageModelToolCallPart,
+  type LanguageModelToolResultPart,
+} from '@platform/languageModel';
 import replacementEngine from '@replacement/engine';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas/toolResult';
-
-// Local imports - utilities
 import { getMimeType } from '@utils/files';
 
 // Local imports - model handlers

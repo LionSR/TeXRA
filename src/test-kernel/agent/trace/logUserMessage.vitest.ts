@@ -3,9 +3,9 @@ import { strict as assert } from 'node:assert';
 import { describe, it, beforeEach, afterEach } from 'vitest';
 
 // Local imports
-import { createRunTrace, StreamLogStore } from '@transcript';
 import { logUserMessage, type AgentTrace } from '@agent/trace';
 import { MESSAGE_TYPES } from '@shared/schemas';
+import { createRunTrace, StreamLogStore } from '@transcript';
 
 // #7508: the `userMessage` row's attachment-kind/count payload — verifies
 // `logUserMessage` stamps `data.attachments` when attachments are present,

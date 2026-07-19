@@ -5,34 +5,34 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
+
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
+import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
   showLoggedMessage,
   showLoggedMessageWithDocs,
 } from '@frontend/ui/errorHandlingUtils';
-import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import {
   runPackLatexdiffvc,
   runPackLatexdiffvcMultiple,
   type LatexdiffPackResult,
 } from '@housekeeping';
 import type { LaTeXdiffResult } from '@latex/latexdiff';
-
+import type { RunLatexdiffCommandConfig } from '@latex/latexdiff/types';
+import {
+  normalizeRunLatexdiffOutputsByRound,
+  runLatexdiffForExecution,
+} from '@latex/latexdiff/runLatexdiff';
+import { CHANNEL, LaTeXdiffService } from '@latex/latexdiff/service';
 import {
   DEFAULT_MATH_MARKUP,
   MATH_MARKUP_OPTIONS,
   describeMathMarkupOption,
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
-import { CHANNEL, LaTeXdiffService } from '@latex/latexdiff/service';
-import {
-  normalizeRunLatexdiffOutputsByRound,
-  runLatexdiffForExecution,
-} from '@latex/latexdiff/runLatexdiff';
-import type { RunLatexdiffCommandConfig } from '@latex/latexdiff/types';
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';

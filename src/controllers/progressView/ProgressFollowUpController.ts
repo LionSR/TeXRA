@@ -17,8 +17,6 @@ import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameM
 
 // Local imports - model
 import { decideRunModel } from '@model/runModelDecision';
-
-// Local imports - shared
 import type {
   CompileFailure,
   FileLocation,
@@ -27,6 +25,8 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 import { pluralize } from '@utils/text/stringUtils';
+
+// Local imports - shared
 
 export interface ProgressFollowUpModelOption {
   value: string;

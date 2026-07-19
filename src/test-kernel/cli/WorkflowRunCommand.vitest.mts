@@ -4,7 +4,6 @@ import * as path from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type {
@@ -13,6 +12,7 @@ import type {
 } from '@cli/runtime/runExecution';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => {
   return {

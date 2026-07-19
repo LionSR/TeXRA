@@ -8,9 +8,6 @@ import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { platform } from '@platform/platform';
-import { createFakePlatform } from '@test/support/FakePlatform';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   computeAgentOptionsData,
@@ -25,8 +22,11 @@ import {
   resolveAgentKey,
 } from '@agent/index/agentRegistry';
 import * as logger from '@logger/logUtils';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { platform } from '@platform/platform';
 import type { AgentDirectoriesPort } from '@platform/interfaces';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { createFakePlatform } from '@test/support/FakePlatform';
 
 const listRemoteAgents = vi.hoisted(() =>
   vi.fn(async () => [

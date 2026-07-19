@@ -32,11 +32,11 @@ import {
   type StorageKey,
   type FileLocation,
 } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   WORKFLOW_DOCUMENT_OUTPUT_EXT,
   WORKFLOW_RAW_OUTPUT_EXT,
 } from '@shared/constants/workflowOutput';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { AbsoluteFS, TaskRunFileService } from '@utils/files';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 

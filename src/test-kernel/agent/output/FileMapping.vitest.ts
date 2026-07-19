@@ -7,9 +7,9 @@ import {
   createFileMapping,
   replaceInputCommands,
 } from '@agent/output/fileMapping';
+import type { FileLocation } from '@shared/schemas';
 
 // Local imports - shared
-import type { FileLocation } from '@shared/schemas';
 
 // Local imports - utilities
 import { FlexibleFS } from '@utils/files/flexibleFS';

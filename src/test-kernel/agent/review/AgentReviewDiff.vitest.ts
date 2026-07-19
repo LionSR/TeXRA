@@ -7,8 +7,6 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { setupPlatform } from '@test/support/setupPlatform';
 import {
   buildUntrackedFileDiff,
   collectReviewDiff,
@@ -16,6 +14,8 @@ import {
   listBaseBranchCandidates,
   type CollectReviewDiffOptions,
 } from '@agent/review/reviewDiff';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { executeCommand } from '@utils/system/execUtils';
 
 setupPlatform({ workspacePath: process.cwd() }, { fs: nodeFilesystem });

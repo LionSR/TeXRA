@@ -6,9 +6,9 @@ import { describe, it } from 'vitest';
 
 // Local imports - controllers
 import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
+import type { ApiProvider } from '@model/apiProviders';
 
 // Local imports - model
-import type { ApiProvider } from '@model/apiProviders';
 
 const PROVIDERS = [
   'openai',

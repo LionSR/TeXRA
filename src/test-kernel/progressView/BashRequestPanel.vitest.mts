@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - progress view component types
 import type { BashRequestPanel } from '@progressView/frontend/components/BashRequestPanel';
+import type { BashPermission } from '@shared/schemas';
 
 // Local imports - shared schemas
-import type { BashPermission } from '@shared/schemas';
 
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';

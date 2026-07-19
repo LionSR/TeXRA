@@ -10,7 +10,6 @@ import { describe, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
 // Local imports - test support and agent
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { noopTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
@@ -21,9 +20,8 @@ import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
-
-// Local imports - shared
 import type { FileLocation } from '@shared/schemas';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Type imports
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';

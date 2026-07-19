@@ -2,13 +2,12 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { configKeyVariants } from '@shared/config/configKeys';
-
 import type {
   ConfigInspection,
   ConfigProvider,
   ConfigTarget,
 } from '@platform/interfaces';
+import { configKeyVariants } from '@shared/config/configKeys';
 
 interface VscodeConfigInspection<T> {
   defaultValue?: T;

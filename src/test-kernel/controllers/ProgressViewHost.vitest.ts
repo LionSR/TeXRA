@@ -3,11 +3,11 @@ import { strict as assert } from 'node:assert';
 import { describe, it, vi } from 'vitest';
 
 // Local imports - controllers
-import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import type { TaskState } from '@agent/core/state/TaskState';
+import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - shared
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - test support
 import { createWorkflowTaskState } from '../support/ProgressControllerHarnesses';

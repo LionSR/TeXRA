@@ -2,8 +2,8 @@
 import * as path from 'node:path';
 
 // Local imports
-import { platform } from '@platform/platform';
 import * as logger from '@logger/logUtils';
+import { platform } from '@platform/platform';
 import type { ExecutionId } from '@shared/schemas';
 import type { FileOpResult } from '@shared/schemas/opResults';
 import { getCleanAgentName } from '@shared/schemas/agent';

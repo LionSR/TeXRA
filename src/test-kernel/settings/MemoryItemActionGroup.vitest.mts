@@ -10,9 +10,9 @@ vi.mock('@shared/hostBridge', () => ({
 }));
 
 // Local imports - component type
-import type { MemoryItem } from '@settingsView/frontend/components/memory/MemoryItem';
 
 // Local imports - shared schemas
+import type { MemoryItem } from '@settingsView/frontend/components/memory/MemoryItem';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { MemoryViewItem } from '@shared/schemas/memoryViewMessages';
 

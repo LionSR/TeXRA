@@ -13,13 +13,13 @@ import {
 } from 'llm-zoo';
 
 // Local imports - test support and agent
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { noopTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/openai/modelHandlerDeepSeek';
 
 // Type imports
 import type { ToolDefinition } from '@model';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 function thinkingFor(
   fullName: string,

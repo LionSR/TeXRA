@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  buildChildStreamEntries,
-  type ChildStreamEntryRow,
-} from '@test/support/childStreamEntries';
-import {
   collectResumeUsage,
   collectResumeTargets,
   formatResumeCommand,
@@ -14,6 +10,10 @@ import {
 } from '@cli/chat/tui/state/resumeHint';
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import {
+  buildChildStreamEntries,
+  type ChildStreamEntryRow,
+} from '@test/support/childStreamEntries';
 
 function makeSlice(
   over: Partial<StreamSlice> & { streamId: string },

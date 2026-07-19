@@ -9,12 +9,12 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import * as yaml from 'yaml';
 
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createFakePlatform } from '@test/support/FakePlatform';
 import {
   getContinuationTemplate,
   initializeGoalPrompts,
 } from '@agent/goal/promptLoader';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { createFakePlatform } from '@test/support/FakePlatform';
 
 const REPO_ROOT = resolve(
   fileURLToPath(new URL('.', import.meta.url)),

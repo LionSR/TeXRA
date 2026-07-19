@@ -1,8 +1,8 @@
-import { StreamLogStore } from '@transcript';
 import {
   SessionHandle,
   type SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
+import { StreamLogStore } from '@transcript';
 
 type TestSessionInit = Omit<SessionHandleInit, 'transcripts'> & {
   readonly transcripts?: StreamLogStore;

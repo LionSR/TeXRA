@@ -4,13 +4,13 @@ import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
-
-// Local imports - shared schemas
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import {
   DEFAULT_TOOL_CONFIG,
   ToolConfigSchema,
 } from '@shared/schemas/toolConfig';
+
+// Local imports - shared schemas
 
 // Local imports - utilities
 import { filterNotNull } from '@utils/core';

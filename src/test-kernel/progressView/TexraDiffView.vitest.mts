@@ -4,9 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - progress view component type
 import type { TexraDiffView } from '@progressView/frontend/components/TexraDiffView';
+import { DESKTOP_THEME_KIND } from '@shared/schemas/commonViewMessages';
 
 // Local imports - shared constants
-import { DESKTOP_THEME_KIND } from '@shared/schemas/commonViewMessages';
 
 const workerModuleIds = [
   'monaco-editor/esm/vs/editor/editor.worker?worker',

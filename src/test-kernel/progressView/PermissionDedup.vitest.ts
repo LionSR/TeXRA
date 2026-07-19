@@ -8,11 +8,11 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
 import {
   permissions$,
   resetProgressState,
 } from '@progressView/frontend/progressState';
+import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { StreamTabId } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';

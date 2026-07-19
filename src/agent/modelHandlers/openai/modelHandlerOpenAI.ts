@@ -34,19 +34,19 @@ import {
   isUserAbort,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
-import type { ToolDefinition } from '@model';
 
 // Local imports - tools and utils
+import type { ToolDefinition } from '@model';
 import replacementEngine from '@replacement/engine';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
-import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas/toolResult';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { isNonEmptyString } from '@utils/core';
-import { getConfig } from '@utils/config/configUtils';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
+import { getConfig } from '@utils/config/configUtils';
 import { toDataUrl } from '../support/dataUrl';
 import {
   getDeclaredMaxReasoningEffort,

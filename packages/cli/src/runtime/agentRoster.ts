@@ -1,9 +1,9 @@
-import { platform } from '@platform/platform';
 import {
   AgentRosterController,
   createWorkspaceAgentRosterController,
   loadAgents,
 } from '@agent/index';
+import { platform } from '@platform/platform';
 import type {
   AgentRosterCategorySelection,
   AgentRosterSelection,

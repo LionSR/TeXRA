@@ -1,3 +1,4 @@
+import type { StateStore } from '@platform/interfaces';
 import {
   agentMatchesIdentifier,
   agentKeyOf,
@@ -22,7 +23,6 @@ import {
 } from '@shared/state/onboardingState';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { KeyedMutex, unique } from '@utils/core';
-import type { StateStore } from '@platform/interfaces';
 
 export interface AgentRosterEntry {
   readonly name: string;

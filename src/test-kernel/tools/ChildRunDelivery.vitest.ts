@@ -3,9 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent
 import type { ResultMeta } from '@agent/storage';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 // Local imports - shared
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
   writeResultMeta: vi.fn(),

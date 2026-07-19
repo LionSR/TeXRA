@@ -3,13 +3,13 @@
 import { glob } from 'glob';
 import pMap from 'p-map';
 
+import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import {
   AgentCategory,
   AgentDefinitionSchema,
   AgentWorkflowSettingSchema,
   type AgentDefinition,
 } from '@agent/core/definition/AgentDataclass';
-import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import * as logger from '@logger/logUtils';
 import type { AgentSource } from '@shared/schemas/agent';

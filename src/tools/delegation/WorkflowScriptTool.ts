@@ -18,21 +18,21 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { startChildRunLoop } from '@agent/runtime/childRunLoop';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
+import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
+import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 
 // Local imports - shared schemas
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
-import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
-import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local imports - tools
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { createChildStream } from '@tools/childStream';
 import { defineTool } from '@tools/core/define';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import { deriveExecutionId } from '@utils/core/idHash';
 
 // Local imports - utilities
-import { deriveExecutionId } from '@utils/core/idHash';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - delegation
 import { createWorkflowScriptAgentRunner } from './workflowScriptAgentRunner';

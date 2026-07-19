@@ -3,20 +3,20 @@ import { z } from 'zod';
 
 // Local imports - agent
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
+import { ToolResult, ToolError } from '@shared/schemas/toolResult';
 
 // Local imports - tools
-import { ToolResult, ToolError } from '@shared/schemas/toolResult';
 import { defineTool } from '@tools/core/define';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
 } from '@tools/approval/bashApproval';
-
-// Local imports - utils
 import {
   splitContentLines,
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';
+
+// Local imports - utils
 
 // Local file imports
 import {

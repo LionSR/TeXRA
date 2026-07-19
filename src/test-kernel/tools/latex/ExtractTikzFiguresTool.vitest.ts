@@ -3,12 +3,12 @@ import * as assert from 'node:assert';
 import { describe, it, afterEach, vi } from 'vitest';
 
 // Local imports - tests
-import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
-
-// Local imports - tools
 import { TikzPictureManager } from '@latex/TikzPictureManager';
+import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { ExtractTikzFiguresTool } from '@tools/latex';
 import { pathToLocation } from '@utils/files';
+
+// Local imports - tools
 
 function installPlatform(files: Record<string, string>) {
   return installFakePlatform({ workspacePath: '/workspace', files });

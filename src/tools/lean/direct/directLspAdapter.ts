@@ -11,8 +11,8 @@
 import { access } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import { warn } from '@logger/logUtils';
+import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { runLakeCommand } from './lakeCommands';

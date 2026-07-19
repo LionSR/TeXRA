@@ -2,12 +2,12 @@
 import path from 'node:path';
 
 // Local imports - agent
-import { extractAgentSuffix } from '@agent/utils/mergeFileUtils';
 
 // Local imports - latex
-import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 
 // Local imports - utilities
+import { extractAgentSuffix } from '@agent/utils/mergeFileUtils';
+import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import type { FileLocation } from '@shared/schemas';
 import {
   createExternalLocation,

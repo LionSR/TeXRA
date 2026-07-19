@@ -1,5 +1,4 @@
 // Test support imports
-import { createTestSession } from '@test/support/sessionTestUtils';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,6 +11,7 @@ import {
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { createTestSession } from '@test/support/sessionTestUtils';
 
 const mocks = vi.hoisted(() => ({
   createHelperModelKit: vi.fn(),

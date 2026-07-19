@@ -5,12 +5,12 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 // Local imports - task state
 import type { TaskState } from '@agent/core/state/TaskState';
-
-// Local imports - shared schemas
 import {
   MainViewPersistedStateSchema,
   type MainViewPersistedState,
 } from '@shared/schemas';
+
+// Local imports - shared schemas
 
 /** Convert a TaskState payload into a full main view state snapshot. */
 export function buildMainViewState(

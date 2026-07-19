@@ -15,9 +15,9 @@ import {
   type SendFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 // Local imports - shared
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 export type ChildRunDeliveryResult =
   | { kind: 'delivered' }

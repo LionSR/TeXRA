@@ -27,9 +27,9 @@ import {
   getFollowUpInputTransientState,
   type FollowUpInputTransientState,
 } from '@progressView/frontend/followUpInputState';
+import type { ExtractedClipboardImage } from '@shared/utils/clipboardImages';
 
 // Local imports - shared types
-import type { ExtractedClipboardImage } from '@shared/utils/clipboardImages';
 
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';

@@ -12,8 +12,6 @@ import {
   type SessionHandle,
   untrackActiveAgentExecution,
 } from '@agent/runtime/SessionHandle';
-
-// Local imports - constants
 import {
   STREAM_PHASE,
   type ExecutionId,
@@ -21,6 +19,8 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
+
+// Local imports - constants
 
 // Local imports - shared schemas
 

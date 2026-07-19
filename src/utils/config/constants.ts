@@ -1,8 +1,8 @@
 // Local imports - platform
 import { tryGlobalState } from '@platform/platform';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
 // Local imports - common
-import { GlobalStateKey } from '@shared/state/stateKeys';
 
 // Local imports - config utils
 import { getConfig } from './configUtils';

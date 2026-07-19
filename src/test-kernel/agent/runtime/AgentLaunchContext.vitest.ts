@@ -1,6 +1,3 @@
-// Test support imports
-import { createTestSession } from '@test/support/sessionTestUtils';
-
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
@@ -31,18 +28,21 @@ vi.mock('@agent/utils/userVars', () => ({ buildUserVars: mocks.buildVars }));
 
 // Local imports
 import { noopTrace } from '@agent/trace';
+import { createRunScope } from '@agent/runtime/RunScope';
+import { useRunContext } from '@agent/runtime/RunContext';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   buildAgentLaunchContext,
   getAgentPath,
   withExecutionRunContext,
   type AgentLaunchContext,
 } from '@agent/runtime/AgentLaunchContext';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { useRunContext } from '@agent/runtime/RunContext';
-import { createRunScope } from '@agent/runtime/RunScope';
 import { RUN_OUTCOME, STREAM_PHASE } from '@shared/schemas';
+
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
 
 import { createRecordingHost } from '../progressTestUtils';
 

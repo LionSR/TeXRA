@@ -30,9 +30,9 @@ import { dirname, join } from 'node:path';
 
 // Local imports - storage layout
 import { WORKSPACE_STORAGE_COLLECTIONS_MERGED_PER_CHILD } from '@platform/defaults/workspaceStorage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - utils
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Type imports - node
 import type { Dirent } from 'node:fs';

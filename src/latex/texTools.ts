@@ -2,13 +2,13 @@
 import * as path from 'node:path';
 
 // Local imports - common
+
+// Local imports - utils
 import {
   LaTeXCompileOptionsSchema,
   type LaTeXCompileOptions,
 } from '@common/schemas';
 import * as logger from '@logger/logUtils';
-
-// Local imports - utils
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceFS, FlexibleFS, pathToLocation } from '@utils/files';
 import { runToolWithCheck } from '@utils/system';

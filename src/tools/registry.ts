@@ -7,10 +7,10 @@ import {
   ToolDefinitionSchema,
   type ToolDefinition,
 } from '@model/ToolDefinition';
+import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
+import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 
 // Local imports - shared tools
-import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
-import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 
 // Local imports - tools
 import { BashTool } from './bash';

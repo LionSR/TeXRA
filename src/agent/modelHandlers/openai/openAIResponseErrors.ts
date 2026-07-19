@@ -4,9 +4,9 @@ import {
   isRetryableStatusCode,
   normalizeProviderError,
 } from '@common/errors/sdkErrorUtils';
+import type { ProviderError } from '@shared/schemas';
 
 // Type imports
-import type { ProviderError } from '@shared/schemas';
 
 // Local imports - model handlers
 import { tagOpenAISdkError } from './openAISdkError';

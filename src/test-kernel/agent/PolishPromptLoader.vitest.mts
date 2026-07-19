@@ -8,14 +8,14 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - platform
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createFakePlatform } from '@test/support/FakePlatform';
-
-// Local imports - agent runtime
 import {
   initializePolishModel,
   renderPolishPrompt,
 } from '@agent/runtime/polishModel';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { createFakePlatform } from '@test/support/FakePlatform';
+
+// Local imports - agent runtime
 
 const REPO_ROOT = resolve(
   fileURLToPath(new URL('.', import.meta.url)),

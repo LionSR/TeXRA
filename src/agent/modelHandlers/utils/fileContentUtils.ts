@@ -6,12 +6,12 @@
 // Local imports - agent workspace
 import { type AgentTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
+import replacementEngine from '@replacement/engine';
+import type { FileLocation } from '@shared/schemas';
 
 // Local imports - replacement
-import replacementEngine from '@replacement/engine';
 
 // Local imports - files
-import type { FileLocation } from '@shared/schemas';
 import { FlexibleFS } from '@utils/files';
 
 // Local imports - xml

@@ -6,22 +6,22 @@ import { access, stat } from 'node:fs/promises';
 import { satisfies as semverSatisfies } from 'semver';
 
 // Local imports - platform
-import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
-
-// Local imports - CLI schemas
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-
-// Local imports - LaTeX
 import {
   probeLatexToolchain,
   type LatexToolchainProbe,
 } from '@latex/latexToolchain';
+import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import {
   TEXRA_CLI_SUPPORTED_NODE_RANGE,
   TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY,
 } from '@tools/externalToolDefs';
 import { extractErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
+
+// Local imports - CLI schemas
+
+// Local imports - LaTeX
 
 // Local imports - CLI runtime
 import { CliExitCode } from './exitCodes';

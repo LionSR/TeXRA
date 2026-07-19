@@ -2,8 +2,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
 import { getExecutionStore } from '@agent/storage';
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -29,6 +27,8 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { setupPlatform } from '@test/support/setupPlatform';
+import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 
 import {
   createRecordingHost,

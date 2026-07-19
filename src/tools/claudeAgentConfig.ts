@@ -5,13 +5,14 @@ import * as path from 'node:path';
 import { execa } from 'execa';
 
 // Local imports - agent config
-import { platform } from '@platform/platform';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
+import { platform } from '@platform/platform';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   CLAUDE_AGENT_DEFAULT_EFFORT,
   CLAUDE_AGENT_DEFAULT_MODEL,
@@ -23,7 +24,6 @@ import {
   type ClaudeAgentModel,
   type ClaudeAgentPermissionMode,
 } from '@shared/schemas/agentCliSettings';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { safeHomedir } from '@utils/system/platformPaths';
 import { createEnumStateGetter } from './support/enumConfig';
 import {

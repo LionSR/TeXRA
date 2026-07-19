@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { setupPlatform } from '@test/support/setupPlatform';
+import { getExecutionStore } from '@agent/storage';
+import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   repairRestartedStreams,
   RestartRepairRetryScheduler,
 } from '@controllers/progressView/backend/restartRepair';
-import { getExecutionStore } from '@agent/storage';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   EXECUTION_STATUS,
   RUN_OUTCOME,
@@ -16,6 +15,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: '/workspace' });
 

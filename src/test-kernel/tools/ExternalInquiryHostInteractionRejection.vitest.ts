@@ -3,11 +3,11 @@ import '@test/support/defaultSessionTestSetup';
 
 import { describe, expect, it } from 'vitest';
 
-import { setupPlatform } from '@test/support/setupPlatform';
-import { createTestSession } from '@test/support/sessionTestUtils';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { StreamTabId } from '@shared/schemas';
+import { setupPlatform } from '@test/support/setupPlatform';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { ExternalInquiryTool } from '@tools/inquiry/ExternalInquiryTool';
 
 const STREAM = 'stream:inquiry-host-interaction' as StreamTabId;

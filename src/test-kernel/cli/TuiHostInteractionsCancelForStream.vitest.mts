@@ -9,7 +9,6 @@ vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
   notify: vi.fn(),
 }));
 
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import {
   clearApprovals,
   currentApproval,
@@ -23,6 +22,7 @@ import {
   type Plan,
   type UserQuestionPermission,
 } from '@shared/schemas';
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 function context(): CliContext {
   return createTestCliContext({

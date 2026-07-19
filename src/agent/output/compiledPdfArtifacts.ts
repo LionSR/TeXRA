@@ -2,10 +2,10 @@
 import * as path from 'node:path';
 
 // Local imports - platform and errors
-import { platform } from '@platform/platform';
-import { isFileNotFoundError } from '@common/errors';
 
 // Local imports - shared schemas
+import { isFileNotFoundError } from '@common/errors';
+import { platform } from '@platform/platform';
 import type {
   ExecutionId,
   FileLocation,

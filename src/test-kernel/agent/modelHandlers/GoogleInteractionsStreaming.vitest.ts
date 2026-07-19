@@ -3,11 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
 // Local imports - test support and agent
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { GOOGLE_FINISH } from '@agent/types/StopReasonTypes';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Type imports
 import type { Interactions } from '@google/genai';

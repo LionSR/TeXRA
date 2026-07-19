@@ -5,13 +5,13 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
-import { waitForRecordedEvent } from '@test/support/asyncTestUtils';
-import { installPlatform } from '@test/support/setupPlatform';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { StreamTabId } from '@shared/schemas';
+import { installPlatform } from '@test/support/setupPlatform';
+import { waitForRecordedEvent } from '@test/support/asyncTestUtils';
 import { AskUserQuestionTool } from '@tools/userQuestion';
 import {
   cleanupAllApprovals,

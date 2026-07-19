@@ -17,13 +17,14 @@
 import { join } from 'node:path';
 
 // Local imports - skills
-import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
+import { registerAgentFeatures } from '@agent/features';
 
 // Local imports - agent + tools (composition wiring)
-import { registerAgentFeatures } from '@agent/features';
 import { initializeGoalPrompts } from '@agent/goal/promptLoader';
 import { PathAgentDirectoryBundleSource } from '@agent/index/AgentDirectorySync';
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
+import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
+import type { SkillSourceOptions } from '@skills/index';
 import { registerDirectLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 
 // Local imports - platform
@@ -37,7 +38,6 @@ import { platform } from '../platform';
 
 // Type imports
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
-import type { SkillSourceOptions } from '@skills/index';
 import type {
   AgentDirectoriesPort,
   AgentResumePort,

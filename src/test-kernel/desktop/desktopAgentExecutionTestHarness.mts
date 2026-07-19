@@ -2,9 +2,9 @@
 import { onTestFinished } from 'vitest';
 
 // Local imports - desktop types
-import type { DesktopAgentExecutionHost } from '@desktop/main/desktopAgentExecutionHost';
 
 // Local imports - shared schemas
+import type { DesktopAgentExecutionHost } from '@desktop/main/desktopAgentExecutionHost';
 import type { RunOutcome } from '@shared/schemas';
 import type { OutputFileSummary } from '@shared/schemas/output';
 

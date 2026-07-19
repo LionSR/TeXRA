@@ -1,8 +1,8 @@
 // Local imports - settings controllers
-import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
-import { applyTeamRosterWithPreflight } from '@controllers/teams/TeamRosterApplication';
 
 // Local imports - agent registry
+
+// Local imports - shared settings
 import type {
   computeAgentOptionsData,
   loadAgents,
@@ -10,8 +10,9 @@ import type {
   AgentEntry,
 } from '@agent/index/agentRegistry';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
-
-// Local imports - shared settings
+import { applyTeamRosterWithPreflight } from '@controllers/teams/TeamRosterApplication';
+import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
+import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import {
@@ -23,7 +24,6 @@ import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { unsupported } from '@shared/utils/dispatcher';
 
 // Local imports - controller types
-import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
 
 export interface DesktopAgentRegistryPort {
   readonly loadAgents: typeof loadAgents;

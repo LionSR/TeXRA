@@ -2,13 +2,11 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
-import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
-import { getActiveFlushers, StreamLogStore } from '@transcript';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   SessionHandle,
@@ -17,6 +15,8 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { type Plan, type StreamTabId } from '@shared/schemas';
+import { createTestSession } from '@test/support/sessionTestUtils';
+import { getActiveFlushers, StreamLogStore } from '@transcript';
 
 import { createRecordingHost } from '../progressTestUtils';
 

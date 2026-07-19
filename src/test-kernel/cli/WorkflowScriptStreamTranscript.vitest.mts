@@ -5,11 +5,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import '@test/support/defaultSessionTestSetup';
-import { clearAllStreamStatusesForTest } from '@test/helpers/streamStatusTestUtils';
-
-import { createRunTrace } from '@transcript';
-import { loadInk } from '@test/support/inkTestHarness.mts';
 import { defaultSession } from '@agent/runtime/SessionHandle';
+
 import {
   StaticConversationTranscript,
   appendStaticTranscriptItems,
@@ -23,6 +20,9 @@ import {
 import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
 import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
+import { clearAllStreamStatusesForTest } from '@test/helpers/streamStatusTestUtils';
+import { loadInk } from '@test/support/inkTestHarness.mts';
+import { createRunTrace } from '@transcript';
 
 // The `workflow-script#` prefix is what marks this stream as a child run whose
 // full log output surfaces when focused.

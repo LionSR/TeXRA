@@ -7,9 +7,9 @@ import {
   runExternalToolChecks,
   type ExternalToolCheckResult,
 } from '@tools/toolAvailability';
+import { getDisabledToolIds, setToolEnabled } from '@utils/config/constants';
 
 // Local imports - config
-import { getDisabledToolIds, setToolEnabled } from '@utils/config/constants';
 
 export interface CliToolStatusRecord {
   readonly id: string;

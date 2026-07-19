@@ -6,12 +6,6 @@ import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
-import {
-  clearStreamStatusForTest,
-  seedStreamStatusForTest,
-} from '@test/helpers/streamStatusTestUtils';
-import { platform } from '@platform/platform';
-import { installPlatform } from '@test/support/setupPlatform';
 import type { FinalizeExecutionResult } from '@agent/storage';
 import { noopTrace, TraceEmitter } from '@agent/trace';
 import {
@@ -39,6 +33,7 @@ import {
 import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
+import { platform } from '@platform/platform';
 import {
   EXECUTION_STATUS,
   RUN_OUTCOME,
@@ -49,9 +44,14 @@ import {
   type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
-import { SETUP_AGENT_NAME } from '@shared/constants/agents';
-import { agentKey } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { agentKey } from '@shared/schemas/agent';
+import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { installPlatform } from '@test/support/setupPlatform';
+import {
+  clearStreamStatusForTest,
+  seedStreamStatusForTest,
+} from '@test/helpers/streamStatusTestUtils';
 import { StorageFS } from '@utils/files';
 
 import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';

@@ -44,15 +44,15 @@ import {
 } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
-import { DELIVERY_TAG } from '@shared/deliveryTags';
-import type { StreamTabId, ExecutionId, ToolUseLog } from '@shared/schemas';
 import { MESSAGE_TYPES } from '@shared/schemas';
+import type { StreamTabId, ExecutionId, ToolUseLog } from '@shared/schemas';
+import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { formatWallTimeSeconds, isNonEmptyString } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { defineTool } from './core/define';

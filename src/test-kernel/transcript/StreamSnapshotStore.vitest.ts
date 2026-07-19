@@ -3,21 +3,12 @@ import * as path from 'node:path';
 import pDefer from 'p-defer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
-import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
-import {
-  cleanupTempDirs,
-  createTempDirPlatform,
-} from '@test/support/tempDirPlatform';
-import { StreamSnapshotStore, streamDataDir } from '@transcript';
-import {
-  stagedStreamDataDir,
-  STREAM_DATA_DIR,
-  STREAM_DATA_DELETION_DIR,
-} from '@transcript/streamDataPaths';
 import { getExecutionStore } from '@agent/storage';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
+import type { Platform } from '@platform/platform';
+import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
+import { RUN_DESCRIPTOR_SCHEMA_VERSION } from '@shared/schemas';
 import type {
   CompileFailure,
   ExecutionId,
@@ -29,10 +20,19 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
-import { RUN_DESCRIPTOR_SCHEMA_VERSION } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
+import {
+  cleanupTempDirs,
+  createTempDirPlatform,
+} from '@test/support/tempDirPlatform';
+import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import { StreamSnapshotStore, streamDataDir } from '@transcript';
+import {
+  stagedStreamDataDir,
+  STREAM_DATA_DIR,
+  STREAM_DATA_DELETION_DIR,
+} from '@transcript/streamDataPaths';
 import { StorageFS } from '@utils/files';
-import type { Platform } from '@platform/platform';
 
 const tempDirs: string[] = [];
 

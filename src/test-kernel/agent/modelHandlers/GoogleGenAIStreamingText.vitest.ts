@@ -9,9 +9,9 @@ import {
 import { ModelProvider } from 'llm-zoo';
 
 // Local imports - test support and agent
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 type StreamRecord = {
   appends: string[];

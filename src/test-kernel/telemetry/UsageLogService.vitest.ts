@@ -8,13 +8,13 @@ import {
   type Mock,
 } from 'vitest';
 
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import * as logger from '@logger/logUtils';
 import {
   USAGE_LOG_FLUSH_OUTCOME,
   UsageLogService,
 } from '@telemetry/UsageLogService';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { SupabaseClient } from '@auth/SupabaseClient';
-import * as logger from '@logger/logUtils';
 
 function usageEntry(model: string) {
   return {

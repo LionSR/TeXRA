@@ -7,6 +7,7 @@ import {
   type OnboardingFunnelState,
   type OnboardingFunnelTransition,
 } from '@controllers/onboarding/onboardingFunnel';
+import type { StateStore } from '@platform/interfaces';
 import {
   backfillFirstRunDone,
   getDefaultTeamId,
@@ -16,8 +17,6 @@ import {
   setFirstRunDone,
 } from '@shared/state/onboardingState';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-
-import type { StateStore } from '@platform/interfaces';
 
 function fakeStateStore(initial: Record<string, unknown> = {}): StateStore {
   const store = new Map<string, unknown>(Object.entries(initial));

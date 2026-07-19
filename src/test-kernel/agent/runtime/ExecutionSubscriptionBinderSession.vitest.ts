@@ -1,6 +1,3 @@
-// Test support imports
-import { createTestSession } from '@test/support/sessionTestUtils';
-
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -20,12 +17,15 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 }));
 
 // Local imports - runtime
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { ExecutionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
-import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
+import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import { ExecutionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { StreamTabId } from '@shared/schemas';
+
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
 
 import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 

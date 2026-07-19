@@ -2,10 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 import {
-  isStored,
-  makeFakeSettingsStores,
-} from '@test/support/settingsStoresFake';
-import {
   buildConfigListItems,
   buildEnumItems,
   coerceSettingInput,
@@ -32,14 +28,18 @@ import {
   resetCliState,
   sessionMeta,
 } from '@cli/chat/tui/state/cliState';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { AgentCategory } from '@shared/schemas/agent';
 import {
   CLI_STATE_SETTINGS,
   DEFAULT_GIT_AUTHOR_NAME,
   STATE_SETTINGS,
   type StateSettingEntry,
 } from '@shared/schemas/stateSettings';
-import { AgentCategory } from '@shared/schemas/agent';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import {
+  isStored,
+  makeFakeSettingsStores,
+} from '@test/support/settingsStoresFake';
 import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 
 const invalidateModelOptionsCache = vi.hoisted(() => vi.fn());

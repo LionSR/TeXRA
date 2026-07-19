@@ -1,25 +1,25 @@
 // Local imports - controllers
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+
+// Local imports - agent
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
+import type { TaskState, WorkflowTaskState } from '@agent/core/state/TaskState';
 import {
   ProgressWorkflowActionsController,
   type WorkflowDiffRequest,
   type WorkflowFileOperation,
   type WorkflowFileOperationRequest,
 } from '@controllers/progressView/ProgressWorkflowActionsController';
-
-// Local imports - agent
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
-import type { TaskState, WorkflowTaskState } from '@agent/core/state/TaskState';
-
-// Local imports - shared
 import type {
   OutputFileInfo,
   RoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
+
+// Local imports - shared
 
 export function createAgentConfig(
   overrides: Partial<AgentConfig> = {},

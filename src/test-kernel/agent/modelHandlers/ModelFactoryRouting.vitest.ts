@@ -11,11 +11,6 @@ import {
   type ModelConfig,
 } from 'llm-zoo';
 
-import { installPlatform } from '@test/support/setupPlatform';
-import {
-  LANGUAGE_MODEL_PORT_ERROR_CODE,
-  type LanguageModelPort,
-} from '@platform/languageModel';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
@@ -40,7 +35,12 @@ import {
   type CodexSession,
 } from '@auth/codex';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
+import {
+  LANGUAGE_MODEL_PORT_ERROR_CODE,
+  type LanguageModelPort,
+} from '@platform/languageModel';
 import { AgentCategory } from '@shared/schemas/agent';
+import { installPlatform } from '@test/support/setupPlatform';
 import type { FakePlatformOptions } from '@test/support/FakePlatform';
 
 function modelConfig(

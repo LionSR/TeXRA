@@ -6,9 +6,9 @@ import {
   getRunContextWorkingDirectory,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
+import { ToolError } from '@shared/schemas/toolResult';
 
 // Local imports - tools
-import { ToolError } from '@shared/schemas/toolResult';
 
 // Local imports - core utilities
 import { WorkspaceFS } from '@utils/files';

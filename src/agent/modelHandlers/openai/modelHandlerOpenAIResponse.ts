@@ -45,19 +45,19 @@ import type {
   ProviderCapabilityProfile,
 } from '@model/providerCapabilities';
 import replacementEngine from '@replacement/engine';
-
-// Type imports
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas/toolResult';
-import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
+import { clamp, filterNotNullish } from '@utils/core';
+import { getWebSocketEnabled } from '@utils/config/providerConfig';
+import { getConfig } from '@utils/config/configUtils';
+
+// Type imports
 
 // Local imports - utils
-import { clamp, filterNotNullish } from '@utils/core';
-import { getConfig } from '@utils/config/configUtils';
-import { getWebSocketEnabled } from '@utils/config/providerConfig';
 import { computeUtilizationPercent } from '../support/contextUtilization';
 import { logCompactionEvent } from '../support/compactionLogging';
 import { toDataUrl } from '../support/dataUrl';

@@ -3,18 +3,18 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports - controllers
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   ProgressFollowUpController,
   type ProgressFollowUpModelOption,
   type ProgressFollowUpState,
 } from '@controllers/progressView/ProgressFollowUpController';
+import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 
 // Local imports - agent
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
 // Local imports - shared
-import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 
 // Local imports - test support
 import {

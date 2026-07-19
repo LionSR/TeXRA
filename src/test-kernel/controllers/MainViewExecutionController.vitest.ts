@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
 
 describe('MainViewExecutionController', () => {
   it('keeps missing selections explicit before schema prefaults apply', () => {

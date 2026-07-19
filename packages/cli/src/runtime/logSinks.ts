@@ -2,9 +2,9 @@
 import { createInterface } from 'node:readline/promises';
 
 // Local imports - CLI schemas
-import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 
 // Local imports - errors
+import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import type { LogLevel } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

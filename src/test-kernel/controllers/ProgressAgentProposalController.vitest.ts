@@ -5,9 +5,9 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports - controllers
-import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
 
 // Local imports - shared
+import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
 import { AgentCategory, type AgentProposalPermission } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 

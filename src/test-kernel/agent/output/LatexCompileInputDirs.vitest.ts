@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent
-import { installPlatform } from '@test/support/setupPlatform';
 import type { AgentTrace } from '@agent/trace';
 import {
   AgentCategory,
@@ -17,8 +16,6 @@ import {
   runCompileCheck,
 } from '@agent/output/compileCheck';
 import { createOutputState, ensureRoundData } from '@agent/output/outputState';
-
-// Local imports - shared
 import type {
   ExecutionId,
   FileLocation,
@@ -26,7 +23,10 @@ import type {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
+// Local imports - shared
+
 // Local imports - file utilities
+import { installPlatform } from '@test/support/setupPlatform';
 import {
   TaskRunFileService,
   createExternalLocation,

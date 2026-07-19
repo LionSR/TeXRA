@@ -2,25 +2,25 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - history dependencies
-import { setupPlatform } from '@test/support/setupPlatform';
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import type { ChatExportInput } from '@controllers/settingsView/ChatExportController';
 import type { DesktopHistoryOptions } from '@desktop/main/desktopHistoryHandlers';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory } from '@shared/schemas/agent';
 import { assertSupported } from '@shared/utils/dispatcher';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { StorageFS } from '@utils/files';
 
 // Local imports - desktop test support
+
+// Local imports - controller types
+import { createStubDesktopHistoryOptions } from './desktopSettingsTestSupport';
 import {
   desktopSourcePath,
   moduleFileUrl,
   repoPath,
 } from './desktopTestPaths.mjs';
-import { createStubDesktopHistoryOptions } from './desktopSettingsTestSupport';
-
-// Local imports - controller types
-import type { ChatExportInput } from '@controllers/settingsView/ChatExportController';
 
 const chatExportMocks = vi.hoisted(() => ({
   buildExportInput: vi.fn(),

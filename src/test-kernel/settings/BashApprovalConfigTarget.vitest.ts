@@ -6,15 +6,15 @@ import * as path from 'node:path';
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-import {
-  BASH_APPROVAL_CONFIG_TARGET,
-  setBashApprovalEnabled,
-} from '@shared/settingsView/handlers/approvalHandlers';
 import type {
   ConfigInspection,
   ConfigTarget,
   StateStore,
 } from '@platform/interfaces';
+import {
+  BASH_APPROVAL_CONFIG_TARGET,
+  setBashApprovalEnabled,
+} from '@shared/settingsView/handlers/approvalHandlers';
 
 class MemoryStateStore implements StateStore {
   private readonly values = new Map<string, unknown>();

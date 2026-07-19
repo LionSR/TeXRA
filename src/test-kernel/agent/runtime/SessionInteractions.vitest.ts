@@ -1,12 +1,10 @@
 // Test support imports
-import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
-import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   type HostBashApprovalResult,
   matchesCancelSelector,
@@ -18,7 +16,9 @@ import {
   type ProposalResult,
   type RetryResult,
 } from '@agent/runtime/HostInteractions';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
+import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 import {
   createDesktopHostInteractions,
   type DesktopHostInteractions,
@@ -36,8 +36,8 @@ import {
   type ToolEditPermission,
   type UserQuestionPermission,
 } from '@shared/schemas';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
-import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 
 /**
  * Parity pins for the coordinator fold (#7487): plan approval, proposal, and

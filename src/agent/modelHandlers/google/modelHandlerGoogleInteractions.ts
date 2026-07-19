@@ -36,21 +36,21 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
-import type { ToolDefinition } from '@model';
-import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
+
+// Local imports - utils
+import type { ToolDefinition } from '@model';
+import replacementEngine from '@replacement/engine';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas/toolResult';
-
-// Local imports - utils
-import { filterNotNull, isNonEmptyString } from '@utils/core';
 import { getShortDisplayPath } from '@utils/files';
-import { getConfig } from '@utils/config/configUtils';
+import { filterNotNull, isNonEmptyString } from '@utils/core';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
+import { getConfig } from '@utils/config/configUtils';
 import {
   isGemini3Model,
   resolveGeminiThinkingLevel,

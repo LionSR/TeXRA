@@ -2,11 +2,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - test support
-import { setupPlatform } from '@test/support/setupPlatform';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import { getExecutionStore } from '@agent/storage';
 
 // Local imports - agent
-import { getExecutionStore } from '@agent/storage';
 import { noopTrace } from '@agent/trace';
 import {
   AgentCategory,
@@ -37,6 +35,8 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import { createTestSession } from '@test/support/sessionTestUtils';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 const CONFIG: AgentConfig = {
   inputFiles: [],

@@ -20,15 +20,15 @@ import stripAnsi from 'strip-ansi';
 import { afterAll, describe, expect, it } from 'vitest';
 
 // Local imports
-import { pollForCondition } from '@test/support/asyncTestUtils';
+import type { TuiRepaintOptions } from '@cli/chat/tui/render/tuiViewportController';
+import type { ConversationEntry } from '@cli/chat/tui/state/cliState';
+import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import {
   FakeStdin,
   FakeStdout,
   loadInk,
 } from '@test/support/inkTestHarness.mts';
-import type { TuiRepaintOptions } from '@cli/chat/tui/render/tuiViewportController';
-import type { ConversationEntry } from '@cli/chat/tui/state/cliState';
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import { pollForCondition } from '@test/support/asyncTestUtils';
 
 afterAll(() => {
   for (const [name, value] of Object.entries(ORIGINAL_COLOR_ENV)) {

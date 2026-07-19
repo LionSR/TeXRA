@@ -14,18 +14,18 @@ import {
 } from 'vitest';
 
 // Local imports
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { platform } from '@platform/platform';
-import { createFakePlatform } from '@test/support/FakePlatform';
 import { refresh } from '@agent/index/agentRegistry';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { getDefaultTeamId } from '@shared/state/onboardingState';
+import { platform } from '@platform/platform';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
+import { getDefaultTeamId } from '@shared/state/onboardingState';
+import { createFakePlatform } from '@test/support/FakePlatform';
 import {
   __resetSetupPlatformForTests,
   setSetupPlatform,
 } from '@tools/setup/platform';
+import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
 
 import { createFakeSetupPlatform } from './fixtures';
 

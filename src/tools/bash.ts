@@ -2,7 +2,6 @@
 import { z } from 'zod';
 
 // Local imports - platform
-import { tryPlatform } from '@platform/platform';
 
 // Local imports - agent
 import {
@@ -29,36 +28,37 @@ import { currentSession } from '@agent/runtime/SessionHandle';
 import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { type StreamTabId, type ExecutionId } from '@shared/schemas';
+
+// Local imports - tools
+
+// Local imports - utils
+import { tryPlatform } from '@platform/platform';
 import { BASH_TOOL_DEFAULT_TIMEOUT_MS } from '@shared/toolUse';
+import { type StreamTabId, type ExecutionId } from '@shared/schemas';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import {
   deriveRunOutcome,
   projectRunOutcome,
 } from '@shared/streams/streamStatus';
-
-// Local imports - tools
-import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import {
-  formatBashDelivery,
-  formatBashError,
-  type BashDeliveryStreamExcerpt,
-} from '@tools/subagentResults';
-import { requireRunStream } from '@tools/contextHelpers';
 import {
   enqueueChildRunFollowUp,
   wakeChildRunFollowUp,
   type ChildRunEnqueueResult,
 } from '@tools/childRunDelivery';
+import { requireRunStream } from '@tools/contextHelpers';
+import {
+  formatBashDelivery,
+  formatBashError,
+  type BashDeliveryStreamExcerpt,
+} from '@tools/subagentResults';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
 } from '@tools/approval/bashApproval';
-
-// Local imports - utils
 import { formatDuration, generateExecutionId } from '@utils/core';
-import { appendHead, appendTail } from '@utils/strings/appendTail';
-import { executeCommand, signalProcessGroup } from '@utils/system/execUtils';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import { executeCommand, signalProcessGroup } from '@utils/system/execUtils';
+import { appendHead, appendTail } from '@utils/strings/appendTail';
 
 // Local file imports
 import { defineTool } from './core/define';

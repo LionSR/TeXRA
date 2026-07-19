@@ -1,8 +1,8 @@
-import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import {
   formatCliModelAccessRoute,
   type CliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
+import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import type { StreamSubstate } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';

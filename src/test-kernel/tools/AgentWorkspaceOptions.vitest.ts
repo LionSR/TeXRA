@@ -6,9 +6,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports - tools
 import { buildAgentWorkspaceOptions } from '@tools/agentWorkspaceOptions';
+import { WorkspaceFS } from '@utils/files';
 
 // Local imports - files
-import { WorkspaceFS } from '@utils/files';
 
 describe('agent workspace options', () => {
   const originalGetPath = WorkspaceFS.getPath;

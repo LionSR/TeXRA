@@ -7,12 +7,12 @@ import * as vscode from 'vscode';
 // Local imports
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { appSignals } from '@eventBus/AppSignals';
+import { registerDiffRefresh } from '@frontend/ui/diffView';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
   toErrorMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { registerDiffRefresh } from '@frontend/ui/diffView';
 import {
   acceptEditedFileReplace,
   buildAcceptSuccessMessage,

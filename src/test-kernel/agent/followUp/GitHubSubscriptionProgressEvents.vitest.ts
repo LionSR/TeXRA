@@ -1,9 +1,6 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-// Test support imports
-import { createTestSession } from '@test/support/sessionTestUtils';
-
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,6 +12,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   sendFollowUp: sendFollowUpMock,
 }));
 
+// Local imports - runtime
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 
 // Local imports - event bus
@@ -22,6 +20,9 @@ import { appSignals, type AppSignalPayloads } from '@eventBus/AppSignals';
 
 // Local imports - shared schemas
 import type { StreamTabId } from '@shared/schemas';
+
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Local imports - tools
 import { emitGitHubSubscriptionChanged } from '@tools/github/subscriptionEventEmitter';

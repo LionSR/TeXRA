@@ -6,11 +6,6 @@ import { strict as assert } from 'node:assert';
 import { describe, it, afterEach, vi } from 'vitest';
 
 // Local imports - tests
-import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
-import {
-  clearStreamStatusForTest,
-  seedStreamStatusForTest,
-} from '@test/helpers/streamStatusTestUtils';
 
 // Local imports - agent core
 import {
@@ -18,7 +13,6 @@ import {
   type ModelConfig,
   ModelProvider,
 } from 'llm-zoo';
-import { createRunTrace, StreamLogStore } from '@transcript';
 import type { AgentEvent } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -59,7 +53,13 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { ExecResult } from '@shared/schemas/opResults';
+import {
+  clearStreamStatusForTest,
+  seedStreamStatusForTest,
+} from '@test/helpers/streamStatusTestUtils';
+import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { BashTool } from '@tools/bash';
+import { createRunTrace, StreamLogStore } from '@transcript';
 import { TaskRunFileService } from '@utils/files';
 import * as execUtils from '@utils/system/execUtils';
 

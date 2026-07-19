@@ -2,19 +2,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - common webview
-import { StreamLogStore, type StreamLogAppendInput } from '@transcript';
 import { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-
-// Local imports - progress view
-
-// Local imports - shared schemas
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   type StreamTabId,
 } from '@shared/schemas';
+import { StreamLogStore, type StreamLogAppendInput } from '@transcript';
+
+// Local imports - progress view
+
+// Local imports - shared schemas
 
 function logEntry(
   id: string,

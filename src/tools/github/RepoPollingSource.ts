@@ -36,6 +36,7 @@
 
 import { LRUCache } from 'lru-cache';
 
+import type { Disposable } from '@platform/interfaces';
 import { shouldDropBotEvent } from './botFilter';
 import {
   formatRepoIssueComment,
@@ -66,8 +67,6 @@ import {
   type GhReviewComment,
 } from './prTypes';
 import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
-
-import type { Disposable } from '@platform/interfaces';
 
 // We pull all "updated since" data; a sufficiently large window guarantees we
 // catch transitions even after a brief network outage. GitHub caps these

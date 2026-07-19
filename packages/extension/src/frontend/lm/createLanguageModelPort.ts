@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - platform
+import { warn } from '@logger/logUtils';
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
   LanguageModelPortError,
@@ -16,7 +17,6 @@ import {
 } from '@platform/languageModel';
 
 // Local imports - logger
-import { warn } from '@logger/logUtils';
 
 function translateLanguageModelError(
   error: unknown,

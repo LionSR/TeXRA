@@ -1,9 +1,9 @@
 import path from 'node:path';
 
 // Local imports - common
-import * as logger from '@logger/logUtils';
 
 // Local imports - shared
+import * as logger from '@logger/logUtils';
 import type {
   OutputFileInfo,
   RoundIndexed,

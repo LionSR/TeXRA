@@ -2,9 +2,8 @@ import * as path from 'node:path';
 
 import pMap from 'p-map';
 
-import { platform } from '@platform/platform';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
-
+import { platform } from '@platform/platform';
 import type { FileLocation } from '@shared/schemas';
 import { ToolConfig } from '@shared/schemas/toolConfig';
 import { TaskRunFileService, FlexibleFS, pathToLocation } from '@utils/files';

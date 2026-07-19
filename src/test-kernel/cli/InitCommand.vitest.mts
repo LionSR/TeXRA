@@ -4,8 +4,6 @@ import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
-
 const mocks = vi.hoisted(() => ({
   getCliModelAccessList: vi.fn(),
   getVisibleAgents: vi.fn(),
@@ -47,6 +45,7 @@ import {
   initWizardModelSelectItems,
 } from '@cli/init/runInitWizard';
 import type { CliModelAccess } from '@cli/runtime/modelAccess';
+import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 
 function modelAccess(
   value: string,

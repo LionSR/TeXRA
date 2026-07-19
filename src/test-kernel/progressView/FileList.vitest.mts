@@ -5,10 +5,10 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 // Local imports - progress view component types
 import type { FileList } from '@progressView/frontend/components/FileList';
 import type { ProgressFileActionDetail } from '@progressView/frontend/events';
-
-// Local imports - shared schemas
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { OutputFileInfo } from '@shared/schemas';
+
+// Local imports - shared schemas
 
 // Local imports - test utilities
 import { installAttachInternalsFallback } from '../settings/litComponentTestUtils';

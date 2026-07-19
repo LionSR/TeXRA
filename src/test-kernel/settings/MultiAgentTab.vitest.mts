@@ -10,9 +10,9 @@ vi.mock('@shared/hostBridge', () => ({
 }));
 
 // Local imports - component type
-import type { MultiAgentTab } from '@settingsView/frontend/tabs/MultiAgentTab';
 
 // Local imports - shared schemas
+import type { MultiAgentTab } from '@settingsView/frontend/tabs/MultiAgentTab';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AGENT_MODE_PRESETS,

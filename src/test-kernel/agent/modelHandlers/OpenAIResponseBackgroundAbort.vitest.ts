@@ -8,12 +8,12 @@ import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller';
-
-// Local imports - common errors
 import {
   isUserAbort,
   requiresFlowAutoRetry,
 } from '@common/errors/sdkErrorUtils';
+
+// Local imports - common errors
 
 // Type imports
 import type OpenAI from 'openai';

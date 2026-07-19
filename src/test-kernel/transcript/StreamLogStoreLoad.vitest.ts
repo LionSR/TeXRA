@@ -5,14 +5,9 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Platform imports
-import { FileType, type FileStat } from '@platform/interfaces';
 
-import {
-  StreamLogStore,
-  STREAM_LOGS_DIR,
-  STREAM_LOG_SUMMARIES_DIR,
-} from '@transcript';
 import * as logUtils from '@logger/logUtils';
+import { FileType, type FileStat } from '@platform/interfaces';
 import {
   END_GROUP_STATUS,
   LOG_LEVELS,
@@ -22,6 +17,11 @@ import {
   STREAM_PHASE,
   type StreamLogEntry,
 } from '@shared/schemas';
+import {
+  StreamLogStore,
+  STREAM_LOGS_DIR,
+  STREAM_LOG_SUMMARIES_DIR,
+} from '@transcript';
 import { StorageFS } from '@utils/files';
 import { delay } from '@utils/core';
 

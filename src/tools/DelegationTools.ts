@@ -30,8 +30,6 @@ import {
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
-
-// Local imports - tools
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
@@ -41,6 +39,8 @@ import {
   type ToolUseAgentProposal,
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
+
+// Local imports - tools
 import {
   formatFollowUpInstruction,
   formatSubagentError,
@@ -48,9 +48,9 @@ import {
 import { deliverChildRunFollowUp } from '@tools/childRunDelivery';
 import { requireRunStream } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - utils
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - delegation
 import {

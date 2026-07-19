@@ -1,11 +1,11 @@
-import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
-
+import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import {
   createSettingsViewCommandHandlers,
   type SettingsViewCommandActions,
 } from '@controllers/settingsView/SettingsViewCommandHandlers';
-import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import type { ConfigProvider } from '@platform/interfaces';
+import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { resolveStateSettingWrite } from '@shared/settingsView/handlers/stateSettingWrite';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -36,7 +36,6 @@ import {
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
 import type { DesktopHistorySettingsController } from './desktopHistoryHandlers.js';
-import type { ConfigProvider } from '@platform/interfaces';
 import type { DesktopAgentSettingsController } from './desktopAgentSettingsController.js';
 import type { DesktopCrashReportingSettingsController } from './desktopCrashReportingSettingsController.js';
 import type { DesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';

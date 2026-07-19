@@ -13,8 +13,8 @@ vi.mock('@tools/gitignore', () => ({
 }));
 
 // Local imports - tools
-import { FileType } from '@platform/interfaces';
 import * as arxivModule from '@latex/arxivProcessor';
+import { FileType } from '@platform/interfaces';
 import { ArxivDownloadTool } from '@tools/arxiv/ArxivDownloadTool';
 import { WorkspaceFS } from '@utils/files';
 

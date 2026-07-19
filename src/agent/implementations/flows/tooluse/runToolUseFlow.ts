@@ -36,13 +36,13 @@ import {
   getRuntimeModelConfig,
   resolveRuntimeModelConfig,
 } from '@model/runtimeModelRegistry';
+import type { SubagentProgressUpdate } from '@shared/schemas';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
   toProviderErrorFromRetry,
   type RunOutcome,
 } from '@shared/schemas';
-import type { SubagentProgressUpdate } from '@shared/schemas';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
 
 // Local imports - tools and flow

@@ -3,9 +3,9 @@ import * as path from 'node:path';
 
 // Local imports - agent
 import type { AgentTrace } from '@agent/trace/AgentTrace';
+import type { FileLocation } from '@shared/schemas';
 
 // Local imports - shared
-import type { FileLocation } from '@shared/schemas';
 
 // Local imports - utilities
 import { normalizeLatexPath, getPathSegments } from '@utils/core/pathCore';

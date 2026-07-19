@@ -1,5 +1,4 @@
 // Local imports - transcript
-import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 
 // Local imports - agent
 import {
@@ -11,17 +10,18 @@ import { executionIdFromStream } from '@agent/storage/executionIdFromStream';
 import { waitForOwnedExecutionLeaseRelease } from '@agent/storage/executionLease';
 
 // Local imports - logger
-import * as logger from '@logger/logUtils';
 
 // Local imports - shared
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 // Local imports - utils
-import { unique } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import * as logger from '@logger/logUtils';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 // Local imports - transcript types
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
+import { canUseStreamDataDir } from '@transcript/streamDataPaths';
+import { unique } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'SessionStores';
 

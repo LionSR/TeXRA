@@ -4,11 +4,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Platform imports
 import { FileType, type FileStat } from '@platform/interfaces';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-
-// Local imports - memory tool under test
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
 import { MemoryTool } from '@tools/memory/MemoryTool';
 import { StorageFS } from '@utils/files';
+
+// Local imports - memory tool under test
 
 const TEST_TIMESTAMP = Date.parse('2026-01-01T00:00:00.000Z');
 const TEST_FRONTMATTER = [

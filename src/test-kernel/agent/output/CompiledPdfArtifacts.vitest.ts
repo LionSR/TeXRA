@@ -9,12 +9,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Local imports - agent output
 
 // Local imports - platform
+import { publishCompiledPdfArtifact } from '@agent/output/compiledPdfArtifacts';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { publishCompiledPdfArtifact } from '@agent/output/compiledPdfArtifacts';
+import { createExternalLocation, createRunStorageLocation } from '@utils/files';
 
 // Local imports - file utilities
-import { createExternalLocation, createRunStorageLocation } from '@utils/files';
 
 async function writePdf(filePath: string, contents: string): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });

@@ -7,9 +7,9 @@ import { describe, expect, it } from 'vitest';
 // Local imports - storage
 import type { ExecutionListingEntry } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { STATUS_DISPLAY, TODO_STATUS } from '@shared/schemas';
 
 // Local imports - schemas
-import { STATUS_DISPLAY, TODO_STATUS } from '@shared/schemas';
 
 // Local imports - tools
 import {

@@ -3,9 +3,9 @@
  */
 // Local imports - logger
 import { createChannelWriter, type ChannelWriter } from '@logger/logUtils';
+import { MESSAGE_TYPES, type LogLevel } from '@shared/schemas';
 
 // Local imports - shared schemas
-import { MESSAGE_TYPES, type LogLevel } from '@shared/schemas';
 
 // Local imports - trace
 import { noopTrace } from './noopTrace';

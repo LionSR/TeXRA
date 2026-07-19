@@ -3,7 +3,6 @@ import { JSDOM } from 'jsdom';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports - node/flow primitives under test
-import { createFakeKv } from '@test/support/FakeExecutionKVStore';
 import { BaseNode } from '@agent/node';
 import {
   RoundPersistedFlow,
@@ -12,6 +11,7 @@ import {
 import { computeRoundStageTotal } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
 import type { RoundStage } from '@shared/schemas';
+import { createFakeKv } from '@test/support/FakeExecutionKVStore';
 
 /**
  * Regression coverage for the reviewer finding on PR #7290 (issue #7077's

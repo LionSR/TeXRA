@@ -15,8 +15,8 @@
 import { z } from 'zod';
 
 // Local imports
-import { platform } from '@platform/platform';
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
+import { platform } from '@platform/platform';
 import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
 import type { RegisteredToolName } from '@tools/registry';
 import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
@@ -37,12 +37,12 @@ import {
   summarizeLeanServers,
 } from '@tools/lean/leanServerRegistry';
 import { getZoteroPort } from '@tools/zotero/bbtClient';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { formatResultCount } from '@utils/text/stringUtils';
-import { isGitRepository } from '@utils/system/isGitRepository';
-import { checkToolInstalled } from '@utils/system/toolUtils';
-import { isWSL } from '@utils/system/wslDetect';
 import { BinaryResolver } from '@utils/system/binaryResolver';
+import { isWSL } from '@utils/system/wslDetect';
+import { checkToolInstalled } from '@utils/system/toolUtils';
+import { isGitRepository } from '@utils/system/isGitRepository';
+import { formatResultCount } from '@utils/text/stringUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Node.js semver range the `texra` CLI supports. */
 export const TEXRA_CLI_SUPPORTED_NODE_RANGE = '>=22.9.0';

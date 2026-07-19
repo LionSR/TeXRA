@@ -29,14 +29,14 @@ import {
   type ProgressState,
   type StreamState,
 } from '@progressView/frontend/store';
-
-// Local imports - shared schemas
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentCategory,
   createStreamState,
   type StreamTabId,
 } from '@shared/schemas';
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+
+// Local imports - shared schemas
 
 function createToolUseState(text: string): StreamState {
   const state = createStreamState(AgentCategory.ToolUse);

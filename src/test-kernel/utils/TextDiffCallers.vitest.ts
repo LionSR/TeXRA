@@ -5,18 +5,18 @@ import path from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports - tests
-import { installPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent output
 import { computeOutputDiffStats } from '@agent/output/diffComputation';
 import { assignByContentSimilarity } from '@agent/output/extraction/contentSimilarity';
 import { createOutputState, ensureRoundData } from '@agent/output/outputState';
 import type { RoundFileMapping } from '@agent/output/types';
-
-// Local imports - shared schemas
 import type { ExecutionId } from '@shared/schemas';
 
+// Local imports - shared schemas
+
 // Local imports - tools
+import { installPlatform } from '@test/support/setupPlatform';
 import { computeAndWriteWorkflowDiffs } from '@tools/subagentDiffs';
 import {
   computeLineChangeSummary,

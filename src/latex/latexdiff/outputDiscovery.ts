@@ -8,12 +8,11 @@
 import * as path from 'node:path';
 
 // Local imports
-import { platform } from '@platform/platform';
-import { StreamSnapshotStore } from '@transcript';
 import { listExecutions, type ExecutionListingEntry } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { platform } from '@platform/platform';
 import type {
   ExecutionId,
   FileLocation,
@@ -24,6 +23,7 @@ import {
   WORKFLOW_OUTPUT_BASENAME,
   parseWorkflowOutputRoundDir,
 } from '@shared/constants/workflowOutput';
+import { StreamSnapshotStore } from '@transcript';
 import {
   WorkspaceFS,
   createRunStorageLocation,

@@ -25,14 +25,14 @@ import {
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { startChildRunLoop } from '@agent/runtime/childRunLoop';
-
-// Local imports - tools
 import {
   AgentCategory,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
+
+// Local imports - tools
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';

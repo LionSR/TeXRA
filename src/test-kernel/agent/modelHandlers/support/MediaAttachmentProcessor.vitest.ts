@@ -12,10 +12,8 @@ import { describe, it, beforeAll, afterAll } from 'vitest';
 import { PDFDocument, StandardFonts } from '@cantoo/pdf-lib';
 
 // Local imports - platform
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 
 // Local imports - test support
-import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent
 import { DEFAULT_MODEL_CAPABILITIES, type ModelCapabilities } from 'llm-zoo';
@@ -29,6 +27,8 @@ import { attachProviderError } from '@common/errors/sdkErrorUtils';
 // Type imports
 
 // Internal imports
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { AbsoluteFS, pathToLocation, getShortDisplayPath } from '@utils/files';
 
 interface MediaLogRecorder extends AgentTrace {

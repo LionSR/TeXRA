@@ -5,19 +5,19 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports - controllers
-import { ProgressFollowUpPolishController } from '@controllers/progressView/ProgressFollowUpPolishController';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 // Local imports - agent
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { WorkflowTaskState } from '@agent/core/state/TaskState';
 import type { FileContext } from '@agent/runtime/textEnhancement';
+import { ProgressFollowUpPolishController } from '@controllers/progressView/ProgressFollowUpPolishController';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - shared
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
 function createWorkflowTaskState(
   overrides: Omit<Partial<AgentConfig>, 'agentCategory'> = {},

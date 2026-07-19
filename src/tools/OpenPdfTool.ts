@@ -2,22 +2,22 @@
 import { z } from 'zod';
 
 // Local imports - runtime
+
+// Type imports
 import {
   getRunContextExecutionId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-
-// Type imports
 import type { FileLocation } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local imports - tools
+
+// Local imports - utilities
 import {
   currentToolRoot,
   resolveWorkspaceRelativePath,
 } from '@tools/pathResolution';
-
-// Local imports - utilities
 import {
   AbsoluteFS,
   pathToLocation,

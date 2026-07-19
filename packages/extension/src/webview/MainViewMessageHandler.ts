@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 
-import { MainViewStartupController } from '@controllers/mainView/MainViewStartupController';
 import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
 import { BaseViewMessageHandler } from '@common/webview';
+import { MainViewStartupController } from '@controllers/mainView/MainViewStartupController';
 import { agentDirectories } from '@frontend/agents';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';

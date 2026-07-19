@@ -15,8 +15,8 @@ import * as path from 'node:path';
 import simpleGit, { type SimpleGit } from 'simple-git';
 
 // Local imports
-import { platform } from '@platform/platform';
 import * as logger from '@logger/logUtils';
+import { platform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { makeMachineGitEnv } from '@utils/system/platformPaths';
 import { splitContentLines, splitOutputLines } from '@utils/text/stringUtils';

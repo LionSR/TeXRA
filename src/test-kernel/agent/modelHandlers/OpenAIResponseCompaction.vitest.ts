@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { type ModelConfig, ModelProvider } from 'llm-zoo';
 
 // Local imports - test support and agent model handlers
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
@@ -13,6 +12,7 @@ import {
 } from '@agent/modelHandlers/contextManagementConstants';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import type { ProviderCapabilityProfile } from '@model/providerCapabilities';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Type imports
 import type { ResponseInputItem } from 'openai/resources/responses/responses';

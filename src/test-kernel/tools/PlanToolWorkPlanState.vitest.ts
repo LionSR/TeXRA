@@ -5,23 +5,23 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
-import { FakeConfigProvider } from '@test/support/FakePlatform';
-import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
-import { platform, type Platform } from '@platform/platform';
 import {
   FileInteractionState,
   WorkPlanState,
 } from '@agent/core/state/AgentWorkspaceState';
 import { withToolEnvironment } from '@agent/followUp/ToolFileInteractionContext';
 import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';
+import { platform, type Platform } from '@platform/platform';
 import { planSummaryLine, type Plan, type StreamTabId } from '@shared/schemas';
 import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas/goal';
+import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
+import { FakeConfigProvider } from '@test/support/FakePlatform';
+import { GoalStore } from '@tools/goal';
 import {
   cleanupApprovalsForStream,
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
 } from '@tools/approval';
-import { GoalStore } from '@tools/goal';
 import { PlanTool } from '@tools/plan/PlanTool';
 import {
   createRecordingHost,

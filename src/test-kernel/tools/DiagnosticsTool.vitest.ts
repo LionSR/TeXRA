@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createTestSession } from '@test/support/sessionTestUtils';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { DiagnosticsTool, type DiagnosticsInput } from '@tools/DiagnosticsTool';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 

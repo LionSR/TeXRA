@@ -2,15 +2,12 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
-import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Third-party imports
 import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
-import { clearStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
-import { installPlatform } from '@test/support/setupPlatform';
 import { noopTrace } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -36,6 +33,9 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { installPlatform } from '@test/support/setupPlatform';
+import { clearStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
+import { createTestSession } from '@test/support/sessionTestUtils';
 
 import { createRecordingHost } from '../progressTestUtils';
 

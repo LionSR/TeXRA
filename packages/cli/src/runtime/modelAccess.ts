@@ -1,7 +1,7 @@
 // Local imports - auth
-import { SupabaseClient } from '@auth/SupabaseClient';
 
 // Local imports - model surfaces
+import { SupabaseClient } from '@auth/SupabaseClient';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
   decideRunModel,

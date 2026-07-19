@@ -7,10 +7,10 @@
 import * as path from 'node:path';
 
 // Local imports
-import { platform } from '@platform/platform';
 import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
 import type { MathMarkupOption } from '@latex/latexdiff/mathMarkup';
 import * as logger from '@logger/logUtils';
+import { platform } from '@platform/platform';
 import {
   getEffectiveDiffBase,
   roundIndexedEntries,

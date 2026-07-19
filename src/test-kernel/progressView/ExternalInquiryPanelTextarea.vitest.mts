@@ -2,9 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - progress view component types
-import type { ExternalInquiryPanel } from '@progressView/frontend/components/ExternalInquiryPanel';
 
 // Local imports - shared schemas
+import type { ExternalInquiryPanel } from '@progressView/frontend/components/ExternalInquiryPanel';
 import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ExternalInquiryPermission } from '@shared/schemas';

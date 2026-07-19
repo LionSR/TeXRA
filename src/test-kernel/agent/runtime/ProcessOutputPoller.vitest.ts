@@ -7,8 +7,6 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { setupPlatform } from '@test/support/setupPlatform';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { ProcessExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import {
@@ -17,7 +15,9 @@ import {
 } from '@agent/runtime/ProcessOutputPoller';
 
 // Local imports - shared
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { StreamTabId } from '@shared/schemas';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { delay } from '@utils/core';
 
 const tmpDirs: string[] = [];

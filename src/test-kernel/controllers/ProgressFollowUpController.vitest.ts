@@ -2,21 +2,21 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - controllers
-import {
-  ProgressFollowUpController,
-  type ProgressFollowUpState,
-} from '@controllers/progressView/ProgressFollowUpController';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 // Local imports - agent
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { WorkflowTaskState } from '@agent/core/state/TaskState';
+import {
+  ProgressFollowUpController,
+  type ProgressFollowUpState,
+} from '@controllers/progressView/ProgressFollowUpController';
+import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 
 // Local imports - shared
-import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 
 function createWorkflowTaskState(
   overrides: Omit<Partial<AgentConfig>, 'agentCategory'> = {},

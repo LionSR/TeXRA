@@ -31,8 +31,6 @@ vi.mock('@agent/core/flows/CycleServices', () => ({
 }));
 
 // Local imports
-import { StreamLogStore } from '@transcript/StreamLogStore';
-import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
 import { TraceEmitter } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
@@ -52,6 +50,8 @@ import {
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
+import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
+import { StreamLogStore } from '@transcript/StreamLogStore';
 import { isObject } from '@utils/core';
 import {
   createRecordingHost,

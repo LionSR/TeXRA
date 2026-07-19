@@ -3,8 +3,6 @@ import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
 import { setTimeout as sleep } from 'node:timers/promises';
-import { createTestSession } from '@test/support/sessionTestUtils';
-import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 // Third-party imports
 
@@ -63,6 +61,8 @@ vi.mock('@tools/childRunDelivery', () => ({
   persistChildRunResultMeta: mocks.persistChildRunResultMeta,
 }));
 
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { createNativeToolUseStrategy } from '@tools/delegation/nativeToolUseStrategy';
 
 const ownedSessions = new Set<SessionHandle>();

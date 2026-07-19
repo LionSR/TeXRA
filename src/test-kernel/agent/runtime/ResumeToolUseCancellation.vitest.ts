@@ -58,7 +58,6 @@ vi.mock('@agent/implementations/flows/tooluse/runToolUseFlow', () => ({
 }));
 
 // Local imports - agent runtime
-import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -68,6 +67,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 interface InterruptibleFlowInput {
   checkInterruption(): boolean;

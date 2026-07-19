@@ -11,12 +11,12 @@ import * as logger from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   countBySeverity,
   formatCounts,
   formatMessageList,
 } from '@utils/diagnostics/diagnosticFormatting';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { defineTool } from './core/define';

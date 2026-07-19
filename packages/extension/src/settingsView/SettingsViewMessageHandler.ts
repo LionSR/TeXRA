@@ -13,55 +13,55 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Shared schemas and dispatchers
-import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
-import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
-import { buildToolDashboardItems } from '@controllers/settingsView/ToolDashboardData';
+import { defaultSession } from '@agent/runtime/SessionHandle';
+import { getServerSideKeyService } from '@auth/serverKeys';
+import { AUTH_COMMANDS } from '@auth/constants';
+import { WorkspaceStateKey, globalSM, workspaceSM } from '@common/state';
+import { BaseViewMessageHandler } from '@common/webview';
+import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import {
   createSettingsViewCommandHandlers,
   type SettingsViewCommandActions,
 } from '@controllers/settingsView/SettingsViewCommandHandlers';
-import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
-import { platform } from '@platform/platform';
-import {
-  LANGUAGE_MODEL_PORT_ERROR_CODE,
-  LanguageModelPortError,
-} from '@platform/languageModel';
-import {
-  resolveMemoryStoragePath,
-  RUNS_STORAGE_DIR,
-} from '@platform/defaults/workspaceStorage';
-import { defaultSession } from '@agent/runtime/SessionHandle';
-import { AUTH_COMMANDS } from '@auth/constants';
-import { getServerSideKeyService } from '@auth/serverKeys';
-import { BaseViewMessageHandler } from '@common/webview';
-import { WorkspaceStateKey, globalSM, workspaceSM } from '@common/state';
+import { buildToolDashboardItems } from '@controllers/settingsView/ToolDashboardData';
+import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
+import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
+import {
+  isInlineCriticismEnabled,
+  setInlineCriticismEnabled,
+} from '@frontend/latex/inlineCriticism';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
+import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
+import {
+  applyGitAuthorConfig,
+  readGitAuthorSettings,
+} from '@frontend/git/gitAuthorSetup';
 import {
   logErrorMessage,
   showLoggedErrorMessage,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import {
-  applyGitAuthorConfig,
-  readGitAuthorSettings,
-} from '@frontend/git/gitAuthorSetup';
-import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
-import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import {
-  isInlineCriticismEnabled,
-  setInlineCriticismEnabled,
-} from '@frontend/latex/inlineCriticism';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+  invalidateApiKeyCache,
+  loadApiKeyStatusMap,
+} from '@model/apiProviders';
 import {
   invalidateRuntimeModelRegistry,
   requestRuntimeModelAccess,
 } from '@model/runtimeModelRegistry';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import {
-  invalidateApiKeyCache,
-  loadApiKeyStatusMap,
-} from '@model/apiProviders';
+  LANGUAGE_MODEL_PORT_ERROR_CODE,
+  LanguageModelPortError,
+} from '@platform/languageModel';
+import { platform } from '@platform/platform';
+import {
+  resolveMemoryStoragePath,
+  RUNS_STORAGE_DIR,
+} from '@platform/defaults/workspaceStorage';
 import { revealProgressStream } from '@progressView/progressNavigation';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { resolveStateSettingWrite } from '@shared/settingsView/handlers/stateSettingWrite';
@@ -85,13 +85,13 @@ import {
   PROVIDER_URLS,
   PROVIDER_VSCODE_SETTINGS,
 } from '@shared/constants/providers';
-import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
-import { findExternalToolDef } from '@tools/externalToolDefs';
 import {
   getLastCheckResults,
   refreshToolAvailability,
   refreshDisabledToolCache,
 } from '@tools/toolAvailability';
+import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
+import { findExternalToolDef } from '@tools/externalToolDefs';
 import { StorageFS } from '@utils/files';
 import { debounce } from '@utils/core';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config';

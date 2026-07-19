@@ -7,8 +7,8 @@ import { describe, it } from 'vitest';
 
 // Local imports - platform
 import { FileType, type FileSystemProvider } from '@platform/interfaces';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform } from '@platform/platform';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 
 // Local imports - test support
 import {

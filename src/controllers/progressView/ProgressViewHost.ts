@@ -4,9 +4,9 @@ import {
   isWorkflowTaskState,
   type TaskState,
 } from '@agent/core/state/TaskState';
+import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - shared
-import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - controllers
 import {

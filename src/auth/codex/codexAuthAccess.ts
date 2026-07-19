@@ -6,8 +6,8 @@
  *
  * Stays `vscode`-free: reaches the keychain only through the platform port.
  */
-import { tryPlatform } from '@platform/platform';
 import * as logger from '@logger/logUtils';
+import { tryPlatform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CODEX_SESSION_SECRET_KEY } from './codexConstants';

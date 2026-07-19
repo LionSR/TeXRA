@@ -24,11 +24,11 @@ import {
   permissions$,
   resetProgressState,
 } from '@progressView/frontend/progressState';
+import { AgentCategory } from '@shared/schemas';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 // Local imports - shared contracts
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import { AgentCategory } from '@shared/schemas';
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 type PostedCall = [command: string, payload: Record<string, unknown>];
 type PermissionCase = {

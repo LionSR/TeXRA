@@ -12,17 +12,8 @@
  * constructor instead of the controller importing `@resources`.
  */
 
-// Local imports - transcript / trace-viewer
-import {
-  assembleTrace,
-  injectStandaloneTrace,
-  type AssembleTraceResult,
-} from '@transcript';
-
 // Local imports - agent
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
-
-// Local imports - host-neutral chat-export formatters
 import {
   formatChatAsMarkdown,
   formatChatAsLatex,
@@ -30,16 +21,23 @@ import {
   type ChatExportInput,
 } from '@agent/export/chatExportFormatter';
 
-export type { ChatExportInput };
-
 // Local imports - LaTeX
 import { compileLatex2Pdf } from '@latex/texTools';
 
 // Local imports - schemas
 import type { ExecutionId } from '@shared/schemas';
 
+// Local imports - transcript / trace-viewer
+import {
+  assembleTrace,
+  injectStandaloneTrace,
+  type AssembleTraceResult,
+} from '@transcript';
+
 // Local imports - utils
 import { StorageFS, pathToLocation } from '@utils/files';
+
+export type { ChatExportInput };
 
 // ============================================================
 // Result types

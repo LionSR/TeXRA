@@ -2,9 +2,6 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - node/flow primitives under test
-import { createFakeKv } from '@test/support/FakeExecutionKVStore';
-import { StreamLogStore } from '@transcript/StreamLogStore';
-import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
 import { TraceEmitter } from '@agent/trace';
 import { BaseNode } from '@agent/node';
 import {
@@ -18,6 +15,9 @@ import {
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
+import { createFakeKv } from '@test/support/FakeExecutionKVStore';
+import { StreamLogStore } from '@transcript/StreamLogStore';
+import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
 import { isObject } from '@utils/core';
 
 /**

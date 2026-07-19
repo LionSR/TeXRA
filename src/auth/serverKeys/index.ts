@@ -13,11 +13,11 @@
  * - free tier: Included non-premium models (up to $3/M input)
  */
 
+import type { StateStore } from '@platform/interfaces';
 import { SUPABASE_CUSTOM_DOMAIN } from '../config';
 import { TierService } from './TierService';
 import { ServerSideKeyService } from './ServerSideKeyService';
 import type { SupabaseSessionLog } from '../supabaseSessionTypes';
-import type { StateStore } from '@platform/interfaces';
 
 // Service class
 export { ServerSideKeyService };

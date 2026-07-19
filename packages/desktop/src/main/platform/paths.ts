@@ -3,10 +3,10 @@ import { join, resolve } from 'node:path';
 
 import { app } from 'electron';
 
-import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { BUNDLED_AGENT_DIRECTORY_NAMES } from '@agent/index/BundledAgentDirectories';
 import { getWorkspacePathInput } from '@desktop/workspacePath.js';
+import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
+import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 
 interface WorkspacePathOptions {
   env?: Partial<Pick<NodeJS.ProcessEnv, 'TEXRA_WORKSPACE_PATH'>>;

@@ -5,10 +5,6 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports - catalog + accessor
-import {
-  isStored,
-  makeFakeSettingsStores,
-} from '@test/support/settingsStoresFake';
 import { KNOWN_TEXRA_KEYS } from '@cli/schemas/knownKeys';
 import { CORE_SETTING_PATHS } from '@shared/schemas/coreSettings';
 import {
@@ -48,6 +44,10 @@ import {
 } from '@shared/schemas/agentCliSettings';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import {
+  isStored,
+  makeFakeSettingsStores,
+} from '@test/support/settingsStoresFake';
 
 const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
   'config',

@@ -1,9 +1,6 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-// Test support imports
-import { createTestSession } from '@test/support/sessionTestUtils';
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sendFollowUpMock = vi.hoisted(() =>
@@ -37,10 +34,11 @@ vi.mock('@tools/inquiry/externalInquiryStorage', () => ({
   readExternalInquiryThread: readExternalInquiryThreadMock,
 }));
 
-import { createRecordingHost } from '@test/agent/progressTestUtils';
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { ExternalInquiryThreadId, StreamTabId } from '@shared/schemas';
+import { createRecordingHost } from '@test/agent/progressTestUtils';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import {
   injectContinuationForAnsweredThread,
   type InjectionOutcome,

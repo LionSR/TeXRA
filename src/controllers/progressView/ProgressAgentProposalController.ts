@@ -4,10 +4,10 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ProposalResult } from '@agent/runtime/HostInteractions';
 
 import type { TaskState } from '@agent/core/state/TaskState';
-
-// Local imports - shared
 import type { AgentProposal, AgentProposalPermission } from '@shared/schemas';
 import type { ProgressAgentProposalActionMessage } from '@shared/schemas/progressView';
+
+// Local imports - shared
 
 type WithoutCommand<Message> = Message extends unknown
   ? Omit<Message, 'command'>

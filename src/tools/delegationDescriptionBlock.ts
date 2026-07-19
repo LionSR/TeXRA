@@ -12,9 +12,9 @@
 
 // Type imports
 import type { ToolDefinition } from '@model';
+import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 
 // Local imports
-import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 
 /**
  * Replace `pattern`'s match in a delegation tool's description with

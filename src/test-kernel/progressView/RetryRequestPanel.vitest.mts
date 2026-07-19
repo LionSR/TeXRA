@@ -2,9 +2,9 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - progress view component types
-import type { RetryRequestPanel } from '@progressView/frontend/components/RetryRequestPanel';
 
 // Local imports - shared schemas
+import type { RetryRequestPanel } from '@progressView/frontend/components/RetryRequestPanel';
 import type { ProviderErrorPartial } from '@shared/schemas';
 
 // Local imports - shared constants

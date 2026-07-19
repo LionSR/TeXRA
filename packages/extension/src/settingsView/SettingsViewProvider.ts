@@ -13,9 +13,9 @@ import {
 } from '@frontend/auth/agentCatalogRefreshScope';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsTab } from '@shared/schemas/settingsViewMessages';
+import type { AgentCategory } from '@shared/schemas/agent';
 
 // Local imports - settings view components
-import type { AgentCategory } from '@shared/schemas/agent';
 import { SettingsViewMessageHandler } from './SettingsViewMessageHandler';
 
 export class SettingsViewProvider

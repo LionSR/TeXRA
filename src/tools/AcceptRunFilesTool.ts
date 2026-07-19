@@ -13,12 +13,12 @@
 import { z } from 'zod';
 
 // Local imports - agent
-import { getExecutionStore } from '@agent/storage';
 
 // Local imports - event bus
-import { appSignals } from '@eventBus/AppSignals';
 
 // Local imports - shared
+import { getExecutionStore } from '@agent/storage';
+import { appSignals } from '@eventBus/AppSignals';
 import { diffFileLocation } from '@latex/acceptedFileTarget';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 import { ExecutionIdSchema } from '@shared/schemas';
@@ -30,16 +30,16 @@ import {
 } from '@shared/schemas/toolResult';
 
 // Local imports - tools
+
+// Local imports - utils
 import { assertNoParentTraversal } from '@tools/pathResolution';
+import { defineTool } from '@tools/core/define';
 import {
   buildApprovalRejectedResult,
   requestToolEditApproval,
   getApprovedContent,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-import { defineTool } from '@tools/core/define';
-
-// Local imports - utils
 import {
   AbsoluteFS,
   WorkspaceFS,

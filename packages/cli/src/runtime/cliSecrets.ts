@@ -2,6 +2,7 @@
 import path from 'node:path';
 
 // Local imports - platform
+import type { PlatformSecrets } from '@platform/secrets';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 
@@ -9,7 +10,6 @@ import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { cliEnvValue } from './cliContext';
 
 // Type imports - platform
-import type { PlatformSecrets } from '@platform/secrets';
 
 /** Secrets file is owner-only: `0o600` (containing dir gets `0o700`). */
 const SECRETS_FILE_MODE = 0o600;

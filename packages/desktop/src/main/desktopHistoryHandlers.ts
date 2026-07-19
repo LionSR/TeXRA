@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 
 // Local imports - history domain
-import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
 import {
   deleteAllExecutions,
   deleteExecution,
@@ -18,9 +17,7 @@ import type { TaskState } from '@agent/core/state/TaskState';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
 // Local imports - IPC contracts
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { ExecutionId } from '@shared/schemas';
-import { formatExecutionHistoryRetention } from '@shared/copy/executionHistory';
+import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
 
 // Local imports - controller types
 import type {
@@ -28,6 +25,9 @@ import type {
   ExportInputStatus,
 } from '@controllers/settingsView/ChatExportController';
 import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
+import type { ExecutionId } from '@shared/schemas';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { formatExecutionHistoryRetention } from '@shared/copy/executionHistory';
 
 type HistoryExportFormat = 'md' | 'tex' | 'html';
 

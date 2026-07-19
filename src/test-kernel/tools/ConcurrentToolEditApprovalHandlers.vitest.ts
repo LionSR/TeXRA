@@ -3,21 +3,21 @@ import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
 import * as assert from 'node:assert';
-import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
 
 // Third-party imports
 import { describe, it, beforeEach, afterEach } from 'vitest';
 
 // Local imports - tests
-import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent types
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - tools
-import type { StreamTabId } from '@shared/schemas';
+import { setupPlatform } from '@test/support/setupPlatform';
+import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
 import { cleanupAllApprovals } from '@tools/approval';
 import {
   requestToolEditApproval,

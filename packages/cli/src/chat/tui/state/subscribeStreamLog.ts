@@ -5,7 +5,6 @@
 
 import { isDeepStrictEqual } from 'node:util';
 
-import { flushPendingRunTraces } from '@transcript';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { appendCliApiSwitchHint } from '@cli/runtime/approvalAdapter';
 import {
@@ -22,6 +21,7 @@ import {
   hasIncompleteEmbeddedSubagentFollowup,
   summarizeFollowupMessage,
 } from '@shared/subagentFollowup';
+import { flushPendingRunTraces } from '@transcript';
 import { createFlushableDebounce } from '@utils/core';
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
 import {

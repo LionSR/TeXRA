@@ -7,9 +7,9 @@ import { resolve } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports - test setup
+import { scanDirectory } from '@agent/index/agentYamlScanner';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createFakePlatform } from '@test/support/FakePlatform';
-import { scanDirectory } from '@agent/index/agentYamlScanner';
 
 describe('agent YAML scanner', () => {
   beforeAll(async () => {

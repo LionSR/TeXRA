@@ -13,9 +13,9 @@ import {
   TaskStateSchema,
 } from '@agent/core/state/TaskState';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
+import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 // Local imports - shared
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 describe('agentConfigToTaskState', () => {
   it('derives workflow active files from normalized file lists', () => {

@@ -4,6 +4,7 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
+import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 import type {
   AppSignal,
   AppSignalPayloads,
@@ -16,7 +17,6 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
-import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 
 class MemoryMementoStorage implements MementoStorage {
   private readonly values = new Map<string, unknown>();

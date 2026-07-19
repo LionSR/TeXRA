@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - progress view component types
 import type { ToolEditRequestPanel } from '@progressView/frontend/components/ToolEditRequestPanel';
+import type { ToolEditPermission } from '@shared/schemas';
 
 // Local imports - shared schemas
-import type { ToolEditPermission } from '@shared/schemas';
 
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';

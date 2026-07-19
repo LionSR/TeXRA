@@ -8,10 +8,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProgressViewMessageHandler } from '@progressView/ProgressViewMessageHandler';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { ExtensionHostInteractions } from '@progressView/extensionHostInteractions';
+import type { StreamTabId } from '@shared/schemas';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - shared
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - test support
 import { FakePromptHost } from '../support/FakeHosts';

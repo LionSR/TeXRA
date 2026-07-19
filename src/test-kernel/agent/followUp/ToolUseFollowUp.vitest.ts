@@ -3,21 +3,14 @@ import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
 import { strict as assert } from 'node:assert';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import { describe, it, afterEach } from 'vitest';
+import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 
 // Third-party imports
-import { describe, it, afterEach } from 'vitest';
 
 // Standard library imports
 
 // Local imports - agent
-import { createFakePlatform } from '@test/support/FakePlatform';
-import { installPlatform } from '@test/support/setupPlatform';
-import {
-  clearStreamStatusForTest,
-  seedStreamStatusForTest,
-} from '@test/helpers/streamStatusTestUtils';
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
@@ -33,6 +26,13 @@ import {
 import { ToolUseSessionLifecycle } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import {
+  clearStreamStatusForTest,
+  seedStreamStatusForTest,
+} from '@test/helpers/streamStatusTestUtils';
+import { installPlatform } from '@test/support/setupPlatform';
+import { createFakePlatform } from '@test/support/FakePlatform';
+import { createTestSession } from '@test/support/sessionTestUtils';
 
 type ResumeHost = NonNullable<
   NonNullable<Parameters<typeof createFakePlatform>[1]>['agentResume']

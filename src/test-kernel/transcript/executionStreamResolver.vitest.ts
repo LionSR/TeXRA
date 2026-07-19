@@ -1,19 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { setupPlatform } from '@test/support/setupPlatform';
-import {
-  cleanupTempDirs,
-  createTempDirPlatform,
-} from '@test/support/tempDirPlatform';
-import {
-  resolvePersistedStreamIdForExecution,
-  StreamLogStore,
-  StreamSnapshotStore,
-} from '@transcript';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { registerExecution } from '@agent/storage/executionLifecycle';
+import type { Platform } from '@platform/platform';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -22,9 +13,18 @@ import {
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { AgentCategory } from '@shared/schemas/agent';
-import type { Platform } from '@platform/platform';
+import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import {
+  cleanupTempDirs,
+  createTempDirPlatform,
+} from '@test/support/tempDirPlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
+import {
+  resolvePersistedStreamIdForExecution,
+  StreamLogStore,
+  StreamSnapshotStore,
+} from '@transcript';
 
 const MINIMAL_CONFIG: AgentConfig = {
   agent: 'chat',

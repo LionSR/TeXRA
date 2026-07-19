@@ -1,13 +1,13 @@
 // Local imports - catalog + platform interfaces (type-only; vscode-free)
 import type {
-  SettingStore,
-  StateSettingEntry,
-} from '@shared/schemas/stateSettings';
-import type {
   ConfigProvider,
   ConfigTarget,
   StateStore,
 } from '@platform/interfaces';
+import type {
+  SettingStore,
+  StateSettingEntry,
+} from '@shared/schemas/stateSettings';
 
 /**
  * Host-aware read/write for {@link StateSettingEntry} rows.

@@ -31,13 +31,13 @@ import {
   type CurrentToolContexts,
 } from '@agent/followUp/ToolFileInteractionContext';
 import type { Plan } from '@shared/schemas';
+import { type ToolResult } from '@shared/schemas/toolResult';
 import {
   formatGoalTime,
   goalElapsedMs,
   isGoalInFlight,
   type Goal,
 } from '@shared/schemas/goal';
-import { type ToolResult } from '@shared/schemas/toolResult';
 import { proposalApprovals } from '@tools/approval';
 import { requireStreamId } from '@tools/contextHelpers';
 import {

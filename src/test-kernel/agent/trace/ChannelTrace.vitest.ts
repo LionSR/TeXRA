@@ -10,9 +10,9 @@ import {
 
 // Local imports - logger
 import * as logUtils from '@logger/logUtils';
+import { MESSAGE_TYPES } from '@shared/schemas';
 
 // Local imports - shared schemas
-import { MESSAGE_TYPES } from '@shared/schemas';
 
 describe('channel trace adapters', () => {
   afterEach(() => {

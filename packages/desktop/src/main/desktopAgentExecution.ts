@@ -1,26 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
-
-import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
-import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
-import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
-import { platform } from '@platform/platform';
-import { StreamLogStore, type StreamSnapshotStore } from '@transcript';
-import {
-  isProgressBackendInteractionEvent,
-  type ProgressBackendInteractionPayloads,
-} from '@controllers/progressView/backend/events/ProgressInteractionHandler';
-import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
-import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
-import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
-import {
-  repairRestartedStreams,
-  RestartRepairRetryScheduler,
-  type RestartRepairResult,
-} from '@controllers/progressView/backend/restartRepair';
 import type { AgentTrace } from '@agent/trace';
+
 import { createChannelTrace } from '@agent/trace';
 import {
   validateExecutionRequest,
@@ -53,12 +35,30 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { isRuntimePresentationEvent } from '@agent/runtime/runtimePresentationEvents';
+import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import {
   getFileListConfig,
   loadFileListSettings,
   type ListableFileType,
 } from '@common/files/fileListingRules';
-import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
+import {
+  repairRestartedStreams,
+  RestartRepairRetryScheduler,
+  type RestartRepairResult,
+} from '@controllers/progressView/backend/restartRepair';
+import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
+import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
+import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
+import {
+  isProgressBackendInteractionEvent,
+  type ProgressBackendInteractionPayloads,
+} from '@controllers/progressView/backend/events/ProgressInteractionHandler';
+import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
+import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
+import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
+import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
+import { platform } from '@platform/platform';
+import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
 import {
   type RunOutcome,
   type AgentCategoryFilter,
@@ -68,22 +68,22 @@ import {
   type RequestOpenFilePayload,
   type StreamTabId,
 } from '@shared/schemas';
-import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
-import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
+import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   formatActiveStreamRetention,
   formatStreamDeletionRetention,
 } from '@shared/copy/executionHistory';
-import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
+import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
+import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import {
   cleanupUnscopedApprovals,
   releaseStreamResources,
 } from '@tools/approval';
 import type { RegisteredToolName } from '@tools/registry';
-import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { StreamLogStore, type StreamSnapshotStore } from '@transcript';
 import { getConfig } from '@utils/config/configUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { buildDesktopOnboardingSetStateMessage } from '../desktopOnboardingMessages.js';
 import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';

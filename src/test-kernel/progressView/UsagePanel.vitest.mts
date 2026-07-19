@@ -3,13 +3,13 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - progress view component types
 import type { UsagePanel } from '@progressView/frontend/components/UsagePanel';
-
-// Local imports - shared schemas
 import {
   TokenUsageStatsSchema,
   type TokenUsageStats,
   type UsageRoute,
 } from '@shared/schemas';
+
+// Local imports - shared schemas
 
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';

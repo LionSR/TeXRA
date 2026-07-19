@@ -2,7 +2,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent core
-import { createRunTrace, StreamLogStore } from '@transcript';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
@@ -13,6 +12,7 @@ import {
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { createRunTrace, StreamLogStore } from '@transcript';
 import { withTestRunContext } from '../progressTestUtils';
 
 /**

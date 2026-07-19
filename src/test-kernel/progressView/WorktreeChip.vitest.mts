@@ -4,9 +4,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports - progress view component types
 import type { WorktreeChip } from '@progressView/frontend/components/WorktreeChip';
+import type { WorktreeInfo } from '@shared/schemas';
 
 // Local imports - shared schemas
-import type { WorktreeInfo } from '@shared/schemas';
 
 // Local imports - test utilities
 import { installAttachInternalsFallback } from '../settings/litComponentTestUtils';

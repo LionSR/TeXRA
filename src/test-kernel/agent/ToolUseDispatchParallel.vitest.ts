@@ -5,8 +5,6 @@ import { strict as assert } from 'node:assert';
 import { describe, it, beforeAll } from 'vitest';
 
 // Local imports
-import { createFakePlatform } from '@test/support/FakePlatform';
-import { createRunTrace, StreamLogStore } from '@transcript';
 import { ToolUseDispatchNode } from '@agent/core/flows/toolUseRound/ToolUseDispatchNode';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
@@ -20,6 +18,8 @@ import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
+import { createFakePlatform } from '@test/support/FakePlatform';
+import { createRunTrace, StreamLogStore } from '@transcript';
 import { delay } from '@utils/core';
 
 import { withTestRunContext } from './progressTestUtils';

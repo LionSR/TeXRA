@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
-import { installPlatform } from '@test/support/setupPlatform';
 import {
   getHelperModelName,
   resolveEffectiveHelperModel,
 } from '@agent/runtime/helperModelName';
+import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { installPlatform } from '@test/support/setupPlatform';
 
 describe('resolveEffectiveHelperModel', () => {
   it('returns the configured model when it is in the candidate list', () => {

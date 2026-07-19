@@ -1,8 +1,8 @@
 // Local imports - agent
 import { isResumeInFlight } from '@agent/runtime/resolveAndResumeStream';
+import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - shared
-import type { StreamTabId } from '@shared/schemas';
 
 export interface CliAgentResumeHandler {
   tryResumeStream(streamId: StreamTabId): Promise<boolean>;

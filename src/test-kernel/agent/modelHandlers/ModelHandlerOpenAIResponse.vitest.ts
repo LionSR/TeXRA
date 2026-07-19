@@ -9,15 +9,10 @@ import { describe, it } from 'vitest';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 import { OpenAIError } from 'openai';
 
-// Local imports - platform
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-
 // Local imports - test support
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent
-import { noopTrace } from '@agent/trace';
+import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
@@ -32,6 +27,10 @@ import {
   isContextWindowError,
 } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
+
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { setupPlatform } from '@test/support/setupPlatform';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Local imports - utilities
 import { pathToLocation } from '@utils/files';

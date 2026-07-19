@@ -3,10 +3,10 @@ import * as assert from 'node:assert';
 import { describe, it, afterEach, vi } from 'vitest';
 
 // Local imports - tests
-import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 
 // Local imports - tools
 import * as bibliographyModule from '@latex/extractBibliography';
+import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { ExtractBibliographyTool } from '@tools/latex';
 
 function installPlatform(files: Record<string, string>) {

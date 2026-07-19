@@ -8,23 +8,23 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports - platform
-import { FileType, type FileStat } from '@platform/interfaces';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 
 // Local imports
-import { installPlatform } from '@test/support/setupPlatform';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import { appSignals } from '@eventBus/AppSignals';
+import { FileType, type FileStat } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
+import { installPlatform } from '@test/support/setupPlatform';
 import {
   cleanupAllApprovals,
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval';
+import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
 import { AbsoluteFS, FlexibleFS, StorageFS, WorkspaceFS } from '@utils/files';
 import { createRecordingHost } from '../progressTestUtils';
 

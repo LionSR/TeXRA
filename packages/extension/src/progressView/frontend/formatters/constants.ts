@@ -3,12 +3,12 @@
  */
 
 // Local imports - progress view helpers
+
+// Local imports - shared schemas
 import {
   languageForPath,
   SPECIAL_BASENAME_LANGUAGES,
 } from '@progressView/frontend/languageForPath';
-
-// Local imports - shared schemas
 import type { LogLevel } from '@shared/schemas';
 
 // Local imports - shared utilities

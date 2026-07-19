@@ -3,10 +3,10 @@ import '@test/support/defaultSessionTestSetup';
 
 import { describe, expect, it } from 'vitest';
 
-import { installPlatform } from '@test/support/setupPlatform';
-import type { StreamTabId } from '@shared/schemas';
-import { GoalStore } from '@tools/goal';
 import type { StateStore } from '@platform/interfaces';
+import type { StreamTabId } from '@shared/schemas';
+import { installPlatform } from '@test/support/setupPlatform';
+import { GoalStore } from '@tools/goal';
 
 const STREAM_A = 'stream:concurrent-goal-a' as StreamTabId;
 const STREAM_B = 'stream:concurrent-goal-b' as StreamTabId;

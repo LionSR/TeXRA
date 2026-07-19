@@ -6,11 +6,11 @@ import {
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
 import { wrapApiCall } from '@tools/utils';
-
-// Local imports - core utilities
 import { isNonEmptyString } from '@utils/core';
 import { WorkspaceFS, getMimeType } from '@utils/files';
 import { toPosixPath } from '@utils/core/pathCore';
+
+// Local imports - core utilities
 
 export interface BuildFileAttachmentOptions {
   /** Path to a workspace file (relative or absolute) */

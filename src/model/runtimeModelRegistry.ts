@@ -5,9 +5,9 @@ import {
   type ModelConfig,
 } from 'llm-zoo';
 
-import { platform } from '@platform/platform';
 import type { ApiProvider } from '@model/apiProviders';
 import { resolveModelApiKeyProvider } from '@model/openRouterRouting';
+import { platform } from '@platform/platform';
 
 import type {
   LanguageModelAccessState,

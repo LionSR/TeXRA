@@ -1,10 +1,8 @@
 // Test support imports
-import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 
-import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import type {
@@ -14,6 +12,8 @@ import type {
   ProposalResult,
   RetryResult,
 } from '@agent/runtime/HostInteractions';
+import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
+import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { createExtensionHostInteractions } from '@progressView/extensionHostInteractions';
 import type {
   AgentProposalPermission,
@@ -25,7 +25,7 @@ import type {
   ToolEditPermission,
   UserQuestionPermission,
 } from '@shared/schemas';
-import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
+import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
 
 const mocks = vi.hoisted(() => ({
   approveNativeToolEditApprovals: vi.fn(async () => undefined),

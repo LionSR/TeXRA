@@ -2,9 +2,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports - progress view component types
-import type { ProposalRequestPanel } from '@progressView/frontend/components/ProposalRequestPanel';
 
 // Local imports - shared schemas
+import type { ProposalRequestPanel } from '@progressView/frontend/components/ProposalRequestPanel';
 import { AgentCategory } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';

@@ -11,13 +11,13 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import { html, type TemplateResult } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';
 
-import type { FormatResult } from '@progressView/frontend/formatters/baseLogFormatter';
 import {
   buildToolUseSection,
   wrapInPre,
   buildDetailsSummary,
   SPINNER_ICON_NAME,
 } from '@progressView/frontend/formatters/htmlBuilders';
+import type { FormatResult } from '@progressView/frontend/formatters/baseLogFormatter';
 import {
   WebSearchPayloadSchema,
   WebFetchPayloadSchema,

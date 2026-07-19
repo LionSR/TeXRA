@@ -5,18 +5,17 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports - platform
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-
 // Local imports - test support
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
+
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { setupPlatform } from '@test/support/setupPlatform';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Local imports - utilities
 import { pathToLocation } from '@utils/files';

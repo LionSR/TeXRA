@@ -3,10 +3,6 @@ import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import {
-  USAGE_LOG_FLUSH_OUTCOME,
-  UsageLogService,
-} from '@telemetry/UsageLogService';
 import { TraceEmitter } from '@agent/trace';
 import {
   AgentRunStateSnapshotSchema,
@@ -20,6 +16,10 @@ import {
   type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
+import {
+  USAGE_LOG_FLUSH_OUTCOME,
+  UsageLogService,
+} from '@telemetry/UsageLogService';
 
 import { recordSessionEvents, runEventsOfType } from '../progressTestUtils';
 

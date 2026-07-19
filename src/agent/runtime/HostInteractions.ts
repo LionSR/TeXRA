@@ -1,4 +1,8 @@
 import type {
+  ToolEditApprovalRequest,
+  ToolEditApprovalResult,
+} from '@platform/interfaces';
+import type {
   AgentProposal,
   Plan,
   ProviderErrorPartial,
@@ -8,10 +12,6 @@ import type {
   UserQuestionPermission,
 } from '@shared/schemas';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
-import type {
-  ToolEditApprovalRequest,
-  ToolEditApprovalResult,
-} from '@platform/interfaces';
 
 export type DiagnosticsReader = (path: string) => Promise<GenericDiagnostic[]>;
 

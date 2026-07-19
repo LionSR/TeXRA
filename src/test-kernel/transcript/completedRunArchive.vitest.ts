@@ -15,21 +15,11 @@ import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { setupPlatform } from '@test/support/setupPlatform';
-import {
-  cleanupTempDirs,
-  createTempDirPlatform,
-} from '@test/support/tempDirPlatform';
-import {
-  readCompletedRunConversation,
-  readCompletedRunTodos,
-  StreamLogStore,
-  StreamSnapshotStore,
-} from '@transcript';
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
+import type { Platform } from '@platform/platform';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -38,7 +28,17 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
-import type { Platform } from '@platform/platform';
+import {
+  cleanupTempDirs,
+  createTempDirPlatform,
+} from '@test/support/tempDirPlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
+import {
+  readCompletedRunConversation,
+  readCompletedRunTodos,
+  StreamLogStore,
+  StreamSnapshotStore,
+} from '@transcript';
 
 const tempDirs: string[] = [];
 

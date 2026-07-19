@@ -5,9 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Standard library imports
 
 // Local imports - agent components
-import { FakeConfigProvider } from '@test/support/FakePlatform';
-import { setupPlatform } from '@test/support/setupPlatform';
-import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 import { noopTrace } from '@agent/trace';
 import {
   AgentConfigSchema,
@@ -21,6 +18,9 @@ import type {
 } from '@agent/core/definition/AgentDataclass';
 // Internal imports
 import { buildUserVars, getToolFlags } from '@agent/utils/userVars';
+import { setRuntimeSkillSources } from '@skills/runtimeSkills';
+import { setupPlatform } from '@test/support/setupPlatform';
+import { FakeConfigProvider } from '@test/support/FakePlatform';
 
 // getConfig reads through the platform config provider; drive the setting
 // via this provider instead of patching the ESM export.

@@ -7,7 +7,6 @@ import { describe, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
 // Local imports - test support and agent
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { noopTrace } from '@agent/trace';
 import {
   AgentCategory,
@@ -20,6 +19,7 @@ import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/mode
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Type imports
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';

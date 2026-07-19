@@ -10,8 +10,6 @@ import type {
   SessionEventHub,
   SessionFact,
 } from '@agent/runtime/SessionEventHub';
-
-// Local imports - shared schemas
 import {
   STREAM_PHASE,
   type ActiveChildInfo,
@@ -21,6 +19,8 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
+
+// Local imports - shared schemas
 import { assertNever } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 

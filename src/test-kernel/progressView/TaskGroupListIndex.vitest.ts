@@ -8,14 +8,14 @@ import type {
   MessageIndex,
   TimelineEntry,
 } from '@progressView/frontend/components/messageIndex';
-
-// Local imports - shared schemas
 import {
   LOG_LEVELS,
   STREAM_PHASE,
   type LogMessageData,
   type TaskGroup,
 } from '@shared/schemas';
+
+// Local imports - shared schemas
 
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';

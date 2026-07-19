@@ -6,12 +6,12 @@ import { describe, expect, it } from 'vitest';
 // Local imports - agent model handlers
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
-
-// Local imports - common errors
 import {
   isUserAbort,
   normalizeProviderError,
 } from '@common/errors/sdkErrorUtils';
+
+// Local imports - common errors
 
 class TestModelHandlerOpenAI extends ModelHandlerOpenAI {
   runStreaming(client: OpenAI, signal?: AbortSignal) {

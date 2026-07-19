@@ -9,14 +9,14 @@ import {
   createOpenAIBackgroundTerminalError,
   normalizeOpenAIResponseError,
 } from '@agent/modelHandlers/openai/openAIResponseErrors';
-
-// Local imports - common errors
 import {
   attachContextWindowError,
   formatProviderHttpError,
   normalizeProviderError,
   requiresFlowAutoRetry,
 } from '@common/errors/sdkErrorUtils';
+
+// Local imports - common errors
 
 describe('OpenAI Responses error normalization', () => {
   it('normalizes provider errors at the OpenAI Responses boundary', () => {

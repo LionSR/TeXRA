@@ -12,9 +12,9 @@ import {
   ConversationRoundStateSnapshotSchema,
 } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
+import type { AgentFileLocation } from '@shared/schemas';
 
 // Local imports - shared schemas
-import type { AgentFileLocation } from '@shared/schemas';
 
 function reflectionShared(): ReflectionFlowShared {
   return {

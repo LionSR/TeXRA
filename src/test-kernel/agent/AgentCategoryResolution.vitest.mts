@@ -8,8 +8,6 @@ import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createFakePlatform } from '@test/support/FakePlatform';
 import {
   findAgentByIdentifier,
   getCategoryAgent,
@@ -22,6 +20,8 @@ import {
 } from '@agent/index/agentRegistry';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentEntry } from '@agent/index/agentEntry';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { createFakePlatform } from '@test/support/FakePlatform';
 
 const REPO_ROOT = resolve(
   fileURLToPath(new URL('.', import.meta.url)),

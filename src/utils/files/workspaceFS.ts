@@ -2,7 +2,6 @@ import * as path from 'node:path';
 
 // Platform imports
 import { platform } from '@platform/platform';
-
 import { normalizeFilePath } from '@utils/core';
 
 // Local imports - filesystem

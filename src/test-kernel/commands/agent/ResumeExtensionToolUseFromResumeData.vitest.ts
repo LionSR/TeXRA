@@ -30,13 +30,13 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
   retrieveSessionResumeData: mocks.retrieveSessionResumeData,
 }));
 
-import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   registerResumeAgentCommand,
   resumeExtensionToolUseFromResumeData,
 } from '@commands/agent/resumeCommand';
 import type { StreamTabId } from '@shared/schemas';
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 const STREAM = 'stream:ext-resume' as StreamTabId;
 const PARENT_STREAM = 'stream:ext-parent' as StreamTabId;

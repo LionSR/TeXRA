@@ -17,10 +17,10 @@ import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 // Local imports - tools
 import { BashTool } from '@tools/bash';
 import { requestBashApproval } from '@tools/approval/bashApproval';
+import * as execUtils from '@utils/system/execUtils';
 import * as agentConfig from '@utils/config/configUtils';
 
 // Local imports - system utilities
-import * as execUtils from '@utils/system/execUtils';
 
 vi.mock('@tools/approval/bashApproval', async (importActual) => {
   const actual =

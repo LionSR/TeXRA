@@ -13,12 +13,7 @@ import {
   ReasoningEffort,
 } from 'llm-zoo';
 
-// Local imports - platform
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-
 // Local imports - test support
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent
 import { noopTrace, type AgentTrace } from '@agent/trace';
@@ -38,6 +33,9 @@ import {
 
 // Local imports - auth (stubbed via vi.spyOn)
 import * as serverKeysModule from '@auth/serverKeys';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { setupPlatform } from '@test/support/setupPlatform';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Local imports - utilities
 import { pathToLocation } from '@utils/files';

@@ -2,13 +2,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - tests
-import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - runtime
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 
 // Local imports - tools
+import { setupPlatform } from '@test/support/setupPlatform';
 import {
   OpenPdfTool,
   setOpenPdfOpener,

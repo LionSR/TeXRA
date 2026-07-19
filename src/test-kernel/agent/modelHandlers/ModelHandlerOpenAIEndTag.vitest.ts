@@ -4,10 +4,10 @@ import { describe, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
 // Local imports - test support and agent
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerXAI } from '@agent/modelHandlers/openai/modelHandlerXAI';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 const END_TAG = '</document>';
 

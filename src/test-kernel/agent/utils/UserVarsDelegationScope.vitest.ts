@@ -61,7 +61,6 @@ vi.mock('@agent/index/agentRegistry', () => ({
 }));
 
 // Local imports - test support
-import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent components
 import { noopTrace } from '@agent/trace';
@@ -72,6 +71,7 @@ import {
   AgentWorkflowSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { buildUserVars } from '@agent/utils/userVars';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: '/workspace' });
 

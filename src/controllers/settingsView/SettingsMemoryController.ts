@@ -1,7 +1,7 @@
 // Local imports - hosts
-import type { PromptHost } from '@hosts/uiHosts';
 
 // Local imports - shared
+import type { PromptHost } from '@hosts/uiHosts';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   MemoryPreview,

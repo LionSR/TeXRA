@@ -2,17 +2,17 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
-import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - platform
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 // Local imports - runtime
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 // Local imports - CLI session stores
+import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import {
   ClaudeAgentSessions,
   CodexThreads,

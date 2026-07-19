@@ -12,10 +12,10 @@ import {
   mergeLegacyWorkspaceStorageBucket,
   moveEntryIfAbsent,
 } from '@platform/defaults/legacyDataMigration';
+import type { LegacyDataMigrationLogger } from '@platform/defaults/legacyDataMigration';
 import { cleanupTempDirs } from '@test/support/tempDirPlatform';
 
 // Type imports - platform
-import type { LegacyDataMigrationLogger } from '@platform/defaults/legacyDataMigration';
 
 async function pathExists(path: string): Promise<boolean> {
   try {

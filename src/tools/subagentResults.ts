@@ -9,16 +9,16 @@
  */
 
 import type { ResultMeta } from '@agent/storage';
+import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
+import type {
+  AgentFlowCategory,
+  AgentFlowResult,
+} from '@agent/runtime/AgentFlowResult';
 import {
   buildAgentFinalResult,
   type AgentFinalResult,
   type ResultDiffSummary,
 } from '@agent/runtime/AgentFinalResult';
-import type {
-  AgentFlowCategory,
-  AgentFlowResult,
-} from '@agent/runtime/AgentFlowResult';
-import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import { normalizeProviderError } from '@common/errors';
 import type {
   ActiveChildInfo,

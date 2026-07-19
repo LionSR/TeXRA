@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - test support
-import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent output
 import {
@@ -14,6 +13,7 @@ import {
 } from '@agent/utils/outputFileUtils';
 
 // Local imports - prompt utilities
+import { setupPlatform } from '@test/support/setupPlatform';
 import {
   getListOfFiles,
   getPromptFileName,

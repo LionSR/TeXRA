@@ -2,15 +2,14 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - test support
-import { installPlatform } from '@test/support/setupPlatform';
 
 // Local imports - auth
-import { platform } from '@platform/platform';
 import {
   CODEX_PREFER_SUBSCRIPTION_KEY,
   isPreferCodexSubscription,
   setPreferCodexSubscription,
 } from '@auth/codex';
+import { platform } from '@platform/platform';
 
 // Local imports - platform types
 import type {
@@ -19,6 +18,7 @@ import type {
   ConfigTarget,
   Disposable,
 } from '@platform/interfaces';
+import { installPlatform } from '@test/support/setupPlatform';
 
 class FolderOverrideConfigProvider implements ConfigProvider {
   private readonly globalValues = new Map<string, unknown>();

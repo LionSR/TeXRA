@@ -8,9 +8,9 @@ import {
   resetProgressState,
 } from '@progressView/frontend/progressState';
 import { createInitialState } from '@progressView/frontend/store';
+import { AgentCategory, type StreamTabInfo } from '@shared/schemas';
 
 // Local imports - shared schemas
-import { AgentCategory, type StreamTabInfo } from '@shared/schemas';
 
 const parent: StreamTabInfo = {
   kind: 'agent',

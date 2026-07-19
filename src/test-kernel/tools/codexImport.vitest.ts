@@ -12,9 +12,9 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 
 // Local imports - tests
 import { setupPlatform } from '@test/support/setupPlatform';
+import { findCodexBinaryInElectronResources } from '@tools/codexImport';
 
 // Local imports - tools
-import { findCodexBinaryInElectronResources } from '@tools/codexImport';
 
 const PLATFORM_PACKAGES: Record<
   string,

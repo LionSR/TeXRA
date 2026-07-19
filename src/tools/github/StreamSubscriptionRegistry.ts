@@ -19,11 +19,10 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import type { StreamTabId } from '@shared/schemas';
-
-import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 
 import type { Disposable } from '@platform/interfaces';
+import type { StreamTabId } from '@shared/schemas';
+import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 
 export interface SubscriptionBinding<K extends string> {
   key: K;

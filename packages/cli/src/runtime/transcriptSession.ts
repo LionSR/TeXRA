@@ -1,9 +1,9 @@
-import { StreamLogStore } from '@transcript';
 import {
   initializeDefaultSession,
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { StreamLogStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export type InteractiveTranscriptPolicy =

@@ -6,12 +6,6 @@
  * this factory removes ~75 lines of duplication on each side.
  */
 import {
-  SettingsAgentCatalogController,
-  type SettingsAgentCatalogState,
-} from '@controllers/settingsView/SettingsAgentCatalogController';
-import { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
-import { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
-import {
   AgentRosterController,
   BUILTIN_TEAM_ROOT_AGENT_NAMES,
   getAgent,
@@ -20,6 +14,12 @@ import {
   getVisibleAgents as getVisibleRegistryAgents,
   type AgentEntry,
 } from '@agent/index';
+import { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
+import { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
+import {
+  SettingsAgentCatalogController,
+  type SettingsAgentCatalogState,
+} from '@controllers/settingsView/SettingsAgentCatalogController';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import { parseAgentModePresets } from '@shared/schemas/agentPresets';

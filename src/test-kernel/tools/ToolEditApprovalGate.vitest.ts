@@ -7,15 +7,15 @@ import pDefer from 'p-defer';
 import { describe, it, beforeEach, afterEach } from 'vitest';
 
 // Local imports - tests
-import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent types
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
+import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - tools
-import type { StreamTabId } from '@shared/schemas';
+import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { TextEditorTool } from '@tools/TextEditorTool';
 import { WriteFileTool } from '@tools/WriteTool';
 import {
