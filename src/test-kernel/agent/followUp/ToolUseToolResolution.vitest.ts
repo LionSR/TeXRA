@@ -26,7 +26,6 @@ describe('tool-use tool resolution', () => {
 
   it('filters approval-gated tools when approval prompts are unavailable', async () => {
     const names = [
-      'apply_path',
       'ask_user_question',
       'bash',
       'delegate_agent',
@@ -53,7 +52,6 @@ describe('tool-use tool resolution', () => {
 
   it('keeps approval-gated tools when approval prompts are available', async () => {
     const names = [
-      'apply_path',
       'ask_user_question',
       'bash',
       'delegate_agent',
@@ -73,7 +71,6 @@ describe('tool-use tool resolution', () => {
     });
 
     expect(tools.map((tool) => tool.name)).toEqual([
-      'apply_path',
       'ask_user_question',
       'bash',
       'delegate_agent',

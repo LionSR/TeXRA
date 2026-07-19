@@ -17,7 +17,6 @@ import { BashTool } from './bash';
 import { DiagnosticsTool } from './DiagnosticsTool';
 import { InlineCommentTool } from './comment/InlineCommentTool';
 import { ReportReviewIssueTool } from './ReportReviewIssueTool';
-import { ApplyPathTool } from './applyPath';
 import { EditFileTool } from './EditTool';
 import { GlobTool } from './glob';
 import { GrepTool } from './grep';
@@ -99,7 +98,6 @@ function createDefaultTools() {
     read_file: new ReadFileTool(),
     write_file: new WriteFileTool(),
     edit_file: new EditFileTool(),
-    apply_path: new ApplyPathTool(),
     glob: new GlobTool(),
     grep: new GrepTool(),
     download_arxiv_source: new ArxivDownloadTool(),

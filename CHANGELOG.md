@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Shared (all surfaces)
 
+#### Breaking Changes
+
+- **Custom agents should replace `apply_path`** — The patch tool is no longer
+  available. Update custom-agent tool lists to use `edit_file` and `write_file`;
+  configurations that still name `apply_path` load without that capability.
+
 #### New Features
 
 - **Lean agents reuse successful proof patterns** — proof development and
