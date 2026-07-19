@@ -13,6 +13,7 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
+import '@awesome.me/webawesome/dist/components/tag/tag.js';
 
 // Local imports - shared schemas
 import type {
@@ -59,15 +60,6 @@ export class ModelsTab extends LitElement {
       }
       .keyless-source__title {
         font-weight: var(--font-weight-semibold);
-      }
-      .keyless-source__badge {
-        font-size: var(--font-size-xs);
-        text-transform: uppercase;
-        letter-spacing: 0;
-        opacity: 0.65;
-        border: 1px solid currentColor;
-        border-radius: var(--border-radius-small);
-        padding: 0 0.4em;
       }
       .keyless-source__hint {
         margin: var(--wa-space-2xs) 0 var(--wa-space-xs);
@@ -272,7 +264,7 @@ export class ModelsTab extends LitElement {
       <section id="chatgpt-subscription" class="keyless-source">
         <div class="keyless-source__header">
           <span class="keyless-source__title">ChatGPT subscription</span>
-          <span class="keyless-source__badge">experimental</span>
+          <wa-tag variant="neutral" size="small">experimental</wa-tag>
         </div>
         <p class="keyless-source__hint">
           Use OpenAI models through your ChatGPT Plus, Pro, or Team
@@ -359,7 +351,7 @@ export class ModelsTab extends LitElement {
       <section id="copilot-access" class="keyless-source">
         <div class="keyless-source__header">
           <span class="keyless-source__title">Copilot in VS Code</span>
-          <span class="keyless-source__badge">keyless</span>
+          <wa-tag variant="neutral" size="small">keyless</wa-tag>
         </div>
         <p class="keyless-source__hint">
           Use models supplied by your GitHub Copilot subscription. No provider

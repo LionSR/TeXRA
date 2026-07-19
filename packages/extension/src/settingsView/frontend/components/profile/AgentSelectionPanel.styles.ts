@@ -143,8 +143,6 @@ export const agentSelectionPanelStyles: CSSResult = css`
     align-items: center;
     justify-content: center;
     height: 100%;
-    color: var(--color-text-secondary);
-    font-style: italic;
   }
 
   .agent-detail-header {
@@ -227,11 +225,6 @@ export const agentSelectionPanelStyles: CSSResult = css`
 
   wa-button.agent-count-link::part(base):hover {
     text-decoration: underline;
-  }
-
-  .agent-empty-message {
-    color: var(--color-text-secondary);
-    font-style: italic;
   }
 
   .agent-detail-path {
