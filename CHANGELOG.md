@@ -70,6 +70,9 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
+- **Interactive sign-in can be cancelled immediately** — pressing Esc or
+  Ctrl-C in an account form now stops an active browser or device-code sign-in
+  attempt instead of leaving its callback wait or polling loop running.
 - **Arrow keys can move between chat and subagents** — when input history has
   no further entry, Up or Down can focus the subagent list; Down past its final
   row returns to the chat input. Tab remains available in both directions.

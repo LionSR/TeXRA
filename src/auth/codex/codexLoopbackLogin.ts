@@ -39,6 +39,7 @@ export interface CodexLoopbackLoginOptions {
   /** Open the consent URL in the user's browser. */
   openBrowser: (url: string) => void | Promise<void>;
   log?: CodexLogger;
+  signal?: AbortSignal;
 }
 
 function respondHtml(
@@ -87,10 +88,20 @@ async function bindLoopbackServer(): Promise<{
 export async function loginWithLoopback(
   options: CodexLoopbackLoginOptions,
 ): Promise<CodexSession> {
-  const { coordinator, openBrowser, log } = options;
+  const { coordinator, openBrowser, log, signal } = options;
   const { server, port } = await bindLoopbackServer();
   const authorize = coordinator.buildAuthorizeRequest(port);
   let callbackTimer: ReturnType<typeof setTimeout> | undefined;
+  let abortListener: (() => void) | undefined;
+
+  const cancellationPromise = new Promise<never>((_resolve, reject) => {
+    signal?.throwIfAborted();
+    abortListener = () => reject(signal?.reason);
+    signal?.addEventListener('abort', abortListener, { once: true });
+  });
+  void cancellationPromise.catch(() => {
+    // The operation raced against cancellation may still be resolving.
+  });
 
   const codePromise = new Promise<string>((resolve, reject) => {
     callbackTimer = setTimeout(() => {
@@ -147,8 +158,16 @@ export async function loginWithLoopback(
 
   try {
     log?.debug?.(`Opening ChatGPT sign-in on loopback port ${port}.`);
-    await openBrowser(authorize.url);
-    const code = await codePromise;
+    await Promise.race([
+      Promise.resolve(openBrowser(authorize.url)),
+      cancellationPromise,
+    ]);
+    const code = await Promise.race([codePromise, cancellationPromise]);
+    signal?.throwIfAborted();
+    if (abortListener) {
+      signal?.removeEventListener('abort', abortListener);
+      abortListener = undefined;
+    }
     return await coordinator.completeLoginWithCode({
       code,
       verifier: authorize.verifier,
@@ -156,6 +175,7 @@ export async function loginWithLoopback(
     });
   } finally {
     clearTimeout(callbackTimer);
+    if (abortListener) signal?.removeEventListener('abort', abortListener);
     server.close();
   }
 }
