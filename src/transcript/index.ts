@@ -23,11 +23,8 @@ export {
 } from './runTrace';
 export { streamDataDir } from './streamDataPaths';
 export { StreamSnapshotStore } from './StreamSnapshotStore';
-export {
-  assembleTrace,
-  type AssembleTraceResult,
-  type TraceDocument,
-} from './traceAssembler';
+export { assembleTrace, type AssembleTraceResult } from './traceAssembler';
+export { TraceDocumentSchema, type TraceDocument } from './traceDocumentSchema';
 export {
   readCompletedRunConversation,
   readCompletedRunTodos,

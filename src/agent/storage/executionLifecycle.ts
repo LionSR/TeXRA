@@ -16,17 +16,15 @@ import {
   RUN_OUTCOME,
   executionStatusToRunOutcome,
   type ExecutionId,
+  type ExecutionMeta,
+  type ExecutionMetaInput,
   type ExecutionStatus,
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  type ExecutionMeta,
-  type ExecutionMetaInput,
-  getExecutionStore,
-} from './ExecutionKVStore';
+import { getExecutionStore } from './ExecutionKVStore';
 import {
   acquireFreshExecutionLease,
   releaseOwnedExecutionLease,

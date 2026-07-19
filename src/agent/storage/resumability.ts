@@ -8,17 +8,15 @@ import {
 import * as logger from '@logger/logUtils';
 import {
   EXECUTION_STATUS,
+  ExecutionMetaSchema,
   RUN_OUTCOME,
   type ExecutionId,
+  type ExecutionMeta,
   type RunOutcome,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import {
-  ExecutionMetaSchema,
-  getExecutionStore,
-  type ExecutionMeta,
-} from './ExecutionKVStore';
+import { getExecutionStore } from './ExecutionKVStore';
 
 const CHANNEL = 'Resumability';
 
