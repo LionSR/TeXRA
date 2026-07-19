@@ -8,6 +8,7 @@ import * as path from 'node:path';
 
 // Local imports
 import { platform } from '@platform/platform';
+import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
 import type { MathMarkupOption } from '@latex/latexdiff/mathMarkup';
 import * as logger from '@logger/logUtils';
 import {
@@ -21,12 +22,7 @@ import {
   midEraWorkflowOutputStem,
   parseWorkflowOutputRoundDir,
 } from '@shared/constants/workflowOutput';
-import {
-  WorkspaceFS,
-  FlexibleFS,
-  getComparablePath,
-  pathToLocation,
-} from '@utils/files';
+import { WorkspaceFS, FlexibleFS, pathToLocation } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
 import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 
@@ -38,8 +34,8 @@ import type {
   DiffRunResult,
 } from './types';
 
-function getFileLabel(info: OutputFileInfo): string {
-  return info.source ?? path.basename(getComparablePath(info.location));
+function getCanonicalSource(info: OutputFileInfo): string {
+  return getSafeDocumentRelativePath(info.source);
 }
 
 async function executeDiffOperations(
@@ -86,6 +82,8 @@ async function executeDiffOperations(
         : await LaTeXdiffService.runDiffBetweenRounds(
             operation.base,
             operation.revised,
+            operation.fromRound,
+            operation.toRound,
             mathMarkup,
             { cwd: operation.cwd },
           );
@@ -113,7 +111,7 @@ export async function runLatexdiffFromMetadata(params: {
   const workspaceCwd = WorkspaceFS.getPath();
   const immediateResults: DiffRunResult[] = [];
   const operations: DiffOperation[] = [];
-  const groupedByRelative = new Map<
+  const groupedBySource = new Map<
     string,
     Array<{ round: number; info: OutputFileInfo }>
   >();
@@ -121,7 +119,8 @@ export async function runLatexdiffFromMetadata(params: {
   for (const [round, infos] of roundIndexedEntries(rounds)) {
     for (const info of infos) {
       const base = getEffectiveDiffBase(info.lineage);
-      const description = `${getFileLabel(info)} (r${round})`;
+      const source = getCanonicalSource(info);
+      const description = `${source} (r${round})`;
 
       if (!base) {
         immediateResults.push({
@@ -141,22 +140,21 @@ export async function runLatexdiffFromMetadata(params: {
         round,
       });
 
-      const key = getComparablePath(info.location);
-      const group = groupedByRelative.get(key) ?? [];
+      const group = groupedBySource.get(source) ?? [];
       group.push({ round, info });
-      groupedByRelative.set(key, group);
+      groupedBySource.set(source, group);
     }
   }
 
   if (generateBetweenRoundDiffs) {
-    for (const group of groupedByRelative.values()) {
+    for (const group of groupedBySource.values()) {
       group.sort((a, b) => a.round - b.round);
       for (let index = 1; index < group.length; index += 1) {
         const previous = group[index - 1];
         const current = group[index];
         const base = previous.info.location;
         const revised = current.info.location;
-        const description = `${getFileLabel(current.info)} (r${previous.round}→r${current.round})`;
+        const description = `${getCanonicalSource(current.info)} (r${previous.round}→r${current.round})`;
 
         operations.push({
           type: 'between-rounds',
