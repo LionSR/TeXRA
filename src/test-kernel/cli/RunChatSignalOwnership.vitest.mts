@@ -30,7 +30,9 @@ const mocks = vi.hoisted(() => ({
   installTerminalRestoreOnExit: vi.fn(),
   loadInputHistory: vi.fn(),
   maybeRunCliOnboarding: vi.fn(),
-  onStreamStatusChange: vi.fn(),
+  onSkillSelect: undefined as
+    | ((selection: { name: string; activationPrompt: string }) => void)
+    | undefined,
   registerBuiltinSlashCommands: vi.fn(),
   render: vi.fn(),
   resolveChatDefaults: vi.fn(),
@@ -151,12 +153,6 @@ vi.mock('@cli/chat/tui/state/subscribeStreamStatus', async (importOriginal) => {
   return { ...actual, subscribeStreamStatus: mocks.subscribeStreamStatus };
 });
 
-vi.mock('@cli/chat/tui/state/streamStatus', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@cli/chat/tui/state/streamStatus')>();
-  return { ...actual, onStreamStatusChange: mocks.onStreamStatusChange };
-});
-
 vi.mock('@cli/chat/tui/commands/registerBuiltins', async (importOriginal) => {
   const actual =
     await importOriginal<
@@ -246,7 +242,17 @@ describe('runChat signal ownership wiring', () => {
     mocks.installTerminalRestoreOnExit.mockReturnValue(() => undefined);
     mocks.subscribeStreamLog.mockReturnValue(() => undefined);
     mocks.subscribeStreamStatus.mockReturnValue(() => undefined);
-    mocks.onStreamStatusChange.mockReturnValue(() => undefined);
+    mocks.onSkillSelect = undefined;
+    mocks.registerBuiltinSlashCommands.mockImplementation(
+      (options: {
+        readonly onSkillSelect?: (selection: {
+          name: string;
+          activationPrompt: string;
+        }) => void;
+      }) => {
+        mocks.onSkillSelect = options.onSkillSelect;
+      },
+    );
     mocks.supportsTerminalJobControl.mockReturnValue(false);
     mocks.tuiOutputStreamForColor.mockImplementation((stream) => stream);
     mocks.createChatSessionController.mockReturnValue({
@@ -288,10 +294,26 @@ describe('runChat signal ownership wiring', () => {
     };
     const waitStarted = deferred();
     const exitTui = deferred();
+    let onSubmit:
+      ((line: string, mediaFiles?: readonly string[]) => void) | undefined;
     mocks.waitUntilExit.mockImplementation(() => {
       waitStarted.resolve();
       return exitTui.promise;
     });
+    mocks.render.mockImplementationOnce(
+      (element: {
+        readonly props?: { readonly onSubmit?: typeof onSubmit };
+      }) => {
+        mocks.callOrder.push('ink.render');
+        onSubmit = element.props?.onSubmit;
+        return {
+          clear: vi.fn(),
+          rerender: vi.fn(),
+          unmount: mocks.unmount,
+          waitUntilExit: mocks.waitUntilExit,
+        };
+      },
+    );
     process.on('newListener', observeNewListener);
 
     const agents = await import('@agent/index');
@@ -335,6 +357,16 @@ describe('runChat signal ownership wiring', () => {
         ]);
       }
 
+      onSubmit?.('check the ordinary case', []);
+      await vi.waitFor(() => expect(mocks.startRootRun).toHaveBeenCalled());
+      expect(mocks.startRootRun).toHaveBeenCalledWith({
+        agent: 'assistant',
+        model: 'gpt-test',
+        instruction: 'check the ordinary case',
+        agentCategory: 'toolUse',
+        workingDirectory: '/tmp/texra-chat',
+      });
+
       exitTui.resolve();
       await expect(runPromise).resolves.toEqual({
         exitCode: CliExitCode.Success,
@@ -358,13 +390,14 @@ describe('runChat signal ownership wiring', () => {
     }
   });
 
-  it('uses a resumed team scope for subsequent root runs', async () => {
+  it('constructs the exact initial run configuration for a resumed team', async () => {
     const exitTui = deferred();
-    let onSubmit: ((line: string) => void) | undefined;
+    let onSubmit:
+      ((line: string, mediaFiles?: readonly string[]) => void) | undefined;
     mocks.waitUntilExit.mockReturnValue(exitTui.promise);
     mocks.render.mockImplementationOnce(
       (element: {
-        readonly props?: { readonly onSubmit?: (line: string) => void };
+        readonly props?: { readonly onSubmit?: typeof onSubmit };
       }) => {
         onSubmit = element.props?.onSubmit;
         return {
@@ -386,6 +419,8 @@ describe('runChat signal ownership wiring', () => {
       workflowAgentKeys: ['builtInWorkflow:physicsReviewer'],
       toolUseAgentKeys: ['builtInToolUse:orchestrator'],
     } as const;
+    const mediaFiles = ['/tmp/diagram.png'];
+    const activationPrompt = '<skill_activation>hidden</skill_activation>';
     const streamId = 'stream-resume' as StreamTabId;
     const resolution: CliToolUseResumeResolution = {
       ...createToolUseResumeData({
@@ -409,17 +444,31 @@ describe('runChat signal ownership wiring', () => {
     });
 
     try {
-      await vi.waitFor(() => expect(onSubmit).toBeTypeOf('function'));
-      if (!onSubmit) throw new Error('TUI input did not mount');
-      onSubmit('continue the team session');
+      await vi.waitFor(() => {
+        expect(onSubmit).toBeTypeOf('function');
+        expect(mocks.onSkillSelect).toBeTypeOf('function');
+      });
+      mocks.onSkillSelect?.({ name: 'proof-audit', activationPrompt });
+      onSubmit?.('', mediaFiles);
 
       await vi.waitFor(() => expect(mocks.startRootRun).toHaveBeenCalled());
-      expect(mocks.startRootRun).toHaveBeenCalledWith(
-        expect.objectContaining({
-          cliMultiAgentPresetId: 'physicist',
-          delegationAgentScope,
-        }),
-      );
+      mediaFiles.push('/tmp/late.png');
+      expect(mocks.startRootRun).toHaveBeenCalledWith({
+        agent: 'assistant',
+        model: 'gpt-test',
+        instruction: [
+          activationPrompt,
+          '<user_request>',
+          '',
+          '</user_request>',
+        ].join('\n'),
+        displayInstruction: '',
+        agentCategory: 'toolUse',
+        workingDirectory: '/tmp/texra-chat',
+        mediaFiles: ['/tmp/diagram.png'],
+        cliMultiAgentPresetId: 'physicist',
+        delegationAgentScope,
+      });
     } finally {
       exitTui.resolve();
       await runPromise;

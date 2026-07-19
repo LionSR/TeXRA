@@ -14,7 +14,6 @@ import {
   type AgentConfig,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
 import { runAgent } from '@agent/runtime/runAgent';
@@ -45,7 +44,6 @@ import {
   type StreamTabId,
   sumUsageStats,
 } from '@shared/schemas';
-import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -105,45 +103,6 @@ interface SupersededInterruptedRecovery {
 interface AutoResumeOptions {
   readonly extraFollowUps?: readonly InterruptedFollowUp[];
   readonly onFollowUpQueueReady?: () => void;
-}
-
-// ---------------------------------------------------------------------------
-// Reusable config builders & execution-registration helpers
-// (moved from runChatTui.tsx — host-neutral, no Ink dependency)
-// ---------------------------------------------------------------------------
-
-export interface BuildInitialChatAgentConfigInput {
-  readonly agent: string;
-  readonly model: string;
-  readonly instruction: string;
-  readonly displayInstruction?: string;
-  readonly workingDirectory: string;
-  readonly mediaFiles?: readonly string[];
-  readonly cliMultiAgentPresetId?: string;
-  readonly delegationAgentScope?: AgentDelegationScope;
-}
-
-export function buildInitialChatAgentConfig({
-  agent,
-  model,
-  instruction,
-  displayInstruction,
-  workingDirectory,
-  mediaFiles,
-  cliMultiAgentPresetId,
-  delegationAgentScope,
-}: BuildInitialChatAgentConfigInput): AgentConfigPayload {
-  return {
-    agent,
-    model,
-    instruction,
-    ...(displayInstruction !== undefined ? { displayInstruction } : {}),
-    agentCategory: AgentCategory.ToolUse,
-    workingDirectory,
-    ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
-    ...(cliMultiAgentPresetId ? { cliMultiAgentPresetId } : {}),
-    ...(delegationAgentScope ? { delegationAgentScope } : {}),
-  };
 }
 
 // ---------------------------------------------------------------------------

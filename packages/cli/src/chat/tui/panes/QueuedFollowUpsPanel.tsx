@@ -1,8 +1,12 @@
 import { Box, Text } from 'ink';
 
-import { numberedFollowUpPreview } from '../render/followUpPreview';
+import { summarizeFollowupMessage } from '@shared/subagentFollowup';
+
 import { COLOR_WARNING } from '../ui/colors';
-import { truncateSummaryToWidth } from '../render/terminalText';
+import {
+  textDisplayWidth,
+  truncateSummaryToWidth,
+} from '../render/terminalText';
 
 const QUEUED_FOLLOW_UP_PANEL_MAX_ROWS = 3;
 
@@ -53,10 +57,17 @@ export function queuedFollowUpPanelDisplay({
     : Math.min(messages.length, messageSlots);
   const rows: QueuedFollowUpPanelRow[] = messages
     .slice(0, visibleMessageCount)
-    .map((message, index) => ({
-      kind: 'message',
-      text: numberedFollowUpPreview(message, index, contentWidth),
-    }));
+    .map((message, index) => {
+      const prefix = `${index + 1}. `;
+      const bodyColumns = Math.max(0, contentWidth - textDisplayWidth(prefix));
+      return {
+        kind: 'message',
+        text: `${prefix}${truncateSummaryToWidth(
+          summarizeFollowupMessage(message),
+          bodyColumns,
+        )}`,
+      };
+    });
 
   const hiddenCount = messages.length - visibleMessageCount;
   if (hiddenCount > 0) {

@@ -33,12 +33,12 @@ import {
   shouldShowTodosPlanPanel,
   staticTranscriptRowBudget,
 } from '@cli/chat/tui/appLayout';
-import { orderedDescendantsFromTree } from '@cli/chat/tui/state/focusCycle';
 import { focusedChildInputDisabledMessage } from '@cli/chat/tui/state/focusedChildFollowUp';
 import {
   activeSubagentsFor,
   applySubagentRoster,
   childStreamEntries,
+  focusOrderDescendants,
   isChildStreamRemoved,
   parentStream,
   retainedChildStreamsFor,
@@ -109,11 +109,9 @@ const GOAL_PAUSED_TRANSCRIPT_NOTICE =
   'Goal paused after a failed cycle. Review the error before starting a new goal.';
 
 function orderedSessionDescendants(parent: StreamTabId): StreamTabId[] {
-  return orderedDescendantsFromTree({
-    parent,
-    childStreamEntries: childStreamEntries.get(),
-    streams: streams.get(),
-  });
+  return [
+    ...focusOrderDescendants(parent, childStreamEntries.get(), streams.get()),
+  ];
 }
 
 afterEach(() => {
