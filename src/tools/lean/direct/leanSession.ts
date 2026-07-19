@@ -26,11 +26,13 @@ import {
 } from '../leanServerRegistry';
 import { JsonRpcConnection } from './jsonRpc';
 import type {
+  LeanDiagnostic,
   LspDiagnostic,
   LspHover,
   LspPublishDiagnosticsParams,
-} from '../lspTypes';
-import type { LeanDiagnostic, PlainGoal, PlainTermGoal } from '../leanTypes';
+  PlainGoal,
+  PlainTermGoal,
+} from '../leanTypes';
 
 const LOG_CHANNEL = 'lean.direct';
 

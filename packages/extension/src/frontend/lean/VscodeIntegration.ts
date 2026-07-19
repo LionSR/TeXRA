@@ -20,15 +20,13 @@ import {
 } from '@frontend/vscode/vscodeDiagnostics';
 import {
   LEAN4_EXTENSION_ID,
+  type LeanDiagnostic,
   type LeanFileCommand,
   type LeanProjectCommand,
-} from '@tools/lean/leanConstants';
-import type { LspHover } from '@tools/lean/lspTypes';
-import type {
-  LeanDiagnostic,
-  LspResult,
-  PlainGoal,
-  PlainTermGoal,
+  type LspHover,
+  type LspResult,
+  type PlainGoal,
+  type PlainTermGoal,
 } from '@tools/lean/leanTypes';
 import {
   registerLeanServer,
