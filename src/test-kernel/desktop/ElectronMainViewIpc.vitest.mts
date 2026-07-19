@@ -9,6 +9,7 @@ import {
   SETTINGS_VIEW_COMMANDS,
 } from '@shared/ipc';
 import { AgentCategory } from '@shared/schemas/agent';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - desktop test paths
@@ -246,7 +247,7 @@ describe('desktop main-view IPC', () => {
     const settings = {
       handleMessage: vi.fn(
         (message: { command: string }) =>
-          message.command === SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_NAME,
+          message.command === SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
       ),
     };
     const progress = {
@@ -321,13 +322,15 @@ describe('desktop main-view IPC', () => {
     rendererListener?.(
       { sender: webContents },
       {
-        command: SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_NAME,
-        name: 'TeXRA Bot',
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+        key: WorkspaceStateKey.GIT_AUTHOR_NAME,
+        value: 'TeXRA Bot',
       },
     );
     expect(settings.handleMessage).toHaveBeenCalledWith({
-      command: SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_NAME,
-      name: 'TeXRA Bot',
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+      key: WorkspaceStateKey.GIT_AUTHOR_NAME,
+      value: 'TeXRA Bot',
     });
 
     rendererListener?.(

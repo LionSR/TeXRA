@@ -40,14 +40,6 @@ import {
   SignInMessageSchema,
   SignOutMessageSchema,
 } from '../profileViewMessages';
-import {
-  ClaudeAgentEffortSchema,
-  ClaudeAgentModelSchema,
-  ClaudeAgentPermissionModeSchema,
-  CodexApprovalPolicySchema,
-  CodexReasoningEffortSchema,
-  CodexSandboxModeSchema,
-} from '../agentCliSettings';
 import { ReasoningLevelSchema } from './data';
 
 const CMD = SETTINGS_VIEW_CMD;
@@ -247,23 +239,6 @@ export type ToolCommandKind = z.infer<
   typeof RunToolCommandMessageSchema
 >['kind'];
 
-// Git author settings inbound messages
-const SetGitMarkCommitsMessageSchema = enabledFlag(CMD.SET_GIT_MARK_COMMITS);
-
-const SetGitAuthorNameMessageSchema = z.object({
-  command: z.literal(CMD.SET_GIT_AUTHOR_NAME),
-  name: z.string(),
-});
-
-const SetGitAuthorEmailMessageSchema = z.object({
-  command: z.literal(CMD.SET_GIT_AUTHOR_EMAIL),
-  email: z.string(),
-});
-
-const SetGitWorktreeSupportMessageSchema = enabledFlag(
-  CMD.SET_GIT_WORKTREE_SUPPORT,
-);
-
 // GitHub token messages (for PR subscription tool)
 const GetGitHubTokenStatusMessageSchema = commandOnly(
   CMD.GET_GITHUB_TOKEN_STATUS,
@@ -359,29 +334,17 @@ const SetInlineCriticismEnabledMessageSchema = enabledFlag(
 const SetBashApprovalEnabledMessageSchema = enabledFlag(
   CMD.SET_BASH_APPROVAL_ENABLED,
 );
-const SetCodexSandboxModeMessageSchema = z.object({
-  command: z.literal(CMD.SET_CODEX_SANDBOX_MODE),
-  mode: CodexSandboxModeSchema,
-});
-const SetCodexReasoningEffortMessageSchema = z.object({
-  command: z.literal(CMD.SET_CODEX_REASONING_EFFORT),
-  effort: CodexReasoningEffortSchema,
-});
-const SetCodexApprovalPolicyMessageSchema = z.object({
-  command: z.literal(CMD.SET_CODEX_APPROVAL_POLICY),
-  policy: CodexApprovalPolicySchema,
-});
-const SetClaudeAgentModelMessageSchema = z.object({
-  command: z.literal(CMD.SET_CLAUDE_AGENT_MODEL),
-  model: ClaudeAgentModelSchema,
-});
-const SetClaudeAgentPermissionModeMessageSchema = z.object({
-  command: z.literal(CMD.SET_CLAUDE_AGENT_PERMISSION_MODE),
-  mode: ClaudeAgentPermissionModeSchema,
-});
-const SetClaudeAgentEffortMessageSchema = z.object({
-  command: z.literal(CMD.SET_CLAUDE_AGENT_EFFORT),
-  effort: ClaudeAgentEffortSchema,
+
+// Generic catalog-driven state-setting write. One flat branch (single outer
+// discriminator on `command`, per the SET_LATEX_CONFIG_VALUE precedent above)
+// carrying the canonical `STATE_SETTINGS` key and a loose value. Per-value
+// validation happens in the backend handler via the entry's own schema
+// (`stateSettingByKey(key).schema`), so the union stays a plain flat branch and
+// never grows a nested per-key discriminator (which would crash the dispatcher).
+const UpdateStateSettingMessageSchema = z.object({
+  command: z.literal(CMD.UPDATE_STATE_SETTING),
+  key: z.string().min(1),
+  value: z.union([z.boolean(), z.number(), z.string(), z.null()]).optional(),
 });
 
 // Navigation inbound messages
@@ -470,11 +433,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     // Multi-Agent orchestration messages
     SetAllowOrchestratorKillMessageSchema,
     SetDetachSubagentsOnStopMessageSchema,
-    // Git author settings messages
-    SetGitMarkCommitsMessageSchema,
-    SetGitAuthorNameMessageSchema,
-    SetGitAuthorEmailMessageSchema,
-    SetGitWorktreeSupportMessageSchema,
     // GitHub token messages
     GetGitHubTokenStatusMessageSchema,
     SetGitHubTokenMessageSchema,
@@ -493,12 +451,8 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     OpenPRSubscriptionStreamMessageSchema,
     // Approval settings messages
     SetBashApprovalEnabledMessageSchema,
-    SetCodexSandboxModeMessageSchema,
-    SetCodexReasoningEffortMessageSchema,
-    SetCodexApprovalPolicyMessageSchema,
-    SetClaudeAgentModelMessageSchema,
-    SetClaudeAgentPermissionModeMessageSchema,
-    SetClaudeAgentEffortMessageSchema,
+    // Generic catalog-driven state-setting write (git-author + agent controls)
+    UpdateStateSettingMessageSchema,
     // Agent team messages
     ApplyAgentModePresetMessageSchema,
     SaveAgentModePresetMessageSchema,

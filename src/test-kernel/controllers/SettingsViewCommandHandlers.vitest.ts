@@ -86,12 +86,6 @@ function createActions(): SettingsViewCommandActions {
       saveModePreset: action(),
       deleteModePreset: action(),
     },
-    gitAuthor: {
-      setMarkCommits: action(),
-      setName: action(),
-      setEmail: action(),
-      setWorktreeSupport: action(),
-    },
     githubSubscriptions: {
       getTokenStatus: action(),
       setToken: action(),
@@ -109,12 +103,9 @@ function createActions(): SettingsViewCommandActions {
     },
     approval: {
       setBashApprovalEnabled: action(),
-      setCodexSandboxMode: action(),
-      setCodexReasoningEffort: action(),
-      setCodexApprovalPolicy: action(),
-      setClaudeAgentModel: action(),
-      setClaudeAgentPermissionMode: action(),
-      setClaudeAgentEffort: action(),
+    },
+    stateSettings: {
+      update: action(),
     },
     tools: {
       openInstallUrl: action(),
@@ -224,6 +215,16 @@ describe('createSettingsViewCommandHandlers', () => {
     });
     expect(actions.modelSelection.requestAccess).toHaveBeenCalledWith(
       'copilot:sonnet46',
+    );
+
+    assertSupported(registry.updateStateSetting)({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+      key: 'texra.codexSandboxMode',
+      value: 'workspace-write',
+    });
+    expect(actions.stateSettings.update).toHaveBeenCalledWith(
+      'texra.codexSandboxMode',
+      'workspace-write',
     );
   });
 });
