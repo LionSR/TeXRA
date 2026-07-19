@@ -97,6 +97,8 @@ export function registerResumeAgentCommand(
           return { success: false };
         }
         if (resume?.type !== 'toolUse') return { success: false };
+        if (defaultSession().status.isActiveOrResuming(identity.streamId))
+          return { success: false };
 
         const success = await resumeExtensionToolUseFromResumeData(
           resume,

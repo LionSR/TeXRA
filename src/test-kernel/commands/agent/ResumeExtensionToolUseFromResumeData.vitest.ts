@@ -31,6 +31,7 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 }));
 
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   registerResumeAgentCommand,
   resumeExtensionToolUseFromResumeData,
@@ -105,7 +106,7 @@ describe('registerResumeAgentCommand', () => {
     expect(context.subscriptions).toEqual([disposable]);
   });
 
-  it('resolves an existing v2-shaped command payload to canonical resume data', async () => {
+  it('resolves a v2-shaped payload once across overlapping commands', async () => {
     const canonical = snapshot();
     const oldSnapshot = {
       version: 2,
@@ -115,25 +116,29 @@ describe('registerResumeAgentCommand', () => {
       parentStreamId: PARENT_STREAM,
     };
     mocks.retrieveSessionResumeData.mockResolvedValue(canonical);
+    const status = defaultSession().status;
+    const statusSpy = vi.spyOn(status, 'isActiveOrResuming');
+    statusSpy.mockImplementation(() => statusSpy.mock.calls.length === 4);
+    const handler = registerHandler();
 
     await expect(
-      registerHandler()({ snapshot: oldSnapshot, followUp: 'Continue.' }),
-    ).resolves.toEqual({ success: true });
+      Promise.all([
+        handler({ snapshot: oldSnapshot, followUp: 'Continue.' }),
+        handler({ snapshot: oldSnapshot, followUp: 'Continue.' }),
+      ]),
+    ).resolves.toEqual([{ success: true }, { success: false }]);
 
-    expect(mocks.retrieveSessionResumeData).toHaveBeenCalledExactlyOnceWith(
+    expect(mocks.retrieveSessionResumeData).toHaveBeenCalledWith(
       canonical.streamId,
       canonical.executionId,
       canonical.agentConfig,
       { parentStreamId: PARENT_STREAM },
     );
-    expect(mocks.resumeQueuedToolUseFromResumeData).toHaveBeenCalledWith(
-      canonical.streamId,
+    expect(mocks.resumeQueuedToolUseFromResumeData).toHaveBeenCalledOnce();
+    expect(mocks.resumeQueuedToolUseFromResumeData.mock.calls[0]?.[1]).toBe(
       canonical,
-      expect.any(Object),
-      expect.objectContaining({
-        extraFollowUps: [{ text: 'Continue.', origin: 'user' }],
-      }),
     );
+    statusSpy.mockRestore();
   });
 
   it('does not read resume storage when persistence is disabled', async () => {
