@@ -1417,14 +1417,14 @@ describe('CLI StatusBar display model', () => {
           text: 'Unknown command: /wat',
           expiresAt: 1,
         },
+        width: 20,
       }),
     );
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
-      '/ running 45s',
-      'Unknown command: /wat',
-      PERSONAL_API_MODE_LABEL,
+      'run 45s',
+      'Unknown…',
     ]);
   });
 
@@ -1466,7 +1466,8 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
-      'Press Ctrl-C again to ex…',
+      'run',
+      'Press Ctrl-C again t…',
     ]);
     expect(display.bindings).toBe(
       'Resume this session with: texra resume abc123',
