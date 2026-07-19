@@ -2154,6 +2154,27 @@ const SCENARIOS = [
     unexpect: ['Feedback to send with rejection', 'send note', '/model models'],
   },
   {
+    name: 'retry-approval-chatgpt',
+    frame: 'scrollback',
+    cols: 120,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_RETRY_APPROVAL: '1',
+      HARNESS_RETRY_APPROVAL_CHATGPT: '1',
+    },
+    bootExpect: '· Ctrl-C ',
+    expect: [
+      'Retry the failed call?',
+      'ChatGPT subscription usage limit reached. Resets in 2h.',
+      'Press k to switch from your ChatGPT subscription to your OpenAI API key before retrying.',
+      'retry',
+      'give up',
+      'use API key and retry',
+      '1 approval',
+    ],
+    unexpect: ['Feedback to send with rejection', 'send note', '/model models'],
+  },
+  {
     name: 'retry-approval-reject',
     frame: 'viewport',
     cols: 120,

@@ -85,10 +85,11 @@ async function hasUsablePersonalKey(provider: ApiProvider): Promise<boolean> {
 }
 
 /**
- * When a retry is triggered by relay exhaustion or ChatGPT-subscription
- * limits, and the stored personal key is not the broken credential, switch
- * to personal keys and retry without showing the modal — matching the
- * progress-view API-key retry behaviour.
+ * When a retry is triggered by relay exhaustion and the stored personal key is
+ * not the broken credential, switch to personal keys and retry without showing
+ * the modal. ChatGPT-subscription limits always require an explicit decision:
+ * changing credential ownership must not hide the quota warning or silently
+ * spend API-key quota.
  *
  * Returns the auto-switch decision, or `undefined` when the modal is needed
  * (no usable key stored, direct-key failure, or unknown provider).
@@ -97,6 +98,7 @@ async function maybeAutoSwitchRetry(
   payload: RuntimeInteractionEventPayloads['showRetryRequest'],
 ): Promise<ApprovalDecision | undefined> {
   if (!isCliApiSwitchableRetry(payload)) return undefined;
+  if (isCliChatGptSubscriptionRetry(payload)) return undefined;
 
   const details = payload.errorDetails;
   // Upstream credit depletion means the stored direct key IS the broken
@@ -104,14 +106,10 @@ async function maybeAutoSwitchRetry(
   // auto-switch to the stored value.
   if (isUpstreamCreditDepletedError(details)) return undefined;
 
-  // ChatGPT-subscription exhaustion -> the user needs an OpenAI key.
-  // Relay exhaustion -> use the provider from error details when known;
+  // Relay exhaustion uses the provider from error details when known;
   // provider-less relay failures can use any configured personal key.
-  const isChatGptSubscription = isCliChatGptSubscriptionRetry(payload);
   let providers: readonly ApiProvider[];
-  if (isChatGptSubscription) {
-    providers = ['openai'];
-  } else if (details?.provider) {
+  if (details?.provider) {
     providers = isApiProvider(details.provider) ? [details.provider] : [];
   } else {
     providers = API_PROVIDERS;
@@ -128,7 +126,6 @@ async function maybeAutoSwitchRetry(
   return {
     accepted: true,
     apiMode: 'personal',
-    ...(isChatGptSubscription ? { disableChatGptSubscription: true } : {}),
   };
 }
 
