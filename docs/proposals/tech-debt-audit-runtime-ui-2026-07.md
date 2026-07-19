@@ -160,7 +160,7 @@ prescribes removing.
 `appendAssistantTranscriptIfMissing` (51 LoC) dedups the run-result fallback
 against store-derived entries **by normalized text**, with
 `.replaceAll('\\checkmark','✓')` at `:38-40`. The `✓`↔`\checkmark` divergence is
-real: `src/replacement/rules/unicode.ts:68` maps `'✓' → '\\checkmark'`, so the
+real: `src/replacement/rules.ts:826` maps `'✓' → '\\checkmark'`, so the
 recorder-normalized store text and the raw `result.lastResponse` genuinely differ.
 `subscribeStreamLog.ts:393` filters synthetic entries; `:403-422` splices by
 `syntheticAfterSeq`; `:327-338` sort-tolerates the out-of-order splice.

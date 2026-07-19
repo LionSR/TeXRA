@@ -4,14 +4,6 @@
 // Local imports
 import { capitalize } from '@utils/text/stringUtils';
 
-// Re-export commonly used constants
-export {
-  GREEK_LETTERS,
-  SECTION_TYPES,
-  MATH_OPERATORS,
-  LATEX_ENVIRONMENTS,
-} from './constants';
-
 // ============================================================================
 // Core factory functions for pattern generation
 // ============================================================================

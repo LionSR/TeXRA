@@ -5,11 +5,11 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
 import {
+  EQUATION_MACRO_REPLACEMENTS,
   EQUATION_STYLE_REPLACEMENTS,
   FENCED_LATEX_BLOCK_REPLACEMENTS,
 } from '@replacement/rulesRegex';
 import {
-  EQUATION_MACRO_REPLACEMENTS,
   HTML_ENTITY_REPLACEMENTS,
   LATEX_FORBIDDEN_REPLACEMENTS,
   LATEX_XML_REPLACEMENTS,
