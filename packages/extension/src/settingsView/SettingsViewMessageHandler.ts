@@ -64,7 +64,7 @@ import {
 } from '@model/apiProviders';
 import { revealProgressStream } from '@progressView/progressNavigation';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { stateSettingByKey } from '@shared/schemas/stateSettings';
+import { resolveStateSettingWrite } from '@shared/settingsView/handlers/stateSettingWrite';
 import {
   dispatchSettingsViewInbound,
   type SettingsViewInboundHandlerRegistry,
@@ -859,32 +859,19 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   /**
    * Generic write path for scalar `STATE_SETTINGS` rows (git-author + external
-   * coding-agent controls). Validates the value against the catalog entry's own
-   * schema — silently ignoring an unknown key or a value the schema rejects, so
-   * a malformed webview payload can never persist junk — then delegates to the
-   * family updater, which owns the persist + rebroadcast (and, for git, the
-   * `applyGitAuthorConfig()` side effect). Routing is by catalog `category`.
+   * coding-agent controls). The shared {@link resolveStateSettingWrite} owns the
+   * value validation + family classification (so it can't drift from the desktop
+   * host); this host only dispatches the resolved family to its updater, which
+   * owns the persist + rebroadcast (and, for git, the `applyGitAuthorConfig()`
+   * side effect).
    */
   private async updateStateSetting(key: string, value: unknown): Promise<void> {
-    // A value-less message is a no-op. This command has no clear-to-default
-    // semantics (unlike SET_LATEX_CONFIG_VALUE), and the catalog schemas use
-    // `.prefault()`, so parsing `undefined` would resolve to the default and
-    // silently reset the setting — reject it up front instead.
-    if (value === undefined) return;
-    const entry = stateSettingByKey(key);
-    if (!entry) return;
-    const parsed = entry.schema.safeParse(value);
-    if (!parsed.success) return;
-    // Only the two families this settings view owns are routable; any other
-    // catalog category (workflow, model, tools, …) is ignored rather than
-    // mis-persisted through the agent path or refreshing the wrong UI.
-    if (entry.category === 'git') {
-      await this.updateGitAuthorSetting(key as WorkspaceStateKey, parsed.data);
-    } else if (entry.category === 'ai-agents') {
-      await this.updateAgentSetting(
-        key as WorkspaceStateKey,
-        parsed.data as string,
-      );
+    const write = resolveStateSettingWrite(key, value);
+    if (!write) return;
+    if (write.family === 'git') {
+      await this.updateGitAuthorSetting(write.key, write.value);
+    } else {
+      await this.updateAgentSetting(write.key, write.value);
     }
   }
 
