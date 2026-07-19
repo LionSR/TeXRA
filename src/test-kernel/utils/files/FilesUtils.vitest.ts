@@ -50,6 +50,23 @@ describe('BaseFS stat predicates', () => {
   });
 
   it.each([
+    ['exists', () => AbsoluteFS.exists('/file/child')],
+    ['isFile', () => AbsoluteFS.isFile('/file/child')],
+    ['isSymbolicLink', () => AbsoluteFS.isSymbolicLink('/file/child')],
+  ])('returns false for ENOTDIR from %s', async (_name, run) => {
+    const error = Object.assign(new Error('parent path is not a directory'), {
+      code: 'ENOTDIR',
+    });
+    const stat = vi.spyOn(platform().fs, 'stat').mockRejectedValueOnce(error);
+
+    try {
+      await expect(run()).resolves.toBe(false);
+    } finally {
+      stat.mockRestore();
+    }
+  });
+
+  it.each([
     ['exists', () => AbsoluteFS.exists('/unreadable')],
     ['isFile', () => AbsoluteFS.isFile('/unreadable')],
     ['isSymbolicLink', () => AbsoluteFS.isSymbolicLink('/unreadable')],

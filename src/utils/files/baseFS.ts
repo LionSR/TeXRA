@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 // Common imports
-import { isFileNotFoundError } from '@common/errors';
+import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 
 // Platform imports
 import { FileType, type FileStat } from '@platform/interfaces';
@@ -52,7 +52,9 @@ export abstract class BaseFS {
     try {
       return await this.stat(target);
     } catch (error) {
-      if (isFileNotFoundError(error)) return undefined;
+      if (isFileNotFoundError(error) || isNotADirectoryError(error)) {
+        return undefined;
+      }
       throw error;
     }
   }
