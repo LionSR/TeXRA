@@ -43,7 +43,6 @@ jobs:
           allowed_tools: |
             Bash(npm run lint)
             Bash(npm run compile)
-            Bash(npm run build)
 
           # Optional: Custom environment variables for Claude
           # claude_env: |
