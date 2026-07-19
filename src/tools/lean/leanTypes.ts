@@ -1,6 +1,7 @@
 /**
- * VS Code-free contracts and helpers shared by the Lean tool implementations
- * and host integration layers.
+ * Host-neutral contracts shared by the VS Code and direct-LSP Lean adapters.
+ * LSP shapes stay structural so this boundary does not depend on the packaging
+ * details of `vscode-languageserver-protocol`.
  */
 
 // Local imports - utils
