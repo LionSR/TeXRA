@@ -8,6 +8,7 @@ import { describe, it, beforeAll } from 'vitest';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { createRunTrace, StreamLogStore } from '@transcript';
 import { ToolUseDispatchNode } from '@agent/core/flows/toolUseRound/ToolUseDispatchNode';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
@@ -33,7 +34,7 @@ function probeTool(
   probe: DispatchProbe,
   name: string,
   delayMs: number,
-  options: { parallelSafe?: boolean } = {},
+  options: { endTurn?: boolean; parallelSafe?: boolean } = {},
 ): ITool {
   return {
     definition: { name, description: name, parameters: {} },
@@ -46,7 +47,11 @@ function probeTool(
       await delay(delayMs);
       probe.inFlight -= 1;
       probe.events.push(`end ${tag}`);
-      return { status: 'executed', output: `${tag} ok` };
+      return {
+        status: 'executed',
+        output: `${tag} ok`,
+        endTurn: options.endTurn,
+      };
     },
   } as ITool;
 }
@@ -86,6 +91,10 @@ function dispatchHarness(opts: HarnessOptions) {
     checkInterruption: opts.checkInterruption ?? (() => false),
     onRoundFinalized: () => {},
     setAbortController: opts.setAbortController ?? (() => {}),
+    modelHandler: {
+      requiresBatchedParallelToolResults: false,
+      createToolUseFollowUpMessages: async () => [],
+    },
     run: AgentRunStateSnapshotSchema.parse({}),
     workspace: AgentWorkspaceState.create(),
   } as unknown as ToolUseRoundServices<unknown>;
@@ -211,6 +220,61 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
         'start read_file:{"n":3}',
         'end read_file:{"n":3}',
       ]);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('stops dispatch and ends the turn after a terminal result', async () => {
+    const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
+    const { node, dispose } = dispatchHarness({
+      tools: {
+        submit_output: probeTool(probe, 'submit_output', 0, { endTurn: true }),
+        write_file: probeTool(probe, 'write_file', 0),
+      },
+    });
+    const calls = [
+      makeCall('c1', 'submit_output', { title: 'done' }),
+      makeCall('c2', 'write_file', { path: 'late.txt' }),
+    ];
+    const shared = {
+      toolCalls: calls,
+      shouldStop: false,
+      endTurn: false,
+      messages: [],
+    };
+
+    try {
+      const prepped = await (
+        node as unknown as { prep(s: unknown): Promise<SdkToolCall[]> }
+      ).prep(shared);
+      const results = await withTestRunContext(
+        noopAgentRuntimeHost,
+        'dispatch-test',
+        () =>
+          (
+            node as unknown as {
+              _exec(items: unknown[]): Promise<unknown[]>;
+            }
+          )._exec(prepped),
+      );
+      const transition = await (
+        node as unknown as {
+          post(
+            state: typeof shared,
+            dispatched: SdkToolCall[],
+            result: unknown[],
+          ): Promise<string | undefined>;
+        }
+      ).post(shared, prepped, results);
+
+      assert.deepEqual(probe.events, [
+        'start submit_output:{"title":"done"}',
+        'end submit_output:{"title":"done"}',
+      ]);
+      assert.equal(shared.shouldStop, true);
+      assert.equal(shared.endTurn, true);
+      assert.equal(transition, FlowTransition.COMPLETE);
     } finally {
       dispose();
     }

@@ -167,6 +167,21 @@ return { structured: withSchema.structured, plain }`,
     ).rejects.toThrow(/schema.*must be a plain JSON Schema object/i);
   });
 
+  it('rejects an empty or regex-bearing structured-output schema', async () => {
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await agent('draft', { schema: {} })`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/schema.*object-root JSON Schema/i);
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await agent('draft', { schema: { type: 'object', properties: { value: { type: 'string', pattern: '(a+)+$' } } } })`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/cannot use pattern/i);
+  });
+
   it('requires explicit identities for otherwise-repeated calls', async () => {
     const invocations: WorkflowAgentInvocation[] = [];
     await runWorkflowScript({
@@ -634,7 +649,10 @@ return await agent('b', { outputSchema: { type: 'object' } })`,
 
     // schema is a first-class option now; outputSchema is no longer recognized
     // and is silently dropped like any other unknown option.
-    expect(seen[0]?.options.schema).toEqual({ type: 'object' });
+    expect(seen[0]?.options.schema).toMatchObject({
+      type: 'object',
+      properties: {},
+    });
     expect(seen[1]?.options.schema).toBeUndefined();
     expect(seen[1]?.options).not.toHaveProperty('outputSchema');
   });

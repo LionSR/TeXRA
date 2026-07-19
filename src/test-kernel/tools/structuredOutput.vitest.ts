@@ -9,16 +9,15 @@ import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 import {
   buildTerminalTool,
   buildTerminalToolRegistry,
-  isStrictNativeCompatible,
-  resolveStructuredOutput,
+  normalizeStructuredOutputSchema,
 } from '@tools/structuredOutput';
 
 // The synthetic terminal tool's name is a file-local const in
 // structuredOutput.ts; assert against the literal here.
 const SUBMIT_OUTPUT_TOOL_NAME = 'submit_output';
 
-describe('resolveStructuredOutput', () => {
-  it('round-trips a JSON Schema object through z.fromJSONSchema', () => {
+describe('normalizeStructuredOutputSchema', () => {
+  it('normalizes a JSON Schema object through the pinned Zod API', async () => {
     const jsonSchema = {
       type: 'object',
       properties: {
@@ -29,120 +28,84 @@ describe('resolveStructuredOutput', () => {
       additionalProperties: false,
     };
 
-    const spec = resolveStructuredOutput(jsonSchema, 'result');
+    const normalized = normalizeStructuredOutputSchema(jsonSchema);
+    const capture = vi.fn<(value: unknown) => void>();
+    const tool = buildTerminalTool(jsonSchema, capture);
 
-    expect(spec.name).toBe('result');
-    expect(spec.jsonSchema).toBe(jsonSchema);
-    expect(spec.validate({ title: 'Lemma', count: 2 }).success).toBe(true);
-    expect(spec.validate({ title: 'Lemma' }).success).toBe(false);
+    expect(normalized.jsonSchema).toMatchObject(jsonSchema);
+    await expect(
+      tool.call({ title: 'Lemma', count: 2 }),
+    ).resolves.toMatchObject({ status: 'executed' });
+    await expect(tool.call({ title: 'Lemma' })).resolves.toMatchObject({
+      status: 'error',
+    });
   });
 
-  it('derives an equivalent JSON Schema from a Zod schema', () => {
+  it('derives an equivalent object schema from a Zod schema', () => {
     const zodSchema = z.strictObject({
       title: z.string(),
       count: z.number(),
     });
 
-    const spec = resolveStructuredOutput(zodSchema, 'result');
+    const normalized = normalizeStructuredOutputSchema(zodSchema);
 
-    expect(spec.zodSchema).toBe(zodSchema);
-    expect(spec.jsonSchema).toMatchObject({
+    expect(normalized.zodSchema).toBe(zodSchema);
+    expect(normalized.jsonSchema).toMatchObject({
       type: 'object',
       properties: {
         title: { type: 'string' },
         count: { type: 'number' },
       },
     });
-    expect(spec.validate({ title: 'Lemma', count: 2 }).success).toBe(true);
-    expect(spec.validate({ title: 'Lemma', count: 'two' }).success).toBe(false);
-  });
-});
-
-describe('isStrictNativeCompatible', () => {
-  it('accepts a plain all-required additionalProperties:false object', () => {
-    const spec = resolveStructuredOutput({
-      type: 'object',
-      properties: {
-        title: { type: 'string' },
-        done: { type: 'boolean' },
-      },
-      required: ['title', 'done'],
-      additionalProperties: false,
-    });
-
-    expect(isStrictNativeCompatible(spec)).toBe(true);
   });
 
-  it('rejects numeric constraint keywords from .int().min()', () => {
-    const spec = resolveStructuredOutput(
-      z.strictObject({ count: z.int().min(1) }),
+  it('rejects non-object and unconstrained roots at normalization time', () => {
+    expect(() => normalizeStructuredOutputSchema({})).toThrow(/object.*root/);
+    expect(() => normalizeStructuredOutputSchema(z.array(z.string()))).toThrow(
+      /object.*root/,
     );
-
-    expect(isStrictNativeCompatible(spec)).toBe(false);
   });
 
-  it('rejects an optional (not required) property', () => {
-    const spec = resolveStructuredOutput(
-      z.strictObject({ title: z.string(), note: z.string().nullish() }),
-    );
-
-    expect(isStrictNativeCompatible(spec)).toBe(false);
+  it('rejects regex-bearing sandbox schemas before host compilation', () => {
+    expect(() =>
+      normalizeStructuredOutputSchema({
+        type: 'object',
+        properties: { value: { type: 'string', pattern: '(a+)+$' } },
+      }),
+    ).toThrow(/cannot use pattern/);
   });
 
-  it('rejects a string pattern constraint', () => {
-    const spec = resolveStructuredOutput({
-      type: 'object',
-      properties: { id: { type: 'string', pattern: '^[a-z]+$' } },
-      required: ['id'],
-      additionalProperties: false,
-    });
-
-    expect(isStrictNativeCompatible(spec)).toBe(false);
-  });
-
-  it('rejects an object that allows extra properties', () => {
-    const spec = resolveStructuredOutput({
-      type: 'object',
-      properties: { title: { type: 'string' } },
-      required: ['title'],
-    });
-
-    expect(isStrictNativeCompatible(spec)).toBe(false);
-  });
-
-  it('rejects a bare object node with no additionalProperties: false', () => {
-    const spec = resolveStructuredOutput({ type: 'object' });
-
-    expect(isStrictNativeCompatible(spec)).toBe(false);
-  });
-
-  it('rejects an unconstrained (empty) schema', () => {
-    const spec = resolveStructuredOutput({});
-
-    expect(isStrictNativeCompatible(spec)).toBe(false);
+  it('allows output fields whose names match JSON Schema keywords', () => {
+    expect(() =>
+      normalizeStructuredOutputSchema({
+        type: 'object',
+        properties: {
+          pattern: { type: 'string' },
+          patternProperties: { type: 'string' },
+        },
+      }),
+    ).not.toThrow();
   });
 });
 
 describe('buildTerminalTool', () => {
-  const spec = resolveStructuredOutput(
-    z.strictObject({ title: z.string(), count: z.number() }),
-  );
+  const schema = z.strictObject({ title: z.string(), count: z.number() });
 
   it('captures already-validated input and returns a success result', async () => {
     const capture = vi.fn<(value: unknown) => void>();
-    const tool = buildTerminalTool(spec, capture);
+    const tool = buildTerminalTool(schema, capture);
 
     expect(tool.definition.name).toBe(SUBMIT_OUTPUT_TOOL_NAME);
 
     const result = await tool.call({ title: 'Lemma', count: 2 });
 
-    expect(result.status).toBe('executed');
+    expect(result).toMatchObject({ status: 'executed', endTurn: true });
     expect(capture).toHaveBeenCalledWith({ title: 'Lemma', count: 2 });
   });
 
   it('rejects invalid input via its own schema before execute (repair path)', async () => {
     const capture = vi.fn<(value: unknown) => void>();
-    const tool = buildTerminalTool(spec, capture);
+    const tool = buildTerminalTool(schema, capture);
 
     const result = await tool.call({ title: 'Lemma', count: 'two' });
 
@@ -151,18 +114,59 @@ describe('buildTerminalTool', () => {
   });
 
   it('rejects a non-object root schema so provider tool inputs stay valid', () => {
-    const arraySpec = resolveStructuredOutput(z.array(z.string()));
-
-    expect(() => buildTerminalTool(arraySpec, vi.fn())).toThrow(
+    expect(() => buildTerminalTool(z.array(z.string()), vi.fn())).toThrow(
       /object at the root/,
     );
+  });
+
+  it('supports async Zod validation through the canonical tool boundary', async () => {
+    const capture = vi.fn<(value: unknown) => void>();
+    const tool = buildTerminalTool(
+      z.strictObject({
+        title: z.string().refine(async (value) => value === 'accepted'),
+      }),
+      capture,
+    );
+
+    await expect(tool.call({ title: 'rejected' })).resolves.toMatchObject({
+      status: 'error',
+    });
+    await expect(tool.call({ title: 'accepted' })).resolves.toMatchObject({
+      status: 'executed',
+    });
+  });
+
+  it('rejects transformed values that cannot cross the JSON boundary', async () => {
+    const capture = vi.fn<(value: unknown) => void>();
+    const tool = buildTerminalTool(
+      z.strictObject({ value: z.string().transform(() => 1n) }),
+      capture,
+    );
+
+    await expect(tool.call({ value: 'one' })).resolves.toMatchObject({
+      status: 'error',
+    });
+    expect(capture).not.toHaveBeenCalled();
+  });
+
+  it('accepts only one structured result per run', async () => {
+    const capture = vi.fn<(value: unknown) => void>();
+    const tool = buildTerminalTool(schema, capture);
+
+    await expect(
+      tool.call({ title: 'First', count: 1 }),
+    ).resolves.toMatchObject({ status: 'executed' });
+    await expect(
+      tool.call({ title: 'Second', count: 2 }),
+    ).resolves.toMatchObject({ status: 'error' });
+    expect(capture).toHaveBeenCalledTimes(1);
   });
 
   it('binds capture per instance so concurrent runs never share a sink', async () => {
     const captureA = vi.fn<(value: unknown) => void>();
     const captureB = vi.fn<(value: unknown) => void>();
-    const toolA = buildTerminalTool(spec, captureA);
-    const toolB = buildTerminalTool(spec, captureB);
+    const toolA = buildTerminalTool(schema, captureA);
+    const toolB = buildTerminalTool(schema, captureB);
 
     await toolA.call({ title: 'A', count: 1 });
 
@@ -172,14 +176,14 @@ describe('buildTerminalTool', () => {
 });
 
 describe('buildTerminalToolRegistry', () => {
-  const spec = resolveStructuredOutput(z.strictObject({ title: z.string() }));
+  const schema = z.strictObject({ title: z.string() });
   const realTool = {
     definition: { name: 'read_file', description: 'read', parameters: {} },
   } as ITool;
   const base = new MapToolRegistry({ read_file: realTool });
 
   it('overrides submit_output while delegating every other lookup', () => {
-    const terminalTool = buildTerminalTool(spec, vi.fn());
+    const terminalTool = buildTerminalTool(schema, vi.fn());
     const overlay = buildTerminalToolRegistry(base, terminalTool);
 
     expect(overlay.get(SUBMIT_OUTPUT_TOOL_NAME)).toBe(terminalTool);
@@ -191,7 +195,7 @@ describe('buildTerminalToolRegistry', () => {
   });
 
   it('never mutates the base registry', () => {
-    const terminalTool = buildTerminalTool(spec, vi.fn());
+    const terminalTool = buildTerminalTool(schema, vi.fn());
     buildTerminalToolRegistry(base, terminalTool);
 
     // The shared default registry must never gain the synthetic tool.

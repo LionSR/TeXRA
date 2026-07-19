@@ -179,6 +179,16 @@ describe('AgentFinalResult', () => {
     ).toBe(false);
   });
 
+  it('rejects structured values that cannot be persisted as JSON', () => {
+    expect(
+      AgentFinalResultSchema.safeParse({
+        category: 'toolUse',
+        outcome: 'completed',
+        structured: { count: 1n },
+      }).success,
+    ).toBe(false);
+  });
+
   it('rejects WAITING and negative cumulative cost', () => {
     expect(
       AgentFinalResultSchema.safeParse({
