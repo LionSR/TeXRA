@@ -198,9 +198,6 @@ export class BackgroundTasksPanel extends LitElement {
 
       .empty-message {
         padding: var(--wa-space-2xs) 0;
-        font-size: var(--font-size-sm);
-        color: var(--color-text-secondary);
-        font-style: italic;
       }
 
       /* Collapsible output per task — also a <wa-details>. */
@@ -407,7 +404,9 @@ export class BackgroundTasksPanel extends LitElement {
           ${
             !hasActive && hasFinished
               ? html`<div class="empty-message">
-                  All ${finishedCount} ${label.toLowerCase()} completed
+                  <em class="text-secondary"
+                    >All ${finishedCount} ${label.toLowerCase()} completed</em
+                  >
                 </div>`
               : nothing
           }
