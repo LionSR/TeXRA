@@ -38,7 +38,7 @@ type ProgressViewApprovalHostActions = Omit<
   'handleAgentProposalAction'
 >;
 
-export interface ProgressViewHostCommandOptions {
+interface ProgressViewHostCommandOptions {
   readonly lifecycle: ProgressViewLifecycleCommandActions;
   readonly resumeStream?: ProgressViewRunCommandActions['resumeStream'];
   readonly followUp: ProgressViewFollowUpCommandActions;

@@ -49,7 +49,7 @@ const ALLOWED_INSTALL_COMMANDS: ReadonlySet<string> = new Set([
   ),
 ]);
 
-export function isAllowedLatexInstallCommand(command: string): boolean {
+function isAllowedLatexInstallCommand(command: string): boolean {
   return ALLOWED_INSTALL_COMMANDS.has(command);
 }
 

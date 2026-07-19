@@ -38,7 +38,7 @@ interface DesktopLatestRelease {
 }
 
 /** Fetch the latest release's version, or undefined on any failure. */
-export async function fetchLatestDesktopRelease(options?: {
+async function fetchLatestDesktopRelease(options?: {
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
 }): Promise<DesktopLatestRelease | undefined> {

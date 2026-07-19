@@ -104,7 +104,7 @@ export class RestartRepairRetryScheduler {
   }
 }
 
-export const RESTART_REPAIR_PHASES: ReadonlySet<StreamPhase> = new Set([
+const RESTART_REPAIR_PHASES: ReadonlySet<StreamPhase> = new Set([
   STREAM_PHASE.RUNNING,
   STREAM_PHASE.WAITING,
 ]);
