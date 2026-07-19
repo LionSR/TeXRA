@@ -16,6 +16,7 @@ import {
 } from 'vitest';
 import { z } from 'zod';
 import { isTexFile } from '@common/files/fileTypeUtils';
+import { platform } from '@platform/platform';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { getMimeType } from '@utils/files';
@@ -25,6 +26,63 @@ import { FlexibleFS } from '@utils/files/flexibleFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { RelativeFS } from '@utils/files/relativeFS';
 import { pastedImageFileName } from '@utils/files/pastedImageUtils';
+
+// ---------------------------------------------------------------------------
+// BaseFS stat predicates
+// ---------------------------------------------------------------------------
+
+describe('BaseFS stat predicates', () => {
+  setupPlatform();
+
+  it('returns ordinary predicate results for present and missing paths', async () => {
+    await AbsoluteFS.write('/present.txt', 'content');
+
+    await expect(AbsoluteFS.exists('/present.txt')).resolves.toBe(true);
+    await expect(AbsoluteFS.isFile('/present.txt')).resolves.toBe(true);
+    await expect(AbsoluteFS.isSymbolicLink('/present.txt')).resolves.toBe(
+      false,
+    );
+    await expect(AbsoluteFS.exists('/missing.txt')).resolves.toBe(false);
+    await expect(AbsoluteFS.isFile('/missing.txt')).resolves.toBe(false);
+    await expect(AbsoluteFS.isSymbolicLink('/missing.txt')).resolves.toBe(
+      false,
+    );
+  });
+
+  it.each([
+    ['exists', () => AbsoluteFS.exists('/file/child')],
+    ['isFile', () => AbsoluteFS.isFile('/file/child')],
+    ['isSymbolicLink', () => AbsoluteFS.isSymbolicLink('/file/child')],
+  ])('returns false for ENOTDIR from %s', async (_name, run) => {
+    const error = Object.assign(new Error('parent path is not a directory'), {
+      code: 'ENOTDIR',
+    });
+    const stat = vi.spyOn(platform().fs, 'stat').mockRejectedValueOnce(error);
+
+    try {
+      await expect(run()).resolves.toBe(false);
+    } finally {
+      stat.mockRestore();
+    }
+  });
+
+  it.each([
+    ['exists', () => AbsoluteFS.exists('/unreadable')],
+    ['isFile', () => AbsoluteFS.isFile('/unreadable')],
+    ['isSymbolicLink', () => AbsoluteFS.isSymbolicLink('/unreadable')],
+  ])('propagates operational stat failures from %s', async (_name, run) => {
+    const error = Object.assign(new Error('path is unreadable'), {
+      code: 'EACCES',
+    });
+    const stat = vi.spyOn(platform().fs, 'stat').mockRejectedValueOnce(error);
+
+    try {
+      await expect(run()).rejects.toBe(error);
+    } finally {
+      stat.mockRestore();
+    }
+  });
+});
 
 // ---------------------------------------------------------------------------
 // WorkspaceFS
