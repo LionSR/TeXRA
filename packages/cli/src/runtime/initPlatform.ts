@@ -29,6 +29,7 @@ import {
   getServerSideKeyService,
   initializeServerSideKeyAccess,
 } from '@auth/serverKeys';
+import { SupabaseClient } from '@auth/SupabaseClient';
 
 // Local imports - logger
 import { setOutputChannelFactory } from '@logger/logUtils';
@@ -54,11 +55,7 @@ import { isCliResumeInFlight, tryResumeCliStream } from './agentResume';
 import { getCliSecrets } from './cliSecrets';
 import { isTexraCliEntrypointPath, readCliEntrypointPath } from './cliContext';
 import { flushNdjsonStdout, writeTextStderr } from './logSinks';
-import {
-  getCliAuthProvider,
-  initializeCliSupabaseAuth,
-  signInCliSupabase,
-} from './supabaseAuth';
+import { initializeCliSupabaseAuth, signInCliSupabase } from './supabaseAuth';
 import { createCliStateStores } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
 
@@ -339,10 +336,10 @@ export async function initCliPlatform(
 
   if (!serverSideKeysInitialized) {
     initializeCliSupabaseAuth(cliPlatformLog, context.storageRoot);
-    initializeServerSideKeyAccess(
-      { state: tryPlatform()?.globalState, logger: cliPlatformLog },
-      getCliAuthProvider(),
-    );
+    initializeServerSideKeyAccess({
+      state: tryPlatform()?.globalState,
+      logger: cliPlatformLog,
+    });
     serverSideKeysInitialized = true;
   }
 
@@ -350,7 +347,7 @@ export async function initCliPlatform(
     host: 'cli',
     signIn: async () => {
       await signInCliSupabase({ openBrowser: true });
-      return getCliAuthProvider().canAccessRemoteAgentCatalog();
+      return SupabaseClient.canAccessRemoteAgentCatalog();
     },
   });
 
@@ -370,7 +367,7 @@ export async function initCliPlatform(
   let authed = false;
   if (!forcePersonalApiKeys) {
     try {
-      authed = await getCliAuthProvider().isAuthenticated();
+      authed = await SupabaseClient.isAuthenticated();
     } catch (error) {
       if (context.bestEffortIncludedModelAccess !== true) throw error;
       logAt(
