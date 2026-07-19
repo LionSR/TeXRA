@@ -33,13 +33,10 @@ interface DesktopProgressIpcBridge {
   completeWebviewReady(): Promise<void>;
 }
 
-type DesktopProgressSource =
-  | { kind: 'eager'; progress: DesktopProgressIpcBridge }
-  | {
-      kind: 'lazy';
-      get(): DesktopProgressIpcBridge | undefined;
-      ensure(): Promise<DesktopProgressIpcBridge>;
-    };
+interface DesktopProgressSource {
+  get(): DesktopProgressIpcBridge | undefined;
+  ensure(): Promise<DesktopProgressIpcBridge>;
+}
 
 export interface DesktopProgressIpcOptions {
   source: DesktopProgressSource;
@@ -79,10 +76,6 @@ export function createDesktopProgressIpc(
       ));
 
   function withProgress(run: (progress: DesktopProgressIpcBridge) => void) {
-    if (options.source.kind === 'eager') {
-      run(options.source.progress);
-      return;
-    }
     const progress = options.source.get();
     if (progress) {
       run(progress);
