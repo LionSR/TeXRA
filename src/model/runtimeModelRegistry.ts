@@ -192,11 +192,6 @@ export function availableRuntimeModelIds(): readonly string[] {
     .map(([id]) => id);
 }
 
-/** All compatible editor-supplied models, including models awaiting consent. */
-export function runtimeModelIds(): readonly string[] {
-  return [...runtimeModels.keys()];
-}
-
 /** Access state reported by the editor for a discovered runtime model. */
 export function runtimeModelAccess(
   model: string,
