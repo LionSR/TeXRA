@@ -1096,17 +1096,16 @@ const SCENARIOS = [
     unexpect: ['Ctrl-C stop'],
   },
   {
-    // The liveness row shows for the whole active run (not just hidden
-    // reasoning) with a ticking elapsed time. The run starts 42s in the past,
-    // but frame settlement may advance the displayed second.
-    name: 'run-liveness-row',
+    // The status bar is the single owner of active-run liveness. The harness
+    // starts 42s in the past; frame settlement may advance the displayed
+    // second.
+    name: 'single-run-liveness',
     env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
     frame: 'viewport',
-    expect: ['✻ Working'],
     expectPatterns: [
-      RUNNING_STATUS_PATTERN,
-      /✻ Working\.{1,3}[ \t]+(?:4[2-9]s|5\ds|[1-9]\d*(?:m|h|d)(?: [1-9]\d*(?:s|m|h))?)/,
+      /◆ [-|\/\\] running (?:4[2-9]s|5\ds|[1-9]\d*(?:m|h|d)(?: [1-9]\d*(?:s|m|h))?)/,
     ],
+    unexpect: ['✻ Working', '✻ Thinking'],
   },
   {
     name: 'tools-form',
