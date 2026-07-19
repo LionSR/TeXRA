@@ -375,9 +375,4 @@ export class SupabaseClient {
   static async canAccessRemoteAgentCatalog(): Promise<boolean> {
     return (await this.getAccessToken()) !== null;
   }
-
-  /** Get configuration for re-initialization. */
-  static getConfig(): { url: string; publicKey: string } | null {
-    return this.config;
-  }
 }

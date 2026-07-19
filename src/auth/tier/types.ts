@@ -31,8 +31,6 @@ export const UserAccessStatusSchema = z.object({
   accessExpiresAt: z.string().nullable(),
   /** Whether access is currently expired */
   isExpired: z.boolean(),
-  /** Days until expiration (negative if expired, null if no expiration) */
-  daysRemaining: z.number().nullable(),
 });
 export type UserAccessStatus = z.infer<typeof UserAccessStatusSchema>;
 
