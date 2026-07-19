@@ -19,14 +19,16 @@
  * - Active tokens per user are capped to bound the blast radius of a leak
  */
 
-import { Hono, type Context as HonoContext } from '@hono/hono';
+import { type Context as HonoContext, Hono } from '@hono/hono';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
 import { handleCors } from '../_shared/cors.ts';
-import { randomBase64Url } from '../_shared/crypto.ts';
-import { createEdgeClient } from '../_shared/edgeClients.ts';
 import { RELAY_CI_TOKEN_PREFIX, sha256Hex } from '../_shared/relayCiToken.ts';
-import { versionedJsonResponse } from '../_shared/responses.ts';
+import {
+  createEdgeClient,
+  randomBase64Url,
+  versionedJsonResponse,
+} from '../_shared/responses.ts';
 
 // =============================================================================
 // Constants
@@ -161,7 +163,9 @@ app.post('/mint', async (c) => {
       );
     }
 
-    const token = `${RELAY_CI_TOKEN_PREFIX}${randomBase64Url(TOKEN_RANDOM_BYTES)}`;
+    const token = `${RELAY_CI_TOKEN_PREFIX}${randomBase64Url(
+      TOKEN_RANDOM_BYTES,
+    )}`;
     const expiresAt = new Date(Date.now() + expiresInDays * MS_PER_DAY);
     const { data, error } = await supabase
       .from('relay_ci_tokens')
