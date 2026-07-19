@@ -1329,6 +1329,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
+      'running',
       'Press Ctrl-C again to exit',
       PERSONAL_API_MODE_LABEL,
     ]);
@@ -1405,6 +1406,94 @@ describe('CLI StatusBar display model', () => {
     );
   });
 
+  it('keeps compact run liveness visible beside transient notices', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_PHASE.RUNNING,
+        runningFrame: '/',
+        elapsedMs: 45_000,
+        transientNotice: {
+          kind: 'message',
+          text: 'Unknown command: /wat',
+          expiresAt: 1,
+        },
+        width: 20,
+      }),
+    );
+
+    expect(display.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'run 45s',
+      'Unknown…',
+    ]);
+  });
+
+  it('keeps thinking status visible during transient notices', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_PHASE.RUNNING,
+        runningFrame: '/',
+        elapsedMs: 45_000,
+        thinkingActive: true,
+        transientNotice: {
+          kind: 'message',
+          text: 'Unknown command: /wat',
+          expiresAt: 1,
+        },
+      }),
+    );
+
+    expect(display.left.map(statusBarSegmentText)).toEqual(
+      expect.arrayContaining(['/ running 45s', 'thinking...']),
+    );
+  });
+
+  it('keeps queued-input discard warnings ahead of status details', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_PHASE.RUNNING,
+        runningFrame: '/',
+        elapsedMs: 45_000,
+        transientNotice: {
+          kind: 'exit',
+          text: 'Press Ctrl-C again to exit',
+          expiresAt: 1,
+        },
+        queuedFollowUpMessages: ['Continue with the proof.'],
+        width: 80,
+      }),
+    );
+
+    expect(display.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'run 45s',
+      'Press Ctrl-C again to exit',
+      '1 queued follow-up will be discarded',
+    ]);
+  });
+
+  it('bounds queued-input discard warnings in very narrow footers', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_PHASE.RUNNING,
+        runningFrame: '/',
+        elapsedMs: 45_000,
+        transientNotice: {
+          kind: 'exit',
+          text: 'Press Ctrl-C again to exit',
+          expiresAt: 1,
+        },
+        queuedFollowUpMessages: ['Continue with the proof.'],
+        width: 30,
+      }),
+    );
+
+    expect(display.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      '1 queued follow-up will b…',
+    ]);
+  });
+
   it('compacts token usage to a percentage before dropping it on narrow widths', () => {
     const input = statusInput({
       status: STREAM_PHASE.RUNNING,
@@ -1443,7 +1532,8 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
-      'Press Ctrl-C again to ex…',
+      'run',
+      'Press Ctrl-C again t…',
     ]);
     expect(display.bindings).toBe(
       'Resume this session with: texra resume abc123',

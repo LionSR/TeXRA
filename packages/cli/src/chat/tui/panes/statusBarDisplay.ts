@@ -39,7 +39,6 @@ import { KEY_HINT_SEPARATOR, keyHintText } from '../ui/KeyHints';
 import { STATUS_BAR_HORIZONTAL_PADDING } from '../ui/theme';
 import { formatResumeCommand } from '../state/resumeHint';
 import {
-  thinkingIndicatorVisible,
   type BypassState,
   type StreamSlice,
   type TransientNotice,
@@ -306,32 +305,99 @@ function statusBarInnerWidth(width: number | undefined): number | undefined {
 function fitTransientNoticeStatusBarLeftSegments(
   segments: readonly StatusBarSegment[],
   noticeIndex: number,
+  livenessIndex: number | undefined,
+  discardWarningIndex: number | undefined,
   width: number | undefined,
 ): readonly StatusBarSegment[] {
   const innerWidth = statusBarInnerWidth(width);
   if (innerWidth === undefined) return segments;
 
   const fitted = [...segments];
-  while (
-    fitted.length > noticeIndex + 1 &&
+  const notice = fitted[noticeIndex];
+  let fittedNotice = notice;
+  let liveness =
+    livenessIndex === undefined ? undefined : fitted[livenessIndex];
+  const discardWarning =
+    discardWarningIndex === undefined ? undefined : fitted[discardWarningIndex];
+
+  // Compact liveness before removing content. In particular, the queued-input
+  // discard warning is safety-critical and must not be displaced by the wider
+  // animated form of the running marker.
+  if (liveness?.compactText && statusBarSegmentsWidth(fitted) > innerWidth) {
+    const index = fitted.indexOf(liveness);
+    liveness = { ...liveness, text: liveness.compactText };
+    fitted[index] = liveness;
+  }
+
+  while (statusBarSegmentsWidth(fitted) > innerWidth) {
+    const removableIndex = fitted.findLastIndex(
+      (segment, index) => index > noticeIndex && segment !== discardWarning,
+    );
+    if (removableIndex < 0) break;
+    fitted.splice(removableIndex, 1);
+  }
+
+  if (statusBarSegmentsWidth(fitted) > innerWidth) {
+    for (let index = noticeIndex - 1; index > 0; index -= 1) {
+      if (fitted[index] !== liveness) fitted.splice(index, 1);
+    }
+  }
+
+  const fitNotice = (): void => {
+    const fittedNoticeIndex = fittedNotice ? fitted.indexOf(fittedNotice) : -1;
+    if (fittedNoticeIndex < 0 || statusBarSegmentsWidth(fitted) <= innerWidth) {
+      return;
+    }
+    const fixedWidth = fitted.reduce(
+      (total, segment, index) =>
+        index === fittedNoticeIndex
+          ? total
+          : total + statusBarSegmentWidth(segment),
+      fitted.length - 1,
+    );
+    fittedNotice = {
+      ...notice,
+      text: truncateSummaryToWidth(
+        notice.text,
+        Math.max(0, innerWidth - fixedWidth),
+      ),
+    };
+    fitted[fittedNoticeIndex] = fittedNotice;
+  };
+
+  fitNotice();
+
+  // At widths where the safety warning and liveness cannot coexist, the
+  // destructive-action warning wins. Refit the notice into the released room.
+  if (
+    discardWarning &&
+    liveness &&
     statusBarSegmentsWidth(fitted) > innerWidth
   ) {
-    fitted.pop();
+    fitted.splice(fitted.indexOf(liveness), 1);
+    liveness = undefined;
+    fitNotice();
   }
 
-  if (noticeIndex > 1 && statusBarSegmentsWidth(fitted) > innerWidth) {
-    fitted.splice(1, noticeIndex - 1);
-  }
-
-  const icon = fitted[0];
-  const prompt = fitted[1];
-  if (icon && prompt && statusBarSegmentsWidth(fitted) > innerWidth) {
-    const iconAndGapWidth = statusBarSegmentWidth(icon) + 1;
-    fitted[1] = {
-      ...prompt,
+  // Extremely narrow terminals may not fit even the full discard warning.
+  // Drop the lower-priority confirmation text and truncate the warning so the
+  // status row never exceeds its layout budget.
+  if (discardWarning && statusBarSegmentsWidth(fitted) > innerWidth) {
+    const fittedNoticeIndex = fittedNotice ? fitted.indexOf(fittedNotice) : -1;
+    if (fittedNoticeIndex >= 0) fitted.splice(fittedNoticeIndex, 1);
+    const fittedWarningIndex = fitted.indexOf(discardWarning);
+    const fixedWidth = fitted.reduce(
+      (total, segment, index) =>
+        index === fittedWarningIndex
+          ? total
+          : total + statusBarSegmentWidth(segment),
+      fitted.length - 1,
+    );
+    fitted[fittedWarningIndex] = {
+      ...discardWarning,
       text: truncateSummaryToWidth(
-        prompt.text,
-        Math.max(0, innerWidth - iconAndGapWidth),
+        discardWarning.text,
+        Math.max(0, innerWidth - fixedWidth),
       ),
     };
   }
@@ -783,29 +849,36 @@ export function buildStatusBarDisplay(
     });
   }
 
-  let transientNoticeIndex: number | undefined;
+  const statusLabel = formatCliStatusLabel(
+    input.status,
+    input.substate,
+    input.isChildStream,
+  );
+  const spinPrefix =
+    isActivePhase(input.status) && input.runningFrame
+      ? `${input.runningFrame} `
+      : '';
+
+  // A notice must not hide the only indication that an active run is still
+  // alive. Keep that liveness compact so the notice remains the focal text.
+  let transientLivenessIndex: number | undefined;
   if (input.transientNotice) {
-    transientNoticeIndex = left.length;
-    left.push({ text: input.transientNotice.text, color: COLOR_WARNING });
-    const queuedCount = input.queuedFollowUpMessages.length;
-    if (input.transientNotice.kind === 'exit' && queuedCount > 0) {
-      // Exiting drops queued follow-ups silently — warn before the user
-      // confirms with the second Ctrl-C.
+    if (isActivePhase(input.status)) {
+      const elapsed =
+        input.elapsedMs === undefined
+          ? ''
+          : ` ${formatCompactDuration(input.elapsedMs)}`;
+      transientLivenessIndex = left.length;
       left.push({
-        text: `${formatResultCount(queuedCount, 'queued follow-up')} will be discarded`,
-        color: COLOR_ERROR,
+        text: `${spinPrefix}${statusLabel}${elapsed}`,
+        compactText:
+          input.elapsedMs === undefined
+            ? 'run'
+            : `run ${formatCompactDuration(input.elapsedMs)}`,
+        color: 'dim',
       });
     }
   } else {
-    const statusLabel = formatCliStatusLabel(
-      input.status,
-      input.substate,
-      input.isChildStream,
-    );
-    const spinPrefix =
-      isActivePhase(input.status) && input.runningFrame
-        ? `${input.runningFrame} `
-        : '';
     left.push({
       text: `${spinPrefix}${statusLabel}`,
       color: 'dim',
@@ -817,16 +890,28 @@ export function buildStatusBarDisplay(
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.elapsed,
       });
     }
-    if (
-      thinkingIndicatorVisible({
-        status: input.status,
-        thinkingActive: input.thinkingActive === true,
-      })
-    ) {
+  }
+  if (input.thinkingActive === true && isActivePhase(input.status)) {
+    left.push({
+      text: 'thinking...',
+      color: COLOR_WARNING,
+      compactPriority: STATUS_BAR_COMPACT_PRIORITY.thinking,
+    });
+  }
+
+  let transientNoticeIndex: number | undefined;
+  let discardWarningIndex: number | undefined;
+  if (input.transientNotice) {
+    transientNoticeIndex = left.length;
+    left.push({ text: input.transientNotice.text, color: COLOR_WARNING });
+    const queuedCount = input.queuedFollowUpMessages.length;
+    if (input.transientNotice.kind === 'exit' && queuedCount > 0) {
+      // Exiting drops queued follow-ups silently — warn before the user
+      // confirms with the second Ctrl-C.
+      discardWarningIndex = left.length;
       left.push({
-        text: 'thinking...',
-        color: COLOR_WARNING,
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.thinking,
+        text: `${formatResultCount(queuedCount, 'queued follow-up')} will be discarded`,
+        color: COLOR_ERROR,
       });
     }
   }
@@ -880,6 +965,8 @@ export function buildStatusBarDisplay(
       ? fitTransientNoticeStatusBarLeftSegments(
           left,
           transientNoticeIndex,
+          transientLivenessIndex,
+          discardWarningIndex,
           input.width,
         )
       : fitStatusBarLeftSegments(left, input.width);
