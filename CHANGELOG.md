@@ -129,6 +129,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Generated-file history no longer invents empty files** — inaccessible run
+  artifacts now surface a history error instead of appearing as zero-byte
+  files, while files removed during the scan are omitted normally.
 - **ChatGPT limits no longer switch credentials silently** — when subscription
   usage is exhausted, the CLI shows the limit and reset warning and waits for
   confirmation before retrying with a personal OpenAI API key.
