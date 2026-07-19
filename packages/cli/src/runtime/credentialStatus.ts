@@ -6,7 +6,7 @@
 // provider key does not suppress included-relay sign-in setup, and vice versa.
 
 import { platform } from '@platform/platform';
-import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
+import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { hasAnyUsableProviderApiKey } from '@model/setupCredentialAccess';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import { AgentCategory } from '@shared/schemas/agent';

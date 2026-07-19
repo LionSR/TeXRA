@@ -1,7 +1,7 @@
 // Local imports
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { API_PROVIDERS, lookupApiKey } from '@model/apiProviders';
-import { isCodexSubscriptionActive } from '@model/codexSubscriptionActive';
+import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import { AgentCategory } from '@shared/schemas/agent';
 import { isNonEmptyString } from '@utils/core';
