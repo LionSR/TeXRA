@@ -3,12 +3,14 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-import { EventEmitter } from 'node:events';
-import { createRequire } from 'node:module';
-import { setTimeout as sleep } from 'node:timers/promises';
-
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
+import {
+  FakeStdin,
+  FakeStdout,
+  loadInk,
+} from '@test/support/inkTestHarness.mts';
 import {
   findSlashCommand,
   listSlashCommands,
@@ -53,49 +55,6 @@ const INCLUDED_CHAT_SESSION: SessionMeta = {
   transcriptMode: 'persistent',
   version: 'test',
 };
-
-const cliRequire = createRequire(
-  new URL('../../../packages/cli/package.json', import.meta.url),
-);
-
-class FakeStdout extends EventEmitter {
-  readonly isTTY = true;
-  readonly columns = 80;
-  readonly rows = 24;
-  output = '';
-
-  write(chunk: string): boolean {
-    this.output += chunk;
-    return true;
-  }
-
-  getColorDepth(): number {
-    return 24;
-  }
-}
-
-class FakeStdin extends EventEmitter {
-  readonly isTTY = true;
-
-  read(): null {
-    return null;
-  }
-
-  ref(): void {}
-  unref(): void {}
-  pause(): void {}
-  resume(): void {}
-  setEncoding(): void {}
-  setRawMode(): void {}
-}
-
-async function waitFor(predicate: () => boolean): Promise<void> {
-  const deadline = Date.now() + 2000;
-  while (!predicate()) {
-    if (Date.now() >= deadline) throw new Error('Timed out waiting for state');
-    await sleep(10);
-  }
-}
 
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
@@ -642,7 +601,7 @@ describe('slashRegistry', () => {
     await waitFor(() => formProgress.get()?.status === 'succeeded');
     expect(formProgress.get()?.archiveCopyable).toBeTypeOf('function');
 
-    const ink = (await import(cliRequire.resolve('ink'))) as any;
+    const { ink } = await loadInk();
     const stdout = new FakeStdout();
     const instance = ink.render(
       activeForm.get()?.render(() => {}, 20),

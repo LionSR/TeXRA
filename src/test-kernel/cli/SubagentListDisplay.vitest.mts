@@ -1,7 +1,6 @@
-import { createRequire } from 'node:module';
-
 import { describe, expect, it } from 'vitest';
 
+import { loadInk } from '@test/support/inkTestHarness.mts';
 import {
   CHILD_STATUS_MARKER,
   childRowMetadataText,
@@ -21,10 +20,6 @@ import {
 } from '@cli/chat/tui/ui/Select';
 import type { StreamView } from '@cli/chat/tui/state/streamViews';
 import { AgentCategory, STREAM_PHASE, type StreamTabId } from '@shared/schemas';
-
-const cliRequire = createRequire(
-  new URL('../../../packages/cli/package.json', import.meta.url),
-);
 
 function session(id: string, active = false): StreamView {
   return {
@@ -236,8 +231,7 @@ describe('CLI child list display model', () => {
   });
 
   it('surfaces per-agent model, tool calls, and tokens for a focused run', async () => {
-    const ink = (await import(cliRequire.resolve('ink'))) as any;
-    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const { ink, React } = await loadInk();
     const run = 'run' as StreamTabId;
     const agent = 'agent-1' as StreamTabId;
     const output: string = ink.renderToString(

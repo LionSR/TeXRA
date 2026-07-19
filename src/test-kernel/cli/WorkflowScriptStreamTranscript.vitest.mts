@@ -2,14 +2,13 @@
 // per-agent log lines render through the focused-child viewport, while the
 // workflow-specific header identifies the kind of child execution.
 
-import { createRequire } from 'node:module';
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import '@test/support/defaultSessionTestSetup';
 import { clearAllStreamStatusesForTest } from '@test/helpers/streamStatusTestUtils';
 
 import { createRunTrace } from '@transcript';
+import { loadInk } from '@test/support/inkTestHarness.mts';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   StaticConversationTranscript,
@@ -29,10 +28,6 @@ import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegation
 // full log output surfaces when focused.
 const STREAM_ID = 'workflow-script#exec-1' as StreamTabId;
 const PARENT_STREAM_ID = 'parent' as StreamTabId;
-const cliRequire = createRequire(
-  new URL('../../../packages/cli/package.json', import.meta.url),
-);
-
 const SESSION_META = {
   agent: 'research',
   category: 'workflow',
@@ -47,8 +42,7 @@ const SESSION_META = {
 } as const;
 
 async function renderStaticTranscript(): Promise<string> {
-  const ink = (await import(cliRequire.resolve('ink'))) as any;
-  const React = ((await import(cliRequire.resolve('react'))) as any).default;
+  const { ink, React } = await loadInk();
   return ink.renderToString(
     React.createElement(StaticConversationTranscript, {
       ownerKey: 'root',
