@@ -65,15 +65,19 @@ async function postJson(
   body: unknown,
   networkErrorMessage: string,
   networkErrorKind: CodexAuthError['kind'],
+  signal?: AbortSignal,
 ): Promise<Response> {
   try {
     return await fetch(url, {
       method: 'POST',
       headers: JSON_HEADERS,
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)])
+        : AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (cause) {
+    signal?.throwIfAborted();
     throw new CodexAuthError(
       `${networkErrorMessage}: ${toErrorMessage(cause)}`,
       networkErrorKind,
@@ -155,12 +159,15 @@ export async function refreshTokens(
 }
 
 /** Begin the device-code flow: request a user code to display. */
-export async function requestDeviceUserCode(): Promise<CodexDeviceUserCode> {
+export async function requestDeviceUserCode(
+  signal?: AbortSignal,
+): Promise<CodexDeviceUserCode> {
   const response = await postJson(
     CODEX_DEVICE_USERCODE_URL,
     { client_id: CODEX_CLIENT_ID },
     'Network error requesting device code',
     'transient',
+    signal,
   );
   if (response.status === 404) {
     throw new CodexAuthError(
@@ -187,16 +194,20 @@ export function deviceUserCode(resp: CodexDeviceUserCode): string | undefined {
  * code + verifier on success, or throws a CodexAuthError('pending') while the
  * user has not yet approved (403/404).
  */
-export async function pollDeviceToken(params: {
-  deviceAuthId: string;
-  userCode: string;
-}): Promise<CodexDeviceToken> {
+export async function pollDeviceToken(
+  params: {
+    deviceAuthId: string;
+    userCode: string;
+  },
+  signal?: AbortSignal,
+): Promise<CodexDeviceToken> {
   // A network blip mid-poll is reported as 'pending' so the loop keeps trying.
   const response = await postJson(
     CODEX_DEVICE_TOKEN_URL,
     { device_auth_id: params.deviceAuthId, user_code: params.userCode },
     'Network error polling device authorization',
     'pending',
+    signal,
   );
   if (response.status === 403 || response.status === 404) {
     throw new CodexAuthError(
