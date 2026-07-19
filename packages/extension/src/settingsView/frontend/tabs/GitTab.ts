@@ -31,6 +31,7 @@ import {
   DEFAULT_GIT_AUTHOR_NAME,
   DEFAULT_GIT_AUTHOR_EMAIL,
 } from '@shared/schemas/stateSettings';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
@@ -197,8 +198,9 @@ export class GitTab extends LitElement {
 
   private handleMarkCommitsToggle(event: Event): void {
     const target = event.target as WaSwitch | null;
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_GIT_MARK_COMMITS, {
-      enabled: Boolean(target?.checked),
+    postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
+      key: WorkspaceStateKey.GIT_MARK_COMMITS,
+      value: Boolean(target?.checked),
     });
   }
 
@@ -206,7 +208,10 @@ export class GitTab extends LitElement {
     const target = event.target as WaInput | null;
     const name = target?.value?.trim();
     if (name) {
-      postMessage(SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_NAME, { name });
+      postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
+        key: WorkspaceStateKey.GIT_AUTHOR_NAME,
+        value: name,
+      });
     }
   }
 
@@ -214,7 +219,10 @@ export class GitTab extends LitElement {
     const target = event.target as WaInput | null;
     const email = target?.value?.trim();
     if (email) {
-      postMessage(SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_EMAIL, { email });
+      postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
+        key: WorkspaceStateKey.GIT_AUTHOR_EMAIL,
+        value: email,
+      });
     }
   }
 
