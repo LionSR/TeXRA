@@ -146,9 +146,10 @@ export const TOOL_ICON_MAP: Record<string, string> = {
   // Search/find
   glob: 'search',
   grep: 'search',
-  // `ls` is no longer a registered tool, but persisted progress entries from
-  // past runs still reference it — keep the icon so historical runs render
-  // with the right glyph instead of the generic fallback.
+  // These tools are no longer registered, but persisted progress entries from
+  // past runs still reference them — keep their icons so historical runs
+  // render with the right glyphs instead of the generic fallback.
+  apply_path: 'diff',
   ls: 'folder-opened',
 
   // Shell
