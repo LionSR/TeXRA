@@ -20,57 +20,105 @@ type JsonValue = z.infer<typeof JsonValueSchema>;
 /** Name of the synthetic tool the model calls to submit its final result. */
 const SUBMIT_OUTPUT_TOOL_NAME = 'submit_output';
 
-/**
- * JSON Schema authored inside a workflow sandbox is untrusted. Zod compiles
- * these keywords to host RegExp instances, where catastrophic backtracking
- * would escape the sandbox's execution limits.
- */
-function assertNoHostRegex(schema: unknown): void {
-  if (schema === null || typeof schema !== 'object') return;
-  if (Array.isArray(schema)) {
-    for (const child of schema) assertNoHostRegex(child);
-    return;
-  }
-  const record = schema as Record<string, unknown>;
-  if ('pattern' in record || 'patternProperties' in record) {
-    throw new Error(
-      'Structured output JSON Schema cannot use pattern or patternProperties.',
-    );
-  }
+// A sandbox schema crosses into host Zod compilation via z.fromJSONSchema, so
+// an unbounded tree is a host DoS. These caps keep compilation cheap; 12 levels
+// / 1000 nodes comfortably cover real structured-output shapes while refusing
+// pathological input.
+const MAX_SANDBOX_SCHEMA_DEPTH = 12;
+const MAX_SANDBOX_SCHEMA_NODES = 1000;
 
-  for (const key of [
-    'additionalItems',
-    'additionalProperties',
-    'contains',
-    'else',
-    'if',
-    'items',
-    'not',
-    'propertyNames',
-    'then',
-    'unevaluatedItems',
-    'unevaluatedProperties',
-  ]) {
-    assertNoHostRegex(record[key]);
-  }
-  for (const key of ['allOf', 'anyOf', 'oneOf', 'prefixItems']) {
-    const branches = record[key];
-    if (Array.isArray(branches)) {
-      for (const branch of branches) assertNoHostRegex(branch);
+// Property names that could reach Object.prototype when z.fromJSONSchema builds
+// the schema object.
+const FORBIDDEN_SCHEMA_PROPERTY_KEYS = [
+  '__proto__',
+  'constructor',
+  'prototype',
+];
+
+/**
+ * Guard a JSON Schema authored inside a workflow sandbox (untrusted) before it
+ * crosses into host Zod compilation via z.fromJSONSchema. Walking the schema it
+ * rejects: `pattern`/`patternProperties`/`format` (Zod compiles these to host
+ * RegExps, a catastrophic-backtracking ReDoS vector); `$ref`/`$dynamicRef`
+ * (external/recursive resolution surprises; inline the definition instead);
+ * prototype-polluting property keys; and trees past the node/depth caps.
+ */
+function assertSafeSandboxSchema(schema: unknown): void {
+  let nodeCount = 0;
+  const walk = (node: unknown, depth: number): void => {
+    if (node === null || typeof node !== 'object') return;
+    if (depth > MAX_SANDBOX_SCHEMA_DEPTH) {
+      throw new Error(
+        `Structured output JSON Schema is nested deeper than the ${MAX_SANDBOX_SCHEMA_DEPTH}-level limit.`,
+      );
     }
-  }
-  for (const key of [
-    '$defs',
-    'definitions',
-    'dependentSchemas',
-    'dependencies',
-    'properties',
-  ]) {
-    const schemas = record[key];
-    if (schemas !== null && typeof schemas === 'object') {
-      for (const child of Object.values(schemas)) assertNoHostRegex(child);
+    nodeCount += 1;
+    if (nodeCount > MAX_SANDBOX_SCHEMA_NODES) {
+      throw new Error(
+        `Structured output JSON Schema exceeds the ${MAX_SANDBOX_SCHEMA_NODES}-node limit.`,
+      );
     }
-  }
+    if (Array.isArray(node)) {
+      for (const child of node) walk(child, depth + 1);
+      return;
+    }
+    const record = node as Record<string, unknown>;
+    if ('pattern' in record || 'patternProperties' in record) {
+      throw new Error(
+        'Structured output JSON Schema cannot use pattern or patternProperties.',
+      );
+    }
+    if ('format' in record) {
+      throw new Error('Structured output JSON Schema cannot use format.');
+    }
+    if ('$ref' in record || '$dynamicRef' in record) {
+      throw new Error(
+        'Structured output JSON Schema cannot use $ref; inline the definition instead.',
+      );
+    }
+
+    for (const key of [
+      'additionalItems',
+      'additionalProperties',
+      'contains',
+      'else',
+      'if',
+      'items',
+      'not',
+      'propertyNames',
+      'then',
+      'unevaluatedItems',
+      'unevaluatedProperties',
+    ]) {
+      walk(record[key], depth + 1);
+    }
+    for (const key of ['allOf', 'anyOf', 'oneOf', 'prefixItems']) {
+      const branches = record[key];
+      if (Array.isArray(branches)) {
+        for (const branch of branches) walk(branch, depth + 1);
+      }
+    }
+    for (const key of [
+      '$defs',
+      'definitions',
+      'dependentSchemas',
+      'dependencies',
+      'properties',
+    ]) {
+      const schemas = record[key];
+      if (schemas !== null && typeof schemas === 'object') {
+        for (const name of Object.keys(schemas)) {
+          if (FORBIDDEN_SCHEMA_PROPERTY_KEYS.includes(name)) {
+            throw new Error(
+              `Structured output JSON Schema cannot declare a "${name}" property.`,
+            );
+          }
+        }
+        for (const child of Object.values(schemas)) walk(child, depth + 1);
+      }
+    }
+  };
+  walk(schema, 0);
 }
 
 /**
@@ -82,7 +130,7 @@ export function normalizeStructuredOutputSchema(
   input: z.ZodType | Record<string, unknown>,
 ): StructuredOutputSchema {
   const fromZod = input instanceof z.ZodType;
-  if (!fromZod) assertNoHostRegex(input);
+  if (!fromZod) assertSafeSandboxSchema(input);
   const zodSchema = fromZod ? input : (z.fromJSONSchema(input) as z.ZodType);
   const jsonSchema = convertToolSchema({
     name: SUBMIT_OUTPUT_TOOL_NAME,

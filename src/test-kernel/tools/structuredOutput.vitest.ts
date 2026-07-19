@@ -97,6 +97,45 @@ describe('normalizeStructuredOutputSchema', () => {
       }),
     ).not.toThrow();
   });
+
+  it('rejects format, $ref, and prototype-polluting property keys', () => {
+    expect(() =>
+      normalizeStructuredOutputSchema({
+        type: 'object',
+        properties: { at: { type: 'string', format: 'email' } },
+      }),
+    ).toThrow(/cannot use format/);
+    expect(() =>
+      normalizeStructuredOutputSchema({
+        type: 'object',
+        properties: { child: { $ref: '#/$defs/x' } },
+      }),
+    ).toThrow(/cannot use \$ref/);
+    // Real sandbox schemas arrive via JSON.parse, which creates an own
+    // "__proto__" key (an object literal would set the prototype instead).
+    const polluting = JSON.parse(
+      '{"type":"object","properties":{"__proto__":{"type":"string"}}}',
+    ) as Record<string, unknown>;
+    expect(() => normalizeStructuredOutputSchema(polluting)).toThrow(
+      /cannot declare a "__proto__" property/,
+    );
+  });
+
+  it('rejects sandbox schemas past the depth and node caps', () => {
+    let deep: Record<string, unknown> = { type: 'string' };
+    for (let i = 0; i < 15; i += 1) {
+      deep = { type: 'object', properties: { next: deep } };
+    }
+    expect(() => normalizeStructuredOutputSchema(deep)).toThrow(
+      /nested deeper than/,
+    );
+
+    const wide: Record<string, unknown> = {};
+    for (let i = 0; i < 1100; i += 1) wide[`f${i}`] = { type: 'string' };
+    expect(() =>
+      normalizeStructuredOutputSchema({ type: 'object', properties: wide }),
+    ).toThrow(/exceeds the .* limit/);
+  });
 });
 
 describe('buildTerminalTool', () => {
