@@ -94,13 +94,19 @@ export async function loginWithLoopback(
   let callbackTimer: ReturnType<typeof setTimeout> | undefined;
   let abortListener: (() => void) | undefined;
 
-  const codePromise = new Promise<string>((resolve, reject) => {
+  const cancellationPromise = new Promise<never>((_resolve, reject) => {
     signal?.throwIfAborted();
+    abortListener = () => reject(signal?.reason);
+    signal?.addEventListener('abort', abortListener, { once: true });
+  });
+  void cancellationPromise.catch(() => {
+    // The operation raced against cancellation may still be resolving.
+  });
+
+  const codePromise = new Promise<string>((resolve, reject) => {
     callbackTimer = setTimeout(() => {
       reject(new Error('Timed out waiting for the ChatGPT sign-in callback.'));
     }, CALLBACK_TIMEOUT_MS);
-    abortListener = () => reject(signal?.reason);
-    signal?.addEventListener('abort', abortListener, { once: true });
 
     const rejectCallback = (
       res: http.ServerResponse,
@@ -149,14 +155,14 @@ export async function loginWithLoopback(
       }
     });
   });
-  void codePromise.catch(() => {
-    // The browser launcher may still be resolving when cancellation rejects.
-  });
 
   try {
     log?.debug?.(`Opening ChatGPT sign-in on loopback port ${port}.`);
-    await openBrowser(authorize.url);
-    const code = await codePromise;
+    await Promise.race([
+      Promise.resolve(openBrowser(authorize.url)),
+      cancellationPromise,
+    ]);
+    const code = await Promise.race([codePromise, cancellationPromise]);
     return await coordinator.completeLoginWithCode({
       code,
       verifier: authorize.verifier,

@@ -52,9 +52,16 @@ export async function startLoopbackCallbackServer(
     resolve: resolveSession,
     reject: rejectSession,
   } = pDefer<SupabaseSession>();
+  let acceptingCallbacks = true;
 
   const server = createServer((request, response) => {
-    void handleCallbackRequest(request, response, authCoordinator, nonce)
+    void handleCallbackRequest(
+      request,
+      response,
+      authCoordinator,
+      nonce,
+      () => acceptingCallbacks,
+    )
       .then((session) => {
         if (session) resolveSession(session);
       })
@@ -97,7 +104,10 @@ export async function startLoopbackCallbackServer(
     waitForSession: (signal) => {
       if (!signal) return sessionPromise.finally(cleanup);
       signal.throwIfAborted();
-      const onAbort = (): void => rejectSession(signal.reason);
+      const onAbort = (): void => {
+        acceptingCallbacks = false;
+        rejectSession(signal.reason);
+      };
       signal.addEventListener('abort', onAbort, { once: true });
       return sessionPromise.finally(() => {
         signal.removeEventListener('abort', onAbort);
@@ -116,7 +126,13 @@ async function handleCallbackRequest(
   response: ServerResponse,
   authCoordinator: SupabaseSessionCoordinator,
   nonce: string,
+  isAcceptingCallbacks: () => boolean,
 ): Promise<SupabaseSession | undefined> {
+  if (!isAcceptingCallbacks()) {
+    throw new RecoverableCallbackRequestError(
+      'This authentication attempt was cancelled.',
+    );
+  }
   const url = new URL(request.url ?? '/', `http://${LOOPBACK_HOST}`);
   if (request.method === 'GET' && url.pathname === CALLBACK_PATH) {
     writeHtml(response, 200, callbackHtml(nonce));
@@ -133,12 +149,22 @@ async function handleCallbackRequest(
         'Authentication callback did not match this login attempt.',
       );
     }
+    if (!isAcceptingCallbacks()) {
+      throw new RecoverableCallbackRequestError(
+        'This authentication attempt was cancelled.',
+      );
+    }
     const result = await authCoordinator.createSessionFromCallback({
       path: CALLBACK_PATH,
       query: trimUrlMarker(body.query, '?'),
       fragment: trimUrlMarker(body.fragment, '#'),
     });
     if (!result.success) throw new Error(result.error);
+    if (!isAcceptingCallbacks()) {
+      throw new RecoverableCallbackRequestError(
+        'This authentication attempt was cancelled.',
+      );
+    }
 
     await authCoordinator.storeSession(result.session);
     writeHtml(response, 200, successHtml(result.session.account.label));
