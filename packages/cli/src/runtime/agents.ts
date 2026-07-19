@@ -6,10 +6,10 @@ import {
 } from '@agent/index';
 import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { CliUsageError } from './cliContext';
-import { getCliAuthProvider } from './supabaseAuth';
 
 export interface CliAgentListOptions {
   readonly includeHidden?: boolean;
@@ -135,7 +135,7 @@ export async function resolveCliAgent(
 
   if (
     name.includes(':') ||
-    !(await getCliAuthProvider().canAccessRemoteAgentCatalog())
+    !(await SupabaseClient.canAccessRemoteAgentCatalog())
   ) {
     return agent;
   }

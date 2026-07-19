@@ -5,11 +5,9 @@ import { describe, it } from 'vitest';
 // Standard library imports
 
 // Local imports - auth
-import { FREE_TIER, type UserTier } from '@auth/config';
 import type { AuthServiceLogger } from '@auth/serviceLogger';
 import {
   ServerSideKeyService,
-  type AuthProvider,
   type ServerSideKeyState,
 } from '@auth/serverKeys/ServerSideKeyService';
 import type { TierService } from '@auth/tier/TierService';
@@ -84,24 +82,11 @@ function createTierService(): FakeTierService {
   };
 }
 
-function createAuthProvider(): AuthProvider {
-  return {
-    isAuthenticated: async () => false,
-    getUserTier: async (): Promise<UserTier> => FREE_TIER,
-    getAccessToken: async () => null,
-  };
-}
-
 function createService(
   tierService: TierService,
   logger?: AuthServiceLogger,
 ): ServerSideKeyService {
-  return new ServerSideKeyService(
-    'https://example.test',
-    createAuthProvider(),
-    tierService,
-    logger,
-  );
+  return new ServerSideKeyService('https://example.test', tierService, logger);
 }
 
 describe('ServerSideKeyService', () => {

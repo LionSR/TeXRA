@@ -1,11 +1,11 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - auth
-import { FREE_TIER, ULTRA_TIER, type UserTier } from '@auth/config';
+import { ULTRA_TIER } from '@auth/config';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   ServerSideKeyService,
-  type AuthProvider,
   type ServerSideKeyState,
 } from '@auth/serverKeys/ServerSideKeyService';
 import type { TierService } from '@auth/tier/TierService';
@@ -94,20 +94,6 @@ function createTierService(
   };
 }
 
-function createAuthProvider(
-  options: {
-    authenticated?: boolean;
-    tier?: UserTier;
-    accessToken?: string | null;
-  } = {},
-): AuthProvider {
-  return {
-    isAuthenticated: async () => options.authenticated ?? false,
-    getUserTier: async (): Promise<UserTier> => options.tier ?? FREE_TIER,
-    getAccessToken: async () => options.accessToken ?? null,
-  };
-}
-
 function createQuotaExceededSetup(): {
   state: MemoryState;
   tier: FakeTierService;
@@ -118,13 +104,11 @@ function createQuotaExceededSetup(): {
     providers: ['openai'],
     quotaExceeded: true,
   });
+  vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
+  vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue(ULTRA_TIER);
+  vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
   const service = new ServerSideKeyService(
     'https://example.test',
-    createAuthProvider({
-      authenticated: true,
-      tier: ULTRA_TIER,
-      accessToken: 'token',
-    }),
     tier.service,
   );
 
@@ -134,6 +118,10 @@ function createQuotaExceededSetup(): {
 }
 
 describe('ServerSideKeyService quota fallback', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('does not repeat the quota auto-switch after manual re-enable', async () => {
     const { service } = createQuotaExceededSetup();
 

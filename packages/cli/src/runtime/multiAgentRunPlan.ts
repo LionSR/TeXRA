@@ -1,5 +1,6 @@
 import { getAgentsByCategory, loadAgents, refresh } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { SupabaseClient } from '@auth/SupabaseClient';
 
 import { missingMultiAgentPresetMessage } from './agents';
 import { CliUsageError } from './cliContext';
@@ -14,7 +15,6 @@ import {
   type CliMultiAgentPreset,
   type CliMultiAgentPresetRunPlan,
 } from './multiAgentPresets';
-import { getCliAuthProvider } from './supabaseAuth';
 
 interface MultiAgentRunPlanInit {
   readonly preset: string;
@@ -116,10 +116,7 @@ async function reloadRemoteAgentsForGaps<T>(
   hasGaps: (value: T) => boolean,
   replan: () => T,
 ): Promise<RemoteAgentPlanReloadResult<T>> {
-  if (
-    hasGaps(value) &&
-    (await getCliAuthProvider().canAccessRemoteAgentCatalog())
-  ) {
+  if (hasGaps(value) && (await SupabaseClient.canAccessRemoteAgentCatalog())) {
     await refresh({ includeRemote: true });
     return { value: replan(), remoteAgentLoadAttempted: true };
   }
