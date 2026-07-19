@@ -61,11 +61,6 @@ const replacementEngine = {
       : processed;
   },
 
-  /** Apply all configured regex-based replacement rules. */
-  applyRegex(text: string): string {
-    return applyReplacements(text, getAllReplacementsRegex()).trim();
-  },
-
   /**
    * Apply every replacement rule in the recommended order. Non-regex
    * replacements run before and after regex replacements to fix artifacts they

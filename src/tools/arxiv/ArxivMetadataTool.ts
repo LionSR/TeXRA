@@ -2,13 +2,13 @@
 import { z } from 'zod';
 
 // Local imports - latex
+import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 import { ArxivProcessor } from '@latex/arxivProcessor';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import {
   type ArxivPaperMetadata,
   createArxivClient,
   extractBasePaperMetadata,
-  normaliseArxivIdentifier,
 } from '@tools/latex/arxivShared';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
 import { rateLimitedRequest } from '@tools/citation/rateLimiter';
