@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   executeCliToolUseConfig: vi.fn(),
   withExpandedRunInputs: vi.fn(),
   initLocalCliPlatform: vi.fn(),
-  isAuthenticated: vi.fn(),
   resolveCliLaunchAgent: vi.fn(),
   selectCliRunModel: vi.fn(),
   writeErrorStderr: vi.fn(),
@@ -35,12 +34,6 @@ vi.mock('@agent/storage', () => ({
 
 vi.mock('@cli/runtime/initPlatform', () => ({
   initLocalCliPlatform: mocks.initLocalCliPlatform,
-}));
-
-vi.mock('@cli/runtime/supabaseAuth', () => ({
-  getCliAuthProvider: () => ({
-    isAuthenticated: mocks.isAuthenticated,
-  }),
 }));
 
 vi.mock('@cli/runtime/runModel', () => ({
