@@ -163,6 +163,11 @@ export async function loginWithLoopback(
       cancellationPromise,
     ]);
     const code = await Promise.race([codePromise, cancellationPromise]);
+    signal?.throwIfAborted();
+    if (abortListener) {
+      signal?.removeEventListener('abort', abortListener);
+      abortListener = undefined;
+    }
     return await coordinator.completeLoginWithCode({
       code,
       verifier: authorize.verifier,
