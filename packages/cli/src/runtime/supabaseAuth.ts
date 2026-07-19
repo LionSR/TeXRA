@@ -164,12 +164,9 @@ export async function signInCliSupabase(
         options.log,
         options.manualBrowserHint ?? 'texra login --no-browser',
       );
-      // A completed callback still waits for the launcher, while cancellation
-      // rejects sessionPromise and therefore preempts a stalled launcher.
-      await Promise.race([
-        browserLaunch,
-        sessionPromise.then(() => browserLaunch),
-      ]);
+      // A completed callback supersedes the launcher result, while callback
+      // failure or cancellation still preempts a stalled launcher.
+      await Promise.race([browserLaunch, sessionPromise.then(() => undefined)]);
     }
 
     const session = await sessionPromise;
