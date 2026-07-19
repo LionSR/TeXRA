@@ -29,11 +29,13 @@
  * - RPCs: usage_logs_upsert, subscription_usage_logs_upsert (service role only)
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { bearerToken } from '../_shared/auth.ts';
 import { handleCors } from '../_shared/cors.ts';
 import { resolveRelayCredential } from '../_shared/relayCiToken.ts';
-import { versionedJsonResponse } from '../_shared/responses.ts';
+import {
+  createEdgeClient,
+  versionedJsonResponse,
+} from '../_shared/responses.ts';
 import { UsageBatchSchema, type UsageLogEntry } from './usageValidation.ts';
 
 // =============================================================================
@@ -201,10 +203,7 @@ if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
 }
 
 // Service-role client for writes (env is fixed at cold start; no per-request state)
-const adminClient =
-  supabaseUrl && supabaseServiceKey
-    ? createClient(supabaseUrl, supabaseServiceKey)
-    : null;
+const adminClient = createEdgeClient(supabaseUrl, supabaseServiceKey);
 
 // =============================================================================
 // Request Handler
