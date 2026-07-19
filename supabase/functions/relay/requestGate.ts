@@ -30,7 +30,7 @@ export type RelayRequestSlot =
       decision: GateDecision;
     };
 
-export const RELAY_SLOT_REFRESH_INTERVAL_MS = 60_000;
+const RELAY_SLOT_REFRESH_INTERVAL_MS = 60_000;
 
 class RelayRequestSlotLostError extends Error {
   constructor() {

@@ -7,7 +7,7 @@ import {
   FREE_TIER,
   MAX_TIER,
   ULTRA_TIER,
-} from '../../../supabase/functions/relay/tierConstants';
+} from '../../../supabase/functions/relay/models';
 
 const TIER_CAPS = {
   [FREE_TIER]: 'medium',

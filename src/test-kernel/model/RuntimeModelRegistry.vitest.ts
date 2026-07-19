@@ -17,7 +17,7 @@ import {
   requestRuntimeModelAccess,
   resolveRuntimeModelConfig,
   runtimeModelAccess,
-  runtimeModelIds,
+  runtimeModelConfigEntries,
 } from '@model/runtimeModelRegistry';
 import type {
   LanguageModelInfo,
@@ -161,7 +161,6 @@ describe('runtime model registry', () => {
     await refreshRuntimeModelRegistry();
 
     expect(availableRuntimeModelIds()).toEqual([]);
-    expect(runtimeModelIds()).toEqual(['copilot:sonnet46']);
     expect(runtimeModelAccess('copilot:sonnet46')).toBe('unavailable');
     expect(getRuntimeModelConfig('copilot:sonnet46')).toBeDefined();
   });
@@ -370,6 +369,8 @@ describe('runtime model registry', () => {
     );
 
     await expect(discoveredRuntimeModelConfigEntries()).resolves.toEqual([]);
-    expect(runtimeModelIds()).toEqual([]);
+    expect(
+      runtimeModelConfigEntries().some(([id]) => id.startsWith('copilot:')),
+    ).toBe(false);
   });
 });
