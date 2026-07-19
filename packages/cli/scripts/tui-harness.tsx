@@ -155,6 +155,8 @@ const SHOW_BASH_APPROVAL = process.env.HARNESS_BASH_APPROVAL === '1';
 const SHOW_REPEATED_BASH_APPROVAL =
   process.env.HARNESS_REPEATED_BASH_APPROVAL === '1';
 const SHOW_RETRY_APPROVAL = process.env.HARNESS_RETRY_APPROVAL === '1';
+const RETRY_APPROVAL_CHATGPT =
+  process.env.HARNESS_RETRY_APPROVAL_CHATGPT === '1';
 const SHOW_EXTERNAL_INQUIRY = process.env.HARNESS_EXTERNAL_INQUIRY === '1';
 const SHOW_USER_QUESTION = process.env.HARNESS_USER_QUESTION === '1';
 const SHOW_PLAN_APPROVAL = process.env.HARNESS_PLAN_APPROVAL === '1';
@@ -887,6 +889,18 @@ function makeBashApprovalPayload(index = 1) {
 }
 
 function makeRetryApprovalPayload(): RetryPermission {
+  if (RETRY_APPROVAL_CHATGPT) {
+    return {
+      streamId: STREAM_ID,
+      operation: 'Tool-use call',
+      errorMessage: 'ChatGPT subscription usage limit reached. Resets in 2h.',
+      errorDetails: {
+        exhaustionReason: 'chatgpt-subscription',
+        isRelayError: false,
+        statusCode: 429,
+      },
+    };
+  }
   return {
     streamId: STREAM_ID,
     operation: 'Tool-use call',
