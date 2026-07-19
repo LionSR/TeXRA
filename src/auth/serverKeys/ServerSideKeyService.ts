@@ -191,7 +191,7 @@ export class ServerSideKeyService {
       return true;
     } catch (error) {
       // Denied by error (auth/network failure), not by policy — log so the two
-      // are distinguishable. The interface exposes only info/error levels.
+      // are distinguishable.
       this.logger.error?.(
         CHANNEL,
         `Access check failed, treating as denied: ${toErrorMessage(error)}`,
