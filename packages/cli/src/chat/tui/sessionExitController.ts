@@ -54,7 +54,7 @@ const EXIT_CONFIRMATION_TTL_MS = 800;
  * is a module-level import, so only these session-scoped bindings are threaded
  * through.
  */
-export interface SessionExitControllerContext {
+interface SessionExitControllerContext {
   /** The mounted Ink instance whose `unmount()` drives the exit. */
   readonly ink: InkInstance;
   /** Mutable run-state record shared with the rest of the session. */
@@ -90,7 +90,7 @@ export interface SessionExitControllerContext {
 }
 
 /** The exit-subsystem handles `runChat` wires into Ink props and its `finally`. */
-export interface SessionExitController {
+interface SessionExitController {
   /** SIGINT / Ctrl-C handler (double-tap-to-exit, or clean/force/preserve exit). */
   readonly handleSigint: () => void;
   /** SIGTSTP / Ctrl-Z handler (restore terminal, then SIGSTOP). */
