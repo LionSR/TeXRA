@@ -4,7 +4,7 @@ import { describe, it } from 'vitest';
 
 // Local imports - auth
 import { ServerSideKeyService } from '@auth/serverKeys/ServerSideKeyService';
-import type { TierService } from '@auth/tier/TierService';
+import type { TierService } from '@auth/serverKeys/TierService';
 import { appSignals } from '@eventBus/AppSignals';
 import type { StateStore } from '@platform/interfaces';
 

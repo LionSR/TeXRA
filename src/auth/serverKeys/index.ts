@@ -14,13 +14,10 @@
  */
 
 import { SUPABASE_CUSTOM_DOMAIN } from '../config';
-import { getTierService } from '../tier';
+import { TierService } from './TierService';
 import { ServerSideKeyService } from './ServerSideKeyService';
 import type { SupabaseSessionLog } from '../supabaseSessionTypes';
 import type { StateStore } from '@platform/interfaces';
-
-// Types
-export { SERVER_SIDE_PROVIDERS, type ServerSideProvider } from './types';
 
 // Service class
 export { ServerSideKeyService };
@@ -64,7 +61,7 @@ export function initializeServerSideKeyAccess(options: {
 }): void {
   _instance = new ServerSideKeyService(
     `https://${SUPABASE_CUSTOM_DOMAIN}`,
-    getTierService(options.logger),
+    new TierService(`https://${SUPABASE_CUSTOM_DOMAIN}`, options.logger),
     options.state ?? null,
     options.logger,
     options.notifyIncludedModelAccessChanged,
