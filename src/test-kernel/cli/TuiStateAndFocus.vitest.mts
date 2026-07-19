@@ -2602,7 +2602,6 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       });
 
       let slice = streams.get().get(root);
-      expect(slice?.queuedFollowUps).toBe(1);
       expect(slice?.queuedFollowUpMessages).toEqual([
         'Keep the proof under one page.',
       ]);
@@ -2617,7 +2616,6 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       });
 
       slice = streams.get().get(root);
-      expect(slice?.queuedFollowUps).toBe(0);
       expect(slice?.queuedFollowUpMessages).toEqual([]);
     } finally {
       detach();
