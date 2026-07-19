@@ -20,6 +20,9 @@ import {
   generateExportFilename,
   type ChatExportInput,
 } from '@agent/export/chatExportFormatter';
+
+export type { ChatExportInput };
+
 import { compileLatex2Pdf } from '@latex/texTools';
 import type { ExecutionId } from '@shared/schemas';
 import {
@@ -28,8 +31,6 @@ import {
   type AssembleTraceResult,
 } from '@transcript';
 import { StorageFS, pathToLocation } from '@utils/files';
-
-export type { ChatExportInput };
 
 // ============================================================
 // Result types
