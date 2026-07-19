@@ -1,75 +1,8 @@
 // @ts-check
 import * as esbuild from 'esbuild';
-import * as path from 'path';
-import * as fs from 'fs';
-
-// Shared path aliases from tsconfig.json (single source of truth)
-import { aliases } from '../../scripts/aliases.mjs';
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
-
-// Sort aliases by length (longest first) to avoid partial matches
-const sortedAliases = Object.entries(aliases).sort(
-  ([a], [b]) => b.length - a.length,
-);
-
-/**
- * Resolve a path with TypeScript extensions
- */
-function resolveWithExtensions(basePath) {
-  const extensions = ['.ts', '.tsx', '.js', '.jsx', ''];
-
-  // Try as-is first (for paths that already have extension)
-  if (fs.existsSync(basePath) && fs.statSync(basePath).isFile()) {
-    return basePath;
-  }
-
-  // Try with extensions
-  for (const ext of extensions) {
-    const withExt = basePath + ext;
-    if (fs.existsSync(withExt) && fs.statSync(withExt).isFile()) {
-      return withExt;
-    }
-  }
-
-  // Try as directory with index file
-  if (fs.existsSync(basePath) && fs.statSync(basePath).isDirectory()) {
-    for (const ext of extensions) {
-      const indexPath = path.join(basePath, 'index' + ext);
-      if (fs.existsSync(indexPath) && fs.statSync(indexPath).isFile()) {
-        return indexPath;
-      }
-    }
-  }
-
-  return null;
-}
-
-/**
- * Plugin to resolve path aliases with TypeScript support
- */
-const aliasPlugin = {
-  name: 'alias',
-  setup(build) {
-    build.onResolve({ filter: /^[@~]/ }, (args) => {
-      for (const [alias, target] of sortedAliases) {
-        if (args.path === alias || args.path.startsWith(alias + '/')) {
-          const resolved = args.path.replace(alias, target);
-          const finalPath = resolveWithExtensions(resolved);
-
-          if (finalPath) {
-            return { path: finalPath };
-          }
-
-          // Let esbuild handle unresolved paths (will show error)
-          return { path: resolved };
-        }
-      }
-      return null;
-    });
-  },
-};
 
 /**
  * Plugin to log build progress
@@ -110,6 +43,7 @@ const extensionConfig = {
   // sdkErrorUtils relies on SDK error class/prototype names after bundling.
   keepNames: production,
   treeShaking: true,
+  tsconfig: './tsconfig.json',
   // Let esbuild resolve .ts files
   resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
   external: [
@@ -119,7 +53,7 @@ const extensionConfig = {
     'utf-8-validate', // Optional native module
   ],
   loader: { '.tex': 'text', '.wasm': 'binary' },
-  plugins: [aliasPlugin, progressPlugin],
+  plugins: [progressPlugin],
   logLevel: 'warning',
   // Polyfill import.meta.url for ESM-only dependencies (e.g. @openai/codex-sdk)
   // bundled into CJS. Without this, esbuild replaces import.meta with {} and
