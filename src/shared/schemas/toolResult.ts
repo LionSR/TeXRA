@@ -125,7 +125,9 @@ export function formatZodIssuesForDiagnostics(
 
 /**
  * Schema for tool execution results.
- * Uses looseObject to allow additional properties for forward compatibility.
+ * Every field a tool wants surfaced to the model must be declared below —
+ * there is no catchall, so an undeclared field is silently stripped rather
+ * than reaching `formatToolResultAsText`.
  */
 const ToolResultSharedFields = {
   /** User instruction that was processed */
