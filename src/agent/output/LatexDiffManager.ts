@@ -237,6 +237,8 @@ export class LatexDiffManager {
               this.latexdiffService.runDiffBetweenRounds(
                 base,
                 revised,
+                currRound - 1,
+                currRound,
                 undefined,
                 {
                   cwd,
