@@ -1,9 +1,4 @@
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
-import { platform } from '@platform/platform';
-import {
-  LANGUAGE_MODEL_PORT_ERROR_CODE,
-  LanguageModelPortError,
-} from '@platform/languageModel';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
@@ -32,14 +27,19 @@ import {
   isOpenRouterRoutingUnsupported,
   shouldRouteModelThroughOpenRouter,
 } from '@model/openRouterRouting';
-import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
-import type { AgentCategory } from '@shared/schemas/agent';
+import {
+  LANGUAGE_MODEL_PORT_ERROR_CODE,
+  LanguageModelPortError,
+} from '@platform/languageModel';
+import { platform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { getConfig } from '@utils/config/configUtils';
+import type { AgentCategory } from '@shared/schemas/agent';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import {
   getPreferKimiCode,
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
+import { getConfig } from '@utils/config/configUtils';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 const CHANNEL = 'ModelFactory';

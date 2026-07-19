@@ -1,8 +1,9 @@
 import { LRUCache } from 'lru-cache';
 
-import { platform } from '@platform/platform';
-import { getServerSideKeyService } from '@auth/serverKeys';
 import { isCodexSignedIn, isPreferCodexSubscription } from '@auth/codex';
+import { getServerSideKeyService } from '@auth/serverKeys';
+import { platform } from '@platform/platform';
+import type { PlatformSecrets } from '@platform/secrets';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
@@ -45,7 +46,6 @@ import {
 } from './runtimeModelRegistry';
 import type { ProviderCapabilityProfile } from './providerCapabilities';
 import type { ModelConfig } from 'llm-zoo';
-import type { PlatformSecrets } from '@platform/secrets';
 
 type PersonalModelAccessKind = 'provider-key' | 'openrouter-key';
 

@@ -1,14 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { setupPlatform } from '@test/support/setupPlatform';
-import {
-  cleanupTempDirs,
-  createTempDirPlatform,
-} from '@test/support/tempDirPlatform';
-import { assembleTrace, StreamLogStore } from '@transcript';
 import { getExecutionStore } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import type { Platform } from '@platform/platform';
 import {
   appState,
   resetProgressState,
@@ -23,13 +18,18 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { setupPlatform } from '@test/support/setupPlatform';
+import {
+  cleanupTempDirs,
+  createTempDirPlatform,
+} from '@test/support/tempDirPlatform';
+import type { TraceDocument } from '@transcript';
+import { assembleTrace, StreamLogStore } from '@transcript';
 // Relative import: `packages/trace-viewer` is a separate workspace package
 // with no path alias into the root vitest config, but this suite exercises
 // the real replay pipeline (`@progressView/frontend`'s dispatcher + slices),
 // so a plain relative import is the simplest way to reach it.
 import { replayTrace } from '../../../packages/trace-viewer/src/replayTrace';
-import type { Platform } from '@platform/platform';
-import type { TraceDocument } from '@transcript';
 
 const tempDirs: string[] = [];
 

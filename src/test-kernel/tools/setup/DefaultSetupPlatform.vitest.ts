@@ -2,8 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { platform } from '@platform/platform';
-import { setupPlatform } from '@test/support/setupPlatform';
 import {
   RELAY_CI_TOKEN_PREFIX,
   RELAY_TOKEN_ENV_VAR,
@@ -12,6 +10,8 @@ import {
 import { SupabaseClient } from '@auth/SupabaseClient';
 import * as codexAuth from '@auth/codex';
 import * as providerCapabilities from '@model/providerCapabilities';
+import { platform } from '@platform/platform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import {
   __resetSetupPlatformForTests,
   getChatGptSubscriptionStatus,

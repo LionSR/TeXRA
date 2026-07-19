@@ -9,53 +9,34 @@ import { fileURLToPath } from 'node:url';
 
 import { loadAliasEntries } from './scripts/aliasUtils.mjs';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const INTERNAL_ALIAS_NAMES = [
-  'agent',
-  'auth',
-  'cli',
-  'commands',
-  'common',
-  'desktop',
-  'eventBus',
-  'explorer',
-  'frontend',
-  'historyView',
-  'hosts',
-  'housekeeping',
-  'latex',
-  'logger',
-  'memoryView',
-  'model',
-  'progressView',
-  'replacement',
-  'settingsView',
-  'shared',
-  'tools',
-  'types',
-  'utils',
-  'webview',
-];
+  ...new Set(
+    loadAliasEntries(__dirname)
+      .map(({ alias }) => alias)
+      .filter((alias) => alias.startsWith('@')),
+  ),
+].toSorted();
 
 const INTERNAL_ALIAS_PATH_GROUPS = INTERNAL_ALIAS_NAMES.flatMap((alias) => [
   {
-    pattern: `@${alias}`,
+    pattern: alias,
     group: 'internal',
     position: 'after',
   },
   {
-    pattern: `@${alias}/*`,
+    pattern: `${alias}/*`,
     group: 'internal',
     position: 'after',
   },
   {
-    pattern: `@${alias}/**`,
+    pattern: `${alias}/**`,
     group: 'internal',
     position: 'after',
   },
 ]);
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const COMPOSITION_ROOT_FILES = new Set([
   path.join(__dirname, 'packages/extension/src/extension.ts'),

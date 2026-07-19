@@ -1,10 +1,6 @@
 import { nanoid } from 'nanoid';
 import * as vscode from 'vscode';
 
-import {
-  cancelApprovalRequestHandlers,
-  type ApprovalRequestHandlerSet,
-} from '@controllers/progressView/backend/progressBackendUiConfig';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   cancellationResultFor,
@@ -30,17 +26,21 @@ import {
 } from '@agent/runtime/hostInteractionResultMappers';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
+  cancelApprovalRequestHandlers,
+  type ApprovalRequestHandlerSet,
+} from '@controllers/progressView/backend/progressBackendUiConfig';
+import {
   approveNativeToolEditApprovals,
   cancelNativeToolEditApprovals,
   nativeRequestApproval,
 } from '@frontend/approval/nativeToolEditApproval';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
-import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
 import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
 } from '@platform/interfaces';
+import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
 
 export interface ExtensionHostInteractionsOptions {
   runtimeHost: AgentRuntimeHost;

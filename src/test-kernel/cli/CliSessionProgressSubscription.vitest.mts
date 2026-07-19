@@ -29,11 +29,11 @@ import {
   type StreamTabId,
   type UpdateStreamStatusPayload,
 } from '@shared/schemas';
+import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import {
   STREAM_TRANSITION_CAUSE,
   type StreamTransitionCause,
 } from '@shared/streams/streamStatus';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 const streamId = 'stream:cli-session-projection' as StreamTabId;
 const executionId = 'execution:cli-session-projection' as ExecutionId;

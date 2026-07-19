@@ -22,7 +22,6 @@ import type {
   UserQuestionPermission,
 } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-
 import { assertNever } from '@utils/core';
 
 export type ApprovalBypassKind = HostApprovalBypassKind;

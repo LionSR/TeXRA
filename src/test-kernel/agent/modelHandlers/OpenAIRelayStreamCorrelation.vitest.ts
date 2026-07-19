@@ -3,11 +3,9 @@ import OpenAI from 'openai';
 import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 import { describe, expect, it } from 'vitest';
 
-// Local imports - agent model handlers
+// Local imports
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
-
-// Local imports - common errors
 import {
   isUserAbort,
   normalizeProviderError,

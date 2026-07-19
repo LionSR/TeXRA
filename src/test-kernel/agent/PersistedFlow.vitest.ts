@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { setupPlatform } from '@test/support/setupPlatform';
 import { getExecutionStore } from '@agent/storage';
 import { BaseNode } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
@@ -12,6 +11,7 @@ import {
   type FlowRecord,
 } from '@agent/node/persistedFlow';
 import type { ExecutionId } from '@shared/schemas';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: '/workspace' });
 

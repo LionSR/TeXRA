@@ -1,16 +1,16 @@
 import { z } from 'zod';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import {
-  getRunContextSession,
-  getRunContextStreamId,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
 import {
   currentSession,
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import {
+  getRunContextSession,
+  getRunContextStreamId,
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import { type ToolResult } from '@shared/schemas/toolResult';

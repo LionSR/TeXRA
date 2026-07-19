@@ -7,6 +7,7 @@
  * which lives in `ConfigProvider` rather than workspace state.
  */
 import * as logger from '@logger/logUtils';
+import type { ConfigProvider, ConfigTarget } from '@platform/interfaces';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { UpdateApprovalSettingsMessage } from '@shared/schemas/settingsViewMessages';
@@ -27,7 +28,6 @@ import {
 } from '@shared/schemas/agentCliSettings';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { ConfigProvider, ConfigTarget } from '@platform/interfaces';
 
 const CHANNEL = 'approvalHandlers';
 

@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { createFakePlatform } from '@test/support/FakePlatform';
-
 import { noopTrace } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -10,6 +8,7 @@ import {
   AgentWorkflowSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { buildUserVars } from '@agent/utils/userVars';
+import { createFakePlatform } from '@test/support/FakePlatform';
 
 const providerFlags = {
   isOpenai: false,

@@ -1,34 +1,24 @@
-// Third-party imports
-
-// Standard library imports
+// Node imports
 import { Buffer } from 'node:buffer';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { strict as assert } from 'node:assert';
-import { describe, it, beforeAll, afterAll } from 'vitest';
 
 // Third-party imports
+import { describe, it, beforeAll, afterAll } from 'vitest';
 import { PDFDocument, StandardFonts } from '@cantoo/pdf-lib';
-
-// Local imports - platform
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-
-// Local imports - test support
-import { setupPlatform } from '@test/support/setupPlatform';
-
-// Local imports - agent
 import { DEFAULT_MODEL_CAPABILITIES, type ModelCapabilities } from 'llm-zoo';
+
+// Local imports
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import {
   MediaAttachmentProcessor,
   type MediaFileResult,
 } from '@agent/modelHandlers/support/MediaAttachmentProcessor';
 import { attachProviderError } from '@common/errors/sdkErrorUtils';
-
-// Type imports
-
-// Internal imports
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { AbsoluteFS, pathToLocation, getShortDisplayPath } from '@utils/files';
 
 interface MediaLogRecorder extends AgentTrace {

@@ -61,10 +61,10 @@ import {
   type WorkPlanSnapshot,
 } from '@shared/schemas';
 import { getCleanAgentName } from '@shared/schemas/agent';
-
 import { mapToRecord, normalizeFilePath } from '@utils/core';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
+
 import {
   canUseStreamDataDir,
   decodeStreamId,

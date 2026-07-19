@@ -28,12 +28,13 @@
  * session is justified only as the ownership container.
  */
 
-import { getActiveFlushers, unregisterFlushers } from '@transcript/runTrace';
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { StreamTabId } from '@shared/schemas';
+import { getActiveFlushers, unregisterFlushers } from '@transcript/runTrace';
 
+import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { getRunContextSession, tryUseRunContext } from './RunContext';
 import { AgentExecutionHandle, type ExecutionHandle } from './ExecutionHandle';
 import { ExecutionRegistry } from './executionRegistry';
@@ -50,7 +51,6 @@ import {
 } from './streamApprovalQueue';
 import { WorkflowControlRegistry } from './workflowControlRegistry';
 import { releaseExecutionLeaseAfterArtifacts } from './executionOwnership';
-import type { StreamLogStore } from '@transcript/StreamLogStore';
 
 const logger = createChannelTrace('sessionHandle');
 

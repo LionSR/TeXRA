@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
@@ -9,14 +9,7 @@ import {
 } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - platform and agent
-import {
-  LANGUAGE_MODEL_PORT_ERROR_CODE,
-  LanguageModelPortError,
-  type LanguageModelMessage,
-  type LanguageModelPort,
-  type LanguageModelResponsePart,
-} from '@platform/languageModel';
+// Local imports
 import {
   foldSystemPromptIntoVscodeLmMessages,
   ModelHandlerVscodeLm,
@@ -29,6 +22,13 @@ import {
   normalizeProviderError,
   requiresFlowAutoRetry,
 } from '@common/errors/sdkErrorUtils';
+import {
+  LANGUAGE_MODEL_PORT_ERROR_CODE,
+  LanguageModelPortError,
+  type LanguageModelMessage,
+  type LanguageModelPort,
+  type LanguageModelResponsePart,
+} from '@platform/languageModel';
 import { isCredentialExhausted, type FileLocation } from '@shared/schemas';
 
 function modelConfig(

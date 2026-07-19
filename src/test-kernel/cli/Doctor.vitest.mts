@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import stripAnsi from 'strip-ansi';
 
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import {
   buildDoctorReport,
   doctorExitCode,
@@ -13,6 +11,8 @@ import {
 } from '@cli/runtime/doctor';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliContext } from '@cli/runtime/cliContext';
+import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 const context: CliContext = createTestCliContext({
   cwd: '/workspace',

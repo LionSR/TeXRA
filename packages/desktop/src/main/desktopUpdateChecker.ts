@@ -1,10 +1,10 @@
+import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   DAILY_UPDATE_CHECK_INTERVAL_MS,
   isNewerSemverVersion,
   UPDATE_CHECK_SKIP_ENV,
 } from '@utils/system/semverUpdateCheck';
-import type { StateStore } from '@platform/interfaces';
 
 /**
  * Lightweight desktop update check (issue #7682, decision: arm b).

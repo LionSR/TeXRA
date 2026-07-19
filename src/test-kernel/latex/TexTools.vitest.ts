@@ -2,13 +2,13 @@
 
 import * as path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { installPlatform } from '@test/support/setupPlatform';
 import {
   buildLatexInputEnv,
   buildLatexSearchParts,
   compileLatex2Pdf,
 } from '@latex/texTools';
 import type { ExecResult } from '@shared/schemas/opResults';
+import { installPlatform } from '@test/support/setupPlatform';
 import { FlexibleFS, pathToLocation } from '@utils/files';
 
 // ---------------------------------------------------------------------------

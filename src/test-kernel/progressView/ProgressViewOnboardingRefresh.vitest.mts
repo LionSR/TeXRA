@@ -1,25 +1,26 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - progress view
+// Local imports
 import { ProgressViewMessageHandler } from '@progressView/ProgressViewMessageHandler';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { ExtensionHostInteractions } from '@progressView/extensionHostInteractions';
-
-// Local imports - shared
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { StreamTabId } from '@shared/schemas';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
-// Local imports - test support
+// Local file imports
 import { FakePromptHost } from '../support/FakeHosts';
 import {
   createOutputFile,
   createWorkflowTaskState,
 } from '../support/ProgressControllerHarnesses';
 
+// Third-party imports
 import type * as vscode from 'vscode';
 
 const mocks = vi.hoisted(() => ({

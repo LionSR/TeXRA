@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { buildProfileMessage } from '@controllers/settingsView/ProfileMessageBuilder';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import * as agentRegistry from '@agent/index/agentRegistry';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { SupabaseSession } from '@auth/SupabaseSession';
 import { setServerSideKeyService } from '@auth/serverKeys';
+import { buildProfileMessage } from '@controllers/settingsView/ProfileMessageBuilder';
 import {
   createDesktopProtocolCallbackRouter,
   parseDesktopProtocolCallback,

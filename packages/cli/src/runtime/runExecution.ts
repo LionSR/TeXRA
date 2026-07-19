@@ -1,6 +1,3 @@
-import { SHUTDOWN_PHASE } from '@platform/interfaces';
-import { tryPlatform } from '@platform/platform';
-import { StreamSnapshotStore } from '@transcript';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -10,7 +7,10 @@ import {
 import { runAgent, type RunAgentOptions } from '@agent/runtime/runAgent';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { AgentError } from '@common/errors';
+import { tryPlatform } from '@platform/platform';
+import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
+import { StreamSnapshotStore } from '@transcript';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

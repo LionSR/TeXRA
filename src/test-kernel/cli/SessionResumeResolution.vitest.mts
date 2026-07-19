@@ -6,13 +6,13 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { ExecutionId } from '@shared/schemas';
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 const mocks = vi.hoisted(() => ({
   readCliHistoryConfig: vi.fn(),

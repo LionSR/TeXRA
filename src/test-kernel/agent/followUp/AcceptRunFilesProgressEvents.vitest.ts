@@ -1,31 +1,33 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-// Local imports - platform
-import { FileType, type FileStat } from '@platform/interfaces';
-
 // Local imports
-import { installPlatform } from '@test/support/setupPlatform';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import { appSignals } from '@eventBus/AppSignals';
+import { FileType, type FileStat } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
+import { installPlatform } from '@test/support/setupPlatform';
 import {
   cleanupAllApprovals,
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval';
+import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
 import { AbsoluteFS, FlexibleFS, StorageFS, WorkspaceFS } from '@utils/files';
+
+// Local file imports
 import { createRecordingHost } from '../progressTestUtils';
 
 let testApprovalHandler:

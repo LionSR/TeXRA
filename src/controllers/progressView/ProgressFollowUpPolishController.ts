@@ -1,11 +1,9 @@
-// Local imports - agent
+// Local imports
 import type { TaskState } from '@agent/core/state/TaskState';
 import {
   polishTextWithAI,
   type FileContext,
 } from '@agent/runtime/textEnhancement';
-
-// Local imports - shared
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewOutboundMessage, StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';

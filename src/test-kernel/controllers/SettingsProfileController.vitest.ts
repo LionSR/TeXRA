@@ -4,10 +4,10 @@ import {
   SettingsProfileController,
   type SettingsProfileConfigValue,
 } from '@controllers/settingsView/SettingsProfileController';
+import type { StateStore } from '@platform/interfaces';
 import type { ProviderVscodeSettingDef } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
-import type { StateStore } from '@platform/interfaces';
 
 const providerVscodeSettings = {
   openai: [

@@ -1,10 +1,10 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - tools
+// Local imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { isOversizedImage, MANY_IMAGE_MAX_DIMENSION } from '@tools/imageUtils';
@@ -17,14 +17,14 @@ import {
 } from '@tools/pathResolution';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { parseEml, type EmlImageAttachment } from '@tools/emlParser';
+import { splitContentLines } from '@utils/text/stringUtils';
+import { hasExtension, getExtensionLowercase } from '@utils/core/pathCore';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import {
   getMimeType,
   OFFICE_EXTENSIONS,
   OFFICE_MIME_TYPES,
 } from '@utils/files/mimeUtils';
-import { hasExtension, getExtensionLowercase } from '@utils/core/pathCore';
-import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';

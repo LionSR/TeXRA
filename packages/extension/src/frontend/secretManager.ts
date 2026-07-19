@@ -2,7 +2,6 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { platform } from '@platform/platform';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import {
   API_PROVIDERS,
@@ -11,6 +10,7 @@ import {
   hasUsableApiKey as resolvedHasUsableApiKey,
   type ApiProvider,
 } from '@model/apiProviders';
+import { platform } from '@platform/platform';
 import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,

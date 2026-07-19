@@ -19,13 +19,13 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   wakeQueuedFollowUpStream: wakeQueuedFollowUpStreamMock,
 }));
 
-import { setupPlatform } from '@test/support/setupPlatform';
 import { ExternalInquiryRequestHandler } from '@controllers/progressView/backend/ExternalInquiryRequestHandler';
 import {
   type ExternalInquiryPermission,
   type ExternalInquiryThreadId,
   type StreamTabId,
 } from '@shared/schemas';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { ExternalInquiryTool } from '@tools/inquiry/ExternalInquiryTool';
 import { injectContinuationForAnsweredThread } from '@tools/inquiry/inquiryContinuation';
 

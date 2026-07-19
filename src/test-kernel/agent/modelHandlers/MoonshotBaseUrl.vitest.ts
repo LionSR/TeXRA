@@ -3,9 +3,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
 // Local imports
-import { installPlatform } from '@test/support/setupPlatform';
 import { resolveBaseUrl } from '@agent/modelHandlers/support/ProxyConfigResolver';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { installPlatform } from '@test/support/setupPlatform';
 
 function moonshotConfig(
   overrides: { customBaseUrl?: string } = {},

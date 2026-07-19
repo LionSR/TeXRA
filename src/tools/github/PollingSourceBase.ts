@@ -17,11 +17,11 @@ import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { appSignals } from '@eventBus/AppSignals';
 
+import type { Disposable } from '@platform/interfaces';
 import {
   createBoundedIdSet,
   type BoundedIdSet,
 } from '@utils/core/boundedIdSet';
-
 import {
   type ConditionalResponse,
   GitHubAuthError,
@@ -29,8 +29,6 @@ import {
   GitHubRateLimitError,
 } from './githubClient';
 import type { ZodType } from 'zod';
-
-import type { Disposable } from '@platform/interfaces';
 
 export interface BasePollSubscriptionState {
   listeners: Set<(text: string) => void>;

@@ -1,5 +1,5 @@
-import { platform } from '@platform/platform';
 import { SharedToolInjectionRegistry } from '@agent/runtime/toolInjection';
+import { platform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { isGoalEnabled } from '@tools/goal';
 

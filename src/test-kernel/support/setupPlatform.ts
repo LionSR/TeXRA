@@ -13,8 +13,8 @@
  */
 import { afterEach, beforeEach } from 'vitest';
 
-import { createFakePlatform, type FakePlatformOptions } from './FakePlatform';
 import type { Platform } from '@platform/platform';
+import { createFakePlatform, type FakePlatformOptions } from './FakePlatform';
 
 type PlatformBuilder = () => Platform | Promise<Platform>;
 

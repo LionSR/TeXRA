@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { StreamLog } from '@transcript';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
 } from '@shared/schemas';
+import { StreamLog } from '@transcript';
 
 function logWithMessage(text = ''): StreamLog {
   const log = new StreamLog();

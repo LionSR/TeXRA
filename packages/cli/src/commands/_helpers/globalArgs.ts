@@ -1,4 +1,3 @@
-import { INTEROP_SKILL_DIRS } from '@skills/skillSources';
 import {
   CLI_APPROVAL_POLICIES,
   CLI_OUTPUT_FORMATS,
@@ -6,6 +5,7 @@ import {
   type CliOutputFormat,
 } from '@cli/schemas/cliSettings';
 import { CliUsageError } from '@cli/runtime/cliContext';
+import { INTEROP_SKILL_DIRS } from '@skills/skillSources';
 
 /**
  * Single source of truth for the global flags accepted by every TeXRA

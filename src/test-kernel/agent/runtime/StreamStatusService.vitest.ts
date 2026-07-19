@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import { TraceEmitter, type StatusEvent } from '@agent/trace';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
@@ -21,7 +20,9 @@ import {
   STREAM_TRANSITION_CAUSE,
   type StreamTransitionCause,
 } from '@shared/streams/streamStatus';
+import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 
+// Local file imports
 import {
   recordSessionEvents,
   runEventsOfType,

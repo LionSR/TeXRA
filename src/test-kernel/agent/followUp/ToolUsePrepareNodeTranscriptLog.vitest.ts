@@ -2,13 +2,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { createToolUseResumeShared } from '@test/support/toolUseResumeTestUtils';
 import { buildInitialToolUsePrompts } from '@agent/prompt';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentPromptSchema } from '@agent/core/definition/AgentDataclass';
 import { ToolUsePrepareNode } from '@agent/implementations/flows/tooluse/nodes/ToolUsePrepareNode';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
+import { createToolUseResumeShared } from '@test/support/toolUseResumeTestUtils';
 
 function buildServices(
   overrides: Partial<ToolUseServices<unknown>> = {},

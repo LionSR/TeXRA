@@ -21,17 +21,15 @@ vi.mock('@shared/utils/clipboardImages', async (importOriginal) => {
   };
 });
 
-// Local imports - progress view
+// Local imports
 import {
   clearFollowUpInputTransientStateStore,
   getFollowUpInputTransientState,
   type FollowUpInputTransientState,
 } from '@progressView/frontend/followUpInputState';
-
-// Local imports - shared types
 import type { ExtractedClipboardImage } from '@shared/utils/clipboardImages';
 
-// Local imports - test utilities
+// Local file imports
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 useLitComponentTestDom(

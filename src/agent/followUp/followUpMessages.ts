@@ -7,8 +7,8 @@ import {
   formatMediaNeedsVisionWarning,
   shouldWarnMediaNeedsVision,
 } from '@agent/runtime/mediaVisionWarning';
-import type { MediaAttachmentKind } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
+import type { MediaAttachmentKind } from '@shared/schemas';
 import type { TaskRunFileService } from '@utils/files';
 import type { FollowUpQueueBatchItem } from './FollowUpQueue';
 

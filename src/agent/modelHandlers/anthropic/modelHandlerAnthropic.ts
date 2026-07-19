@@ -1,3 +1,4 @@
+// Node imports
 import { basename } from 'node:path';
 
 // Third-party imports
@@ -7,7 +8,7 @@ import {
   APIUserAbortError as AnthropicUserAbortError,
 } from '@anthropic-ai/sdk';
 
-// Local imports - agent
+// Local imports
 import {
   type AgentSetting,
   hasEndTag,
@@ -19,8 +20,6 @@ import type {
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
-
-// Local imports - common
 import { ANTHROPIC_STOP } from '@agent/types/StopReasonTypes';
 import {
   isAnthropicServerToolContent,
@@ -43,8 +42,6 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 import replacementEngine from '@replacement/engine';
-
-// Local imports - tools
 import type {
   FileLocation,
   MediaAttachmentKind,
@@ -54,18 +51,16 @@ import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas/toolResult';
-
-// Local imports - utils
-import { getConfig } from '@utils/config/configUtils';
-import { getAnthropicDynamicFiltering } from '@utils/config/providerConfig';
 import { joinNonEmpty } from '@utils/text/stringUtils';
+import { getAnthropicDynamicFiltering } from '@utils/config/providerConfig';
+import { getConfig } from '@utils/config/configUtils';
+
+// Local file imports
 import {
   computeAnthropicPrice,
   normalizeAnthropicUsage,
   type AnthropicPricingConfig,
 } from './anthropicUsage';
-
-// Local file imports
 import {
   getAnthropicMaxPdfPages,
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
@@ -112,7 +107,7 @@ import {
   extractAnthropicServerToolData,
 } from './anthropicServerTools';
 
-// Type imports
+// Third-party imports
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
   BetaContentBlock,

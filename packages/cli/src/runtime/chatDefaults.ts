@@ -1,4 +1,3 @@
-import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import {
   isUserVisibleExecution,
   listExecutions,
@@ -10,6 +9,7 @@ import {
   decideRunModel,
   type RunModelDecisionReason,
 } from '@model/runModelDecision';
+import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { toNewestFirstByTimestamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { GlobalStorageFS } from '@utils/files/storageFS';

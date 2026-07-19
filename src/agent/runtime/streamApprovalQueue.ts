@@ -17,8 +17,8 @@
 
 import PQueue from 'p-queue';
 
-import type { StreamTabId } from '@shared/schemas';
 import type { ToolEditApprovalResult } from '@platform/interfaces';
+import type { StreamTabId } from '@shared/schemas';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { HostBashApprovalResult } from './HostInteractions';

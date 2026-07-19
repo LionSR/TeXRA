@@ -1,9 +1,7 @@
 // Test support imports
-import { createTestSession } from '@test/support/sessionTestUtils';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { setupPlatform } from '@test/support/setupPlatform';
 import { noopTrace } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
@@ -51,6 +49,8 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import { setupPlatform } from '@test/support/setupPlatform';
+import { createTestSession } from '@test/support/sessionTestUtils';
 
 const CONFIG: AgentConfig = {
   inputFiles: [],

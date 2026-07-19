@@ -11,7 +11,7 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - agent
+// Local imports
 import {
   currentSession,
   type SessionHandle,
@@ -27,11 +27,7 @@ import {
   sendFollowUp,
   wakeQueuedFollowUpStream,
 } from '@agent/followUp/ToolUseFollowUp';
-
-// Local imports - logger
 import * as logger from '@logger/logUtils';
-
-// Local imports - tools
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
@@ -48,11 +44,9 @@ import {
 import { deliverChildRunFollowUp } from '@tools/childRunDelivery';
 import { requireRunStream } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
-
-// Local imports - utils
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-// Local imports - delegation
+// Local file imports
 import {
   proposeAndExecute,
   requireVisibleAgent,

@@ -8,8 +8,8 @@
 
 import * as path from 'node:path';
 
-import { platform } from '@platform/platform';
 import * as logger from '@logger/logUtils';
+import { platform } from '@platform/platform';
 import { FlexibleFS } from '@utils/files';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 

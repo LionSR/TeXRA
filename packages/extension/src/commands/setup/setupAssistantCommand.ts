@@ -2,11 +2,6 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import {
-  resolveSetupLaunchModel,
-  SETUP_INSTRUCTION,
-} from '@controllers/onboarding/setupLaunch';
-import { platform } from '@platform/platform';
 import { loadAgents } from '@agent/index';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { runAgent } from '@agent/runtime/runAgent';
@@ -14,19 +9,24 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { GlobalStateKey, globalSM } from '@common/state';
-import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
+import {
+  resolveSetupLaunchModel,
+  SETUP_INSTRUCTION,
+} from '@controllers/onboarding/setupLaunch';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
+import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import * as logger from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
+import { platform } from '@platform/platform';
+import { agentName } from '@shared/schemas/agent';
+import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import {
   ONBOARDING_CHOICE_API_KEY,
   ONBOARDING_CHOICE_CHATGPT,
   ONBOARDING_CHOICE_SIGN_IN,
 } from '@shared/copy/onboarding';
-import { SETUP_AGENT_NAME } from '@shared/constants/agents';
-import { agentName } from '@shared/schemas/agent';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'SetupAssistant';
 

@@ -1,18 +1,14 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - agent
+// Local imports
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
-
-// Local imports - tools
 import { ToolResult, ToolError } from '@shared/schemas/toolResult';
 import { defineTool } from '@tools/core/define';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
 } from '@tools/approval/bashApproval';
-
-// Local imports - utils
 import {
   splitContentLines,
   truncateWithEllipsis,

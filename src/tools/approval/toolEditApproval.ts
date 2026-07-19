@@ -1,15 +1,19 @@
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import {
-  getRunContextSession,
-  getRunContextStreamId,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
 import {
   currentSession,
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import {
+  getRunContextSession,
+  getRunContextStreamId,
+  tryUseRunContext,
+} from '@agent/runtime/RunContext';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { isLatexFile } from '@common/files/fileTypeUtils';
+import type {
+  ToolEditApprovalRequest,
+  ToolEditApprovalResult,
+} from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import type { LineChanges } from '@shared/schemas/lineChanges';
@@ -27,11 +31,6 @@ import {
   type TextDiff,
 } from '@utils/text/diff';
 import { countLines } from '@utils/text/stringUtils';
-
-import type {
-  ToolEditApprovalRequest,
-  ToolEditApprovalResult,
-} from '@platform/interfaces';
 
 export type { ToolEditApprovalRequest, ToolEditApprovalResult };
 

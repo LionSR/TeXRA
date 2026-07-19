@@ -1,5 +1,4 @@
-// Local imports - agent
-import { createRunTrace } from '@transcript';
+// Local imports
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -13,21 +12,14 @@ import {
   currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-
-// Local imports - errors
 import { classifyAgentError } from '@common/errors';
-
-// Local imports - constants
-
-// Local imports - shared
-import type { ExecutionId, StreamTabId, StorageKey } from '@shared/schemas';
 import { RUN_OUTCOME, STREAM_PHASE, buildRunDescriptor } from '@shared/schemas';
+import type { ExecutionId, StreamTabId, StorageKey } from '@shared/schemas';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
-
-// Local imports - utils
+import { createRunTrace } from '@transcript';
 import { formatDuration } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface CreateChildStreamOptions {
   runtimeHost: AgentRuntimeHost;

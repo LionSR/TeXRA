@@ -16,7 +16,6 @@ import { nanoid } from 'nanoid';
 import pDefer from 'p-defer';
 import pTimeout from 'p-timeout';
 
-import { platform } from '@platform/platform';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   matchesCancelSelector,
@@ -51,6 +50,7 @@ import {
   isApiProvider,
   type ApiProvider,
 } from '@model/apiProviders';
+import { platform } from '@platform/platform';
 import { isUpstreamCreditDepletedError } from '@shared/schemas';
 import {
   setBashApprovalSessionBypass,

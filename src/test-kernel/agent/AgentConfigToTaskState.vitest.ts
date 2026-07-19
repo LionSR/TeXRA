@@ -1,10 +1,10 @@
-// Standard library imports
+// Node imports
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
 import { describe, it } from 'vitest';
 
-// Local imports - agent
+// Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -13,8 +13,6 @@ import {
   TaskStateSchema,
 } from '@agent/core/state/TaskState';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-
-// Local imports - shared
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 describe('agentConfigToTaskState', () => {

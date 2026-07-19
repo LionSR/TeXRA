@@ -5,13 +5,13 @@ import { createRequire } from 'node:module';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliToolUseResumeResolution } from '@cli/runtime/sessionResume';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 const cliRequire = createRequire(
   new URL('../../../packages/cli/package.json', import.meta.url),

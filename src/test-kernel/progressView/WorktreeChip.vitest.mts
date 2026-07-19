@@ -2,13 +2,11 @@
 import { JSDOM } from 'jsdom';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-// Local imports - progress view component types
+// Local imports
 import type { WorktreeChip } from '@progressView/frontend/components/WorktreeChip';
-
-// Local imports - shared schemas
 import type { WorktreeInfo } from '@shared/schemas';
 
-// Local imports - test utilities
+// Local file imports
 import { installAttachInternalsFallback } from '../settings/litComponentTestUtils';
 
 const originalGlobals = {

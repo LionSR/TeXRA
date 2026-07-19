@@ -1,7 +1,5 @@
-// Type imports - tracing
+// Local imports
 import type { AgentTrace } from '@agent/trace';
-
-// Local imports - agent runtime
 import {
   AgentExecutionHandle,
   ProcessExecutionHandle,
@@ -12,8 +10,6 @@ import {
   type SessionHandle,
   untrackActiveAgentExecution,
 } from '@agent/runtime/SessionHandle';
-
-// Local imports - constants
 import {
   STREAM_PHASE,
   type ExecutionId,
@@ -21,8 +17,6 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
-
-// Local imports - shared schemas
 
 interface ReboundAgentBinding {
   readonly streamId: StreamTabId;

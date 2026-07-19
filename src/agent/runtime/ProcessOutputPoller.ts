@@ -2,8 +2,8 @@ import { StringDecoder } from 'node:string_decoder';
 
 import pMap from 'p-map';
 
-import { platform } from '@platform/platform';
 import * as logger from '@logger/logUtils';
+import { platform } from '@platform/platform';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { delay } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';

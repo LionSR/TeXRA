@@ -1,4 +1,4 @@
-// Local imports - tools
+// Local imports
 import { ToolError, type ToolFileAttachment } from '@shared/schemas/toolResult';
 import { isOversizedImage, MANY_IMAGE_MAX_DIMENSION } from '@tools/imageUtils';
 import {
@@ -6,8 +6,6 @@ import {
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
 import { wrapApiCall } from '@tools/utils';
-
-// Local imports - core utilities
 import { isNonEmptyString } from '@utils/core';
 import { WorkspaceFS, getMimeType } from '@utils/files';
 import { toPosixPath } from '@utils/core/pathCore';

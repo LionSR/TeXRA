@@ -3,20 +3,20 @@ import * as path from 'node:path';
 
 import { glob, hasMagic } from 'glob';
 
-import { SHUTDOWN_PHASE } from '@platform/interfaces';
-import { tryPlatform } from '@platform/platform';
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-import { unique } from '@utils/core';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe at both call sites below since the input is always a relative
 // path already validated by isStrictlyWithin or path.relative.
+import { tryPlatform } from '@platform/platform';
+import { SHUTDOWN_PHASE } from '@platform/interfaces';
+import type { Disposable } from '@platform/interfaces';
+import { unique } from '@utils/core';
 import {
   isPathWithin,
   isStrictlyWithin,
   toPosixPath,
 } from '@utils/core/pathCore';
-import type { Disposable } from '@platform/interfaces';
 import type { Stats } from 'node:fs';
 
 const STDIN_INPUT_TOKEN = '-';

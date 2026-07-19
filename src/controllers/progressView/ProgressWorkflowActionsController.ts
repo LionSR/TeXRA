@@ -1,10 +1,9 @@
+// Local imports
 import {
   isWorkflowTaskState,
   type TaskState,
   type WorkflowTaskState,
 } from '@agent/core/state/TaskState';
-
-// Local imports - shared
 import type {
   OutputFileInfo,
   RoundIndexed,

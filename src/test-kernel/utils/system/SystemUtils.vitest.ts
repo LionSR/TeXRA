@@ -1,5 +1,6 @@
 // Suites for src/utils/system (execUtils, workspaceInfo, binaryResolver).
 
+// Node imports
 import { strict as assert } from 'node:assert';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import * as os from 'node:os';
@@ -9,10 +10,14 @@ import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import * as fs from 'node:fs/promises';
 import { mkdtemp, rm } from 'node:fs/promises';
-import { setupPlatform } from '@test/support/setupPlatform';
+
+// Third-party imports
 import { afterEach, describe, expect, expectTypeOf, it } from 'vitest';
+
+// Local imports
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { executeCommand, executeCommandSync } from '@utils/system/execUtils';
 import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
 import { BinaryResolverService } from '@utils/system/binaryResolver';
@@ -20,8 +25,6 @@ import { BinaryResolverService } from '@utils/system/binaryResolver';
 // ---------------------------------------------------------------------------
 // execUtils
 // ---------------------------------------------------------------------------
-
-// Node imports
 
 async function waitForFile(filePath: string): Promise<void> {
   for (let attempt = 0; attempt < 50; attempt += 1) {

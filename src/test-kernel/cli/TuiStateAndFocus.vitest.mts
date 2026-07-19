@@ -5,8 +5,6 @@ import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { createRunTrace } from '@transcript';
-import { clearAllStreamStatusesForTest } from '@test/helpers/streamStatusTestUtils';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
@@ -87,6 +85,7 @@ import {
   moveLocalTranscriptToStream,
   resolveLocalTranscriptStreamId,
 } from '@cli/chat/tui/state/transcript';
+import { stripOrchestratorFollowup } from '@shared/subagentFollowup';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
@@ -100,7 +99,8 @@ import {
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
-import { stripOrchestratorFollowup } from '@shared/subagentFollowup';
+import { clearAllStreamStatusesForTest } from '@test/helpers/streamStatusTestUtils';
+import { createRunTrace } from '@transcript';
 
 const root = 'root' as StreamTabId;
 const child1 = 'child-1' as StreamTabId;

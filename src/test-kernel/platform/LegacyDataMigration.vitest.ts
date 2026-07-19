@@ -6,16 +6,14 @@ import { join } from 'node:path';
 // Third-party imports
 import { afterEach, describe, expect, it } from 'vitest';
 
-// Local imports - platform
+// Local imports
 import {
   mergeLegacyStorageBucket,
   mergeLegacyWorkspaceStorageBucket,
   moveEntryIfAbsent,
 } from '@platform/defaults/legacyDataMigration';
-import { cleanupTempDirs } from '@test/support/tempDirPlatform';
-
-// Type imports - platform
 import type { LegacyDataMigrationLogger } from '@platform/defaults/legacyDataMigration';
+import { cleanupTempDirs } from '@test/support/tempDirPlatform';
 
 async function pathExists(path: string): Promise<boolean> {
   try {

@@ -1,13 +1,11 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - progress view component types
+// Local imports
 import type { BashRequestPanel } from '@progressView/frontend/components/BashRequestPanel';
-
-// Local imports - shared schemas
 import type { BashPermission } from '@shared/schemas';
 
-// Local imports - test utilities
+// Local file imports
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 function createPermission(

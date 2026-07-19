@@ -4,8 +4,8 @@
  * slice under `cliState/`.
  */
 import { computed, signal, type Signal } from '@lit-labs/signals';
-import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import {
   AgentCategory,

@@ -6,9 +6,9 @@
  * owned by the onboarding controllers.
  */
 
+import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { isNonEmptyString } from '@utils/core';
-import type { StateStore } from '@platform/interfaces';
 
 export interface OnboardingFlags {
   /** The user saw the credential picker and chose "Skip for now". */

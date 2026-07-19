@@ -18,12 +18,10 @@ import {
 } from 'openai';
 import { describe, expect, it } from 'vitest';
 
-// Local imports - agent model handlers
+// Local imports
 import { tagAnthropicSdkError } from '@agent/modelHandlers/anthropic/anthropicSdkError';
 import { tagGoogleSdkError } from '@agent/modelHandlers/google/googleSdkError';
 import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
-
-// Local imports - common errors
 import {
   attachContextWindowError,
   attachProviderError,
@@ -38,15 +36,13 @@ import {
   normalizeProviderError,
   sdkErrorKindFromStatusCode,
 } from '@common/errors/sdkErrorUtils';
-
-// Local imports - shared schemas
+import type { ProviderError, RetryErrorInfo } from '@shared/schemas/errors';
 import {
   ErrorLogDataSchema,
   RetryErrorInfoSchema,
   toProviderErrorFromRetry,
   toRetryErrorInfo,
 } from '@shared/schemas/errors';
-import type { ProviderError, RetryErrorInfo } from '@shared/schemas/errors';
 
 class APIError extends Error {}
 

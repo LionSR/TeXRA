@@ -24,11 +24,11 @@
  * (and no risk of it throwing on a corrupt record) is needed.
  */
 
-import { readCompletedRunConversation } from '@transcript';
 import { getExecutionStore, type ExecutionMeta } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ChatExportInput } from '@agent/export/schemas';
 import type { ExecutionId } from '@shared/schemas';
+import { readCompletedRunConversation } from '@transcript';
 
 /**
  * Facts read from the execution store, plus the assembled

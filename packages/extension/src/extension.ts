@@ -1,26 +1,11 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
 // Third-party imports
 import * as vscode from 'vscode';
 import dotenv from 'dotenv';
 
-// Local imports - core
-import { initPlatform, platform } from '@platform/platform';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import {
-  canonicalizeWorkspacePath,
-  createNodeWorkspace,
-} from '@platform/defaults/nodeWorkspace';
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
-import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
-import { UsageLogService } from '@telemetry/UsageLogService';
-import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
-import { StreamLogStore } from '@transcript';
-import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
-import { nodeFileLocks } from '@platform/defaults/fileLocks';
+// Local imports
 import { loadAgents } from '@agent/index';
 import { clearStoreCache, listExecutions } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
@@ -32,24 +17,24 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { initializePolishModel } from '@agent/runtime/polishModel';
-import { initializeServerSideKeyAccess } from '@auth/serverKeys';
-import { SupabaseClient } from '@auth/SupabaseClient';
+import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
 import {
   getAuthCallbackUri,
   isSupabaseConfigured,
   setExternalAuthCallbackResolver,
   setRuntimeExtensionId,
 } from '@auth/config';
-import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { initializeServerSideKeyAccess } from '@auth/serverKeys';
 import { hasAnyUsableSetupCredential } from '@commands/setup';
+import { openGettingStarted } from '@commands/system/walkthroughCommands';
+import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import {
   isResumeInFlight,
   tryResumeFromResumeData,
 } from '@commands/agent/resumeFromResumeData';
-import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
-import { openGettingStarted } from '@commands/system/walkthroughCommands';
-import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import { globalSM, initializeStateManagers, workspaceSM } from '@common/state';
+import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager } from '@frontend/secretManager';
 import {
@@ -92,25 +77,40 @@ import * as logger from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
-import { backfillFirstRunDone } from '@shared/state/onboardingState';
-import { migrateLegacyGlobalBashApprovalOverride } from '@shared/settingsView/handlers/approvalHandlers';
+import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
+import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
+import { initPlatform, platform } from '@platform/platform';
+import { nodeFileLocks } from '@platform/defaults/fileLocks';
+import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
+import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
+import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import {
+  canonicalizeWorkspacePath,
+  createNodeWorkspace,
+} from '@platform/defaults/nodeWorkspace';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { setOpenPdfOpener } from '@tools/OpenPdfTool';
-import { refreshToolAvailability } from '@tools/toolAvailability';
-import { setSetupPlatform } from '@tools/setup';
+import { migrateLegacyGlobalBashApprovalOverride } from '@shared/settingsView/handlers/approvalHandlers';
+import { backfillFirstRunDone } from '@shared/state/onboardingState';
+import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
+import { UsageLogService } from '@telemetry/UsageLogService';
 import {
   SharedPRPollingSource,
   SharedRepoPollingSource,
   SharedIssuePollingSource,
 } from '@tools/github';
-import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
-import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
+import { setSetupPlatform } from '@tools/setup';
+import { refreshToolAvailability } from '@tools/toolAvailability';
+import { setOpenPdfOpener } from '@tools/OpenPdfTool';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
-import { StorageFS } from '@utils/files';
+import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
+import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
+import { StreamLogStore } from '@transcript';
 import { getConfig } from '@utils/config';
+import { StorageFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-// Local imports - components
+// Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands } from './commands';
 

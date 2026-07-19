@@ -5,13 +5,13 @@ import {
   readAgentRosterSelection,
   type AgentRosterEntry,
 } from '@agent/roster/AgentRosterController';
+import type { StateStore } from '@platform/interfaces';
 import type { AgentCategory } from '@shared/schemas/agent';
 import {
   STARTER_AGENT_MODE_PRESET,
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import type { StateStore } from '@platform/interfaces';
 
 function memoryStore(initial: Record<string, unknown> = {}): StateStore {
   const values = new Map(Object.entries(initial));

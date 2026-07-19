@@ -3,7 +3,6 @@ import '@test/support/defaultSessionTestSetup';
 
 import { describe, expect, it } from 'vitest';
 
-import { buildChildStreamEntries } from '@test/support/childStreamEntries';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   LIVE_TAIL_ROWS,
@@ -60,6 +59,7 @@ import {
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
+import { buildChildStreamEntries } from '@test/support/childStreamEntries';
 
 const STREAM_ID = 'cli-test-stream' as StreamTabId;
 const SESSION_META = {

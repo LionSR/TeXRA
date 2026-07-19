@@ -1,7 +1,5 @@
-// Local imports - model
+// Local imports
 import type { ApiProvider } from '@model/apiProviders';
-
-// Local imports - shared
 import type { ExhaustionReason, StreamTabId } from '@shared/schemas';
 
 export interface ProgressApiKeyRetryRequest {

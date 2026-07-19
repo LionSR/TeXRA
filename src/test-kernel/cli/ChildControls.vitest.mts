@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildChildStreamEntries } from '@test/support/childStreamEntries';
 import {
   computeTaskDetailLayout,
   isUltraCompactTaskDetailRows,
@@ -25,6 +24,7 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import { streamTreeViews } from '@cli/chat/tui/state/streamViews';
 import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+import { buildChildStreamEntries } from '@test/support/childStreamEntries';
 
 const root = 'root' as StreamTabId;
 const child = 'child' as StreamTabId;

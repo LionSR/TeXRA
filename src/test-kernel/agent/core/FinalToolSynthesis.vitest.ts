@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createRunTrace, StreamLogStore } from '@transcript';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import {
   createToolUseRoundFlow,
@@ -11,6 +10,7 @@ import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { CreateResponseOptions } from '@agent/types/ModelHandlerContracts';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
+import { createRunTrace, StreamLogStore } from '@transcript';
 import { withTestRunContext } from '../progressTestUtils';
 
 function buildRound(supportsForcedToolChoice: boolean) {

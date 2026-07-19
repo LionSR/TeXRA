@@ -1,3 +1,4 @@
+import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type {
   ApiAccessMode,
@@ -9,7 +10,6 @@ import type {
 import type { ProviderVscodeSettingDef } from '@shared/constants/providers';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { buildProfileMessage } from './ProfileMessageBuilder';
-import type { StateStore } from '@platform/interfaces';
 
 type SettingsReliabilitySetting = Omit<NumberVscodeSetting, 'value'> & {
   defaultValue: number;

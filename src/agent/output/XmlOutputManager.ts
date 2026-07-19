@@ -8,10 +8,10 @@ import {
   logMissingOutputs,
   type AgentTrace,
 } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
-import replacementEngine, { applyReplacements } from '@replacement/engine';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
+import replacementEngine, { applyReplacements } from '@replacement/engine';
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
 import {
   OUTPUT_DOCUMENT_TAG,

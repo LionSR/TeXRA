@@ -2,7 +2,6 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
-import { createTestSession } from '@test/support/sessionTestUtils';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -23,6 +22,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { DelegateAgentTool } from '@tools/DelegationTools';
 import {
   executeStableSubagentInBand,

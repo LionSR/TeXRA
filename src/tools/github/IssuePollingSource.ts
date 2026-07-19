@@ -14,6 +14,7 @@
  * file only owns the per-issue endpoint set and the dedup state.
  */
 
+import type { Disposable } from '@platform/interfaces';
 import { shouldDropBotEvent } from './botFilter';
 import {
   formatIssueClosed,
@@ -36,8 +37,6 @@ import {
   type GhIssue,
   type GhIssueComment,
 } from './prTypes';
-
-import type { Disposable } from '@platform/interfaces';
 
 const MAX_SEEN_IDS = 1000;
 

@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import { ZodError } from 'zod';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
-import { createRunTrace, type RunTrace } from '@transcript';
 import {
   isRemoteAgent,
   resolveAgentForLaunch,
@@ -38,7 +37,6 @@ import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError, getSdkErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
-import { INSTRUCTION_ACTION } from '@shared/schemas';
 import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
@@ -46,7 +44,9 @@ import {
   type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
+import { INSTRUCTION_ACTION } from '@shared/schemas';
 import type { AgentSource } from '@shared/schemas/agent';
+import { createRunTrace, type RunTrace } from '@transcript';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

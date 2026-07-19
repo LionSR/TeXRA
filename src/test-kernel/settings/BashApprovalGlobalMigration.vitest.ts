@@ -1,18 +1,19 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
-import {
-  BASH_APPROVAL_CONFIG_TARGET,
-  migrateLegacyGlobalBashApprovalOverride,
-} from '@shared/settingsView/handlers/approvalHandlers';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+// Local imports
 import type {
   ConfigInspection,
   ConfigProvider,
   ConfigTarget,
   StateStore,
 } from '@platform/interfaces';
+import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
+import {
+  BASH_APPROVAL_CONFIG_TARGET,
+  migrateLegacyGlobalBashApprovalOverride,
+} from '@shared/settingsView/handlers/approvalHandlers';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 class MemoryStateStore implements StateStore {
   private readonly values = new Map<string, unknown>();

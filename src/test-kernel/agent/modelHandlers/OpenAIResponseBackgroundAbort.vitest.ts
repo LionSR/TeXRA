@@ -3,19 +3,17 @@ import { APIUserAbortError } from 'openai';
 import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - agent model handlers
+// Local imports
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller';
-
-// Local imports - common errors
 import {
   isUserAbort,
   requiresFlowAutoRetry,
 } from '@common/errors/sdkErrorUtils';
 
-// Type imports
+// Third-party imports
 import type OpenAI from 'openai';
 
 function createHandler(): ModelHandlerOpenAIResponse {

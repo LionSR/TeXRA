@@ -6,10 +6,10 @@ import {
   type ModelConfig,
 } from 'llm-zoo';
 
-import { installPlatform } from '@test/support/setupPlatform';
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { resetCodexCoordinator } from '@auth/codex';
+import { installPlatform } from '@test/support/setupPlatform';
 
 // Protected/private surface exercised by these tests via a narrow cast.
 interface CodexInternals {

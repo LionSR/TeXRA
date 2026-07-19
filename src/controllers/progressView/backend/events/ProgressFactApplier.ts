@@ -1,12 +1,3 @@
-import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
-import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
-import {
-  ProgressViewState,
-  type ActiveStreamId,
-  type StreamBadgeSnapshot,
-  type StreamExecutionState,
-} from '@controllers/progressView/backend/state/ProgressViewState';
-import { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
 import {
   createChannelTrace,
   RUN_FACT_EVENT_TYPES,
@@ -18,6 +9,15 @@ import type { TaskState } from '@agent/core/state/TaskState';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
+import { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
+import {
+  ProgressViewState,
+  type ActiveStreamId,
+  type StreamBadgeSnapshot,
+  type StreamExecutionState,
+} from '@controllers/progressView/backend/state/ProgressViewState';
+import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
+import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
 import {
   STREAM_PHASE,
   type AddOutputFilesPayload,
@@ -42,10 +42,10 @@ import {
   type UpdateStreamUsagePayload,
   type UpdateTodosPayload,
 } from '@shared/schemas';
-import { isInFlightPhase } from '@shared/streams/streamStatus';
-import { diffActiveChildren } from '@shared/streams/childActivityReducer';
-import { buildStreamContentSync } from '@shared/streams/streamContentSync';
 import { isGoalInFlight } from '@shared/schemas/goal';
+import { buildStreamContentSync } from '@shared/streams/streamContentSync';
+import { diffActiveChildren } from '@shared/streams/childActivityReducer';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import { assertNever, mapToRecord } from '@utils/core';
 

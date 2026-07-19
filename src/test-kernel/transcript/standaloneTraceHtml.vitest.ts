@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { injectStandaloneTrace, type TraceDocument } from '@transcript';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import { injectStandaloneTrace, type TraceDocument } from '@transcript';
 
 function trace(overrides: Partial<TraceDocument> = {}): TraceDocument {
   return {

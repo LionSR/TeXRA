@@ -1,12 +1,4 @@
-// Local imports - shared settings controllers
-import {
-  buildModelSelectionMessage,
-  createModelSelectionController,
-} from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
-import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
-import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
-
-// Local imports - authentication and models
+// Local imports
 import {
   codexCoordinator,
   getChatGptAuthStatus,
@@ -14,7 +6,19 @@ import {
   setCodexSubscriptionToolUseOnly,
   setPreferCodexSubscription,
 } from '@auth/codex';
+import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
+import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
+import {
+  buildModelSelectionMessage,
+  createModelSelectionController,
+} from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
+import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
+import type { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import type { ExternalOpener, PromptHost } from '@hosts/uiHosts';
+import {
+  computeModelOptionsData,
+  invalidateModelOptionsCache,
+} from '@model/computeModelOptions';
 import {
   API_PROVIDERS,
   apiKeySecretName,
@@ -22,12 +26,8 @@ import {
   isApiProvider,
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
-import {
-  computeModelOptionsData,
-  invalidateModelOptionsCache,
-} from '@model/computeModelOptions';
-
-// Local imports - shared schemas and messages
+import type { ConfigProvider } from '@platform/interfaces';
+import type { PlatformSecrets } from '@platform/secrets';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   PROVIDER_DISPLAY_NAMES,
@@ -38,8 +38,6 @@ import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { unsupported } from '@shared/utils/dispatcher';
-
-// Local imports - platform and host ports
 import {
   getProviderDisplayName,
   getProviderEndpoint,
@@ -51,12 +49,6 @@ import {
   supportsCustomEndpoint,
 } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { ConfigProvider } from '@platform/interfaces';
-import type { PlatformSecrets } from '@platform/secrets';
-
-// Local imports - utilities
-import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
-import type { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 
 interface DesktopCredentialRendererPort {
   postToRenderer(message: unknown): void;

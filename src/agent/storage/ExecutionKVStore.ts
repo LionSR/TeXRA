@@ -9,7 +9,6 @@
 import { LRUCache } from 'lru-cache';
 import { z } from 'zod';
 
-import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   type AgentConfig,
   AgentConfigSchema,
@@ -20,6 +19,7 @@ import {
 } from '@agent/types/ProviderMessage';
 import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
+import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   ExecutionMetaSchema,
   type ExecutionId,
