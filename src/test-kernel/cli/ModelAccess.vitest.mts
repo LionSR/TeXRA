@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   emptyModelListMessageForCliMode,
   findCliModelAccessEntry,
@@ -20,18 +21,8 @@ import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { ModelOptionData } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 
-const mocks = vi.hoisted(() => ({
-  authProvider: {
-    isAuthenticated: vi.fn(),
-  },
-}));
-
 vi.mock('@model/computeModelOptions', () => ({
   computeModelOptionsData: vi.fn(),
-}));
-
-vi.mock('@cli/runtime/supabaseAuth', () => ({
-  getCliAuthProvider: () => mocks.authProvider,
 }));
 
 vi.mock('llm-zoo', async (importOriginal) => {
@@ -50,6 +41,7 @@ vi.mock('llm-zoo', async (importOriginal) => {
 });
 
 const computeModelOptionsDataMock = vi.mocked(computeModelOptionsData);
+const isAuthenticatedSpy = vi.spyOn(SupabaseClient, 'isAuthenticated');
 
 function model(
   value: string,
@@ -85,8 +77,8 @@ const INTERACTIVE_RECOVERY = {
 describe('CLI model access resolution', () => {
   beforeEach(() => {
     computeModelOptionsDataMock.mockReset();
-    mocks.authProvider.isAuthenticated.mockReset();
-    mocks.authProvider.isAuthenticated.mockResolvedValue(true);
+    isAuthenticatedSpy.mockReset();
+    isAuthenticatedSpy.mockResolvedValue(true);
   });
 
   it('keeps the requested model when it is currently runnable', async () => {
@@ -910,7 +902,7 @@ describe('CLI model access resolution', () => {
   });
 
   it('does not mask explicit retired models behind included login', async () => {
-    mocks.authProvider.isAuthenticated.mockResolvedValue(false);
+    isAuthenticatedSpy.mockResolvedValue(false);
     computeModelOptionsDataMock.mockResolvedValueOnce([
       modelOption('haiku3', {
         label: 'Haiku 3',
@@ -1056,7 +1048,7 @@ describe('CLI model access resolution', () => {
         disabled: true,
       }),
     ]);
-    mocks.authProvider.isAuthenticated.mockResolvedValueOnce(false);
+    isAuthenticatedSpy.mockResolvedValueOnce(false);
 
     await expect(
       getCliModelAccessList({ apiMode: 'included' }),
@@ -1084,7 +1076,7 @@ describe('CLI model access resolution', () => {
         disabled: false,
       }),
     ]);
-    mocks.authProvider.isAuthenticated.mockResolvedValueOnce(false);
+    isAuthenticatedSpy.mockResolvedValueOnce(false);
 
     await expect(
       getCliModelAccessList({ apiMode: 'included' }),
@@ -1110,7 +1102,7 @@ describe('CLI model access resolution', () => {
         disabled: true,
       }),
     ]);
-    mocks.authProvider.isAuthenticated.mockResolvedValueOnce(true);
+    isAuthenticatedSpy.mockResolvedValueOnce(true);
 
     await expect(
       getCliModelAccessList({ apiMode: 'included' }),

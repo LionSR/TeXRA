@@ -422,17 +422,10 @@ export function createDesktopAuthCoordinator(options: {
 export function initializeDesktopServerSideKeyAccess(
   log: DesktopAuthLog,
 ): void {
-  initializeServerSideKeyAccess(
-    {
-      state: platform().globalState,
-      logger: createAuthServiceLogger(log),
-    },
-    {
-      isAuthenticated: () => SupabaseClient.isAuthenticated(),
-      getUserTier: () => SupabaseClient.getUserTier(),
-      getAccessToken: () => SupabaseClient.getRelayAccessToken(),
-    },
-  );
+  initializeServerSideKeyAccess({
+    state: platform().globalState,
+    logger: createAuthServiceLogger(log),
+  });
 }
 
 function clearDesktopServerSideKeyCaches(log: DesktopAuthLog): void {

@@ -3,6 +3,7 @@ import { defineCommand, showUsage } from 'citty';
 import { platform } from '@platform/platform';
 import { getVisibleAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 
@@ -56,11 +57,7 @@ import {
   chatGptSignOutPreferenceMessage,
   signOutCliChatGpt,
 } from '../runtime/chatgptLogin';
-import {
-  getCliAuthProfile,
-  getCliAuthProvider,
-  signOutCliSupabase,
-} from '../runtime/supabaseAuth';
+import { getCliAuthProfile, signOutCliSupabase } from '../runtime/supabaseAuth';
 
 import { contextFromArgs } from './_helpers/context';
 import { withUsageSections } from './_helpers/dispatch';
@@ -220,7 +217,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
       teamItems: buildCliTeamItems(presetPlanSet.plans, {
         includeLoginHint: !presetPlanSet.remoteAgentLoadAttempted,
         remoteAgentCatalogAvailable:
-          await getCliAuthProvider().canAccessRemoteAgentCatalog(),
+          await SupabaseClient.canAccessRemoteAgentCatalog(),
         launchBlockReason:
           launchContext.approvalPolicy === 'never'
             ? 'delegation-denied'
@@ -259,7 +256,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
           plan: initialPlan,
           remoteCatalogRefreshAttempted: presetPlanSet.remoteAgentLoadAttempted,
           canAccessRemoteCatalog: () =>
-            getCliAuthProvider().canAccessRemoteAgentCatalog(),
+            SupabaseClient.canAccessRemoteAgentCatalog(),
           choose: async (names) => {
             writeTextStderr(
               `Team ${action.preset} has unavailable TeXRA-hosted members: ${names.join(', ')}.`,
@@ -282,7 +279,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
             );
             return (
               code === CliExitCode.Success &&
-              (await getCliAuthProvider().canAccessRemoteAgentCatalog())
+              (await SupabaseClient.canAccessRemoteAgentCatalog())
             );
           },
           refresh: async () =>
