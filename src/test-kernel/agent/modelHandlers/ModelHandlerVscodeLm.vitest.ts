@@ -268,6 +268,7 @@ describe('ModelHandlerVscodeLm streaming and tools', () => {
           parameters: { type: 'object', properties: {} },
         },
       ],
+      finalTool: { name: 'search' },
     });
 
     expect(response).toMatchObject({
@@ -295,6 +296,7 @@ describe('ModelHandlerVscodeLm streaming and tools', () => {
         input: { url: 'https://example.com' },
       },
     ]);
+    expect(handler.supportsForcedToolChoice).toBe(false);
     expect(port.sendRequest).toHaveBeenCalledWith(
       { vendor: ModelProvider.COPILOT, id: 'copilot-model-id' },
       [

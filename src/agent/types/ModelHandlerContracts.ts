@@ -51,6 +51,11 @@ export interface TokenValidationResult {
   utilizationPercent?: number;
 }
 
+/** Named terminal tool selected for a provider-native forced turn. */
+export interface FinalTool {
+  name: string;
+}
+
 /**
  * Options for creating a model response.
  * @template M - Provider-specific message type
@@ -73,6 +78,8 @@ export interface CreateResponseOptions<
   signal?: AbortSignal;
   /** Optional tool definitions for function calling */
   tools?: ToolDefinition[];
+  /** Specific terminal tool to force for this response, when supported. */
+  finalTool?: FinalTool;
 }
 
 /**
