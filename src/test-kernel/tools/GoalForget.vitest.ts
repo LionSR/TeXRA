@@ -50,6 +50,16 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
     expect(next.status).toBe('active');
   });
 
+  it('treats only absent goal records as no goal', async () => {
+    const { platform } = await import('@platform/platform');
+    const state = platform().workspaceState;
+    const key = `goals:byStream:${STREAM_A}`;
+
+    expect(GoalStore.getForStream(STREAM_A)).toBeNull();
+    await state.update(key, null);
+    expect(GoalStore.getForStream(STREAM_A)).toBeNull();
+  });
+
   it('routes explicit-session forget notifications only to the passed session', async () => {
     const runSession = createTestSession();
     const explicitSession = createTestSession();
@@ -108,17 +118,27 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
     }
   });
 
-  it('cleans up an unparseable blob (raw key presence, not parse success)', async () => {
+  it('surfaces an unparseable blob but still lets explicit cleanup remove it', async () => {
     const { platform } = await import('@platform/platform');
     const state = platform().workspaceState;
-    // An unparseable record normalizes to null on read, but its raw key
-    // must still be removed by forget.
     await state.update(`goals:byStream:${STREAM_A}`, { goalId: 'not-valid' });
-    expect(GoalStore.getForStream(STREAM_A)).toBeNull();
+    expect(() => GoalStore.getForStream(STREAM_A)).toThrow();
 
     await GoalStore.forget(STREAM_A);
 
     expect(state.get(`goals:byStream:${STREAM_A}`)).toBeUndefined();
+    expect(GoalStore.getForStream(STREAM_A)).toBeNull();
+  });
+
+  it('does not overwrite an unparseable record when starting a goal', async () => {
+    const { platform } = await import('@platform/platform');
+    const state = platform().workspaceState;
+    const malformed = { goalId: 'not-valid' };
+    const key = `goals:byStream:${STREAM_A}`;
+    await state.update(key, malformed);
+
+    await expect(GoalStore.start(STREAM_A, 'replacement')).rejects.toThrow();
+    expect(state.get(key)).toEqual(malformed);
   });
 
   it('forgetMany clears records and unparseable blobs', async () => {

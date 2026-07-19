@@ -68,9 +68,9 @@ function readRaw(streamId: StreamTabId): Goal | null {
   // does throw, surfacing the misuse.
   const state = tryWorkspaceState();
   if (!state) return null;
-  return GoalSchema.nullable()
-    .catch(null)
-    .parse(state.get<unknown>(streamKey(streamId)));
+  return (
+    GoalSchema.nullish().parse(state.get<unknown>(streamKey(streamId))) ?? null
+  );
 }
 
 async function writeRaw(goal: Goal): Promise<void> {
@@ -276,9 +276,8 @@ export const GoalStore = {
   async forget(streamId: StreamTabId, session?: SessionHandle): Promise<void> {
     const state = tryWorkspaceState();
     if (!state) return;
-    // Gate on raw key presence, not parse success — an unparseable blob
-    // (which `readRaw` normalizes to null) must still be cleaned up, or its
-    // key lingers forever.
+    // Gate on raw key presence, not parse success, so explicit cleanup can
+    // still remove an invalid record without first reading it.
     const existed = state.get<unknown>(streamKey(streamId)) != null;
     if (!existed) return;
     await Promise.all([
