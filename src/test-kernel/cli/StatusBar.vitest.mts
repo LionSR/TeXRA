@@ -1329,6 +1329,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
+      'running',
       'Press Ctrl-C again to exit',
       PERSONAL_API_MODE_LABEL,
     ]);
@@ -1403,6 +1404,28 @@ describe('CLI StatusBar display model', () => {
     expect(display.left.map(statusBarSegmentText)).not.toContain(
       '1 queued follow-up will be discarded',
     );
+  });
+
+  it('keeps compact run liveness visible beside transient notices', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_PHASE.RUNNING,
+        runningFrame: '/',
+        elapsedMs: 45_000,
+        transientNotice: {
+          kind: 'message',
+          text: 'Unknown command: /wat',
+          expiresAt: 1,
+        },
+      }),
+    );
+
+    expect(display.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      '/ running 45s',
+      'Unknown command: /wat',
+      PERSONAL_API_MODE_LABEL,
+    ]);
   });
 
   it('compacts token usage to a percentage before dropping it on narrow widths', () => {

@@ -782,6 +782,29 @@ export function buildStatusBarDisplay(
     });
   }
 
+  const statusLabel = formatCliStatusLabel(
+    input.status,
+    input.substate,
+    input.isChildStream,
+  );
+  const spinPrefix =
+    isActivePhase(input.status) && input.runningFrame
+      ? `${input.runningFrame} `
+      : '';
+
+  // A notice must not hide the only indication that an active run is still
+  // alive. Keep that liveness compact so the notice remains the focal text.
+  if (input.transientNotice && isActivePhase(input.status)) {
+    const elapsed =
+      input.elapsedMs === undefined
+        ? ''
+        : ` ${formatCompactDuration(input.elapsedMs)}`;
+    left.push({
+      text: `${spinPrefix}${statusLabel}${elapsed}`,
+      color: 'dim',
+    });
+  }
+
   let transientNoticeIndex: number | undefined;
   if (input.transientNotice) {
     transientNoticeIndex = left.length;
@@ -796,15 +819,6 @@ export function buildStatusBarDisplay(
       });
     }
   } else {
-    const statusLabel = formatCliStatusLabel(
-      input.status,
-      input.substate,
-      input.isChildStream,
-    );
-    const spinPrefix =
-      isActivePhase(input.status) && input.runningFrame
-        ? `${input.runningFrame} `
-        : '';
     left.push({
       text: `${spinPrefix}${statusLabel}`,
       color: 'dim',
