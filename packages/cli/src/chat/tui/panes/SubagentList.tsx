@@ -432,6 +432,13 @@ export function SubagentList(
         items={items}
         maxVisibleItems={contentRows}
         onCancel={props.onCancel ?? (() => undefined)}
+        // This panel is a standalone focus target, not a cyclic menu: Down
+        // past the last row hands keyboard ownership back to the input
+        // (mirrors Tab) instead of wrapping to the top.
+        wrap={false}
+        onBoundaryEscape={(direction) => {
+          if (direction === 1) props.onCancel?.();
+        }}
         onHighlightChange={(value) => props.onSelectionChange?.(value)}
         onSelect={(value) => {
           const streamId = childListStreamId(value);

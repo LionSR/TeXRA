@@ -167,6 +167,13 @@ const STAT_FIELDS: readonly StatFieldConfig[] = [
   ['cost', 'rocket', 'Cost', formatCostUsd],
 ];
 
+/** Fixed header config for the statistics panel rendered via <context-management>. */
+const STATISTICS_CONFIG = Object.freeze({
+  icon: 'graph',
+  label: 'Statistics',
+  color: 'var(--wa-color-text-normal)',
+});
+
 /** Format statistics entry as TemplateResult. */
 export function formatStatisticsTemplate(
   message: LogMessageData,
@@ -188,5 +195,5 @@ export function formatStatisticsTemplate(
 
   if (items.length === 0) return null;
   // prettier-ignore
-  return html`<statistics-panel .logId=${id} .items=${items}></statistics-panel>`;
+  return html`<context-management .logId=${id} .items=${items} .config=${STATISTICS_CONFIG}></context-management>`;
 }

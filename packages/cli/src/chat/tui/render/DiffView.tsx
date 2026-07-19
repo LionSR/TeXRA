@@ -178,6 +178,46 @@ export function maxDiffScrollOffset(
   });
 }
 
+/**
+ * Start a scrollable approval diff near its first changed visual row. Long
+ * wrapped context lines can otherwise consume the whole initial viewport.
+ */
+export function initialDiffScrollOffset(
+  hunks: readonly Hunk[],
+  width: number,
+  maxDisplayLines: number,
+): number {
+  if (maxDisplayLines <= COMPACT_DIFF_DISPLAY_LINES) return 0;
+
+  const lines = wrappedDiffDisplayLines(hunks, width);
+  if (lines.length <= maxDisplayLines) return 0;
+
+  const changedIndex = lines.findIndex(
+    (line) => line.kind === 'added' || line.kind === 'removed',
+  );
+  if (changedIndex < 0) return 0;
+
+  const initiallyVisibleContentRows = Math.max(1, maxDisplayLines - 1);
+  const firstChange = lines.at(changedIndex);
+  const maxOffset = maxDiffScrollOffset(lines.length, maxDisplayLines);
+  const defaultOffset = clamp(changedIndex - 1, 0, maxOffset);
+  if (firstChange?.kind !== 'removed') {
+    return changedIndex < initiallyVisibleContentRows ? 0 : defaultOffset;
+  }
+
+  let removedEnd = changedIndex;
+  while (lines.at(removedEnd + 1)?.kind === 'removed') removedEnd += 1;
+  const addedIndex =
+    lines.at(removedEnd + 1)?.kind === 'added' ? removedEnd + 1 : undefined;
+  if (addedIndex === undefined) {
+    return changedIndex < initiallyVisibleContentRows ? 0 : defaultOffset;
+  }
+
+  if (addedIndex < initiallyVisibleContentRows) return 0;
+
+  return clamp(addedIndex - Math.max(1, maxDisplayLines - 2) + 1, 0, maxOffset);
+}
+
 function overflowMarkerCandidates(
   kind: OverflowMarkerKind,
   count: number,
