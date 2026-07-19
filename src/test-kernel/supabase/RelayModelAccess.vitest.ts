@@ -5,6 +5,9 @@ import { strict as assert } from 'node:assert';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { describe, it, vi } from 'vitest';
 
+// Local imports - shared provider registry
+import { SERVER_SIDE_PROVIDER_IDS } from '@shared/constants/providers';
+
 // A retired model whose provider is not in RELAY_PROVIDERS (e.g. 'meta') is
 // not currently present in the pinned llm-zoo registry, so this synthetic
 // entry pins down the RETIRED_MODEL_PATTERNS derivation directly: it must
@@ -39,6 +42,13 @@ import {
 } from '../../../supabase/functions/relay/models';
 
 describe('relay tier model access', () => {
+  it('keeps client server-key providers aligned with relay routing', () => {
+    assert.deepEqual(
+      SERVER_SIDE_PROVIDER_IDS.toSorted(),
+      TIER_CONFIG.providers.toSorted(),
+    );
+  });
+
   it('limits Max to non-Ultra providers and keeps Ultra passthrough', () => {
     const maxModels = TIER_CONFIG.tiers.Max?.models;
     assert.ok(Array.isArray(maxModels));
