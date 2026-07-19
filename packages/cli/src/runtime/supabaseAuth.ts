@@ -156,16 +156,23 @@ export async function signInCliSupabase(
     }
 
     options.signal?.throwIfAborted();
+    const sessionPromise = callbackServer.waitForSession(options.signal);
     options.onAuthUrl?.(data.url);
     if (options.openBrowser ?? true) {
-      await openBrowser(
+      const browserLaunch = openBrowser(
         data.url,
         options.log,
         options.manualBrowserHint ?? 'texra login --no-browser',
       );
+      // A completed callback still waits for the launcher, while cancellation
+      // rejects sessionPromise and therefore preempts a stalled launcher.
+      await Promise.race([
+        browserLaunch,
+        sessionPromise.then(() => browserLaunch),
+      ]);
     }
 
-    const session = await callbackServer.waitForSession(options.signal);
+    const session = await sessionPromise;
     getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
     await enableCliIncludedModelAccess();
     return session;

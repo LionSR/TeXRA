@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
     })),
     clearServerKeyCaches: vi.fn(),
     getCliSecrets: vi.fn(),
+    openBrowser: vi.fn(),
     pollForDeviceSession: vi.fn(),
     requestDeviceAuthorization: vi.fn(),
     setUseIncludedModelAccess: vi.fn(),
@@ -88,7 +89,7 @@ vi.mock('@cli/runtime/cliSecrets', () => ({
 }));
 
 vi.mock('@cli/runtime/browser', () => ({
-  openBrowser: vi.fn(),
+  openBrowser: mocks.openBrowser,
 }));
 
 vi.mock('@cli/runtime/supabaseAuthCallbackServer', () => ({
@@ -229,6 +230,41 @@ describe('CLI Supabase auth', () => {
     expect(mocks.pollForDeviceSession).toHaveBeenCalledWith(authorization, {
       signal: controller.signal,
     });
+  });
+
+  it('settles browser sign-in cancellation while its launcher remains pending', async () => {
+    const controller = new AbortController();
+    const callbackServer = {
+      close: vi.fn().mockResolvedValue(undefined),
+      redirectTo: 'http://127.0.0.1:0/callback',
+      waitForSession: vi.fn(
+        (signal: AbortSignal | undefined) =>
+          new Promise((_resolve, reject) => {
+            signal?.addEventListener('abort', () => reject(signal.reason), {
+              once: true,
+            });
+          }),
+      ),
+    };
+    mocks.startLoopbackCallbackServer.mockResolvedValue(callbackServer);
+    mocks.signInWithOAuth.mockResolvedValue({
+      data: { url: 'https://auth.example/login' },
+      error: null,
+    });
+    mocks.openBrowser.mockReturnValue(new Promise(() => {}));
+    const { signInCliSupabase } = await loadSupabaseAuth();
+    const completion = signInCliSupabase({ signal: controller.signal });
+    const rejection = expect(completion).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+
+    await vi.waitFor(() =>
+      expect(callbackServer.waitForSession).toHaveBeenCalledOnce(),
+    );
+    controller.abort();
+
+    await rejection;
+    expect(callbackServer.close).toHaveBeenCalledOnce();
   });
 
   it('removes cached remote agents after sign-out', async () => {

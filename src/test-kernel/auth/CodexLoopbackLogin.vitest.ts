@@ -36,6 +36,35 @@ describe('Codex loopback login', () => {
     await expect(completion).rejects.toMatchObject({ name: 'AbortError' });
   });
 
+  it('settles cancellation while the browser launcher remains pending', async () => {
+    const controller = new AbortController();
+    let finishBrowserLaunch!: () => void;
+    const coordinator = {
+      buildAuthorizeRequest: (port: number): CodexAuthorizeRequest => ({
+        url: 'https://auth.example.test/oauth/authorize',
+        verifier: 'verifier',
+        state: 'state',
+        redirectUri: `http://127.0.0.1:${port}${CODEX_CALLBACK_PATH}`,
+      }),
+    } as unknown as CodexSessionCoordinator;
+    const completion = loginWithLoopback({
+      coordinator,
+      openBrowser: () =>
+        new Promise<void>((resolve) => {
+          finishBrowserLaunch = resolve;
+        }),
+      signal: controller.signal,
+    });
+    const rejection = expect(completion).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+
+    controller.abort();
+
+    await rejection;
+    finishBrowserLaunch();
+  });
+
   it('ignores stale callback errors and accepts a later valid callback', async () => {
     const state = 'expected-state';
     const verifier = 'verifier';
