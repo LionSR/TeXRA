@@ -50,6 +50,8 @@ const ToolUseRunSharedSchema = z.looseObject({
   lastError: RetryErrorInfoSchema.optional(),
   /** Last assistant response without the full assembly buffers. */
   lastResponse: z.string().optional(),
+  /** Validated terminal-tool result retained across interrupt and resume. */
+  structured: z.json().optional(),
 });
 
 /** Per-step schema after the one-time legacy workspace migration. */

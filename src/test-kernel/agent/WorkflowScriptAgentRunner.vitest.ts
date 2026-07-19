@@ -78,6 +78,16 @@ const result: AgentFinalResult = {
   diffs: [],
   cost: 0,
 };
+// A completed tool-use result carrying a structured value, as a schema call
+// resolves once the agent submits output.
+const structuredResult: AgentFinalResult = {
+  category: 'toolUse',
+  outcome: 'completed',
+  response: '',
+  files: [],
+  cost: 0,
+  structured: { title: 'Lemma 1' },
+};
 
 function parentContext(): LaunchRunContext {
   return {
@@ -492,6 +502,97 @@ describe('createWorkflowScriptAgentRunner', () => {
       expect.anything(),
       expect.anything(),
     );
+  });
+
+  it('routes an agent({ schema }) call to a tool-use agent with an output schema', async () => {
+    mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
+      name,
+      source: 'builtInToolUse',
+      category: 'toolUse',
+      path: `/agents/${name}.yml`,
+    }));
+    mocks.executeStableSubagentInBand.mockImplementationOnce(
+      async (options) => {
+        mocks.preparedOptions.push(await options.prepare());
+        return { executionId: 'bbbbbb222222', result: structuredResult };
+      },
+    );
+    const schema = {
+      type: 'object',
+      properties: { title: { type: 'string' } },
+      required: ['title'],
+      additionalProperties: false,
+    };
+    const runner = defaultRunner();
+
+    await expect(
+      runner(invocation({ agentName: 'assistant', schema })),
+    ).resolves.toBe(structuredResult);
+
+    expect(mocks.requireVisibleAgent).toHaveBeenCalledWith(
+      'toolUse',
+      'assistant',
+      expect.anything(),
+    );
+    expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
+      parentModel: 'parent-model',
+      agentCategory: 'toolUse',
+    });
+    expect(mocks.preparedOptions[0]).toEqual(
+      expect.objectContaining({
+        agentName: 'assistant',
+        configPayload: expect.objectContaining({
+          agentCategory: 'toolUse',
+          outputSchema: schema,
+        }),
+      }),
+    );
+  });
+
+  it('exempts a schema call from the workflow empty-files guard', async () => {
+    mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
+      name,
+      source: 'builtInToolUse',
+      category: 'toolUse',
+      path: `/agents/${name}.yml`,
+    }));
+    mocks.executeStableSubagentInBand.mockImplementationOnce(
+      async (options) => {
+        mocks.preparedOptions.push(await options.prepare());
+        return { executionId: 'bbbbbb222222', result: structuredResult };
+      },
+    );
+    const schema = { type: 'object', additionalProperties: false };
+    const runner = defaultRunner();
+
+    // No input files and no default outputs: the workflow path aborts, but a
+    // schema call runs a tool-use agent whose result is the submitted value.
+    await expect(
+      runner(invocation({ agentName: 'assistant', schema })),
+    ).resolves.toBe(structuredResult);
+    expect(mocks.preparedOptions[0]).toEqual(
+      expect.objectContaining({
+        configPayload: expect.objectContaining({ agentCategory: 'toolUse' }),
+      }),
+    );
+  });
+
+  it('aborts a schema call that omits agentName', async () => {
+    const schema = { type: 'object', additionalProperties: false };
+    const runner = defaultRunner();
+
+    // The workflow default 'correct' is a document editor with no tool-use
+    // counterpart, so a schema call must name a tool-use agent explicitly
+    // rather than silently reuse the workflow default under the tool-use
+    // category.
+    await expect(runner(invocation({ schema }))).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: expect.stringMatching(
+        /must name a tool-use agent via agentName/,
+      ),
+    });
+    expect(mocks.preparedOptions).toHaveLength(0);
+    expect(mocks.requireVisibleAgent).not.toHaveBeenCalled();
   });
 
   it('leaves onChildActive untouched when a recovered attempt runs no live work', async () => {

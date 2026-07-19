@@ -67,6 +67,8 @@ export class WorkflowScriptTool extends defineTool({
 
 Script rules: start with export const meta = { name, description }; no imports or require (only the injected primitives exist: agent, phase, log, parallel, pipeline, concat, and the args global). agent(), parallel(), and pipeline() return Promises: ALWAYS await them. agent(prompt, options) options: inputFiles (REQUIRED for file-editing agents; workspace paths, or a previous call's output paths to chain stages), agentName (another visible workflow agent; defaults to this tool's agent field), id (distinguish otherwise-identical calls), label, phase. A failed call inside parallel()/pipeline() resolves to null; filter with .filter(Boolean).
 
+Structured output: agent(prompt, { schema }) where schema is a JSON Schema object runs a tool-use agent (name one via agentName; the default agent field is a file editor with no tool-use counterpart) that finishes by calling submit_output with a value matching schema. The call resolves to an envelope whose .structured is the validated object rather than edited files.
+
 Async: this tool returns immediately with an execution ID and runs the workflow as its own detached execution. The script's return value plus the run log (phases, log() lines, per-call outcomes with cost) are delivered back as a follow-up message when the run completes. Check intermediate progress with the executions tool (path=/executions/<id>, action=wait).
 
 Example:

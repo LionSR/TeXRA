@@ -129,17 +129,42 @@ export function createWorkflowScriptAgentRunner(
           hooks?.onChildActive?.(executionId, invocation, true);
         },
         prepare: async () => {
+          // A `schema` option routes the call to a tool-use agent that
+          // finishes by submitting a validated structured value; otherwise it
+          // is an ordinary workflow-edit agent. The category parameterizes
+          // agent resolution, model selection, and the launched config.
+          const schema = invocation.options.schema;
+          const category =
+            schema !== undefined
+              ? AgentCategory.ToolUse
+              : AgentCategory.Workflow;
+          // A schema call runs a tool-use agent, so it must name one: the
+          // workflow default (this tool's `agent` field) is a document editor
+          // with no same-named tool-use counterpart, and resolving it under the
+          // tool-use category would fail with a confusing "Unknown toolUse
+          // agent". Fail loudly here instead of silently substituting an
+          // unrelated general agent.
+          if (
+            schema !== undefined &&
+            invocation.options.agentName === undefined
+          ) {
+            throw new WorkflowRunAbortError(
+              `Structured-output agent() calls must name a tool-use agent via ` +
+                `agentName: the workflow default '${defaultAgentName}' is a ` +
+                `document editor with no tool-use counterpart.`,
+            );
+          }
           const requestedAgent =
             invocation.options.agentName ?? defaultAgentName;
           const agent = requireVisibleAgent(
-            AgentCategory.Workflow,
+            category,
             requestedAgent,
             runScope.delegationAgentScope ?? undefined,
           );
           const [model, inputFiles] = await Promise.all([
             selectAvailableDelegationModel({
               parentModel: parent.model,
-              agentCategory: AgentCategory.Workflow,
+              agentCategory: category,
             }),
             resolveInvocationInputFiles(
               run.executionId,
@@ -155,7 +180,10 @@ export function createWorkflowScriptAgentRunner(
           // Run-fatal, not a per-call failure: a plain error would resolve
           // this agent() to null inside parallel()/pipeline(), silently
           // filtering away the very misuse this guard exists to surface.
+          // A schema call runs a tool-use agent whose result is the submitted
+          // value, not edited files, so this workflow-edit guard is exempt.
           if (
+            schema === undefined &&
             inputFiles.length === 0 &&
             (agent.defaultOutputFiles ?? []).length === 0
           ) {
@@ -165,13 +193,17 @@ export function createWorkflowScriptAgentRunner(
                 `diffs, not response text).`,
             );
           }
+          const categoryFields =
+            schema !== undefined
+              ? { agentCategory: AgentCategory.ToolUse, outputSchema: schema }
+              : { agentCategory: AgentCategory.Workflow };
           const configPayload: AgentConfigPayload = {
             agent: agent.name,
             agentSource: agent.source,
-            agentCategory: AgentCategory.Workflow,
             model,
             instruction: invocation.prompt,
             inputFiles,
+            ...categoryFields,
             ...(runScope.workingDirectory !== undefined && {
               workingDirectory: runScope.workingDirectory,
             }),

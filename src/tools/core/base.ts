@@ -30,8 +30,15 @@ export abstract class BaseTool<T> implements ITool {
     this.schema = schema;
   }
 
-  validate(input: unknown): T {
-    return this.schema.parse(input);
+  validate(input: unknown): T | Promise<T> {
+    try {
+      return this.schema.parse(input);
+    } catch (error) {
+      if (error instanceof z.core.$ZodAsyncError) {
+        return this.schema.parseAsync(input);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -51,7 +58,8 @@ export abstract class BaseTool<T> implements ITool {
    */
   async call(rawInput: unknown): Promise<ToolResult> {
     try {
-      const input = this.validate(rawInput);
+      const validated = this.validate(rawInput);
+      const input = validated instanceof Promise ? await validated : validated;
       // await is required here - without it, rejections bypass the catch block
       return await this.execute(input);
     } catch (err) {

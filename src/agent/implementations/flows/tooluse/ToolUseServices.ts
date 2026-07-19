@@ -4,7 +4,7 @@ import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { SubagentProgressUpdate, TodoItem } from '@shared/schemas';
 import type { TaskRunFileService } from '@utils/files';
-import type { PreparedShared } from './nodes/types';
+import type { PreparedShared, ToolUseRunShared } from './nodes/types';
 
 export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly setting: AgentToolUseSetting;
@@ -17,6 +17,8 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
   /** Persist todos to the execution KV store. Injected by runToolUseFlow. */
   readonly persistTodos?: (todos: TodoItem[]) => Promise<void>;
+  /** Read the run-local terminal result so the cycle can persist it atomically. */
+  readonly getPendingStructuredOutput?: () => ToolUseRunShared['structured'];
   /** True when this agent was launched as a subagent by an orchestrator. */
   readonly isSubagent?: boolean;
   /**
