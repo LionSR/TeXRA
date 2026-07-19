@@ -35,7 +35,6 @@ import { WebFetchTool } from './web/WebFetchTool';
 import { WebSearchTool } from './web/WebSearchTool';
 import { WolframTool } from './wolfram/WolframTool';
 import { TexcountTool } from './texcount/TexcountTool';
-import { CrossrefDoiTool } from './citation/CrossrefDoiTool';
 import { CrossrefSearchTool } from './citation/CrossrefSearchTool';
 import { PlanTool } from './plan/PlanTool';
 import { TodoWriteTool } from './todo/TodoTool';
@@ -106,7 +105,6 @@ function createDefaultTools() {
     extract_figures: new ExtractLatexFiguresTool(),
     extract_bib_entries: new ExtractBibliographyTool(),
     extract_tikz_figures: new ExtractTikzFiguresTool(),
-    crossref_doi: new CrossrefDoiTool(),
     crossref_search: new CrossrefSearchTool(),
     zotero_add: new ZoteroAddTool(),
     zotero_collections: new ZoteroCollectionsTool(),
@@ -167,8 +165,10 @@ type _CanonicalDisplayNamesAreRegistered = AssertNever<
  * normalized while loading configs, rather than registered as extra tool names,
  * so the model sees only the canonical definition.
  */
-const TOOL_ALIASES: Record<string, string> = {
+const TOOL_ALIASES: Record<string, RegisteredToolName> = {
   add_criticism: 'diagnostics',
+  // Remove on 2026-08-19 after the custom-agent migration window; see #6981.
+  crossref_doi: 'crossref_search',
   external_inquiry: 'inquiry',
 };
 
@@ -207,14 +207,19 @@ export function resolveToolDefinitions(
   warnOnMissing?: (toolName: string) => void,
 ): ToolDefinition[] {
   const registry = getDefaultToolRegistry();
+  const seenNames = new Set<string>();
 
-  return tools.map((item): ToolDefinition => {
+  return tools.flatMap((item): ToolDefinition[] => {
     const name = typeof item === 'string' ? item : item.name;
     const canonicalName = canonicalToolName(name);
+    if (seenNames.has(canonicalName)) {
+      return [];
+    }
+    seenNames.add(canonicalName);
 
     if (!VALID_TOOL_NAME.test(canonicalName)) {
       warnOnMissing?.(name);
-      return { name: canonicalName };
+      return [{ name: canonicalName }];
     }
 
     const tool = registry.get(canonicalName);
@@ -222,15 +227,25 @@ export function resolveToolDefinitions(
       warnOnMissing?.(name);
     }
 
+    // Aliases are compatibility names, not independent tool contracts. Legacy
+    // object-form configs may carry the retired tool's parameter schema, so
+    // normalize the whole definition at this boundary instead of only renaming
+    // it and exposing a stale contract to the model.
+    if (name !== canonicalName && tool) {
+      return [tool.definition];
+    }
+
     // String items: return tool definition or minimal fallback
     if (typeof item === 'string') {
-      return tool?.definition ?? { name: canonicalName };
+      return [tool?.definition ?? { name: canonicalName }];
     }
 
     // Object items: always parse with schema to validate/merge overrides
-    return ToolDefinitionSchema.catch({ name: canonicalName }).parse({
-      ...item,
-      name: canonicalName,
-    });
+    return [
+      ToolDefinitionSchema.catch({ name: canonicalName }).parse({
+        ...item,
+        name: canonicalName,
+      }),
+    ];
   });
 }

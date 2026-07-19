@@ -49,7 +49,8 @@ Get the citation info for arxiv:2401.12345
 Look up DOI 10.1038/nature12373
 ```
 
-Behind the scenes this calls the `arxiv_metadata` and `crossref_doi` tools.
+Behind the scenes this calls `arxiv_metadata` or the DOI lookup command in
+`crossref_search`.
 
 ### <wa-icon library="texra" name="cloud-download"></wa-icon> Download Paper Sources
 
@@ -138,7 +139,7 @@ Three research agents, each tuned for a different stage of the work — pick one
   :cards="[
     { icon: 'mortar-board', title: 'search', tag: 'default', tagVariant: 'accent', desc: 'Finding papers, literature reviews, fact-checking.', chips: [
       { text: 'arxiv_metadata', variant: 'neutral' },
-      { text: 'crossref_doi', variant: 'neutral' },
+      { text: 'crossref_search', variant: 'neutral' },
       { text: 'web_search', variant: 'neutral' },
       { text: 'web_fetch', variant: 'neutral' },
       { text: 'zotero', variant: 'neutral' },

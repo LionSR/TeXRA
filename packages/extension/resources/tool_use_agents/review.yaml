@@ -19,7 +19,6 @@ settings:
     - arxiv_search
     - arxiv_metadata
     - crossref_search
-    - crossref_doi
     - diagnostics
 prompts:
   systemPrompt: |
@@ -71,7 +70,7 @@ prompts:
 
     Reference Verification:
     (1) Use extract_bib_entries to examine the bibliography.
-    (2) When the text attributes a specific claim to a reference, use arxiv_search, arxiv_metadata, or crossref_doi to verify the claim matches the cited work.
+    (2) When the text attributes a specific claim to a reference, use arxiv_search, arxiv_metadata, or crossref_search with the doi command to verify the claim matches the cited work.
     (3) Check for self-consistency of citations.
 
     Report: Organize findings by category — Stated Goals (goal, status, evidence), Mathematical Verification (equation reference, status, details), Notation Issues (symbol, locations, description), Code Issues, Figure/Table Issues, Reference Issues, and a Summary of Findings. Return the report in your final response by default. Only save a report file in the workspace when the user explicitly asks for a file artifact, the task is inherently an edit, or a file is genuinely required for verification. Use write_file for new workspace artifacts and edit_file for targeted edits; do not use bash as a workspace file-writing fallback.

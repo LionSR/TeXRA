@@ -32,8 +32,7 @@ recommended groups at the bottom are a good starting point.
 - `arxiv_metadata` — fetch bibliographic metadata for an arXiv paper by ID.
 - `download_arxiv_source` — download an arXiv paper's source archive into
   the workspace.
-- `crossref_search` — search Crossref works and return top matches.
-- `crossref_doi` — look up detailed metadata for a DOI.
+- `crossref_search` — search Crossref works or look up detailed DOI metadata.
 
 ## LaTeX processing
 
@@ -92,8 +91,7 @@ Most agents should include the file-operations set as a baseline.
 
 **Research agent:**
 `bash, read_file, write_file, glob, grep, web_search, web_fetch,
-arxiv_search, arxiv_metadata, download_arxiv_source, crossref_search,
-crossref_doi`
+arxiv_search, arxiv_metadata, download_arxiv_source, crossref_search`
 
 **Code/editing agent:**
 `bash, read_file, write_file, edit_file, glob, grep, diagnostics`
@@ -104,7 +102,7 @@ extract_bib_entries, extract_tikz_figures, texcount`
 
 **Literature review agent:**
 `bash, read_file, write_file, glob, grep, arxiv_search, arxiv_metadata,
-crossref_search, crossref_doi, web_search, zotero_search, zotero_add,
+crossref_search, web_search, zotero_search, zotero_add,
 zotero_export`
 
 **Orchestrator agent:**
