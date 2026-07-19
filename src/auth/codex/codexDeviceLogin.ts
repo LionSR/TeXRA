@@ -7,10 +7,7 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 
 import { CODEX_DEVICE_VERIFICATION_URL } from './codexConstants';
-import {
-  type CodexLogger,
-  type CodexSessionCoordinator,
-} from './CodexSessionCoordinator';
+import { type CodexSessionCoordinator } from './CodexSessionCoordinator';
 import { CodexAuthError, type CodexSession } from './codexSessionTypes';
 import {
   deviceUserCode,
@@ -33,7 +30,6 @@ export interface CodexDeviceLoginOptions {
   onPrompt: (prompt: CodexDevicePrompt) => void;
   /** Optional heartbeat called once per poll (e.g. to print a dot). */
   onPoll?: () => void;
-  log?: CodexLogger;
   signal?: AbortSignal;
 }
 

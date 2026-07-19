@@ -47,11 +47,6 @@ export interface CodexOAuthClient {
   refreshTokens(refreshToken: string): Promise<CodexTokenResponse>;
 }
 
-export interface CodexLogger {
-  debug?(message: string): void;
-  warn?(message: string): void;
-}
-
 export interface CodexSessionStatus {
   signedIn: boolean;
   email?: string;
@@ -68,7 +63,6 @@ export interface CodexAuthorizeRequest {
 export interface CodexSessionCoordinatorInit {
   storage: CodexSessionStorage;
   client?: CodexOAuthClient;
-  log?: CodexLogger;
   /** Injectable clock for tests; defaults to Date.now. */
   now?: () => number;
 }
@@ -76,7 +70,6 @@ export interface CodexSessionCoordinatorInit {
 export class CodexSessionCoordinator {
   private readonly storage: CodexSessionStorage;
   private readonly client: CodexOAuthClient;
-  private readonly log?: CodexLogger;
   private readonly now: () => number;
   private refreshInFlight: Promise<CodexSession> | null = null;
   /**
@@ -94,7 +87,6 @@ export class CodexSessionCoordinator {
       exchangeAuthorizationCode: defaultExchange,
       refreshTokens: defaultRefresh,
     };
-    this.log = init.log;
     this.now = init.now ?? (() => Date.now());
   }
 
@@ -104,12 +96,10 @@ export class CodexSessionCoordinator {
     if (!raw) return null;
     const parsedJson = safeParseJson(raw);
     if (parsedJson.isErr()) {
-      this.log?.warn?.('Codex session storage was not valid JSON; ignoring.');
       return null;
     }
     const result = CodexSessionSchema.safeParse(parsedJson.value);
     if (!result.success) {
-      this.log?.warn?.('Codex session bundle failed validation; ignoring.');
       return null;
     }
     return result.data;
@@ -299,7 +289,6 @@ export class CodexSessionCoordinator {
         // whose store is queued behind it.
         await this.mutateSession(async () => {
           if (generation !== this.sessionGeneration) return;
-          this.log?.warn?.('Codex token refresh was rejected; signing out.');
           await this.storage.delete();
         });
       }

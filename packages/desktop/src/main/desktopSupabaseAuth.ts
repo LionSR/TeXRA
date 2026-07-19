@@ -20,7 +20,6 @@ import {
   getServerSideKeyService,
   initializeServerSideKeyAccess,
 } from '@auth/serverKeys';
-import type { AuthServiceLogger } from '@auth/serviceLogger';
 import type { AuthCallbackUriParts } from '@auth/core/authCallback';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { TEXRA_PROTOCOL } from '../desktopProtocol.js';
@@ -427,7 +426,7 @@ export function initializeDesktopServerSideKeyAccess(
 ): void {
   initializeServerSideKeyAccess({
     state: platform().globalState,
-    logger: createAuthServiceLogger(log),
+    logger: createSessionLog(log),
   });
 }
 
@@ -503,15 +502,6 @@ function createSessionLog(log: DesktopAuthLog): SupabaseSessionLog {
     debug: (source, message) => log.debug(`[${source}] ${message}`),
     info: (source, message) => log.info(`[${source}] ${message}`),
     warn: (source, message) => log.warn(`[${source}] ${message}`),
-    error: (source, message) => log.error(`[${source}] ${message}`),
-  };
-}
-
-function createAuthServiceLogger(
-  log: Pick<DesktopAuthLog, 'info' | 'error'>,
-): AuthServiceLogger {
-  return {
-    info: (source, message) => log.info(`[${source}] ${message}`),
     error: (source, message) => log.error(`[${source}] ${message}`),
   };
 }
