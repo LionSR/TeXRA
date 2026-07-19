@@ -2,6 +2,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+// Common imports
+import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+
 // Platform imports
 import { FileType, type FileStat } from '@platform/interfaces';
 import { platform } from '@platform/platform';
@@ -42,18 +45,27 @@ export abstract class BaseFS {
     return resolved;
   }
 
+  private static async statIfExists(
+    this: typeof BaseFS,
+    target: string,
+  ): Promise<FileStat | undefined> {
+    try {
+      return await this.stat(target);
+    } catch (error) {
+      if (isFileNotFoundError(error) || isNotADirectoryError(error)) {
+        return undefined;
+      }
+      throw error;
+    }
+  }
+
   // ===== Async Methods =====
 
   public static async exists(
     this: typeof BaseFS,
     target: string,
   ): Promise<boolean> {
-    try {
-      await platform().fs.stat(this.preparePath(target));
-      return true;
-    } catch {
-      return false;
-    }
+    return (await this.statIfExists(target)) !== undefined;
   }
 
   public static async read(
@@ -181,24 +193,18 @@ export abstract class BaseFS {
     this: typeof BaseFS,
     target: string,
   ): Promise<boolean> {
-    try {
-      const stats = await this.stat(target);
-      return isFile(stats.type);
-    } catch {
-      return false;
-    }
+    const stats = await this.statIfExists(target);
+    return stats ? isFile(stats.type) : false;
   }
 
   public static async isSymbolicLink(
     this: typeof BaseFS,
     target: string,
   ): Promise<boolean> {
-    try {
-      const stats = await this.stat(target);
-      return (stats.type & FileType.SymbolicLink) === FileType.SymbolicLink;
-    } catch {
-      return false;
-    }
+    const stats = await this.statIfExists(target);
+    return stats
+      ? (stats.type & FileType.SymbolicLink) === FileType.SymbolicLink
+      : false;
   }
 
   // ===== Sync Methods =====
