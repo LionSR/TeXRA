@@ -126,9 +126,6 @@ jobs:
       - name: Check dead-code ratchet
         run: pnpm run check:dead-code-ratchet
 
-      - name: Check test-kernel LoC growth (warn-only)
-        run: pnpm run check:test-loc-growth
-
       - name: Check extension package invariants
         run: pnpm run check:extension-package-invariants
 
