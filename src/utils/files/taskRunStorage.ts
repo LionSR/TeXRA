@@ -51,7 +51,6 @@ export {
   inspectRunStorageEntry,
   runStorageLocationFromAnyAbsolutePath,
   runStorageLocationFromAbsolutePath,
-  type RunStorageEntryInspection,
 } from './runStorageFs';
 
 export class TaskRunFileService {

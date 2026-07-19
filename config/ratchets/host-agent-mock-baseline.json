@@ -132,6 +132,11 @@
       "specifier": "@agent/runtime/streamTab"
     },
     {
+      "file": "src/test-kernel/cli/TranscriptSessionPolicy.vitest.mts",
+      "form": "doMock",
+      "specifier": "@agent/runtime/runAgent"
+    },
+    {
       "file": "src/test-kernel/cli/WorkflowRunCommand.vitest.mts",
       "form": "mock",
       "specifier": "@agent/index"
@@ -180,11 +185,6 @@
       "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.mts",
       "form": "doMock",
       "specifier": "@agent/runtime/SessionResumeRetrieval"
-    },
-    {
-      "file": "src/test-kernel/desktop/DesktopSessionProgressBridge.vitest.mts",
-      "form": "doMock",
-      "specifier": "@agent/runtime/StreamStatusService"
     },
     {
       "file": "src/test-kernel/desktop/DesktopToolEditApproval.vitest.mts",

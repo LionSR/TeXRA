@@ -1,11 +1,10 @@
 import * as vscode from 'vscode';
 import { z } from 'zod';
 
-import { formatError, isFileNotFoundError } from '@common/errors';
+import { formatError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-export { isFileNotFoundError };
 export { toErrorMessage };
 
 /** Valid documentation identifiers for error messages. */

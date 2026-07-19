@@ -52,7 +52,7 @@ export interface ContextStateData {
  * read this to nest events under the active stage in the transcript;
  * agent-general SDK consumers may ignore it.
  */
-export interface StageStamp {
+interface StageStamp {
   readonly stageId?: string;
 }
 
@@ -83,13 +83,13 @@ export interface StageStartEvent extends StageStamp {
 }
 
 /** Immutable run identity emitted once when a stream enters RUNNING. */
-export interface RunStartEvent extends StageStamp {
+interface RunStartEvent extends StageStamp {
   readonly type: 'run.start';
   readonly descriptor: RunDescriptor;
 }
 
 /** Mutable persisted run config changed after run.start, e.g. model switch. */
-export interface RunConfigEvent extends StageStamp {
+interface RunConfigEvent extends StageStamp {
   readonly type: 'run.config';
   readonly streamId: StreamTabId;
   readonly executionId: ExecutionId;
@@ -97,14 +97,14 @@ export interface RunConfigEvent extends StageStamp {
 }
 
 /** Stage closed with a terminal status. */
-export interface StageEndEvent extends StageStamp {
+interface StageEndEvent extends StageStamp {
   readonly type: 'stage.end';
   readonly id: string;
   readonly status: RunOutcome;
 }
 
 /** Tool call started. `logId` is the subscriber-correlatable id. */
-export interface ToolStartEvent extends StageStamp {
+interface ToolStartEvent extends StageStamp {
   readonly type: 'tool.start';
   readonly logId: string;
   readonly toolName: string;
@@ -120,7 +120,7 @@ export interface ToolStartEvent extends StageStamp {
  * upsert keyed on `logId` and rely on `status` for terminality rather than
  * assuming the call is done.
  */
-export interface ToolEndEvent extends StageStamp {
+interface ToolEndEvent extends StageStamp {
   readonly type: 'tool.end';
   readonly logId: string;
   readonly status: ToolStatus;
@@ -129,7 +129,7 @@ export interface ToolEndEvent extends StageStamp {
 }
 
 /** Token-usage report. */
-export interface UsageEvent extends StageStamp {
+interface UsageEvent extends StageStamp {
   readonly type: 'usage';
   readonly payload: UpdateStreamUsagePayload;
   /** False when this usage report should not create a transcript stats row. */
@@ -147,7 +147,7 @@ export interface StatusEvent extends StageStamp {
 }
 
 /** Session-owned child/process activity for a parent run stream. */
-export type ChildActivityEvent =
+type ChildActivityEvent =
   | (StageStamp & {
       readonly type: 'child.activity';
       readonly kind: 'subagents';
@@ -162,7 +162,7 @@ export type ChildActivityEvent =
     });
 
 /** Incremental output from a child process owned by a parent run stream. */
-export interface ProcessOutputEvent extends StageStamp {
+interface ProcessOutputEvent extends StageStamp {
   readonly type: 'process.output';
   readonly parentStreamId: StreamTabId;
   readonly executionId: ExecutionId;
@@ -171,13 +171,13 @@ export interface ProcessOutputEvent extends StageStamp {
 }
 
 /** UI progress counters for a run, projected by hosts but not transcript logs. */
-export interface ConversationProgressEvent extends StageStamp {
+interface ConversationProgressEvent extends StageStamp {
   readonly type: 'conversation.progress';
   readonly progress: ConversationProgress;
 }
 
 /** Durable TeXRA run facts carried by the run trace with fact-native names. */
-export type RunFactEvent =
+type RunFactEvent =
   | (StageStamp &
       UpdateTodosPayload & {
         readonly type: 'updateTodos';
@@ -204,7 +204,7 @@ export type RunFactEvent =
       });
 
 /** Context window utilisation snapshot. */
-export interface ContextStateEvent extends StageStamp {
+interface ContextStateEvent extends StageStamp {
   readonly type: 'context.state';
   readonly inputTokens: number;
   readonly contextWindow: number;
@@ -217,21 +217,21 @@ export interface ContextStateEvent extends StageStamp {
  * `StreamOptions.deferStart`), so subscribers may surface liveness — "the
  * model is thinking / responding" — from this event alone.
  */
-export interface StreamStartEvent extends StageStamp {
+interface StreamStartEvent extends StageStamp {
   readonly type: 'stream.start';
   readonly id: string;
   readonly kind: StreamKind;
 }
 
 /** Chunk appended to an open stream. */
-export interface StreamChunkEvent extends StageStamp {
+interface StreamChunkEvent extends StageStamp {
   readonly type: 'stream.chunk';
   readonly id: string;
   readonly text: string;
 }
 
 /** Stream closed; finalText, when provided, replaces the buffered content. */
-export interface StreamEndEvent extends StageStamp {
+interface StreamEndEvent extends StageStamp {
   readonly type: 'stream.end';
   readonly id: string;
   readonly finalText?: string;
@@ -264,7 +264,7 @@ export interface ResponseFinalizedEvent extends StageStamp {
  * `filesLoaded`, `missingOutputs`, `webSearch`, `webFetch`, …). Keeps the
  * union clean for SDK consumers; host subscribers switch on `key`.
  */
-export interface DomainEvent extends StageStamp {
+interface DomainEvent extends StageStamp {
   readonly type: 'domain';
   readonly key: string;
   readonly data?: unknown;

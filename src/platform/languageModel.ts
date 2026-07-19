@@ -15,7 +15,7 @@ export interface LanguageModelInfo {
 export type LanguageModelAccessState =
   'allowed' | 'consent-required' | 'unavailable';
 
-export interface LanguageModelSelector {
+interface LanguageModelSelector {
   readonly vendor?: string;
   readonly family?: string;
   readonly version?: string;

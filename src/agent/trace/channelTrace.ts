@@ -40,7 +40,7 @@ export function createChannelTrace(name: string): AgentTrace {
   };
 }
 
-export interface ChannelSubscriberOptions {
+interface ChannelSubscriberOptions {
   /** Channel name used for the per-channel output sink. */
   readonly channel: string;
   /** Whether to route writes to the agent-specific output channel. */

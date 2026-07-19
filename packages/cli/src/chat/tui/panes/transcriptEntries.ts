@@ -75,7 +75,7 @@ export function isRenderableTranscriptEntry(entry: ConversationEntry): boolean {
   }
 }
 
-export function nextRenderableTranscriptEntry(
+function nextRenderableTranscriptEntry(
   entries: readonly ConversationEntry[],
   index: number,
 ): ConversationEntry | undefined {
