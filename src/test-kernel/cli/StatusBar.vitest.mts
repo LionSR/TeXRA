@@ -1428,6 +1428,26 @@ describe('CLI StatusBar display model', () => {
     ]);
   });
 
+  it('keeps thinking status visible during transient notices', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_PHASE.RUNNING,
+        runningFrame: '/',
+        elapsedMs: 45_000,
+        thinkingActive: true,
+        transientNotice: {
+          kind: 'message',
+          text: 'Unknown command: /wat',
+          expiresAt: 1,
+        },
+      }),
+    );
+
+    expect(display.left.map(statusBarSegmentText)).toEqual(
+      expect.arrayContaining(['/ running 45s', 'thinking...']),
+    );
+  });
+
   it('keeps queued-input discard warnings ahead of status details', () => {
     const display = buildStatusBarDisplay(
       statusInput({
