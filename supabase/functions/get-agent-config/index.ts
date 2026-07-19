@@ -7,10 +7,12 @@
  * - POST /get-agent-config - Fetch agent YAML config by name
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
 import { handleCors } from '../_shared/cors.ts';
-import { versionedJsonResponse } from '../_shared/responses.ts';
+import {
+  createEdgeClient,
+  versionedJsonResponse,
+} from '../_shared/responses.ts';
 
 // =============================================================================
 // Constants
@@ -36,10 +38,7 @@ const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
 // Service-role client that bypasses bucket policies for storage operations
 // (env is fixed at cold start; no per-request state)
-const adminClient =
-  supabaseUrl && serviceRoleKey
-    ? createClient(supabaseUrl, serviceRoleKey)
-    : null;
+const adminClient = createEdgeClient(supabaseUrl, serviceRoleKey);
 
 // =============================================================================
 // Request Handler

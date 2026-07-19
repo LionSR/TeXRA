@@ -28,19 +28,21 @@
  * in the Supabase Auth URL configuration (e.g. https://remote.texra.ai/functions/v1/auth-device/verify).
  */
 
-import { Hono, type Context as HonoContext } from '@hono/hono';
+import { type Context as HonoContext, Hono } from '@hono/hono';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { parseApprovalDecision } from './approvalRequest.ts';
 import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
 import { getCorsHeaders, handleCors } from '../_shared/cors.ts';
-import { randomBase64Url } from '../_shared/crypto.ts';
-import { createEdgeClient } from '../_shared/edgeClients.ts';
 import {
   mintGoTrueSession,
   sessionResponseBody,
 } from '../_shared/goTrueSession.ts';
 import { sha256Hex } from '../_shared/relayCiToken.ts';
-import { versionedJsonResponse } from '../_shared/responses.ts';
+import {
+  createEdgeClient,
+  randomBase64Url,
+  versionedJsonResponse,
+} from '../_shared/responses.ts';
 
 // =============================================================================
 // Constants
@@ -215,7 +217,9 @@ app.post('/code', async (c) => {
         device_code: deviceCode,
         user_code: displayCode,
         verification_uri: verifyUri,
-        verification_uri_complete: `${verifyUri}?device_code=${encodeURIComponent(displayCode)}`,
+        verification_uri_complete: `${verifyUri}?device_code=${encodeURIComponent(
+          displayCode,
+        )}`,
         expires_in: DEVICE_CODE_TTL_SECONDS,
         interval: POLL_INTERVAL_SECONDS,
       },
@@ -271,7 +275,9 @@ app.post('/approve', async (c) => {
     }
 
     console.log(
-      `[DEVICE] code ${approve ? 'approved' : 'denied'} by user ${auth.user.id}`,
+      `[DEVICE] code ${
+        approve ? 'approved' : 'denied'
+      } by user ${auth.user.id}`,
     );
     return versionedJsonResponse(
       c.req.raw,
@@ -497,7 +503,9 @@ function verifyPageHtml(
 <script type="module" nonce="${scriptNonce}">
   import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-  const supabase = createClient(${JSON.stringify(projectUrl)}, ${JSON.stringify(anonKey)});
+  const supabase = createClient(${JSON.stringify(projectUrl)}, ${JSON.stringify(
+    anonKey,
+  )});
   const codeInput = document.getElementById('code');
   const statusEl = document.getElementById('status');
   const signedOut = document.getElementById('signed-out');

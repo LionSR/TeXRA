@@ -21,10 +21,9 @@
  * - Service role key for user management; sign-up policy enforced for new users
  */
 
-import { Hono, type Context as HonoContext } from '@hono/hono';
+import { type Context as HonoContext, Hono } from '@hono/hono';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { handleCors } from '../_shared/cors.ts';
-import { createEdgeClient } from '../_shared/edgeClients.ts';
 import {
   checkEmailDomain,
   checkGitHubAccountAge,
@@ -33,7 +32,10 @@ import {
   mintGoTrueSession,
   sessionResponseBody,
 } from '../_shared/goTrueSession.ts';
-import { versionedJsonResponse } from '../_shared/responses.ts';
+import {
+  createEdgeClient,
+  versionedJsonResponse,
+} from '../_shared/responses.ts';
 
 // =============================================================================
 // Constants
@@ -185,7 +187,9 @@ async function validateGitHubToken(
     const errorText = await userRes.text().catch(() => 'unknown');
     lastError = `${userRes.status} - ${errorText}`;
     console.warn(
-      `[AUTH] GitHub /user API failed with ${authHeader.split(' ')[0]} auth: ${lastError}`,
+      `[AUTH] GitHub /user API failed with ${
+        authHeader.split(' ')[0]
+      } auth: ${lastError}`,
     );
 
     // Only retry with next format if we got 401 (unauthorized)
