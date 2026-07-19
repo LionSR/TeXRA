@@ -4,8 +4,6 @@ import { z } from 'zod';
 
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 
-export { normaliseArxivIdentifier };
-
 /** Infer ArxivEntry type from the client's execute() return type */
 type ArxivEntry = Awaited<ReturnType<typeof arxivClient.execute>>[number];
 

@@ -17,8 +17,6 @@ import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import {
   runPackLatexdiffvc,
   runPackLatexdiffvcMultiple,
-  runCleanLatexdiffvc,
-  runCleanLatexdiffvcMultiple,
   type LatexdiffPackResult,
 } from '@housekeeping';
 import type { LaTeXdiffResult } from '@latex/latexdiff';
@@ -303,7 +301,7 @@ async function handleCleanLatexdiffvc(
         `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}`,
       );
       const fileToUse = baseFile ?? inputFile;
-      reportLatexdiff(await runCleanLatexdiffvc(fileToUse, commitHash));
+      reportLatexdiff(await runPackLatexdiffvc(fileToUse, commitHash, true));
     },
   );
 }
@@ -319,7 +317,7 @@ async function handleCleanLatexdiffvcMultiple(
       logger.debug(CHANNEL, `Command called with: commitHash=${commitHash}`);
       logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
       reportLatexdiff(
-        await runCleanLatexdiffvcMultiple(inputFiles, commitHash),
+        await runPackLatexdiffvcMultiple(inputFiles, commitHash, true),
       );
     },
   );

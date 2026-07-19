@@ -10,6 +10,7 @@ import {
 import { z } from 'zod';
 
 // Local imports
+import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 import { warn } from '@logger/logUtils';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { requireNonEmptyString, wrapApiCall } from '@tools/utils';
@@ -20,7 +21,6 @@ import {
   type ArxivSearchResult,
   createArxivClient,
   extractBasePaperMetadata,
-  normaliseArxivIdentifier,
 } from '@tools/latex/arxivShared';
 import { pluralize } from '@utils/text/stringUtils';
 
