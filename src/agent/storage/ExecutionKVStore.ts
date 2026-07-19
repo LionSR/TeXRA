@@ -21,12 +21,9 @@ import {
 import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
 import {
-  ExecutionIdSchema,
-  RunOutcomeSchema,
-  StreamTabIdSchema,
-  executionStatusToRunOutcome,
+  ExecutionMetaSchema,
   type ExecutionId,
-  type RunOutcome,
+  type ExecutionMeta,
 } from '@shared/schemas';
 import { byString, filterNotNull, normalizeFilePath } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -76,46 +73,11 @@ export function isReservedKvKeyName(key: string): boolean {
 }
 
 const CHANNEL = 'ExecutionKVStore';
-export const EXECUTION_META_SCHEMA_VERSION = 1;
+type ExecutionMetaInput = z.input<typeof ExecutionMetaSchema>;
 
 // ============================================================================
 // Domain types — Zod schemas as source of truth
 // ============================================================================
-
-/** Execution metadata stored alongside config at launch time. */
-const ExecutionMetaBaseSchema = z.object({
-  schemaVersion: z.literal(EXECUTION_META_SCHEMA_VERSION).prefault(1),
-  timestamp: z.string(),
-  parentExecutionId: ExecutionIdSchema.optional(),
-  /** Persisted when execution reaches a terminal state (success or error). */
-  terminalStatus: z.string().optional(),
-  /** Canonical terminal outcome; legacy meta files derive this from terminalStatus. */
-  outcome: RunOutcomeSchema.optional(),
-  /** Runtime category override (e.g. 'process' for background bash). */
-  category: z.string().optional(),
-  /** AI-generated summary of what the session aimed to accomplish. */
-  description: z.string().optional(),
-  /**
-   * The transcript stream this execution's data lives under, once resolved.
-   * Decide-once-carry-as-data cache for `resolvePersistedStreamIdForExecution`
-   * (`executionStreamResolver.ts`): absent on executions whose stream wasn't
-   * resolved yet (or predate this field), in which case the resolver falls
-   * back to its full meta-scan.
-   */
-  streamId: StreamTabIdSchema.optional(),
-});
-
-export const ExecutionMetaSchema = ExecutionMetaBaseSchema.transform(
-  (
-    meta,
-  ): z.infer<typeof ExecutionMetaBaseSchema> & { outcome?: RunOutcome } => {
-    const outcome =
-      meta.outcome ?? executionStatusToRunOutcome(meta.terminalStatus);
-    return outcome ? { ...meta, outcome } : meta;
-  },
-);
-export type ExecutionMeta = z.infer<typeof ExecutionMetaSchema>;
-export type ExecutionMetaInput = z.input<typeof ExecutionMetaSchema>;
 
 /** Shape of a persisted todo item from tool-use flow state. */
 const TodoEntrySchema = z.object({

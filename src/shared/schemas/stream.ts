@@ -136,6 +136,40 @@ export const RUN_OUTCOME = {
 export const RunOutcomeSchema = z.enum(RUN_OUTCOME);
 export type RunOutcome = z.infer<typeof RunOutcomeSchema>;
 
+export const EXECUTION_META_SCHEMA_VERSION = 1;
+
+/** Execution metadata stored alongside config at launch time. */
+const ExecutionMetaBaseSchema = z.object({
+  schemaVersion: z.literal(EXECUTION_META_SCHEMA_VERSION).prefault(1),
+  timestamp: z.string(),
+  parentExecutionId: ExecutionIdSchema.optional(),
+  /** Persisted when execution reaches a terminal state (success or error). */
+  terminalStatus: z.string().optional(),
+  /** Canonical terminal outcome; legacy meta files derive this from terminalStatus. */
+  outcome: RunOutcomeSchema.optional(),
+  /** Runtime category override (e.g. 'process' for background bash). */
+  category: z.string().optional(),
+  /** AI-generated summary of what the session aimed to accomplish. */
+  description: z.string().optional(),
+  /**
+   * The transcript stream this execution's data lives under, once resolved.
+   * Decide-once-carry-as-data cache for the execution stream resolver: absent
+   * on executions whose stream wasn't resolved yet (or predate this field).
+   */
+  streamId: StreamTabIdSchema.optional(),
+});
+
+export const ExecutionMetaSchema = ExecutionMetaBaseSchema.transform(
+  (
+    meta,
+  ): z.infer<typeof ExecutionMetaBaseSchema> & { outcome?: RunOutcome } => {
+    const outcome =
+      meta.outcome ?? executionStatusToRunOutcome(meta.terminalStatus);
+    return outcome ? { ...meta, outcome } : meta;
+  },
+);
+export type ExecutionMeta = z.infer<typeof ExecutionMetaSchema>;
+
 export const STREAM_PHASE = {
   RUNNING: STREAM_STATUS.RUNNING,
   WAITING: STREAM_STATUS.WAITING,
