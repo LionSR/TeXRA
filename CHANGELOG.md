@@ -37,6 +37,9 @@ All notable changes to this project will be documented in this file.
 
 - **Accepted run files remain editable** — agents can continue editing accepted
   workflow output without an unnecessary intervening file read.
+- **Between-round LaTeX diffs work with current runs** — users who enable
+  between-round comparisons now receive them for current saved runs and active
+  agent sessions instead of a round-number extraction error.
 - **Credential setup stays private and matches the current app** — the setup
   assistant now distinguishes saved keys, environment variables, ChatGPT
   access, and included TeXRA access; it directs API-key entry to the current
