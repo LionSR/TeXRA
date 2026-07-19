@@ -5,7 +5,7 @@ export const SETUP_AGENT_NAME = 'setup';
  * Relay-served orchestrator roots that delegate to a team. They need sign-in,
  * so UIs surface them first.
  */
-export const REMOTE_ORCHESTRATOR_AGENT_NAMES = [
+const REMOTE_ORCHESTRATOR_AGENT_NAMES = [
   'orchestrator',
   'leanOrchestrator',
 ] as const;

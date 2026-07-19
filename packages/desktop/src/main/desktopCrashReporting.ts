@@ -83,7 +83,7 @@ export function scrubDesktopCrashEvent(
   return createDesktopCrashEventScrubber(sensitivePaths)(event);
 }
 
-export function createDesktopCrashEventScrubber(
+function createDesktopCrashEventScrubber(
   sensitivePaths: readonly (string | undefined)[],
 ): (event: CrashEvent) => CrashEvent | null {
   const scrubbers = buildPathScrubbers(sensitivePaths);

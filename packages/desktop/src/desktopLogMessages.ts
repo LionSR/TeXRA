@@ -7,7 +7,7 @@ export const DESKTOP_LOG_COMMANDS = {
   EXPORT_LOG: 'desktop:exportLog',
 } as const;
 
-export const DesktopLogSnapshotSchema = z.object({
+const DesktopLogSnapshotSchema = z.object({
   text: z.string(),
   truncated: z.boolean(),
   path: z.string().nullish(),

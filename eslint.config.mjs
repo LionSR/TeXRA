@@ -4,7 +4,6 @@ import tseslint from 'typescript-eslint';
 import stylistic from '@stylistic/eslint-plugin';
 import importPlugin from 'eslint-plugin-import-x';
 import unicorn from 'eslint-plugin-unicorn';
-import globals from 'globals';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -601,40 +600,6 @@ export default tseslint.config(
           ],
         },
       ],
-    },
-  },
-
-  // Configuration for JavaScript view modules
-  {
-    files: [
-      'src/historyView/modules/**/*.js',
-      'src/memoryView/modules/**/*.js',
-      'packages/extension/src/progressView/modules/**/*.js',
-      'packages/extension/src/webview/modules/**/*.js',
-      'src/common/*.js',
-      'src/common/modules/*.js',
-      'src/common/webview/*.js',
-      'src/historyView/script.js',
-      'src/memoryView/script.js',
-      'packages/extension/src/progressView/script.js',
-      'packages/extension/src/webview/script.js',
-    ],
-    // Disable TS type-checking rules for these JS files
-    extends: [tseslint.configs.disableTypeChecked],
-    languageOptions: {
-      globals: {
-        ...globals.browser, // Add browser globals like document, window
-        ...globals.node, // Add Node globals if potentially used
-        acquireVsCodeApi: 'readonly', // Define VS Code specific API
-        Sortable: 'readonly', // Define Sortable library global
-      },
-    },
-    rules: {
-      // Disable or adjust rules specifically for these JS files if needed
-      'no-undef': 'warn', // Downgrade no-undef to warning for potentially missed globals
-      'no-unused-vars': 'off', // Disable unused var checks
-      'no-case-declarations': 'off', // Disable the rule for JS files
-      // Add any other JS-specific rule adjustments here
     },
   },
 );

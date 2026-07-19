@@ -25,7 +25,7 @@ export type ToolDisplayKind = 'edit' | 'read' | 'write' | 'bash';
  * text-editor tool. It can surface verbatim instead of the canonical
  * `str_replace_editor`, but it is not a registered TeXRA tool name.
  */
-export const TOOL_DISPLAY_KIND = {
+const TOOL_DISPLAY_KIND = {
   edit_file: 'edit',
   str_replace_editor: 'edit',
   str_replace_based_edit_tool: 'edit',
