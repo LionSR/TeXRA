@@ -1,24 +1,28 @@
 // Mirror the default session's status machine `onDidChange` into the
 // per-stream status signal.
 
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   isTerminalOutcomePhase,
   STREAM_TRANSITION_CAUSE,
 } from '@shared/streams/streamStatus';
 
 import { parentStream } from './childExecutions';
-import { activeStreamId } from './cliState';
+import { activeStreamId, setStreamStatusInCliState } from './cliState';
 import { projectStreamTranscriptForStatus } from './transcriptProjection';
-import { applyStreamStatusChange, onStreamStatusChange } from './streamStatus';
 
 export function subscribeStreamStatus(): () => void {
-  return onStreamStatusChange((change) => {
+  return defaultSession().status.onDidChange((change) => {
     // Patch status BEFORE projection so the transcript projector derives
     // `finalizeDeferred` from the current status. A reused stream still
     // carrying `WAITING` from the previous turn would otherwise finalize
     // the next run's first chunks early, shoving partial text into
     // `<Static>` before it finished streaming.
-    const recognized = applyStreamStatusChange(change);
+    const recognized = setStreamStatusInCliState({
+      streamId: change.streamId,
+      status: change.status,
+      ...(change.substate ? { substate: change.substate } : {}),
+    });
     if (recognized) {
       projectStreamTranscriptForStatus(change.streamId, change.status);
     }

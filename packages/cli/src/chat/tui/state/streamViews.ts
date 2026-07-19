@@ -10,10 +10,10 @@ import type { StreamTabId } from '@shared/schemas';
 import {
   childExecutionKey,
   childExecutionLabel,
+  focusOrderDescendants,
   visibleSubagentRows,
   type ChildStreamEntries,
 } from './childExecutions';
-import { orderedDescendantsFromTree } from './focusCycle';
 import type { StreamSlice } from './cliState';
 
 export interface StreamView {
@@ -167,15 +167,15 @@ export function streamTreeEntries(
 ): readonly ActiveStreamTreeEntry[] {
   const root = init.rootStreamId;
   if (!root) return [];
-  // Newest-first: `orderedDescendantsFromTree` returns children oldest-first
-  // (retained order, then creation order), so the child list and its
+  // Newest-first: focus order returns children oldest-first (retained order,
+  // then creation order), so the child list and its
   // Alt+1..9 shortcuts read top-to-bottom from most to least recently
   // started, keeping the row a user is most likely watching near the top.
-  const ordered = orderedDescendantsFromTree({
-    parent: root,
-    childStreamEntries: init.childStreamEntries,
-    streams: init.streams,
-  }).toReversed();
+  const ordered = focusOrderDescendants(
+    root,
+    init.childStreamEntries,
+    init.streams,
+  ).toReversed();
   const out: ActiveStreamTreeEntry[] = [];
   if (init.streams.has(root)) out.push({ id: root });
   for (const [index, id] of ordered.entries()) {
