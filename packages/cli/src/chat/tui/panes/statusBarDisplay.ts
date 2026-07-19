@@ -1,17 +1,17 @@
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { computeUtilizationPercent } from '@agent/modelHandlers/support/contextUtilization';
-import {
-  defaultShortcutModifierLabel,
-  metaChordLabel,
-} from '@cli/runtime/shortcutLabels';
+import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import {
   shortCliModelAccessRoute,
   type CliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
-import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
-import { resolveProviderCapabilities } from '@model/providerCapabilities';
+import {
+  defaultShortcutModifierLabel,
+  metaChordLabel,
+} from '@cli/runtime/shortcutLabels';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import { resolveProviderCapabilities } from '@model/providerCapabilities';
 import {
   type RoundStage,
   type StreamPhase,

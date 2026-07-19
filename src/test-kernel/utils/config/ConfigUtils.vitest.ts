@@ -2,10 +2,10 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { installPlatform } from '@test/support/setupPlatform';
 import * as logger from '@logger/logUtils';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { installPlatform } from '@test/support/setupPlatform';
 import { getValidatedConfig } from '@utils/config/configUtils';
 import {
   getProviderEndpoint,

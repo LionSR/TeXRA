@@ -1,14 +1,12 @@
-// Standard library imports
+// Node imports
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { strict as assert } from 'node:assert';
+
+// Third-party imports
 import { describe, it } from 'vitest';
 
-// Local imports - catalog + accessor
-import {
-  isStored,
-  makeFakeSettingsStores,
-} from '@test/support/settingsStoresFake';
+// Local imports
 import { KNOWN_TEXRA_KEYS } from '@cli/schemas/knownKeys';
 import { CORE_SETTING_PATHS } from '@shared/schemas/coreSettings';
 import {
@@ -36,8 +34,6 @@ import {
   settingDefault,
   writeSetting,
 } from '@shared/config/settingsAccess';
-
-// Local imports - canonical defaults + keys the catalog must agree with
 import {
   CLAUDE_AGENT_DEFAULT_EFFORT,
   CLAUDE_AGENT_DEFAULT_MODEL,
@@ -48,6 +44,10 @@ import {
 } from '@shared/schemas/agentCliSettings';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import {
+  isStored,
+  makeFakeSettingsStores,
+} from '@test/support/settingsStoresFake';
 
 const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
   'config',

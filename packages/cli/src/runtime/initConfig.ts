@@ -10,8 +10,8 @@ import path from 'node:path';
 
 import writeFileAtomic from 'write-file-atomic';
 
-import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
 import { isFileNotFoundError } from '@common/errors';
+import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
 
 import type {
   CliApprovalPolicy,

@@ -1,12 +1,12 @@
-// Third-party imports
+// Node imports
 import * as assert from 'node:assert';
+
+// Third-party imports
 import { describe, it, afterEach, vi } from 'vitest';
 
-// Local imports - tests
-import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
-
-// Local imports - tools
+// Local imports
 import * as figureModule from '@latex/extractFigure';
+import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { ExtractLatexFiguresTool } from '@tools/latex';
 
 function installPlatform(files: Record<string, string>) {

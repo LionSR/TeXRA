@@ -1,15 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { setupPlatform } from '@test/support/setupPlatform';
-import {
-  cleanupTempDirs,
-  createTempDirPlatform,
-} from '@test/support/tempDirPlatform';
-import { assembleTrace, StreamLogStore } from '@transcript';
 import { getExecutionStore } from '@agent/storage';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getStreamTabId } from '@agent/runtime/streamTab';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { Platform } from '@platform/platform';
 import {
   EXECUTION_STATUS,
   LOG_LEVELS,
@@ -17,13 +12,18 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   type ExecutionId,
 } from '@shared/schemas';
-import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
+import {
+  cleanupTempDirs,
+  createTempDirPlatform,
+} from '@test/support/tempDirPlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
+import { assembleTrace, StreamLogStore } from '@transcript';
 import {
   parseTraceData,
   TraceDataSchema,
 } from '../../../packages/trace-viewer/src/traceDataSchema';
-import type { Platform } from '@platform/platform';
 
 const tempDirs: string[] = [];
 

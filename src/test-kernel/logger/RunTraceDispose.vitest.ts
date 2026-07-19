@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MESSAGE_TYPES } from '@shared/schemas';
 import {
   createRunTrace,
   flushPendingRunTraces,
   StreamLogStore,
 } from '@transcript';
-import { MESSAGE_TYPES } from '@shared/schemas';
 
 describe('createRunTrace dispose', () => {
   let store: StreamLogStore;

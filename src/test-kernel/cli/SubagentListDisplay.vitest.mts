@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { loadInk } from '@test/support/inkTestHarness.mts';
 import {
   CHILD_STATUS_MARKER,
   childRowMetadataText,
@@ -20,6 +19,7 @@ import {
 } from '@cli/chat/tui/ui/Select';
 import type { StreamView } from '@cli/chat/tui/state/streamViews';
 import { AgentCategory, STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+import { loadInk } from '@test/support/inkTestHarness.mts';
 
 function session(id: string, active = false): StreamView {
   return {

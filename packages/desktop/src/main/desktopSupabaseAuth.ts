@@ -2,7 +2,6 @@ import { randomBytes } from 'node:crypto';
 
 import { z } from 'zod';
 
-import { platform } from '@platform/platform';
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import {
   DEFAULT_OAUTH_PROVIDER,
@@ -21,10 +20,11 @@ import {
   initializeServerSideKeyAccess,
 } from '@auth/serverKeys';
 import type { AuthCallbackUriParts } from '@auth/core/authCallback';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { TEXRA_PROTOCOL } from '../desktopProtocol.js';
+import { platform } from '@platform/platform';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import { TEXRA_PROTOCOL } from '../desktopProtocol.js';
 import type {
   DesktopProtocolCallback,
   DesktopProtocolCallbackRouter,

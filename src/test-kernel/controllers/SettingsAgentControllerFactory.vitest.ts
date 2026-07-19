@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
+import type { StateStore } from '@platform/interfaces';
 import type { AgentCategory } from '@shared/schemas/agent';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import type { StateStore } from '@platform/interfaces';
 
 function memoryStore(
   initial: Record<string, unknown> = {},

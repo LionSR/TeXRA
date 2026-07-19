@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { setupPlatform } from '@test/support/setupPlatform';
 import {
   clearStoreCache,
   EXECUTION_META_SCHEMA_VERSION,
@@ -14,6 +13,7 @@ import {
   type ExecutionId,
   type RunOutcome,
 } from '@shared/schemas';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: '/workspace' });
 

@@ -26,8 +26,8 @@ import {
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { createTexraTempDir } from './desktopTempDir.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 

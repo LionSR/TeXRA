@@ -1,18 +1,14 @@
-// Local imports - core types
+// Local imports
 import type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-
-// Local imports - model types
 import {
   ToolDefinitionSchema,
   type ToolDefinition,
 } from '@model/ToolDefinition';
-
-// Local imports - shared tools
-import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
+import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 
-// Local imports - tools
+// Local file imports
 import { BashTool } from './bash';
 import { DiagnosticsTool } from './DiagnosticsTool';
 import { InlineCommentTool } from './comment/InlineCommentTool';

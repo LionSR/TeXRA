@@ -11,6 +11,7 @@
  * layer above.
  */
 
+import type { Disposable } from '@platform/interfaces';
 import { getConfig } from '@utils/config';
 import { shouldDropBotEvent } from './botFilter';
 import {
@@ -77,7 +78,6 @@ import {
   type GhReviewComment,
 } from './prTypes';
 import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
-import type { Disposable } from '@platform/interfaces';
 
 const GITHUB_PR_POLLING_EMIT_CI_STARTED_CONFIG_KEY =
   'texra.git.emitPrCiStartedEvents';

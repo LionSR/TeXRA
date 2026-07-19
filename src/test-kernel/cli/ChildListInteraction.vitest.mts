@@ -1,11 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
-import {
-  FakeStdin,
-  FakeStdout,
-  loadInk,
-} from '@test/support/inkTestHarness.mts';
 import { SubagentList } from '@cli/chat/tui/panes/SubagentList';
 import {
   childProcessListValue,
@@ -15,6 +9,12 @@ import {
 import type { StreamView } from '@cli/chat/tui/state/streamViews';
 import { POINTER } from '@cli/chat/tui/ui/glyphs';
 import type { StreamTabId } from '@shared/schemas';
+import {
+  FakeStdin,
+  FakeStdout,
+  loadInk,
+} from '@test/support/inkTestHarness.mts';
+import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 
 function session(id: StreamTabId, active = false): StreamView {
   return { id, label: id, slice: undefined, active };

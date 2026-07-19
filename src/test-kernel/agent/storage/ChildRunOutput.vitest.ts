@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { setupPlatform } from '@test/support/setupPlatform';
 import {
   clearStoreCache,
   getExecutionStore,
@@ -8,6 +7,7 @@ import {
   type ResultMeta,
 } from '@agent/storage';
 import type { ExecutionId } from '@shared/schemas';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { StorageFS } from '@utils/files';
 
 const parentExecutionId = 'aaaaaa111111' as ExecutionId;

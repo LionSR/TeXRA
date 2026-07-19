@@ -1,18 +1,14 @@
-// Local imports - agent
+// Local imports
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
-
-// Local imports - shared schemas
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import {
   DEFAULT_TOOL_CONFIG,
   ToolConfigSchema,
 } from '@shared/schemas/toolConfig';
-
-// Local imports - utilities
 import { filterNotNull } from '@utils/core';
 import {
   getPastedImageFullPath,

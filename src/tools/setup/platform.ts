@@ -9,13 +9,12 @@
  */
 
 // Local imports
-import { platform as currentPlatform } from '@platform/platform';
-import { SupabaseClient } from '@auth/SupabaseClient';
-import { getCodexStatus } from '@auth/codex';
 import {
   fetchRelayTokenStatus,
   getConfiguredRelayToken,
 } from '@auth/relayToken';
+import { getCodexStatus } from '@auth/codex';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TerminalRunResult, TerminalRunner } from '@hosts/uiHosts';
 import {
   API_PROVIDERS,
@@ -28,6 +27,7 @@ import {
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
+import { platform as currentPlatform } from '@platform/platform';
 import { AgentCategory } from '@shared/schemas/agent';
 import { resolveGitHubTokenSource } from '@tools/github/githubAuth';
 

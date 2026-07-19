@@ -1,10 +1,8 @@
-// Local imports - platform
+// Local imports
 import { tryGlobalState } from '@platform/platform';
-
-// Local imports - common
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-// Local imports - config utils
+// Local file imports
 import { getConfig } from './configUtils';
 
 // Settings query constants for VS Code settings UI

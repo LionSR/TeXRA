@@ -14,6 +14,7 @@
  * - free tier: Included non-premium models (up to $3/M input)
  */
 
+import type { StateStore } from '@platform/interfaces';
 import type { ServerSideProvider } from '@shared/constants/providers';
 import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -25,7 +26,6 @@ import {
   type UserTier,
 } from '../config';
 import type { SupabaseSessionLog } from '../supabaseSessionTypes';
-import type { StateStore } from '@platform/interfaces';
 import type { TierService } from './TierService';
 
 const CHANNEL = 'ServerSideKeyService';

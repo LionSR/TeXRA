@@ -40,7 +40,6 @@ vi.mock('@platform/platform', () => ({
   platform: () => ({ secrets: mocks.secrets }),
 }));
 
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
@@ -55,13 +54,14 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { AgentCategory } from '@shared/schemas';
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { setGoalSessionBashAutoApproval } from '@tools/goal';
 import {
   cleanupAllApprovals,
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
   proposalApprovals,
 } from '@tools/approval';
-import { setGoalSessionBashAutoApproval } from '@tools/goal';
 
 function context(): CliContext {
   return createTestCliContext({

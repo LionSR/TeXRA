@@ -4,16 +4,15 @@
  * stream-tab metadata from a matching execution.
  */
 
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
 // Local imports
-import { platform } from '@platform/platform';
-import { StreamSnapshotStore } from '@transcript';
 import { listExecutions, type ExecutionListingEntry } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { platform } from '@platform/platform';
 import type {
   ExecutionId,
   FileLocation,
@@ -24,6 +23,7 @@ import {
   WORKFLOW_OUTPUT_BASENAME,
   parseWorkflowOutputRoundDir,
 } from '@shared/constants/workflowOutput';
+import { StreamSnapshotStore } from '@transcript';
 import {
   WorkspaceFS,
   createRunStorageLocation,
@@ -34,6 +34,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
 
+// Local file imports
 import { CHANNEL } from './service';
 
 /**

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { loadInk } from '@test/support/inkTestHarness.mts';
 import type { AgentEntry } from '@agent/index';
 import {
   AgentRosterForm,
@@ -10,6 +9,7 @@ import {
   setChatDefaultAgent,
 } from '@cli/chat/tui/forms/AgentRosterForm';
 import { formatCliAgentRoster } from '@cli/runtime/agentRoster';
+import { loadInk } from '@test/support/inkTestHarness.mts';
 
 const agents: AgentEntry[] = [
   {

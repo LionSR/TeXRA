@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { setupPlatform } from '@test/support/setupPlatform';
 import {
   clearStoreCache,
   deriveResumability,
@@ -22,6 +21,7 @@ import {
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 const BASE_FLOW_RECORD: FlowRecord = {
   flowName: 'texra',

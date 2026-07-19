@@ -10,7 +10,6 @@ import {
   createInitialState,
   type ProgressState,
 } from '@progressView/frontend/store';
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentCategory,
   LOG_LEVELS,
@@ -24,6 +23,7 @@ import {
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { assertSupported } from '@shared/utils/dispatcher';
 
 /** Seed the shared appState singleton and return a live reader over it. */

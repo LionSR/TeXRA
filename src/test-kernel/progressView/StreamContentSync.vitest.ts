@@ -1,4 +1,6 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
@@ -7,7 +9,9 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports
 import { ProgressFactApplier } from '@controllers/progressView/backend/events/ProgressFactApplier';
 import { ProgressViewState } from '@controllers/progressView/backend/state/ProgressViewState';
-import { AgentCategory } from '@shared/schemas';
+import type { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
+import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
+import type { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
 import type {
   ActiveChildInfo,
   CompileFailure,
@@ -20,9 +24,7 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
-import type { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
-import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
-import type { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
+import { AgentCategory } from '@shared/schemas';
 
 class MemoryMementoStorage implements MementoStorage {
   private readonly values = new Map<string, unknown>();

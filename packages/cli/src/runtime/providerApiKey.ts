@@ -1,9 +1,9 @@
-import { platform } from '@platform/platform';
 import {
   apiKeySecretName,
   invalidateApiKeyCache,
   type ApiProvider,
 } from '@model/apiProviders';
+import { platform } from '@platform/platform';
 
 const PLACEHOLDER_PATTERNS: readonly RegExp[] = [
   /^(sk-?)?(x{3,}|\*{3,}|\.{3,}|<.*>|your[- _]?(?:api[- _]?)?key)/i,

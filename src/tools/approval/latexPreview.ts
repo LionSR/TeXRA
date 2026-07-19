@@ -9,10 +9,10 @@ import { sync as globSync } from 'glob';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
-import { platform } from '@platform/platform';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { debug } from '@logger/logUtils';
+import { platform } from '@platform/platform';
 import type { FileLocation } from '@shared/schemas';
 import { LATEXDIFF_TEMP_FILE_LOCATIONS } from '@shared/schemas/coreSettings';
 import {

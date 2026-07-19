@@ -1,3 +1,8 @@
+import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
+import {
+  defaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import {
   WebviewBridge,
   type ProgressViewMessageSender,
@@ -21,21 +26,16 @@ import {
   type ApprovalRequestHandlerSet,
   type BuildApprovalRequestHandlerSetParams,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
-import { canUseStreamDataDir } from '@transcript/streamDataPaths';
-import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
-import {
-  defaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 import type {
   ProgressViewOutboundMessage,
   SetActiveStreamPayload,
   StreamTabId,
 } from '@shared/schemas';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
-import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 import type { StreamSnapshotStore } from '@transcript';
+import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 
 type ProgressBackendApprovalOptions = Omit<
   BuildApprovalRequestHandlerSetParams,

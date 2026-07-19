@@ -10,14 +10,7 @@ import * as vscode from 'vscode';
 // The `.tex` template is bundled in the extension's resources/ tree and loaded
 // as raw text by the esbuild `.tex: text` loader; it is injected into the
 // host-neutral ChatExportController so core stays free of `@resources`.
-import latexPreamble from '@resources/templates/chatExport.tex';
 
-import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
-import {
-  ChatExportController,
-  type ChatExportInput,
-  type ExportInputStatus,
-} from '@controllers/settingsView/ChatExportController';
 import {
   getExecutionStore,
   deleteExecution,
@@ -30,16 +23,23 @@ import {
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 import {
+  ChatExportController,
+  type ChatExportInput,
+  type ExportInputStatus,
+} from '@controllers/settingsView/ChatExportController';
+import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
+import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import type { ExecutionId } from '@shared/schemas';
+import latexPreamble from '@resources/templates/chatExport.tex';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { formatExecutionHistoryRetention } from '@shared/copy/executionHistory';
+import type { ExecutionId } from '@shared/schemas';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
 } from '@shared/schemas/settingsViewMessages';
+import { formatExecutionHistoryRetention } from '@shared/copy/executionHistory';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
 

@@ -1,8 +1,17 @@
+// Node imports
 import { access, constants } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
+// Third-party imports
 import { app } from 'electron';
 
+// Local imports
+import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
+import { isFileNotFoundError } from '@common/errors';
+import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/workspacePath.js';
+import { initPlatform } from '@platform/platform';
+import { SHUTDOWN_PHASE } from '@platform/interfaces';
+import type { LifecycleHost } from '@platform/interfaces';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import {
@@ -14,16 +23,12 @@ import {
 } from '@platform/defaults/nodeHost';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
-import { initPlatform } from '@platform/platform';
-import { SHUTDOWN_PHASE } from '@platform/interfaces';
-import { StreamSnapshotStore } from '@transcript';
-import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
-import { isFileNotFoundError } from '@common/errors';
-import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/workspacePath.js';
-import { configKeyVariants } from '@shared/config/configKeys';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { configKeyVariants } from '@shared/config/configKeys';
+import { StreamSnapshotStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+// Local file imports
 import {
   migrateLegacyDesktopDataRoot,
   migrateLegacyDesktopWorkspaceBucket,
@@ -41,9 +46,6 @@ import {
   isDesktopResumeInFlight,
   tryResumeDesktopStream,
 } from '../desktopAgentResume.js';
-
-// Type imports - platform
-import type { LifecycleHost } from '@platform/interfaces';
 
 export interface ElectronPlatformInitResult {
   workspacePath: string | undefined;

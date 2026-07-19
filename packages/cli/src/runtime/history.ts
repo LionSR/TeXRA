@@ -1,7 +1,6 @@
 import { cp, readFile, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { readCompletedRunConversation } from '@transcript';
 import {
   deleteAllExecutions,
   deleteExecution,
@@ -19,6 +18,7 @@ import type { ChatExportInput } from '@agent/export/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
+import { readCompletedRunConversation } from '@transcript';
 
 import { readCliToolUseResumeDataForListing } from './toolUseResumeData';
 import { formatCliHistoryAgentLabel } from './historyLabels';

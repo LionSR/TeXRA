@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import { strict as assert } from 'node:assert';
 import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
@@ -6,15 +6,16 @@ import * as path from 'node:path';
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-import {
-  BASH_APPROVAL_CONFIG_TARGET,
-  setBashApprovalEnabled,
-} from '@shared/settingsView/handlers/approvalHandlers';
+// Local imports
 import type {
   ConfigInspection,
   ConfigTarget,
   StateStore,
 } from '@platform/interfaces';
+import {
+  BASH_APPROVAL_CONFIG_TARGET,
+  setBashApprovalEnabled,
+} from '@shared/settingsView/handlers/approvalHandlers';
 
 class MemoryStateStore implements StateStore {
   private readonly values = new Map<string, unknown>();

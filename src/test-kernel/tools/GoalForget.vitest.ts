@@ -2,15 +2,14 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
-import { createTestSession } from '@test/support/sessionTestUtils';
-
 import { afterEach, describe, expect, it } from 'vitest';
-
-import { createRecordingHost } from '@test/agent/progressTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { createTestSession } from '@test/support/sessionTestUtils';
+
+import { createRecordingHost } from '@test/agent/progressTestUtils';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 
 const STREAM_A = 'stream:forget-a' as StreamTabId;

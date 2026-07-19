@@ -1,11 +1,8 @@
-// Third-party imports
+// Node imports
 import * as assert from 'node:assert';
+
+// Third-party imports
 import { describe, it, afterEach, beforeEach, vi } from 'vitest';
-
-// Node.js built-in imports
-
-// Platform imports
-import { FileType, type FileStat } from '@platform/interfaces';
 
 const mocks = vi.hoisted(() => ({
   tryUseRunContext: vi.fn(),
@@ -43,14 +40,11 @@ vi.mock('@tools/childRunDelivery', () => ({
   deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
 }));
 
-// Local imports - agent
+// Local imports
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { FollowUpWakeResult } from '@agent/followUp/ToolUseFollowUp';
-
-// Local imports - shared
+import { FileType, type FileStat } from '@platform/interfaces';
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
-
-// Local imports - tools
 import {
   DelegateAgentTool,
   rejectOversizedBibAttachments,

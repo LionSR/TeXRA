@@ -1,26 +1,24 @@
-// Third-party imports
+// Node imports
 import { strict as assert } from 'node:assert';
+
+// Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Standard library imports
-
-// Local imports - agent components
-import { FakeConfigProvider } from '@test/support/FakePlatform';
-import { setupPlatform } from '@test/support/setupPlatform';
-import { setRuntimeSkillSources } from '@skills/runtimeSkills';
+// Local imports
 import { noopTrace } from '@agent/trace';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-// Type imports
 import type {
   AgentSetting,
   AgentPrompt,
 } from '@agent/core/definition/AgentDataclass';
-// Internal imports
 import { buildUserVars, getToolFlags } from '@agent/utils/userVars';
+import { setRuntimeSkillSources } from '@skills/runtimeSkills';
+import { setupPlatform } from '@test/support/setupPlatform';
+import { FakeConfigProvider } from '@test/support/FakePlatform';
 
 // getConfig reads through the platform config provider; drive the setting
 // via this provider instead of patching the ESM export.

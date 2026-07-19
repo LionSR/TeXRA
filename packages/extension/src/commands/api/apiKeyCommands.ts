@@ -2,8 +2,8 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
+import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';

@@ -1,10 +1,8 @@
-// Standard library imports
+// Node imports
 import { createInterface } from 'node:readline/promises';
 
-// Local imports - CLI schemas
+// Local imports
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-
-// Local imports - errors
 import type { LogLevel } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

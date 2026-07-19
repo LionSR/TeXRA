@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
@@ -6,8 +6,7 @@ import { createPartFromText, type Content } from '@google/genai';
 import { describe, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
-// Local imports - test support and agent
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+// Local imports
 import { noopTrace } from '@agent/trace';
 import {
   AgentCategory,
@@ -20,8 +19,9 @@ import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/mode
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
-// Type imports
+// Third-party imports
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 import type { ChatMessages } from '@openrouter/sdk/models';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';

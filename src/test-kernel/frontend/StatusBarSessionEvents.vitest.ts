@@ -1,13 +1,13 @@
 // Test support imports
-import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - status bar state
+// Local imports
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { subscribeStatusBarSessionEvents } from '@frontend/statusBar/statusBarSessionEvents';
 import { STREAM_PHASE, type StorageKey } from '@shared/schemas';
+import { createTestSession } from '@test/support/sessionTestUtils';
 
 describe('subscribeStatusBarSessionEvents', () => {
   it('tracks stream status changes from the session status plane', () => {

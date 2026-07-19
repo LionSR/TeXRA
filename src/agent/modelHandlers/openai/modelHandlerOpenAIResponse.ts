@@ -5,7 +5,7 @@ import OpenAI, { OpenAIError } from 'openai';
 // coverage around SDK upgrades because this is not a top-level public helper.
 import { addOutputText } from 'openai/lib/ResponsesParser';
 
-// Local imports - agent
+// Local imports
 import { logContextManagementEvent, logProgressStatus } from '@agent/trace';
 import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -45,19 +45,17 @@ import type {
   ProviderCapabilityProfile,
 } from '@model/providerCapabilities';
 import replacementEngine from '@replacement/engine';
-
-// Type imports
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas/toolResult';
-import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
-
-// Local imports - utils
 import { clamp, filterNotNullish } from '@utils/core';
-import { getConfig } from '@utils/config/configUtils';
 import { getWebSocketEnabled } from '@utils/config/providerConfig';
+import { getConfig } from '@utils/config/configUtils';
+
+// Local file imports
 import { computeUtilizationPercent } from '../support/contextUtilization';
 import { logCompactionEvent } from '../support/compactionLogging';
 import { toDataUrl } from '../support/dataUrl';
@@ -72,8 +70,6 @@ import {
 } from './openAIUsage';
 import { tagOpenAISdkError } from './openAISdkError';
 import { normalizeOpenAIResponseError } from './openAIResponseErrors';
-
-// Local file imports
 import {
   formatAttachmentSummary,
   formatToolResultAsText,
@@ -107,6 +103,8 @@ import {
   uploadToolAttachments,
   type UploadedOpenAIResponseAttachment,
 } from './openAIResponseFileUploads';
+
+// Third-party imports
 import type { InputTokenCountParams } from 'openai/resources/responses/input-tokens';
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
 import type { Reasoning } from 'openai/resources/shared';

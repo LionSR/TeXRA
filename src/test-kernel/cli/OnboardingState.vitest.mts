@@ -7,6 +7,7 @@ import {
   describeSavedKeyLocation,
   formatSavedKeySummary,
 } from '@cli/onboarding/onboardingState';
+import type { StateStore } from '@platform/interfaces';
 import {
   getOnboardingDeclined,
   setOnboardingDeclined,
@@ -14,8 +15,6 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 const ONBOARDING_DECLINED_KEY = GlobalStateKey.ONBOARDING_DECLINED;
-
-import type { StateStore } from '@platform/interfaces';
 
 function fakeStateStore(initial: Record<string, unknown> = {}): StateStore {
   const store = new Map<string, unknown>(Object.entries(initial));

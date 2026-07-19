@@ -6,7 +6,7 @@ import {
 } from '@openrouter/sdk/models/errors';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
-// Local imports - agent
+// Local imports
 import type { StreamHandle } from '@agent/trace';
 import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -27,8 +27,6 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 import replacementEngine from '@replacement/engine';
-
-// Local imports - tools and utils
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
   ToolFileAttachment,
@@ -36,6 +34,8 @@ import type {
 } from '@shared/schemas/toolResult';
 import { isNonEmptyString } from '@utils/core';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
+
+// Local file imports
 import { toDataUrl } from '../support/dataUrl';
 import { getDeclaredMaxReasoningEffort } from '../support/reasoningEffort';
 import {
@@ -47,8 +47,6 @@ import {
   normalizeOpenRouterUsage,
 } from './openRouterUsage';
 import { tagOpenRouterSdkError } from './openRouterSdkError';
-
-// Local file imports
 import { toOpenAITools } from '../toolConversion';
 import {
   appendUserTextToChatMessages,
@@ -70,6 +68,8 @@ import {
 } from './openRouterStreaming';
 import { ModelHandler } from '../ModelHandler';
 import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
+
+// Third-party imports
 import type {
   ChatResult,
   ChatStreamChunk,

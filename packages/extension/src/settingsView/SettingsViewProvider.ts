@@ -1,7 +1,7 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - common webview
+// Local imports
 import {
   BaseWebviewProvider,
   BundledViewContentProvider,
@@ -13,9 +13,9 @@ import {
 } from '@frontend/auth/agentCatalogRefreshScope';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsTab } from '@shared/schemas/settingsViewMessages';
-
-// Local imports - settings view components
 import type { AgentCategory } from '@shared/schemas/agent';
+
+// Local file imports
 import { SettingsViewMessageHandler } from './SettingsViewMessageHandler';
 
 export class SettingsViewProvider

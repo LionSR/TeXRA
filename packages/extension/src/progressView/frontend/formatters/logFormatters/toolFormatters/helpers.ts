@@ -8,12 +8,12 @@
 
 import { html, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
+import { TOOL_OUTPUT_LANGUAGES } from '@progressView/frontend/formatters/constants';
 import {
   buildToolUseSection,
   wrapInPre,
   buildCodeBlock,
 } from '@progressView/frontend/formatters/htmlBuilders';
-import { TOOL_OUTPUT_LANGUAGES } from '@progressView/frontend/formatters/constants';
 import type { LogMessageData } from '@shared/schemas';
 import {
   BASH_TOOL_DEFAULT_TIMEOUT_MS,

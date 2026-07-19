@@ -1,21 +1,17 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - controllers
-import {
-  ProgressFollowUpController,
-  type ProgressFollowUpState,
-} from '@controllers/progressView/ProgressFollowUpController';
-
-// Local imports - agent
+// Local imports
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { WorkflowTaskState } from '@agent/core/state/TaskState';
-
-// Local imports - shared
+import {
+  ProgressFollowUpController,
+  type ProgressFollowUpState,
+} from '@controllers/progressView/ProgressFollowUpController';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 
 function createWorkflowTaskState(

@@ -1,10 +1,8 @@
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - agent
+// Local imports
 import type { ResultMeta } from '@agent/storage';
-
-// Local imports - shared
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
@@ -25,8 +23,6 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   sendFollowUp: mocks.sendFollowUp,
   wakeOrReleaseQueuedStream: mocks.wakeOrReleaseQueuedStream,
 }));
-
-// Local imports - tools
 import {
   deliverChildRunFollowUp,
   enqueueChildRunFollowUp,

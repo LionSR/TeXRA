@@ -1,17 +1,17 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
 // Third-party imports
 import { z } from 'zod';
 
 // Local imports
-import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
   getRunContextAgentName,
   getRunContextExecutionId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { debug } from '@logger/logUtils';
+import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { formatBytes, formatRelativeTime } from '@shared/utils/string';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { replaceLiteralMatches } from '@tools/fileEditFlow';
@@ -19,7 +19,7 @@ import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { splitContentLines } from '@utils/text/stringUtils';
 
-// Local imports - tool core
+// Local file imports
 import { defineTool } from '../core/define';
 import {
   recordToolFileRead,
@@ -33,8 +33,6 @@ import {
   ViewRangeSchema,
 } from '../formatting';
 import { requireField } from '../utils';
-
-// Local imports - shared memory constants and utilities
 import {
   MAX_VIEW_LINES,
   MAX_PINNED_MEMORIES,

@@ -1,13 +1,11 @@
-// Standard library imports
+// Node imports
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
 import { describe, it } from 'vitest';
 
-// Local imports - controllers
+// Local imports
 import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
-
-// Local imports - model
 import type { ApiProvider } from '@model/apiProviders';
 
 const PROVIDERS = [

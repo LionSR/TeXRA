@@ -1,32 +1,17 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
-import * as path from 'node:path';
-import { createTestSession } from '@test/support/sessionTestUtils';
 
-// Standard library imports
+// Node imports
+import * as path from 'node:path';
 
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - transcript
-import {
-  streamDataDir,
-  StreamLogStore,
-  StreamSnapshotStore,
-} from '@transcript';
-import {
-  stagedStreamDataDir,
-  STREAM_DATA_DIR,
-} from '@transcript/streamDataPaths';
-
-// Local imports - agent
-import {
-  ProgressBackend,
-  type ProgressBackendOptions,
-} from '@controllers/progressView/backend/ProgressBackend';
-import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
+// Local imports
 import type { AgentEvent } from '@agent/trace';
 import {
   getExecutionStore,
@@ -39,12 +24,13 @@ import {
   type RunFactPayloads,
 } from '@agent/runtime/runFactEvents';
 import type { TaskState } from '@agent/core/state/TaskState';
-
-// Local imports - logger
+import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
+import {
+  ProgressBackend,
+  type ProgressBackendOptions,
+} from '@controllers/progressView/backend/ProgressBackend';
+import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 import * as logger from '@logger/logUtils';
-
-// Local imports - shared
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentCategory,
   type ActiveChildInfo,
@@ -65,10 +51,20 @@ import {
   type TodoItem,
   type UpdateStreamDescriptionPayload,
 } from '@shared/schemas';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { GoalStore } from '@tools/goal';
+import {
+  streamDataDir,
+  StreamLogStore,
+  StreamSnapshotStore,
+} from '@transcript';
+import {
+  stagedStreamDataDir,
+  STREAM_DATA_DIR,
+} from '@transcript/streamDataPaths';
 import { StorageFS } from '@utils/files';
-import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 
 class MemoryMementoStorage implements MementoStorage {
   private readonly values = new Map<string, unknown>();

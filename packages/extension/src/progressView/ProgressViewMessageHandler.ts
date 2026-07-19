@@ -1,30 +1,30 @@
 import * as vscode from 'vscode';
 
-import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
-import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
-import {
-  ProgressFollowUpController,
-  type ProgressFollowUpPlan,
-} from '@controllers/progressView/ProgressFollowUpController';
-import {
-  ProgressFollowUpPolishController,
-  type ProgressFollowUpPolishResult,
-} from '@controllers/progressView/ProgressFollowUpPolishController';
-import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { getAgent } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   validateExecutionRequest,
   type ExecutionRequest,
 } from '@agent/core/state/executionRequests';
-import { getServerSideKeyService } from '@auth/serverKeys';
+import { defaultSession } from '@agent/runtime/SessionHandle';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   isPreferCodexSubscription,
   setPreferCodexSubscription,
 } from '@auth/codex';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { BaseViewMessageHandler } from '@common/webview';
+import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
+import {
+  ProgressFollowUpPolishController,
+  type ProgressFollowUpPolishResult,
+} from '@controllers/progressView/ProgressFollowUpPolishController';
+import {
+  ProgressFollowUpController,
+  type ProgressFollowUpPlan,
+} from '@controllers/progressView/ProgressFollowUpController';
+import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
+import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { SecretManager } from '@frontend/secretManager';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { loadOptions } from '@frontend/agents/optionsLoader';
@@ -35,15 +35,15 @@ import type { PromptHost } from '@hosts/uiHosts';
 import { isApiProvider } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/runtimeModelRegistry';
-import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { GettingStartedAction, StreamTabId } from '@shared/schemas';
-import { GETTING_STARTED_COMMANDS } from '@shared/schemas/mainView';
+import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import { unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   dispatchProgressViewInbound,
   type ProgressViewInboundHandlerRegistry,
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
-import { unsupportedCommands } from '@shared/utils/dispatcher';
+import { GETTING_STARTED_COMMANDS } from '@shared/schemas/mainView';
 import {
   cleanupUnscopedApprovals,
   releaseStreamResources,
@@ -54,8 +54,8 @@ import {
   pathToLocation,
   WorkspaceFS,
 } from '@utils/files';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { ProgressViewProvider } from './ProgressViewProvider';
 import type { ExtensionHostInteractions } from './extensionHostInteractions';

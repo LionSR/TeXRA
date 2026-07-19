@@ -6,20 +6,20 @@ import * as path from 'node:path';
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - platform
+// Local imports
+import type { FileSystemProvider } from '@platform/interfaces';
+import type { Platform } from '@platform/platform';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import { RUN_OUTCOME, type StreamTabId } from '@shared/schemas';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { cleanupTempDirs } from '@test/support/tempDirPlatform';
-
-// Local imports - shared schemas and tools
-import { RUN_OUTCOME, type StreamTabId } from '@shared/schemas';
 import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
 
-// Local imports - desktop test support
+// Local file imports
 import {
   createStubDesktopAgentExecutionHost,
   disposeAfterTest,
@@ -28,8 +28,6 @@ import {
   type RunExecutionRequest,
 } from './desktopAgentExecutionTestHarness.mjs';
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
-import type { FileSystemProvider } from '@platform/interfaces';
-import type { Platform } from '@platform/platform';
 
 type DesktopExecution = {
   handleExecute(message: unknown): Promise<void>;

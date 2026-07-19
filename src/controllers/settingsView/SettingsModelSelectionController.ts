@@ -1,19 +1,19 @@
 import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
+import { resolveEffectiveHelperModel } from '@agent/runtime/helperModelName';
 import {
   hasConfigurableReasoningEffort,
   LEVEL_TO_EFFORT,
 } from '@agent/modelHandlers/support/reasoningEffort';
-import { resolveEffectiveHelperModel } from '@agent/runtime/helperModelName';
 import { FREE_TIER, MAX_TIER } from '@auth/config';
-import { computeModelOptionsData } from '@model/computeModelOptions';
-import { isGpt5ModelName } from '@model/modelNames';
-import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
+import { resolveModelSource } from '@model/openRouterRouting';
 import {
   discoveredRuntimeModelConfigEntries,
   staticModelConfigEntries,
 } from '@model/runtimeModelRegistry';
-import { resolveModelSource } from '@model/openRouterRouting';
+import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
+import { isGpt5ModelName } from '@model/modelNames';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { ModelOptionData } from '@shared/schemas';
 import {
   DEFAULT_HELPER_MODEL,

@@ -7,10 +7,10 @@
  */
 import * as vscode from 'vscode';
 
-import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
-import { LatexRecommendedSettingsController } from '@controllers/settingsView/LatexRecommendedSettingsController';
-import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { workspaceSM } from '@common/state';
+import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
+import { LatexRecommendedSettingsController } from '@controllers/settingsView/LatexRecommendedSettingsController';
+import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {

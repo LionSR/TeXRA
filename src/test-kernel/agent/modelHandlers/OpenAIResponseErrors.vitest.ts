@@ -2,15 +2,13 @@
 import { NotFoundError as OpenAINotFoundError } from 'openai';
 import { describe, expect, it } from 'vitest';
 
-// Local imports - agent model handlers
+// Local imports
 import {
   classifyOpenAIBackgroundResumeError,
   createOpenAIBackgroundPollingError,
   createOpenAIBackgroundTerminalError,
   normalizeOpenAIResponseError,
 } from '@agent/modelHandlers/openai/openAIResponseErrors';
-
-// Local imports - common errors
 import {
   attachContextWindowError,
   formatProviderHttpError,

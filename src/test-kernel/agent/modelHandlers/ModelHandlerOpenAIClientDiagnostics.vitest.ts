@@ -2,13 +2,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type ModelConfig, ModelProvider } from 'llm-zoo';
 
-// Local imports - test support, agent, and model config
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+// Local imports
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import * as serverKeysModule from '@auth/serverKeys';
 import { KIMI_CODE_BASE_URL } from '@model/kimiCodeSubscriptionRouting';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 const MOONSHOT_BASE_URL = 'https://api.moonshot.ai/v1';
 const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com/v1';

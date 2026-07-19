@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
 import {
   buildApprovalRequestHandlerSet,
   cancelApprovalRequestHandlers,
@@ -7,7 +8,6 @@ import {
   replayApprovalRequestHandlers,
   type ApprovalRequestHandlerSet,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
-import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentCategory,

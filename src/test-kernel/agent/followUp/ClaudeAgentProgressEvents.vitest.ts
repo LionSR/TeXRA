@@ -1,15 +1,12 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createRunTrace, StreamLogStore } from '@transcript';
+// Local imports
 import type { AgentTrace } from '@agent/trace';
-
-// Local imports - shared
 import { MESSAGE_TYPES } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
-
-// Local imports - tools
 import { runStreamedTurn } from '@tools/claudeAgent';
+import { createRunTrace, StreamLogStore } from '@transcript';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),

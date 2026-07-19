@@ -1,4 +1,6 @@
 // Desktop imports
+
+// Local imports
 import { createModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
 import type { DesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
 import type { DesktopCrashReportingSettingsController } from '@desktop/main/desktopCrashReportingSettingsController';
@@ -9,14 +11,14 @@ import type {
 } from '@desktop/main/desktopHistoryHandlers';
 import type { DesktopSettingsUiHost } from '@desktop/main/desktopSettingsIpc';
 import type { DesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
-
-// Shared imports - settings controllers
+import { unsupported } from '@shared/utils/dispatcher';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 
-// Shared imports
-import { unsupported } from '@shared/utils/dispatcher';
+// Shared imports - settings controllers
 
-// Local imports - desktop test paths
+// Shared imports
+
+// Local file imports
 import { repoPath } from './desktopTestPaths.mjs';
 
 const noOp = async (): Promise<void> => undefined;

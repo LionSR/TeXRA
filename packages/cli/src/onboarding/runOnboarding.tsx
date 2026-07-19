@@ -15,15 +15,15 @@
 import { render, Box, Text, useApp, useInput } from 'ink';
 import { useState } from 'react';
 
-import { platform } from '@platform/platform';
 import { listExecutions } from '@agent/storage';
-import { setPreferCodexSubscription, type CodexSession } from '@auth/codex';
-import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 import { type SupabaseSession } from '@auth/SupabaseSession';
-import { useCancellableEffect } from '@cli/chat/tui/state/useCancellableEffect';
+import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
+import { setPreferCodexSubscription, type CodexSession } from '@auth/codex';
 import { LoadingIndicator } from '@cli/chat/tui/ui/LoadingIndicator';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { useCancellableEffect } from '@cli/chat/tui/state/useCancellableEffect';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { platform } from '@platform/platform';
 import {
   backfillFirstRunDone,
   getFirstRunDone,

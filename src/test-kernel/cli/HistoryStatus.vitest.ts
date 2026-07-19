@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { setupPlatform } from '@test/support/setupPlatform';
 import {
   EXECUTION_META_SCHEMA_VERSION,
   registerExecution,
@@ -19,6 +18,7 @@ import {
 } from '@cli/runtime/history';
 import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 const TOOL_USE_CONFIG: AgentConfig = {
   inputFiles: [],

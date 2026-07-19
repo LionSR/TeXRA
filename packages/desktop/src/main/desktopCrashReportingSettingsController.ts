@@ -1,17 +1,15 @@
-// Local imports - shared settings
+// Local imports
+import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
+import type { StateStore } from '@platform/interfaces';
+import type { PlatformSecrets } from '@platform/secrets';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
-// Local imports - crash-reporting settings
+// Local file imports
 import {
   getDesktopCrashReportingStatus,
   setDesktopCrashReportingDsn,
   setDesktopCrashReportingEnabled,
 } from './desktopCrashReporting.js';
-
-// Local imports - supporting types
-import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
-import type { StateStore } from '@platform/interfaces';
-import type { PlatformSecrets } from '@platform/secrets';
 
 interface DesktopCrashReportingRendererPort {
   postToRenderer(message: unknown): void;

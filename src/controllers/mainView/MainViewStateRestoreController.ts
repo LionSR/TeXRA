@@ -1,12 +1,8 @@
-// Local imports - agent registry
+// Local imports
 import { resolveAgentKey } from '@agent/index';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-
-// Local imports - task state
 import type { TaskState } from '@agent/core/state/TaskState';
-
-// Local imports - shared schemas
 import {
   MainViewPersistedStateSchema,
   type MainViewPersistedState,

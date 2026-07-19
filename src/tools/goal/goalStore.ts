@@ -1,6 +1,5 @@
 import { Mutex } from 'async-mutex';
 
-import { platform, tryWorkspaceState } from '@platform/platform';
 import {
   getRunContextSession,
   tryUseRunContext,
@@ -9,6 +8,7 @@ import {
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { platform, tryWorkspaceState } from '@platform/platform';
 import type { ExecutionId, StreamTabId } from '@shared/schemas/identifiers';
 import {
   GoalSchema,

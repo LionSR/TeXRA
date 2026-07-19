@@ -4,7 +4,6 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createTestSession } from '@test/support/sessionTestUtils';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -15,6 +14,7 @@ import {
   initializeNativeToolEditApproval,
   nativeRequestApproval,
 } from '@frontend/approval/nativeToolEditApproval';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import type { ToolEditApprovalResult } from '@tools/approval/toolEditApproval';
 import type * as VSCode from 'vscode';
 

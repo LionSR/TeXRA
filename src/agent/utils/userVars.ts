@@ -1,23 +1,23 @@
 import * as path from 'node:path';
 
-import {
-  loadRuntimeSkillCatalog,
-  type SkillLoadIssue,
-} from '@skills/runtimeSkills';
 import { logFileCategory, logFilesLoaded, type AgentTrace } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import {
-  resolveDelegationScopeAgents,
-  type AgentEntry,
-} from '@agent/index/agentRegistry';
+import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import {
   AgentSetting,
   AgentPrompt,
   AgentCategory,
 } from '@agent/core/definition/AgentDataclass';
-import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
+import {
+  resolveDelegationScopeAgents,
+  type AgentEntry,
+} from '@agent/index/agentRegistry';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { FileListEntry } from '@shared/schemas';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
+import {
+  loadRuntimeSkillCatalog,
+  type SkillLoadIssue,
+} from '@skills/runtimeSkills';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { filterNotNull, isNonEmptyString, unique } from '@utils/core';

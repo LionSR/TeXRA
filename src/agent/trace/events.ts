@@ -8,8 +8,8 @@
  * file-list payloads, latexdiff, scratchpad, etc.) use the `domain`
  * escape hatch with a host-chosen `key`.
  */
-import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type { AgentErrorKind } from '@common/errors';
 import type {
   ActiveChildInfo,

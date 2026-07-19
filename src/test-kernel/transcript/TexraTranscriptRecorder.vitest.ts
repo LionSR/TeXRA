@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
-import { StreamLogStore } from '@transcript/StreamLogStore';
 import { TraceEmitter } from '@agent/trace';
 import {
   MESSAGE_TYPES,
@@ -10,6 +8,8 @@ import {
   STREAM_PHASE,
   type StreamTabId,
 } from '@shared/schemas';
+import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
+import { StreamLogStore } from '@transcript/StreamLogStore';
 import { isObject } from '@utils/core';
 
 describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)', () => {

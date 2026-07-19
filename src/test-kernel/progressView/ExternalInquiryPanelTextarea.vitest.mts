@@ -1,15 +1,13 @@
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - progress view component types
+// Local imports
 import type { ExternalInquiryPanel } from '@progressView/frontend/components/ExternalInquiryPanel';
-
-// Local imports - shared schemas
 import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ExternalInquiryPermission } from '@shared/schemas';
 
-// Local imports - test utilities
+// Local file imports
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 interface PostedMessage {

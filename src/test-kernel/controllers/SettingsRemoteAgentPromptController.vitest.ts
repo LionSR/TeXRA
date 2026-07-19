@@ -2,8 +2,8 @@ import { strict as assert } from 'node:assert';
 
 import { describe, it, vi } from 'vitest';
 
-import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { FREE_TIER, ULTRA_TIER, type UserTier } from '@auth/config';
+import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 
 function createController(options: {
   tier: UserTier;

@@ -1,8 +1,4 @@
 import { nanoid } from 'nanoid';
-import {
-  cancelApprovalRequestHandlers,
-  type ApprovalRequestHandlerSet,
-} from '@controllers/progressView/backend/progressBackendUiConfig';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   cancellationResultFor,
@@ -26,11 +22,15 @@ import {
   toUserQuestionResult,
 } from '@agent/runtime/hostInteractionResultMappers';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
+import {
+  cancelApprovalRequestHandlers,
+  type ApprovalRequestHandlerSet,
+} from '@controllers/progressView/backend/progressBackendUiConfig';
 import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
 } from '@platform/interfaces';
+import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
 
 import type { DesktopToolEditApprovalController } from './desktopToolEditApproval.js';
 

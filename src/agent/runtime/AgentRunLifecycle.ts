@@ -1,4 +1,3 @@
-import { platform } from '@platform/platform';
 import { finalizeExecution, type FinalizeExecutionInput } from '@agent/storage';
 import {
   logSdkError,
@@ -18,6 +17,7 @@ import {
   classifyAgentError,
   normalizeProviderError,
 } from '@common/errors';
+import { platform } from '@platform/platform';
 import {
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
@@ -27,13 +27,13 @@ import {
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
-import { projectRunOutcome } from '@shared/streams/streamStatus';
-import { SETUP_AGENT_NAME } from '@shared/constants/agents';
-import { agentName as baseAgentName } from '@shared/schemas/agent';
 import {
   getFirstRunDone,
   setFirstRunDone,
 } from '@shared/state/onboardingState';
+import { agentName as baseAgentName } from '@shared/schemas/agent';
+import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { projectRunOutcome } from '@shared/streams/streamStatus';
 
 import { AgentExecutionHandle, type AgentRunHandle } from './ExecutionHandle';
 import {

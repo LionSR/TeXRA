@@ -11,7 +11,7 @@ vi.mock('@progressView/frontend/components/ExternalInquiryPanel', () => ({
   clearInquiryDraft: mocks.clearInquiryDraft,
 }));
 
-// Local imports - progress view
+// Local imports
 import { handlePermissionAction } from '@progressView/frontend/eventHandlers';
 import {
   APPROVE_ALL_DELEGATED_WORK_ACTION,
@@ -24,10 +24,8 @@ import {
   permissions$,
   resetProgressState,
 } from '@progressView/frontend/progressState';
-
-// Local imports - shared contracts
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory } from '@shared/schemas';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 type PostedCall = [command: string, payload: Record<string, unknown>];

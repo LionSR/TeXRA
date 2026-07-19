@@ -1,15 +1,13 @@
 // Third-party imports
 import { afterEach, describe, expect, it } from 'vitest';
 
-// Local imports - progress view state
+// Local imports
 import {
   appState,
   logContext$,
   resetProgressState,
 } from '@progressView/frontend/progressState';
 import { createInitialState } from '@progressView/frontend/store';
-
-// Local imports - shared schemas
 import { AgentCategory, type StreamTabInfo } from '@shared/schemas';
 
 const parent: StreamTabInfo = {

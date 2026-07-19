@@ -1,8 +1,13 @@
-// Local imports - agent components
+// Local imports
 import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 import type { ToolDefinition } from '@model';
+import type { LanguageModelToolCallPart } from '@platform/languageModel';
+
+// Local file imports
 import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderStopReason } from './StopReasonTypes';
+
+// Third-party imports
 import type {
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageToolCall,
@@ -11,7 +16,6 @@ import type { ResponseFunctionToolCallItem } from 'openai/resources/responses/re
 import type { FunctionCall } from '@google/genai';
 import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/messages';
 import type { ChatToolCall as ORChatToolCall } from '@openrouter/sdk/models';
-import type { LanguageModelToolCallPart } from '@platform/languageModel';
 
 /**
  * Plain data contracts shared between the {@link ModelHandler} base class and

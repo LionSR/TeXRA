@@ -1,7 +1,6 @@
 import pMap from 'p-map';
 import { z } from 'zod';
 
-import { StreamSnapshotStore, type StreamLogStore } from '@transcript';
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -12,6 +11,7 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 import {
   AgentCategoryFilterSchema,
   LOG_LEVELS,
@@ -25,13 +25,14 @@ import {
   type RoundStage,
   type StreamTabId,
 } from '@shared/schemas';
-import { isInFlightPhase } from '@shared/streams/streamStatus';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   PersistedState,
   createBackendStorage,
 } from '@shared/state/PersistedState';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
+import { StreamSnapshotStore, type StreamLogStore } from '@transcript';
 import { clamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -39,7 +40,6 @@ import {
   type DeleteAllStreamsResult,
   type DeleteStreamResult,
 } from './SessionStores';
-import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 
 /** Bounded fan-out for the one-time legacy-instruction backfill at load(),
  *  mirroring `StreamSnapshotStore`'s own per-stream disk-read concurrency. */

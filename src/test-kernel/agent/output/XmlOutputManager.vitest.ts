@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { installPlatform } from '@test/support/setupPlatform';
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { assignByContentSimilarity } from '@agent/output/extraction/contentSimilarity';
@@ -8,6 +7,7 @@ import { OutputFileProcessor } from '@agent/output/OutputFileProcessor';
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { OutputFileInfo, RoundOutput } from '@shared/schemas';
+import { installPlatform } from '@test/support/setupPlatform';
 import {
   AbsoluteFS,
   TaskRunFileService,

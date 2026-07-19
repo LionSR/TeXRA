@@ -10,7 +10,6 @@ import path, { join } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import {
   buildInitConfig,
   ensureTexraGitignored,
@@ -23,6 +22,7 @@ import {
   loadWorkspaceCliConfig,
   setWorkspaceCliChatAgent,
 } from '@cli/runtime/cliConfig';
+import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();

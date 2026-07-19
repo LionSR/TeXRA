@@ -1,13 +1,9 @@
-// Standard library imports
+// Node imports
 import path from 'node:path';
 
-// Local imports - agent
+// Local imports
 import { extractAgentSuffix } from '@agent/utils/mergeFileUtils';
-
-// Local imports - latex
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
-
-// Local imports - utilities
 import type { FileLocation } from '@shared/schemas';
 import {
   createExternalLocation,

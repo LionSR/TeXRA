@@ -5,12 +5,12 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { createFakePlatform } from '@test/support/FakePlatform';
 import {
   createStdinWorkflowInputMaterializer,
   expandWorkflowInputSpecs,
   withExpandedRunInputs,
 } from '@cli/runtime/workflowInputs';
+import { createFakePlatform } from '@test/support/FakePlatform';
 
 describe('CLI workflow input lifecycle', () => {
   let root: string;

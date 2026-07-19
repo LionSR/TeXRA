@@ -1,8 +1,9 @@
-import { platform } from '@platform/platform';
 import {
   planOnboardingFunnelTransition,
   type OnboardingFunnelState,
 } from '@controllers/onboarding/onboardingFunnel';
+import { platform } from '@platform/platform';
+import type { StateStore } from '@platform/interfaces';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   readOnboardingFlags,
@@ -19,7 +20,6 @@ import {
   type DesktopMessageHandler,
   type DesktopRenderer,
 } from './desktopIpcTypes.js';
-import type { StateStore } from '@platform/interfaces';
 
 export interface DesktopOnboardingIpcOptions {
   state?: StateStore;

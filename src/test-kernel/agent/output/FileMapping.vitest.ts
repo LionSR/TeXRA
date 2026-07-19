@@ -1,17 +1,13 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - agent
+// Local imports
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import {
   createFileMapping,
   replaceInputCommands,
 } from '@agent/output/fileMapping';
-
-// Local imports - shared
 import type { FileLocation } from '@shared/schemas';
-
-// Local imports - utilities
 import { FlexibleFS } from '@utils/files/flexibleFS';
 
 function externalLocation(absolutePath: string): FileLocation {

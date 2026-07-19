@@ -7,11 +7,11 @@
  */
 import { tryPlatform } from '@platform/platform';
 
+import type { ConfigTarget } from '@platform/interfaces';
 import {
   CODEX_PREFER_SUBSCRIPTION_KEY,
   CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY,
 } from './codexConstants';
-import type { ConfigTarget } from '@platform/interfaces';
 
 export interface CodexSubscriptionPreferenceUpdate {
   readonly effective: boolean;

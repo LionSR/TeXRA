@@ -1,6 +1,6 @@
-import { platform } from '@platform/platform';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { platform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 export type CliApiMode = 'included' | 'personal';

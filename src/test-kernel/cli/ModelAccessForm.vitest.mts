@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ModelAccessForm } from '@cli/chat/tui/forms/ModelAccessForm';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import {
   FakeStdin,
   FakeStdout,
   loadInk,
 } from '@test/support/inkTestHarness.mts';
-import { ModelAccessForm } from '@cli/chat/tui/forms/ModelAccessForm';
 
 const loadCliModelAccessOverview = vi.hoisted(() => vi.fn());
 

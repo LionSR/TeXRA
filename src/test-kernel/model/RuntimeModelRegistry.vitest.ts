@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { installPlatform } from '@test/support/setupPlatform';
 import { inferPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import {
   computeModelOptionsData,
@@ -23,6 +22,7 @@ import type {
   LanguageModelInfo,
   LanguageModelPort,
 } from '@platform/languageModel';
+import { installPlatform } from '@test/support/setupPlatform';
 
 const SONNET: LanguageModelInfo = {
   id: 'claude-sonnet-4.6',

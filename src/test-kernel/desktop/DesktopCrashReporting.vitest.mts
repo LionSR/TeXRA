@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 

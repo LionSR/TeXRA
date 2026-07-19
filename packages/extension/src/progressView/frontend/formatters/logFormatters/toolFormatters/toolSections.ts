@@ -29,18 +29,18 @@ import {
   TOOL_CODE_LANGUAGES,
   getLanguageFromPath,
 } from '@progressView/frontend/formatters/constants';
-import { getProposalFileGroups } from '@shared/schemas/proposalFields';
-import {
-  CodexMcpToolOutputSchema,
-  type CodexMcpToolOutput,
-} from '@shared/schemas/codex';
+import { toolDisplayKind } from '@shared/tools/toolKind';
+import { EXECUTIONS_DEFAULT_ACTION } from '@shared/tools/executionsDisplay';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import {
   DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
   DELEGATION_TOOLS,
 } from '@shared/constants/delegationTools';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
-import { EXECUTIONS_DEFAULT_ACTION } from '@shared/tools/executionsDisplay';
-import { toolDisplayKind } from '@shared/tools/toolKind';
+import {
+  CodexMcpToolOutputSchema,
+  type CodexMcpToolOutput,
+} from '@shared/schemas/codex';
+import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
 import type { EditInput } from '@tools/EditTool';
 import type { TextEditorInput } from '@tools/TextEditorTool';

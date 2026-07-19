@@ -5,12 +5,6 @@ import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
-import {
-  FakeStdin,
-  FakeStdout,
-  loadInk,
-} from '@test/support/inkTestHarness.mts';
 import {
   findSlashCommand,
   listSlashCommands,
@@ -41,6 +35,12 @@ import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
 import type { CliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { AgentCategory } from '@shared/schemas/agent';
+import {
+  FakeStdin,
+  FakeStdout,
+  loadInk,
+} from '@test/support/inkTestHarness.mts';
+import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const INCLUDED_CHAT_SESSION: SessionMeta = {

@@ -16,8 +16,8 @@ import type { ExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import { DELIVERY_TAG } from '@shared/deliveryTags';
 import type { StreamTabId } from '@shared/schemas';
+import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';
 import { currentSession, type SessionHandle } from './SessionHandle';
 

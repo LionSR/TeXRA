@@ -1,6 +1,7 @@
+// Third-party imports
 import PQueue from 'p-queue';
 
-// Local imports - core flow primitives
+// Local imports
 import { Node } from '@agent/node';
 import {
   emitToolUseCard,
@@ -14,8 +15,6 @@ import {
 } from '@agent/core/tools/toolAttachmentExtraction';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { FileLocation } from '@shared/schemas';
-
-// Local imports - logging
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { AbsoluteFS, pathToLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
