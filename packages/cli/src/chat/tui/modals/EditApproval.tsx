@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
@@ -18,6 +18,7 @@ import {
   COMPACT_DIFF_DISPLAY_LINES,
   diffVisualRowCount,
   DiffView,
+  initialDiffScrollOffset,
   maxDiffScrollOffset,
   statsFromHunks,
 } from '../render/DiffView';
@@ -106,6 +107,9 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const [feedbackMode, setFeedbackMode] = useState(false);
   const [feedbackValue, setFeedbackValue] = useState('');
+  const [feedbackExitCount, setFeedbackExitCount] = useState(0);
+  const feedbackModeRef = useRef(false);
+  const feedbackWasCompactRef = useRef(false);
   const title = `Apply edit to ${props.request.path}?`;
   const diffWidth = clampModalWidth(columns - EDIT_DIFF_PADDING);
   const maxDiffLines = editApprovalDiffRowsBudget({
@@ -136,9 +140,55 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
     [diffWidth, hunks],
   );
   const maxScrollOffset = maxDiffScrollOffset(diffRows, maxDiffLines);
+  const initialScrollOffset = useMemo(
+    () => initialDiffScrollOffset(hunks, diffWidth, maxDiffLines),
+    [diffWidth, hunks, maxDiffLines],
+  );
+  const scrollResetKey = useMemo(
+    () => ({
+      availableRows: props.availableRows,
+      columns,
+      feedbackExitCount,
+      hunks,
+      request: props.request,
+    }),
+    [columns, feedbackExitCount, hunks, props.availableRows, props.request],
+  );
+  const feedbackDiffIsCompact = useCallback(
+    (value: string) =>
+      editApprovalDiffRowsBudget({
+        availableRows: props.availableRows,
+        columns,
+        feedbackMode: true,
+        feedbackValue: value,
+        title,
+      }) <= COMPACT_DIFF_DISPLAY_LINES,
+    [columns, props.availableRows, title],
+  );
+  useEffect(() => {
+    if (feedbackMode && feedbackDiffIsCompact(feedbackValue)) {
+      feedbackWasCompactRef.current = true;
+    }
+  }, [feedbackDiffIsCompact, feedbackMode, feedbackValue]);
+  const handleFeedbackModeChange = useCallback(
+    (active: boolean) => {
+      if (active && feedbackDiffIsCompact(feedbackValue)) {
+        feedbackWasCompactRef.current = true;
+      }
+      if (feedbackModeRef.current && !active && feedbackWasCompactRef.current) {
+        setFeedbackExitCount((count) => count + 1);
+      }
+      if (!active) feedbackWasCompactRef.current = false;
+      feedbackModeRef.current = active;
+      setFeedbackMode(active);
+    },
+    [feedbackDiffIsCompact, feedbackValue],
+  );
   const { scrollOffset, scrollable: diffScrollable } = useScrollableOffset({
+    initialOffset: initialScrollOffset,
     maxScrollOffset,
     pageRows: Math.max(1, maxDiffLines - 2),
+    resetKey: scrollResetKey,
   });
   const compactDiffLayout = maxDiffLines <= COMPACT_DIFF_DISPLAY_LINES;
   const compactCard =
@@ -154,7 +204,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
       alwaysAllow={{ kind: 'toolEdit', label: 'approve edits for session' }}
       feedbackPlaceholder={EDIT_APPROVAL_FEEDBACK_PLACEHOLDER}
       compact={compactCard}
-      onFeedbackModeChange={setFeedbackMode}
+      onFeedbackModeChange={handleFeedbackModeChange}
       onFeedbackValueChange={setFeedbackValue}
       onDecide={props.onDecide}
     >

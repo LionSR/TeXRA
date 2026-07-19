@@ -112,6 +112,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Edit previews open on the change** — approval previews now begin near the
+  first added or removed line, so long wrapped context no longer hides the
+  proposed edit below the fold.
 - **Workflow-script progress is visible in the CLI** — delegated workflow
   phases, script log messages, and per-step cost summaries now remain in
   terminal scrollback beneath the workflow call that produced them.
