@@ -18,9 +18,10 @@
 
 import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 import { normalizeModelName, stripProviderPrefix } from './modelNames.ts';
-import { FREE_TIER, MAX_TIER, ULTRA_TIER } from './tierConstants.ts';
 
-export { FREE_TIER, MAX_TIER, ULTRA_TIER };
+export const ULTRA_TIER = 'Ultra';
+export const MAX_TIER = 'Max';
+export const FREE_TIER = 'free';
 
 // =============================================================================
 // Types

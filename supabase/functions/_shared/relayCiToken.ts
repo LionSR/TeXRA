@@ -22,7 +22,7 @@ export const RELAY_CI_TOKEN_PREFIX = 'texra_relay_';
 /** Refresh last_used_at at most this often to avoid per-request writes. */
 const LAST_USED_REFRESH_MS = 60 * 1000;
 
-export function isRelayCiToken(token: string): boolean {
+function isRelayCiToken(token: string): boolean {
   return token.startsWith(RELAY_CI_TOKEN_PREFIX);
 }
 
@@ -43,7 +43,7 @@ export type CiTokenAuthResult =
  * Validate a CI relay token: hash lookup, revocation, expiry, and scope.
  * Refreshes last_used_at (throttled) as audit metadata on success.
  */
-export async function authenticateRelayCiToken(
+async function authenticateRelayCiToken(
   adminClient: SupabaseClient<any>,
   token: string,
   requiredScope = 'relay',

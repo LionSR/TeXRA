@@ -15,8 +15,6 @@ const BYTES_PER_MIB = BYTES_PER_KIB * 1024;
 export const FREE_TIER_REQUEST_BODY_LIMIT_BYTES = 2 * BYTES_PER_MIB;
 export const FREE_TIER_MAX_OUTPUT_TOKENS = 8192;
 
-const textEncoder = new TextEncoder();
-
 export interface RequestBodySizeCheck {
   allowed: boolean;
   limitBytes: number;
@@ -26,28 +24,6 @@ export interface RequestBodySizeCheck {
 export type RequestBodyReadResult =
   | (RequestBodySizeCheck & { allowed: true; body: Uint8Array })
   | (RequestBodySizeCheck & { allowed: false; body: null });
-
-export type RequestBodyForSizeCheck =
-  string | ArrayBuffer | ArrayBufferView | null;
-
-function requestBodyByteLength(body: RequestBodyForSizeCheck): number {
-  if (body == null) return 0;
-  if (typeof body === 'string') return textEncoder.encode(body).byteLength;
-  return body.byteLength;
-}
-
-export function checkRequestBodySizeLimit(
-  body: RequestBodyForSizeCheck,
-  limitBytes: number = FREE_TIER_REQUEST_BODY_LIMIT_BYTES,
-): RequestBodySizeCheck {
-  const requestBytes = requestBodyByteLength(body);
-
-  return {
-    allowed: requestBytes <= limitBytes,
-    limitBytes,
-    requestBytes,
-  };
-}
 
 function concatChunks(chunks: Uint8Array[], byteLength: number): Uint8Array {
   const body = new Uint8Array(byteLength);
