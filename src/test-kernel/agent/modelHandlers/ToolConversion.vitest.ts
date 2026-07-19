@@ -8,7 +8,6 @@ import {
 } from '@agent/modelHandlers/toolConversion';
 import type { ToolDefinition } from '@model';
 import { DiagnosticsTool } from '@tools/DiagnosticsTool';
-import { ApplyPathTool } from '@tools/applyPath';
 import { BashTool } from '@tools/bash';
 import { EditFileTool } from '@tools/EditTool';
 import { GlobTool } from '@tools/glob';
@@ -270,7 +269,6 @@ describe('Anthropic tool conversion', () => {
 describe('tool schema descriptions', () => {
   it('keeps LLM-facing input fields described through provider conversions', () => {
     const cases: ToolDescriptionCase[] = [
-      { definition: new ApplyPathTool().definition, fields: ['patch'] },
       {
         definition: new ArxivDownloadTool().definition,
         fields: ['id', 'autoIndent', 'destination'],
