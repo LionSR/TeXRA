@@ -98,6 +98,40 @@ function createFakeClient(...chunks: GenerateContentResponse[]): any {
 }
 
 describe('ModelHandlerGoogleGenAI streaming text extraction', () => {
+  it('maps finalTool to an ANY function allow-list', async () => {
+    const streamRecords: StreamRecord[] = [];
+    const handler = createStreamingHandler(streamRecords);
+    let chatConfig: Record<string, unknown> | undefined;
+    const response = new GenerateContentResponse();
+    response.candidates = [];
+    const client = createFakeClient(response);
+    client.chats.create = (params: { config: Record<string, unknown> }) => {
+      chatConfig = params.config;
+      return {
+        sendMessageStream: async () =>
+          (async function* () {
+            yield response;
+          })(),
+      };
+    };
+
+    await handler.createResponse({
+      client,
+      messages: [{ role: 'user', parts: [createPartFromText('finish')] }],
+      temperature: 0,
+      tools: [{ name: 'submit_output', description: 'Submit output' }],
+      finalTool: { name: 'submit_output' },
+    });
+
+    expect(chatConfig?.toolConfig).toEqual({
+      functionCallingConfig: {
+        mode: 'ANY',
+        allowedFunctionNames: ['submit_output'],
+      },
+    });
+    expect(handler.supportsForcedToolChoice).toBe(true);
+  });
+
   it('does not read the Google SDK text getter for streamed function calls', async () => {
     const streamRecords: StreamRecord[] = [];
     const handler = createStreamingHandler(streamRecords);
