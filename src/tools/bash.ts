@@ -416,7 +416,7 @@ export class BashTool extends defineTool({
 
     // Wake the parent only after this child is finalized (see #8093): waking
     // a WAITING parent can await its entire resumed turn
-    // (`agentResume.tryResumeStream` → … → `resumeToolUseFromSnapshot`), and
+    // (`agentResume.tryResumeStream` → … → `resumeToolUseFromResumeData`), and
     // that resumed turn may itself wait on this execution — so finalizing
     // first keeps a self-stall impossible instead of merely unlikely.
     const wakeParentFollowUp = async (

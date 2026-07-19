@@ -29,8 +29,14 @@ export class ToolUsePrepareNode<C> extends Node<
   async exec(
     _prepRes: void,
   ): Promise<{ kind: 'success'; result: CyclePrepResult }> {
-    const { userVarChannels, logger, snapshot, config, fileService, setting } =
-      this.services;
+    const {
+      userVarChannels,
+      logger,
+      resumeShared,
+      config,
+      fileService,
+      setting,
+    } = this.services;
     const resolvedToolNames = setting.tools.map((tool) => tool.name);
     const hasDelegationTools = hasDelegationTool(resolvedToolNames);
     const promptOptions = {
@@ -39,7 +45,7 @@ export class ToolUsePrepareNode<C> extends Node<
       isSubagent: this.services.isSubagent,
     };
 
-    if (snapshot) {
+    if (resumeShared) {
       logger.debug('Resuming tool-use session from saved state.');
       // The persisted messages are used verbatim -- including `messages[0]`
       // for providers that embed the system prompt into `messages` (OpenAI,
@@ -68,12 +74,18 @@ export class ToolUsePrepareNode<C> extends Node<
       return {
         kind: 'success',
         result: {
-          messages: snapshot.messages,
-          runState: snapshot.run,
-          workspaceState: AgentWorkspaceState.fromSnapshot(snapshot.workspace),
+          messages: resumeShared.messages,
+          runState: resumeShared.stateSlices.runStateSnapshot,
+          workspaceState: AgentWorkspaceState.fromSnapshot(
+            resumeShared.stateSlices.workspaceSnapshot,
+          ),
           userChannels: {
-            input: Object.freeze({ ...snapshot.user.input }),
-            transient: { ...snapshot.user.transient },
+            input: Object.freeze({
+              ...resumeShared.stateSlices.userChannels.input,
+            }),
+            transient: {
+              ...resumeShared.stateSlices.userChannels.transient,
+            },
           },
           shouldSkipCycle: true,
           systemPrompt: systemMessage,

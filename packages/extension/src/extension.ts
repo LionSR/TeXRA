@@ -47,8 +47,8 @@ import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
 import { hasAnyUsableSetupCredential } from '@commands/setup';
 import {
   isResumeInFlight,
-  tryResumeFromSnapshot,
-} from '@commands/agent/resumeFromSnapshot';
+  tryResumeFromResumeData,
+} from '@commands/agent/resumeFromResumeData';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
@@ -244,7 +244,7 @@ export async function activate(context: vscode.ExtensionContext) {
     lifecycle,
     agentDirectories,
     agentResume: {
-      tryResumeStream: (streamId) => tryResumeFromSnapshot(streamId),
+      tryResumeStream: (streamId) => tryResumeFromResumeData(streamId),
       isResumeInFlight: (streamId) => isResumeInFlight(streamId),
     },
     toolAvailability: {

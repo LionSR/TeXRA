@@ -2,14 +2,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import { createToolUseResumeShared } from '@test/support/toolUseResumeTestUtils';
 import { buildInitialToolUsePrompts } from '@agent/prompt';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentPromptSchema } from '@agent/core/definition/AgentDataclass';
-import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ToolUsePrepareNode } from '@agent/implementations/flows/tooluse/nodes/ToolUsePrepareNode';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
-import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 
 function buildServices(
@@ -31,7 +29,7 @@ function buildServices(
     }),
     session: {} as never,
     setting: { agentCategory: 'toolUse', tools: [] } as never,
-    snapshot: null,
+    resumeShared: null,
     toolRegistry: {} as never,
     userVarChannels: { input: {}, transient: {} },
     checkInterruption: () => false,
@@ -93,18 +91,12 @@ describe('ToolUsePrepareNode transcript logging (regression #7508)', () => {
   });
 });
 
-function buildSnapshot(
-  overrides: Partial<ToolUseSessionSnapshot> = {},
-): ToolUseSessionSnapshot {
-  return {
+function buildResumeShared() {
+  return createToolUseResumeShared({
     messages: [
       { role: 'system', content: [{ type: 'text', text: 'stale system' }] },
     ],
-    run: AgentRunStateSnapshotSchema.parse({}),
-    workspace: AgentWorkspaceState.create().toSnapshot(),
-    user: { input: {}, transient: {} },
-    ...overrides,
-  } as ToolUseSessionSnapshot;
+  });
 }
 
 describe('ToolUsePrepareNode resume (prompt-cache preservation)', () => {
@@ -116,8 +108,8 @@ describe('ToolUsePrepareNode resume (prompt-cache preservation)', () => {
     // a mid-run agent-config edit does not propagate into an
     // already-suspended run's prefix. The separate per-call system prompt,
     // however, must still be rebuilt from the current prompt configuration.
-    const snapshot = buildSnapshot();
-    const services = buildServices({ snapshot });
+    const resumeShared = buildResumeShared();
+    const services = buildServices({ resumeShared });
     const node = new ToolUsePrepareNode().setServices(services);
     const resolvedToolNames = services.setting.tools.map((tool) => tool.name);
     const rebuiltPrompts = await buildInitialToolUsePrompts(
@@ -136,7 +128,7 @@ describe('ToolUsePrepareNode resume (prompt-cache preservation)', () => {
     expect(result.result.systemPrompt).toBe(
       `${rebuiltPrompts.systemPrompt}\n${rebuiltPrompts.instructionSuffix}`,
     );
-    expect(result.result.messages).toBe(snapshot.messages);
+    expect(result.result.messages).toBe(resumeShared.messages);
     expect(result.result.messages[0]).toEqual({
       role: 'system',
       content: [{ type: 'text', text: 'stale system' }],

@@ -540,7 +540,7 @@ describe('childRunLoop E2E fixtures', () => {
 
   it('#8093 regression: a terminal turn finalizes this child before its wake step is even reached, so a resumed parent never self-stalls waiting on it', async () => {
     // Regression: `wakeChildRunFollowUp` can await the ENTIRE resumed parent
-    // turn (`agentResume.tryResumeStream` → … → `resumeToolUseFromSnapshot`).
+    // turn (`agentResume.tryResumeStream` → … → `resumeToolUseFromResumeData`).
     // Before #8093, the loop awaited enqueue-and-wake together, inline in the
     // turn loop, and only finalized this child (untracking its execution
     // handle) afterward in the outer `finally` — so a resumed parent that

@@ -94,7 +94,7 @@ export async function enqueueChildRunFollowUp(params: {
  * Wake (or release) the parent stream for a result already enqueued via
  * {@link enqueueChildRunFollowUp}. This is the half that can await an entire
  * resumed parent turn (`agentResume.tryResumeStream` → … →
- * `resumeToolUseFromSnapshot`) — call it only after any of this child's own
+ * `resumeToolUseFromResumeData`) — call it only after any of this child's own
  * finalization work is done, so a resumed parent that immediately waits on
  * this child's execution never races its own wake.
  */

@@ -10,10 +10,12 @@
  */
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { TaskState } from '@agent/core/state/TaskState';
-import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
-import { retrieveSessionResumeData } from './SessionResumeRetrieval';
+import {
+  retrieveSessionResumeData,
+  type ToolUseResumeData,
+} from './SessionResumeRetrieval';
 import type { StreamStatusMachine } from './StreamStatusService';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
@@ -45,8 +47,8 @@ export interface ResumeStreamPorts {
   resolveResumeState(
     streamId: StreamTabId,
   ): Promise<ResolvedResumeState | undefined>;
-  /** Resume a tool-use snapshot (host injects its failure surface). */
-  resumeToolUse(snapshot: ToolUseSessionSnapshot): Promise<boolean>;
+  /** Resume canonical tool-use state (host injects its failure surface). */
+  resumeToolUse(resume: ToolUseResumeData): Promise<boolean>;
   /**
    * Launch a workflow resume run. The extension re-parses the config and opens
    * the final output; the desktop runs it directly and opens its own preview —
@@ -129,7 +131,7 @@ export async function resolveAndResumeStream(
 
     if (resume.type === 'toolUse') {
       // The tool-use helper owns the RESUMING flip + follow-up dance.
-      return await ports.resumeToolUse(resume.snapshot);
+      return await ports.resumeToolUse(resume);
     }
 
     // Workflow launch owns stream acquisition and status transitions through

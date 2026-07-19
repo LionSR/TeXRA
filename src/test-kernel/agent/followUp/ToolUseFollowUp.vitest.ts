@@ -17,9 +17,6 @@ import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
 } from '@test/helpers/streamStatusTestUtils';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { defaultSession } from '@agent/runtime/SessionHandle';
@@ -35,7 +32,6 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseSessionLifecycle } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
-import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 type ResumeHost = NonNullable<
@@ -64,29 +60,6 @@ function trackChildHandle(
 
 describe('ToolUseFollowUp', () => {
   const streamId = 'stream-follow-up' as StreamTabId;
-
-  // Create state snapshots directly (no store wrapper needed)
-  const workspaceState = AgentWorkspaceState.create();
-
-  const snapshot: ToolUseSessionSnapshot = {
-    version: 2,
-    executionId: 'exec-1',
-    streamId,
-    agentConfig: AgentConfigSchema.parse({
-      model: 'demo-model',
-      agent: 'demo-agent',
-      agentCategory: 'toolUse',
-    }),
-    messages: [],
-    // State slices stored directly (v2 schema)
-    run: AgentRunStateSnapshotSchema.parse({}),
-    workspace: workspaceState.toSnapshot(),
-    user: {
-      input: {},
-      transient: {},
-    },
-    lastUpdated: Date.now(),
-  };
 
   afterEach(() => {
     for (const executionId of defaultSession().executions.getActiveIds()) {
@@ -496,17 +469,5 @@ describe('ToolUseFollowUp', () => {
       clearStreamStatusForTest(routedSession.status, parentStreamId);
       defaultSession().followUps.release(parentStreamId);
     }
-  });
-
-  it('creates valid snapshot structure', () => {
-    // Test that snapshot structure is valid (used for resume operations)
-    assert.equal(snapshot.version, 2);
-    assert.equal(snapshot.streamId, streamId);
-    assert.equal(snapshot.executionId, 'exec-1');
-    assert.ok(snapshot.agentConfig);
-    // State slices stored directly (v2 schema)
-    assert.ok(snapshot.run);
-    assert.ok(snapshot.workspace);
-    assert.ok(snapshot.user);
   });
 });

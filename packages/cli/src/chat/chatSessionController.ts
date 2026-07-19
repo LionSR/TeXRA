@@ -16,10 +16,10 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
+import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
 import { runAgent } from '@agent/runtime/runAgent';
 import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
-import { resumeQueuedToolUseSnapshot } from '@agent/runtime/resumeQueuedToolUse';
+import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { type CliContext } from '@cli/runtime/cliContext';
@@ -33,7 +33,7 @@ import {
 } from '@cli/runtime/runtimeHost';
 import {
   explainNonResumable,
-  resolveCliResumeSnapshot,
+  resolveCliResume,
   type CliToolUseResumeResolution,
 } from '@cli/runtime/sessionResume';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
@@ -457,8 +457,8 @@ export function createChatSessionController(
 
     const supersededRecovery = supersedeInterruptedRecovery();
     try {
-      const resolution = preResolved ?? (await resolveCliResumeSnapshot(id));
-      if (resolution.kind !== 'toolUse') {
+      const resolution = preResolved ?? (await resolveCliResume(id));
+      if (resolution.type !== 'toolUse') {
         restoreInterruptedRecovery(supersededRecovery);
         appendLocalErrorTranscript(explainNonResumable(resolution, id));
         markChatTuiRunCompleted(session);
@@ -469,13 +469,13 @@ export function createChatSessionController(
       clearLocalTranscript();
       followUpQueue.clear();
       session.streamId = resolution.streamId;
-      session.executionId = resolution.snapshot.executionId;
+      session.executionId = resolution.executionId;
       publishChatTuiRunState(session);
       rootStreamId.set(resolution.streamId);
 
-      const currentModel = resolution.config.model;
+      const currentModel = resolution.agentConfig.model;
       const sessionContext = getSessionContext(currentModel);
-      activateAgentConfig(resolution.config, 'history');
+      activateAgentConfig(resolution.agentConfig, 'history');
 
       await defaultSession().transcripts.ensureLoaded(resolution.streamId);
       await snapshotStore.load([resolution.streamId]);
@@ -498,7 +498,7 @@ export function createChatSessionController(
         setupRunHost(sessionContext);
       session.runtimeHost = runtimeHost;
 
-      // A Ctrl-C during the rehydration awaits above (`resolveCliResumeSnapshot`,
+      // A Ctrl-C during the rehydration awaits above (`resolveCliResume`,
       // `ensureLoaded`, `snapshotStore.load`/`read`) lands here as
       // `session.stopRequested`. Honor it before starting the real run chain —
       // matching `tryResumeStream()`'s stop-check after its own preparatory
@@ -512,7 +512,7 @@ export function createChatSessionController(
 
       const runChain = setCliHelperModel(currentModel)
         .then(() =>
-          resumeToolUseFromSnapshot(resolution.snapshot, runtimeHost, {
+          resumeToolUseFromResumeData(resolution, runtimeHost, {
             approvalPromptsUnavailable: approvalsUnavailable,
             runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
             drainedFollowUps: supersededRecovery?.followUps.map((followUp) => ({
@@ -628,8 +628,8 @@ export function createChatSessionController(
               executionId,
               parentStreamId,
             }),
-            resumeToolUse: (snapshot) =>
-              resumeQueuedToolUseSnapshot(streamId, snapshot, runtimeHost, {
+            resumeToolUse: (resume) =>
+              resumeQueuedToolUseFromResumeData(streamId, resume, runtimeHost, {
                 session: defaultSession(),
                 approvalPromptsUnavailable: approvalsUnavailable,
                 runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
