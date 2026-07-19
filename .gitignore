@@ -1,7 +1,6 @@
 node_modules/
 dist/
 dist-packaged/
-out/
 .env
 .aider*
 releases/
