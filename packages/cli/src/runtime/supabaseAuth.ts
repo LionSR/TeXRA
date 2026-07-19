@@ -260,7 +260,7 @@ export async function getCliSessionAccessToken(): Promise<string | null> {
  * limit must use this tier — `getCliAuthProfile().tier` may describe the
  * env token's account instead.
  */
-export async function getCliSessionTier(): Promise<string> {
+async function getCliSessionTier(): Promise<string> {
   return SupabaseClient.getSessionTier();
 }
 

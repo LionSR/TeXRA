@@ -15,31 +15,7 @@ const SAFE_REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,200}$/;
 type RelayRequestBody =
   string | Uint8Array | ReadableStream<Uint8Array> | null | undefined;
 
-function utf8ByteLength(value: string): number {
-  let bytes = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    const codeUnit = value.charCodeAt(i);
-    if (codeUnit < 0x80) {
-      bytes += 1;
-    } else if (codeUnit < 0x800) {
-      bytes += 2;
-    } else if (
-      codeUnit >= 0xd800 &&
-      codeUnit <= 0xdbff &&
-      i + 1 < value.length &&
-      value.charCodeAt(i + 1) >= 0xdc00 &&
-      value.charCodeAt(i + 1) <= 0xdfff
-    ) {
-      bytes += 4;
-      i += 1;
-    } else {
-      bytes += 3;
-    }
-  }
-  return bytes;
-}
-
-export interface RelayFailureDiagnostic {
+interface RelayFailureDiagnostic {
   relayRequestId: string;
   provider: string;
   model: string | null;
@@ -96,7 +72,8 @@ export function getRelayRequestBytes(
   contentLength: string | null,
 ): number | null {
   if (body == null) return 0;
-  if (typeof body === 'string') return utf8ByteLength(body);
+  if (typeof body === 'string')
+    return new TextEncoder().encode(body).byteLength;
   if (body instanceof Uint8Array) return body.byteLength;
 
   if (contentLength == null || contentLength.trim() === '') return null;
