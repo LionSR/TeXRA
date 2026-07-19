@@ -69,6 +69,10 @@ interface ToolExecutionResult {
   logRef: { logId: string | undefined; groupId: string | undefined };
 }
 
+function endsToolUseTurn(result: ToolExecutionResult | null): boolean {
+  return result?.result.status === 'executed' && result.result.endTurn === true;
+}
+
 /**
  * Dispatches tool calls with ordering barriers.
  *
@@ -191,6 +195,7 @@ export class ToolUseDispatchNode<C> extends Node<
             batchController.signal,
           );
           i += 1;
+          if (endsToolUseTurn(results[index])) break;
           continue;
         }
         // Contiguous run of parallel-safe calls executes concurrently.
@@ -212,6 +217,7 @@ export class ToolUseDispatchNode<C> extends Node<
             }),
           ),
         );
+        if (run.some((index) => endsToolUseTurn(results[index]))) break;
       }
       this.fanOutDuplicateResults(calls, results);
       this.rejectUnsafeDuplicates(calls, results);
@@ -631,6 +637,11 @@ export class ToolUseDispatchNode<C> extends Node<
     if (interrupted) {
       shared.shouldStop = true;
     }
+    const endTurn = allResults.some((result) => endsToolUseTurn(result));
+    if (endTurn) {
+      shared.shouldStop = true;
+      shared.endTurn = true;
+    }
 
     const assistantText = shared.text ?? '';
 
@@ -691,6 +702,6 @@ export class ToolUseDispatchNode<C> extends Node<
 
     shared.toolCalls = [];
 
-    return FlowTransition.CONTINUE;
+    return endTurn ? FlowTransition.COMPLETE : FlowTransition.CONTINUE;
   }
 }

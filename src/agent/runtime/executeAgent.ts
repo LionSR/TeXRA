@@ -101,6 +101,9 @@ function buildToolUseFlowResult(
     touchedFiles: result.touchedFiles,
     executionId,
     streamId,
+    ...(result.structured !== undefined
+      ? { structured: result.structured }
+      : {}),
     ...buildOptionalFlowResultFields(memoryMisses, result.totalCostUsd),
   };
 }
