@@ -2,6 +2,7 @@ import * as path from 'node:path';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import type { FileStat } from '@platform/interfaces';
 import { AbsoluteFS } from '@utils/files';
 import { byStringProp, normalizeFilePath } from '@utils/core';
 import { isStrictlyWithin } from '@utils/core/pathCore';
@@ -47,7 +48,7 @@ export async function listExecutionWorkspaceFiles(
     const resolved = resolveExecutionWorkspaceFilePath(config, filePath);
     if (!resolved || files.has(resolved.path)) continue;
 
-    let stat;
+    let stat: FileStat;
     try {
       stat = await AbsoluteFS.stat(resolved.absolutePath);
     } catch (error) {
