@@ -1389,6 +1389,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     }
   }
 
+  override get supportsForcedToolChoice(): boolean {
+    return true;
+  }
+
   protected override async createResponseImpl(
     options: CreateResponseOptions<Step, GoogleGenAI>,
   ): Promise<CreateResponseResult<GoogleGenAIInteraction, Step>> {
@@ -1400,6 +1404,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       endTag,
       signal,
       tools,
+      finalTool,
     } = options;
     if (messages.length === 0) {
       this.logger.error('Cannot create response from empty messages array.');
@@ -1414,6 +1419,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     const interactionsTools = tools?.length
       ? this.toInteractionsTools(tools)
       : undefined;
+    if (finalTool && interactionsTools) {
+      generationConfig.tool_choice = finalTool.name;
+    }
 
     // Phase: COUNT + VALIDATE — adjust max_output_tokens to fit the context
     // window. Estimate on the FULL local transcript (conservative — see

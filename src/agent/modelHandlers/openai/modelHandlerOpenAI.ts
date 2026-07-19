@@ -581,6 +581,10 @@ export class ModelHandlerOpenAI<
     return tagOpenAISdkError;
   }
 
+  override get supportsForcedToolChoice(): boolean {
+    return true;
+  }
+
   /** Creates a chat completion after SDK-boundary error tagging is installed. */
   protected override async createResponseImpl(
     options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
@@ -593,6 +597,7 @@ export class ModelHandlerOpenAI<
       endTag,
       signal,
       tools,
+      finalTool,
     } = options;
 
     // Phase 0: COMPACT - Apply the shared trigger before building the request.
@@ -620,6 +625,12 @@ export class ModelHandlerOpenAI<
       endTag,
       tools,
     );
+    if (finalTool && tools?.length) {
+      baseParams.tool_choice = {
+        type: 'function',
+        function: { name: finalTool.name },
+      };
+    }
 
     // Phase 2: COUNT - Estimate input tokens if handler supports it
     // Phase 3: VALIDATE - Adjust max_tokens if needed

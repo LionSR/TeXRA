@@ -2,6 +2,7 @@
 import { nanoid } from 'nanoid';
 import {
   GoogleGenAI,
+  FunctionCallingConfigMode,
   FinishReason,
   ThinkingLevel,
   PartMediaResolutionLevel,
@@ -255,6 +256,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return tagGoogleSdkError;
   }
 
+  override get supportsForcedToolChoice(): boolean {
+    return true;
+  }
+
   /** Creates a Google response after SDK-boundary error tagging is installed. */
   protected override async createResponseImpl(
     options: CreateResponseOptions<Content, GoogleGenAI>,
@@ -267,6 +272,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       endTag,
       signal,
       tools,
+      finalTool,
     } = options;
     if (messages.length === 0) {
       this.logger.error('Cannot create response from empty messages array.');
@@ -307,6 +313,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const googleTools = tools?.length ? toGoogleTools(tools) : undefined;
     if (googleTools?.length) {
       generationConfig.tools = googleTools;
+      if (finalTool) {
+        generationConfig.toolConfig = {
+          functionCallingConfig: {
+            mode: FunctionCallingConfigMode.ANY,
+            allowedFunctionNames: [finalTool.name],
+          },
+        };
+      }
     }
 
     const chatParams: CreateChatParameters = {

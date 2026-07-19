@@ -75,6 +75,13 @@ export class ToolUseCycleNode<C> extends Node<
       return { outcome: 'skipped' };
     }
 
+    const finalTool =
+      modelHandler.supportsForcedToolChoice &&
+      this.services.setting.tools.length === 1 &&
+      this.services.setting.tools[0]?.name === this.services.finalTool?.name
+        ? this.services.finalTool
+        : undefined;
+
     const roundShared: ToolUseRoundShared = {
       messages: prepRes.messages,
       shouldStop: false,
@@ -86,6 +93,8 @@ export class ToolUseCycleNode<C> extends Node<
         typeof prepRes.userChannels.transient.INSTRUCTION === 'string'
           ? prepRes.userChannels.transient.INSTRUCTION
           : undefined,
+      finalTool,
+      finalToolAttempted: finalTool !== undefined,
     };
 
     const flow = createToolUseRoundFlow<C>();

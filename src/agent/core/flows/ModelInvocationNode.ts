@@ -10,6 +10,7 @@ import type {
   AgentCore,
   BaseFlowContextInit,
 } from '@agent/core/flows/BaseFlowServices';
+import type { FinalTool } from '@agent/types/ModelHandlerContracts';
 import { requiresFlowAutoRetry } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
 
@@ -30,6 +31,10 @@ export interface ModelInvocationConfig<TShared, TServices> {
   ) => string | undefined;
   getEndTag?: (services: TServices) => string | undefined;
   getTools?: (services: TServices) => ToolDefinition[] | undefined;
+  getFinalTool?: (
+    shared: TShared,
+    services: TServices,
+  ) => FinalTool | undefined;
   storeResponse: (shared: TShared, response: unknown) => void;
   /**
    * Called after compaction to get additional context (e.g. active executions)
@@ -109,6 +114,7 @@ export class ModelInvocationNode<
       shouldStop: shared.shouldStop,
       messages: shared.messages,
       systemPrompt: this._config.getSystemPrompt?.(shared, this.services),
+      finalTool: this._config.getFinalTool?.(shared, this.services),
     };
   }
 
@@ -135,6 +141,7 @@ export class ModelInvocationNode<
         tools: this._config.getTools
           ? this._config.getTools(services)
           : services.setting.tools,
+        finalTool: prepRes.finalTool,
       });
 
       return {

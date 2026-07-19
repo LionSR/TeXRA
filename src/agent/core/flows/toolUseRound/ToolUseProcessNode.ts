@@ -22,6 +22,7 @@ import type { ToolUseRoundShared } from './roundShared';
 
 const BLANK_TOOL_RESULT_CONTINUATION =
   'The previous assistant turn after a tool result was blank. Continue now with the final answer or next required action.';
+const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
 
 function hasToolResultContent(value: unknown): boolean {
   if (!Array.isArray(value)) return false;
@@ -178,6 +179,11 @@ export class ToolUseProcessNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
+    // `finalTool` selects only the request whose response is being processed.
+    // Keep the separate attempted bit so a malformed/ignored forced response
+    // cannot force every later round or schedule a second final attempt.
+    shared.finalTool = undefined;
+
     workspace.serverToolContent.contentBlocks =
       execRes.serverToolContentBlocks ?? [];
     workspace.serverToolContent.lastAssistantContent =
@@ -224,9 +230,6 @@ export class ToolUseProcessNode<C> extends BaseNode<
         return FlowTransition.CONTINUE;
       }
 
-      shared.toolCalls = undefined;
-      shared.shouldStop = true;
-      shared.endTurn = true;
       if (execRes.text) {
         shared.messages.push(
           modelHandler.createAssistantMessageFromResponse(
@@ -249,6 +252,28 @@ export class ToolUseProcessNode<C> extends BaseNode<
       }
       workspace.resetServerToolContent();
       workspace.resetReasoning();
+
+      if (
+        this.services.finalTool &&
+        modelHandler.supportsForcedToolChoice &&
+        !shared.finalToolAttempted
+      ) {
+        const result = await appendFollowUpAsUserMessage(
+          shared.messages,
+          { text: FINAL_TOOL_INSTRUCTION, origin: 'synthetic' },
+          this.services,
+        );
+        shared.messages = result.messages;
+        shared.finalTool = this.services.finalTool;
+        shared.finalToolAttempted = true;
+        shared.toolCalls = undefined;
+        advanceRound(shared);
+        return FlowTransition.CONTINUE;
+      }
+
+      shared.toolCalls = undefined;
+      shared.shouldStop = true;
+      shared.endTurn = true;
       return FlowTransition.COMPLETE;
     }
 

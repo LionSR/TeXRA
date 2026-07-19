@@ -212,11 +212,13 @@ export async function runToolUseFlow<C = unknown>(
       ? input.config.outputSchema
       : undefined;
   let pendingStructuredOutput: ToolUseRunShared['structured'];
+  let finalTool: ToolUseServices<C>['finalTool'];
   let registry = baseRegistry;
   if (outputSchema) {
     const terminalTool = buildTerminalTool(outputSchema, (value) => {
       pendingStructuredOutput = value;
     });
+    finalTool = { name: terminalTool.definition.name };
     resolvedTools.push(terminalTool.definition);
     registry = buildTerminalToolRegistry(baseRegistry, terminalTool);
   }
@@ -228,6 +230,7 @@ export async function runToolUseFlow<C = unknown>(
     setting: { ...setting, tools: resolvedTools },
     session: sessionLifecycle,
     toolRegistry: registry,
+    finalTool,
     resumeShared: input.resume?.shared ?? null,
     persistTodos: (todos) => kv.writeTodos(todos),
     getPendingStructuredOutput: () => pendingStructuredOutput,

@@ -694,6 +694,11 @@ export abstract class ModelHandler<
     return false;
   }
 
+  /** Whether this provider can force one named tool on a model request. */
+  get supportsForcedToolChoice(): boolean {
+    return false;
+  }
+
   /**
    * Whether this handler needs the system prompt resupplied on every call via
    * `createResponse({ systemPrompt })`, rather than embedded once into
