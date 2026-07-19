@@ -20,7 +20,7 @@ import {
 import { AgentError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { apiKeyExists } from '@model/apiProviders';
-import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from '@model/codexSubscriptionRouting';
+import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from '@model/providerCapabilities';
 import {
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,

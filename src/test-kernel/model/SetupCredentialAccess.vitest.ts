@@ -19,9 +19,14 @@ const mocks = vi.hoisted(() => ({
 
 const secrets = {} as PlatformSecrets;
 
-vi.mock('@model/codexSubscriptionActive', () => ({
-  isCodexSubscriptionActive: mocks.isCodexSubscriptionActive,
-}));
+vi.mock('@model/providerCapabilities', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@model/providerCapabilities')>();
+  return {
+    ...actual,
+    isCodexSubscriptionActive: mocks.isCodexSubscriptionActive,
+  };
+});
 
 vi.mock('@model/apiProviders', () => ({
   API_PROVIDERS: ['openai', 'anthropic'],
