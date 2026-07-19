@@ -24,4 +24,4 @@ export const TraceDocumentSchema = z.object({
   terminalStatus: ExecutionStatusSchema.nullable(),
 });
 
-export type TraceDocument = z.infer<typeof TraceDocumentSchema>;
+export type TraceDocument = Readonly<z.infer<typeof TraceDocumentSchema>>;
