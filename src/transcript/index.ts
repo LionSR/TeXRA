@@ -13,14 +13,12 @@ export {
   StreamLogStore,
   STREAM_LOGS_DIR,
   STREAM_LOG_SUMMARIES_DIR,
-  type StreamLogStoreMode,
 } from './StreamLogStore';
 export { StreamLog, type StreamLogAppendInput } from './StreamLog';
 export {
   createRunTrace,
   flushPendingRunTraces,
   getActiveFlushers,
-  unregisterFlushers,
   type RunTrace,
 } from './runTrace';
 export { streamDataDir } from './streamDataPaths';

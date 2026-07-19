@@ -297,16 +297,6 @@
       "name": "src/test-kernel/support/setupFakePlatform.ts"
     },
     {
-      "file": "src/transcript/index.ts",
-      "category": "exports",
-      "name": "unregisterFlushers"
-    },
-    {
-      "file": "src/transcript/index.ts",
-      "category": "types",
-      "name": "StreamLogStoreMode"
-    },
-    {
       "file": "src/utils/files/taskRunStorage.ts",
       "category": "types",
       "name": "RunStorageEntryInspection"

@@ -53,7 +53,7 @@ interface ParsedPersistedEntries {
   preservedRawEntries: StreamLogPreservedRawEntry[];
 }
 
-export type StreamLogStoreMode =
+type StreamLogStoreMode =
   | { readonly kind: 'persistent' }
   | { readonly kind: 'read-only' }
   | { readonly kind: 'ephemeral'; readonly reason: string };
