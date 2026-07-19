@@ -38,6 +38,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **File searches no longer hide unreadable matches** — inaccessible matching
+  files now surface a search error instead of appearing as the oldest results,
+  while files removed during the search are omitted normally.
 - **Accepted run files remain editable** — agents can continue editing accepted
   workflow output without an unnecessary intervening file read.
 - **Between-round LaTeX diffs work with current runs** — users who enable
