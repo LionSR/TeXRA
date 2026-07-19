@@ -1,6 +1,6 @@
 /**
- * Shared path aliases derived from tsconfig.json.
- * Single source of truth for esbuild and Vite build configs.
+ * Shared path aliases derived from tsconfig.json for Vite build configs.
+ * Extension esbuild reads its generated package tsconfig directly.
  */
 
 import { resolve, dirname } from 'node:path';
