@@ -70,6 +70,9 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
+- **Arrow keys can move between chat and subagents** — when input history has
+  no further entry, Up or Down can focus the subagent list; Down past its final
+  row returns to the chat input. Tab remains available in both directions.
 - **Account changes stay visible without filling chat history** — sign-in,
   sign-out, and model-access forms now show their progress in place and leave
   only the final result in the conversation.

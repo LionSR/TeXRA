@@ -198,6 +198,84 @@ describe('CLI child list interaction', () => {
     }
   });
 
+  it('hands focus back to the input instead of wrapping past the last row', async () => {
+    const ink = (await import(cliRequire.resolve('ink'))) as any;
+    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const root = 'root' as StreamTabId;
+    const child = 'child' as StreamTabId;
+    const onCancel = vi.fn();
+    const onSelectionChange = vi.fn();
+
+    const stdin = new FakeStdin();
+    const instance = ink.render(
+      React.createElement(SubagentList, {
+        keyboardActive: true,
+        maxRows: 5,
+        onCancel,
+        onSelectionChange,
+        selectedValue: childStreamListValue(child),
+        sessions: [session(root, true), session(child)],
+      }),
+      {
+        stdin,
+        stdout: new FakeStdout(),
+        interactive: true,
+        exitOnCtrlC: false,
+        patchConsole: false,
+      },
+    );
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write('[B');
+      await waitFor(() => onCancel.mock.calls.length === 1);
+
+      expect(onSelectionChange).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('clamps instead of wrapping when ↑ is pressed at the first row', async () => {
+    const ink = (await import(cliRequire.resolve('ink'))) as any;
+    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const root = 'root' as StreamTabId;
+    const child = 'child' as StreamTabId;
+    const onCancel = vi.fn();
+    const onSelectionChange = vi.fn();
+
+    const stdin = new FakeStdin();
+    const instance = ink.render(
+      React.createElement(SubagentList, {
+        keyboardActive: true,
+        maxRows: 5,
+        onCancel,
+        onSelectionChange,
+        selectedValue: childStreamListValue(root),
+        sessions: [session(root, true), session(child)],
+      }),
+      {
+        stdin,
+        stdout: new FakeStdout(),
+        interactive: true,
+        exitOnCtrlC: false,
+        patchConsole: false,
+      },
+    );
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write('[A');
+      // No state change to await for a no-op; give the event loop a turn.
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      expect(onCancel).not.toHaveBeenCalled();
+      expect(onSelectionChange).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it('opens and kills a selected process without printing stream output', async () => {
     const ink = (await import(cliRequire.resolve('ink'))) as any;
     const React = ((await import(cliRequire.resolve('react'))) as any).default;

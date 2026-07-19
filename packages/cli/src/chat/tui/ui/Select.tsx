@@ -50,6 +50,12 @@ export interface SelectProps<T> {
   readonly onHighlightChange?: (value: T) => void;
   /** Disable direct 1-9/a-z activation for arrow-only lists. */
   readonly hotkeys?: boolean;
+  /** Set false when this Select is a standalone focus target rather than a
+   *  cyclic menu: a move past either edge reports `onBoundaryEscape` instead
+   *  of wrapping. Defaults to true (existing wrap-around behavior). */
+  readonly wrap?: boolean;
+  /** Called when `wrap` is false and a move would cross the top/bottom edge. */
+  readonly onBoundaryEscape?: (direction: -1 | 1) => void;
   readonly renderItem?: (
     item: SelectItem<T>,
     state: {
@@ -116,10 +122,12 @@ export function nextSelectHighlightIndex<T>({
   direction,
   highlight,
   items,
+  wrap = true,
 }: {
   readonly direction: -1 | 1;
   readonly highlight: number;
   readonly items: ReadonlyArray<SelectItem<T>>;
+  readonly wrap?: boolean;
 }): number {
   if (items.length === 0) return 0;
 
@@ -128,6 +136,9 @@ export function nextSelectHighlightIndex<T>({
     items.every((item) => item.disabled) ||
     items.every((item) => !item.disabled)
   ) {
+    if (!wrap) {
+      return clampIndex(clampedHighlight + direction, items.length);
+    }
     return nextWrappingHighlightIndex({
       direction,
       highlight: clampedHighlight,
@@ -294,11 +305,17 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   });
 
   const moveHighlight = (direction: -1 | 1): void => {
+    const current = highlightRef.current;
     const next = nextSelectHighlightIndex({
       direction,
-      highlight: highlightRef.current,
+      highlight: current,
       items: props.items,
+      wrap: props.wrap,
     });
+    if (props.wrap === false && next === current) {
+      props.onBoundaryEscape?.(direction);
+      return;
+    }
     highlightRef.current = next;
     setHighlight(next);
     const item = props.items[next];
