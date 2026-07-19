@@ -205,6 +205,32 @@ describe('collectReviewDiff (real git repository)', () => {
     expect(value.changedFiles).toEqual([]);
   });
 
+  it('includes an untracked file that reappears during the type recheck', async () => {
+    const replacedPath = path.join(repo, 'reappeared.txt');
+    await writeFile(replacedPath, 'temporary\n');
+    const fs = platform().fs;
+    const readFileChunk = fs.readFileChunk.bind(fs);
+    let firstRead = true;
+    vi.spyOn(fs, 'readFileChunk').mockImplementation(
+      async (filePath, offset, length) => {
+        if (path.basename(filePath) === 'reappeared.txt' && firstRead) {
+          firstRead = false;
+          await rm(filePath);
+          await mkdir(filePath);
+          await rm(filePath, { recursive: true });
+          await writeFile(filePath, 'current evidence\n');
+          throw fsError('EISDIR', 'untracked file briefly became a directory');
+        }
+        return readFileChunk(filePath, offset, length);
+      },
+    );
+
+    const value = await collectDiffOrFail({ includeUntracked: true });
+
+    expect(value.diff).toContain('+current evidence');
+    expect(value.changedFiles).toEqual(['reappeared.txt']);
+  });
+
   it('does not hide an untracked symlink to a directory', async () => {
     const target = path.join(repo, 'target-dir');
     await mkdir(target);
