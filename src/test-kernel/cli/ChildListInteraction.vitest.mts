@@ -1,8 +1,11 @@
-import { EventEmitter } from 'node:events';
-import { createRequire } from 'node:module';
-
 import { describe, expect, it, vi } from 'vitest';
 
+import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
+import {
+  FakeStdin,
+  FakeStdout,
+  loadInk,
+} from '@test/support/inkTestHarness.mts';
 import { SubagentList } from '@cli/chat/tui/panes/SubagentList';
 import {
   childProcessListValue,
@@ -13,63 +16,13 @@ import type { StreamView } from '@cli/chat/tui/state/streamViews';
 import { POINTER } from '@cli/chat/tui/ui/glyphs';
 import type { StreamTabId } from '@shared/schemas';
 
-const cliRequire = createRequire(
-  new URL('../../../packages/cli/package.json', import.meta.url),
-);
-
-class FakeStdout extends EventEmitter {
-  readonly isTTY = true;
-  readonly columns = 100;
-  readonly rows = 24;
-  output = '';
-
-  write(chunk: string): boolean {
-    this.output += chunk;
-    return true;
-  }
-
-  getColorDepth(): number {
-    return 24;
-  }
-}
-
-class FakeStdin extends EventEmitter {
-  readonly isTTY = true;
-  private readonly chunks: string[] = [];
-
-  write(chunk: string): void {
-    this.chunks.push(chunk);
-    this.emit('readable');
-  }
-
-  read(): string | null {
-    return this.chunks.shift() ?? null;
-  }
-
-  ref(): void {}
-  unref(): void {}
-  pause(): void {}
-  resume(): void {}
-  setEncoding(): void {}
-  setRawMode(): void {}
-}
-
-async function waitFor(predicate: () => boolean): Promise<void> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (predicate()) return;
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-  throw new Error('Timed out waiting for child-list input');
-}
-
 function session(id: StreamTabId, active = false): StreamView {
   return { id, label: id, slice: undefined, active };
 }
 
 describe('CLI child list interaction', () => {
   it('renders no process highlight before the list receives a selection', async () => {
-    const ink = (await import(cliRequire.resolve('ink'))) as any;
-    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const { ink, React } = await loadInk();
     const output = ink.renderToString(
       React.createElement(SubagentList, {
         activeProcesses: [
@@ -91,8 +44,7 @@ describe('CLI child list interaction', () => {
   });
 
   it('prints and kills only the selected active session, then focuses it', async () => {
-    const ink = (await import(cliRequire.resolve('ink'))) as any;
-    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const { ink, React } = await loadInk();
     const root = 'root' as StreamTabId;
     const child = 'child' as StreamTabId;
     const onFocusStream = vi.fn();
@@ -126,7 +78,7 @@ describe('CLI child list interaction', () => {
     const stdin = new FakeStdin();
     const instance = ink.render(React.createElement(Harness), {
       stdin,
-      stdout: new FakeStdout(),
+      stdout: new FakeStdout(100),
       interactive: true,
       exitOnCtrlC: false,
       patchConsole: false,
@@ -155,8 +107,7 @@ describe('CLI child list interaction', () => {
   });
 
   it('skips and retries the focused subagent grandchild by execution id', async () => {
-    const ink = (await import(cliRequire.resolve('ink'))) as any;
-    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const { ink, React } = await loadInk();
     const root = 'root' as StreamTabId;
     const child = 'child' as StreamTabId;
     const onSkipExecution = vi.fn();
@@ -177,7 +128,7 @@ describe('CLI child list interaction', () => {
       }),
       {
         stdin,
-        stdout: new FakeStdout(),
+        stdout: new FakeStdout(100),
         interactive: true,
         exitOnCtrlC: false,
         patchConsole: false,
@@ -199,8 +150,7 @@ describe('CLI child list interaction', () => {
   });
 
   it('hands focus back to the input instead of wrapping past the last row', async () => {
-    const ink = (await import(cliRequire.resolve('ink'))) as any;
-    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const { ink, React } = await loadInk();
     const root = 'root' as StreamTabId;
     const child = 'child' as StreamTabId;
     const onCancel = vi.fn();
@@ -218,7 +168,7 @@ describe('CLI child list interaction', () => {
       }),
       {
         stdin,
-        stdout: new FakeStdout(),
+        stdout: new FakeStdout(100),
         interactive: true,
         exitOnCtrlC: false,
         patchConsole: false,
@@ -237,8 +187,7 @@ describe('CLI child list interaction', () => {
   });
 
   it('clamps instead of wrapping when ↑ is pressed at the first row', async () => {
-    const ink = (await import(cliRequire.resolve('ink'))) as any;
-    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const { ink, React } = await loadInk();
     const root = 'root' as StreamTabId;
     const child = 'child' as StreamTabId;
     const onCancel = vi.fn();
@@ -256,7 +205,7 @@ describe('CLI child list interaction', () => {
       }),
       {
         stdin,
-        stdout: new FakeStdout(),
+        stdout: new FakeStdout(100),
         interactive: true,
         exitOnCtrlC: false,
         patchConsole: false,
@@ -277,8 +226,7 @@ describe('CLI child list interaction', () => {
   });
 
   it('opens and kills a selected process without printing stream output', async () => {
-    const ink = (await import(cliRequire.resolve('ink'))) as any;
-    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const { ink, React } = await loadInk();
     const processValue = childProcessListValue('process-exec');
     const onKillExecution = vi.fn();
     const onOpenProcessDetail = vi.fn();
@@ -306,7 +254,7 @@ describe('CLI child list interaction', () => {
       }),
       {
         stdin,
-        stdout: new FakeStdout(),
+        stdout: new FakeStdout(100),
         interactive: true,
         exitOnCtrlC: false,
         patchConsole: false,

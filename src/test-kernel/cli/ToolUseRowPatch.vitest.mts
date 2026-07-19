@@ -1,7 +1,6 @@
-import { createRequire } from 'node:module';
-
 import { describe, expect, it } from 'vitest';
 
+import { loadInk } from '@test/support/inkTestHarness.mts';
 import { toolDisplaySpanTextProps } from '@cli/chat/tui/panes/ToolUseRow';
 import {
   toolUseDisplayLines,
@@ -9,10 +8,6 @@ import {
 } from '@cli/chat/tui/panes/toolRenderers';
 import type { ConversationEntry } from '@cli/chat/tui/state/cliState';
 import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
-
-const cliRequire = createRequire(
-  new URL('../../../packages/cli/package.json', import.meta.url),
-);
 
 function toolUse(
   toolName: string,
@@ -43,8 +38,7 @@ async function renderBoundedTool(
   entry: NormalizedToolUse,
   maxRows: number,
 ): Promise<string> {
-  const ink = (await import(cliRequire.resolve('ink'))) as any;
-  const React = ((await import(cliRequire.resolve('react'))) as any).default;
+  const { ink, React } = await loadInk();
   const { BoundedTranscriptEntry } =
     await import('@cli/chat/tui/panes/TranscriptEntry');
   const transcriptEntry: ConversationEntry = {
