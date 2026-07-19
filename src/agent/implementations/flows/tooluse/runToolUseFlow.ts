@@ -456,11 +456,13 @@ export async function runToolUseFlow<C = unknown>(
             ) ?? services.config.model)
           : services.config.model;
         const backfillCompatibilityKey =
+          migratedData.modelHandlerCompatibilityKey ??
           inferPersistedModelHandlerCompatibilityKey(
             sharedModel,
             migratedData.messages,
             logger,
-          ) ?? compatibilityKey;
+          ) ??
+          compatibilityKey;
         if (
           !migratedData.modelHandlerCompatibilityKey &&
           backfillCompatibilityKey
