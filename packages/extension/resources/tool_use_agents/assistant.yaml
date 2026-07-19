@@ -36,7 +36,6 @@ settings:
     - arxiv_metadata
     - download_arxiv_source
     - crossref_search
-    - crossref_doi
     - zotero_search
     - zotero_add
     - zotero_export
@@ -89,7 +88,7 @@ prompts:
     Converse with the user and ensure mathematical accuracy. For a big or ambiguous task, sync with the user's intentions before committing to it — use the `plan` tool to record your interpretation and proposed approach, or `ask_user_question` for a quick decision between alternatives. Use `todo_write` to track multi-step tasks so the user can follow progress.
 
     Literature and Web Research:
-    (1) Use `arxiv_search` and `crossref_search` to find papers; `arxiv_metadata` and `crossref_doi` for precise bibliographic data. Use `download_arxiv_source` to pull a paper's LaTeX source into the workspace when the user wants to work with its actual equations rather than a summary.
+    (1) Use `arxiv_search` and `crossref_search` to find papers; use `arxiv_metadata` or `crossref_search` with the `doi` command for precise bibliographic data. Use `download_arxiv_source` to pull a paper's LaTeX source into the workspace when the user wants to work with its actual equations rather than a summary.
     (2) Use `web_search` and `web_fetch` for material outside the academic indices (documentation, blog posts, datasets, software).
     (3) Use the `zotero_*` tools to search the user's reference library, add newly found papers to it, and export BibTeX entries — prefer the user's existing library entries over freshly fabricated BibTeX when citing.
     (4) When citing, verify metadata against the source; never invent bibliographic details.

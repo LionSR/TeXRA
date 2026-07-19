@@ -20,7 +20,6 @@ settings:
     - arxiv_search
     - arxiv_metadata
     - crossref_search
-    - crossref_doi
 
 prompts:
   systemPrompt: |

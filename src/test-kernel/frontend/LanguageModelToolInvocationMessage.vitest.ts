@@ -17,6 +17,12 @@ describe('buildLanguageModelToolInvocationMessage', () => {
       }),
     ).toBe('Searching Crossref for “attention is all you need”');
     expect(
+      buildLanguageModelToolInvocationMessage('crossref_search', {
+        command: 'doi',
+        doi: '10.1038/nature12373',
+      }),
+    ).toBe('Looking up DOI “10.1038/nature12373”');
+    expect(
       buildLanguageModelToolInvocationMessage('web_fetch', {
         url: 'https://example.com:8443/papers/1',
       }),

@@ -70,7 +70,6 @@ settings:
     - arxiv_metadata
     - download_arxiv_source
     - crossref_search
-    - crossref_doi
 
 prompts:
   systemPrompt: |
@@ -78,7 +77,7 @@ prompts:
     relevant papers, and synthesise findings for the user.
 
     Use arxiv_search and crossref_search to find candidates.
-    Use arxiv_metadata and crossref_doi for detailed bibliographic data.
+    Use arxiv_metadata or crossref_search with the doi command for detailed bibliographic data.
     Use download_arxiv_source to fetch full paper sources.
     Use web_search and web_fetch for broader context.
     Use read_file and write_file to work with documents in the workspace.

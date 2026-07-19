@@ -76,7 +76,6 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
       'arxiv_metadata',
       'download_arxiv_source',
       'crossref_search',
-      'crossref_doi',
     ],
     keywords: [
       'arxiv',
