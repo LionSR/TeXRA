@@ -179,6 +179,11 @@ export class ToolUseProcessNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
+    // `finalTool` selects only the request whose response is being processed.
+    // Keep the separate attempted bit so a malformed/ignored forced response
+    // cannot force every later round or schedule a second final attempt.
+    shared.finalTool = undefined;
+
     workspace.serverToolContent.contentBlocks =
       execRes.serverToolContentBlocks ?? [];
     workspace.serverToolContent.lastAssistantContent =
@@ -251,7 +256,7 @@ export class ToolUseProcessNode<C> extends BaseNode<
       if (
         this.services.finalTool &&
         modelHandler.supportsForcedToolChoice &&
-        !shared.finalTool
+        !shared.finalToolAttempted
       ) {
         const result = await appendFollowUpAsUserMessage(
           shared.messages,
@@ -260,6 +265,7 @@ export class ToolUseProcessNode<C> extends BaseNode<
         );
         shared.messages = result.messages;
         shared.finalTool = this.services.finalTool;
+        shared.finalToolAttempted = true;
         shared.toolCalls = undefined;
         advanceRound(shared);
         return FlowTransition.CONTINUE;

@@ -98,6 +98,8 @@ describe('final-tool synthesis turn', () => {
       undefined,
       { name: 'submit_output' },
     ]);
+    expect(shared.finalTool).toBeUndefined();
+    expect(shared.finalToolAttempted).toBe(true);
     expect(shared.messages).toEqual([
       { role: 'user', content: 'Research this' },
       { role: 'assistant', content: 'Draft answer' },
