@@ -1,11 +1,14 @@
-import { EventEmitter } from 'node:events';
-import { createRequire } from 'node:module';
-
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
+import {
+  FakeStdin,
+  FakeStdout,
+  loadInk,
+} from '@test/support/inkTestHarness.mts';
 import { ImagePasteQueue } from '@cli/chat/tui/input/imagePasteQueue';
 import { BaseTextInput } from '@cli/chat/tui/input/BaseTextInput';
 import {
@@ -37,47 +40,6 @@ const clipboardMock = vi.hoisted(() => ({
 
 vi.mock('@cli/runtime/clipboardImage', () => clipboardMock);
 
-const cliRequire = createRequire(
-  new URL('../../../packages/cli/package.json', import.meta.url),
-);
-
-class FakeStdout extends EventEmitter {
-  readonly isTTY = true;
-  readonly columns = 80;
-  readonly rows = 24;
-  buf = '';
-
-  write(chunk: string): boolean {
-    this.buf += chunk;
-    return true;
-  }
-
-  getColorDepth(): number {
-    return 24;
-  }
-}
-
-class FakeStdin extends EventEmitter {
-  readonly isTTY = true;
-  private readonly chunks: string[] = [];
-
-  write(chunk: string): void {
-    this.chunks.push(chunk);
-    this.emit('readable');
-  }
-
-  read(): string | null {
-    return this.chunks.shift() ?? null;
-  }
-
-  ref(): void {}
-  unref(): void {}
-  pause(): void {}
-  resume(): void {}
-  setEncoding(): void {}
-  setRawMode(): void {}
-}
-
 function deferred(): {
   readonly promise: Promise<void>;
   readonly resolve: () => void;
@@ -105,17 +67,6 @@ async function flushPromiseQueue(): Promise<void> {
   await Promise.resolve();
 }
 
-async function waitFor(
-  predicate: () => boolean,
-  timeoutMs = 2000,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (!predicate()) {
-    if (Date.now() >= deadline) throw new Error('Timed out waiting for state');
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-}
-
 function fakeHistory(entries: readonly string[]): InputHistory {
   return {
     push: async () => undefined,
@@ -130,8 +81,7 @@ afterEach(() => vi.clearAllMocks());
 
 describe('InputBar arrow-key child-list focus', () => {
   it('falls through to the child list on ↓/↑ when there is no history to walk', async () => {
-    const ink = (await import(cliRequire.resolve('ink'))) as any;
-    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const { ink, React } = await loadInk();
     const onFocusChildList = vi.fn();
 
     const stdin = new FakeStdin();
@@ -161,8 +111,7 @@ describe('InputBar arrow-key child-list focus', () => {
   });
 
   it('still recalls history on ↑ but hands off on an idle ↓', async () => {
-    const ink = (await import(cliRequire.resolve('ink'))) as any;
-    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const { ink, React } = await loadInk();
     const onFocusChildList = vi.fn();
     const history = fakeHistory(['first command', 'second command']);
 
@@ -190,7 +139,7 @@ describe('InputBar arrow-key child-list focus', () => {
       await waitFor(() => onFocusChildList.mock.calls.length === 1);
       // Up still recalls the most recent entry rather than escaping.
       stdin.write('[A');
-      await waitFor(() => stdout.buf.includes('second command'));
+      await waitFor(() => stdout.output.includes('second command'));
 
       expect(onFocusChildList).toHaveBeenCalledTimes(1);
     } finally {
@@ -201,8 +150,7 @@ describe('InputBar arrow-key child-list focus', () => {
 
 describe('InputBar slash submit', () => {
   it('threads deferred echo through a palette-opened form', async () => {
-    const ink = (await import(cliRequire.resolve('ink'))) as any;
-    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const { ink, React } = await loadInk();
     registerSlashCommand({
       name: 'model',
       description: 'Choose a model',
@@ -225,7 +173,7 @@ describe('InputBar slash submit', () => {
     try {
       await waitFor(() => stdin.listenerCount('readable') > 0);
       stdin.write('/model');
-      await waitFor(() => stdout.buf.includes('/model'));
+      await waitFor(() => stdout.output.includes('/model'));
       stdin.write('\r');
       await waitFor(() => activeForm.get()?.commandName === 'model');
 
@@ -349,8 +297,7 @@ describe('InputBar slash submit', () => {
 
 describe('InputBar draft discard', () => {
   it('clears a mounted foreground text input before exiting', async () => {
-    const ink = (await import(cliRequire.resolve('ink'))) as any;
-    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const { ink, React } = await loadInk();
     const registry = createActiveDraftRegistry();
     const onExit = vi.fn();
     let currentValue = 'dialog answer';
@@ -440,8 +387,7 @@ describe('InputBar draft discard', () => {
   });
 
   it('discards a pending image submit from an otherwise empty mounted input', async () => {
-    const ink = (await import(cliRequire.resolve('ink'))) as any;
-    const React = ((await import(cliRequire.resolve('react'))) as any).default;
+    const { ink, React } = await loadInk();
     const firstPaste = deferredValue<{
       readonly ok: true;
       readonly path: string;
@@ -499,13 +445,13 @@ describe('InputBar draft discard', () => {
       await flushPromiseQueue();
 
       expect(submitted).toEqual([]);
-      expect(stdout.buf).not.toContain('[Image #1]');
-      expect(stdout.buf).not.toContain('Image paste failed');
+      expect(stdout.output).not.toContain('[Image #1]');
+      expect(stdout.output).not.toContain('Image paste failed');
 
-      stdout.buf = '';
+      stdout.output = '';
       stdin.write('\u0016');
-      await waitFor(() => stdout.buf.includes('[Image #1]'));
-      expect(stdout.buf).not.toContain('[Image #2]');
+      await waitFor(() => stdout.output.includes('[Image #1]'));
+      expect(stdout.output).not.toContain('[Image #2]');
       stdin.write('\r');
       await waitFor(() => submitted.length === 1);
 
