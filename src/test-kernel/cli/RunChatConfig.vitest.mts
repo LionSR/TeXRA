@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getAgent, type AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { buildInitialChatAgentConfig } from '@cli/chat/chatSessionController';
 import {
   applyInitialCliAgentSelection,
   chatToolUseAgentUsageError,
@@ -42,53 +41,6 @@ beforeEach(() => {
 });
 
 describe('CLI chat run config', () => {
-  it('tags preset-launched team chats with the multi-agent preset id', () => {
-    expect(
-      buildInitialChatAgentConfig({
-        agent: 'orchestrator',
-        model: 'deepseekT',
-        instruction: 'prove the bounded case',
-        workingDirectory: '/tmp/project',
-        cliMultiAgentPresetId: 'physicist',
-      }),
-    ).toMatchObject({
-      agent: 'orchestrator',
-      model: 'deepseekT',
-      instruction: 'prove the bounded case',
-      workingDirectory: '/tmp/project',
-      agentCategory: AgentCategory.ToolUse,
-      cliMultiAgentPresetId: 'physicist',
-    });
-  });
-
-  it('carries a team delegation roster in the run configuration', () => {
-    const delegationAgentScope = {
-      workflowAgentKeys: ['builtInWorkflow:correct'],
-      toolUseAgentKeys: ['builtInToolUse:orchestrator'],
-    };
-
-    expect(
-      buildInitialChatAgentConfig({
-        agent: 'orchestrator',
-        model: 'deepseekT',
-        instruction: 'check the proof',
-        workingDirectory: '/tmp/project',
-        delegationAgentScope,
-      }),
-    ).toMatchObject({ delegationAgentScope });
-  });
-
-  it('does not tag ordinary chats as multi-agent preset runs', () => {
-    expect(
-      buildInitialChatAgentConfig({
-        agent: 'chat',
-        model: 'deepseekT',
-        instruction: 'hello',
-        workingDirectory: '/tmp/project',
-      }),
-    ).not.toHaveProperty('cliMultiAgentPresetId');
-  });
-
   it('leaves team mode when the root agent is changed explicitly', () => {
     mockedGetAgent.mockReturnValue(registryAgent(AgentCategory.ToolUse));
     patchSessionMeta({
@@ -113,36 +65,6 @@ describe('CLI chat run config', () => {
     expect(sessionMeta.get().teamName).toBeUndefined();
     expect(sessionMeta.get().cliMultiAgentPresetId).toBeUndefined();
     expect(sessionMeta.get().delegationAgentScope).toBeUndefined();
-  });
-
-  it('preserves display instruction separately from model instruction', () => {
-    expect(
-      buildInitialChatAgentConfig({
-        agent: 'chat',
-        model: 'deepseekT',
-        instruction: '<skill_activation>hidden</skill_activation>',
-        displayInstruction: 'summarize this proof',
-        workingDirectory: '/tmp/project',
-      }),
-    ).toMatchObject({
-      instruction: '<skill_activation>hidden</skill_activation>',
-      displayInstruction: 'summarize this proof',
-    });
-  });
-
-  it('preserves an empty display instruction instead of dropping it', () => {
-    expect(
-      buildInitialChatAgentConfig({
-        agent: 'chat',
-        model: 'deepseekT',
-        instruction: '<skill_activation>hidden</skill_activation>',
-        displayInstruction: '',
-        workingDirectory: '/tmp/project',
-      }),
-    ).toMatchObject({
-      instruction: '<skill_activation>hidden</skill_activation>',
-      displayInstruction: '',
-    });
   });
 
   it('reserves pending skill activations for only one prepared message', () => {

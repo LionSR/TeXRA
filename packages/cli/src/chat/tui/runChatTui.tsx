@@ -67,7 +67,6 @@ import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
-  buildInitialChatAgentConfig,
   createChatSessionController,
   type ChatSessionController,
 } from '../chatSessionController';
@@ -123,7 +122,6 @@ import {
 } from './state/resumeHint';
 import { subscribeStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
-import { onStreamStatusChange } from './state/streamStatus';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
 import {
   appendLocalAssistantTranscript,
@@ -641,18 +639,21 @@ export async function runChat(
           return;
         }
 
-        chatController.startRootRun(
-          buildInitialChatAgentConfig({
-            agent: currentAgent,
-            model: selection.model,
-            instruction,
-            displayInstruction,
-            mediaFiles,
-            workingDirectory: context.cwd,
-            cliMultiAgentPresetId: meta.cliMultiAgentPresetId,
-            delegationAgentScope: meta.delegationAgentScope,
-          }),
-        );
+        chatController.startRootRun({
+          agent: currentAgent,
+          model: selection.model,
+          instruction,
+          ...(displayInstruction !== undefined ? { displayInstruction } : {}),
+          agentCategory: AgentCategory.ToolUse,
+          workingDirectory: context.cwd,
+          ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
+          ...(meta.cliMultiAgentPresetId
+            ? { cliMultiAgentPresetId: meta.cliMultiAgentPresetId }
+            : {}),
+          ...(meta.delegationAgentScope
+            ? { delegationAgentScope: meta.delegationAgentScope }
+            : {}),
+        });
         started = true;
       } catch (error: unknown) {
         if (!session.stopRequested) {
@@ -1062,7 +1063,7 @@ export async function runChat(
   // signals "your turn." Combined with the StatusBar pill, this replaces
   // the legacy reader.prompt() ergonomics.
   disposers.push(
-    onStreamStatusChange((change) => {
+    defaultSession().status.onDidChange((change) => {
       if (
         change.streamId === session.streamId &&
         change.status === STREAM_PHASE.WAITING &&

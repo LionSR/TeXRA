@@ -139,7 +139,7 @@ export function createTuiHostInteractions(
   host: CliRuntimeHost,
   context: CliContext,
 ): HostInteractions {
-  const retryRoutes = createRetryRouteState();
+  const retryRoutes = new Map<string, ActiveRetryRoute>();
   const disposeApprovalClearListener = onApprovalsCleared(() => {
     invalidateRetryRoutes(retryRoutes, { cancel: true });
   });
@@ -285,10 +285,6 @@ interface ActiveRetryRoute {
   readonly settle?: (result: RetryResult) => void;
 }
 
-interface RetryRouteState {
-  readonly activeRetryRoutes: Map<string, ActiveRetryRoute>;
-}
-
 const NEUTRAL_TIMEOUT_DECISION: ApprovalDecision = {
   accepted: true,
   userMessage: 'Approval request timed out.',
@@ -334,43 +330,42 @@ function withInteractionTimeout<T>(
   return timedInteraction;
 }
 
-function createRetryRouteState(): RetryRouteState {
-  return { activeRetryRoutes: new Map() };
-}
-
 function isActiveRetryRoute(
-  state: RetryRouteState,
+  retryRoutes: Map<string, ActiveRetryRoute>,
   streamId: string,
   routeId: symbol,
 ): boolean {
-  return state.activeRetryRoutes.get(streamId)?.routeId === routeId;
+  return retryRoutes.get(streamId)?.routeId === routeId;
 }
 
-function cancelRetryRoute(state: RetryRouteState, streamId: string): void {
-  settleRetryRoute(state, streamId, { action: 'cancel' });
+function cancelRetryRoute(
+  retryRoutes: Map<string, ActiveRetryRoute>,
+  streamId: string,
+): void {
+  settleRetryRoute(retryRoutes, streamId, { action: 'cancel' });
 }
 
 function settleRetryRoute(
-  state: RetryRouteState,
+  retryRoutes: Map<string, ActiveRetryRoute>,
   streamId: string,
   result: RetryResult,
 ): void {
-  const route = state.activeRetryRoutes.get(streamId);
+  const route = retryRoutes.get(streamId);
   if (!route) return;
-  state.activeRetryRoutes.delete(streamId);
+  retryRoutes.delete(streamId);
   route.settle?.(result);
 }
 
 function invalidateRetryRoutes(
-  state: RetryRouteState,
+  retryRoutes: Map<string, ActiveRetryRoute>,
   options: { cancel: boolean },
 ): void {
-  const streamIds = [...state.activeRetryRoutes.keys()];
+  const streamIds = [...retryRoutes.keys()];
   for (const streamId of streamIds) {
     if (options.cancel) {
-      cancelRetryRoute(state, streamId);
+      cancelRetryRoute(retryRoutes, streamId);
     } else {
-      state.activeRetryRoutes.delete(streamId);
+      retryRoutes.delete(streamId);
     }
   }
 }
@@ -502,21 +497,21 @@ async function requestProposalInteraction(
 async function requestRetryInteraction(
   request: HostRetryRequest,
   context: CliContext,
-  retryRoutes: RetryRouteState,
+  retryRoutes: Map<string, ActiveRetryRoute>,
 ): Promise<RetryResult> {
   cancelRetryRoute(retryRoutes, request.streamId);
   const routeId = Symbol(request.streamId);
   clearRetryApprovalsForStream(request.streamId);
 
   return await new Promise<RetryResult>((resolve) => {
-    retryRoutes.activeRetryRoutes.set(request.streamId, {
+    retryRoutes.set(request.streamId, {
       routeId,
       settle: resolve,
     });
     const isCurrent = () =>
       isActiveRetryRoute(retryRoutes, request.streamId, routeId);
     const finish = () => {
-      if (isCurrent()) retryRoutes.activeRetryRoutes.delete(request.streamId);
+      if (isCurrent()) retryRoutes.delete(request.streamId);
     };
 
     void (async () => {
