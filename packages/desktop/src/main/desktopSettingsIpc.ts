@@ -1,3 +1,4 @@
+import { formatError } from '@common/errors';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import {
   createSettingsViewCommandHandlers,
@@ -182,22 +183,30 @@ export function createDesktopSettingsIpc(
    * (or refreshing) the panel re-reads the store, so a live push adds a
    * subscription surface without a user-visible gain.
    */
-  function postGoalList(): void {
-    options.postToRenderer({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-      items: [...GoalStore.list()],
-    });
+  async function postGoalList(): Promise<void> {
+    try {
+      options.postToRenderer({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
+        items: GoalStore.list(),
+      });
+    } catch (error) {
+      options.ui.onError(error);
+      await options.ui.showErrorMessage(
+        formatError('Failed to load goals', error),
+      );
+    }
   }
 
   async function postInitialSettingsData(): Promise<void> {
     postGitAuthorSettings();
     options.toolingSettingsController.postLatexConfigValues();
-    postGoalList();
+    const goalListPosted = postGoalList();
     const memoryEnabledPosted = postMemoryEnabled();
     const modelSelectionDataPosted = postModelSelectionData();
     postSuperYoloEnabled();
     postApprovalSettings();
     await Promise.all([
+      goalListPosted,
       memoryEnabledPosted,
       postMemoryData(),
       options.historySettingsController.postHistoryData(),
