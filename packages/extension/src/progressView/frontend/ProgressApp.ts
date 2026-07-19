@@ -68,7 +68,6 @@ import type { FilterEventDetail } from './events';
 import './components/StreamTabs';
 import './components/StreamConversation';
 import './components/UserMessage';
-import './components/StatisticsPanel';
 import './components/LatexdiffResults';
 import './components/ContextManagement';
 
