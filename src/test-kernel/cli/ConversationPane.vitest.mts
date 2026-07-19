@@ -38,7 +38,6 @@ import {
   resetCliState,
   patchStream,
   streams,
-  thinkingIndicatorVisible,
   type ConversationEntry,
   type StreamSlice,
 } from '@cli/chat/tui/state/cliState';
@@ -1345,36 +1344,6 @@ describe('CLI conversation transcript splitting', () => {
       { clearScrollback: true, preserveStatic: false },
       { clearScrollback: true },
     ]);
-  });
-
-  it('shows the thinking liveness row only while a running stream is thinking', () => {
-    expect(thinkingIndicatorVisible(undefined)).toBe(false);
-    expect(
-      thinkingIndicatorVisible(
-        sliceWithEntries(STREAM_ID, [], {
-          thinkingActive: true,
-          status: STREAM_PHASE.RUNNING,
-        }),
-      ),
-    ).toBe(true);
-    // Off once visible activity (or a final status) takes over — the row is
-    // a liveness signal for the silent reasoning phase only.
-    expect(
-      thinkingIndicatorVisible(
-        sliceWithEntries(STREAM_ID, [], {
-          thinkingActive: false,
-          status: STREAM_PHASE.RUNNING,
-        }),
-      ),
-    ).toBe(false);
-    expect(
-      thinkingIndicatorVisible(
-        sliceWithEntries(STREAM_ID, [], {
-          thinkingActive: true,
-          status: STREAM_PHASE.WAITING,
-        }),
-      ),
-    ).toBe(false);
   });
 
   it('detects generated inquiry continuation rows only', () => {

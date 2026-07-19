@@ -39,7 +39,6 @@ import { KEY_HINT_SEPARATOR, keyHintText } from '../ui/KeyHints';
 import { STATUS_BAR_HORIZONTAL_PADDING } from '../ui/theme';
 import { formatResumeCommand } from '../state/resumeHint';
 import {
-  thinkingIndicatorVisible,
   type BypassState,
   type StreamSlice,
   type TransientNotice,
@@ -817,12 +816,7 @@ export function buildStatusBarDisplay(
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.elapsed,
       });
     }
-    if (
-      thinkingIndicatorVisible({
-        status: input.status,
-        thinkingActive: input.thinkingActive === true,
-      })
-    ) {
+    if (input.thinkingActive === true && isActivePhase(input.status)) {
       left.push({
         text: 'thinking...',
         color: COLOR_WARNING,
