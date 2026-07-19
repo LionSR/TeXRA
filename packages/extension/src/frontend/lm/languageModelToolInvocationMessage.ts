@@ -34,8 +34,13 @@ export function buildLanguageModelToolInvocationMessage(
   switch (toolName) {
     case 'arxiv_search':
       return searchMessage('arXiv', input);
-    case 'crossref_search':
+    case 'crossref_search': {
+      const doi = readInputString(input, 'doi');
+      if (doi) {
+        return `Looking up DOI “${truncateSummary(doi, MAX_CONTEXT_LENGTH)}”`;
+      }
       return searchMessage('Crossref', input);
+    }
     case 'web_fetch': {
       const rawUrl = readInputString(input, 'url');
       const url = rawUrl ? tryParseUrl(rawUrl) : undefined;
