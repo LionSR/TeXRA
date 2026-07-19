@@ -1,8 +1,3 @@
 export { isGoalEnabled } from './goalFeatureFlag';
-export {
-  GoalStore,
-  subscribeGoalStateChanges,
-  type GoalStateChange,
-  type GoalStateChangeListener,
-} from './goalStore';
+export { GoalStore, subscribeGoalStateChanges } from './goalStore';
 export { setGoalSessionBashAutoApproval } from './goalAutoApproval';
