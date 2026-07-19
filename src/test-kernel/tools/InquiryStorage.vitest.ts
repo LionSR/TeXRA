@@ -55,6 +55,29 @@ describe('InquiryStorage', () => {
     logUtils.setOutputChannelFactory(null);
   });
 
+  it('treats a missing inquiry history directory as empty', async () => {
+    await expect(listOpenThreads()).resolves.toEqual([]);
+  });
+
+  it('surfaces inquiry history directory read failures', async () => {
+    const platform = (await import('@platform/platform')).platform();
+    const threadsDir = `${platform.storage.getGlobalStoragePath()}/ei_threads`;
+    const readDirectorySpy = vi
+      .spyOn(platform.fs, 'readDirectory')
+      .mockRejectedValueOnce(
+        Object.assign(new Error('inquiry history is unreadable'), {
+          code: 'EACCES',
+        }),
+      );
+
+    try {
+      await expect(listOpenThreads()).rejects.toMatchObject({ code: 'EACCES' });
+      expect(readDirectorySpy).toHaveBeenCalledWith(threadsDir);
+    } finally {
+      readDirectorySpy.mockRestore();
+    }
+  });
+
   it('opens, answers, and resolves a thread end-to-end', async () => {
     const opened = await recordOpenQuestion({
       parentStreamId: STREAM_A,
