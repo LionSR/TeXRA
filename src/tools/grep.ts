@@ -179,17 +179,14 @@ export class GrepTool extends defineTool({
 
     const summary = `Found ${returnedCount} of ${totalCount} matches for "${input.pattern}" in ${display}`;
     const hasMore = returnedCount < totalCount;
+    const output = hasMore
+      ? `${paginatedLines.join('\n')}\n\n[Showing ${returnedCount} of ${totalCount} results. Use offset=${offset + returnedCount} to see more.]`
+      : paginatedLines.join('\n');
 
-    const toolResult: ToolResult = {
+    return {
       status: 'executed',
       summary,
-      output: paginatedLines.join('\n'),
+      output,
     };
-
-    if (hasMore) {
-      toolResult.instruction = `Showing ${returnedCount} of ${totalCount} results. Use offset=${offset + returnedCount} to see more.`;
-    }
-
-    return toolResult;
   }
 }

@@ -28,7 +28,6 @@ function makeSlice(
     cumulativeUsage: undefined,
     conversation: undefined,
     entries: [],
-    queuedFollowUps: 0,
     queuedFollowUpMessages: [],
     activeProcesses: [],
     todos: [],
