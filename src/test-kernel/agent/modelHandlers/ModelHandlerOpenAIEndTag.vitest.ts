@@ -1,59 +1,15 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelCapabilities,
-  type ModelConfig,
-  ModelProvider,
-} from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 
-// Local imports - agent
-import type { AgentTrace } from '@agent/trace';
+// Local imports - test support and agent
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerXAI } from '@agent/modelHandlers/openai/modelHandlerXAI';
 
 const END_TAG = '</document>';
-
-function createLoggerStub(): AgentTrace {
-  const noop = () => {
-    /* no-op for tests */
-  };
-  return {
-    streamId: 'test-channel',
-    debug: noop,
-    info: noop,
-    warn: noop,
-    error: noop,
-  } as unknown as AgentTrace;
-}
-
-function buildConfig(
-  provider: ModelProvider,
-  overrides: Partial<Omit<ModelConfig, 'capabilities'>> & {
-    capabilities?: Partial<ModelCapabilities>;
-  } = {},
-): ModelConfig {
-  const { capabilities: capabilityOverrides, label, ...rest } = overrides;
-  return {
-    name: 'test-model',
-    fullName: 'test-model',
-    shortName: 'test-model',
-    provider,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 200000,
-    openRouterOnly: false,
-    ...rest,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsVision: false,
-      ...(capabilityOverrides ?? {}),
-    },
-    label: label ?? 'Test Model',
-  };
-}
 
 /** A `stop`-configured completion whose text is missing its closing end tag. */
 function completionWithoutEndTag() {
@@ -75,11 +31,12 @@ describe('ModelHandlerOpenAI.extractResponse end-tag restoration', () => {
     // A plain OpenAI chat model sets `stop: [endTag]`, so the SDK strips the
     // matched tag from the completion — extractResponse must put it back.
     const handler = new ModelHandlerOpenAI(
-      buildConfig(ModelProvider.OPENAI, {
-        capabilities: { supportsReasoning: false },
+      buildTestModelConfig({
+        provider: ModelProvider.OPENAI,
+        capabilities: { supportsReasoning: false, supportsVision: false },
       }),
     );
-    handler.setLogger(createLoggerStub());
+    handler.setLogger({ ...noopTrace });
 
     const result = handler.extractResponse(completionWithoutEndTag(), END_TAG);
 
@@ -91,11 +48,12 @@ describe('ModelHandlerOpenAI.extractResponse end-tag restoration', () => {
     // not imply the provider stripped the tag — forging it could mask
     // genuinely incomplete output as complete.
     const handler = new ModelHandlerOpenAI(
-      buildConfig(ModelProvider.OPENAI, {
-        capabilities: { supportsReasoning: true },
+      buildTestModelConfig({
+        provider: ModelProvider.OPENAI,
+        capabilities: { supportsReasoning: true, supportsVision: false },
       }),
     );
-    handler.setLogger(createLoggerStub());
+    handler.setLogger({ ...noopTrace });
 
     const result = handler.extractResponse(completionWithoutEndTag(), END_TAG);
 
@@ -105,11 +63,12 @@ describe('ModelHandlerOpenAI.extractResponse end-tag restoration', () => {
   it('does not forge an end tag for a Grok reasoning model (no stop configured)', () => {
     // ModelHandlerXAI inherits the gated behavior via super.extractResponse().
     const handler = new ModelHandlerXAI(
-      buildConfig(ModelProvider.XAI, {
-        capabilities: { supportsReasoning: true },
+      buildTestModelConfig({
+        provider: ModelProvider.XAI,
+        capabilities: { supportsReasoning: true, supportsVision: false },
       }),
     );
-    handler.setLogger(createLoggerStub());
+    handler.setLogger({ ...noopTrace });
 
     const result = handler.extractResponse(completionWithoutEndTag(), END_TAG);
 

@@ -1,45 +1,31 @@
+// Third-party imports
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 
-import type { AgentTrace } from '@agent/trace';
+// Local imports - test support and agent
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
-import type { ModelConfig } from 'llm-zoo';
+
+// Type imports
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
 
-function createLoggerStub(): Partial<AgentTrace> & { streamId: string } {
-  return {
-    streamId: 'test-channel',
-    debug: () => undefined,
-    info: () => undefined,
-    warn: () => undefined,
-    error: () => undefined,
-    domain: () => undefined,
-  };
-}
-
-function createConfig(): ModelConfig {
-  return {
-    name: 'gpt-4.1',
-    fullName: 'gpt-4.1',
-    shortName: 'gpt-4.1',
-    label: 'GPT 4.1',
-    provider: ModelProvider.OPENAI,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 200000,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsReasoning: false,
-      supportsVision: false,
-    },
-    openRouterOnly: true,
-  };
-}
-
 function createHandler(): ModelHandlerOpenAIResponse {
-  const handler = new ModelHandlerOpenAIResponse(createConfig());
-  handler.setLogger(createLoggerStub() as unknown as AgentTrace);
+  const handler = new ModelHandlerOpenAIResponse(
+    buildTestModelConfig({
+      name: 'gpt-4.1',
+      fullName: 'gpt-4.1',
+      shortName: 'gpt-4.1',
+      label: 'GPT 4.1',
+      provider: ModelProvider.OPENAI,
+      capabilities: {
+        supportsReasoning: false,
+        supportsVision: false,
+      },
+      openRouterOnly: true,
+    }),
+  );
+  handler.setLogger({ ...noopTrace });
   return handler;
 }
 

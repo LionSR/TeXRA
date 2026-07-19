@@ -2,15 +2,19 @@
 import { describe, it, expect, vi } from 'vitest';
 
 // Local imports - class under test
-import type { AgentTrace } from '@agent/trace';
+import { noopTrace, type AgentTrace } from '@agent/trace';
 import { AnthropicStreamHandler } from '@agent/modelHandlers/support/AnthropicStreamHandler';
 
 // Type imports
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
 
-function createLoggerStub() {
-  return {
-    streamId: 'test',
+/**
+ * Builds a handler wired to a captured event callback, so tests can push
+ * synthetic stream events without a real Anthropic SDK stream.
+ */
+function createHandlerHarness(progressViewEnabled: boolean) {
+  const logger = {
+    ...noopTrace,
     debug: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
@@ -18,14 +22,6 @@ function createLoggerStub() {
     domain: vi.fn(),
     openStream: vi.fn(),
   };
-}
-
-/**
- * Builds a handler wired to a captured event callback, so tests can push
- * synthetic stream events without a real Anthropic SDK stream.
- */
-function createHandlerHarness(progressViewEnabled: boolean) {
-  const logger = createLoggerStub();
   const handler = new AnthropicStreamHandler(
     logger as unknown as AgentTrace,
     { progressViewEnabled },

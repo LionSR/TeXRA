@@ -5,37 +5,26 @@ import {
   RequestTimeoutError as OpenRouterRequestTimeoutError,
 } from '@openrouter/sdk/models/errors';
 import { describe, it, afterEach, vi } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelConfig,
-  ModelProvider,
-  ReasoningEffort,
-} from 'llm-zoo';
+import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
-// Local imports - handler under test
+// Local imports - test support and handler under test
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 
 // Modules to stub via vi.spyOn
 import * as serverKeysModule from '@auth/serverKeys';
 import * as providerConfigModule from '@utils/config/providerConfig';
 
-function buildConfig(overrides: Partial<ModelConfig> = {}): ModelConfig {
-  return {
-    name: 'gpt-5.5',
-    label: 'GPT-5.5',
-    fullName: 'gpt-5.5-2026-04-15',
-    shortName: 'gpt-5.5',
-    provider: ModelProvider.OPENAI,
-    maxOutputTokens: 16384,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 200000,
-    capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
-    openRouterOnly: false,
-    openrouterFullName: 'openai/gpt-5.5',
-    ...overrides,
-  };
-}
+const OPENROUTER_TEST_CONFIG = Object.freeze({
+  name: 'gpt-5.5',
+  label: 'GPT-5.5',
+  fullName: 'gpt-5.5-2026-04-15',
+  shortName: 'gpt-5.5',
+  provider: ModelProvider.OPENAI,
+  maxOutputTokens: 16_384,
+  openrouterFullName: 'openai/gpt-5.5',
+});
 
 function stubServerSideKeyService(): void {
   vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
@@ -51,15 +40,6 @@ function statusError(statusCode: number): Error {
   return Object.assign(new Error(`OpenRouter HTTP ${statusCode}`), {
     statusCode,
   });
-}
-
-function createLoggerStub() {
-  return {
-    debug: () => undefined,
-    info: () => undefined,
-    warn: () => undefined,
-    error: () => undefined,
-  };
 }
 
 describe('ModelHandlerOpenRouterNative routing precedence', () => {
@@ -95,7 +75,7 @@ describe('ModelHandlerOpenRouterNative routing precedence', () => {
       stubServerSideKeyService();
 
       const handler = new ModelHandlerOpenRouterNative(
-        buildConfig({ openRouterOnly }),
+        buildTestModelConfig(OPENROUTER_TEST_CONFIG, { openRouterOnly }),
       );
 
       assert.equal((handler as any).shouldUseServerSideKeys(), expected);
@@ -112,7 +92,7 @@ describe('ModelHandlerOpenRouterNative system prompt placement', () => {
     'never resupplies the system prompt per-call, even when the underlying provider is %s',
     (provider) => {
       const handler = new ModelHandlerOpenRouterNative(
-        buildConfig({ provider }),
+        buildTestModelConfig(OPENROUTER_TEST_CONFIG, { provider }),
       );
 
       assert.equal(handler.requiresPerCallSystemPrompt, false);
@@ -149,20 +129,19 @@ describe('ModelHandlerOpenRouterNative Moonshot fixed temperature', () => {
     // and requires requests to omit temperature. OpenRouter forwards to the
     // same backend, so the field must not survive this route either.
     const handler = new ModelHandlerOpenRouterNative(
-      buildConfig({
+      buildTestModelConfig(OPENROUTER_TEST_CONFIG, {
         name: 'kimi3',
         fullName: 'kimi-k3',
         openrouterFullName: 'moonshotai/kimi-k3',
         provider: ModelProvider.MOONSHOT,
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsReasoningEffort: true,
           reasoningEffort: ReasoningEffort.MAX,
         },
       }),
     );
-    (handler as any).setLogger(createLoggerStub());
+    (handler as any).setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => false;
 
     const { client, sendCalls } = createSendStub();
@@ -177,9 +156,12 @@ describe('ModelHandlerOpenRouterNative Moonshot fixed temperature', () => {
 
   it('keeps the caller temperature outside Moonshot', async () => {
     const handler = new ModelHandlerOpenRouterNative(
-      buildConfig({ fullName: 'kimi-k3', provider: ModelProvider.OPENAI }),
+      buildTestModelConfig(OPENROUTER_TEST_CONFIG, {
+        fullName: 'kimi-k3',
+        provider: ModelProvider.OPENAI,
+      }),
     );
-    (handler as any).setLogger(createLoggerStub());
+    (handler as any).setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => false;
 
     const { client, sendCalls } = createSendStub();
@@ -193,8 +175,10 @@ describe('ModelHandlerOpenRouterNative Moonshot fixed temperature', () => {
   });
 
   it('maps finalTool to a named OpenRouter function choice', async () => {
-    const handler = new ModelHandlerOpenRouterNative(buildConfig());
-    (handler as any).setLogger(createLoggerStub());
+    const handler = new ModelHandlerOpenRouterNative(
+      buildTestModelConfig(OPENROUTER_TEST_CONFIG),
+    );
+    (handler as any).setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => false;
     const { client, sendCalls } = createSendStub();
 
@@ -216,8 +200,10 @@ describe('ModelHandlerOpenRouterNative Moonshot fixed temperature', () => {
 
 describe('ModelHandlerOpenRouterNative response mode discrimination', () => {
   it('rejects a non-streaming response on the streaming path', async () => {
-    const handler = new ModelHandlerOpenRouterNative(buildConfig());
-    (handler as any).setLogger(createLoggerStub());
+    const handler = new ModelHandlerOpenRouterNative(
+      buildTestModelConfig(OPENROUTER_TEST_CONFIG),
+    );
+    (handler as any).setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => true;
 
     const client = {
@@ -244,8 +230,10 @@ describe('ModelHandlerOpenRouterNative response mode discrimination', () => {
   });
 
   it('rejects a streaming response on the non-streaming path', async () => {
-    const handler = new ModelHandlerOpenRouterNative(buildConfig());
-    (handler as any).setLogger(createLoggerStub());
+    const handler = new ModelHandlerOpenRouterNative(
+      buildTestModelConfig(OPENROUTER_TEST_CONFIG),
+    );
+    (handler as any).setLogger({ ...noopTrace });
     (handler as any).getStreamingConfig = () => false;
 
     const client = {
@@ -272,10 +260,9 @@ describe('ModelHandlerOpenRouterNative response mode discrimination', () => {
 describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
   it('does not allow overrides for a fixed max-effort model', () => {
     const handler = new ModelHandlerOpenRouterNative(
-      buildConfig({
+      buildTestModelConfig(OPENROUTER_TEST_CONFIG, {
         provider: ModelProvider.MOONSHOT,
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsReasoningEffort: true,
           reasoningEffort: ReasoningEffort.MAX,
@@ -288,9 +275,8 @@ describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
 
   it('allows max selection when the model declares max as its ceiling', () => {
     const handler = new ModelHandlerOpenRouterNative(
-      buildConfig({
+      buildTestModelConfig(OPENROUTER_TEST_CONFIG, {
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsReasoningEffort: true,
           reasoningEffort: ReasoningEffort.MEDIUM,
@@ -304,9 +290,8 @@ describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
 
   it('keeps the declared override range after an effective max selection', () => {
     const handler = new ModelHandlerOpenRouterNative(
-      buildConfig({
+      buildTestModelConfig(OPENROUTER_TEST_CONFIG, {
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsReasoningEffort: true,
           reasoningEffort: ReasoningEffort.XHIGH,
@@ -344,10 +329,9 @@ describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
     '$name',
     ({ provider, supportsReasoning, supportsReasoningEffort, expected }) => {
       const handler = new ModelHandlerOpenRouterNative(
-        buildConfig({
+        buildTestModelConfig(OPENROUTER_TEST_CONFIG, {
           provider,
           capabilities: {
-            ...DEFAULT_MODEL_CAPABILITIES,
             supportsReasoning,
             supportsReasoningEffort,
           },
@@ -366,7 +350,9 @@ describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
     }
 
     const handler = new TestableHandler(
-      buildConfig({ provider: ModelProvider.XAI }),
+      buildTestModelConfig(OPENROUTER_TEST_CONFIG, {
+        provider: ModelProvider.XAI,
+      }),
     );
 
     assert.equal(handler.validateReasoningEffortForTest('xhigh'), 'xhigh');
@@ -375,7 +361,9 @@ describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
 
 describe('ModelHandlerOpenRouterNative retry ownership', () => {
   it('matches the OpenRouter SDK retry boundary', () => {
-    const handler = new ModelHandlerOpenRouterNative(buildConfig());
+    const handler = new ModelHandlerOpenRouterNative(
+      buildTestModelConfig(OPENROUTER_TEST_CONFIG),
+    );
 
     assert.equal(handler.isAutoRetryManagedByProvider(statusError(500)), true);
     assert.equal(handler.isAutoRetryManagedByProvider(statusError(529)), true);
@@ -408,7 +396,9 @@ describe('ModelHandlerOpenRouterNative getClient retryConfig', () => {
       }
     }
 
-    const handler = new TestableHandler(buildConfig());
+    const handler = new TestableHandler(
+      buildTestModelConfig(OPENROUTER_TEST_CONFIG),
+    );
     const client = await handler.getClient();
 
     // Constructing the SDK client is synchronous, local option-merging (no

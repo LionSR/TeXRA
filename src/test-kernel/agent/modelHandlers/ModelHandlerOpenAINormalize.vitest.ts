@@ -1,49 +1,14 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelConfig,
-  ModelProvider,
-} from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 
-// Local imports - agent
-import type { AgentTrace } from '@agent/trace';
+// Local imports - test support and agent
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { noopTrace } from '@agent/trace';
 import { ModelHandlerDashScope } from '@agent/modelHandlers/openai/modelHandlerDashScope';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/openai/modelHandlerDeepSeek';
 import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
-
-type LoggerStub = Partial<AgentTrace> & {
-  streamId: string;
-  debugMessages: string[];
-  debugLogs: Array<{ message: string; options: unknown }>;
-  infoMessages: string[];
-};
-
-function createLoggerStub(): LoggerStub {
-  const debugMessages: string[] = [];
-  const debugLogs: Array<{ message: string; options: unknown }> = [];
-  const infoMessages: string[] = [];
-  return {
-    streamId: 'test-channel',
-    debugMessages,
-    debugLogs,
-    infoMessages,
-    debug: (message: string, options?: unknown) => {
-      debugMessages.push(message);
-      debugLogs.push({ message, options });
-    },
-    info: (message: string) => {
-      infoMessages.push(message);
-    },
-    warn: () => {
-      /* no-op for tests */
-    },
-    error: () => {
-      /* no-op for tests */
-    },
-  };
-}
 
 function createClientStub() {
   const createCalls: any[] = [];
@@ -95,40 +60,27 @@ const BASE_MESSAGES = [
   },
 ];
 
-function buildConfig(
-  provider: ModelProvider,
-  overrides: Partial<ModelConfig> = {},
-): ModelConfig {
-  const baseCapabilities = {
-    ...DEFAULT_MODEL_CAPABILITIES,
-    supportsVision: false,
-  };
-
-  return {
-    name: 'test-model',
-    fullName: 'test-model',
-    shortName: 'test-model',
-    provider,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 200000,
-    capabilities: {
-      ...baseCapabilities,
-      ...(overrides.capabilities ?? {}),
-    },
-    openRouterOnly: false,
-    ...overrides,
-    label: overrides.label ?? 'Test Model',
-  };
-}
-
 type NormalizingHandler =
   ModelHandlerDeepSeek | ModelHandlerKimi | ModelHandlerDashScope;
 
 async function runNormalize(handler: NormalizingHandler) {
-  const loggerStub = createLoggerStub();
-  handler.setLogger(loggerStub as unknown as AgentTrace);
+  const debugMessages: string[] = [];
+  const debugLogs: Array<{ message: string; options: unknown }> = [];
+  const infoMessages: string[] = [];
+  const loggerStub = {
+    ...noopTrace,
+    debugMessages,
+    debugLogs,
+    infoMessages,
+    debug: (message: string, options?: unknown) => {
+      debugMessages.push(message);
+      debugLogs.push({ message, options });
+    },
+    info: (message: string) => {
+      infoMessages.push(message);
+    },
+  };
+  handler.setLogger(loggerStub);
   (handler as any).getStreamingConfig = () => false;
 
   const { client, createCalls } = createClientStub();
@@ -143,9 +95,11 @@ async function runNormalize(handler: NormalizingHandler) {
 
 describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
   it('DeepSeek handler merges consecutive user messages into string content', async () => {
-    const config = buildConfig(ModelProvider.DEEPSEEK, {
+    const config = buildTestModelConfig({
       name: 'deepseek-chat',
       fullName: 'deepseek-chat',
+      provider: ModelProvider.DEEPSEEK,
+      capabilities: { supportsVision: false },
     });
     const { createCalls, loggerStub } = await runNormalize(
       new ModelHandlerDeepSeek(config),
@@ -189,9 +143,11 @@ describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
       name: 'Kimi',
       makeHandler: () =>
         new ModelHandlerKimi(
-          buildConfig(ModelProvider.MOONSHOT, {
+          buildTestModelConfig({
             name: 'kimi128k',
             fullName: 'moonshot-v1-128k',
+            provider: ModelProvider.MOONSHOT,
+            capabilities: { supportsVision: false },
           }),
         ),
     },
@@ -199,9 +155,11 @@ describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
       name: 'DashScope',
       makeHandler: () =>
         new ModelHandlerDashScope(
-          buildConfig(ModelProvider.DASHSCOPE, {
+          buildTestModelConfig({
             name: 'qwen',
             fullName: 'qwen-plus',
+            provider: ModelProvider.DASHSCOPE,
+            capabilities: { supportsVision: false },
           }),
         ),
     },

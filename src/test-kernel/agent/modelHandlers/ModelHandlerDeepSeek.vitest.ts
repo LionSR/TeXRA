@@ -12,8 +12,9 @@ import {
   ReasoningEffort,
 } from 'llm-zoo';
 
-// Local imports - agent
-import type { AgentTrace } from '@agent/trace';
+// Local imports - test support and agent
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { noopTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/openai/modelHandlerDeepSeek';
 
@@ -32,47 +33,20 @@ function thinkingFor(
   return (handler as any).getThinkingParameter();
 }
 
-function buildConfig(overrides: Partial<ModelConfig> = {}): ModelConfig {
-  return {
-    name: 'deepseek-chat',
-    fullName: 'deepseek-chat',
-    shortName: 'deepseek-chat',
-    provider: ModelProvider.DEEPSEEK,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 200000,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsReasoning: false,
-      supportsVision: false,
-      ...(overrides.capabilities ?? {}),
-    },
-    openRouterOnly: false,
-    label: 'DeepSeek Chat',
-    ...overrides,
-  };
-}
-
-function createLoggerStub(): Partial<AgentTrace> {
-  return {
-    debug: () => {
-      /* no-op */
-    },
-    info: () => {
-      /* no-op */
-    },
-    warn: () => {
-      /* no-op */
-    },
-    error: () => {
-      /* no-op */
-    },
-  };
-}
+const DEEPSEEK_TEST_CONFIG = Object.freeze({
+  name: 'deepseek-chat',
+  fullName: 'deepseek-chat',
+  shortName: 'deepseek-chat',
+  provider: ModelProvider.DEEPSEEK,
+  label: 'DeepSeek Chat',
+  capabilities: Object.freeze({
+    supportsReasoning: false,
+    supportsVision: false,
+  }),
+});
 
 function stubHandlerForTest(handler: ModelHandlerDeepSeek): void {
-  handler.setLogger(createLoggerStub() as AgentTrace);
+  handler.setLogger({ ...noopTrace });
   (handler as any).getStreamingConfig = () => false;
 }
 
@@ -154,7 +128,9 @@ describe('ModelHandlerDeepSeek.getThinkingParameter', () => {
 
 describe('ModelHandlerDeepSeek tool conversion', () => {
   it('normalizes DeepSeek cache hit and miss tokens', () => {
-    const handler = new ModelHandlerDeepSeek(buildConfig());
+    const handler = new ModelHandlerDeepSeek(
+      buildTestModelConfig(DEEPSEEK_TEST_CONFIG),
+    );
 
     const usage = handler.normalizeUsage(
       {
@@ -175,7 +151,9 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
   });
 
   it('falls back to DeepSeek cache hit plus miss when prompt_tokens is absent', () => {
-    const handler = new ModelHandlerDeepSeek(buildConfig());
+    const handler = new ModelHandlerDeepSeek(
+      buildTestModelConfig(DEEPSEEK_TEST_CONFIG),
+    );
 
     const usage = handler.normalizeUsage(
       {
@@ -193,7 +171,9 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
   });
 
   it('maps prompt_tokens_details.cache_write_tokens to cacheCreationTokens', () => {
-    const handler = new ModelHandlerDeepSeek(buildConfig());
+    const handler = new ModelHandlerDeepSeek(
+      buildTestModelConfig(DEEPSEEK_TEST_CONFIG),
+    );
 
     const usage = handler.normalizeUsage(
       {
@@ -210,7 +190,9 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
   });
 
   it('defaults cacheCreationTokens to undefined when cache_write_tokens is absent', () => {
-    const handler = new ModelHandlerDeepSeek(buildConfig());
+    const handler = new ModelHandlerDeepSeek(
+      buildTestModelConfig(DEEPSEEK_TEST_CONFIG),
+    );
 
     const usage = handler.normalizeUsage(
       {
@@ -227,9 +209,8 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
 
   it('passes thinking toggle and low effort in OpenAI wire format', async () => {
     const handler = new ModelHandlerDeepSeek(
-      buildConfig({
+      buildTestModelConfig(DEEPSEEK_TEST_CONFIG, {
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsVision: false,
           reasoningEffort: ReasoningEffort.LOW,
@@ -254,10 +235,9 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
 
   it('maps xhigh reasoning effort to DeepSeek max effort', async () => {
     const handler = new ModelHandlerDeepSeek(
-      buildConfig({
+      buildTestModelConfig(DEEPSEEK_TEST_CONFIG, {
         fullName: 'deepseek-v4-pro',
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsVision: false,
           reasoningEffort: ReasoningEffort.XHIGH,
@@ -281,10 +261,9 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
 
   it('maps max reasoning effort to DeepSeek max effort', async () => {
     const handler = new ModelHandlerDeepSeek(
-      buildConfig({
+      buildTestModelConfig(DEEPSEEK_TEST_CONFIG, {
         fullName: 'deepseek-v4-pro',
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsVision: false,
           reasoningEffort: ReasoningEffort.MAX,
@@ -310,9 +289,8 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
 
   it('passes back content and reasoning_content in tool-call messages', async () => {
     const handler = new ModelHandlerDeepSeek(
-      buildConfig({
+      buildTestModelConfig(DEEPSEEK_TEST_CONFIG, {
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsVision: false,
         },
@@ -373,9 +351,8 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
 
   it('includes empty reasoning_content in tool-call messages when model generated none', async () => {
     const handler = new ModelHandlerDeepSeek(
-      buildConfig({
+      buildTestModelConfig(DEEPSEEK_TEST_CONFIG, {
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsVision: false,
         },
@@ -416,9 +393,8 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
 
   it('passes back response reasoning_content on final assistant messages', () => {
     const handler = new ModelHandlerDeepSeek(
-      buildConfig({
+      buildTestModelConfig(DEEPSEEK_TEST_CONFIG, {
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsVision: false,
         },
@@ -451,9 +427,8 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
 
   it('includes empty reasoning_content on final assistant messages when model generated none', () => {
     const handler = new ModelHandlerDeepSeek(
-      buildConfig({
+      buildTestModelConfig(DEEPSEEK_TEST_CONFIG, {
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
           supportsVision: false,
         },
@@ -482,7 +457,9 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
   });
 
   it('sends nullable Chat Completions tools without SDK strict auto-parse validation', async () => {
-    const handler = new ModelHandlerDeepSeek(buildConfig());
+    const handler = new ModelHandlerDeepSeek(
+      buildTestModelConfig(DEEPSEEK_TEST_CONFIG),
+    );
     stubHandlerForTest(handler);
 
     const { client, getParams } = createCapturingClient();
@@ -525,11 +502,10 @@ describe('ModelHandlerOpenAI DeepSeek official max_tokens ceiling (#7081)', () =
     // maxOutputTokens, not on the literal fullName 'deepseek-chat' — so a
     // differently named low-budget entry is still capped correctly.
     const handler = new ModelHandlerDeepSeek(
-      buildConfig({
+      buildTestModelConfig(DEEPSEEK_TEST_CONFIG, {
         fullName: 'deepseek-legacy-chat',
         maxOutputTokens: 8192,
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: false,
         },
       }),
@@ -549,11 +525,10 @@ describe('ModelHandlerOpenAI DeepSeek official max_tokens ceiling (#7081)', () =
 
   it('keeps the tool-use reduction for a current large-output non-reasoning DeepSeek entry', async () => {
     const handler = new ModelHandlerDeepSeek(
-      buildConfig({
+      buildTestModelConfig(DEEPSEEK_TEST_CONFIG, {
         fullName: 'deepseek-v4-flash',
         maxOutputTokens: 393216,
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: false,
         },
       }),
@@ -573,11 +548,10 @@ describe('ModelHandlerOpenAI DeepSeek official max_tokens ceiling (#7081)', () =
 
   it('keeps the tool-use reduction for a reasoning DeepSeek entry even at a low registry budget', async () => {
     const handler = new ModelHandlerDeepSeek(
-      buildConfig({
+      buildTestModelConfig(DEEPSEEK_TEST_CONFIG, {
         fullName: 'deepseek-legacy-reasoner',
         maxOutputTokens: 8192,
         capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
           supportsReasoning: true,
         },
       }),
