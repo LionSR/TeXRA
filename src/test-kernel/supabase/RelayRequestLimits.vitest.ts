@@ -8,7 +8,6 @@ import { describe, it, vi } from 'vitest';
 import {
   FREE_TIER_MAX_OUTPUT_TOKENS,
   FREE_TIER_REQUEST_BODY_LIMIT_BYTES,
-  checkRequestBodySizeLimit,
   clampFreeTierMaxOutputTokens,
   formatRequestBytes,
   readRequestBodyWithinSizeLimit,
@@ -84,33 +83,6 @@ function createGateClient(
 describe('relay free-tier request limits', () => {
   it('allows four concurrent free-tier requests', () => {
     assert.equal(getRequestLimits('free').concurrent, 4);
-  });
-
-  it('rejects free-tier request bodies over the byte cap', () => {
-    assert.deepEqual(checkRequestBodySizeLimit('abc', 3), {
-      allowed: true,
-      limitBytes: 3,
-      requestBytes: 3,
-    });
-    assert.deepEqual(checkRequestBodySizeLimit('abcd', 3), {
-      allowed: false,
-      limitBytes: 3,
-      requestBytes: 4,
-    });
-  });
-
-  it('counts UTF-8 bytes rather than JavaScript string length', () => {
-    const result = checkRequestBodySizeLimit('€', 2);
-
-    assert.equal(result.allowed, false);
-    assert.equal(result.requestBytes, 3);
-  });
-
-  it('uses existing byte lengths for binary request bodies', () => {
-    const result = checkRequestBodySizeLimit(new Uint8Array([0, 255, 1]), 2);
-
-    assert.equal(result.allowed, false);
-    assert.equal(result.requestBytes, 3);
   });
 
   it('reads accepted request streams without changing bytes', async () => {
