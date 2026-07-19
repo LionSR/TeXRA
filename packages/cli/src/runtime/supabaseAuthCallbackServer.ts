@@ -24,6 +24,11 @@ const CALLBACK_PATH = '/auth-callback';
 const CALLBACK_NONCE_BYTES = 24;
 const MAX_CALLBACK_BODY_BYTES = 8 * 1024;
 
+interface CallbackAttemptState {
+  acceptingCallbacks: boolean;
+  commitStarted: boolean;
+}
+
 class RecoverableCallbackRequestError extends Error {
   constructor(message: string) {
     super(message);
@@ -52,7 +57,10 @@ export async function startLoopbackCallbackServer(
     resolve: resolveSession,
     reject: rejectSession,
   } = pDefer<SupabaseSession>();
-  let acceptingCallbacks = true;
+  const attemptState: CallbackAttemptState = {
+    acceptingCallbacks: true,
+    commitStarted: false,
+  };
 
   const server = createServer((request, response) => {
     void handleCallbackRequest(
@@ -60,7 +68,7 @@ export async function startLoopbackCallbackServer(
       response,
       authCoordinator,
       nonce,
-      () => acceptingCallbacks,
+      attemptState,
     )
       .then((session) => {
         if (session) resolveSession(session);
@@ -105,7 +113,8 @@ export async function startLoopbackCallbackServer(
       if (!signal) return sessionPromise.finally(cleanup);
       signal.throwIfAborted();
       const onAbort = (): void => {
-        acceptingCallbacks = false;
+        if (attemptState.commitStarted) return;
+        attemptState.acceptingCallbacks = false;
         rejectSession(signal.reason);
       };
       signal.addEventListener('abort', onAbort, { once: true });
@@ -126,9 +135,9 @@ async function handleCallbackRequest(
   response: ServerResponse,
   authCoordinator: SupabaseSessionCoordinator,
   nonce: string,
-  isAcceptingCallbacks: () => boolean,
+  attemptState: CallbackAttemptState,
 ): Promise<SupabaseSession | undefined> {
-  if (!isAcceptingCallbacks()) {
+  if (!attemptState.acceptingCallbacks) {
     throw new RecoverableCallbackRequestError(
       'This authentication attempt was cancelled.',
     );
@@ -149,7 +158,7 @@ async function handleCallbackRequest(
         'Authentication callback did not match this login attempt.',
       );
     }
-    if (!isAcceptingCallbacks()) {
+    if (!attemptState.acceptingCallbacks) {
       throw new RecoverableCallbackRequestError(
         'This authentication attempt was cancelled.',
       );
@@ -160,12 +169,14 @@ async function handleCallbackRequest(
       fragment: trimUrlMarker(body.fragment, '#'),
     });
     if (!result.success) throw new Error(result.error);
-    if (!isAcceptingCallbacks()) {
+    if (!attemptState.acceptingCallbacks) {
       throw new RecoverableCallbackRequestError(
         'This authentication attempt was cancelled.',
       );
     }
 
+    attemptState.commitStarted = true;
+    attemptState.acceptingCallbacks = false;
     await authCoordinator.storeSession(result.session);
     writeHtml(response, 200, successHtml(result.session.account.label));
     return result.session;
