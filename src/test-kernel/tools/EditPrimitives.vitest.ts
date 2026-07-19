@@ -7,9 +7,9 @@ import {
   findOccurrenceLineNumbers,
   replaceAllLiteral,
   replaceFirstLiteral,
-} from '@tools/editPrimitives';
+} from '@tools/fileEditFlow';
 
-describe('editPrimitives literal replacement', () => {
+describe('fileEditFlow literal replacement', () => {
   // Regression: String.prototype.replace interprets $$, $&, $', `$\`` and
   // $<name> in the replacement string, silently corrupting LaTeX/code edits.
   // The primitives must insert the replacement verbatim.
