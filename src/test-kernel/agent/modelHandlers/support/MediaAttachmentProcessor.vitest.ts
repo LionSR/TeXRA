@@ -19,12 +19,11 @@ import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent
 import { DEFAULT_MODEL_CAPABILITIES, type ModelCapabilities } from 'llm-zoo';
-import type { AgentTrace } from '@agent/trace';
+import { noopTrace, type AgentTrace } from '@agent/trace';
 import {
   MediaAttachmentProcessor,
   type MediaFileResult,
 } from '@agent/modelHandlers/support/MediaAttachmentProcessor';
-import { noopTrace } from '@agent/trace/noopTrace';
 import { attachProviderError } from '@common/errors/sdkErrorUtils';
 
 // Type imports

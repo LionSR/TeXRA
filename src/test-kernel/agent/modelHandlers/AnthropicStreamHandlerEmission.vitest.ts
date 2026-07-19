@@ -2,9 +2,8 @@
 import { describe, it, expect, vi } from 'vitest';
 
 // Local imports - class under test
-import type { AgentTrace } from '@agent/trace';
+import { noopTrace, type AgentTrace } from '@agent/trace';
 import { AnthropicStreamHandler } from '@agent/modelHandlers/support/AnthropicStreamHandler';
-import { noopTrace } from '@agent/trace/noopTrace';
 
 // Type imports
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';

@@ -5,8 +5,8 @@ import { ModelProvider } from 'llm-zoo';
 
 // Local imports - test support and agent
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
-import { noopTrace } from '@agent/trace/noopTrace';
 
 /** A well-formed completion with a single `function` tool call. */
 function completionWithValidToolCall() {

@@ -24,7 +24,7 @@ import {
   ModelProvider,
   ReasoningEffort,
 } from 'llm-zoo';
-import type { AgentTrace } from '@agent/trace';
+import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
@@ -33,7 +33,6 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
-import { noopTrace } from '@agent/trace/noopTrace';
 import {
   enforceCacheControlLimit,
   logContextManagementFromResponse,

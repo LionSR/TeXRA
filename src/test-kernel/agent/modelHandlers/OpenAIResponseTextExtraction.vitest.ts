@@ -4,8 +4,8 @@ import { ModelProvider } from 'llm-zoo';
 
 // Local imports - test support and agent
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
-import { noopTrace } from '@agent/trace/noopTrace';
 
 // Type imports
 import type { ResponseInputItem } from 'openai/resources/responses/responses';

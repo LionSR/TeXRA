@@ -17,6 +17,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - test support and agent
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { noopTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
@@ -25,7 +26,6 @@ import {
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller';
-import { noopTrace } from '@agent/trace/noopTrace';
 import {
   attachContextWindowError,
   hasContextWindowErrorMarker,

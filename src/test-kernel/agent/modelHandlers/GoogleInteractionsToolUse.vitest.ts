@@ -4,9 +4,9 @@ import { ModelProvider } from 'llm-zoo';
 
 // Local imports - test support, agent, and config
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { noopTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
-import { noopTrace } from '@agent/trace/noopTrace';
 import type { GoogleToolCall } from '@agent/types/ModelHandlerContracts';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import * as configModule from '@utils/config/configUtils';

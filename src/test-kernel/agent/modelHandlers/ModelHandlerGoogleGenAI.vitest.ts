@@ -1,44 +1,33 @@
-// Third-party imports
-import { strict as assert } from 'node:assert';
-import { describe, it } from 'vitest';
-
 // Standard library imports
+import { strict as assert } from 'node:assert';
 
 // Third-party imports
 import {
   createPartFromBase64,
   createPartFromText,
   createPartFromUri,
+  type Content,
+  type File,
+  type FunctionCall,
+  type Part,
+  type UploadFileParameters,
 } from '@google/genai';
+import { describe, it } from 'vitest';
+import { type ModelConfig, ModelProvider } from 'llm-zoo';
+
+// Local imports - test support
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Local imports - agent
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelCapabilities,
-  type ModelConfig,
-  ModelProvider,
-} from 'llm-zoo';
-import type { AgentTrace } from '@agent/trace';
-import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
+import { noopTrace, type AgentTrace } from '@agent/trace';
 import { validateGoogleMessageHistory } from '@agent/modelHandlers/google/googleMessageHelpers';
-import { noopTrace } from '@agent/trace/noopTrace';
+import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
-// Type imports
-
-// Local imports - model config
+// Local imports - shared and utilities
 import type { FileLocation } from '@shared/schemas';
 import { pathToLocation } from '@utils/files';
-
-// Type imports
-import type {
-  File,
-  Part,
-  UploadFileParameters,
-  FunctionCall,
-  Content,
-} from '@google/genai';
 
 interface LogRecorder extends AgentTrace {
   fileListEntries: Array<Array<{ path: string; ok: boolean }>>;
@@ -66,33 +55,23 @@ function createLogRecorder(): { logger: AgentTrace; stub: LogRecorder } {
   return { logger: stub, stub };
 }
 
-function buildGoogleConfig(
-  overrides: Partial<ModelCapabilities> = {},
-): ModelConfig {
-  const capabilities: ModelCapabilities = {
-    ...DEFAULT_MODEL_CAPABILITIES,
+const GOOGLE_TEST_CONFIG = Object.freeze({
+  name: 'test-google',
+  label: 'Test Google',
+  fullName: 'test-google',
+  shortName: 'test-google',
+  provider: ModelProvider.GOOGLE,
+  contextWindow: 100_000,
+  capabilities: Object.freeze({
     supportsVision: true,
     supportsNativePdf: true,
-    ...overrides,
-  };
-
-  return {
-    name: 'test-google',
-    label: 'Test Google',
-    fullName: 'test-google',
-    shortName: 'test-google',
-    provider: ModelProvider.GOOGLE,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 100000,
-    capabilities,
-    openRouterOnly: false,
-  };
-}
+  }),
+});
 
 function createGoogleGenAIHandler(): ModelHandlerGoogleGenAI {
-  const handler = new ModelHandlerGoogleGenAI(buildGoogleConfig());
+  const handler = new ModelHandlerGoogleGenAI(
+    buildTestModelConfig(GOOGLE_TEST_CONFIG),
+  );
   const { logger } = createLogRecorder();
   handler.setLogger(logger);
   return handler;
@@ -134,7 +113,7 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
     };
 
     const handler = new GoogleHandlerTestDouble(
-      buildGoogleConfig(),
+      buildTestModelConfig(GOOGLE_TEST_CONFIG),
       clientStub,
     );
     const { logger } = createLogRecorder();
@@ -166,7 +145,7 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
     };
 
     const handler = new GoogleHandlerTestDouble(
-      buildGoogleConfig(),
+      buildTestModelConfig(GOOGLE_TEST_CONFIG),
       clientStub,
     );
     const { logger, stub } = createLogRecorder();
@@ -210,7 +189,10 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
       }
     }
 
-    const handler = new LimitedInlineHandler(buildGoogleConfig(), clientStub);
+    const handler = new LimitedInlineHandler(
+      buildTestModelConfig(GOOGLE_TEST_CONFIG),
+      clientStub,
+    );
     const { logger } = createLogRecorder();
     handler.setLogger(logger);
 
@@ -246,7 +228,10 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
       }
     }
 
-    const handler = new LimitedInlineHandler(buildGoogleConfig(), clientStub);
+    const handler = new LimitedInlineHandler(
+      buildTestModelConfig(GOOGLE_TEST_CONFIG),
+      clientStub,
+    );
     const { logger, stub } = createLogRecorder();
     handler.setLogger(logger);
 
@@ -285,7 +270,9 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
       }
     }
 
-    const handler = new RecordingHandler(buildGoogleConfig());
+    const handler = new RecordingHandler(
+      buildTestModelConfig(GOOGLE_TEST_CONFIG),
+    );
     const { logger, stub } = createLogRecorder();
     handler.setLogger(logger);
 

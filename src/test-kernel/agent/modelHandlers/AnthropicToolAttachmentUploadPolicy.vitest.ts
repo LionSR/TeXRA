@@ -3,9 +3,8 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports - agent
-import type { AgentTrace } from '@agent/trace';
+import { noopTrace, type AgentTrace } from '@agent/trace';
 import { uploadToolAttachments } from '@agent/modelHandlers/anthropic/anthropicTools';
-import { noopTrace } from '@agent/trace/noopTrace';
 import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
 function createWarningRecorder(): {

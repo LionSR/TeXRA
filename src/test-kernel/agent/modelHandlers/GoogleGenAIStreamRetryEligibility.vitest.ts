@@ -5,8 +5,8 @@ import { ModelProvider } from 'llm-zoo';
 
 // Local imports - test support and agent
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { noopTrace } from '@agent/trace';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
-import { noopTrace } from '@agent/trace/noopTrace';
 
 // Local imports - common errors
 import {

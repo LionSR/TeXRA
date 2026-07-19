@@ -9,8 +9,8 @@ import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 // Local imports - test support and handler under test
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
-import { noopTrace } from '@agent/trace/noopTrace';
 
 // Modules to stub via vi.spyOn
 import * as serverKeysModule from '@auth/serverKeys';

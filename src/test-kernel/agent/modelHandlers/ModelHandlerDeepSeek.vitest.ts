@@ -14,9 +14,9 @@ import {
 
 // Local imports - test support and agent
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { noopTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/openai/modelHandlerDeepSeek';
-import { noopTrace } from '@agent/trace/noopTrace';
 
 // Type imports
 import type { ToolDefinition } from '@model';

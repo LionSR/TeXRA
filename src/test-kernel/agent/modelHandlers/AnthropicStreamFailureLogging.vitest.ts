@@ -4,9 +4,8 @@ import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent model handlers
-import type { AgentTrace } from '@agent/trace';
+import { noopTrace, type AgentTrace } from '@agent/trace';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
-import { noopTrace } from '@agent/trace/noopTrace';
 
 // Type imports
 import type Anthropic from '@anthropic-ai/sdk';

@@ -1,28 +1,24 @@
 // Standard library imports
 import { strict as assert } from 'node:assert';
-import { describe, it } from 'vitest';
 
 // Third-party imports
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelConfig,
-  ModelProvider,
-} from 'llm-zoo';
+import { describe, it } from 'vitest';
+import { ModelProvider } from 'llm-zoo';
 
 // Local imports - platform
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 
 // Local imports - test support
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 // Local imports - agent
-import type { AgentTrace } from '@agent/trace';
+import { noopTrace, type AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
-import { noopTrace } from '@agent/trace/noopTrace';
 
-// Type imports
+// Local imports - utilities
 import { pathToLocation } from '@utils/files';
 
 // pathToLocation resolves through platform services.
@@ -61,43 +57,24 @@ class ThrowingMediaGoogleGenAIHandler extends ModelHandlerGoogleGenAI {
   }
 }
 
-function buildOpenAIResponseConfig(): ModelConfig {
-  return {
-    name: 'gpt-4.1',
-    fullName: 'gpt-4.1',
-    shortName: 'gpt-4.1',
-    label: 'GPT 4.1',
-    provider: ModelProvider.OPENAI,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 200000,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsVision: true,
-    },
-    openRouterOnly: false,
-  };
-}
+const OPENAI_RESPONSE_TEST_CONFIG = Object.freeze({
+  name: 'gpt-4.1',
+  fullName: 'gpt-4.1',
+  shortName: 'gpt-4.1',
+  label: 'GPT 4.1',
+  provider: ModelProvider.OPENAI,
+  capabilities: Object.freeze({ supportsVision: true }),
+});
 
-function buildGoogleGenAIConfig(): ModelConfig {
-  return {
-    name: 'test-google',
-    fullName: 'test-google',
-    shortName: 'test-google',
-    label: 'Test Google',
-    provider: ModelProvider.GOOGLE,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 100000,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsVision: true,
-    },
-    openRouterOnly: false,
-  };
-}
+const GOOGLE_GENAI_TEST_CONFIG = Object.freeze({
+  name: 'test-google',
+  fullName: 'test-google',
+  shortName: 'test-google',
+  label: 'Test Google',
+  provider: ModelProvider.GOOGLE,
+  contextWindow: 100_000,
+  capabilities: Object.freeze({ supportsVision: true }),
+});
 
 const MEDIA_FILES = [pathToLocation('/tmp/does-not-matter.png')];
 
@@ -116,7 +93,7 @@ const MEDIA_FILES = [pathToLocation('/tmp/does-not-matter.png')];
 describe('media attachment failure policy (#7465)', () => {
   it('OpenAIResponse.initializeMessages now fails the round on a media error (previously silently warned)', async () => {
     const handler = new ThrowingMediaOpenAIResponseHandler(
-      buildOpenAIResponseConfig(),
+      buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG),
     );
     const { logger } = createFailureRecorder();
     handler.setLogger(logger);
@@ -129,7 +106,7 @@ describe('media attachment failure policy (#7465)', () => {
 
   it('OpenAIResponse.createRoundMessages still warns and continues without the attachment', async () => {
     const handler = new ThrowingMediaOpenAIResponseHandler(
-      buildOpenAIResponseConfig(),
+      buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG),
     );
     const { logger, errorMessages } = createFailureRecorder();
     handler.setLogger(logger);
@@ -149,7 +126,7 @@ describe('media attachment failure policy (#7465)', () => {
 
   it('Google GenAI.createRoundMessages now warns and continues on a media error (previously threw and failed the round)', async () => {
     const handler = new ThrowingMediaGoogleGenAIHandler(
-      buildGoogleGenAIConfig(),
+      buildTestModelConfig(GOOGLE_GENAI_TEST_CONFIG),
     );
     const { logger, errorMessages } = createFailureRecorder();
     handler.setLogger(logger);
@@ -169,7 +146,7 @@ describe('media attachment failure policy (#7465)', () => {
 
   it('Google GenAI.initializeMessages still fails the round on a media error', async () => {
     const handler = new ThrowingMediaGoogleGenAIHandler(
-      buildGoogleGenAIConfig(),
+      buildTestModelConfig(GOOGLE_GENAI_TEST_CONFIG),
     );
     const { logger } = createFailureRecorder();
     handler.setLogger(logger);

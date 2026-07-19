@@ -4,7 +4,7 @@ import { type ModelConfig, ModelProvider } from 'llm-zoo';
 
 // Local imports - test support and agent model handlers
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-import type { AgentTrace } from '@agent/trace';
+import { noopTrace, type AgentTrace } from '@agent/trace';
 import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
   COMPACTION_SYSTEM_PROMPT,
@@ -12,7 +12,6 @@ import {
   estimateTokensFromText,
 } from '@agent/modelHandlers/contextManagementConstants';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
-import { noopTrace } from '@agent/trace/noopTrace';
 import type { ProviderCapabilityProfile } from '@model/providerCapabilities';
 
 // Type imports
