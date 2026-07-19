@@ -1452,6 +1452,28 @@ describe('CLI StatusBar display model', () => {
     ]);
   });
 
+  it('bounds queued-input discard warnings in very narrow footers', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_PHASE.RUNNING,
+        runningFrame: '/',
+        elapsedMs: 45_000,
+        transientNotice: {
+          kind: 'exit',
+          text: 'Press Ctrl-C again to exit',
+          expiresAt: 1,
+        },
+        queuedFollowUpMessages: ['Continue with the proof.'],
+        width: 30,
+      }),
+    );
+
+    expect(display.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      '1 queued follow-up will b…',
+    ]);
+  });
+
   it('compacts token usage to a percentage before dropping it on narrow widths', () => {
     const input = statusInput({
       status: STREAM_PHASE.RUNNING,
