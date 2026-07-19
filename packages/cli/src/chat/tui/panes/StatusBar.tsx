@@ -171,26 +171,32 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     activeProcesses: statusSlice?.activeProcesses.length ?? 0,
     approvalDepth: approvals.depth,
     approvalKind: approvals.kind,
-    agentSelectionAvailable: props.agentSelectionAvailable,
-    childListFocused: props.childListFocused,
-    childListSelectionKind: props.childListSelectionKind,
-    childListSelectionKillable: props.childListSelectionKillable,
-    childListSelectionWorkflowControllable:
-      props.childListSelectionWorkflowControllable,
-    childNavigationAvailable: props.childNavigationAvailable,
-    streamFocusAvailable: props.streamFocusAvailable,
     model: accessTarget.model,
     modelAccess,
     transcriptMode: sessionMeta.transcriptMode,
     approvalPolicy: sessionMeta.approvalPolicy,
-    shiftEnterNewline: caps.kittyKeyboard,
-    transcriptAvailable: props.transcriptAvailable,
     width: columns,
     ctrlCAction: target.ctrlCAction,
     isChildStream: target.isChildStream,
-    foregroundEscapeAction: props.foregroundEscapeAction,
-    foregroundInputActive: props.foregroundInputActive,
-    shortcutsActive: props.shortcutsActive,
+    foreground: {
+      inputActive: props.foregroundInputActive,
+      escapeAction: props.foregroundEscapeAction,
+      shortcutsActive: props.shortcutsActive,
+    },
+    childList: {
+      focused: props.childListFocused,
+      selectionKind: props.childListSelectionKind,
+      selectionKillable: props.childListSelectionKillable,
+      selectionWorkflowControllable:
+        props.childListSelectionWorkflowControllable,
+    },
+    shortcuts: {
+      agentSelectionAvailable: props.agentSelectionAvailable,
+      childNavigationAvailable: props.childNavigationAvailable,
+      streamFocusAvailable: props.streamFocusAvailable,
+      shiftEnterNewline: caps.kittyKeyboard,
+      transcriptAvailable: props.transcriptAvailable,
+    },
   });
 
   return (
