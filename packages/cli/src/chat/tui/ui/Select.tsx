@@ -122,10 +122,12 @@ export function nextSelectHighlightIndex<T>({
   direction,
   highlight,
   items,
+  wrap = true,
 }: {
   readonly direction: -1 | 1;
   readonly highlight: number;
   readonly items: ReadonlyArray<SelectItem<T>>;
+  readonly wrap?: boolean;
 }): number {
   if (items.length === 0) return 0;
 
@@ -134,6 +136,9 @@ export function nextSelectHighlightIndex<T>({
     items.every((item) => item.disabled) ||
     items.every((item) => !item.disabled)
   ) {
+    if (!wrap) {
+      return clampIndex(clampedHighlight + direction, items.length);
+    }
     return nextWrappingHighlightIndex({
       direction,
       highlight: clampedHighlight,
@@ -301,19 +306,16 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
 
   const moveHighlight = (direction: -1 | 1): void => {
     const current = highlightRef.current;
-    if (
-      props.wrap === false &&
-      ((direction === 1 && current >= props.items.length - 1) ||
-        (direction === -1 && current <= 0))
-    ) {
+    const next = nextSelectHighlightIndex({
+      direction,
+      highlight: current,
+      items: props.items,
+      wrap: props.wrap,
+    });
+    if (props.wrap === false && next === current) {
       props.onBoundaryEscape?.(direction);
       return;
     }
-    const next = nextSelectHighlightIndex({
-      direction,
-      highlight: highlightRef.current,
-      items: props.items,
-    });
     highlightRef.current = next;
     setHighlight(next);
     const item = props.items[next];
