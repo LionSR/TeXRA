@@ -340,42 +340,49 @@ export function formatFollowUpInstruction(instruction: string): string {
 /** Last N lines of output for the delivery preview. */
 const OUTPUT_PREVIEW_LINES = 20;
 
+/** Tail/head excerpt plus the elided-character gap for one output stream. */
+export interface BashDeliveryStreamExcerpt {
+  tail: string;
+  /**
+   * Only pass this (non-empty) when the stream was actually truncated — the
+   * caller (bash.ts) preserves a small head budget alongside the tail so a
+   * long run's first fatal error survives even once total output exceeds the
+   * tail budget. Unlike the tail preview (`lastNLines`), the head is emitted
+   * as-is and may end mid-line — it's a best-effort char-capped excerpt, not a
+   * line-bounded preview, and a truncated trailing line is fine for an LLM
+   * consumer to recover the error from.
+   */
+  head?: string;
+  /**
+   * The gap between the head and tail (mirroring the foreground
+   * `checkToolResultTextLimit`'s "[... N characters elided ...]" note) so the
+   * model doesn't mistake the head+tail excerpt for the complete stream.
+   */
+  elidedChars?: number;
+}
+
 /**
  * Format a completed background bash result as a delivery message.
  * Injected into the orchestrator's FollowUpQueue.
  *
- * `outputTail` and `stderrTail` are accumulated from `onStdout`/`onStderr`
+ * `stdout.tail`/`stderr.tail` are accumulated from `onStdout`/`onStderr`
  * chunks as the process runs, since `buffer: false` means `result.stdout` is
  * always empty.
- *
- * `outputHead`/`stderrHead` are optional and should only be passed
- * (non-empty) when the corresponding stream was actually truncated — the
- * caller (bash.ts) preserves a small head budget alongside the tail so a
- * long run's first fatal error survives even once total output exceeds the
- * tail budget. Unlike the tail preview (`lastNLines`), the head is emitted
- * as-is and may end mid-line — it's a best-effort char-capped excerpt, not a
- * line-bounded preview, and a truncated trailing line is fine for an LLM
- * consumer to recover the error from.
- *
- * `outputElidedChars`/`stderrElidedChars` report the gap between the head and
- * tail (mirroring the foreground `checkToolResultTextLimit`'s
- * "[... N characters elided ...]" note) so the model doesn't mistake the
- * head+tail excerpt for the complete stream.
  */
 export function formatBashDelivery(
   executionId: string,
   command: string,
   wallTimeMs: number,
   result: ExecResult,
-  outputTail: string,
-  stderrTail: string,
-  outputHead = '',
-  stderrHead = '',
-  outputElidedChars = 0,
-  stderrElidedChars = 0,
+  stdout: BashDeliveryStreamExcerpt,
+  stderr: BashDeliveryStreamExcerpt,
 ): string {
-  const stdoutPreview = lastNLines(outputTail, OUTPUT_PREVIEW_LINES);
-  const stderrPreview = lastNLines(stderrTail, OUTPUT_PREVIEW_LINES);
+  const outputHead = stdout.head ?? '';
+  const stderrHead = stderr.head ?? '';
+  const outputElidedChars = stdout.elidedChars ?? 0;
+  const stderrElidedChars = stderr.elidedChars ?? 0;
+  const stdoutPreview = lastNLines(stdout.tail, OUTPUT_PREVIEW_LINES);
+  const stderrPreview = lastNLines(stderr.tail, OUTPUT_PREVIEW_LINES);
   const tag = DELIVERY_TAG.backgroundResult;
   const lines = [
     `<${tag} id="${escapeAttr(executionId)}" command="${escapeAttr(command)}">`,

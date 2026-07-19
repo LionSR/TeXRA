@@ -255,15 +255,11 @@ function refreshQueuedFollowUps(
 ): void {
   const messages = defaultSession().followUps.getAll(streamId);
   patchStream(streamId, (s) => {
-    if (
-      s.queuedFollowUps === messages.length &&
-      sameQueuedFollowUps(s.queuedFollowUpMessages, messages)
-    ) {
+    if (sameQueuedFollowUps(s.queuedFollowUpMessages, messages)) {
       return s;
     }
     return {
       ...s,
-      queuedFollowUps: messages.length,
       queuedFollowUpMessages: messages,
     };
   });

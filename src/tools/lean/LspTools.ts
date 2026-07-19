@@ -338,7 +338,6 @@ Requires: Lean 4 VS Code extension installed and active.`,
         status: 'executed',
         summary: 'No goals',
         output: 'No goals at this position. The proof may be complete here.',
-        goalState: { goals: [], count: 0, status: 'noGoals' as const },
       };
     }
 
@@ -347,11 +346,6 @@ Requires: Lean 4 VS Code extension installed and active.`,
       status: 'executed',
       summary: formatResultCount(goalCount, 'goal'),
       output: data.rendered,
-      goalState: {
-        goals: data.goals,
-        count: goalCount,
-        status: 'open' as const,
-      },
     };
   }
 

@@ -19,10 +19,49 @@ import {
 import { AgentCategory, STREAM_PHASE, STREAM_SUBSTATE } from '@shared/schemas';
 
 const PERSONAL_API_MODE_LABEL = shortCliApiMode('personal');
+
+// Flat legacy field names, redistributed by `statusInput` below into
+// `StatusBarDisplayInput`'s `foreground`/`childList`/`shortcuts` groups — kept
+// flat here so individual tests can override one field at a time.
+type StatusInputOverrides = Partial<
+  Omit<StatusBarDisplayInput, 'foreground' | 'childList' | 'shortcuts'>
+> & {
+  agentSelectionAvailable?: boolean;
+  childNavigationAvailable?: boolean;
+  streamFocusAvailable?: boolean;
+  shortcutModifierLabel?: string;
+  shiftEnterNewline?: boolean;
+  transcriptAvailable?: boolean;
+  foregroundInputActive?: boolean;
+  foregroundEscapeAction?: string;
+  shortcutsActive?: boolean;
+  childListFocused?: boolean;
+  childListSelectionKind?: 'stream' | 'process';
+  childListSelectionKillable?: boolean;
+  childListSelectionWorkflowControllable?: boolean;
+};
+
 // Idle single-stream baseline; each test overrides only the fields it exercises.
 function statusInput(
-  overrides: Partial<StatusBarDisplayInput> = {},
+  overrides: StatusInputOverrides = {},
 ): StatusBarDisplayInput {
+  const {
+    agentSelectionAvailable,
+    childNavigationAvailable = false,
+    streamFocusAvailable = false,
+    shortcutModifierLabel = 'Alt',
+    shiftEnterNewline,
+    transcriptAvailable,
+    foregroundInputActive,
+    foregroundEscapeAction,
+    shortcutsActive,
+    childListFocused,
+    childListSelectionKind,
+    childListSelectionKillable,
+    childListSelectionWorkflowControllable,
+    ...rest
+  } = overrides;
+
   return {
     status: STREAM_PHASE.WAITING,
     transientNotice: undefined,
@@ -33,12 +72,28 @@ function statusInput(
     activeSubagents: 0,
     activeProcesses: 0,
     approvalDepth: 0,
-    childNavigationAvailable: false,
-    streamFocusAvailable: false,
     model: 'deepseekT',
     modelAccess: 'personal',
-    shortcutModifierLabel: 'Alt',
-    ...overrides,
+    foreground: {
+      inputActive: foregroundInputActive,
+      escapeAction: foregroundEscapeAction,
+      shortcutsActive,
+    },
+    childList: {
+      focused: childListFocused,
+      selectionKind: childListSelectionKind,
+      selectionKillable: childListSelectionKillable,
+      selectionWorkflowControllable: childListSelectionWorkflowControllable,
+    },
+    shortcuts: {
+      agentSelectionAvailable,
+      childNavigationAvailable,
+      streamFocusAvailable,
+      modifierLabel: shortcutModifierLabel,
+      shiftEnterNewline,
+      transcriptAvailable,
+    },
+    ...rest,
   };
 }
 

@@ -1094,7 +1094,6 @@ patchStream(STREAM_ID, (slice) => ({
   status: harnessInitialStreamStatus(slice.status),
   runStartedAt: HARNESS_RUN_ACTIVE ? Date.now() - 42_000 : slice.runStartedAt,
   entries: harnessInitialEntries(),
-  queuedFollowUps: QUEUED_FOLLOW_UPS.length,
   queuedFollowUpMessages: QUEUED_FOLLOW_UPS,
 }));
 

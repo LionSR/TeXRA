@@ -317,8 +317,8 @@ describe('formatSubagentDelivery', () => {
       'printf lines',
       1000,
       { success: true, stdout: '', stderr: '', exitCode: 0 },
-      `${outputTail}\n`,
-      '',
+      { tail: `${outputTail}\n` },
+      { tail: '' },
     );
 
     expect(delivery).toContain('line-01');
@@ -331,8 +331,8 @@ describe('formatSubagentDelivery', () => {
       'printf lines',
       1000,
       { success: true, stdout: '', stderr: '', exitCode: 0 },
-      'ok',
-      '',
+      { tail: 'ok' },
+      { tail: '' },
     );
     const error = formatBashError('bash&1"<', 'printf lines', new Error('no'));
 
@@ -346,12 +346,8 @@ describe('formatSubagentDelivery', () => {
       'make build',
       1000,
       { success: false, stdout: '', stderr: '', exitCode: 1 },
-      'tail output',
-      'tail stderr',
-      'first fatal error',
-      'first fatal stderr',
-      500,
-      250,
+      { tail: 'tail output', head: 'first fatal error', elidedChars: 500 },
+      { tail: 'tail stderr', head: 'first fatal stderr', elidedChars: 250 },
     );
 
     expect(delivery).toContain('<output-head>first fatal error</output-head>');
@@ -370,8 +366,8 @@ describe('formatSubagentDelivery', () => {
       'echo hi',
       1000,
       { success: true, stdout: '', stderr: '', exitCode: 0 },
-      'ok',
-      '',
+      { tail: 'ok' },
+      { tail: '' },
     );
 
     expect(delivery).not.toContain('output-head');
@@ -418,8 +414,8 @@ describe('formatSubagentDelivery', () => {
       'printf lines',
       1000,
       { success: true, stdout: '', stderr: '', exitCode: 0 },
-      `${outputTail}\r\n`,
-      '',
+      { tail: `${outputTail}\r\n` },
+      { tail: '' },
     );
 
     expect(delivery).not.toContain('line-01');
