@@ -14,9 +14,9 @@ import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import * as logger from '@logger/logUtils';
 import { resolveToolDefinitions, type RawToolConfig } from '@tools/registry';
-
 import { filterNotNull, filterNotNullish } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+
 import { errorDataToString } from './errorData';
 import {
   RemoteAgentListItemSchema,

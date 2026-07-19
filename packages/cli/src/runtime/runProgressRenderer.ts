@@ -1,6 +1,7 @@
+// Node imports
 import path from 'node:path';
 
-// Local imports - agent runtime and trace
+// Local imports
 import { getAgent } from '@agent/index';
 import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -10,8 +11,6 @@ import type {
   SessionEventHub,
   SessionFact,
 } from '@agent/runtime/SessionEventHub';
-
-// Local imports - shared schemas
 import {
   STREAM_PHASE,
   type ActiveChildInfo,
@@ -24,7 +23,7 @@ import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import { assertNever } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 
-// Local imports - CLI runtime
+// Local file imports
 import { writeRawStderr } from './logSinks';
 import type { CliContext } from './cliContext';
 

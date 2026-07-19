@@ -1,16 +1,17 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   createProgressViewCommandHandlers as createSharedProgressViewCommandHandlers,
   type ProgressViewCommandActions,
 } from '@controllers/progressView/ProgressViewCommandHandlers';
-import { createTestSession } from '@test/support/sessionTestUtils';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   ProgressViewInboundMessageSchema,
@@ -19,6 +20,7 @@ import {
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
 import { assertSupported, unsupported } from '@shared/utils/dispatcher';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import {
   cleanupAllApprovals,
   isApprovalBypassedForStream,

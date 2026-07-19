@@ -7,7 +7,6 @@ import {
   type ModelConfig,
 } from 'llm-zoo';
 
-import { installPlatform } from '@test/support/setupPlatform';
 import {
   CODEX_SESSION_SECRET_KEY,
   resetCodexCoordinator,
@@ -23,6 +22,7 @@ import {
   resolveProviderCapabilities,
 } from '@model/providerCapabilities';
 import { AgentCategory } from '@shared/schemas/agent';
+import { installPlatform } from '@test/support/setupPlatform';
 
 const gpt55Config: ModelConfig = {
   name: 'gpt55',

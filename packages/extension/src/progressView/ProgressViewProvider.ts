@@ -1,13 +1,5 @@
 import * as vscode from 'vscode';
 
-import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
-import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
-import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
-import {
-  repairRestartedStreams,
-  RestartRepairRetryScheduler,
-} from '@controllers/progressView/backend/restartRepair';
-import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
 import { computeAgentOptionsData } from '@agent/index';
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
@@ -21,10 +13,20 @@ import {
   setActiveSidebarView,
 } from '@common/webview';
 import { workspaceSM } from '@common/state';
+import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
+import {
+  repairRestartedStreams,
+  RestartRepairRetryScheduler,
+} from '@controllers/progressView/backend/restartRepair';
+import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
+import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
+import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
+
+import type { ProgressBackendInteractionPayloads } from '@controllers/progressView/backend/events/ProgressInteractionHandler';
 import { appSignals } from '@eventBus/AppSignals';
+import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { setExtensionInteractionEventSink } from '@frontend/events/extensionInteractionEvents';
-import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import {
   buildVisibleBasicModelOptionsData,
   computeModelOptionsData,
@@ -36,17 +38,15 @@ import {
   type ProgressViewPlacement,
   type StreamTabId,
 } from '@shared/schemas';
-import { agentName } from '@shared/schemas/agent';
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
   formatActiveStreamRetention,
   formatStreamDeletionRetention,
 } from '@shared/copy/executionHistory';
-
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import { agentName } from '@shared/schemas/agent';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 import { createExtensionHostInteractions } from './extensionHostInteractions';
 import { attachProgressBackendAppSignals } from './progressBackendAppSignals';
-import type { ProgressBackendInteractionPayloads } from '@controllers/progressView/backend/events/ProgressInteractionHandler';
 
 import type { MainViewProvider } from '../MainViewProvider';
 

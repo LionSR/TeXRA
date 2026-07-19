@@ -1,10 +1,10 @@
 import { defineCommand, showUsage } from 'citty';
 
-import { platform } from '@platform/platform';
 import { getVisibleAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { platform } from '@platform/platform';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 
 import { firstRunSetupAgentOverride } from '../onboarding/setupContinuation';

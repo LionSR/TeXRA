@@ -1,7 +1,5 @@
-// Local imports - auth
+// Local imports
 import { SupabaseClient } from '@auth/SupabaseClient';
-
-// Local imports - model surfaces
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
   decideRunModel,
@@ -11,6 +9,7 @@ import {
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import type { AgentCategory } from '@shared/schemas/agent';
 
+// Local file imports
 import { resolveKnownCliModelId } from './cliConfig';
 import type { CliApiMode } from './apiAccessMode';
 

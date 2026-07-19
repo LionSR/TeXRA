@@ -1,19 +1,14 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
-import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - runtime
-import {
-  createRunTrace,
-  flushPendingRunTraces,
-  getActiveFlushers,
-  StreamLogStore,
-} from '@transcript';
+// Local imports
 import {
   SessionHandle,
   defaultSession,
@@ -22,8 +17,16 @@ import {
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { MESSAGE_TYPES, type Plan, type StreamTabId } from '@shared/schemas';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { cleanupAllApprovals } from '@tools/approval';
+import {
+  createRunTrace,
+  flushPendingRunTraces,
+  getActiveFlushers,
+  StreamLogStore,
+} from '@transcript';
 
+// Local file imports
 import { createRecordingHost } from '../progressTestUtils';
 
 const plan: Plan = { objective: 'Scope session-owned state.' };

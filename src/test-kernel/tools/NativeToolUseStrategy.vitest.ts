@@ -1,16 +1,17 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
+
+// Node imports
 import { setTimeout as sleep } from 'node:timers/promises';
-import { createTestSession } from '@test/support/sessionTestUtils';
-import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 // Third-party imports
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - agent
+// Local imports
 import {
   isChildRunLoopActive,
   startChildRunLoop,
@@ -62,7 +63,8 @@ vi.mock('@tools/childRunDelivery', () => ({
   persistChildRunReport: mocks.persistChildRunReport,
   persistChildRunResultMeta: mocks.persistChildRunResultMeta,
 }));
-
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { createNativeToolUseStrategy } from '@tools/delegation/nativeToolUseStrategy';
 
 const ownedSessions = new Set<SessionHandle>();

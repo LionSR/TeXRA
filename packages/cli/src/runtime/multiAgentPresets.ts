@@ -1,4 +1,3 @@
-import { platform } from '@platform/platform';
 import {
   BUILTIN_TEAM_ROOT_AGENT_NAMES,
   findAgentByIdentifier,
@@ -6,6 +5,7 @@ import {
 } from '@agent/index';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { teamHostedNamesForPreflight } from '@common/teams/TeamRoster';
+import { platform } from '@platform/platform';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { agentKeyOf } from '@shared/schemas/agent';

@@ -1,20 +1,16 @@
-// Local imports - controllers
-import {
-  ProgressWorkflowActionsController,
-  type WorkflowDiffRequest,
-  type WorkflowFileOperation,
-  type WorkflowFileOperationRequest,
-} from '@controllers/progressView/ProgressWorkflowActionsController';
-
-// Local imports - agent
+// Local imports
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { TaskState, WorkflowTaskState } from '@agent/core/state/TaskState';
-
-// Local imports - shared
+import {
+  ProgressWorkflowActionsController,
+  type WorkflowDiffRequest,
+  type WorkflowFileOperation,
+  type WorkflowFileOperationRequest,
+} from '@controllers/progressView/ProgressWorkflowActionsController';
 import type {
   OutputFileInfo,
   RoundIndexed,

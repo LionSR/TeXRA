@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { FakeStateStore } from '@test/support/FakePlatform';
 import {
   buildUpdateCommand,
   checkCliUpdateAvailable,
@@ -11,6 +10,7 @@ import {
   isPackageManagerInstall,
 } from '@cli/runtime/updateChecker';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { FakeStateStore } from '@test/support/FakePlatform';
 
 describe('detectInstallMethod', () => {
   it('recognizes pnpm, yarn, and bun global layouts', () => {

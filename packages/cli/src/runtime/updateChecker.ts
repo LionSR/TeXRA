@@ -4,16 +4,17 @@ import { fileURLToPath } from 'node:url';
 
 import { z } from 'zod';
 
+import { parseJsonWith } from '@common/parsing/safeParseJson';
+import type { StateStore } from '@platform/interfaces';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
-import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { executeCommand } from '@utils/system/execUtils';
 import {
   DAILY_UPDATE_CHECK_INTERVAL_MS,
   isNewerSemverVersion,
   UPDATE_CHECK_SKIP_ENV,
 } from '@utils/system/semverUpdateCheck';
+import { executeCommand } from '@utils/system/execUtils';
 
 import {
   cliEnvValue,
@@ -25,7 +26,6 @@ import {
 import { CliExitCode } from './exitCodes';
 import { askCliQuestion, writeTextStderr } from './logSinks';
 import { createCliStyle, type CliStyle } from './style';
-import type { StateStore } from '@platform/interfaces';
 
 /** Published package name on npm; the `texra` bin lives here. */
 const CLI_PACKAGE_NAME = '@texra-ai/cli';

@@ -1,15 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { setupPlatform } from '@test/support/setupPlatform';
-import {
-  cleanupTempDirs,
-  createTempDirPlatform,
-} from '@test/support/tempDirPlatform';
-import { assembleTrace, StreamLogStore } from '@transcript';
 import { getExecutionStore } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getStreamTabId } from '@agent/runtime/streamTab';
+import type { Platform } from '@platform/platform';
 import {
   EXECUTION_STATUS,
   LOG_LEVELS,
@@ -18,7 +13,12 @@ import {
   type ExecutionId,
 } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
-import type { Platform } from '@platform/platform';
+import {
+  cleanupTempDirs,
+  createTempDirPlatform,
+} from '@test/support/tempDirPlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
+import { assembleTrace, StreamLogStore } from '@transcript';
 
 const tempDirs: string[] = [];
 

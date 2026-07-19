@@ -15,7 +15,6 @@
 // which no-ops via the `exiting` guard so the drain / hint / cleanup never run
 // twice.
 
-import { tryPlatform } from '@platform/platform';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
   handOffCliShutdownSignalHandlers,
@@ -23,6 +22,7 @@ import {
 } from '@cli/runtime/initPlatform';
 import { writeTextStdout } from '@cli/runtime/logSinks';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+import { tryPlatform } from '@platform/platform';
 import { assertNever } from '@utils/core';
 
 import {

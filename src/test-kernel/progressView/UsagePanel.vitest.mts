@@ -1,17 +1,15 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - progress view component types
+// Local imports
 import type { UsagePanel } from '@progressView/frontend/components/UsagePanel';
-
-// Local imports - shared schemas
 import {
   TokenUsageStatsSchema,
   type TokenUsageStats,
   type UsageRoute,
 } from '@shared/schemas';
 
-// Local imports - test utilities
+// Local file imports
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 useLitComponentTestDom(

@@ -1,7 +1,7 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - agent
+// Local imports
 import { deriveResumability } from '@agent/storage';
 import { createChannelTrace } from '@agent/trace';
 import {
@@ -13,8 +13,8 @@ import {
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import { STREAM_PHASE } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
+import { STREAM_PHASE } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 
 const logger = createChannelTrace('followUpCommand');

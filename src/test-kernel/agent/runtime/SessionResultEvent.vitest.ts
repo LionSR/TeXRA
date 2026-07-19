@@ -1,16 +1,15 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
-import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Third-party imports
 import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { clearStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
 import { TraceEmitter, type ResultEvent } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -34,7 +33,11 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { setupPlatform } from '@test/support/setupPlatform';
+import { clearStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
+import { createTestSession } from '@test/support/sessionTestUtils';
 
+// Local file imports
 import { createRecordingHost } from '../progressTestUtils';
 
 const storageMocks = vi.hoisted(() => ({

@@ -1,10 +1,10 @@
-import { platform } from '@platform/platform';
 import {
   getCodexStatus,
   isPreferCodexSubscription,
   setPreferCodexSubscription,
 } from '@auth/codex';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { platform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import {

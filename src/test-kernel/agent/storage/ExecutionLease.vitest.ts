@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { platform } from '@platform/platform';
-
 import {
   clearStoreCache,
   finalizeExecution,
@@ -26,6 +24,7 @@ import {
   runWithInactiveExecutionLease,
   waitForOwnedExecutionLeaseRelease,
 } from '@agent/storage/executionLease';
+import { platform } from '@platform/platform';
 import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
 

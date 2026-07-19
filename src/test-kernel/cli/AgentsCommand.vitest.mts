@@ -1,8 +1,8 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { CliContext } from '@cli/runtime/cliContext';
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => ({
   emitCliResult: vi.fn(),

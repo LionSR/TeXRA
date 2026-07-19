@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
 // Third-party imports
@@ -6,8 +6,8 @@ import { execa } from 'execa';
 import { parse as shellParse } from 'shell-quote';
 
 // Local imports
-import { platform } from '@platform/platform';
 import * as logger from '@logger/logUtils';
+import { platform } from '@platform/platform';
 import type { ExecResult } from '@shared/schemas/opResults';
 import {
   PDFLATEX_INSTALL_GUIDE,

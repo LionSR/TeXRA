@@ -15,9 +15,9 @@ import {
   vi,
 } from 'vitest';
 import { z } from 'zod';
+import { isTexFile } from '@common/files/fileTypeUtils';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { isTexFile } from '@common/files/fileTypeUtils';
 import { getMimeType } from '@utils/files';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/taskRunStorage';

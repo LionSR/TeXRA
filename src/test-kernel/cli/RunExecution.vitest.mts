@@ -4,17 +4,14 @@ import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createFakePlatform } from '@test/support/FakePlatform';
-import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
-import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { cleanupTempDirs } from '@test/support/tempDirPlatform';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { executeCliRequest } from '@cli/runtime/runExecution';
 import { AgentError } from '@common/errors';
+import { MemoryStateStore } from '@platform/defaults/memoryState';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
+import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import {
   EXECUTION_STATUS,
   type ExecutionId,
@@ -22,6 +19,9 @@ import {
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
+import { createFakePlatform } from '@test/support/FakePlatform';
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { cleanupTempDirs } from '@test/support/tempDirPlatform';
 import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
 

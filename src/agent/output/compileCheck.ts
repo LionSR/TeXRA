@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 
 import type { AgentTrace } from '@agent/trace';
-import { hasLatexCompiler } from '@latex/latexToolchain';
 import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
+import { hasLatexCompiler } from '@latex/latexToolchain';
 import type {
   CompileFailure,
   CompileResult,

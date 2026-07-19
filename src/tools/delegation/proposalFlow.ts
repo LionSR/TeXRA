@@ -8,23 +8,19 @@
 // Third-party imports
 import { nanoid } from 'nanoid';
 
-// Local imports - agent
+// Local imports
 import type { AgentEntry } from '@agent/index/agentRegistry';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import type { ProposalResult } from '@agent/runtime/HostInteractions';
-
-// Local imports - model
 import { computeModelOptionsData } from '@model/computeModelOptions';
-
-// Local imports - tools
 import {
   AgentCategory,
   type WorkflowAgentProposal,
   type ToolUseAgentProposal,
   type StreamTabId,
 } from '@shared/schemas';
-import type { ToolResult } from '@shared/schemas/toolResult';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
+import type { ToolResult } from '@shared/schemas/toolResult';
 import { proposalApprovals } from '@tools/approval';
 import {
   availableModelNamesFromOptions,
@@ -36,10 +32,10 @@ import {
   getDelegationAgents,
   getDelegationAgentsForScope,
 } from '@tools/delegationAgentAvailability';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
-// Local imports - delegation
+// Local file imports
 import { executeSubagent } from './subagentExecution';
 
 const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [

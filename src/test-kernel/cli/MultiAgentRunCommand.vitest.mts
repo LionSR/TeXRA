@@ -4,10 +4,10 @@ import * as path from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => ({
   emitCliResult: vi.fn(),

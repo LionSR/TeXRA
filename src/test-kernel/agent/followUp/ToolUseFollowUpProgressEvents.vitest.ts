@@ -1,17 +1,14 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
-import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import {
-  clearAllStreamStatusesForTest,
-  seedStreamStatusForTest,
-} from '@test/helpers/streamStatusTestUtils';
 import {
   noopAgentRuntimeHost,
   type AgentRuntimeHost,
@@ -28,6 +25,13 @@ import {
   sendFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import { STREAM_PHASE, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import {
+  clearAllStreamStatusesForTest,
+  seedStreamStatusForTest,
+} from '@test/helpers/streamStatusTestUtils';
+import { createTestSession } from '@test/support/sessionTestUtils';
+
+// Local file imports
 import { createRecordingHost } from '../progressTestUtils';
 
 const streamId = 'stream:follow-up' as StreamTabId;

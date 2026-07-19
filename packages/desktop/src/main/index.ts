@@ -12,11 +12,6 @@ import {
   shell,
 } from 'electron';
 
-import { platform } from '@platform/platform';
-import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
-import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
-import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import {
   computeAgentOptionsData,
   getAgent,
@@ -28,8 +23,13 @@ import {
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
+import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import type { TerminalRunResult } from '@hosts/uiHosts';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
+import { platform } from '@platform/platform';
+import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
+import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { normalizePlatform } from '@shared/constants/latex';
 import {
@@ -40,6 +40,7 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
+import type { StreamSnapshotStore } from '@transcript';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config';
 import { debounce } from '@utils/core';
 import { BinaryResolver } from '@utils/system/binaryResolver';
@@ -122,7 +123,6 @@ import type {
   DesktopAgentExecutionOptions,
 } from './desktopAgentExecution.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
-import type { StreamSnapshotStore } from '@transcript';
 
 const moduleDirname = fileURLToPath(new URL('.', import.meta.url));
 const desktopMainDir = findDesktopMainDir(moduleDirname);

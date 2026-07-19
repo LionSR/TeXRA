@@ -1,11 +1,11 @@
 import * as path from 'node:path';
 
-import { platform } from '@platform/platform';
-import type { StageHandle } from '@agent/trace';
 import { logLatexdiff, type AgentTrace } from '@agent/trace';
+import type { StageHandle } from '@agent/trace';
 import { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
-import { compileLatex2Pdf } from '@latex/texTools';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
+import { compileLatex2Pdf } from '@latex/texTools';
+import { platform } from '@platform/platform';
 import {
   type DiffResult,
   type ExecutionId,

@@ -13,8 +13,6 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { render, type Instance as InkInstance } from 'ink';
 import PQueue from 'p-queue';
 
-import { StreamSnapshotStore } from '@transcript';
-import { platform } from '@platform/platform';
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
@@ -51,16 +49,18 @@ import {
 } from '@cli/runtime/terminalRequirements';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
+import { platform } from '@platform/platform';
 import {
   STREAM_PHASE,
   type ExecutionId,
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
-import { isActivePhase } from '@shared/streams/streamStatus';
-import { getFirstRunDone } from '@shared/state/onboardingState';
-import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { escapeText } from '@shared/utils/xmlEscape';
+import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
+import { getFirstRunDone } from '@shared/state/onboardingState';
+import { isActivePhase } from '@shared/streams/streamStatus';
+import { StreamSnapshotStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {

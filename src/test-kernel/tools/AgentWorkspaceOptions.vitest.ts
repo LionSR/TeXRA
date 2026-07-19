@@ -1,13 +1,11 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-// Local imports - tools
+// Local imports
 import { buildAgentWorkspaceOptions } from '@tools/agentWorkspaceOptions';
-
-// Local imports - files
 import { WorkspaceFS } from '@utils/files';
 
 describe('agent workspace options', () => {

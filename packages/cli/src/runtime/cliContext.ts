@@ -1,8 +1,9 @@
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
+import type { SkillSourceOptions } from '@skills/skillSources';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { setWebSocketEnabledOverride } from '@utils/config/providerConfig';
@@ -24,7 +25,6 @@ import {
   type CliConfigValues,
 } from './cliConfig';
 import { resolveCliResourcesPath } from './resourcesPath';
-import type { SkillSourceOptions } from '@skills/skillSources';
 
 type CliMode = 'headless' | 'interactive';
 

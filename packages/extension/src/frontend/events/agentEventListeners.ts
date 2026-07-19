@@ -17,7 +17,6 @@ import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgent
 import { extensionPresentationEvents } from '@frontend/events/extensionPresentationEvents';
 import * as logger from '@logger/logUtils';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   INSTRUCTION_ACTION,
   type InstructionAction,
@@ -27,6 +26,7 @@ import {
   type RequestShowInstructionPayload,
   type ShowAgentConfigBannerPayload,
 } from '@shared/schemas';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'agentEventListeners';

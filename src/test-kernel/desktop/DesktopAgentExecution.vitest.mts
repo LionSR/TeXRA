@@ -1,32 +1,21 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - transcript
-import {
-  STREAM_LOGS_DIR,
-  type StreamLogStore,
-  type StreamSnapshotStore as ProgressSnapshotStore,
-} from '@transcript';
-
-// Local imports - agent state
-import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
-import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
+// Local imports
 import { noopTrace, type AgentEvent, type AgentTrace } from '@agent/trace';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionEvent, SessionFact } from '@agent/runtime/SessionEventHub';
+import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';
+import {
+  TaskStateSchema,
+  type WorkflowTaskState,
+} from '@agent/core/state/TaskState';
 import {
   AgentConfigSchema,
   WorkflowAgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import {
-  TaskStateSchema,
-  type WorkflowTaskState,
-} from '@agent/core/state/TaskState';
-import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';
-import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import type { SessionEvent, SessionFact } from '@agent/runtime/SessionEventHub';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-
-// Local imports - desktop and progress schemas
 import { DESKTOP_SHELL_COMMANDS } from '@desktop/desktopShellMessages';
 import {
   AgentCategory,
@@ -45,12 +34,19 @@ import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progres
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
+import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import {
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
 } from '@tools/approval';
+import {
+  STREAM_LOGS_DIR,
+  type StreamLogStore,
+  type StreamSnapshotStore as ProgressSnapshotStore,
+} from '@transcript';
 
-// Local imports - desktop test support
+// Local file imports
 import {
   createStubDesktopAgentExecutionHost,
   disposeAfterTest,

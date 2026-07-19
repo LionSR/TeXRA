@@ -1,10 +1,11 @@
 // Third-party imports
 import { glob } from 'glob';
 import { z } from 'zod';
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 
-// Local imports - tools
+// Local imports
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError, ToolResult } from '@shared/schemas/toolResult';
+import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
 import {
   joinWorkspaceRelativePath,
@@ -12,7 +13,6 @@ import {
   currentToolRoot,
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
-import { getGitignoreMatcher } from '@tools/gitignore';
 import { filterNotNull } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';

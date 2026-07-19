@@ -1,5 +1,5 @@
-import { applyCliGitAuthorConfig } from '@cli/runtime/gitAuthor';
 import { cliSettingsStores } from '@cli/runtime/settingsStores';
+import { applyCliGitAuthorConfig } from '@cli/runtime/gitAuthor';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import {
   readSetting,

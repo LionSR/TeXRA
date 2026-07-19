@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { setupPlatform } from '@test/support/setupPlatform';
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { TraceEmitter, type AgentEvent } from '@agent/trace';
 import {
@@ -8,6 +7,7 @@ import {
   type WorkflowAgentInvocation,
 } from '@agent/workflowScript';
 import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { runPersistedWorkflowScriptWithProgress } from '@tools/delegation/workflowScriptRun';
 
 const executionId = '7154progress' as ExecutionId;

@@ -1,4 +1,4 @@
-// Standard library imports
+// Node imports
 import {
   lstat,
   mkdir,
@@ -13,27 +13,21 @@ import * as path from 'node:path';
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - platform
-import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
-
-// Local imports - test support
-import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
-import { cleanupTempDirs } from '@test/support/tempDirPlatform';
-
-// Local imports - agent
+// Local imports
 import type { AgentTrace } from '@agent/trace';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-
-// Local imports - latex
 import {
   LatexMediaManager,
   type MediaWorkspaceState,
 } from '@latex/LatexMediaManager';
 import { DiffFileProcessor } from '@latex/latexdiff/diffFileProcessor';
+import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolConfig } from '@shared/schemas/toolConfig';
+import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
+import { cleanupTempDirs } from '@test/support/tempDirPlatform';
 import {
   createExternalLocation,
   createWorkspaceLocation,

@@ -1,15 +1,15 @@
-// Local imports - common errors
+// Local imports
 import {
   attachFlowAutoRetryRequired,
   isRetryableStatusCode,
   normalizeProviderError,
 } from '@common/errors/sdkErrorUtils';
-
-// Type imports
 import type { ProviderError } from '@shared/schemas';
 
-// Local imports - model handlers
+// Local file imports
 import { tagOpenAISdkError } from './openAISdkError';
+
+// Third-party imports
 import type { Response } from 'openai/resources/responses/responses';
 
 interface OpenAIBackgroundResumeError {

@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { ExecutionId } from '@shared/schemas';
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 const mocks = vi.hoisted(() => ({
   explainNonResumable: vi.fn(),

@@ -1,13 +1,11 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - progress view component types
+// Local imports
 import type { ToolEditRequestPanel } from '@progressView/frontend/components/ToolEditRequestPanel';
-
-// Local imports - shared schemas
 import type { ToolEditPermission } from '@shared/schemas';
 
-// Local imports - test utilities
+// Local file imports
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 function createPermission(

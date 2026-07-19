@@ -27,11 +27,11 @@ import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass'
 import * as logUtils from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import type { AgentCategory } from '@shared/schemas/agent';
 import {
   DELEGATION_AVAILABILITY_CATEGORY,
   hasDelegationTool,
 } from '@shared/constants/delegationTools';
-import type { AgentCategory } from '@shared/schemas/agent';
 import { getDefaultToolRegistry } from '@tools/registry';
 import {
   getDisabledToolNames,

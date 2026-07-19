@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { InvalidAgentTeamError } from '@agent/index';
+import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 
 const mocks = vi.hoisted(() => ({
   clearDefaultTeam: vi.fn(),

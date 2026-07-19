@@ -6,7 +6,6 @@ import {
   type ModelConfig,
 } from 'llm-zoo';
 
-import { installPlatform } from '@test/support/setupPlatform';
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
 import {
   CODEX_BACKEND_BASE_URL,
@@ -19,6 +18,7 @@ import {
   CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
 } from '@model/providerCapabilities';
 import { AgentCategory } from '@shared/schemas/agent';
+import { installPlatform } from '@test/support/setupPlatform';
 
 import type { ResponseUsage } from 'openai/resources/responses/responses';
 

@@ -1,7 +1,18 @@
 // Node imports
 import * as nodePath from 'node:path';
 
-// Local imports - platform
+// Local imports
+import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
+import {
+  getServerSideKeyService,
+  initializeServerSideKeyAccess,
+} from '@auth/serverKeys';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { setOutputChannelFactory } from '@logger/logUtils';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { SHUTDOWN_PHASE } from '@platform/interfaces';
+import { initPlatform, platform, tryPlatform } from '@platform/platform';
+import type { LifecycleHost } from '@platform/interfaces';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import {
@@ -15,41 +26,13 @@ import {
   TEXRA_CONFIG_FILE_NAME,
   workspaceTexraConfigPath,
 } from '@platform/defaults/nodeStorage';
-import { SHUTDOWN_PHASE } from '@platform/interfaces';
-import { initPlatform, platform, tryPlatform } from '@platform/platform';
-
-// Local imports - telemetry
-import { UsageLogService } from '@telemetry/UsageLogService';
-
-// Local imports - agent
-import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
-
-// Local imports - auth
-import {
-  getServerSideKeyService,
-  initializeServerSideKeyAccess,
-} from '@auth/serverKeys';
-import { SupabaseClient } from '@auth/SupabaseClient';
-
-// Local imports - logger
-import { setOutputChannelFactory } from '@logger/logUtils';
-
-// Local imports - model
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-
-// Local imports - shared state
 import { GlobalStateKey } from '@shared/state/stateKeys';
-
-// Local imports - setup tools
+import { UsageLogService } from '@telemetry/UsageLogService';
 import { setSetupPlatform } from '@tools/setup/platform';
-
-// Local imports - utilities
+import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-// Local imports - config
-import { getUseOpenRouter } from '@utils/config/providerConfig';
-
-// Local imports - CLI runtime
+// Local file imports
 import { applyCliGitAuthorConfig } from './gitAuthor';
 import { isCliResumeInFlight, tryResumeCliStream } from './agentResume';
 import { getCliSecrets } from './cliSecrets';
@@ -58,9 +41,6 @@ import { flushNdjsonStdout, writeTextStderr } from './logSinks';
 import { initializeCliSupabaseAuth, signInCliSupabase } from './supabaseAuth';
 import { createCliStateStores } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
-
-// Type imports - platform and CLI runtime
-import type { LifecycleHost } from '@platform/interfaces';
 import type { LogBackend } from './supabaseAuth';
 import type { CliContext } from './cliContext';
 

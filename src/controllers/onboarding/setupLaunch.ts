@@ -1,4 +1,3 @@
-import { platform } from '@platform/platform';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { lookupApiKey, API_PROVIDERS } from '@model/apiProviders';
 import { isCodexSubscriptionActive } from '@model/providerCapabilities';
@@ -13,13 +12,14 @@ import {
 } from '@model/setupModelDefaults';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
-import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
-import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
-import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { platform } from '@platform/platform';
+import type { PlatformSecrets } from '@platform/secrets';
 import { AgentCategory } from '@shared/schemas/agent';
+import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
+import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import { isNonEmptyString } from '@utils/core';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
-import type { PlatformSecrets } from '@platform/secrets';
 
 /** Instruction handed to the setup agent when launched. Shared by every host. */
 export const SETUP_INSTRUCTION =

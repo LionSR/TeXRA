@@ -10,7 +10,6 @@
  * showing appropriate UI notifications based on the returned result.
  */
 
-import { platform } from '@platform/platform';
 import { createChannelTrace } from '@agent/trace';
 import { type ToolUseFollowUpQueueReason } from '@agent/runtime/executionRegistry';
 import {
@@ -22,6 +21,7 @@ import {
   getRunContextSession,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
+import { platform } from '@platform/platform';
 import type { StreamTabId } from '@shared/schemas';
 import type { FollowUpQueueInput } from './FollowUpQueue';
 

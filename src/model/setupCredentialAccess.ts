@@ -3,9 +3,9 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import { API_PROVIDERS, lookupApiKey } from '@model/apiProviders';
 import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
+import type { PlatformSecrets } from '@platform/secrets';
 import { AgentCategory } from '@shared/schemas/agent';
 import { isNonEmptyString } from '@utils/core';
-import type { PlatformSecrets } from '@platform/secrets';
 
 /** True when any provider has a usable API key in secret storage or the environment. */
 export async function hasAnyUsableProviderApiKey(

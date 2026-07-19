@@ -5,7 +5,6 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { setupPlatform } from '@test/support/setupPlatform';
 import * as logUtils from '@logger/logUtils';
 import {
   ExternalInquiryPermissionSchema,
@@ -13,6 +12,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { ToolError } from '@shared/schemas/toolResult';
+import { setupPlatform } from '@test/support/setupPlatform';
 import {
   getOpenTurnDraft,
   listOpenThreads,

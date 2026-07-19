@@ -7,7 +7,6 @@
 
 import PQueue from 'p-queue';
 
-import { StreamSnapshotStore } from '@transcript';
 import { getExecutionStore } from '@agent/storage';
 import {
   AgentConfigSchema,
@@ -44,6 +43,7 @@ import {
   type StreamTabId,
   sumUsageStats,
 } from '@shared/schemas';
+import { StreamSnapshotStore } from '@transcript';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

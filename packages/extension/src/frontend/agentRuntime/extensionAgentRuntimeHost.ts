@@ -1,8 +1,8 @@
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   isProgressBackendInteractionEvent,
   type ProgressBackendInteractionPayloads,
 } from '@controllers/progressView/backend/events/ProgressInteractionHandler';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   extensionPresentationEvents,
   type ExtensionPresentationEvent,

@@ -1,11 +1,11 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - tools
+// Local imports
 import { ArxivProcessor } from '@latex/arxivProcessor';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { formatToolOutput } from '@tools/formatting';
 import { getGitignoreMatcher } from '@tools/gitignore';
+import { formatToolOutput } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';

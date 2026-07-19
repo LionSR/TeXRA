@@ -1,7 +1,10 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 import { promises as fs } from 'node:fs';
 
+// Local imports
+import { isFileNotFoundError } from '@common/errors';
+import * as logger from '@logger/logUtils';
 import {
   resolveExistingRunStoragePath,
   resolveLegacyRunStoragePath,
@@ -10,8 +13,6 @@ import {
   resolveRunStorageRelativePath,
   RUNS_STORAGE_DIR,
 } from '@platform/defaults/workspaceStorage';
-import { isFileNotFoundError } from '@common/errors';
-import * as logger from '@logger/logUtils';
 import {
   ExecutionIdSchema,
   type ExecutionId,
@@ -19,6 +20,8 @@ import {
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getPathSegments } from '@utils/core/pathCore';
+
+// Local file imports
 import { createRunStorageLocation } from './fileLocation';
 import { isDirectory, isFile, isSymlink } from './fsEntryType';
 import { StorageFS } from './storageFS';

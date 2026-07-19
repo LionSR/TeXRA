@@ -2,10 +2,10 @@ import * as path from 'node:path';
 
 import { z } from 'zod';
 
-import { EXTERNAL_INQUIRY_THREADS_DIR } from '@platform/defaults/globalStorage';
-import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { createChannelTrace } from '@agent/trace';
 import { isFileNotFoundError } from '@common/errors';
+import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
+import { EXTERNAL_INQUIRY_THREADS_DIR } from '@platform/defaults/globalStorage';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import {
   ExternalInquirySessionLinksSchema,

@@ -1,5 +1,4 @@
 import { platform } from '@platform/platform';
-
 import {
   LEGACY_GOAL_FEATURE_FLAG_KEYS,
   GOAL_FEATURE_FLAG_KEY,

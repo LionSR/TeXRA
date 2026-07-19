@@ -1,15 +1,18 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
-// Third-party imports
-
-// Node.js built-in imports
+// Node imports
 import { strict as assert } from 'node:assert';
+
+// Third-party imports
 import { describe, it, beforeAll } from 'vitest';
 
 // Local imports
-import { installPlatform } from '@test/support/setupPlatform';
+import type { ConfigProvider } from '@platform/interfaces';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
+import { installPlatform } from '@test/support/setupPlatform';
 import { SendToTerminalTool } from '@tools/setup/SendToTerminalTool';
 import {
   setSetupPlatform,
@@ -17,8 +20,8 @@ import {
   type TerminalRunResult,
 } from '@tools/setup/platform';
 
+// Local file imports
 import { createFakeSetupPlatform } from './fixtures';
-import type { ConfigProvider } from '@platform/interfaces';
 
 /**
  * `requestBashApproval` reads `texra.toolUse.requireBashApproval` via

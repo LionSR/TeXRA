@@ -1,11 +1,9 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Platform imports
+// Local imports
 import { FileType, type FileStat } from '@platform/interfaces';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-
-// Local imports - memory tool under test
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
 import { MemoryTool } from '@tools/memory/MemoryTool';
 import { StorageFS } from '@utils/files';

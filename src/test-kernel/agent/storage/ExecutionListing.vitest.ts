@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
-import { platform } from '@platform/platform';
 import {
   clearStoreCache,
   getExecutionStore,
@@ -10,8 +8,10 @@ import {
 } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { platform } from '@platform/platform';
 import type { ExecutionId } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 
 function config(agent: string): AgentConfig {
   return {

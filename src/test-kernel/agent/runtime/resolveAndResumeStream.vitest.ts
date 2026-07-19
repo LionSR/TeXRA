@@ -2,7 +2,6 @@
 import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 const retrieveSessionResumeDataMock = vi.hoisted(() => vi.fn());
 
@@ -11,10 +10,6 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 }));
 
 import {
-  clearStreamStatusForTest,
-  seedStreamStatusForTest,
-} from '@test/helpers/streamStatusTestUtils';
-import {
   isResumeInFlight,
   resolveAndResumeStream,
   type ResumeStreamPorts,
@@ -22,6 +17,11 @@ import {
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import {
+  clearStreamStatusForTest,
+  seedStreamStatusForTest,
+} from '@test/helpers/streamStatusTestUtils';
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 const STREAM = 'stream:resume' as StreamTabId;
 const runtimeHost = { emit: vi.fn() };

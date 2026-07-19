@@ -8,19 +8,21 @@
  *
  * Host-neutral: uses simple-git for git operations; no vscode.
  */
-// Standard library imports
+
+// Node imports
 import * as path from 'node:path';
 
 // Third-party imports
 import simpleGit, { type SimpleGit } from 'simple-git';
 
 // Local imports
-import { platform } from '@platform/platform';
 import * as logger from '@logger/logUtils';
+import { platform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { makeMachineGitEnv } from '@utils/system/platformPaths';
 import { splitContentLines, splitOutputLines } from '@utils/text/stringUtils';
 
+// Local file imports
 import { normalizeReviewFilePath } from './reviewIssues';
 
 const GIT_TIMEOUT_MS = 30_000;

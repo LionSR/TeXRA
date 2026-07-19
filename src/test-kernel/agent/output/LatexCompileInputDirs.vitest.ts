@@ -1,11 +1,10 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - agent
-import { installPlatform } from '@test/support/setupPlatform';
+// Local imports
 import type { AgentTrace } from '@agent/trace';
 import {
   AgentCategory,
@@ -17,16 +16,13 @@ import {
   runCompileCheck,
 } from '@agent/output/compileCheck';
 import { createOutputState, ensureRoundData } from '@agent/output/outputState';
-
-// Local imports - shared
 import type {
   ExecutionId,
   FileLocation,
   OutputFileInfo,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-
-// Local imports - file utilities
+import { installPlatform } from '@test/support/setupPlatform';
 import {
   TaskRunFileService,
   createExternalLocation,

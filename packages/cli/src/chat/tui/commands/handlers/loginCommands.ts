@@ -28,8 +28,8 @@ import {
   signOutCliSupabase,
 } from '@cli/runtime/supabaseAuth';
 import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { collapseWhitespace } from '@utils/text/stringUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { setCliSessionApiMode } from './apiModeCommands';
 import {

@@ -2,10 +2,10 @@ import * as path from 'node:path';
 
 import { defineCommand } from 'citty';
 
-import { assembleTrace, injectStandaloneTrace } from '@transcript';
 import { formatChatAsMarkdown } from '@agent/export/chatExportFormatter';
 import { type ExecutionId } from '@shared/schemas';
 import { formatCliHistoryDeletionSummary } from '@shared/copy/executionHistory';
+import { assembleTrace, injectStandaloneTrace } from '@transcript';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { CliExitCode } from '../runtime/exitCodes';

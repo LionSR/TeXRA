@@ -1,4 +1,6 @@
 // Test composition imports
+
+// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
@@ -6,11 +8,6 @@ import { DEFAULT_MODEL_CAPABILITIES } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { installPlatform } from '@test/support/setupPlatform';
-import {
-  clearStreamStatusForTest,
-  seedStreamStatusForTest,
-} from '@test/helpers/streamStatusTestUtils';
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
@@ -30,8 +27,15 @@ import {
   STREAM_STATUS,
   type StreamTabId,
 } from '@shared/schemas';
+import {
+  clearStreamStatusForTest,
+  seedStreamStatusForTest,
+} from '@test/helpers/streamStatusTestUtils';
+import { installPlatform } from '@test/support/setupPlatform';
 import { cleanupApprovalsForStream } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
+
+// Local file imports
 import {
   recordSessionEvents,
   runEventsOfType,

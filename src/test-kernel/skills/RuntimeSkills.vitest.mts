@@ -4,13 +4,13 @@ import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { buildInitialToolUsePrompts } from '@agent/prompt';
 import {
   formatRuntimeSkillActivation,
   loadRuntimeSkillCatalog,
   setRuntimeSkillSources,
 } from '@skills/runtimeSkills';
-import { buildInitialToolUsePrompts } from '@agent/prompt';
+import { createFakePlatform } from '@test/support/FakePlatform';
 
 const tempRoots: string[] = [];
 

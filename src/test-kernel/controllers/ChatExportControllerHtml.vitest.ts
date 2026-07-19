@@ -4,17 +4,15 @@ import * as path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createFakePlatform } from '@test/support/FakePlatform';
-import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
-import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
-import { ChatExportController } from '@controllers/settingsView/ChatExportController';
-import { StreamLogStore } from '@transcript';
 import { getExecutionStore } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getStreamTabId } from '@agent/runtime/streamTab';
+import { ChatExportController } from '@controllers/settingsView/ChatExportController';
+import { MemoryStateStore } from '@platform/defaults/memoryState';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
+import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -22,6 +20,8 @@ import {
   type ExecutionId,
 } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import { createFakePlatform } from '@test/support/FakePlatform';
+import { StreamLogStore } from '@transcript';
 import { StorageFS } from '@utils/files';
 
 const TEMPLATE =

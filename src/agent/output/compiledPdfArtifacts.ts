@@ -1,11 +1,9 @@
-// Standard library imports
+// Node imports
 import * as path from 'node:path';
 
-// Local imports - platform and errors
-import { platform } from '@platform/platform';
+// Local imports
 import { isFileNotFoundError } from '@common/errors';
-
-// Local imports - shared schemas
+import { platform } from '@platform/platform';
 import type {
   ExecutionId,
   FileLocation,
@@ -14,8 +12,6 @@ import type {
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { createRunStorageLocation, getComparablePath } from '@utils/files';
 import { isFile } from '@utils/files/fsEntryType';
-
-// Local imports - file utilities
 import { hasExtension } from '@utils/core/pathCore';
 
 export interface CompiledPdfArtifact {

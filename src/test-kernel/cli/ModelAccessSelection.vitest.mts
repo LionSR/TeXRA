@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import {
   contextForCliModelAccess,
   readCliModelAccessStatus,
@@ -14,6 +13,7 @@ import {
   resolveCliModelAccessRoute,
   shortCliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => ({
   getCodexStatus: vi.fn(),

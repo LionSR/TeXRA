@@ -3,6 +3,12 @@ import { fileURLToPath } from 'node:url';
 
 import * as vscode from 'vscode';
 
+import { ExtensionCategory, getIncludedExtensions } from '@common/files';
+import {
+  planCurrentFileAsBase,
+  planCurrentFileAsEdited,
+  type MainViewBaseFileSelectionPlan,
+} from '@controllers/mainView/MainViewBaseFileController';
 import {
   MAIN_VIEW_ATTACHABLE_DROP_CATEGORIES,
   normalizeMainViewFileExtension,
@@ -10,22 +16,16 @@ import {
   type MainViewAllowedDropExtensions,
 } from '@controllers/mainView/MainViewDroppedFilesController';
 import {
-  planCurrentFileAsBase,
-  planCurrentFileAsEdited,
-  type MainViewBaseFileSelectionPlan,
-} from '@controllers/mainView/MainViewBaseFileController';
-import { ExtensionCategory, getIncludedExtensions } from '@common/files';
-import {
   FILE_SELECTION_COMMAND_IDS,
   MULTIPLE_FILE_COMMANDS,
   getFileLister,
   type MultiFileCategory,
 } from '@frontend/files';
+import { selectFiles } from '@frontend/ui/dialogs';
 import {
   showLoggedErrorMessage,
   toErrorMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewInboundMessage } from '@shared/schemas';

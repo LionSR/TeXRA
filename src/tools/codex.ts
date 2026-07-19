@@ -42,21 +42,21 @@ import {
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
+import { MESSAGE_TYPES } from '@shared/schemas';
+import { DELIVERY_TAG } from '@shared/deliveryTags';
 import type {
   StreamTabId,
   ExecutionId,
   TodoItem,
   ToolUseLog,
 } from '@shared/schemas';
-import { DELIVERY_TAG } from '@shared/deliveryTags';
-import { MESSAGE_TYPES } from '@shared/schemas';
-import { CodexSandboxModeSchema } from '@shared/schemas/agentCliSettings';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { CodexSandboxModeSchema } from '@shared/schemas/agentCliSettings';
 import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { formatWallTimeSeconds } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -82,7 +82,7 @@ import {
   buildCodexUsageStats,
 } from './codexShared';
 
-// Type-only imports (kept separate for bundler efficiency)
+// Third-party imports
 import type {
   RunResult,
   Thread,

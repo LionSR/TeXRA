@@ -3,12 +3,6 @@ import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
-import {
-  FakeStdin,
-  FakeStdout,
-  loadInk,
-} from '@test/support/inkTestHarness.mts';
 import { ImagePasteQueue } from '@cli/chat/tui/input/imagePasteQueue';
 import { BaseTextInput } from '@cli/chat/tui/input/BaseTextInput';
 import {
@@ -33,6 +27,12 @@ import {
   streams,
 } from '@cli/chat/tui/state/cliState';
 import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
+import {
+  FakeStdin,
+  FakeStdout,
+  loadInk,
+} from '@test/support/inkTestHarness.mts';
+import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 
 const clipboardMock = vi.hoisted(() => ({
   attachClipboardImage: vi.fn(),

@@ -1,3 +1,4 @@
+import type { StateStore } from '@platform/interfaces';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   DEFAULT_GIT_AUTHOR_EMAIL,
@@ -9,7 +10,6 @@ import type { UpdateGitAuthorSettingsMessage } from '@shared/schemas/settingsVie
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { setWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
 import { setGitAuthorEnv } from './gitAuthorEnv';
-import type { StateStore } from '@platform/interfaces';
 
 export type GitAuthorSettings = {
   markCommits: boolean;

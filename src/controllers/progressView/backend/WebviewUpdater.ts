@@ -1,13 +1,13 @@
-import {
-  buildStreamInfo,
-  buildStreamInfos,
-} from '@controllers/progressView/backend/streamInfoUtils';
+import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import {
   type ActiveStreamId,
   ProgressViewState,
   type StreamBadgeSnapshot,
 } from '@controllers/progressView/backend/state/ProgressViewState';
-import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
+import {
+  buildStreamInfo,
+  buildStreamInfos,
+} from '@controllers/progressView/backend/streamInfoUtils';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   AgentCategoryFilter,
