@@ -181,7 +181,7 @@ describe('TEXRA_RELAY_TOKEN consumption (CI relay tokens)', () => {
 
     // The resolved value itself must agree with the cache — not just the
     // cache in isolation — otherwise a caller that trusts the return value
-    // (getUserAuthContext, getCliAuthProfile) could still treat the
+    // (getUserTier, getCliAuthProfile) could still treat the
     // just-rejected token as usable.
     await expect(pending).resolves.toEqual({ state: 'invalid' });
 
