@@ -41,7 +41,6 @@ const categories = [
       'arxiv_search',
       'arxiv_metadata',
       'download_arxiv_source',
-      'crossref_doi',
       'crossref_search',
       'zotero_*',
     ],

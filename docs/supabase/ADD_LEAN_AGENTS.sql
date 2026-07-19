@@ -55,7 +55,7 @@ VALUES (
   'tool-use-lean/leanBlueprint.yaml',
   ARRAY['researcher', 'lean'],
   'toolUse',
-  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'memory', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'web_search', 'web_fetch', 'arxiv_search', 'arxiv_metadata', 'download_arxiv_source', 'crossref_search', 'crossref_doi', 'zotero_add', 'zotero_search', 'zotero_export']
+  ARRAY['todo_write', 'bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep', 'memory', 'lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect', 'lean_loogle', 'web_search', 'web_fetch', 'arxiv_search', 'arxiv_metadata', 'download_arxiv_source', 'crossref_search', 'zotero_add', 'zotero_search', 'zotero_export']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,

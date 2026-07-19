@@ -71,9 +71,17 @@ export function registerLanguageModelTools(
       async invoke(
         options: vscode.LanguageModelToolInvocationOptions<unknown>,
       ) {
-        // The tool runs its own Zod validation and returns a structured error
-        // result for bad input, so we forward the raw, manifest-validated input.
-        const result = await tool.call(options.input);
+        // The LM manifest intentionally exposes the search-only Crossref
+        // surface; adapt that narrower host contract to the canonical
+        // command-dispatched registry tool at this boundary.
+        const input =
+          toolName === 'crossref_search'
+            ? {
+                ...(options.input as Record<string, unknown>),
+                command: 'search',
+              }
+            : options.input;
+        const result = await tool.call(input);
         return new vscode.LanguageModelToolResult([
           new vscode.LanguageModelTextPart(toResultText(result)),
         ]);

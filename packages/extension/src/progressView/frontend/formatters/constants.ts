@@ -150,6 +150,7 @@ export const TOOL_ICON_MAP: Record<string, string> = {
   // past runs still reference them — keep their icons so historical runs
   // render with the right glyphs instead of the generic fallback.
   apply_path: 'diff',
+  crossref_doi: 'references',
   ls: 'folder-opened',
 
   // Shell
@@ -163,7 +164,6 @@ export const TOOL_ICON_MAP: Record<string, string> = {
   arxiv_metadata: 'book',
   download_arxiv_source: 'cloud-download',
   crossref_search: 'references',
-  crossref_doi: 'references',
 
   // LaTeX
   texcount: 'symbol-numeric',

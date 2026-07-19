@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 
 #### Breaking Changes
 
+- **Crossref uses one research tool** — use `crossref_search` with the `search`
+  or `doi` command. Custom agents that still list `crossref_doi` continue to
+  load through its compatibility name.
 - **Custom agents should replace `apply_path`** — The patch tool is no longer
   available. Update custom-agent tool lists to use `edit_file` and `write_file`;
   configurations that still name `apply_path` load without that capability.
