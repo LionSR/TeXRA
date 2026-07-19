@@ -1,4 +1,3 @@
-import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import type {
   FollowUpQueueBatchItem,
   FollowUpQueueInput,
@@ -10,10 +9,11 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import {
-  resumeToolUseFromSnapshot,
+  resumeToolUseFromResumeData,
   type SubagentRunOptions,
 } from './executeAgent';
 import { defaultSession } from './SessionHandle';
+import type { ToolUseResumeData } from './SessionResumeRetrieval';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
@@ -50,7 +50,7 @@ export interface ResumeQueuedToolUseOptions extends SubagentRunOptions {
 
 /**
  * Drive the shared tool-use resume "queue dance" that both the VS Code
- * extension and the desktop bridge wrap around `resumeToolUseFromSnapshot`:
+ * extension and the desktop bridge wrap around `resumeToolUseFromResumeData`:
  *
  *   acquire the follow-up queue → flip the stream to RESUMING → drain the
  *   queued follow-ups and notify the UI → resume, handing the drained batch
@@ -63,9 +63,9 @@ export interface ResumeQueuedToolUseOptions extends SubagentRunOptions {
  * toast). Returns `true` when the resume completed and `false` when it failed
  * or returned before the resumed cursor consumed its follow-ups.
  */
-export async function resumeQueuedToolUseSnapshot(
+export async function resumeQueuedToolUseFromResumeData(
   streamId: StreamTabId,
-  snapshot: ToolUseSessionSnapshot,
+  resume: ToolUseResumeData,
   runtimeHost: AgentRuntimeHost,
   options: ResumeQueuedToolUseOptions,
 ): Promise<boolean> {
@@ -118,12 +118,12 @@ export async function resumeQueuedToolUseSnapshot(
     // `ToolUseWaitNode` — only its child-run loop's queue wait consumes it),
     // so re-queued items would sit unconsumed until the next wake. A root
     // cursor accepts either route; the handoff works for both.
-    const result = await resumeToolUseFromSnapshot(snapshot, runtimeHost, {
+    const result = await resumeToolUseFromResumeData(resume, runtimeHost, {
       session: options.session,
       approvalPromptsUnavailable: options.approvalPromptsUnavailable,
       runtimeUnavailableTools: options.runtimeUnavailableTools,
       parentStreamId:
-        options.parentStreamId ?? snapshot.parentStreamId ?? undefined,
+        options.parentStreamId ?? resume.parentStreamId ?? undefined,
       onFollowUpConsumed: () => {
         followUps = [];
         options.onFollowUpConsumed?.();

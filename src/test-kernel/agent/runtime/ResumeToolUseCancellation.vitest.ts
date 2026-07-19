@@ -58,11 +58,11 @@ vi.mock('@agent/implementations/flows/tooluse/runToolUseFlow', () => ({
 }));
 
 // Local imports - agent runtime
-import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
+import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
 import {
   RUN_OUTCOME,
   type ExecutionId,
@@ -80,7 +80,7 @@ interface TestFlowContext {
   interrupt(): void;
 }
 
-describe('resumeToolUseFromSnapshot cancellation handoff', () => {
+describe('resumeToolUseFromResumeData cancellation handoff', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.acquireResumedExecutionLease.mockResolvedValue('existing');
@@ -93,22 +93,39 @@ describe('resumeToolUseFromSnapshot cancellation handoff', () => {
   it('resolves execution lineage before activating the resume stream', async () => {
     const storageError = new Error('execution metadata unavailable');
     const runtimeHost = { emit: vi.fn() } as unknown as AgentRuntimeHost;
-    const snapshot = {
+    const snapshot = createToolUseResumeData({
       executionId: 'e8048' as ExecutionId,
       streamId: 'stream-8048' as StreamTabId,
-      agentConfig: { agent: 'test-agent', model: 'test-model' },
-      messages: [],
-    } as unknown as ToolUseSessionSnapshot;
+    });
     mocks.hasPersistedParent.mockRejectedValueOnce(storageError);
 
-    await expect(resumeToolUseFromSnapshot(snapshot, runtimeHost)).rejects.toBe(
-      storageError,
-    );
+    await expect(
+      resumeToolUseFromResumeData(snapshot, runtimeHost),
+    ).rejects.toBe(storageError);
 
     expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
     expect(mocks.releaseOwnedExecutionLeaseAfterFailure).toHaveBeenCalledWith(
       snapshot.executionId,
       storageError,
+    );
+  });
+
+  it('preserves the historical diagnostic for a non-tool-use launch', async () => {
+    const resume = createToolUseResumeData();
+    mocks.hasPersistedParent.mockResolvedValueOnce(false);
+    mocks.buildAgentLaunchContext.mockResolvedValueOnce({
+      setting: { agentCategory: AgentCategory.Workflow },
+      runScope: {
+        executionId: resume.executionId,
+        streamId: resume.streamId,
+        session: { flushArtifacts: vi.fn() },
+      },
+    } as unknown as AgentLaunchContext);
+
+    await expect(
+      resumeToolUseFromResumeData(resume, {} as AgentRuntimeHost),
+    ).rejects.toThrow(
+      'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
     );
   });
 
@@ -173,14 +190,12 @@ describe('resumeToolUseFromSnapshot cancellation handoff', () => {
       },
     );
 
-    const snapshot = {
+    const snapshot = createToolUseResumeData({
       executionId,
       streamId,
-      agentConfig: { agent: 'test-agent', model: 'test-model' },
-      messages: [],
-    } as unknown as ToolUseSessionSnapshot;
+    });
 
-    const result = await resumeToolUseFromSnapshot(snapshot, runtimeHost, {
+    const result = await resumeToolUseFromResumeData(snapshot, runtimeHost, {
       takePendingFollowUps: () => {
         order.push('take');
         return [];

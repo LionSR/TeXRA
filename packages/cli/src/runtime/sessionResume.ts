@@ -2,85 +2,72 @@
 //
 // Resume = continue (load the prior conversation), not re-run. The resumable
 // state lives in the per-execution flow record (executions/<id>/flow-*.json),
-// written per-step during a tool-use run; `retrieveSessionResumeData` rebuilds
-// a full snapshot (messages + state slices) from it. Only tool-use agents
+// written per-step during a tool-use run; `retrieveSessionResumeData` returns
+// canonical shared state plus its resume identity. Only tool-use agents
 // resume this way — workflows are not continuable here.
 
 import { isToolUseTaskState } from '@agent/core/state/TaskState';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
+import type { ToolUseResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { ExecutionId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { readCliHistoryConfig } from './history';
-import {
-  readCliToolUseResumeData,
-  type CliToolUseResumeData,
-} from './toolUseResumeData';
+import { readCliToolUseResumeData } from './toolUseResumeData';
 
 export type CliResumeResolution =
-  | {
-      readonly kind: 'toolUse';
-      readonly snapshot: ToolUseSessionSnapshot;
-      readonly streamId: StreamTabId;
-      readonly config: AgentConfig;
-    }
-  /** A workflow execution — not continuable via the tool-use snapshot path. */
-  | { readonly kind: 'workflow' }
+  | ToolUseResumeData
+  /** A workflow execution — not continuable via the tool-use resume path. */
+  | { readonly type: 'workflow' }
   /** No execution with this id. */
-  | { readonly kind: 'not-found' }
+  | { readonly type: 'not-found' }
   /** Tool-use, but no live flow record to continue from (completed or cleared). */
-  | { readonly kind: 'no-snapshot' }
+  | { readonly type: 'no-resume-state' }
   /** Execution metadata or resume state exists but could not be loaded. */
-  | { readonly kind: 'load-failed'; readonly reason: string };
+  | { readonly type: 'load-failed'; readonly reason: string };
 
 export type CliToolUseResumeResolution = Extract<
   CliResumeResolution,
-  { readonly kind: 'toolUse' }
+  { readonly type: 'toolUse' }
 >;
 
-export async function resolveCliResumeSnapshot(
+export async function resolveCliResume(
   id: ExecutionId,
 ): Promise<CliResumeResolution> {
   let config: AgentConfig | null;
   try {
     config = await readCliHistoryConfig(id);
   } catch (error) {
-    return { kind: 'load-failed', reason: toErrorMessage(error) };
+    return { type: 'load-failed', reason: toErrorMessage(error) };
   }
-  if (!config) return { kind: 'not-found' };
+  if (!config) return { type: 'not-found' };
 
   const taskState = agentConfigToTaskState(config);
-  if (!isToolUseTaskState(taskState)) return { kind: 'workflow' };
+  if (!isToolUseTaskState(taskState)) return { type: 'workflow' };
 
-  let resume: CliToolUseResumeData | null;
+  let resume: ToolUseResumeData | null;
   try {
     resume = await readCliToolUseResumeData(id, config);
   } catch (error) {
-    return { kind: 'load-failed', reason: toErrorMessage(error) };
+    return { type: 'load-failed', reason: toErrorMessage(error) };
   }
-  if (!resume) return { kind: 'no-snapshot' };
+  if (!resume) return { type: 'no-resume-state' };
 
-  return {
-    kind: 'toolUse',
-    snapshot: resume.snapshot,
-    streamId: resume.streamId,
-    config: resume.config,
-  };
+  return resume;
 }
 
 /** A user-facing line explaining why a non-tool-use resolution can't continue. */
 export function explainNonResumable(
-  resolution: Exclude<CliResumeResolution, { kind: 'toolUse' }>,
+  resolution: Exclude<CliResumeResolution, { type: 'toolUse' }>,
   id: ExecutionId,
 ): string {
-  switch (resolution.kind) {
+  switch (resolution.type) {
     case 'not-found':
       return `Execution not found: ${id}`;
     case 'workflow':
       return `Execution ${id} is a workflow; only tool-use sessions can be resumed.`;
-    case 'no-snapshot':
+    case 'no-resume-state':
       return `Execution ${id} has no resumable session state (it completed or was cleared).`;
     case 'load-failed':
       return `Failed to load resumable session ${id}: ${resolution.reason}`;

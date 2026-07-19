@@ -42,7 +42,7 @@ import { executeSubagentForDeliveryInBand } from './inBandSubagentExecution';
 // `createNativeToolUseStrategy`/`createNativeWorkflowStrategy` are lazy-
 // imported below. Both strategy modules import
 // `@agent/runtime/executeAgent` (directly, or transitively via
-// `resumeQueuedToolUseSnapshot`), which pulls in `runToolUseFlow.ts` ->
+// `resumeQueuedToolUseFromResumeData`), which pulls in `runToolUseFlow.ts` ->
 // `@tools/registry`. An eager import here would close the same
 // registry -> DelegationTools -> proposalFlow -> subagentExecution cycle
 // the existing `executeAgent` lazy import already avoids.

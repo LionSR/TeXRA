@@ -36,7 +36,7 @@ const StateSlicesCanonicalSchema = StateSlicesSchema.extend({
 export type StateSlicesSnapshot = z.output<typeof StateSlicesSchema>;
 
 /** Full persisted and live shared state for one tool-use flow. */
-export const ToolUseRunSharedSchema = z.looseObject({
+const ToolUseRunSharedSchema = z.looseObject({
   messages: ProviderMessageArraySchema,
   modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullable()
     .transform((key) => key ?? undefined)

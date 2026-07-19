@@ -202,7 +202,7 @@ export async function readCliHistoryDetails(
       : {}),
     files,
     hasFlowRecord: resumeData !== null,
-    currentModel: resumeData?.snapshot.agentConfig.model,
+    currentModel: resumeData?.agentConfig.model,
   };
 }
 
@@ -490,7 +490,7 @@ async function toCliHistoryEntry(
     id: entry.id,
     timestamp: entry.timestamp,
     agent: config.agent,
-    model: resumeData?.snapshot.agentConfig.model ?? config.model,
+    model: resumeData?.agentConfig.model ?? config.model,
     status: resolveCliHistoryStatus({
       terminalStatus: entry.terminalStatus,
       resumable: resumeData !== null,

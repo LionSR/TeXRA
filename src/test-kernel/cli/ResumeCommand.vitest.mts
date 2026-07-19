@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { ExecutionId } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
   explainNonResumable: vi.fn(),
   initInteractiveCliPlatform: vi.fn(),
-  resolveCliResumeSnapshot: vi.fn(),
+  resolveCliResume: vi.fn(),
   runChat: vi.fn(),
   writeTextStderr: vi.fn(),
 }));
@@ -26,7 +27,7 @@ vi.mock('@cli/runtime/logSinks', () => ({
 
 vi.mock('@cli/runtime/sessionResume', () => ({
   explainNonResumable: mocks.explainNonResumable,
-  resolveCliResumeSnapshot: mocks.resolveCliResumeSnapshot,
+  resolveCliResume: mocks.resolveCliResume,
 }));
 
 vi.mock('@cli/chat/tui/runChatTui', () => ({
@@ -48,28 +49,20 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
 }
 
 function resumableResolution() {
-  return {
-    kind: 'toolUse',
-    snapshot: {},
-    streamId: 'stream-1',
-    config: {
-      agent: 'review',
-      model: 'gpt-5',
-    },
-  } as const;
+  return createToolUseResumeData();
 }
 
 describe('runResumeExecution', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.initInteractiveCliPlatform.mockResolvedValue(undefined);
-    mocks.resolveCliResumeSnapshot.mockResolvedValue(resumableResolution());
+    mocks.resolveCliResume.mockResolvedValue(resumableResolution());
     mocks.runChat.mockResolvedValue({ exitCode: 0 });
   });
 
   it('uses the CLI context TTY snapshot before reopening chat', async () => {
     const resolution = resumableResolution();
-    mocks.resolveCliResumeSnapshot.mockResolvedValueOnce(resolution);
+    mocks.resolveCliResume.mockResolvedValueOnce(resolution);
     const { runResumeExecution } = await import('@cli/runtime/resumeExecution');
 
     await expect(
@@ -111,7 +104,7 @@ describe('runResumeExecution', () => {
     ).resolves.toBe(2);
 
     expect(mocks.initInteractiveCliPlatform).not.toHaveBeenCalled();
-    expect(mocks.resolveCliResumeSnapshot).not.toHaveBeenCalled();
+    expect(mocks.resolveCliResume).not.toHaveBeenCalled();
     expect(mocks.runChat).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       expect.stringContaining(`texra resume ${EXECUTION_ID}`),
@@ -147,7 +140,7 @@ describe('runResumeExecution', () => {
     ).resolves.toBe(2);
 
     expect(mocks.initInteractiveCliPlatform).not.toHaveBeenCalled();
-    expect(mocks.resolveCliResumeSnapshot).not.toHaveBeenCalled();
+    expect(mocks.resolveCliResume).not.toHaveBeenCalled();
     expect(mocks.runChat).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       'texra resume needs a capable terminal: TERM=dumb disables the cursor controls Ink uses. If this is an interactive PTY, prefix the command with `TERM=xterm-256color`. For non-interactive runs, use `texra run`.',
@@ -169,9 +162,9 @@ describe('runResumeExecution', () => {
     );
   });
 
-  it('reports resume snapshot load failures as operational errors', async () => {
-    mocks.resolveCliResumeSnapshot.mockResolvedValue({
-      kind: 'load-failed',
+  it('reports resume-state load failures as operational errors', async () => {
+    mocks.resolveCliResume.mockResolvedValue({
+      type: 'load-failed',
       reason: 'KV timeout',
     });
     mocks.explainNonResumable.mockReturnValue(
