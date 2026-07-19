@@ -41,9 +41,6 @@ export const TOOL_OUTPUT_CORNER = '⎿';
 /** Generated-tokens marker in child-row metadata (`↓40k`). */
 export const TOKENS_GENERATED = '↓';
 
-/** Marker for the liveness row shown while a run is active. */
-export const THINKING_MARKER = '✻';
-
 /** 1 Hz solid/hollow blink pair for "your input is needed" prompts (approval
  *  modals) — deliberately distinct from STATUS_DOT (never animated) so the
  *  two never read as the same signal. Pair with `ui/LoadingIndicator`'s

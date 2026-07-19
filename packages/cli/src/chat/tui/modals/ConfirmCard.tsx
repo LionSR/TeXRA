@@ -69,8 +69,9 @@ export function ConfirmCard({
   const [feedback, setFeedback] = useState('');
   const { columns } = useWindowSize();
   // A pending approval always needs the user's eyes on it — pulse the title
-  // at 1 Hz off the shared clock (same pattern as LoadingIndicator/
-  // LivenessRow) instead of a static line, so it's harder to miss.
+  // at 1 Hz off the shared clock (same pattern as LoadingIndicator and the
+  // status bar's running marker) instead of a static line, so it's harder to
+  // miss.
   const now = useLiveNowMs(true);
   const pulsedTitle = confirmCardPulsedTitle(now, title);
 
