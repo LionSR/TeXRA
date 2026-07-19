@@ -32,17 +32,13 @@
 import { bearerToken } from '../_shared/auth.ts';
 import { handleCors } from '../_shared/cors.ts';
 import { resolveRelayCredential } from '../_shared/relayCiToken.ts';
-import {
-  createEdgeClient,
-  versionedJsonResponse,
-} from '../_shared/responses.ts';
+import { createEdgeClient, jsonResponse } from '../_shared/responses.ts';
 import { UsageBatchSchema, type UsageLogEntry } from './usageValidation.ts';
 
 // =============================================================================
 // Constants
 // =============================================================================
 
-const LOG_USAGE_VERSION = '1.6.0';
 const MAX_REPORTED_VALIDATION_ISSUES = 20;
 
 const UsageDestinations = {
@@ -83,9 +79,8 @@ function successResponse(
   accepted: number,
   message?: string,
 ): Response {
-  return versionedJsonResponse(
+  return jsonResponse(
     req,
-    LOG_USAGE_VERSION,
     {
       success: true,
       accepted,
@@ -110,9 +105,8 @@ function errorResponse(
     issueCount?: number;
   },
 ): Response {
-  return versionedJsonResponse(
+  return jsonResponse(
     req,
-    LOG_USAGE_VERSION,
     {
       success: false,
       accepted: 0,

@@ -32,16 +32,7 @@ import {
   mintGoTrueSession,
   sessionResponseBody,
 } from '../_shared/goTrueSession.ts';
-import {
-  createEdgeClient,
-  versionedJsonResponse,
-} from '../_shared/responses.ts';
-
-// =============================================================================
-// Constants
-// =============================================================================
-
-const VERSION = '3.0.0';
+import { createEdgeClient, jsonResponse } from '../_shared/responses.ts';
 
 // =============================================================================
 // Environment
@@ -93,9 +84,8 @@ app.use('*', async (c, next) => {
 // Initialize Supabase client
 app.use('*', async (c, next) => {
   if (!adminSupabase || !anonSupabase) {
-    return versionedJsonResponse(
+    return jsonResponse(
       c.req.raw,
-      VERSION,
       { error: 'Server configuration error' },
       500,
     );
@@ -114,17 +104,12 @@ app.use('*', async (c, next) => {
 type Context = HonoContext<{ Variables: Variables }>;
 
 function errorResponse(c: Context, error: string, status: number) {
-  return versionedJsonResponse(c.req.raw, VERSION, { error }, status);
+  return jsonResponse(c.req.raw, { error }, status);
 }
 
 /** Session payload returned by both exchange and refresh. */
 function sessionResponse(c: Context, session: Session) {
-  return versionedJsonResponse(
-    c.req.raw,
-    VERSION,
-    sessionResponseBody(session),
-    200,
-  );
+  return jsonResponse(c.req.raw, sessionResponseBody(session), 200);
 }
 
 function githubAppMetadata(
