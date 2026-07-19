@@ -3,8 +3,73 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - tools under test
 import { ToolError } from '@shared/schemas/toolResult';
-import { replaceLiteralMatches } from '@tools/fileEditFlow';
+import {
+  findOccurrenceLineNumbers,
+  replaceAllLiteral,
+  replaceFirstLiteral,
+  replaceLiteralMatches,
+} from '@tools/fileEditFlow';
 import { ViewRangeSchema } from '@tools/formatting';
+
+describe('literal replacement primitives', () => {
+  // String.prototype.replace interprets these replacement patterns. The
+  // primitives must insert them verbatim for LaTeX and code edits.
+  const dollarPatterns = [
+    '$&',
+    "$'",
+    '$`',
+    '$$',
+    '$1',
+    'a$&b$$c',
+    '\\sum_{i=1}^{n} $x_i$',
+  ] as const;
+
+  it.each(dollarPatterns)(
+    'replaceFirstLiteral inserts %j verbatim',
+    (replacement) => {
+      expect(replaceFirstLiteral('before OLD after', 'OLD', replacement)).toBe(
+        `before ${replacement} after`,
+      );
+    },
+  );
+
+  it.each(dollarPatterns)(
+    'replaceAllLiteral inserts %j verbatim for every occurrence',
+    (replacement) => {
+      expect(replaceAllLiteral('OLD and OLD', 'OLD', replacement)).toBe(
+        `${replacement} and ${replacement}`,
+      );
+    },
+  );
+
+  it('replaces only the first literal occurrence', () => {
+    expect(replaceFirstLiteral('x OLD y OLD z', 'OLD', 'NEW')).toBe(
+      'x NEW y OLD z',
+    );
+  });
+
+  it('returns content unchanged when the first-match needle is absent', () => {
+    expect(replaceFirstLiteral('nothing here', 'OLD', 'NEW')).toBe(
+      'nothing here',
+    );
+  });
+
+  it('rejects empty search strings', () => {
+    expect(() => replaceFirstLiteral('abc', '', 'x')).toThrow(ToolError);
+    expect(() => replaceAllLiteral('abc', '', 'x')).toThrow(ToolError);
+  });
+
+  it('reports every 1-indexed matching line', () => {
+    expect(
+      findOccurrenceLineNumbers('foo\nbar foo\nbaz\nfoo again', 'foo'),
+    ).toEqual([1, 2, 4]);
+  });
+
+  it('reports no lines for absent or empty needles', () => {
+    expect(findOccurrenceLineNumbers('a\nb\nc', 'zzz')).toEqual([]);
+    expect(findOccurrenceLineNumbers('a\nb\nc', '')).toEqual([]);
+  });
+});
 
 describe('replaceLiteralMatches', () => {
   it('returns the unique replacement and its 1-based line', () => {
