@@ -83,4 +83,6 @@ export interface ToolUseRoundShared extends ToolUseRoundFields {
   currentUserInstruction?: string;
   /** Named tool forced on this round's model request. */
   finalTool?: FinalTool;
+  /** Whether this cycle has already issued its one provider-native final turn. */
+  finalToolAttempted?: boolean;
 }
