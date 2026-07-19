@@ -1066,10 +1066,21 @@ export abstract class ModelHandler<
   ): Promise<M[]>;
 
   /**
-   * Formats image content into provider-specific message format.
+   * Formats media entries into provider-specific content blocks for the base
+   * {@link createMediaMessage} template. Providers that render media through
+   * that template override this; providers that override `createMediaMessage`
+   * wholesale (e.g. the Google handlers, which upload/inline media directly)
+   * never reach this path and inherit the default, which fails clearly rather
+   * than emitting a malformed payload if a future change ever routes media
+   * through the base template without supplying a conversion.
    * @returns Array of formatted image/document content objects
    */
-  abstract createMediaContent(mediaMessage: MediaEntry[]): Media[];
+  createMediaContent(_mediaMessage: MediaEntry[]): Media[] {
+    throw new Error(
+      `${this.constructor.name}.createMediaContent is not implemented — ` +
+        'override it, or override createMediaMessage to build media directly.',
+    );
+  }
 
   /**
    * Extracts the response text and metadata from the model's response object
