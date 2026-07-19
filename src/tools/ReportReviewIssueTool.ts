@@ -12,6 +12,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { defineTool } from './core/define';
+import { normalizeStructuredOutputSchema } from './structuredOutput';
 
 const CHANNEL = 'ReportReviewIssueTool';
 
@@ -68,12 +69,15 @@ const ReportReviewIssueInputSchema = z.strictObject({
 });
 
 type ReportReviewIssueInput = z.infer<typeof ReportReviewIssueInputSchema>;
+const NormalizedReportReviewIssueSchema = normalizeStructuredOutputSchema(
+  ReportReviewIssueInputSchema,
+);
 
 export class ReportReviewIssueTool extends defineTool({
   name: 'report_review_issue',
   description:
     'Report one finding from an agent review of the current change set. The issue appears in the Agent Review panel and as an editor diagnostic with quick fixes. Only accepted while an agent review session is collecting issues.',
-  schema: ReportReviewIssueInputSchema,
+  schema: NormalizedReportReviewIssueSchema.zodSchema,
 }) {
   protected async execute(input: ReportReviewIssueInput): Promise<ToolResult> {
     try {
