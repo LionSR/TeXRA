@@ -12,7 +12,7 @@ import {
   MAX_TIER,
   ULTRA_TIER,
   UserTierSchema,
-} from '@auth/sharedConfig';
+} from '@auth/config';
 
 import {
   FREE_TIER as RELAY_FREE_TIER,

@@ -22,7 +22,7 @@ import {
   ULTRA_TIER,
   FREE_TIER,
   type UserTier,
-} from '../sharedConfig';
+} from '../config';
 import {
   NOOP_AUTH_SERVICE_LOGGER,
   type AuthServiceLogger,

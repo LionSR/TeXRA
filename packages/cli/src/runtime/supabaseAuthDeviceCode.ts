@@ -9,9 +9,9 @@ import { setTimeout as sleepMs } from 'node:timers/promises';
 
 import { z } from 'zod';
 
-import { DEVICE_AUTH_BASE_URL } from '@auth/sharedConfig';
+import { DEVICE_AUTH_BASE_URL } from '@auth/config';
+import { fetchWithTimeout } from '@auth/fetchWithTimeout';
 import {
-  fetchWithTimeout,
   parseTokenExchangeResponse,
   type GitHubTokenExchangeResponse,
 } from '@auth/SupabaseSession';

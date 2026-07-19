@@ -9,7 +9,6 @@ import {
   getExternalAuthCallbackInfo,
   AUTH_CALLBACK_TIMEOUT_MS,
   GITHUB_TOKEN_EXCHANGE_URL,
-  DEFAULT_SESSION_EXPIRY_MS,
   isOAuthProvider,
   type OAuthProvider,
 } from '@auth/config';
@@ -19,12 +18,13 @@ import {
 } from '@auth/SupabaseAuthCoordinator';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import {
-  fetchWithTimeout,
+  DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
   parseTokenExchangeResponse,
   SupabaseSessionCoordinator,
   toStorableSupabaseSession,
   type SupabaseSession,
 } from '@auth/SupabaseSession';
+import { fetchWithTimeout } from '@auth/fetchWithTimeout';
 import * as logger from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { SupabaseUriHandler } from './UriHandler';
@@ -392,7 +392,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       const data = await parseTokenExchangeResponse(response, logger);
       const session = toStorableSupabaseSession(data, {
         fallbackLabel: githubSession.account.label,
-        defaultExpiryMs: DEFAULT_SESSION_EXPIRY_MS,
+        defaultExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
       });
 
       await this.storeSession(session, true);

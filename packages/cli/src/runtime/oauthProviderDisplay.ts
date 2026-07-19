@@ -1,4 +1,4 @@
-import { OAUTH_PROVIDERS, type OAuthProvider } from '@auth/sharedConfig';
+import { OAUTH_PROVIDERS, type OAuthProvider } from '@auth/config';
 
 export interface CliOAuthProviderItem {
   readonly value: OAuthProvider;

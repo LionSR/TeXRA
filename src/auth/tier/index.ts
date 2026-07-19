@@ -17,7 +17,7 @@
  * - Ultra: every model
  */
 
-import { SUPABASE_CUSTOM_DOMAIN } from '../sharedConfig';
+import { SUPABASE_CUSTOM_DOMAIN } from '../config';
 import { TierService } from './TierService';
 import type { AuthServiceLogger } from '../serviceLogger';
 
