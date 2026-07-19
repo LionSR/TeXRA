@@ -133,10 +133,7 @@ import {
   markChatTuiRunPending,
   type TuiSession,
 } from './state/sessionRunState';
-import {
-  createSessionExitController,
-  type SessionExitController,
-} from './sessionExitController';
+import { createSessionExitController } from './sessionExitController';
 import type { SkillActivation } from './forms/SkillsListForm';
 
 export interface ChatResult {
@@ -352,14 +349,6 @@ export async function runChat(
     activeApprovalPolicy = policy;
     patchSessionMeta({ approvalPolicy: policy });
   };
-  // Owns signal handling + exit teardown; assigned once Ink has mounted (below).
-  // The lazily-invoked closures here reach it through this binding, so they see
-  // the initialized controller by the time the user can trigger them. `let` is
-  // required — the controller can't be built until Ink is mounted, which is far
-  // below these forward references — so prefer-const's single-write heuristic
-  // misfires here.
-  // eslint-disable-next-line prefer-const
-  let exitController: SessionExitController;
   // The slash-command context is identical at every call site; build it once
   // lazily so the closures it captures (interruptActive, resetSessionForClear,
   // chatController.resume) are all defined before the first use.
@@ -863,7 +852,7 @@ export async function runChat(
   );
   inkRef.current = ink;
 
-  exitController = createSessionExitController({
+  const exitController = createSessionExitController({
     ink,
     session,
     commandName: context.commandName,
