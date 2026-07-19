@@ -86,6 +86,8 @@ async function executeDiffOperations(
         : await LaTeXdiffService.runDiffBetweenRounds(
             operation.base,
             operation.revised,
+            operation.fromRound,
+            operation.toRound,
             mathMarkup,
             { cwd: operation.cwd },
           );
@@ -141,7 +143,7 @@ export async function runLatexdiffFromMetadata(params: {
         round,
       });
 
-      const key = getComparablePath(info.location);
+      const key = info.source;
       const group = groupedByRelative.get(key) ?? [];
       group.push({ round, info });
       groupedByRelative.set(key, group);

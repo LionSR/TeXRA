@@ -10,8 +10,10 @@ import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { installPlatform } from '@test/support/setupPlatform';
 import { cleanupTempDirs } from '@test/support/tempDirPlatform';
+import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
 import {
   createExternalLocation,
+  createRunStorageLocation,
   createWorkspaceLocation,
   getRunDir,
   TaskRunFileService,
@@ -118,6 +120,75 @@ describe('LaTeXdiffService shadow output', () => {
     await expect(
       readFile(path.join(sourceDir, 'revised_diff.tex'), 'utf8'),
     ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('generates between-round diffs for modern run-storage paths', async () => {
+    const tempDir = await makeTempDir('texra-latexdiff-rounds-');
+    const workspaceDir = path.join(tempDir, 'workspace');
+    const executionId: ExecutionId = 'abcdef';
+    const firstDir = path.join(tempDir, 'executions', executionId, 'r1');
+    const secondDir = path.join(tempDir, 'executions', executionId, 'r2');
+    const basePath = path.join(workspaceDir, 'paper.tex');
+    const firstPath = path.join(firstDir, 'paper.tex');
+    const secondPath = path.join(secondDir, 'paper.tex');
+    const document = (body: string) =>
+      `\\documentclass{article}\n\\begin{document}\n${body}\n\\end{document}\n`;
+
+    await Promise.all([
+      mkdir(workspaceDir, { recursive: true }),
+      mkdir(firstDir, { recursive: true }),
+      mkdir(secondDir, { recursive: true }),
+    ]);
+    await Promise.all([
+      writeFile(basePath, document('base')),
+      writeFile(firstPath, document('round one')),
+      writeFile(secondPath, document('round two')),
+    ]);
+    await installNodeBackedPlatform(
+      workspaceDir,
+      path.join(tempDir, 'storage'),
+    );
+
+    const base = createWorkspaceLocation(basePath, 'paper.tex');
+    const first = createRunStorageLocation(
+      firstPath,
+      'r1/paper.tex',
+      executionId,
+    );
+    const second = createRunStorageLocation(
+      secondPath,
+      'r2/paper.tex',
+      executionId,
+    );
+    const output = (round: number, location: typeof first): OutputFileInfo => ({
+      source: 'paper.tex',
+      location,
+      round,
+      lineage: { original: base, diffBase: null, diffFile: null },
+      diff: null,
+    });
+    const { runLatexdiffFromMetadata } =
+      await import('@latex/latexdiff/diffOperations');
+
+    const result = await runLatexdiffFromMetadata({
+      rounds: { 1: [output(1, first)], 2: [output(2, second)] },
+      generateBetweenRoundDiffs: true,
+      progress: { report: vi.fn() },
+    });
+
+    expect(result).toMatchObject({ totalOperations: 3 });
+    expect(result.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          success: true,
+          description: 'paper.tex (r1→r2)',
+          diffFileName: 'paper_diffr2r1.tex',
+        }),
+      ]),
+    );
+    await expect(
+      readFile(path.join(firstDir, 'paper_diffr2r1.tex'), 'utf8'),
+    ).resolves.toContain('changed');
   });
 
   it('restores flattened BibTeX blocks to the source bibliography directive', async () => {
