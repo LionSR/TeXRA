@@ -1,5 +1,5 @@
 /**
- * Type definitions and schemas for tier-based model access.
+ * Schemas and types for tier-based model access.
  *
  * RESEARCHER ACCESS PROGRAM:
  * All server-side API key access is provided as a convenience for researchers.

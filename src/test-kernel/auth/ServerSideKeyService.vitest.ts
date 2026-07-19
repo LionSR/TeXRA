@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ULTRA_TIER } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ServerSideKeyService } from '@auth/serverKeys/ServerSideKeyService';
-import type { TierService } from '@auth/tier/TierService';
+import type { TierService } from '@auth/serverKeys/TierService';
 import { delay } from '@utils/core';
 import type { StateStore } from '@platform/interfaces';
 
