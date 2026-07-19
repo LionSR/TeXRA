@@ -10,9 +10,10 @@ import { tryPlatform } from '@platform/platform';
 import * as logger from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { createCodexAuthCoordinator } from './CodexAuthCoordinator';
+import { CODEX_SESSION_SECRET_KEY } from './codexConstants';
 import {
-  type CodexSessionCoordinator,
+  CodexSessionCoordinator,
+  type CodexSessionStorage,
   type CodexSessionStatus,
 } from './CodexSessionCoordinator';
 import { CodexAuthError } from './codexSessionTypes';
@@ -35,7 +36,12 @@ export function codexCoordinator(): CodexSessionCoordinator {
   if (!platform) {
     throw new Error('Codex auth used before the platform was initialized.');
   }
-  singleton = createCodexAuthCoordinator({ secrets: platform.secrets });
+  const storage: CodexSessionStorage = {
+    get: () => platform.secrets.get(CODEX_SESSION_SECRET_KEY),
+    store: (value) => platform.secrets.set(CODEX_SESSION_SECRET_KEY, value),
+    delete: () => platform.secrets.delete(CODEX_SESSION_SECRET_KEY),
+  };
+  singleton = new CodexSessionCoordinator({ storage });
   return singleton;
 }
 

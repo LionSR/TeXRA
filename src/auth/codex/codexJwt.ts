@@ -57,7 +57,7 @@ const CodexJwtClaimsSchema = z
  * Decode + validate a JWT's claims (the middle base64url segment). Returns empty
  * claims on any structural error; never throws.
  */
-export function decodeJwtPayload(token: string): CodexJwtClaims {
+function decodeJwtPayload(token: string): CodexJwtClaims {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return {};

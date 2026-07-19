@@ -18,7 +18,7 @@
 export const CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
 
 /** OpenAI auth issuer. */
-export const CODEX_ISSUER = 'https://auth.openai.com';
+const CODEX_ISSUER = 'https://auth.openai.com';
 
 /** OAuth authorize endpoint. */
 export const CODEX_AUTHORIZE_URL = `${CODEX_ISSUER}/oauth/authorize`;
@@ -41,7 +41,7 @@ export const CODEX_DEVICE_REDIRECT_URI = `${CODEX_ISSUER}/deviceauth/callback`;
  * with a generic `unknown_error` before redirecting back. Do NOT pick your own
  * port. (Keep in sync with codex-rs/login/src/server.rs in openai/codex.)
  */
-export const CODEX_CALLBACK_HOST = 'localhost';
+const CODEX_CALLBACK_HOST = 'localhost';
 export const CODEX_CALLBACK_PORT = 1455;
 export const CODEX_CALLBACK_FALLBACK_PORT = 1457;
 export const CODEX_CALLBACK_PATH = '/auth/callback';

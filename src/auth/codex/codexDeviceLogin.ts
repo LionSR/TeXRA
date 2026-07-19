@@ -20,7 +20,7 @@ import {
 
 const DEVICE_TIMEOUT_MS = 15 * 60 * 1000;
 
-export interface CodexDevicePrompt {
+interface CodexDevicePrompt {
   /** The one-time code the user types at the verification URL. */
   userCode: string;
   /** Where the user enters the code. */

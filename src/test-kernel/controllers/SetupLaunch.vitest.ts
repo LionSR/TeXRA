@@ -27,9 +27,14 @@ const mocks = vi.hoisted(() => ({
   getUseOpenRouter: vi.fn<() => boolean>(),
 }));
 
-vi.mock('@model/codexSubscriptionActive', () => ({
-  isCodexSubscriptionActive: mocks.isCodexSubscriptionActive,
-}));
+vi.mock('@model/providerCapabilities', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@model/providerCapabilities')>();
+  return {
+    ...actual,
+    isCodexSubscriptionActive: mocks.isCodexSubscriptionActive,
+  };
+});
 
 vi.mock('@auth/serverKeys', () => ({
   getServerSideKeyService: () => ({
