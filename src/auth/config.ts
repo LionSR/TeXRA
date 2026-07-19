@@ -6,12 +6,7 @@
  *
  * Similar to how GitHub Copilot works - users sign in to the official service.
  */
-import { z } from 'zod';
-import {
-  SUPABASE_CONFIG,
-  UserTierSchema,
-  type OAuthProvider,
-} from './sharedConfig';
+import { SUPABASE_CONFIG, type OAuthProvider } from './sharedConfig';
 export {
   AUTH_BRIDGE_URL,
   FREE_TIER,
@@ -37,30 +32,6 @@ export function isSupabaseConfigured(): boolean {
     !SUPABASE_CONFIG.url.includes('placeholder')
   );
 }
-
-// ============================================================================
-// User Groups & Permissions
-// ============================================================================
-
-/**
- * Permissions are just visibility values that the user can access.
- * E.g., ['researcher', 'math', 'cs'] means user can see agents with those visibility levels.
- * 'public' agents are always visible to authenticated users.
- *
- * Note: 'tier' column is reserved for future server-side API key access.
- */
-
-/**
- * User's authorization context.
- * Permissions are visibility values stored in profiles.permissions column.
- */
-export const UserAuthContextSchema = z.object({
-  /** Visibility values user can access: ['researcher', 'math', etc.] */
-  permissions: z.array(z.string()).catch([]),
-  /** User's tier (reserved for future API key access) */
-  tier: UserTierSchema.catch('free'),
-});
-export type UserAuthContext = z.infer<typeof UserAuthContextSchema>;
 
 /**
  * Default OAuth provider to use.

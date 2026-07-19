@@ -178,10 +178,7 @@ function installAuthenticatedSupabaseProvider() {
     id: 'user-1',
     email: 'user@example.com',
   } as never);
-  vi.spyOn(SupabaseClient, 'getUserAuthContext').mockResolvedValue({
-    tier: 'free',
-    permissions: ['public'],
-  });
+  vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue('free');
   return { ensureFreshToken };
 }
 
@@ -1050,7 +1047,6 @@ describe('desktop Supabase auth', () => {
       authenticated: true,
       user: { email: 'user@example.com', id: 'user-1' },
       tier: 'free',
-      permissions: ['public'],
       remoteAgents: [
         {
           name: 'remoteWriter',
