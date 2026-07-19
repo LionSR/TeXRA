@@ -135,8 +135,11 @@ describe('registerResumeAgentCommand', () => {
       { parentStreamId: PARENT_STREAM },
     );
     expect(mocks.resumeQueuedToolUseFromResumeData).toHaveBeenCalledOnce();
-    expect(mocks.resumeQueuedToolUseFromResumeData.mock.calls[0]?.[1]).toBe(
+    expect(mocks.resumeQueuedToolUseFromResumeData).toHaveBeenCalledWith(
+      canonical.streamId,
       canonical,
+      expect.any(Object),
+      expect.any(Object),
     );
     statusSpy.mockRestore();
   });
