@@ -197,14 +197,16 @@ describe('CLI model access routes', () => {
       target: 'global',
     });
     const writeProgress = vi.fn();
+    const controller = new AbortController();
 
     const result = await selectCliModelAccessRoute(context, 'chatgpt', {
       writeProgress,
+      signal: controller.signal,
     });
 
     expect(mocks.signInCliChatGpt).toHaveBeenCalledWith(
       { device: false, noBrowser: false },
-      { writeProgress },
+      { signal: controller.signal, writeProgress },
     );
     expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(true);
     expect(mocks.updateGlobalState).toHaveBeenCalledWith(
