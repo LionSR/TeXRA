@@ -190,6 +190,28 @@ describe('CLI Supabase auth', () => {
     );
   });
 
+  it('does not store a device session when cancellation follows polling', async () => {
+    const controller = new AbortController();
+    mocks.requestDeviceAuthorization.mockResolvedValue({
+      device_code: 'device-code',
+      expires_in: 600,
+      interval: 5,
+      user_code: 'ABCD-EFGH',
+      verification_uri: 'https://auth.example/device',
+    });
+    mocks.pollForDeviceSession.mockImplementation(async () => {
+      controller.abort();
+      return { access_token: 'device-token' };
+    });
+    const { signInCliSupabaseDeviceCode } = await loadSupabaseAuth();
+
+    await expect(
+      signInCliSupabaseDeviceCode({ signal: controller.signal }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+
+    expect(mocks.authCoordinator.storeSession).not.toHaveBeenCalled();
+  });
+
   it('forwards interactive cancellation to both TeXRA transports', async () => {
     const controller = new AbortController();
     const session = { access_token: 'token' };
