@@ -45,7 +45,6 @@
     "check:desktop-package": "node scripts/verify-desktop-package.mjs",
     "check:dead-code": "knip --no-progress --include files,exports,types,duplicates",
     "check:dead-code-ratchet": "node scripts/check-dead-code-ratchet.mjs",
-    "check:test-loc-growth": "node scripts/check-test-loc-growth.mjs",
     "texra-local:build": "corepack pnpm --filter @texra-ai/cli run prepare:trace-viewer-assets && corepack pnpm --filter @texra-ai/cli run bundle && corepack pnpm --filter @texra-ai/cli run copy:resources && corepack pnpm --filter @texra-ai/cli run copy:docs",
     "texra-local:link": "node scripts/link-texra-local.mjs",
     "check:desktop-installers": "node scripts/verify-desktop-installer-artifacts.mjs",

@@ -1,4 +1,0 @@
-{
-  "semantics": "D8 warn-only test-LoC baseline (issue #7684): total line count of src/test-kernel/** (.ts/.tsx/.mts/.cts, excluding .d.ts). check:test-loc-growth reports the delta against this number and never fails CI; update this file when a deliberate, judged addition should reset the baseline.",
-  "testKernelLoc": 147904
-}
