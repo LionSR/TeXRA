@@ -312,18 +312,11 @@ export async function activate(context: vscode.ExtensionContext) {
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => disposeDiffRefresh());
   await StorageFS.ensureDir(RUNS_STORAGE_DIR);
   FileLister.initialize(context);
-  initializeServerSideKeyAccess(
-    {
-      state: context.globalState,
-      subscriptions: context.subscriptions,
-      logger,
-    },
-    {
-      isAuthenticated: () => SupabaseClient.isAuthenticated(),
-      getUserTier: () => SupabaseClient.getUserTier(),
-      getAccessToken: () => SupabaseClient.getRelayAccessToken(),
-    },
-  );
+  initializeServerSideKeyAccess({
+    state: context.globalState,
+    subscriptions: context.subscriptions,
+    logger,
+  });
 
   // Seed first-install defaults (e.g. disabled tools) before anything writes
   // LAST_KNOWN_VERSION, so upgrading users are not affected.

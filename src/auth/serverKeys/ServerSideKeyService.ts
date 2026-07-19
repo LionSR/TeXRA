@@ -16,6 +16,7 @@
 
 import { EventEmitter } from 'node:events';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { SupabaseClient } from '../SupabaseClient';
 import {
   SERVER_SIDE_CACHE_TTL_MS,
   ULTRA_TIER,
@@ -47,15 +48,6 @@ const RELAY_PATH_SUFFIXES: Partial<Record<ServerSideProvider, string>> = {
 const USE_INCLUDED_ACCESS_KEY = 'texra.useIncludedModelAccess';
 
 const SERVICE_EVENT = 'event';
-
-/**
- * Interface for authentication provider that can check auth state and get user tier.
- */
-export interface AuthProvider {
-  isAuthenticated(): Promise<boolean>;
-  getUserTier(): Promise<UserTier>;
-  getAccessToken(): Promise<string | null>;
-}
 
 export interface ServerSideKeyDisposable {
   dispose(): void;
@@ -164,7 +156,6 @@ export class ServerSideKeyService {
 
   constructor(
     private readonly baseUrl: string,
-    private readonly authProvider: AuthProvider,
     private readonly tierService: TierService,
     private readonly logger: AuthServiceLogger = NOOP_AUTH_SERVICE_LOGGER,
   ) {
@@ -275,10 +266,10 @@ export class ServerSideKeyService {
 
   private async fetchAccessStatus(): Promise<boolean> {
     try {
-      if (!(await this.authProvider.isAuthenticated())) {
+      if (!(await SupabaseClient.isAuthenticated())) {
         return this.setAccessDenied();
       }
-      const tier = await this.authProvider.getUserTier();
+      const tier = await SupabaseClient.getUserTier();
       this.accessResult = true;
       this.userTier = tier || FREE_TIER;
       return true;
@@ -317,7 +308,8 @@ export class ServerSideKeyService {
     }
 
     this.accessFetchPromise = (async () => {
-      const authToken = (await this.authProvider.getAccessToken()) ?? undefined;
+      const authToken =
+        (await SupabaseClient.getRelayAccessToken()) ?? undefined;
 
       const [hasAccess, tierConfig] = await Promise.all([
         this.fetchAccessStatus(),
