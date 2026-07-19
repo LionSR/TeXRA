@@ -16,9 +16,15 @@ import * as path from 'node:path';
 import simpleGit, { type SimpleGit } from 'simple-git';
 
 // Local imports
+import {
+  isADirectoryError,
+  isFileNotFoundError,
+  isNotADirectoryError,
+} from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { isDirectory, isSymlink } from '@utils/files/fsEntryType';
 import { makeMachineGitEnv } from '@utils/system/platformPaths';
 import { splitContentLines, splitOutputLines } from '@utils/text/stringUtils';
 
@@ -336,18 +342,51 @@ async function collectUntrackedDiffs(
   const included = untracked.slice(0, MAX_UNTRACKED_FILES);
   const contents = await Promise.all(
     included.map(async (file) => {
+      const filePath = path.join(repoRoot, file);
       // One byte beyond the cap so buildUntrackedFileDiff still detects
       // and marks truncation for oversized files.
-      try {
-        const content = await platform().fs.readFileChunk(
-          path.join(repoRoot, file),
-          0,
-          MAX_UNTRACKED_FILE_BYTES + 1,
-        );
-        return { file, content };
-      } catch {
-        return undefined; // Vanished or unreadable; skip.
+      for (const isRetry of [false, true]) {
+        try {
+          const content = await platform().fs.readFileChunk(
+            filePath,
+            0,
+            MAX_UNTRACKED_FILE_BYTES + 1,
+          );
+          return { file, content };
+        } catch (error) {
+          if (isFileNotFoundError(error) || isNotADirectoryError(error)) {
+            // The path disappeared after Git listed it, so there is no
+            // evidence left for this review to collect.
+            return undefined;
+          }
+          if (isADirectoryError(error)) {
+            try {
+              const { type } = await platform().fs.stat(filePath);
+              // A real directory means the listed file was replaced. A file
+              // or symlink may have reappeared, so retry its read once.
+              if (isDirectory(type) && !isSymlink(type)) return undefined;
+              if (!isRetry) continue;
+            } catch (recheckError) {
+              if (
+                isFileNotFoundError(recheckError) ||
+                isNotADirectoryError(recheckError)
+              ) {
+                // The path disappeared again while its type was rechecked.
+                return undefined;
+              }
+              throw new Error(
+                `Could not inspect untracked path "${file}": ${toErrorMessage(recheckError)}`,
+                { cause: recheckError },
+              );
+            }
+          }
+          throw new Error(
+            `Could not read untracked file "${file}": ${toErrorMessage(error)}`,
+            { cause: error },
+          );
+        }
       }
+      throw new Error(`Could not read untracked file "${file}"`);
     }),
   );
 
@@ -442,13 +481,23 @@ export async function collectReviewDiff(
   const submoduleFlag = includeSubmodules
     ? '--submodule=diff'
     : '--ignore-submodules=all';
-  const [diffText, nameOnly, untracked] = await Promise.all([
-    rawGit(sgRoot, ['diff', '--no-color', submoduleFlag, baseRef, '--']),
-    rawGit(sgRoot, ['diff', '--name-only', submoduleFlag, baseRef, '--']),
-    includeUntracked
-      ? collectUntrackedDiffs(sgRoot, repoRoot)
-      : Promise.resolve({ diff: '', files: [] }),
-  ]);
+  let collected: [
+    string | null,
+    string | null,
+    Awaited<ReturnType<typeof collectUntrackedDiffs>>,
+  ];
+  try {
+    collected = await Promise.all([
+      rawGit(sgRoot, ['diff', '--no-color', submoduleFlag, baseRef, '--']),
+      rawGit(sgRoot, ['diff', '--name-only', submoduleFlag, baseRef, '--']),
+      includeUntracked
+        ? collectUntrackedDiffs(sgRoot, repoRoot)
+        : Promise.resolve({ diff: '', files: [] }),
+    ]);
+  } catch (error) {
+    return { ok: false, reason: toErrorMessage(error) };
+  }
+  const [diffText, nameOnly, untracked] = collected;
   // A failed name-only diff must fail the collection too: issue reports are
   // validated against `changedFiles`, so an empty list alongside real diff
   // text would reject every finding as outside the change set.

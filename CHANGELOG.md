@@ -38,6 +38,10 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Agent reviews no longer hide unreadable untracked files** — files removed
+  during review collection are omitted normally, while permission and I/O
+  failures stop the review with a clear error instead of producing incomplete
+  findings.
 - **File searches no longer hide unreadable matches** — inaccessible matching
   files now surface a search error instead of appearing as the oldest results,
   while files removed during the search are omitted normally.
