@@ -148,7 +148,6 @@ export interface StreamSlice {
   readonly conversation: ConversationProgress | undefined;
   readonly roundStage?: RoundStage | undefined;
   readonly entries: readonly ConversationEntry[];
-  readonly queuedFollowUps: number;
   readonly queuedFollowUpMessages: readonly string[];
   readonly activeProcesses: readonly ActiveChildInfo[];
   readonly todos: readonly TodoItem[];
@@ -220,7 +219,6 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
     conversation: undefined,
     roundStage: undefined,
     entries: [],
-    queuedFollowUps: 0,
     queuedFollowUpMessages: [],
     activeProcesses: [],
     todos: [],

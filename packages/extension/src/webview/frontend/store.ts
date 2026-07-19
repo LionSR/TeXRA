@@ -100,6 +100,15 @@ export const KEY_TO_FILE_TYPE: Record<
   outputFiles: 'output',
 };
 
+/** Maps a single-file selection type (`SET_CURRENT_FILE`'s base/edited slot) to its `FileOptions` key. */
+export const SINGLE_FILE_TYPE_TO_KEY: Record<
+  'base' | 'edited',
+  keyof Pick<FileOptions, 'baseFile' | 'editedFile'>
+> = {
+  base: 'baseFile',
+  edited: 'editedFile',
+};
+
 // =========================================================================
 // Placeholder Configuration
 // =========================================================================

@@ -5,12 +5,7 @@
 
 // Local imports - shared IPC and schemas
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import type {
-  FileOptions,
-  MainViewHandlerRegistry,
-  MainViewMessage,
-  MultiFiles,
-} from '@shared/schemas';
+import type { MainViewHandlerRegistry, MainViewMessage } from '@shared/schemas';
 import { unique } from '@utils/core';
 
 // Local imports - main view
@@ -24,7 +19,11 @@ import {
 } from '../mainViewState';
 import { showInformation, updateMultiFiles } from '../mainViewActions';
 import { saveState } from '../persistence';
-import { MULTI_FILE_COMMAND_TO_KEY } from '../store';
+import {
+  FILE_TYPE_TO_KEY,
+  MULTI_FILE_COMMAND_TO_KEY,
+  SINGLE_FILE_TYPE_TO_KEY,
+} from '../store';
 
 // Helper type for extracting specific message type from union
 type MainViewMessageFor<C extends MainViewMessage['command']> = Extract<
@@ -40,7 +39,7 @@ type SetMultipleFilesMessage =
 
 function handleSetMultipleFiles(message: SetMultipleFilesMessage): void {
   const files = message.files ?? [];
-  const listId = MULTI_FILE_COMMAND_TO_KEY[message.command] as keyof MultiFiles;
+  const listId = MULTI_FILE_COMMAND_TO_KEY[message.command];
   if (!listId) return;
 
   multiFiles$.set({ ...multiFiles$.get(), [listId]: files });
@@ -139,7 +138,7 @@ export const documentHandlers = {
     // Workflow categories (input/context/media): prepend the active editor's
     // file to the multi-list head so it becomes the "primary" file.
     if (DOCUMENT_FILE_TYPES.includes(fileType as DocumentFileType)) {
-      const listId = `${fileType}Files` as keyof MultiFiles;
+      const listId = FILE_TYPE_TO_KEY[fileType as DocumentFileType];
       const mf = multiFiles$.get();
       const existing = mf[listId] ?? [];
       const next = [filePath, ...existing.filter((f) => f !== filePath)];
@@ -148,9 +147,10 @@ export const documentHandlers = {
     }
 
     // Base/edited single-slot fields go through fileOptions like before.
-    const key = `${fileType}File` as keyof FileOptions;
+    const key =
+      SINGLE_FILE_TYPE_TO_KEY[fileType as keyof typeof SINGLE_FILE_TYPE_TO_KEY];
+    if (!key) return;
     const sf = singleFiles$.get();
-    if (!(key in sf)) return;
     const options = fileOptions$.get()[key] ?? [];
     if (!options.includes(filePath)) {
       showInformation(
@@ -180,14 +180,11 @@ export const documentHandlers = {
   },
 
   [MAIN_VIEW_COMMANDS.SET_OPENED_FILES]: (message) => {
-    const fileType = message.fileType;
-    const normalizedType = fileType.endsWith('Files')
-      ? fileType
-      : `${fileType}Files`;
-    const listId = normalizedType as keyof MultiFiles;
-    const mf = multiFiles$.get();
-    if (!(listId in mf)) return;
+    const listId =
+      FILE_TYPE_TO_KEY[message.fileType as keyof typeof FILE_TYPE_TO_KEY];
+    if (!listId) return;
 
+    const mf = multiFiles$.get();
     const filesToAdd = message.files ?? [];
     const existing = mf[listId] ?? [];
     const merged = unique([...existing, ...filesToAdd]);

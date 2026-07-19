@@ -431,7 +431,7 @@ describe('child stream progress events', () => {
       childStream.waitForInput();
       childStream.beginTurn();
       childStream.failTurn();
-      await childStream.finalize({ failed: true });
+      await childStream.finalize({ outcome: { kind: 'failed' } });
     } finally {
       recorded.detach();
     }
@@ -485,7 +485,7 @@ describe('child stream progress events', () => {
       childStream.waitForInput();
       childStream.beginTurn();
       childStream.failTurn();
-      await childStream.finalize({ failed: true });
+      await childStream.finalize({ outcome: { kind: 'failed' } });
 
       expect(defaultSession().status.get(stoppedChildStreamId)).toBe(
         STREAM_PHASE.CANCELLED,
@@ -518,7 +518,7 @@ describe('child stream progress events', () => {
     expect(handle).toBeDefined();
 
     await withSessionEventRecording(() =>
-      childStream.finalize({ cancelled: true }),
+      childStream.finalize({ outcome: { kind: 'cancelled' } }),
     );
 
     await expect(handle?.result).resolves.toMatchObject({
@@ -544,7 +544,9 @@ describe('child stream progress events', () => {
     expect(handle).toBeDefined();
 
     await withSessionEventRecording(() =>
-      childStream.finalize({ errorMessage: 'child process exited 1' }),
+      childStream.finalize({
+        outcome: { kind: 'failed', errorMessage: 'child process exited 1' },
+      }),
     );
 
     await expect(handle?.result).resolves.toMatchObject({
@@ -559,7 +561,7 @@ describe('child stream progress events', () => {
     });
   });
 
-  it('normalizes clean loop facts to failed when child finalization has an error', async () => {
+  it('fails finalization when the outcome carries an errorMessage', async () => {
     const active = createRecordingHost();
 
     const childStream = withSessionEventRecording(() =>
@@ -576,9 +578,10 @@ describe('child stream progress events', () => {
 
     await withSessionEventRecording(() =>
       childStream.finalize({
-        failed: false,
-        cancelled: false,
-        errorMessage: 'tool failed after reporting ready',
+        outcome: {
+          kind: 'failed',
+          errorMessage: 'tool failed after reporting ready',
+        },
       }),
     );
 

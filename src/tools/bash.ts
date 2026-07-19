@@ -38,7 +38,11 @@ import {
 
 // Local imports - tools
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { formatBashDelivery, formatBashError } from '@tools/subagentResults';
+import {
+  formatBashDelivery,
+  formatBashError,
+  type BashDeliveryStreamExcerpt,
+} from '@tools/subagentResults';
 import { requireRunStream } from '@tools/contextHelpers';
 import {
   enqueueChildRunFollowUp,
@@ -487,27 +491,33 @@ export class BashTool extends defineTool({
           // mirroring the foreground `checkToolResultTextLimit` elision note.
           const stdoutTruncated = stdoutTotalChars > stdoutTail.length;
           const stderrTruncated = stderrTotalChars > stderrTail.length;
-          const msg = formatBashDelivery(
-            executionId,
-            command,
-            wallTimeMs,
-            result,
-            stdoutTail,
-            stderrTail,
-            stdoutTruncated ? stdoutHead : '',
-            stderrTruncated ? stderrHead : '',
-            stdoutTruncated
+          const stdoutExcerpt: BashDeliveryStreamExcerpt = {
+            tail: stdoutTail,
+            head: stdoutTruncated ? stdoutHead : '',
+            elidedChars: stdoutTruncated
               ? Math.max(
                   0,
                   stdoutTotalChars - stdoutHead.length - stdoutTail.length,
                 )
               : 0,
-            stderrTruncated
+          };
+          const stderrExcerpt: BashDeliveryStreamExcerpt = {
+            tail: stderrTail,
+            head: stderrTruncated ? stderrHead : '',
+            elidedChars: stderrTruncated
               ? Math.max(
                   0,
                   stderrTotalChars - stderrHead.length - stderrTail.length,
                 )
               : 0,
+          };
+          const msg = formatBashDelivery(
+            executionId,
+            command,
+            wallTimeMs,
+            result,
+            stdoutExcerpt,
+            stderrExcerpt,
           );
 
           const store = getExecutionStore(executionId);
@@ -525,7 +535,11 @@ export class BashTool extends defineTool({
           }
           await finalizeAndReport(result.success, msg);
 
-          await deliverAndFinalize(msg, { wallTimeMs, error, autoClose: true });
+          await deliverAndFinalize(msg, {
+            wallTimeMs,
+            outcome: error ? { kind: 'failed', error } : { kind: 'completed' },
+            autoClose: true,
+          });
           return;
         }
 
@@ -533,7 +547,10 @@ export class BashTool extends defineTool({
         const msg = formatBashError(executionId, command, error);
         await finalizeAndReport(false, msg);
 
-        await deliverAndFinalize(msg, { error, autoClose: true });
+        await deliverAndFinalize(msg, {
+          outcome: { kind: 'failed', error },
+          autoClose: true,
+        });
       } catch (err: unknown) {
         logDurabilityFailure('complete', err);
       } finally {
