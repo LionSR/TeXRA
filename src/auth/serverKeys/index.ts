@@ -16,7 +16,7 @@
 import { SUPABASE_CUSTOM_DOMAIN } from '../config';
 import { getTierService } from '../tier';
 import { ServerSideKeyService } from './ServerSideKeyService';
-import type { AuthServiceLogger } from '../serviceLogger';
+import type { SupabaseSessionLog } from '../supabaseSessionTypes';
 import type { StateStore } from '@platform/interfaces';
 
 // Types
@@ -59,7 +59,7 @@ export function setServerSideKeyService(service: ServerSideKeyService): void {
  */
 export function initializeServerSideKeyAccess(options: {
   state?: StateStore;
-  logger?: AuthServiceLogger;
+  logger?: SupabaseSessionLog;
   notifyIncludedModelAccessChanged?: (enabled: boolean) => void;
 }): void {
   _instance = new ServerSideKeyService(
