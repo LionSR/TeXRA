@@ -206,7 +206,6 @@ export class UsageMonitor {
         outputTokens: roundOutputTokens,
         cachedInputTokens: roundCacheReadTokens,
         cacheMissInputTokens: roundCacheMissTokens.billing,
-        cacheCreationInputTokens: roundCacheCreationTokens,
         reasoningTokens: roundReasoningTokens,
         cost: roundCost,
         usageRoute,
@@ -265,7 +264,6 @@ export class UsageMonitor {
       | 'inputTokens'
       | 'outputTokens'
       | 'cachedInputTokens'
-      | 'cacheCreationInputTokens'
       | 'reasoningTokens'
       | 'cost'
     > & { cacheMissInputTokens: number; usageRoute?: UsageRoute },
@@ -288,8 +286,6 @@ export class UsageMonitor {
         cost: roundTo(usage.cost, 6),
         responseTimeMs: Math.round(totalResponseTimeMs),
         cachedInputTokens,
-        cacheMissInputTokens: usage.cacheMissInputTokens,
-        cacheCreationInputTokens: usage.cacheCreationInputTokens ?? 0,
         reasoningTokens: usage.reasoningTokens ?? 0,
         usedRelay,
         ...(usage.usageRoute != null && { usageRoute: usage.usageRoute }),
