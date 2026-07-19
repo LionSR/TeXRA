@@ -17,6 +17,25 @@ function testSession(): CodexSession {
 }
 
 describe('Codex loopback login', () => {
+  it('closes the callback wait when its host cancels', async () => {
+    const controller = new AbortController();
+    const coordinator = {
+      buildAuthorizeRequest: (port: number): CodexAuthorizeRequest => ({
+        url: 'https://auth.example.test/oauth/authorize',
+        verifier: 'verifier',
+        state: 'state',
+        redirectUri: `http://127.0.0.1:${port}${CODEX_CALLBACK_PATH}`,
+      }),
+    } as unknown as CodexSessionCoordinator;
+    const completion = loginWithLoopback({
+      coordinator,
+      openBrowser: () => controller.abort(),
+      signal: controller.signal,
+    });
+
+    await expect(completion).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
   it('ignores stale callback errors and accepts a later valid callback', async () => {
     const state = 'expected-state';
     const verifier = 'verifier';

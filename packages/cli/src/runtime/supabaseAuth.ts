@@ -71,6 +71,7 @@ export interface CliLoginOptions {
   log?: LogBackend;
   onAuthUrl?: (url: string) => void;
   manualBrowserHint?: string;
+  signal?: AbortSignal;
 }
 
 export const CLI_MANUAL_AUTH_URL_PROMPT =
@@ -136,6 +137,7 @@ export async function signInCliSupabase(
   const queryParams = buildOAuthQueryParams(provider, options);
 
   try {
+    options.signal?.throwIfAborted();
     if (options.selectAccount || options.loginHint) {
       await authCoordinator.clearSession();
     }
@@ -153,6 +155,7 @@ export async function signInCliSupabase(
       );
     }
 
+    options.signal?.throwIfAborted();
     options.onAuthUrl?.(data.url);
     if (options.openBrowser ?? true) {
       await openBrowser(
@@ -162,7 +165,7 @@ export async function signInCliSupabase(
       );
     }
 
-    const session = await callbackServer.waitForSession();
+    const session = await callbackServer.waitForSession(options.signal);
     getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
     await enableCliIncludedModelAccess();
     return session;
@@ -189,6 +192,7 @@ function buildOAuthQueryParams(
 export interface CliDeviceLoginOptions {
   /** Called once with the code and verification URL the user must open. */
   onDeviceCode?: (authorization: DeviceAuthorization) => void;
+  signal?: AbortSignal;
 }
 
 /**
@@ -200,9 +204,13 @@ export async function signInCliSupabaseDeviceCode(
   options: CliDeviceLoginOptions = {},
 ): Promise<SupabaseSession> {
   const authCoordinator = getCliSupabaseAuthCoordinator();
-  const authorization = await requestDeviceAuthorization();
+  const authorization = await requestDeviceAuthorization({
+    signal: options.signal,
+  });
   options.onDeviceCode?.(authorization);
-  const exchange = await pollForDeviceSession(authorization);
+  const exchange = await pollForDeviceSession(authorization, {
+    signal: options.signal,
+  });
   // The token endpoint mints a native GoTrue session (auth-github shape), so
   // standard Supabase refresh applies — no custom refresh flag.
   const session = toStorableSupabaseSession(exchange, {

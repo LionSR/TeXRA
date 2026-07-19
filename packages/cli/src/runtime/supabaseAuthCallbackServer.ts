@@ -39,7 +39,7 @@ function isRecoverableCallbackRequestError(
 
 export interface LoopbackCallbackServer {
   readonly redirectTo: string;
-  waitForSession(): Promise<SupabaseSession>;
+  waitForSession(signal?: AbortSignal): Promise<SupabaseSession>;
   close(): Promise<void>;
 }
 
@@ -94,10 +94,16 @@ export async function startLoopbackCallbackServer(
 
   return {
     redirectTo: `http://${LOOPBACK_HOST}:${address.port}${CALLBACK_PATH}`,
-    waitForSession: () =>
-      sessionPromise.finally(() => {
+    waitForSession: (signal) => {
+      if (!signal) return sessionPromise.finally(cleanup);
+      signal.throwIfAborted();
+      const onAbort = (): void => rejectSession(signal.reason);
+      signal.addEventListener('abort', onAbort, { once: true });
+      return sessionPromise.finally(() => {
+        signal.removeEventListener('abort', onAbort);
         cleanup();
-      }),
+      });
+    },
     close: async () => {
       cleanup();
       await closeServer(server);
