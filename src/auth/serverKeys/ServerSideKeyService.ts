@@ -14,6 +14,8 @@
  * - free tier: Included non-premium models (up to $3/M input)
  */
 
+import type { ServerSideProvider } from '@shared/constants/providers';
+import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { SupabaseClient } from '../SupabaseClient';
 import {
@@ -24,8 +26,7 @@ import {
 } from '../config';
 import type { SupabaseSessionLog } from '../supabaseSessionTypes';
 import type { StateStore } from '@platform/interfaces';
-import type { TierService } from '../tier/TierService';
-import type { ServerSideProvider } from './types';
+import type { TierService } from './TierService';
 
 const CHANNEL = 'ServerSideKeyService';
 
@@ -120,6 +121,10 @@ export class ServerSideKeyService {
 
   isRelayQuotaExceeded(): boolean {
     return this.tierService.isQuotaExceeded();
+  }
+
+  getSpendingStatus(): SpendingStatus | null {
+    return this.tierService.getSpendingStatus();
   }
 
   async setUseIncludedModelAccess(
