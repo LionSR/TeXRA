@@ -4,7 +4,7 @@ import { z } from 'zod';
 // Local imports
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { LEAN4_EXTENSION_ID } from '@tools/lean/leanConstants';
+import { LEAN4_EXTENSION_ID } from '@tools/lean/leanTypes';
 import { delay } from '@utils/core';
 
 // Local file imports

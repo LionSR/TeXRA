@@ -30,7 +30,7 @@ import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
   PR_POLL_INTERVAL_MS,
 } from '@tools/github/prSubscriptionConstants';
-import { LEAN4_EXTENSION_ID } from '@tools/lean/leanConstants';
+import { LEAN4_EXTENSION_ID } from '@tools/lean/leanTypes';
 import {
   isLeanServerActive,
   listLeanServers,
