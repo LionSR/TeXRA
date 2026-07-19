@@ -13,6 +13,7 @@ import { FileType, type FileStat } from '@platform/interfaces';
 // Local imports
 import { installPlatform } from '@test/support/setupPlatform';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
@@ -87,11 +88,12 @@ function runAccept(
   tool: AcceptRunFilesTool,
   host: AgentRuntimeHost,
   files: { path: string; original: string }[],
+  tracker = new FileInteractionState(),
 ) {
   return withRunContext(
     createRunContext({ runtimeHost: host, streamId, executionId }),
     () =>
-      withToolFileInteractionContext({ tracker: {} as never }, () =>
+      withToolFileInteractionContext({ tracker }, () =>
         tool.call({ execution_id: executionId, files }),
       ),
   );
@@ -157,6 +159,7 @@ describe('accept_run_files progress events', () => {
   it('publishes accepted workspace files through app signals', async () => {
     const explicit = createRecordingHost();
     const tool = new AcceptRunFilesTool();
+    const tracker = new FileInteractionState();
     const written: string[][] = [];
     const dispose = appSignals.on(
       'workspaceFilesWritten',
@@ -176,13 +179,17 @@ describe('accept_run_files progress events', () => {
 
     testApprovalHandler = async () => ({ accepted: true });
 
-    const result = await runAccept(tool, explicit.host, [
-      { path: 'output.tex', original: 'paper.tex' },
-    ]);
+    const result = await runAccept(
+      tool,
+      explicit.host,
+      [{ path: 'output.tex', original: 'paper.tex' }],
+      tracker,
+    );
 
     expect(result.status).toBe('executed');
     expect(explicit.events).toEqual([]);
     expect(written).toEqual([[`${workspacePath}/paper.tex`]]);
+    expect(tracker.hasRead('paper.tex')).toBe(true);
     dispose();
   });
 
