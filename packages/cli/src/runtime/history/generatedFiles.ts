@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { listExecutionWorkspaceFiles } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { isFileNotFoundError } from '@common/errors';
+import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { ExecutionId } from '@shared/schemas';
 import { isKVFile as isHistoryKvFile } from '@tools/executions/executionKvFiles';
@@ -45,12 +45,17 @@ async function walkStorageDirectory(
     const rawRelative = relativePath ? path.join(relativePath, name) : name;
     const childPath = path.join(basePath, rawRelative);
     const entryIsDirectory = isDirectory(type);
-    const stat = await StorageFS.stat(childPath).catch(() => ({ size: 0 }));
-    files.push({
-      path: toPosixPath(rawRelative),
-      size: stat.size,
-      isDirectory: entryIsDirectory,
-    });
+    try {
+      const stat = await StorageFS.stat(childPath);
+      files.push({
+        path: toPosixPath(rawRelative),
+        size: stat.size,
+        isDirectory: entryIsDirectory,
+      });
+    } catch (error) {
+      if (isFileNotFoundError(error) || isNotADirectoryError(error)) continue;
+      throw error;
+    }
     if (entryIsDirectory && maxDepth > 1) {
       files.push(
         ...(await walkStorageDirectory(basePath, rawRelative, maxDepth - 1)),
