@@ -405,7 +405,7 @@ const localRules = {
 export default tseslint.config(
   // Global ignores specified in the old config
   {
-    ignores: ['out/', 'dist/', '**/*.d.ts'],
+    ignores: ['dist/', '**/*.d.ts'],
   },
 
   // Apply ESLint recommended rules globally

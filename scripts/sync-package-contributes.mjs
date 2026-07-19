@@ -1,8 +1,13 @@
+// Node.js imports
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { readFile, writeFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
+
+// Third-party imports
+import { build } from 'esbuild';
 
 // Code-generate the catalog-derived parts of the VS Code manifest
 // (`contributes.configuration`, `contributes.commands`,
@@ -16,13 +21,32 @@ const rootDir = path.resolve(
 );
 const packagePath = path.join(rootDir, 'packages', 'extension', 'package.json');
 const require = createRequire(import.meta.url);
-const {
-  buildTexraPackageConfiguration,
-} = require('../out/packages/extension/src/schemas/texraSettings.js');
-const {
-  packageCommandContributions,
-  commandKeybindings,
-} = require('../out/src/shared/commands/catalog.js');
+const bundleDir = await mkdtemp(
+  path.join(tmpdir(), 'texra-package-contributes-'),
+);
+let texraSettings;
+let commandCatalog;
+try {
+  await build({
+    absWorkingDir: rootDir,
+    entryPoints: {
+      texraSettings: 'packages/extension/src/schemas/texraSettings.ts',
+      commandCatalog: 'src/shared/commands/catalog.ts',
+    },
+    bundle: true,
+    format: 'cjs',
+    platform: 'node',
+    target: 'node22',
+    outdir: bundleDir,
+    tsconfig: 'tsconfig.json',
+  });
+  texraSettings = require(path.join(bundleDir, 'texraSettings.js'));
+  commandCatalog = require(path.join(bundleDir, 'commandCatalog.js'));
+} finally {
+  await rm(bundleDir, { recursive: true, force: true });
+}
+const { buildTexraPackageConfiguration } = texraSettings;
+const { packageCommandContributions, commandKeybindings } = commandCatalog;
 
 function getConfigurationSections(packageJson) {
   const configuration = packageJson.contributes?.configuration;
