@@ -1,5 +1,12 @@
 // Node imports
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
@@ -173,6 +180,50 @@ describe('collectReviewDiff (real git repository)', () => {
       ok: false,
       reason:
         'Could not read untracked file "secret.txt": untracked file is unreadable',
+    });
+  });
+
+  it('omits an untracked file replaced by a directory during collection', async () => {
+    const replacedPath = path.join(repo, 'replaced.txt');
+    await writeFile(replacedPath, 'temporary\n');
+    const fs = platform().fs;
+    const readFileChunk = fs.readFileChunk.bind(fs);
+    vi.spyOn(fs, 'readFileChunk').mockImplementation(
+      async (filePath, offset, length) => {
+        if (path.basename(filePath) === 'replaced.txt') {
+          await rm(filePath);
+          await mkdir(filePath);
+          throw fsError('EISDIR', 'untracked file became a directory');
+        }
+        return readFileChunk(filePath, offset, length);
+      },
+    );
+
+    const value = await collectDiffOrFail({ includeUntracked: true });
+
+    expect(value.diff).toBe('');
+    expect(value.changedFiles).toEqual([]);
+  });
+
+  it('does not hide an untracked symlink to a directory', async () => {
+    const target = path.join(repo, 'target-dir');
+    await mkdir(target);
+    await symlink(target, path.join(repo, 'linked-dir'));
+    failUntrackedRead(
+      'linked-dir',
+      fsError('EISDIR', 'untracked path resolves to a directory'),
+    );
+
+    const result = await collectReviewDiff({
+      cwd: repo,
+      includeUntracked: true,
+      includeSubmodules: true,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      reason:
+        'Could not read untracked file "linked-dir": untracked path resolves to a directory',
     });
   });
 

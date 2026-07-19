@@ -337,11 +337,12 @@ async function collectUntrackedDiffs(
   const included = untracked.slice(0, MAX_UNTRACKED_FILES);
   const contents = await Promise.all(
     included.map(async (file) => {
+      const filePath = path.join(repoRoot, file);
       // One byte beyond the cap so buildUntrackedFileDiff still detects
       // and marks truncation for oversized files.
       try {
         const content = await platform().fs.readFileChunk(
-          path.join(repoRoot, file),
+          filePath,
           0,
           MAX_UNTRACKED_FILE_BYTES + 1,
         );
@@ -349,6 +350,22 @@ async function collectUntrackedDiffs(
       } catch (error) {
         if (isFileNotFoundError(error) || isNotADirectoryError(error)) {
           return undefined;
+        }
+        if ((error as { code?: string })?.code === 'EISDIR') {
+          try {
+            if (!(await platform().fs.isSymlink(filePath))) return undefined;
+          } catch (recheckError) {
+            if (
+              isFileNotFoundError(recheckError) ||
+              isNotADirectoryError(recheckError)
+            ) {
+              return undefined;
+            }
+            throw new Error(
+              `Could not inspect untracked path "${file}": ${toErrorMessage(recheckError)}`,
+              { cause: recheckError },
+            );
+          }
         }
         throw new Error(
           `Could not read untracked file "${file}": ${toErrorMessage(error)}`,
