@@ -8,7 +8,10 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { subscribeStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
+import {
+  subscribeStreamLog,
+  syncStreamLog,
+} from '@cli/chat/tui/state/subscribeStreamLog';
 import {
   activeStreamId,
   patchStream,
@@ -156,5 +159,21 @@ describe('subscribeStreamLog batching and dispose', () => {
     expect(releaseEntries).toHaveBeenCalledWith(streamA);
 
     dispose();
+  });
+
+  it('does not release a background transcript before its status is known', () => {
+    const store = defaultSession().transcripts;
+    appendUserMessage(store, streamB, 'b-1', 'starting');
+    activeStreamId.set(streamA);
+    const releaseEntries = vi.spyOn(store, 'releaseEntries');
+
+    syncStreamLog(streamB);
+
+    expect(streams.get().get(streamB)).toMatchObject({
+      description: 'starting',
+      entries: [],
+      status: undefined,
+    });
+    expect(releaseEntries).not.toHaveBeenCalledWith(streamB);
   });
 });

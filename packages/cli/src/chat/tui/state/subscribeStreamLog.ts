@@ -563,7 +563,10 @@ export function syncStreamLog(
       )?.text ??
       latestInstruction ??
       slice.description;
-    releaseAfterSync = !projectFullTranscript && !isActivePhase(slice.status);
+    releaseAfterSync =
+      !projectFullTranscript &&
+      slice.status !== undefined &&
+      !isActivePhase(slice.status);
 
     if (!projectFullTranscript) {
       const compactEntries = syntheticEntries;
