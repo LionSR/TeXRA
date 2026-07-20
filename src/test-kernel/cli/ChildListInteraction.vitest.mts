@@ -21,6 +21,37 @@ function session(id: StreamTabId, active = false): StreamView {
 }
 
 describe('CLI child list interaction', () => {
+  it('toggles file details with i while the list owns the keyboard', async () => {
+    const { ink, React } = await loadInk();
+    const onToggleRowExpand = vi.fn();
+    const stdin = new FakeStdin();
+    const instance = ink.render(
+      React.createElement(SubagentList, {
+        keyboardActive: true,
+        maxRows: 4,
+        onToggleRowExpand,
+        selectedValue: childStreamListValue('root' as StreamTabId),
+        sessions: [session('root' as StreamTabId, true)],
+      }),
+      {
+        stdin,
+        stdout: new FakeStdout(100),
+        interactive: true,
+        exitOnCtrlC: false,
+        patchConsole: false,
+      },
+    );
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write('i');
+      await waitFor(() => onToggleRowExpand.mock.calls.length === 1);
+      expect(onToggleRowExpand).toHaveBeenCalledOnce();
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it('renders no process highlight before the list receives a selection', async () => {
     const { ink, React } = await loadInk();
     const output = ink.renderToString(

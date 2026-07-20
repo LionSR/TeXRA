@@ -2,6 +2,9 @@
 import { formatCompactTokenCount } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
+// Local imports - TUI rendering and state
+import { truncateSummaryToWidth } from '../render/terminalText';
+
 // Local imports - TUI state and presentation
 import { isChildExecutionErrorStatus } from '../state/childExecutionStatus';
 import {
@@ -12,6 +15,7 @@ import {
 } from '../ui/colors';
 import { STATUS_DOT, TOKENS_GENERATED } from '../ui/glyphs';
 import type { PendingApprovalKind } from '../state/approvalQueue';
+import type { StreamFileMetadata } from '../state/cliState';
 
 export function childStatusColor(status: string | undefined): string {
   if (!status) return COLOR_SUCCESS;
@@ -83,4 +87,47 @@ export function pendingApprovalRowSuffix(
   if (kinds === undefined || first === undefined) return undefined;
   const label = PENDING_APPROVAL_ROW_LABELS[first];
   return kinds.length > 1 ? `${label} +${kinds.length - 1}` : label;
+}
+
+const FILE_CATEGORIES = [
+  ['input', 'in', 'Input'],
+  ['context', 'ctx', 'Context'],
+  ['media', 'media', 'Media'],
+  ['output', 'out', 'Output'],
+] as const satisfies readonly (readonly [
+  keyof StreamFileMetadata,
+  string,
+  string,
+])[];
+
+/** Compact, derived file counts for a child row. Empty categories consume no
+ *  horizontal space, and an absent run configuration produces no badge. */
+export function childFileBadgeText(
+  files: StreamFileMetadata | undefined,
+): string | undefined {
+  if (!files) return undefined;
+  const parts = FILE_CATEGORIES.flatMap(([key, badge]) =>
+    files[key].length > 0 ? [`${badge}:${files[key].length}`] : [],
+  );
+  return parts.length > 0 ? parts.join(' ') : undefined;
+}
+
+/** At most one bounded detail line per file role. Paths remain intact until
+ *  the terminal-width boundary, where the shared Unicode-aware truncator clips
+ *  the line. */
+export function fileDetailLines(
+  files: StreamFileMetadata | undefined,
+  maxColumns: number,
+): readonly string[] {
+  if (!files) return [];
+  return FILE_CATEGORIES.flatMap(([key, , label]) =>
+    files[key].length > 0
+      ? [
+          truncateSummaryToWidth(
+            `${label}  ${files[key].join(', ')}`,
+            maxColumns,
+          ),
+        ]
+      : [],
+  );
 }
