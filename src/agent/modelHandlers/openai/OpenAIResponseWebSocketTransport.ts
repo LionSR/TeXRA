@@ -82,6 +82,24 @@ export class OpenAIResponseWebSocketTransport {
   /** Keepalive interval for the WebSocket connection. */
   private wsKeepaliveInterval: ReturnType<typeof setInterval> | null = null;
 
+  /**
+   * Bound for the pooled connection's whole lifetime, not just while a
+   * request is in flight. Without this, a server-pushed error while idle
+   * between requests (e.g. `websocket_connection_limit_reached` at the
+   * 60-minute mark) has zero listeners on the emitter, and Node treats an
+   * unhandled `'error'` event as a fatal unhandled rejection, crashing the
+   * process. `executeViaWebSocket`'s per-request `onWsError` still settles
+   * the in-flight promise when one exists (registered after this handler,
+   * so it still fires); this one only needs to invalidate the connection so
+   * the next `execute()` reconnects.
+   */
+  private readonly onIdleWsError = (error: WebSocketError): void => {
+    this.logger.debug('WebSocket connection error — invalidating', {
+      data: { message: error.message },
+    });
+    this.closeWebSocket();
+  };
+
   constructor(private readonly deps: OpenAIResponseWebSocketTransportDeps) {}
 
   private get logger(): AgentTrace {
@@ -174,6 +192,7 @@ export class OpenAIResponseWebSocketTransport {
 
     this.wsConnection = ws;
     this.wsConnectionCreatedAt = Date.now();
+    ws.on('error', this.onIdleWsError);
     this.startWsKeepalive(ws);
 
     this.logger.debug('WebSocket connection established');
@@ -397,6 +416,7 @@ export class OpenAIResponseWebSocketTransport {
     this.stopWsKeepalive();
     const wsConnection = this.wsConnection;
     if (wsConnection) {
+      wsConnection.off('error', this.onIdleWsError);
       closeQuietly(wsConnection);
       // A graceful `close()` only sends the close frame and waits for the
       // server's reply, so the underlying socket stays an active handle and
