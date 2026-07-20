@@ -19,16 +19,13 @@
  *     (System prompts already go to top-level `instructions`, which the
  *     backend wants.)
  *
- * All three are gated on the "prefer ChatGPT subscription" preference, re-read
- * per request: if the user turns it off mid-run (e.g. the "Use your own API
- * key" switch after a `usage_limit_reached` error), this handler transparently
- * falls back to the base Responses handler's OpenAI API-key path on the same
- * instance — no handler swap needed. Subscription capability differences
- * (context cap, zero pricing, stateless storage, streaming/background policy)
- * live in the provider capability profile rather than handler-local predicates.
+ * All three are gated by the immutable route captured when a client is built.
+ * A later preference change affects the next client, while an already-running
+ * request keeps its endpoint, wire shape, limits, pricing, and usage tag aligned.
  */
 import OpenAI from 'openai';
 
+import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import {
   CODEX_ACCOUNT_ID_HEADER,
   CODEX_BACKEND_BASE_URL,
@@ -207,36 +204,42 @@ const codexFetch = (async (input, init) => {
 }) satisfies typeof fetch;
 
 export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
-  /**
-   * Re-read the active profile per request (not cached at construction) so that
-   * turning the preference off mid-run — e.g. via the "Use your own API key"
-   * retry switch after a `usage_limit_reached` error — makes the next attempt
-   * fall back to the user's OpenAI API key on this same handler instance. The
-   * OpenAI client is rebuilt every request from `getApiKey()`/`getBaseUrl()`, so
-   * re-resolving here is enough to reroute the in-place retry, mirroring how the
-   * base handler re-resolves relay vs direct credentials per request.
-   *
-   * Sign-in is intentionally not re-checked: the switch flips this preference,
-   * not the stored session, and an auth lapse still surfaces as an actionable
-   * error from {@link resolveAccessToken}.
-   *
-   * The profile owns subscription behavior: context cap, zero-rate pricing,
-   * token-counting/compaction/chaining/file-upload disables, stateless storage,
-   * streaming/background/websocket policy, and usage-route tagging. Once the
-   * profile is inactive the inherited OpenAI Responses API-key behavior applies.
-   */
   protected override getActiveProviderCapabilities(): ProviderCapabilityProfile | null {
-    if (!isPreferCodexSubscription()) return null;
-    if (isCodexSubscriptionToolUseOnly() && !this.isToolUseMode()) return null;
+    if (this.activeCredentialRoute !== undefined) {
+      return this.activeCredentialRoute === 'chatgpt-subscription'
+        ? this.subscriptionCapabilities()
+        : null;
+    }
+    return this.configuredSubscriptionCapabilities();
+  }
+
+  protected override getUsageProviderCapabilities(): ProviderCapabilityProfile | null {
+    const usageRoute = this.getLastCredentialUsageRoute();
+    if (usageRoute !== undefined) {
+      return usageRoute === 'chatgpt-subscription'
+        ? this.subscriptionCapabilities()
+        : null;
+    }
+    return this.configuredSubscriptionCapabilities();
+  }
+
+  private subscriptionCapabilities(): ProviderCapabilityProfile | null {
     return resolveProviderCapabilities({
       model: this.config,
       useOpenRouter: false,
     });
   }
 
-  private hasSubscriptionProfile(): boolean {
+  private configuredSubscriptionCapabilities(): ProviderCapabilityProfile | null {
+    if (!isPreferCodexSubscription()) return null;
+    if (isCodexSubscriptionToolUseOnly() && !this.isToolUseMode()) return null;
+    return this.subscriptionCapabilities();
+  }
+
+  private hasConfiguredSubscriptionProfile(): boolean {
     return (
-      this.getActiveProviderCapabilities()?.authMode === 'chatgpt-subscription'
+      this.configuredSubscriptionCapabilities()?.authMode ===
+      'chatgpt-subscription'
     );
   }
 
@@ -251,7 +254,11 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
   protected override prepareWireParams(
     params: ResponseCreateParamsBase,
   ): ResponseCreateParamsBase {
-    if (!this.hasSubscriptionProfile()) return params;
+    if (
+      this.getActiveProviderCapabilities()?.authMode !== 'chatgpt-subscription'
+    ) {
+      return params;
+    }
     // `rewriteCodexRequestBody` works on the parsed JSON body (a plain record),
     // matching the HTTP `codexFetch` path; the SDK param type has no index
     // signature, so round-trip it through `Record` at this single boundary.
@@ -262,7 +269,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
   /** OAuth access token in place of an API key (becomes the Bearer header),
    *  or the user's OpenAI API key once the subscription preference is off. */
   protected override async getApiKey(): Promise<string> {
-    return this.hasSubscriptionProfile()
+    return this.hasConfiguredSubscriptionProfile()
       ? this.resolveAccessToken()
       : super.getApiKey();
   }
@@ -270,19 +277,32 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
   /** The Codex backend while the subscription is active, else the default
    *  OpenAI base from the parent. */
   public override getBaseUrl(): string | null {
-    return this.hasSubscriptionProfile()
+    if (this.activeCredentialRoute !== undefined) {
+      return this.activeCredentialRoute === 'chatgpt-subscription'
+        ? CODEX_BACKEND_BASE_URL
+        : super.getBaseUrl();
+    }
+    return this.hasConfiguredSubscriptionProfile()
       ? CODEX_BACKEND_BASE_URL
       : super.getBaseUrl();
   }
 
-  protected override async createOpenAIClient(): Promise<OpenAI> {
-    if (!this.hasSubscriptionProfile()) {
+  protected override async createOpenAIClient(
+    selection: ModelCredentialSelection = 'configured',
+  ): Promise<OpenAI> {
+    const subscriptionCapabilities =
+      selection === 'configured'
+        ? this.configuredSubscriptionCapabilities()
+        : null;
+    if (subscriptionCapabilities?.authMode !== 'chatgpt-subscription') {
       // Preference switched off (e.g. after a usage limit) — route this request
       // through the user's OpenAI API key via the standard Responses client.
       this.logger.debug(
-        'ChatGPT subscription preference is off — using the OpenAI API key.',
+        selection === 'personal'
+          ? 'Building a personal OpenAI API-key client.'
+          : 'ChatGPT subscription preference is off — using the OpenAI API key.',
       );
-      return super.createOpenAIClient();
+      return super.createOpenAIClient(selection);
     }
 
     const apiKey = await this.resolveAccessToken();
@@ -297,12 +317,15 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
     this.logger.debug(
       `Using ChatGPT subscription (Codex). Base URL: ${CODEX_BACKEND_BASE_URL}`,
     );
-    return new OpenAI({
-      apiKey,
-      baseURL: CODEX_BACKEND_BASE_URL,
-      defaultHeaders,
-      fetch: codexFetch,
-    });
+    return this.rememberClientCredentialRoute(
+      new OpenAI({
+        apiKey,
+        baseURL: CODEX_BACKEND_BASE_URL,
+        defaultHeaders,
+        fetch: codexFetch,
+      }),
+      'chatgpt-subscription',
+    );
   }
 
   /** Fetch a fresh OAuth token, turning auth failures into actionable errors. */

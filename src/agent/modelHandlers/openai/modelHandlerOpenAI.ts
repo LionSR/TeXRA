@@ -21,6 +21,7 @@ import type {
   CreateResponseResult,
   ExtractResponseResult,
   DeepSeekToolCall,
+  ModelCredentialSelection,
   OpenAIToolCall,
 } from '@agent/types/ModelHandlerContracts';
 import {
@@ -242,18 +243,24 @@ export class ModelHandlerOpenAI<
    * Creates a new OpenAI client using the stored credentials.
    * Handles API key retrieval, base URL resolution, and logging.
    */
-  protected async createOpenAIClient(): Promise<OpenAI> {
-    const apiKey = await this.getApiKey();
-    const baseURL = this.getBaseUrl();
+  protected async createOpenAIClient(
+    selection: ModelCredentialSelection = 'configured',
+  ): Promise<OpenAI> {
+    const credential = await this.resolveClientCredential(selection);
     // there is a time out parameter that can be set; default is 10 minutes
-    const client = new OpenAI({ apiKey, baseURL });
-    this.logOpenAICompatibleClientConfig(client.baseURL);
-    return client;
+    const client = new OpenAI({
+      apiKey: credential.apiKey,
+      baseURL: credential.baseUrl,
+    });
+    this.logOpenAICompatibleClientConfig(client.baseURL, credential.route);
+    return this.rememberClientCredentialRoute(client, credential.route);
   }
 
   /** Returns OpenAI client with configured API key. */
-  async getClient(): Promise<OpenAI> {
-    return this.createOpenAIClient();
+  async getClient(
+    selection: ModelCredentialSelection = 'configured',
+  ): Promise<OpenAI> {
+    return this.createOpenAIClient(selection);
   }
 
   override isAutoRetryManagedByProvider(_error: Error): boolean {

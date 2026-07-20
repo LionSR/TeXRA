@@ -18,6 +18,7 @@ import type {
   CreateResponseOptions,
   CreateResponseResult,
   ExtractResponseResult,
+  ModelCredentialSelection,
   OpenRouterToolCall,
 } from '@agent/types/ModelHandlerContracts';
 import {
@@ -138,13 +139,14 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     return this.config.provider === ModelProvider.ANTHROPIC;
   }
 
-  async getClient(): Promise<OpenRouter> {
-    const apiKey = await this.getApiKey();
-    const baseUrl = this.getBaseUrl();
-    return new OpenRouter({
-      apiKey,
+  async getClient(
+    selection: ModelCredentialSelection = 'configured',
+  ): Promise<OpenRouter> {
+    const credential = await this.resolveClientCredential(selection);
+    const client = new OpenRouter({
+      apiKey: credential.apiKey,
       appTitle: 'TeXRA.ai',
-      ...(baseUrl ? { serverURL: baseUrl } : {}),
+      ...(credential.baseUrl ? { serverURL: credential.baseUrl } : {}),
       // @openrouter/sdk@0.13.31 chatSend.js:46-58 defaults retryConfig to a
       // 3_600_000ms (1h) maxElapsedTime backoff, so a transient 5XX can hang
       // inside a single "attempt" for up to an hour before TeXRA's flow-level
@@ -164,6 +166,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         retryConnectionErrors: true,
       },
     });
+    return this.rememberClientCredentialRoute(client, credential.route);
   }
 
   override isAutoRetryManagedByProvider(error: Error): boolean {

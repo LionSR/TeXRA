@@ -28,6 +28,19 @@ import type { ChatToolCall as ORChatToolCall } from '@openrouter/sdk/models';
  * a cycle. Don't move these back into either of those two files.
  */
 
+/** User-selected credential source requested for a newly constructed client. */
+export type ModelCredentialSelection = 'configured' | 'personal';
+
+/** Credential route actually captured by an immutable provider client. */
+export type ModelCredentialRoute =
+  'api-key' | 'chatgpt-subscription' | 'openrouter' | 'relay';
+
+export interface ResolvedClientCredential {
+  readonly apiKey: string;
+  readonly baseUrl: string | null;
+  readonly route: Exclude<ModelCredentialRoute, 'chatgpt-subscription'>;
+}
+
 /**
  * Options for token counting - all fields optional, handlers use what they need.
  * @template C Provider-specific client type

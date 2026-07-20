@@ -7,6 +7,10 @@ import { ModelProvider } from 'llm-zoo';
 
 // Local imports
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
+import type {
+  ModelCredentialSelection,
+  ResolvedClientCredential,
+} from '@agent/types/ModelHandlerContracts';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import * as serverKeysModule from '@auth/serverKeys';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
@@ -18,6 +22,12 @@ import * as configUtilsModule from '@utils/config/configUtils';
 class ExposedKeyHandler extends ModelHandlerOpenRouterNative {
   exposeGetApiKey(): Promise<string> {
     return this.getApiKey();
+  }
+
+  exposeResolveClientCredential(
+    selection?: ModelCredentialSelection,
+  ): Promise<ResolvedClientCredential> {
+    return this.resolveClientCredential(selection);
   }
 }
 
@@ -48,6 +58,7 @@ function stubServerSideKeyService(
     canUseServerSideKeys,
     wasQuotaAutoSwitched: () => options.quotaAutoSwitched ?? false,
     shouldUseServerSideKeysSync: () => options.shouldUseServerSideKeys ?? false,
+    getRelayBaseUrl: () => 'https://relay.example.test/openai',
   } as unknown as ReturnType<typeof serverKeysModule.getServerSideKeyService>);
 
   return { canUseServerSideKeys };
@@ -200,6 +211,31 @@ describe('ModelHandler.getApiKey resolution', () => {
     );
 
     assert.equal(await handler.exposeGetApiKey(), 'personal-key');
+    assert.equal(canUseServerSideKeys.mock.calls.length, 1);
+  });
+
+  it('can reject a personal candidate without disturbing the configured relay route', async () => {
+    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(false);
+    const { canUseServerSideKeys } = stubServerSideKeyService({
+      useIncludedAccess: true,
+      hasServerAccess: true,
+      shouldUseServerSideKeys: true,
+    });
+    vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
+      'relay-token',
+    );
+    const handler = new ExposedKeyHandler(
+      buildTestModelConfig(API_KEY_TEST_CONFIG),
+    );
+
+    await assert.rejects(
+      handler.exposeResolveClientCredential('personal'),
+      /Missing API key for openai/,
+    );
+    const configured = await handler.exposeResolveClientCredential();
+
+    assert.equal(configured.route, 'relay');
+    assert.equal(configured.apiKey, 'relay-token');
     assert.equal(canUseServerSideKeys.mock.calls.length, 1);
   });
 });
