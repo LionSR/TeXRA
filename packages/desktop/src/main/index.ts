@@ -95,6 +95,10 @@ import {
 } from './desktopSetupTerminal.js';
 import { createDesktopTerminalRunner } from './desktopTerminalRunner.js';
 import {
+  getDesktopWindowTitle,
+  installDesktopWindowTitle,
+} from './desktopWindowTitle.js';
+import {
   initializeDesktopSetupAuth,
   registerDesktopSetupSignIn,
 } from './desktopSetupAuth.js';
@@ -320,12 +324,16 @@ function createWindow(options: {
   /** See ElectronPlatformInitResult.resourcesPath. */
   resourcesPath: string;
 }): void {
+  const initialWindowTitle = getDesktopWindowTitle(
+    options.processSession,
+    options.workspacePath,
+  );
   const window = new BrowserWindow({
     width: 960,
     height: 680,
     minWidth: 720,
     minHeight: 520,
-    title: 'TeXRA',
+    title: initialWindowTitle,
     webPreferences: {
       preload: join(desktopMainDir, '../preload/index.cjs'),
       contextIsolation: true,
@@ -342,6 +350,11 @@ function createWindow(options: {
     },
   });
   mainWindow = window;
+  const disposeWindowTitle = installDesktopWindowTitle(
+    window,
+    options.processSession,
+    options.workspacePath,
+  );
   const reportAsyncError = (error: unknown) => console.error(error);
   installDesktopNavigationPolicy(window.webContents, {
     onAsyncError: reportAsyncError,
@@ -1142,6 +1155,7 @@ function createWindow(options: {
   );
   window.once('closed', () => {
     windowClosed = true;
+    disposeWindowTitle();
     presentationAbort.abort();
     executionsWatcher?.close();
     if (mainWindow === window) {

@@ -503,6 +503,10 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
     const session = createTestSession();
     const first = createControllablePlanAdapter();
     const second = createControllablePlanAdapter();
+    const pendingCounts: number[] = [];
+    session.interactions.onPendingCountChange((count) =>
+      pendingCounts.push(count),
+    );
     try {
       const detach = session.useHostInteractions(first.interactions);
       const pending = session.interactions.requestPlanApproval({
@@ -514,6 +518,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
       detach();
       await Promise.resolve();
       expect(first.dispose).toHaveBeenCalledOnce();
+      expect(pendingCounts).toEqual([1]);
 
       session.useHostInteractions(second.interactions);
       expect(second.requests).toHaveLength(1);
@@ -521,9 +526,79 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
         true,
       );
       await expect(pending).resolves.toEqual({ action: 'approve' });
+      expect(pendingCounts).toEqual([1, 0]);
     } finally {
       session.dispose();
     }
+  });
+
+  it('observes every response-bearing request until cancellation', async () => {
+    const session = createTestSession();
+    const pendingCounts: number[] = [];
+    const stopObserving = session.interactions.onPendingCountChange((count) =>
+      pendingCounts.push(count),
+    );
+    const requests = [
+      session.interactions.requestToolEditApproval({
+        path: 'paper.tex',
+        originalContent: 'old',
+        proposedContent: 'new',
+        sourceTool: 'edit_file',
+        streamId,
+      }),
+      session.interactions.requestBashApproval({
+        command: 'lake build',
+        streamId,
+      }),
+      session.interactions.requestPlanApproval({
+        approvalId: 'approval:count',
+        streamId,
+        plan,
+        goalEnabled: false,
+      }),
+      session.interactions.requestAgentProposal({
+        proposalId: 'proposal:count',
+        streamId,
+        ...proposal,
+      }),
+      session.interactions.requestRetry({
+        requestId: 'retry:count',
+        streamId,
+        operation: 'model request',
+      }),
+      session.interactions.askUserQuestion({
+        requestId: 'question:count',
+        streamId,
+        allowBypass: false,
+        questions: [
+          {
+            question: 'Continue?',
+            options: [{ label: 'Yes' }, { label: 'No' }],
+          },
+        ],
+      }),
+    ];
+
+    expect(session.interactions.pendingCount).toBe(6);
+    expect(pendingCounts).toEqual([1]);
+
+    session.interactions.cancel({ cause: 'Test complete.' });
+    await Promise.all(requests);
+
+    expect(session.interactions.pendingCount).toBe(0);
+    expect(pendingCounts).toEqual([1, 0]);
+
+    stopObserving();
+    const ignored = session.interactions.requestPlanApproval({
+      approvalId: 'approval:after-observer-dispose',
+      streamId,
+      plan,
+      goalEnabled: false,
+    });
+    session.interactions.cancel({ cause: 'Test cleanup.' });
+    await ignored;
+    expect(pendingCounts).toHaveLength(2);
+    session.dispose();
   });
 
   it('drops ordinary one-way events emitted while no host is attached', async () => {
