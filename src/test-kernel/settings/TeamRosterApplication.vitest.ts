@@ -174,4 +174,32 @@ describe('extension team roster application', () => {
     expect(choose).toHaveBeenCalledWith(['generic', 'remoteSpecialist']);
     expect(legacyPreset).not.toHaveProperty('texraHostedAgents');
   });
+
+  it('proceeds on a provided "continue" choice without prompting or signing in', async () => {
+    const choose = vi.fn();
+    const signIn = vi.fn();
+    const commitPresetResolution = vi.fn();
+
+    const result = await applyTeamRosterWithPreflight('research', {
+      catalog: {
+        resolvePreset: () => ({ ok: true, preset, resolution: unresolved }),
+        commitPresetResolution,
+      },
+      loadLocalCatalog: async () => {},
+      canAccessRemoteCatalog: async () => false,
+      providedChoice: 'continue',
+      choose,
+      signIn,
+      forceRefreshRemoteCatalog: async () => {},
+    });
+
+    expect(result).toEqual({
+      status: 'applied',
+      preset,
+      resolution: unresolved,
+    });
+    expect(choose).not.toHaveBeenCalled();
+    expect(signIn).not.toHaveBeenCalled();
+    expect(commitPresetResolution).toHaveBeenCalledWith(preset, unresolved);
+  });
 });
