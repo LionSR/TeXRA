@@ -27,6 +27,7 @@ export type RunExecutionRequest = (
       ): () => void;
     };
     runtimeUnavailableTools?: readonly string[];
+    onRun?: (handle: unknown) => void | Promise<void>;
   },
 ) => Promise<void>;
 

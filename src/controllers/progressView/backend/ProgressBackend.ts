@@ -36,6 +36,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 import type { StreamSnapshotStore } from '@transcript';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
+import type { SessionStores } from './state/SessionStores';
 
 type ProgressBackendApprovalOptions = Omit<
   BuildApprovalRequestHandlerSetParams,
@@ -43,14 +44,11 @@ type ProgressBackendApprovalOptions = Omit<
 >;
 
 interface ProgressBackendLifecycleOptions {
-  /** Resolve the session that owns a stream; desktop overrides this per window. */
-  sessionForStream?(stream: StreamTabId): SessionHandle;
   stopStream(
     stream: StreamTabId,
-    ownerSession: SessionHandle,
     options?: { clearRetryRequest?: boolean },
   ): Promise<void> | void;
-  cleanupDeletedStream(stream: StreamTabId, ownerSession: SessionHandle): void;
+  cleanupDeletedStream(stream: StreamTabId): void;
   cleanupDeletedStreams(options: { allDeleted: boolean }): void;
   rebuildRenderedStreams(options: {
     forceRebuild: boolean;
@@ -68,6 +66,7 @@ interface ProgressBackendLifecycleOptions {
 export interface ProgressBackendOptions {
   storage: StateStore;
   snapshots?: StreamSnapshotStore;
+  stores?: SessionStores;
   sendMessage: ProgressViewMessageSender;
   hasTarget(): boolean;
   approvals: ProgressBackendApprovalOptions;
@@ -76,6 +75,12 @@ export interface ProgressBackendOptions {
   onSetActiveStream?: (payload: SetActiveStreamPayload) => void;
   /** Session that owns this backend's coordination state (defaults to the process session). */
   session?: SessionHandle;
+  /**
+   * `session` when the supplied snapshot store already has its own
+   * process-lifetime session-event subscription. The backend then projects
+   * facts without applying the same durable mutations a second time.
+   */
+  stateOwnership?: 'backend' | 'session';
   /**
    * Commands this host's progressView inbound registry declares
    * `unsupported(...)` — pass `() => unsupportedCommands(registry)`. Threaded
@@ -106,10 +111,12 @@ export class ProgressBackend {
     payload: SetActiveStreamPayload,
   ) => void;
   private readonly detachArtifactFlusher: () => void;
+  private readonly stateOwnership: 'backend' | 'session';
   private disposed = false;
 
   constructor(options: ProgressBackendOptions) {
     this.session = options.session ?? defaultSession();
+    this.stateOwnership = options.stateOwnership ?? 'backend';
     this.lifecycle = options.lifecycle;
     this.postMessage = (message) => {
       if (!options.hasTarget()) return;
@@ -122,10 +129,12 @@ export class ProgressBackend {
       options.storage,
       options.snapshots,
       this.session,
+      options.stores,
     );
-    this.detachArtifactFlusher = this.session.useArtifactFlusher(() =>
-      this.state.snapshots.flush(),
-    );
+    this.detachArtifactFlusher =
+      this.stateOwnership === 'session'
+        ? () => undefined
+        : this.session.useArtifactFlusher(() => this.state.snapshots.flush());
     this.webviewUpdater = new WebviewUpdater(
       this.postMessage,
       options.hasTarget,
@@ -153,17 +162,14 @@ export class ProgressBackend {
       ui.hasPendingPermissions,
       (stream) => this.deleteStream(stream),
       options.getStreamControls,
+      this.stateOwnership,
     );
     this.interactionHandler = new ProgressInteractionHandler(ui.callbacks);
     this.onSetActiveStream = options.onSetActiveStream;
   }
 
-  private ownerSession(stream: StreamTabId): SessionHandle {
-    return this.lifecycle.sessionForStream?.(stream) ?? this.session;
-  }
-
   async stopStream(stream: StreamTabId): Promise<void> {
-    await this.lifecycle.stopStream(stream, this.ownerSession(stream), {
+    await this.lifecycle.stopStream(stream, {
       clearRetryRequest: true,
     });
   }
@@ -190,11 +196,10 @@ export class ProgressBackend {
     }
 
     const wasActive = this.state.activeStream === stream;
-    const ownerSession = this.ownerSession(stream);
     const ownedLocally =
-      ownerSession.executions.getAgentHandleByStream(stream) !== undefined;
-    if (ownedLocally && isInFlightPhase(ownerSession.status.get(stream))) {
-      await this.lifecycle.stopStream(stream, ownerSession);
+      this.session.executions.getAgentHandleByStream(stream) !== undefined;
+    if (ownedLocally && isInFlightPhase(this.session.status.get(stream))) {
+      await this.lifecycle.stopStream(stream);
     }
     if (ownedLocally) await this.state.waitForOwnedExecutionRelease(stream);
 
@@ -205,7 +210,7 @@ export class ProgressBackend {
       return;
     }
 
-    this.lifecycle.cleanupDeletedStream(stream, ownerSession);
+    this.lifecycle.cleanupDeletedStream(stream);
     this.webviewBridge.clearStream(stream);
 
     let shouldActivateStream = false;
@@ -245,19 +250,14 @@ export class ProgressBackend {
 
   async deleteAllStreams(): Promise<void> {
     const streamIds = this.state.streamLogs.keys();
-    const ownerSessions = new Map(
-      streamIds.map((stream) => [stream, this.ownerSession(stream)]),
-    );
     const locallyOwnedStreams = streamIds.filter(
       (stream) =>
-        ownerSessions.get(stream)?.executions.getAgentHandleByStream(stream) !==
-        undefined,
+        this.session.executions.getAgentHandleByStream(stream) !== undefined,
     );
     await Promise.all(
       locallyOwnedStreams.map(async (stream) => {
-        const ownerSession = ownerSessions.get(stream) ?? this.session;
-        if (isInFlightPhase(ownerSession.status.get(stream))) {
-          await this.lifecycle.stopStream(stream, ownerSession);
+        if (isInFlightPhase(this.session.status.get(stream))) {
+          await this.lifecycle.stopStream(stream);
         }
       }),
     );
@@ -271,10 +271,7 @@ export class ProgressBackend {
     const retainedStreams = new Set([...retained.active, ...retained.failed]);
     const deleted = streamIds.filter((stream) => !retainedStreams.has(stream));
     for (const stream of deleted) {
-      this.lifecycle.cleanupDeletedStream(
-        stream,
-        ownerSessions.get(stream) ?? this.session,
-      );
+      this.lifecycle.cleanupDeletedStream(stream);
       this.webviewBridge.clearStream(stream);
     }
     const allDeleted = retainedStreams.size === 0;
@@ -302,7 +299,7 @@ export class ProgressBackend {
   }
 
   async load(): Promise<void> {
-    await this.state.load();
+    await this.state.load(this.stateOwnership);
   }
 
   setupEventListeners(): ProgressEventSubscription {

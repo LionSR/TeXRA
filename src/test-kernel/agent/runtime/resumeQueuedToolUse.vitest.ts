@@ -4,12 +4,14 @@ import '@test/support/defaultSessionTestSetup';
 // Test support imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
+import { ResumeAdmissionCancelledError } from '@agent/runtime/resumeAdmission';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
   STREAM_STATUS,
+  type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -534,6 +536,35 @@ describe('resumeQueuedToolUseFromResumeData', () => {
         'updateQueuedFollowUps',
       ),
     ).toHaveLength(2);
+  });
+
+  it('does not restore deleted-stream state after guarded admission is cancelled', async () => {
+    const session = createTestSession();
+    session.transcripts.ensureStream(STREAM);
+    session.followUps.enqueue(STREAM, { text: 'queued one' }, { force: true });
+    const reportFailure = vi.fn();
+    resumeToolUseFromResumeDataMock.mockImplementationOnce(async () => {
+      await session.transcripts.delete(STREAM);
+      throw new ResumeAdmissionCancelledError('cancelled' as ExecutionId);
+    });
+
+    try {
+      await expect(
+        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
+          session,
+          canAcquireResumeLease: () => false,
+          onError: reportFailure,
+        }),
+      ).resolves.toBe(false);
+
+      expect(session.transcripts.has(STREAM)).toBe(false);
+      expect(session.followUps.getAll(STREAM)).toEqual([]);
+      expect(reportFailure).not.toHaveBeenCalled();
+    } finally {
+      session.followUps.release(STREAM);
+      session.status.clearStream(STREAM);
+      session.dispose();
+    }
   });
 
   it('uses the supplied session status plane for resume markers', async () => {

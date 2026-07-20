@@ -60,6 +60,7 @@ import {
 import { createInterruptCallbacks } from './InterruptManager';
 import { generateSessionDescription } from './sessionDescription';
 import { flushOwnedExecutionArtifacts } from './executionOwnership';
+import { ResumeAdmissionCancelledError } from './resumeAdmission';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentExecutionHandle, AgentRunHandle } from './ExecutionHandle';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
@@ -461,6 +462,8 @@ export async function executeAgent(
 }
 
 export interface ResumeToolUseFromResumeDataOptions extends SubagentRunOptions {
+  /** Recheck canonical admission atomically while acquiring the resumed lease. */
+  readonly canAcquireResumeLease?: () => boolean;
   /**
    * Take messages queued after the initial drain. The flow invokes this once
    * after attaching its live context and before resuming the persisted cursor.
@@ -488,7 +491,15 @@ export async function resumeToolUseFromResumeData(
   runtimeHost: AgentRuntimeHost,
   options: ResumeToolUseFromResumeDataOptions = {},
 ): Promise<AgentRuntimeFlowResult> {
-  await acquireResumedExecutionLease(resume.executionId);
+  const lease = options.canAcquireResumeLease
+    ? await acquireResumedExecutionLease(
+        resume.executionId,
+        options.canAcquireResumeLease,
+      )
+    : await acquireResumedExecutionLease(resume.executionId);
+  if (lease === 'cancelled') {
+    throw new ResumeAdmissionCancelledError(resume.executionId);
+  }
   const modelHandlerCompatibilityKey =
     resume.shared.modelHandlerCompatibilityKey ??
     inferAndLogPersistedModelHandlerCompatibilityKey(

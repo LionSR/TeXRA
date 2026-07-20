@@ -336,16 +336,28 @@ export async function runWithExecutionLeaseWriteFence<T>(
   return operation();
 }
 
+function acquireExecutionLease(
+  executionId: ExecutionId,
+  mode: 'fresh',
+): Promise<'acquired' | 'existing'>;
+function acquireExecutionLease(
+  executionId: ExecutionId,
+  mode: 'resume',
+  canAcquire?: () => boolean,
+): Promise<'acquired' | 'existing' | 'cancelled'>;
 async function acquireExecutionLease(
   executionId: ExecutionId,
   mode: 'fresh' | 'resume',
-): Promise<'acquired' | 'existing'> {
+  canAcquire?: () => boolean,
+): Promise<'acquired' | 'existing' | 'cancelled'> {
   const root = storageRoot();
   const key = ownershipKey(root, executionId);
   const existingOwnership = ownedLeases.get(key);
   if (mode === 'resume' && existingOwnership) {
     await heartbeat(existingOwnership);
-    if (ownedLeases.get(key) === existingOwnership) return 'existing';
+    if (ownedLeases.get(key) === existingOwnership) {
+      return canAcquire?.() === false ? 'cancelled' : 'existing';
+    }
   }
 
   return withLeaseLock(
@@ -360,6 +372,7 @@ async function acquireExecutionLease(
       if (liveness.status === 'active') {
         throw new ExecutionLeaseActiveError(executionId, liveness.heartbeatAt);
       }
+      if (canAcquire?.() === false) return 'cancelled' as const;
       const ownerToken = randomUUID();
       if (existingOwnership) forgetOwnedLease(existingOwnership);
       await writeLease(
@@ -389,8 +402,9 @@ export function acquireFreshExecutionLease(
 /** Establish ownership before a persisted execution is resumed. */
 export function acquireResumedExecutionLease(
   executionId: ExecutionId,
-): Promise<'acquired' | 'existing'> {
-  return acquireExecutionLease(executionId, 'resume');
+  canAcquire?: () => boolean,
+): Promise<'acquired' | 'existing' | 'cancelled'> {
+  return acquireExecutionLease(executionId, 'resume', canAcquire);
 }
 
 /** Release this process's lease, but never remove a later owner's record. */

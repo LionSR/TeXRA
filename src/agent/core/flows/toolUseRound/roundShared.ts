@@ -77,6 +77,8 @@ type ToolUseRoundFields = z.infer<typeof ToolUseRoundFieldsSchema>;
  * - Immutable services: `this.services` (ToolUseRoundServices)
  */
 export interface ToolUseRoundShared extends ToolUseRoundFields {
+  /** Whether RetryState already emitted the canonical structured failure. */
+  failureLogEmitted?: boolean;
   /** Tool calls with proper typing (schema uses z.unknown()) */
   toolCalls?: SdkToolCall[];
   /** Current user instruction, refreshed when the round consumes user input. */

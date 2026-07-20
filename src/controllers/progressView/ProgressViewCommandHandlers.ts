@@ -81,8 +81,6 @@ export interface ProgressViewBypassCommandOptions {
    * window session; the extension omits it so the default session applies.
    */
   session?: SessionHandle;
-  /** Resolve a retained stream's durable approval owner. */
-  sessionForStream?(stream: StreamTabId): SessionHandle | undefined;
   showInfo?(message: string): void | PromiseLike<unknown>;
 }
 
@@ -159,9 +157,7 @@ export function createProgressViewCommandHandlers(
   actions: ProgressViewCommandActions,
 ) {
   const { lifecycle, run, file, followUp, approval, externalInquiry } = actions;
-  const { runtimeHost, session, sessionForStream, showInfo } = actions.bypass;
-  const bypassSession = (stream: StreamTabId): SessionHandle | undefined =>
-    sessionForStream?.(stream) ?? session;
+  const { runtimeHost, session, showInfo } = actions.bypass;
 
   // Single source of truth for the coupled edit + bash session bypass behind
   // the one edit/command approval concept. The shield toolbar button flips it;
@@ -171,13 +167,12 @@ export function createProgressViewCommandHandlers(
     stream: StreamTabId,
     enabled: boolean,
   ): Promise<void> => {
-    const ownerSession = bypassSession(stream);
     setToolEditApprovalSessionBypass(stream, enabled, runtimeHost, {
-      session: ownerSession,
+      session,
     });
     setBashApprovalSessionBypass(stream, enabled, runtimeHost, {
       silent: true,
-      session: ownerSession,
+      session,
     });
     await showInfo?.(
       enabled
@@ -246,7 +241,7 @@ export function createProgressViewCommandHandlers(
     [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]: (data) =>
       applyCoupledBypass(
         data.stream,
-        !isApprovalBypassedForStream(data.stream, bypassSession(data.stream)),
+        !isApprovalBypassedForStream(data.stream, session),
       ),
     // Inline edit/command approval button: force bypass ON. Unlike the
     // shield toggle this is idempotent, so it can never invert an already-on
@@ -255,13 +250,12 @@ export function createProgressViewCommandHandlers(
     [PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS]: (data) =>
       applyCoupledBypass(data.stream, true),
     [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: (data) => {
-      const ownerSession = bypassSession(data.stream);
-      const enabled = !proposalApprovals(ownerSession).isBypassed(data.stream);
+      const enabled = !proposalApprovals(session).isBypassed(data.stream);
       setDelegatedWorkApprovalBypasses(
         data.stream,
         enabled,
         runtimeHost,
-        ownerSession,
+        session,
       );
       return reportDelegatedWorkApproval(enabled);
     },
@@ -269,12 +263,7 @@ export function createProgressViewCommandHandlers(
     // mode on. It is idempotent, so it cannot invert a grant made from the
     // stream header while the proposal was open.
     [PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS]: async (data) => {
-      setDelegatedWorkApprovalBypasses(
-        data.stream,
-        true,
-        runtimeHost,
-        bypassSession(data.stream),
-      );
+      setDelegatedWorkApprovalBypasses(data.stream, true, runtimeHost, session);
       await approval.approvePendingDelegatedWork(
         data.stream,
         data.initiatingProposalId,

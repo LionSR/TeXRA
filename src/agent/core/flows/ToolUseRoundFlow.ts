@@ -51,7 +51,7 @@ export function createToolUseRoundFlow<C>(): Flow<
     ToolUseRoundShared,
     ToolUseRoundServices<C>
   >({
-    operationName: 'Tool-use call',
+    operationName: 'Model request',
     streaming: true,
     // Only resupply for providers that need it per-call (Anthropic, Google).
     // Providers that embed the system prompt into `messages` at session init

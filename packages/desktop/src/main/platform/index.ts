@@ -11,7 +11,7 @@ import { isFileNotFoundError } from '@common/errors';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/workspacePath.js';
 import { initPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
-import type { LifecycleHost } from '@platform/interfaces';
+import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import {
@@ -42,11 +42,6 @@ import {
   resolveWorkspacePath,
 } from './paths.js';
 import { showSecretStorageWarningDialog } from './secretStorageWarningDialog.js';
-import {
-  isDesktopResumeInFlight,
-  tryResumeDesktopStream,
-} from '../desktopAgentResume.js';
-
 export interface ElectronPlatformInitResult {
   workspacePath: string | undefined;
   lifecycle: LifecycleHost;
@@ -106,6 +101,7 @@ async function canCreateOrWrite(filePath: string): Promise<boolean> {
 
 export async function initializeElectronPlatform(
   mainDirname: string,
+  agentResume: AgentResumePort,
 ): Promise<ElectronPlatformInitResult> {
   // The default handler's console.error is mirrored into the desktop app log,
   // so shutdown-handler failures land at error severity like the other hosts.
@@ -280,10 +276,7 @@ export async function initializeElectronPlatform(
         showWarningMessage: showSecretStorageWarningDialog,
       }),
       lifecycle,
-      agentResume: {
-        tryResumeStream: tryResumeDesktopStream,
-        isResumeInFlight: isDesktopResumeInFlight,
-      },
+      agentResume,
       agentDirectories,
       getWorkspacePath: () => workspacePath,
       getLegacyWorkspacePaths: () =>
@@ -304,17 +297,12 @@ export async function initializeElectronPlatform(
 
   const resourcesPath = resolveResourcesPath(mainDirname);
 
-  // Persist per-stream sidecar data (todos, plan, usage, output files) via the
-  // shared, host-agnostic snapshot store. The desktop progress backend owns the
-  // bus event handling; the platform owns lifecycle flushing so app shutdown
-  // drains the same writer instead of creating a second bus subscriber.
+  // The Electron composition root attaches this process-owned snapshot store
+  // to its SessionHandle and flushes it with the other session artifacts.
   const snapshotStore = new StreamSnapshotStore();
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => snapshotStore.flush());
 
   // Register the shared Node-host agent runtime: memory + goal tool injections
-  // and the direct Lean language services (lake env lean --server). Registered
-  // after the snapshot-store shutdown handler so the snapshot flush still runs
-  // before the Lean adapter dispose.
+  // and the direct Lean language services (lake env lean --server).
   initNodeAgentRuntime(lifecycle);
   initializeNodeGoalPrompts(resourcesPath);
   initializeNodeRuntimeSkills({
