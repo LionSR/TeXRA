@@ -1194,14 +1194,17 @@ if (protocolLifecycle.shouldContinue) {
       lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => {
         disposeAgentResumeHandler();
       });
-      lifecycle.onShutdown(SHUTDOWN_PHASE.ON, async () => {
-        try {
-          await processSession.flushArtifacts();
-        } finally {
-          disposeAgentResumeHandler();
-          disposeProcessStores();
-          processSession.dispose();
-        }
+      registerAgentShutdownHandlers(lifecycle);
+      // Agent shutdown runs first so its final events enter the process-owned
+      // stores. Flush in BEFORE so persistence cannot be delayed by a later
+      // ON-phase language-service disposal.
+      lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
+        processSession.flushArtifacts(),
+      );
+      lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => {
+        disposeAgentResumeHandler();
+        disposeProcessStores();
+        processSession.dispose();
       });
 
       // Until the initial window is fully wired, any startup failure must run
@@ -1221,8 +1224,6 @@ if (protocolLifecycle.shouldContinue) {
           session: processSession,
           snapshots: platformInit.progressSnapshotStore,
         });
-        registerAgentShutdownHandlers(lifecycle);
-
         // before-quit semantics: hold every quit event until shutdown handlers
         // have finished draining (a second Cmd+Q while we're mid-drain must NOT
         // be allowed to terminate the process). Only after runShutdown resolves

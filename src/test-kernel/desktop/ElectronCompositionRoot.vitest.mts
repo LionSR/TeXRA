@@ -103,23 +103,6 @@ describe('desktop composition root and launch environment', () => {
     expect(abortPresentation).toBeGreaterThan(windowClose);
     expect(disposePresentation).toBeGreaterThan(abortPresentation);
 
-    const shutdownStart = source.indexOf(
-      'lifecycle.onShutdown(SHUTDOWN_PHASE.ON',
-    );
-    const flush = source.indexOf(
-      'await processSession.flushArtifacts()',
-      shutdownStart,
-    );
-    const disposeStores = source.indexOf(
-      'disposeProcessStores()',
-      shutdownStart,
-    );
-    const dispose = source.indexOf('processSession.dispose()', shutdownStart);
-    expect(shutdownStart).toBeGreaterThanOrEqual(0);
-    expect(flush).toBeGreaterThan(shutdownStart);
-    expect(disposeStores).toBeGreaterThan(flush);
-    expect(dispose).toBeGreaterThan(disposeStores);
-
     const shutdownBefore = source.indexOf(
       'lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE',
     );
@@ -130,9 +113,26 @@ describe('desktop composition root and launch environment', () => {
     const registerAgentShutdown = source.indexOf(
       'registerAgentShutdownHandlers(lifecycle)',
     );
+    const flush = source.indexOf(
+      'processSession.flushArtifacts()',
+      registerAgentShutdown,
+    );
+    const shutdownStart = source.indexOf(
+      'lifecycle.onShutdown(SHUTDOWN_PHASE.ON',
+    );
+    const disposeStores = source.indexOf(
+      'disposeProcessStores()',
+      shutdownStart,
+    );
+    const dispose = source.indexOf('processSession.dispose()', shutdownStart);
     expect(shutdownBefore).toBeGreaterThanOrEqual(0);
     expect(disableResume).toBeGreaterThan(shutdownBefore);
     expect(registerAgentShutdown).toBeGreaterThan(disableResume);
+    expect(flush).toBeGreaterThan(registerAgentShutdown);
+    expect(flush).toBeLessThan(shutdownStart);
+    expect(shutdownStart).toBeGreaterThanOrEqual(0);
+    expect(disposeStores).toBeGreaterThan(shutdownStart);
+    expect(dispose).toBeGreaterThan(disposeStores);
   });
 
   it('keeps platform initialization in the Electron composition root', async () => {
