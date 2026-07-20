@@ -381,6 +381,47 @@ describe('StreamLogStore load', () => {
     );
   });
 
+  it('reserves a writer across rehydration and a concurrent eviction', async () => {
+    let markReadStarted = (): void => undefined;
+    const readStarted = new Promise<void>((resolve) => {
+      markReadStarted = resolve;
+    });
+    let releaseRead = (): void => undefined;
+    const readGate = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 100)] },
+      summaries: {
+        alpha: {
+          firstTimestamp: 100,
+          lastTimestamp: 100,
+          hasRunningGroup: false,
+        },
+      },
+      onLogRead: async () => {
+        markReadStarted();
+        await readGate;
+      },
+    });
+    const store = await StreamLogStore.open();
+    const writerPromise = store.loadAndAcquireWriter(
+      'alpha',
+      'execution-alpha',
+    );
+    await readStarted;
+
+    store.requestEviction('alpha');
+    releaseRead();
+    const writer = await writerPromise;
+
+    expect(store.get('alpha')?.size).toBe(1);
+    expect(() => writer.append(logEntry('alpha-live', 2, 200))).not.toThrow();
+    writer.close();
+    await store.flush();
+    expect(store.get('alpha')).toBeUndefined();
+  });
+
   it('keeps a requested eviction resident until its sequential write finishes', async () => {
     const storage = mockStorage({
       logs: {},

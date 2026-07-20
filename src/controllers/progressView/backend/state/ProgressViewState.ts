@@ -542,33 +542,32 @@ export class ProgressViewState {
           const text = legacyInstruction.text.trim();
           if (!text) return;
 
-          await this.streamLogs.ensureLoaded(streamId);
-          const log = this.streamLogs.get(streamId);
-          if (!log) return;
-
-          const alreadyPresent = log
-            .getRange(0, log.head)
-            .some(
-              (entry) =>
-                entry.type === STREAM_LOG_ENTRY_TYPES.LOG &&
-                entry.messageType === MESSAGE_TYPES.USER_MESSAGE &&
-                entry.text?.trim() === text,
-            );
-          if (alreadyPresent) return;
-
-          const firstTimestamp = log.firstTimestamp;
-          const baseTimestamp =
-            legacyInstruction.timestamp ?? firstTimestamp ?? Date.now();
-          const timestamp =
-            firstTimestamp == null
-              ? baseTimestamp
-              : clamp(baseTimestamp, 0, firstTimestamp - 1);
-
-          const writer = this.streamLogs.acquireWriter(
+          const writer = await this.streamLogs.loadAndAcquireWriter(
             streamId,
             `legacy-instruction:${streamId}`,
           );
           try {
+            const log = this.streamLogs.get(streamId);
+            if (!log) return;
+
+            const alreadyPresent = log
+              .getRange(0, log.head)
+              .some(
+                (entry) =>
+                  entry.type === STREAM_LOG_ENTRY_TYPES.LOG &&
+                  entry.messageType === MESSAGE_TYPES.USER_MESSAGE &&
+                  entry.text?.trim() === text,
+              );
+            if (alreadyPresent) return;
+
+            const firstTimestamp = log.firstTimestamp;
+            const baseTimestamp =
+              legacyInstruction.timestamp ?? firstTimestamp ?? Date.now();
+            const timestamp =
+              firstTimestamp == null
+                ? baseTimestamp
+                : clamp(baseTimestamp, 0, firstTimestamp - 1);
+
             writer.append({
               id: `legacy-instruction:${streamId}:${timestamp}`,
               type: STREAM_LOG_ENTRY_TYPES.LOG,

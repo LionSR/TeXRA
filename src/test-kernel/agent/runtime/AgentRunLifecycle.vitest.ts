@@ -691,6 +691,11 @@ describe('runFlowWithLifecycle', () => {
         streamId,
         STREAM_STATUS.WAITING,
       );
+      const waitingHandle = defaultSession().executions.getHandle(executionId);
+      expect(waitingHandle).toBeInstanceOf(AgentExecutionHandle);
+      if (!(waitingHandle instanceof AgentExecutionHandle)) {
+        throw new Error('Expected a suspended agent execution handle.');
+      }
 
       // runToolUseFlow's finally detaches this stream's interrupt handler but
       // (post #7286) preserves the follow-up queue for WAITING — it does not
@@ -702,6 +707,7 @@ describe('runFlowWithLifecycle', () => {
       // fall back to the waiting-cleanup registered above and actually tear
       // the execution down.
       expect(defaultSession().executions.kill(executionId)).toBe(true);
+      await waitingHandle.result;
 
       // The bypassed runFlowWithLifecycle can't emit the terminal result, so
       // terminateWaitingHandle must — trace subscribers would otherwise miss

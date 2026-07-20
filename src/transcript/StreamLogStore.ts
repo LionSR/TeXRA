@@ -330,6 +330,34 @@ export class StreamLogStore {
    * releasing a newer writer.
    */
   acquireWriter(streamId: StreamTabId, ownerKey: string): TranscriptWriter {
+    return this.createWriter(streamId, ownerKey, false);
+  }
+
+  /**
+   * Reserve mutation authority before rehydrating a released stream. The
+   * reservation keeps a concurrent eviction request pending until the caller
+   * receives and later closes the writer, so load and writer acquisition form
+   * one ownership transition instead of two raceable calls.
+   */
+  async loadAndAcquireWriter(
+    streamId: StreamTabId,
+    ownerKey: string,
+  ): Promise<TranscriptWriter> {
+    const writer = this.createWriter(streamId, ownerKey, true);
+    try {
+      await this.ensureLoaded(streamId);
+      return writer;
+    } catch (error) {
+      writer.close();
+      throw error;
+    }
+  }
+
+  private createWriter(
+    streamId: StreamTabId,
+    ownerKey: string,
+    allowReleased: boolean,
+  ): TranscriptWriter {
     this.assertWritableStore('acquire a transcript writer');
     if (!ownerKey.trim()) {
       throw new Error('A transcript writer requires a non-empty owner key.');
@@ -337,6 +365,7 @@ export class StreamLogStore {
 
     this.pendingRelease.delete(streamId);
     if (
+      !allowReleased &&
       this.mode.kind === 'persistent' &&
       this.summaries.has(streamId) &&
       !this.logs.has(streamId)
@@ -452,7 +481,10 @@ export class StreamLogStore {
           this.refreshSummary(streamId, logInstance);
           // An eviction request that arrived while the load was in flight gets
           // queued; honor it now (unless a reactivation cleared the intent).
-          if (this.pendingRelease.has(streamId)) {
+          if (
+            this.pendingRelease.has(streamId) &&
+            !this.writers.has(streamId)
+          ) {
             this.pendingRelease.delete(streamId);
             if (!this.dirtyStreamIds.has(streamId)) {
               this.logs.delete(streamId);

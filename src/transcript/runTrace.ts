@@ -16,7 +16,7 @@ import {
 import type { StreamTabId } from '@shared/schemas';
 
 import { attachTranscriptRecorder } from './TexraTranscriptRecorder';
-import type { StreamLogStore } from './StreamLogStore';
+import type { StreamLogStore, TranscriptWriter } from './StreamLogStore';
 
 export interface RunTrace {
   readonly trace: AgentTrace;
@@ -37,8 +37,9 @@ export function createRunTrace(
   store: StreamLogStore,
   flushers: Set<() => void> = new Set(),
   ownerKey: string = streamId,
+  reservedWriter?: TranscriptWriter,
 ): RunTrace {
-  const writer = store.acquireWriter(streamId, ownerKey);
+  const writer = reservedWriter ?? store.acquireWriter(streamId, ownerKey);
   const trace = new TraceEmitter();
   const unsubscribeChannel = attachChannelSubscriber(trace, {
     channel: streamId,

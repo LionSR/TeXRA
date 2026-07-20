@@ -333,7 +333,7 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('falls back to a registered waiting-cleanup when a suspended handle has no live interrupt (issue #7287)', () => {
+  it('falls back to a registered waiting-cleanup when a suspended handle has no live interrupt (issue #7287)', async () => {
     // Regression: a native subagent suspended at WAITING has already had its
     // live interrupt context detached (runToolUseFlow's finally), while the
     // handle stays tracked for resume. Before the fix, terminate() found no
@@ -366,6 +366,7 @@ describe('executionRegistry', () => {
       );
 
       expect(registry.kill(executionId)).toBe(true);
+      await handle.result;
 
       expect(cleanup).toHaveBeenCalledOnce();
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
@@ -417,6 +418,7 @@ describe('executionRegistry', () => {
       );
 
       expect(registry.kill(executionId)).toBe(true);
+      await handle.result;
 
       expect(publishResult).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({
@@ -442,6 +444,55 @@ describe('executionRegistry', () => {
         outcome: RUN_OUTCOME.CANCELLED,
         executionId,
       });
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('publishes a waiting cancellation after its transcript cleanup settles', async () => {
+    const streamStatus = new StreamStatusMachine();
+    const order: string[] = [];
+    const publishResult = vi.fn(() => order.push('publish'));
+    const registry = new ExecutionRegistry({ streamStatus, publishResult });
+    const executionId = 'exec-waiting-cleanup-order' as ExecutionId;
+    const childStreamId = 'child-waiting-cleanup-order' as StreamTabId;
+    let finishCleanup = (): void => undefined;
+    const cleanupGate = new Promise<void>((resolve) => {
+      finishCleanup = resolve;
+    });
+
+    try {
+      const handle = createHandle(
+        executionId,
+        'parent-waiting-cleanup-order' as StreamTabId,
+        childStreamId,
+        createRecordingHost().host,
+      );
+      registry.track(handle);
+      handle.registerWaitingCleanup(async () => {
+        await cleanupGate;
+        order.push('cleanup');
+      });
+      seedStreamStatusForTest(
+        streamStatus,
+        childStreamId,
+        STREAM_STATUS.WAITING,
+      );
+
+      expect(registry.kill(executionId)).toBe(true);
+      await Promise.resolve();
+      expect(publishResult).not.toHaveBeenCalled();
+      expect(registry.getHandle(executionId)).toBe(handle);
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.WAITING);
+
+      finishCleanup();
+      await expect(handle.result).resolves.toMatchObject({
+        type: 'result',
+        outcome: RUN_OUTCOME.CANCELLED,
+      });
+      expect(order).toEqual(['cleanup', 'publish']);
+      expect(registry.getHandle(executionId)).toBeUndefined();
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
     } finally {
       registry.dispose();
     }
@@ -735,6 +786,7 @@ describe('executionRegistry', () => {
       );
 
       expect(registry.kill(executionId)).toBe(true);
+      await handle.result;
 
       expect(cleanup).toHaveBeenCalledOnce();
       expect(registry.getHandle(executionId)).toBeUndefined();

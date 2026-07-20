@@ -428,8 +428,7 @@ export async function runFlowWithLifecycle(
         // `beginRunStage` call, including on resume), so this can never
         // double-close a stage some other turn already ended.
         if (parentStageId) {
-          await session.transcripts.ensureLoaded(streamId);
-          const writer = session.transcripts.acquireWriter(
+          const writer = await session.transcripts.loadAndAcquireWriter(
             streamId,
             handle.executionId,
           );
