@@ -270,6 +270,11 @@ declare module 'turndown-plugin-gfm' {
 
 /// <reference types="vite/client" />
 
+/** Monaco's exported editor-only entry point; TypeScript's legacy Node resolver cannot follow the package export map. */
+declare module 'monaco-editor/editor/editor.api.js' {
+  export { editor } from 'monaco-editor';
+}
+
 declare module '*?worker' {
   const WorkerConstructor: new () => Worker;
   export default WorkerConstructor;

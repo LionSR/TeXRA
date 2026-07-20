@@ -7,11 +7,11 @@ import type { TexraDiffView } from '@progressView/frontend/components/TexraDiffV
 import { DESKTOP_THEME_KIND } from '@shared/schemas/commonViewMessages';
 
 const workerModuleIds = [
-  'monaco-editor/esm/vs/editor/editor.worker?worker',
-  'monaco-editor/esm/vs/language/json/json.worker?worker',
-  'monaco-editor/esm/vs/language/css/css.worker?worker',
-  'monaco-editor/esm/vs/language/html/html.worker?worker',
-  'monaco-editor/esm/vs/language/typescript/ts.worker?worker',
+  'monaco-editor/editor/editor.worker?worker',
+  'monaco-editor/language/json/json.worker?worker',
+  'monaco-editor/language/css/css.worker?worker',
+  'monaco-editor/language/html/html.worker?worker',
+  'monaco-editor/language/typescript/ts.worker?worker',
 ];
 
 const originalGlobals = {
@@ -102,7 +102,7 @@ describe('texra-diff-view', () => {
     const createDiffEditor = vi.fn(() => diffEditor);
     const setTheme = vi.fn();
 
-    vi.doMock('monaco-editor/esm/vs/editor/editor.api.js', () => ({
+    vi.doMock('monaco-editor/editor/editor.api.js', () => ({
       editor: {
         createDiffEditor,
         createModel,
