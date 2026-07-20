@@ -45,6 +45,7 @@ function getNodeRetryConfig(): { maxRetries: number; wait: number } {
 interface ManualRetryPromptResult {
   shouldRetry: boolean;
   userCancelled: boolean;
+  clientPrepared?: boolean;
 }
 
 /** success: model response | failed: retries exhausted | cancelled: user cancelled | skipped: shouldStop was true */
@@ -260,11 +261,13 @@ export abstract class RetryableInvocationNode<
       // credit-depletion flow), toggling included-access mode, rotating
       // a token after a relay 401, etc. Refreshing is cheap and keeps
       // the cached client in sync with current secrets/config.
-      await tryRefreshClient(
-        this.services.refreshClient,
-        this.services.logger,
-        'before manual retry',
-      );
+      if (result.clientPrepared !== true) {
+        await tryRefreshClient(
+          this.services.refreshClient,
+          this.services.logger,
+          'before manual retry',
+        );
+      }
     }
 
     return result.shouldRetry;
@@ -294,14 +297,26 @@ export abstract class RetryableInvocationNode<
       data: formatted.message ?? 'unknown error',
     });
     // No timeout: the retry panel waits indefinitely for the user's decision.
-    const interaction = session.interactions.requestRetry({
-      requestId: `retry-${nanoid()}`,
-      streamId,
-      operation: operationName,
-      model: this.services.config.model,
-      errorMessage: formatted.message,
-      errorDetails: formatted,
-    });
+    let clientPrepared = false;
+    const interaction = session.interactions.requestRetry(
+      {
+        requestId: `retry-${nanoid()}`,
+        streamId,
+        operation: operationName,
+        model: this.services.config.model,
+        errorMessage: formatted.message,
+        errorDetails: formatted,
+      },
+      {
+        prepareRetry: async () => {
+          if (!this.services.refreshClient) {
+            throw new Error('Model client refresh is unavailable');
+          }
+          await this.services.refreshClient();
+          clientPrepared = true;
+        },
+      },
+    );
     if (!interaction) {
       throw new Error('HostInteractions.requestRetry is required');
     }
@@ -312,7 +327,7 @@ export abstract class RetryableInvocationNode<
       streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
         trace: logger,
       });
-      return { shouldRetry: true, userCancelled: false };
+      return { shouldRetry: true, userCancelled: false, clientPrepared };
     }
 
     if (result.action === 'deny') {

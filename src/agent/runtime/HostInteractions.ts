@@ -52,6 +52,11 @@ export interface HostInteractionOptions {
   readonly cancellationScope?: object;
 }
 
+export interface HostRetryInteractionOptions extends HostInteractionOptions {
+  /** Prepare the model client that the approved retry will use. */
+  readonly prepareRetry?: () => Promise<void>;
+}
+
 /** Delivery policy for a notification owned by a process session. */
 interface SessionPresentationOptions {
   /** Retain the notice for the next attachment instead of dropping it now. */
@@ -314,7 +319,7 @@ export interface HostInteractions {
   ): Promise<ProposalResult> | undefined;
   requestRetry?(
     request: HostRetryRequest,
-    options?: HostInteractionOptions,
+    options?: HostRetryInteractionOptions,
   ): Promise<RetryResult> | undefined;
   askUserQuestion?(
     request: HostUserQuestionRequest,
@@ -490,7 +495,7 @@ export class SessionHostInteractions
 
   requestRetry(
     request: HostRetryRequest,
-    options?: HostInteractionOptions,
+    options?: HostRetryInteractionOptions,
   ): Promise<RetryResult> {
     return this.enqueue<RetryResult>(
       'retry',
