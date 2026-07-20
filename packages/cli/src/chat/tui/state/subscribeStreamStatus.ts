@@ -27,11 +27,12 @@ export function subscribeStreamStatus(): () => void {
       projectStreamTranscriptForStatus(change.streamId, change.status);
     }
 
-    // A lifecycle-owned child completion returns manual focus to that child's
+    // A completed or user-stopped child returns manual focus to that child's
     // immediate owner. WAITING, repair events, unrelated streams, and detached
     // children deliberately leave focus unchanged.
     if (
-      change.cause === STREAM_TRANSITION_CAUSE.LIFECYCLE &&
+      (change.cause === STREAM_TRANSITION_CAUSE.LIFECYCLE ||
+        change.cause === STREAM_TRANSITION_CAUSE.USER_STOP) &&
       isTerminalOutcomePhase(change.status) &&
       activeStreamId.get() === change.streamId
     ) {

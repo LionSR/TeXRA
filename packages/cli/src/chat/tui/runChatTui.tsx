@@ -806,10 +806,15 @@ export async function runChat(
     <App
       onSubmit={handleSubmit}
       canInterruptActiveRun={canInterruptActiveRun}
+      canInterruptStream={(streamId) =>
+        (streamId === session.streamId && canInterruptActiveRun()) ||
+        defaultSession().status.isInFlight(streamId)
+      }
       canStopActiveRun={canStopActiveRun}
       colorEnabled={stdoutColorEnabled}
       commandName={context.commandName}
       onInterruptActive={interruptActive}
+      onInterruptStream={chatController.stopStream}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={() => exitController.handleSigint()}
       onSuspend={() => exitController.handleSigtstp()}

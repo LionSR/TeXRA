@@ -272,15 +272,14 @@ describe('app interaction policy', () => {
   });
 
   it('runs Escape interrupt from the supplied current state', () => {
-    let interrupts = 0;
+    const interrupted: StreamTabId[] = [];
+    const target = 'focused-child' as StreamTabId;
     const baseState = {
       inputDisabled: false,
       reverseSearchOpen: false,
       slashPaletteOpen: false,
-      onInterruptActive: () => {
-        interrupts += 1;
-      },
-    } satisfies Omit<EscapeInterruptState, 'canInterruptActiveRun'>;
+      onInterruptStream: (streamId: StreamTabId) => interrupted.push(streamId),
+    } satisfies Omit<EscapeInterruptState, 'canInterruptStream'>;
     const cases = [
       [true, true, 1],
       [false, false, 1],
@@ -288,13 +287,27 @@ describe('app interaction policy', () => {
 
     for (const [canInterrupt, expected, expectedInterrupts] of cases) {
       expect(
-        triggerEscapeInterrupt({
-          ...baseState,
-          canInterruptActiveRun: () => canInterrupt,
-        }),
+        triggerEscapeInterrupt(
+          {
+            ...baseState,
+            canInterruptStream: (streamId) =>
+              streamId === target && canInterrupt,
+          },
+          target,
+        ),
       ).toBe(expected);
-      expect(interrupts).toBe(expectedInterrupts);
+      expect(interrupted).toHaveLength(expectedInterrupts);
     }
+    expect(interrupted).toEqual([target]);
+    expect(
+      triggerEscapeInterrupt(
+        {
+          ...baseState,
+          canInterruptStream: () => true,
+        },
+        undefined,
+      ),
+    ).toBe(false);
   });
 
   it('lets approvals preempt only a busy form', () => {

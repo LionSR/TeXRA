@@ -27,6 +27,7 @@ import {
   getCliStateGeneration,
   removeStream,
   patchStream,
+  registerCliStateResetHook,
   type StreamSlice,
 } from './cliState';
 import {
@@ -314,7 +315,10 @@ function applyStreamMeta(
 export function attachTuiRunFactSubscription(
   events: SessionEventHub,
 ): () => void {
-  const generation = getCliStateGeneration();
+  let generation = getCliStateGeneration();
+  const detachResetHook = registerCliStateResetHook(() => {
+    generation = getCliStateGeneration();
+  });
   const detachSessionFacts = events.subscribe(
     (sessionEvent) => {
       if (generation !== getCliStateGeneration()) return;
@@ -386,6 +390,7 @@ export function attachTuiRunFactSubscription(
     },
   );
   return () => {
+    detachResetHook();
     detachRunFacts();
     detachSessionFacts();
   };
