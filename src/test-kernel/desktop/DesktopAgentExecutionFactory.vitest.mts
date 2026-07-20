@@ -239,7 +239,7 @@ async function createExecution(options: {
   const { StreamLogStore, StreamSnapshotStore } = await import('@transcript');
   const { SessionHandle } = await import('@agent/runtime/SessionHandle');
   const { initializeDesktopProcessStores } =
-    await import('@desktop/main/desktopLegacyStreamImporter');
+    await import('@desktop/main/desktopProcessStores');
   const transcripts = await StreamLogStore.open();
   const session = new SessionHandle({ transcripts });
   options.inspectSession?.(session);
