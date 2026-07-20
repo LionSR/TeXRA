@@ -17,78 +17,86 @@ cursor from a previous conversation turn.
 
 ## Steps
 
-1. **Read the ledger.** `mcp__github__issue_read` (method `get`) on #8974.
-   Parse `cursor`, `rotationSize`, the `areas` order list, and the current
-   do-not-do bullet list from the body.
+1. **Read the ledger.** Call `mcp__github__get_issue` for #8974. Parse
+   `cursor`, `rotationSize`, the ordered `areas` list, and the current
+   do-not-do bullets from the body.
 
-2. **Gather known issues for dedupe.** `mcp__github__search_issues` with
-   `query: "repo:LionSR/TeXRA label:tech-debt"` (state not restricted — a
-   recently closed tech-debt issue is still a real duplicate risk). Reduce
-   each hit to `"#N <title>"` strings; that is the `knownIssues` arg.
+2. **Gather known issues for dedupe.** Call `mcp__github__search_issues` with
+   `query: "repo:LionSR/TeXRA is:issue label:tech-debt"`. Do not restrict
+   state: a recently closed issue remains a duplicate risk. Follow pagination
+   until every page has been read, and reduce each issue to a `"#N <title>"`
+   string for the `knownIssues` argument. Pull requests are not dedupe records.
 
 3. **Run the workflow.** Call `Workflow` with `name: "tech-debt-tournament"`
    (or `scriptPath: ".claude/workflows/tech-debt-tournament.mjs"`) and args:
-   ```
+
+   ```text
    {
      campaignDate: "<today's date, YYYY-MM-DD, from environment context>",
      cursor: <ledger cursor>,
      rotationSize: <ledger rotationSize, default 3>,
+     areas: [...ledger area names in their persisted order...],
      knownIssues: [...],
      doNotDo: [...ledger do-not-do bullets...],
-     maxVerify: 8,
      maxFile: 3
    }
    ```
-   The workflow is entirely read-only (no edits, no state-changing commands
-   inside any spawned agent) until this point — everything so far only reads
-   the repo and GitHub.
+
+   The workflow is entirely read-only: agents may inspect the repository but
+   must not edit files or run state-changing commands.
 
 4. **Inspect the result.** The workflow returns
-   `{ campaignDate, areasThisCycle, nextCursor, toFile, carriedForward,
-   contested, rejected, newDoNotDo, droppedAsKnown, droppedAsDoNotDo, merged,
-   seamCount }`. If `toFile` is empty, skip straight to step 7 (update the
-   ledger cycle log with zero filed — a quiet cycle is a valid outcome, don't
-   force filing to hit a quota).
+   `{ campaignDate, areasThisCycle, nextCursor, toFile, contested, rejected,
+   newDoNotDo, droppedAsKnown, droppedAsDoNotDo, merged, seamCount }`. If
+   `toFile` is empty, skip to step 7 and record a quiet cycle. Do not force a
+   candidate through to meet a quota. Any candidate with a verifier correction
+   is `CONTESTED`, so every `toFile` spec survived with its scope and estimates
+   unchanged.
 
-5. **File the issues.** For each candidate in `toFile`, in the same style as
-   the child issues under #8758 (e.g. #8746): `mcp__github__issue_write`
-   method `create`, `owner: LionSR`, `repo: TeXRA`, `title` from the
-   candidate (issue-style, e.g. `refactor(scope): <what ceases to exist>
-   (~-N LoC)`), `body` = the candidate's `spec` plus a short header noting
-   `From the <campaignDate> tech-debt tournament (adversarially verified).
-   Verdict: REAL_NET_GAIN, ~-<estLoc> LoC, -<estElements> elements, risk
-   <risk>.` and append any `corrections` from the verify phase as a
-   `**Verifier corrections**` section — these are hard scope requirements,
-   not suggestions. `labels: ["tech-debt", "source:claude", "risk:<risk>"]`.
+5. **Create the tracking issue first.** This makes a partially completed run
+   recoverable. Call `mcp__github__create_issue` with:
 
-6. **Create the cycle's tracking issue and attach sub-issues.** One umbrella
-   issue per cycle (mirrors #8758's shape but scaled down):
-   title `tracking: tech-debt tournament <campaignDate> (<N> deletion
-   issue(s), ~-<total LoC> LoC)`, body summarizing `areasThisCycle`, the
-   filed issues, and — briefly — what was dropped (`droppedAsKnown`,
-   `droppedAsDoNotDo`, `contested`, `carriedForward`) so a human skimming it
-   understands why the count is small. Then `mcp__github__sub_issue_write`
-   method `add` for each filed issue under this tracking issue.
+   - Title: `Tracking: tech-debt tournament <campaignDate> (<N> deletion issue(s), ~-<total LoC> LoC)`.
+   - Labels: `tracking`, `tech-debt`, and `source:claude`.
+   - Body: `areasThisCycle` plus the planned child titles.
 
-7. **Update the ledger issue (#8974).** `mcp__github__issue_write` method
-   `update` on #8974:
-   - Set `cursor` to the workflow's `nextCursor`.
-   - Append any `newDoNotDo` entries to the do-not-do list (dedupe against
-     what's already there — don't duplicate an entry).
-   - Append one row to the cycle log table: date, `areasThisCycle`, filed
-     issue numbers, `carriedForward` titles (if any), new do-not-do entries
-     (if any).
-   - Keep the rest of the body intact — this is an update, not a rewrite of
-     the working rules section.
+   Capture the tracking issue number and integer REST database `id`; the `id`
+   is not its issue number and not its GraphQL `node_id`.
 
-8. **Report.** One short message: date, areas covered this cycle, links to
-   the filed issues and tracking issue (or "quiet cycle, nothing survived
-   verification" if `toFile` was empty), and the new cursor position for
-   context on what's next.
+6. **Create and attach each child.** For each candidate in `toFile`, call
+   `mcp__github__create_issue` in the style of #8758's children (for example,
+   #8746):
+
+   - Use the candidate title and spec.
+   - Prefix the body with `From the <campaignDate> tech-debt tournament
+     (adversarially verified). Verdict: REAL_NET_GAIN, ~-<estLoc> LoC,
+     -<estElements> elements, risk <risk>.`
+   - Apply `tech-debt`, `source:claude`, and `risk:<risk>` labels.
+
+   Capture the child's issue number and integer REST database `id`, then call
+   `mcp__github__add_sub_issue` with the tracking issue number and
+   `sub_issue_id: <child id>`. After every child is attached, call
+   `mcp__github__update_issue` to replace the tracking issue's planned list
+   with filed issue links and summarize `droppedAsKnown`, `droppedAsDoNotDo`,
+   and `contested` so a human can see why the cycle remained small.
+
+7. **Update ledger issue #8974.** Only after all creates and attachments
+   succeed, call `mcp__github__update_issue`:
+
+   - Set `cursor` to `nextCursor`.
+   - Append the plain-string `newDoNotDo` entries, deduplicated against the
+     existing do-not-do bullets.
+   - Append one cycle-log row with the date, `areasThisCycle`, filed issue
+     numbers, and new do-not-do entries.
+   - Preserve the rest of the body exactly.
+
+8. **Report.** Return the date, areas covered, links to the filed children and
+   tracking issue (or `quiet cycle, nothing survived verification`), and the
+   next cursor.
 
 ## Guardrails
 
-- Never raise `maxFile`/`maxVerify`/`rotationSize` above the SKILL defaults
+- Never raise `maxFile` or `rotationSize` above the skill defaults
   without the user explicitly asking for a bigger cycle — the whole point of
   this mechanism is small, steady, low-drama batches, not recreating the
   #8758 mega-campaign every few days.
@@ -98,3 +106,6 @@ cursor from a previous conversation turn.
 - If `mcp__github__search_issues` or the ledger read fails, stop and report
   rather than guessing at cursor/dedupe state — filing duplicate or
   already-adjudicated issues is worse than skipping a cycle.
+- If a child create or attachment fails, do not advance the ledger and do not
+  restart from scratch. Report the existing tracking issue and use its planned
+  child list to resume only the missing create or attach operations.

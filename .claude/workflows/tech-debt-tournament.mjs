@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Recurring tech-debt tournament: seam mappers over a ROTATING slice of areas, architect lenses propose deletions, dedupe against known issues + do-not-do ledger, adversarial net-gain verification, output capped to a few issues per cycle.',
   whenToUse:
-    'Invoked by the tech-debt-tournament skill (scheduled campaign). Args: { campaignDate, cursor?, rotationSize?, knownIssues?, doNotDo?, areas?, maxVerify?, maxFile? }. Deliberately scoped small per run (a handful of areas, a few issues filed) — breadth comes from repeated cycles rotating through areas, not from one large sweep.',
+    'Invoked by the tech-debt-tournament skill (scheduled campaign). Args: { campaignDate, cursor?, rotationSize?, knownIssues?, doNotDo?, areas?, maxFile? }. Deliberately scoped small per run (a handful of areas, a few issues filed) — breadth comes from repeated cycles rotating through areas, not from one large sweep.',
   phases: [
     { title: 'Map', detail: 'one read-only seam mapper per rotated area' },
     { title: 'Propose', detail: 'four architect lenses over all maps' },
@@ -12,16 +12,50 @@ export const meta = {
   ],
 }
 
-// The driver (skill) passes campaignDate because Date is unavailable inside workflow scripts.
-const campaignDate = (args && args.campaignDate) || 'unknown-date'
-const knownIssues = (args && args.knownIssues) || [] // ["#8746 refactor(logger): ...", ...]
-const doNotDo = (args && args.doNotDo) || [] // ledger entries: adjudicated NET_LOSS / held-back items
-const MAX_VERIFY = (args && args.maxVerify) || 8
-// Hard cap on issues actually recommended for filing this cycle. Keep this small —
-// the point of running every few days is a steady trickle, not another 12-issue/-1k-LoC
-// mega campaign each time. Extra REAL_NET_GAIN survivors are returned as carriedForward,
-// not filed, so they aren't lost but also don't overshoot this cycle.
-const MAX_FILE = (args && args.maxFile) || 3
+const input = args && typeof args === 'object' ? args : {}
+
+function readInteger(name, fallback, min, max = Number.MAX_SAFE_INTEGER) {
+  const value = input[name]
+  if (value == null) return fallback
+  if (
+    (typeof value !== 'number' && typeof value !== 'string') ||
+    (typeof value === 'string' && !value.trim())
+  ) {
+    throw new Error(`${name} must be a number or numeric string`)
+  }
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(`${name} must be an integer between ${min} and ${max}; received ${String(value)}`)
+  }
+  return parsed
+}
+
+function readStringArray(name, fallback = []) {
+  const value = input[name]
+  if (value == null) return fallback
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string' || !entry.trim())) {
+    throw new Error(`${name} must be an array of non-empty strings`)
+  }
+  return value
+}
+
+function requireStageResults(results, stage) {
+  const missingIndex = results.findIndex((result) => !result)
+  if (missingIndex !== -1) {
+    throw new Error(`${stage} agent ${missingIndex + 1}/${results.length} returned no result; aborting the cycle`)
+  }
+  return results
+}
+
+// The driver passes campaignDate because Date is unavailable inside workflow scripts.
+const campaignDate = typeof input.campaignDate === 'string' && input.campaignDate.trim()
+  ? input.campaignDate
+  : 'unknown-date'
+const knownIssues = readStringArray('knownIssues') // ["#8746 refactor(logger): ...", ...]
+const doNotDo = readStringArray('doNotDo') // adjudicated NET_LOSS / held-back ledger entries
+// One cap owns both verification fan-out and issue filing. With the default, a cycle
+// launches at most 3 mappers + 4 lenses + 1 deduper + 9 refuters = 17 agents.
+const MAX_FILE = readInteger('maxFile', 3, 1, 8)
 
 const ALL_AREAS = [
   { name: 'agent-runtime', paths: ['src/agent/runtime/', 'src/agent/core/'] },
@@ -30,7 +64,15 @@ const ALL_AREAS = [
   { name: 'platform-infra', paths: ['src/platform/', 'src/logger/', 'src/eventBus/', 'src/utils/'] },
   { name: 'storage-transcript', paths: ['src/agent/storage/', 'src/agent/trace/', 'src/transcript/'] },
   { name: 'controllers-shared', paths: ['src/controllers/', 'src/shared/', 'src/hosts/'] },
-  { name: 'extension-host', paths: ['packages/extension/src/commands/', 'packages/extension/src/*.ts'] },
+  {
+    name: 'extension-host',
+    paths: [
+      'packages/extension/src/commands/',
+      'packages/extension/src/MainViewProvider.ts',
+      'packages/extension/src/commands.ts',
+      'packages/extension/src/extension.ts',
+    ],
+  },
   { name: 'webviews', paths: ['packages/extension/src/webview/', 'packages/extension/src/progressView/', 'packages/extension/src/settingsView/'] },
   { name: 'cli', paths: ['packages/cli/src/'] },
   { name: 'desktop', paths: ['packages/desktop/src/'] },
@@ -46,9 +88,24 @@ function rotateAreas(all, cursor, size) {
   return picked
 }
 
-const rotationSize = (args && args.rotationSize) || 3
-const cursor = (args && args.cursor) || 0
-const areas = (args && args.areas) || rotateAreas(ALL_AREAS, cursor, rotationSize)
+const areaByName = new Map(ALL_AREAS.map((area) => [area.name, area]))
+const areaNames = readStringArray(
+  'areas',
+  ALL_AREAS.map((area) => area.name),
+)
+if (new Set(areaNames).size !== areaNames.length) {
+  throw new Error('areas must not contain duplicate names')
+}
+const orderedAreas = areaNames.map((name) => {
+  const area = areaByName.get(name)
+  if (!area) throw new Error(`Unknown tournament area: ${name}`)
+  return area
+})
+if (!orderedAreas.length) throw new Error('areas must contain at least one configured area')
+
+const rotationSize = readInteger('rotationSize', 3, 1, orderedAreas.length)
+const cursor = readInteger('cursor', 0, 0)
+const areas = rotateAreas(orderedAreas, cursor, rotationSize)
 
 const SEAM_SCHEMA = {
   type: 'object',
@@ -208,7 +265,7 @@ const VERDICT_SCHEMA = {
     reason: { type: 'string' },
     corrections: {
       type: 'string',
-      description: 'scope corrections an implementer MUST honor even if the candidate survives (e.g. "the 78-hit grep includes one doc comment"). Empty string if none.',
+      description: 'mandatory scope or estimate correction; any non-empty value makes the candidate contested and not fileable. Empty string if none.',
     },
   },
   required: ['refuted', 'confidence', 'reason', 'corrections'],
@@ -254,13 +311,14 @@ log(
   `Tournament ${campaignDate}: mapping ${areas.length} rotated area(s) [${areas.map((a) => a.name).join(', ')}] (cursor=${cursor}); ${knownIssues.length} known issues and ${doNotDo.length} ledger entries loaded for dedupe`,
 )
 
-const maps = (
+const maps = requireStageResults(
   await parallel(
     areas.map((area) => () =>
       agent(mapperPrompt(area), { label: `map:${area.name}`, phase: 'Map', schema: SEAM_SCHEMA }),
     ),
-  )
-).filter(Boolean)
+  ),
+  'Map',
+)
 
 const totalSeams = maps.reduce((n, m) => n + m.seams.length, 0)
 log(`Mapping done: ${totalSeams} seams across ${maps.length}/${areas.length} areas`)
@@ -273,13 +331,14 @@ const mapsJson = JSON.stringify(
   1,
 )
 
-const lensResults = (
+const lensResults = requireStageResults(
   await parallel(
     LENSES.map((lens) => () =>
       agent(lensPrompt(lens, mapsJson), { label: `lens:${lens.key}`, phase: 'Propose', schema: CANDIDATE_SCHEMA }),
     ),
-  )
-).filter(Boolean)
+  ),
+  'Propose',
+)
 
 const rawCandidates = lensResults.flatMap((r) => r.candidates.map((c) => ({ ...c, lens: r.lens })))
 log(`Lenses proposed ${rawCandidates.length} raw candidates`)
@@ -287,32 +346,40 @@ log(`Lenses proposed ${rawCandidates.length} raw candidates`)
 // ---- Phase 3: Dedupe (barrier justified: needs the full candidate set) -----
 phase('Dedupe')
 const dedupe = rawCandidates.length
-  ? await agent(
+  ? requireStageResults(
       [
-        `Merge and dedupe tech-debt candidates for the TeXRA tournament ${campaignDate}. READ-ONLY; no edits.`,
-        ``,
-        `1. Merge near-duplicate candidates (same deletion proposed by different lenses) into the single strongest spec.`,
-        `2. Drop any candidate that duplicates an EXISTING issue below (report which). Titles will not match verbatim — judge by substance, and check the issue on GitHub or in the repo docs when unsure.`,
-        `3. Drop any candidate banned by the DO-NOT-DO ledger below (report which). Ledger entries are adjudicated verdicts; do not relitigate them here.`,
-        ``,
-        `Existing issues:`,
-        knownIssues.length ? knownIssues.map((s) => `- ${s}`).join('\n') : '- (none provided)',
-        ``,
-        `Do-not-do ledger:`,
-        doNotDo.length ? doNotDo.map((s) => `- ${s}`).join('\n') : '- (none provided)',
-        ``,
-        `Candidates (JSON):`,
-        JSON.stringify(rawCandidates, null, 1),
-      ].join('\n'),
-      { label: 'dedupe', phase: 'Dedupe', schema: DEDUPE_SCHEMA },
-    )
+        await agent(
+          [
+            `Merge and dedupe tech-debt candidates for the TeXRA tournament ${campaignDate}. READ-ONLY; no edits.`,
+            ``,
+            `1. Merge near-duplicate candidates (same deletion proposed by different lenses) into the single strongest spec.`,
+            `2. Drop any candidate that duplicates an EXISTING issue below (report which). Titles will not match verbatim — judge by substance, and check the issue on GitHub or in the repo docs when unsure.`,
+            `3. Drop any candidate banned by the DO-NOT-DO ledger below (report which). Ledger entries are adjudicated verdicts; do not relitigate them here.`,
+            ``,
+            `Existing issues:`,
+            knownIssues.length ? knownIssues.map((s) => `- ${s}`).join('\n') : '- (none provided)',
+            ``,
+            `Do-not-do ledger:`,
+            doNotDo.length ? doNotDo.map((s) => `- ${s}`).join('\n') : '- (none provided)',
+            ``,
+            `Candidates (JSON):`,
+            JSON.stringify(rawCandidates, null, 1),
+          ].join('\n'),
+          { label: 'dedupe', phase: 'Dedupe', schema: DEDUPE_SCHEMA },
+        ),
+      ],
+      'Dedupe',
+    )[0]
   : { kept: [], droppedAsKnown: [], droppedAsDoNotDo: [], merged: [] }
 
-const ranked = [...dedupe.kept].sort((a, b) => b.estLoc - a.estLoc)
-const toVerify = ranked.slice(0, MAX_VERIFY)
+const riskRank = { low: 0, medium: 1, high: 2 }
+const ranked = dedupe.kept.toSorted(
+  (a, b) => riskRank[a.risk] - riskRank[b.risk] || a.estLoc - b.estLoc,
+)
+const toVerify = ranked.slice(0, MAX_FILE)
 if (ranked.length > toVerify.length) {
-  log(`Capping verification at ${MAX_VERIFY}: dropping ${ranked.length - toVerify.length} lowest-LoC candidates: ${ranked
-    .slice(MAX_VERIFY)
+  log(`Capping this cycle at ${MAX_FILE}: not selecting ${ranked.length - toVerify.length} additional candidate(s): ${ranked
+    .slice(MAX_FILE)
     .map((c) => c.title)
     .join(' | ')}`)
 }
@@ -320,51 +387,54 @@ log(`Dedupe done: ${dedupe.kept.length} kept, ${dedupe.droppedAsKnown.length} al
 
 // ---- Phase 4: Verify (pipeline: each candidate verifies independently) -----
 phase('Verify')
-const verified = await pipeline(toVerify, (candidate) =>
-  parallel(
-    REFUTER_LENSES.map((lens) => () =>
-      agent(refuterPrompt(candidate, lens), {
-        label: `verify:${lens.key}:${candidate.area}`,
-        phase: 'Verify',
-        schema: VERDICT_SCHEMA,
-      }),
-    ),
-  ).then((votes) => {
-    const cast = votes.filter(Boolean)
-    const refutes = cast.filter((v) => v.refuted)
-    return {
-      ...candidate,
-      verdict: cast.length >= 2 && refutes.length === 0 ? 'REAL_NET_GAIN' : refutes.length >= 2 ? 'NET_LOSS' : 'CONTESTED',
-      votes: cast,
-      corrections: cast.map((v) => v.corrections).filter((s) => s && s.trim()),
-    }
-  }),
+const verified = requireStageResults(
+  await pipeline(toVerify, (candidate) =>
+    parallel(
+      REFUTER_LENSES.map((lens) => () =>
+        agent(refuterPrompt(candidate, lens), {
+          label: `verify:${lens.key}:${candidate.area}`,
+          phase: 'Verify',
+          schema: VERDICT_SCHEMA,
+        }),
+      ),
+    ).then((votes) => {
+      const cast = requireStageResults(votes, `Verify ${candidate.title}`)
+      const refutes = cast.filter((v) => v.refuted)
+      const corrections = cast.map((v) => v.corrections).filter((text) => text && text.trim())
+      let verdict = 'CONTESTED'
+      if (refutes.length >= 2) verdict = 'NET_LOSS'
+      else if (refutes.length === 0 && corrections.length === 0) verdict = 'REAL_NET_GAIN'
+      return {
+        ...candidate,
+        verdict,
+        votes: cast,
+        corrections,
+      }
+    }),
+  ),
+  'Verify',
 )
 
-const allSurvivors = verified.filter(Boolean).filter((c) => c.verdict === 'REAL_NET_GAIN')
-const rejected = verified.filter(Boolean).filter((c) => c.verdict === 'NET_LOSS')
-const contested = verified.filter(Boolean).filter((c) => c.verdict === 'CONTESTED')
+const allSurvivors = verified.filter((candidate) => candidate.verdict === 'REAL_NET_GAIN')
+const rejected = verified.filter((candidate) => candidate.verdict === 'NET_LOSS')
+const contested = verified.filter((candidate) => candidate.verdict === 'CONTESTED')
 
-// Don't overshoot: file only the smallest/lowest-risk MAX_FILE survivors this cycle.
-// Smaller, easier-to-review PRs land faster than a wall of simultaneous refactors;
-// larger or lower-priority survivors carry over to be re-proposed (post-dedupe) next cycle.
-const riskRank = { low: 0, medium: 1, high: 2 }
-const bySafetyThenSize = [...allSurvivors].sort(
+// Every verified survivor is filed. The single pre-verification cap guarantees this
+// cannot exceed MAX_FILE and avoids a second persisted carry-forward queue.
+const toFile = allSurvivors.toSorted(
   (a, b) => riskRank[a.risk] - riskRank[b.risk] || a.estLoc - b.estLoc,
 )
-const toFile = bySafetyThenSize.slice(0, MAX_FILE)
-const carriedForward = bySafetyThenSize.slice(MAX_FILE)
-if (carriedForward.length) {
-  log(`Filing cap ${MAX_FILE}: carrying ${carriedForward.length} verified survivor(s) forward instead of filing this cycle: ${carriedForward.map((c) => c.title).join(' | ')}`)
-}
 
 // NET_LOSS with a confident majority becomes a ledger entry so future sweeps stop re-proposing it.
 const newDoNotDo = rejected
   .filter((c) => c.votes.filter((v) => v.refuted && v.confidence !== 'low').length >= 2)
-  .map((c) => ({
-    entry: `${c.title}: NET_LOSS (tournament ${campaignDate})`,
-    reasons: c.votes.filter((v) => v.refuted).map((v) => v.reason),
-  }))
+  .map(
+    (c) =>
+      `${c.title}: NET_LOSS (tournament ${campaignDate}) — ${c.votes
+        .filter((vote) => vote.refuted)
+        .map((vote) => vote.reason.replaceAll(/\s+/g, ' ').trim())
+        .join('; ')}`,
+  )
 
 log(
   `Verification done: ${allSurvivors.length} REAL_NET_GAIN (${toFile.length} to file, ~-${toFile.reduce((n, c) => n + c.estLoc, 0)} LoC), ${rejected.length} NET_LOSS, ${contested.length} contested (not filed)`,
@@ -373,9 +443,8 @@ log(
 return {
   campaignDate,
   areasThisCycle: areas.map((a) => a.name),
-  nextCursor: cursor + rotationSize,
+  nextCursor: cursor + areas.length,
   toFile,
-  carriedForward,
   contested,
   rejected,
   newDoNotDo,
