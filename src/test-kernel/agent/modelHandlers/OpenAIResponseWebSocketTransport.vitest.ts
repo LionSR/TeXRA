@@ -1,11 +1,15 @@
+// Node imports
 import { EventEmitter } from 'node:events';
 
+// Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
 import { WebSocketError } from 'openai/resources/responses/internal-base';
+
+// Local imports
 import type { AgentTrace } from '@agent/trace';
 import { OpenAIResponseWebSocketTransport } from '@agent/modelHandlers/openai/OpenAIResponseWebSocketTransport';
 
+// Third-party type imports
 import type OpenAI from 'openai';
 
 const WS_OPEN = 1;

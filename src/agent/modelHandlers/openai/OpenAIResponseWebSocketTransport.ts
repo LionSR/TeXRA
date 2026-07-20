@@ -82,17 +82,7 @@ export class OpenAIResponseWebSocketTransport {
   /** Keepalive interval for the WebSocket connection. */
   private wsKeepaliveInterval: ReturnType<typeof setInterval> | null = null;
 
-  /**
-   * Bound for the pooled connection's whole lifetime, not just while a
-   * request is in flight. Without this, a server-pushed error while idle
-   * between requests (e.g. `websocket_connection_limit_reached` at the
-   * 60-minute mark) has zero listeners on the emitter, and Node treats an
-   * unhandled `'error'` event as a fatal unhandled rejection, crashing the
-   * process. `executeViaWebSocket`'s per-request `onWsError` still settles
-   * the in-flight promise when one exists (registered after this handler,
-   * so it still fires); this one only needs to invalidate the connection so
-   * the next `execute()` reconnects.
-   */
+  /** Invalidate pooled sockets that emit errors between requests. */
   private readonly onIdleWsError = (error: WebSocketError): void => {
     this.logger.debug('WebSocket connection error — invalidating', {
       data: { message: error.message },
