@@ -143,7 +143,7 @@ const DELEGATED_WORK_APPROVAL_TOGGLE_BUTTON = Object.freeze({
   command: PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
   title: DELEGATION_APPROVAL_COPY.progressViewToggle,
   titleActive:
-    'Task, edit, and command auto-approval active — click to resume prompts',
+    'Agent tasks, file edits, and shell commands are being auto-approved — click to resume prompts',
   className: 'super-yolo-toggle-button',
   isToggle: true,
 });

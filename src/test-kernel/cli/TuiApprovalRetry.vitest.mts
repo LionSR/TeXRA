@@ -46,6 +46,8 @@ import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInte
 import {
   clearApprovals,
   currentApproval,
+  enqueueApproval,
+  pendingApprovalSummaries,
 } from '@cli/chat/tui/state/approvalQueue';
 import { resetCliState, streams } from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
@@ -319,6 +321,57 @@ describe('TUI retry approvals', () => {
       command: 'lake build',
       streamId,
     });
+    void enqueueApproval({
+      kind: 'plan',
+      payload: {
+        approvalId: 'plan-excluded',
+        streamId,
+        goalEnabled: false,
+        plan: { objective: 'Keep the approval categories distinct.' },
+      },
+    });
+    void enqueueApproval({
+      kind: 'retry',
+      payload: {
+        requestId: 'retry-excluded',
+        streamId,
+        operation: 'model request',
+      },
+    });
+    void enqueueApproval({
+      kind: 'externalInquiry',
+      payload: {
+        requestId: 'inquiry-excluded',
+        allowBypass: false,
+        streamId,
+        mode: 'new',
+        question: 'What external fact should be checked?',
+        threadId: 'thread-excluded',
+      },
+    });
+    void enqueueApproval({
+      kind: 'userQuestion',
+      payload: {
+        requestId: 'question-excluded',
+        allowBypass: false,
+        streamId,
+        questions: [
+          {
+            question: 'Continue?',
+            options: [{ label: 'Yes' }, { label: 'No' }],
+          },
+        ],
+      },
+    });
+    void enqueueApproval({
+      kind: 'bash',
+      payload: {
+        requestId: 'other-stream-bash',
+        allowBypass: true,
+        streamId: 'other-approval-stream',
+        command: 'lake test',
+      },
+    });
 
     await vi.waitFor(() => {
       expect(currentApproval.get()?.payload).toMatchObject({
@@ -337,7 +390,14 @@ describe('TUI retry approvals', () => {
       accepted: true,
       userMessage: undefined,
     });
-    expect(currentApproval.get()).toBeUndefined();
+    expect(pendingApprovalSummaries.get()).toEqual([
+      { streamKey: streamId, kind: 'plan' },
+      { streamKey: streamId, kind: 'retry' },
+      { streamKey: streamId, kind: 'externalInquiry' },
+      { streamKey: streamId, kind: 'userQuestion' },
+      { streamKey: 'other-approval-stream', kind: 'bash' },
+    ]);
+    expect(currentApproval.get()?.payload.kind).toBe('plan');
   });
 
   it('keeps an ordinary proposal approval limited to the current request', async () => {

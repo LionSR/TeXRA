@@ -401,7 +401,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
       },
     ]);
     expect(showInfo).toHaveBeenCalledWith(
-      'YOLO mode enabled: Tool actions and bash commands will be auto-approved for this stream.',
+      'File edits and shell commands will be auto-approved for this run.',
     );
 
     expectDispatched(
@@ -456,7 +456,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
   });
 
   it('forces edit and bash bypass on without inverting a decoupled stream', async () => {
-    // Reproduces the inline "Yolo (this session)" path on a delegated child
+    // Reproduces the inline run-approval path on a delegated child
     // stream where edit-YOLO was granted but bash stayed gated. A toggle would
     // flip edit OFF; ENABLE_APPROVAL_BYPASS must force both ON.
     const stream = 'stream:yolo-enable';
@@ -479,7 +479,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     expect(isApprovalBypassedForStream(stream)).toBe(true);
     expect(isBashApprovalBypassedForStream(stream)).toBe(true);
     expect(showInfo).toHaveBeenCalledWith(
-      'YOLO mode enabled: Tool actions and bash commands will be auto-approved for this stream.',
+      'File edits and shell commands will be auto-approved for this run.',
     );
   });
 
@@ -515,7 +515,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
       },
     ]);
     expect(showInfo).toHaveBeenCalledWith(
-      'Task, file-edit, and command auto-approval enabled for this run.',
+      'Agent tasks, file edits, and shell commands will be auto-approved for this run.',
     );
 
     expectDispatched(
@@ -558,7 +558,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
       },
     ]);
     expect(showInfo).toHaveBeenLastCalledWith(
-      'Task, file-edit, and command auto-approval disabled for this run.',
+      'Agent tasks, file edits, and shell commands will require approval for this run.',
     );
   });
 });
