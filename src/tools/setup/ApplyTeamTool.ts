@@ -26,7 +26,7 @@ import {
   teamHostedNamesForPreflight,
   type TeamRosterCatalog,
 } from '@common/teams/TeamRoster';
-import { applyTeamRosterWithPreflight } from '@controllers/teams/TeamRosterApplication';
+import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { agentName } from '@shared/schemas/agent';
 import {
   AGENT_MODE_PRESETS,
