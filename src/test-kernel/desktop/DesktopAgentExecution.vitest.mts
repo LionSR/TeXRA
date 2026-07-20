@@ -2708,9 +2708,7 @@ describe('DesktopProgressBridge', () => {
           session: processSession,
           sessionStores,
           progressSnapshotStore,
-          ...(wakeQueuedFollowUpStream
-            ? { wakeQueuedFollowUpStream }
-            : {}),
+          ...(wakeQueuedFollowUpStream ? { wakeQueuedFollowUpStream } : {}),
           host: createStubDesktopAgentExecutionHost({
             openDiff: async (original, proposed, title) => {
               diffPathsA.push({
