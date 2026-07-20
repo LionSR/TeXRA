@@ -7,6 +7,7 @@ import { z } from 'zod';
 interface StateStorage {
   get(key: string): unknown;
   set(key: string, value: unknown): void;
+  delete(key: string): void;
 }
 
 /**
@@ -23,6 +24,9 @@ export function createBackendStorage(memento: {
   return {
     get: (key) => memento.get(key),
     set: (key, value) => void memento.update(key, value),
+    // A Memento key is removed by updating it to `undefined`; there is no
+    // separate delete API.
+    delete: (key) => void memento.update(key, undefined),
   };
 }
 
@@ -47,6 +51,10 @@ export function createWebviewStorage(hostBridge: {
     get: (key) => cache[key],
     set: (key, value) => {
       cache[key] = value;
+      hostBridge.setState(cache);
+    },
+    delete: (key) => {
+      delete cache[key];
       hostBridge.setState(cache);
     },
   };

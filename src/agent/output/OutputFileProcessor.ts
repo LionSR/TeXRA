@@ -196,7 +196,6 @@ export class OutputFileProcessor {
       async () => {
         const rawContent = await FlexibleFS.read(rawOutput);
         const tagContents: Record<string, string[]> = {};
-        const documents: string[] = [];
 
         const documentEntries = extractMultipleTextFromTag(
           rawContent,
@@ -206,13 +205,6 @@ export class OutputFileProcessor {
           tagContents[OUTPUT_DOCUMENTS_TAG] = documentEntries.map((e) =>
             e.content.trim(),
           );
-
-          for (const entry of documentEntries) {
-            const nameAttr = entry.name ? ` name="${entry.name}"` : '';
-            documents.push(
-              `<${OUTPUT_DOCUMENTS_TAG}${nameAttr}>${entry.content.trim()}</${OUTPUT_DOCUMENTS_TAG}>`,
-            );
-          }
         } else {
           const singleDocument = extractTextFromTag(
             rawContent,
@@ -220,9 +212,6 @@ export class OutputFileProcessor {
           ).trim();
           if (singleDocument) {
             tagContents[OUTPUT_DOCUMENTS_TAG] = [singleDocument];
-            documents.push(
-              `<${OUTPUT_DOCUMENTS_TAG}>${singleDocument}</${OUTPUT_DOCUMENTS_TAG}>`,
-            );
           }
         }
 
@@ -234,9 +223,15 @@ export class OutputFileProcessor {
           tagContents.scratchpad = [scratchpadContent];
         }
 
+        // `documents` used to hold the same text again, re-wrapped in its
+        // XML tags — pure duplication of `tagContents[OUTPUT_DOCUMENTS_TAG]`
+        // with nothing reading either the tag-wrapped or bare form
+        // downstream. Every full-text round summary was cloned per node
+        // step (see persistedFlow.ts), so the duplicate copy cost grew with
+        // every round of every run.
         data.xmlSummary = {
           tagContents,
-          documents,
+          documents: [],
           singleOutputFile: singleFile,
           sourceLocation: rawOutput,
         };
