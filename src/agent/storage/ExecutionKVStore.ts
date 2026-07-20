@@ -273,9 +273,8 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     const entries = await Promise.all(
       childKeys.map(async (key) => {
         const id = key.replace(CHILD_KEY_PREFIX, '') as ExecutionId;
-        const raw = await this.read(key);
-        const result = ChildRecordDataSchema.safeParse(raw);
-        return result.success ? { id, ...result.data } : null;
+        const data = await this.readValidated(key, ChildRecordDataSchema);
+        return data ? { id, ...data } : null;
       }),
     );
     return entries.filter(filterNotNull);
