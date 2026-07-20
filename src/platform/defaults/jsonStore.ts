@@ -1,7 +1,6 @@
 import { chmod, mkdir, readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
-import { lock } from 'proper-lockfile';
 import writeFileAtomic from 'write-file-atomic';
 
 import { isFileNotFoundError } from '@common/errors';
@@ -160,7 +159,8 @@ export class JsonStore implements StateStore {
     missingFallback: JsonRecord,
   ): Promise<void> {
     await ensureDir(dirname(this.filePath), this.options.mode);
-    const release = await lock(this.filePath, {
+    const { default: properLockfile } = await import('proper-lockfile');
+    const release = await properLockfile.lock(this.filePath, {
       realpath: false,
       stale: LOCK_STALE_MS,
       retries: LOCK_RETRY_OPTIONS,
