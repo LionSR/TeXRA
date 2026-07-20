@@ -15,10 +15,21 @@ import {
   type ModelHandlerCompatibilityKey,
 } from './modelHandlerCompatibilityKey';
 
+/**
+ * Narrow an arbitrary value to a plain-object record, or `undefined` if it
+ * isn't one. `isObject` already narrows its own parameter, but narrowing
+ * `message: ProviderMessage` (a union of provider SDK types with no common
+ * shape) through it still leaves per-property access needing a cast — this
+ * wraps that once for every shape-sniffing call site below instead of each
+ * repeating `isObject(x) ? (x as Record<string, unknown>) : ...` by hand.
+ */
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return isObject(value) ? value : undefined;
+}
+
 function isGoogleGenAIContentMessage(message: ProviderMessage): boolean {
-  if (!isObject(message)) return false;
-  const record = message as Record<string, unknown>;
-  if ('type' in record) return false;
+  const record = asRecord(message);
+  if (!record || 'type' in record) return false;
   const role = record.role;
   if (role !== 'user' && role !== 'model' && role !== 'system') {
     return false;
@@ -27,8 +38,7 @@ function isGoogleGenAIContentMessage(message: ProviderMessage): boolean {
 }
 
 function isGoogleInteractionsStepMessage(message: ProviderMessage): boolean {
-  if (!isObject(message)) return false;
-  const type = (message as Record<string, unknown>).type;
+  const type = asRecord(message)?.type;
   return (
     type === 'user_input' ||
     type === 'model_output' ||
@@ -39,9 +49,8 @@ function isGoogleInteractionsStepMessage(message: ProviderMessage): boolean {
 }
 
 function isOpenRouterChatMessage(message: ProviderMessage): boolean {
-  if (!isObject(message)) return false;
-  const record = message as Record<string, unknown>;
-  if ('type' in record || 'parts' in record) return false;
+  const record = asRecord(message);
+  if (!record || 'type' in record || 'parts' in record) return false;
   const role = record.role;
   return (
     (role === 'system' ||
@@ -105,23 +114,20 @@ function stringValue(value: unknown): string | undefined {
 function currentModelFromRawSharedState(
   shared: Record<string, unknown>,
 ): string | undefined {
-  const stateSlices = shared.stateSlices;
-  if (!isObject(stateSlices)) return undefined;
-  const userChannels = stateSlices.userChannels;
-  if (!isObject(userChannels)) return undefined;
-  const transient = userChannels.transient;
-  const input = userChannels.input;
+  const userChannels = asRecord(asRecord(shared.stateSlices)?.userChannels);
+  if (!userChannels) return undefined;
+  const transient = asRecord(userChannels.transient);
+  const input = asRecord(userChannels.input);
   return (
-    (isObject(transient) ? stringValue(transient.MODEL) : undefined) ??
-    (isObject(input) ? stringValue(input.MODEL) : undefined)
+    (transient ? stringValue(transient.MODEL) : undefined) ??
+    (input ? stringValue(input.MODEL) : undefined)
   );
 }
 
 function unwrapSharedState(shared: unknown): Record<string, unknown> | null {
-  if (!isObject(shared)) return null;
-  return isObject(shared.state)
-    ? (shared.state as Record<string, unknown>)
-    : shared;
+  const record = asRecord(shared);
+  if (!record) return null;
+  return asRecord(record.state) ?? record;
 }
 
 export function inferPersistedFlowModelHandlerCompatibilityKey(

@@ -78,23 +78,31 @@ export const DIAGNOSTIC_TYPE_VALIDATION_ERROR = 'validation_error' as const;
  * Formatted Zod issue for model consumption.
  * Provides structured information that helps models self-correct.
  */
-export interface FormattedZodIssue {
-  path: string;
-  message: string;
-  expected?: unknown;
-  received?: unknown;
-  code?: string;
-}
+const FormattedZodIssueSchema = z.object({
+  path: z.string(),
+  message: z.string(),
+  expected: z.unknown().optional(),
+  received: z.unknown().optional(),
+  code: z.string().optional(),
+});
+export type FormattedZodIssue = z.infer<typeof FormattedZodIssueSchema>;
 
 /**
- * Structured validation error diagnostics.
- * Used to provide rich error information to models for self-correction.
+ * Structured validation error diagnostics. One of several shapes a tool's
+ * `ToolResult.diagnostics` may carry (see that field's own comment) — this is
+ * the one produced for Zod input-validation failures, used to provide rich
+ * error information to models for self-correction. `issues` stays
+ * `z.custom<ZodIssue>()` since `ZodIssue` is Zod's own internal type with no
+ * exported schema to compose against.
  */
-export interface ValidationErrorDiagnostics {
-  type: typeof DIAGNOSTIC_TYPE_VALIDATION_ERROR;
-  issues: ZodIssue[];
-  formatted: FormattedZodIssue[];
-}
+export const ValidationErrorDiagnosticsSchema = z.object({
+  type: z.literal(DIAGNOSTIC_TYPE_VALIDATION_ERROR),
+  issues: z.array(z.custom<ZodIssue>()),
+  formatted: z.array(FormattedZodIssueSchema),
+});
+export type ValidationErrorDiagnostics = z.infer<
+  typeof ValidationErrorDiagnosticsSchema
+>;
 
 /**
  * Format Zod issues into structured diagnostics for model consumption.
@@ -134,7 +142,13 @@ const ToolResultSharedFields = {
   userInstruction: z.string().optional(),
   /** User-provided patch content */
   userPatch: z.string().optional(),
-  /** Additional diagnostic information */
+  /**
+   * Additional diagnostic information. Deliberately `z.unknown()`: every tool
+   * shapes its own payload here (validation issues, severity counts, an
+   * unread-file reason, an error name, …), so there is no single schema to
+   * validate against. Consumers that care about one specific shape — e.g.
+   * {@link ValidationErrorDiagnosticsSchema} — parse it themselves.
+   */
   diagnostics: z.unknown().optional(),
   /** Summary added by handlers when attachments are available */
   attachmentSummary: z.string().optional(),

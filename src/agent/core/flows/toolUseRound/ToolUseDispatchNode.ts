@@ -664,11 +664,14 @@ export class ToolUseDispatchNode<C> extends Node<
     const shouldBatch =
       calls.length > 1 &&
       modelHandler.requiresBatchedParallelToolResults &&
-      !!modelHandler.createBatchedToolUseFollowUpMessages;
+      modelHandler.createBatchedToolUseFollowUpMessages !== undefined;
 
-    if (shouldBatch) {
+    // Called through `modelHandler.` (not an extracted local reference) so
+    // provider implementations that read `this` internally (e.g. Google,
+    // OpenAI) keep their receiver bound.
+    if (shouldBatch && modelHandler.createBatchedToolUseFollowUpMessages) {
       const followUpMsgs =
-        await modelHandler.createBatchedToolUseFollowUpMessages!(
+        await modelHandler.createBatchedToolUseFollowUpMessages(
           calls.map((call, index) => ({
             call,
             result: extracted[index].sanitizedResult,

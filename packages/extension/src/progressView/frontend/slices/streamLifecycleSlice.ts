@@ -16,7 +16,12 @@ import {
   type StreamTabInfo,
 } from '@shared/schemas';
 
-import { firstStreamId, type ProgressState, type StreamState } from '../store';
+import {
+  deleteStreamState,
+  firstStreamId,
+  type ProgressState,
+  type StreamState,
+} from '../store';
 import {
   appState,
   permissions$,
@@ -96,10 +101,7 @@ function updateStreamInfo(
   return create(state, (draft) => {
     for (const key of draft.streamStates.keys()) {
       if (!newStreamById.has(key)) {
-        draft.streamStates.delete(key);
-        draft.streamLogs.delete(key);
-        draft.processOutputs.delete(key);
-        draft.followupOptionsByStream.delete(key);
+        deleteStreamState(draft, key);
       }
     }
 
@@ -185,10 +187,7 @@ export const streamLifecycleHandlers = {
     pendingDescriptions.delete(streamId);
     appState.set(
       create(appState.get(), (draft) => {
-        draft.streamStates.delete(streamId);
-        draft.streamLogs.delete(streamId);
-        draft.processOutputs.delete(streamId);
-        draft.followupOptionsByStream.delete(streamId);
+        deleteStreamState(draft, streamId);
         draft.streamById.delete(streamId);
         if (draft.activeStreamId === streamId) {
           draft.activeStreamId = null;

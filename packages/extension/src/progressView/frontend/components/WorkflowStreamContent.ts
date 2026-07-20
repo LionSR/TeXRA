@@ -8,7 +8,7 @@ import { customElement } from 'lit/decorators.js';
 import { hasOutputFiles } from '../stateUtils';
 import { BaseStreamContent } from './BaseStreamContent';
 import { renderStreamHeader } from './streamHeaderView';
-import type { WorkflowStreamState } from '../store';
+import { isWorkflowState, type WorkflowStreamState } from '../store';
 
 // Local imports - components
 
@@ -25,9 +25,8 @@ import './WorkflowHintBanner';
 @customElement('workflow-stream-content')
 export class WorkflowStreamContent extends BaseStreamContent {
   private get currentState(): WorkflowStreamState | null {
-    const ctx = this.streamContext;
-    if (ctx.isToolUse || !ctx.streamState) return null;
-    return ctx.streamState as WorkflowStreamState;
+    const { streamState } = this.streamContext;
+    return streamState && isWorkflowState(streamState) ? streamState : null;
   }
 
   override render(): TemplateResult | typeof nothing {
