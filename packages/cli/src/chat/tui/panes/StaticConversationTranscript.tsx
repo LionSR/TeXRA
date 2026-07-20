@@ -100,11 +100,8 @@ export function sessionHeaderIdentityLine(
       streamId: context.streamId,
       streams: context.streams,
     });
-    const childEntry = context.childStreamEntries?.get(context.streamId);
-    const toolName =
-      childEntry?.kind === 'live' ? childEntry.summary?.toolName : undefined;
     const streamKind =
-      toolName === DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME
+      view.toolName === DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME
         ? 'workflow script'
         : 'subagent';
     return `${streamKind}: ${view.label} · parent: ${view.parentLabel} · model: ${model}`;
