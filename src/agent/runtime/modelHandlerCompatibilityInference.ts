@@ -1,5 +1,6 @@
 import { ModelProvider } from 'llm-zoo';
 
+import type { AgentTrace } from '@agent/trace';
 import {
   normalizeProviderMessages,
   type ProviderMessage,
@@ -75,6 +76,26 @@ export function inferPersistedModelHandlerCompatibilityKey(
   return messages.some(isOpenRouterChatMessage)
     ? 'ModelHandlerOpenRouterNative'
     : undefined;
+}
+
+export function inferAndLogPersistedModelHandlerCompatibilityKey(
+  model: string,
+  messages: readonly ProviderMessage[],
+  logger: Pick<AgentTrace, 'info'>,
+): ModelHandlerCompatibilityKey | undefined {
+  const compatibilityKey = inferPersistedModelHandlerCompatibilityKey(
+    model,
+    messages,
+  );
+  if (compatibilityKey) {
+    logger.info(
+      'Inferred model-handler compatibility for keyless persisted run',
+      {
+        data: { model, compatibilityKey },
+      },
+    );
+  }
+  return compatibilityKey;
 }
 
 function stringValue(value: unknown): string | undefined {
