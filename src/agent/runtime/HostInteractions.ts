@@ -1,3 +1,4 @@
+import { createChannelTrace } from '@agent/trace';
 import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
@@ -17,6 +18,8 @@ import type {
   AgentRuntimeEventPayloads,
   AgentRuntimeHost,
 } from './AgentRuntimeHost';
+
+const logger = createChannelTrace('SessionHostInteractions');
 
 export type DiagnosticsReader = (path: string) => Promise<GenericDiagnostic[]>;
 
@@ -47,6 +50,12 @@ export interface HostInteractionOptions {
   readonly timeoutMs?: number;
   /** Internal identity used to cancel one forwarded presentation request. */
   readonly cancellationScope?: object;
+}
+
+/** Delivery policy for a notification owned by a process session. */
+interface SessionPresentationOptions {
+  /** Retain the notice for the next attachment instead of dropping it now. */
+  readonly replayWhenAttached?: boolean;
 }
 
 export type PlanApprovalResult =
@@ -347,6 +356,9 @@ export class SessionHostInteractions
 {
   private readonly attachments: HostInteractionAttachment[] = [];
   private readonly pending = new Set<PendingSessionInteraction>();
+  private readonly pendingPresentationReplays: Array<
+    (interactions: HostInteractions) => Promise<void> | void
+  > = [];
   private attachmentVersion = 0;
   private disposed = false;
 
@@ -361,6 +373,7 @@ export class SessionHostInteractions
     };
     this.attachments.push(attachment);
     this.activateCurrentAttachment();
+    this.replayPendingPresentations();
     return () => {
       if (attachment.disposed) return;
       const wasActive = this.activeAttachment === attachment;
@@ -375,8 +388,16 @@ export class SessionHostInteractions
   emit<K extends AgentRuntimeEvent>(
     event: K,
     payload: AgentRuntimeEventPayloads[K],
+    options: SessionPresentationOptions = {},
   ): void {
-    this.activeAttachment?.interactions.emit?.(event, payload);
+    const active = this.activeAttachment;
+    if (active) {
+      active.interactions.emit?.(event, payload);
+    } else if (options.replayWhenAttached && !this.disposed) {
+      this.pendingPresentationReplays.push((interactions) =>
+        interactions.emit?.(event, payload),
+      );
+    }
   }
 
   get readDiagnostics(): DiagnosticsReader | undefined {
@@ -391,8 +412,17 @@ export class SessionHostInteractions
     return this.activeAttachment?.interactions.notifyUnavailableTools;
   }
 
-  showInfoMessage(message: string): Promise<void> | void {
-    return this.activeAttachment?.interactions.showInfoMessage?.(message);
+  showInfoMessage(
+    message: string,
+    options: SessionPresentationOptions = {},
+  ): Promise<void> | void {
+    const active = this.activeAttachment;
+    if (active) return active.interactions.showInfoMessage?.(message);
+    if (options.replayWhenAttached && !this.disposed) {
+      this.pendingPresentationReplays.push((interactions) =>
+        interactions.showInfoMessage?.(message),
+      );
+    }
   }
 
   requestToolEditApproval(
@@ -523,6 +553,7 @@ export class SessionHostInteractions
       }
     }
     this.attachments.length = 0;
+    this.pendingPresentationReplays.length = 0;
     if (firstError !== undefined) throw firstError;
   }
 
@@ -560,6 +591,27 @@ export class SessionHostInteractions
     if (!this.activeAttachment) return;
     for (const pending of this.pending) {
       if (!pending.cancellationRequested) this.dispatch(pending);
+    }
+  }
+
+  private replayPendingPresentations(): void {
+    const attachment = this.activeAttachment;
+    if (!attachment || this.pendingPresentationReplays.length === 0) return;
+    const replays = this.pendingPresentationReplays.splice(0);
+    for (const replay of replays) {
+      try {
+        void Promise.resolve(replay(attachment.interactions)).catch(
+          (error: unknown) => {
+            logger.warn('Failed to replay a session presentation notice', {
+              data: error,
+            });
+          },
+        );
+      } catch (error) {
+        logger.warn('Failed to replay a session presentation notice', {
+          data: error,
+        });
+      }
     }
   }
 

@@ -112,9 +112,11 @@ function reportResumeFailure(
   context.logger.error(`Failed to resume desktop stream ${streamId}`, {
     data: toLogData(error),
   });
-  context.session.interactions.emit('requestShowError', {
-    message: `Resume failed: ${toErrorMessage(error)}`,
-  });
+  context.session.interactions.emit(
+    'requestShowError',
+    { message: `Resume failed: ${toErrorMessage(error)}` },
+    { replayWhenAttached: true },
+  );
 }
 
 function resumeDesktopStream(
@@ -132,12 +134,14 @@ function resumeDesktopStream(
       if (!resumeState) {
         await context.session.interactions.showInfoMessage(
           'No persisted run state was found for this stream. Start a new run instead.',
+          { replayWhenAttached: true },
         );
         return undefined;
       }
       if (!resumeState.executionId) {
         await context.session.interactions.showInfoMessage(
           'This stream has no persisted execution id. Start a new run instead.',
+          { replayWhenAttached: true },
         );
         return undefined;
       }
@@ -170,6 +174,7 @@ function resumeDesktopStream(
     reportNoResumableSession: () =>
       context.session.interactions.showInfoMessage(
         'This run has no resumable session state. Start a new run instead.',
+        { replayWhenAttached: true },
       ),
     reportFailure: (id, error) => reportResumeFailure(id, error, context),
     isCancellationRequested: context.isCancellationRequested,

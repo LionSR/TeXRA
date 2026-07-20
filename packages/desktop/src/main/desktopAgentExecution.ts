@@ -120,8 +120,8 @@ async function wakeDesktopFollowUp(
 ): Promise<void> {
   // This continuation deliberately accepts only the process SessionHandle.
   // It may outlive a window, so it must not capture a bridge or BrowserWindow
-  // presentation; SessionHostInteractions routes any eventual notice to the
-  // presentation attached at that time.
+  // presentation. Its important failure notice explicitly survives a detached
+  // interval and is delivered once when the next presentation attaches.
   const wake = await wakeQueuedFollowUpStream(
     streamId,
     result,
@@ -139,7 +139,9 @@ async function wakeDesktopFollowUp(
       },
     });
   }
-  await session.interactions.showInfoMessage(presentation.message);
+  await session.interactions.showInfoMessage(presentation.message, {
+    replayWhenAttached: true,
+  });
 }
 
 export class DesktopProgressBridge {
@@ -466,7 +468,11 @@ export class DesktopProgressBridge {
           stopStream: (stream) => this.backend.stopStream(stream),
         },
         resumeStream: (stream) => {
-          void this.tryResumeStream(stream);
+          void this.tryResumeStream(stream).catch((error: unknown) => {
+            this.logger.warn(`Failed to resume desktop stream ${stream}`, {
+              data: toLogData(error),
+            });
+          });
         },
         followUp: {
           sendFollowUp: ({ stream, text, mediaFiles }) =>

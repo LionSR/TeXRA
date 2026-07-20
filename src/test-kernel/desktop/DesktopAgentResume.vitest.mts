@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { ToolUseAgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import * as SessionResumeRetrieval from '@agent/runtime/SessionResumeRetrieval';
 import * as AgentRunner from '@agent/runtime/runAgent';
 import { DesktopProcessResumeOwner } from '@desktop/main/desktopAgentResume';
@@ -40,6 +41,7 @@ function createSnapshots(): StreamSnapshotStore {
 
 function createResumeHarness(): {
   owner: DesktopProcessResumeOwner;
+  session: SessionHandle;
   dispose(): void;
 } {
   const session = createTestSession();
@@ -48,6 +50,7 @@ function createResumeHarness(): {
   const detach = owner.attach({ session, snapshots: createSnapshots() });
   return {
     owner,
+    session,
     dispose() {
       detach();
       session.dispose();
@@ -79,6 +82,39 @@ describe('desktop process resume owner', () => {
     try {
       await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(true);
       expect(runAgent).toHaveBeenCalledOnce();
+    } finally {
+      harness.dispose();
+    }
+  });
+
+  it('replays a headless resume failure to the next presentation once', async () => {
+    retrieveSessionResumeData.mockResolvedValue({
+      type: 'workflow',
+      agentConfig: config,
+      executionId,
+    });
+    runAgent.mockRejectedValue(new Error('launch failed'));
+    const harness = createResumeHarness();
+
+    try {
+      await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(false);
+      const firstEmit = vi.fn();
+      const detach = harness.session.useHostInteractions({
+        emit: firstEmit,
+        cancel: vi.fn(),
+      });
+      expect(firstEmit).toHaveBeenCalledOnce();
+      expect(firstEmit).toHaveBeenCalledWith('requestShowError', {
+        message: 'Resume failed: launch failed',
+      });
+
+      detach();
+      const secondEmit = vi.fn();
+      harness.session.useHostInteractions({
+        emit: secondEmit,
+        cancel: vi.fn(),
+      });
+      expect(secondEmit).not.toHaveBeenCalled();
     } finally {
       harness.dispose();
     }

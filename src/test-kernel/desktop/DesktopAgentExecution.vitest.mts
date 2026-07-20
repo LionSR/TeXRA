@@ -193,6 +193,7 @@ type CreateBridgeOptions = {
   deferReady?: boolean;
   detectWaitingStreams?: ReturnType<typeof vi.fn>;
   repairRestartedStreams?: ReturnType<typeof vi.fn>;
+  wakeQueuedFollowUpStream?: ReturnType<typeof vi.fn>;
   showErrorMessage?: (message: string) => Promise<void> | void;
   openPath?: (filePath: string, line?: number) => Promise<void>;
   observeRendererMessage?: (message: unknown) => void;
@@ -278,6 +279,17 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   vi.doMock('@agent/runtime/runAgent', () => ({
     runAgent: options.runAgent ?? vi.fn(),
   }));
+  vi.doMock('@agent/followUp/ToolUseFollowUp', async () => {
+    const actual = await vi.importActual<
+      typeof import('@agent/followUp/ToolUseFollowUp')
+    >('@agent/followUp/ToolUseFollowUp');
+    return options.wakeQueuedFollowUpStream
+      ? {
+          ...actual,
+          wakeQueuedFollowUpStream: options.wakeQueuedFollowUpStream,
+        }
+      : actual;
+  });
   vi.doMock('@agent/storage/detectWaitingStreams', () => ({
     detectWaitingStreams:
       options.detectWaitingStreams ?? vi.fn(async () => new Set()),
@@ -2523,6 +2535,7 @@ describe('DesktopProgressBridge', () => {
       category = AgentCategory.Workflow,
       messages = [],
       detectWaitingStreams,
+      wakeQueuedFollowUpStream,
     }: {
       streamId: StreamTabId;
       executionId: ExecutionId;
@@ -2530,6 +2543,7 @@ describe('DesktopProgressBridge', () => {
       category?: AgentCategory;
       messages?: unknown[];
       detectWaitingStreams?: ReturnType<typeof vi.fn>;
+      wakeQueuedFollowUpStream?: ReturnType<typeof vi.fn>;
     }) {
       const {
         bridgeModule,
@@ -2537,7 +2551,10 @@ describe('DesktopProgressBridge', () => {
         createSession,
         openTranscripts,
         processResumeOwner,
-      } = await loadBridgeModule({ detectWaitingStreams });
+      } = await loadBridgeModule({
+        detectWaitingStreams,
+        wakeQueuedFollowUpStream,
+      });
       const { AgentExecutionHandle, ProcessExecutionHandle } =
         await import('@agent/runtime/ExecutionHandle');
       const { getExecutionStore } = await import('@agent/storage');
@@ -2573,6 +2590,7 @@ describe('DesktopProgressBridge', () => {
         executionId,
       );
       const errorsA: string[] = [];
+      const infosA: string[] = [];
       const diffPathsA: Array<{ original: string; proposed: string }> = [];
       const bridgeA = new bridgeModule.DesktopProgressBridge(
         (message) => {
@@ -2592,6 +2610,9 @@ describe('DesktopProgressBridge', () => {
             },
             showErrorMessage: async (message) => {
               errorsA.push(message);
+            },
+            showInfoMessage: async (message) => {
+              infosA.push(message);
             },
           }),
         },
@@ -2639,6 +2660,7 @@ describe('DesktopProgressBridge', () => {
       const reopen = async (reopenedMessages: unknown[] = []) => {
         close();
         const errorsB: string[] = [];
+        const infosB: string[] = [];
         const bridgeB = new bridgeModule.DesktopProgressBridge(
           (message) => {
             reopenedMessages.push(message);
@@ -2651,6 +2673,9 @@ describe('DesktopProgressBridge', () => {
               showErrorMessage: async (message) => {
                 errorsB.push(message);
               },
+              showInfoMessage: async (message) => {
+                infosB.push(message);
+              },
             }),
           },
         ) as unknown as TestableBridge & {
@@ -2658,7 +2683,7 @@ describe('DesktopProgressBridge', () => {
         };
         presentationBridges.add(bridgeB);
         await bridgeB.waitUntilReady();
-        return { bridgeB, errorsB, progressSnapshotStore };
+        return { bridgeB, errorsB, infosB, progressSnapshotStore };
       };
 
       disposeAfterTest({
@@ -2676,6 +2701,7 @@ describe('DesktopProgressBridge', () => {
         close,
         createHandle,
         errorsA,
+        infosA,
         diffPathsA,
         getExecutionStore,
         handle,
@@ -2896,6 +2922,65 @@ describe('DesktopProgressBridge', () => {
         await expect(planPromise).resolves.toEqual({ action: 'approve' });
       } finally {
         bridgeB.dispose();
+      }
+    });
+
+    it('replays a follow-up wake notice that completes after window close exactly once', async () => {
+      const streamId = 'process-follow-up-wake' as StreamTabId;
+      const executionId = 'ec00ea' as ExecutionId;
+      let finishWake: (result: { kind: 'dropped' }) => void = () => undefined;
+      const wakeResult = new Promise<{ kind: 'dropped' }>((resolve) => {
+        finishWake = resolve;
+      });
+      const wakeQueuedFollowUpStream = vi.fn(() => wakeResult);
+      const owner = await createProcessOwner({
+        streamId,
+        executionId,
+        agentName: 'search',
+        category: AgentCategory.ToolUse,
+        wakeQueuedFollowUpStream,
+      });
+      expect(
+        owner.processSession.status.transitionToWaiting(streamId, 'wait', {
+          trace: owner.trace as unknown as AgentTrace,
+        }),
+      ).toBe(true);
+      const send = assertSupported(
+        owner.bridgeA.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP
+        ],
+      );
+
+      await send({
+        command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
+        stream: streamId,
+        text: 'Continue after the child completes.',
+      });
+      expect(wakeQueuedFollowUpStream).toHaveBeenCalledOnce();
+      owner.close();
+      finishWake({ kind: 'dropped' });
+      await settleProgressEvents();
+      expect(owner.infosA).toEqual([]);
+
+      const { bridgeB, infosB } = await owner.reopen();
+      try {
+        await vi.waitFor(() =>
+          expect(infosB).toEqual([
+            'Message dropped because no session was available to receive it. Start a new agent task to continue.',
+          ]),
+        );
+        await settleProgressEvents();
+        expect(infosB).toHaveLength(1);
+      } finally {
+        bridgeB.dispose();
+      }
+
+      const { bridgeB: bridgeC, infosB: infosC } = await owner.reopen();
+      try {
+        await settleProgressEvents();
+        expect(infosC).toEqual([]);
+      } finally {
+        bridgeC.dispose();
       }
     });
 

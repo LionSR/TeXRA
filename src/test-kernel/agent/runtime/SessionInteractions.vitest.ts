@@ -295,6 +295,93 @@ describe('session.interactions immediate capabilities', () => {
     expect(notifyUnavailableTools).not.toHaveBeenCalled();
     session.dispose();
   });
+
+  it('replays only opted-in presentation notices once after reattachment', () => {
+    const session = createTestSession();
+    const firstInfo = vi.fn();
+    const firstEmit = vi.fn();
+    const detach = session.useHostInteractions({
+      emit: firstEmit,
+      showInfoMessage: firstInfo,
+      cancel: vi.fn(),
+    });
+    detach();
+
+    session.interactions.showInfoMessage('attachment-scoped');
+    session.interactions.emit('requestShowError', {
+      message: 'attachment-scoped',
+    });
+    session.interactions.showInfoMessage('replay this', {
+      replayWhenAttached: true,
+    });
+    session.interactions.emit(
+      'requestShowError',
+      { message: 'replay this error' },
+      { replayWhenAttached: true },
+    );
+
+    const secondInfo = vi.fn();
+    const secondEmit = vi.fn();
+    const detachSecond = session.useHostInteractions({
+      emit: secondEmit,
+      showInfoMessage: secondInfo,
+      cancel: vi.fn(),
+    });
+    expect(secondInfo).toHaveBeenCalledOnce();
+    expect(secondInfo).toHaveBeenCalledWith('replay this');
+    expect(secondEmit).toHaveBeenCalledOnce();
+    expect(secondEmit).toHaveBeenCalledWith('requestShowError', {
+      message: 'replay this error',
+    });
+
+    detachSecond();
+    const thirdInfo = vi.fn();
+    const thirdEmit = vi.fn();
+    session.useHostInteractions({
+      emit: thirdEmit,
+      showInfoMessage: thirdInfo,
+      cancel: vi.fn(),
+    });
+    expect(thirdInfo).not.toHaveBeenCalled();
+    expect(thirdEmit).not.toHaveBeenCalled();
+    expect(firstInfo).not.toHaveBeenCalled();
+    expect(firstEmit).not.toHaveBeenCalled();
+    session.dispose();
+  });
+
+  it('does not queue an opted-in notice delivered to an attached presentation', () => {
+    const session = createTestSession();
+    const firstInfo = vi.fn();
+    const firstEmit = vi.fn();
+    const detach = session.useHostInteractions({
+      emit: firstEmit,
+      showInfoMessage: firstInfo,
+      cancel: vi.fn(),
+    });
+
+    session.interactions.showInfoMessage('deliver now', {
+      replayWhenAttached: true,
+    });
+    session.interactions.emit(
+      'requestShowError',
+      { message: 'deliver error now' },
+      { replayWhenAttached: true },
+    );
+    expect(firstInfo).toHaveBeenCalledOnce();
+    expect(firstEmit).toHaveBeenCalledOnce();
+
+    detach();
+    const secondInfo = vi.fn();
+    const secondEmit = vi.fn();
+    session.useHostInteractions({
+      emit: secondEmit,
+      showInfoMessage: secondInfo,
+      cancel: vi.fn(),
+    });
+    expect(secondInfo).not.toHaveBeenCalled();
+    expect(secondEmit).not.toHaveBeenCalled();
+    session.dispose();
+  });
 });
 
 describe('session.interactions request bookkeeping (coordinator fold)', () => {
