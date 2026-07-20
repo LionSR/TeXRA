@@ -57,31 +57,25 @@ export function inferPersistedModelHandlerCompatibilityKey(
   messages: readonly ProviderMessage[],
 ): ModelHandlerCompatibilityKey | undefined {
   const modelConfig = getRuntimeModelConfig(model);
-  let compatibilityKey: ModelHandlerCompatibilityKey | undefined;
-  if (isRuntimeModel(model)) {
-    compatibilityKey = 'ModelHandlerVscodeLm';
-  }
+  if (isRuntimeModel(model)) return 'ModelHandlerVscodeLm';
 
   // Copilot had no direct handler before ModelHandlerVscodeLm. Its only
   // runnable legacy route was OpenRouter, so a keyless persisted transcript
   // necessarily uses the OpenRouter message format. New Copilot sessions
   // persist their explicit compatibility key and do not enter this inference.
-  if (!compatibilityKey && modelConfig?.provider === ModelProvider.COPILOT) {
-    compatibilityKey = 'ModelHandlerOpenRouterNative';
-  } else if (
-    !compatibilityKey &&
-    modelConfig?.provider === ModelProvider.GOOGLE
-  ) {
-    if (messages.some(isGoogleGenAIContentMessage)) {
-      compatibilityKey = 'ModelHandlerGoogleGenAI';
-    } else if (messages.some(isGoogleInteractionsStepMessage)) {
-      compatibilityKey = 'ModelHandlerGoogleInteractions';
-    } else if (messages.some(isOpenRouterChatMessage)) {
-      compatibilityKey = 'ModelHandlerOpenRouterNative';
-    }
+  if (modelConfig?.provider === ModelProvider.COPILOT) {
+    return 'ModelHandlerOpenRouterNative';
   }
-
-  return compatibilityKey;
+  if (modelConfig?.provider !== ModelProvider.GOOGLE) return undefined;
+  if (messages.some(isGoogleGenAIContentMessage)) {
+    return 'ModelHandlerGoogleGenAI';
+  }
+  if (messages.some(isGoogleInteractionsStepMessage)) {
+    return 'ModelHandlerGoogleInteractions';
+  }
+  return messages.some(isOpenRouterChatMessage)
+    ? 'ModelHandlerOpenRouterNative'
+    : undefined;
 }
 
 export function inferAndLogPersistedModelHandlerCompatibilityKey(
