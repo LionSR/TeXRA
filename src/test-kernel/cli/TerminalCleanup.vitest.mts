@@ -4,12 +4,25 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import {
+  approvalQueueStatus,
+  clearApprovals,
+} from '@cli/chat/tui/state/approvalQueue';
+import {
+  resetCliState,
+  rootRunPending,
+  rootRunStreamId,
+  setStreamStatusInCliState,
+} from '@cli/chat/tui/state/cliState';
+import {
   installTerminalRestoreOnExit,
-  setTerminalTitle,
   supportsTerminalJobControl,
-  terminalTitleText,
   tuiInputModeRestoreSequence,
 } from '@cli/chat/tui/terminalCleanup';
+import {
+  installTerminalTitleUpdates,
+  terminalTitleText,
+} from '@cli/chat/tui/terminalTitle';
+import { STREAM_PHASE } from '@shared/schemas';
 
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -17,6 +30,8 @@ vi.mock('node:fs', async (importOriginal) => ({
 }));
 
 afterEach(() => {
+  clearApprovals();
+  resetCliState();
   vi.restoreAllMocks();
   // `writeSync` is a vi.fn() created inside the vi.mock() factory above, not
   // a vi.spyOn() wrapping a real implementation — restoreAllMocks() has no
@@ -44,6 +59,16 @@ describe('terminalTitleText', () => {
     expect(terminalTitleText('/')).toBe('TeXRA');
   });
 
+  it('adds running and approval labels before the project name', () => {
+    expect(terminalTitleText('/Users/ray/projects/coauthor', 'running')).toBe(
+      'TeXRA — Running — coauthor',
+    );
+    expect(terminalTitleText('/Users/ray/projects/coauthor', 'approval')).toBe(
+      'TeXRA — Approval needed — coauthor',
+    );
+    expect(terminalTitleText('/', 'running')).toBe('TeXRA — Running');
+  });
+
   it('strips control characters out of a hostile folder name', () => {
     expect(terminalTitleText('/tmp/evil\x07\x1b]0;pwned\x07')).toBe(
       'TeXRA — evil]0;pwned',
@@ -51,8 +76,8 @@ describe('terminalTitleText', () => {
   });
 });
 
-describe('setTerminalTitle', () => {
-  it('writes an OSC 0 title sequence on an OSC-capable terminal', () => {
+describe('installTerminalTitleUpdates', () => {
+  const enableOscTitles = (): void => {
     terminalCapabilities.set({
       kittyKeyboard: false,
       graphemeClusters: false,
@@ -60,24 +85,151 @@ describe('setTerminalTitle', () => {
       oscColorReports: true,
       discovered: true,
     });
+  };
+  const flushTitleUpdate = async (): Promise<void> => {
+    await Promise.resolve();
+  };
+  const expectLastTitle = (title: string): void => {
+    expect(writeSync).toHaveBeenLastCalledWith(1, `\x1b]0;${title}\x07`);
+  };
 
-    setTerminalTitle('/Users/ray/projects/coauthor');
+  it('shows root launch as running before the first stream status arrives', async () => {
+    enableOscTitles();
+    const updates = installTerminalTitleUpdates('/work/coauthor');
+    rootRunPending.set(true);
 
-    expect(writeSync).toHaveBeenCalledWith(1, '\x1b]0;TeXRA — coauthor\x07');
+    await flushTitleUpdate();
+
+    expectLastTitle('TeXRA — Running — coauthor');
+    updates.dispose();
   });
 
-  it('leaves the title alone on a terminal that never acknowledged OSC support', () => {
-    terminalCapabilities.set({
-      kittyKeyboard: false,
-      graphemeClusters: false,
-      bracketedPaste: false,
-      oscColorReports: false,
-      discovered: true,
+  it('stays running after the root id is published but before its status arrives', () => {
+    enableOscTitles();
+    rootRunPending.set(true);
+    rootRunStreamId.set('status-pending-root');
+
+    const updates = installTerminalTitleUpdates('/work/coauthor');
+
+    expectLastTitle('TeXRA — Running — coauthor');
+    updates.dispose();
+  });
+
+  it('uses every stream phase and gives queued approval precedence', async () => {
+    enableOscTitles();
+    const updates = installTerminalTitleUpdates('/work/coauthor');
+    rootRunPending.set(true);
+    rootRunStreamId.set('transition-root');
+    setStreamStatusInCliState({
+      streamId: 'transition-root',
+      status: STREAM_PHASE.WAITING,
     });
+    setStreamStatusInCliState({
+      streamId: 'transition-child',
+      status: STREAM_PHASE.RUNNING,
+    });
+    await flushTitleUpdate();
+    expectLastTitle('TeXRA — Running — coauthor');
 
-    setTerminalTitle('/Users/ray/projects/coauthor');
+    approvalQueueStatus.set({ depth: 1, kind: 'approval' });
+    await flushTitleUpdate();
+    expectLastTitle('TeXRA — Approval needed — coauthor');
 
+    approvalQueueStatus.set({ depth: 0, kind: 'approval' });
+    await flushTitleUpdate();
+    expectLastTitle('TeXRA — Running — coauthor');
+
+    setStreamStatusInCliState({
+      streamId: 'transition-child',
+      status: STREAM_PHASE.WAITING,
+    });
+    await flushTitleUpdate();
+    expectLastTitle('TeXRA — coauthor');
+    updates.dispose();
+  });
+
+  it('deduplicates unchanged title projections and resets an active title on teardown', async () => {
+    enableOscTitles();
+    const on = vi.spyOn(process, 'on');
+    const off = vi.spyOn(process, 'off');
+    const updates = installTerminalTitleUpdates('/work/coauthor');
+    const exitListener = on.mock.calls.find(([event]) => event === 'exit')?.[1];
+    setStreamStatusInCliState({
+      streamId: 'dedup-root',
+      status: STREAM_PHASE.RUNNING,
+    });
+    await flushTitleUpdate();
+    setStreamStatusInCliState({
+      streamId: 'dedup-child',
+      status: STREAM_PHASE.RUNNING,
+    });
+    await flushTitleUpdate();
+
+    expect(writeSync).toHaveBeenCalledTimes(2);
+    updates.dispose();
+    expect(writeSync).toHaveBeenCalledTimes(3);
+    expectLastTitle('TeXRA — coauthor');
+    expect(off).toHaveBeenCalledWith('exit', exitListener);
+  });
+
+  it('restores the idle title from the process-exit path', async () => {
+    enableOscTitles();
+    const on = vi.spyOn(process, 'on');
+    const updates = installTerminalTitleUpdates('/work/coauthor');
+    const exitListener = on.mock.calls.find(
+      ([event]) => event === 'exit',
+    )?.[1] as ((code: number) => void) | undefined;
+    setStreamStatusInCliState({
+      streamId: 'exit-root',
+      status: STREAM_PHASE.RUNNING,
+    });
+    await flushTitleUpdate();
+
+    exitListener?.(0);
+
+    expectLastTitle('TeXRA — coauthor');
+    expect(writeSync).toHaveBeenCalledTimes(3);
+    updates.dispose();
+    expect(writeSync).toHaveBeenCalledTimes(3);
+  });
+
+  it('shows the idle title while suspended and re-projects live state on resume', async () => {
+    enableOscTitles();
+    const updates = installTerminalTitleUpdates('/work/coauthor');
+    setStreamStatusInCliState({
+      streamId: 'suspend-root',
+      status: STREAM_PHASE.RUNNING,
+    });
+    await flushTitleUpdate();
+
+    updates.suspend();
+    expectLastTitle('TeXRA — coauthor');
+    approvalQueueStatus.set({ depth: 1, kind: 'approval' });
+    await flushTitleUpdate();
+    expect(writeSync).toHaveBeenCalledTimes(3);
+
+    updates.resume();
+    expectLastTitle('TeXRA — Approval needed — coauthor');
+    updates.dispose();
+  });
+
+  it('keeps sanitization and the OSC capability gate across live transitions', async () => {
+    const updates = installTerminalTitleUpdates(
+      '/tmp/evil\x07\x1b]0;pwned\x07',
+    );
+    rootRunPending.set(true);
+    await flushTitleUpdate();
+    updates.dispose();
     expect(writeSync).not.toHaveBeenCalled();
+
+    enableOscTitles();
+    const capableUpdates = installTerminalTitleUpdates(
+      '/tmp/evil\x07\x1b]0;pwned\x07',
+    );
+    rootRunPending.set(false);
+    await flushTitleUpdate();
+    expectLastTitle('TeXRA — evil]0;pwned');
+    capableUpdates.dispose();
   });
 });
 

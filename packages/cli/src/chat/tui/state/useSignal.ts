@@ -3,7 +3,9 @@
 // the same signals without pulling in a second state-management library.
 
 import { useCallback, useSyncExternalStore } from 'react';
-import { Signal } from '@lit-labs/signals';
+
+import { subscribeToSignalChanges } from './signalSubscription';
+import type { Signal } from '@lit-labs/signals';
 
 type ReadableSignal<T> = Signal.State<T> | Signal.Computed<T>;
 
@@ -44,23 +46,7 @@ type ReadableSignal<T> = Signal.State<T> | Signal.Computed<T>;
 export function useSignal<T>(signal: ReadableSignal<T>): T {
   const subscribe = useCallback(
     (notify: () => void) => {
-      let notifyPending = false;
-      let disposed = false;
-      const watcher = new Signal.subtle.Watcher(() => {
-        if (notifyPending) return;
-        notifyPending = true;
-        queueMicrotask(() => {
-          notifyPending = false;
-          if (disposed) return;
-          notify();
-          watcher.watch();
-        });
-      });
-      watcher.watch(signal);
-      return () => {
-        disposed = true;
-        watcher.unwatch(signal);
-      };
+      return subscribeToSignalChanges([signal], notify);
     },
     [signal],
   );
