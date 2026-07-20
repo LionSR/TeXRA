@@ -8,6 +8,7 @@ import {
   BrowserWindow,
   clipboard,
   dialog,
+  Menu,
   session,
   shell,
 } from 'electron';
@@ -58,7 +59,6 @@ import {
   getDesktopLogDirectory,
   readDesktopLogSnapshot,
 } from './desktopAppLog.js';
-import { installDesktopMenu } from './desktopMenu.js';
 import { installDesktopNavigationPolicy } from './desktopNavigationPolicy.js';
 import {
   createDesktopOnboardingIpc,
@@ -107,7 +107,10 @@ import {
   type DesktopAuthCoordinator,
   type DesktopSupabaseAuthHost,
 } from './desktopSupabaseAuth.js';
-import { DESKTOP_DOCS_URL } from '../desktopCommandSurface.js';
+import {
+  buildDesktopMenuTemplate,
+  DESKTOP_DOCS_URL,
+} from '../desktopCommandSurface.js';
 import { reportFatalStartupError } from './fatalStartupError.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeDesktopCrashReporting } from './desktopCrashReporting.js';
@@ -1133,7 +1136,9 @@ function createWindow(options: {
     onAsyncError: reportAsyncError,
   });
   ipcRef.current = mainViewIpc;
-  installDesktopMenu(shellActions);
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate(buildDesktopMenuTemplate(shellActions)),
+  );
   window.once('closed', () => {
     windowClosed = true;
     executionsWatcher?.close();

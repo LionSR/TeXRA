@@ -141,8 +141,6 @@ export const AGENT_RUN_GLOBAL_ARGS = {
   ...SKILL_SOURCE_ARGS,
 } as const;
 
-export const ROOT_ROUTING_ARGS = AGENT_RUN_GLOBAL_ARGS;
-
 export const HEADLESS_ONLY_GLOBAL_ARG_NAMES = [
   'print',
   'output-format',
@@ -184,17 +182,17 @@ function flagSpellings(
   return def.alias ? [long, `-${def.alias}`] : [long];
 }
 
-// Derived from `ROOT_ROUTING_ARGS` so adding/renaming a leading-routable flag
+// Derived from `AGENT_RUN_GLOBAL_ARGS` so adding/renaming a leading-routable flag
 // in one place flows through to `reorderGlobalFlags` automatically. Commands
 // still choose which routed flags they accept through their own args objects.
 export const GLOBAL_VALUE_FLAGS = new Set<string>(
-  Object.entries(ROOT_ROUTING_ARGS).flatMap(([name, def]) =>
+  Object.entries(AGENT_RUN_GLOBAL_ARGS).flatMap(([name, def]) =>
     def.type === 'boolean' ? [] : flagSpellings(name, def),
   ),
 );
 
 export const GLOBAL_BOOL_FLAGS = new Set<string>(
-  Object.entries(ROOT_ROUTING_ARGS).flatMap(([name, def]) => {
+  Object.entries(AGENT_RUN_GLOBAL_ARGS).flatMap(([name, def]) => {
     if (def.type !== 'boolean') return [];
     const flags = flagSpellings(name, def);
     // Register the negated `--no-<name>` spelling so leading-flag reordering and

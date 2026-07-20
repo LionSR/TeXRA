@@ -24,6 +24,8 @@ import {
 } from '@cli/runtime/relayTokensClient';
 import { relayTokenStillActiveNotice } from '@cli/runtime/supabaseAuth';
 
+import { jsonResponse } from './fixtures/fetchResponses';
+
 const TOKEN = `${RELAY_CI_TOKEN_PREFIX}abcdefghijklmnopqrstuvwxyz0123456789abcdEFG`;
 
 const MINTED = {
@@ -35,13 +37,6 @@ const MINTED = {
   expires_at: '2026-07-10T12:00:00.000Z',
   token: TOKEN,
 };
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
 
 function singleFetch(response: Response): {
   fetchImpl: typeof fetch;
