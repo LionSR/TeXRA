@@ -1029,6 +1029,11 @@ export abstract class ModelHandler<
     return this.getClient(selection);
   }
 
+  /** Returns a client after routing changes; cached providers invalidate here. */
+  async refreshClient(): Promise<C> {
+    return this.getClient();
+  }
+
   /**
    * Provider-specific SDK error tagger. The base {@link createResponse}
    * template wraps {@link createResponseImpl} with this tagger so every thrown

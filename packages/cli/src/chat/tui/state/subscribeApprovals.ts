@@ -264,12 +264,39 @@ export function createTuiHostInteractions(
  */
 interface ActiveRetryRoute {
   readonly routeId: symbol;
+  readonly preparationController: AbortController;
   readonly settle?: (result: RetryResult) => void;
 }
 
 // API mode and ChatGPT preference are process-wide. Keep their transactional
 // switch and rollback indivisible across concurrent stream retry decisions.
 const retryCredentialSwitchQueue = new PQueue({ concurrency: 1 });
+
+function prepareRetryClient(
+  prepare: NonNullable<HostRetryInteractionOptions['prepareRetry']>,
+  signal: AbortSignal,
+): Promise<void> {
+  signal.throwIfAborted();
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+    try {
+      prepare(signal).then(
+        () => {
+          signal.removeEventListener('abort', onAbort);
+          resolve();
+        },
+        (error: unknown) => {
+          signal.removeEventListener('abort', onAbort);
+          reject(error);
+        },
+      );
+    } catch (error) {
+      signal.removeEventListener('abort', onAbort);
+      reject(error);
+    }
+  });
+}
 
 const NEUTRAL_TIMEOUT_DECISION: ApprovalDecision = {
   accepted: true,
@@ -339,6 +366,7 @@ function settleRetryRoute(
   const route = retryRoutes.get(streamId);
   if (!route) return;
   retryRoutes.delete(streamId);
+  route.preparationController.abort(new Error('Retry request was replaced.'));
   route.settle?.(result);
 }
 
@@ -380,6 +408,18 @@ async function decideWithPolicy<
       : immediateDecision(context);
   if (policy) return policy;
 
+  return decideAfterImmediatePolicy(context, kind, payload, options);
+}
+
+async function decideAfterImmediatePolicy<
+  K extends 'bash' | 'plan' | 'proposal' | 'retry',
+  P,
+>(
+  context: CliContext,
+  kind: K,
+  payload: P,
+  options: RouteWithPolicyOptions<P> = {},
+): Promise<ApprovalDecision> {
   let autoDecision: ApprovalDecision | undefined;
   if (options.beforeQueue) {
     try {
@@ -488,11 +528,13 @@ async function requestRetryInteraction(
 ): Promise<RetryResult> {
   cancelRetryRoute(retryRoutes, request.streamId);
   const routeId = Symbol(request.streamId);
+  const preparationController = new AbortController();
   clearRetryApprovalsForStream(request.streamId);
 
   return await new Promise<RetryResult>((resolve) => {
     retryRoutes.set(request.streamId, {
       routeId,
+      preparationController,
       settle: resolve,
     });
     const isCurrent = () =>
@@ -511,22 +553,32 @@ async function requestRetryInteraction(
           requestedProvider && isApiProvider(requestedProvider)
             ? requestedProvider
             : undefined;
-        const personalApiKeyAvailable = provider
-          ? await hasUsableApiKey(platform().secrets, provider).catch(
-              // A keychain failure must not permit an automatic credential switch.
-              () => false,
-            )
-          : false;
+        let personalApiKeyAvailable = false;
+        let missingPersonalApiKeyMessage = missingApiKeyRetryMessage(provider);
+        if (provider) {
+          try {
+            personalApiKeyAvailable = await hasUsableApiKey(
+              platform().secrets,
+              provider,
+            );
+          } catch {
+            // A keychain failure must not permit an automatic credential switch.
+            missingPersonalApiKeyMessage = missingApiKeyRetryMessage(
+              provider,
+              'unavailable',
+            );
+          }
+        }
         promptRequest = {
           ...request,
           personalApiKeyAvailable,
-          missingPersonalApiKeyMessage: missingApiKeyRetryMessage(provider),
+          missingPersonalApiKeyMessage,
         };
       }
       if (!isCurrent()) return;
       const decision =
         immediate ??
-        (await decideWithPolicy(context, 'retry', promptRequest, {
+        (await decideAfterImmediatePolicy(context, 'retry', promptRequest, {
           beforeQueue: maybeAutoSwitchRetry,
           isCurrent,
         }));
@@ -551,14 +603,21 @@ async function requestRetryInteraction(
             applyRetrySideEffects(decision, promptRequest, {
               isCurrent,
               prepareRetry: options?.prepareRetry,
+              preparationSignal: preparationController.signal,
             }),
           );
         } else if (options?.prepareRetry) {
+          const prepareRetry = options.prepareRetry;
           // Client construction is a read of process-wide credential state.
           // Linearize it with credential writes so it cannot observe a route
           // that a concurrent switch later rolls back.
           await retryCredentialSwitchQueue.add(async () => {
-            if (isCurrent()) await options.prepareRetry?.();
+            if (isCurrent()) {
+              await prepareRetryClient(
+                prepareRetry,
+                preparationController.signal,
+              );
+            }
           });
         }
         if (!isCurrent()) return;
@@ -654,7 +713,8 @@ async function applyRetrySideEffects(
   request: TuiRetryRequest,
   options: {
     isCurrent?: () => boolean;
-    prepareRetry?: () => Promise<void>;
+    prepareRetry?: HostRetryInteractionOptions['prepareRetry'];
+    preparationSignal?: AbortSignal;
   } = {},
 ): Promise<void> {
   const isCurrent = () => options.isCurrent?.() ?? true;
@@ -710,14 +770,17 @@ async function applyRetrySideEffects(
     // they change. Revalidate once more in case the key changed during either
     // persisted setting write, then invalidate before construction.
     await validateCurrentKey();
-    await options.prepareRetry();
+    await prepareRetryClient(
+      options.prepareRetry,
+      options.preparationSignal ?? new AbortController().signal,
+    );
     // Commit invariant: no retry proceeds unless its final settings and live
     // client agree. Publish the session-visible mode only after construction,
     // avoiding a transient personal-mode UI state when preparation rolls back.
     if (decision.apiMode) patchSessionMeta({ apiMode: decision.apiMode });
   } catch (error) {
     const rollbackFailures: Error[] = [];
-    if (subscriptionWriteStarted) {
+    if (subscriptionWriteStarted && !isPreferCodexSubscription()) {
       try {
         const update = await setCliCodexSubscription(
           previousSubscriptionPreference,
@@ -739,7 +802,7 @@ async function applyRetrySideEffects(
         );
       }
     }
-    if (apiModeWriteStarted) {
+    if (apiModeWriteStarted && getCliApiMode() === decision.apiMode) {
       try {
         await setCliApiMode(previousApiMode);
         if (getCliApiMode() !== previousApiMode) {

@@ -137,4 +137,29 @@ describe('CLI retry request', () => {
       expect(output).not.toContain('k use API key and retry');
     },
   );
+
+  it('derives the fallback copy from the failed provider', async () => {
+    const { ink, React } = await loadInk();
+    const output = ink.renderToString(
+      React.createElement(RetryRequest, {
+        payload: {
+          requestId: 'anthropic-fallback',
+          streamId: 'retry-stream' as StreamTabId,
+          operation: 'Tool-use call',
+          errorDetails: {
+            message: 'Relay monthly limit reached.',
+            exhaustionReason: 'relay-limit',
+            isRelayError: true,
+            provider: 'anthropic',
+          },
+          personalApiKeyAvailable: false,
+        },
+        onDecide: vi.fn(),
+      }),
+      { columns: 100 },
+    );
+
+    expect(output).toContain('No Anthropic API key is configured.');
+    expect(output).not.toContain('OpenAI API key');
+  });
 });

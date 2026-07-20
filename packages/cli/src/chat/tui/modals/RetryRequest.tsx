@@ -4,6 +4,7 @@ import {
   isCliApiSwitchableRetry,
   isCliChatGptSubscriptionRetry,
 } from '@cli/runtime/approvalAdapter';
+import { isApiProvider } from '@model/apiProviders';
 import { ConfirmCard } from './ConfirmCard';
 import { COLOR_HINT, COLOR_WARNING } from '../ui/colors';
 import {
@@ -37,10 +38,15 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
     isCliApiSwitchableRetry(props.payload) &&
     personalApiKeyAvailable !== true
   ) {
+    const requestedProvider = props.payload.errorDetails?.provider;
+    const provider =
+      requestedProvider && isApiProvider(requestedProvider)
+        ? requestedProvider
+        : undefined;
     keyGuidance = (
       <Text color={COLOR_HINT}>
         {props.payload.missingPersonalApiKeyMessage ??
-          missingApiKeyRetryMessage('openai')}
+          missingApiKeyRetryMessage(provider)}
       </Text>
     );
   } else if (canSwitchToPersonalKey) {

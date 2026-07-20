@@ -59,7 +59,7 @@ interface RetryableNodeServices {
   config: Pick<AgentConfig, 'model'>;
   logger: AgentTrace;
   setAbortController: (ac: AbortController | null) => void;
-  refreshClient?: () => Promise<void>;
+  refreshClient?: (signal?: AbortSignal) => Promise<void>;
 }
 
 /**
@@ -67,7 +67,7 @@ interface RetryableNodeServices {
  * Logs success or failure; returns true if refresh was attempted and succeeded.
  */
 async function tryRefreshClient(
-  refreshClient: (() => Promise<void>) | undefined,
+  refreshClient: ((signal?: AbortSignal) => Promise<void>) | undefined,
   logger: AgentTrace,
   context: string,
 ): Promise<boolean> {
@@ -310,8 +310,10 @@ export abstract class RetryableInvocationNode<
       },
       refreshClient
         ? {
-            prepareRetry: async () => {
-              await refreshClient();
+            prepareRetry: async (signal) => {
+              signal?.throwIfAborted();
+              await refreshClient(signal);
+              signal?.throwIfAborted();
               clientPrepared = true;
             },
           }

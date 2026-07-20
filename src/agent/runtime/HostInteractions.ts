@@ -53,8 +53,12 @@ export interface HostInteractionOptions {
 }
 
 export interface HostRetryInteractionOptions extends HostInteractionOptions {
-  /** Prepare the model client that the approved retry will use. */
-  readonly prepareRetry?: () => Promise<void>;
+  /**
+   * Rebuild the caller's model client after a host-side credential change.
+   * A host that calls this successfully has prepared the next attempt; a
+   * rejection leaves the caller's previous client unchanged.
+   */
+  readonly prepareRetry?: (signal?: AbortSignal) => Promise<void>;
 }
 
 /** Delivery policy for a notification owned by a process session. */
