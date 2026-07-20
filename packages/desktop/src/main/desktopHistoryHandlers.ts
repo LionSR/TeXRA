@@ -135,7 +135,9 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
       return;
     }
     await this.dependencies.showInfoMessage('Rerunning agent from history');
-    await this.dependencies.runExecution(validated.request);
+    void this.dependencies
+      .runExecution(validated.request)
+      .catch(this.dependencies.onError);
   }
 
   private async restore(historyId: string): Promise<void> {

@@ -214,7 +214,7 @@ function followUpSentSession(session?: SessionHandle): SessionHandle {
  * bash, delegation, CLI session loop, inquiry continuation) resolve the active
  * run's session via the ALS and stay byte-identical. HOST-PATH callers that
  * run OUTSIDE any run ALS (e.g. the desktop progress-view IPC handler, whose
- * runs are tracked in a per-window session, not the process default) MUST pass
+ * runs are tracked in an explicit process session, not the module default) MUST pass
  * their owning session, or the run's handle is looked up in the wrong registry
  * and a live follow-up is dropped as `no_session`.
  */

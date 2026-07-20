@@ -8,32 +8,21 @@ import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { TaskState } from '@agent/core/state/TaskState';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
-import {
-  isResumeInFlight as isStreamResumeInFlight,
-  resolveAndResumeStream,
-} from '@agent/runtime/resolveAndResumeStream';
-import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import type {
   AgentRuntimeEvent,
   AgentRuntimeEventPayloads,
   AgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
-import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
-import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
-import {
-  getAllActiveExecutionIds,
-  SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   presentFollowUpWakeResult,
   sendFollowUp,
   wakeQueuedFollowUpStream,
 } from '@agent/followUp/ToolUseFollowUp';
-import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { isRuntimePresentationEvent } from '@agent/runtime/runtimePresentationEvents';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import {
@@ -57,6 +46,7 @@ import { getProgressStreamControls } from '@controllers/progressView/progressStr
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
+import type { SessionStores } from '@controllers/progressView/backend/state/SessionStores';
 import { platform } from '@platform/platform';
 import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
 import {
@@ -74,14 +64,8 @@ import {
   formatStreamDeletionRetention,
 } from '@shared/copy/executionHistory';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
-import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
-import {
-  cleanupUnscopedApprovals,
-  releaseStreamResources,
-} from '@tools/approval';
-import type { RegisteredToolName } from '@tools/registry';
-import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
-import { StreamLogStore, type StreamSnapshotStore } from '@transcript';
+import { cleanupUnscopedApprovals } from '@tools/approval';
+import type { StreamSnapshotStore } from '@transcript';
 import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -95,61 +79,71 @@ import {
   createDesktopHostInteractions,
   type DesktopHostInteractions,
 } from './desktopHostInteractions.js';
-import { DesktopExecutionRebinder } from './desktopExecutionRebinder.js';
+import { toLogData } from './desktopLogUtils.js';
 import {
   DesktopProgressFileActions,
   type DesktopLatexdiffRunContext,
   type DesktopLatexdiffWorkspaceScan,
 } from './desktopProgressFileActions.js';
 import {
-  prepareDesktopLegacyStreamImport,
-  type DesktopLegacyStreamImport,
-} from './desktopLegacyStreamImporter.js';
+  launchDesktopAgent,
+  type DesktopAgentLaunchOptions as DesktopRunExecutionOptions,
+} from './desktopAgentLaunch.js';
 import type { DesktopProgressInboundHandlerRegistry } from './desktopProgressIpc.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 
-const DESKTOP_UNAVAILABLE_TOOLS: readonly RegisteredToolName[] = [
-  ...SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES,
-  'inline_comment',
-  DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
-];
-
-/** Normalize a caught error into a logger `data` argument, preserving Error instances as-is. */
-function toLogData(error: unknown): unknown {
-  return error instanceof Error ? error : { error };
-}
 export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): boolean | void;
   host: DesktopAgentExecutionHost;
+  session: SessionHandle;
   progressSnapshotStore: StreamSnapshotStore;
-  /** Primary-process path to the retired global desktop stream file. */
-  legacyStreamFilePath?: string;
-}
-
-export interface DesktopAgentExecution {
-  handleExecute(message: MainViewExecuteMessage): Promise<void>;
-  progress: DesktopProgressBridge;
-  flush(): Promise<void>;
-  dispose(): void;
-}
-
-type ResumeState = {
-  runState: AgentConfig;
-  executionId?: ExecutionId;
-  parentStreamId?: StreamTabId;
-};
-
-interface DesktopRunExecutionOptions {
-  modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
+  sessionStores: SessionStores;
+  /** Aborts construction and detaches presentation when its window closes. */
+  presentationSignal?: AbortSignal;
 }
 
 export interface DesktopProgressBridgeOptions {
-  transcripts: StreamLogStore;
+  session: SessionHandle;
+  sessionStores: SessionStores;
   logger?: AgentTrace;
   host: DesktopAgentExecutionHost;
   progressSnapshotStore: StreamSnapshotStore;
-  /** Runs after canonical state is loaded and before restart repair begins. */
-  afterCanonicalLoad?: () => Promise<void>;
+  wakeQueuedFollowUpStream?: typeof wakeQueuedFollowUpStream;
+}
+
+async function wakeDesktopFollowUp(
+  streamId: StreamTabId,
+  result: Extract<
+    Awaited<ReturnType<typeof sendFollowUp>>,
+    { status: 'sent' | 'queued' }
+  >,
+  session: SessionHandle,
+  wakeFollowUpStream: typeof wakeQueuedFollowUpStream = wakeQueuedFollowUpStream,
+): Promise<void> {
+  // This continuation deliberately accepts only the process SessionHandle.
+  // It may outlive a window, so it must not capture a bridge or BrowserWindow
+  // presentation. Its important failure notice explicitly survives a detached
+  // interval and is delivered once when the next presentation attaches.
+  const wake = await wakeFollowUpStream(
+    streamId,
+    result,
+    platform().agentResume,
+    session,
+  );
+  const presentation = presentFollowUpWakeResult(wake);
+  if (presentation.severity === 'none') return;
+  if (presentation.refreshQueuedFollowUps) {
+    session.events.emit({
+      scope: 'session',
+      event: {
+        type: 'updateQueuedFollowUps',
+        payload: { streamId },
+      },
+    });
+  }
+  await session.interactions.showInfoMessage(presentation.message, {
+    replayWhenAttached: true,
+  });
 }
 
 export class DesktopProgressBridge {
@@ -157,83 +151,60 @@ export class DesktopProgressBridge {
   private readonly backend: ProgressBackend;
   private readonly state: ProgressBackend['state'];
   readonly streamLogs: ProgressBackend['state']['streamLogs'];
-  private readonly progressHost: ProgressViewHost;
-  private readonly agentProposalController: ProgressViewHost['agentProposalController'];
-  private readonly workflowFileActions: ProgressViewHost['workflowFileActionsController'];
+  private progressHost!: ProgressViewHost;
+  private agentProposalController!: ProgressViewHost['agentProposalController'];
+  private workflowFileActions!: ProgressViewHost['workflowFileActionsController'];
   /**
    * Pending approval prompts, one {@link ApprovalRequestHandler}
    * per kind. These back the shared pending-permissions guard against view
    * switches and the pending-proposal lookup — the same host-agnostic
    * bookkeeping the extension uses, rather than a hand-rolled registry.
    */
-  private readonly deletedStreams = new Set<StreamTabId>();
-  private readonly unsubscribe: () => void;
-  private readonly toolEditApprovals: DesktopToolEditApprovalController;
-  private readonly hostInteractions: DesktopHostInteractions;
-  private readonly fileActions: DesktopProgressFileActions;
+  private unsubscribe: () => void = () => undefined;
+  private toolEditApprovals: DesktopToolEditApprovalController | undefined;
+  private hostInteractions!: DesktopHostInteractions;
+  private fileActions!: DesktopProgressFileActions;
   private restartRepair: Promise<void> = Promise.resolve();
+  // Restart repair also closes presentation-state running groups, so its retry
+  // timer is deliberately presentation-owned. A window close cancels only the
+  // timer; canonical status is retained and the next window reruns repair.
   private readonly restartRepairRetry = new RestartRepairRetryScheduler();
-  private startupStreamIds: ReadonlySet<StreamTabId> = new Set();
   private disposed = false;
+  private presentationReady = false;
 
   readonly runtimeHost: AgentRuntimeHost;
-  readonly progressViewInboundHandlers: DesktopProgressInboundHandlerRegistry;
+  progressViewInboundHandlers!: DesktopProgressInboundHandlerRegistry;
 
-  /**
-   * This window's own session. Each desktop BrowserWindow gets a fresh one so
-   * its runs, interrupts, pending interactions, and trace flushers are isolated
-   * from other windows and torn down on window close. Cross-window "is this
-   * execution running anywhere" checks use `getAllActiveExecutionIds()`.
-   */
   private readonly session: SessionHandle;
-  /** Detaches this window's concrete host interaction implementation. */
-  private readonly detachHostInteractions: () => void;
-  /** Detaches the session→toast consumer; called on dispose. */
-  private detachResultToast: (() => void) | undefined;
-  private readonly executionRebinder: DesktopExecutionRebinder;
+  /** Detaches this window's presentation from process-owned interactions. */
+  private detachHostInteractions: () => void = () => undefined;
+  private detachResultToast: () => void = () => undefined;
 
   constructor(
     private readonly postToRenderer: (message: unknown) => boolean | void,
     private readonly options: DesktopProgressBridgeOptions,
   ) {
     this.logger = options.logger ?? createChannelTrace('DesktopProgressBridge');
-    this.runtimeHost = {
+    const presentationHost: AgentRuntimeHost = {
       emit: (event, payload) => this.handleInteractionEvent(event, payload),
     };
-    this.session = new SessionHandle({
-      transcripts: options.transcripts,
-    });
-    this.executionRebinder = new DesktopExecutionRebinder(
-      this.session,
-      this.logger,
-    );
-    this.toolEditApprovals = createDesktopToolEditApprovalController({
-      runtimeHost: this.runtimeHost,
-      session: this.session,
-      ui: options.host,
-    });
-    this.hostInteractions = createDesktopHostInteractions({
-      runtimeHost: this.runtimeHost,
-      session: this.session,
-      getApprovalHandlers: () => this.backend.approvalHandlers,
-      getToolEditApprovals: () => this.toolEditApprovals,
-    });
-    this.detachHostInteractions = this.session.useHostInteractions(
-      this.hostInteractions,
-    );
+    this.session = options.session;
+    this.runtimeHost = this.session.interactions;
     const syncRenderedStreams = (): void =>
       this.syncStreamContent(this.updateStreamMetadata());
 
     this.backend = new ProgressBackend({
       session: this.session,
+      stateOwnership: 'session',
       storage: platform().workspaceState,
       snapshots: options.progressSnapshotStore,
+      stores: options.sessionStores,
       sendMessage: (message) => {
         return this.postToRenderer(message) !== false;
       },
       hasTarget: () => true,
       getStreamControls: (stream) =>
-        getProgressStreamControls(stream, this.sessionForStream(stream)),
+        getProgressStreamControls(stream, this.session),
       getUnsupportedCommands: () =>
         unsupportedCommands(this.progressViewInboundHandlers),
       approvals: {
@@ -248,12 +219,18 @@ export class DesktopProgressBridge {
         },
       },
       lifecycle: {
-        sessionForStream: (stream) => this.sessionForStream(stream),
-        stopStream: (stream, ownerSession) =>
-          this.stopStreamForSession(stream, ownerSession),
-        cleanupDeletedStream: (stream, ownerSession) => {
-          this.deletedStreams.add(stream);
-          releaseStreamResources(stream, ownerSession);
+        stopStream: (stream) => {
+          this.session.interactions.cancel({
+            streamId: stream,
+            kind: 'retry',
+            cause: 'Retry request cleared.',
+          });
+          this.session.executions.stopAgentStream(stream, {
+            detachActiveChildren: detachSubagentsOnStop(),
+            runtimeHost: this.runtimeHost,
+          });
+        },
+        cleanupDeletedStream: (stream) => {
           this.releaseApprovalsForStream(stream);
           this.workflowFileActions.clearStreamBackups(stream);
         },
@@ -261,7 +238,7 @@ export class DesktopProgressBridge {
           if (!allDeleted) return;
           cleanupUnscopedApprovals(this.session);
           this.session.interactions.cancel({ cause: 'All streams deleted.' });
-          this.clearDesktopSessionMaps();
+          this.clearDesktopPresentationState();
           this.workflowFileActions.clearAllBackups();
         },
         rebuildRenderedStreams: ({ syncActiveStream = true }) => {
@@ -285,50 +262,139 @@ export class DesktopProgressBridge {
     });
     this.state = this.backend.state;
     this.streamLogs = this.state.streamLogs;
-    const backendSubscription = this.backend.setupEventListeners();
-    // Onboarding funnel (PRD: agent-native onboarding): a completed run ends
-    // State 1. `AgentRunLifecycle` persists `firstRunDone` BEFORE it emits the
-    // terminal `result` event, so by the time this listener fires the funnel
-    // derivation will read the up-to-date flag. The setup agent's own run does
-    // not flip `firstRunDone` (the lifecycle skips it), but recomputing here is
-    // still safe — the derivation is idempotent.
-    const unsubscribeResult = this.session.onResult((event) => {
-      if (event.outcome === 'completed') {
-        this.options.host.onRunCompleted();
-      }
+    this.restartRepair = this.initializeCanonicalState(presentationHost);
+  }
+
+  /** Wait until canonical state and restart repair are ready for use. */
+  waitUntilReady(): Promise<void> {
+    return this.restartRepair;
+  }
+
+  private async initializeCanonicalState(
+    presentationHost: AgentRuntimeHost,
+  ): Promise<void> {
+    await this.backend.load();
+    await this.repairOrphanedStreamsAfterRestart();
+    if (this.disposed) return;
+
+    this.toolEditApprovals = createDesktopToolEditApprovalController({
+      runtimeHost: presentationHost,
+      session: this.session,
+      ui: this.options.host,
     });
-    this.unsubscribe = () => {
-      backendSubscription.dispose();
-      unsubscribeResult();
-    };
-    // Present terminal-error toasts from this window's run results (the run
-    // lifecycle no longer emits them directly) through the same runtimeHost
-    // path they used before — scoped to this window's session.
-    this.detachResultToast = attachTerminalResultToast(
-      this.session,
-      this.runtimeHost,
-    );
-    this.fileActions = new DesktopProgressFileActions(options.host, {
-      runExecution: (request) => this.runExecution(request),
+    this.hostInteractions = createDesktopHostInteractions({
+      runtimeHost: presentationHost,
+      session: this.session,
+      getApprovalHandlers: () => this.backend.approvalHandlers,
+      getToolEditApprovals: () => this.toolEditApprovals!,
+      showInfoMessage: (message) => this.options.host.showInfoMessage(message),
+    });
+    this.fileActions = new DesktopProgressFileActions(this.options.host, {
+      startExecution: (request) => {
+        const logger = this.logger;
+        const runtimeHost = this.runtimeHost;
+        let lifecycleStarted = false;
+        void this.runExecution(request, {
+          onLifecycleStart: () => {
+            lifecycleStarted = true;
+          },
+        }).catch((error: unknown) => {
+          logger.error('Desktop merge execution failed', {
+            data: toLogData(error),
+          });
+          // Once the lifecycle starts, the process-session result listener
+          // owns the one terminal error presentation.
+          if (!lifecycleStarted) {
+            runtimeHost.emit('requestShowError', {
+              message: `Merge failed: ${toErrorMessage(error)}`,
+            });
+          }
+        });
+      },
       listWorkspaceCandidateFiles: () => this.listWorkspaceCandidateFiles(),
     });
     this.progressHost = this.createProgressViewHost();
     this.workflowFileActions = this.progressHost.workflowFileActionsController;
     this.agentProposalController = this.progressHost.agentProposalController;
     this.progressViewInboundHandlers = this.createProgressViewInboundHandlers();
-    this.restartRepair = this.initializeCanonicalState();
-  }
-
-  /** Wait until canonical state and restart repair are ready for use. */
-  async waitUntilReady(): Promise<void> {
-    await this.restartRepair;
-  }
-
-  private async initializeCanonicalState(): Promise<void> {
-    await this.backend.load();
-    await this.options.afterCanonicalLoad?.();
-    this.startupStreamIds = new Set(this.streamLogs.keys());
-    await this.repairOrphanedStreamsAfterRestart();
+    const backendSubscription = this.backend.setupEventListeners();
+    const unsubscribeResult = this.session.onResult((event) => {
+      if (event.outcome === 'completed') this.options.host.onRunCompleted();
+    });
+    this.unsubscribe = () => {
+      backendSubscription.dispose();
+      unsubscribeResult();
+    };
+    if (this.disposed) {
+      this.unsubscribe();
+      return;
+    }
+    // Canonical state and restart repair are complete before any window-owned
+    // adapter can receive a replay. Subscribe first because attachment
+    // synchronously redispatches pending approvals and their visibility facts.
+    const detachHostInteractions = this.session.useHostInteractions(
+      this.hostInteractions,
+    );
+    // Attachment synchronously replays pending requests. That replay can close
+    // the window before useHostInteractions returns its disposer.
+    if (this.disposed) {
+      detachHostInteractions();
+      return;
+    }
+    this.detachHostInteractions = detachHostInteractions;
+    // A removal can begin after the pre-load drain but before these
+    // subscriptions exist. Drain the one shared deletion owner again now;
+    // subsequent events are observed live, and no await remains before the
+    // first render can be enabled.
+    await this.options.sessionStores.waitForPendingStreamDeletions();
+    if (this.disposed) return;
+    const detachResultToast = attachTerminalResultToast(
+      this.session,
+      this.runtimeHost,
+      { replayWhenAttached: true },
+    );
+    // Missed-result replay is synchronous for the same reason as approval
+    // replay above; never publish a disposer after this presentation closed.
+    if (this.disposed) {
+      detachResultToast();
+      return;
+    }
+    this.detachResultToast = detachResultToast;
+    // Close the load→subscribe gap. The process-owned snapshot listener may
+    // have accepted metadata facts while restart repair was in flight; now
+    // that live subscriptions are established, overlay that canonical state
+    // once before any initial render.
+    for (const streamId of this.streamLogs.keys()) {
+      this.state.refreshStreamMetadataFromSnapshot(streamId);
+    }
+    // Child activity is live presentation state rather than durable history.
+    // Seed it only after attaching the presentation and every live-event
+    // subscription, so the first renderer output cannot precede either.
+    for (const streamId of this.streamLogs.keys()) {
+      const runConfig = this.state.snapshots.getRunConfig(streamId);
+      if (runConfig) {
+        this.state.getOrCreateStreamState(streamId, runConfig.agentCategory);
+      }
+      const { subagents, processes } =
+        this.session.executions.getActiveChildren(streamId);
+      if (subagents.length > 0) {
+        this.backend.factApplier.handleRunFact(streamId, {
+          type: 'child.activity',
+          kind: 'subagents',
+          parentStreamId: streamId,
+          items: subagents,
+        });
+      }
+      if (processes.length > 0) {
+        this.backend.factApplier.handleRunFact(streamId, {
+          type: 'child.activity',
+          kind: 'processes',
+          parentStreamId: streamId,
+          items: processes,
+        });
+      }
+    }
+    this.presentationReady = true;
   }
 
   private createProgressViewHost(): ProgressViewHost {
@@ -338,16 +404,17 @@ export class DesktopProgressBridge {
           getTaskState: (stream) => this.state.snapshots.getTaskState(stream),
           getExecutionId: (stream) => this.getStreamExecutionId(stream),
         },
-        executeAgent: async (request) => {
+        executeAgent: (request) => {
           const validated = validateExecutionRequest(request);
           if (!validated.valid) {
             this.logger.error('Invalid desktop workflow execution request', {
               data: validated.issue,
             });
-            await this.options.host.showErrorMessage(validated.message);
-            return;
+            return Promise.resolve(
+              this.options.host.showErrorMessage(validated.message),
+            ).then(() => undefined);
           }
-          await this.runExecution(validated.request);
+          return this.runExecution(validated.request);
         },
       },
       workflowFileActions: {
@@ -370,9 +437,7 @@ export class DesktopProgressBridge {
             this.fileActions.runMergeFile(baseFile, editedFile),
           latexdiffFile: (baseFile, editedFile) =>
             this.runLatexdiffFile(baseFile, editedFile),
-          openDirectory: async (directory) => {
-            await this.options.host.openPath(directory);
-          },
+          openDirectory: (directory) => this.options.host.openPath(directory),
           openLabel: (label) => this.fileActions.findAndOpenLabel(label),
           readFile: (file) => readFile(file, 'utf8'),
           showInfo: async (message) => {
@@ -387,9 +452,7 @@ export class DesktopProgressBridge {
             });
           },
         },
-        sendFollowUp: async (stream, text) => {
-          await this.sendFollowUp(stream, text);
-        },
+        sendFollowUp: (stream, text) => this.sendFollowUp(stream, text),
       },
       agentProposal: {
         getPendingProposal: (proposalId) =>
@@ -433,8 +496,12 @@ export class DesktopProgressBridge {
           deleteAllStreams: () => this.backend.deleteAllStreams(),
           stopStream: (stream) => this.backend.stopStream(stream),
         },
-        resumeStream: async (stream) => {
-          await this.tryResumeStream(stream);
+        resumeStream: (stream) => {
+          void this.tryResumeStream(stream).catch((error: unknown) => {
+            this.logger.warn(`Failed to resume desktop stream ${stream}`, {
+              data: toLogData(error),
+            });
+          });
         },
         followUp: {
           sendFollowUp: ({ stream, text, mediaFiles }) =>
@@ -449,12 +516,9 @@ export class DesktopProgressBridge {
         bypass: {
           runtimeHost: this.runtimeHost,
           session: this.session,
-          sessionForStream: (stream) => this.sessionForStream(stream),
         },
         file: {
-          openFile: async (file, line) => {
-            await this.options.host.openPath(file, line);
-          },
+          openFile: (file, line) => this.options.host.openPath(file, line),
           openFileCompile: (file) => this.openFileCompile(file),
         },
         approval: {
@@ -464,7 +528,7 @@ export class DesktopProgressBridge {
               initiatingProposalId,
             ),
           handleToolEditApprovalAction: (message) =>
-            this.toolEditApprovals.handleAction(message),
+            this.toolEditApprovals!.handleAction(message),
           handleBashApprovalAction: (message) =>
             void this.hostInteractions.submitBashDecision(
               message.requestId,
@@ -596,35 +660,27 @@ export class DesktopProgressBridge {
 
   dispose(): void {
     if (this.disposed) return;
+    // Make this presentation sink inert before detaching resources owned by
+    // the closing BrowserWindow.
     this.disposed = true;
     this.restartRepairRetry.dispose();
-    this.detachResultToast?.();
-    this.executionRebinder.dispose();
+    // Detaching first advances the session's attachment generation. Any
+    // cancellation produced while the old presenters are disposed is stale;
+    // the process-owned request remains pending for the next window.
     this.detachHostInteractions();
-    this.toolEditApprovals.dispose();
+    this.toolEditApprovals?.dispose();
+    this.clearDesktopPresentationState();
+    this.detachResultToast();
     this.unsubscribe();
     this.backend.dispose();
-    this.clearDesktopSessionMaps();
-    this.workflowFileActions.clearAllBackups();
-    void this.state.flush().catch((error: unknown) => {
-      this.logger.warn('Failed to flush desktop progress state', {
-        data: toLogData(error),
-      });
-    });
-    // Tear down this window's session last. In-flight runs are allowed to keep
-    // executing headless on macOS after the window closes, but their execution
-    // ids must remain visible to process-wide history guards until they settle.
-    this.session.dispose({ keepActiveExecutions: true });
+    this.workflowFileActions?.clearAllBackups();
   }
 
-  async flush(): Promise<void> {
-    await this.state.flush();
-  }
-
-  private clearDesktopSessionMaps(): void {
-    // Release every pending approval (and proposal payload) without notifying
-    // the webview. Each handler owns settlement as well as presentation state,
-    // so teardown cannot leave an interaction promise pending.
+  private clearDesktopPresentationState(): void {
+    // Settle only this detached presenter's promises and clear its request IDs.
+    // SessionHostInteractions ignores those stale settlements and keeps each
+    // process-owned request pending for the next attached presentation.
+    if (!this.presentationReady) return;
     for (const handler of Object.values(this.backend.approvalHandlers)) {
       handler.clear();
     }
@@ -645,16 +701,8 @@ export class DesktopProgressBridge {
     activeExecutionIds: Set<string>;
     allExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>;
   } {
-    const activeExecutionIds = new Set(getAllActiveExecutionIds());
+    const activeExecutionIds = new Set(this.session.executions.getActiveIds());
     const allExecutionIds = this.state.snapshots.getExecutionIdMap();
-    // A replacement window may need to mirror a still-running execution from
-    // the prior window. Canonical startup membership and execution mappings
-    // are sufficient; no persisted liveness or restoration object is needed.
-    this.executionRebinder.rebind(
-      activeExecutionIds,
-      allExecutionIds,
-      this.startupStreamIds,
-    );
     return { activeExecutionIds, allExecutionIds };
   }
 
@@ -800,10 +848,11 @@ export class DesktopProgressBridge {
 
   private syncAfterRestartRepair(result: RestartRepairResult): void {
     if (
-      result.waitingStreams.length > 0 ||
-      result.failedStreams.length > 0 ||
-      result.closedWaitingGroups.length > 0 ||
-      result.closedFailedGroups.length > 0
+      this.presentationReady &&
+      (result.waitingStreams.length > 0 ||
+        result.failedStreams.length > 0 ||
+        result.closedWaitingGroups.length > 0 ||
+        result.closedFailedGroups.length > 0)
     ) {
       this.syncFullView();
     }
@@ -934,12 +983,12 @@ export class DesktopProgressBridge {
     this.syncStreamContent(this.updateStreamMetadata());
   }
 
-  async deleteStream(streamId: StreamTabId): Promise<void> {
-    await this.backend.deleteStream(streamId);
+  deleteStream(streamId: StreamTabId): Promise<void> {
+    return this.backend.deleteStream(streamId);
   }
 
-  async deleteAllStreams(): Promise<void> {
-    await this.backend.deleteAllStreams();
+  deleteAllStreams(): Promise<void> {
+    return this.backend.deleteAllStreams();
   }
 
   private syncStreamContent(streamId: StreamTabId | ''): void {
@@ -966,108 +1015,9 @@ export class DesktopProgressBridge {
       });
   }
 
-  private stopStreamForSession(
-    streamId: StreamTabId,
-    ownerSession: SessionHandle,
-  ): void {
-    // Kind-scoped: clear only the pending retry panel for this stream.
-    ownerSession.interactions.cancel({
-      streamId,
-      kind: 'retry',
-      cause: 'Retry request cleared.',
-    });
-    ownerSession.executions.stopAgentStream(streamId, {
-      detachActiveChildren: detachSubagentsOnStop(),
-      runtimeHost: this.runtimeHost,
-    });
-  }
-
-  private sessionForStream(streamId: StreamTabId): SessionHandle {
-    return (
-      this.executionRebinder.ownerSessionForStream(streamId) ?? this.session
-    );
-  }
-
-  async tryResumeStream(streamId: StreamTabId): Promise<boolean> {
-    await this.restartRepair;
-    // Desktop-only pre-check: a stream deleted in this window must never be
-    // resurrected, even if its persisted meta.json survives on disk. The shared
-    // orchestrator owns the active/resuming + in-flight guards.
-    if (this.deletedStreams.has(streamId)) {
-      this.logger.debug(
-        `Stream ${streamId} cannot be resumed, skipping desktop resume`,
-      );
-      return false;
-    }
-
-    return resolveAndResumeStream(streamId, {
-      runtimeHost: this.runtimeHost,
-      // Desktop runs write status to this window's session machine, so the
-      // resume guards must read the same machine (the process-global default
-      // is never populated here).
-      streamStatus: this.session.status,
-      resolveResumeState: async (id) => {
-        const resumeState = await this.resolveResumeState(id);
-        if (!resumeState) {
-          await this.options.host.showInfoMessage(
-            'No persisted run state was found for this stream. Start a new run instead.',
-          );
-          return undefined;
-        }
-        if (!resumeState.executionId) {
-          await this.options.host.showInfoMessage(
-            'This stream has no persisted execution id. Start a new run instead.',
-          );
-          return undefined;
-        }
-        return {
-          runState: resumeState.runState,
-          executionId: resumeState.executionId,
-          ...(resumeState.parentStreamId !== undefined && {
-            parentStreamId: resumeState.parentStreamId,
-          }),
-        };
-      },
-      resumeToolUse: (snapshot) =>
-        resumeQueuedToolUseFromResumeData(
-          snapshot.streamId,
-          snapshot,
-          this.runtimeHost,
-          {
-            session: this.session,
-            runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
-            onError: (error) => this.reportResumeFailure(streamId, error),
-          },
-        ),
-      executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
-        this.runExecution(
-          { config, executionId },
-          { modelHandlerCompatibilityKey },
-        ),
-      reportNoResumableSession: async () => {
-        await this.options.host.showInfoMessage(
-          'This run has no resumable session state. Start a new run instead.',
-        );
-      },
-      reportFailure: async (id, error) => {
-        await this.reportResumeFailure(id, error);
-      },
-    });
-  }
-
-  isResumeInFlight(streamId: StreamTabId): boolean {
-    return isStreamResumeInFlight(streamId);
-  }
-
-  private async reportResumeFailure(
-    streamId: StreamTabId,
-    error: unknown,
-  ): Promise<void> {
-    this.logger.error(`Failed to resume desktop stream ${streamId}`, {
-      data: toLogData(error),
-    });
-    await this.options.host.showErrorMessage(
-      `Resume failed: ${toErrorMessage(error)}`,
+  tryResumeStream(streamId: StreamTabId): Promise<boolean> {
+    return this.restartRepair.then(() =>
+      platform().agentResume.tryResumeStream(streamId),
     );
   }
 
@@ -1134,50 +1084,13 @@ export class DesktopProgressBridge {
     };
   }
 
-  private async resolveResumeState(
-    streamId: StreamTabId,
-  ): Promise<ResumeState | undefined> {
-    let runState = this.state.snapshots.getRunConfig(streamId);
-    let executionId = this.getStreamExecutionId(streamId);
-    if (runState && executionId) {
-      const parentStreamId = this.state.snapshots.getParentStreamId(streamId);
-      return {
-        runState,
-        executionId,
-        ...(parentStreamId !== undefined && { parentStreamId }),
-      };
-    }
-
-    try {
-      await this.state.snapshots.preload([streamId]);
-    } catch (error) {
-      this.logger.warn(`Failed to read persisted resume data for ${streamId}`, {
-        data: toLogData(error),
-      });
-      return undefined;
-    }
-    runState = this.state.snapshots.getRunConfig(streamId);
-    executionId = executionId ?? this.getStreamExecutionId(streamId);
-    if (!runState) return undefined;
-
-    this.state.streamLogs.ensureStream(streamId);
-    this.state.refreshStreamMetadataFromSnapshot(streamId);
-
-    const parentStreamId = this.state.snapshots.getParentStreamId(streamId);
-    return {
-      runState,
-      ...(executionId && { executionId }),
-      ...(parentStreamId !== undefined && { parentStreamId }),
-    };
-  }
-
   private async sendFollowUp(
     streamId: StreamTabId,
     text: string,
     mediaFiles?: readonly string[],
   ): Promise<void> {
     await this.restartRepair;
-    // Resolve the follow-up target against THIS window's session: the run's
+    // Resolve the follow-up target against the process session: the run's
     // handle is tracked in `this.session`, but this IPC path runs outside the
     // run ALS, so the module default (currentSession ⇒ defaultSession) would
     // look in the wrong registry and report `no_session` for a live run.
@@ -1196,28 +1109,17 @@ export class DesktopProgressBridge {
           payload: { streamId },
         },
       });
-      const wake = await wakeQueuedFollowUpStream(
+      const logger = this.logger;
+      void wakeDesktopFollowUp(
         streamId,
         result,
-        {
-          tryResumeStream: (id) => this.tryResumeStream(id),
-          isResumeInFlight: (id) => this.isResumeInFlight(id),
-        },
         this.session,
-      );
-      const presentation = presentFollowUpWakeResult(wake);
-      if (presentation.severity !== 'none') {
-        if (presentation.refreshQueuedFollowUps) {
-          this.session.events.emit({
-            scope: 'session',
-            event: {
-              type: 'updateQueuedFollowUps',
-              payload: { streamId },
-            },
-          });
-        }
-        await this.options.host.showInfoMessage(presentation.message);
-      }
+        this.options.wakeQueuedFollowUpStream,
+      ).catch((error: unknown) => {
+        logger.warn(`Failed to wake follow-up stream ${streamId}`, {
+          data: toLogData(error),
+        });
+      });
       return;
     }
 
@@ -1226,8 +1128,8 @@ export class DesktopProgressBridge {
     );
   }
 
-  async openFileCompile(filePath: string): Promise<void> {
-    await this.fileActions.openFileCompile(filePath);
+  openFileCompile(filePath: string): Promise<void> {
+    return this.fileActions.openFileCompile(filePath);
   }
 
   /**
@@ -1258,25 +1160,28 @@ export class DesktopProgressBridge {
     return true;
   }
 
-  async runExecution(
+  runExecution(
     request: ValidatedExecutionRequest,
     options: DesktopRunExecutionOptions = {},
   ): Promise<void> {
-    await this.restartRepair;
-    const { runAgent } = await import('@agent/runtime/runAgent');
-    await runAgent(request, {
-      runtimeHost: this.runtimeHost,
-      session: this.session,
-      runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
-      modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
-      openWorkflowOutput: async (result) => {
-        // Gate, outcome check, and final-output selection are shared policy
-        // (selectAutoOpenFinalOutput); the desktop host only supplies openPath.
-        const output = selectAutoOpenFinalOutput(result);
-        if (!output) return;
-        await this.options.host.openPath(output.absolutePath);
+    return launchDesktopAgent(
+      request,
+      {
+        ready: this.restartRepair,
+        session: this.session,
       },
-    });
+      options,
+    );
+  }
+
+  handleExecute(message: MainViewExecuteMessage): Promise<void> {
+    const preparation = prepareMainViewExecutionRequest(message);
+    if (!preparation.valid) {
+      return Promise.resolve(
+        this.options.host.showErrorMessage(preparation.message),
+      ).then(() => undefined);
+    }
+    return this.runExecution(preparation.request);
   }
 
   /**
@@ -1298,8 +1203,8 @@ export class DesktopProgressBridge {
 
   /**
    * Drop every pending approval (incl. proposal payloads) tied to a deleted
-   * stream from the pending guard. The underlying approvals are settled by
-   * releaseStreamResources; this only clears prompts that never receive a
+   * stream from the pending guard. The process store owner settles underlying
+   * approvals; this only clears prompts that never receive a
    * resolve event (e.g. durable external inquiries), keeping the guard from
    * blocking switches on a stream that no longer exists.
    */
@@ -1325,72 +1230,32 @@ export class DesktopProgressBridge {
 
 export async function createDesktopAgentExecution(
   options: DesktopAgentExecutionOptions,
-): Promise<DesktopAgentExecution> {
-  const transcripts = await StreamLogStore.open();
-  let legacyImport: DesktopLegacyStreamImport | undefined;
-  if (options.legacyStreamFilePath) {
-    try {
-      legacyImport = await prepareDesktopLegacyStreamImport(
-        options.legacyStreamFilePath,
-        {
-          transcriptStreamIds: transcripts.keys(),
-          sidecarStreamIds:
-            await options.progressSnapshotStore.listPersistedStreams(),
-        },
-      );
-    } catch (error) {
-      createChannelTrace('DesktopLegacyStreamImporter').warn(
-        'Retaining unreadable legacy desktop stream state for retry',
-        { data: toLogData(error) },
-      );
-    }
-  }
-  for (const streamId of legacyImport?.claims ?? []) {
-    transcripts.ensureStream(streamId);
-  }
-  if ((legacyImport?.claims.length ?? 0) > 0) {
-    await transcripts.flush();
-  }
+): Promise<DesktopProgressBridge> {
+  options.presentationSignal?.throwIfAborted();
   const progress = new DesktopProgressBridge(options.postToRenderer, {
-    transcripts,
+    session: options.session,
+    sessionStores: options.sessionStores,
     host: options.host,
     progressSnapshotStore: options.progressSnapshotStore,
-    afterCanonicalLoad: legacyImport
-      ? async () => {
-          try {
-            await legacyImport.commit(legacyImport.claims);
-          } catch (error) {
-            createChannelTrace('DesktopLegacyStreamImporter').warn(
-              'Retaining legacy desktop stream state after cleanup failed',
-              { data: toLogData(error) },
-            );
-          }
-        }
-      : undefined,
   });
+  const disposeAbortedPresentation = (): void => progress.dispose();
+  options.presentationSignal?.addEventListener(
+    'abort',
+    disposeAbortedPresentation,
+    { once: true },
+  );
   try {
     await progress.waitUntilReady();
+    options.presentationSignal?.throwIfAborted();
   } catch (error) {
     progress.dispose();
     throw error;
+  } finally {
+    options.presentationSignal?.removeEventListener(
+      'abort',
+      disposeAbortedPresentation,
+    );
   }
 
-  return {
-    progress,
-    async handleExecute(message) {
-      const preparation = prepareMainViewExecutionRequest(message);
-      if (!preparation.valid) {
-        await options.host.showErrorMessage(preparation.message);
-        return;
-      }
-
-      await progress.runExecution(preparation.request);
-    },
-    dispose() {
-      progress.dispose();
-    },
-    flush() {
-      return progress.flush();
-    },
-  };
+  return progress;
 }

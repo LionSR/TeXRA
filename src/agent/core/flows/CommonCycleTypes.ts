@@ -30,7 +30,10 @@ export const BaseCycleFieldsSchema = z.object({
   lastError: RetryErrorInfoSchema.optional(),
 });
 
-export type BaseCycleFields = z.infer<typeof BaseCycleFieldsSchema>;
+/** Runtime cycle fields, including non-persisted failure-log bookkeeping. */
+export type BaseCycleFields = z.infer<typeof BaseCycleFieldsSchema> & {
+  failureLogEmitted?: boolean;
+};
 
 /** Result type for nodes that can be skipped based on flow state. */
 export type SkippableNodeResult<T> =
@@ -46,6 +49,7 @@ export function resetCycleState<T extends BaseCycleFields>(
   state.responseTimeMs = undefined;
   state.stopReason = undefined;
   state.lastError = undefined;
+  state.failureLogEmitted = undefined;
 
   for (const field of additionalFields) {
     state[field] = undefined as T[typeof field];

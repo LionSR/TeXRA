@@ -1,3 +1,4 @@
+import { createChannelTrace } from '@agent/trace';
 import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
@@ -12,6 +13,13 @@ import type {
   UserQuestionPermission,
 } from '@shared/schemas';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
+import type {
+  AgentRuntimeEvent,
+  AgentRuntimeEventPayloads,
+  AgentRuntimeHost,
+} from './AgentRuntimeHost';
+
+const logger = createChannelTrace('SessionHostInteractions');
 
 export type DiagnosticsReader = (path: string) => Promise<GenericDiagnostic[]>;
 
@@ -42,6 +50,12 @@ export interface HostInteractionOptions {
   readonly timeoutMs?: number;
   /** Internal identity used to cancel one forwarded presentation request. */
   readonly cancellationScope?: object;
+}
+
+/** Delivery policy for a notification owned by a process session. */
+interface SessionPresentationOptions {
+  /** Retain the notice for the next attachment instead of dropping it now. */
+  readonly replayWhenAttached?: boolean;
 }
 
 export type PlanApprovalResult =
@@ -269,12 +283,19 @@ export function matchesCancelSelector(
  * adapters own presentation, request-id resolution, and local disposal.
  */
 export interface HostInteractions {
+  /** Present an ignorable runtime event through the active host attachment. */
+  emit?<K extends AgentRuntimeEvent>(
+    event: K,
+    payload: AgentRuntimeEventPayloads[K],
+  ): void;
   /** Read diagnostics from the active host integration. */
   readonly readDiagnostics?: DiagnosticsReader;
   /** Add one manual criticism to the active host diagnostics surface. */
   readonly addCriticism?: AddCriticismSink;
   /** Surface unavailable tool groups through the active host UI. */
   readonly notifyUnavailableTools?: ToolNotificationHandler;
+  /** Present non-error information through the currently attached host. */
+  showInfoMessage?(message: string): Promise<void> | void;
   requestToolEditApproval?(
     request: ToolEditApprovalRequest,
     options?: HostInteractionOptions,
@@ -330,9 +351,14 @@ interface PendingSessionInteraction {
  * object once, while hosts may attach and detach presentation adapters without
  * cancelling requests owned by a still-running session.
  */
-export class SessionHostInteractions implements HostInteractions {
+export class SessionHostInteractions
+  implements HostInteractions, AgentRuntimeHost
+{
   private readonly attachments: HostInteractionAttachment[] = [];
   private readonly pending = new Set<PendingSessionInteraction>();
+  private readonly pendingPresentationReplays: Array<
+    (interactions: HostInteractions) => Promise<void> | void
+  > = [];
   private attachmentVersion = 0;
   private disposed = false;
 
@@ -347,6 +373,7 @@ export class SessionHostInteractions implements HostInteractions {
     };
     this.attachments.push(attachment);
     this.activateCurrentAttachment();
+    queueMicrotask(() => this.replayPendingPresentations(attachment));
     return () => {
       if (attachment.disposed) return;
       const wasActive = this.activeAttachment === attachment;
@@ -356,6 +383,21 @@ export class SessionHostInteractions implements HostInteractions {
       if (wasActive) this.activateCurrentAttachment();
       interactions.dispose?.();
     };
+  }
+
+  emit<K extends AgentRuntimeEvent>(
+    event: K,
+    payload: AgentRuntimeEventPayloads[K],
+    options: SessionPresentationOptions = {},
+  ): void {
+    const active = this.activeAttachment;
+    if (active) {
+      active.interactions.emit?.(event, payload);
+    } else if (options.replayWhenAttached && !this.disposed) {
+      this.pendingPresentationReplays.push((interactions) =>
+        interactions.emit?.(event, payload),
+      );
+    }
   }
 
   get readDiagnostics(): DiagnosticsReader | undefined {
@@ -368,6 +410,19 @@ export class SessionHostInteractions implements HostInteractions {
 
   get notifyUnavailableTools(): ToolNotificationHandler | undefined {
     return this.activeAttachment?.interactions.notifyUnavailableTools;
+  }
+
+  showInfoMessage(
+    message: string,
+    options: SessionPresentationOptions = {},
+  ): Promise<void> | void {
+    const active = this.activeAttachment;
+    if (active) return active.interactions.showInfoMessage?.(message);
+    if (options.replayWhenAttached && !this.disposed) {
+      this.pendingPresentationReplays.push((interactions) =>
+        interactions.showInfoMessage?.(message),
+      );
+    }
   }
 
   requestToolEditApproval(
@@ -498,19 +553,8 @@ export class SessionHostInteractions implements HostInteractions {
       }
     }
     this.attachments.length = 0;
+    this.pendingPresentationReplays.length = 0;
     if (firstError !== undefined) throw firstError;
-  }
-
-  /**
-   * Return a presentation-only adapter for another session owner. Requests
-   * pass directly to this slot's current concrete host, so forwarding does not
-   * create a second session-owned pending record. Disposal is deliberately
-   * absent: detaching a forwarder must not dispose the target host adapter.
-   */
-  createForwarder(): HostInteractions {
-    return createHostInteractionsForwarder(
-      () => this.activeAttachment?.interactions,
-    );
   }
 
   private get activeAttachment(): HostInteractionAttachment | undefined {
@@ -547,6 +591,32 @@ export class SessionHostInteractions implements HostInteractions {
     if (!this.activeAttachment) return;
     for (const pending of this.pending) {
       if (!pending.cancellationRequested) this.dispatch(pending);
+    }
+  }
+
+  private replayPendingPresentations(
+    attachment: HostInteractionAttachment,
+  ): void {
+    while (
+      !attachment.disposed &&
+      this.activeAttachment === attachment &&
+      this.pendingPresentationReplays.length > 0
+    ) {
+      const replay = this.pendingPresentationReplays.shift();
+      if (!replay) return;
+      try {
+        void Promise.resolve(replay(attachment.interactions)).catch(
+          (error: unknown) => {
+            logger.warn('Failed to replay a session presentation notice', {
+              data: error,
+            });
+          },
+        );
+      } catch (error) {
+        logger.warn('Failed to replay a session presentation notice', {
+          data: error,
+        });
+      }
     }
   }
 
@@ -600,117 +670,4 @@ export class SessionHostInteractions implements HostInteractions {
       this.attachmentVersion === version
     );
   }
-}
-
-/**
- * Build a non-owning adapter for forwarding one session's requests to another.
- * Disposal is intentionally not forwarded: detaching the adapter must not
- * dispose the target session's interaction owner.
- */
-function createHostInteractionsForwarder(
-  target: () => HostInteractions | undefined,
-): HostInteractions {
-  const pending = new Set<{
-    readonly kind: PendingInteractionKind;
-    readonly streamId?: StreamTabId;
-    readonly cancellationScope: object;
-  }>();
-
-  const forward = <T>(
-    kind: PendingInteractionKind,
-    streamId: StreamTabId | null | undefined,
-    options: HostInteractionOptions | undefined,
-    invoke: (
-      interactions: HostInteractions,
-      options: HostInteractionOptions,
-    ) => Promise<T> | undefined,
-  ): Promise<T> | undefined => {
-    const interactions = target();
-    if (!interactions) return undefined;
-    const cancellationScope = options?.cancellationScope ?? {};
-    const record = {
-      kind,
-      streamId: streamId ?? undefined,
-      cancellationScope,
-    };
-    pending.add(record);
-    let result: Promise<T> | undefined;
-    try {
-      result = invoke(interactions, { ...options, cancellationScope });
-    } catch (error) {
-      pending.delete(record);
-      throw error;
-    }
-    if (!result) {
-      pending.delete(record);
-      return undefined;
-    }
-    return result.finally(() => pending.delete(record));
-  };
-
-  return {
-    get readDiagnostics() {
-      return target()?.readDiagnostics;
-    },
-    get addCriticism() {
-      return target()?.addCriticism;
-    },
-    get notifyUnavailableTools() {
-      return target()?.notifyUnavailableTools;
-    },
-    requestToolEditApproval: (request, options) =>
-      forward(
-        'toolEdit',
-        request.streamId as StreamTabId | null | undefined,
-        options,
-        (interactions, forwardedOptions) =>
-          interactions.requestToolEditApproval?.(request, forwardedOptions),
-      ),
-    requestBashApproval: (request, options) =>
-      forward('bash', request.streamId, options, (interactions, forwarded) =>
-        interactions.requestBashApproval?.(request, forwarded),
-      ),
-    requestPlanApproval: (request, options) =>
-      forward('plan', request.streamId, options, (interactions, forwarded) =>
-        interactions.requestPlanApproval?.(request, forwarded),
-      ),
-    requestAgentProposal: (request, options) =>
-      forward(
-        'proposal',
-        request.streamId,
-        options,
-        (interactions, forwarded) =>
-          interactions.requestAgentProposal?.(request, forwarded),
-      ),
-    requestRetry: (request, options) =>
-      forward('retry', request.streamId, options, (interactions, forwarded) =>
-        interactions.requestRetry?.(request, forwarded),
-      ),
-    askUserQuestion: (request, options) =>
-      forward(
-        'userQuestion',
-        request.streamId,
-        options,
-        (interactions, forwarded) =>
-          interactions.askUserQuestion?.(request, forwarded),
-      ),
-    openExternalInquiry: (request) => target()?.openExternalInquiry?.(request),
-    setApprovalBypassState: (update) =>
-      target()?.setApprovalBypassState?.(update),
-    cancel: (selector = {}) => {
-      const interactions = target();
-      if (!interactions) return;
-      const scopes = [...pending].filter((record) =>
-        matchesCancelSelector(record, selector),
-      );
-      for (const scope of scopes) {
-        interactions.cancel({
-          kind: scope.kind,
-          streamId: scope.streamId ?? null,
-          cause: selector.cause,
-          cancellationScope: scope.cancellationScope,
-        });
-      }
-    },
-  };
 }

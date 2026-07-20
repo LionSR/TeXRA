@@ -130,7 +130,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
         },
       },
       lifecycle: {
-        stopStream: (stream, _ownerSession, options) =>
+        stopStream: (stream, options) =>
           this.messageHandler.stopStream(stream, options),
         cleanupDeletedStream: (stream) =>
           this.messageHandler.cleanupDeletedStream(stream),

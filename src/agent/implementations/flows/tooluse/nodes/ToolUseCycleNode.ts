@@ -34,6 +34,7 @@ type ToolUseCycleOutcome =
       message: string;
       userRetryable: boolean;
       lastError?: RetryErrorInfo;
+      failureLogEmitted: boolean;
     };
 
 export class ToolUseCycleNode<C> extends Node<
@@ -159,6 +160,7 @@ export class ToolUseCycleNode<C> extends Node<
           message: lastError.message,
           userRetryable: lastError.userRetryable,
           lastError,
+          failureLogEmitted: roundShared.failureLogEmitted ?? false,
         };
       }
       if (roundOutcome === RUN_OUTCOME.CANCELLED) {
@@ -185,6 +187,7 @@ export class ToolUseCycleNode<C> extends Node<
     return {
       outcome: 'failed',
       message: error.message,
+      failureLogEmitted: false,
       ...buildFailedRetryInfo(error),
     };
   }
@@ -237,13 +240,14 @@ export class ToolUseCycleNode<C> extends Node<
           message: execRes.message,
           userRetryable: execRes.userRetryable,
         };
-        // Surface the failure in the transcript. Without this the WaitNode
-        // resets lastError when the user sends a follow-up (see
-        // ToolUseWaitNode.post), so a recurring failure (e.g. missing API
-        // key) leaves the agent stuck in "idle" with no visible reason.
-        this.services.logger.error(execRes.message, {
-          messageType: MESSAGE_TYPES.ERROR,
-        });
+        if (!execRes.failureLogEmitted) {
+          // Outer cycle failures have not passed through RetryState's
+          // structured error logger. Surface them before WaitNode resets
+          // lastError on a follow-up.
+          this.services.logger.error(execRes.message, {
+            messageType: MESSAGE_TYPES.ERROR,
+          });
+        }
         break;
       case 'cancelled':
         shared.userCancelledRetry = true;

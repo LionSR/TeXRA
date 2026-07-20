@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.8] - Unreleased
+
+### Extension (VS Code)
+
+#### Bug Fixes
+
+- **Kimi K3 stays easy to find when its route changes** — the model remains
+  under Moonshot while showing whether requests use Moonshot, Kimi Code, or
+  OpenRouter.
+
+### CLI
+
+#### Bug Fixes
+
+- **Model failures show their reason** — failed model requests now include a
+  concise provider message and are no longer labeled as tool failures.
+
 ## [0.39.7] - 2026-07-20
 
 ### Shared (all surfaces)

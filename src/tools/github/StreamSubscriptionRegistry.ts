@@ -61,7 +61,7 @@ interface BoundSubscription {
    * onEvent fires later from a detached polling timer where the ALS is empty, so
    * it must pass this session to sendFollowUp explicitly — otherwise sendFollowUp
    * falls back to defaultSession() and the follow-up is misrouted/dropped on a
-   * non-default session (e.g. a desktop per-window session). Mirrors
+   * non-default session (for example, the desktop process session). Mirrors
    * ExecutionSubscriptionBinder.
    */
   session: SessionHandle;

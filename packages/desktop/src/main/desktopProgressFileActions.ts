@@ -42,7 +42,7 @@ type DesktopProgressFileActionUi = Pick<
  * full progress bridge.
  */
 export interface DesktopProgressFileActionHost {
-  runExecution(request: ValidatedExecutionRequest): Promise<void>;
+  startExecution(request: ValidatedExecutionRequest): void;
   listWorkspaceCandidateFiles(): Promise<string[]>;
 }
 
@@ -72,8 +72,8 @@ export class DesktopProgressFileActions {
     private readonly host: DesktopProgressFileActionHost,
   ) {}
 
-  async openFileCompile(filePath: string): Promise<void> {
-    await this.ui.openBuildDisplay(toFileLocation(filePath));
+  openFileCompile(filePath: string): Promise<void> {
+    return this.ui.openBuildDisplay(toFileLocation(filePath));
   }
 
   async compareFiles(baseFile: string, editedFile: string): Promise<void> {
@@ -102,7 +102,7 @@ export class DesktopProgressFileActions {
       await this.ui.showErrorMessage(`Merge: ${validation.message}`);
       return;
     }
-    await this.host.runExecution(validation.request);
+    this.host.startExecution(validation.request);
   }
 
   async acceptEditedFile(
@@ -244,7 +244,7 @@ export class DesktopProgressFileActions {
   }
 
   /** Open a generated diff file via the desktop LaTeX build display. */
-  private async openDiffOutput(diffFilePath: string): Promise<void> {
-    await this.ui.openBuildDisplay(createExternalLocation(diffFilePath));
+  private openDiffOutput(diffFilePath: string): Promise<void> {
+    return this.ui.openBuildDisplay(createExternalLocation(diffFilePath));
   }
 }

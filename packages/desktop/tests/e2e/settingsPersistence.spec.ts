@@ -1,14 +1,6 @@
-import {
-  mkdirSync,
-  mkdtempSync,
-  realpathSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 
 import { test, expect } from '@playwright/test';
 
@@ -18,6 +10,10 @@ import {
   launchTexraApp,
   type LaunchedApp,
 } from './electronApp.js';
+import {
+  cleanupDirectory,
+  findWorkspaceStoragePath,
+} from './workspaceStorageFixture.js';
 
 const SETTINGS_TAB_INDEX = {
   MEMORY: 0,
@@ -32,47 +28,6 @@ const MEMORY_FILE_CONTENT = `${MEMORY_PREVIEW_TEXT}
 It verifies that the same workspace storage is read after relaunch.
 `;
 
-function tryReadWorkspaceSidecar(path: string): string | undefined {
-  try {
-    const sidecar = JSON.parse(readFileSync(path, 'utf8')) as {
-      path?: unknown;
-    };
-    return typeof sidecar.path === 'string' ? resolve(sidecar.path) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function findWorkspaceStoragePath(input: {
-  userDataPath: string;
-  workspacePath: string;
-}): string {
-  const targetWorkspacePath = realpathSync(input.workspacePath);
-
-  for (const storageRoot of readdirSync(input.userDataPath, {
-    withFileTypes: true,
-  })) {
-    if (!storageRoot.isDirectory()) continue;
-
-    const storageRootPath = join(input.userDataPath, storageRoot.name);
-    for (const candidate of readdirSync(storageRootPath, {
-      withFileTypes: true,
-    })) {
-      if (!candidate.isDirectory()) continue;
-
-      const candidatePath = join(storageRootPath, candidate.name);
-      const sidecarPath = join(candidatePath, '_workspace.json');
-      if (tryReadWorkspaceSidecar(sidecarPath) === targetWorkspacePath) {
-        return candidatePath;
-      }
-    }
-  }
-
-  throw new Error(
-    `No TeXRA workspace storage directory found for ${targetWorkspacePath}`,
-  );
-}
-
 function writeMemoryEntry(input: {
   userDataPath: string;
   workspacePath: string;
@@ -80,15 +35,6 @@ function writeMemoryEntry(input: {
   const memoryDir = join(findWorkspaceStoragePath(input), 'memories');
   mkdirSync(memoryDir, { recursive: true });
   writeFileSync(join(memoryDir, MEMORY_FILE_NAME), MEMORY_FILE_CONTENT, 'utf8');
-}
-
-function cleanupDirectory(path: string): void {
-  try {
-    rmSync(path, { recursive: true, force: true });
-  } catch {
-    // Best-effort cleanup. A stale temp dir is preferable to masking the
-    // assertion that actually failed.
-  }
 }
 
 async function setRoute(
