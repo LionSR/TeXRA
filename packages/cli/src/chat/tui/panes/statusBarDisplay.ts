@@ -777,7 +777,7 @@ const BYPASS_BADGES: ReadonlyArray<{
   readonly text: string;
   readonly badgeColor: typeof COLOR_ERROR | typeof COLOR_WARNING;
 }> = [
-  { field: 'superYolo', text: 'YOLO', badgeColor: COLOR_ERROR },
+  { field: 'superYolo', text: 'AUTO-TASK', badgeColor: COLOR_ERROR },
   { field: 'bash', text: 'AUTO-BASH', badgeColor: COLOR_WARNING },
   { field: 'toolEdit', text: 'AUTO-EDIT', badgeColor: COLOR_WARNING },
 ];
