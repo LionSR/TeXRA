@@ -33,17 +33,22 @@ function createAgentHandle(id: string, streamId: StreamTabId) {
 function createWindow(initialTitle: string) {
   const webContents = new EventEmitter();
   let title = initialTitle;
+  let destroyed = false;
   const setTitle = vi.fn((nextTitle: string) => {
     title = nextTitle;
   });
   return {
     window: {
       getTitle: () => title,
+      isDestroyed: () => destroyed,
       setTitle,
       webContents: Object.assign(webContents, { isDestroyed: () => false }),
     },
     setTitle,
     webContents,
+    destroy: () => {
+      destroyed = true;
+    },
   };
 }
 
@@ -186,6 +191,26 @@ describe('desktop process-session window title', () => {
       const handle = createAgentHandle(
         'execution:after-close',
         'stream:after-close' as StreamTabId,
+      );
+      session.executions.trackAgentExecution(handle, {
+        status: STREAM_PHASE.RUNNING,
+      });
+      expect(view.setTitle).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+      session.dispose();
+    }
+  });
+
+  it('does not write the native title after window destruction', () => {
+    const session = createTestSession();
+    const view = createWindow('TeXRA — geometry');
+    const dispose = installTitle(view.window, session);
+    try {
+      view.destroy();
+      const handle = createAgentHandle(
+        'execution:destroyed-window',
+        'stream:destroyed-window' as StreamTabId,
       );
       session.executions.trackAgentExecution(handle, {
         status: STREAM_PHASE.RUNNING,

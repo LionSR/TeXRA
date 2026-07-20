@@ -690,7 +690,11 @@ export class SessionHostInteractions
 
   private notifyPendingCountChange(): void {
     for (const listener of this.pendingCountListeners) {
-      listener(this.pending.size);
+      try {
+        listener(this.pending.size);
+      } catch (error) {
+        logger.warn('Pending interaction observer failed', { data: error });
+      }
     }
   }
 

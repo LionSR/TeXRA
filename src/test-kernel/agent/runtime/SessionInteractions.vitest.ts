@@ -730,6 +730,27 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
     expect(pendingCounts).toEqual([1, 0]);
   });
 
+  it('does not let a pending observer interrupt request cleanup', async () => {
+    const session = createTestSession();
+    session.interactions.onPendingCountChange(() => {
+      throw new Error('title projection failed');
+    });
+    const pending = session.interactions.requestPlanApproval({
+      approvalId: 'approval:throwing-observer',
+      streamId,
+      plan,
+      goalEnabled: false,
+    });
+
+    expect(session.interactions.pendingCount).toBe(1);
+    session.dispose();
+
+    await expect(pending).resolves.toEqual({
+      action: 'reject',
+      feedback: 'Session disposed.',
+    });
+  });
+
   it('resolves a plan approval first-wins through the session slot', async () => {
     const { session, uiEvents, emitted, interactions } = createPortSession();
     try {

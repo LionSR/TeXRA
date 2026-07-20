@@ -24,7 +24,7 @@ type DesktopTitleSession = Pick<
 
 type DesktopTitleWindow = Pick<
   BrowserWindow,
-  'getTitle' | 'setTitle' | 'webContents'
+  'getTitle' | 'isDestroyed' | 'setTitle' | 'webContents'
 >;
 
 /** Derive aggregate activity from canonical process-session owners. */
@@ -34,12 +34,12 @@ export function getDesktopSessionActivity(session: {
   readonly status: Pick<StreamStatusMachine, 'get'>;
 }): DesktopSessionActivity {
   if (session.interactions.pendingCount > 0) return 'approval';
-  const hasRunningAgent = session.executions
-    .getAgentHandles()
-    .some(
-      (handle) =>
-        session.status.get(handle.childStreamId) === STREAM_PHASE.RUNNING,
-    );
+  const hasRunningAgent = session.executions.getAgentHandles().some(
+    (handle) =>
+      // Deliberately exact: provisional/restored and WAITING-like phases
+      // must not project a running native title.
+      session.status.get(handle.childStreamId) === STREAM_PHASE.RUNNING,
+  );
   return hasRunningAgent ? 'running' : 'idle';
 }
 
@@ -65,7 +65,7 @@ export function installDesktopWindowTitle(
   let currentTitle = window.getTitle();
   let disposed = false;
   const update = (): void => {
-    if (disposed) return;
+    if (disposed || window.isDestroyed()) return;
     const title = getDesktopWindowTitle(session, workspacePath);
     if (title === currentTitle) return;
     currentTitle = title;
