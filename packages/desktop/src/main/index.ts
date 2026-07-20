@@ -1144,6 +1144,9 @@ function createWindow(options: {
     executionsWatcher?.close();
     if (mainWindow === window) {
       mainWindow = null;
+      if (process.platform === 'darwin') {
+        Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }]));
+      }
     }
     disposeAgentResumeHandler();
     agentExecutionShutdownRegistration?.dispose();
