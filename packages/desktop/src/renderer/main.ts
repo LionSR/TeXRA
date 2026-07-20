@@ -703,7 +703,16 @@ window.addEventListener('message', (event) => {
 // Wire <stream-tabs> + <stream-conversation> events to shared handlers
 // =============================================================================
 
+// Each guard below protects its wiring function against double-registration:
+// a bootstrap recovery attempt that itself fails re-renders the same
+// fallback UI, whose button re-invokes recoverFromBootstrapFallback()
+// against these same module-level railTabs/conversationView elements, which
+// never get recreated or torn down for the life of the renderer.
+let railTabsWired = false;
+
 function wireRailTabs(): void {
+  if (railTabsWired) return;
+  railTabsWired = true;
   railTabs.addEventListener('stream-switch', ((e: CustomEvent) => {
     handleStreamSwitch(e);
     // Switching to a stream pulls the user out of the launcher view.
@@ -720,7 +729,11 @@ function wireRailTabs(): void {
   railTabs.addEventListener('delete-all', handleDeleteAll as EventListener);
 }
 
+let conversationWired = false;
+
 function wireConversation(): void {
+  if (conversationWired) return;
+  conversationWired = true;
   conversationView.addEventListener(
     'stream-switch',
     handleStreamSwitch as EventListener,

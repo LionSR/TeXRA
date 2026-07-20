@@ -91,6 +91,19 @@ export class TextEditorTool extends defineTool({
   // File history for undo operations
   private fileHistory: Map<string, string[]> = new Map();
 
+  /**
+   * Cap on retained full-file snapshots per (execution, file) key.
+   * `undo_edit` only ever pops the most recent snapshot (`history.at(-1)`),
+   * so trimming the oldest entries beyond this depth never changes that
+   * behavior — deep multi-level undo past this many edits in a single
+   * execution isn't a documented or relied-upon usage pattern. Without this,
+   * a long execution that edits the same file many times without ever
+   * calling undo_edit retains every historical version of that file for the
+   * rest of the process's lifetime (fileHistory is a process-wide
+   * singleton, never cleared per-execution).
+   */
+  private static readonly MAX_HISTORY_PER_FILE = 50;
+
   constructor(apiType: TextEditorApiType = 'text_editor_20250124') {
     const name = API_TYPE_TO_NAME[apiType];
     super({ name });
@@ -515,6 +528,9 @@ export class TextEditorTool extends defineTool({
     const history = this.fileHistory.get(key);
     if (history) {
       history.push(content);
+      if (history.length > TextEditorTool.MAX_HISTORY_PER_FILE) {
+        history.shift();
+      }
     } else {
       this.fileHistory.set(key, [content]);
     }

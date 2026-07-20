@@ -45,6 +45,7 @@ import {
   removePermissionsForStream,
   updateParentStreamId,
 } from '../stateUtils';
+import { logListStateKey, webviewStorage } from '../webviewStorage';
 
 // ============================================================
 // Helpers
@@ -180,6 +181,7 @@ export const streamLifecycleHandlers = {
     clearCopyContentStore();
     clearProposalInputStore();
     deleteFollowUpInputTransientState(streamId);
+    webviewStorage.delete(logListStateKey(streamId));
 
     // Remove permissions for the deleted stream to prevent orphaned entries
     permissions$.set(removePermissionsForStream(permissions$.get(), streamId));
@@ -205,6 +207,13 @@ export const streamLifecycleHandlers = {
 
     // Clear all permissions — no streams means no valid permissions
     permissions$.set([]);
+
+    // Every remaining stream's persisted toggle state loses its only future
+    // consumer here (the stream itself is about to disappear from
+    // streamById below) — read the ids before the reset wipes them.
+    for (const streamId of appState.get().streamById.keys()) {
+      webviewStorage.delete(logListStateKey(streamId));
+    }
 
     appState.set(
       create(appState.get(), (draft) => {
