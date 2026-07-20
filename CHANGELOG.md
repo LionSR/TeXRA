@@ -36,6 +36,13 @@ All notable changes to this project will be documented in this file.
 - **Model failures show their reason** — failed model requests now include a
   concise provider message and are no longer labeled as tool failures.
 
+### Desktop
+
+#### New Features
+
+- **Window titles show session activity** — desktop windows indicate when
+  agents are running or waiting for approval, including after a macOS reopen.
+
 ## [0.39.7] - 2026-07-20
 
 ### Shared (all surfaces)
