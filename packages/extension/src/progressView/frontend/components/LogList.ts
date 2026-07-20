@@ -36,7 +36,7 @@ import { PersistedState } from '@shared/state/PersistedState';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { copyWithFeedback } from '@shared/utils/clipboard';
-import { webviewStorage } from '../webviewStorage';
+import { logListStateKey, webviewStorage } from '../webviewStorage';
 import { getComposedPathElement } from '../utils';
 
 // Local imports - progress view contexts
@@ -213,7 +213,7 @@ export class LogList extends LitElement {
 
     const stateManager = new PersistedState(
       this.storage,
-      `logListState:${streamId}`,
+      logListStateKey(streamId),
       LogListStateSchema,
     );
     const toggleStates = new ToggleStateStore(() => {
