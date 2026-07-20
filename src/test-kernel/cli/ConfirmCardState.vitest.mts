@@ -150,6 +150,12 @@ describe('CLI confirm-card key handling', () => {
       key: 'a',
       action: DELEGATION_APPROVAL_COPY.cliCompactAction,
     });
+    expect(DELEGATION_APPROVAL_COPY.cliAction).toBe(
+      'approve this and all later tasks, edits & commands in this run',
+    );
+    expect(DELEGATION_APPROVAL_COPY.cliCompactAction).toBe(
+      'all later tasks + actions in run',
+    );
   });
 
   it('keeps the approve-all hint on mid-width terminals', () => {
