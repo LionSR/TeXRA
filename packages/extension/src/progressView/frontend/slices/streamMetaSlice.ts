@@ -15,6 +15,7 @@ import {
 } from '@shared/schemas';
 import {
   EMPTY_STREAM_META,
+  PROCESS_OUTPUT_MAX_CHARS,
   reduceStreamMeta,
 } from '@shared/streams/streamMetaReducer';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
@@ -51,7 +52,10 @@ export function takePendingDescription(
  * per stdout/stderr, trimming to 80k when the cap is crossed so output can keep
  * appending for a while before the next reset. The shared reducer applies it.
  */
-const WEBVIEW_OUTPUT_CAP = { maxChars: 100_000, retainChars: 80_000 } as const;
+const WEBVIEW_OUTPUT_CAP = {
+  maxChars: PROCESS_OUTPUT_MAX_CHARS,
+  retainChars: 80_000,
+} as const;
 
 function upsertSortedStreamInfo(
   streams: Map<StreamTabId, StreamTabInfo>,
