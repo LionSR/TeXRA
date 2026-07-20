@@ -4,7 +4,6 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
-import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 import type {
   AppSignal,
   AppSignalPayloads,
@@ -17,24 +16,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
-
-class MemoryMementoStorage implements MementoStorage {
-  private readonly values = new Map<string, unknown>();
-
-  get<T>(key: string): T | undefined;
-  get<T>(key: string, defaultValue: T): T;
-  get<T>(key: string, defaultValue?: T): T | undefined {
-    return this.values.has(key) ? (this.values.get(key) as T) : defaultValue;
-  }
-
-  async update<T>(key: string, value: T | undefined): Promise<void> {
-    if (value === undefined) {
-      this.values.delete(key);
-      return;
-    }
-    this.values.set(key, value);
-  }
-}
+import { FakeStateStore } from '@test/support/FakePlatform';
 
 class MemoryAppSignals implements AppSignalsLike {
   private readonly listeners = new Map<
@@ -72,7 +54,7 @@ class MemoryAppSignals implements AppSignalsLike {
 
 function createBackend(): ProgressBackend {
   return new ProgressBackend({
-    storage: new MemoryMementoStorage(),
+    storage: new FakeStateStore(),
     sendMessage: () => true,
     hasTarget: () => true,
     approvals: {

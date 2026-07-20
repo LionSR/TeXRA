@@ -11,7 +11,7 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
+import type { StateStore } from '@platform/interfaces';
 import {
   AgentCategoryFilterSchema,
   LOG_LEVELS,
@@ -147,7 +147,7 @@ export class ProgressViewState {
   private readonly session: SessionHandle;
 
   constructor(
-    storage: MementoStorage,
+    storage: StateStore,
     snapshots = new StreamSnapshotStore(),
     session: SessionHandle = defaultSession(),
   ) {

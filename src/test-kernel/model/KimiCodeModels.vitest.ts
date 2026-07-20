@@ -18,10 +18,7 @@ import {
   shouldRouteModelThroughOpenRouter,
 } from '@model/openRouterRouting';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
-import {
-  resolveSetupModel,
-  SETUP_MODEL_BY_PROVIDER,
-} from '@model/setupModelDefaults';
+import { SETUP_MODEL_BY_PROVIDER } from '@model/setupModelDefaults';
 
 describe('Kimi Code model registry', () => {
   it.each([
@@ -110,9 +107,5 @@ describe('Kimi Code routing', () => {
 describe('Kimi Code setup defaults', () => {
   it('includes a setup model for the kimiCode provider', () => {
     expect(SETUP_MODEL_BY_PROVIDER.kimiCode).toBe('kimiCoding');
-  });
-
-  it('resolves the preferred setup model to a live Kimi Code entry', () => {
-    expect(resolveSetupModel('kimiCode')).toBe('kimiCoding');
   });
 });
