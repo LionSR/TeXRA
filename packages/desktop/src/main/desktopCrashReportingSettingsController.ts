@@ -11,24 +11,21 @@ import {
   setDesktopCrashReportingEnabled,
 } from './desktopCrashReporting.js';
 
-interface DesktopCrashReportingRendererPort {
-  postToRenderer(message: unknown): void;
-}
-
-interface DesktopCrashReportingPromptPort {
-  input(input: { title: string; prompt: string }): Promise<string | undefined>;
-}
-
-interface DesktopCrashReportingInitializationPort {
-  initialize(): Promise<void>;
-}
-
 interface DesktopCrashReportingSettingsControllerOptions {
   readonly state: StateStore;
   readonly secrets: PlatformSecrets;
-  readonly renderer: DesktopCrashReportingRendererPort;
-  readonly prompt: DesktopCrashReportingPromptPort;
-  readonly initialization: DesktopCrashReportingInitializationPort;
+  readonly renderer: {
+    postToRenderer(message: unknown): void;
+  };
+  readonly prompt: {
+    input(input: {
+      title: string;
+      prompt: string;
+    }): Promise<string | undefined>;
+  };
+  readonly initialization: {
+    initialize(): Promise<void>;
+  };
 }
 
 export interface DesktopCrashReportingSettingsController {

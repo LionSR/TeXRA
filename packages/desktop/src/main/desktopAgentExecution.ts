@@ -96,7 +96,6 @@ import {
   type DesktopHostInteractions,
 } from './desktopHostInteractions.js';
 import { DesktopExecutionRebinder } from './desktopExecutionRebinder.js';
-import { toLogData } from './desktopLogUtils.js';
 import {
   DesktopProgressFileActions,
   type DesktopLatexdiffRunContext,
@@ -114,6 +113,11 @@ const DESKTOP_UNAVAILABLE_TOOLS: readonly RegisteredToolName[] = [
   'inline_comment',
   DIAGNOSTICS_READ_RUNTIME_CAPABILITY,
 ];
+
+/** Normalize a caught error into a logger `data` argument, preserving Error instances as-is. */
+function toLogData(error: unknown): unknown {
+  return error instanceof Error ? error : { error };
+}
 export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): boolean | void;
   host: DesktopAgentExecutionHost;

@@ -26,7 +26,7 @@ import {
   type ApprovalRequestHandlerSet,
   type BuildApprovalRequestHandlerSetParams,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
-import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
+import type { StateStore } from '@platform/interfaces';
 import type {
   ProgressViewOutboundMessage,
   SetActiveStreamPayload,
@@ -66,7 +66,7 @@ interface ProgressBackendLifecycleOptions {
 }
 
 export interface ProgressBackendOptions {
-  storage: MementoStorage;
+  storage: StateStore;
   snapshots?: StreamSnapshotStore;
   sendMessage: ProgressViewMessageSender;
   hasTarget(): boolean;

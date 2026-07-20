@@ -10,7 +10,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { ProgressFactApplier } from '@controllers/progressView/backend/events/ProgressFactApplier';
 import { ProgressViewState } from '@controllers/progressView/backend/state/ProgressViewState';
 import type { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
-import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 import type { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
 import type {
   ActiveChildInfo,
@@ -25,21 +24,7 @@ import type {
   TokenUsageStats,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-
-class MemoryMementoStorage implements MementoStorage {
-  private readonly values = new Map<string, unknown>();
-
-  get<T>(key: string): T | undefined;
-  get<T>(key: string, defaultValue: T): T;
-  get<T>(key: string, defaultValue?: T): T | undefined {
-    return this.values.has(key) ? (this.values.get(key) as T) : defaultValue;
-  }
-
-  update<T>(key: string, value: T): Thenable<void> {
-    this.values.set(key, value);
-    return Promise.resolve();
-  }
-}
+import { FakeStateStore } from '@test/support/FakePlatform';
 
 const todo: TodoItem = {
   content: 'Hydrate work-plan state',
@@ -96,7 +81,7 @@ const compileFailure: CompileFailure = {
 };
 
 async function createLoadedState(): Promise<ProgressViewState> {
-  const state = new ProgressViewState(new MemoryMementoStorage());
+  const state = new ProgressViewState(new FakeStateStore());
   await state.snapshots.load([]);
   return state;
 }
