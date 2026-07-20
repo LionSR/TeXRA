@@ -151,8 +151,12 @@ function SessionRow({
   const roundLabel = formatRoundStageLabel(session.slice?.roundStage);
   // The resolved model is per-agent identity (a workflow run's grandchildren
   // can each resolve a different model); the list-root row is the conversation
-  // itself, whose model already rides the status bar.
-  const modelLabel = isListRoot ? undefined : session.slice?.model;
+  // itself, whose model already rides the status bar. A background bash stream
+  // inherits its parent's configuration, but the shell does not use a model.
+  const modelLabel =
+    !isListRoot && session.toolName !== 'bash'
+      ? session.slice?.model
+      : undefined;
   const metadata = metadataColumn
     ? childRowMetadataText({
         elapsed,
