@@ -1274,7 +1274,6 @@ describe('finalizeSettledPrefix', () => {
       text: '',
       finalized: false,
       toolUse: {
-        parsed: {},
         toolName: 'Bash',
         errorText: '',
         outputText: '',
@@ -1786,6 +1785,57 @@ describe('CLI transcript state', () => {
     expect(entries[0]?.synthetic).toBeUndefined();
   });
 
+  it('keeps only a summary for an unfocused dormant transcript', () => {
+    activeStreamId.set(root);
+    const logger = createRunTrace(child1, defaultSession().transcripts).trace;
+    logger.info('Check the second lemma.', {
+      messageType: MESSAGE_TYPES.USER_MESSAGE,
+    });
+    logger.info('The second lemma is valid.', {
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    });
+    patchStream(child1, (slice) => ({
+      ...slice,
+      status: STREAM_PHASE.WAITING,
+    }));
+
+    syncStreamLog(child1);
+
+    expect(streams.get().get(child1)).toMatchObject({
+      description: 'The second lemma is valid.',
+      entries: [],
+      status: STREAM_PHASE.WAITING,
+    });
+  });
+
+  it('restores an exact dormant transcript when it is requested', () => {
+    activeStreamId.set(root);
+    const logger = createRunTrace(child1, defaultSession().transcripts).trace;
+    logger.info('Check the second lemma.', {
+      messageType: MESSAGE_TYPES.USER_MESSAGE,
+    });
+    logger.info('The second lemma is valid.', {
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    });
+    patchStream(child1, (slice) => ({
+      ...slice,
+      status: STREAM_PHASE.WAITING,
+    }));
+    syncStreamLog(child1);
+
+    syncStreamLog(child1, { forceFull: true });
+
+    expect(
+      streams
+        .get()
+        .get(child1)
+        ?.entries.map((entry) => [entry.role, entry.text]),
+    ).toEqual([
+      ['user', 'Check the second lemma.'],
+      ['assistant', 'The second lemma is valid.'],
+    ]);
+  });
+
   it('does not let an earlier round leak its stream id into a later round', () => {
     const logger = createRunTrace(root, defaultSession().transcripts).trace;
     const round0 = logger.openStage('r0', { kind: 'round', index: 0 });
@@ -2052,7 +2102,6 @@ describe('CLI transcript state', () => {
       text: '',
       finalized: false,
       toolUse: {
-        parsed: {},
         toolName: 'executions',
         errorText: '',
         outputText: '',
@@ -2082,7 +2131,6 @@ describe('CLI transcript state', () => {
         text: '',
         finalized: false,
         toolUse: {
-          parsed: {},
           toolName: 'Bash',
           errorText: '',
           outputText: 'one\ntwo\nthree',

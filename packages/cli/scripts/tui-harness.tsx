@@ -609,7 +609,6 @@ function makeEntries(count: number): ConversationEntry[] {
 
 function makeLongToolOutput(): NormalizedToolUse {
   return {
-    parsed: {},
     toolName: 'bash',
     errorText: '',
     outputText: Array.from(
@@ -664,7 +663,6 @@ function makeAssistantToolPreambleEntries(): ConversationEntry[] {
       text: '',
       finalized: true,
       toolUse: {
-        parsed: {},
         toolName: 'read_file',
         errorText: '',
         outputText: '',
@@ -743,7 +741,6 @@ function makeRejectedBashToolEntries(): ConversationEntry[] {
       text: '',
       finalized: true,
       toolUse: {
-        parsed: {},
         toolName: 'bash',
         errorText: message,
         outputText: message,

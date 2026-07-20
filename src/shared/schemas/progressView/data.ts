@@ -100,10 +100,10 @@ export const ToolUseLogSchema = z
 export type ToolUseLog = z.infer<typeof ToolUseLogSchema>;
 
 const NormalizedToolUseSchema = z.object({
-  parsed: z.record(z.string(), z.unknown()),
   toolName: z.string(),
   errorText: z.string(),
   outputText: z.string(),
+  exitCode: z.int().optional(),
   userInstructionText: z.string(),
   input: z.unknown(),
   isError: z.boolean(),
