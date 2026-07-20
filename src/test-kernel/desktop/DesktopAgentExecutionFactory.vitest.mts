@@ -626,6 +626,65 @@ describe('createDesktopAgentExecution', () => {
     expect(opener.openPath).toHaveBeenCalledWith('/tmp/result.pdf');
   });
 
+  it('replays one workflow output open when its window closes before completion', async () => {
+    let session!: SessionHandle;
+    let finishRun!: () => void;
+    let markRunStarted!: () => void;
+    const runStarted = new Promise<void>((resolve) => {
+      markRunStarted = resolve;
+    });
+    const runGate = new Promise<void>((resolve) => {
+      finishRun = resolve;
+    });
+    const runAgent = vi.fn(async (_request, options) => {
+      markRunStarted();
+      await runGate;
+      await options.openWorkflowOutput({
+        outcome: RUN_OUTCOME.COMPLETED,
+        outputs: [{ absolutePath: '/tmp/headless-result.pdf', round: 0 }],
+      });
+    });
+    const execution = await createExecution({
+      inspectSession: (value) => {
+        session = value;
+      },
+      runAgent,
+      prepareMainViewExecutionRequest: vi.fn(() => ({
+        valid: true,
+        request: {
+          agentName: 'default',
+          filePath: 'main.tex',
+          prompt: 'run',
+        },
+      })),
+    });
+
+    const run = execution.handleExecute({ command: 'execute' });
+    await runStarted;
+    execution.dispose();
+    finishRun();
+    await run;
+
+    const firstEmit = vi.fn();
+    const detach = session.useHostInteractions({
+      emit: firstEmit,
+      cancel: vi.fn(),
+    });
+    expect(firstEmit).toHaveBeenCalledOnce();
+    expect(firstEmit).toHaveBeenCalledWith('requestOpenFile', {
+      location: {
+        kind: 'external',
+        absolutePath: '/tmp/headless-result.pdf',
+      },
+      preserveFocus: false,
+    });
+
+    detach();
+    const secondEmit = vi.fn();
+    session.useHostInteractions({ emit: secondEmit, cancel: vi.fn() });
+    expect(secondEmit).not.toHaveBeenCalled();
+  });
+
   it('fires onRunCompleted when a run reaches a completed terminal result', async () => {
     const onRunCompleted = vi.fn();
     // The mock run bridges a trace into the process session's onResult channel

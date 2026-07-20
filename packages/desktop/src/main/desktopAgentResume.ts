@@ -93,9 +93,8 @@ async function resolveDesktopResumeState(
   }
   runState = context.snapshots.getRunConfig(streamId);
   executionId = executionId ?? context.snapshots.getExecutionId(streamId);
-  if (!runState) return undefined;
+  if (!runState || !context.session.transcripts.has(streamId)) return undefined;
 
-  context.session.transcripts.ensureStream(streamId);
   const parentStreamId = context.snapshots.getParentStreamId(streamId);
   return {
     runState,
@@ -124,13 +123,16 @@ function resumeDesktopStream(
   context: DesktopResumeContext,
 ): Promise<boolean> {
   if (!context.session.transcripts.has(streamId)) return Promise.resolve(false);
+  const isResumeInvalidated = (): boolean =>
+    context.isCancellationRequested() ||
+    !context.session.transcripts.has(streamId);
   const runtimeHost = context.session.interactions;
   return resolveAndResumeStream(streamId, {
     runtimeHost,
     streamStatus: context.session.status,
     resolveResumeState: async (id) => {
       const resumeState = await resolveDesktopResumeState(id, context);
-      if (context.isCancellationRequested()) return undefined;
+      if (isResumeInvalidated()) return undefined;
       if (!resumeState) {
         await context.session.interactions.showInfoMessage(
           'No persisted run state was found for this stream. Start a new run instead.',
@@ -161,14 +163,19 @@ function resumeDesktopStream(
         {
           session: context.session,
           runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
-          isCancellationRequested: context.isCancellationRequested,
+          canAcquireResumeLease: () => !isResumeInvalidated(),
+          isCancellationRequested: isResumeInvalidated,
           onError: (error) => reportResumeFailure(streamId, error, context),
         },
       ),
     executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
       launchDesktopAgent(
         { config, executionId },
-        { ready: Promise.resolve(), session: context.session },
+        {
+          ready: Promise.resolve(),
+          session: context.session,
+          canAcquireResumeLease: () => !isResumeInvalidated(),
+        },
         { modelHandlerCompatibilityKey },
       ),
     reportNoResumableSession: () =>
@@ -177,6 +184,6 @@ function resumeDesktopStream(
         { replayWhenAttached: true },
       ),
     reportFailure: (id, error) => reportResumeFailure(id, error, context),
-    isCancellationRequested: context.isCancellationRequested,
+    isCancellationRequested: isResumeInvalidated,
   });
 }

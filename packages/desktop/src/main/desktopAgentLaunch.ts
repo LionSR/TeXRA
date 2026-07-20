@@ -19,6 +19,8 @@ export const DESKTOP_UNAVAILABLE_TOOLS: readonly RegisteredToolName[] = [
 export interface DesktopAgentLaunchContext {
   readonly ready: Promise<void>;
   readonly session: SessionHandle;
+  /** Resume-only canonical admission checked under the execution lease lock. */
+  readonly canAcquireResumeLease?: () => boolean;
 }
 
 export interface DesktopAgentLaunchOptions {
@@ -39,6 +41,9 @@ export async function launchDesktopAgent(
     session: context.session,
     runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+    ...(context.canAcquireResumeLease && {
+      canAcquireResumeLease: context.canAcquireResumeLease,
+    }),
     openWorkflowOutput: async (result) => {
       const output = selectAutoOpenFinalOutput(result);
       if (!output) return;
@@ -59,10 +64,14 @@ export async function launchDesktopAgent(
       } else {
         location = { kind: 'external', absolutePath: output.absolutePath };
       }
-      runtimeHost.emit('requestOpenFile', {
-        location,
-        preserveFocus: false,
-      });
+      runtimeHost.emit(
+        'requestOpenFile',
+        {
+          location,
+          preserveFocus: false,
+        },
+        { replayWhenAttached: true },
+      );
     },
   });
 }

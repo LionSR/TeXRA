@@ -152,4 +152,34 @@ describe('desktop process resume owner', () => {
     await expect(resume).resolves.toBe(false);
     expect(runAgent).not.toHaveBeenCalled();
   });
+
+  it('does not resume or recreate a stream deleted during retrieval', async () => {
+    let releaseRetrieval!: () => void;
+    let markRetrievalStarted!: () => void;
+    const retrievalStarted = new Promise<void>((resolve) => {
+      markRetrievalStarted = resolve;
+    });
+    const retrievalGate = new Promise<void>((resolve) => {
+      releaseRetrieval = resolve;
+    });
+    retrieveSessionResumeData.mockImplementation(async () => {
+      markRetrievalStarted();
+      await retrievalGate;
+      return { type: 'workflow', agentConfig: config, executionId };
+    });
+    const harness = createResumeHarness();
+
+    try {
+      const resume = harness.owner.tryResumeStream(stream);
+      await retrievalStarted;
+      await harness.session.transcripts.delete(stream);
+      releaseRetrieval();
+
+      await expect(resume).resolves.toBe(false);
+      expect(runAgent).not.toHaveBeenCalled();
+      expect(harness.session.transcripts.has(stream)).toBe(false);
+    } finally {
+      harness.dispose();
+    }
+  });
 });
