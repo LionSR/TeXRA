@@ -18,6 +18,7 @@ import type {
   ThinkingBlock,
 } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { ANTHROPIC_STOP } from '@agent/types/StopReasonTypes';
@@ -253,16 +254,20 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return true;
   }
 
-  async getClient(): Promise<Anthropic> {
-    const credential = await this.getApiKey();
-    const baseUrl = this.getBaseUrl();
-    this.logger.debug(`Using Anthropic API. Base URL: ${baseUrl}`);
+  async getClient(
+    selection: ModelCredentialSelection = 'configured',
+  ): Promise<Anthropic> {
+    const credential = await this.resolveClientCredential(selection);
+    this.logger.debug(`Using Anthropic API. Base URL: ${credential.baseUrl}`);
 
     // For relay auth: credential is the user's JWT, SDK sends it via x-api-key header.
-    return new Anthropic({
-      apiKey: credential,
-      baseURL: baseUrl,
-    });
+    return this.rememberClientCredentialRoute(
+      new Anthropic({
+        apiKey: credential.apiKey,
+        baseURL: credential.baseUrl,
+      }),
+      credential.route,
+    );
   }
 
   override isAutoRetryManagedByProvider(_error: Error): boolean {

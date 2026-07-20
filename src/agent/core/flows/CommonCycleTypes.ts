@@ -172,6 +172,12 @@ export function extractModelResponse(
   if (usage != null || options.normalizeNullUsage === true) {
     normalizedUsage = modelHandler.normalizeUsage(usage, responseTimeMs ?? 0);
     if (normalizedUsage) {
+      const usageRoute =
+        normalizedUsage.usageRoute ??
+        modelHandler.getLastCredentialUsageRoute();
+      if (usageRoute !== undefined) {
+        normalizedUsage = { ...normalizedUsage, usageRoute };
+      }
       const { inputTokens } = normalizedUsage;
       const contextWindow = modelHandler.getEffectiveContextWindow();
       if (inputTokens > 0 && contextWindow > 0) {

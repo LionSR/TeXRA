@@ -17,6 +17,7 @@ import { logProgressStatus } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
+import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import { parseToolInputAsObject } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
@@ -50,6 +51,7 @@ import { getConfig } from '@utils/config/configUtils';
 
 // Local file imports
 import {
+  type GoogleClientCache,
   isGemini3Model,
   resolveGeminiThinkingLevel,
   resolveGoogleClient,
@@ -351,7 +353,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     this.pendingBackgroundInteractionId = null;
   }
 
-  private googleClient: GoogleGenAI | null = null;
+  private googleClient: GoogleClientCache | null = null;
 
   // ===========================================================================
   // STATEFUL chaining state (store:true + previous_interaction_id)
@@ -532,19 +534,29 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     return ModelHandlerGoogleInteractions.INLINE_MEDIA_LIMIT_BYTES;
   }
 
-  async getClient(): Promise<GoogleGenAI> {
+  async getClient(
+    selection: ModelCredentialSelection = 'configured',
+  ): Promise<GoogleGenAI> {
     // `apiVersion` left unset for v0 — see spec §6.4.
+    const credential = await this.resolveClientCredential(selection);
     return resolveGoogleClient({
       sdkLabel: 'Interactions',
-      shouldUseServerSideKeys: this.shouldUseServerSideKeys(),
-      getApiKey: () => this.getApiKey(),
-      getBaseUrl: () => this.getBaseUrl(),
+      credential,
       logger: this.logger,
       cached: this.googleClient,
-      setCached: (client) => {
-        this.googleClient = client;
+      setCached: (cache) => {
+        this.googleClient = cache;
       },
+      rememberRoute: (client, route) =>
+        this.rememberClientCredentialRoute(client, route),
     });
+  }
+
+  override async refreshClient(
+    selection: ModelCredentialSelection = 'configured',
+  ): Promise<GoogleGenAI> {
+    this.googleClient = null;
+    return this.getClient(selection);
   }
 
   /**
