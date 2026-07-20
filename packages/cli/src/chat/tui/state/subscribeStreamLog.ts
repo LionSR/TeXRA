@@ -7,7 +7,9 @@ import { isDeepStrictEqual } from 'node:util';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { appendCliApiSwitchHint } from '@cli/runtime/approvalAdapter';
+import { redactSecrets } from '@logger/redaction';
 import {
+  ErrorLogDataSchema,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   TOOL_USE_STATUS,
@@ -24,11 +26,13 @@ import { isActivePhase } from '@shared/streams/streamStatus';
 import { flushPendingRunTraces } from '@transcript';
 import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { truncateSummary } from '@utils/text/stringUtils';
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
 import {
   isRenderableTranscriptEntry,
   trimAssistantTranscriptLead,
 } from '../panes/transcriptEntries';
+import { TOOL_OUTPUT_CORNER } from '../ui/glyphs';
 import {
   activeStreamId,
   getCliStateGeneration,
@@ -40,6 +44,9 @@ import {
 import { isChildStreamRemoved } from './childExecutions';
 import { subscribeToSignalChanges } from './signalSubscription';
 import { isFinalTranscriptStatus } from './transcript';
+import { safeTerminalText } from './transcriptLines';
+
+const MAX_ERROR_DETAIL_LENGTH = 240;
 
 const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.ERROR,
@@ -216,14 +223,27 @@ function logEntryRole(
 function renderLogEntryText(
   role: 'assistant' | 'error' | 'user',
   text: string,
+  data: unknown,
 ): string {
   switch (role) {
     case 'assistant':
       return normalizeKnownHtmlForCliMarkdown(
         trimAssistantTranscriptLead(text),
       );
-    case 'error':
-      return appendCliApiSwitchHint(text);
+    case 'error': {
+      const safeSummary = redactSecrets(safeTerminalText(text));
+      const parsed = ErrorLogDataSchema.safeParse(data);
+      if (!parsed.success) return appendCliApiSwitchHint(safeSummary);
+
+      const detail = truncateSummary(
+        redactSecrets(safeTerminalText(parsed.data.message)),
+        MAX_ERROR_DETAIL_LENGTH,
+      );
+      const withDetail = detail
+        ? `${safeSummary}\n${TOOL_OUTPUT_CORNER} ${detail}`
+        : safeSummary;
+      return appendCliApiSwitchHint(withDetail, parsed.data.exhaustionReason);
+    }
     case 'user':
       return summarizeFollowupMessage(text);
   }
@@ -301,7 +321,7 @@ function renderLogEntry(
   const role = logEntryRole(entry.messageType);
   const assistantTranscript =
     role === 'assistant' ? trimAssistantTranscriptLead(text) : undefined;
-  const renderedText = renderLogEntryText(role, text);
+  const renderedText = renderLogEntryText(role, text, entry.data);
   // Assistant text is promoted by `finalizeSettledPrefix` once the model
   // moves on to a later entry; inherit the prior flag here so a re-sync
   // can't de-finalize an already-promoted block. User/error rows can't

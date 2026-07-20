@@ -124,6 +124,18 @@ describe('cross-process execution leases', () => {
     ).rejects.toBeInstanceOf(ExecutionLeaseActiveError);
   });
 
+  it('does not create a resumed lease when canonical admission is withdrawn', async () => {
+    const executionId = 'd8644e' as ExecutionId;
+
+    await expect(
+      acquireResumedExecutionLease(executionId, () => false),
+    ).resolves.toBe('cancelled');
+    expect(ownsExecutionLease(executionId)).toBe(false);
+    await expect(inspectExecutionLease(executionId)).resolves.toEqual({
+      status: 'missing',
+    });
+  });
+
   it('keeps resumed ownership live until terminal lifecycle release', async () => {
     const executionId = 'd86440' as ExecutionId;
     await writeExecution(executionId);

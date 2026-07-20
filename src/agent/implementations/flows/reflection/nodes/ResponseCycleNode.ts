@@ -38,6 +38,7 @@ type CycleOutcome =
       error: Error;
       userRetryable: boolean;
       lastError?: RetryErrorInfo;
+      failureLogEmitted: boolean;
     };
 
 export class ResponseCycleNode<C = unknown> extends Node<
@@ -122,6 +123,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
           error: new Error(cycleShared.lastError.message),
           userRetryable: cycleShared.lastError.userRetryable,
           lastError: cycleShared.lastError,
+          failureLogEmitted: cycleShared.failureLogEmitted ?? false,
         };
       }
       // A round is `cancelled` only when the run was genuinely interrupted —
@@ -146,6 +148,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
       return {
         outcome: 'failed',
         error: ensureError(error),
+        failureLogEmitted: false,
         ...buildFailedRetryInfo(error),
       };
     }
@@ -155,7 +158,12 @@ export class ResponseCycleNode<C = unknown> extends Node<
     _prepRes: CyclePrepInput,
     error: Error,
   ): Promise<CycleOutcome> {
-    return { outcome: 'failed', error, ...buildFailedRetryInfo(error) };
+    return {
+      outcome: 'failed',
+      error,
+      failureLogEmitted: false,
+      ...buildFailedRetryInfo(error),
+    };
   }
 
   async post(
@@ -168,7 +176,9 @@ export class ResponseCycleNode<C = unknown> extends Node<
     shared.outputLocation = prepRes.outputLocation;
 
     if (execRes.outcome === 'failed') {
-      logger.error(`Response cycle failed: ${execRes.error.message}`);
+      if (!execRes.failureLogEmitted) {
+        logger.error(`Response cycle failed: ${execRes.error.message}`);
+      }
       shared.lastError = execRes.lastError ?? {
         message: execRes.error.message,
         userRetryable: execRes.userRetryable,

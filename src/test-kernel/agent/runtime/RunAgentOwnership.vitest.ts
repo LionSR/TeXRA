@@ -94,6 +94,33 @@ describe('runAgent execution ownership', () => {
     );
   });
 
+  it('abandons a resume whose canonical admission is withdrawn under the lease lock', async () => {
+    let canonical = true;
+    mocks.acquireResumedExecutionLease.mockImplementationOnce(
+      async (_executionId: ExecutionId, canAcquire: () => boolean) => {
+        canonical = false;
+        return canAcquire() ? 'acquired' : 'cancelled';
+      },
+    );
+
+    await expect(
+      runAgent(
+        { config: CONFIG, executionId: EXECUTION_ID },
+        {
+          runtimeHost: RUNTIME_HOST,
+          session: SESSION,
+          canAcquireResumeLease: () => canonical,
+        },
+      ),
+    ).rejects.toThrow();
+
+    expect(mocks.acquireResumedExecutionLease).toHaveBeenCalledWith(
+      EXECUTION_ID,
+      expect.any(Function),
+    );
+    expect(mocks.executeAgent).not.toHaveBeenCalled();
+  });
+
   it('persists an early launch error before releasing ownership', async () => {
     const order: string[] = [];
     const launchError = new Error('launch failed');

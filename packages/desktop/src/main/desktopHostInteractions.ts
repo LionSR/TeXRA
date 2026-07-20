@@ -1,5 +1,9 @@
 import { nanoid } from 'nanoid';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type {
+  AgentRuntimeEvent,
+  AgentRuntimeEventPayloads,
+  AgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
 import {
   cancellationResultFor,
   type BashSettlement,
@@ -39,6 +43,7 @@ export interface DesktopHostInteractionsOptions {
   session: SessionHandle;
   getApprovalHandlers(): ApprovalRequestHandlerSet;
   getToolEditApprovals(): DesktopToolEditApprovalController;
+  showInfoMessage(message: string): Promise<void> | void;
 }
 
 export interface DesktopHostInteractions extends HostInteractions {
@@ -71,6 +76,17 @@ export function createDesktopHostInteractions(
 
 class DesktopHostInteractionsImpl implements DesktopHostInteractions {
   constructor(private readonly options: DesktopHostInteractionsOptions) {}
+
+  emit<K extends AgentRuntimeEvent>(
+    event: K,
+    payload: AgentRuntimeEventPayloads[K],
+  ): void {
+    this.options.runtimeHost.emit(event, payload);
+  }
+
+  showInfoMessage(message: string): Promise<void> | void {
+    return this.options.showInfoMessage(message);
+  }
 
   requestToolEditApproval(
     request: ToolEditApprovalRequest,
@@ -211,7 +227,7 @@ class DesktopHostInteractionsImpl implements DesktopHostInteractions {
   }
 
   dispose(): void {
-    this.cancel({ cause: 'Desktop session disposed.' });
+    this.cancel({ cause: 'Desktop presentation detached.' });
   }
 
   // Interaction requests surface per-stream (pending badge on the stream
