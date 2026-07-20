@@ -977,7 +977,18 @@ export class ExecutionRegistry {
     // it with its own result.
     void (async () => {
       try {
-        await handle.waitForWaitingCleanup();
+        try {
+          await handle.waitForWaitingCleanup();
+        } catch (error) {
+          // Transcript closure and terminal execution metadata are independent
+          // durable facts. Preserve the failed artifact fence, but still give
+          // the terminal status its own opportunity to reach disk.
+          markOwnedExecutionLeaseUndurable(handle.executionId);
+          logger.warn(
+            'Waiting-execution cleanup failed; continuing terminal persistence',
+            { data: { executionId: handle.executionId, error } },
+          );
+        }
         const result = await finalizeExecution({
           executionId: handle.executionId,
           terminalStatus: projectRunOutcome(RUN_OUTCOME.CANCELLED)

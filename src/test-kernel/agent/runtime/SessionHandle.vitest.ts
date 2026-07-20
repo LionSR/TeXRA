@@ -306,6 +306,26 @@ describe('SessionHandle', () => {
     expect(executions).toHaveBeenCalledOnce();
   });
 
+  it('finishes trace flushing and owner teardown before surfacing a flush failure', () => {
+    const session = createTestSession();
+    const failure = new Error('latched transcript failure');
+    const laterFlusher = vi.fn();
+    const interactions = vi.spyOn(session.interactions, 'dispose');
+    const subscriptions = vi.spyOn(session.subscriptions, 'dispose');
+    const executions = vi.spyOn(session.executions, 'dispose');
+    session.flushers.add(() => {
+      throw failure;
+    });
+    session.flushers.add(laterFlusher);
+
+    expect(() => session.dispose()).toThrow(failure);
+
+    expect(laterFlusher).toHaveBeenCalledOnce();
+    expect(interactions).toHaveBeenCalledOnce();
+    expect(subscriptions).toHaveBeenCalledOnce();
+    expect(executions).toHaveBeenCalledOnce();
+  });
+
   it('rejects execution work registered after disposal', () => {
     const session = createTestSession();
     const { host } = createRecordingHost();

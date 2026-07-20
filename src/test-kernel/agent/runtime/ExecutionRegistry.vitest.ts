@@ -27,6 +27,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { projectRunOutcome } from '@shared/streams/streamStatus';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 
@@ -501,6 +502,55 @@ describe('executionRegistry', () => {
         );
       });
       expect(storageMocks.synchronizeAgentResultOutcome).not.toHaveBeenCalled();
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('persists a waiting stop after transcript cleanup fails', async () => {
+    const streamStatus = new StreamStatusMachine();
+    const registry = new ExecutionRegistry({ streamStatus });
+    const executionId = 'exec-waiting-cleanup-failure' as ExecutionId;
+    const parentStreamId = 'parent-waiting-cleanup-failure' as StreamTabId;
+    const childStreamId = 'child-waiting-cleanup-failure' as StreamTabId;
+    const cleanupError = new Error('transcript reload failed');
+    storageMocks.finalizeExecution.mockResolvedValueOnce({
+      status: 'durable',
+      terminalStatusPersisted: true,
+      flowRecord: 'deleted',
+    });
+    storageMocks.synchronizeAgentResultOutcome.mockResolvedValueOnce(undefined);
+    channelTraceMocks.warn.mockClear();
+
+    try {
+      const handle = createHandle(
+        executionId,
+        parentStreamId,
+        childStreamId,
+        createRecordingHost().host,
+      );
+      registry.track(handle);
+      handle.registerWaitingCleanup(() => Promise.reject(cleanupError));
+      seedStreamStatusForTest(
+        streamStatus,
+        childStreamId,
+        STREAM_STATUS.WAITING,
+      );
+
+      expect(registry.kill(executionId)).toBe(true);
+
+      await vi.waitFor(() => {
+        expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
+          executionId,
+          terminalStatus: projectRunOutcome(RUN_OUTCOME.CANCELLED)
+            .executionStatus,
+          flowRecord: 'delete',
+        });
+      });
+      expect(channelTraceMocks.warn).toHaveBeenCalledWith(
+        'Waiting-execution cleanup failed; continuing terminal persistence',
+        { data: { executionId, error: cleanupError } },
+      );
     } finally {
       registry.dispose();
     }

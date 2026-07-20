@@ -178,7 +178,21 @@ export class SessionHandle {
 
   /** Drain pending trace writes for this session's streams only. */
   flushPendingTraces(): void {
-    for (const flush of [...this.flushers]) flush();
+    const failures: unknown[] = [];
+    for (const flush of [...this.flushers]) {
+      try {
+        flush();
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1) {
+      throw new AggregateError(
+        failures,
+        'Multiple session trace writers failed to flush',
+      );
+    }
   }
 
   /** Register a session-owned durable writer such as a snapshot store. */
@@ -340,19 +354,30 @@ export class SessionHandle {
    * Tear down everything this session owns. Order matters: drain this session's
    * pending trace writes, drop subscription disposers, dispose the execution
    * registry, settle pending host interactions via `interactions.dispose()`,
-   * and drop result listeners. Finally unregister this session's flusher set
-   * from the process-wide drain and deregister it from `liveSessions`, both in
-   * `finally` so a teardown throw cannot strand a disposed session.
+   * and drop result listeners. Deregistration from `liveSessions` happens even
+   * when either phase fails, and every collected failure returns only after
+   * teardown has been attempted.
    */
   dispose(): void {
     if (this.disposeStarted) return;
     this.disposeStarted = true;
 
+    const failures: unknown[] = [];
     try {
       this.flushPendingTraces();
+    } catch (error) {
+      failures.push(error);
+    }
+    try {
       this.teardownOwners();
+    } catch (error) {
+      failures.push(error);
     } finally {
       this.deregisterSession();
+    }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1) {
+      throw new AggregateError(failures, 'Session teardown failed');
     }
   }
 
