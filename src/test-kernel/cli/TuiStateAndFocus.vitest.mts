@@ -590,6 +590,23 @@ describe('CLI TUI row allocation', () => {
     });
   });
 
+  it('charges expanded file details to the existing child-panel budget', () => {
+    expect(
+      allocateConversationBottomPanelRows({
+        maxRows: 10,
+        sessionCount: 2,
+        childListFocused: true,
+        detailContentRows: 4,
+        todosPlanContentRows: 0,
+        transcriptRows: 20,
+      }),
+    ).toEqual({
+      bottomPanelRows: 7,
+      sessionPanelRows: 7,
+      todosPlanRows: 0,
+    });
+  });
+
   it('reserves a separator row above the todos panel', () => {
     // 2 todos + separator = 3 rows when the transcript allows it.
     expect(
@@ -2629,10 +2646,10 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
             agentCategory: AgentCategory.ToolUse,
             model: 'kimi26T',
             instruction: 'Check the enumeration independently.',
-            inputFiles: [],
-            contextFiles: [],
+            inputFiles: ['src/Main.lean'],
+            contextFiles: ['notes/proof.md'],
             mediaFiles: [],
-            outputFiles: [],
+            outputFiles: ['build/Main.olean'],
             editedFile: null,
             editedFiles: [],
             toolConfig: DEFAULT_TOOL_CONFIG,
@@ -2653,6 +2670,12 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       expect(streams.get().get(root)).toMatchObject({
         model: 'kimi26T',
         category: AgentCategory.ToolUse,
+        files: {
+          input: ['src/Main.lean'],
+          context: ['notes/proof.md'],
+          media: [],
+          output: ['build/Main.olean'],
+        },
         conversation: { toolCallCount: 3 },
       });
     } finally {
