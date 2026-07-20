@@ -19,7 +19,7 @@ import { build } from 'esbuild';
 import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports - test support
-import { repoPath } from './desktopTestPaths.mjs';
+import { moduleFileUrl, repoPath } from './desktopTestPaths.mjs';
 import { loadPlatformDefaultsModule } from './loadPlatformDefaultsModule.mjs';
 
 const require = createRequire(import.meta.url);
@@ -144,6 +144,35 @@ describe('shared JsonStore', () => {
     expect(JSON.parse(await readFile(filePath, 'utf8'))).toEqual({
       fromA: 'a',
       fromB: 'b',
+    });
+  });
+
+  it('keeps the lock function callable in a split ESM bundle', async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'texra-json-store-bundle-'));
+    const outdir = join(tempDir, 'bundle');
+    await build({
+      entryPoints: {
+        jsonStore: repoPath('src', 'platform', 'defaults', 'jsonStore.ts'),
+      },
+      bundle: true,
+      format: 'esm',
+      splitting: true,
+      platform: 'node',
+      outdir,
+      outExtension: { '.js': '.mjs' },
+      logLevel: 'silent',
+    });
+
+    const { JsonStore } = (await import(
+      moduleFileUrl(join(outdir, 'jsonStore.mjs'))
+    )) as JsonStoreModule;
+    const filePath = join(tempDir, 'state.json');
+    const store = await JsonStore.open(filePath);
+
+    await store.set('persisted', true);
+
+    expect(JSON.parse(await readFile(filePath, 'utf8'))).toEqual({
+      persisted: true,
     });
   });
 
