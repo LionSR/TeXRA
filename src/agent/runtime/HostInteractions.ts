@@ -356,11 +356,24 @@ export class SessionHostInteractions
 {
   private readonly attachments: HostInteractionAttachment[] = [];
   private readonly pending = new Set<PendingSessionInteraction>();
+  private readonly pendingCountListeners = new Set<(count: number) => void>();
   private readonly pendingPresentationReplays: Array<
     (interactions: HostInteractions) => Promise<void> | void
   > = [];
   private attachmentVersion = 0;
   private disposed = false;
+
+  /** Number of response-bearing requests awaiting a host decision. */
+  get pendingCount(): number {
+    return this.pending.size;
+  }
+
+  /** Observe transitions between no pending requests and at least one. */
+  onPendingCountChange(listener: (count: number) => void): () => void {
+    if (this.disposed) return () => {};
+    this.pendingCountListeners.add(listener);
+    return () => this.pendingCountListeners.delete(listener);
+  }
 
   use(interactions: HostInteractions): () => void {
     if (this.disposed) {
@@ -520,7 +533,7 @@ export class SessionHostInteractions
 
     const settleFallbacks = (): void => {
       for (const pending of matching) {
-        if (!this.pending.delete(pending)) continue;
+        if (!this.deletePending(pending)) continue;
         pending.settle(pending.cancellationResult(selector.cause));
       }
     };
@@ -536,11 +549,19 @@ export class SessionHostInteractions
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    const cancellationCause = 'Session disposed.';
     let firstError: unknown;
     try {
-      this.cancel({ cause: 'Session disposed.' });
+      this.cancel({ cause: cancellationCause });
     } catch (error) {
       firstError = error;
+    }
+    // An attached adapter makes cancel's fallback asynchronous so that its
+    // own settlement can win. Session disposal is terminal, however: settle
+    // any requests still owned here before observers are removed.
+    for (const pending of [...this.pending]) {
+      if (!this.deletePending(pending)) continue;
+      pending.settle(pending.cancellationResult(cancellationCause));
     }
     this.attachmentVersion += 1;
     for (const attachment of this.attachments.toReversed()) {
@@ -554,6 +575,7 @@ export class SessionHostInteractions
     }
     this.attachments.length = 0;
     this.pendingPresentationReplays.length = 0;
+    this.pendingCountListeners.clear();
     if (firstError !== undefined) throw firstError;
   }
 
@@ -582,6 +604,7 @@ export class SessionHostInteractions
         cancellationRequested: false,
       };
       this.pending.add(pending);
+      if (this.pending.size === 1) this.notifyPendingCountChange();
       this.dispatch(pending);
     });
   }
@@ -632,14 +655,14 @@ export class SessionHostInteractions
       return;
     }
     if (!result) {
-      this.pending.delete(pending);
+      this.deletePending(pending);
       pending.settle(pending.cancellationResult());
       return;
     }
     void result.then(
       (value) => {
         if (!this.isCurrentDispatch(pending, attachment, version)) return;
-        this.pending.delete(pending);
+        this.deletePending(pending);
         pending.settle(value);
       },
       (error: unknown) => {
@@ -655,8 +678,24 @@ export class SessionHostInteractions
     error: unknown,
   ): void {
     if (!this.isCurrentDispatch(pending, attachment, version)) return;
-    this.pending.delete(pending);
+    this.deletePending(pending);
     pending.reject(error);
+  }
+
+  private deletePending(pending: PendingSessionInteraction): boolean {
+    if (!this.pending.delete(pending)) return false;
+    if (this.pending.size === 0) this.notifyPendingCountChange();
+    return true;
+  }
+
+  private notifyPendingCountChange(): void {
+    for (const listener of this.pendingCountListeners) {
+      try {
+        listener(this.pending.size);
+      } catch (error) {
+        logger.warn('Pending interaction observer failed', { data: error });
+      }
+    }
   }
 
   private isCurrentDispatch(
