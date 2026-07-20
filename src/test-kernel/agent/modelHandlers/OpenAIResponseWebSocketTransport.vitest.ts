@@ -8,6 +8,7 @@ import { WebSocketError } from 'openai/resources/responses/internal-base';
 // Local imports
 import type { AgentTrace } from '@agent/trace';
 import { OpenAIResponseWebSocketTransport } from '@agent/modelHandlers/openai/OpenAIResponseWebSocketTransport';
+import type { ResponseStreamProcessor } from '@agent/modelHandlers/openai/ResponseStreamProcessor';
 
 // Third-party type imports
 import type OpenAI from 'openai';
@@ -62,6 +63,11 @@ interface TransportInternals {
     client: OpenAI,
     signal?: AbortSignal,
   ): Promise<FakeResponsesWS>;
+  executeViaWebSocket(
+    ws: FakeResponsesWS,
+    params: unknown,
+    signal?: AbortSignal,
+  ): Promise<unknown>;
 }
 
 function internals(
@@ -71,9 +77,13 @@ function internals(
 }
 
 function createTransport(): OpenAIResponseWebSocketTransport {
+  const processor = {
+    abort: vi.fn(),
+    process: vi.fn(),
+  } as unknown as ResponseStreamProcessor;
   return new OpenAIResponseWebSocketTransport({
     logger: createLogger(),
-    createStreamProcessor: vi.fn(),
+    createStreamProcessor: vi.fn(() => processor),
   });
 }
 
@@ -113,18 +123,31 @@ describe('OpenAIResponseWebSocketTransport idle connection errors', () => {
     expect(createdSockets).toHaveLength(2);
   });
 
-  it('unregisters the idle listener from a disposed connection', async () => {
-    // Each fresh ResponsesWS gets its own `onIdleWsError` registration;
-    // dispose() must strip it from the outgoing connection object. Otherwise
-    // a stray late event on that now-orphaned socket would call
-    // closeWebSocket() again and could tear down a connection established
-    // afterward, since `onIdleWsError` always acts on the transport's
-    // *current* `wsConnection`, not the specific socket that fired.
+  it('keeps late errors on an orphan isolated from a later connection', async () => {
     const transport = createTransport();
-    const ws = await internals(transport).getOrCreateWebSocket(fakeClient);
+    const first = await internals(transport).getOrCreateWebSocket(fakeClient);
 
     transport.dispose();
+    const second = await internals(transport).getOrCreateWebSocket(fakeClient);
 
-    expect(ws.listenerCount('error')).toBe(0);
+    expect(() =>
+      first.emit('error', new WebSocketError('late orphan error', null)),
+    ).not.toThrow();
+    expect(internals(transport).wsConnection).toBe(second);
+    expect(second.socket.platformSocket.terminate).not.toHaveBeenCalled();
+  });
+
+  it('preserves the request error when closing emits synchronously', async () => {
+    const transport = createTransport();
+    const ws = await internals(transport).getOrCreateWebSocket(fakeClient);
+    ws.close.mockImplementation(() => {
+      ws.socket.emit('close', 1006, Buffer.from('closed'));
+    });
+
+    const request = internals(transport).executeViaWebSocket(ws, {});
+    const error = new WebSocketError('request failed', null);
+    ws.emit('error', error);
+
+    await expect(request).rejects.toBe(error);
   });
 });
