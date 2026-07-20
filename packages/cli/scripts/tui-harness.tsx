@@ -26,7 +26,10 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
+import {
+  isInFlightPhase,
+  STREAM_TRANSITION_CAUSE,
+} from '@shared/streams/streamStatus';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { platform, tryPlatform } from '@platform/platform';
@@ -57,6 +60,7 @@ import { StreamLogStore } from '@transcript';
 
 import { App } from '../src/chat/tui/App';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
+import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 import { cliSettingsStores } from '../src/runtime/settingsStores';
 import {
   formatSlashCommandHelp,
@@ -102,7 +106,9 @@ import { notify } from '../src/chat/tui/notifications/terminalNotifier';
 import { tuiOutputStreamForColor } from '../src/chat/tui/render/noColorOutput';
 import { createTuiViewportController } from '../src/chat/tui/render/tuiViewportController';
 import {
+  approvalPayloadStreamId,
   clearApprovals,
+  clearApprovalsWhere,
   enqueueApproval,
   type ApprovalDecision,
 } from '../src/chat/tui/state/approvalQueue';
@@ -248,6 +254,8 @@ const DISABLED_MODEL_SWITCH_REASON =
   'different conversation format; start new chat';
 const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
 const SHOW_NESTED_CHILDREN = process.env.HARNESS_NESTED_CHILDREN === '1';
+const RETARGET_FOCUSED_ESCAPE =
+  process.env.HARNESS_RETARGET_FOCUSED_ESCAPE === '1';
 // Opt-in fixture for the PTY ordering tests (issue #7972, follow-up from
 // #7967 / the "PTY ordering tests" section of
 // docs/proposals/cli-child-stream-state-consolidation.md): drives one child
@@ -341,6 +349,20 @@ const HARNESS_VISIBLE_WORKFLOW_AGENTS = parseList(
 );
 const HARNESS_VISIBLE_MODELS = parseList(process.env.HARNESS_VISIBLE_MODELS);
 const HARNESS_MEMORY_FILES = parseList(process.env.HARNESS_MEMORY_FILES);
+const HARNESS_INPUT_HISTORY_ENTRIES = parseList(
+  process.env.HARNESS_INPUT_HISTORY,
+);
+const HARNESS_INPUT_HISTORY: InputHistory | undefined =
+  HARNESS_INPUT_HISTORY_ENTRIES.length === 0
+    ? undefined
+    : {
+        async push(line) {
+          HARNESS_INPUT_HISTORY_ENTRIES.push(line);
+        },
+        reverseFind: () => undefined,
+        at: (index) => HARNESS_INPUT_HISTORY_ENTRIES[index],
+        length: () => HARNESS_INPUT_HISTORY_ENTRIES.length,
+      };
 
 if (SHOW_PROJECT_SKILL) {
   seedHarnessProjectSkill();
@@ -1710,6 +1732,64 @@ function markHarnessInterrupted(): void {
   }
 }
 
+let focusedEscapeRetargeted = false;
+
+function canInterruptHarnessStream(streamId: StreamTabId): boolean {
+  const interruptible = isInFlightPhase(streams.get().get(streamId)?.status);
+  if (
+    interruptible &&
+    RETARGET_FOCUSED_ESCAPE &&
+    !focusedEscapeRetargeted &&
+    streamId === 'harness-child-strategy-stream'
+  ) {
+    focusedEscapeRetargeted = true;
+    setTimeout(() => {
+      activeStreamIdSignal.set('harness-child-review-stream');
+    }, 50);
+  }
+  return interruptible;
+}
+
+function markHarnessStreamInterrupted(streamId: StreamTabId): void {
+  clearApprovalsWhere(
+    (payload) => approvalPayloadStreamId(payload) === streamId,
+  );
+  if (streamId === STREAM_ID) {
+    canInterrupt = false;
+    rootRunPending.set(false);
+  } else {
+    applySubagentRoster(
+      STREAM_ID,
+      activeSubagentsFor(
+        STREAM_ID,
+        childStreamEntries.get(),
+        streams.get(),
+      ).filter((child) => child.childStreamId !== streamId),
+    );
+  }
+  patchStream(streamId, (slice) => ({
+    ...slice,
+    status: STREAM_PHASE.CANCELLED,
+    runStartedAt: undefined,
+    activeProcesses: [],
+    entries: [
+      ...slice.entries,
+      {
+        id: `harness-focused-interrupted-${streamId}`,
+        role: 'assistant',
+        text: `Harness focused interrupt requested for ${streamId}.`,
+        finalized: true,
+      },
+    ],
+  }));
+  defaultSession().status.transition(
+    streamId,
+    STREAM_PHASE.CANCELLED,
+    STREAM_TRANSITION_CAUSE.USER_STOP,
+    { events: defaultSession().events },
+  );
+}
+
 function appendHarnessAssistantTranscript(
   text: string,
   streamId?: StreamTabId,
@@ -2052,9 +2132,12 @@ function renderHarnessApp(): React.JSX.Element {
       onSkipExecution={() => undefined}
       onRetryExecution={() => undefined}
       canInterruptActiveRun={() => canInterrupt}
+      canInterruptStream={canInterruptHarnessStream}
       canStopActiveRun={() => canInterrupt}
       colorEnabled={HARNESS_COLOR_ENABLED}
+      history={HARNESS_INPUT_HISTORY}
       onInterruptActive={markHarnessInterrupted}
+      onInterruptStream={markHarnessStreamInterrupted}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={handleHarnessCtrlC}
     />
@@ -2069,12 +2152,13 @@ const ink = render(renderHarnessApp(), {
 });
 inkRef.current = ink;
 
+CHILD_EVENT_ORDER_DISPOSERS.push(subscribeStreamStatus());
+
 if (CHILD_EVENT_ORDER) {
   // Mirror real CLI startup: `runChatTui.tsx` installs
   // `subscribeStreamStatus()` once per session, and
   // `chatSessionController.ts` attaches the run-fact subscription per run.
   CHILD_EVENT_ORDER_DISPOSERS.push(
-    subscribeStreamStatus(),
     attachTuiRunFactSubscription(defaultSession().events),
   );
   void runChildEventOrderFixture(ink, CHILD_EVENT_ORDER).catch((error) => {

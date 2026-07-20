@@ -1207,6 +1207,32 @@ describe('CLI TUI row allocation', () => {
     }
   });
 
+  it('returns a user-stopped focused child to its immediate owner', () => {
+    const dispose = subscribeStreamStatus();
+    setParentStream(child1, root);
+    activeStreamId.set(child1);
+
+    try {
+      expect(
+        defaultSession().status.transition(
+          child1,
+          STREAM_PHASE.RUNNING,
+          'lifecycle',
+        ),
+      ).toBe(true);
+      expect(
+        defaultSession().status.transition(
+          child1,
+          STREAM_PHASE.CANCELLED,
+          'user-stop',
+        ),
+      ).toBe(true);
+      expect(activeStreamId.get()).toBe(root);
+    } finally {
+      dispose();
+    }
+  });
+
   it('does not auto-return for WAITING, repair, unrelated, or detached status events', () => {
     const dispose = subscribeStreamStatus();
     const detachedChild = 'detached-child' as StreamTabId;
