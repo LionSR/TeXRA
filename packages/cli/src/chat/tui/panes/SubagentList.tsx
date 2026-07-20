@@ -18,7 +18,6 @@ import { truncateSummaryToWidth } from '../render/terminalText';
 // Local imports - TUI state and controls
 import {
   childElapsed,
-  latestChildResponseSummary,
   liveChildExecutionElapsedKey,
   processTailLines,
 } from '../state/childControls';
@@ -168,9 +167,7 @@ function SessionRow({
   // Child rows summarize what the subagent last said; the list-root row is
   // the conversation itself — echoing its own last exchange there is noise
   // (and the root can itself be a nested subagent when focus is scoped).
-  const summary = isListRoot
-    ? undefined
-    : latestChildResponseSummary(session.slice?.entries);
+  const summary = isListRoot ? undefined : session.slice?.description;
   return (
     <Box
       flexDirection="row"

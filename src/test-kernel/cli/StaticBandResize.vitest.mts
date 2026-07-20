@@ -102,7 +102,6 @@ describe('Static band resize', () => {
       text: '',
       finalized: false,
       toolUse: {
-        parsed: {},
         toolName: 'Bash',
         errorText: '',
         outputText: Array.from({ length: 15 }, (_, index) =>
@@ -223,7 +222,6 @@ describe('Static band resize', () => {
       text: '',
       finalized: true,
       toolUse: {
-        parsed: {},
         toolName: 'executions',
         errorText: '',
         outputText: 'report',
@@ -330,7 +328,6 @@ describe('Static band resize', () => {
         text: '',
         finalized: true,
         toolUse: {
-          parsed: {},
           toolName: 'Bash',
           errorText: '',
           outputText: `result ${index}`,

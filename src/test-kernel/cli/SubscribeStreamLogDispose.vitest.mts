@@ -69,12 +69,10 @@ describe('subscribeStreamLog batching and dispose', () => {
         .get(streamA)
         ?.entries.map((e) => e.text),
     ).toEqual(['hello']);
-    expect(
-      streams
-        .get()
-        .get(streamB)
-        ?.entries.map((e) => e.text),
-    ).toEqual(['world']);
+    expect(streams.get().get(streamB)).toMatchObject({
+      description: 'world',
+      entries: [],
+    });
 
     dispose();
   });
