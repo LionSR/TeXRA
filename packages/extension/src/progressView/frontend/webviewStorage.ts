@@ -10,3 +10,12 @@ import { hostBridge } from '@shared/hostBridge';
 import { createWebviewStorage } from '@shared/state/PersistedState';
 
 export const webviewStorage = createWebviewStorage(hostBridge);
+
+/**
+ * Key format for LogList's per-stream toggle-state entries. Single owner so
+ * the creator (LogList) and the deleters (stream lifecycle handlers) can't
+ * drift apart.
+ */
+export function logListStateKey(streamId: string): string {
+  return `logListState:${streamId}`;
+}

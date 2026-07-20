@@ -26,7 +26,11 @@ import {
   resetProgressState,
 } from '@progressView/frontend/progressState';
 import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
-import type { StreamTabId } from '@shared/schemas';
+import {
+  logListStateKey,
+  webviewStorage,
+} from '@progressView/frontend/webviewStorage';
+import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import { MAIN_VIEW_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   dispatchProgressViewOutbound,
@@ -181,6 +185,51 @@ describe('progressView dispatchMessage (createDispatcher migration)', () => {
     expect(permissions$.get()).toEqual([]);
     expect(appState.get().streamById.size).toBe(0);
     expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("DELETE_ALL clears every remaining stream's persisted LogList toggle state", () => {
+    const streamId = 'stream-delete-all' as StreamTabId;
+    appState.get().streamById.set(streamId, {
+      kind: 'agent',
+      name: streamId,
+      label: 'stream-delete-all',
+      agentCategory: AgentCategory.Workflow,
+      creationTimestamp: 1,
+    });
+    webviewStorage.set(logListStateKey(streamId), {
+      groupToggleStates: [['group-1', true]],
+    });
+    expect(webviewStorage.get(logListStateKey(streamId))).toBeDefined();
+
+    const handled = dispatchMessage(
+      { command: PROGRESS_VIEW_COMMANDS.DELETE_ALL },
+      vi.fn(),
+    );
+
+    expect(handled).toBe(true);
+    expect(webviewStorage.get(logListStateKey(streamId))).toBeUndefined();
+  });
+
+  it("DELETE_STREAM clears that stream's persisted LogList toggle state", () => {
+    const streamId = 'stream-delete-one' as StreamTabId;
+    appState.get().streamById.set(streamId, {
+      kind: 'agent',
+      name: streamId,
+      label: 'stream-delete-one',
+      agentCategory: AgentCategory.Workflow,
+      creationTimestamp: 1,
+    });
+    webviewStorage.set(logListStateKey(streamId), {
+      groupToggleStates: [['group-1', true]],
+    });
+
+    const handled = dispatchMessage(
+      { command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM, stream: streamId },
+      vi.fn(),
+    );
+
+    expect(handled).toBe(true);
+    expect(webviewStorage.get(logListStateKey(streamId))).toBeUndefined();
   });
 
   it('routes a malformed message to onError instead of throwing inside a handler body', () => {
