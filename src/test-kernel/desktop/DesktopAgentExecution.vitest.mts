@@ -1478,6 +1478,45 @@ describe('DesktopProgressBridge', () => {
     expect(order.indexOf('subscribe')).toBeLessThan(order.indexOf('render'));
   });
 
+  it('detaches when pending approval replay closes the presentation during attachment', async () => {
+    let finishDetection!: (value: Set<StreamTabId>) => void;
+    const detectionGate = new Promise<Set<StreamTabId>>((resolve) => {
+      finishDetection = resolve;
+    });
+    const detectWaitingStreams = vi.fn(async () => detectionGate);
+    let bridge: TestableBridge | undefined;
+
+    bridge = await createBridge([], {
+      configureSession: (session) => {
+        void session.interactions.requestPlanApproval?.({
+          approvalId: 'close-during-attachment',
+          streamId: 'attachment-close-stream' as StreamTabId,
+          plan: { objective: 'Close while replaying this approval.' },
+          goalEnabled: false,
+        });
+      },
+      deferReady: true,
+      detectWaitingStreams,
+      observeRendererMessage: (message) => {
+        const progress = message as ProgressMessage;
+        if (
+          progress.command === PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION &&
+          progress.action === 'show'
+        ) {
+          bridge?.dispose();
+        }
+      },
+    });
+    await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalled());
+    finishDetection(new Set());
+    await bridge.waitUntilReady();
+
+    const interactions = bridgeInteractions(bridge) as unknown as {
+      attachments: unknown[];
+    };
+    expect(interactions.attachments).toHaveLength(0);
+  });
+
   it('rechecks active executions after waiting detection before repairing logs', async () => {
     const streamId = 'race-stream' as StreamTabId;
     const executionId = 'abc123' as ExecutionId;

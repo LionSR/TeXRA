@@ -323,23 +323,41 @@ export class DesktopProgressBridge {
       backendSubscription.dispose();
       unsubscribeResult();
     };
+    if (this.disposed) {
+      this.unsubscribe();
+      return;
+    }
     // Canonical state and restart repair are complete before any window-owned
     // adapter can receive a replay. Subscribe first because attachment
     // synchronously redispatches pending approvals and their visibility facts.
-    this.detachHostInteractions = this.session.useHostInteractions(
+    const detachHostInteractions = this.session.useHostInteractions(
       this.hostInteractions,
     );
+    // Attachment synchronously replays pending requests. That replay can close
+    // the window before useHostInteractions returns its disposer.
+    if (this.disposed) {
+      detachHostInteractions();
+      return;
+    }
+    this.detachHostInteractions = detachHostInteractions;
     // A removal can begin after the pre-load drain but before these
     // subscriptions exist. Drain the one shared deletion owner again now;
     // subsequent events are observed live, and no await remains before the
     // first render can be enabled.
     await this.options.sessionStores.waitForPendingStreamDeletions();
     if (this.disposed) return;
-    this.detachResultToast = attachTerminalResultToast(
+    const detachResultToast = attachTerminalResultToast(
       this.session,
       this.runtimeHost,
       { replayWhenAttached: true },
     );
+    // Missed-result replay is synchronous for the same reason as approval
+    // replay above; never publish a disposer after this presentation closed.
+    if (this.disposed) {
+      detachResultToast();
+      return;
+    }
+    this.detachResultToast = detachResultToast;
     // Close the load→subscribe gap. The process-owned snapshot listener may
     // have accepted metadata facts while restart repair was in flight; now
     // that live subscriptions are established, overlay that canonical state
