@@ -15,7 +15,7 @@ import {
   type SessionTitleState,
 } from '@shared/sessionTitle';
 
-export type DesktopSessionActivity = SessionTitleState;
+type DesktopSessionActivity = SessionTitleState;
 
 type DesktopTitleSession = Pick<
   SessionHandle,
