@@ -17,14 +17,15 @@ import {
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
-import { normalizeToolUseData } from '@shared/toolUse';
-
 import {
   hasIncompleteEmbeddedSubagentFollowup,
   summarizeFollowupMessage,
 } from '@shared/subagentFollowup';
+import { normalizeToolUseData } from '@shared/toolUse';
+import { isActivePhase } from '@shared/streams/streamStatus';
 import { flushPendingRunTraces } from '@transcript';
 import { createFlushableDebounce } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateSummary } from '@utils/text/stringUtils';
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
 import {
@@ -37,9 +38,11 @@ import {
   getCliStateGeneration,
   isCliStreamRetired,
   patchStream,
+  setTransientNotice,
   type ConversationEntry,
 } from './cliState';
 import { isChildStreamRemoved } from './childExecutions';
+import { subscribeToSignalChanges } from './signalSubscription';
 import { isFinalTranscriptStatus } from './transcript';
 import { safeTerminalText } from './transcriptLines';
 
@@ -128,6 +131,7 @@ function toolUseEqual(
     prev.toolName === next.toolName &&
     prev.outputText === next.outputText &&
     prev.errorText === next.errorText &&
+    prev.exitCode === next.exitCode &&
     prev.headerSummary === next.headerSummary &&
     prev.isError === next.isError &&
     prev.isUserFeedback === next.isUserFeedback &&
@@ -442,6 +446,7 @@ function sortTranscriptCandidatesIfNeeded(
 export function subscribeStreamLog(): () => void {
   const store = defaultSession().transcripts;
   const pendingStreams = new Map<StreamTabId, number>();
+  let previousActiveStreamId = activeStreamId.get();
 
   // One trailing timer shared by every stream: during a multi-subagent burst
   // the root and each child emit within the same window, and per-stream
@@ -465,8 +470,36 @@ export function subscribeStreamLog(): () => void {
     if (!syncDebounce.pending) syncDebounce.schedule();
   });
 
+  const disposeFocus = subscribeToSignalChanges([activeStreamId], () => {
+    const nextActiveStreamId = activeStreamId.get();
+    const previous = previousActiveStreamId;
+    previousActiveStreamId = nextActiveStreamId;
+
+    if (previous && previous !== nextActiveStreamId) {
+      syncStreamLog(previous);
+    }
+    if (!nextActiveStreamId || nextActiveStreamId === previous) return;
+
+    const generation = getCliStateGeneration();
+    void store
+      .ensureLoaded(nextActiveStreamId)
+      .then(() => {
+        if (generation === getCliStateGeneration()) {
+          syncStreamLog(nextActiveStreamId);
+        }
+      })
+      .catch((error: unknown) => {
+        if (activeStreamId.get() === nextActiveStreamId) {
+          setTransientNotice(
+            `Could not load transcript: ${toErrorMessage(error)}`,
+          );
+        }
+      });
+  });
+
   return () => {
     dispose();
+    disposeFocus();
     // Cancel, not flush: the caller is tearing down (process exit or
     // unmount), so a final render of whatever was still pending isn't
     // needed and would race an already-torn-down UI.
@@ -475,7 +508,10 @@ export function subscribeStreamLog(): () => void {
   };
 }
 
-export function syncStreamLog(streamId: StreamTabId): void {
+export function syncStreamLog(
+  streamId: StreamTabId,
+  options: { readonly forceFull?: boolean } = {},
+): void {
   if (isChildStreamRemoved(streamId)) return;
   // AgentTrace throttles MODEL_RESPONSE chunks into the store via a 50ms
   // timer. If we read before that timer fires (e.g. the stream finalized
@@ -493,6 +529,12 @@ export function syncStreamLog(streamId: StreamTabId): void {
   const responses = allEntries.filter((entry: StreamLogEntry) =>
     transcriptMessageTypes.has(entry.messageType ?? ''),
   );
+  const currentActiveStreamId = activeStreamId.get();
+  const projectFullTranscript =
+    options.forceFull === true ||
+    currentActiveStreamId === undefined ||
+    currentActiveStreamId === streamId;
+  let releaseAfterSync = false;
 
   patchStream(streamId, (slice) => {
     const existing = new Map(slice.entries.map((e) => [e.id, e]));
@@ -525,6 +567,46 @@ export function syncStreamLog(streamId: StreamTabId): void {
     // entry" and Static append order are both defined on the final stream
     // order, not the per-entry render order.
     const next = finalizeSettledPrefix(ordered, streamFinal);
+    const latestUserIndex = next.findLastIndex(
+      (entry) => entry.role === 'user' && entry.text.trim(),
+    );
+    const latestInstruction =
+      latestUserIndex >= 0 ? next[latestUserIndex]?.text : undefined;
+    const description =
+      next.findLast(
+        (entry, index) =>
+          index > latestUserIndex &&
+          entry.role === 'assistant' &&
+          entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE &&
+          entry.finalized &&
+          entry.text.trim(),
+      )?.text ??
+      latestInstruction ??
+      slice.description;
+    releaseAfterSync =
+      !projectFullTranscript &&
+      slice.status !== undefined &&
+      !isActivePhase(slice.status);
+
+    if (!projectFullTranscript) {
+      const compactEntries = syntheticEntries;
+      if (
+        slice.entries.length === compactEntries.length &&
+        slice.entries.every(
+          (entry, index) => entry === compactEntries[index],
+        ) &&
+        slice.description === description &&
+        slice.thinkingActive === thinkingActive
+      ) {
+        return slice;
+      }
+      return {
+        ...slice,
+        description,
+        entries: compactEntries,
+        thinkingActive,
+      };
+    }
 
     const changed =
       slice.entries.length !== next.length ||
@@ -536,9 +618,17 @@ export function syncStreamLog(streamId: StreamTabId): void {
           !entriesEqual(entry, candidate)
         );
       });
-    if (!changed && slice.thinkingActive === thinkingActive) return slice;
-    return { ...slice, entries: next, thinkingActive };
+    if (
+      !changed &&
+      slice.description === description &&
+      slice.thinkingActive === thinkingActive
+    ) {
+      return slice;
+    }
+    return { ...slice, description, entries: next, thinkingActive };
   });
+
+  if (releaseAfterSync) store.releaseEntries(streamId);
 
   // Surface stream as active if we don't already have one — handles bare
   // `texra chat` where setActiveStream is the first signal the runtime emits.

@@ -368,6 +368,7 @@ export function sessionWithInteractions(
     interactions: owner,
     approvals: createSessionApprovals(),
     status,
+    transcripts: { ensureLoaded: async () => {} },
   } as unknown as SessionHandle;
 }
 
