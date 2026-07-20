@@ -1,6 +1,7 @@
 import {
   mkdirSync,
   mkdtempSync,
+  realpathSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -46,7 +47,7 @@ function findWorkspaceStoragePath(input: {
   userDataPath: string;
   workspacePath: string;
 }): string {
-  const targetWorkspacePath = resolve(input.workspacePath);
+  const targetWorkspacePath = realpathSync(input.workspacePath);
 
   for (const storageRoot of readdirSync(input.userDataPath, {
     withFileTypes: true,
