@@ -1021,10 +1021,6 @@ export class DesktopProgressBridge {
     );
   }
 
-  isResumeInFlight(streamId: StreamTabId): boolean {
-    return platform().agentResume.isResumeInFlight?.(streamId) ?? false;
-  }
-
   private async runLatexdiffFile(
     baseFile: string,
     editedFile: string,
