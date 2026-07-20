@@ -12,6 +12,7 @@ import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 // Local imports
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
+import type { ResolvedClientCredential } from '@agent/types/ModelHandlerContracts';
 
 // Modules to stub via vi.spyOn
 import * as serverKeysModule from '@auth/serverKeys';
@@ -389,12 +390,12 @@ describe('ModelHandlerOpenRouterNative retry ownership', () => {
 describe('ModelHandlerOpenRouterNative getClient retryConfig', () => {
   it('bounds the SDK retry window instead of the 1h default (#7643)', async () => {
     class TestableHandler extends ModelHandlerOpenRouterNative {
-      protected override async getApiKey(): Promise<string> {
-        return 'test-api-key';
-      }
-
-      override getBaseUrl(): string | null {
-        return null;
+      protected override async resolveClientCredential(): Promise<ResolvedClientCredential> {
+        return {
+          apiKey: 'test-api-key',
+          baseUrl: null,
+          route: 'openrouter',
+        };
       }
     }
 

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import pDefer from 'p-defer';
 import {
   DEFAULT_MODEL_CAPABILITIES,
   ModelProvider,
@@ -7,12 +8,15 @@ import {
 } from 'llm-zoo';
 
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
+import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
 import {
   CODEX_BACKEND_BASE_URL,
   resetCodexCoordinator,
   setPreferCodexSubscription,
+  isPreferCodexSubscription,
 } from '@auth/codex';
 import { setServerSideKeyService } from '@auth/serverKeys';
+import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import {
   CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
   CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
@@ -20,6 +24,7 @@ import {
 import { AgentCategory } from '@shared/schemas/agent';
 import { installPlatform } from '@test/support/setupPlatform';
 
+import type OpenAI from 'openai';
 import type { ResponseUsage } from 'openai/resources/responses/responses';
 
 function initFakePlatformWithSubscription(
@@ -30,6 +35,7 @@ function initFakePlatformWithSubscription(
       'texra.chatgptCodex.preferSubscription': true,
       ...extraConfig,
     },
+    secrets: { [apiKeySecretName('openai')]: 'sk-openai-test' },
   });
 }
 
@@ -71,6 +77,12 @@ const RAW_USAGE = {
   output_tokens: 1_000_000,
 } as ResponseUsage;
 
+class CodexRouteProbe extends ModelHandlerCodex {
+  tagClient(client: OpenAI, route: ModelCredentialRoute): OpenAI {
+    return this.rememberClientCredentialRoute(client, route);
+  }
+}
+
 /** Seed the handler's running input-token tally (owned by the chain-state
  *  collaborator; reached here via its narrow setter, not a raw field write). */
 function setCumulativeInputTokens(
@@ -89,8 +101,12 @@ describe('ModelHandlerCodex subscription fallback', () => {
     // The fallback path resolves the OpenAI base via the relay service; stub it
     // to "no relay" so getBaseUrl() yields the direct OpenAI base.
     setServerSideKeyService({
+      getUseIncludedModelAccess: () => false,
+      canUseServerSideKeys: async () => false,
+      wasQuotaAutoSwitched: () => false,
       shouldUseServerSideKeysSync: () => false,
     } as never);
+    invalidateApiKeyCache();
   });
 
   afterEach(() => {
@@ -275,5 +291,68 @@ describe('ModelHandlerCodex subscription fallback', () => {
 
     expect(usage.usageRoute).toBeUndefined();
     expect(usage.cost).toBeGreaterThan(0);
+  });
+
+  it('keeps an in-flight attempt on its captured subscription route', async () => {
+    await initFakePlatformWithSubscription();
+
+    const handler = new CodexRouteProbe(largeWindowConfig);
+    handler.setAgentCategory(AgentCategory.ToolUse);
+    const stream = pDefer<never>();
+    const streamRequest = vi.fn(() => stream.promise);
+    const client = handler.tagClient(
+      { responses: { stream: streamRequest } } as unknown as OpenAI,
+      'chatgpt-subscription',
+    );
+
+    const attempt = handler.createResponse({
+      client,
+      messages: [],
+      temperature: 0,
+    });
+    await vi.waitFor(() => expect(streamRequest).toHaveBeenCalledOnce());
+
+    await setPreferCodexSubscription(false);
+    expect(handler.getEffectiveContextWindow()).toBe(
+      CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
+    );
+    expect(handler.computePrice(RAW_USAGE)).toBe(0);
+    expect(handler.getLastCredentialUsageRoute()).toBe('chatgpt-subscription');
+
+    const rejectedClient = handler.tagClient(
+      { responses: { stream: vi.fn() } } as unknown as OpenAI,
+      'api-key',
+    );
+    await expect(
+      handler.createResponse({
+        client: rejectedClient,
+        messages: [],
+        temperature: 0,
+      }),
+    ).rejects.toThrow(/single-turn per instance/);
+    expect(handler.getLastCredentialUsageRoute()).toBe('chatgpt-subscription');
+
+    stream.reject(new Error('finish route snapshot test'));
+    await expect(attempt).rejects.toThrow('finish route snapshot test');
+    expect(handler.getBaseUrl()).not.toBe(CODEX_BACKEND_BASE_URL);
+    expect(handler.getEffectiveContextWindow()).toBe(
+      largeWindowConfig.contextWindow,
+    );
+    expect(handler.computePrice(RAW_USAGE)).toBe(0);
+    expect(handler.normalizeUsage(RAW_USAGE, 1000)).toMatchObject({
+      cost: 0,
+      usageRoute: 'chatgpt-subscription',
+    });
+  });
+
+  it('constructs a personal candidate without publishing the preference', async () => {
+    await initFakePlatformWithSubscription();
+
+    const handler = new ModelHandlerCodex(config);
+    handler.setAgentCategory(AgentCategory.ToolUse);
+    const candidate = await handler.getClient('personal');
+
+    expect(candidate.baseURL).toBe('https://api.openai.com/v1');
+    expect(isPreferCodexSubscription()).toBe(true);
   });
 });
