@@ -298,6 +298,7 @@ export abstract class RetryableInvocationNode<
     });
     // No timeout: the retry panel waits indefinitely for the user's decision.
     let clientPrepared = false;
+    const refreshClient = this.services.refreshClient;
     const interaction = session.interactions.requestRetry(
       {
         requestId: `retry-${nanoid()}`,
@@ -307,15 +308,14 @@ export abstract class RetryableInvocationNode<
         errorMessage: formatted.message,
         errorDetails: formatted,
       },
-      {
-        prepareRetry: async () => {
-          if (!this.services.refreshClient) {
-            throw new Error('Model client refresh is unavailable');
+      refreshClient
+        ? {
+            prepareRetry: async () => {
+              await refreshClient();
+              clientPrepared = true;
+            },
           }
-          await this.services.refreshClient();
-          clientPrepared = true;
-        },
-      },
+        : undefined,
     );
     if (!interaction) {
       throw new Error('HostInteractions.requestRetry is required');

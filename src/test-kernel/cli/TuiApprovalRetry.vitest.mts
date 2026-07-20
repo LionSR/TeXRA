@@ -842,7 +842,7 @@ describe('TUI retry approvals', () => {
     expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
   });
 
-  it('does not queue an ordinary retry behind slow client preparation', async () => {
+  it('linearizes ordinary retry preparation after a successful credential switch', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
     const preparation = pDefer<void>();
     const prepareRetry = vi.fn(() => preparation.promise);
@@ -854,24 +854,145 @@ describe('TUI retry approvals', () => {
     );
     await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
 
-    const ordinary = interactions.requestRetry?.({
-      requestId: 'ordinary-retry',
-      streamId: 'ordinary-stream',
-      operation: 'model request',
-      errorMessage: 'Temporary connection error.',
+    const ordinaryPrepare = vi.fn(async () => {
+      expect(mocks.apiMode).toBe('personal');
+      expect(mocks.preferSubscription).toBe(false);
     });
+    const ordinary = interactions.requestRetry?.(
+      {
+        requestId: 'ordinary-retry',
+        streamId: 'ordinary-stream',
+        operation: 'model request',
+        errorMessage: 'Temporary connection error.',
+      },
+      { prepareRetry: ordinaryPrepare },
+    );
     await waitForRetryApproval({ streamId: 'ordinary-stream' });
     decideRetry({ accepted: true });
 
-    await expect(ordinary).resolves.toEqual({
-      action: 'retry',
-      feedback: undefined,
-    });
+    await Promise.resolve();
+    expect(ordinaryPrepare).not.toHaveBeenCalled();
+
     preparation.resolve();
     await expect(switching).resolves.toEqual({
       action: 'retry',
       feedback: undefined,
     });
+    await expect(ordinary).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
+    expect(ordinaryPrepare).toHaveBeenCalledOnce();
+  });
+
+  it('linearizes ordinary retry preparation after credential rollback', async () => {
+    mocks.hasUsableApiKey.mockResolvedValue(true);
+    const preparation = pDefer<void>();
+    const switchPrepare = vi.fn(async () => {
+      await preparation.promise;
+      throw new Error('replacement client failed');
+    });
+    const { interactions } = tui();
+    const { result: switching } = await beginSubscriptionSwitch(
+      interactions,
+      'failing-switch',
+      { prepareRetry: switchPrepare },
+    );
+    await vi.waitFor(() => expect(switchPrepare).toHaveBeenCalledOnce());
+
+    const ordinaryPrepare = vi.fn(async () => {
+      expect(mocks.apiMode).toBe('included');
+      expect(mocks.preferSubscription).toBe(true);
+    });
+    const ordinary = interactions.requestRetry?.(
+      {
+        requestId: 'ordinary-after-rollback',
+        streamId: 'ordinary-after-rollback',
+        operation: 'model request',
+        errorMessage: 'Temporary connection error.',
+      },
+      { prepareRetry: ordinaryPrepare },
+    );
+    await waitForRetryApproval({ streamId: 'ordinary-after-rollback' });
+    decideRetry({ accepted: true });
+    await Promise.resolve();
+    expect(ordinaryPrepare).not.toHaveBeenCalled();
+
+    preparation.resolve();
+    await expect(switching).resolves.toEqual({
+      action: 'deny',
+      reason: 'replacement client failed',
+    });
+    await expect(ordinary).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
+    expect(ordinaryPrepare).toHaveBeenCalledOnce();
+  });
+
+  it('denies an ordinary retry when its replacement client cannot be prepared', async () => {
+    const { interactions } = tui();
+    const prepareRetry = vi.fn(async () => {
+      throw new Error('ordinary client refresh failed');
+    });
+    const ordinary = interactions.requestRetry?.(
+      {
+        requestId: 'ordinary-refresh-failure',
+        streamId: 'ordinary-refresh-failure',
+        operation: 'model request',
+        errorMessage: 'Temporary connection error.',
+      },
+      { prepareRetry },
+    );
+    await waitForRetryApproval({ streamId: 'ordinary-refresh-failure' });
+    decideRetry({ accepted: true });
+
+    await expect(ordinary).resolves.toEqual({
+      action: 'deny',
+      reason: 'ordinary client refresh failed',
+    });
+    expect(prepareRetry).toHaveBeenCalledOnce();
+    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
+    expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
+  });
+
+  it('skips queued ordinary preparation after that retry is cancelled', async () => {
+    mocks.hasUsableApiKey.mockResolvedValue(true);
+    const preparation = pDefer<void>();
+    const switchPrepare = vi.fn(() => preparation.promise);
+    const { interactions } = tui();
+    const { result: switching } = await beginSubscriptionSwitch(
+      interactions,
+      'switch-before-cancel',
+      { prepareRetry: switchPrepare },
+    );
+    await vi.waitFor(() => expect(switchPrepare).toHaveBeenCalledOnce());
+
+    const ordinaryPrepare = vi.fn(async () => undefined);
+    const ordinary = interactions.requestRetry?.(
+      {
+        requestId: 'cancelled-ordinary',
+        streamId: 'cancelled-ordinary',
+        operation: 'model request',
+        errorMessage: 'Temporary connection error.',
+      },
+      { prepareRetry: ordinaryPrepare },
+    );
+    await waitForRetryApproval({ streamId: 'cancelled-ordinary' });
+    decideRetry({ accepted: true });
+    interactions.cancel({
+      streamId: 'cancelled-ordinary',
+      kind: 'retry',
+      cause: 'Cancelled in test.',
+    });
+    await expect(ordinary).resolves.toEqual({ action: 'cancel' });
+
+    preparation.resolve();
+    await expect(switching).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
+    expect(ordinaryPrepare).not.toHaveBeenCalled();
   });
 
   it('invalidates pre-queue retry lookups when approvals are cleared', async () => {

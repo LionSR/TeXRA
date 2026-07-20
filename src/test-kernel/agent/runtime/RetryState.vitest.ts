@@ -375,7 +375,7 @@ describe('RetryState', () => {
           operation: 'Model request',
           model: 'copilot:sonnet46',
         }),
-        expect.objectContaining({ prepareRetry: expect.any(Function) }),
+        undefined,
       );
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);

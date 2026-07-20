@@ -553,6 +553,13 @@ async function requestRetryInteraction(
               prepareRetry: options?.prepareRetry,
             }),
           );
+        } else if (options?.prepareRetry) {
+          // Client construction is a read of process-wide credential state.
+          // Linearize it with credential writes so it cannot observe a route
+          // that a concurrent switch later rolls back.
+          await retryCredentialSwitchQueue.add(async () => {
+            if (isCurrent()) await options.prepareRetry?.();
+          });
         }
         if (!isCurrent()) return;
         resolve({ action: 'retry', feedback: decision.userMessage });
