@@ -81,6 +81,8 @@ export class OpenAIResponseWebSocketTransport {
   private wsConnectionCreatedAt = 0;
   /** Keepalive interval for the WebSocket connection. */
   private wsKeepaliveInterval: ReturnType<typeof setInterval> | null = null;
+  /** Socket whose request-specific listeners currently own error settlement. */
+  private activeRequestSocket: ResponsesWS | null = null;
 
   constructor(private readonly deps: OpenAIResponseWebSocketTransportDeps) {}
 
@@ -174,6 +176,19 @@ export class OpenAIResponseWebSocketTransport {
 
     this.wsConnection = ws;
     this.wsConnectionCreatedAt = Date.now();
+    // The SDK rejects globally when an error has no listener, so every socket
+    // keeps this guard even after it leaves the pool. Capturing `ws` prevents a
+    // late orphan error from invalidating a newer connection. During a request,
+    // its listener owns settlement and this guard deliberately stays passive.
+    ws.on('error', (error) => {
+      if (this.wsConnection !== ws || this.activeRequestSocket === ws) {
+        return;
+      }
+      this.logger.debug('WebSocket connection error — invalidating', {
+        data: { message: error.message },
+      });
+      this.closeWebSocket();
+    });
     this.startWsKeepalive(ws);
 
     this.logger.debug('WebSocket connection established');
@@ -201,6 +216,7 @@ export class OpenAIResponseWebSocketTransport {
     }
 
     const processor = this.deps.createStreamProcessor();
+    this.activeRequestSocket = ws;
     // Accumulate text deltas so we can attach a tail to the error on reject,
     // mirroring the HTTP streaming path. Without this, a WebSocket failure
     // mid-response would lose any text that had already been generated.
@@ -351,6 +367,9 @@ export class OpenAIResponseWebSocketTransport {
       };
 
       const cleanup = (): void => {
+        if (this.activeRequestSocket === ws) {
+          this.activeRequestSocket = null;
+        }
         signal?.removeEventListener('abort', onAbort);
         ws.off('event', onEvent);
         ws.off('response.completed', onCompleted);
@@ -397,6 +416,11 @@ export class OpenAIResponseWebSocketTransport {
     this.stopWsKeepalive();
     const wsConnection = this.wsConnection;
     if (wsConnection) {
+      // Clear ownership before physical teardown. The SDK may emit another
+      // error synchronously from close/terminate; the socket-bound guard then
+      // absorbs it without recursing or touching a later connection.
+      this.wsConnection = null;
+      this.wsConnectionCreatedAt = 0;
       closeQuietly(wsConnection);
       // A graceful `close()` only sends the close frame and waits for the
       // server's reply, so the underlying socket stays an active handle and
@@ -408,8 +432,6 @@ export class OpenAIResponseWebSocketTransport {
       } catch {
         /* already closed */
       }
-      this.wsConnection = null;
-      this.wsConnectionCreatedAt = 0;
       this.logger.debug('WebSocket connection closed');
     }
   }
