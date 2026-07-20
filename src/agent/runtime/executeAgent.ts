@@ -12,7 +12,7 @@ import {
   runReflectionFlow,
   type RunReflectionFlowResult,
 } from '@agent/implementations/flows/reflection/runReflectionFlow';
-import { inferPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
+import { inferAndLogPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RoundFinalizedCallback } from '@agent/core/flows/BaseFlowServices';
 import {
@@ -491,9 +491,10 @@ export async function resumeToolUseFromResumeData(
   await acquireResumedExecutionLease(resume.executionId);
   const modelHandlerCompatibilityKey =
     resume.shared.modelHandlerCompatibilityKey ??
-    inferPersistedModelHandlerCompatibilityKey(
+    inferAndLogPersistedModelHandlerCompatibilityKey(
       resume.agentConfig.model,
       resume.shared.messages,
+      logger,
     );
   // Resolve persisted lineage before launch assembly activates the stream and
   // transfers its resources. Storage failures must propagate without leaving
