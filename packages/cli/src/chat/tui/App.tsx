@@ -180,6 +180,7 @@ export function App(props: AppProps): React.JSX.Element {
   const childListActiveStreamRef = useRef(activeStreamId);
   const childListFocused = childListSelection.focused;
   const selectedChildValue = childListSelection.selectedValue;
+  const childListRowExpanded = childListSelection.rowExpanded;
   const { columns, rows } = useWindowSize();
   const { exit } = useApp();
   const [transcriptPrints, setTranscriptPrints] = useState<
@@ -729,6 +730,7 @@ export function App(props: AppProps): React.JSX.Element {
           rootStreamId,
           slashPaletteOpen,
           childListFocused,
+          childListRowExpanded,
           sessionViews,
           selectedChildValue,
           streams,
@@ -747,6 +749,9 @@ export function App(props: AppProps): React.JSX.Element {
           taskDetailExecutionIdSignal.set(executionId)
         }
         onPrintStream={printStreamOutput}
+        onToggleChildRowExpand={() =>
+          dispatchChildListSelection({ kind: 'toggleRowExpand' })
+        }
         onChildSelectionChange={(value) =>
           dispatchChildListSelection({ kind: 'highlight', value })
         }
