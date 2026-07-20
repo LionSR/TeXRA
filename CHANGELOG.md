@@ -2,133 +2,103 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.39.7] - Unreleased
 
 ### Shared (all surfaces)
 
 #### Breaking Changes
 
 - **Crossref DOI lookups moved to `crossref_search`** — use its `doi` command
-  instead. Existing custom-agent tool lists that name `crossref_doi` continue
-  to work temporarily and should be updated.
-- **Custom agents should replace `apply_path`** — the patch tool is no longer
-  available. Update custom-agent tool lists to use `edit_file` and `write_file`;
-  configurations that still name `apply_path` load without that capability.
+  and update custom agents that still list the temporary `crossref_doi` alias.
+- **Custom agents should replace `apply_path`** — use `edit_file` and
+  `write_file`; existing configurations still load but lose patch support.
 
 #### New Features
 
-- **Lean agents reuse successful proof patterns** — proof development and
-  simplification can build on effective patterns from earlier sessions, making
-  repeated formalization work shorter and more consistent over time.
-- **Custom agents can require structured results** — tool-use agents can define
-  a JSON schema for their final answer, and workflow scripts can request
-  schema-validated results from individual agents.
+- **Lean proofs reuse successful patterns** — Lean agents can build on proof
+  techniques that worked in earlier sessions.
+- **Custom agents can return validated data** — require a structured JSON
+  result from an agent or workflow step.
 
 #### Bug Fixes
 
-- **Files from parallel tool calls remain available** — when several tools run
-  at once, generated-file attachments are now passed back to the agent just as
-  they are for a single tool call.
-- **Delegated approval states its full scope** — CLI and VS Code prompts now
-  explain that approval covers pending and later tasks, edits, and commands
-  across the current run.
-- **Malformed saved goals report a clear Settings error** — invalid goal data
-  is not overwritten, and other settings continue loading normally.
-- **Agent reviews no longer hide unreadable untracked files** — files removed
-  during review collection are omitted normally, while permission and I/O
-  failures stop the review with a clear error instead of producing incomplete
-  findings.
-- **File searches no longer hide unreadable matches** — inaccessible matching
-  files now surface a search error instead of appearing as the oldest results,
-  while files removed during the search are omitted normally.
-- **Accepted run files remain editable** — agents can continue editing accepted
-  workflow output without an unnecessary intervening file read.
-- **Accepted LaTeX edits clean up only obsolete comparisons** — replacing an
-  original removes its old `_diff` comparison companions without deleting
-  comparisons for copies or files with different extensions.
-- **Between-round LaTeX diffs work with current runs** — users who enable
-  between-round comparisons now receive them for current saved runs and active
-  agent sessions instead of a round-number extraction error.
-- **Failed progress clearing keeps progress intact** — clearing progress now
-  reports when an active session cannot be stopped instead of continuing the
-  cleanup and discarding its progress.
-- **Retried workflow agents return to running status** — retrying an individual
-  workflow step now shows its agent as running instead of leaving it visibly
-  completed.
+- **Parallel tools keep generated files available** — all generated attachments
+  are returned to the agent after parallel calls.
+- **Delegated approval shows its full scope** — prompts now state that approval
+  covers current and later tasks, edits, and commands in the run.
+- **Invalid saved goals no longer disrupt Settings** — TeXRA reports the error,
+  preserves the goal data, and loads the remaining settings.
+- **Agent reviews report unreadable untracked files** — reviews now fail clearly
+  instead of silently producing incomplete findings.
+- **File searches report unreadable matches** — inaccessible matching files no
+  longer appear as ordinary results.
+- **Accepted workflow files remain editable** — agents can continue editing
+  accepted output without interruption.
+- **Accepting LaTeX edits removes only obsolete comparisons** — old `_diff`
+  files for the replaced original are removed without affecting other files.
+- **Between-round LaTeX comparisons work for current runs** — comparisons now
+  work for both saved runs and active agent sessions.
+- **Failed progress clearing preserves the run** — progress remains intact when
+  an active session cannot be stopped.
+- **Retried workflow agents show as running** — retrying one step updates its
+  visible status correctly.
 
 ### CLI
 
 #### Breaking Changes
 
-- **CLI model access now uses `/api` exclusively** — use `/api chatgpt`,
-  `/api included`, or `/api personal`; the separate `/subscription` command
-  and `/sub` alias have been removed.
+- **Model access now uses `/api`** — use `/api chatgpt`, `/api included`, or
+  `/api personal`; `/subscription` and `/sub` have been removed.
 
 #### New Features
 
-- **Interactive sign-in can be cancelled immediately** — pressing Esc or
-  Ctrl-C in an account form now stops an active browser or device-code sign-in
-  attempt instead of leaving its callback wait or polling loop running.
-- **Arrow keys can move between chat and subagents** — when input history has
-  no further entry, Up or Down can focus the subagent list; Down past its final
-  row returns to the chat input. Tab remains available in both directions.
-- **Account changes stay visible without filling chat history** — sign-in,
-  sign-out, and model-access forms now show their progress in place and leave
-  only the final result in the conversation.
-- **Reference commands stay out of chat history** — `/help`, `/goal` help,
-  and memory lists or previews open in a temporary Esc-to-close pane when they
-  fit the terminal, while oversized output still falls back to searchable
-  scrollback.
-- **Model access and accounts have distinct CLI controls** — `/api` now offers
-  ChatGPT subscription, included TeXRA access, and personal API keys in one
-  picker; `/auth` reports both account sessions and the effective route; and
-  `/logout` lets users sign out of either account or explicitly sign out of
-  both.
-- **Skip or retry individual workflow agents** — select an active workflow
-  child to skip it or retry only that step without restarting the whole
-  workflow.
-- **Terminal titles show live run state** — supported terminals label the
-  current project as running or awaiting approval, then restore the idle title
-  when the run ends.
-- **Focused workflows show phase and agent details** — workflow output is
-  grouped by phase and shows each agent's model, elapsed time, tool calls, token
-  count, and cost.
+- **Cancel sign-in immediately** — press Esc or Ctrl-C in an account form to
+  stop browser or device-code sign-in.
+- **Use arrow keys to move between chat and subagents** — Up and Down move to
+  the subagent list when input history ends, while Tab still works both ways.
+- **Account forms keep chat history clean** — sign-in, sign-out, and access
+  progress updates in place, leaving only the final result in the conversation.
+- **Reference commands open outside chat history** — `/help`, `/goal` help, and
+  memory views use a temporary pane or searchable scrollback for long output.
+- **Manage model access and accounts separately** — `/api` chooses ChatGPT,
+  included, or personal access; `/auth` shows sessions and routing; `/logout`
+  signs out of one or both accounts.
+- **Skip or retry one workflow agent** — restart or bypass an individual step
+  without restarting the full workflow.
+- **Terminal titles show run status** — supported terminals show when a project
+  is running or awaiting approval, then restore the idle title.
+- **Focused workflows show more detail** — each phase lists agent models,
+  elapsed time, tool calls, token use, and cost.
 
 #### Bug Fixes
 
-- **Generated-file history no longer invents empty files** — inaccessible run
-  artifacts now surface a history error instead of appearing as zero-byte
-  files, while files removed during the scan are omitted normally.
-- **ChatGPT limits no longer switch credentials silently** — when subscription
-  usage is exhausted, the CLI shows the limit and reset warning and waits for
-  confirmation before retrying with a personal OpenAI API key.
-- **Edit previews open on the change** — approval previews now begin near the
-  first added or removed line, so long wrapped context no longer hides the
+- **Generated-file history reports inaccessible files** — unreadable artifacts
+  now produce an error instead of appearing as empty files.
+- **ChatGPT limits no longer switch credentials silently** — the CLI shows the
+  limit and reset time before offering to retry with a personal OpenAI key.
+- **Edit previews open at the first change** — long context no longer hides the
   proposed edit below the fold.
-- **Run activity remains visible throughout a turn** — an animated elapsed-time
-  indicator now stays visible while agent work is active, not only while the
-  model is thinking.
+- **Run activity stays visible throughout a turn** — the elapsed-time indicator
+  remains animated for all active agent work.
 
 ### Extension (VS Code)
 
 #### New Features
 
-- **Workflow phase headers show their plan position** — focused workflow runs
-  label each declared phase with its current and total position, matching the
-  CLI progress view.
+- **Workflow phases show their plan position** — headers display the current and
+  total phase number.
 
 #### Bug Fixes
 
-- **Moonshot key links follow the selected region** — API-key actions now open
-  the international or China console that matches the configured Moonshot
-  endpoint.
+- **Moonshot key links match the selected region** — key actions open the China
+  or international console for the configured endpoint.
 
 ### Desktop
 
 #### Bug Fixes
 
-- **Packaged Desktop starts successfully** — the bundled app can complete its
-  startup state write instead of failing while acquiring the state-file lock.
+- **Packaged Desktop starts successfully** — the app can save its startup state
+  without failing on the state file.
 
 ## [0.39.6] - 2026-07-18
 
@@ -136,133 +106,95 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
-- **Kimi Code membership models** — Kimi Code members can use their Kimi Code
-  API key for Kimi for Coding and Kimi for Coding (High-Speed) in the CLI and
-  VS Code extension. A "Prefer Kimi Code" switch additionally routes Kimi K3
-  through the Kimi Code coding endpoint when a Kimi Code key is set, so K3
-  appears once in the picker instead of as a separate duplicate entry.
-- **One conversation history across TeXRA apps** — sessions created in the
-  CLI, desktop app, or VS Code extension now appear in the same project
-  history when that project is opened in another TeXRA app.
-- **Kimi K3** — Moonshot's new flagship model (1M-token context, vision, always-on
-  reasoning) is available and included in the default model list.
-- **GPT-5.6 Pro** — OpenAI's pro reasoning mode for GPT-5.6 is available through
-  direct OpenAI API access for the hardest, latency-tolerant tasks.
-- **Custom agents can run resumable multi-agent workflows** — agent authors can
-  opt into deterministic workflow scripts whose completed steps resume after
-  interruption and whose progress appears in the existing session view.
+- **Kimi Code membership models** — use a Kimi Code key for both coding models,
+  and optionally route Kimi K3 through Kimi Code without a duplicate picker entry.
+- **Conversation history is shared across TeXRA apps** — project sessions from
+  the CLI, Desktop, and VS Code extension appear in the same history.
+- **Kimi K3** — Moonshot's flagship model with a 1M-token context window,
+  vision, and always-on reasoning joins the default model list.
+- **GPT-5.6 Pro** — OpenAI's pro reasoning mode is available through direct API
+  access for demanding tasks where latency is less important.
+- **Custom agents can run resumable multi-agent workflows** — scripted
+  workflows keep completed steps after interruptions and show session progress.
 
 #### Bug Fixes
 
-- **Credential setup stays private and matches the current app** — the setup
-  assistant now distinguishes saved keys, environment variables, ChatGPT
-  access, and included TeXRA access; it directs API-key entry to the current
-  app's protected input instead of asking users to place secrets in chat.
-- **Relay failures support safe diagnostics** — support can trace failures
-  before or during a model response without recording request content.
-- **Running sessions are protected across TeXRA apps** — clearing history or
-  progress in one app no longer removes or marks failed a session that is
-  still active in the CLI, desktop app, or VS Code extension.
-- **Saved app logs redact provider credentials** — recognizable provider
-  credentials are removed from saved extension and app logs, while local CLI
-  terminal output remains operator-readable.
-- **Unavailable-tool notices are scoped to each agent session** — one active
-  session no longer suppresses dependency guidance for another session.
-- **Follow-ups to waiting or resumed subagents are delivered exactly once** —
-  messages sent during an active resumed turn no longer remain dormant, and a
-  completed follow-up is no longer reported as failed or repeated later.
-- **Auto-approval stays in sync for parent and delegated agents** — file and
-  command auto-approval persists across CLI turns, and live parent changes
-  propagate to inheriting delegated agents and their visible status.
-- **Resumable workflows are easier for agents to use and repair** — workflow
-  scripts now explain their file-passing contract, report useful source
-  locations and recent activity after failures, reject missing file inputs,
-  and retain completed steps when a retry revises the script.
+- **Credential setup stays private and app-specific** — setup distinguishes all
+  access methods and collects API keys through the current app's protected input.
+- **Relay failures support private diagnostics** — support can trace failures
+  without recording request content.
+- **Active sessions are protected across TeXRA apps** — clearing history or
+  progress in one app no longer removes or fails a run active in another.
+- **Saved app logs redact provider credentials** — credentials are removed from
+  saved extension and app logs without changing local CLI output.
+- **Tool setup notices appear in every relevant session** — one active session
+  no longer hides dependency guidance from another.
+- **Subagent follow-ups arrive exactly once** — messages reach waiting and
+  resumed subagents without being delayed, repeated, or falsely marked failed.
+- **Auto-approval stays synchronized across agents** — CLI approval persists
+  across turns, and parent changes reach delegated agents immediately.
+- **Resumable workflows are easier to fix** — clearer file guidance and failure
+  details help agents reject missing inputs and preserve completed steps on retry.
 
 ### CLI
 
 #### New Features
 
-- **Add provider keys without leaving a CLI chat** — `/key` opens a provider
-  picker followed by masked input and selects personal API-key access after
-  the key is saved.
-- **Subagent rows show elapsed time and generated tokens** — each row in the
-  child list gains a right-aligned metadata column with the subagent's
-  elapsed time and how many tokens it has generated so far, so a glance shows
-  which children are working and how much they have produced. Narrow
-  terminals keep the compact inline form.
-- **The todo checklist gets breathing room** — a blank separator row now sits
-  above the todos/plan panel, so the checklist no longer merges visually with
-  the session list or the footer.
-- **Child rows show what each subagent last said** — the session list
-  summarizes every subagent's latest response (or its current instruction
-  while a turn is running) inline on its row, so you can triage children
-  without focusing them.
-- **Workflow round progress shows per agent** — session rows and the status
-  bar display each running agent's round (for example `r2/3`), so a
-  multi-agent workflow's delegated agents show where they are without
-  focusing each one.
-- **Waiting agents say what they are waiting on** — a session row that needs
-  your input shows the kind of request (command approval, edit, question,
-  and so on) and how many more are queued behind it. Selecting that session
-  brings its request forward immediately instead of leaving it behind other
-  sessions' prompts.
-- **Workflow-script progress is visible in the CLI** — delegated workflow
-  phases, script log messages, and per-step cost summaries now remain in
-  terminal scrollback beneath the workflow call that produced them.
-- **Full tool output stays in terminal scrollback** — press Ctrl-T to print the
-  focused session's complete output once without leaving the chat, or press v
-  on a selected child session. Long output remains searchable and available to
-  ordinary terminal scrolling without a separate transcript screen.
-- **Child navigation now uses one persistent list** — press Tab to select child
-  sessions and background processes together, then use Enter to focus a
-  session or inspect process output. Finished sessions remain available, and a
-  completed focused child returns to its immediate parent.
+- **Add provider keys from CLI chat** — `/key` opens masked key entry and
+  switches to personal API access after saving.
+- **Subagent rows show elapsed time and generated tokens** — see each child's
+  progress at a glance, with a compact layout in narrow terminals.
+- **Todo panels are easier to distinguish** — a blank row separates the
+  todo or plan checklist from adjacent content.
+- **Subagent rows show their latest message** — each row previews the latest
+  response, or the current instruction while running.
+- **Workflow rows show each agent's round** — session rows and the status bar
+  display progress such as `r2/3` without requiring focus.
+- **Waiting agents show what they need** — rows display the request type and
+  queue count, and selecting one brings its request forward.
+- **Workflow progress remains in scrollback** — delegated phases, log messages,
+  and step costs stay beneath the workflow call.
+- **Full tool output stays in scrollback** — press Ctrl-T for the focused
+  session or `v` on a selected child to print searchable output.
+- **Navigate all child work from one list** — Tab selects sessions and processes,
+  Enter opens them, finished entries remain available, and completed children
+  return focus to their parent.
 
 #### Bug Fixes
 
-- **Clipped tool output keeps its visual status cues** — tool rows that exceed
-  the available transcript space now retain their status, preview, and error
-  styling.
-- **A calmer footer with one home per hint** — the rotating tip line is gone
-  (its shortcuts live in the status bar and `/help`), and queued follow-ups
-  preview only in their dedicated panel instead of also scrolling through the
-  status bar, freeing a transcript row and ending duplicate displays.
-- **Long plans are readable before you approve them** — the plan approval body
-  now scrolls with the same ↑/↓ and PgUp/PgDn keys as command and delegation
-  approvals, instead of silently truncating tall plans; all three approval
-  bodies share identical scroll and overflow behavior.
-- **The chat transcript breathes** — a blank line now always follows your
-  message, keeping prompts visually separate from the agent's first action.
-- **Ctrl+C clears dialog text before stopping or exiting** — pressing Ctrl+C
-  with text in a foreground dialog now clears that text; pressing it again
-  keeps the existing response-stop or exit behavior.
-- **Slash-command pickers behave consistently on small terminals** — memory,
-  resume, model, agent, skill, tool, login, access, and approval lists now use
-  the same navigation hints and compact layout, and a shortcut typed while an
-  asynchronous list is loading is applied when its choices appear.
+- **Clipped tool output keeps its status** — shortened rows retain their preview,
+  error styling, and state cues.
+- **CLI hints no longer appear twice** — shortcuts stay in the status bar and
+  `/help`, while queued follow-ups stay in their own panel.
+- **Long approval plans are scrollable** — use arrow keys or PgUp and PgDn to
+  review the full plan before approving it.
+- **Chat messages stay visually separated** — a blank line now follows every
+  user message.
+- **Ctrl+C clears dialog text first** — press it once to clear typed text and
+  again to stop the response or exit.
+- **Slash-command pickers work consistently in small terminals** — lists share
+  compact navigation, and shortcuts typed while loading apply when ready.
 
 ### Extension (VS Code)
 
 #### New Features
 
-- **Moonshot API regions** — choose the China or international Moonshot API
-  region in provider settings.
-- **VS Code language models handle images and tool context** — language models
-  provided by VS Code can receive image inputs and show clearer contextual
-  messages while invoking TeXRA tools.
+- **Moonshot API regions** — choose the China or international endpoint in
+  provider settings.
+- **VS Code language models support images and tool context** — models can
+  receive images and show clearer context while using TeXRA tools.
 
 #### Bug Fixes
 
-- **Extension history stays available if automatic updates cannot start** —
-  reopening Settings refreshes the list without disrupting the extension.
+- **Extension history survives live-refresh failures** — reopening Settings
+  refreshes history without disrupting the extension.
 
 ### Desktop
 
 #### Bug Fixes
 
-- **Desktop history remains usable when live refresh fails** — manual refresh
-  continues to work without the app closing unexpectedly.
+- **Desktop history survives live-refresh failures** — manual refresh continues
+  working without closing the app.
 
 ## [0.39.5] - 2026-07-15
 
