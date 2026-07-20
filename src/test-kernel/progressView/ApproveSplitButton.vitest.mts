@@ -115,7 +115,7 @@ describe('approve-split-button', () => {
       DELEGATION_APPROVAL_COPY.progressViewAction,
     );
     expect(DELEGATION_APPROVAL_COPY.progressViewAction).toBe(
-      'Approve this and all later tasks, edits & commands in this run',
+      'Approve all pending and later tasks, edits & commands in this run',
     );
     const menu = element.shadowRoot?.querySelector('.approve-split-menu');
     menu?.dispatchEvent(

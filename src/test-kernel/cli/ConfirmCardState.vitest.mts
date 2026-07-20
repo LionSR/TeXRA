@@ -153,10 +153,10 @@ describe('CLI confirm-card key handling', () => {
       action: DELEGATION_APPROVAL_COPY.cliCompactAction,
     });
     expect(DELEGATION_APPROVAL_COPY.cliAction).toBe(
-      'approve this and all later tasks, edits & commands in this run',
+      'approve all pending and later tasks, edits & commands in this run',
     );
     expect(DELEGATION_APPROVAL_COPY.cliCompactAction).toBe(
-      'later tasks + actions in run',
+      'pending + later actions in run',
     );
   });
 
