@@ -131,7 +131,24 @@ describe('desktop composition root and launch environment', () => {
     );
     expect(source).toContain('presentationSignal: presentationAbort.signal');
 
+    const installWindowTitle = source.indexOf('installDesktopWindowTitle(');
+    const loadRendererUrl = source.indexOf(
+      'window.loadURL(',
+      installWindowTitle,
+    );
+    const loadRendererFile = source.indexOf(
+      'window.loadFile(',
+      installWindowTitle,
+    );
+    expect(installWindowTitle).toBeGreaterThanOrEqual(0);
+    expect(loadRendererUrl).toBeGreaterThan(installWindowTitle);
+    expect(loadRendererFile).toBeGreaterThan(installWindowTitle);
+
     const windowClose = source.indexOf("window.once('closed'");
+    const disposeWindowTitle = source.indexOf(
+      'disposeWindowTitle()',
+      windowClose,
+    );
     const abortPresentation = source.indexOf(
       'presentationAbort.abort()',
       windowClose,
@@ -140,7 +157,8 @@ describe('desktop composition root and launch environment', () => {
       'agentExecution.dispose()',
       windowClose,
     );
-    expect(abortPresentation).toBeGreaterThan(windowClose);
+    expect(disposeWindowTitle).toBeGreaterThan(windowClose);
+    expect(abortPresentation).toBeGreaterThan(disposeWindowTitle);
     expect(disposePresentation).toBeGreaterThan(abortPresentation);
 
     const shutdownBefore = source.indexOf(
