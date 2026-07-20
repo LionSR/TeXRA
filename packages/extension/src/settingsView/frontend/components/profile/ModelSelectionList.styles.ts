@@ -195,6 +195,11 @@ export const modelSelectionListStyles: CSSResult = css`
     margin-left: auto;
   }
 
+  .model-route {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+  }
+
   .reasoning-level-select {
     flex-shrink: 0;
     width: 120px;

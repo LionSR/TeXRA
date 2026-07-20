@@ -229,6 +229,11 @@ export class ModelSelectionList extends LitElement {
         >
           <span class="model-name">${model.label}</span>
           <span class="model-shortname">(${model.name})</span>
+          ${
+            model.routeLabel
+              ? html`<span class="model-route">· ${model.routeLabel}</span>`
+              : nothing
+          }
           ${this.renderAvailabilityIcon(model)}
           ${
             isExpensiveModel(model.provider, model.name)
