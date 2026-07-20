@@ -78,6 +78,63 @@ describe('desktop composition root and launch environment', () => {
     ]);
   }
 
+  it('owns one process session and flushes it before shutdown disposal', async () => {
+    const source = await readFile(
+      repoPath('packages', 'desktop', 'src', 'main', 'index.ts'),
+      'utf8',
+    );
+
+    expect(source.match(/new SessionHandle\(/gu)).toHaveLength(1);
+    expect(source.match(/StreamLogStore\.open\(\)/gu)).toHaveLength(1);
+    expect(source).toMatch(
+      /createWindow\(\{[\s\S]*?\bprocessSession,[\s\S]*?\}\)/u,
+    );
+    expect(source).toContain('presentationSignal: presentationAbort.signal');
+
+    const windowClose = source.indexOf("window.once('closed'");
+    const abortPresentation = source.indexOf(
+      'presentationAbort.abort()',
+      windowClose,
+    );
+    const disposePresentation = source.indexOf(
+      'agentExecution.dispose()',
+      windowClose,
+    );
+    expect(abortPresentation).toBeGreaterThan(windowClose);
+    expect(disposePresentation).toBeGreaterThan(abortPresentation);
+
+    const shutdownBefore = source.indexOf(
+      'lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE',
+    );
+    const disableResume = source.indexOf(
+      'disposeAgentResumeHandler()',
+      shutdownBefore,
+    );
+    const registerAgentShutdown = source.indexOf(
+      'registerAgentShutdownHandlers(lifecycle)',
+    );
+    const flush = source.indexOf(
+      'processSession.flushArtifacts()',
+      registerAgentShutdown,
+    );
+    const shutdownStart = source.indexOf(
+      'lifecycle.onShutdown(SHUTDOWN_PHASE.ON',
+    );
+    const disposeStores = source.indexOf(
+      'disposeProcessStores()',
+      shutdownStart,
+    );
+    const dispose = source.indexOf('processSession.dispose()', shutdownStart);
+    expect(shutdownBefore).toBeGreaterThanOrEqual(0);
+    expect(disableResume).toBeGreaterThan(shutdownBefore);
+    expect(registerAgentShutdown).toBeGreaterThan(disableResume);
+    expect(flush).toBeGreaterThan(registerAgentShutdown);
+    expect(flush).toBeLessThan(shutdownStart);
+    expect(shutdownStart).toBeGreaterThanOrEqual(0);
+    expect(disposeStores).toBeGreaterThan(shutdownStart);
+    expect(dispose).toBeGreaterThan(disposeStores);
+  });
+
   it('keeps platform initialization in the Electron composition root', async () => {
     const files = await walkTypeScriptFiles(DESKTOP_SRC_DIR);
     const initPlatformFiles: string[] = [];

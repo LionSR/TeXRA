@@ -14,6 +14,7 @@ import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { defaultSession } from './SessionHandle';
 import { flushOwnedExecutionArtifacts } from './executionOwnership';
+import { ResumeAdmissionCancelledError } from './resumeAdmission';
 import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
 
 /**
@@ -38,6 +39,8 @@ export interface RunAgentOptions extends Pick<
   /** Persist host-owned final artifacts while this run still owns its lease. */
   beforeLeaseRelease?: () => Promise<void>;
   registerExecution?: boolean;
+  /** Recheck canonical admission atomically while acquiring a resumed lease. */
+  canAcquireResumeLease?: () => boolean;
   /**
    * Opt-in set by the "fix LaTeX" VS Code actions (Fix-Compilation command, the
    * progress-view compile fixer): run the launched agent on the configured
@@ -70,6 +73,7 @@ export async function runAgent(
     openWorkflowOutput,
     beforeLeaseRelease,
     registerExecution: registerExecutionOption,
+    canAcquireResumeLease,
     preferHelperModel,
     ...executeAgentOptions
   } = options;
@@ -97,7 +101,12 @@ export async function runAgent(
       config.agentCategory,
     );
   } else {
-    await acquireResumedExecutionLease(executionId);
+    const lease = canAcquireResumeLease
+      ? await acquireResumedExecutionLease(executionId, canAcquireResumeLease)
+      : await acquireResumedExecutionLease(executionId);
+    if (lease === 'cancelled') {
+      throw new ResumeAdmissionCancelledError(executionId);
+    }
   }
 
   let lifecycleStarted = false;

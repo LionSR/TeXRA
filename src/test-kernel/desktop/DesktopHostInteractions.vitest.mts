@@ -74,6 +74,7 @@ interface DesktopHostInteractionsModule {
   createDesktopHostInteractions(options: {
     runtimeHost: { emit: (event: string, payload: unknown) => void };
     session: SessionHandle;
+    showInfoMessage(message: string): Promise<void> | void;
     getApprovalHandlers(): ApprovalRequestHandlerSet;
     getToolEditApprovals(): {
       approvePendingForStream: ReturnType<typeof vi.fn>;
@@ -202,6 +203,7 @@ async function createInteractions(handlers = createHandlers()) {
     interactions: createDesktopHostInteractions({
       runtimeHost,
       session,
+      showInfoMessage: vi.fn(),
       getApprovalHandlers: () => handlers,
       getToolEditApprovals: () => toolEditApprovals,
     }),
@@ -483,11 +485,11 @@ describe('createDesktopHostInteractions', () => {
 
     await expect(bashPromise).resolves.toEqual({
       accepted: false,
-      userMessage: 'Desktop session disposed.',
+      userMessage: 'Desktop presentation detached.',
     });
     await expect(planPromise).resolves.toEqual({
       action: 'reject',
-      feedback: 'Desktop session disposed.',
+      feedback: 'Desktop presentation detached.',
     });
     expect(handlers.transport.bash.dismiss).toHaveBeenCalled();
     expect(handlers.transport.planApproval.dismiss).toHaveBeenCalled();

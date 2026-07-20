@@ -258,7 +258,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.cancel({ cause: 'Desktop session disposed.' });
+    this.cancel({ cause: 'Desktop presentation detached.' });
   }
 
   private async createPendingEntry(

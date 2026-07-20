@@ -57,7 +57,7 @@ describe('tool-use follow-up progress events', () => {
       session.executions.untrack(executionId);
     }
     for (const session of sessions) {
-      session.dispose({ keepActiveExecutions: true });
+      session.dispose();
     }
     sessions.clear();
     clearAllStreamStatusesForTest(defaultSession().status);

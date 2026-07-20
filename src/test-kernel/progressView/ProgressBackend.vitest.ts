@@ -445,7 +445,7 @@ describe('ProgressBackend', () => {
     try {
       await backend.stopStream(stream);
 
-      expect(lifecycle.stopStream).toHaveBeenCalledWith(stream, session, {
+      expect(lifecycle.stopStream).toHaveBeenCalledWith(stream, {
         clearRetryRequest: true,
       });
       expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalled();
@@ -481,10 +481,7 @@ describe('ProgressBackend', () => {
 
       await backend.deleteStream(second);
 
-      expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(
-        second,
-        session,
-      );
+      expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(second);
       expect(lifecycle.activateStream).toHaveBeenCalledWith(first);
       expect(messages).toContainEqual({
         command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
@@ -616,14 +613,8 @@ describe('ProgressBackend', () => {
     try {
       await backend.deleteAllStreams();
 
-      expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(
-        first,
-        session,
-      );
-      expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(
-        second,
-        session,
-      );
+      expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(first);
+      expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(second);
       expect(lifecycle.cleanupDeletedStreams).toHaveBeenCalledWith({
         allDeleted: true,
       });
@@ -671,8 +662,8 @@ describe('ProgressBackend', () => {
     try {
       await backend.deleteAllStreams();
 
-      expect(lifecycle.stopStream).toHaveBeenCalledWith(first, session);
-      expect(lifecycle.stopStream).toHaveBeenCalledWith(second, session);
+      expect(lifecycle.stopStream).toHaveBeenCalledWith(first);
+      expect(lifecycle.stopStream).toHaveBeenCalledWith(second);
       expect(waitForRelease).toHaveBeenCalledWith(first);
       expect(waitForRelease).toHaveBeenCalledWith(second);
     } finally {
@@ -709,7 +700,7 @@ describe('ProgressBackend', () => {
     try {
       await expect(backend.deleteAllStreams()).rejects.toBe(stopError);
 
-      expect(lifecycle.stopStream).toHaveBeenCalledWith(stream, session);
+      expect(lifecycle.stopStream).toHaveBeenCalledWith(stream);
       expect(waitForRelease).not.toHaveBeenCalled();
       expect(clearAll).not.toHaveBeenCalled();
       expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalled();
@@ -735,14 +726,8 @@ describe('ProgressBackend', () => {
     try {
       await backend.deleteAllStreams();
 
-      expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(
-        deleted,
-        session,
-      );
-      expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalledWith(
-        retained,
-        session,
-      );
+      expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(deleted);
+      expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalledWith(retained);
       expect(lifecycle.cleanupDeletedStreams).toHaveBeenCalledWith({
         allDeleted: false,
       });
