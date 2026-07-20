@@ -180,6 +180,7 @@ export class ProgressFactApplier {
       stream: StreamTabId,
     ) => void | Promise<void>,
     private readonly getStreamControls: GetProgressStreamControls = getDefaultProgressStreamControls,
+    private readonly stateOwnership: 'backend' | 'session' = 'backend',
   ) {
     this.logger = createChannelTrace('ProgressFactApplier');
   }
@@ -305,7 +306,7 @@ export class ProgressFactApplier {
     streamId,
     description,
   }: UpdateStreamDescriptionPayload): void {
-    this.state.setStreamDescription(streamId, description);
+    this.state.setStreamDescription(streamId, description, this.stateOwnership);
     if (this.webviewUpdater.isAvailable()) {
       this.webviewUpdater.updateStreamDescription(streamId, description);
     }
@@ -315,7 +316,11 @@ export class ProgressFactApplier {
     childStreamId,
     parentStreamId,
   }: SetParentStreamPayload): void {
-    this.state.setStreamParent(childStreamId, parentStreamId);
+    this.state.setStreamParent(
+      childStreamId,
+      parentStreamId,
+      this.stateOwnership,
+    );
     if (this.webviewUpdater.isAvailable()) {
       this.webviewUpdater.updateParentStream(
         childStreamId,
@@ -346,7 +351,9 @@ export class ProgressFactApplier {
     streamId,
     filesByRound,
   }: AddOutputFilesPayload): void {
-    this.state.snapshots.addOutputFiles(streamId, filesByRound);
+    if (this.stateOwnership === 'backend') {
+      this.state.snapshots.addOutputFiles(streamId, filesByRound);
+    }
     this.sendIfActive(streamId, () => {
       const rounds = this.state.snapshots.getOutputFiles(streamId);
       this.webviewUpdater.updateFiles(streamId, {
@@ -359,7 +366,9 @@ export class ProgressFactApplier {
     streamId,
     filesByRound,
   }: UpdateMissingOutputsPayload): void {
-    this.state.snapshots.updateMissingOutputs(streamId, filesByRound);
+    if (this.stateOwnership === 'backend') {
+      this.state.snapshots.updateMissingOutputs(streamId, filesByRound);
+    }
     this.sendIfActive(streamId, () => {
       const rounds = this.state.snapshots.getMissingOutputs(streamId);
       this.webviewUpdater.updateMissingOutputs(streamId, {
@@ -372,7 +381,9 @@ export class ProgressFactApplier {
     streamId,
     filesByRound,
   }: UpdateCompileFailuresPayload): void {
-    this.state.snapshots.updateCompileFailures(streamId, filesByRound);
+    if (this.stateOwnership === 'backend') {
+      this.state.snapshots.updateCompileFailures(streamId, filesByRound);
+    }
     this.sendIfActive(streamId, () => {
       const rounds = this.state.snapshots.getCompileFailures(streamId);
       this.webviewUpdater.updateCompileFailures(streamId, {
@@ -394,7 +405,9 @@ export class ProgressFactApplier {
       targets = [];
     }
     for (const streamId of targets) {
-      this.state.snapshots.clearMissingOutputs(streamId);
+      if (this.stateOwnership === 'backend') {
+        this.state.snapshots.clearMissingOutputs(streamId);
+      }
       this.sendIfActive(streamId, () =>
         this.webviewUpdater.updateMissingOutputs(streamId, {
           reset: true,
@@ -408,25 +421,31 @@ export class ProgressFactApplier {
     usage,
     storageKey,
   }: UpdateStreamUsagePayload): void {
-    void Promise.resolve(
-      this.state.snapshots.addUsage(streamId, storageKey, usage),
-    ).then((accumulated) => {
-      if (!accumulated) return;
+    const accumulated =
+      this.stateOwnership === 'backend'
+        ? this.state.snapshots.addUsage(streamId, storageKey, usage)
+        : this.state.snapshots.getRunUsage(streamId).get(storageKey);
+    void Promise.resolve(accumulated).then((nextUsage) => {
+      if (!nextUsage) return;
       this.sendIfActive(streamId, () =>
-        this.webviewUpdater.updateRunUsage(streamId, storageKey, accumulated),
+        this.webviewUpdater.updateRunUsage(streamId, storageKey, nextUsage),
       );
     });
   }
 
   public handleUpdateTodos({ streamId, todos }: UpdateTodosPayload): void {
-    this.state.snapshots.setTodos(streamId, todos);
+    if (this.stateOwnership === 'backend') {
+      this.state.snapshots.setTodos(streamId, todos);
+    }
     this.sendIfActive(streamId, () =>
       this.webviewUpdater.updateTodos(streamId, todos),
     );
   }
 
   public handleUpdatePlan({ streamId, plan }: UpdatePlanPayload): void {
-    this.state.snapshots.setPlan(streamId, plan);
+    if (this.stateOwnership === 'backend') {
+      this.state.snapshots.setPlan(streamId, plan);
+    }
     if (this.webviewUpdater.isAvailable()) {
       this.webviewUpdater.updatePlan(streamId, plan);
     }
@@ -574,7 +593,12 @@ export class ProgressFactApplier {
 
     // Legacy compatibility payload. The snapshot store derives the current
     // config and run descriptor from this but no longer writes meta.taskState.
-    this.state.setStreamTaskState(streamId, taskState, executionId);
+    this.state.setStreamTaskState(
+      streamId,
+      taskState,
+      executionId,
+      this.stateOwnership,
+    );
 
     if (isActiveStream) {
       this.maybeUpdateFilterForCategory(category);

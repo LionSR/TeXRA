@@ -62,6 +62,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
+import { ResumeAdmissionCancelledError } from '@agent/runtime/resumeAdmission';
 import {
   RUN_OUTCOME,
   type ExecutionId,
@@ -108,6 +109,25 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       snapshot.executionId,
       storageError,
     );
+  });
+
+  it('does not build a launch context when canonical admission is withdrawn under the lease lock', async () => {
+    const snapshot = createToolUseResumeData();
+    let canonical = true;
+    mocks.acquireResumedExecutionLease.mockImplementationOnce(
+      async (_executionId: ExecutionId, canAcquire: () => boolean) => {
+        canonical = false;
+        return canAcquire() ? 'acquired' : 'cancelled';
+      },
+    );
+
+    await expect(
+      resumeToolUseFromResumeData(snapshot, {} as AgentRuntimeHost, {
+        canAcquireResumeLease: () => canonical,
+      }),
+    ).rejects.toBeInstanceOf(ResumeAdmissionCancelledError);
+
+    expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
   });
 
   it('preserves the historical diagnostic for a non-tool-use launch', async () => {
