@@ -658,9 +658,10 @@ describe('TUI retry approvals', () => {
       mocks.secrets,
       'openai',
     );
-    expect(mocks.apiKeyExistsUncached).toHaveBeenCalledTimes(2);
-    expect(mocks.invalidateApiKeyCache).toHaveBeenCalledTimes(2);
+    expect(mocks.apiKeyExistsUncached).toHaveBeenCalledOnce();
+    expect(mocks.invalidateApiKeyCache).toHaveBeenCalledOnce();
     expect(prepareRetry).toHaveBeenCalledOnce();
+    expect(prepareRetry).toHaveBeenCalledWith('personal', expect.anything());
     expect(currentApproval.get()).toBeUndefined();
   });
 
@@ -708,7 +709,7 @@ describe('TUI retry approvals', () => {
     expectNoCredentialChange(prepareRetry);
   });
 
-  it('rolls back both preferences when the personal-key client cannot be prepared', async () => {
+  it('does not publish preferences when the personal-key client cannot be prepared', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
     const prepareRetry = vi.fn(async () => {
       throw new Error('OpenAI client construction failed');
@@ -725,19 +726,14 @@ describe('TUI retry approvals', () => {
       action: 'deny',
       reason: 'OpenAI client construction failed',
     });
-    expect(mocks.setCliApiMode.mock.calls.map(([mode]) => mode)).toEqual([
-      'personal',
-      'included',
-    ]);
-    expect(
-      mocks.setCliCodexSubscription.mock.calls.map(([enabled]) => enabled),
-    ).toEqual([false, true]);
+    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
+    expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
     expect(mocks.apiMode).toBe('included');
     expect(mocks.preferSubscription).toBe(true);
     expect(prepareRetry).toHaveBeenCalledOnce();
   });
 
-  it('does not roll back over a newer access selection', async () => {
+  it('leaves a newer access selection untouched when candidate construction fails', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
     const preparation = pDefer<void>();
     const prepareRetry = vi.fn(async () => {
@@ -751,8 +747,8 @@ describe('TUI retry approvals', () => {
       { prepareRetry },
     );
     await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
-    expect(mocks.apiMode).toBe('personal');
-    expect(mocks.preferSubscription).toBe(false);
+    expect(mocks.apiMode).toBe('included');
+    expect(mocks.preferSubscription).toBe(true);
 
     // A later /api, /key, login, or logout selection owns these values now.
     mocks.apiMode = 'included';
@@ -763,18 +759,18 @@ describe('TUI retry approvals', () => {
       action: 'deny',
       reason: 'OpenAI client construction failed',
     });
-    expect(mocks.setCliApiMode).toHaveBeenCalledTimes(1);
-    expect(mocks.setCliCodexSubscription).toHaveBeenCalledTimes(1);
+    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
+    expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
     expect(mocks.apiMode).toBe('included');
     expect(mocks.preferSubscription).toBe(true);
   });
 
-  it('cancels stalled preparation, restores its settings, and releases the retry queue', async () => {
+  it('cancels stalled candidate construction without publishing settings', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
     const prepareRetry = vi.fn(
-      async (_signal?: AbortSignal) =>
+      async (_selection, _signal?: AbortSignal) =>
         await new Promise<void>(() => {
-          // Deliberately never settles: cancellation must release the queue.
+          // Deliberately never settles: cancellation must reject the wrapper.
         }),
     );
     const { interactions } = tui();
@@ -791,13 +787,15 @@ describe('TUI retry approvals', () => {
       cause: 'Cancelled in test.',
     });
     await expect(result).resolves.toEqual({ action: 'cancel' });
-    expect(prepareRetry.mock.calls[0]?.[0]?.aborted).toBe(true);
+    expect(prepareRetry.mock.calls[0]?.[1]?.aborted).toBe(true);
     await vi.waitFor(() => {
       expect(mocks.apiMode).toBe('included');
       expect(mocks.preferSubscription).toBe(true);
     });
 
-    const laterPrepare = vi.fn(async () => undefined);
+    const laterPrepare = vi.fn(async (selection) => {
+      expect(selection).toBe('configured');
+    });
     const later = interactions.requestRetry?.(
       {
         requestId: 'retry-after-stall',
@@ -817,17 +815,15 @@ describe('TUI retry approvals', () => {
     expect(laterPrepare).toHaveBeenCalledOnce();
   });
 
-  it('reports any preference that cannot be restored after preparation fails', async () => {
+  it('reports any preference that cannot be restored after commit fails', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
     mocks.setCliCodexSubscription
       .mockImplementationOnce(async (enabled: boolean) => {
         mocks.preferSubscription = enabled;
-        return { effective: enabled, target: 'global' };
+        throw new Error('subscription write failed');
       })
       .mockRejectedValueOnce(new Error('settings storage unavailable'));
-    const prepareRetry = vi.fn(async () => {
-      throw new Error('OpenAI client construction failed');
-    });
+    const prepareRetry = vi.fn(async () => undefined);
 
     const { interactions } = tui();
     const { result } = await beginSubscriptionSwitch(
@@ -846,7 +842,7 @@ describe('TUI retry approvals', () => {
     expect(mocks.preferSubscription).toBe(false);
   });
 
-  it('reports unconfirmed persistence when rollback restores memory before rejecting', async () => {
+  it('reports unconfirmed persistence when API-mode rollback restores memory before rejecting', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
     mocks.setCliApiMode
       .mockImplementationOnce(async (mode) => {
@@ -856,9 +852,10 @@ describe('TUI retry approvals', () => {
         mocks.apiMode = mode;
         throw new Error('API mode storage unavailable');
       });
-    const prepareRetry = vi.fn(async () => {
-      throw new Error('OpenAI client construction failed');
-    });
+    mocks.setCliCodexSubscription.mockRejectedValueOnce(
+      new Error('subscription storage unavailable'),
+    );
+    const prepareRetry = vi.fn(async () => undefined);
 
     const { interactions } = tui();
     const { result } = await beginSubscriptionSwitch(
@@ -878,7 +875,7 @@ describe('TUI retry approvals', () => {
     expect(prepareRetry).toHaveBeenCalledOnce();
   });
 
-  it('rolls back a credential switch cancelled during client preparation', async () => {
+  it('cancels a credential switch during candidate construction without settings writes', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
     const preparation = pDefer<void>();
     const prepareRetry = vi.fn(() => preparation.promise);
@@ -902,13 +899,8 @@ describe('TUI retry approvals', () => {
     });
 
     expect(sessionMeta.get().apiMode).toBe('included');
-    expect(mocks.setCliApiMode.mock.calls.map(([mode]) => mode)).toEqual([
-      'personal',
-      'included',
-    ]);
-    expect(
-      mocks.setCliCodexSubscription.mock.calls.map(([enabled]) => enabled),
-    ).toEqual([false, true]);
+    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
+    expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
   });
 
   it('retries ChatGPT subscription access without changing credentials when the ordinary retry action is chosen', async () => {
@@ -934,7 +926,7 @@ describe('TUI retry approvals', () => {
     expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
   });
 
-  it('linearizes ordinary retry preparation after a successful credential switch', async () => {
+  it('keeps new ordinary retry preparation on the old route while a candidate is building', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
     const preparation = pDefer<void>();
     const prepareRetry = vi.fn(() => preparation.promise);
@@ -947,8 +939,8 @@ describe('TUI retry approvals', () => {
     await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
 
     const ordinaryPrepare = vi.fn(async () => {
-      expect(mocks.apiMode).toBe('personal');
-      expect(mocks.preferSubscription).toBe(false);
+      expect(mocks.apiMode).toBe('included');
+      expect(mocks.preferSubscription).toBe(true);
     });
     const ordinary = interactions.requestRetry?.(
       {
@@ -962,22 +954,22 @@ describe('TUI retry approvals', () => {
     await waitForRetryApproval({ streamId: 'ordinary-stream' });
     decideRetry({ accepted: true });
 
-    await Promise.resolve();
-    expect(ordinaryPrepare).not.toHaveBeenCalled();
+    await expect(ordinary).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
+    expect(ordinaryPrepare).toHaveBeenCalledOnce();
 
     preparation.resolve();
     await expect(switching).resolves.toEqual({
       action: 'retry',
       feedback: undefined,
     });
-    await expect(ordinary).resolves.toEqual({
-      action: 'retry',
-      feedback: undefined,
-    });
-    expect(ordinaryPrepare).toHaveBeenCalledOnce();
+    expect(mocks.apiMode).toBe('personal');
+    expect(mocks.preferSubscription).toBe(false);
   });
 
-  it('linearizes ordinary retry preparation after credential rollback', async () => {
+  it('lets an ordinary retry keep the old route while another candidate fails', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
     const preparation = pDefer<void>();
     const switchPrepare = vi.fn(async () => {
@@ -1007,19 +999,17 @@ describe('TUI retry approvals', () => {
     );
     await waitForRetryApproval({ streamId: 'ordinary-after-rollback' });
     decideRetry({ accepted: true });
-    await Promise.resolve();
-    expect(ordinaryPrepare).not.toHaveBeenCalled();
+    await expect(ordinary).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
+    expect(ordinaryPrepare).toHaveBeenCalledOnce();
 
     preparation.resolve();
     await expect(switching).resolves.toEqual({
       action: 'deny',
       reason: 'replacement client failed',
     });
-    await expect(ordinary).resolves.toEqual({
-      action: 'retry',
-      feedback: undefined,
-    });
-    expect(ordinaryPrepare).toHaveBeenCalledOnce();
   });
 
   it('denies an ordinary retry when its replacement client cannot be prepared', async () => {
@@ -1048,19 +1038,14 @@ describe('TUI retry approvals', () => {
     expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
   });
 
-  it('skips queued ordinary preparation after that retry is cancelled', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(true);
-    const preparation = pDefer<void>();
-    const switchPrepare = vi.fn(() => preparation.promise);
-    const { interactions } = tui();
-    const { result: switching } = await beginSubscriptionSwitch(
-      interactions,
-      'switch-before-cancel',
-      { prepareRetry: switchPrepare },
+  it('cancels ordinary retry preparation after approval', async () => {
+    const ordinaryPrepare = vi.fn(
+      async (_selection, _signal?: AbortSignal) =>
+        await new Promise<void>(() => {
+          // Cancellation settles the abort-aware wrapper around this task.
+        }),
     );
-    await vi.waitFor(() => expect(switchPrepare).toHaveBeenCalledOnce());
-
-    const ordinaryPrepare = vi.fn(async () => undefined);
+    const { interactions } = tui();
     const ordinary = interactions.requestRetry?.(
       {
         requestId: 'cancelled-ordinary',
@@ -1072,19 +1057,14 @@ describe('TUI retry approvals', () => {
     );
     await waitForRetryApproval({ streamId: 'cancelled-ordinary' });
     decideRetry({ accepted: true });
+    await vi.waitFor(() => expect(ordinaryPrepare).toHaveBeenCalledOnce());
     interactions.cancel({
       streamId: 'cancelled-ordinary',
       kind: 'retry',
       cause: 'Cancelled in test.',
     });
     await expect(ordinary).resolves.toEqual({ action: 'cancel' });
-
-    preparation.resolve();
-    await expect(switching).resolves.toEqual({
-      action: 'retry',
-      feedback: undefined,
-    });
-    expect(ordinaryPrepare).not.toHaveBeenCalled();
+    expect(ordinaryPrepare.mock.calls[0]?.[1]?.aborted).toBe(true);
   });
 
   it('invalidates pre-queue retry lookups when approvals are cleared', async () => {
@@ -1369,6 +1349,16 @@ describe('TUI retry approvals', () => {
       'personal',
     ]);
     expect(mocks.apiMode).toBe('personal');
-    expect(prepareRetry).toHaveBeenCalledOnce();
+    expect(prepareRetry).toHaveBeenCalledTimes(2);
+    expect(prepareRetry).toHaveBeenNthCalledWith(
+      1,
+      'personal',
+      expect.anything(),
+    );
+    expect(prepareRetry).toHaveBeenNthCalledWith(
+      2,
+      'personal',
+      expect.anything(),
+    );
   });
 });

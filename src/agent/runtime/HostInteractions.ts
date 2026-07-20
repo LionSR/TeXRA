@@ -1,4 +1,5 @@
 import { createChannelTrace } from '@agent/trace';
+import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
@@ -58,7 +59,10 @@ export interface HostRetryInteractionOptions extends HostInteractionOptions {
    * A host that calls this successfully has prepared the next attempt; a
    * rejection leaves the caller's previous client unchanged.
    */
-  readonly prepareRetry?: (signal?: AbortSignal) => Promise<void>;
+  readonly prepareRetry?: (
+    selection: ModelCredentialSelection,
+    signal?: AbortSignal,
+  ) => Promise<void>;
 }
 
 /** Delivery policy for a notification owned by a process session. */

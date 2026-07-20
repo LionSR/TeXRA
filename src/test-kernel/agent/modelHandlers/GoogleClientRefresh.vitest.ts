@@ -93,7 +93,7 @@ describe('Google client refresh', () => {
     const services = await withModelClient({}, handler);
     const controller = new AbortController();
 
-    const refresh = services.refreshClient?.(controller.signal);
+    const refresh = services.refreshClient?.(undefined, controller.signal);
     controller.abort(new Error('Retry preparation cancelled.'));
     finishRefresh?.();
 

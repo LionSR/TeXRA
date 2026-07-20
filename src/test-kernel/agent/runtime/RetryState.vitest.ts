@@ -390,7 +390,7 @@ describe('RetryState', () => {
       refreshClient,
     );
     requestRetry.mockImplementationOnce(async (_request, options) => {
-      await options?.prepareRetry?.();
+      await options?.prepareRetry?.('configured');
       return { action: 'retry' };
     });
     node.seedPersistent401Guards();

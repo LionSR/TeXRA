@@ -88,7 +88,8 @@ describe('TUI retry API-key cache boundary', () => {
         },
       },
       {
-        prepareRetry: async () => {
+        prepareRetry: async (selection) => {
+          expect(selection).toBe('personal');
           preparedKeys.push(await lookupApiKey(platform().secrets, 'openai'));
         },
       },

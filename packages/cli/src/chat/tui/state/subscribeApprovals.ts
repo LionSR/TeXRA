@@ -268,12 +268,16 @@ interface ActiveRetryRoute {
   readonly settle?: (result: RetryResult) => void;
 }
 
-// API mode and ChatGPT preference are process-wide. Keep their transactional
-// switch and rollback indivisible across concurrent stream retry decisions.
-const retryCredentialSwitchQueue = new PQueue({ concurrency: 1 });
+// API mode and ChatGPT preference are two persisted fields that form one user
+// choice. Serialize only their commit/rollback window; candidate construction
+// happens before this queue while the published preference remains unchanged.
+const retryCredentialCommitQueue = new PQueue({ concurrency: 1 });
 
 function prepareRetryClient(
   prepare: NonNullable<HostRetryInteractionOptions['prepareRetry']>,
+  selection: Parameters<
+    NonNullable<HostRetryInteractionOptions['prepareRetry']>
+  >[0],
   signal: AbortSignal,
 ): Promise<void> {
   signal.throwIfAborted();
@@ -281,7 +285,7 @@ function prepareRetryClient(
     const onAbort = () => reject(signal.reason);
     signal.addEventListener('abort', onAbort, { once: true });
     try {
-      prepare(signal).then(
+      prepare(selection, signal).then(
         () => {
           signal.removeEventListener('abort', onAbort);
           resolve();
@@ -599,26 +603,17 @@ async function requestRetryInteraction(
           decision.apiMode !== undefined ||
           decision.disableChatGptSubscription === true;
         if (changesCredentialRoute) {
-          await retryCredentialSwitchQueue.add(() =>
-            applyRetrySideEffects(decision, promptRequest, {
-              isCurrent,
-              prepareRetry: options?.prepareRetry,
-              preparationSignal: preparationController.signal,
-            }),
-          );
-        } else if (options?.prepareRetry) {
-          const prepareRetry = options.prepareRetry;
-          // Client construction is a read of process-wide credential state.
-          // Linearize it with credential writes so it cannot observe a route
-          // that a concurrent switch later rolls back.
-          await retryCredentialSwitchQueue.add(async () => {
-            if (isCurrent()) {
-              await prepareRetryClient(
-                prepareRetry,
-                preparationController.signal,
-              );
-            }
+          await switchRetryToPersonalCredentials(decision, promptRequest, {
+            isCurrent,
+            prepareRetry: options?.prepareRetry,
+            preparationSignal: preparationController.signal,
           });
+        } else if (options?.prepareRetry) {
+          await prepareRetryClient(
+            options.prepareRetry,
+            'configured',
+            preparationController.signal,
+          );
         }
         if (!isCurrent()) return;
         resolve({ action: 'retry', feedback: decision.userMessage });
@@ -708,7 +703,7 @@ function setTuiApprovalBypassState({
   }));
 }
 
-async function applyRetrySideEffects(
+async function switchRetryToPersonalCredentials(
   decision: ApprovalDecision,
   request: TuiRetryRequest,
   options: {
@@ -743,92 +738,98 @@ async function applyRetrySideEffects(
 
   await validateCurrentKey();
 
-  const previousApiMode = getCliApiMode();
-  const previousSubscriptionPreference = isPreferCodexSubscription();
-  let apiModeWriteStarted = false;
-  let subscriptionWriteStarted = false;
-  try {
-    if (decision.apiMode) {
-      apiModeWriteStarted = true;
-      await setCliApiMode(decision.apiMode);
-      if (!isCurrent()) throw new Error('Retry request was replaced.');
-    }
-    if (decision.disableChatGptSubscription) {
-      subscriptionWriteStarted = true;
-      const update = await setCliCodexSubscription(false);
-      if (update.effective) {
-        throw new Error(
-          'ChatGPT subscription remains enabled by a more specific setting.',
-        );
+  if (!options.prepareRetry) {
+    throw new Error('The model client cannot be refreshed for this retry.');
+  }
+  await prepareRetryClient(
+    options.prepareRetry,
+    'personal',
+    options.preparationSignal ?? new AbortController().signal,
+  );
+  if (!isCurrent()) throw new Error('Retry request was replaced.');
+
+  await retryCredentialCommitQueue.add(async () => {
+    if (!isCurrent()) throw new Error('Retry request was replaced.');
+    const previousApiMode = getCliApiMode();
+    const previousSubscriptionPreference = isPreferCodexSubscription();
+    let apiModeWriteStarted = false;
+    let subscriptionWriteStarted = false;
+    try {
+      if (decision.apiMode) {
+        apiModeWriteStarted = true;
+        await setCliApiMode(decision.apiMode);
+        if (!isCurrent()) throw new Error('Retry request was replaced.');
       }
-      if (!isCurrent()) throw new Error('Retry request was replaced.');
-    }
-    if (!options.prepareRetry) {
-      throw new Error('The model client cannot be refreshed for this retry.');
-    }
-    // Settings select the route used by getClient(), so construct only after
-    // they change. Revalidate once more in case the key changed during either
-    // persisted setting write, then invalidate before construction.
-    await validateCurrentKey();
-    await prepareRetryClient(
-      options.prepareRetry,
-      options.preparationSignal ?? new AbortController().signal,
-    );
-    // Commit invariant: no retry proceeds unless its final settings and live
-    // client agree. Publish the session-visible mode only after construction,
-    // avoiding a transient personal-mode UI state when preparation rolls back.
-    if (decision.apiMode) patchSessionMeta({ apiMode: decision.apiMode });
-  } catch (error) {
-    const rollbackFailures: Error[] = [];
-    if (subscriptionWriteStarted && !isPreferCodexSubscription()) {
-      try {
-        const update = await setCliCodexSubscription(
-          previousSubscriptionPreference,
-        );
-        if (update.effective !== previousSubscriptionPreference) {
+      if (decision.disableChatGptSubscription) {
+        subscriptionWriteStarted = true;
+        const update = await setCliCodexSubscription(false);
+        if (update.effective) {
           throw new Error(
-            `ChatGPT subscription preference remained ${String(update.effective)}.`,
+            'ChatGPT subscription remains enabled by a more specific setting.',
           );
         }
-      } catch (rollbackError) {
-        const persistenceContext =
-          isPreferCodexSubscription() === previousSubscriptionPreference
-            ? 'The previous ChatGPT subscription preference appears restored in memory, but persistence could not be confirmed'
-            : 'Could not restore the ChatGPT subscription preference';
-        rollbackFailures.push(
-          new Error(`${persistenceContext}: ${toErrorMessage(rollbackError)}`, {
-            cause: rollbackError,
-          }),
-        );
+        if (!isCurrent()) throw new Error('Retry request was replaced.');
       }
-    }
-    if (apiModeWriteStarted && getCliApiMode() === decision.apiMode) {
-      try {
-        await setCliApiMode(previousApiMode);
-        if (getCliApiMode() !== previousApiMode) {
-          throw new Error(`API mode remained ${getCliApiMode()}.`);
+      if (decision.apiMode) patchSessionMeta({ apiMode: decision.apiMode });
+      return;
+    } catch (error) {
+      const rollbackFailures: Error[] = [];
+      if (subscriptionWriteStarted && !isPreferCodexSubscription()) {
+        try {
+          const update = await setCliCodexSubscription(
+            previousSubscriptionPreference,
+          );
+          if (update.effective !== previousSubscriptionPreference) {
+            throw new Error(
+              `ChatGPT subscription preference remained ${String(update.effective)}.`,
+            );
+          }
+        } catch (rollbackError) {
+          const persistenceContext =
+            isPreferCodexSubscription() === previousSubscriptionPreference
+              ? 'The previous ChatGPT subscription preference appears restored in memory, but persistence could not be confirmed'
+              : 'Could not restore the ChatGPT subscription preference';
+          rollbackFailures.push(
+            new Error(
+              `${persistenceContext}: ${toErrorMessage(rollbackError)}`,
+              {
+                cause: rollbackError,
+              },
+            ),
+          );
         }
-      } catch (rollbackError) {
-        const persistenceContext =
-          getCliApiMode() === previousApiMode
-            ? 'The previous API mode appears restored in memory, but persistence could not be confirmed'
-            : 'Could not restore API mode';
-        rollbackFailures.push(
-          new Error(`${persistenceContext}: ${toErrorMessage(rollbackError)}`, {
-            cause: rollbackError,
-          }),
+      }
+      if (apiModeWriteStarted && getCliApiMode() === decision.apiMode) {
+        try {
+          await setCliApiMode(previousApiMode);
+          if (getCliApiMode() !== previousApiMode) {
+            throw new Error(`API mode remained ${getCliApiMode()}.`);
+          }
+        } catch (rollbackError) {
+          const persistenceContext =
+            getCliApiMode() === previousApiMode
+              ? 'The previous API mode appears restored in memory, but persistence could not be confirmed'
+              : 'Could not restore API mode';
+          rollbackFailures.push(
+            new Error(
+              `${persistenceContext}: ${toErrorMessage(rollbackError)}`,
+              {
+                cause: rollbackError,
+              },
+            ),
+          );
+        }
+      }
+      if (rollbackFailures.length > 0) {
+        throw new AggregateError(
+          [error, ...rollbackFailures],
+          `${toErrorMessage(error)} Previous access settings could not be fully restored: ${rollbackFailures.map(toErrorMessage).join(' ')}`,
+          { cause: error },
         );
       }
+      throw error;
     }
-    if (rollbackFailures.length > 0) {
-      throw new AggregateError(
-        [error, ...rollbackFailures],
-        `${toErrorMessage(error)} Previous access settings could not be fully restored: ${rollbackFailures.map(toErrorMessage).join(' ')}`,
-        { cause: error },
-      );
-    }
-    throw error;
-  }
+  });
 }
 
 function handleExternalInquiry(

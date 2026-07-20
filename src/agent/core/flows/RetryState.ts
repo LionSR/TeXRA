@@ -7,6 +7,7 @@ import { Node } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
+import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { normalizeProviderError } from '@common/errors';
 import {
@@ -59,7 +60,10 @@ interface RetryableNodeServices {
   config: Pick<AgentConfig, 'model'>;
   logger: AgentTrace;
   setAbortController: (ac: AbortController | null) => void;
-  refreshClient?: (signal?: AbortSignal) => Promise<void>;
+  refreshClient?: (
+    selection?: ModelCredentialSelection,
+    signal?: AbortSignal,
+  ) => Promise<void>;
 }
 
 /**
@@ -67,7 +71,12 @@ interface RetryableNodeServices {
  * Logs success or failure; returns true if refresh was attempted and succeeded.
  */
 async function tryRefreshClient(
-  refreshClient: ((signal?: AbortSignal) => Promise<void>) | undefined,
+  refreshClient:
+    | ((
+        selection?: ModelCredentialSelection,
+        signal?: AbortSignal,
+      ) => Promise<void>)
+    | undefined,
   logger: AgentTrace,
   context: string,
 ): Promise<boolean> {
@@ -310,9 +319,9 @@ export abstract class RetryableInvocationNode<
       },
       refreshClient
         ? {
-            prepareRetry: async (signal) => {
+            prepareRetry: async (selection, signal) => {
               signal?.throwIfAborted();
-              await refreshClient(signal);
+              await refreshClient(selection, signal);
               signal?.throwIfAborted();
               clientPrepared = true;
             },
