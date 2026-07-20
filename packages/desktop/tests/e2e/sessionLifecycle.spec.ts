@@ -1,14 +1,6 @@
-import {
-  mkdirSync,
-  mkdtempSync,
-  realpathSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 
 import { expect, test } from '@playwright/test';
 
@@ -17,6 +9,10 @@ import {
   launchTexraApp,
   type LaunchedApp,
 } from './electronApp.js';
+import {
+  cleanupDirectory,
+  findWorkspaceStoragePath,
+} from './workspaceStorageFixture.js';
 
 const WAITING_STREAM = 'e2e-waiting#a11ce1';
 const WAITING_EXECUTION = 'a11ce1';
@@ -27,57 +23,6 @@ interface PersistedLogEntry {
   id?: unknown;
   type?: unknown;
   data?: { status?: unknown };
-}
-
-function cleanupDirectory(path: string): void {
-  try {
-    rmSync(path, { recursive: true, force: true });
-  } catch {
-    // Best-effort cleanup must not hide a lifecycle assertion failure.
-  }
-}
-
-function tryReadWorkspaceSidecar(path: string): string | undefined {
-  try {
-    const sidecar = JSON.parse(readFileSync(path, 'utf8')) as {
-      path?: unknown;
-    };
-    return typeof sidecar.path === 'string' ? resolve(sidecar.path) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function findWorkspaceStoragePath(input: {
-  userDataPath: string;
-  workspacePath: string;
-}): string {
-  const targetWorkspacePath = realpathSync(input.workspacePath);
-
-  for (const storageRoot of readdirSync(input.userDataPath, {
-    withFileTypes: true,
-  })) {
-    if (!storageRoot.isDirectory()) continue;
-
-    const storageRootPath = join(input.userDataPath, storageRoot.name);
-    for (const candidate of readdirSync(storageRootPath, {
-      withFileTypes: true,
-    })) {
-      if (!candidate.isDirectory()) continue;
-
-      const candidatePath = join(storageRootPath, candidate.name);
-      if (
-        tryReadWorkspaceSidecar(join(candidatePath, '_workspace.json')) ===
-        targetWorkspacePath
-      ) {
-        return candidatePath;
-      }
-    }
-  }
-
-  throw new Error(
-    `No TeXRA workspace storage directory found for ${targetWorkspacePath}`,
-  );
 }
 
 function writeJson(path: string, value: unknown): void {

@@ -19,7 +19,10 @@ import {
   DESKTOP_UNAVAILABLE_TOOLS,
   launchDesktopAgent,
 } from './desktopAgentLaunch.js';
-import { toLogData } from './desktopLogUtils.js';
+
+function toLogData(error: unknown): unknown {
+  return error instanceof Error ? error : { error };
+}
 
 interface DesktopResumeState {
   readonly runState: AgentConfig;
@@ -34,36 +37,37 @@ interface DesktopResumeContext {
   readonly isCancellationRequested: () => boolean;
 }
 
-let activeContext: DesktopResumeContext | undefined;
+/** Process-lifetime owner of desktop stream resumption. */
+export class DesktopProcessResumeOwner {
+  private context: DesktopResumeContext | undefined;
 
-/** Install the one resume owner for the Electron process session. */
-export function installDesktopProcessResumeHandler(options: {
-  session: SessionHandle;
-  snapshots: StreamSnapshotStore;
-}): () => void {
-  let cancelled = false;
-  const context: DesktopResumeContext = {
-    ...options,
-    logger: createChannelTrace('DesktopAgentResume'),
-    isCancellationRequested: () => cancelled,
-  };
-  activeContext = context;
-  return () => {
-    cancelled = true;
-    if (activeContext === context) activeContext = undefined;
-  };
-}
+  /** Attach the canonical process session after platform initialization. */
+  attach(options: {
+    session: SessionHandle;
+    snapshots: StreamSnapshotStore;
+  }): () => void {
+    let cancelled = false;
+    const context: DesktopResumeContext = {
+      ...options,
+      logger: createChannelTrace('DesktopAgentResume'),
+      isCancellationRequested: () => cancelled,
+    };
+    this.context = context;
+    return () => {
+      cancelled = true;
+      if (this.context === context) this.context = undefined;
+    };
+  }
 
-export async function tryResumeDesktopStream(
-  streamId: StreamTabId,
-): Promise<boolean> {
-  return activeContext
-    ? resumeDesktopStream(streamId, activeContext)
-    : Promise.resolve(false);
-}
+  tryResumeStream(streamId: StreamTabId): Promise<boolean> {
+    return this.context
+      ? resumeDesktopStream(streamId, this.context)
+      : Promise.resolve(false);
+  }
 
-export function isDesktopResumeInFlight(streamId: StreamTabId): boolean {
-  return activeContext ? isResumeInFlight(streamId) : false;
+  isResumeInFlight(streamId: StreamTabId): boolean {
+    return this.context ? isResumeInFlight(streamId) : false;
+  }
 }
 
 async function resolveDesktopResumeState(

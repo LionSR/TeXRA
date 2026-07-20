@@ -20,6 +20,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { DESKTOP_SHELL_COMMANDS } from '@desktop/desktopShellMessages';
+import type { AgentResumePort } from '@platform/interfaces';
 import {
   AgentCategory,
   LOG_LEVELS,
@@ -245,15 +246,25 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   openTranscripts(): Promise<StreamLogStore>;
   createSession(transcripts: StreamLogStore): SessionHandle;
   createProgressSnapshotStore(): ProgressSnapshotStore;
+  processResumeOwner: import('@desktop/main/desktopAgentResume').DesktopProcessResumeOwner;
   progressSnapshotStore: ProgressSnapshotStore;
 }> {
   vi.resetModules();
   const kvStoreBacking = options.kvStoreBacking ?? new Map<string, unknown>();
+  let resumeDelegate: AgentResumePort = {
+    tryResumeStream: async () => false,
+    isResumeInFlight: () => false,
+  };
+  const agentResume: AgentResumePort = {
+    tryResumeStream: (streamId) => resumeDelegate.tryResumeStream(streamId),
+    isResumeInFlight: (streamId) =>
+      resumeDelegate.isResumeInFlight?.(streamId) ?? false,
+  };
   const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
     import('@platform/platform'),
     import('@test/support/FakePlatform'),
   ]);
-  initPlatform(createFakePlatform());
+  initPlatform(createFakePlatform({}, { agentResume }));
   vi.doMock('@agent/runtime/SessionResumeRetrieval', () => ({
     retrieveSessionResumeData:
       options.retrieveSessionResumeData ?? vi.fn(async () => null),
@@ -402,6 +413,10 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   const bridgeModule = (await import(
     moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
   )) as DesktopAgentExecutionModule;
+  const { DesktopProcessResumeOwner } =
+    await import('@desktop/main/desktopAgentResume');
+  const processResumeOwner = new DesktopProcessResumeOwner();
+  resumeDelegate = processResumeOwner;
   const { initializeDefaultSession, SessionHandle } =
     await import('@agent/runtime/SessionHandle');
   initializeDefaultSession({
@@ -412,6 +427,7 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
     createSession: (transcripts) => new SessionHandle({ transcripts }),
     createProgressSnapshotStore,
     openTranscripts: () => StreamLogStore.open(),
+    processResumeOwner,
     progressSnapshotStore,
   };
 }
@@ -424,6 +440,7 @@ async function createBridge(
     bridgeModule,
     createSession,
     openTranscripts,
+    processResumeOwner,
     progressSnapshotStore,
   } = await loadBridgeModule(options);
   const transcripts = await openTranscripts();
@@ -454,9 +471,7 @@ async function createBridge(
       releaseStreamResources(stream, session);
     },
   });
-  const { installDesktopProcessResumeHandler } =
-    await import('@desktop/main/desktopAgentResume');
-  const disposeResumeHandler = installDesktopProcessResumeHandler({
+  const disposeResumeHandler = processResumeOwner.attach({
     session,
     snapshots: progressSnapshotStore,
   });
@@ -2521,6 +2536,7 @@ describe('DesktopProgressBridge', () => {
         createProgressSnapshotStore,
         createSession,
         openTranscripts,
+        processResumeOwner,
       } = await loadBridgeModule({ detectWaitingStreams });
       const { AgentExecutionHandle, ProcessExecutionHandle } =
         await import('@agent/runtime/ExecutionHandle');
@@ -2539,6 +2555,10 @@ describe('DesktopProgressBridge', () => {
         snapshots: progressSnapshotStore,
       });
       const { stores: sessionStores } = processStores;
+      const disposeResumeHandler = processResumeOwner.attach({
+        session: processSession,
+        snapshots: progressSnapshotStore,
+      });
       const taskState = workflowTaskState();
       progressSnapshotStore.setTaskState(
         streamId,
@@ -2577,6 +2597,7 @@ describe('DesktopProgressBridge', () => {
         },
       ) as unknown as TestableBridge & { session: SessionHandle };
       await bridgeA.waitUntilReady();
+      const presentationBridges = new Set([bridgeA]);
       const createHandle = (
         options: {
           executionId?: ExecutionId;
@@ -2635,13 +2656,15 @@ describe('DesktopProgressBridge', () => {
         ) as unknown as TestableBridge & {
           session: SessionHandle;
         };
+        presentationBridges.add(bridgeB);
         await bridgeB.waitUntilReady();
         return { bridgeB, errorsB, progressSnapshotStore };
       };
 
       disposeAfterTest({
         dispose: () => {
-          bridgeA.dispose();
+          for (const bridge of presentationBridges) bridge.dispose();
+          disposeResumeHandler();
           processStores.dispose();
           processSession.dispose();
         },
@@ -3465,7 +3488,7 @@ describe('DesktopProgressBridge', () => {
       }
     });
 
-    it('handles a failed headless removal without an unhandled rejection', async () => {
+    it('reattaches while an overlapping headless deletion settles as failed', async () => {
       const streamId = 'headless-remove-owner' as StreamTabId;
       const failedStreamId = 'headless-remove-failure' as StreamTabId;
       const owner = await createProcessOwner({
@@ -3474,10 +3497,22 @@ describe('DesktopProgressBridge', () => {
       });
       owner.processSession.transcripts.ensureStream(failedStreamId);
       const failure = new Error('execution metadata unavailable');
+      let markDeletionStarted!: () => void;
+      const deletionStarted = new Promise<void>((resolve) => {
+        markDeletionStarted = resolve;
+      });
+      let releaseDeletion!: () => void;
+      const deletionGate = new Promise<void>((resolve) => {
+        releaseDeletion = resolve;
+      });
       vi.spyOn(
         owner.progressSnapshotStore,
         'readPersistedExecutionId',
-      ).mockRejectedValueOnce(failure);
+      ).mockImplementationOnce(async () => {
+        markDeletionStarted();
+        await deletionGate;
+        throw failure;
+      });
       const unhandled = vi.fn();
       process.on('unhandledRejection', unhandled);
       owner.close();
@@ -3490,10 +3525,18 @@ describe('DesktopProgressBridge', () => {
             payload: { streamId: failedStreamId },
           },
         });
+        await deletionStarted;
+        const pendingDrain = vi.spyOn(
+          owner.sessionStores,
+          'waitForPendingStreamDeletions',
+        );
+        const reopening = owner.reopen();
+        await vi.waitFor(() => expect(pendingDrain).toHaveBeenCalled());
+        releaseDeletion();
+
+        const { bridgeB } = await reopening;
+        bridgeB.syncFullView();
         await settleProgressEvents();
-        await expect(
-          owner.sessionStores.waitForPendingStreamDeletions(),
-        ).resolves.toBeUndefined();
         expect(unhandled).not.toHaveBeenCalled();
         expect(owner.processSession.transcripts.has(failedStreamId)).toBe(true);
       } finally {

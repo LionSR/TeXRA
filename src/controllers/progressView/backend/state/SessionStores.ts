@@ -1,3 +1,6 @@
+// Third-party imports
+import PQueue from 'p-queue';
+
 // Local imports
 import {
   deleteExecution as deleteStoredExecution,
@@ -71,7 +74,7 @@ export class SessionStores {
     Promise<DeleteStreamResult>
   >();
   private pendingDeleteAll: Promise<DeleteAllStreamsResult> | undefined;
-  private deletionTail: Promise<void> = Promise.resolve();
+  private readonly deletionQueue = new PQueue({ concurrency: 1 });
 
   constructor(options: SessionStoresOptions) {
     this.streamLogs = options.streamLogs;
@@ -110,7 +113,7 @@ export class SessionStores {
       this.pendingStreamDeletions.size > 0 ||
       this.pendingDeleteAll !== undefined
     ) {
-      await Promise.all([
+      await Promise.allSettled([
         ...this.pendingStreamDeletions.values(),
         ...(this.pendingDeleteAll ? [this.pendingDeleteAll] : []),
       ]);
@@ -118,12 +121,7 @@ export class SessionStores {
   }
 
   private enqueueDeletion<T>(operation: () => Promise<T>): Promise<T> {
-    const pending = this.deletionTail.then(operation, operation);
-    this.deletionTail = pending.then(
-      () => undefined,
-      () => undefined,
-    );
-    return pending;
+    return this.deletionQueue.add(operation);
   }
 
   private finishStreamDeletion(

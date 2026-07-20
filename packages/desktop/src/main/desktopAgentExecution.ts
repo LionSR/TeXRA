@@ -79,7 +79,6 @@ import {
   createDesktopHostInteractions,
   type DesktopHostInteractions,
 } from './desktopHostInteractions.js';
-import { toLogData } from './desktopLogUtils.js';
 import {
   DesktopProgressFileActions,
   type DesktopLatexdiffRunContext,
@@ -89,10 +88,6 @@ import {
   launchDesktopAgent,
   type DesktopAgentLaunchOptions as DesktopRunExecutionOptions,
 } from './desktopAgentLaunch.js';
-import {
-  isDesktopResumeInFlight,
-  tryResumeDesktopStream,
-} from './desktopAgentResume.js';
 import type { DesktopProgressInboundHandlerRegistry } from './desktopProgressIpc.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 
@@ -114,6 +109,10 @@ export interface DesktopProgressBridgeOptions {
   progressSnapshotStore: StreamSnapshotStore;
 }
 
+function toLogData(error: unknown): unknown {
+  return error instanceof Error ? error : { error };
+}
+
 async function wakeDesktopFollowUp(
   streamId: StreamTabId,
   result: Extract<
@@ -129,10 +128,7 @@ async function wakeDesktopFollowUp(
   const wake = await wakeQueuedFollowUpStream(
     streamId,
     result,
-    {
-      tryResumeStream: tryResumeDesktopStream,
-      isResumeInFlight: isDesktopResumeInFlight,
-    },
+    platform().agentResume,
     session,
   );
   const presentation = presentFollowUpWakeResult(wake);
@@ -987,11 +983,13 @@ export class DesktopProgressBridge {
   }
 
   tryResumeStream(streamId: StreamTabId): Promise<boolean> {
-    return this.restartRepair.then(() => tryResumeDesktopStream(streamId));
+    return this.restartRepair.then(() =>
+      platform().agentResume.tryResumeStream(streamId),
+    );
   }
 
   isResumeInFlight(streamId: StreamTabId): boolean {
-    return isDesktopResumeInFlight(streamId);
+    return platform().agentResume.isResumeInFlight?.(streamId) ?? false;
   }
 
   private async runLatexdiffFile(

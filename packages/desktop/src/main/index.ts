@@ -52,7 +52,7 @@ import {
   detectPackageManager,
 } from '@utils/system/toolUtils';
 import { launchDesktopAgent } from './desktopAgentLaunch.js';
-import { installDesktopProcessResumeHandler } from './desktopAgentResume.js';
+import { DesktopProcessResumeOwner } from './desktopAgentResume.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
 import { initializeDesktopProcessStores } from './desktopLegacyStreamImporter.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
@@ -1180,7 +1180,11 @@ if (protocolLifecycle.shouldContinue) {
   app
     .whenReady()
     .then(async () => {
-      const platformInit = await initializeElectronPlatform(desktopMainDir);
+      const processResumeOwner = new DesktopProcessResumeOwner();
+      const platformInit = await initializeElectronPlatform(
+        desktopMainDir,
+        processResumeOwner,
+      );
       const { lifecycle } = platformInit;
       const transcripts = await StreamLogStore.open();
       const processSession = new SessionHandle({ transcripts });
@@ -1213,7 +1217,7 @@ if (protocolLifecycle.shouldContinue) {
         });
         sessionStores = processStores.stores;
         disposeProcessStores = () => processStores.dispose();
-        disposeAgentResumeHandler = installDesktopProcessResumeHandler({
+        disposeAgentResumeHandler = processResumeOwner.attach({
           session: processSession,
           snapshots: platformInit.progressSnapshotStore,
         });

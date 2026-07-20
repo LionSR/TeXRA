@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ToolUseAgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import * as SessionResumeRetrieval from '@agent/runtime/SessionResumeRetrieval';
 import * as AgentRunner from '@agent/runtime/runAgent';
+import { DesktopProcessResumeOwner } from '@desktop/main/desktopAgentResume';
 import {
   AgentCategory,
   RUN_OUTCOME,
@@ -37,6 +38,23 @@ function createSnapshots(): StreamSnapshotStore {
   return snapshots;
 }
 
+function createResumeHarness(): {
+  owner: DesktopProcessResumeOwner;
+  dispose(): void;
+} {
+  const session = createTestSession();
+  session.transcripts.ensureStream(stream);
+  const owner = new DesktopProcessResumeOwner();
+  const detach = owner.attach({ session, snapshots: createSnapshots() });
+  return {
+    owner,
+    dispose() {
+      detach();
+      session.dispose();
+    },
+  };
+}
+
 describe('desktop process resume owner', () => {
   beforeEach(() => {
     retrieveSessionResumeData.mockReset();
@@ -56,38 +74,22 @@ describe('desktop process resume owner', () => {
       agentConfig: config,
       executionId,
     });
-    const session = createTestSession();
-    session.transcripts.ensureStream(stream);
-    const { installDesktopProcessResumeHandler, tryResumeDesktopStream } =
-      await import('@desktop/main/desktopAgentResume');
-    const dispose = installDesktopProcessResumeHandler({
-      session,
-      snapshots: createSnapshots(),
-    });
+    const harness = createResumeHarness();
 
     try {
-      await expect(tryResumeDesktopStream(stream)).resolves.toBe(true);
+      await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(true);
       expect(runAgent).toHaveBeenCalledOnce();
     } finally {
-      dispose();
-      session.dispose();
+      harness.dispose();
     }
   });
 
   it('rejects a termination-triggered wake after shutdown disables resume', async () => {
-    const session = createTestSession();
-    session.transcripts.ensureStream(stream);
-    const { installDesktopProcessResumeHandler, tryResumeDesktopStream } =
-      await import('@desktop/main/desktopAgentResume');
-    const dispose = installDesktopProcessResumeHandler({
-      session,
-      snapshots: createSnapshots(),
-    });
+    const harness = createResumeHarness();
 
-    dispose();
-    await expect(tryResumeDesktopStream(stream)).resolves.toBe(false);
+    harness.dispose();
+    await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(false);
     expect(retrieveSessionResumeData).not.toHaveBeenCalled();
-    session.dispose();
   });
 
   it('cancels an in-flight resume before shutdown can launch it', async () => {
@@ -104,22 +106,14 @@ describe('desktop process resume owner', () => {
       await retrievalGate;
       return { type: 'workflow', agentConfig: config, executionId };
     });
-    const session = createTestSession();
-    session.transcripts.ensureStream(stream);
-    const { installDesktopProcessResumeHandler, tryResumeDesktopStream } =
-      await import('@desktop/main/desktopAgentResume');
-    const dispose = installDesktopProcessResumeHandler({
-      session,
-      snapshots: createSnapshots(),
-    });
+    const harness = createResumeHarness();
 
-    const resume = tryResumeDesktopStream(stream);
+    const resume = harness.owner.tryResumeStream(stream);
     await retrievalStarted;
-    dispose();
+    harness.dispose();
     releaseRetrieval();
 
     await expect(resume).resolves.toBe(false);
     expect(runAgent).not.toHaveBeenCalled();
-    session.dispose();
   });
 });
