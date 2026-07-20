@@ -9,7 +9,7 @@ import {
   modelHandlersShareConversationFormat,
   modelHandlerCompatibilityKey,
 } from '@agent/runtime/ModelFactory';
-import { inferPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
+import { inferAndLogPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
@@ -456,10 +456,13 @@ export async function runToolUseFlow<C = unknown>(
             ) ?? services.config.model)
           : services.config.model;
         const backfillCompatibilityKey =
-          inferPersistedModelHandlerCompatibilityKey(
+          migratedData.modelHandlerCompatibilityKey ??
+          inferAndLogPersistedModelHandlerCompatibilityKey(
             sharedModel,
             migratedData.messages,
-          ) ?? compatibilityKey;
+            logger,
+          ) ??
+          compatibilityKey;
         if (
           !migratedData.modelHandlerCompatibilityKey &&
           backfillCompatibilityKey

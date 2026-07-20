@@ -11,7 +11,7 @@ import { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import { activeModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
-import { inferPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
+import { inferAndLogPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -204,9 +204,10 @@ export async function runReflectionFlow<C = unknown>(
 
       shared = validated.data;
       shared.modelHandlerCompatibilityKey ??=
-        inferPersistedModelHandlerCompatibilityKey(
+        inferAndLogPersistedModelHandlerCompatibilityKey(
           config.model,
           shared.conversation,
+          logger,
         ) ?? compatibilityKey;
       // Always sync totalRounds from the current agent config so that changes
       // to the YAML (e.g. rounds: 2 → 1) take effect on resume.
