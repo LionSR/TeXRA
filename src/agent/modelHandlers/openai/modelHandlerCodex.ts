@@ -205,8 +205,8 @@ const codexFetch = (async (input, init) => {
 
 export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
   protected override getActiveProviderCapabilities(): ProviderCapabilityProfile | null {
-    if (this.attemptCredentialRoute !== undefined) {
-      return this.attemptCredentialRoute === 'chatgpt-subscription'
+    if (this.activeCredentialRoute !== undefined) {
+      return this.activeCredentialRoute === 'chatgpt-subscription'
         ? this.subscriptionCapabilities()
         : null;
     }

@@ -576,11 +576,6 @@ export abstract class ModelHandler<
     return client;
   }
 
-  /** Route used by the most recently started attempt on this handler. */
-  protected get attemptCredentialRoute(): ModelCredentialRoute | undefined {
-    return this.activeAttemptCredentialRoute ?? this.lastAttemptCredentialRoute;
-  }
-
   /** Route currently executing, excluding the last completed attempt. */
   protected get activeCredentialRoute(): ModelCredentialRoute | undefined {
     return this.activeAttemptCredentialRoute;

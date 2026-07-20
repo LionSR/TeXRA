@@ -48,6 +48,7 @@ import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
 
 // Local file imports
 import {
+  type GoogleClientCache,
   isGemini3Model,
   resolveGeminiThinkingLevel,
   resolveGoogleClient,
@@ -102,7 +103,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 > {
   private static readonly INLINE_MEDIA_LIMIT_BYTES = 20 * 1024 * 1024;
 
-  private googleClient: GoogleGenAI | null = null;
+  private googleClient: GoogleClientCache | null = null;
 
   private supportsFileUploads(): boolean {
     return supportsGoogleFileUploads(this.capabilities);
@@ -177,8 +178,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       credential,
       logger: this.logger,
       cached: this.googleClient,
-      setCached: (client) => {
-        this.googleClient = client;
+      setCached: (cache) => {
+        this.googleClient = cache;
       },
       rememberRoute: (client, route) =>
         this.rememberClientCredentialRoute(client, route),

@@ -4,7 +4,10 @@ import { GoogleGenAI, type File } from '@google/genai';
 import { ReasoningEffort, type ModelCapabilities } from 'llm-zoo';
 
 import type { AgentTrace } from '@agent/trace';
-import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
+import type {
+  ModelCredentialRoute,
+  ResolvedClientCredential,
+} from '@agent/types/ModelHandlerContracts';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { isNonEmptyString } from '@utils/core';
@@ -39,19 +42,20 @@ export function supportsGoogleFileUploads(
   return capabilities.supportsVision || capabilities.supportsNativeAudio;
 }
 
+export interface GoogleClientCache {
+  readonly client: GoogleGenAI;
+  readonly credential: ResolvedClientCredential;
+}
+
 interface ResolveGoogleClientParams {
   /** SDK surface label used in debug logs, e.g. `'Native'` or `'Interactions'`. */
   sdkLabel: string;
-  credential: {
-    readonly apiKey: string;
-    readonly baseUrl: string | null;
-    readonly route: Exclude<ModelCredentialRoute, 'chatgpt-subscription'>;
-  };
+  credential: ResolvedClientCredential;
   logger: AgentTrace;
   /** Current cached client (server-side keys bypass the cache). */
-  cached: GoogleGenAI | null;
+  cached: GoogleClientCache | null;
   /** Stores a freshly-created client for reuse with personal API keys. */
-  setCached: (client: GoogleGenAI) => void;
+  setCached: (cache: GoogleClientCache) => void;
   rememberRoute: (
     client: GoogleGenAI,
     route: ModelCredentialRoute,
@@ -93,12 +97,16 @@ export async function resolveGoogleClient(
     return createClient(true);
   }
 
-  if (cached) {
-    return cached;
+  if (
+    cached?.credential.apiKey === credential.apiKey &&
+    cached.credential.baseUrl === credential.baseUrl &&
+    cached.credential.route === credential.route
+  ) {
+    return cached.client;
   }
 
   const client = await createClient(false);
-  setCached(client);
+  setCached({ client, credential });
   return client;
 }
 

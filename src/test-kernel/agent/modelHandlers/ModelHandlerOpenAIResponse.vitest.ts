@@ -18,6 +18,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
+import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
 import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller';
 import {
   attachContextWindowError,
@@ -31,6 +32,7 @@ import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { pathToLocation } from '@utils/files';
 
 // Third-party imports
+import type OpenAI from 'openai';
 import type {
   ResponseInputItem,
   ResponseUsage,
@@ -87,6 +89,16 @@ class StatelessResponseHandler extends ModelHandlerOpenAIResponse {
   }
 }
 
+class ResponseRouteProbe extends ModelHandlerOpenAIResponse {
+  tagClient(client: OpenAI, route: ModelCredentialRoute): OpenAI {
+    return this.rememberClientCredentialRoute(client, route);
+  }
+
+  usesOpenRouter(): boolean {
+    return this.isOpenRouterRoutingEnabled();
+  }
+}
+
 function createNonChainingHandler(
   configOverrides: TestModelConfigOverrides = {},
 ): ModelHandlerOpenAIResponse {
@@ -125,6 +137,33 @@ function createMessages(count: number): ResponseInputItem[] {
 }
 
 describe('ModelHandlerOpenAIResponse.createResponse', () => {
+  it('uses the client route instead of mutable OpenRouter configuration during an attempt', async () => {
+    const handler = setupHandler(
+      new ResponseRouteProbe(
+        buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG, {
+          openRouterOnly: true,
+        }),
+      ),
+    );
+    const client = handler.tagClient(
+      {
+        responses: {
+          create: async () => {
+            assert.equal(handler.usesOpenRouter(), false);
+            return createResponse('resp-direct-route', { input_tokens: 1 });
+          },
+        },
+      } as unknown as OpenAI,
+      'api-key',
+    );
+
+    await handler.createResponse({
+      client,
+      messages: createMessages(1),
+      temperature: 0,
+    });
+  });
+
   it('sends reasoning.mode for pro-mode registry entries (GPT-5.6 Pro)', async () => {
     // GPT-5.6 Pro shares gpt-5.6-sol's wire id; pro execution is selected by
     // the request's reasoning.mode, driven by the reasoningMode capability.

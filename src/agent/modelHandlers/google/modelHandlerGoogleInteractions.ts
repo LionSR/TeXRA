@@ -51,6 +51,7 @@ import { getConfig } from '@utils/config/configUtils';
 
 // Local file imports
 import {
+  type GoogleClientCache,
   isGemini3Model,
   resolveGeminiThinkingLevel,
   resolveGoogleClient,
@@ -352,7 +353,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     this.pendingBackgroundInteractionId = null;
   }
 
-  private googleClient: GoogleGenAI | null = null;
+  private googleClient: GoogleClientCache | null = null;
 
   // ===========================================================================
   // STATEFUL chaining state (store:true + previous_interaction_id)
@@ -543,8 +544,8 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       credential,
       logger: this.logger,
       cached: this.googleClient,
-      setCached: (client) => {
-        this.googleClient = client;
+      setCached: (cache) => {
+        this.googleClient = cache;
       },
       rememberRoute: (client, route) =>
         this.rememberClientCredentialRoute(client, route),

@@ -277,8 +277,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return this.getActiveProviderCapabilities()?.openAIResponses;
   }
 
-  private isOpenRouterRoutingEnabled(): boolean {
-    return shouldUseOpenRouter(this.config);
+  protected isOpenRouterRoutingEnabled(): boolean {
+    return this.activeCredentialRoute === undefined
+      ? shouldUseOpenRouter(this.config)
+      : this.activeCredentialRoute === 'openrouter';
   }
 
   public override getEffectiveContextWindow(): number {

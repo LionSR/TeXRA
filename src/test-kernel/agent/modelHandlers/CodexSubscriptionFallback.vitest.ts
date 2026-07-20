@@ -334,6 +334,11 @@ describe('ModelHandlerCodex subscription fallback', () => {
 
     stream.reject(new Error('finish route snapshot test'));
     await expect(attempt).rejects.toThrow('finish route snapshot test');
+    expect(handler.getBaseUrl()).not.toBe(CODEX_BACKEND_BASE_URL);
+    expect(handler.getEffectiveContextWindow()).toBe(
+      largeWindowConfig.contextWindow,
+    );
+    expect(handler.computePrice(RAW_USAGE)).toBeGreaterThan(0);
   });
 
   it('constructs a personal candidate without publishing the preference', async () => {
