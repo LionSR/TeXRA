@@ -4,6 +4,9 @@ import { describe, expect, it } from 'vitest';
 // Local imports - component type
 import type { ApproveSplitButton } from '@progressView/frontend/components/ApproveSplitButton';
 
+// Local imports - shared copy
+import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
+
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
@@ -109,7 +112,7 @@ describe('approve-split-button', () => {
     );
 
     expect(item?.textContent).toContain(
-      'Approve all tasks, edits & commands (this stream)',
+      DELEGATION_APPROVAL_COPY.progressViewAction,
     );
     const menu = element.shadowRoot?.querySelector('.approve-split-menu');
     menu?.dispatchEvent(

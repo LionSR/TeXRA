@@ -515,7 +515,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
       },
     ]);
     expect(showInfo).toHaveBeenCalledWith(
-      'Task, file-edit, and command auto-approval enabled for this stream.',
+      'Task, file-edit, and command auto-approval enabled for this run.',
     );
 
     expectDispatched(
@@ -557,6 +557,9 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
         payload: { streamId: stream, bypassActive: false },
       },
     ]);
+    expect(showInfo).toHaveBeenLastCalledWith(
+      'Task, file-edit, and command auto-approval disabled for this run.',
+    );
   });
 });
 
