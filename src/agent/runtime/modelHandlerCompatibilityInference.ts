@@ -55,7 +55,6 @@ function isOpenRouterChatMessage(message: ProviderMessage): boolean {
 export function inferPersistedModelHandlerCompatibilityKey(
   model: string,
   messages: readonly ProviderMessage[],
-  logger: Pick<AgentTrace, 'info'>,
 ): ModelHandlerCompatibilityKey | undefined {
   const modelConfig = getRuntimeModelConfig(model);
   let compatibilityKey: ModelHandlerCompatibilityKey | undefined;
@@ -82,6 +81,18 @@ export function inferPersistedModelHandlerCompatibilityKey(
     }
   }
 
+  return compatibilityKey;
+}
+
+export function inferAndLogPersistedModelHandlerCompatibilityKey(
+  model: string,
+  messages: readonly ProviderMessage[],
+  logger: Pick<AgentTrace, 'info'>,
+): ModelHandlerCompatibilityKey | undefined {
+  const compatibilityKey = inferPersistedModelHandlerCompatibilityKey(
+    model,
+    messages,
+  );
   if (compatibilityKey) {
     logger.info(
       'Inferred model-handler compatibility for keyless persisted run',
@@ -122,7 +133,6 @@ function unwrapSharedState(shared: unknown): Record<string, unknown> | null {
 export function inferPersistedFlowModelHandlerCompatibilityKey(
   model: string,
   shared: unknown,
-  logger: Pick<AgentTrace, 'info'>,
 ): ModelHandlerCompatibilityKey | undefined {
   const record = unwrapSharedState(shared);
   if (!record) return undefined;
@@ -141,6 +151,5 @@ export function inferPersistedFlowModelHandlerCompatibilityKey(
   return inferPersistedModelHandlerCompatibilityKey(
     currentModelFromRawSharedState(record) ?? model,
     messages,
-    logger,
   );
 }

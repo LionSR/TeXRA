@@ -184,7 +184,6 @@ async function inferLaunchModelHandlerCompatibilityKey(
     return inferPersistedFlowModelHandlerCompatibilityKey(
       model,
       flowRecord?.shared,
-      logger,
     );
   } catch (error) {
     // A failed read here silently falls through to the default model-handler

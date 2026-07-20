@@ -9,6 +9,7 @@ import {
   modelHandlersShareConversationFormat,
   modelHandlerCompatibilityKey,
 } from '@agent/runtime/ModelFactory';
+import { inferAndLogPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
@@ -62,7 +63,10 @@ import {
   type PreparedShared,
   type ToolUseRunShared,
 } from './nodes/types';
-import { setToolUseSharedModel } from './modelSwitchState';
+import {
+  currentModelFromUserChannels,
+  setToolUseSharedModel,
+} from './modelSwitchState';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseServices } from './ToolUseServices';
 
@@ -446,13 +450,29 @@ export async function runToolUseFlow<C = unknown>(
         // a stale legacy shape.
         let migratedData = migrationResult.data;
         let shouldWriteShared = migrationResult.migrated;
-        if (!migratedData.modelHandlerCompatibilityKey && compatibilityKey) {
+        const sharedModel = migratedData.stateSlices
+          ? (currentModelFromUserChannels(
+              migratedData.stateSlices.userChannels,
+            ) ?? services.config.model)
+          : services.config.model;
+        const backfillCompatibilityKey =
+          migratedData.modelHandlerCompatibilityKey ??
+          inferAndLogPersistedModelHandlerCompatibilityKey(
+            sharedModel,
+            migratedData.messages,
+            logger,
+          ) ??
+          compatibilityKey;
+        if (
+          !migratedData.modelHandlerCompatibilityKey &&
+          backfillCompatibilityKey
+        ) {
           logger.debug(
             'Backfilled tool-use model-handler compatibility key in shared state.',
           );
           migratedData = {
             ...migratedData,
-            modelHandlerCompatibilityKey: compatibilityKey,
+            modelHandlerCompatibilityKey: backfillCompatibilityKey,
           };
           shouldWriteShared = true;
         }

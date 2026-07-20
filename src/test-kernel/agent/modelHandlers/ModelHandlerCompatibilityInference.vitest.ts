@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentTrace } from '@agent/trace';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import {
+  inferAndLogPersistedModelHandlerCompatibilityKey,
   inferPersistedFlowModelHandlerCompatibilityKey,
-  inferPersistedModelHandlerCompatibilityKey,
 } from '@agent/runtime/modelHandlerCompatibilityInference';
 
 const info = vi.fn<AgentTrace['info']>();
@@ -17,7 +17,7 @@ describe('model handler compatibility inference', () => {
 
   it('infers the legacy Google GenAI handler from Content transcripts', () => {
     expect(
-      inferPersistedModelHandlerCompatibilityKey(
+      inferAndLogPersistedModelHandlerCompatibilityKey(
         'gemini35f',
         [
           {
@@ -41,7 +41,7 @@ describe('model handler compatibility inference', () => {
 
   it('infers OpenRouter for Google chat transcripts without a stored key', () => {
     expect(
-      inferPersistedModelHandlerCompatibilityKey(
+      inferAndLogPersistedModelHandlerCompatibilityKey(
         'gemini35f',
         [
           {
@@ -52,11 +52,20 @@ describe('model handler compatibility inference', () => {
         logger,
       ),
     ).toBe('ModelHandlerOpenRouterNative');
+    expect(info).toHaveBeenCalledWith(
+      'Inferred model-handler compatibility for keyless persisted run',
+      {
+        data: {
+          model: 'gemini35f',
+          compatibilityKey: 'ModelHandlerOpenRouterNative',
+        },
+      },
+    );
   });
 
   it('keeps keyless legacy Copilot transcripts on OpenRouter', () => {
     expect(
-      inferPersistedModelHandlerCompatibilityKey(
+      inferAndLogPersistedModelHandlerCompatibilityKey(
         'copilot4o',
         [
           {
@@ -67,53 +76,55 @@ describe('model handler compatibility inference', () => {
         logger,
       ),
     ).toBe('ModelHandlerOpenRouterNative');
+    expect(info).toHaveBeenCalledWith(
+      'Inferred model-handler compatibility for keyless persisted run',
+      {
+        data: {
+          model: 'copilot4o',
+          compatibilityKey: 'ModelHandlerOpenRouterNative',
+        },
+      },
+    );
   });
 
-  it('infers from raw persisted flow state before launch constructs a handler', () => {
+  it('keeps launch-time flow inference silent until persistence', () => {
     expect(
-      inferPersistedFlowModelHandlerCompatibilityKey(
-        'gpt54',
-        {
-          messages: [
-            {
-              role: 'user',
-              parts: [{ text: 'continue' }],
-            },
-          ],
-          stateSlices: {
-            userChannels: {
-              input: {},
-              transient: { MODEL: 'gemini35f' },
-            },
+      inferPersistedFlowModelHandlerCompatibilityKey('gpt54', {
+        messages: [
+          {
+            role: 'user',
+            parts: [{ text: 'continue' }],
+          },
+        ],
+        stateSlices: {
+          userChannels: {
+            input: {},
+            transient: { MODEL: 'gemini35f' },
           },
         },
-        logger,
-      ),
+      }),
     ).toBe('ModelHandlerGoogleGenAI');
+    expect(info).not.toHaveBeenCalled();
   });
 
   it('honors an explicitly persisted flow compatibility key', () => {
     expect(
-      inferPersistedFlowModelHandlerCompatibilityKey(
-        'gemini35f',
-        {
-          modelHandlerCompatibilityKey: 'ModelHandlerOpenRouterNative',
-          conversation: [
-            {
-              role: 'user',
-              parts: [{ text: 'continue' }],
-            },
-          ],
-        },
-        logger,
-      ),
+      inferPersistedFlowModelHandlerCompatibilityKey('gemini35f', {
+        modelHandlerCompatibilityKey: 'ModelHandlerOpenRouterNative',
+        conversation: [
+          {
+            role: 'user',
+            parts: [{ text: 'continue' }],
+          },
+        ],
+      }),
     ).toBe('ModelHandlerOpenRouterNative');
     expect(info).not.toHaveBeenCalled();
   });
 
   it('does not log when inference is inconclusive', () => {
     expect(
-      inferPersistedModelHandlerCompatibilityKey('gpt54', [], logger),
+      inferAndLogPersistedModelHandlerCompatibilityKey('gpt54', [], logger),
     ).toBeUndefined();
     expect(info).not.toHaveBeenCalled();
   });
