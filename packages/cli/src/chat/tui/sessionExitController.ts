@@ -15,6 +15,7 @@
 // which no-ops via the `exiting` guard so the drain / hint / cleanup never run
 // twice.
 
+import { readCliCwd } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
   handOffCliShutdownSignalHandlers,
@@ -149,7 +150,7 @@ export function createSessionExitController(
       ctx.commandName,
       {
         cwd: ctx.cwd,
-        processCwd: process.cwd(),
+        processCwd: readCliCwd(),
         approvalPolicy: ctx.getApprovalPolicy(),
       },
     );
