@@ -930,6 +930,87 @@ describe('executionRegistry', () => {
     }
   });
 
+  it('stops one child while preserving its owner, sibling, and agent descendants', () => {
+    const explicit = createRecordingHost();
+    const streamStatus = new StreamStatusMachine();
+    const registry = new ExecutionRegistry({ streamStatus });
+    const rootStreamId = 'root-focused-stop-test' as StreamTabId;
+    const childStreamId = 'child-focused-stop-test' as StreamTabId;
+    const siblingStreamId = 'sibling-focused-stop-test' as StreamTabId;
+    const descendantStreamId = 'descendant-focused-stop-test' as StreamTabId;
+    const rootInterrupt = vi.fn();
+    const childInterrupt = vi.fn();
+    const siblingInterrupt = vi.fn();
+    const descendantInterrupt = vi.fn();
+
+    try {
+      const rootHandle = createHandle(
+        'exec-root-focused-stop-test',
+        rootStreamId,
+        rootStreamId,
+        explicit.host,
+        { agentName: 'test-root' },
+      );
+      rootHandle.attachInterruptHandler({ interrupt: rootInterrupt });
+      registry.track(rootHandle);
+      const childHandle = createHandle(
+        'exec-child-focused-stop-test',
+        rootStreamId,
+        childStreamId,
+        explicit.host,
+      );
+      childHandle.attachInterruptHandler({ interrupt: childInterrupt });
+      registry.track(childHandle);
+      const siblingHandle = createHandle(
+        'exec-sibling-focused-stop-test',
+        rootStreamId,
+        siblingStreamId,
+        explicit.host,
+      );
+      siblingHandle.attachInterruptHandler({ interrupt: siblingInterrupt });
+      registry.track(siblingHandle);
+      const descendantHandle = createHandle(
+        'exec-descendant-focused-stop-test',
+        childStreamId,
+        descendantStreamId,
+        explicit.host,
+      );
+      descendantHandle.attachInterruptHandler({
+        interrupt: descendantInterrupt,
+      });
+      registry.track(descendantHandle);
+
+      expect(
+        registry.stopAgentStream(childStreamId, {
+          detachActiveChildren: true,
+          runtimeHost: explicit.host,
+        }),
+      ).toEqual({
+        kind: 'interrupted',
+        streamId: childStreamId,
+        childPolicy: 'detach',
+      });
+
+      expect(childInterrupt).toHaveBeenCalledOnce();
+      expect(rootInterrupt).not.toHaveBeenCalled();
+      expect(siblingInterrupt).not.toHaveBeenCalled();
+      expect(descendantInterrupt).not.toHaveBeenCalled();
+      expect(registry.getAgentHandleByStream(rootStreamId)).toBe(rootHandle);
+      expect(registry.getAgentHandleByStream(siblingStreamId)).toBe(
+        siblingHandle,
+      );
+      expect(
+        registry.getAgentHandleByStream(descendantStreamId)?.parentStreamId,
+      ).toBe(descendantStreamId);
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
+      expect(streamStatus.get(rootStreamId)).toBeUndefined();
+      expect(streamStatus.get(siblingStreamId)).toBeUndefined();
+      expect(streamStatus.get(descendantStreamId)).toBeUndefined();
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it('marks an ownerless stream stopped when a host can publish status', () => {
     const explicit = createRecordingHost();
     const streamStatus = new StreamStatusMachine();

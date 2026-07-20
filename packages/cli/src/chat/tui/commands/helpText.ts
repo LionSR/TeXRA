@@ -71,7 +71,7 @@ function keyboardSection(options: SlashCommandHelpOptions): string {
     // Generated from the editing keymap so this list can't drift from the
     // bindings that actually exist (see textInputBindings.ts).
     `- ${textInputEditingHelp()}`,
-    '- `Esc` stops the current response · `Ctrl-C` exits idle chats; stops active responses',
+    '- `Esc` stops the focused agent · `Ctrl-C` exits idle chats; stops active responses',
     "- `Ctrl-T` prints the focused stream's full output once into terminal scrollback",
     "- `Tab` selects child sessions and processes · `v` prints the selected stream's full output",
     `- \`${focusChord}\` focuses a stream directly`,

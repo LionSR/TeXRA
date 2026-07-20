@@ -380,12 +380,13 @@ export class SessionHostInteractions
       interactions.dispose?.();
       return () => {};
     }
+    const previous = this.activeAttachment;
     const attachment: HostInteractionAttachment = {
       interactions,
       disposed: false,
     };
     this.attachments.push(attachment);
-    this.activateCurrentAttachment();
+    this.activateCurrentAttachment(previous);
     queueMicrotask(() => this.replayPendingPresentations(attachment));
     return () => {
       if (attachment.disposed) return;
@@ -393,7 +394,7 @@ export class SessionHostInteractions
       attachment.disposed = true;
       const index = this.attachments.indexOf(attachment);
       if (index !== -1) this.attachments.splice(index, 1);
-      if (wasActive) this.activateCurrentAttachment();
+      if (wasActive) this.activateCurrentAttachment(attachment);
       interactions.dispose?.();
     };
   }
@@ -609,9 +610,21 @@ export class SessionHostInteractions
     });
   }
 
-  private activateCurrentAttachment(): void {
+  private activateCurrentAttachment(
+    previous: HostInteractionAttachment | undefined,
+  ): void {
     this.attachmentVersion += 1;
-    if (!this.activeAttachment) return;
+    const active = this.activeAttachment;
+    if (previous && previous !== active) {
+      try {
+        previous.interactions.cancel({ cause: 'Interaction host changed.' });
+      } catch (error) {
+        logger.warn('Failed to cancel the previous interaction host', {
+          data: error,
+        });
+      }
+    }
+    if (!active) return;
     for (const pending of this.pending) {
       if (!pending.cancellationRequested) this.dispatch(pending);
     }

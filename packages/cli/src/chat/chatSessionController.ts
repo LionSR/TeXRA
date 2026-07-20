@@ -130,8 +130,11 @@ export interface ChatSessionController {
     preResolved?: CliToolUseResumeResolution,
   ): Promise<void>;
 
-  /** Request stop of the active run (idempotent). */
+  /** Request stop of the root run using the configured child policy. */
   stop(): void;
+
+  /** Stop one user-focused stream while preserving other agent streams. */
+  stopStream(streamId: StreamTabId): void;
 
   /**
    * Atomically admit a message into an interrupted root conversation.
@@ -184,6 +187,13 @@ export function createChatSessionController(
   } = init;
   let interruptedContinuation: InterruptedContinuationBatch | undefined;
   let pendingInterruptedFollowUps: InterruptedFollowUp[] = [];
+
+  // Run facts belong to the TUI session, not to any one root turn. A stopped
+  // root may leave detached children running, and those children must keep
+  // projecting status, output, and approval-related facts after the root
+  // promise settles. Installing this once also avoids duplicate projections
+  // when another root starts while an earlier detached child is still alive.
+  disposers.push(attachTuiRunFactSubscription(defaultSession().events));
 
   const activateAgentConfig = (
     config: Pick<
@@ -277,9 +287,11 @@ export function createChatSessionController(
       : CliExitCode.AgentError;
   };
 
-  // Build the runtime host shared by start and resume: attach the
-  // terminal-result toast and the TUI approval pipeline, and return a
-  // `finalize` teardown that both run promises invoke from their `.finally`.
+  // Build the runtime host shared by start and resume. Root completion marks
+  // the root row complete and detaches its terminal-result presenter
+  // immediately. Host interactions remain attached until every execution that
+  // inherited this runtime host settles, so detached children retain a visible,
+  // answerable approval path without keeping the completed root turn pending.
   const setupRunHost = (
     sessionContext: CliContext,
   ): {
@@ -291,26 +303,66 @@ export function createChatSessionController(
     const detachHostInteractions = defaultSession().useHostInteractions(
       createTuiHostInteractions(runtimeHost, sessionContext),
     );
-    disposers.push(detachHostInteractions);
     const detachResultToast = attachTerminalResultToast(
       defaultSession(),
       runtimeHost,
     );
-    const detachTuiRunFacts = attachTuiRunFactSubscription(
-      defaultSession().events,
-    );
+    let resultToastAttached = true;
+    const detachResultToastOnce = (): void => {
+      if (!resultToastAttached) return;
+      resultToastAttached = false;
+      detachResultToast();
+    };
+    let released = false;
+    let detachExecutionListener = (): void => {};
+    const releaseHost = (): void => {
+      if (released) return;
+      released = true;
+      detachExecutionListener();
+      detachResultToastOnce();
+      detachHostInteractions();
+      if (session.runtimeHost === runtimeHost) {
+        session.runtimeHost = undefined;
+      }
+      void runtimeHost.close();
+    };
+    disposers.push(releaseHost);
+
+    const releaseHostWhenUnused = (): void => {
+      if (released) return;
+      const executions = defaultSession().executions;
+      const releaseIfUnused = (): void => {
+        const inUse = executions
+          .getActiveIds()
+          .some(
+            (executionId) =>
+              executions.getHandle(executionId)?.runtimeHost === runtimeHost,
+          );
+        if (!inUse) releaseHost();
+      };
+      // Subscribe before the first liveness check. An execution that untracks
+      // at this boundary therefore either fires the listener or is absent from
+      // the check; there is no snapshot-to-wait interval that can lose it.
+      const detach = executions.addRegistrationListener(releaseIfUnused);
+      detachExecutionListener = detach;
+      if (released) {
+        // Defensive against a registration source that invokes synchronously.
+        detach();
+        return;
+      }
+      releaseIfUnused();
+    };
     return {
       runtimeHost,
       approvalsUnavailable: approvalPromptsUnavailable(sessionContext),
       finalize: (): void => {
-        detachResultToast();
-        detachTuiRunFacts();
-        detachHostInteractions();
-        if (session.runtimeHost === runtimeHost) {
-          session.runtimeHost = undefined;
-        }
+        // The root terminal result is published before its run promise
+        // settles. Children retain `isSubagent: true` and never produce a
+        // terminal toast, so this session-wide listener has no work after the
+        // root finalizes and must not overlap a later root's listener.
+        detachResultToastOnce();
         markChatTuiRunCompleted(session);
-        void runtimeHost.close();
+        releaseHostWhenUnused();
       },
     };
   };
@@ -707,10 +759,27 @@ export function createChatSessionController(
     interruptActiveRun();
   };
 
+  const stopStream = (streamId: StreamTabId): void => {
+    const current = defaultSession();
+    current.interactions.cancel({
+      streamId,
+      cause: 'Run interrupted.',
+    });
+    if (streamId === session.streamId) {
+      session.stopRequested = true;
+      session.interruptedStreamId = streamId;
+    }
+    current.executions.stopAgentStream(streamId, {
+      detachActiveChildren: true,
+      runtimeHost: session.runtimeHost,
+    });
+  };
+
   return {
     startRootRun,
     resume,
     stop,
+    stopStream,
     admitInterruptedFollowUp,
     clearInterruptedRecovery: () => {
       void supersedeInterruptedRecovery();
