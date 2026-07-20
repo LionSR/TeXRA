@@ -7,18 +7,22 @@ import {
   type AgentTrace,
 } from '@agent/trace';
 import { MESSAGE_TYPES } from '@shared/schemas';
-import {
-  createRunTrace,
-  flushPendingRunTraces,
-  StreamLogStore,
-} from '@transcript';
+import { createRunTrace, StreamLogStore } from '@transcript';
 
 /** Run against a fresh, test-local store. */
 function withStore(
-  run: (store: StreamLogStore, logger: AgentTrace) => void,
+  run: (
+    store: StreamLogStore,
+    logger: AgentTrace,
+    flushPending: () => void,
+  ) => void,
 ): void {
   const store = StreamLogStore.ephemeral('test');
-  run(store, createRunTrace('stream', store).trace);
+  const flushers = new Set<() => void>();
+  const handle = createRunTrace('stream', store, flushers);
+  run(store, handle.trace, () => {
+    for (const flush of flushers) flush();
+  });
 }
 
 describe('AgentTrace stream output', () => {
@@ -29,7 +33,7 @@ describe('AgentTrace stream output', () => {
   it('coalesces streaming text updates and flushes on finalize', () => {
     vi.useFakeTimers();
 
-    withStore((store, logger) => {
+    withStore((store, logger, flushPending) => {
       const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
 
       stream.append('a');
@@ -64,14 +68,14 @@ describe('AgentTrace stream output', () => {
   it('drains pending stream updates for shutdown persistence', () => {
     vi.useFakeTimers();
 
-    withStore((store, logger) => {
+    withStore((store, logger, flushPending) => {
       const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
 
       stream.append('a');
       stream.append('b');
       expect((store.get('stream')?.getRange(0) ?? [])[0]?.text).toBe('a');
 
-      flushPendingRunTraces();
+      flushPending();
       expect((store.get('stream')?.getRange(0) ?? [])[0]?.text).toBe('ab');
       expect(vi.getTimerCount()).toBe(0);
 
@@ -100,7 +104,7 @@ describe('AgentTrace stream output', () => {
   });
 
   it('emits nothing for a deferred stream until the first chunk', () => {
-    withStore((store, logger) => {
+    withStore((store, logger, flushPending) => {
       const thinking = logger.openStream(MESSAGE_TYPES.THINKING, {
         deferStart: true,
       });
@@ -108,7 +112,7 @@ describe('AgentTrace stream output', () => {
       expect(store.get('stream')).toBeUndefined();
 
       thinking.append('reasoning delta');
-      flushPendingRunTraces();
+      flushPending();
 
       const entries = store.get('stream')?.getRange(0) ?? [];
       expect(entries).toHaveLength(1);

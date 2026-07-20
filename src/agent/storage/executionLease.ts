@@ -44,6 +44,9 @@ interface OwnedExecutionLease {
   readonly released: Promise<void>;
   readonly resolveReleased: () => void;
   readonly lossListeners: Set<() => void>;
+  heartbeatInFlight: Promise<void> | undefined;
+  lastConfirmedHeartbeatAt: number;
+  releasing: boolean;
   durabilityFailed: boolean;
 }
 
@@ -211,7 +214,7 @@ function forgetOwnedLease(
   }
 }
 
-async function heartbeat(lease: OwnedExecutionLease): Promise<void> {
+async function performHeartbeat(lease: OwnedExecutionLease): Promise<void> {
   await withLeaseLock(
     lease.executionId,
     async () => {
@@ -224,8 +227,59 @@ async function heartbeat(lease: OwnedExecutionLease): Promise<void> {
         { ...current, heartbeatAt: Date.now() },
         lease.storageRoot,
       );
+      lease.lastConfirmedHeartbeatAt = Date.now();
     },
     lease.storageRoot,
+  );
+}
+
+function heartbeat(lease: OwnedExecutionLease): Promise<void> {
+  if (lease.releasing) return Promise.resolve();
+  if (lease.heartbeatInFlight) return lease.heartbeatInFlight;
+
+  const work = performHeartbeat(lease)
+    .catch((error: unknown) => {
+      handleHeartbeatFailure(lease, error);
+      throw error;
+    })
+    .finally(() => {
+      if (lease.heartbeatInFlight === work) {
+        lease.heartbeatInFlight = undefined;
+      }
+    });
+  lease.heartbeatInFlight = work;
+  return work;
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+  if (error && typeof error === 'object') {
+    if ('code' in error && error.code === code) return true;
+    if (error instanceof AggregateError) {
+      return error.errors.some((nested) => hasErrorCode(nested, code));
+    }
+  }
+  return false;
+}
+
+function handleHeartbeatFailure(
+  lease: OwnedExecutionLease,
+  error: unknown,
+): void {
+  const ownershipUnprovable =
+    hasErrorCode(error, 'ECOMPROMISED') ||
+    Date.now() - lease.lastConfirmedHeartbeatAt > EXECUTION_LEASE_STALE_MS;
+  if (ownershipUnprovable) {
+    forgetOwnedLease(lease, { notifyLoss: true, fenceWrites: true });
+  }
+  logger.warn(
+    CHANNEL,
+    `Failed to heartbeat execution ${lease.executionId}: ${toErrorMessage(error)}`,
+    {
+      data: {
+        error,
+        ownershipFenced: ownershipUnprovable,
+      },
+    },
   );
 }
 
@@ -245,6 +299,9 @@ function rememberOwnership(
     released,
     resolveReleased,
     lossListeners: new Set(),
+    heartbeatInFlight: undefined,
+    lastConfirmedHeartbeatAt: Date.now(),
+    releasing: false,
     durabilityFailed: false,
   };
   ownedLeases.set(ownershipKey(root, executionId), lease);
@@ -252,18 +309,9 @@ function rememberOwnership(
   if (!heartbeatTimer) {
     heartbeatTimer = setInterval(() => {
       for (const owned of ownedLeases.values()) {
-        void heartbeat(owned).catch((error: unknown) => {
-          // A host that cannot renew the lease also cannot prove continued
-          // ownership to its peers. Ordinary execution persistence uses the
-          // same storage root and will normally fail on the same outage; keep
-          // the last lease record intact so peers remain fail-closed until the
-          // documented stale horizon rather than deleting it prematurely.
-          logger.warn(
-            CHANNEL,
-            `Failed to heartbeat execution ${owned.executionId}: ${toErrorMessage(error)}`,
-            { data: error },
-          );
-        });
+        // heartbeat() records and classifies its own failure before rejecting;
+        // the interval consumes that rejection because it has no caller.
+        void heartbeat(owned).catch(() => undefined);
       }
     }, EXECUTION_LEASE_HEARTBEAT_MS);
     heartbeatTimer.unref();
@@ -307,14 +355,18 @@ async function runWithValidatedOwnership<T>(
   );
 }
 
-/** Hold the coordination lock while an owned execution commits artifacts. */
-export async function runWithOwnedExecutionLease<T>(
+/** Refresh and validate local ownership at a short durability boundary. */
+export async function renewOwnedExecutionLease(
   executionId: ExecutionId,
-  operation: () => Promise<T>,
-): Promise<T> {
+): Promise<void> {
   const lease = ownedLeases.get(ownershipKey(storageRoot(), executionId));
-  if (!lease) throw new ExecutionLeaseLostError(executionId);
-  return runWithValidatedOwnership(lease, operation);
+  if (!lease || lease.releasing) {
+    throw new ExecutionLeaseLostError(executionId);
+  }
+  await heartbeat(lease);
+  if (ownedLeases.get(ownershipKey(lease.storageRoot, executionId)) !== lease) {
+    throw new ExecutionLeaseLostError(executionId);
+  }
 }
 
 /**
@@ -489,6 +541,12 @@ async function releaseOwnership(ownership: OwnedExecutionLease): Promise<void> {
   const root = ownership.storageRoot;
   const { executionId } = ownership;
   let ownershipLost = false;
+  let releaseFailed = false;
+  ownership.releasing = true;
+  await ownership.heartbeatInFlight?.catch(() => undefined);
+  if (ownedLeases.get(ownershipKey(root, executionId)) !== ownership) {
+    return;
+  }
   try {
     await withLeaseLock(
       executionId,
@@ -503,9 +561,14 @@ async function releaseOwnership(ownership: OwnedExecutionLease): Promise<void> {
       root,
     );
   } catch (error) {
-    if (!isFileNotFoundError(error)) throw error;
+    if (!isFileNotFoundError(error)) {
+      releaseFailed = true;
+      throw error;
+    }
   } finally {
-    forgetOwnedLease(ownership, { fenceWrites: ownershipLost });
+    forgetOwnedLease(ownership, {
+      fenceWrites: ownershipLost || releaseFailed,
+    });
   }
 }
 

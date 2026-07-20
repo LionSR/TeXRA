@@ -300,10 +300,12 @@ async function assembleAgentLaunchContext(
   // runs outside any ALS, so it resolves to the process default. Either way the
   // child is tracked in the same session as its launcher.
   const session = input.session ?? currentSession();
+  await session.transcripts.ensureLoaded(streamId);
   const rawRunTrace = createRunTrace(
     streamId,
     session.transcripts,
     session.flushers,
+    executionId,
   );
   const runTrace = resources.ownRunTrace(rawRunTrace, () =>
     session.attachRunTrace(rawRunTrace.trace, streamId),

@@ -15,12 +15,7 @@ import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { MESSAGE_TYPES, type Plan, type StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { cleanupAllApprovals } from '@tools/approval';
-import {
-  createRunTrace,
-  flushPendingRunTraces,
-  getActiveFlushers,
-  StreamLogStore,
-} from '@transcript';
+import { createRunTrace, StreamLogStore } from '@transcript';
 
 // Local file imports
 import { createRecordingHost } from '../progressTestUtils';
@@ -32,7 +27,7 @@ describe('session-scoped trace flushers (SDK Step 7d PR 3)', () => {
     const store = StreamLogStore.ephemeral('test');
     const sessionB = createTestSession();
     try {
-      const defaultBefore = getActiveFlushers().size;
+      const defaultBefore = defaultSession().flushers.size;
       const handle = createRunTrace(
         'stream:flusher-b' as StreamTabId,
         store,
@@ -41,9 +36,8 @@ describe('session-scoped trace flushers (SDK Step 7d PR 3)', () => {
 
       expect(sessionB.flushers.size).toBe(1);
       // The default (process) set did not gain this session's stream flush.
-      expect(getActiveFlushers().size).toBe(defaultBefore);
-      // The process-wide drain still reaches the registered session set.
-      expect(() => flushPendingRunTraces()).not.toThrow();
+      expect(defaultSession().flushers.size).toBe(defaultBefore);
+      expect(() => sessionB.flushPendingTraces()).not.toThrow();
 
       handle.dispose();
       expect(sessionB.flushers.size).toBe(0);
@@ -52,13 +46,12 @@ describe('session-scoped trace flushers (SDK Step 7d PR 3)', () => {
     }
   });
 
-  it("drops the disposed session's flusher set from the process-wide drain", () => {
+  it("does not drain another session's trace flushers", () => {
     const store = StreamLogStore.ephemeral('test');
     const sessionB = createTestSession();
     let drained = 0;
 
-    // Registers sessionB.flushers in the process-wide drain registry.
-    createRunTrace(
+    const handle = createRunTrace(
       'stream:flusher-dispose' as StreamTabId,
       store,
       sessionB.flushers,
@@ -67,16 +60,13 @@ describe('session-scoped trace flushers (SDK Step 7d PR 3)', () => {
       drained += 1;
     });
 
-    flushPendingRunTraces();
-    // While live, the session's set is reached by the process-wide drain.
-    expect(drained).toBeGreaterThan(0);
-
-    sessionB.dispose();
-
-    drained = 0;
-    flushPendingRunTraces();
-    // After dispose the set is unregistered — no longer iterated forever.
+    defaultSession().flushPendingTraces();
     expect(drained).toBe(0);
+
+    sessionB.flushPendingTraces();
+    expect(drained).toBeGreaterThan(0);
+    handle.dispose();
+    sessionB.dispose();
   });
 });
 

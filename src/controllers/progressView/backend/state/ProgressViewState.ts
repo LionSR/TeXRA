@@ -30,7 +30,7 @@ import {
   PersistedState,
   createBackendStorage,
 } from '@shared/state/PersistedState';
-import { isInFlightPhase } from '@shared/streams/streamStatus';
+import { isActivePhase } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import { StreamSnapshotStore, type StreamLogStore } from '@transcript';
 import { clamp } from '@utils/core';
@@ -203,8 +203,8 @@ export class ProgressViewState {
    * call this on the stream being moved away from to close the loop.
    */
   releasePreviousActive(streamId: StreamTabId): void {
-    if (!isInFlightPhase(this.streamStatus.get(streamId))) {
-      this.streamLogs.releaseEntries(streamId);
+    if (!isActivePhase(this.streamStatus.get(streamId))) {
+      this.streamLogs.requestEviction(streamId);
     }
   }
 
@@ -564,15 +564,23 @@ export class ProgressViewState {
               ? baseTimestamp
               : clamp(baseTimestamp, 0, firstTimestamp - 1);
 
-          this.streamLogs.append(streamId, {
-            id: `legacy-instruction:${streamId}:${timestamp}`,
-            type: STREAM_LOG_ENTRY_TYPES.LOG,
-            level: LOG_LEVELS.INFO,
-            timestamp,
-            messageType: MESSAGE_TYPES.USER_MESSAGE,
-            text: legacyInstruction.text,
-            data: { source: 'legacyInstruction' },
-          });
+          const writer = this.streamLogs.acquireWriter(
+            streamId,
+            `legacy-instruction:${streamId}`,
+          );
+          try {
+            writer.append({
+              id: `legacy-instruction:${streamId}:${timestamp}`,
+              type: STREAM_LOG_ENTRY_TYPES.LOG,
+              level: LOG_LEVELS.INFO,
+              timestamp,
+              messageType: MESSAGE_TYPES.USER_MESSAGE,
+              text: legacyInstruction.text,
+              data: { source: 'legacyInstruction' },
+            });
+          } finally {
+            writer.close();
+          }
           restoredCount++;
         } catch (err) {
           this.logger.warn(

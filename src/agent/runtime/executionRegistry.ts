@@ -970,11 +970,6 @@ export class ExecutionRegistry {
     handle.trace?.emit(cancelledResult);
     this.publishResult?.(cancelledResult, handle.childStreamId);
     handle.settleResult(cancelledResult);
-    const finalization = finalizeExecution({
-      executionId: handle.executionId,
-      terminalStatus: projectRunOutcome(RUN_OUTCOME.CANCELLED).executionStatus,
-      flowRecord: 'delete',
-    });
     // No later result write is guaranteed here, including during RESUMING:
     // the resume can fail before installing its own handle, while this method
     // untracks the suspended one below. Align the interim envelope only after
@@ -982,7 +977,13 @@ export class ExecutionRegistry {
     // it with its own result.
     void (async () => {
       try {
-        const result = await finalization;
+        await handle.waitForWaitingCleanup();
+        const result = await finalizeExecution({
+          executionId: handle.executionId,
+          terminalStatus: projectRunOutcome(RUN_OUTCOME.CANCELLED)
+            .executionStatus,
+          flowRecord: 'delete',
+        });
         if (result.status === 'failed') {
           markOwnedExecutionLeaseUndurable(handle.executionId);
           logger.warn('Failed to finalize stopped waiting execution', {

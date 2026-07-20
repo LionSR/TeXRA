@@ -82,7 +82,8 @@ export class AgentExecutionHandle implements ExecutionHandle {
   private toolUseFlowContext?: LiveToolUseFlowContext;
   private acceptsPendingInterrupt = false;
   private pendingInterrupt = false;
-  private waitingCleanups?: Set<() => void>;
+  private waitingCleanups?: Set<() => void | Promise<void>>;
+  private waitingCleanupCompletion: Promise<void> = Promise.resolve();
   private _executionLeaseLost = false;
 
   /** Stable tool name for UI identification (e.g. "bash", "codex"). */
@@ -256,7 +257,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
    * covering the gap (see `childRunLoop.ts`'s own whole-lifetime
    * handler, which is the primary path for a loop-driven child).
    */
-  registerWaitingCleanup(cleanup: () => void): void {
+  registerWaitingCleanup(cleanup: () => void | Promise<void>): void {
     (this.waitingCleanups ??= new Set()).add(cleanup);
   }
 
@@ -269,6 +270,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
    */
   clearWaitingCleanup(): void {
     this.waitingCleanups = undefined;
+    this.waitingCleanupCompletion = Promise.resolve();
   }
 
   /**
@@ -279,8 +281,18 @@ export class AgentExecutionHandle implements ExecutionHandle {
     const cleanups = this.waitingCleanups;
     if (!cleanups || cleanups.size === 0) return false;
     this.waitingCleanups = undefined;
-    for (const cleanup of cleanups) cleanup();
+    this.waitingCleanupCompletion = Promise.all(
+      [...cleanups].map(async (cleanup) => cleanup()),
+    ).then(() => undefined);
+    // The registry normally awaits this before terminal persistence. Retain a
+    // rejection handler for the lease-loss branch, which intentionally skips
+    // durable finalization but must not create an unhandled rejection.
+    void this.waitingCleanupCompletion.catch(() => undefined);
     return true;
+  }
+
+  waitForWaitingCleanup(): Promise<void> {
+    return this.waitingCleanupCompletion;
   }
 }
 

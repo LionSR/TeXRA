@@ -45,7 +45,7 @@ import {
 import { isGoalInFlight } from '@shared/schemas/goal';
 import { buildStreamContentSync } from '@shared/streams/streamContentSync';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
-import { isInFlightPhase } from '@shared/streams/streamStatus';
+import { isActivePhase } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import { assertNever, mapToRecord } from '@utils/core';
 
@@ -829,12 +829,12 @@ export class ProgressFactApplier {
       this.state.streamLogs.mode.kind === 'persistent' &&
       this.state.streamLogs.has(streamId) &&
       !this.state.streamLogs.get(streamId);
-    if (isInFlightPhase(status)) {
+    if (isActivePhase(status)) {
       if (requiresPersistentRehydrate) {
         await this.state.streamLogs.ensureLoaded(streamId);
       }
     } else if (streamId !== this.state.activeStream) {
-      this.state.streamLogs.releaseEntries(streamId);
+      this.state.streamLogs.requestEviction(streamId);
     }
 
     const isNewRunningTransition =

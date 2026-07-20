@@ -32,8 +32,6 @@ import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { StreamTabId } from '@shared/schemas';
-import { getActiveFlushers, unregisterFlushers } from '@transcript/runTrace';
-
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { getRunContextSession, tryUseRunContext } from './RunContext';
 import { ExecutionRegistry } from './executionRegistry';
@@ -56,6 +54,22 @@ const logger = createChannelTrace('sessionHandle');
 interface ResultListenerRegistration {
   readonly listener: (event: ResultEvent) => void;
   readonly replayMissed: boolean;
+}
+
+interface ArtifactFlushBatch {
+  readonly promise: Promise<void>;
+  readonly resolve: () => void;
+  readonly reject: (error: unknown) => void;
+}
+
+function createArtifactFlushBatch(): ArtifactFlushBatch {
+  let resolve: () => void = () => undefined;
+  let reject: (error: unknown) => void = () => undefined;
+  const promise = new Promise<void>((settle, fail) => {
+    resolve = settle;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
 }
 
 function isReplayableTerminalResult(event: ResultEvent): boolean {
@@ -96,6 +110,8 @@ export class SessionHandle {
   /** This session's trace-flush callbacks (drained on dispose / shutdown). */
   readonly flushers: Set<() => void>;
   private readonly artifactFlushers = new Set<() => Promise<void>>();
+  private pendingArtifactFlush: ArtifactFlushBatch | undefined;
+  private artifactFlushWorkerRunning = false;
   /** Session-scoped host interaction owner. */
   readonly interactions: SessionHostInteractions;
   /** Session-owned approval queues, pending registries, and bypass state. */
@@ -147,9 +163,8 @@ export class SessionHandle {
     this.approvals = approvals;
     this.workflowControls =
       init.workflowControls ?? new WorkflowControlRegistry();
-    // A fresh session owns its own flusher set; the default session aliases
-    // the process-module set (`getActiveFlushers()`) so the process-wide
-    // shutdown drain (`flushPendingRunTraces()`) still reaches it.
+    // Every session owns exactly one trace-flusher set. There is no
+    // process-wide registry: a host drains the session it is shutting down.
     this.flushers = init.flushers ?? new Set<() => void>();
     executions.attachRootExecutionLeaseRelease((executionId) =>
       releaseExecutionLeaseAfterArtifacts(this, executionId),
@@ -173,7 +188,38 @@ export class SessionHandle {
   }
 
   /** Persist every buffered session artifact before execution ownership ends. */
-  async flushArtifacts(): Promise<void> {
+  flushArtifacts(): Promise<void> {
+    this.pendingArtifactFlush ??= createArtifactFlushBatch();
+    const batch = this.pendingArtifactFlush;
+    if (!this.artifactFlushWorkerRunning) {
+      this.artifactFlushWorkerRunning = true;
+      queueMicrotask(() => {
+        void this.drainArtifactFlushBatches();
+      });
+    }
+    return batch.promise;
+  }
+
+  /**
+   * Drain one current batch and, when calls arrived during it, one trailing
+   * batch at a time. This preserves each caller's durability boundary without
+   * repeating a full session flush for every execution ending in one burst.
+   */
+  private async drainArtifactFlushBatches(): Promise<void> {
+    while (this.pendingArtifactFlush) {
+      const batch = this.pendingArtifactFlush;
+      this.pendingArtifactFlush = undefined;
+      try {
+        await this.flushArtifactsOnce();
+        batch.resolve();
+      } catch (error) {
+        batch.reject(error);
+      }
+    }
+    this.artifactFlushWorkerRunning = false;
+  }
+
+  private async flushArtifactsOnce(): Promise<void> {
     const failures: unknown[] = [];
     for (const flush of [...this.flushers]) {
       try {
@@ -323,9 +369,8 @@ export class SessionHandle {
     this.missedTerminalResults.clear();
   }
 
-  /** Leave the process-wide trace drain and live-session registry. */
+  /** Leave the live-session registry. */
   private deregisterSession(): void {
-    unregisterFlushers(this.flushers);
     liveSessions.delete(this);
   }
 }
@@ -351,10 +396,7 @@ export function initializeDefaultSession(
   if (cachedDefaultSession) {
     throw new Error('The default session has already been initialized.');
   }
-  cachedDefaultSession = new SessionHandle({
-    ...init,
-    flushers: getActiveFlushers(),
-  });
+  cachedDefaultSession = new SessionHandle(init);
   return cachedDefaultSession;
 }
 

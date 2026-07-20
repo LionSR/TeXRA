@@ -58,6 +58,19 @@ type StreamLogStoreMode =
   | { readonly kind: 'read-only' }
   | { readonly kind: 'ephemeral'; readonly reason: string };
 
+export interface TranscriptWriter {
+  readonly streamId: StreamTabId;
+  append(entry: StreamLogAppendInput): StreamLogEntry;
+  update(id: string, patch: StreamLogUpdatePatch): StreamLogEntry | undefined;
+  appendText(id: string, text: string): StreamLogEntry | undefined;
+  close(): void;
+}
+
+interface StreamWriterOwnership {
+  readonly ownerKey: string;
+  readonly tokens: Set<symbol>;
+}
+
 function summaryOf(logInstance: StreamLog): StreamLogSummary {
   return {
     firstTimestamp: logInstance.firstTimestamp,
@@ -141,7 +154,7 @@ export class StreamLogStore {
 
   /**
    * Lightweight summary per stream (first/last timestamp). Populated at open
-   * or reload and refreshed on append/update. Survives `releaseEntries` so sidebar
+   * or reload and refreshed on append/update. Survives eviction so sidebar
    * metadata stays available for streams whose heavy entries have been evicted.
    */
   private readonly summaries = new Map<StreamTabId, StreamLogSummary>();
@@ -158,11 +171,13 @@ export class StreamLogStore {
   private readonly flushing = new Set<StreamTabId>();
 
   /**
-   * Streams that went stale while still dirty, so `releaseEntries` deferred
-   * the memory drop until the next save flush. Reads + new appends clear the
-   * entry so a reactivated stream isn't evicted out from under the agent.
+   * Streams whose requested eviction is waiting for writers or persistence.
+   * A read or writer acquisition clears the request; otherwise the store
+   * evicts as soon as the remaining ownership and durability guards leave.
    */
   private readonly pendingRelease = new Set<StreamTabId>();
+  /** Exact mutation capabilities currently keeping a stream resident. */
+  private readonly writers = new Map<StreamTabId, StreamWriterOwnership>();
 
   /**
    * Streams whose rehydrate read from disk failed. While marked, saves skip
@@ -280,7 +295,7 @@ export class StreamLogStore {
    * first and actually evict afterwards; otherwise releases immediately.
    * Subsequent access must go through `ensureLoaded` to rehydrate.
    */
-  releaseEntries(streamId: StreamTabId): void {
+  requestEviction(streamId: StreamTabId): void {
     // Ephemeral entries have no durable copy from which they could be restored.
     if (this.mode.kind === 'ephemeral') return;
 
@@ -290,12 +305,16 @@ export class StreamLogStore {
       // queue the intent so it runs once the load completes. Otherwise the
       // rapid in-flight → stale flip would finish the load into memory
       // with no subsequent eviction trigger.
-      if (this.pendingLoads.has(streamId)) {
+      if (this.writers.has(streamId) || this.pendingLoads.has(streamId)) {
         this.pendingRelease.add(streamId);
       }
       return;
     }
-    if (this.dirtyStreamIds.has(streamId) || this.flushing.has(streamId)) {
+    if (
+      this.writers.has(streamId) ||
+      this.dirtyStreamIds.has(streamId) ||
+      this.flushing.has(streamId)
+    ) {
       this.pendingRelease.add(streamId);
       return;
     }
@@ -303,6 +322,78 @@ export class StreamLogStore {
     this.refreshSummary(streamId, logInstance);
     this.logs.delete(streamId);
     this.stateRevision += 1;
+  }
+
+  /**
+   * Rehydrate a stream and grant mutation authority to one logical execution.
+   * Exact tokens make close idempotent and prevent an obsolete handle from
+   * releasing a newer writer.
+   */
+  acquireWriter(streamId: StreamTabId, ownerKey: string): TranscriptWriter {
+    this.assertWritableStore('acquire a transcript writer');
+    if (!ownerKey.trim()) {
+      throw new Error('A transcript writer requires a non-empty owner key.');
+    }
+
+    this.pendingRelease.delete(streamId);
+    if (
+      this.mode.kind === 'persistent' &&
+      this.summaries.has(streamId) &&
+      !this.logs.has(streamId)
+    ) {
+      throw new Error(
+        `Cannot acquire a writer for released stream ${streamId}. Await ensureLoaded() first.`,
+      );
+    }
+
+    const current = this.writers.get(streamId);
+    if (current && current.ownerKey !== ownerKey) {
+      throw new Error(
+        `Transcript stream ${streamId} is already owned by another writer.`,
+      );
+    }
+    const ownership =
+      current ??
+      ({ ownerKey, tokens: new Set() } satisfies StreamWriterOwnership);
+    const token = Symbol(ownerKey);
+    ownership.tokens.add(token);
+    this.writers.set(streamId, ownership);
+    let closed = false;
+
+    const assertOwned = (): void => {
+      if (
+        closed ||
+        this.writers.get(streamId) !== ownership ||
+        !ownership.tokens.has(token)
+      ) {
+        throw new Error(`Transcript writer for ${streamId} has been released.`);
+      }
+    };
+
+    return {
+      streamId,
+      append: (entry) => {
+        assertOwned();
+        return this.append(streamId, entry);
+      },
+      update: (id, patch) => {
+        assertOwned();
+        return this.update(streamId, id, patch);
+      },
+      appendText: (id, text) => {
+        assertOwned();
+        return this.appendText(streamId, id, text);
+      },
+      close: () => {
+        if (closed) return;
+        closed = true;
+        if (this.writers.get(streamId) !== ownership) return;
+        ownership.tokens.delete(token);
+        if (ownership.tokens.size > 0) return;
+        this.writers.delete(streamId);
+        this.drainPendingReleases();
+      },
+    };
   }
 
   /**
@@ -359,7 +450,7 @@ export class StreamLogStore {
           this.logs.set(streamId, logInstance);
           this.stateRevision += 1;
           this.refreshSummary(streamId, logInstance);
-          // A `releaseEntries` that arrived while the load was in flight gets
+          // An eviction request that arrived while the load was in flight gets
           // queued; honor it now (unless a reactivation cleared the intent).
           if (this.pendingRelease.has(streamId)) {
             this.pendingRelease.delete(streamId);
@@ -397,8 +488,6 @@ export class StreamLogStore {
 
   append(streamId: StreamTabId, entry: StreamLogAppendInput): StreamLogEntry {
     this.assertWritableStream(streamId);
-    // New writes mean the stream is live again — cancel any deferred release.
-    this.pendingRelease.delete(streamId);
     if (
       this.mode.kind === 'persistent' &&
       this.summaries.has(streamId) &&
@@ -803,6 +892,7 @@ export class StreamLogStore {
     this.flushing.clear();
     this.loadFailed.clear();
     this.pendingLoads.clear();
+    this.writers.clear();
     this.writeTombstones.clear();
     this.clearing = false;
     this.stateRevision += 1;
@@ -931,6 +1021,7 @@ export class StreamLogStore {
     this.flushing.delete(streamId);
     this.loadFailed.delete(streamId);
     this.pendingLoads.delete(streamId);
+    this.writers.delete(streamId);
   }
 
   private forgetAllStreamState(): void {
@@ -941,6 +1032,7 @@ export class StreamLogStore {
     this.flushing.clear();
     this.loadFailed.clear();
     this.pendingLoads.clear();
+    this.writers.clear();
   }
 
   private assertWritableStore(operation: string): void {
@@ -1109,7 +1201,7 @@ export class StreamLogStore {
     log.debug(LOG_TAG, `Writing ${dirtyIds.length} dirty stream(s)`);
     const writeGeneration = this.writeGeneration;
 
-    // Mark these as mid-flush so `releaseEntries` defers — we need the
+    // Mark these as mid-flush so eviction defers — we need the
     // in-memory copy preserved until the write resolves, otherwise a failed
     // write can't re-mark the stream dirty (there'd be no log entries left).
     for (const streamId of dirtyIds) this.flushing.add(streamId);
@@ -1157,7 +1249,9 @@ export class StreamLogStore {
   private drainPendingReleases(): void {
     if (this.pendingRelease.size === 0) return;
     for (const streamId of [...this.pendingRelease]) {
-      if (this.dirtyStreamIds.has(streamId)) continue;
+      if (this.writers.has(streamId) || this.dirtyStreamIds.has(streamId)) {
+        continue;
+      }
       this.pendingRelease.delete(streamId);
       const logInstance = this.logs.get(streamId);
       if (!logInstance) continue;

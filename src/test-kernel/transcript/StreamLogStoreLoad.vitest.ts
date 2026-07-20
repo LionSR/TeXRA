@@ -347,7 +347,7 @@ describe('StreamLogStore load', () => {
 
     store.ensureStream('empty-ephemeral');
     store.append('ephemeral-stream', logEntry('ephemeral-stream', 1, 100));
-    store.releaseEntries('ephemeral-stream');
+    store.requestEviction('ephemeral-stream');
     await store.flush();
 
     expect(store.mode).toEqual({
@@ -358,6 +358,43 @@ describe('StreamLogStore load', () => {
     expect(store.get('empty-ephemeral')?.size).toBe(0);
     expect(store.get('ephemeral-stream')?.size).toBe(1);
     expect(() => StreamLogStore.ephemeral('  ')).toThrow('requires a reason');
+  });
+
+  it('defers a requested eviction until the exact writer releases', async () => {
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 100)] },
+      summaries: {},
+    });
+    const store = await StreamLogStore.open();
+    await store.ensureLoaded('alpha');
+    const writer = store.acquireWriter('alpha', 'execution-alpha');
+
+    store.requestEviction('alpha');
+    writer.append(logEntry('alpha-live', 2, 200));
+    await store.flush();
+
+    expect(store.get('alpha')?.size).toBe(2);
+    writer.close();
+    expect(store.get('alpha')).toBeUndefined();
+    expect(() => writer.append(logEntry('late', 3, 300))).toThrow(
+      'has been released',
+    );
+  });
+
+  it('keeps a same-owner successor valid after an older writer closes', () => {
+    const store = StreamLogStore.ephemeral('writer identity test');
+    const first = store.acquireWriter('alpha', 'execution-alpha');
+    const successor = store.acquireWriter('alpha', 'execution-alpha');
+
+    expect(() => store.acquireWriter('alpha', 'execution-beta')).toThrow(
+      'already owned by another writer',
+    );
+    first.close();
+    expect(() => first.append(logEntry('late', 1, 100))).toThrow(
+      'has been released',
+    );
+    expect(() => successor.append(logEntry('successor', 2, 200))).not.toThrow();
+    successor.close();
   });
 
   it('rejects when persistent storage cannot be opened', async () => {

@@ -268,6 +268,37 @@ describe('cross-process execution leases', () => {
     ownedExecutionIds.delete(executionId);
   });
 
+  it('never overlaps heartbeat work for the same execution', async () => {
+    const executionId = 'e86441' as ExecutionId;
+    vi.useFakeTimers();
+    let releaseHeartbeat = (): void => undefined;
+    try {
+      await acquire(executionId);
+      const originalRunExclusive = platform().fileLocks.runExclusive.bind(
+        platform().fileLocks,
+      );
+      const heartbeatGate = new Promise<void>((resolve) => {
+        releaseHeartbeat = resolve;
+      });
+      const runExclusive = vi
+        .spyOn(platform().fileLocks, 'runExclusive')
+        .mockImplementation(async (lockPath, operation) => {
+          await heartbeatGate;
+          return originalRunExclusive(lockPath, operation);
+        });
+
+      await vi.advanceTimersByTimeAsync(15_000);
+      for (let index = 0; index < 5; index += 1) await Promise.resolve();
+      expect(runExclusive).toHaveBeenCalledOnce();
+
+      await vi.advanceTimersByTimeAsync(45_000);
+      expect(runExclusive).toHaveBeenCalledOnce();
+    } finally {
+      releaseHeartbeat();
+      vi.useRealTimers();
+    }
+  });
+
   it('serializes deletion with a racing lease acquisition', async () => {
     const executionId = 'f8644f' as ExecutionId;
     let allowDeletion: (() => void) | undefined;

@@ -15,12 +15,8 @@ export {
   STREAM_LOG_SUMMARIES_DIR,
 } from './StreamLogStore';
 export { StreamLog, type StreamLogAppendInput } from './StreamLog';
-export {
-  createRunTrace,
-  flushPendingRunTraces,
-  getActiveFlushers,
-  type RunTrace,
-} from './runTrace';
+export { createRunTrace, type RunTrace } from './runTrace';
+export type { TranscriptWriter } from './StreamLogStore';
 export { streamDataDir } from './streamDataPaths';
 export { StreamSnapshotStore } from './StreamSnapshotStore';
 export { assembleTrace, type AssembleTraceResult } from './traceAssembler';

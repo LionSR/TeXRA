@@ -18,7 +18,7 @@ import {
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { type Plan, type StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import { getActiveFlushers, StreamLogStore } from '@transcript';
+import { StreamLogStore } from '@transcript';
 
 // Local file imports
 import { createRecordingHost } from '../progressTestUtils';
@@ -122,6 +122,47 @@ describe('SessionHandle', () => {
     }
   });
 
+  it('coalesces durability calls made in the same synchronous burst', async () => {
+    const session = createTestSession();
+    const flush = vi
+      .spyOn(session.transcripts, 'flush')
+      .mockResolvedValue(undefined);
+    try {
+      const first = session.flushArtifacts();
+      const second = session.flushArtifacts();
+
+      expect(second).toBe(first);
+      await Promise.all([first, second]);
+      expect(flush).toHaveBeenCalledOnce();
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('runs one trailing durability batch for calls arriving mid-flush', async () => {
+    const session = createTestSession();
+    let releaseFirst = (): void => undefined;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const flush = vi
+      .spyOn(session.transcripts, 'flush')
+      .mockImplementationOnce(() => firstGate)
+      .mockResolvedValue(undefined);
+    try {
+      const first = session.flushArtifacts();
+      await vi.waitFor(() => expect(flush).toHaveBeenCalledOnce());
+      const trailing = session.flushArtifacts();
+
+      expect(trailing).not.toBe(first);
+      releaseFirst();
+      await Promise.all([first, trailing]);
+      expect(flush).toHaveBeenCalledTimes(2);
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('rejects a read-only transcript store', async () => {
     const transcripts = await StreamLogStore.openReadOnly();
 
@@ -134,10 +175,8 @@ describe('SessionHandle', () => {
     // No `Shared*`/`*Service` module export exists anymore — the process
     // default's owners are installed together by the test composition root.
     // What's left to verify is that repeated calls return the identical
-    // session (and therefore identical members), and that the flushers
-    // member still aliases the process-wide flush registry by identity
-    // (that accessor is intentionally NOT one of the deleted aliases — see
-    // `runTrace.ts`'s `getActiveFlushers`).
+    // session (and therefore identical members), including its one owned
+    // trace-flusher set.
     const first = defaultSession();
     const second = defaultSession();
     expect(second).toBe(first);
@@ -147,7 +186,7 @@ describe('SessionHandle', () => {
     expect(second.events).toBe(first.events);
     expect(second.transcripts).toBe(first.transcripts);
     expect(second.followUps).toBe(first.followUps);
-    expect(defaultSession().flushers).toBe(getActiveFlushers());
+    expect(second.flushers).toBe(first.flushers);
   });
 
   it('a fresh session shares no member with the default session', () => {
@@ -164,7 +203,7 @@ describe('SessionHandle', () => {
       expect(fresh.workflowControls).not.toBe(
         defaultSession().workflowControls,
       );
-      expect(fresh.flushers).not.toBe(getActiveFlushers());
+      expect(fresh.flushers).not.toBe(defaultSession().flushers);
     } finally {
       fresh.dispose();
     }

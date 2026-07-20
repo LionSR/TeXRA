@@ -11,6 +11,9 @@ All notable changes to this project will be documented in this file.
 - **Brief network interruptions no longer stop model turns immediately** —
   requests retry automatically when a transport failure escapes the provider
   client.
+- **Parallel runs finish reliably after long pauses** — delayed storage work
+  no longer causes the application to exit while several agents are saving
+  their final results.
 
 ### Extension (VS Code)
 
@@ -45,6 +48,9 @@ All notable changes to this project will be documented in this file.
   no key is available, the CLI directs you to `/key`. If a replacement client
   cannot be prepared, the CLI restores the previous settings and reports any
   setting whose persistence cannot be confirmed.
+- **Retry prompts keep their transcript available** — switching away from an
+  agent waiting for a retry no longer causes the CLI to exit when that agent
+  writes its next update.
 
 ### Desktop
 

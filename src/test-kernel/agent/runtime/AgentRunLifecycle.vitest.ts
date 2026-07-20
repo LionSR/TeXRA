@@ -722,11 +722,13 @@ describe('runFlowWithLifecycle', () => {
         STREAM_PHASE.CANCELLED,
       );
       expect(followUpsRelease).toHaveBeenCalledWith(streamId);
-      expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
-        executionId,
-        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
-        flowRecord: 'delete',
-      });
+      await vi.waitFor(() =>
+        expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
+          executionId,
+          terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+          flowRecord: 'delete',
+        }),
+      );
       // The kill path never resumes, so the per-suspension parent stage must
       // be closed here rather than dangling open forever. `ctx.parentStage`
       // is already desubscribed by this point (disposeTrace ran in the
