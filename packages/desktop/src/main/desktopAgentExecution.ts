@@ -79,6 +79,7 @@ import {
   createDesktopHostInteractions,
   type DesktopHostInteractions,
 } from './desktopHostInteractions.js';
+import { toLogData } from './desktopLogUtils.js';
 import {
   DesktopProgressFileActions,
   type DesktopLatexdiffRunContext,
@@ -107,10 +108,6 @@ export interface DesktopProgressBridgeOptions {
   logger?: AgentTrace;
   host: DesktopAgentExecutionHost;
   progressSnapshotStore: StreamSnapshotStore;
-}
-
-function toLogData(error: unknown): unknown {
-  return error instanceof Error ? error : { error };
 }
 
 async function wakeDesktopFollowUp(
@@ -307,11 +304,6 @@ export class DesktopProgressBridge {
     this.workflowFileActions = this.progressHost.workflowFileActionsController;
     this.agentProposalController = this.progressHost.agentProposalController;
     this.progressViewInboundHandlers = this.createProgressViewInboundHandlers();
-    // Canonical state and restart repair are complete before any window-owned
-    // adapter can receive a replay or session event.
-    this.detachHostInteractions = this.session.useHostInteractions(
-      this.hostInteractions,
-    );
     const backendSubscription = this.backend.setupEventListeners();
     const unsubscribeResult = this.session.onResult((event) => {
       if (event.outcome === 'completed') this.options.host.onRunCompleted();
@@ -320,6 +312,12 @@ export class DesktopProgressBridge {
       backendSubscription.dispose();
       unsubscribeResult();
     };
+    // Canonical state and restart repair are complete before any window-owned
+    // adapter can receive a replay. Subscribe first because attachment
+    // synchronously redispatches pending approvals and their visibility facts.
+    this.detachHostInteractions = this.session.useHostInteractions(
+      this.hostInteractions,
+    );
     // A removal can begin after the pre-load drain but before these
     // subscriptions exist. Drain the one shared deletion owner again now;
     // subsequent events are observed live, and no await remains before the

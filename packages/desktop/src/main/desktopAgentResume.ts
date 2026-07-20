@@ -19,10 +19,7 @@ import {
   DESKTOP_UNAVAILABLE_TOOLS,
   launchDesktopAgent,
 } from './desktopAgentLaunch.js';
-
-function toLogData(error: unknown): unknown {
-  return error instanceof Error ? error : { error };
-}
+import { toLogData } from './desktopLogUtils.js';
 
 interface DesktopResumeState {
   readonly runState: AgentConfig;

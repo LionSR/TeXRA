@@ -26,11 +26,10 @@ import { GoalStore } from '@tools/goal';
 // Transcript imports
 import type { StreamSnapshotStore } from '@transcript';
 
-const LEGACY_STREAMS_KEY = 'restoredStreams';
+// Local imports
+import { toLogData } from './desktopLogUtils.js';
 
-function toLogData(error: unknown): unknown {
-  return error instanceof Error ? error : { error };
-}
+const LEGACY_STREAMS_KEY = 'restoredStreams';
 
 /**
  * The global desktop file used one version number across two status

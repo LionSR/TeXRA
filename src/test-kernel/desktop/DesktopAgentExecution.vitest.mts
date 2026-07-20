@@ -205,6 +205,7 @@ type ProgressMessage = {
   action?: string;
   kind?: string;
   activeStream?: string;
+  agentFilter?: string;
   stream?: string;
   streamId?: string;
   todos?: unknown[];
@@ -224,6 +225,7 @@ type ProgressMessage = {
     compileFailures: Record<string, unknown>;
   };
   activeState?: unknown;
+  permission?: { data?: { approvalId?: string } };
 };
 
 /** Shared fixture for the tool-use "search" agentConfig used across several
@@ -1368,7 +1370,7 @@ describe('DesktopProgressBridge', () => {
     );
   });
 
-  it('attaches and subscribes before projecting process-owned live children', async () => {
+  it('subscribes before attaching and projecting process-owned live children', async () => {
     const streamId = 'attachment-order' as StreamTabId;
     const order: string[] = [];
 
@@ -1397,7 +1399,6 @@ describe('DesktopProgressBridge', () => {
             expect(interactions.requestPlanApproval).toEqual(
               expect.any(Function),
             );
-            order.push('construct');
             order.push('attach');
             return attach(interactions);
           },
@@ -1416,9 +1417,8 @@ describe('DesktopProgressBridge', () => {
     });
     await bridge.completeWebviewReady();
 
-    expect(order.indexOf('load')).toBeLessThan(order.indexOf('construct'));
-    expect(order.indexOf('construct')).toBeLessThan(order.indexOf('attach'));
-    expect(order.indexOf('attach')).toBeLessThan(order.indexOf('subscribe'));
+    expect(order.indexOf('load')).toBeLessThan(order.indexOf('subscribe'));
+    expect(order.indexOf('subscribe')).toBeLessThan(order.indexOf('attach'));
     expect(order.indexOf('subscribe')).toBeLessThan(order.indexOf('render'));
   });
 
@@ -3272,6 +3272,69 @@ describe('DesktopProgressBridge', () => {
             id: 'plan-rebound-delete',
           }),
         );
+      } finally {
+        bridgeB.dispose();
+      }
+    });
+
+    it('makes one headless approval visible when reopening under an excluding filter', async () => {
+      const streamId = 'rebound-filtered-approval' as StreamTabId;
+      const owner = await createProcessOwner({
+        streamId,
+        executionId: 'ec00fa' as ExecutionId,
+      });
+      const filterStreams = assertSupported(
+        owner.bridgeA.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.FILTER_STREAMS
+        ],
+      );
+      await filterStreams({
+        command: PROGRESS_VIEW_COMMANDS.FILTER_STREAMS,
+        filter: 'toolUse',
+      });
+      owner.close();
+      const pendingApproval =
+        owner.processSession.interactions.requestPlanApproval({
+          approvalId: 'plan-filtered-while-headless',
+          streamId,
+          plan: { objective: 'Restore the hidden approval stream.' },
+          goalEnabled: false,
+        });
+      const messagesB: unknown[] = [];
+      const { bridgeB } = await owner.reopen(messagesB);
+
+      try {
+        await vi.waitFor(() => {
+          const approvalShows = progressMessages(
+            messagesB,
+            PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+          ).filter(
+            (message) =>
+              message.action === 'show' &&
+              message.permission?.data?.approvalId ===
+                'plan-filtered-while-headless',
+          );
+          expect(approvalShows).toHaveLength(1);
+          expect(
+            progressMessages(
+              messagesB,
+              PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+            ).at(-1),
+          ).toMatchObject({
+            activeStream: streamId,
+            agentFilter: 'all',
+            streams: expect.arrayContaining([
+              expect.objectContaining({ name: streamId }),
+            ]),
+          });
+        });
+        expect(
+          bridgeB.hostInteractions.submitPlanDecision(
+            'plan-filtered-while-headless',
+            { action: 'approve' },
+          ),
+        ).toBe(true);
+        await expect(pendingApproval).resolves.toEqual({ action: 'approve' });
       } finally {
         bridgeB.dispose();
       }
