@@ -119,4 +119,30 @@ describe('ModelSelectionList provider key status', () => {
       ],
     ]);
   });
+
+  it('shows an effective route without changing the provider group', async () => {
+    const list = await renderModelSelectionList((el) => {
+      el.models = [
+        {
+          ...deepseekModel,
+          name: 'kimi3',
+          label: 'Kimi K3',
+          provider: 'moonshot',
+          routeLabel: 'Via Kimi Code',
+        },
+      ];
+    });
+
+    list
+      .shadowRoot!.querySelector<HTMLElement>('.provider-group-toggle')
+      ?.click();
+    await list.updateComplete;
+
+    expect(
+      list.shadowRoot!.querySelector('.provider-group-name')?.textContent,
+    ).toContain('Moonshot');
+    expect(
+      list.shadowRoot!.querySelector('.model-route')?.textContent,
+    ).toContain('Via Kimi Code');
+  });
 });
