@@ -1,15 +1,36 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import pDefer from 'p-defer';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  lookupApiKey: vi.fn(),
+  apiKeyExistsUncached: vi.fn(),
+  apiMode: 'included' as 'included' | 'personal',
+  hasUsableApiKey: vi.fn(),
+  invalidateApiKeyCache: vi.fn(),
+  preferSubscription: true,
   notify: vi.fn(),
   secrets: {},
-  setCliApiMode: vi.fn(async () => undefined),
-  setCliCodexSubscription: vi.fn(async () => undefined),
+  setCliApiMode: vi.fn(),
+  setCliCodexSubscription: vi.fn(),
 }));
+
+vi.mock('@auth/codex', async (importActual) => {
+  const actual = await importActual<typeof import('@auth/codex')>();
+  return {
+    ...actual,
+    isPreferCodexSubscription: () => mocks.preferSubscription,
+  };
+});
 
 vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
   notify: mocks.notify,
@@ -20,6 +41,7 @@ vi.mock('@cli/runtime/apiAccessMode', async (importActual) => {
     await importActual<typeof import('@cli/runtime/apiAccessMode')>();
   return {
     ...actual,
+    getCliApiMode: () => mocks.apiMode,
     setCliApiMode: mocks.setCliApiMode,
   };
 });
@@ -32,7 +54,9 @@ vi.mock('@model/apiProviders', async (importActual) => {
   const actual = await importActual<typeof import('@model/apiProviders')>();
   return {
     ...actual,
-    lookupApiKey: mocks.lookupApiKey,
+    apiKeyExistsUncached: mocks.apiKeyExistsUncached,
+    hasUsableApiKey: mocks.hasUsableApiKey,
+    invalidateApiKeyCache: mocks.invalidateApiKeyCache,
   };
 });
 
@@ -40,7 +64,10 @@ vi.mock('@platform/platform', () => ({
   platform: () => ({ secrets: mocks.secrets }),
 }));
 
-import type { HostInteractions } from '@agent/runtime/HostInteractions';
+import type {
+  HostInteractions,
+  HostRetryInteractionOptions,
+} from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import {
@@ -48,13 +75,19 @@ import {
   currentApproval,
   enqueueApproval,
   pendingApprovalSummaries,
+  type ApprovalDecision,
 } from '@cli/chat/tui/state/approvalQueue';
-import { resetCliState, streams } from '@cli/chat/tui/state/cliState';
+import {
+  patchSessionMeta,
+  resetCliState,
+  sessionMeta,
+  streams,
+} from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import { hasCliApprovalDenied } from '@cli/runtime/approvalAdapter';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
-import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
+import type { ApiProvider } from '@model/apiProviders';
 import { AgentCategory } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { setGoalSessionBashAutoApproval } from '@tools/goal';
@@ -86,10 +119,20 @@ function tui(runtimeHost = host()): {
   readonly runtimeHost: CliRuntimeHost;
   readonly cliContext: CliContext;
   readonly interactions: HostInteractions;
+  readonly prepareRetry: ReturnType<typeof vi.fn>;
   readonly dispose: () => void;
 } {
   const cliContext = context();
-  const interactions = createTuiHostInteractions(runtimeHost, cliContext);
+  const hostInteractions = createTuiHostInteractions(runtimeHost, cliContext);
+  const prepareRetry = vi.fn(async () => undefined);
+  const interactions: HostInteractions = {
+    ...hostInteractions,
+    requestRetry: (request, options) =>
+      hostInteractions.requestRetry?.(request, {
+        prepareRetry,
+        ...options,
+      }),
+  };
   const detachInteractions = defaultSession().useHostInteractions(interactions);
   let disposed = false;
   const dispose = () => {
@@ -103,6 +146,7 @@ function tui(runtimeHost = host()): {
     runtimeHost,
     cliContext,
     interactions,
+    prepareRetry,
     dispose,
   };
 }
@@ -140,14 +184,79 @@ function chatGptSubscriptionRetry(
   } as RuntimeInteractionEventPayloads['showRetryRequest'];
 }
 
+function decideRetry(decision: ApprovalDecision): void {
+  const pending = currentApproval.get();
+  expect(pending?.payload.kind).toBe('retry');
+  pending?.decide(decision);
+}
+
+function expectNoCredentialChange(
+  prepareRetry: ReturnType<typeof vi.fn>,
+): void {
+  expect(mocks.invalidateApiKeyCache).not.toHaveBeenCalled();
+  expect(mocks.setCliApiMode).not.toHaveBeenCalled();
+  expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
+  expect(prepareRetry).not.toHaveBeenCalled();
+}
+
+const PERSONAL_KEY_RETRY: ApprovalDecision = {
+  accepted: true,
+  apiMode: 'personal',
+  disableChatGptSubscription: true,
+};
+
+async function waitForRetryApproval(
+  payload: Record<string, unknown>,
+): Promise<void> {
+  await vi.waitFor(() => {
+    expect(currentApproval.get()?.payload).toMatchObject({
+      kind: 'retry',
+      payload,
+    });
+  });
+}
+
+async function beginSubscriptionSwitch(
+  interactions: HostInteractions,
+  streamId: string,
+  options?: HostRetryInteractionOptions,
+): Promise<{
+  readonly result: ReturnType<NonNullable<HostInteractions['requestRetry']>>;
+}> {
+  const result = interactions.requestRetry?.(
+    chatGptSubscriptionRetry(streamId),
+    options,
+  );
+  await waitForRetryApproval({ streamId });
+  decideRetry(PERSONAL_KEY_RETRY);
+  return { result };
+}
+
+beforeEach(() => {
+  mocks.apiMode = 'included';
+  patchSessionMeta({ apiMode: 'included' });
+  mocks.preferSubscription = true;
+  mocks.apiKeyExistsUncached.mockResolvedValue(true);
+  mocks.hasUsableApiKey.mockResolvedValue(false);
+  mocks.setCliApiMode.mockImplementation(async (mode) => {
+    mocks.apiMode = mode;
+  });
+  mocks.setCliCodexSubscription.mockImplementation(async (enabled) => {
+    mocks.preferSubscription = enabled;
+    return { effective: enabled, target: 'global' };
+  });
+});
+
 afterEach(() => {
   clearApprovals();
   cleanupAllApprovals();
   resetCliState();
-  mocks.lookupApiKey.mockReset();
+  mocks.apiKeyExistsUncached.mockReset();
+  mocks.hasUsableApiKey.mockReset();
+  mocks.invalidateApiKeyCache.mockReset();
   mocks.notify.mockReset();
-  mocks.setCliApiMode.mockClear();
-  mocks.setCliCodexSubscription.mockClear();
+  mocks.setCliApiMode.mockReset();
+  mocks.setCliCodexSubscription.mockReset();
 });
 
 describe('TUI retry approvals', () => {
@@ -429,33 +538,26 @@ describe('TUI retry approvals', () => {
     expect(isBashApprovalBypassedForStream(streamId)).toBe(false);
   });
 
-  it('auto-switches provider-less relay retries when any personal key exists', async () => {
-    const fallbackProvider =
-      API_PROVIDERS.find((provider) => provider !== 'openai') ??
-      API_PROVIDERS[0];
-    mocks.lookupApiKey.mockImplementation(
-      async (_secrets, provider: ApiProvider) =>
-        provider === fallbackProvider ? 'sk-test' : undefined,
-    );
-
-    const { interactions } = tui();
+  it('fails closed when a relay retry does not identify its provider', async () => {
+    mocks.hasUsableApiKey.mockResolvedValue(true);
+    const { interactions, prepareRetry } = tui();
     const result = interactions.requestRetry?.(relayRetry({ streamId: 's1' }));
 
-    await vi.waitFor(() => {
-      expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
+    await waitForRetryApproval({
+      personalApiKeyAvailable: false,
+      missingPersonalApiKeyMessage: expect.stringContaining(
+        'provider could not be identified',
+      ),
     });
-    await expect(result).resolves.toEqual({
-      action: 'retry',
-      feedback: undefined,
-    });
-    expect(currentApproval.get()).toBeUndefined();
-    expect(mocks.lookupApiKey.mock.calls.map((call) => call[1])).toContain(
-      fallbackProvider,
-    );
+    decideRetry({ accepted: false });
+
+    await expect(result).resolves.toEqual({ action: 'cancel' });
+    expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
+    expectNoCredentialChange(prepareRetry);
   });
 
   it('falls back to the retry modal when API key lookup fails', async () => {
-    mocks.lookupApiKey.mockRejectedValue(new Error('keychain unavailable'));
+    mocks.hasUsableApiKey.mockRejectedValue(new Error('keychain unavailable'));
 
     const { interactions } = tui();
     const retry = relayRetry({ streamId: 's2', provider: 'openai' });
@@ -464,13 +566,18 @@ describe('TUI retry approvals', () => {
     await vi.waitFor(() => {
       expect(currentApproval.get()?.payload).toMatchObject({
         kind: 'retry',
-        payload: { streamId: 's2' },
+        payload: {
+          streamId: 's2',
+          personalApiKeyAvailable: false,
+          missingPersonalApiKeyMessage:
+            'TeXRA could not check whether the OpenAI API key is available. Press n to give up, then use `/key` to try again.',
+        },
       });
     });
   });
 
   it('does not auto-switch when a retry provider is not an API provider', async () => {
-    mocks.lookupApiKey.mockResolvedValue('sk-test');
+    mocks.hasUsableApiKey.mockResolvedValue(true);
 
     const { interactions } = tui();
     const retry = relayRetry({
@@ -485,13 +592,12 @@ describe('TUI retry approvals', () => {
         payload: { streamId: 'unknown-provider' },
       });
     });
-    expect(mocks.lookupApiKey).not.toHaveBeenCalled();
+    expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
   });
 
   it('auto-switches relay retries detected by monthly-limit message fallback', async () => {
-    mocks.lookupApiKey.mockImplementation(
-      async (_secrets, provider: ApiProvider) =>
-        provider === 'openai' ? 'sk-openai' : undefined,
+    mocks.hasUsableApiKey.mockImplementation(
+      async (_secrets, provider: ApiProvider) => provider === 'openai',
     );
 
     const { interactions } = tui();
@@ -518,12 +624,11 @@ describe('TUI retry approvals', () => {
   });
 
   it('requires an explicit decision before switching a ChatGPT subscription retry to an API key', async () => {
-    mocks.lookupApiKey.mockImplementation(
-      async (_secrets, provider: ApiProvider) =>
-        provider === 'openai' ? 'sk-openai' : undefined,
+    mocks.hasUsableApiKey.mockImplementation(
+      async (_secrets, provider: ApiProvider) => provider === 'openai',
     );
 
-    const { interactions } = tui();
+    const { interactions, prepareRetry } = tui();
     const result = interactions.requestRetry?.(chatGptSubscriptionRetry('s3'));
 
     await vi.waitFor(() => {
@@ -532,18 +637,15 @@ describe('TUI retry approvals', () => {
         payload: {
           streamId: 's3',
           errorMessage: 'ChatGPT subscription usage limit reached.',
+          personalApiKeyAvailable: true,
         },
       });
     });
-    expect(mocks.lookupApiKey).not.toHaveBeenCalled();
+    expect(mocks.hasUsableApiKey).toHaveBeenCalledTimes(1);
     expect(mocks.setCliApiMode).not.toHaveBeenCalled();
     expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
 
-    currentApproval.get()?.decide({
-      accepted: true,
-      apiMode: 'personal',
-      disableChatGptSubscription: true,
-    });
+    decideRetry(PERSONAL_KEY_RETRY);
 
     await expect(result).resolves.toEqual({
       action: 'retry',
@@ -551,7 +653,294 @@ describe('TUI retry approvals', () => {
     });
     expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
     expect(mocks.setCliCodexSubscription).toHaveBeenCalledWith(false);
+    expect(mocks.hasUsableApiKey).toHaveBeenCalledTimes(1);
+    expect(mocks.apiKeyExistsUncached).toHaveBeenCalledWith(
+      mocks.secrets,
+      'openai',
+    );
+    expect(mocks.apiKeyExistsUncached).toHaveBeenCalledOnce();
+    expect(mocks.invalidateApiKeyCache).toHaveBeenCalledOnce();
+    expect(prepareRetry).toHaveBeenCalledOnce();
+    expect(prepareRetry).toHaveBeenCalledWith('personal', expect.anything());
     expect(currentApproval.get()).toBeUndefined();
+  });
+
+  it('does not offer or apply the subscription switch without an OpenAI API key', async () => {
+    mocks.hasUsableApiKey.mockResolvedValue(false);
+
+    const { interactions, prepareRetry } = tui();
+    const result = interactions.requestRetry?.(
+      chatGptSubscriptionRetry('missing-openai-key'),
+    );
+
+    await waitForRetryApproval({
+      streamId: 'missing-openai-key',
+      personalApiKeyAvailable: false,
+    });
+    decideRetry({ accepted: false });
+
+    await expect(result).resolves.toEqual({ action: 'cancel' });
+    expectNoCredentialChange(prepareRetry);
+  });
+
+  it('does not mutate state when cancellation arrives during uncached validation', async () => {
+    mocks.hasUsableApiKey.mockResolvedValue(true);
+    const validation = pDefer<boolean>();
+    mocks.apiKeyExistsUncached.mockReturnValueOnce(validation.promise);
+
+    const { interactions, prepareRetry } = tui();
+    const { result } = await beginSubscriptionSwitch(
+      interactions,
+      'cancel-during-validation',
+    );
+    await vi.waitFor(() =>
+      expect(mocks.apiKeyExistsUncached).toHaveBeenCalledOnce(),
+    );
+
+    interactions.cancel({
+      streamId: 'cancel-during-validation',
+      kind: 'retry',
+    });
+    await expect(result).resolves.toEqual({ action: 'cancel' });
+    validation.resolve(true);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expectNoCredentialChange(prepareRetry);
+  });
+
+  it('does not publish preferences when the personal-key client cannot be prepared', async () => {
+    mocks.hasUsableApiKey.mockResolvedValue(true);
+    const prepareRetry = vi.fn(async () => {
+      throw new Error('OpenAI client construction failed');
+    });
+
+    const { interactions } = tui();
+    const { result } = await beginSubscriptionSwitch(
+      interactions,
+      'client-refresh-failure',
+      { prepareRetry },
+    );
+
+    await expect(result).resolves.toEqual({
+      action: 'deny',
+      reason: 'OpenAI client construction failed',
+    });
+    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
+    expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
+    expect(mocks.apiMode).toBe('included');
+    expect(mocks.preferSubscription).toBe(true);
+    expect(prepareRetry).toHaveBeenCalledOnce();
+  });
+
+  it('leaves a newer access selection untouched when candidate construction fails', async () => {
+    mocks.hasUsableApiKey.mockResolvedValue(true);
+    const preparation = pDefer<void>();
+    const prepareRetry = vi.fn(async () => {
+      await preparation.promise;
+      throw new Error('OpenAI client construction failed');
+    });
+    const { interactions } = tui();
+    const { result } = await beginSubscriptionSwitch(
+      interactions,
+      'newer-access-selection',
+      { prepareRetry },
+    );
+    await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
+    expect(mocks.apiMode).toBe('included');
+    expect(mocks.preferSubscription).toBe(true);
+
+    // A later /api, /key, login, or logout selection owns these values now.
+    mocks.apiMode = 'included';
+    mocks.preferSubscription = true;
+    preparation.resolve();
+
+    await expect(result).resolves.toEqual({
+      action: 'deny',
+      reason: 'OpenAI client construction failed',
+    });
+    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
+    expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
+    expect(mocks.apiMode).toBe('included');
+    expect(mocks.preferSubscription).toBe(true);
+  });
+
+  it('cancels stalled candidate construction without publishing settings', async () => {
+    mocks.hasUsableApiKey.mockResolvedValue(true);
+    const prepareRetry = vi.fn(
+      async (_selection, _signal?: AbortSignal) =>
+        await new Promise<void>(() => {
+          // Deliberately never settles: cancellation must reject the wrapper.
+        }),
+    );
+    const { interactions } = tui();
+    const { result } = await beginSubscriptionSwitch(
+      interactions,
+      'stalled-preparation',
+      { prepareRetry },
+    );
+    await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
+
+    interactions.cancel({
+      streamId: 'stalled-preparation',
+      kind: 'retry',
+      cause: 'Cancelled in test.',
+    });
+    await expect(result).resolves.toEqual({ action: 'cancel' });
+    expect(prepareRetry.mock.calls[0]?.[1]?.aborted).toBe(true);
+    await vi.waitFor(() => {
+      expect(mocks.apiMode).toBe('included');
+      expect(mocks.preferSubscription).toBe(true);
+    });
+
+    const laterPrepare = vi.fn(async (selection) => {
+      expect(selection).toBe('configured');
+    });
+    const later = interactions.requestRetry?.(
+      {
+        requestId: 'retry-after-stall',
+        streamId: 'retry-after-stall',
+        operation: 'model request',
+        errorMessage: 'Temporary connection error.',
+      },
+      { prepareRetry: laterPrepare },
+    );
+    await waitForRetryApproval({ streamId: 'retry-after-stall' });
+    decideRetry({ accepted: true });
+
+    await expect(later).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
+    expect(laterPrepare).toHaveBeenCalledOnce();
+  });
+
+  it('rolls back a cancelled persistence write and releases the session commit queue', async () => {
+    mocks.hasUsableApiKey.mockResolvedValue(true);
+    mocks.setCliApiMode.mockImplementationOnce(async (mode) => {
+      mocks.apiMode = mode;
+      await new Promise<void>(() => {
+        // Simulate storage that never settles after updating in-memory state.
+      });
+    });
+    const { interactions } = tui();
+    const { result } = await beginSubscriptionSwitch(
+      interactions,
+      'stalled-mode-persistence',
+    );
+    await vi.waitFor(() => expect(mocks.setCliApiMode).toHaveBeenCalledOnce());
+    expect(mocks.apiMode).toBe('personal');
+
+    interactions.cancel({
+      streamId: 'stalled-mode-persistence',
+      kind: 'retry',
+      cause: 'Cancelled in test.',
+    });
+    await expect(result).resolves.toEqual({ action: 'cancel' });
+    await vi.waitFor(() => expect(mocks.apiMode).toBe('included'));
+
+    const laterPrepare = vi.fn(async () => undefined);
+    const later = interactions.requestRetry?.(
+      relayRetry({
+        streamId: 'after-stalled-persistence',
+        provider: 'openai',
+      }),
+      { prepareRetry: laterPrepare },
+    );
+    await expect(later).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
+    expect(laterPrepare).toHaveBeenCalledOnce();
+    expect(mocks.apiMode).toBe('personal');
+  });
+
+  it('reports any preference that cannot be restored after commit fails', async () => {
+    mocks.hasUsableApiKey.mockResolvedValue(true);
+    mocks.setCliCodexSubscription
+      .mockImplementationOnce(async (enabled: boolean) => {
+        mocks.preferSubscription = enabled;
+        throw new Error('subscription write failed');
+      })
+      .mockRejectedValueOnce(new Error('settings storage unavailable'));
+    const prepareRetry = vi.fn(async () => undefined);
+
+    const { interactions } = tui();
+    const { result } = await beginSubscriptionSwitch(
+      interactions,
+      'rollback-failure',
+      { prepareRetry },
+    );
+
+    await expect(result).resolves.toEqual({
+      action: 'deny',
+      reason: expect.stringContaining(
+        'Previous access settings could not be fully restored: Could not restore the ChatGPT subscription preference: settings storage unavailable',
+      ),
+    });
+    expect(mocks.apiMode).toBe('included');
+    expect(mocks.preferSubscription).toBe(false);
+  });
+
+  it('reports unconfirmed persistence when API-mode rollback restores memory before rejecting', async () => {
+    mocks.hasUsableApiKey.mockResolvedValue(true);
+    mocks.setCliApiMode
+      .mockImplementationOnce(async (mode) => {
+        mocks.apiMode = mode;
+      })
+      .mockImplementationOnce(async (mode) => {
+        mocks.apiMode = mode;
+        throw new Error('API mode storage unavailable');
+      });
+    mocks.setCliCodexSubscription.mockRejectedValueOnce(
+      new Error('subscription storage unavailable'),
+    );
+    const prepareRetry = vi.fn(async () => undefined);
+
+    const { interactions } = tui();
+    const { result } = await beginSubscriptionSwitch(
+      interactions,
+      'rollback-persistence-failure',
+      { prepareRetry },
+    );
+
+    await expect(result).resolves.toEqual({
+      action: 'deny',
+      reason: expect.stringContaining(
+        'Previous access settings could not be fully restored: The previous API mode appears restored in memory, but persistence could not be confirmed: API mode storage unavailable',
+      ),
+    });
+    expect(mocks.apiMode).toBe('included');
+    expect(mocks.preferSubscription).toBe(true);
+    expect(prepareRetry).toHaveBeenCalledOnce();
+  });
+
+  it('cancels a credential switch during candidate construction without settings writes', async () => {
+    mocks.hasUsableApiKey.mockResolvedValue(true);
+    const preparation = pDefer<void>();
+    const prepareRetry = vi.fn(() => preparation.promise);
+
+    const { interactions } = tui();
+    const { result: first } = await beginSubscriptionSwitch(
+      interactions,
+      'commit-race',
+      { prepareRetry },
+    );
+    await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
+    expect(sessionMeta.get().apiMode).toBe('included');
+
+    void interactions.requestRetry?.(chatGptSubscriptionRetry('commit-race'));
+    await expect(first).resolves.toEqual({ action: 'cancel' });
+    preparation.resolve();
+    await preparation.promise;
+    await vi.waitFor(() => {
+      expect(mocks.apiMode).toBe('included');
+      expect(mocks.preferSubscription).toBe(true);
+    });
+
+    expect(sessionMeta.get().apiMode).toBe('included');
+    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
+    expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
   });
 
   it('retries ChatGPT subscription access without changing credentials when the ordinary retry action is chosen', async () => {
@@ -566,22 +955,163 @@ describe('TUI retry approvals', () => {
         payload: { streamId: 'subscription-retry' },
       });
     });
-    currentApproval.get()?.decide({ accepted: true });
+    decideRetry({ accepted: true });
 
     await expect(result).resolves.toEqual({
       action: 'retry',
       feedback: undefined,
     });
-    expect(mocks.lookupApiKey).not.toHaveBeenCalled();
+    expect(mocks.hasUsableApiKey).toHaveBeenCalledOnce();
     expect(mocks.setCliApiMode).not.toHaveBeenCalled();
     expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
   });
 
+  it('keeps new ordinary retry preparation on the old route while a candidate is building', async () => {
+    mocks.hasUsableApiKey.mockResolvedValue(true);
+    const preparation = pDefer<void>();
+    const prepareRetry = vi.fn(() => preparation.promise);
+    const { interactions } = tui();
+    const { result: switching } = await beginSubscriptionSwitch(
+      interactions,
+      'slow-switch',
+      { prepareRetry },
+    );
+    await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
+
+    const ordinaryPrepare = vi.fn(async () => {
+      expect(mocks.apiMode).toBe('included');
+      expect(mocks.preferSubscription).toBe(true);
+    });
+    const ordinary = interactions.requestRetry?.(
+      {
+        requestId: 'ordinary-retry',
+        streamId: 'ordinary-stream',
+        operation: 'model request',
+        errorMessage: 'Temporary connection error.',
+      },
+      { prepareRetry: ordinaryPrepare },
+    );
+    await waitForRetryApproval({ streamId: 'ordinary-stream' });
+    decideRetry({ accepted: true });
+
+    await expect(ordinary).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
+    expect(ordinaryPrepare).toHaveBeenCalledOnce();
+
+    preparation.resolve();
+    await expect(switching).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
+    expect(mocks.apiMode).toBe('personal');
+    expect(mocks.preferSubscription).toBe(false);
+  });
+
+  it('lets an ordinary retry keep the old route while another candidate fails', async () => {
+    mocks.hasUsableApiKey.mockResolvedValue(true);
+    const preparation = pDefer<void>();
+    const switchPrepare = vi.fn(async () => {
+      await preparation.promise;
+      throw new Error('replacement client failed');
+    });
+    const { interactions } = tui();
+    const { result: switching } = await beginSubscriptionSwitch(
+      interactions,
+      'failing-switch',
+      { prepareRetry: switchPrepare },
+    );
+    await vi.waitFor(() => expect(switchPrepare).toHaveBeenCalledOnce());
+
+    const ordinaryPrepare = vi.fn(async () => {
+      expect(mocks.apiMode).toBe('included');
+      expect(mocks.preferSubscription).toBe(true);
+    });
+    const ordinary = interactions.requestRetry?.(
+      {
+        requestId: 'ordinary-after-rollback',
+        streamId: 'ordinary-after-rollback',
+        operation: 'model request',
+        errorMessage: 'Temporary connection error.',
+      },
+      { prepareRetry: ordinaryPrepare },
+    );
+    await waitForRetryApproval({ streamId: 'ordinary-after-rollback' });
+    decideRetry({ accepted: true });
+    await expect(ordinary).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
+    expect(ordinaryPrepare).toHaveBeenCalledOnce();
+
+    preparation.resolve();
+    await expect(switching).resolves.toEqual({
+      action: 'deny',
+      reason: 'replacement client failed',
+    });
+  });
+
+  it('denies an ordinary retry when its replacement client cannot be prepared', async () => {
+    const { interactions } = tui();
+    const prepareRetry = vi.fn(async () => {
+      throw new Error('ordinary client refresh failed');
+    });
+    const ordinary = interactions.requestRetry?.(
+      {
+        requestId: 'ordinary-refresh-failure',
+        streamId: 'ordinary-refresh-failure',
+        operation: 'model request',
+        errorMessage: 'Temporary connection error.',
+      },
+      { prepareRetry },
+    );
+    await waitForRetryApproval({ streamId: 'ordinary-refresh-failure' });
+    decideRetry({ accepted: true });
+
+    await expect(ordinary).resolves.toEqual({
+      action: 'deny',
+      reason: 'ordinary client refresh failed',
+    });
+    expect(prepareRetry).toHaveBeenCalledOnce();
+    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
+    expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
+  });
+
+  it('cancels ordinary retry preparation after approval', async () => {
+    const ordinaryPrepare = vi.fn(
+      async (_selection, _signal?: AbortSignal) =>
+        await new Promise<void>(() => {
+          // Cancellation settles the abort-aware wrapper around this task.
+        }),
+    );
+    const { interactions } = tui();
+    const ordinary = interactions.requestRetry?.(
+      {
+        requestId: 'cancelled-ordinary',
+        streamId: 'cancelled-ordinary',
+        operation: 'model request',
+        errorMessage: 'Temporary connection error.',
+      },
+      { prepareRetry: ordinaryPrepare },
+    );
+    await waitForRetryApproval({ streamId: 'cancelled-ordinary' });
+    decideRetry({ accepted: true });
+    await vi.waitFor(() => expect(ordinaryPrepare).toHaveBeenCalledOnce());
+    interactions.cancel({
+      streamId: 'cancelled-ordinary',
+      kind: 'retry',
+      cause: 'Cancelled in test.',
+    });
+    await expect(ordinary).resolves.toEqual({ action: 'cancel' });
+    expect(ordinaryPrepare.mock.calls[0]?.[1]?.aborted).toBe(true);
+  });
+
   it('invalidates pre-queue retry lookups when approvals are cleared', async () => {
-    let resolveLookup: ((value: string | undefined) => void) | undefined;
-    mocks.lookupApiKey.mockImplementation(
+    let resolveLookup: ((value: boolean) => void) | undefined;
+    mocks.hasUsableApiKey.mockImplementation(
       () =>
-        new Promise<string | undefined>((resolve) => {
+        new Promise<boolean>((resolve) => {
           resolveLookup = resolve;
         }),
     );
@@ -593,7 +1123,7 @@ describe('TUI retry approvals', () => {
     clearApprovals();
     await expect(result).resolves.toEqual({ action: 'cancel' });
 
-    resolveLookup?.('sk-after-interrupt');
+    resolveLookup?.(true);
     await Promise.resolve();
     await Promise.resolve();
 
@@ -602,10 +1132,10 @@ describe('TUI retry approvals', () => {
   });
 
   it('invalidates pre-queue retry lookups when approvals are unbound', async () => {
-    let resolveLookup: ((value: string | undefined) => void) | undefined;
-    mocks.lookupApiKey.mockImplementation(
+    let resolveLookup: ((value: boolean) => void) | undefined;
+    mocks.hasUsableApiKey.mockImplementation(
       () =>
-        new Promise<string | undefined>((resolve) => {
+        new Promise<boolean>((resolve) => {
           resolveLookup = resolve;
         }),
     );
@@ -617,7 +1147,7 @@ describe('TUI retry approvals', () => {
     dispose();
     await expect(result).resolves.toEqual({ action: 'cancel' });
 
-    resolveLookup?.('sk-after-unbind');
+    resolveLookup?.(true);
     await Promise.resolve();
     await Promise.resolve();
 
@@ -626,7 +1156,7 @@ describe('TUI retry approvals', () => {
   });
 
   it('cancels an active retry modal when approvals are cleared', async () => {
-    mocks.lookupApiKey.mockResolvedValue(undefined);
+    mocks.hasUsableApiKey.mockResolvedValue(false);
 
     const { interactions } = tui();
     const result = interactions.requestRetry?.(
@@ -668,7 +1198,7 @@ describe('TUI retry approvals', () => {
   });
 
   it('times out an active retry modal', async () => {
-    mocks.lookupApiKey.mockResolvedValue(undefined);
+    mocks.hasUsableApiKey.mockResolvedValue(false);
 
     const { cliContext, interactions } = tui();
     const result = interactions.requestRetry?.(
@@ -687,7 +1217,9 @@ describe('TUI retry approvals', () => {
   });
 
   it('times out while a retry is still waiting on the keychain', async () => {
-    mocks.lookupApiKey.mockImplementation(() => new Promise(() => undefined));
+    mocks.hasUsableApiKey.mockImplementation(
+      () => new Promise(() => undefined),
+    );
 
     const { cliContext, interactions } = tui();
     const result = interactions.requestRetry?.(
@@ -701,15 +1233,15 @@ describe('TUI retry approvals', () => {
   });
 
   it('ignores stale auto-switch lookups after a newer retry replaces them', async () => {
-    let resolveFirstLookup: ((value: string | undefined) => void) | undefined;
-    mocks.lookupApiKey
+    let resolveFirstLookup: ((value: boolean) => void) | undefined;
+    mocks.hasUsableApiKey
       .mockImplementationOnce(
         () =>
-          new Promise<string | undefined>((resolve) => {
+          new Promise<boolean>((resolve) => {
             resolveFirstLookup = resolve;
           }),
       )
-      .mockResolvedValueOnce(undefined);
+      .mockResolvedValueOnce(false);
 
     const { interactions } = tui();
     void interactions.requestRetry?.(
@@ -734,7 +1266,7 @@ describe('TUI retry approvals', () => {
       });
     });
 
-    resolveFirstLookup?.('sk-stale');
+    resolveFirstLookup?.(true);
     await Promise.resolve();
     await Promise.resolve();
 
@@ -742,9 +1274,9 @@ describe('TUI retry approvals', () => {
   });
 
   it('clears an older retry modal when a newer retry auto-switches', async () => {
-    mocks.lookupApiKey
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce('sk-new');
+    mocks.hasUsableApiKey
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
 
     const { interactions } = tui();
     void interactions.requestRetry?.(
@@ -779,7 +1311,7 @@ describe('TUI retry approvals', () => {
   });
 
   it('replaces an older retry modal when a newer retry also needs input', async () => {
-    mocks.lookupApiKey.mockResolvedValue(undefined);
+    mocks.hasUsableApiKey.mockResolvedValue(false);
 
     const { interactions } = tui();
     void interactions.requestRetry?.(
@@ -812,19 +1344,19 @@ describe('TUI retry approvals', () => {
     });
   });
 
-  it('does not let a stale auto-switch failure cancel a newer retry', async () => {
-    let rejectFirstModeSwitch: ((error: Error) => void) | undefined;
-    mocks.lookupApiKey.mockResolvedValue('sk-test');
+  it('serializes a newer switch behind stale-switch rollback', async () => {
+    const firstModeSwitch = pDefer<undefined>();
+    mocks.hasUsableApiKey.mockResolvedValue(true);
     mocks.setCliApiMode
-      .mockImplementationOnce(
-        () =>
-          new Promise<undefined>((_resolve, reject) => {
-            rejectFirstModeSwitch = reject;
-          }),
-      )
-      .mockResolvedValueOnce(undefined);
+      .mockImplementationOnce(async (mode) => {
+        mocks.apiMode = mode;
+        await firstModeSwitch.promise;
+      })
+      .mockImplementationOnce(async (mode) => {
+        mocks.apiMode = mode;
+      });
 
-    const { interactions } = tui();
+    const { interactions, prepareRetry } = tui();
     void interactions.requestRetry?.(
       relayRetry({
         streamId: 'same-stream',
@@ -843,16 +1375,33 @@ describe('TUI retry approvals', () => {
         message: 'second retry',
       }),
     );
-    await vi.waitFor(() => {
-      expect(mocks.setCliApiMode).toHaveBeenCalledTimes(2);
-    });
+    await Promise.resolve();
+    await vi.waitFor(() =>
+      expect(mocks.setCliApiMode).toHaveBeenCalledTimes(2),
+    );
+    expect(mocks.apiMode).toBe('included');
+
+    firstModeSwitch.reject(new Error('stale mode switch failed'));
     await expect(second).resolves.toEqual({
       action: 'retry',
       feedback: undefined,
     });
-
-    rejectFirstModeSwitch?.(new Error('stale mode switch failed'));
-    await Promise.resolve();
-    await Promise.resolve();
+    expect(mocks.setCliApiMode.mock.calls.map(([mode]) => mode)).toEqual([
+      'personal',
+      'included',
+      'personal',
+    ]);
+    expect(mocks.apiMode).toBe('personal');
+    expect(prepareRetry).toHaveBeenCalledTimes(2);
+    expect(prepareRetry).toHaveBeenNthCalledWith(
+      1,
+      'personal',
+      expect.anything(),
+    );
+    expect(prepareRetry).toHaveBeenNthCalledWith(
+      2,
+      'personal',
+      expect.anything(),
+    );
   });
 });

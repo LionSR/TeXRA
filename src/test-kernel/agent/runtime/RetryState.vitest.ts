@@ -19,6 +19,7 @@ import {
 } from '@agent/core/flows/RetryState';
 import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import type {
+  HostRetryInteractionOptions,
   HostRetryRequest,
   RetryResult,
 } from '@agent/runtime/HostInteractions';
@@ -59,6 +60,7 @@ interface TestRetryServices {
   runtimeHost: AgentRuntimeHost;
   logger: AgentTrace;
   setAbortController: (ac: AbortController | null) => void;
+  refreshClient?: () => Promise<void>;
 }
 
 class ExposedRetryNode extends RetryableInvocationNode<
@@ -76,16 +78,39 @@ class ExposedRetryNode extends RetryableInvocationNode<
   fallbackFor(error: Error): unknown {
     return this.getFallbackResult(error);
   }
+
+  seedPersistent401Guards(): void {
+    this._persistent401Error = new Error('persistent relay 401');
+    this._hasAttemptedTokenRefresh = true;
+  }
+
+  persistent401Guards(): {
+    readonly error: Error | null;
+    readonly tokenRefreshAttempted: boolean;
+  } {
+    return {
+      error: this._persistent401Error,
+      tokenRefreshAttempted: this._hasAttemptedTokenRefresh,
+    };
+  }
 }
 
 interface RetryNodeKit {
   node: ExposedRetryNode;
   session: SessionHandle;
   streamStatus: StreamStatusMachine;
-  requestRetry: Mock<(request: HostRetryRequest) => Promise<RetryResult>>;
+  requestRetry: Mock<
+    (
+      request: HostRetryRequest,
+      options?: HostRetryInteractionOptions,
+    ) => Promise<RetryResult>
+  >;
 }
 
-function createRetryNode(streamId: StreamTabId): RetryNodeKit {
+function createRetryNode(
+  streamId: StreamTabId,
+  refreshClient?: () => Promise<void>,
+): RetryNodeKit {
   const streamStatus = new StreamStatusMachine();
   const requestRetry = vi.fn<RetryNodeKit['requestRetry']>();
   const session = sessionWithInteractions(
@@ -98,6 +123,7 @@ function createRetryNode(streamId: StreamTabId): RetryNodeKit {
     runtimeHost: noopAgentRuntimeHost,
     logger: noopTrace,
     setAbortController: vi.fn(),
+    refreshClient,
   });
   return { node, session, streamStatus, requestRetry };
 }
@@ -351,6 +377,38 @@ describe('RetryState', () => {
         }),
         undefined,
       );
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  it('lets the host prepare a replacement client without refreshing it twice', async () => {
+    const streamId = 'retry-state-prepared-client' as StreamTabId;
+    const refreshClient = vi.fn(async () => undefined);
+    const { node, session, streamStatus, requestRetry } = createRetryNode(
+      streamId,
+      refreshClient,
+    );
+    requestRetry.mockImplementationOnce(async (_request, options) => {
+      await options?.prepareRetry?.('configured');
+      return { action: 'retry' };
+    });
+    node.seedPersistent401Guards();
+
+    try {
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
+
+      await expect(
+        withRetryRunContext(streamId, session, () =>
+          node.retryPrompt(undefined, new Error('temporary provider failure')),
+        ),
+      ).resolves.toBe(true);
+
+      expect(refreshClient).toHaveBeenCalledOnce();
+      expect(node.persistent401Guards()).toEqual({
+        error: null,
+        tokenRefreshAttempted: false,
+      });
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);
     }
