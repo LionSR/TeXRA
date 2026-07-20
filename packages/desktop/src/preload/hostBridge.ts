@@ -8,11 +8,6 @@ import {
   ELECTRON_WEBVIEW_PUSH_CHANNEL,
 } from '../hostBridgeChannels.js';
 
-export {
-  ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
-  ELECTRON_WEBVIEW_PUSH_CHANNEL,
-} from '../hostBridgeChannels.js';
-
 export interface ElectronHostBridgeInstallOptions {
   exposeInMainWorld(name: string, api: HostBridgeApi): void;
   onHostMessage(
@@ -26,7 +21,7 @@ export interface ElectronHostBridgeInstallOptions {
   ): void;
 }
 
-export function createElectronHostBridge(
+function createElectronHostBridge(
   sendToMain: ElectronHostBridgeInstallOptions['sendToMain'],
 ): HostBridgeApi {
   let state: unknown;
