@@ -61,7 +61,7 @@ const credentialExhaustedRetry: RuntimeInteractionEventPayloads['showRetryReques
     requestId: 'relay-limit-retry',
     streamId:
       'test-stream' as RuntimeInteractionEventPayloads['showRetryRequest']['streamId'],
-    operation: 'Tool-use call',
+    operation: 'Model request',
     errorMessage: 'HTTP 429 Too Many Requests',
     errorDetails: {
       exhaustionReason: 'relay-limit',

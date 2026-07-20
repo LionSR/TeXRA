@@ -892,7 +892,7 @@ function makeRetryApprovalPayload(): RetryPermission {
   if (RETRY_APPROVAL_CHATGPT) {
     return {
       streamId: STREAM_ID,
-      operation: 'Tool-use call',
+      operation: 'Model request',
       errorMessage: 'ChatGPT subscription usage limit reached. Resets in 2h.',
       errorDetails: {
         exhaustionReason: 'chatgpt-subscription',
@@ -903,7 +903,7 @@ function makeRetryApprovalPayload(): RetryPermission {
   }
   return {
     streamId: STREAM_ID,
-    operation: 'Tool-use call',
+    operation: 'Model request',
     errorMessage: 'HTTP 429 Too Many Requests',
     errorDetails: {
       exhaustionReason: 'relay-limit',

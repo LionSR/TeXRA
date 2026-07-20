@@ -3,6 +3,7 @@ import { isRelayMonthlyLimitMessage } from '@common/errors/sdkErrorUtils';
 import {
   isChatGptSubscriptionLimitError,
   isCredentialExhausted,
+  type ExhaustionReason,
   type ApprovalDecision as SharedApprovalDecision,
 } from '@shared/schemas';
 
@@ -64,8 +65,13 @@ export function isCliApiSwitchableRetry(
   );
 }
 
-export function appendCliApiSwitchHint(text: string): string {
-  if (!isRelayMonthlyLimitMessage(text)) return text;
+export function appendCliApiSwitchHint(
+  text: string,
+  exhaustionReason?: ExhaustionReason,
+): string {
+  if (exhaustionReason !== 'relay-limit' && !isRelayMonthlyLimitMessage(text)) {
+    return text;
+  }
   if (text.includes('/api personal')) return text;
   return [text, CLI_PERSONAL_API_RETRY_HINT].join('\n');
 }

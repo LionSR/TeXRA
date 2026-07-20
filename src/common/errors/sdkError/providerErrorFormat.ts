@@ -1,3 +1,6 @@
+import stableStringify from 'fast-json-stable-stringify';
+
+import { safeParseJson } from '@common/parsing/safeParseJson';
 import {
   type ErrorContext,
   type ErrorLogData,
@@ -26,6 +29,7 @@ import {
   detectStatusCode,
   detectStatusText,
   getErrorClassNames,
+  pickStringField,
   safeGetReasonPhrase,
 } from './errorInspection';
 import {
@@ -59,13 +63,67 @@ function describeHttpError(
   err: unknown,
   statusCode: number | undefined,
   extractedMessage: string | undefined,
+  rawErrorBody: unknown,
 ): { statusText: string | undefined; message: string } {
   const statusText = detectStatusText(err, statusCode);
   const fallbackMessage = statusCode
     ? safeGetReasonPhrase(statusCode)
     : undefined;
+  const bodyMessage =
+    pickStringField(rawErrorBody, 'message') ??
+    pickStringField(
+      typeof rawErrorBody === 'object' && rawErrorBody !== null
+        ? (rawErrorBody as { error?: unknown }).error
+        : undefined,
+      'message',
+    );
+  // Some SDKs stringify the complete response body into Error.message when
+  // the body has no scalar message. Keep that body on rawErrorBody for
+  // diagnostics, but do not promote its serialization to user-facing text.
+  let wrapperMessageContainsRawBody = false;
+  if (extractedMessage !== undefined && rawErrorBody !== undefined) {
+    if (typeof rawErrorBody === 'string') {
+      wrapperMessageContainsRawBody =
+        extractedMessage === rawErrorBody ||
+        extractedMessage.includes(JSON.stringify(rawErrorBody));
+    }
+
+    if (typeof rawErrorBody === 'object' && rawErrorBody !== null) {
+      try {
+        const serializedRawBody = JSON.stringify(rawErrorBody);
+        wrapperMessageContainsRawBody =
+          serializedRawBody.length > 2 &&
+          extractedMessage.includes(serializedRawBody);
+      } catch {
+        // Non-serializable diagnostic bodies cannot have been JSON-stringified
+        // into the SDK wrapper message by the path guarded here.
+      }
+
+      if (!wrapperMessageContainsRawBody) {
+        const opening = Array.isArray(rawErrorBody) ? '[' : '{';
+        const closing = Array.isArray(rawErrorBody) ? ']' : '}';
+        const start = extractedMessage.indexOf(opening);
+        const end = extractedMessage.lastIndexOf(closing);
+        if (start >= 0 && end > start) {
+          const embeddedBody = safeParseJson(
+            extractedMessage.slice(start, end + 1),
+          ).unwrapOr(undefined);
+          try {
+            wrapperMessageContainsRawBody =
+              stableStringify(embeddedBody) === stableStringify(rawErrorBody);
+          } catch {
+            // Circular or otherwise non-JSON diagnostics cannot match a JSON
+            // fragment parsed from the wrapper message.
+          }
+        }
+      }
+    }
+  }
   const finalMessage =
-    extractedMessage ?? fallbackMessage ?? 'Provider request failed';
+    (wrapperMessageContainsRawBody ? undefined : extractedMessage) ??
+    bodyMessage ??
+    fallbackMessage ??
+    'Provider request failed';
   const message = statusCode
     ? `HTTP ${statusCode}${statusText ? ` ${statusText}` : ''} – ${finalMessage}`
     : finalMessage;
@@ -121,6 +179,7 @@ function matchSdkError(
     err,
     statusCode,
     extractErrorMessage(err),
+    rawErrorBody,
   );
 
   if (!statusCode) {
@@ -282,6 +341,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     err,
     statusCode,
     extractedMessage,
+    rawErrorBody,
   );
   // No status code on an unrecognized error likely means a network-level failure
   // (DNS, proxy, TLS, etc.) — show retry button for safety.

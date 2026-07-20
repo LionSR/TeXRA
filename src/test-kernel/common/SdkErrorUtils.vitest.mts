@@ -384,6 +384,133 @@ describe('formatProviderHttpError', () => {
     expect(formatted.userRetryable).toBe(false);
   });
 
+  it('does not promote a serialized provider response body into the message', () => {
+    const privatePrompt = 'private request body content';
+    const body = {
+      request: { prompt: privatePrompt },
+      authorization: 'opaque credential',
+    };
+    const error = new OpenAIBadRequestError(
+      400,
+      body,
+      `400 ${JSON.stringify(body)}`,
+      new Headers(),
+    );
+    tagOpenAISdkError(error, 'openai');
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted.message).toBe('HTTP 400 Bad Request – Bad Request');
+    expect(formatted.message).not.toContain(privatePrompt);
+    expect(formatted.message).not.toContain('opaque credential');
+    expect(formatted.rawErrorBody).toEqual(body);
+  });
+
+  it('does not promote a pretty-printed provider response body into the message', () => {
+    const privatePrompt = 'private pretty-printed request content';
+    const body = {
+      request: { prompt: privatePrompt },
+      authorization: 'opaque pretty-printed credential',
+    };
+    const reorderedBody = {
+      authorization: body.authorization,
+      request: body.request,
+    };
+    const error = new Error(
+      `400 ${JSON.stringify(reorderedBody, null, 2)}`,
+    ) as Error & { error: unknown };
+    error.error = body;
+    attachSdkErrorMetadata(error, {
+      provider: 'openai',
+      kind: 'bad_request',
+      statusCode: 400,
+    });
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted.message).toBe('HTTP 400 Bad Request – Bad Request');
+    expect(formatted.message).not.toContain(privatePrompt);
+    expect(formatted.message).not.toContain('opaque pretty-printed credential');
+    expect(formatted.rawErrorBody).toEqual(body);
+  });
+
+  it('retains a useful wrapper explanation when the raw body is plain text', () => {
+    const error = new Error(
+      'The provider rejected this request because the model is unavailable.',
+    ) as Error & { error: unknown };
+    error.error = 'upstream plain-text response';
+    attachSdkErrorMetadata(error, {
+      provider: 'openai',
+      kind: 'bad_request',
+      statusCode: 400,
+    });
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted.message).toBe(
+      'HTTP 400 Bad Request – The provider rejected this request because the model is unavailable.',
+    );
+    expect(formatted.rawErrorBody).toBe('upstream plain-text response');
+  });
+
+  it('does not promote a serialized plain-text response body into the message', () => {
+    const privateBody = 'private prompt and opaque authorization';
+    const error = new OpenAIBadRequestError(
+      400,
+      privateBody,
+      'ignored by the OpenAI error constructor',
+      new Headers(),
+    );
+    tagOpenAISdkError(error, 'openai');
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted.message).toBe('HTTP 400 Bad Request – Bad Request');
+    expect(formatted.message).not.toContain(privateBody);
+    expect(formatted.rawErrorBody).toBe(privateBody);
+  });
+
+  it('formats cyclic diagnostic bodies without throwing', () => {
+    const body: { kind: string; self?: unknown } = { kind: 'provider-error' };
+    body.self = body;
+    const error = new Error(
+      'The provider failed while reporting {"kind":"provider-error"}.',
+    ) as Error & { error: unknown };
+    error.error = body;
+    attachSdkErrorMetadata(error, {
+      provider: 'openai',
+      kind: 'bad_request',
+      statusCode: 400,
+    });
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted.message).toBe(
+      'HTTP 400 Bad Request – The provider failed while reporting {"kind":"provider-error"}.',
+    );
+    expect(formatted.rawErrorBody).toBe(body);
+  });
+
+  it('retains a wrapper explanation that does not serialize its response body', () => {
+    const body = { code: 'unsupported_response_format' };
+    const error = new Error(
+      'The selected model does not support this response format.',
+    ) as Error & { error: unknown };
+    error.error = body;
+    attachSdkErrorMetadata(error, {
+      provider: 'openai',
+      kind: 'bad_request',
+      statusCode: 400,
+    });
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted.message).toBe(
+      'HTTP 400 Bad Request – The selected model does not support this response format.',
+    );
+    expect(formatted.rawErrorBody).toEqual(body);
+  });
+
   it('classifies OpenAI insufficient_quota bodies as credential exhaustion', () => {
     const error = new Error('quota exhausted') as Error & { error: unknown };
     error.error = {
