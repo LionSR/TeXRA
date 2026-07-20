@@ -21,6 +21,7 @@ import type { StreamHandle } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
+import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
@@ -167,18 +168,28 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return parts;
   }
 
-  async getClient(): Promise<GoogleGenAI> {
+  async getClient(
+    selection: ModelCredentialSelection = 'configured',
+  ): Promise<GoogleGenAI> {
+    const credential = await this.resolveClientCredential(selection);
     return resolveGoogleClient({
       sdkLabel: 'Native',
-      shouldUseServerSideKeys: this.shouldUseServerSideKeys(),
-      getApiKey: () => this.getApiKey(),
-      getBaseUrl: () => this.getBaseUrl(),
+      credential,
       logger: this.logger,
       cached: this.googleClient,
       setCached: (client) => {
         this.googleClient = client;
       },
+      rememberRoute: (client, route) =>
+        this.rememberClientCredentialRoute(client, route),
     });
+  }
+
+  override async refreshClient(
+    selection: ModelCredentialSelection = 'configured',
+  ): Promise<GoogleGenAI> {
+    this.googleClient = null;
+    return this.getClient(selection);
   }
   /**
    * Gemini carries thought signatures across parallel function calls, which must

@@ -11,6 +11,7 @@ import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import type { IModelHandler } from '@agent/types/IModelHandler';
 import type {
   FinalTool,
+  ModelCredentialSelection,
   SdkToolCall,
 } from '@agent/types/ModelHandlerContracts';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
@@ -30,7 +31,10 @@ import type { TaskRunFileService } from '@utils/files';
  */
 export interface ModelClientServices<C = unknown> {
   readonly client: C;
-  readonly refreshClient?: () => Promise<void>;
+  readonly refreshClient?: (
+    selection?: ModelCredentialSelection,
+    signal?: AbortSignal,
+  ) => Promise<void>;
 }
 
 /**
@@ -55,8 +59,14 @@ export async function withModelClient<C, T extends object>(
     get client(): C {
       return client;
     },
-    async refreshClient(): Promise<void> {
-      client = await modelHandler.getClient();
+    async refreshClient(
+      selection: ModelCredentialSelection = 'configured',
+      signal?: AbortSignal,
+    ): Promise<void> {
+      signal?.throwIfAborted();
+      const replacement = await modelHandler.refreshClient(selection);
+      signal?.throwIfAborted();
+      client = replacement;
     },
   };
 }

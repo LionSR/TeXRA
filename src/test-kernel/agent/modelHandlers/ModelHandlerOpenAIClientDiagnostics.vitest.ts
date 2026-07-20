@@ -4,6 +4,10 @@ import { type ModelConfig, ModelProvider } from 'llm-zoo';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
+import type {
+  ModelCredentialSelection,
+  ResolvedClientCredential,
+} from '@agent/types/ModelHandlerContracts';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import * as serverKeysModule from '@auth/serverKeys';
@@ -15,6 +19,15 @@ const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 const RELAY_BASE_URL = 'https://relay.example.test/openai';
 const TEST_API_KEY = 'test-secret-key';
+
+function diagnosticRoute(
+  config: ModelConfig,
+  useRelay: boolean,
+): ResolvedClientCredential['route'] {
+  if (useRelay) return 'relay';
+  if (config.openRouterOnly) return 'openrouter';
+  return 'api-key';
+}
 
 const KIMI_DIAGNOSTICS_CONFIG = Object.freeze({
   name: 'kimi-test',
@@ -34,12 +47,18 @@ class TestModelHandlerOpenAI extends ModelHandlerOpenAI {
     super(config);
   }
 
-  protected override async getApiKey(): Promise<string> {
-    return TEST_API_KEY;
-  }
-
   protected override shouldUseServerSideKeys(): boolean {
     return this.useRelay;
+  }
+
+  protected override async resolveClientCredential(
+    _selection: ModelCredentialSelection = 'configured',
+  ): Promise<ResolvedClientCredential> {
+    return {
+      apiKey: TEST_API_KEY,
+      baseUrl: this.getBaseUrl(),
+      route: diagnosticRoute(this.config, this.useRelay),
+    };
   }
 }
 
@@ -51,12 +70,18 @@ class TestModelHandlerOpenAIResponse extends ModelHandlerOpenAIResponse {
     super(config);
   }
 
-  protected override async getApiKey(): Promise<string> {
-    return TEST_API_KEY;
-  }
-
   protected override shouldUseServerSideKeys(): boolean {
     return this.useRelay;
+  }
+
+  protected override async resolveClientCredential(
+    _selection: ModelCredentialSelection = 'configured',
+  ): Promise<ResolvedClientCredential> {
+    return {
+      apiKey: TEST_API_KEY,
+      baseUrl: this.getBaseUrl(),
+      route: diagnosticRoute(this.config, this.useRelay),
+    };
   }
 }
 

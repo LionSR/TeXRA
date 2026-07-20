@@ -43,6 +43,9 @@ import type {
   CreateResponseOptions,
   CreateResponseResult,
   ExtractResponseResult,
+  ModelCredentialRoute,
+  ModelCredentialSelection,
+  ResolvedClientCredential,
   SdkToolCall,
   StopConditionsResult,
   TokenCountOptions,
@@ -195,6 +198,12 @@ export abstract class ModelHandler<
   Resp = unknown,
   Media = unknown,
 > {
+  private readonly clientCredentialRoutes = new WeakMap<
+    object,
+    ModelCredentialRoute
+  >();
+  private activeAttemptCredentialRoute: ModelCredentialRoute | undefined;
+  private lastAttemptCredentialRoute: ModelCredentialRoute | undefined;
   public config: ModelConfig;
   public capabilities: ModelCapabilities;
   public continueLimit: number;
@@ -441,6 +450,9 @@ export abstract class ModelHandler<
    * check independently.
    */
   protected shouldUseServerSideKeys(): boolean {
+    if (this.activeAttemptCredentialRoute !== undefined) {
+      return this.activeAttemptCredentialRoute === 'relay';
+    }
     return usesServerSideKeysRoute(this.config);
   }
 
@@ -457,115 +469,141 @@ export abstract class ModelHandler<
   }
 
   /**
-   * Retrieves API key from environment variables based on provider and OpenRouter configuration.
-   * When server-side keys are enabled (experimental), returns the user's JWT token instead,
-   * which the relay Edge Function will use for authentication.
-   *
-   * When "Use Included Access" is enabled, only server-side keys are used — no fallback
-   * to personal API keys. This ensures runtime behavior matches dropdown availability.
-   * Exception: models routed through OpenRouter (openRouterOnly or global toggle) always
-   * use the OpenRouter API key regardless of included-access settings, because the
-   * server-side relay is a direct-provider path that does not apply to OpenRouter routing.
-   *
-   * @throws Error if required API key is missing from environment
+   * Resolve the credential and endpoint together for one client construction.
+   * The returned value is immutable and no later request step needs to reread
+   * the process-wide access settings. `personal` bypasses included relay
+   * access but preserves model-owned routes such as OpenRouter-only models.
    */
-  protected async getApiKey(): Promise<string> {
-    const serverSideKeyService = getServerSideKeyService();
-    const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
-    const canRouteThroughRelay = allowsModelRelay(this.config);
+  protected async resolveClientCredential(
+    selection: ModelCredentialSelection = 'configured',
+  ): Promise<ResolvedClientCredential> {
+    const useOpenRouter = shouldUseOpenRouter(this.config);
+    const serverSideKeyService =
+      selection === 'configured' ? getServerSideKeyService() : null;
+    const useIncludedAccess =
+      serverSideKeyService?.getUseIncludedModelAccess() ?? false;
+    const canRouteThroughRelay =
+      useIncludedAccess && !useOpenRouter && allowsModelRelay(this.config);
+    const hasServerAccess = canRouteThroughRelay
+      ? await serverSideKeyService?.canUseServerSideKeys()
+      : false;
 
-    // Prime caches before using sync methods. This ensures that after reload/continue,
-    // the tier config and access status are fetched before shouldUseServerSideKeys() is called.
-    // Without this, sync methods return false due to empty caches, causing incorrect tier errors.
-    const hasServerAccess =
-      useIncludedAccess && canRouteThroughRelay
-        ? await serverSideKeyService.canUseServerSideKeys()
-        : false;
-
-    const rules: readonly {
-      readonly reason: string;
-      readonly matches: () => boolean;
-      readonly resolve: () => Promise<string>;
-    }[] = [
-      {
-        reason:
-          'Quota auto-switch means the relay was selected but is no longer usable.',
-        matches: () =>
-          canRouteThroughRelay &&
-          useIncludedAccess &&
-          serverSideKeyService.wasQuotaAutoSwitched(),
-        resolve: () => {
-          throw new Error(
-            `Model "${this.config.name}" cannot use the TeXRA relay because your monthly relay quota is exhausted. ` +
-              `Switch to "Use My Own Keys" via the TeXRA Profile panel, or wait for the next quota period.`,
-          );
-        },
-      },
-      {
-        reason: 'Server-side keys authenticate with the Supabase relay token.',
-        matches: () => this.shouldUseServerSideKeys(),
-        resolve: async () => {
-          const accessToken = await SupabaseClient.getRelayAccessToken();
-          if (accessToken) {
-            this.logger.debug(
-              `Using server-side API keys via relay for ${this.config.provider}`,
-            );
-            return accessToken;
-          }
-          throw new Error(
-            'Unable to authenticate with server. Please sign out and sign back in, or switch to personal API keys.',
-          );
-        },
-      },
-      {
-        reason:
-          'OpenRouter routing always uses the OpenRouter key, not direct-provider relay access.',
-        matches: () => shouldUseOpenRouter(this.config),
-        resolve: () =>
-          this.fetchApiKeyOrThrow(
-            'openRouter',
-            'Missing API key for OpenRouter. Set your OpenRouter API key to continue.',
-          ),
-      },
-      {
-        reason:
-          'Included access is enabled and authenticated, but this model is outside the tier.',
-        matches: () => useIncludedAccess && hasServerAccess,
-        resolve: () => {
-          this.logger.debug(
-            `Model "${this.config.name}" not available for tier, useIncludedAccess=true`,
-          );
-          throw new Error(
-            `Model "${this.config.name}" is not available with your current subscription tier. ` +
-              `Switch to personal API keys, or select a model included in your tier.`,
-          );
-        },
-      },
-      {
-        reason: 'Personal-key mode uses the configured provider key.',
-        matches: () => true,
-        resolve: () => {
-          const directProvider = resolveDirectModelApiKeyProvider(this.config);
-          if (!directProvider) {
-            throw new Error(
-              `Model "${this.config.name}" has no direct API-key provider.`,
-            );
-          }
-          return this.fetchApiKeyOrThrow(
-            directProvider,
-            `Missing API key for ${directProvider}. Set your ${directProvider} API key to continue.`,
-          );
-        },
-      },
-    ];
-
-    for (const rule of rules) {
-      if (!rule.matches()) continue;
-      this.logger.debug(`Resolving API key: ${rule.reason}`);
-      return rule.resolve();
+    if (canRouteThroughRelay && serverSideKeyService?.wasQuotaAutoSwitched()) {
+      throw new Error(
+        `Model "${this.config.name}" cannot use the TeXRA relay because your monthly relay quota is exhausted. ` +
+          'Switch to "Use My Own Keys" via the TeXRA Profile panel, or wait for the next quota period.',
+      );
     }
-    // Defensive only: the final personal-key rule is exhaustive.
-    throw new Error('No API key resolution rule matched.');
+
+    const useRelay =
+      canRouteThroughRelay &&
+      serverSideKeyService?.shouldUseServerSideKeysSync(
+        this.config.provider,
+        this.config.name,
+      );
+    if (useRelay) {
+      const apiKey = await SupabaseClient.getRelayAccessToken();
+      if (!apiKey) {
+        throw new Error(
+          'Unable to authenticate with server. Please sign out and sign back in, or switch to personal API keys.',
+        );
+      }
+      this.logger.debug(
+        `Using server-side API keys via relay for ${this.config.provider}`,
+      );
+      return {
+        apiKey,
+        baseUrl: resolveBaseUrl({
+          provider: this.config.provider,
+          openRouterOnly: this.config.openRouterOnly,
+          customBaseUrl: this.config.baseUrl,
+          requiresResponsesAPI: this.config.requiresResponsesAPI,
+          forceDirectProvider: (
+            this.config as { forceDirectProvider?: boolean }
+          ).forceDirectProvider,
+          useServerSideKeys: true,
+          useOpenRouter: false,
+          logger: this.logger,
+        }),
+        route: 'relay',
+      };
+    }
+
+    if (useIncludedAccess && hasServerAccess) {
+      throw new Error(
+        `Model "${this.config.name}" is not available with your current subscription tier. ` +
+          'Switch to personal API keys, or select a model included in your tier.',
+      );
+    }
+
+    const provider = useOpenRouter
+      ? 'openRouter'
+      : resolveDirectModelApiKeyProvider(this.config);
+    if (!provider) {
+      throw new Error(
+        `Model "${this.config.name}" has no direct API-key provider.`,
+      );
+    }
+    const apiKey = await this.fetchApiKeyOrThrow(
+      provider,
+      useOpenRouter
+        ? 'Missing API key for OpenRouter. Set your OpenRouter API key to continue.'
+        : `Missing API key for ${provider}. Set your ${provider} API key to continue.`,
+    );
+    return {
+      apiKey,
+      baseUrl: resolveBaseUrl({
+        provider: this.config.provider,
+        openRouterOnly: this.config.openRouterOnly,
+        customBaseUrl: this.config.baseUrl,
+        requiresResponsesAPI: this.config.requiresResponsesAPI,
+        forceDirectProvider: (this.config as { forceDirectProvider?: boolean })
+          .forceDirectProvider,
+        useServerSideKeys: false,
+        useOpenRouter,
+        logger: this.logger,
+      }),
+      route: useOpenRouter ? 'openrouter' : 'api-key',
+    };
+  }
+
+  /** Associate a constructed SDK client with the route it captured. */
+  protected rememberClientCredentialRoute<Candidate extends object>(
+    client: Candidate,
+    route: ModelCredentialRoute,
+  ): Candidate {
+    this.clientCredentialRoutes.set(client, route);
+    return client;
+  }
+
+  /** Route used by the most recently started attempt on this handler. */
+  protected get attemptCredentialRoute(): ModelCredentialRoute | undefined {
+    return this.activeAttemptCredentialRoute ?? this.lastAttemptCredentialRoute;
+  }
+
+  /** Route currently executing, excluding the last completed attempt. */
+  protected get activeCredentialRoute(): ModelCredentialRoute | undefined {
+    return this.activeAttemptCredentialRoute;
+  }
+
+  /** Route tag for usage recorded after a successful attempt. */
+  getLastCredentialUsageRoute(): NormalizedUsage['usageRoute'] {
+    switch (this.lastAttemptCredentialRoute) {
+      case 'chatgpt-subscription':
+        return 'chatgpt-subscription';
+      case 'relay':
+        return 'relay';
+      case 'api-key':
+      case 'openrouter':
+        return 'api-key';
+      default:
+        return undefined;
+    }
+  }
+
+  /** Resolve the key from the same atomic route used by client construction. */
+  protected async getApiKey(): Promise<string> {
+    return (await this.resolveClientCredential()).apiKey;
   }
 
   /**
@@ -573,6 +611,7 @@ export abstract class ModelHandler<
    * @returns Base URL string or null for providers using default URLs
    */
   public getBaseUrl(): string | null {
+    const activeRoute = this.activeAttemptCredentialRoute;
     // Use centralized check to ensure consistency with getApiKey()
     // Pass the decision to resolveBaseUrl to avoid duplicate checks
     return resolveBaseUrl({
@@ -583,16 +622,28 @@ export abstract class ModelHandler<
       forceDirectProvider: (this.config as { forceDirectProvider?: boolean })
         .forceDirectProvider,
       useServerSideKeys: this.shouldUseServerSideKeys(),
+      ...(activeRoute !== undefined && {
+        useOpenRouter: activeRoute === 'openrouter',
+      }),
       logger: this.logger,
     });
   }
 
   /** Log the resolved credential route and final wire request config. */
-  protected logOpenAICompatibleClientConfig(baseURL: string): void {
+  protected logOpenAICompatibleClientConfig(
+    baseURL: string,
+    route?: ModelCredentialRoute,
+  ): void {
     let credential: string;
-    if (this.shouldUseServerSideKeys()) {
+    if (
+      route === 'relay' ||
+      (route === undefined && this.shouldUseServerSideKeys())
+    ) {
       credential = 'TeXRA relay access token';
-    } else if (shouldUseOpenRouter(this.config)) {
+    } else if (
+      route === 'openrouter' ||
+      (route === undefined && shouldUseOpenRouter(this.config))
+    ) {
       credential = 'OpenRouter API key';
     } else {
       const provider =
@@ -974,7 +1025,14 @@ export abstract class ModelHandler<
   }
 
   /** Creates and configures a client instance for the specific model provider. */
-  abstract getClient(): Promise<C>;
+  abstract getClient(selection?: ModelCredentialSelection): Promise<C>;
+
+  /** Rebuild a client for an explicit route without publishing settings. */
+  async refreshClient(
+    selection: ModelCredentialSelection = 'configured',
+  ): Promise<C> {
+    return this.getClient(selection);
+  }
 
   /**
    * Provider-specific SDK error tagger. The base {@link createResponse}
@@ -1003,11 +1061,19 @@ export abstract class ModelHandler<
   createResponse(
     options: CreateResponseOptions<M, C>,
   ): Promise<CreateResponseResult<Resp, M>> {
-    return this.withCreateResponseGuard(() =>
-      withSdkErrorTag(this.sdkErrorTagger, this.config.provider, () =>
+    let credentialRoute: ModelCredentialRoute | undefined;
+    if (typeof options.client === 'object' && options.client !== null) {
+      credentialRoute = this.clientCredentialRoutes.get(options.client);
+    }
+    return this.withCreateResponseGuard(() => {
+      this.activeAttemptCredentialRoute = credentialRoute;
+      this.lastAttemptCredentialRoute = credentialRoute;
+      return withSdkErrorTag(this.sdkErrorTagger, this.config.provider, () =>
         this.createResponseImpl(options),
-      ),
-    );
+      ).finally(() => {
+        this.activeAttemptCredentialRoute = undefined;
+      });
+    });
   }
 
   /**

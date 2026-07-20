@@ -24,6 +24,7 @@ import type {
   CreateResponseOptions,
   CreateResponseResult,
   ExtractResponseResult,
+  ModelCredentialSelection,
   OpenAIResponseToolCall,
   TokenCountOptions,
 } from '@agent/types/ModelHandlerContracts';
@@ -1138,17 +1139,23 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /** Creates a configured OpenAI client instance. */
-  protected async createOpenAIClient(): Promise<OpenAI> {
-    const apiKey = await this.getApiKey();
-    const baseURL = this.getBaseUrl();
-    const client = new OpenAI({ apiKey, baseURL });
-    this.logOpenAICompatibleClientConfig(client.baseURL);
-    return client;
+  protected async createOpenAIClient(
+    selection: ModelCredentialSelection = 'configured',
+  ): Promise<OpenAI> {
+    const credential = await this.resolveClientCredential(selection);
+    const client = new OpenAI({
+      apiKey: credential.apiKey,
+      baseURL: credential.baseUrl,
+    });
+    this.logOpenAICompatibleClientConfig(client.baseURL, credential.route);
+    return this.rememberClientCredentialRoute(client, credential.route);
   }
 
   /** Returns OpenAI client with configured API key. */
-  async getClient(): Promise<OpenAI> {
-    return this.createOpenAIClient();
+  async getClient(
+    selection: ModelCredentialSelection = 'configured',
+  ): Promise<OpenAI> {
+    return this.createOpenAIClient(selection);
   }
 
   override isAutoRetryManagedByProvider(_error: Error): boolean {

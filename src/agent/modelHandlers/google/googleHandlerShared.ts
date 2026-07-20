@@ -4,6 +4,7 @@ import { GoogleGenAI, type File } from '@google/genai';
 import { ReasoningEffort, type ModelCapabilities } from 'llm-zoo';
 
 import type { AgentTrace } from '@agent/trace';
+import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { isNonEmptyString } from '@utils/core';
@@ -41,14 +42,20 @@ export function supportsGoogleFileUploads(
 interface ResolveGoogleClientParams {
   /** SDK surface label used in debug logs, e.g. `'Native'` or `'Interactions'`. */
   sdkLabel: string;
-  shouldUseServerSideKeys: boolean;
-  getApiKey: () => Promise<string>;
-  getBaseUrl: () => string | null;
+  credential: {
+    readonly apiKey: string;
+    readonly baseUrl: string | null;
+    readonly route: Exclude<ModelCredentialRoute, 'chatgpt-subscription'>;
+  };
   logger: AgentTrace;
   /** Current cached client (server-side keys bypass the cache). */
   cached: GoogleGenAI | null;
   /** Stores a freshly-created client for reuse with personal API keys. */
   setCached: (client: GoogleGenAI) => void;
+  rememberRoute: (
+    client: GoogleGenAI,
+    route: ModelCredentialRoute,
+  ) => GoogleGenAI;
 }
 
 /**
@@ -63,32 +70,26 @@ interface ResolveGoogleClientParams {
 export async function resolveGoogleClient(
   params: ResolveGoogleClientParams,
 ): Promise<GoogleGenAI> {
-  const {
-    sdkLabel,
-    shouldUseServerSideKeys,
-    getApiKey,
-    getBaseUrl,
-    logger,
-    cached,
-    setCached,
-  } = params;
+  const { sdkLabel, credential, logger, cached, setCached, rememberRoute } =
+    params;
 
-  const createClient = async (relayAuth: boolean): Promise<GoogleGenAI> => {
-    const credential = await getApiKey();
-    const baseUrl = getBaseUrl();
+  const createClient = (relayAuth: boolean): GoogleGenAI => {
     logger.debug(
-      `Using Google GenAI ${sdkLabel} SDK${relayAuth ? ' with relay auth' : ''}. Base URL: ${baseUrl}`,
+      `Using Google GenAI ${sdkLabel} SDK${relayAuth ? ' with relay auth' : ''}. Base URL: ${credential.baseUrl}`,
     );
-    return new GoogleGenAI({
-      apiKey: credential,
-      httpOptions: {
-        baseUrl: baseUrl ?? undefined,
-        retryOptions: { attempts: 1 },
-      },
-    });
+    return rememberRoute(
+      new GoogleGenAI({
+        apiKey: credential.apiKey,
+        httpOptions: {
+          baseUrl: credential.baseUrl ?? undefined,
+          retryOptions: { attempts: 1 },
+        },
+      }),
+      credential.route,
+    );
   };
 
-  if (shouldUseServerSideKeys) {
+  if (credential.route === 'relay') {
     return createClient(true);
   }
 
