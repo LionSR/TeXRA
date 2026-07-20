@@ -1,5 +1,6 @@
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { AgentCategoryFilter } from '@shared/schemas';
+import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 
 /**
  * DOM element IDs used across the progress view.
@@ -140,7 +141,7 @@ const DELEGATED_WORK_APPROVAL_TOGGLE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
   icon: 'rocket',
   command: PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
-  title: 'Auto-approve tasks, file edits, and commands in this stream',
+  title: DELEGATION_APPROVAL_COPY.progressViewToggle,
   titleActive:
     'Task, edit, and command auto-approval active — click to resume prompts',
   className: 'super-yolo-toggle-button',
