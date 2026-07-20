@@ -6,7 +6,7 @@ import type {
   AgentEntry,
 } from '@agent/index/agentRegistry';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
-import { applyTeamRosterWithPreflight } from '@controllers/teams/TeamRosterApplication';
+import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';

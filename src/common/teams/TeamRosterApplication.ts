@@ -38,10 +38,12 @@ export interface TeamRosterApplicationDeps {
   readonly catalog: TeamRosterCatalog;
   readonly loadLocalCatalog: () => Promise<void>;
   readonly canAccessRemoteCatalog: () => Promise<boolean>;
+  /** A decision already supplied by a non-interactive caller. */
+  readonly providedChoice?: TeamAvailabilityChoice;
   readonly choose: (
     preset: AgentModePreset,
     unavailableNames: readonly string[],
-  ) => Promise<TeamAvailabilityChoice>;
+  ) => Promise<TeamAvailabilityChoice | undefined>;
   readonly signIn: () => Promise<boolean>;
   readonly forceRefreshRemoteCatalog: () => Promise<void>;
 }
@@ -63,6 +65,7 @@ export async function applyTeamRosterWithPreflight(
       initial.resolution.unresolvedNames,
     ),
     canAccessRemoteCatalog: deps.canAccessRemoteCatalog,
+    providedChoice: deps.providedChoice,
     choose: (names) => deps.choose(initial.preset, names),
     signIn: deps.signIn,
     refresh: async () => {

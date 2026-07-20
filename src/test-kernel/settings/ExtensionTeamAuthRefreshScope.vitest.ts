@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { applyTeamRosterWithPreflight } from '@controllers/teams/TeamRosterApplication';
+import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import {
   resetAgentCatalogAuthRefreshScopeForTests,
   runAfterAgentCatalogAuthRefresh,

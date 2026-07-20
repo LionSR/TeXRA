@@ -18,7 +18,7 @@ import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClien
 import { AUTH_COMMANDS } from '@auth/constants';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { workspaceSM, globalSM } from '@common/state';
-import { applyTeamRosterWithPreflight } from '@controllers/teams/TeamRosterApplication';
+import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
