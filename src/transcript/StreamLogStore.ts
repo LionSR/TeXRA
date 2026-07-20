@@ -1249,7 +1249,11 @@ export class StreamLogStore {
   private drainPendingReleases(): void {
     if (this.pendingRelease.size === 0) return;
     for (const streamId of [...this.pendingRelease]) {
-      if (this.writers.has(streamId) || this.dirtyStreamIds.has(streamId)) {
+      if (
+        this.writers.has(streamId) ||
+        this.dirtyStreamIds.has(streamId) ||
+        this.flushing.has(streamId)
+      ) {
         continue;
       }
       this.pendingRelease.delete(streamId);

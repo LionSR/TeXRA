@@ -381,6 +381,37 @@ describe('StreamLogStore load', () => {
     );
   });
 
+  it('keeps a requested eviction resident until its sequential write finishes', async () => {
+    const storage = mockStorage({
+      logs: {},
+      summaries: {},
+      pauseLogWriteKey: 'alpha',
+    });
+    const store = await StreamLogStore.open();
+    const alphaWriter = store.acquireWriter('alpha', 'execution-alpha');
+    const betaWriter = store.acquireWriter('beta', 'execution-beta');
+    alphaWriter.append(logEntry('alpha', 1, 100));
+    betaWriter.append(logEntry('beta', 1, 200));
+
+    const flush = store.flush();
+    await storage.waitForPausedWrite();
+    store.requestEviction('beta');
+    betaWriter.close();
+
+    // Both dirty bits were moved into the active write batch. The explicit
+    // flushing guard must keep beta resident while the sequential writer is
+    // still blocked on alpha.
+    expect(store.get('beta')?.size).toBe(1);
+
+    storage.releasePausedWrite();
+    await flush;
+    expect(
+      storage.writes.get(storageFile(STREAM_LOGS_DIR, 'beta')),
+    ).toHaveLength(1);
+    expect(store.get('beta')).toBeUndefined();
+    alphaWriter.close();
+  });
+
   it('keeps a same-owner successor valid after an older writer closes', () => {
     const store = StreamLogStore.ephemeral('writer identity test');
     const first = store.acquireWriter('alpha', 'execution-alpha');
