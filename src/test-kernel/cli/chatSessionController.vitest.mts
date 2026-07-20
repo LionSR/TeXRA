@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   executeAgent: vi.fn(),
   runAgent: vi.fn(),
   stopAgentStream: vi.fn(),
+  cancelInteractions: vi.fn(),
   workspaceGet: vi.fn(),
   getExecutionStore: vi.fn(),
   setCliHelperModel: vi.fn(),
@@ -19,6 +20,9 @@ const mocks = vi.hoisted(() => ({
   runtimeHostClose: vi.fn(),
   defaultSession: vi.fn(),
   streamIsActiveOrResuming: vi.fn(),
+  getActiveExecutionIds: vi.fn(),
+  getExecutionHandle: vi.fn(),
+  addExecutionRegistrationListener: vi.fn(),
   detachHostInteractions: vi.fn(),
   attachTerminalResultToast: vi.fn(),
   attachTuiRunFactSubscription: vi.fn(),
@@ -123,10 +127,16 @@ vi.mock('@cli/runtime/sessionResume', () => ({
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { wakeQueuedFollowUpStream } from '@agent/followUp/ToolUseFollowUp';
+import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
+import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { ResumeStreamPorts } from '@agent/runtime/resolveAndResumeStream';
 import type { ResumeQueuedToolUseOptions } from '@agent/runtime/resumeQueuedToolUse';
+import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { readCliRunOutcome } from '@cli/runtime/terminalStatus';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
 import { createChatSessionController } from '@cli/chat/chatSessionController';
@@ -418,6 +428,7 @@ describe('createChatSessionController', () => {
       },
     );
     mocks.stopAgentStream.mockReset();
+    mocks.cancelInteractions.mockReset();
     mocks.workspaceGet.mockReset();
     mocks.workspaceGet.mockReturnValue(false);
     mocks.getExecutionStore.mockReset();
@@ -433,6 +444,11 @@ describe('createChatSessionController', () => {
     mocks.defaultSession.mockReset();
     mocks.streamIsActiveOrResuming.mockReset();
     mocks.streamIsActiveOrResuming.mockReturnValue(false);
+    mocks.getActiveExecutionIds.mockReset();
+    mocks.getActiveExecutionIds.mockReturnValue([]);
+    mocks.getExecutionHandle.mockReset();
+    mocks.addExecutionRegistrationListener.mockReset();
+    mocks.addExecutionRegistrationListener.mockReturnValue(vi.fn());
     mocks.detachHostInteractions.mockReset();
     mocks.attachTerminalResultToast.mockReset();
     mocks.attachTerminalResultToast.mockReturnValue(vi.fn());
@@ -442,11 +458,16 @@ describe('createChatSessionController', () => {
     mocks.createTuiHostInteractions.mockReturnValue({});
     mocks.defaultSession.mockReturnValue({
       useHostInteractions: vi.fn(() => mocks.detachHostInteractions),
-      interactions: {},
+      interactions: { cancel: mocks.cancelInteractions },
       events: { emit: mocks.sessionEventEmit },
       followUps: { enqueue: mocks.followUpEnqueue },
       status: { isActiveOrResuming: mocks.streamIsActiveOrResuming },
-      executions: { stopAgentStream: mocks.stopAgentStream },
+      executions: {
+        stopAgentStream: mocks.stopAgentStream,
+        getActiveIds: mocks.getActiveExecutionIds,
+        getHandle: mocks.getExecutionHandle,
+        addRegistrationListener: mocks.addExecutionRegistrationListener,
+      },
       transcripts: { ensureLoaded: vi.fn(async () => undefined) },
     });
     mocks.resolveAndResumeStream.mockReset();
@@ -487,6 +508,7 @@ describe('createChatSessionController', () => {
     expect(typeof ctrl.startRootRun).toBe('function');
     expect(typeof ctrl.resume).toBe('function');
     expect(typeof ctrl.stop).toBe('function');
+    expect(typeof ctrl.stopStream).toBe('function');
     expect(typeof ctrl.canStartRootRun).toBe('function');
   });
 
@@ -604,6 +626,309 @@ describe('createChatSessionController', () => {
       detachActiveChildren: true,
       runtimeHost,
     });
+  });
+
+  it('stops the focused root while preserving its agent children', () => {
+    const runtimeHost = { emit: vi.fn() };
+    const session = makeSession({
+      streamId: 'root-stream',
+      runtimeHost,
+    });
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    ctrl.stopStream('root-stream');
+
+    expect(session.stopRequested).toBe(true);
+    expect(session.interruptedStreamId).toBe('root-stream');
+    expect(mocks.cancelInteractions).toHaveBeenCalledWith({
+      streamId: 'root-stream',
+      cause: 'Run interrupted.',
+    });
+    expect(mocks.stopAgentStream).toHaveBeenCalledWith('root-stream', {
+      detachActiveChildren: true,
+      runtimeHost,
+    });
+    expect(mocks.workspaceGet).not.toHaveBeenCalled();
+  });
+
+  it('stops one focused child without stopping the root session', () => {
+    const runtimeHost = { emit: vi.fn() };
+    const session = makeSession({
+      streamId: 'root-stream',
+      runtimeHost,
+    });
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    ctrl.stopStream('child-a');
+
+    expect(session.stopRequested).toBe(false);
+    expect(session.interruptedStreamId).toBeUndefined();
+    expect(mocks.cancelInteractions).toHaveBeenCalledWith({
+      streamId: 'child-a',
+      cause: 'Run interrupted.',
+    });
+    expect(mocks.stopAgentStream).toHaveBeenCalledWith('child-a', {
+      detachActiveChildren: true,
+      runtimeHost,
+    });
+  });
+
+  it('keeps detached-child approvals answerable after the stopped root finalizes', async () => {
+    const rootStream = 'root-stream' as StreamTabId;
+    const childStream = 'child-stream' as StreamTabId;
+    const events = new SessionEventHub();
+    const status = new StreamStatusMachine();
+    const executions = new ExecutionRegistry({ events, streamStatus: status });
+    const interactions = new SessionHostInteractions();
+    const adapterDecision = pDefer<{ accepted: boolean }>();
+    const requestBashApproval = vi.fn(() => adapterDecision.promise);
+    const disposeAdapter = vi.fn();
+    const detachResultToast = vi.fn();
+    const detachRunFacts = vi.fn();
+    const runtimeHost = {
+      emit: vi.fn(),
+      close: mocks.runtimeHostClose,
+      attachRunProgressRenderer: vi.fn(() => vi.fn()),
+    } as unknown as CliRuntimeHost;
+    const ownerSession = {
+      useHostInteractions: (adapter: Parameters<typeof interactions.use>[0]) =>
+        interactions.use(adapter),
+      interactions,
+      events,
+      followUps: { enqueue: mocks.followUpEnqueue },
+      approvals: { registerStreamParent: vi.fn() },
+      status,
+      executions,
+      transcripts: { ensureLoaded: vi.fn(async () => undefined) },
+    };
+    mocks.defaultSession.mockReturnValue(ownerSession);
+    mocks.createCliRuntimeHost.mockReturnValue(runtimeHost);
+    mocks.createTuiHostInteractions.mockReturnValue({
+      requestBashApproval,
+      cancel: vi.fn(),
+      dispose: disposeAdapter,
+    });
+    mocks.attachTerminalResultToast.mockReturnValue(detachResultToast);
+    mocks.attachTuiRunFactSubscription.mockReturnValue(detachRunFacts);
+
+    const rootRun = pDefer<{
+      category: 'toolUse';
+      executionId: ExecutionId;
+      outcome: typeof RUN_OUTCOME.CANCELLED;
+      streamId: StreamTabId;
+    }>();
+    mocks.executeAgent.mockImplementationOnce(
+      async (
+        _config: unknown,
+        _executionId: ExecutionId,
+        options: { readonly onStreamResolved?: (id: StreamTabId) => void },
+      ) => {
+        const rootHandle = new AgentExecutionHandle(
+          'root-exec',
+          rootStream,
+          rootStream,
+          'root',
+          'toolUse',
+          runtimeHost,
+        );
+        const childHandle = new AgentExecutionHandle(
+          'child-exec',
+          rootStream,
+          childStream,
+          'child',
+          'toolUse',
+          runtimeHost,
+        );
+        rootHandle.attachInterruptHandler({
+          interrupt: () => {
+            executions.untrack(rootHandle.executionId);
+            rootRun.resolve({
+              category: 'toolUse',
+              executionId: rootHandle.executionId as ExecutionId,
+              outcome: RUN_OUTCOME.CANCELLED,
+              streamId: rootStream,
+            });
+          },
+        });
+        executions.trackAgentExecution(rootHandle, {
+          status: STREAM_PHASE.RUNNING,
+        });
+        executions.trackAgentExecution(childHandle, {
+          status: STREAM_PHASE.RUNNING,
+        });
+        options.onStreamResolved?.(rootStream);
+        return rootRun.promise;
+      },
+    );
+
+    const session = makeSession();
+    const disposers: Array<() => void> = [];
+    const ctrl = createChatSessionController(makeInit({ session, disposers }));
+    ctrl.startRootRun({
+      agent: 'chat',
+      model: 'gpt54',
+      instruction: 'Delegate the calculation.',
+      workingDirectory: '/tmp/test',
+      agentCategory: 'toolUse',
+    });
+    await vi.waitFor(() => expect(session.streamId).toBe(rootStream));
+
+    ctrl.stopStream(rootStream);
+    await session.runPromise;
+
+    expect(session.runCompleted).toBe(true);
+    expect(
+      executions.getAgentHandleByStream(childStream)?.isChildExecution,
+    ).toBe(false);
+    expect(disposeAdapter).not.toHaveBeenCalled();
+    expect(detachResultToast).toHaveBeenCalledOnce();
+    expect(mocks.runtimeHostClose).not.toHaveBeenCalled();
+
+    const approval = interactions.requestBashApproval({
+      command: 'printf child',
+      streamId: childStream,
+    });
+    await vi.waitFor(() => expect(requestBashApproval).toHaveBeenCalledOnce());
+    adapterDecision.resolve({ accepted: true });
+    await expect(approval).resolves.toEqual({ accepted: true });
+
+    executions.untrack('child-exec');
+    await vi.waitFor(() => {
+      expect(disposeAdapter).toHaveBeenCalledOnce();
+      expect(mocks.runtimeHostClose).toHaveBeenCalledOnce();
+    });
+    expect(detachResultToast).toHaveBeenCalledOnce();
+    expect(detachRunFacts).not.toHaveBeenCalled();
+
+    for (const dispose of disposers) dispose();
+    expect(detachRunFacts).toHaveBeenCalledOnce();
+    expect(disposeAdapter).toHaveBeenCalledOnce();
+    executions.dispose();
+  });
+
+  it('does not overlap terminal-result presenters across surviving host generations', async () => {
+    const hostA = { emit: vi.fn(), close: vi.fn() };
+    const hostB = { emit: vi.fn(), close: vi.fn() };
+    const resultPresenters = new Set<(message: string) => void>();
+    mocks.createCliRuntimeHost
+      .mockReturnValueOnce(hostA)
+      .mockReturnValueOnce(hostB);
+    mocks.attachTerminalResultToast.mockImplementation(
+      (_session: unknown, host: typeof hostA) => {
+        const present = (message: string) =>
+          host.emit('requestShowError', { message });
+        resultPresenters.add(present);
+        return () => resultPresenters.delete(present);
+      },
+    );
+    mocks.getActiveExecutionIds.mockReturnValue(['child-a']);
+    mocks.getExecutionHandle.mockReturnValue({ runtimeHost: hostA });
+
+    const runA = pDefer<{
+      category: 'toolUse';
+      executionId: ExecutionId;
+      outcome: typeof RUN_OUTCOME.CANCELLED;
+      streamId: StreamTabId;
+    }>();
+    const runB = pDefer<{
+      category: 'toolUse';
+      executionId: ExecutionId;
+      outcome: typeof RUN_OUTCOME.FAILED;
+      streamId: StreamTabId;
+    }>();
+    mocks.runAgent
+      .mockReturnValueOnce(runA.promise)
+      .mockReturnValueOnce(runB.promise);
+
+    const session = makeSession();
+    const ctrl = createChatSessionController(makeInit({ session }));
+    const config = {
+      agent: 'chat',
+      model: 'gpt54',
+      instruction: 'Check presenter ownership.',
+      workingDirectory: '/tmp/test',
+      agentCategory: 'toolUse' as const,
+    };
+    ctrl.startRootRun(config);
+    session.streamId = 'root-a' as StreamTabId;
+    ctrl.stopStream('root-a' as StreamTabId);
+    for (const present of resultPresenters) present('Failure A');
+    runA.resolve({
+      category: 'toolUse',
+      executionId: 'exec-a' as ExecutionId,
+      outcome: RUN_OUTCOME.CANCELLED,
+      streamId: 'root-a' as StreamTabId,
+    });
+    await session.runPromise;
+
+    expect(resultPresenters).toHaveLength(0);
+    expect(hostA.close).not.toHaveBeenCalled();
+
+    ctrl.startRootRun(config);
+    await vi.waitFor(() => expect(mocks.runAgent).toHaveBeenCalledTimes(2));
+    expect(mocks.attachTerminalResultToast).toHaveBeenCalledTimes(2);
+    expect(session.runCompleted).toBe(false);
+    await vi.waitFor(() => expect(resultPresenters).toHaveLength(1));
+    for (const present of resultPresenters) present('Failure B');
+    runB.resolve({
+      category: 'toolUse',
+      executionId: 'exec-b' as ExecutionId,
+      outcome: RUN_OUTCOME.FAILED,
+      streamId: 'root-b' as StreamTabId,
+    });
+    await session.runPromise;
+
+    expect(hostA.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
+      message: 'Failure A',
+    });
+    expect(hostB.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
+      message: 'Failure B',
+    });
+    expect(hostA.close).not.toHaveBeenCalled();
+    expect(hostB.close).toHaveBeenCalledOnce();
+    expect(resultPresenters).toHaveLength(0);
+  });
+
+  it('cannot miss the final survivor untracking at host-listener registration', async () => {
+    const runtimeHost = {
+      emit: vi.fn(),
+      close: mocks.runtimeHostClose,
+    } as unknown as CliRuntimeHost;
+    const detachRegistrationListener = vi.fn();
+    let childActive = true;
+    mocks.createCliRuntimeHost.mockReturnValue(runtimeHost);
+    mocks.getActiveExecutionIds.mockImplementation(() =>
+      childActive ? ['child-exec'] : [],
+    );
+    mocks.getExecutionHandle.mockImplementation(() =>
+      childActive ? { runtimeHost } : undefined,
+    );
+    mocks.addExecutionRegistrationListener.mockImplementation(
+      (listener: () => void) => {
+        // Adversarial boundary: the final survivor disappears while the
+        // listener is being installed, before the initial liveness check.
+        childActive = false;
+        listener();
+        return detachRegistrationListener;
+      },
+    );
+
+    const session = makeSession();
+    const ctrl = createChatSessionController(makeInit({ session }));
+    ctrl.startRootRun({
+      agent: 'chat',
+      model: 'gpt54',
+      instruction: 'Check listener registration.',
+      workingDirectory: '/tmp/test',
+      agentCategory: 'toolUse',
+    });
+    await session.runPromise;
+
+    expect(session.runCompleted).toBe(true);
+    expect(mocks.addExecutionRegistrationListener).toHaveBeenCalledOnce();
+    expect(mocks.runtimeHostClose).toHaveBeenCalledOnce();
+    expect(mocks.detachHostInteractions).toHaveBeenCalledOnce();
+    expect(detachRegistrationListener).toHaveBeenCalledOnce();
   });
 
   it('reserves the root-run slot before tryResumeStream awaits persisted state', async () => {

@@ -140,11 +140,17 @@ export interface AppProps {
   readonly onSkipExecution: (executionId: string) => void;
   /** Retry a focused, in-flight workflow-script grandchild `agent()` call. */
   readonly onRetryExecution: (executionId: string) => void;
+  /** Whether Ctrl-C may stop the current root run. */
   readonly canInterruptActiveRun: () => boolean;
+  /** Whether bare Escape may stop the identified focused stream. */
+  readonly canInterruptStream: (streamId: StreamTabId) => boolean;
   readonly canStopActiveRun?: () => boolean;
   readonly colorEnabled?: boolean;
   readonly commandName?: string;
+  /** Apply the existing root-run interruption used by Ctrl-C. */
   readonly onInterruptActive: () => void;
+  /** Stop only the focused stream captured by bare Escape. */
+  readonly onInterruptStream: (streamId: StreamTabId) => void;
   readonly onStaticTranscriptChange?: () => void;
   readonly onCtrlC?: () => void;
   /** Suspend the process (Ctrl-Z). Raw mode swallows the tty driver's own
@@ -230,21 +236,21 @@ export function App(props: AppProps): React.JSX.Element {
     inputDisabled: appInputDisabled,
     reverseSearchOpen,
     slashPaletteOpen,
-    canInterruptActiveRun: props.canInterruptActiveRun,
-    onInterruptActive: props.onInterruptActive,
+    canInterruptStream: props.canInterruptStream,
+    onInterruptStream: props.onInterruptStream,
   });
   useLayoutEffect(() => {
     escapeInterruptStateRef.current = {
       inputDisabled: appInputDisabled,
       reverseSearchOpen,
       slashPaletteOpen,
-      canInterruptActiveRun: props.canInterruptActiveRun,
-      onInterruptActive: props.onInterruptActive,
+      canInterruptStream: props.canInterruptStream,
+      onInterruptStream: props.onInterruptStream,
     };
   }, [
     appInputDisabled,
-    props.canInterruptActiveRun,
-    props.onInterruptActive,
+    props.canInterruptStream,
+    props.onInterruptStream,
     reverseSearchOpen,
     slashPaletteOpen,
   ]);
@@ -492,15 +498,20 @@ export function App(props: AppProps): React.JSX.Element {
       reverseSearchOpen,
       slashPaletteOpen,
     });
-  const pendingEscapeInterruptTimer = useRef<
-    ReturnType<typeof setTimeout> | undefined
+  const pendingEscapeInterrupt = useRef<
+    | {
+        readonly streamId: StreamTabId;
+        readonly timer: ReturnType<typeof setTimeout>;
+      }
+    | undefined
   >(undefined);
   const inputBarRef = useRef<InputBarHandle>(null);
 
   const clearPendingEscapeInterrupt = () => {
-    if (pendingEscapeInterruptTimer.current === undefined) return;
-    clearTimeout(pendingEscapeInterruptTimer.current);
-    pendingEscapeInterruptTimer.current = undefined;
+    const pending = pendingEscapeInterrupt.current;
+    if (pending === undefined) return;
+    clearTimeout(pending.timer);
+    pendingEscapeInterrupt.current = undefined;
   };
 
   useEffect(() => {
@@ -558,12 +569,13 @@ export function App(props: AppProps): React.JSX.Element {
       });
   };
 
-  const scheduleEscapeInterrupt = () => {
+  const scheduleEscapeInterrupt = (streamId: StreamTabId) => {
     clearPendingEscapeInterrupt();
-    pendingEscapeInterruptTimer.current = setTimeout(() => {
-      pendingEscapeInterruptTimer.current = undefined;
-      triggerEscapeInterrupt(escapeInterruptStateRef.current);
+    const timer = setTimeout(() => {
+      pendingEscapeInterrupt.current = undefined;
+      triggerEscapeInterrupt(escapeInterruptStateRef.current, streamId);
     }, ESC_META_CHORD_INTERRUPT_DELAY_MS);
+    pendingEscapeInterrupt.current = { streamId, timer };
   };
 
   // Single App-level keyboard entry point. Ink broadcasts every keystroke to all
@@ -571,7 +583,8 @@ export function App(props: AppProps): React.JSX.Element {
   // handler (gating internally) is clearer than several hooks racing on the same
   // chord. Stays mounted so Ctrl+C works even while a modal/form owns the input.
   useInput((input, key) => {
-    if (pendingEscapeInterruptTimer.current !== undefined) {
+    const pendingEscape = pendingEscapeInterrupt.current;
+    if (pendingEscape !== undefined) {
       clearPendingEscapeInterrupt();
       if (
         !key.ctrl &&
@@ -580,7 +593,10 @@ export function App(props: AppProps): React.JSX.Element {
         input.length > 0
       ) {
         if (handleMetaShortcut(input)) return;
-        triggerEscapeInterrupt(escapeInterruptStateRef.current);
+        triggerEscapeInterrupt(
+          escapeInterruptStateRef.current,
+          pendingEscape.streamId,
+        );
         return;
       }
     }
@@ -650,10 +666,12 @@ export function App(props: AppProps): React.JSX.Element {
     // Escape interrupts an active run.
     if (
       isEscapeInput(input, key) &&
+      activeStreamId !== undefined &&
       appEscapeInterruptActive({
         inputDisabled: escapeInterruptStateRef.current.inputDisabled,
         reverseSearchOpen: escapeInterruptStateRef.current.reverseSearchOpen,
-        runPending: escapeInterruptStateRef.current.canInterruptActiveRun(),
+        runPending:
+          escapeInterruptStateRef.current.canInterruptStream(activeStreamId),
         slashPaletteOpen: escapeInterruptStateRef.current.slashPaletteOpen,
       })
     ) {
@@ -663,10 +681,10 @@ export function App(props: AppProps): React.JSX.Element {
           streamFocusAvailable: sessionViews.length > 0,
         })
       ) {
-        scheduleEscapeInterrupt();
+        scheduleEscapeInterrupt(activeStreamId);
         return;
       }
-      triggerEscapeInterrupt(escapeInterruptStateRef.current);
+      triggerEscapeInterrupt(escapeInterruptStateRef.current, activeStreamId);
     }
   });
 
