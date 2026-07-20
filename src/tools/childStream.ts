@@ -156,9 +156,9 @@ export function createChildStream(
     runTrace.trace,
   );
   if (options.toolName) handle.toolName = options.toolName;
-  // Both facts above fire before the handle is tracked, so a session that
-  // rebinds this child later can only replay them from the handle (#8258).
-  handle.initialRunFacts = { config: options.config, description };
+  // The process-owned snapshot listener persists both facts before handle
+  // tracking; a later presentation replays them from the snapshot store during
+  // canonical state loading (#8258).
   session.executions.trackAgentExecution(handle, {
     status: STREAM_PHASE.RUNNING,
   });

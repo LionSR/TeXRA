@@ -9,11 +9,7 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import {
-  SessionHandle,
-  defaultSession,
-  getAllActiveExecutionIds,
-} from '@agent/runtime/SessionHandle';
+import { SessionHandle, defaultSession } from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { MESSAGE_TYPES, type Plan, type StreamTabId } from '@shared/schemas';
@@ -30,44 +26,6 @@ import {
 import { createRecordingHost } from '../progressTestUtils';
 
 const plan: Plan = { objective: 'Scope session-owned state.' };
-
-describe('cross-session active executions (SDK Step 7d PR 4)', () => {
-  it('aggregates active execution ids across live sessions and drops them on dispose', () => {
-    const a = createTestSession();
-    const b = createTestSession();
-    const { host } = createRecordingHost();
-    const track = (session: SessionHandle, id: string): void => {
-      session.executions.track(
-        new AgentExecutionHandle(
-          id,
-          `${id}-stream` as StreamTabId,
-          `${id}-stream` as StreamTabId,
-          'orchestrator',
-          'toolUse',
-          host,
-        ),
-      );
-    };
-
-    try {
-      track(a, 'exec:agg-a');
-      track(b, 'exec:agg-b');
-
-      const ids = getAllActiveExecutionIds();
-      expect(ids).toContain('exec:agg-a');
-      expect(ids).toContain('exec:agg-b');
-
-      // Disposing one session removes only its executions from the aggregate.
-      a.dispose();
-      const after = getAllActiveExecutionIds();
-      expect(after).not.toContain('exec:agg-a');
-      expect(after).toContain('exec:agg-b');
-    } finally {
-      a.dispose();
-      b.dispose();
-    }
-  });
-});
 
 describe('session-scoped trace flushers (SDK Step 7d PR 3)', () => {
   it('registers the flush in the run session set, not the default set', () => {
@@ -218,14 +176,14 @@ describe('cleanupAllApprovals scope (SDK Step 7d PR 3)', () => {
 
 describe('sendFollowUp host-path session routing (SDK Step 7d PR 4)', () => {
   it('resolves the follow-up target against the passed session, not the process default', async () => {
-    const windowSession = createTestSession();
+    const processSession = createTestSession();
     const { host } = createRecordingHost();
     const parentStream = 'stream:fu-parent' as StreamTabId;
 
     try {
-      // A child run is tracked in the per-window session, exactly as a desktop
-      // run is after PR 4 (launched with { session: this.session }).
-      windowSession.executions.track(
+      // A child run is tracked in the explicit process session, as desktop
+      // composition does instead of using the module default.
+      processSession.executions.track(
         new AgentExecutionHandle(
           'exec:fu-child',
           parentStream,
@@ -237,14 +195,14 @@ describe('sendFollowUp host-path session routing (SDK Step 7d PR 4)', () => {
       );
 
       // A host-path caller (outside any run ALS, like the desktop IPC handler)
-      // that passes its window session sees the live child and queues.
+      // that passes its process session sees the live child and queues.
       await expect(
         sendFollowUp(
           parentStream,
           'continue',
           undefined,
           undefined,
-          windowSession,
+          processSession,
         ),
       ).resolves.toEqual({ status: 'queued', reason: 'children_running' });
 
@@ -256,8 +214,8 @@ describe('sendFollowUp host-path session routing (SDK Step 7d PR 4)', () => {
         streamStatus: undefined,
       });
     } finally {
-      windowSession.followUps.release(parentStream);
-      windowSession.dispose();
+      processSession.followUps.release(parentStream);
+      processSession.dispose();
     }
   });
 });

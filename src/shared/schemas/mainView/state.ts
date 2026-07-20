@@ -63,13 +63,16 @@ const ModelAvailabilityKindSchema = z.enum([
 export type ModelAvailabilityKind = z.infer<typeof ModelAvailabilityKindSchema>;
 
 /**
- * Resolved per-model availability under the active API mode. Computed once by
+ * Resolved per-model access under the active API mode. Computed once by
  * `computeModelOptionsData` and shared verbatim across hosts (CLI picker,
- * extension Models tab) so availability is never re-derived at render time.
+ * extension Models tab) so availability and routing are never re-derived at
+ * render time.
  */
 export const ModelAvailabilityFieldsSchema = z.object({
   availability: ModelAvailabilityKindSchema.optional(),
   availabilityLabel: z.string().optional(),
+  /** Effective request route for a model that can use multiple backends. */
+  routeLabel: z.string().optional(),
   requiresKey: z.boolean().optional(),
   disabled: z.boolean().optional(),
 });

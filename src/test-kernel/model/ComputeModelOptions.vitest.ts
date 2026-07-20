@@ -518,6 +518,7 @@ describe('computeModelOptionsData Kimi Code routing (dual-backend kimi3)', () =>
     );
     expect(model).toMatchObject({
       provider: 'moonshot',
+      routeLabel: 'Via Moonshot',
       availability: 'provider-key',
       disabled: false,
     });
@@ -533,6 +534,7 @@ describe('computeModelOptionsData Kimi Code routing (dual-backend kimi3)', () =>
     // the conservative tier context cap, not the open platform's 1M / paid rate.
     expect(model).toMatchObject({
       provider: 'kimiCode',
+      routeLabel: 'Via Kimi Code',
       availability: 'provider-key',
       disabled: false,
       cost: '$0.000/$0.000',
@@ -547,7 +549,30 @@ describe('computeModelOptionsData Kimi Code routing (dual-backend kimi3)', () =>
     );
     expect(model).toMatchObject({
       provider: 'moonshot',
+      routeLabel: 'Via Moonshot',
       availability: 'provider-key',
+      disabled: false,
+    });
+  });
+
+  it('reports OpenRouter without changing the Kimi K3 registry identity', async () => {
+    const access = {
+      ...createModelOptionsAccess(
+        {
+          useIncludedAccess: false,
+          relayQuotaExceeded: false,
+          quotaAutoSwitched: false,
+        },
+        { [apiKeySecretName('openRouter')]: 'sk-openrouter' },
+      ),
+      useOpenRouter: true,
+    };
+    const [model] = await computeModelOptionsData(['kimi3'], access);
+
+    expect(model).toMatchObject({
+      provider: 'moonshot',
+      routeLabel: 'Via OpenRouter',
+      availability: 'openrouter-key',
       disabled: false,
     });
   });

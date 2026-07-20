@@ -63,6 +63,7 @@ import {
   selectTranscriptEntriesForViewport,
 } from '@cli/chat/tui/panes/transcriptViewport';
 import { splitTranscriptEntries } from '@cli/chat/tui/panes/transcriptEntries';
+import { transcriptEntryLayout } from '@cli/chat/tui/panes/transcriptEntryLayout';
 import { renderAnsiMarkdown } from '@cli/chat/tui/render/ansiMarkdown';
 import {
   chatTuiCanInterruptActiveRun,
@@ -1475,6 +1476,163 @@ describe('CLI transcript state', () => {
       role: 'error',
       text: 'Model request failed',
       finalized: true,
+    });
+  });
+
+  it('shows the canonical safe reason below a model-request failure', () => {
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
+    logger.error('Model request failed (no retry available)', {
+      messageType: MESSAGE_TYPES.ERROR,
+      data: {
+        message: 'HTTP 400 Bad Request – status code without a body',
+        provider: 'openai',
+        userRetryable: false,
+        rawErrorBody: { apiKey: 'secret-must-not-render' },
+      },
+    });
+
+    syncStreamLog(root);
+
+    const entries = streams.get().get(root)?.entries ?? [];
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      role: 'error',
+      text: [
+        'Model request failed (no retry available)',
+        '⎿ HTTP 400 Bad Request – status code without a body',
+      ].join('\n'),
+      finalized: true,
+    });
+    expect(entries[0]?.text).not.toContain('secret-must-not-render');
+    expect(transcriptEntryLayout(entries[0]!, { width: 80 }).lines).toEqual([
+      '! Model request failed (no retry available)',
+      '  ⎿ HTTP 400 Bad Request – status code without a body',
+    ]);
+  });
+
+  it('keeps the error summary when structured error data is malformed', () => {
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
+    logger.error('Model request failed', {
+      messageType: MESSAGE_TYPES.ERROR,
+      data: {
+        message: { nested: 'not a canonical message' },
+        rawErrorBody: { apiKey: 'secret-must-not-render' },
+        userRetryable: 'sometimes',
+      },
+    });
+
+    syncStreamLog(root);
+
+    const entries = streams.get().get(root)?.entries ?? [];
+    expect(entries[0]?.text).toBe('Model request failed');
+  });
+
+  it('removes terminal control sequences from model-error reasons', () => {
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
+    logger.error('Model request failed', {
+      messageType: MESSAGE_TYPES.ERROR,
+      data: {
+        message:
+          '\u001b[31mProvider failed\u001b[0m\u0007 \n retry later\u0085',
+        userRetryable: false,
+      },
+    });
+
+    syncStreamLog(root);
+
+    const text = streams.get().get(root)?.entries[0]?.text ?? '';
+    expect(text).toBe('Model request failed\n⎿ Provider failed retry later');
+    expect(text).not.toContain('\u001b');
+    expect(text).not.toContain('\u0007');
+    expect(text).not.toContain('\u0085');
+  });
+
+  it('redacts credentials embedded in the canonical provider message', () => {
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
+    const secret = 'sk-provider-redaction-example-1234567890abcdef';
+    const ansiSplitSecret = `${secret.slice(0, 12)}\u001b[31m${secret.slice(12)}\u001b[0m`;
+    logger.error(`Model request failed with Bearer ${ansiSplitSecret}`, {
+      messageType: MESSAGE_TYPES.ERROR,
+      data: {
+        message: `Connection failed with API_KEY=${ansiSplitSecret} and Bearer ${ansiSplitSecret}`,
+        userRetryable: false,
+      },
+    });
+
+    syncStreamLog(root);
+
+    const text = streams.get().get(root)?.entries[0]?.text ?? '';
+    expect(text).toContain('Model request failed with Bearer [redacted]');
+    expect(text).toContain('API_KEY=[redacted]');
+    expect(text).toContain('Bearer [redacted]');
+    expect(text).not.toContain(secret);
+  });
+
+  it('collapses and bounds long multiline model-error reasons', () => {
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
+    logger.error('Model request failed', {
+      messageType: MESSAGE_TYPES.ERROR,
+      data: {
+        message: `First line\n  second line\t${'x'.repeat(300)}`,
+        userRetryable: false,
+      },
+    });
+
+    syncStreamLog(root);
+
+    const entries = streams.get().get(root)?.entries ?? [];
+    const lines = entries[0]?.text.split('\n') ?? [];
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toMatch(/^⎿ First line second line x+…$/);
+    expect([...lines[1]!.slice('⎿ '.length)]).toHaveLength(240);
+  });
+
+  it('adds the personal-API hint once from structured relay-limit data', () => {
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
+    logger.error('Model request failed', {
+      messageType: MESSAGE_TYPES.ERROR,
+      data: {
+        message: `${'x'.repeat(300)} Monthly spending limit reached.`,
+        exhaustionReason: 'relay-limit',
+        userRetryable: false,
+      },
+    });
+
+    syncStreamLog(root);
+    syncStreamLog(root);
+
+    const text = streams.get().get(root)?.entries[0]?.text ?? '';
+    expect(text).toContain('\n⎿ ');
+    expect(text).not.toContain('Monthly spending limit reached.');
+    expect(text.match(/\/api personal/g)).toHaveLength(1);
+  });
+
+  it('keeps actual tool failures on the tool-row renderer', () => {
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
+    logger.error('Actual tool failed', {
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      data: {
+        toolName: 'bash',
+        input: { command: 'false' },
+        error: 'The shell command exited with status 1.',
+        status: 'failed',
+        message: 'must not become a model-error continuation',
+      },
+    });
+
+    syncStreamLog(root);
+
+    const entries = streams.get().get(root)?.entries ?? [];
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      role: 'tool',
+      text: '',
+      toolUse: {
+        toolName: 'bash',
+        errorText: 'The shell command exited with status 1.',
+        isError: true,
+        status: 'failed',
+      },
     });
   });
 

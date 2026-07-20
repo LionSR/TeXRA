@@ -1,3 +1,6 @@
+// Node imports
+import { access } from 'node:fs/promises';
+
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,6 +20,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { DESKTOP_SHELL_COMMANDS } from '@desktop/desktopShellMessages';
+import type { AgentResumePort } from '@platform/interfaces';
 import {
   AgentCategory,
   LOG_LEVELS,
@@ -25,6 +29,8 @@ import {
   STREAM_PHASE,
   STREAM_STATUS,
   type ExecutionId,
+  type OutputFileInfo,
+  type StorageKey,
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
@@ -56,13 +62,20 @@ import {
 } from './desktopAgentExecutionTestHarness.mjs';
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
+type WakeQueuedFollowUpStream =
+  typeof import('@agent/followUp/ToolUseFollowUp').wakeQueuedFollowUpStream;
+type DesktopProgressBridgeOptions =
+  import('@desktop/main/desktopAgentExecution').DesktopProgressBridgeOptions;
+
 type Bridge = {
   openFileCompile(filePath: string): Promise<void>;
-  flush(): Promise<void>;
   dispose(): void;
 };
 
 type TestableBridge = Bridge & {
+  fileActions: {
+    host: { startExecution(request: unknown): void };
+  };
   hostInteractions: {
     submitPlanDecision(
       requestId: string,
@@ -111,6 +124,7 @@ type TestableBridge = Bridge & {
 
 type BridgeWithSession = TestableBridge & {
   session: {
+    executions: SessionHandle['executions'];
     interactions: {
       cancel(selector?: { cause?: string }): void;
       requestPlanApproval?: (request: {
@@ -183,13 +197,15 @@ type CreateBridgeOptions = {
   configureProgressSnapshotStore?: (
     store: ProgressSnapshotStore,
   ) => Promise<void> | void;
+  configureSession?: (session: SessionHandle) => Promise<void> | void;
   deferReady?: boolean;
-  afterCanonicalLoad?: () => Promise<void>;
   detectWaitingStreams?: ReturnType<typeof vi.fn>;
   repairRestartedStreams?: ReturnType<typeof vi.fn>;
-  activeExecutionIds?: readonly string[] | (() => readonly string[]);
+  wakeQueuedFollowUpStream?: WakeQueuedFollowUpStream;
   showErrorMessage?: (message: string) => Promise<void> | void;
+  showInfoMessage?: (message: string) => Promise<void> | void;
   openPath?: (filePath: string, line?: number) => Promise<void>;
+  observeRendererMessage?: (message: unknown) => void;
   /** Captures `this.logger.error(...)` calls made by the bridge under test. */
   loggerErrorSpy?: ReturnType<typeof vi.fn<AgentTrace['error']>>;
 };
@@ -199,6 +215,7 @@ type ProgressMessage = {
   action?: string;
   kind?: string;
   activeStream?: string;
+  agentFilter?: string;
   stream?: string;
   streamId?: string;
   todos?: unknown[];
@@ -218,6 +235,7 @@ type ProgressMessage = {
     compileFailures: Record<string, unknown>;
   };
   activeState?: unknown;
+  permission?: { data?: { approvalId?: string } };
 };
 
 /** Shared fixture for the tool-use "search" agentConfig used across several
@@ -238,16 +256,27 @@ const SEARCH_TOOL_USE_AGENT_CONFIG = AgentConfigSchema.parse({
 async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   bridgeModule: DesktopAgentExecutionModule;
   openTranscripts(): Promise<StreamLogStore>;
+  createSession(transcripts: StreamLogStore): SessionHandle;
   createProgressSnapshotStore(): ProgressSnapshotStore;
+  processResumeOwner: import('@desktop/main/desktopAgentResume').DesktopProcessResumeOwner;
   progressSnapshotStore: ProgressSnapshotStore;
 }> {
   vi.resetModules();
   const kvStoreBacking = options.kvStoreBacking ?? new Map<string, unknown>();
+  let resumeDelegate: AgentResumePort = {
+    tryResumeStream: async () => false,
+    isResumeInFlight: () => false,
+  };
+  const agentResume: AgentResumePort = {
+    tryResumeStream: (streamId) => resumeDelegate.tryResumeStream(streamId),
+    isResumeInFlight: (streamId) =>
+      resumeDelegate.isResumeInFlight?.(streamId) ?? false,
+  };
   const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
     import('@platform/platform'),
     import('@test/support/FakePlatform'),
   ]);
-  initPlatform(createFakePlatform());
+  initPlatform(createFakePlatform({}, { agentResume }));
   vi.doMock('@agent/runtime/SessionResumeRetrieval', () => ({
     retrieveSessionResumeData:
       options.retrieveSessionResumeData ?? vi.fn(async () => null),
@@ -259,19 +288,6 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   vi.doMock('@agent/runtime/runAgent', () => ({
     runAgent: options.runAgent ?? vi.fn(),
   }));
-  vi.doMock('@agent/runtime/SessionHandle', async () => {
-    const actual = await vi.importActual<
-      typeof import('@agent/runtime/SessionHandle')
-    >('@agent/runtime/SessionHandle');
-    return {
-      ...actual,
-      getAllActiveExecutionIds: vi.fn(() =>
-        typeof options.activeExecutionIds === 'function'
-          ? options.activeExecutionIds()
-          : (options.activeExecutionIds ?? []),
-      ),
-    };
-  });
   vi.doMock('@agent/storage/detectWaitingStreams', () => ({
     detectWaitingStreams:
       options.detectWaitingStreams ?? vi.fn(async () => new Set()),
@@ -409,15 +425,21 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   const bridgeModule = (await import(
     moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
   )) as DesktopAgentExecutionModule;
-  const { initializeDefaultSession } =
+  const { DesktopProcessResumeOwner } =
+    await import('@desktop/main/desktopAgentResume');
+  const processResumeOwner = new DesktopProcessResumeOwner();
+  resumeDelegate = processResumeOwner;
+  const { initializeDefaultSession, SessionHandle } =
     await import('@agent/runtime/SessionHandle');
   initializeDefaultSession({
     transcripts: StreamLogStore.ephemeral('desktop module test default'),
   });
   return {
     bridgeModule,
+    createSession: (transcripts) => new SessionHandle({ transcripts }),
     createProgressSnapshotStore,
     openTranscripts: () => StreamLogStore.open(),
+    processResumeOwner,
     progressSnapshotStore,
   };
 }
@@ -426,40 +448,80 @@ async function createBridge(
   messages: unknown[],
   options: CreateBridgeOptions = {},
 ): Promise<TestableBridge> {
-  const { bridgeModule, openTranscripts, progressSnapshotStore } =
-    await loadBridgeModule(options);
+  const {
+    bridgeModule,
+    createSession,
+    openTranscripts,
+    processResumeOwner,
+    progressSnapshotStore,
+  } = await loadBridgeModule(options);
   const transcripts = await openTranscripts();
   for (const streamId of options.canonicalStreamIds ?? []) {
     transcripts.ensureStream(streamId);
   }
   await options.configureTranscripts?.(transcripts);
   await transcripts.flush();
+  await progressSnapshotStore.load(transcripts.keys());
   if (options.configureProgressSnapshotStore) {
-    await progressSnapshotStore.load(transcripts.keys());
     await options.configureProgressSnapshotStore(progressSnapshotStore);
     await progressSnapshotStore.flush();
   }
-  const bridge = disposeAfterTest(
-    new bridgeModule.DesktopProgressBridge(
-      (message) => {
-        messages.push(message);
-      },
-      {
-        transcripts,
-        logger: options.loggerErrorSpy
-          ? { ...noopTrace, error: options.loggerErrorSpy }
-          : undefined,
-        progressSnapshotStore,
-        afterCanonicalLoad: options.afterCanonicalLoad,
-        host: createStubDesktopAgentExecutionHost({
-          ...(options.showErrorMessage
-            ? { showErrorMessage: options.showErrorMessage }
-            : {}),
-          ...(options.openPath ? { openPath: options.openPath } : {}),
-        }),
-      },
-    ) as unknown as TestableBridge,
+  const session = createSession(transcripts);
+  const { SessionStores } =
+    await import('@controllers/progressView/backend/state/SessionStores');
+  const { releaseStreamResources } = await import('@tools/approval');
+  const { GoalStore: bridgeGoalStore } = await import('@tools/goal');
+  const sessionStores = new SessionStores({
+    streamLogs: transcripts,
+    snapshots: progressSnapshotStore,
+    goalEntries: {
+      forget: (stream) => bridgeGoalStore.forget(stream, session),
+      forgetMany: (streams) => bridgeGoalStore.forgetMany(streams, session),
+    },
+    onCanonicalStreamDeleted: (stream) => {
+      session.status.clearStream(stream);
+      releaseStreamResources(stream, session);
+    },
+  });
+  const disposeResumeHandler = processResumeOwner.attach({
+    session,
+    snapshots: progressSnapshotStore,
+  });
+  const detachSnapshotEvents = progressSnapshotStore.attachSessionEvents(
+    session.events,
   );
+  await options.configureSession?.(session);
+  const bridge = new bridgeModule.DesktopProgressBridge(
+    (message) => {
+      options.observeRendererMessage?.(message);
+      messages.push(message);
+    },
+    {
+      session,
+      sessionStores,
+      logger: options.loggerErrorSpy
+        ? { ...noopTrace, error: options.loggerErrorSpy }
+        : undefined,
+      progressSnapshotStore,
+      host: createStubDesktopAgentExecutionHost({
+        ...(options.showErrorMessage
+          ? { showErrorMessage: options.showErrorMessage }
+          : {}),
+        ...(options.showInfoMessage
+          ? { showInfoMessage: options.showInfoMessage }
+          : {}),
+        ...(options.openPath ? { openPath: options.openPath } : {}),
+      }),
+    },
+  ) as unknown as TestableBridge;
+  disposeAfterTest({
+    dispose: () => {
+      bridge.dispose();
+      disposeResumeHandler();
+      detachSnapshotEvents();
+      session.dispose();
+    },
+  });
   if (!options.deferReady) await bridge.waitUntilReady();
   return bridge;
 }
@@ -619,7 +681,7 @@ describe('DesktopProgressBridge', () => {
     vi.restoreAllMocks();
   });
 
-  it('routes session facts to the window-local desktop backend', async () => {
+  it('routes process-session facts to the attached desktop backend', async () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
 
@@ -1080,6 +1142,66 @@ describe('DesktopProgressBridge', () => {
     });
   });
 
+  it('starts a fresh process session on restart and repairs waiting and orphaned streams', async () => {
+    const waitingStream = 'restart-waiting' as StreamTabId;
+    const orphanedStream = 'restart-orphaned' as StreamTabId;
+    const executionId = 'ec0e57a7' as ExecutionId;
+    const kvStoreBacking = new Map<string, unknown>();
+    const first = await createBridge([], { kvStoreBacking });
+    const firstSession = (first as unknown as { session: SessionHandle })
+      .session;
+    const firstSnapshots = (
+      first as unknown as {
+        state: { snapshots: ProgressSnapshotStore };
+      }
+    ).state.snapshots;
+    const taskState = workflowTaskState();
+
+    appendRunningGroup(
+      first.streamLogs as unknown as StreamLogStore,
+      waitingStream,
+    );
+    appendRunningGroup(
+      first.streamLogs as unknown as StreamLogStore,
+      orphanedStream,
+    );
+    firstSnapshots.setTaskState(waitingStream, taskState, executionId);
+    const { getExecutionStore } = await import('@agent/storage');
+    await getExecutionStore(executionId).writeConfig(taskState.agentConfig);
+    await firstSnapshots.flush();
+    await firstSession.flushArtifacts();
+    first.dispose();
+    firstSession.dispose();
+
+    const detectWaitingStreams = vi.fn(async () => new Set([waitingStream]));
+    const second = await createBridge([], {
+      kvStoreBacking,
+      detectWaitingStreams,
+    });
+    const secondSession = (second as unknown as { session: SessionHandle })
+      .session;
+
+    expect(secondSession).not.toBe(firstSession);
+    expect(secondSession.executions).not.toBe(firstSession.executions);
+    expect(detectWaitingStreams).toHaveBeenCalledWith(
+      new Map([[waitingStream, executionId]]),
+    );
+    expect(bridgeStatus(second).get(waitingStream)).toBe(STREAM_PHASE.WAITING);
+    expect(
+      second.streamLogs.get(waitingStream)?.getRange(0).at(-1),
+    ).toMatchObject({
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+      data: { status: RUN_OUTCOME.CANCELLED },
+    });
+    expect(
+      second.streamLogs.get(orphanedStream)?.getRange(0).at(-1),
+    ).toMatchObject({
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+      data: { status: RUN_OUTCOME.FAILED },
+    });
+    await getExecutionStore(executionId).clear();
+  });
+
   it('repairs a crashed unfinished canonical log without legacy metadata', async () => {
     const streamId = 'unfinished-stream' as StreamTabId;
     const bridge = await createBridge([], {
@@ -1164,33 +1286,72 @@ describe('DesktopProgressBridge', () => {
     const taskState = workflowTaskState();
 
     try {
+      await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalled());
+      await settleProgressEvents();
+      expect(bridge.progressViewInboundHandlers).toBeUndefined();
+      expect(runAgent).not.toHaveBeenCalled();
+
+      finishRepair(new Set());
+      await bridge.waitUntilReady();
+
       emitRunConfigFact(bridge, {
         streamId: 'stream-new',
         executionId: 'abc123',
         taskState,
       });
-
       const runNew = assertSupported(
         bridge.progressViewInboundHandlers[PROGRESS_VIEW_COMMANDS.RUN_NEW],
       );
-      expect(runNew).toBeTypeOf('function');
-      const runPromise = runNew({
+      await runNew({
         command: PROGRESS_VIEW_COMMANDS.RUN_NEW,
         stream: 'stream-new',
       });
-
-      await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalled());
-      await settleProgressEvents();
-      expect(runAgent).not.toHaveBeenCalled();
-
-      finishRepair(new Set());
-      await runPromise;
-      await bridge.waitUntilReady();
 
       expect(runAgent).toHaveBeenCalledOnce();
     } finally {
       finishRepair(new Set());
     }
+  });
+
+  it('presents a merge failure that occurs before lifecycle startup', async () => {
+    const failure = new Error('model setup failed');
+    const runAgent = vi.fn(async () => {
+      throw failure;
+    });
+    const showErrorMessage = vi.fn(async () => undefined);
+    const bridge = await createBridge([], { runAgent, showErrorMessage });
+
+    bridge.fileActions.host.startExecution({
+      config: workflowTaskState().agentConfig,
+    });
+
+    await vi.waitFor(() =>
+      expect(showErrorMessage).toHaveBeenCalledWith(
+        'Merge failed: model setup failed',
+      ),
+    );
+  });
+
+  it('leaves a terminal merge failure to the session result presenter', async () => {
+    const runAgent = vi.fn(
+      async (
+        _request: unknown,
+        options: Parameters<RunExecutionRequest>[1],
+      ) => {
+        await options.onRun?.({});
+        throw new Error('merge execution failed');
+      },
+    );
+    const showErrorMessage = vi.fn(async () => undefined);
+    const bridge = await createBridge([], { runAgent, showErrorMessage });
+
+    bridge.fileActions.host.startExecution({
+      config: workflowTaskState().agentConfig,
+    });
+
+    await vi.waitFor(() => expect(runAgent).toHaveBeenCalledOnce());
+    await settleProgressEvents();
+    expect(showErrorMessage).not.toHaveBeenCalled();
   });
 
   it('does not expose the desktop bridge before transcript opening settles', async () => {
@@ -1245,7 +1406,7 @@ describe('DesktopProgressBridge', () => {
       return new Set<StreamTabId>();
     });
 
-    await createBridge([], {
+    const bridge = await createBridge([], {
       canonicalStreamIds: [streamId],
       configureProgressSnapshotStore: (store) => {
         snapshots = store;
@@ -1255,10 +1416,6 @@ describe('DesktopProgressBridge', () => {
           executionId,
         );
       },
-      afterCanonicalLoad: async () => {
-        expect(snapshots?.getExecutionId(streamId)).toBe(executionId);
-        expect(detectWaitingStreams).not.toHaveBeenCalled();
-      },
       detectWaitingStreams,
     });
 
@@ -1267,17 +1424,136 @@ describe('DesktopProgressBridge', () => {
     );
   });
 
+  it('subscribes before attaching and projecting process-owned live children', async () => {
+    const streamId = 'attachment-order' as StreamTabId;
+    const order: string[] = [];
+
+    const bridge = await createBridge([], {
+      canonicalStreamIds: [streamId],
+      detectWaitingStreams: vi.fn(async () => {
+        order.push('load');
+        return new Set();
+      }),
+      configureSession: async (session) => {
+        const { ProcessExecutionHandle } =
+          await import('@agent/runtime/ExecutionHandle');
+        session.executions.track(
+          new ProcessExecutionHandle(
+            'abcdef' as ExecutionId,
+            streamId,
+            'bash',
+            () => true,
+            session.interactions,
+          ),
+        );
+
+        const attach = session.useHostInteractions.bind(session);
+        vi.spyOn(session, 'useHostInteractions').mockImplementation(
+          (interactions) => {
+            expect(interactions.requestPlanApproval).toEqual(
+              expect.any(Function),
+            );
+            order.push('attach');
+            return attach(interactions);
+          },
+        );
+        const subscribe = session.events.subscribe.bind(session.events);
+        vi.spyOn(session.events, 'subscribe').mockImplementation(
+          (subscriber, filter) => {
+            order.push('subscribe');
+            return subscribe(subscriber, filter);
+          },
+        );
+      },
+      observeRendererMessage: () => {
+        order.push('render');
+      },
+    });
+    await bridge.completeWebviewReady();
+
+    expect(order.indexOf('load')).toBeLessThan(order.indexOf('subscribe'));
+    expect(order.indexOf('subscribe')).toBeLessThan(order.indexOf('attach'));
+    expect(order.indexOf('subscribe')).toBeLessThan(order.indexOf('render'));
+  });
+
+  it('preserves queued notices when approval replay closes the attaching presentation', async () => {
+    let finishDetection!: (value: Set<StreamTabId>) => void;
+    const detectionGate = new Promise<Set<StreamTabId>>((resolve) => {
+      finishDetection = resolve;
+    });
+    const detectWaitingStreams = vi.fn(async () => detectionGate);
+    const firstInfo = vi.fn(async () => undefined);
+    const bridgeRef: { current?: TestableBridge } = {};
+
+    const bridge = await createBridge([], {
+      configureSession: (session) => {
+        session.interactions.showInfoMessage('survive approval replay', {
+          replayWhenAttached: true,
+        });
+        void session.interactions.requestPlanApproval?.({
+          approvalId: 'close-during-attachment',
+          streamId: 'attachment-close-stream' as StreamTabId,
+          plan: { objective: 'Close while replaying this approval.' },
+          goalEnabled: false,
+        });
+      },
+      deferReady: true,
+      detectWaitingStreams,
+      showInfoMessage: firstInfo,
+      observeRendererMessage: (message) => {
+        const progress = message as ProgressMessage;
+        if (
+          progress.command === PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION &&
+          progress.action === 'show'
+        ) {
+          bridgeRef.current?.dispose();
+        }
+      },
+    });
+    bridgeRef.current = bridge;
+    await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalled());
+    finishDetection(new Set());
+    await bridge.waitUntilReady();
+
+    const interactions = bridgeInteractions(bridge) as unknown as {
+      attachments: unknown[];
+    };
+    expect(interactions.attachments).toHaveLength(0);
+    expect(firstInfo).not.toHaveBeenCalled();
+
+    const internal = bridge as unknown as {
+      constructor: new (
+        postToRenderer: (message: unknown) => boolean | void,
+        options: DesktopProgressBridgeOptions,
+      ) => TestableBridge;
+      options: DesktopProgressBridgeOptions;
+    };
+    const replacementInfo = vi.fn(async () => undefined);
+    const replacement = disposeAfterTest(
+      new internal.constructor(() => undefined, {
+        ...internal.options,
+        host: createStubDesktopAgentExecutionHost({
+          showInfoMessage: replacementInfo,
+        }),
+      }),
+    );
+    await replacement.waitUntilReady();
+
+    expect(replacementInfo).toHaveBeenCalledOnce();
+    expect(replacementInfo).toHaveBeenCalledWith('survive approval replay');
+    await Promise.resolve();
+    expect(replacementInfo).toHaveBeenCalledOnce();
+  });
+
   it('rechecks active executions after waiting detection before repairing logs', async () => {
     const streamId = 'race-stream' as StreamTabId;
     const executionId = 'abc123' as ExecutionId;
-    let activeExecutionIds: readonly string[] = [];
     let finishDetection!: (value: Set<StreamTabId>) => void;
     const detectionGate = new Promise<Set<StreamTabId>>((resolve) => {
       finishDetection = resolve;
     });
     const detectWaitingStreams = vi.fn(async () => detectionGate);
     const bridge = await createBridge([], {
-      activeExecutionIds: () => activeExecutionIds,
       detectWaitingStreams,
       canonicalStreamIds: [streamId],
       configureTranscripts: (store) => appendRunningGroup(store, streamId),
@@ -1293,7 +1569,21 @@ describe('DesktopProgressBridge', () => {
 
     try {
       await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalled());
-      activeExecutionIds = [executionId];
+      const [{ AgentExecutionHandle }, { noopAgentRuntimeHost }] =
+        await Promise.all([
+          import('@agent/runtime/ExecutionHandle'),
+          import('@agent/runtime/AgentRuntimeHost'),
+        ]);
+      (bridge as BridgeWithSession).session.executions.track(
+        new AgentExecutionHandle(
+          executionId,
+          streamId,
+          streamId,
+          'proofreader',
+          'workflow',
+          bridge.runtimeHost,
+        ),
+      );
       finishDetection(new Set([streamId]));
       await bridge.waitUntilReady();
 
@@ -1888,6 +2178,7 @@ describe('DesktopProgressBridge', () => {
       kvRead,
       retrieveSessionResumeData,
       runAgent,
+      canonicalStreamIds: ['stream-1'],
     });
 
     try {
@@ -2007,6 +2298,7 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages, {
       retrieveSessionResumeData,
       resumeToolUseFromResumeData,
+      canonicalStreamIds: ['stream-1'],
     });
     const taskState = { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG };
 
@@ -2080,6 +2372,7 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge([], {
       retrieveSessionResumeData,
       resumeToolUseFromResumeData,
+      canonicalStreamIds: ['stream-1'],
     });
 
     try {
@@ -2107,7 +2400,10 @@ describe('DesktopProgressBridge', () => {
 
   it('does not launch a duplicate resume for active streams', async () => {
     const retrieveSessionResumeData = vi.fn(async () => null);
-    const bridge = await createBridge([], { retrieveSessionResumeData });
+    const bridge = await createBridge([], {
+      retrieveSessionResumeData,
+      canonicalStreamIds: ['stream-1'],
+    });
 
     try {
       seedStreamStatusForTest(
@@ -2141,7 +2437,10 @@ describe('DesktopProgressBridge', () => {
         agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG,
       });
     });
-    const bridge = await createBridge([], { retrieveSessionResumeData });
+    const bridge = await createBridge([], {
+      retrieveSessionResumeData,
+      canonicalStreamIds: ['stream-1'],
+    });
 
     try {
       emitRunConfigFact(bridge, {
@@ -2322,7 +2621,9 @@ describe('DesktopProgressBridge', () => {
       text: 'persist me before quit',
     });
 
-    await bridge.flush();
+    await (
+      bridge as unknown as { session: SessionHandle }
+    ).session.flushArtifacts();
     bridge.streamLogs.releaseEntries(streamId);
     await bridge.streamLogs.reload();
     await bridge.streamLogs.ensureLoaded(streamId);
@@ -2335,465 +2636,98 @@ describe('DesktopProgressBridge', () => {
     ).toEqual(['persist me before quit']);
   });
 
-  // Stage-5 acceptance gate (#6968): two desktop windows, runs in each, zero
-  // cross-talk in view state, transcripts, and status. Each window is a
-  // `DesktopProgressBridge` with its own per-window `SessionHandle`, built
-  // from ONE module registry — the same process globals a real multi-window
-  // desktop main process shares — so any leak through a surviving singleton
-  // would surface here. Pins the L1–L3 leak fixes from
-  // docs/proposals/session-scoped-runtime-architecture.md §1.
-  describe('multi-window session isolation', () => {
-    const streamA = 'stream-window-a' as StreamTabId;
-    const streamB = 'stream-window-b' as StreamTabId;
-    const executionA = 'ec00aa';
-    const executionB = 'ec00bb';
-
-    type WindowFixture = {
-      bridge: TestableBridge;
-      session: SessionHandle;
-      /** Loosely-typed runtime-host emit, as runs use it (`runtimeHost.emit`). */
-      emit: (event: string, payload: unknown) => void;
-      messages: unknown[];
-    };
-
-    type WindowPair = {
-      windowA: WindowFixture;
-      windowB: WindowFixture;
-      /**
-       * Same-registry `defaultSession` (the one the bridges actually use) —
-       * there is no separate `StreamStatusService`/`getDefaultStreamLogStore`
-       * module export anymore (#7694): the process-wide default session owns
-       * its `status`/`transcripts` members directly.
-       */
-      registry: {
-        defaultSession: typeof import('@agent/runtime/SessionHandle').defaultSession;
-      };
-      dispose(): void;
-    };
-
-    async function createWindowPair(): Promise<WindowPair> {
-      const { bridgeModule, createProgressSnapshotStore, openTranscripts } =
-        await loadBridgeModule();
-      // Same registry as the bridge module graph — identity comparisons
-      // against process-wide defaults must use this instance, not a
-      // statically imported copy from the pre-reset registry.
-      const { defaultSession } = await import('@agent/runtime/SessionHandle');
-      const makeWindow = async (): Promise<WindowFixture> => {
-        const messages: unknown[] = [];
-        const transcripts = await openTranscripts();
-        const bridge = new bridgeModule.DesktopProgressBridge(
-          (message) => {
-            messages.push(message);
-          },
-          {
-            transcripts,
-            progressSnapshotStore: createProgressSnapshotStore(),
-            host: createStubDesktopAgentExecutionHost(),
-          },
-        ) as unknown as TestableBridge;
-        const session = (bridge as unknown as { session: SessionHandle })
-          .session;
-        return {
-          bridge,
-          session,
-          emit: (event, payload) => bridge.runtimeHost.emit(event, payload),
-          messages,
-        };
-      };
-      const [windowA, windowB] = await Promise.all([
-        makeWindow(),
-        makeWindow(),
-      ]);
-      await Promise.all([
-        windowA.bridge.waitUntilReady(),
-        windowB.bridge.waitUntilReady(),
-      ]);
-      windowA.messages.length = 0;
-      windowB.messages.length = 0;
-      return disposeAfterTest({
-        windowA,
-        windowB,
-        registry: {
-          defaultSession,
-        },
-        dispose: () => {
-          windowA.bridge.dispose();
-          windowB.bridge.dispose();
-        },
-      });
-    }
-
-    function messagesMentioning(
-      messages: unknown[],
-      needle: string,
-    ): unknown[] {
-      return messages.filter((message) => {
-        let serialized: string | undefined;
-        try {
-          serialized = JSON.stringify(message);
-        } catch {
-          return false;
-        }
-        return serialized?.includes(needle) ?? false;
-      });
-    }
-
-    /** Bridge a fake run trace into a session, as `runAgent` does. */
-    function attachTrace(
-      session: SessionHandle,
-      streamId: StreamTabId,
-      trace: ReturnType<typeof makeFakeTrace>,
-    ): void {
-      session.attachRunTrace(
-        trace as unknown as Parameters<SessionHandle['attachRunTrace']>[0],
-        streamId,
-      );
-    }
-
-    it('keeps one window’s rail, entries, and status updates out of the sibling view state', async () => {
-      const pair = await createWindowPair();
-      const { windowA, windowB } = pair;
-
-      // Simulated run lifecycle in each window over its own runtime host:
-      // track → status transitions → log entry → terminal.
-      for (const [window, streamId, executionId] of [
-        [windowA, streamA, executionA],
-        [windowB, streamB, executionB],
-      ] as const) {
-        window.emit('setActiveStream', {
-          streamId,
-          agentCategory: AgentCategory.Workflow,
-        });
-        window.emit('setTaskState', {
-          streamId,
-          executionId,
-          taskState: TaskStateSchema.parse(workflowTaskState()),
-        });
-        window.emit('updateStreamStatus', {
-          streamId,
-          status: STREAM_PHASE.RUNNING,
-        });
-        window.bridge.streamLogs.append(streamId, {
-          id: `${streamId}-log`,
-          type: STREAM_LOG_ENTRY_TYPES.LOG,
-          level: LOG_LEVELS.INFO,
-          timestamp: 1_000,
-          text: `${streamId} run log`,
-        });
-        window.emit('updateStreamStatus', {
-          streamId,
-          status: STREAM_PHASE.COMPLETED,
-          previousStatus: STREAM_PHASE.RUNNING,
-        });
-      }
-      await settleProgressEvents();
-      windowA.bridge.syncFullView();
-      windowB.bridge.syncFullView();
-      await settleProgressEvents();
-
-      // Each window's own run is fully visible to itself...
-      expect(windowA.bridge.streamLogs.get(streamA)).toBeDefined();
-      expect(
-        progressMessages(
-          windowA.messages,
-          PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
-        ).at(-1),
-      ).toMatchObject({ activeStream: streamA });
-      expect(windowB.bridge.streamLogs.get(streamB)).toBeDefined();
-
-      // ...and completely invisible to the sibling: no view-state entry or
-      // renderer message (stream list, status, or log delta) at all.
-      expect(windowB.bridge.streamLogs.get(streamA)).toBeUndefined();
-      expect(windowA.bridge.streamLogs.get(streamB)).toBeUndefined();
-      expect(messagesMentioning(windowB.messages, streamA)).toEqual([]);
-      expect(messagesMentioning(windowA.messages, streamB)).toEqual([]);
-    });
-
-    it('delivers run facts and session facts only to the owning session’s hub subscribers', async () => {
-      const pair = await createWindowPair();
-      const { windowA, windowB } = pair;
-
-      const factKey = (event: SessionEvent): string =>
-        event.scope === 'run'
-          ? `run:${event.streamId}:${event.event.type}`
-          : `session:${event.event.type}:${
-              (event.event.payload as { streamId?: string }).streamId ?? ''
-            }`;
-      const seenByA: string[] = [];
-      const seenByB: string[] = [];
-      windowA.session.events.subscribe((event) => seenByA.push(factKey(event)));
-      windowB.session.events.subscribe((event) => seenByB.push(factKey(event)));
-      // Even a subscriber that explicitly asks B's hub for A's stream must
-      // see nothing — the hub itself never carries the foreign stream.
-      const crossStreamFacts: SessionEvent[] = [];
-      windowB.session.events.subscribe(
-        (event) => crossStreamFacts.push(event),
-        { scope: 'run', streamId: streamA },
-      );
-      const resultsSeenByB: unknown[] = [];
-      windowB.session.onResult((event) => resultsSeenByB.push(event));
-
-      // A run in each window: trace bridged into the launching session
-      // (as runAgent does), distinct streamIds and executionIds.
-      for (const [window, streamId, executionId] of [
-        [windowA, streamA, executionA],
-        [windowB, streamB, executionB],
-      ] as const) {
-        const trace = makeFakeTrace();
-        attachTrace(window.session, streamId, trace);
-        trace.emit({
-          type: 'log',
-          level: 'info',
-          message: `${streamId} progress`,
-        });
-        window.session.events.emit({
-          scope: 'session',
-          event: {
-            type: 'updateStreamDescription',
-            payload: {
-              streamId,
-              description: `${streamId} description`,
-            },
-          },
-        });
-        trace.emit({
-          type: 'result',
-          outcome: RUN_OUTCOME.COMPLETED,
-          executionId,
-          streamId,
-          agentName: 'proofreader',
-          category: 'workflow',
-          isSubagent: false,
-        });
-      }
-
-      expect(seenByA).toEqual([
-        `run:${streamA}:log`,
-        `session:updateStreamDescription:${streamA}`,
-        `run:${streamA}:result`,
-      ]);
-      expect(seenByB).toEqual([
-        `run:${streamB}:log`,
-        `session:updateStreamDescription:${streamB}`,
-        `run:${streamB}:result`,
-      ]);
-      // Fully disjoint streams: no fact key is seen by both hubs.
-      expect(seenByA.filter((key) => seenByB.includes(key))).toEqual([]);
-      expect(crossStreamFacts).toEqual([]);
-      expect(resultsSeenByB).toEqual([
-        expect.objectContaining({ executionId: executionB }),
-      ]);
-    });
-
-    it('keeps a pending approval invisible and unresolvable from the sibling window', async () => {
-      const pair = await createWindowPair();
-      const { windowA, windowB } = pair;
-
-      const approvalId = 'plan-window-a';
-      const result = bridgeInteractions(windowA.bridge).requestPlanApproval?.({
-        approvalId,
-        streamId: streamA,
-        plan: { objective: 'Prove per-window interaction isolation.' },
-        goalEnabled: false,
-      });
-      expect(result).toBeDefined();
-      let settled = false;
-      void (result as Promise<unknown>).then(() => {
-        settled = true;
-      });
-
-      await vi.waitFor(() => {
-        expect(
-          progressMessages(
-            windowA.messages,
-            PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-          ),
-        ).toContainEqual(expect.objectContaining({ action: 'show' }));
-      });
-      // The prompt never reaches window B's renderer.
-      expect(
-        progressMessages(
-          windowB.messages,
-          PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-        ),
-      ).toEqual([]);
-
-      // B's response port cannot settle A's pending approval...
-      expect(
-        windowB.bridge.hostInteractions.submitPlanDecision(approvalId, {
-          action: 'approve',
-        }),
-      ).toBe(false);
-      // ...neither can B's inbound plan-approval handler...
-      const handlePlanB = assertSupported(
-        windowB.bridge.progressViewInboundHandlers[
-          PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION
-        ],
-      );
-      await handlePlanB({
-        command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
-        approvalId,
-        action: 'approve',
-      });
-      // ...nor B's delete-all sweep (the cross-window sweep the Stage-5
-      // gate exists to rule out).
-      await windowB.bridge.deleteAllStreams();
-      await settleProgressEvents();
-      expect(settled).toBe(false);
-
-      // A's own surface still resolves it, first try.
-      const handlePlanA = assertSupported(
-        windowA.bridge.progressViewInboundHandlers[
-          PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION
-        ],
-      );
-      await handlePlanA({
-        command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
-        approvalId,
-        action: 'approve',
-      });
-      await expect(result).resolves.toEqual({ action: 'approve' });
-    });
-
-    it('scopes transcript stores to the launching session (L1)', async () => {
-      const pair = await createWindowPair();
-      const { windowA, windowB, registry } = pair;
-
-      // The L1 fix, by identity: each window owns a fresh transcript store,
-      // and neither aliases the process-default (last-writer-wins) store.
-      expect(windowA.session.transcripts).not.toBe(windowB.session.transcripts);
-      expect(windowA.session.transcripts).not.toBe(
-        registry.defaultSession().transcripts,
-      );
-      expect(windowB.session.transcripts).not.toBe(
-        registry.defaultSession().transcripts,
-      );
-
-      for (const [window, streamId] of [
-        [windowA, streamA],
-        [windowB, streamB],
-      ] as const) {
-        window.session.transcripts.append(streamId, {
-          id: `${streamId}-transcript`,
-          type: STREAM_LOG_ENTRY_TYPES.LOG,
-          level: LOG_LEVELS.INFO,
-          timestamp: 1_000,
-          text: `${streamId} transcript entry`,
-        });
-      }
-
-      expect(windowA.session.transcripts.has(streamA)).toBe(true);
-      expect(windowB.session.transcripts.has(streamB)).toBe(true);
-      // A's transcript writes never land under B's stores, and vice versa —
-      // neither the session transcript store nor the view-state log store.
-      expect(windowB.session.transcripts.has(streamA)).toBe(false);
-      expect(windowA.session.transcripts.has(streamB)).toBe(false);
-      expect(windowB.bridge.streamLogs.get(streamA)).toBeUndefined();
-      expect(windowA.bridge.streamLogs.get(streamB)).toBeUndefined();
-      expect(registry.defaultSession().transcripts.has(streamA)).toBe(false);
-      expect(registry.defaultSession().transcripts.has(streamB)).toBe(false);
-    });
-
-    it('keeps stream phases, listeners, and sweeps per-window in the status machine (L3)', async () => {
-      const pair = await createWindowPair();
-      const { windowA, windowB, registry } = pair;
-
-      // Desktop windows own fresh status machines. The process-wide
-      // default session's status machine survives, but only as the
-      // single-session default-session compatibility path (extension/CLI) —
-      // a ledgered residue tracked on #6981 (D1 rows), not a desktop
-      // multi-window sharing point. Assert the isolation that IS promised:
-      // neither window aliases it, and neither window writes to it.
-      expect(windowA.session.status).not.toBe(windowB.session.status);
-      expect(windowA.session.status).not.toBe(registry.defaultSession().status);
-      expect(windowB.session.status).not.toBe(registry.defaultSession().status);
-
-      const changesSeenByB: unknown[] = [];
-      windowB.session.status.onDidChange((change) =>
-        changesSeenByB.push(change),
-      );
-
-      expect(
-        windowA.session.status.transition(
-          streamA,
-          STREAM_PHASE.RUNNING,
-          STREAM_TRANSITION_CAUSE.LIFECYCLE,
-        ),
-      ).toBe(true);
-      expect(
-        windowB.session.status.transition(
-          streamB,
-          STREAM_PHASE.RUNNING,
-          STREAM_TRANSITION_CAUSE.LIFECYCLE,
-        ),
-      ).toBe(true);
-      expect(
-        windowA.session.status.transitionToTerminal(
-          streamA,
-          STREAM_PHASE.COMPLETED,
-        ),
-      ).toBe(true);
-
-      // A's phases never appear in B's machine, and A's transitions never
-      // fire B's listeners (the L3 waiter fan-out half).
-      expect(windowB.session.status.get(streamA)).toBeUndefined();
-      expect(windowA.session.status.get(streamB)).toBeUndefined();
-      expect(
-        changesSeenByB.filter(
-          (change) => (change as { streamId: string }).streamId === streamA,
-        ),
-      ).toEqual([]);
-      // Neither window's run leaked into the process-default machine.
-      expect(registry.defaultSession().status.get(streamA)).toBeUndefined();
-      expect(registry.defaultSession().status.get(streamB)).toBeUndefined();
-
-      // One window's delete-all sweep (bridge path AND machine path) cannot
-      // reset the sibling's streams — the exact L3 clearAll leak.
-      await windowB.bridge.deleteAllStreams();
-      windowB.session.status.clearAll();
-      expect(windowA.session.status.get(streamA)).toBe(STREAM_PHASE.COMPLETED);
-      expect(windowB.session.status.get(streamB)).toBeUndefined();
-    });
-  });
-
-  // #8148: closing a desktop window deliberately keeps active executions
-  // alive while tearing down the old bridge's UI consumers. A replacement
-  // window must rebind canonical startup streams to those headless runs.
-  describe('window recreation rebind (#8148)', () => {
-    async function createReboundOwner({
+  // One Electron process owns the session continuously; BrowserWindows own
+  // only presentation resources that attach and detach from it.
+  describe('process-owned session across window recreation', () => {
+    async function createProcessOwner({
       streamId,
       executionId,
       agentName = 'proofreader',
       category = AgentCategory.Workflow,
       messages = [],
+      detectWaitingStreams,
+      wakeQueuedFollowUpStream,
     }: {
       streamId: StreamTabId;
       executionId: ExecutionId;
       agentName?: string;
       category?: AgentCategory;
       messages?: unknown[];
+      detectWaitingStreams?: ReturnType<typeof vi.fn>;
+      wakeQueuedFollowUpStream?: WakeQueuedFollowUpStream;
     }) {
-      let activeExecutionIds: readonly string[] = [];
-      const { bridgeModule, createProgressSnapshotStore, openTranscripts } =
-        await loadBridgeModule({
-          activeExecutionIds: () => activeExecutionIds,
-        });
+      const {
+        bridgeModule,
+        createProgressSnapshotStore,
+        createSession,
+        openTranscripts,
+        processResumeOwner,
+      } = await loadBridgeModule({ detectWaitingStreams });
       const { AgentExecutionHandle, ProcessExecutionHandle } =
         await import('@agent/runtime/ExecutionHandle');
+      const { getExecutionStore } = await import('@agent/storage');
       const { noopAgentRuntimeHost } =
         await import('@agent/runtime/AgentRuntimeHost');
-      const transcriptsA = await openTranscripts();
+      const transcripts = await openTranscripts();
+      transcripts.ensureStream(streamId);
+      await transcripts.flush();
+      const processSession = createSession(transcripts);
+      const { initializeDesktopProcessStores } =
+        await import('@desktop/main/desktopLegacyStreamImporter');
+      const progressSnapshotStore = createProgressSnapshotStore();
+      const processStores = await initializeDesktopProcessStores({
+        session: processSession,
+        snapshots: progressSnapshotStore,
+      });
+      const { stores: sessionStores } = processStores;
+      const disposeResumeHandler = processResumeOwner.attach({
+        session: processSession,
+        snapshots: progressSnapshotStore,
+      });
+      const taskState = workflowTaskState();
+      progressSnapshotStore.setTaskState(
+        streamId,
+        TaskStateSchema.parse({
+          ...taskState,
+          agentConfig: {
+            ...taskState.agentConfig,
+            agent: agentName,
+            agentCategory: category,
+          },
+        }),
+        executionId,
+      );
+      const errorsA: string[] = [];
+      const infosA: string[] = [];
+      const diffPathsA: Array<{ original: string; proposed: string }> = [];
       const bridgeA = new bridgeModule.DesktopProgressBridge(
         (message) => {
           messages.push(message);
         },
         {
-          transcripts: transcriptsA,
-          progressSnapshotStore: createProgressSnapshotStore(),
-          host: createStubDesktopAgentExecutionHost(),
+          session: processSession,
+          sessionStores,
+          progressSnapshotStore,
+          ...(wakeQueuedFollowUpStream ? { wakeQueuedFollowUpStream } : {}),
+          host: createStubDesktopAgentExecutionHost({
+            openDiff: async (original, proposed, title) => {
+              diffPathsA.push({
+                original: original.filePath,
+                proposed: proposed.filePath,
+              });
+              return { original, proposed, title };
+            },
+            showErrorMessage: async (message) => {
+              errorsA.push(message);
+            },
+            showInfoMessage: async (message) => {
+              infosA.push(message);
+            },
+          }),
         },
       ) as unknown as TestableBridge & { session: SessionHandle };
       await bridgeA.waitUntilReady();
+      const presentationBridges = new Set([bridgeA]);
       const createHandle = (
         options: {
           executionId?: ExecutionId;
@@ -2810,108 +2744,236 @@ describe('DesktopProgressBridge', () => {
           options.childStreamId ?? streamId,
           options.agentName ?? agentName,
           options.category ?? category,
-          noopAgentRuntimeHost,
+          processSession.interactions,
           nextTrace as unknown as ConstructorParameters<
             typeof AgentExecutionHandle
           >[6],
         );
+        processSession.attachRunTrace(
+          nextTrace as unknown as AgentTrace,
+          options.childStreamId ?? streamId,
+        );
         return { handle: nextHandle, trace: nextTrace };
       };
       const { handle, trace } = createHandle();
-      bridgeA.session.executions.trackAgentExecution(handle, {
+      processSession.executions.trackAgentExecution(handle, {
         status: STREAM_PHASE.RUNNING,
       });
       let closed = false;
       const close = (): void => {
         if (closed) return;
         closed = true;
-        activeExecutionIds = [executionId];
         bridgeA.dispose();
       };
 
       const reopen = async (reopenedMessages: unknown[] = []) => {
         close();
-        const transcripts = await openTranscripts();
-        transcripts.ensureStream(streamId);
-        const progressSnapshotStore = createProgressSnapshotStore();
-        await progressSnapshotStore.load([streamId]);
-        const taskState = workflowTaskState();
-        progressSnapshotStore.setTaskState(
-          streamId,
-          TaskStateSchema.parse({
-            ...taskState,
-            agentConfig: {
-              ...taskState.agentConfig,
-              agent: agentName,
-              agentCategory: category,
-            },
-          }),
-          executionId,
-        );
+        const errorsB: string[] = [];
+        const infosB: string[] = [];
         const bridgeB = new bridgeModule.DesktopProgressBridge(
           (message) => {
             reopenedMessages.push(message);
           },
           {
-            transcripts,
+            session: processSession,
+            sessionStores,
             progressSnapshotStore,
-            host: createStubDesktopAgentExecutionHost(),
+            host: createStubDesktopAgentExecutionHost({
+              showErrorMessage: async (message) => {
+                errorsB.push(message);
+              },
+              showInfoMessage: async (message) => {
+                infosB.push(message);
+              },
+            }),
           },
         ) as unknown as TestableBridge & {
           session: SessionHandle;
         };
+        presentationBridges.add(bridgeB);
         await bridgeB.waitUntilReady();
-        return { bridgeB, progressSnapshotStore };
+        return { bridgeB, errorsB, infosB, progressSnapshotStore };
       };
+
+      disposeAfterTest({
+        dispose: () => {
+          for (const bridge of presentationBridges) bridge.dispose();
+          disposeResumeHandler();
+          processStores.dispose();
+          processSession.dispose();
+        },
+      });
 
       return {
         ProcessExecutionHandle,
         bridgeA,
         close,
         createHandle,
+        errorsA,
+        infosA,
+        diffPathsA,
+        getExecutionStore,
         handle,
         noopAgentRuntimeHost,
+        processSession,
+        progressSnapshotStore,
+        sessionStores,
         reopen,
         trace,
       };
     }
 
-    it('seeds the canonical rebound stream with the live owning session status', async () => {
-      const streamId = 'rebound-stream-2' as StreamTabId;
-      const executionId = 'ec00dd' as ExecutionId;
-      const owner = await createReboundOwner({
+    it('keeps a live transcript append made while replacement state loads', async () => {
+      const streamId = 'process-stream-live-reopen' as StreamTabId;
+      const childStreamId = 'process-child-live-reopen' as StreamTabId;
+      const executionId = 'ec00dc' as ExecutionId;
+      const childExecutionId = 'ec00db' as ExecutionId;
+      let releaseSnapshotLoad!: () => void;
+      let markSnapshotLoadStarted!: () => void;
+      const snapshotLoadStarted = new Promise<void>((resolve) => {
+        markSnapshotLoadStarted = resolve;
+      });
+      const snapshotLoadGate = new Promise<void>((resolve) => {
+        releaseSnapshotLoad = resolve;
+      });
+      let repairCallCount = 0;
+      const detectWaitingStreams = vi.fn(async () => {
+        repairCallCount += 1;
+        if (repairCallCount === 2) {
+          markSnapshotLoadStarted();
+          await snapshotLoadGate;
+        }
+        return new Set<StreamTabId>();
+      });
+      const owner = await createProcessOwner({
         streamId,
         executionId,
+        detectWaitingStreams,
       });
       owner.close();
-
-      // Owner status stays live while the replacement window starts.
+      const pendingApproval =
+        owner.processSession.interactions.requestPlanApproval?.({
+          approvalId: 'approval-during-reopen-load',
+          streamId,
+          plan: { objective: 'Wait for canonical state.' },
+          goalEnabled: false,
+        });
+      const messagesB: unknown[] = [];
+      const reopening = owner.reopen(messagesB);
+      await snapshotLoadStarted;
       expect(
-        owner.bridgeA.session.status.transitionToWaiting(streamId, 'wait', {
-          trace: owner.trace as unknown as AgentTrace,
-        }),
-      ).toBe(true);
-      expect(owner.bridgeA.session.status.get(streamId)).toBe(
-        STREAM_PHASE.WAITING,
-      );
-
-      const { bridgeB } = await owner.reopen();
+        progressMessages(messagesB, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+      ).toEqual([]);
+      owner.processSession.transcripts.append(streamId, {
+        id: 'during-reopen',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        timestamp: 2_500,
+        text: 'Appended while replacement presentation loaded.',
+      });
+      owner.processSession.transcripts.ensureStream(childStreamId);
+      owner.processSession.publishRunEvent(childStreamId, {
+        type: 'run.config',
+        streamId: childStreamId,
+        executionId: childExecutionId,
+        config: SEARCH_TOOL_USE_AGENT_CONFIG,
+      });
+      owner.processSession.events.emit({
+        scope: 'session',
+        event: {
+          type: 'setParentStream',
+          payload: { childStreamId, parentStreamId: streamId },
+        },
+      });
+      owner.processSession.events.emit({
+        scope: 'session',
+        event: {
+          type: 'updateStreamDescription',
+          payload: {
+            streamId: childStreamId,
+            description: 'Metadata emitted during attachment.',
+          },
+        },
+      });
+      owner.processSession.publishRunEvent(childStreamId, {
+        type: 'usage',
+        payload: {
+          streamId: childStreamId,
+          storageKey: childExecutionId as StorageKey,
+          usage: { inputTokens: 5, outputTokens: 2, cost: 0.01 },
+        },
+      });
+      releaseSnapshotLoad();
+      const { bridgeB } = await reopening;
 
       try {
-        expect(bridgeB.session.executions.getHandle(executionId)).toBe(
-          owner.handle,
-        );
-        expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
+        bridgeB.syncFullView();
+        await vi.waitFor(() => {
+          expect(
+            progressMessages(
+              messagesB,
+              PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+            ).filter(
+              (message) =>
+                (
+                  message as ProgressMessage & {
+                    permission?: { data?: { approvalId?: string } };
+                  }
+                ).permission?.data?.approvalId ===
+                'approval-during-reopen-load',
+            ),
+          ).toHaveLength(1);
+        });
+        expect(
+          owner.progressSnapshotStore.getRunConfig(childStreamId)?.agent,
+        ).toBe('search');
+        expect(
+          owner.progressSnapshotStore.getParentStreamId(childStreamId),
+        ).toBe(streamId);
+        expect(
+          progressMessages(messagesB, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(
+            -1,
+          ),
+        ).toMatchObject({
+          streams: expect.arrayContaining([
+            expect.objectContaining({
+              name: childStreamId,
+              agent: 'search',
+              agentCategory: AgentCategory.ToolUse,
+              parentStreamId: streamId,
+              description: 'Metadata emitted during attachment.',
+            }),
+            expect.objectContaining({ name: streamId }),
+          ]),
+        });
+        expect(
+          owner.progressSnapshotStore
+            .getRunUsage(childStreamId)
+            .get(childExecutionId),
+        ).toMatchObject({ inputTokens: 5, outputTokens: 2, cost: 0.01 });
+        expect(
+          bridgeB.streamLogs
+            .get(streamId)
+            ?.getRange(0)
+            .map((entry) => entry.text),
+        ).toContain('Appended while replacement presentation loaded.');
+        expect(
+          bridgeB.hostInteractions.submitPlanDecision(
+            'approval-during-reopen-load',
+            { action: 'approve' },
+          ),
+        ).toBe(true);
+        await expect(pendingApproval).resolves.toEqual({ action: 'approve' });
       } finally {
         bridgeB.dispose();
       }
     });
 
-    it('forwards the owner session host interactions to the reopened window (#8227)', async () => {
+    it('reattaches process-session interactions to the reopened window exactly once (#8227)', async () => {
       const streamId = 'rebound-stream-3' as StreamTabId;
       const executionId = 'ec00ee' as ExecutionId;
       const messagesA: unknown[] = [];
-      const owner = await createReboundOwner({
+      const owner = await createProcessOwner({
         streamId,
         executionId,
         messages: messagesA,
@@ -2920,9 +2982,10 @@ describe('DesktopProgressBridge', () => {
       const { bridgeB } = await owner.reopen(messagesB);
 
       try {
-        await bridgeB.waitUntilReady();
+        bridgeB.syncFullView();
+        await bridgeB.completeWebviewReady();
 
-        // The retained run still resolves interactions through window A.
+        // The retained run still owns one process-session interaction.
         const planPromise = bridgeInteractions(
           owner.bridgeA,
         ).requestPlanApproval?.({
@@ -2933,7 +2996,7 @@ describe('DesktopProgressBridge', () => {
         });
         expect(planPromise).toBeDefined();
 
-        // The forwarded prompt surfaces only in window B.
+        // Its presentation moves to the currently attached window.
         await vi.waitFor(() => {
           expect(
             progressMessages(
@@ -2954,7 +3017,12 @@ describe('DesktopProgressBridge', () => {
           progressMessages(messagesA, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
         ).toEqual([]);
 
-        // Window B resolves the retained run's pending interaction.
+        // The detached presenter cannot settle the request; the attached one can.
+        expect(
+          owner.bridgeA.hostInteractions.submitPlanDecision('plan-rebound', {
+            action: 'approve',
+          }),
+        ).toBe(false);
         expect(
           bridgeB.hostInteractions.submitPlanDecision('plan-rebound', {
             action: 'approve',
@@ -2966,11 +3034,126 @@ describe('DesktopProgressBridge', () => {
       }
     });
 
+    it('replays a follow-up wake notice that completes after window close exactly once', async () => {
+      const streamId = 'process-follow-up-wake' as StreamTabId;
+      const executionId = 'ec00ea' as ExecutionId;
+      let finishWake: (result: { kind: 'dropped' }) => void = () => undefined;
+      const wakeResult = new Promise<{ kind: 'dropped' }>((resolve) => {
+        finishWake = resolve;
+      });
+      const wakeQueuedFollowUpStream = vi.fn(() => wakeResult);
+      const owner = await createProcessOwner({
+        streamId,
+        executionId,
+        agentName: 'search',
+        category: AgentCategory.ToolUse,
+        wakeQueuedFollowUpStream,
+      });
+      expect(
+        owner.processSession.status.transitionToWaiting(streamId, 'wait', {
+          trace: owner.trace as unknown as AgentTrace,
+        }),
+      ).toBe(true);
+      const send = assertSupported(
+        owner.bridgeA.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP
+        ],
+      );
+
+      await send({
+        command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
+        stream: streamId,
+        text: 'Continue after the child completes.',
+      });
+      expect(wakeQueuedFollowUpStream).toHaveBeenCalledOnce();
+      owner.close();
+      finishWake({ kind: 'dropped' });
+      await settleProgressEvents();
+      expect(owner.infosA).toEqual([]);
+
+      const { bridgeB, infosB } = await owner.reopen();
+      try {
+        await vi.waitFor(() =>
+          expect(infosB).toEqual([
+            'Message dropped because no session was available to receive it. Start a new agent task to continue.',
+          ]),
+        );
+        await settleProgressEvents();
+        expect(infosB).toHaveLength(1);
+      } finally {
+        bridgeB.dispose();
+      }
+
+      const { bridgeB: bridgeC, infosB: infosC } = await owner.reopen();
+      try {
+        await settleProgressEvents();
+        expect(infosC).toEqual([]);
+      } finally {
+        bridgeC.dispose();
+      }
+    });
+
+    it('routes a retained handle runtime event only to the current presentation', async () => {
+      const streamId = 'process-runtime-host' as StreamTabId;
+      const executionId = 'ec00de' as ExecutionId;
+      const owner = await createProcessOwner({ streamId, executionId });
+      const { bridgeB, errorsB } = await owner.reopen();
+
+      try {
+        expect(owner.handle.runtimeHost).toBe(
+          owner.processSession.interactions,
+        );
+        owner.handle.runtimeHost.emit('requestShowError', {
+          message: 'Presented after reopen.',
+        });
+        await vi.waitFor(() =>
+          expect(errorsB).toEqual(['Presented after reopen.']),
+        );
+        expect(owner.errorsA).toEqual([]);
+      } finally {
+        bridgeB.dispose();
+      }
+    });
+
+    it('replays one terminal error produced while no window is attached', async () => {
+      const streamId = 'process-headless-result' as StreamTabId;
+      const executionId = 'ec00df' as ExecutionId;
+      const owner = await createProcessOwner({ streamId, executionId });
+      owner.close();
+
+      owner.trace.emit({
+        type: 'result',
+        outcome: RUN_OUTCOME.FAILED,
+        executionId,
+        streamId,
+        agentName: 'proofreader',
+        category: 'workflow',
+        isSubagent: false,
+        error: {
+          kind: 'unexpected',
+          message: 'Failure while desktop was headless.',
+        },
+      });
+      expect(owner.errorsA).toEqual([]);
+
+      const { bridgeB, errorsB } = await owner.reopen();
+      try {
+        await vi.waitFor(() =>
+          expect(errorsB).toEqual(['Failure while desktop was headless.']),
+        );
+        await Promise.resolve();
+        expect(errorsB).toHaveLength(1);
+        expect(owner.errorsA).toEqual([]);
+      } finally {
+        bridgeB.dispose();
+      }
+    });
+
     it('replays a tool-edit approval with a fresh window request id', async () => {
       const streamId = 'rebound-stream-tool-edit' as StreamTabId;
       const executionId = 'ec00ed' as ExecutionId;
       const messagesA: unknown[] = [];
-      const owner = await createReboundOwner({
+      const owner = await createProcessOwner({
         streamId,
         executionId,
         messages: messagesA,
@@ -2990,17 +3173,51 @@ describe('DesktopProgressBridge', () => {
         oldRequestId = shownToolEditRequestId(messagesA) ?? '';
         expect(oldRequestId).not.toBe('');
       });
+      const handleOldToolEdit = assertSupported(
+        owner.bridgeA.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION
+        ],
+      );
+      await handleOldToolEdit({
+        command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+        requestId: oldRequestId,
+        action: 'openDiff',
+      });
+      await vi.waitFor(() => expect(owner.diffPathsA).toHaveLength(1));
+      const [oldDiff] = owner.diffPathsA;
+      await expect(access(oldDiff!.original)).resolves.toBeUndefined();
+      await expect(access(oldDiff!.proposed)).resolves.toBeUndefined();
 
       const messagesB: unknown[] = [];
       const { bridgeB } = await owner.reopen(messagesB);
       try {
-        await bridgeB.waitUntilReady();
+        await vi.waitFor(async () => {
+          await expect(access(oldDiff!.original)).rejects.toMatchObject({
+            code: 'ENOENT',
+          });
+          await expect(access(oldDiff!.proposed)).rejects.toMatchObject({
+            code: 'ENOENT',
+          });
+        });
         let newRequestId = '';
         await vi.waitFor(() => {
           newRequestId = shownToolEditRequestId(messagesB) ?? '';
           expect(newRequestId).not.toBe('');
         });
         expect(newRequestId).not.toBe(oldRequestId);
+
+        let settledByOldPresenter = false;
+        void approvalPromise?.then(() => {
+          settledByOldPresenter = true;
+        });
+        await handleOldToolEdit({
+          command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+          requestId: oldRequestId,
+          action: 'reject',
+          feedback: 'Stale presenter.',
+        });
+        await settleProgressEvents();
+        expect(settledByOldPresenter).toBe(false);
 
         const handleToolEdit = assertSupported(
           bridgeB.progressViewInboundHandlers[
@@ -3026,10 +3243,9 @@ describe('DesktopProgressBridge', () => {
     it('keeps owner approvals pending when a replacement window also closes', async () => {
       const streamId = 'rebound-stream-second-close' as StreamTabId;
       const executionId = 'ec00ec' as ExecutionId;
-      const owner = await createReboundOwner({ streamId, executionId });
+      const owner = await createProcessOwner({ streamId, executionId });
       const messagesB: unknown[] = [];
       const { bridgeB } = await owner.reopen(messagesB);
-      await bridgeB.waitUntilReady();
 
       const approval = bridgeInteractions(owner.bridgeA).requestPlanApproval?.({
         approvalId: 'plan-second-window-close',
@@ -3053,6 +3269,7 @@ describe('DesktopProgressBridge', () => {
         );
       });
 
+      const staleInteractionsB = bridgeB.hostInteractions;
       bridgeB.dispose();
       const messagesC: unknown[] = [];
       const { bridgeB: bridgeC } = await owner.reopen(messagesC);
@@ -3075,6 +3292,17 @@ describe('DesktopProgressBridge', () => {
             }),
           );
         });
+        let settled = false;
+        void approval?.then(() => {
+          settled = true;
+        });
+        expect(
+          staleInteractionsB.submitPlanDecision('plan-second-window-close', {
+            action: 'approve',
+          }),
+        ).toBe(false);
+        await Promise.resolve();
+        expect(settled).toBe(false);
         expect(
           bridgeC.hostInteractions.submitPlanDecision(
             'plan-second-window-close',
@@ -3091,7 +3319,7 @@ describe('DesktopProgressBridge', () => {
       const streamId = 'rebound-stream-approval-gap' as StreamTabId;
       const executionId = 'ec00ef' as ExecutionId;
       const messagesA: unknown[] = [];
-      const owner = await createReboundOwner({
+      const owner = await createProcessOwner({
         streamId,
         executionId,
         messages: messagesA,
@@ -3134,8 +3362,6 @@ describe('DesktopProgressBridge', () => {
       const messagesB: unknown[] = [];
       const { bridgeB } = await owner.reopen(messagesB);
       try {
-        await bridgeB.waitUntilReady();
-
         const enableBypass = assertSupported(
           bridgeB.progressViewInboundHandlers[
             PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS
@@ -3152,7 +3378,7 @@ describe('DesktopProgressBridge', () => {
           isBashApprovalBypassedForStream(streamId, owner.bridgeA.session),
         ).toBe(true);
         expect(isApprovalBypassedForStream(streamId, bridgeB.session)).toBe(
-          false,
+          true,
         );
 
         await vi.waitFor(() => {
@@ -3190,15 +3416,14 @@ describe('DesktopProgressBridge', () => {
       }
     });
 
-    it('releases rebound stream interactions from the durable owner session', async () => {
+    it('releases process-session interactions when the stream is deleted', async () => {
       const streamId = 'rebound-stream-delete' as StreamTabId;
       const executionId = 'ec00f9' as ExecutionId;
-      const owner = await createReboundOwner({ streamId, executionId });
+      const owner = await createProcessOwner({ streamId, executionId });
       const messagesB: unknown[] = [];
       const { bridgeB } = await owner.reopen(messagesB);
 
       try {
-        await bridgeB.waitUntilReady();
         const planPromise = bridgeInteractions(
           owner.bridgeA,
         ).requestPlanApproval?.({
@@ -3246,13 +3471,76 @@ describe('DesktopProgressBridge', () => {
       }
     });
 
-    it('rebinds still-active child subagent and process handles so stops cascade from the new window (#8228)', async () => {
+    it('makes one headless approval visible when reopening under an excluding filter', async () => {
+      const streamId = 'rebound-filtered-approval' as StreamTabId;
+      const owner = await createProcessOwner({
+        streamId,
+        executionId: 'ec00fa' as ExecutionId,
+      });
+      const filterStreams = assertSupported(
+        owner.bridgeA.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.FILTER_STREAMS
+        ],
+      );
+      await filterStreams({
+        command: PROGRESS_VIEW_COMMANDS.FILTER_STREAMS,
+        filter: 'toolUse',
+      });
+      owner.close();
+      const pendingApproval =
+        owner.processSession.interactions.requestPlanApproval({
+          approvalId: 'plan-filtered-while-headless',
+          streamId,
+          plan: { objective: 'Restore the hidden approval stream.' },
+          goalEnabled: false,
+        });
+      const messagesB: unknown[] = [];
+      const { bridgeB } = await owner.reopen(messagesB);
+
+      try {
+        await vi.waitFor(() => {
+          const approvalShows = progressMessages(
+            messagesB,
+            PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+          ).filter(
+            (message) =>
+              message.action === 'show' &&
+              message.permission?.data?.approvalId ===
+                'plan-filtered-while-headless',
+          );
+          expect(approvalShows).toHaveLength(1);
+          expect(
+            progressMessages(
+              messagesB,
+              PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+            ).at(-1),
+          ).toMatchObject({
+            activeStream: streamId,
+            agentFilter: 'all',
+            streams: expect.arrayContaining([
+              expect.objectContaining({ name: streamId }),
+            ]),
+          });
+        });
+        expect(
+          bridgeB.hostInteractions.submitPlanDecision(
+            'plan-filtered-while-headless',
+            { action: 'approve' },
+          ),
+        ).toBe(true);
+        await expect(pendingApproval).resolves.toEqual({ action: 'approve' });
+      } finally {
+        bridgeB.dispose();
+      }
+    });
+
+    it('keeps children launched while headless canonical and stops their current handles (#8228)', async () => {
       const streamId = 'rebound-stream-4' as StreamTabId;
       const childStreamId = 'rebound-child-4' as StreamTabId;
       const executionId = 'ec00f0' as ExecutionId;
       const childExecutionId = 'ec00f1' as ExecutionId;
       const processExecutionId = 'ec00f2' as ExecutionId;
-      const owner = await createReboundOwner({
+      const owner = await createProcessOwner({
         streamId,
         executionId,
       });
@@ -3277,17 +3565,25 @@ describe('DesktopProgressBridge', () => {
       );
       const childInterrupt = vi.fn();
       childHandle.attachInterruptHandler({ interrupt: childInterrupt });
-      const { bridgeB } = await owner.reopen();
+      owner.close();
+      owner.processSession.executions.trackAgentExecution(childHandle, {
+        status: STREAM_PHASE.RUNNING,
+      });
+      owner.processSession.executions.track(processHandle);
+      expect(
+        owner.processSession.executions.getActiveChildren(streamId),
+      ).toMatchObject({
+        subagents: [expect.objectContaining({ executionId: childExecutionId })],
+        processes: [
+          expect.objectContaining({ executionId: processExecutionId }),
+        ],
+      });
+      const messagesB: unknown[] = [];
+      const { bridgeB } = await owner.reopen(messagesB);
 
       try {
-        await bridgeB.waitUntilReady();
-        // Children launched after startup repair are observed for root life.
-        owner.bridgeA.session.executions.trackAgentExecution(childHandle, {
-          status: STREAM_PHASE.RUNNING,
-        });
-        owner.bridgeA.session.executions.track(processHandle);
-
-        // Both children and the child status are now visible in window B.
+        bridgeB.syncFullView();
+        // Both headless children and the child status remain in the one registry.
         expect(bridgeB.session.executions.getHandle(childExecutionId)).toBe(
           childHandle,
         );
@@ -3297,6 +3593,22 @@ describe('DesktopProgressBridge', () => {
         expect(bridgeB.session.status.get(childStreamId)).toBe(
           STREAM_PHASE.RUNNING,
         );
+        expect(
+          progressMessages(messagesB, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(
+            -1,
+          ),
+        ).toMatchObject({
+          streamStates: {
+            [streamId]: {
+              activeSubagents: [
+                expect.objectContaining({ executionId: childExecutionId }),
+              ],
+              activeProcesses: [
+                expect.objectContaining({ executionId: processExecutionId }),
+              ],
+            },
+          },
+        });
 
         // Native child follow-ups replace the owner-side handle and trace.
         const { handle: freshChildHandle } = owner.createHandle({
@@ -3309,25 +3621,32 @@ describe('DesktopProgressBridge', () => {
         freshChildHandle.attachInterruptHandler({
           interrupt: freshChildInterrupt,
         });
-        owner.bridgeA.session.executions.track(freshChildHandle);
+        owner.processSession.executions.track(freshChildHandle);
         expect(bridgeB.session.executions.getHandle(childExecutionId)).toBe(
           freshChildHandle,
         );
 
         // Stop cascades through root, current child turn, and process.
-        bridgeB.session.executions.stopAgentStream(streamId);
+        const stopStream = assertSupported(
+          bridgeB.progressViewInboundHandlers[
+            PROGRESS_VIEW_COMMANDS.STOP_STREAM
+          ],
+        );
+        await stopStream({
+          command: PROGRESS_VIEW_COMMANDS.STOP_STREAM,
+          stream: streamId,
+        });
         expect(rootInterrupt).toHaveBeenCalledTimes(1);
         expect(childInterrupt).not.toHaveBeenCalled();
         expect(freshChildInterrupt).toHaveBeenCalledTimes(1);
         expect(killProcess).toHaveBeenCalledTimes(1);
 
-        // Owner-side process removal clears the mirrored entry too.
-        owner.bridgeA.session.executions.untrack(processExecutionId);
+        owner.processSession.executions.untrack(processExecutionId);
         expect(
           bridgeB.session.executions.getHandle(processExecutionId),
         ).toBeUndefined();
 
-        // Owner-side child removal clears both registries.
+        // Identity-safe removal clears the canonical registry.
         freshChildHandle.settleResult({
           type: 'result',
           outcome: RUN_OUTCOME.CANCELLED,
@@ -3337,7 +3656,7 @@ describe('DesktopProgressBridge', () => {
           category: 'toolUse',
           isSubagent: true,
         } as unknown as Parameters<typeof freshChildHandle.settleResult>[0]);
-        owner.bridgeA.session.executions.untrack(childExecutionId);
+        owner.processSession.executions.untrack(childExecutionId);
         await freshChildHandle.result;
         await settleProgressEvents();
         expect(
@@ -3351,29 +3670,157 @@ describe('DesktopProgressBridge', () => {
       }
     });
 
-    it('seeds live RUNNING and mirrors later owner transitions (#8230, #8231)', async () => {
+    it('completes a coordinated auto-close deletion while headless before reopen', async () => {
+      const streamId = 'headless-remove-parent' as StreamTabId;
+      const childStreamId = 'bash#headless-remove-child' as StreamTabId;
+      const owner = await createProcessOwner({
+        streamId,
+        executionId: 'ec00f7' as ExecutionId,
+      });
+      owner.processSession.transcripts.ensureStream(childStreamId);
+      owner.progressSnapshotStore.setDescription(
+        childStreamId,
+        'Transient bash child',
+      );
+      seedStreamStatusForTest(
+        owner.processSession.status,
+        childStreamId,
+        STREAM_PHASE.RUNNING,
+      );
+      owner.processSession.followUps.enqueue(
+        childStreamId,
+        { text: 'late follow-up' },
+        { force: true },
+      );
+      await owner.processSession.flushArtifacts();
+      owner.close();
+      const pendingApproval =
+        owner.processSession.interactions.requestPlanApproval({
+          approvalId: 'headless-remove-approval',
+          streamId: childStreamId,
+          plan: { objective: 'This must be released.' },
+          goalEnabled: false,
+        });
+
+      owner.processSession.events.emit({
+        scope: 'session',
+        event: {
+          type: 'removeStream',
+          payload: { streamId: childStreamId },
+        },
+      });
+      await owner.sessionStores.waitForPendingStreamDeletions();
+      expect(owner.processSession.transcripts.has(childStreamId)).toBe(false);
+      expect(owner.processSession.status.get(childStreamId)).toBeUndefined();
+      expect(owner.processSession.followUps.getAll(childStreamId)).toEqual([]);
+      await expect(pendingApproval).resolves.toEqual({
+        action: 'reject',
+        feedback: 'Stream resources released.',
+      });
+      expect(
+        await owner.progressSnapshotStore.listPersistedStreams(),
+      ).not.toContain(childStreamId);
+
+      const messagesB: unknown[] = [];
+      const { bridgeB } = await owner.reopen(messagesB);
+      try {
+        bridgeB.syncFullView();
+        expect(
+          progressMessages(messagesB, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(
+            -1,
+          ),
+        ).toMatchObject({
+          streams: [expect.objectContaining({ name: streamId })],
+        });
+        expect(
+          (
+            progressMessages(
+              messagesB,
+              PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+            ).at(-1) as ProgressMessage
+          ).streams?.map((stream) => stream.name),
+        ).not.toContain(childStreamId);
+      } finally {
+        bridgeB.dispose();
+      }
+    });
+
+    it('reattaches while an overlapping headless deletion settles as failed', async () => {
+      const streamId = 'headless-remove-owner' as StreamTabId;
+      const failedStreamId = 'headless-remove-failure' as StreamTabId;
+      const owner = await createProcessOwner({
+        streamId,
+        executionId: 'ec00f6' as ExecutionId,
+      });
+      owner.processSession.transcripts.ensureStream(failedStreamId);
+      const failure = new Error('execution metadata unavailable');
+      let markDeletionStarted!: () => void;
+      const deletionStarted = new Promise<void>((resolve) => {
+        markDeletionStarted = resolve;
+      });
+      let releaseDeletion!: () => void;
+      const deletionGate = new Promise<void>((resolve) => {
+        releaseDeletion = resolve;
+      });
+      vi.spyOn(
+        owner.progressSnapshotStore,
+        'readPersistedExecutionId',
+      ).mockImplementationOnce(async () => {
+        markDeletionStarted();
+        await deletionGate;
+        throw failure;
+      });
+      const unhandled = vi.fn();
+      process.on('unhandledRejection', unhandled);
+      owner.close();
+
+      try {
+        owner.processSession.events.emit({
+          scope: 'session',
+          event: {
+            type: 'removeStream',
+            payload: { streamId: failedStreamId },
+          },
+        });
+        await deletionStarted;
+        const pendingDrain = vi.spyOn(
+          owner.sessionStores,
+          'waitForPendingStreamDeletions',
+        );
+        const reopening = owner.reopen();
+        await vi.waitFor(() => expect(pendingDrain).toHaveBeenCalled());
+        releaseDeletion();
+
+        const { bridgeB } = await reopening;
+        bridgeB.syncFullView();
+        await settleProgressEvents();
+        expect(unhandled).not.toHaveBeenCalled();
+        expect(owner.processSession.transcripts.has(failedStreamId)).toBe(true);
+      } finally {
+        process.off('unhandledRejection', unhandled);
+      }
+    });
+
+    it('preserves live phase, handle replacement, trace, and result across reopen (#8230, #8231)', async () => {
       const streamId = 'rebound-stream-5' as StreamTabId;
       const executionId = 'ec00f3' as ExecutionId;
-      const owner = await createReboundOwner({
+      const owner = await createProcessOwner({
         streamId,
         executionId,
       });
-      const { bridgeB } = await owner.reopen();
+      const { bridgeB, errorsB } = await owner.reopen();
       const resultsSeenByB: unknown[] = [];
       const detachResult = bridgeB.session.onResult((event) => {
         resultsSeenByB.push(event);
       });
 
       try {
-        await bridgeB.waitUntilReady();
-
         expect(bridgeB.session.executions.getHandle(executionId)).toBe(
           owner.handle,
         );
-        // Rebind seeds the replacement window from the live owner.
         expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.RUNNING);
 
-        // Later owner transitions continue mirroring into window B.
+        // Window presentation does not split canonical lifecycle state.
         expect(
           owner.bridgeA.session.status.transitionToWaiting(streamId, 'wait', {
             trace: owner.trace as unknown as AgentTrace,
@@ -3390,7 +3837,7 @@ describe('DesktopProgressBridge', () => {
         ).toBe(true);
         expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.RUNNING);
 
-        // A later owner turn replaces both handle and trace.
+        // A later turn replaces both handle and trace in the same registry.
         const { handle: freshHandle, trace: freshTrace } = owner.createHandle();
         owner.bridgeA.session.executions.track(freshHandle);
         expect(bridgeB.session.executions.getHandle(executionId)).toBe(
@@ -3405,18 +3852,29 @@ describe('DesktopProgressBridge', () => {
 
         const resultEvent = {
           type: 'result' as const,
-          outcome: RUN_OUTCOME.COMPLETED,
+          outcome: RUN_OUTCOME.FAILED,
           executionId,
           streamId,
           agentName: 'proofreader',
           category: 'workflow' as const,
           isSubagent: false,
+          error: {
+            kind: 'unexpected' as const,
+            message: 'Failure after desktop reopen.',
+          },
         };
         freshTrace.emit(resultEvent);
+        expect(
+          owner.processSession.status.transitionToTerminal(
+            streamId,
+            STREAM_PHASE.FAILED,
+            { trace: freshTrace as unknown as AgentTrace },
+          ),
+        ).toBe(true);
         expect(resultsSeenByB).toContainEqual(resultEvent);
-        expect(bridgeB.session.status.get(streamId)).toBe(
-          STREAM_PHASE.COMPLETED,
-        );
+        expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.FAILED);
+        expect(errorsB).toEqual(['Failure after desktop reopen.']);
+        expect(owner.errorsA).toEqual([]);
         owner.bridgeA.session.executions.untrack(executionId);
         expect(
           bridgeB.session.executions.getHandle(executionId),
@@ -3427,13 +3885,12 @@ describe('DesktopProgressBridge', () => {
       }
     });
 
-    it('detaches agent and process mirrors when the reopened window closes', async () => {
+    it('detaches a closed presentation without disposing process executions', async () => {
       const streamId = 'rebound-stream-dispose' as StreamTabId;
       const executionId = 'ec00f5' as ExecutionId;
       const processExecutionId = 'ec00f6' as ExecutionId;
-      const owner = await createReboundOwner({ streamId, executionId });
+      const owner = await createProcessOwner({ streamId, executionId });
       const { bridgeB } = await owner.reopen();
-      await bridgeB.waitUntilReady();
 
       const processHandle = new owner.ProcessExecutionHandle(
         processExecutionId,
@@ -3448,25 +3905,35 @@ describe('DesktopProgressBridge', () => {
       );
 
       bridgeB.dispose();
-      expect(bridgeB.session.executions.getHandle(executionId)).toBeUndefined();
+      expect(owner.processSession.executions.getHandle(executionId)).toBe(
+        owner.handle,
+      );
       expect(
-        bridgeB.session.executions.getHandle(processExecutionId),
-      ).toBeUndefined();
+        owner.processSession.executions.getHandle(processExecutionId),
+      ).toBe(processHandle);
 
       const { handle: freshHandle } = owner.createHandle();
-      owner.bridgeA.session.executions.track(freshHandle);
-      owner.bridgeA.session.executions.untrack(processExecutionId);
-      expect(bridgeB.session.executions.getHandle(executionId)).toBeUndefined();
-      expect(
-        bridgeB.session.executions.getHandle(processExecutionId),
-      ).toBeUndefined();
-      owner.bridgeA.session.executions.untrack(executionId);
+      owner.processSession.executions.track(freshHandle);
+      const { bridgeB: bridgeC } = await owner.reopen();
+      try {
+        expect(bridgeC.session).toBe(owner.processSession);
+        expect(bridgeC.session.executions.getHandle(executionId)).toBe(
+          freshHandle,
+        );
+        expect(bridgeC.session.executions.getHandle(processExecutionId)).toBe(
+          processHandle,
+        );
+      } finally {
+        bridgeC.dispose();
+        owner.processSession.executions.untrack(processExecutionId);
+        owner.processSession.executions.untrack(executionId);
+      }
     });
 
-    it('releases the original session registration when a resume supersedes the rebound handle (#8229)', async () => {
+    it('keeps a replacement handle when its stale predecessor settles late (#8229)', async () => {
       const streamId = 'rebound-stream-6' as StreamTabId;
       const executionId = 'ec00f4' as ExecutionId;
-      const owner = await createReboundOwner({
+      const owner = await createProcessOwner({
         streamId,
         executionId,
         agentName: 'search',
@@ -3482,12 +3949,11 @@ describe('DesktopProgressBridge', () => {
       const { bridgeB } = await owner.reopen();
 
       try {
-        await bridgeB.waitUntilReady();
         expect(bridgeB.session.executions.getHandle(executionId)).toBe(
           owner.handle,
         );
 
-        // Local resume replaces the rebound handle under the same id.
+        // Resume replaces the canonical handle under the same id.
         const { handle: freshHandle } = owner.createHandle();
         bridgeB.session.executions.track(freshHandle);
         expect(
@@ -3498,11 +3964,10 @@ describe('DesktopProgressBridge', () => {
           ),
         ).toBe(true);
 
-        // The replacement releases window A's stale registration.
-        expect(
-          owner.bridgeA.session.executions.getHandle(executionId),
-        ).toBeUndefined();
-        // Identity-safe cleanup preserves the fresh local handle.
+        expect(owner.bridgeA.session.executions.getHandle(executionId)).toBe(
+          freshHandle,
+        );
+        // Identity-safe cleanup preserves the fresh handle.
         expect(bridgeB.session.executions.getHandle(executionId)).toBe(
           freshHandle,
         );
@@ -3527,10 +3992,10 @@ describe('DesktopProgressBridge', () => {
       }
     });
 
-    it('publishes mirrored owner status changes as updateStreamStatus session facts (#8256)', async () => {
+    it('publishes canonical status changes as updateStreamStatus session facts (#8256)', async () => {
       const streamId = 'rebound-stream-7' as StreamTabId;
       const executionId = 'ec00f7' as ExecutionId;
-      const owner = await createReboundOwner({ streamId, executionId });
+      const owner = await createProcessOwner({ streamId, executionId });
       const { bridgeB } = await owner.reopen();
       const facts: SessionFact[] = [];
       const detachFacts = bridgeB.session.events.subscribe(
@@ -3541,12 +4006,12 @@ describe('DesktopProgressBridge', () => {
       );
 
       try {
-        await bridgeB.waitUntilReady();
-
-        // A bare owner-machine transition (no live trace) must still reach
-        // the reopened window's UI as a session fact.
+        // A bare process-session transition (no live trace) still reaches the
+        // reopened presentation as a session fact.
         expect(
-          owner.bridgeA.session.status.transitionToWaiting(streamId, 'wait'),
+          owner.processSession.status.transitionToWaiting(streamId, 'wait', {
+            events: owner.processSession.events,
+          }),
         ).toBe(true);
         expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
         expect(facts).toContainEqual(
@@ -3564,12 +4029,12 @@ describe('DesktopProgressBridge', () => {
       }
     });
 
-    it('mirrors a child terminal status that lands after the owner untracks (#8257)', async () => {
+    it('preserves a child terminal status that lands after owner untrack (#8257)', async () => {
       const streamId = 'rebound-stream-8' as StreamTabId;
       const childStreamId = 'rebound-child-8' as StreamTabId;
       const executionId = 'ec00f8' as ExecutionId;
       const childExecutionId = 'ec00f9' as ExecutionId;
-      const owner = await createReboundOwner({ streamId, executionId });
+      const owner = await createProcessOwner({ streamId, executionId });
       const { handle: childHandle } = owner.createHandle({
         executionId: childExecutionId,
         childStreamId,
@@ -3586,7 +4051,6 @@ describe('DesktopProgressBridge', () => {
       );
 
       try {
-        await bridgeB.waitUntilReady();
         owner.bridgeA.session.executions.trackAgentExecution(childHandle, {
           status: STREAM_PHASE.RUNNING,
         });
@@ -3604,6 +4068,7 @@ describe('DesktopProgressBridge', () => {
           owner.bridgeA.session.status.transitionToTerminal(
             childStreamId,
             STREAM_PHASE.COMPLETED,
+            { events: owner.processSession.events },
           ),
         ).toBe(true);
         expect(bridgeB.session.status.get(childStreamId)).toBe(
@@ -3618,38 +4083,20 @@ describe('DesktopProgressBridge', () => {
             }),
           }),
         );
-
-        // The terminal mirror was the binding's last act; later owner-machine
-        // transitions for the finished child no longer mirror.
-        expect(
-          owner.bridgeA.session.status.transition(
-            childStreamId,
-            STREAM_PHASE.RUNNING,
-            'resume',
-          ),
-        ).toBe(true);
-        expect(bridgeB.session.status.get(childStreamId)).toBe(
-          STREAM_PHASE.COMPLETED,
-        );
       } finally {
         detachFacts();
         bridgeB.dispose();
       }
     });
 
-    it('mirrors a terminal owner status onto a WAITING target through resume choreography', async () => {
+    it('moves a waiting canonical stream to terminal after owner untrack', async () => {
       const streamId = 'rebound-stream-12' as StreamTabId;
       const executionId = 'ec00fe' as ExecutionId;
-      const owner = await createReboundOwner({ streamId, executionId });
+      const owner = await createProcessOwner({ streamId, executionId });
       const { bridgeB } = await owner.reopen();
 
       try {
-        await bridgeB.waitUntilReady();
-
-        // A target-local wait skews the machines: the target sits at WAITING
-        // while the owner finishes from RUNNING. The terminal mirror must go
-        // through transitionToTerminal's resume choreography, not the plain
-        // cause-preserving transition (which rejects WAITING -> terminal).
+        // Finalization untracks first, then performs WAITING -> terminal.
         expect(
           bridgeB.session.status.transitionToWaiting(streamId, 'wait'),
         ).toBe(true);
@@ -3668,42 +4115,99 @@ describe('DesktopProgressBridge', () => {
       }
     });
 
-    it('replays initial run config and description for descendants bound after tracking (#8258)', async () => {
+    it('persists exact headless run facts and restores them once on reopen (#8258)', async () => {
       const streamId = 'rebound-stream-9' as StreamTabId;
       const childStreamId = 'rebound-child-9' as StreamTabId;
       const executionId = 'ec00fa' as ExecutionId;
       const childExecutionId = 'ec00fb' as ExecutionId;
-      const owner = await createReboundOwner({ streamId, executionId });
-      const { bridgeB, progressSnapshotStore } = await owner.reopen();
+      const owner = await createProcessOwner({ streamId, executionId });
       const childConfig = {
         agent: 'searcher',
         model: 'deepseekproT',
         agentCategory: AgentCategory.ToolUse,
         toolConfig: DEFAULT_TOOL_CONFIG,
       } as unknown as AgentConfig;
+      const outputFile: OutputFileInfo = {
+        source: 'exact-output.tex',
+        location: {
+          kind: 'workspace',
+          absolutePath: '/workspace/exact-output.pdf',
+          relativePath: 'exact-output.pdf',
+        },
+        round: 1,
+        lineage: null,
+        diff: null,
+      };
       const events: SessionEvent[] = [];
-      const detachEvents = bridgeB.session.events.subscribe((event) => {
+      const detachEvents = owner.processSession.events.subscribe((event) => {
         events.push(event);
       });
 
+      owner.close();
+      let bridgeB: TestableBridge | undefined;
       try {
-        await bridgeB.waitUntilReady();
-
-        // Spawn a child AFTER the root was rebound: its run.config and
-        // description fired on the owner side before tracking, so only the
-        // handle-carried replay can deliver them to the reopened window.
+        owner.processSession.transcripts.ensureStream(childStreamId);
+        await owner
+          .getExecutionStore(childExecutionId)
+          .writeConfig(childConfig);
         const { handle: childHandle } = owner.createHandle({
           executionId: childExecutionId,
           childStreamId,
           agentName: 'searcher',
           category: AgentCategory.ToolUse,
         });
-        childHandle.initialRunFacts = {
+        owner.processSession.publishRunEvent(childStreamId, {
+          type: 'run.config',
+          streamId: childStreamId,
+          executionId: childExecutionId,
           config: childConfig,
-          description: 'Search the docs',
-        };
-        owner.bridgeA.session.executions.trackAgentExecution(childHandle, {
+        });
+        owner.processSession.events.emit({
+          scope: 'session',
+          event: {
+            type: 'updateStreamDescription',
+            payload: {
+              streamId: childStreamId,
+              description: 'Search the docs',
+            },
+          },
+        });
+        owner.processSession.events.emit({
+          scope: 'session',
+          event: {
+            type: 'setParentStream',
+            payload: {
+              childStreamId,
+              parentStreamId: streamId,
+            },
+          },
+        });
+        owner.processSession.publishRunEvent(childStreamId, {
+          type: 'usage',
+          payload: {
+            streamId: childStreamId,
+            storageKey: childExecutionId as StorageKey,
+            usage: {
+              inputTokens: 11,
+              outputTokens: 7,
+              cost: 0.125,
+            },
+          },
+        } as AgentEvent);
+        owner.processSession.publishRunEvent(childStreamId, {
+          type: 'addOutputFiles',
+          streamId: childStreamId,
+          filesByRound: { 1: [outputFile] },
+        });
+        owner.processSession.executions.trackAgentExecution(childHandle, {
           status: STREAM_PHASE.RUNNING,
+        });
+        owner.processSession.transcripts.append(childStreamId, {
+          id: 'headless-log',
+          type: STREAM_LOG_ENTRY_TYPES.LOG,
+          level: LOG_LEVELS.INFO,
+          timestamp: 2_000,
+          text: 'Emitted while the desktop had no window.',
         });
 
         expect(events).toContainEqual(
@@ -3730,18 +4234,83 @@ describe('DesktopProgressBridge', () => {
           }),
         );
         await settleProgressEvents();
-        expect(progressSnapshotStore.getExecutionId(childStreamId)).toBe(
-          childExecutionId,
-        );
-        expect(progressSnapshotStore.getRunConfig(childStreamId)?.agent).toBe(
-          'searcher',
-        );
-        expect(progressSnapshotStore.getDescription(childStreamId)).toBe(
-          'Search the docs',
-        );
+        await owner.processSession.flushArtifacts();
+        const messagesB: unknown[] = [];
+        const reopened = await owner.reopen(messagesB);
+        bridgeB = reopened.bridgeB;
+        const { progressSnapshotStore } = reopened;
+        // Output files are not part of a tool-use stream's full-render payload;
+        // verify that durable fact separately while the common facts below are
+        // checked at the renderer boundary.
+        expect(progressSnapshotStore.getOutputFiles(childStreamId)).toEqual({
+          1: [outputFile],
+        });
+
+        bridgeB.setActiveStream(childStreamId);
+        const childMessages = (command: string, idKey: string) =>
+          progressMessages(messagesB, command).filter(
+            (message) =>
+              (message as unknown as Record<string, unknown>)[idKey] ===
+              childStreamId,
+          );
+        await vi.waitFor(() => {
+          expect(
+            childMessages(PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT, 'stream'),
+          ).toHaveLength(1);
+          expect(
+            childMessages(PROGRESS_VIEW_COMMANDS.LOG_DELTA, 'streamId'),
+          ).toHaveLength(1);
+        });
+        expect(
+          progressMessages(messagesB, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(
+            -1,
+          ),
+        ).toMatchObject({
+          activeStream: childStreamId,
+          streams: expect.arrayContaining([
+            expect.objectContaining({
+              name: childStreamId,
+              agent: 'searcher',
+              agentCategory: AgentCategory.ToolUse,
+              parentStreamId: streamId,
+              description: 'Search the docs',
+            }),
+          ]),
+        });
+        expect(
+          childMessages(PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT, 'stream'),
+        ).toEqual([
+          expect.objectContaining({
+            action: 'render',
+            kind: AgentCategory.ToolUse,
+            runUsage: {
+              [childExecutionId]: expect.objectContaining({
+                inputTokens: 11,
+                outputTokens: 7,
+                cost: 0.125,
+              }),
+            },
+            activeState: expect.objectContaining({
+              parentStreamId: streamId,
+            }),
+          }),
+        ]);
+        expect(
+          childMessages(PROGRESS_VIEW_COMMANDS.LOG_DELTA, 'streamId'),
+        ).toEqual([
+          expect.objectContaining({
+            entries: [
+              expect.objectContaining({
+                id: 'headless-log',
+                text: 'Emitted while the desktop had no window.',
+              }),
+            ],
+          }),
+        ]);
       } finally {
+        bridgeB?.dispose();
         detachEvents();
-        bridgeB.dispose();
+        await owner.getExecutionStore(childExecutionId).clear();
       }
     });
   });

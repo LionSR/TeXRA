@@ -113,6 +113,32 @@ describe('SettingsModelSelectionController', () => {
     });
   });
 
+  it('keeps Kimi K3 under Moonshot while preserving its effective route', async () => {
+    const controller = new SettingsModelSelectionController({
+      state: createState(),
+      resolveModelOptions: async (models) =>
+        (await resolveModelOptions(models)).map((option) =>
+          option.value === 'kimi3'
+            ? {
+                ...option,
+                provider: 'kimiCode',
+                routeLabel: 'Via Kimi Code',
+              }
+            : option,
+        ),
+      getRuntimeModelEntries: NO_RUNTIME_MODELS,
+    });
+
+    expect(
+      (await controller.buildSelectionData()).models.find(
+        (model) => model.name === 'kimi3',
+      ),
+    ).toMatchObject({
+      provider: 'moonshot',
+      routeLabel: 'Via Kimi Code',
+    });
+  });
+
   it('moves a stale helper fallback when disabling the effective helper model', async () => {
     const state = createState({
       enabledModels: ['gpt55', 'sonnet46T'],
