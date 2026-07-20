@@ -7,27 +7,12 @@ import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import type {
-  ConfigInspection,
-  ConfigTarget,
-  StateStore,
-} from '@platform/interfaces';
+import type { ConfigInspection, ConfigTarget } from '@platform/interfaces';
+import { MemoryStateStore } from '@platform/defaults/memoryState';
 import {
   BASH_APPROVAL_CONFIG_TARGET,
   setBashApprovalEnabled,
 } from '@shared/settingsView/handlers/approvalHandlers';
-
-class MemoryStateStore implements StateStore {
-  private readonly values = new Map<string, unknown>();
-
-  get<T>(key: string, defaultValue?: T): T {
-    return (this.values.has(key) ? this.values.get(key) : defaultValue) as T;
-  }
-
-  async update(key: string, value: unknown): Promise<void> {
-    this.values.set(key, value);
-  }
-}
 
 class RecordingConfigProvider {
   readonly updateCalls: Array<{
