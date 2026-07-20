@@ -67,10 +67,7 @@ import {
   extractReasoningDelta as extractReasoningDeltaFromChunk,
 } from './openAIChatHelpers';
 import { toOpenAITools } from '../toolConversion';
-import {
-  formatAttachmentSummary,
-  formatToolResultAsText,
-} from '../utils/toolAttachmentUtils';
+import { formatToolResultTextWithAttachments } from '../utils/toolAttachmentUtils';
 import { ModelHandler } from '../ModelHandler';
 import {
   BaseReasoningStreamAggregator,
@@ -1263,15 +1260,14 @@ export class ModelHandlerOpenAI<
     );
 
     // Build tool result as plain text - JSON wastes tokens
-    const attachmentSummary =
-      this.canProcessToolResultAttachments && attachments.length > 0
-        ? formatAttachmentSummary(attachments)
-        : undefined;
-
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
       tool_call_id: toolCall.id,
-      content: formatToolResultAsText(result, attachmentSummary),
+      content: formatToolResultTextWithAttachments(
+        result,
+        attachments,
+        this.canProcessToolResultAttachments,
+      ),
     };
     return [callMsg, resultMsg];
   }
@@ -1310,7 +1306,11 @@ export class ModelHandlerOpenAI<
     const toolResultMessages = toolCalls.map((call, i) => ({
       role: 'tool' as const,
       tool_call_id: call.id,
-      content: formatToolResultAsText(entries[i].result),
+      content: formatToolResultTextWithAttachments(
+        entries[i].result,
+        entries[i].attachments,
+        this.canProcessToolResultAttachments,
+      ),
     }));
 
     return [callMsg, ...toolResultMessages];
