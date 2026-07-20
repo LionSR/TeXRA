@@ -54,6 +54,19 @@ function formatOutputText(content: unknown): string {
   }
 }
 
+function normalizedExitCode(data: unknown, input: unknown): number | undefined {
+  for (const candidate of [data, input]) {
+    if (!isObject(candidate)) continue;
+    const raw =
+      candidate.exitCode ??
+      candidate.exit_code ??
+      (isObject(candidate.output) ? candidate.output.exitCode : undefined);
+    if (typeof raw === 'number' && Number.isInteger(raw)) return raw;
+    if (typeof raw === 'string' && /^-?\d+$/.test(raw)) return Number(raw);
+  }
+  return undefined;
+}
+
 export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
   const parseResult = ToolUseLogSchema.safeParse(data);
   if (!parseResult.success) return null;
@@ -80,16 +93,13 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
     errorText,
   );
 
-  // Preserve unknown fields stripped by the schema for fallback rendering.
-  const parsed: Record<string, unknown> = isObject(data)
-    ? { ...data }
-    : { ...validated };
+  const exitCode = normalizedExitCode(data, validated.input);
 
   return {
-    parsed,
     toolName,
     errorText,
     outputText,
+    ...(exitCode !== undefined ? { exitCode } : {}),
     userInstructionText,
     input: validated.input,
     isError,

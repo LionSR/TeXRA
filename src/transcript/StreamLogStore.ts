@@ -1114,39 +1114,35 @@ export class StreamLogStore {
     // write can't re-mark the stream dirty (there'd be no log entries left).
     for (const streamId of dirtyIds) this.flushing.add(streamId);
 
-    // `Promise.allSettled` keeps per-stream outcomes so a single failed
-    // write doesn't poison the drain for the other streams in the batch —
-    // `pendingRelease` entries for streams that wrote fine still get evicted.
-    const writePromise = Promise.allSettled(
-      dirtyIds.map((streamId) => {
+    // Write streams one at a time. Each KV write serializes the stream's full
+    // transcript to JSON before the filesystem await; starting every dirty
+    // stream together retains all of those large JSON strings simultaneously.
+    // Sequential writes keep peak memory proportional to one serialized
+    // transcript while preserving independent per-stream failure handling.
+    const writePromise = (async () => {
+      for (const streamId of dirtyIds) {
         const logInstance = this.logs.get(streamId);
-        return logInstance
-          ? this.writeStream(streamId, logInstance, writeGeneration)
-          : Promise.resolve();
-      }),
-    )
-      .then((results) => {
-        // Failed writes re-mark their streams dirty so the next save
-        // retries. Successful streams are now persisted and safe to evict
-        // (drainPendingReleases' dirtyStreamIds check excludes failed ones).
-        results.forEach((result, i) => {
-          if (result.status === 'rejected') {
-            const streamId = dirtyIds[i];
-            if (this.logs.has(streamId)) this.dirtyStreamIds.add(streamId);
-          }
-        });
-      })
-      .finally(() => {
-        for (const streamId of dirtyIds) this.flushing.delete(streamId);
-        if (this.inFlightWrite === writePromise) {
-          this.inFlightWrite = null;
+        if (!logInstance) continue;
+        try {
+          await this.writeStream(streamId, logInstance, writeGeneration);
+        } catch {
+          // Failed writes re-mark their stream dirty so the next save retries.
+          // Continue draining the batch so one unavailable file does not
+          // prevent unrelated transcripts from becoming durable.
+          if (this.logs.has(streamId)) this.dirtyStreamIds.add(streamId);
         }
-        this.drainPendingReleases();
-        // Settle the snapshotted save awaiters — on failure the dirty
-        // streams have already been re-marked for retry, so resolve
-        // regardless.
-        for (const resolve of awaiters) resolve();
-      });
+      }
+    })().finally(() => {
+      for (const streamId of dirtyIds) this.flushing.delete(streamId);
+      if (this.inFlightWrite === writePromise) {
+        this.inFlightWrite = null;
+      }
+      this.drainPendingReleases();
+      // Settle the snapshotted save awaiters — on failure the dirty
+      // streams have already been re-marked for retry, so resolve
+      // regardless.
+      for (const resolve of awaiters) resolve();
+    });
 
     this.inFlightWrite = writePromise;
     return writePromise;

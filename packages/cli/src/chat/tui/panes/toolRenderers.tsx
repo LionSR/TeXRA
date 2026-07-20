@@ -295,16 +295,7 @@ function visibleOutputLines(
 }
 
 function extractExitCode(toolUse: NormalizedToolUse): number | undefined {
-  const candidates = [toolUse.parsed, toolUse.input];
-  for (const candidate of candidates) {
-    if (!isObject(candidate)) continue;
-    const raw =
-      candidate.exitCode ??
-      candidate.exit_code ??
-      (isObject(candidate.output) ? candidate.output.exitCode : undefined);
-    if (typeof raw === 'number' && Number.isInteger(raw)) return raw;
-    if (typeof raw === 'string' && /^\d+$/.test(raw)) return Number(raw);
-  }
+  if (toolUse.exitCode !== undefined) return toolUse.exitCode;
 
   const match = /\bexit(?: code)?\s+(\d+)\b/i.exec(
     [toolUse.errorText, toolUse.headerSummary, toolUse.outputText].join('\n'),

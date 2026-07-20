@@ -191,6 +191,7 @@ export class ToolUseWaitNode<C> extends Node<
     shared.lastError = undefined;
     shared.userCancelledRetry = undefined;
 
+    await session.transcripts.ensureLoaded(streamId);
     session.status.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
       trace: logger,
     });
