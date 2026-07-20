@@ -14,7 +14,7 @@ import { renderLoadingState } from '@shared/wa/loadingState';
 // Local imports - errors
 import { extractErrorMessage } from '@utils/errors/errorMessage';
 
-type MonacoModule = typeof import('monaco-editor/esm/vs/editor/editor.api.js');
+type MonacoModule = typeof import('monaco-editor/editor/editor.api.js');
 type MonacoWorkerModule = { default: new () => Worker };
 type DiffEditor = ReturnType<MonacoModule['editor']['createDiffEditor']>;
 type TextModel = ReturnType<MonacoModule['editor']['createModel']>;
@@ -63,12 +63,12 @@ function setupMonacoWorkers(workers: MonacoWorkerConstructors): void {
 
 async function loadMonaco(): Promise<MonacoModule> {
   monacoLoad ??= Promise.all([
-    import('monaco-editor/esm/vs/editor/editor.api.js'),
-    import('monaco-editor/esm/vs/editor/editor.worker?worker'),
-    import('monaco-editor/esm/vs/language/json/json.worker?worker'),
-    import('monaco-editor/esm/vs/language/css/css.worker?worker'),
-    import('monaco-editor/esm/vs/language/html/html.worker?worker'),
-    import('monaco-editor/esm/vs/language/typescript/ts.worker?worker'),
+    import('monaco-editor/editor/editor.api.js'),
+    import('monaco-editor/editor/editor.worker?worker'),
+    import('monaco-editor/language/json/json.worker?worker'),
+    import('monaco-editor/language/css/css.worker?worker'),
+    import('monaco-editor/language/html/html.worker?worker'),
+    import('monaco-editor/language/typescript/ts.worker?worker'),
   ])
     .then(
       ([monaco, editorWorker, jsonWorker, cssWorker, htmlWorker, tsWorker]) => {
