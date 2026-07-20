@@ -270,7 +270,6 @@ export class AgentExecutionHandle implements ExecutionHandle {
    */
   clearWaitingCleanup(): void {
     this.waitingCleanups = undefined;
-    this.waitingCleanupCompletion = Promise.resolve();
   }
 
   /**

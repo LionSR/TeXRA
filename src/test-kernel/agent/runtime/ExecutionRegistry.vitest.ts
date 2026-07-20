@@ -97,6 +97,33 @@ function createHandle(
 }
 
 describe('executionRegistry', () => {
+  it('retains an in-progress waiting cleanup after registrations are cleared', async () => {
+    const handle = createHandle(
+      'exec-waiting-cleanup-completion',
+      'stream-waiting-cleanup-completion' as StreamTabId,
+      'stream-waiting-cleanup-completion' as StreamTabId,
+      createRecordingHost().host,
+    );
+    let finishCleanup: () => void = () => undefined;
+    const cleanupFinished = new Promise<void>((resolve) => {
+      finishCleanup = resolve;
+    });
+    handle.registerWaitingCleanup(() => cleanupFinished);
+
+    expect(handle.runWaitingCleanup()).toBe(true);
+    handle.clearWaitingCleanup();
+    let observedCompletion = false;
+    const observation = handle.waitForWaitingCleanup().then(() => {
+      observedCompletion = true;
+    });
+    await Promise.resolve();
+    expect(observedCompletion).toBe(false);
+
+    finishCleanup();
+    await observation;
+    expect(observedCompletion).toBe(true);
+  });
+
   it('settles without persisting a stopped waiting handle after lease loss', async () => {
     const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
