@@ -12,37 +12,29 @@ import type { SettingsStatePorts } from '@shared/settingsView/types';
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 
-interface DesktopToolDashboardPort {
-  buildItems(
-    cachedResults?: ExternalToolCheckResult[],
-  ): Promise<ToolDashboardItem[]>;
-  getCachedCheckResults(): Promise<ExternalToolCheckResult[] | undefined>;
-  refreshAvailability(): Promise<void>;
-  refreshDisabledCache(): Promise<void>;
-  findCommand(
-    toolId: string,
-    kind: 'install' | 'auth',
-  ): Promise<string | undefined>;
-}
-
-interface DesktopToolingRendererPort {
-  postToRenderer(message: unknown): void;
-}
-
-interface DesktopToolingNavigationPort {
-  openExternal(url: string): Promise<void>;
-  presentExtensionInstall(extensionId: string): Promise<void>;
-}
-
-interface DesktopToolingCommandPort {
-  run(command: string): Promise<void>;
-}
-
 interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePorts {
-  readonly renderer: DesktopToolingRendererPort;
-  readonly dashboard: DesktopToolDashboardPort;
-  readonly navigation: DesktopToolingNavigationPort;
-  readonly commands: DesktopToolingCommandPort;
+  readonly renderer: {
+    postToRenderer(message: unknown): void;
+  };
+  readonly dashboard: {
+    buildItems(
+      cachedResults?: ExternalToolCheckResult[],
+    ): Promise<ToolDashboardItem[]>;
+    getCachedCheckResults(): Promise<ExternalToolCheckResult[] | undefined>;
+    refreshAvailability(): Promise<void>;
+    refreshDisabledCache(): Promise<void>;
+    findCommand(
+      toolId: string,
+      kind: 'install' | 'auth',
+    ): Promise<string | undefined>;
+  };
+  readonly navigation: {
+    openExternal(url: string): Promise<void>;
+    presentExtensionInstall(extensionId: string): Promise<void>;
+  };
+  readonly commands: {
+    run(command: string): Promise<void>;
+  };
   readonly latexToolingController: LatexToolingController;
   readonly latexConfigPersistenceController: LatexConfigPersistenceController;
 }

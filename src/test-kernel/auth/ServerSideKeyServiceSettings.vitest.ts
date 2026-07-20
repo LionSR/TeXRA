@@ -7,28 +7,9 @@ import { ServerSideKeyService } from '@auth/serverKeys/ServerSideKeyService';
 import type { TierService } from '@auth/serverKeys/TierService';
 import { appSignals } from '@eventBus/AppSignals';
 import type { StateStore } from '@platform/interfaces';
+import { FakeStateStore } from '@test/support/FakePlatform';
 
 const USE_INCLUDED_ACCESS_KEY = 'texra.useIncludedModelAccess';
-
-class MemoryState implements StateStore {
-  private readonly values = new Map<string, unknown>();
-
-  constructor(initialValues: Record<string, unknown> = {}) {
-    for (const [key, value] of Object.entries(initialValues)) {
-      this.values.set(key, value);
-    }
-  }
-
-  get<T>(key: string, defaultValue?: T): T {
-    return this.values.has(key)
-      ? (this.values.get(key) as T)
-      : (defaultValue as T);
-  }
-
-  async update(key: string, value: unknown): Promise<void> {
-    this.values.set(key, value);
-  }
-}
 
 interface FakeTierService {
   clearCacheCalls: number;
@@ -95,7 +76,7 @@ function createService(
 describe('ServerSideKeyService', () => {
   it('reads the included-access setting from host-provided state', () => {
     const tier = createTierService();
-    const state = new MemoryState({ [USE_INCLUDED_ACCESS_KEY]: false });
+    const state = new FakeStateStore({ [USE_INCLUDED_ACCESS_KEY]: false });
     const service = createService(tier.service, state);
 
     assert.equal(service.getUseIncludedModelAccess(), false);
@@ -103,7 +84,7 @@ describe('ServerSideKeyService', () => {
 
   it('persists setting changes and fires change events', async () => {
     const tier = createTierService();
-    const state = new MemoryState({ [USE_INCLUDED_ACCESS_KEY]: false });
+    const state = new FakeStateStore({ [USE_INCLUDED_ACCESS_KEY]: false });
     const changes: boolean[] = [];
     const service = createService(tier.service, state, (value) => {
       changes.push(value);

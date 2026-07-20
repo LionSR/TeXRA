@@ -39,7 +39,6 @@ function usableConfiguredAgent(value: string | undefined): string | undefined {
 }
 
 export const BUILTIN_DEFAULT_CHAT_MODEL = CLI_BUILTIN_DEFAULT_MODEL;
-export { BUILTIN_DEFAULT_CHAT_AGENT } from './defaultAgents';
 
 export interface ChatDefaults {
   readonly agent: string;

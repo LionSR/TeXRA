@@ -50,30 +50,24 @@ import {
 } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-interface DesktopCredentialRendererPort {
-  postToRenderer(message: unknown): void;
-}
-
-interface DesktopCredentialNotificationPort {
-  showInfoMessage(message: string): Promise<void>;
-  showErrorMessage(message: string): Promise<void>;
-}
-
-interface DesktopCredentialAuthPort {
-  signIn(): Promise<void>;
-  signOut(): Promise<void>;
-}
-
 interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts {
   readonly config: ConfigProvider;
   readonly secrets: PlatformSecrets;
-  readonly renderer: DesktopCredentialRendererPort;
+  readonly renderer: {
+    postToRenderer(message: unknown): void;
+  };
   readonly prompt: Pick<PromptHost, 'input' | 'confirm'>;
   readonly externalOpener: Pick<ExternalOpener, 'openExternal'> & {
     presentChatGptSignInUrl(url: string): void | Promise<void>;
   };
-  readonly notifications: DesktopCredentialNotificationPort;
-  readonly auth: DesktopCredentialAuthPort;
+  readonly notifications: {
+    showInfoMessage(message: string): Promise<void>;
+    showErrorMessage(message: string): Promise<void>;
+  };
+  readonly auth: {
+    signIn(): Promise<void>;
+    signOut(): Promise<void>;
+  };
   readonly setUseIncludedModelAccess: (enabled: boolean) => Promise<void>;
   readonly modelListRefresh: PromiseLike<void>;
   readonly onCredentialChanged: () => Promise<void>;

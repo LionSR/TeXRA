@@ -13,8 +13,8 @@ import { isCodexSubscriptionEligible } from './providerCapabilities';
  * not the source of truth for whether that model is still servable: a
  * provider can retire the pinned model at any time (this has already
  * happened live for `xai: 'grok4'`), which would otherwise make the setup
- * assistant silently probe a dead model forever. `resolveSetupModel` below
- * validates each preference through the runtime model registry and
+ * assistant silently probe a dead model forever. {@link resolveWithPreferred}
+ * below validates each preference through the runtime model registry and
  * substitutes a still-usable model for that provider when the pin has gone
  * stale, so {@link SETUP_MODEL_BY_PROVIDER} always resolves to a servable
  * model without needing this table hand-updated on every retirement.
@@ -107,21 +107,6 @@ function resolveWithPreferred(
     return preferred;
   }
   return fallbackSetupModel(setupProvider) ?? preferred;
-}
-
-/**
- * Resolve the model the setup assistant should probe for `setupProvider`:
- * the curated preference above when it is still live, otherwise a usable
- * model this provider currently has in the registry. Returns `undefined`
- * for a `setupProvider` outside {@link PREFERRED_SETUP_MODEL_BY_PROVIDER} —
- * callers that already hold a known provider key get a plain `string` from
- * {@link SETUP_MODEL_BY_PROVIDER} instead.
- */
-export function resolveSetupModel(setupProvider: string): string | undefined {
-  const preferred = PREFERRED_SETUP_MODEL_BY_PROVIDER[setupProvider];
-  return preferred === undefined
-    ? undefined
-    : resolveWithPreferred(setupProvider, preferred);
 }
 
 /**

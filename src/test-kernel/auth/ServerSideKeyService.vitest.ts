@@ -6,30 +6,10 @@ import { ULTRA_TIER } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ServerSideKeyService } from '@auth/serverKeys/ServerSideKeyService';
 import type { TierService } from '@auth/serverKeys/TierService';
-import type { StateStore } from '@platform/interfaces';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { delay } from '@utils/core';
 
 const USE_INCLUDED_ACCESS_KEY = 'texra.useIncludedModelAccess';
-
-class MemoryState implements StateStore {
-  private readonly values = new Map<string, unknown>();
-
-  constructor(initialValues: Record<string, unknown> = {}) {
-    for (const [key, value] of Object.entries(initialValues)) {
-      this.values.set(key, value);
-    }
-  }
-
-  get<T>(key: string, defaultValue?: T): T {
-    return this.values.has(key)
-      ? (this.values.get(key) as T)
-      : (defaultValue as T);
-  }
-
-  async update(key: string, value: unknown): Promise<void> {
-    this.values.set(key, value);
-  }
-}
 
 interface FakeTierService {
   clearCacheCalls: number;
@@ -93,11 +73,11 @@ function createTierService(
 }
 
 function createQuotaExceededSetup(): {
-  state: MemoryState;
+  state: FakeStateStore;
   tier: FakeTierService;
   service: ServerSideKeyService;
 } {
-  const state = new MemoryState({ [USE_INCLUDED_ACCESS_KEY]: true });
+  const state = new FakeStateStore({ [USE_INCLUDED_ACCESS_KEY]: true });
   const tier = createTierService({
     providers: ['openai'],
     quotaExceeded: true,
