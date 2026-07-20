@@ -70,6 +70,11 @@ export function extractToolAttachments(
       continue;
     }
     if (key === 'diagnostics') {
+      // Sanitized results only carry the validation-error diagnostics shape
+      // (see ToolResultSharedFields.diagnostics); any other tool's
+      // diagnostics payload — or a validation-error payload whose `formatted`
+      // doesn't actually match FormattedZodIssueSchema — is dropped here
+      // rather than passed through untyped.
       const validationError = ValidationErrorDiagnosticsSchema.safeParse(value);
       if (validationError.success) {
         const { type, formatted } = validationError.data;

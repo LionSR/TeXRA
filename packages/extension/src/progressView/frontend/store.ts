@@ -1,4 +1,4 @@
-// Third-party imports
+// Shared imports
 import {
   AgentCategory,
   createStreamState,
@@ -14,8 +14,6 @@ import {
   type ExternalInquiryThreadId,
 } from '@shared/schemas';
 import type { Draft } from 'mutative';
-
-// Local imports
 
 /**
  * Background process outputs, keyed by executionId → accumulated stdout/stderr.
