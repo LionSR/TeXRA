@@ -27,7 +27,10 @@ import { currentModelFromUserChannels } from '@agent/implementations/flows/toolu
 import type { TaskState } from '@agent/core/state/TaskState';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { StreamTabId, ExecutionId } from '@shared/schemas';
-import { inferPersistedModelHandlerCompatibilityKey } from './modelHandlerCompatibilityInference';
+import {
+  inferAndLogPersistedModelHandlerCompatibilityKey,
+  inferPersistedModelHandlerCompatibilityKey,
+} from './modelHandlerCompatibilityInference';
 import {
   ModelHandlerCompatibilityKeySchema,
   type ModelHandlerCompatibilityKey,
@@ -183,7 +186,11 @@ async function retrieveToolUseResumeData(
     };
     const modelHandlerCompatibilityKey =
       migrationResult.data.modelHandlerCompatibilityKey ??
-      inferPersistedModelHandlerCompatibilityKey(currentConfig.model, messages);
+      inferAndLogPersistedModelHandlerCompatibilityKey(
+        currentConfig.model,
+        messages,
+        logger,
+      );
 
     const shared: PreparedShared = {
       ...migrationResult.data,
