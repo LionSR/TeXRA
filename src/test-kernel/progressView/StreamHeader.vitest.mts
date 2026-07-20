@@ -10,6 +10,7 @@ import {
   STREAM_PHASE,
   type StreamTabInfo,
 } from '@shared/schemas';
+import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 
 // Local file imports
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
@@ -189,6 +190,19 @@ describe('stream-header', () => {
         `wa-tooltip[for="${ELEMENT_IDS.STOP_STREAM_BTN}"]`,
       );
       expect(stopTooltip).toBeTruthy();
+    });
+
+    it('describes delegated-work approval with its run-scoped shared copy', async () => {
+      const element = await mount({
+        stream: baseStream({ agentCategory: AgentCategory.ToolUse }),
+      });
+
+      const tooltip = element.shadowRoot?.querySelector(
+        `wa-tooltip[for="${ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN}"]`,
+      );
+      expect(tooltip?.textContent?.trim()).toBe(
+        DELEGATION_APPROVAL_COPY.progressViewToggle,
+      );
     });
 
     it('dispatches toolbar-command with the button-specific command on click', async () => {
