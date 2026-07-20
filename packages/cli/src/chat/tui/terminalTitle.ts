@@ -1,6 +1,10 @@
 import { writeSync } from 'node:fs';
 import { basename } from 'node:path';
 
+import {
+  formatSessionTitle,
+  type SessionTitleState,
+} from '@shared/sessionTitle';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
@@ -18,21 +22,16 @@ import { terminalCapabilities } from './state/terminalCapabilities';
 // eslint-disable-next-line no-control-regex -- stripping C0/C1 controls
 const TITLE_INVALID_CHARS = /[\x00-\x1f\x7f-\x9f]/g;
 
-type TerminalTitleState = 'idle' | 'running' | 'approval';
-
 /** Project-aware terminal title, optionally annotated with live TUI state. */
 export function terminalTitleText(
   cwd: string,
-  state: TerminalTitleState = 'idle',
+  state: SessionTitleState = 'idle',
 ): string {
   const project = sanitizePathSegment(basename(cwd), {
     invalidCharPattern: TITLE_INVALID_CHARS,
     replacement: '',
   });
-  let activity: string | undefined;
-  if (state === 'approval') activity = 'Approval needed';
-  if (state === 'running') activity = 'Running';
-  return ['TeXRA', activity, project].filter(Boolean).join(' — ');
+  return formatSessionTitle(project, state);
 }
 
 /** Write the title only when terminal capability discovery admitted OSC. */
@@ -45,7 +44,7 @@ function writeTerminalTitle(title: string): void {
   }
 }
 
-function currentTerminalTitleState(): TerminalTitleState {
+function currentTerminalTitleState(): SessionTitleState {
   if (approvalQueueStatus.get().depth > 0) return 'approval';
   const streamSlices = streams.get();
   const rootStreamId = rootRunStreamId.get();
