@@ -3189,7 +3189,7 @@ const SCENARIOS = [
       'strategy stopped',
       'leanSolver waiting for you',
       'reviewer running',
-      '2 sub',
+      '3 subagents',
       'Session selection active.',
     ],
     unexpect: ['Harness interrupt requested.', '› ✓ ● main stopped'],

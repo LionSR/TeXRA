@@ -2298,6 +2298,36 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     status: 'running',
   };
 
+  it('keeps a session-scoped fact subscription live after state reset', () => {
+    const hub = new SessionEventHub();
+    const detach = attachTuiRunFactSubscription(hub);
+    const nextRoot = 'root-after-clear' as StreamTabId;
+    const todos: TodoItem[] = [
+      {
+        content: 'Continue after clear',
+        status: TODO_STATUS.PENDING,
+        activeForm: 'Continuing after clear',
+      },
+    ];
+
+    try {
+      resetCliState();
+      hub.emit({
+        scope: 'run',
+        streamId: nextRoot,
+        event: {
+          type: 'updateTodos',
+          streamId: nextRoot,
+          todos,
+        },
+      });
+
+      expect(streams.get().get(nextRoot)?.todos).toEqual(todos);
+    } finally {
+      detach();
+    }
+  });
+
   it('applies typed updateTodos run facts without host emission', () => {
     const hub = new SessionEventHub();
     const detach = attachTuiRunFactSubscription(hub);

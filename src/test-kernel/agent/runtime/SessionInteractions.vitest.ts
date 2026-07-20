@@ -622,24 +622,34 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
     }
   });
 
-  it('ignores a result produced by a detached adapter', async () => {
+  it('cancels each adapter presentation before a host handoff redispatches it', async () => {
     const session = createTestSession();
-    const first = createControllablePlanAdapter({ settleOnDispose: false });
+    const first = createControllablePlanAdapter();
     const second = createControllablePlanAdapter();
     try {
-      const detach = session.useHostInteractions(first.interactions);
+      session.useHostInteractions(first.interactions);
       const pending = session.interactions.requestPlanApproval({
-        approvalId: 'approval:stale',
+        approvalId: 'approval:handoff',
         streamId,
         plan,
         goalEnabled: false,
       });
-      detach();
-      session.useHostInteractions(second.interactions);
+      const detachSecond = session.useHostInteractions(second.interactions);
 
-      expect(first.submit('approval:stale', { action: 'reject' })).toBe(true);
-      await Promise.resolve();
-      expect(second.submit('approval:stale', { action: 'approve' })).toBe(true);
+      expect(first.submit('approval:handoff', { action: 'reject' })).toBe(
+        false,
+      );
+      expect(second.requests).toHaveLength(1);
+
+      detachSecond();
+
+      expect(second.submit('approval:handoff', { action: 'reject' })).toBe(
+        false,
+      );
+      expect(first.requests).toHaveLength(2);
+      expect(first.submit('approval:handoff', { action: 'approve' })).toBe(
+        true,
+      );
       await expect(pending).resolves.toEqual({ action: 'approve' });
     } finally {
       session.dispose();

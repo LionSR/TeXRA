@@ -1735,9 +1735,11 @@ function markHarnessInterrupted(): void {
 let focusedEscapeRetargeted = false;
 
 function canInterruptHarnessStream(streamId: StreamTabId): boolean {
-  const interruptible = isInFlightPhase(streams.get().get(streamId)?.status);
+  return isInFlightPhase(streams.get().get(streamId)?.status);
+}
+
+function markHarnessStreamInterrupted(streamId: StreamTabId): void {
   if (
-    interruptible &&
     RETARGET_FOCUSED_ESCAPE &&
     !focusedEscapeRetargeted &&
     streamId === 'harness-child-strategy-stream'
@@ -1747,10 +1749,6 @@ function canInterruptHarnessStream(streamId: StreamTabId): boolean {
       activeStreamIdSignal.set('harness-child-review-stream');
     }, 50);
   }
-  return interruptible;
-}
-
-function markHarnessStreamInterrupted(streamId: StreamTabId): void {
   clearApprovalsWhere(
     (payload) => approvalPayloadStreamId(payload) === streamId,
   );
@@ -2156,8 +2154,8 @@ CHILD_EVENT_ORDER_DISPOSERS.push(subscribeStreamStatus());
 
 if (CHILD_EVENT_ORDER) {
   // Mirror real CLI startup: `runChatTui.tsx` installs
-  // `subscribeStreamStatus()` once per session, and
-  // `chatSessionController.ts` attaches the run-fact subscription per run.
+  // `subscribeStreamStatus()` and the run-fact subscription once per TUI
+  // session.
   CHILD_EVENT_ORDER_DISPOSERS.push(
     attachTuiRunFactSubscription(defaultSession().events),
   );
