@@ -374,7 +374,7 @@ const dedupe = rawCandidates.length
 
 const riskRank = { low: 0, medium: 1, high: 2 }
 const ranked = dedupe.kept.toSorted(
-  (a, b) => riskRank[a.risk] - riskRank[b.risk] || a.estLoc - b.estLoc,
+  (a, b) => riskRank[a.risk] - riskRank[b.risk] || b.estLoc - a.estLoc,
 )
 const toVerify = ranked.slice(0, MAX_FILE)
 if (ranked.length > toVerify.length) {
@@ -422,7 +422,7 @@ const contested = verified.filter((candidate) => candidate.verdict === 'CONTESTE
 // Every verified survivor is filed. The single pre-verification cap guarantees this
 // cannot exceed MAX_FILE and avoids a second persisted carry-forward queue.
 const toFile = allSurvivors.toSorted(
-  (a, b) => riskRank[a.risk] - riskRank[b.risk] || a.estLoc - b.estLoc,
+  (a, b) => riskRank[a.risk] - riskRank[b.risk] || b.estLoc - a.estLoc,
 )
 
 // NET_LOSS with a confident majority becomes a ledger entry so future sweeps stop re-proposing it.
