@@ -32,7 +32,7 @@ import {
 } from './QueuedFollowUpsPanel';
 import { StaticConversationTranscript } from './StaticConversationTranscript';
 import { SubagentList } from './SubagentList';
-import { fileDetailLines } from './SubagentListDisplay';
+import { childFileDisplay } from './SubagentListDisplay';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
 import {
   childListStreamId,
@@ -187,10 +187,10 @@ export function ConversationRegion({
   const selectedChildFiles = selectedChildStreamId
     ? snapshot.streams.get(selectedChildStreamId)?.files
     : undefined;
-  const selectedFileDetailLines = fileDetailLines(
+  const selectedFileDetailLines = childFileDisplay(
     selectedChildFiles,
     Math.max(1, columns - 6),
-  );
+  ).detailLines;
   const expandedFileDetailLines =
     selectedFileDetailLines.length > 0
       ? selectedFileDetailLines

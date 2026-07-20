@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CHILD_STATUS_MARKER,
-  childFileBadgeText,
+  childFileDisplay,
   childRowMetadataText,
   childStatusColor,
-  fileDetailLines,
   pendingApprovalRowSuffix,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
 import {
@@ -73,17 +72,20 @@ describe('CLI child list display model', () => {
       output: ['Main.olean'],
     };
 
-    expect(childFileBadgeText(files)).toBe('in:2 ctx:1 out:1');
-    expect(fileDetailLines(files, 80)).toEqual([
+    expect(childFileDisplay(files).badge).toBe('in:2 ctx:1 out:1');
+    expect(childFileDisplay(files, 80).detailLines).toEqual([
       'Input src/Main.lean, src/Lemma.lean',
       'Context notes/proof.md',
       'Output Main.olean',
     ]);
-    expect(childFileBadgeText(undefined)).toBeUndefined();
+    expect(childFileDisplay(undefined)).toEqual({
+      badge: undefined,
+      detailLines: [],
+    });
     expect(
-      childFileBadgeText({ input: [], context: [], media: [], output: [] }),
+      childFileDisplay({ input: [], context: [], media: [], output: [] }).badge,
     ).toBeUndefined();
-    expect(fileDetailLines(files, 20)).toEqual([
+    expect(childFileDisplay(files, 20).detailLines).toEqual([
       'Input src/Main.lean…',
       'Context notes/proof…',
       'Output Main.olean',
