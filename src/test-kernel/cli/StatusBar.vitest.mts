@@ -69,7 +69,7 @@ function statusInput(
     queuedFollowUpMessages: [],
     usage: undefined,
     roundStage: undefined,
-    activeSubagents: 0,
+    subagents: 0,
     activeProcesses: 0,
     approvalDepth: 0,
     model: 'deepseekT',
@@ -421,7 +421,7 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         elapsedMs: 12_000,
-        activeSubagents: 1,
+        subagents: 1,
         childNavigationAvailable: true,
         streamFocusAvailable: true,
         modelAccess: 'included',
@@ -444,7 +444,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        activeSubagents: 1,
+        subagents: 1,
         childNavigationAvailable: true,
         streamFocusAvailable: true,
         modelAccess: 'included',
@@ -458,6 +458,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('scroll');
     expect(display.bindings).toContain('Tab children');
     expect(display.bindings).toContain('Ctrl-C stop root');
+    expect(display.left.map(statusBarSegmentText)).toContain('1 subagent');
   });
 
   it('advertises Shift-Enter for newline when the Kitty protocol is active', () => {
@@ -479,7 +480,7 @@ describe('CLI StatusBar display model', () => {
         ],
         usage: { inputTokens: 80_000, outputTokens: 25_000, cost: 0 },
         roundStage: { index: 1 },
-        activeSubagents: 2,
+        subagents: 2,
         activeProcesses: 1,
         approvalDepth: 3,
         childNavigationAvailable: true,
@@ -496,7 +497,7 @@ describe('CLI StatusBar display model', () => {
       'r2',
       '80k/1.0M (8%)',
       'queued 2',
-      '2 sub',
+      '2 subagents',
       '1 proc',
       '3 approvals',
     ]);
@@ -647,7 +648,7 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         elapsedMs: 88_000,
-        activeSubagents: 3,
+        subagents: 3,
         activeProcesses: 1,
         childNavigationAvailable: true,
         streamFocusAvailable: true,
@@ -668,7 +669,7 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         elapsedMs: 88_000,
-        activeSubagents: 3,
+        subagents: 3,
         activeProcesses: 1,
         childNavigationAvailable: true,
         streamFocusAvailable: true,
@@ -688,7 +689,7 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         elapsedMs: 75_000,
-        activeSubagents: 3,
+        subagents: 3,
         activeProcesses: 1,
         childNavigationAvailable: true,
         streamFocusAvailable: true,
@@ -1145,7 +1146,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        activeSubagents: 2,
+        subagents: 2,
         activeProcesses: 1,
         approvalDepth: 1,
         childNavigationAvailable: true,
@@ -1194,7 +1195,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        activeSubagents: 3,
+        subagents: 3,
         activeProcesses: 1,
         childNavigationAvailable: true,
         streamFocusAvailable: true,
@@ -1211,7 +1212,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        activeSubagents: 3,
+        subagents: 3,
         activeProcesses: 1,
         childNavigationAvailable: true,
         streamFocusAvailable: true,
