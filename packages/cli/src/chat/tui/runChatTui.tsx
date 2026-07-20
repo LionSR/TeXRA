@@ -117,8 +117,8 @@ import {
 } from './state/transcript';
 import {
   clearTerminalScrollback,
+  installTerminalTitleUpdates,
   installTerminalRestoreOnExit,
-  setTerminalTitle,
 } from './terminalCleanup';
 import {
   chatTuiCanInterruptActiveRun,
@@ -430,8 +430,9 @@ export async function runChat(
   disposers.push(installTerminalRestoreOnExit({ clearItermProgress }));
   // Cosmetic, but "texra-local" (a local dev binary's own name) or a bare
   // shell prompt in every tab makes a multi-session workflow hard to
-  // navigate — name the tab after the project instead.
-  setTerminalTitle(context.cwd);
+  // navigate. Keep the project name while surfacing live attention state.
+  const terminalTitleUpdates = installTerminalTitleUpdates(context.cwd);
+  disposers.push(terminalTitleUpdates.dispose);
   disposers.push(subscribeStreamLog());
   disposers.push(subscribeStreamStatus());
 
@@ -868,6 +869,8 @@ export async function runChat(
     detachSnapshotPersistence,
     repaintAfterTerminalResume: () =>
       viewportController.repaintAfterTerminalResume(),
+    suspendTerminalTitle: terminalTitleUpdates.suspend,
+    resumeTerminalTitle: terminalTitleUpdates.resume,
     canStopActiveRun,
     isResumableIdle,
     interruptActive,

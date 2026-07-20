@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   initCliPlatform: vi.fn(),
   initInteractiveCliPlatform: vi.fn(),
   installTerminalRestoreOnExit: vi.fn(),
+  installTerminalTitleUpdates: vi.fn(),
   loadInputHistory: vi.fn(),
   maybeRunCliOnboarding: vi.fn(),
   onSkillSelect: undefined as
@@ -36,6 +37,7 @@ const mocks = vi.hoisted(() => ({
   registerBuiltinSlashCommands: vi.fn(),
   render: vi.fn(),
   resolveChatDefaults: vi.fn(),
+  restoreTuiInputModes: vi.fn(),
   runCliPlatformShutdownSequence: vi.fn(),
   selectCliRunnableModel: vi.fn(),
   setCliHelperModel: vi.fn(),
@@ -43,6 +45,9 @@ const mocks = vi.hoisted(() => ({
   subscribeStreamLog: vi.fn(),
   subscribeStreamStatus: vi.fn(),
   supportsTerminalJobControl: vi.fn(),
+  terminalTitleDispose: vi.fn(),
+  terminalTitleResume: vi.fn(),
+  terminalTitleSuspend: vi.fn(),
   tuiOutputStreamForColor: vi.fn(),
   unmount: vi.fn(),
   waitUntilExit: vi.fn(),
@@ -124,6 +129,8 @@ vi.mock('@cli/chat/tui/terminalCleanup', async (importOriginal) => {
     ...actual,
     cleanupTerminalModes: mocks.cleanupTerminalModes,
     installTerminalRestoreOnExit: mocks.installTerminalRestoreOnExit,
+    installTerminalTitleUpdates: mocks.installTerminalTitleUpdates,
+    restoreTuiInputModes: mocks.restoreTuiInputModes,
     supportsTerminalJobControl: mocks.supportsTerminalJobControl,
   };
 });
@@ -240,6 +247,11 @@ describe('runChat signal ownership wiring', () => {
       oscColorReports: false,
     });
     mocks.installTerminalRestoreOnExit.mockReturnValue(() => undefined);
+    mocks.installTerminalTitleUpdates.mockReturnValue({
+      dispose: mocks.terminalTitleDispose,
+      resume: mocks.terminalTitleResume,
+      suspend: mocks.terminalTitleSuspend,
+    });
     mocks.subscribeStreamLog.mockReturnValue(() => undefined);
     mocks.subscribeStreamStatus.mockReturnValue(() => undefined);
     mocks.onSkillSelect = undefined;
@@ -268,6 +280,7 @@ describe('runChat signal ownership wiring', () => {
       mocks.callOrder.push('ink.render');
       return {
         clear: vi.fn(),
+        repaint: vi.fn(),
         rerender: vi.fn(),
         unmount: mocks.unmount,
         waitUntilExit: mocks.waitUntilExit,
@@ -276,7 +289,7 @@ describe('runChat signal ownership wiring', () => {
   });
 
   it('initializes the interactive platform and hands signal ownership to the mounted TUI', async () => {
-    const targetSignals = ['SIGINT', 'SIGTERM'] as const;
+    const targetSignals = ['SIGINT', 'SIGTERM', 'SIGTSTP', 'SIGCONT'] as const;
     type TargetSignal = (typeof targetSignals)[number];
     const baselineListeners = new Map(
       targetSignals.map(
@@ -288,9 +301,9 @@ describe('runChat signal ownership wiring', () => {
       event: string | symbol,
       listener: (...args: unknown[]) => void,
     ): void => {
-      if (event !== 'SIGINT' && event !== 'SIGTERM') return;
-      mocks.callOrder.push(`process.on:${event}`);
-      tuiListeners.set(event, listener);
+      if (!targetSignals.includes(event as TargetSignal)) return;
+      mocks.callOrder.push(`process.on:${String(event)}`);
+      tuiListeners.set(event as TargetSignal, listener);
     };
     const waitStarted = deferred();
     const exitTui = deferred();
@@ -308,6 +321,7 @@ describe('runChat signal ownership wiring', () => {
         onSubmit = element.props?.onSubmit;
         return {
           clear: vi.fn(),
+          repaint: vi.fn(),
           rerender: vi.fn(),
           unmount: mocks.unmount,
           waitUntilExit: mocks.waitUntilExit,
@@ -315,6 +329,8 @@ describe('runChat signal ownership wiring', () => {
       },
     );
     process.on('newListener', observeNewListener);
+    mocks.supportsTerminalJobControl.mockReturnValue(true);
+    const kill = vi.spyOn(process, 'kill').mockReturnValue(true);
 
     const agents = await import('@agent/index');
     const loadAgentsSpy = vi
@@ -346,6 +362,8 @@ describe('runChat signal ownership wiring', () => {
         'handOffCliShutdownSignalHandlers',
         'process.on:SIGINT',
         'process.on:SIGTERM',
+        'process.on:SIGTSTP',
+        'process.on:SIGCONT',
       ]);
 
       for (const signal of targetSignals) {
@@ -356,6 +374,17 @@ describe('runChat signal ownership wiring', () => {
           listener,
         ]);
       }
+
+      tuiListeners.get('SIGTSTP')?.();
+      expect(mocks.terminalTitleSuspend).toHaveBeenCalledTimes(1);
+      expect(mocks.cleanupTerminalModes).toHaveBeenCalledTimes(1);
+      expect(kill).toHaveBeenCalledWith(process.pid, 'SIGSTOP');
+
+      tuiListeners.get('SIGCONT')?.();
+      expect(mocks.restoreTuiInputModes).toHaveBeenCalledWith({
+        kittyKeyboard: false,
+      });
+      expect(mocks.terminalTitleResume).toHaveBeenCalledTimes(1);
 
       onSubmit?.('check the ordinary case', []);
       await vi.waitFor(() => expect(mocks.startRootRun).toHaveBeenCalled());
@@ -387,6 +416,7 @@ describe('runChat signal ownership wiring', () => {
       }
       loadAgentsSpy.mockRestore();
       getVisibleAgentsSpy.mockRestore();
+      kill.mockRestore();
     }
   });
 
@@ -402,6 +432,7 @@ describe('runChat signal ownership wiring', () => {
         onSubmit = element.props?.onSubmit;
         return {
           clear: vi.fn(),
+          repaint: vi.fn(),
           rerender: vi.fn(),
           unmount: mocks.unmount,
           waitUntilExit: mocks.waitUntilExit,

@@ -1,10 +1,15 @@
 import { writeSync } from 'node:fs';
 import { basename } from 'node:path';
 
+import { Signal } from '@lit-labs/signals';
 import { kittyFlags } from 'ink';
 
+import { isActivePhase } from '@shared/streams/streamStatus';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
+import { approvalQueueStatus } from './state/approvalQueue';
+import { rootRunPending, rootRunStreamId, streams } from './state/cliState';
+import { chatTuiCanStopActiveRun } from './state/sessionRunState';
 import { terminalCapabilities } from './state/terminalCapabilities';
 
 // Undo exactly the input/display modes the TUI turns on: mouse tracking
@@ -51,12 +56,20 @@ const TITLE_INVALID_CHARS = /[\x00-\x1f\x7f-\x9f]/g;
  * the launcher binary's own name (e.g. a local dev symlink like
  * `texra-local`).
  */
-export function terminalTitleText(cwd: string): string {
+type TerminalTitleState = 'idle' | 'running' | 'approval';
+
+export function terminalTitleText(
+  cwd: string,
+  state: TerminalTitleState = 'idle',
+): string {
   const project = sanitizePathSegment(basename(cwd), {
     invalidCharPattern: TITLE_INVALID_CHARS,
     replacement: '',
   });
-  return project ? `TeXRA — ${project}` : 'TeXRA';
+  let activity: string | undefined;
+  if (state === 'approval') activity = 'Approval needed';
+  if (state === 'running') activity = 'Running';
+  return ['TeXRA', activity, project].filter(Boolean).join(' — ');
 }
 
 export interface CleanupTerminalModesOptions {
@@ -141,11 +154,97 @@ export function clearTerminalVisibleScreen(): void {
  * degrade to fall back to, so the safe move on an ungated terminal is to
  * leave the title alone entirely.
  */
-export function setTerminalTitle(cwd: string): void {
+function writeTerminalTitle(title: string): void {
   if (!terminalCapabilities.get().oscColorReports) return;
   try {
-    writeSync(1, `\x1b]0;${terminalTitleText(cwd)}\x07`);
+    writeSync(1, `\x1b]0;${title}\x07`);
   } catch {
     // The tab title is cosmetic; a write failure here isn't actionable.
   }
+}
+
+function currentTerminalTitleState(): TerminalTitleState {
+  if (approvalQueueStatus.get().depth > 0) return 'approval';
+  const streamSlices = streams.get();
+  const rootStreamId = rootRunStreamId.get();
+  if (
+    chatTuiCanStopActiveRun({
+      runPending: rootRunPending.get(),
+      streamId: rootStreamId,
+      status: rootStreamId ? streamSlices.get(rootStreamId)?.status : undefined,
+    }) ||
+    [...streamSlices.values()].some((stream) => isActivePhase(stream.status))
+  ) {
+    return 'running';
+  }
+  return 'idle';
+}
+
+/**
+ * Keep the terminal title synchronized with existing TUI state. Signal reads
+ * run in a microtask because the signals polyfill forbids reads during a
+ * Watcher notification; the single queued synchronization also coalesces
+ * related state writes and suppresses duplicate OSC output.
+ */
+export function installTerminalTitleUpdates(cwd: string) {
+  let disposed = false;
+  let suspended = false;
+  let synchronizationPending = false;
+  let lastTitle: string | undefined;
+  const synchronize = (): void => {
+    if (suspended) return;
+    const state = currentTerminalTitleState();
+    const title = terminalTitleText(cwd, state);
+    if (title === lastTitle) return;
+    lastTitle = title;
+    writeTerminalTitle(title);
+  };
+  const restoreIdleTitle = (): void => {
+    const idleTitle = terminalTitleText(cwd);
+    if (lastTitle === idleTitle) return;
+    lastTitle = idleTitle;
+    writeTerminalTitle(idleTitle);
+  };
+  const watcher = new Signal.subtle.Watcher(() => {
+    if (synchronizationPending) return;
+    synchronizationPending = true;
+    queueMicrotask(() => {
+      synchronizationPending = false;
+      if (disposed) return;
+      synchronize();
+      watcher.watch();
+    });
+  });
+  watcher.watch(approvalQueueStatus, rootRunPending, rootRunStreamId, streams);
+  synchronize();
+  // Synchronous signal exits bypass the normal disposer loop, but still emit
+  // `exit`; restore the title there as well as during graceful teardown.
+  process.on('exit', restoreIdleTitle);
+
+  const dispose = (): void => {
+    if (disposed) return;
+    disposed = true;
+    watcher.unwatch(
+      approvalQueueStatus,
+      rootRunPending,
+      rootRunStreamId,
+      streams,
+    );
+    process.off('exit', restoreIdleTitle);
+    restoreIdleTitle();
+  };
+
+  return {
+    suspend: () => {
+      if (disposed) return;
+      suspended = true;
+      restoreIdleTitle();
+    },
+    resume: () => {
+      if (disposed) return;
+      suspended = false;
+      synchronize();
+    },
+    dispose,
+  };
 }

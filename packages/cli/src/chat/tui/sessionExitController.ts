@@ -81,6 +81,10 @@ interface SessionExitControllerContext {
   readonly detachSnapshotPersistence: () => void;
   /** Repaint the TUI from a known origin after a `fg`/SIGCONT resume. */
   readonly repaintAfterTerminalResume: () => void;
+  /** Replace a live attention title with the idle project title while stopped. */
+  readonly suspendTerminalTitle: () => void;
+  /** Re-project live attention state after the shell returns control. */
+  readonly resumeTerminalTitle: () => void;
   /** Whether an actively-running turn can be stopped (vs idle/WAITING). */
   readonly canStopActiveRun: () => boolean;
   /** Whether the session is a resumable-idle exit (preserve the flow record). */
@@ -253,6 +257,7 @@ export function createSessionExitController(
   // re-raising SIGTSTP would just recurse.
   const handleSigtstp = (): void => {
     if (!terminalJobControlSupported) return;
+    ctx.suspendTerminalTitle();
     cleanupTerminalModes({ clearItermProgress: ctx.clearItermProgress });
     if (process.stdin.isTTY) process.stdin.setRawMode(false);
     process.kill(process.pid, 'SIGSTOP');
@@ -265,6 +270,7 @@ export function createSessionExitController(
   const handleSigcont = (): void => {
     if (process.stdin.isTTY) process.stdin.setRawMode(true);
     restoreTuiInputModes({ kittyKeyboard: ctx.kittyKeyboardEnabled });
+    ctx.resumeTerminalTitle();
     ctx.repaintAfterTerminalResume();
   };
   function requestInputExit(): void {
