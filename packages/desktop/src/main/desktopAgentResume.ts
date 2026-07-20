@@ -107,10 +107,12 @@ function reportResumeFailure(
   streamId: StreamTabId,
   error: unknown,
   context: DesktopResumeContext,
+  lifecycleStarted: boolean,
 ): void {
   context.logger.error(`Failed to resume desktop stream ${streamId}`, {
     data: toLogData(error),
   });
+  if (lifecycleStarted) return;
   context.session.interactions.emit(
     'requestShowError',
     { message: `Resume failed: ${toErrorMessage(error)}` },
@@ -127,6 +129,7 @@ function resumeDesktopStream(
     context.isCancellationRequested() ||
     !context.session.transcripts.has(streamId);
   const runtimeHost = context.session.interactions;
+  let lifecycleStarted = false;
   return resolveAndResumeStream(streamId, {
     runtimeHost,
     streamStatus: context.session.status,
@@ -165,7 +168,11 @@ function resumeDesktopStream(
           runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
           canAcquireResumeLease: () => !isResumeInvalidated(),
           isCancellationRequested: isResumeInvalidated,
-          onError: (error) => reportResumeFailure(streamId, error, context),
+          onRun: () => {
+            lifecycleStarted = true;
+          },
+          onError: (error) =>
+            reportResumeFailure(streamId, error, context, lifecycleStarted),
         },
       ),
     executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
@@ -176,14 +183,20 @@ function resumeDesktopStream(
           session: context.session,
           canAcquireResumeLease: () => !isResumeInvalidated(),
         },
-        { modelHandlerCompatibilityKey },
+        {
+          modelHandlerCompatibilityKey,
+          onLifecycleStart: () => {
+            lifecycleStarted = true;
+          },
+        },
       ),
     reportNoResumableSession: () =>
       context.session.interactions.showInfoMessage(
         'This run has no resumable session state. Start a new run instead.',
         { replayWhenAttached: true },
       ),
-    reportFailure: (id, error) => reportResumeFailure(id, error, context),
+    reportFailure: (id, error) =>
+      reportResumeFailure(id, error, context, lifecycleStarted),
     isCancellationRequested: isResumeInvalidated,
   });
 }

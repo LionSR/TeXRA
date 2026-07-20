@@ -9,8 +9,11 @@
 import type { ActiveChildInfo } from '@shared/schemas';
 import { appendTail } from '@utils/strings/appendTail';
 
+/** Maximum stdout/stderr tail length retained per active process. */
+export const PROCESS_OUTPUT_MAX_CHARS = 100_000;
+
 /** Per-execution captured stdout/stderr tail held in stream meta. */
-interface StreamProcessOutput {
+export interface StreamProcessOutput {
   readonly stdout: string;
   readonly stderr: string;
 }
