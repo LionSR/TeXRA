@@ -82,6 +82,16 @@ declare module 'markdown-it/lib/index.mjs' {
 
   class MarkdownIt {
     constructor(options?: Record<string, unknown>);
+    block: {
+      ruler: {
+        before(
+          beforeName: string,
+          ruleName: string,
+          rule: MarkdownItBlockRule,
+          options?: { alt?: string[] },
+        ): void;
+      };
+    };
     renderer: {
       rules: Record<string, RenderRule | undefined>;
       render(tokens: unknown[], options: unknown, env: unknown): string;
@@ -94,6 +104,13 @@ declare module 'markdown-it/lib/index.mjs' {
   }
 
   export default MarkdownIt;
+
+  type MarkdownItBlockRule = (
+    state: unknown,
+    startLine: number,
+    endLine: number,
+    silent: boolean,
+  ) => boolean;
 }
 
 declare module 'markdown-it/lib/renderer.mjs' {
@@ -139,8 +156,16 @@ declare module 'markdown-it-texmath' {
   }
 
   interface Texmath {
+    block: (rule: TexmathRule) => MarkdownItBlockRule;
     rules: TexmathRules;
   }
+
+  type MarkdownItBlockRule = (
+    state: unknown,
+    startLine: number,
+    endLine: number,
+    silent: boolean,
+  ) => boolean;
 
   const texmath: Texmath;
   export = texmath;
