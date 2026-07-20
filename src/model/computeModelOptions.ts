@@ -471,8 +471,21 @@ async function buildModelOptionData(
         outputPrice: availability.providerCapabilities.outputPrice,
       }
     : config;
+  let routeLabel: string | undefined;
+  if (
+    isKimiSubscriptionEligible(rawConfig) &&
+    !isKimiCodeExclusiveModel(rawConfig)
+  ) {
+    if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
+      routeLabel = 'Via OpenRouter';
+    } else {
+      const source = resolveModelSource(config) ?? config.provider;
+      routeLabel = `Via ${PROVIDER_DISPLAY_NAMES[source] ?? source}`;
+    }
+  }
   return {
     ...buildBaseModelOption(model, optionConfig, config),
+    ...(routeLabel ? { routeLabel } : {}),
     availability: availability.kind,
     availabilityLabel: availability.label,
     requiresKey: availability.requiresKey,
