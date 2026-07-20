@@ -72,6 +72,8 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Large multi-agent runs use substantially less memory** — inactive
+  subagent transcripts remain available without accumulating in the CLI.
 - **Generated-file history reports inaccessible files** — unreadable artifacts
   now produce an error instead of appearing as empty files.
 - **ChatGPT limits no longer switch credentials silently** — the CLI shows the

@@ -70,9 +70,12 @@ export function formatToolUseTemplate(
   const { timestamp, data } = message;
   const normalizedToolLog = normalizeToolUseData(data);
   if (!normalizedToolLog) return null;
+  // Normalization has already established that this is an object. Keep the
+  // raw value local to this render so fallback sections can include fields
+  // outside the common schema without retaining a second copy in UI state.
+  const parsed = isObject(data) ? data : {};
 
   const {
-    parsed,
     toolName,
     errorText,
     outputText,
