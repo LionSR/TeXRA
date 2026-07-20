@@ -464,10 +464,7 @@ export function subscribeStreamLog(): () => void {
     void store
       .ensureLoaded(nextActiveStreamId)
       .then(() => {
-        if (
-          generation === getCliStateGeneration() &&
-          activeStreamId.get() === nextActiveStreamId
-        ) {
+        if (generation === getCliStateGeneration()) {
           syncStreamLog(nextActiveStreamId);
         }
       })
