@@ -13,7 +13,9 @@ export type FileTypeProbe = {
 
 export interface StatCapableFs {
   promises: {
-    stat(target: string): Promise<Pick<FileTypeProbe, 'isFile' | 'isDirectory'>>;
+    stat(
+      target: string,
+    ): Promise<Pick<FileTypeProbe, 'isFile' | 'isDirectory'>>;
   };
 }
 
