@@ -1,6 +1,9 @@
 // Node imports
 import { basename } from 'node:path';
 
+// Third-party imports
+import { type BrowserWindow } from 'electron';
+
 // Local imports
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
@@ -11,9 +14,6 @@ import {
   formatSessionTitle,
   type SessionTitleState,
 } from '@shared/sessionTitle';
-
-// Third-party type imports
-import type { BrowserWindow } from 'electron';
 
 export type DesktopSessionActivity = SessionTitleState;
 
@@ -88,9 +88,11 @@ export function installDesktopWindowTitle(
     disposePending();
     disposeStatus();
     disposeRegistrations();
-    window.webContents.removeListener(
-      'page-title-updated',
-      preventRendererTitle,
-    );
+    if (!window.webContents.isDestroyed()) {
+      window.webContents.removeListener(
+        'page-title-updated',
+        preventRendererTitle,
+      );
+    }
   };
 }

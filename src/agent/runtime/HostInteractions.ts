@@ -549,11 +549,19 @@ export class SessionHostInteractions
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    const cancellationCause = 'Session disposed.';
     let firstError: unknown;
     try {
-      this.cancel({ cause: 'Session disposed.' });
+      this.cancel({ cause: cancellationCause });
     } catch (error) {
       firstError = error;
+    }
+    // An attached adapter makes cancel's fallback asynchronous so that its
+    // own settlement can win. Session disposal is terminal, however: settle
+    // any requests still owned here before observers are removed.
+    for (const pending of [...this.pending]) {
+      if (!this.deletePending(pending)) continue;
+      pending.settle(pending.cancellationResult(cancellationCause));
     }
     this.attachmentVersion += 1;
     for (const attachment of this.attachments.toReversed()) {

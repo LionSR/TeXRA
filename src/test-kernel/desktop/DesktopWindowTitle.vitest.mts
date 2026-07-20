@@ -40,7 +40,7 @@ function createWindow(initialTitle: string) {
     window: {
       getTitle: () => title,
       setTitle,
-      webContents,
+      webContents: Object.assign(webContents, { isDestroyed: () => false }),
     },
     setTitle,
     webContents,

@@ -706,6 +706,30 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
     });
   });
 
+  it('publishes the final pending boundary before disposal', async () => {
+    const session = createTestSession();
+    const adapter = createControllablePlanAdapter({ settleOnDispose: false });
+    const pendingCounts: number[] = [];
+    session.interactions.onPendingCountChange((count) =>
+      pendingCounts.push(count),
+    );
+    session.useHostInteractions(adapter.interactions);
+    const pending = session.interactions.requestPlanApproval({
+      approvalId: 'approval:dispose-attached',
+      streamId,
+      plan,
+      goalEnabled: false,
+    });
+
+    session.dispose();
+
+    await expect(pending).resolves.toEqual({
+      action: 'reject',
+      feedback: 'Session disposed.',
+    });
+    expect(pendingCounts).toEqual([1, 0]);
+  });
+
   it('resolves a plan approval first-wins through the session slot', async () => {
     const { session, uiEvents, emitted, interactions } = createPortSession();
     try {
