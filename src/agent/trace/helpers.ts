@@ -194,16 +194,23 @@ export function logConversationProgress(
   trace.emit({ type: 'conversation.progress', progress: data, stageId });
 }
 
+/** Payload logged by {@link logMissingOutputs} for one round's unmatched
+ *  expected outputs. Distinct from `UpdateMissingOutputsPayload` (the
+ *  `updateMissingOutputs` run fact) — this is the human-facing transcript log. */
+interface MissingOutputsLogInfo {
+  missing: string[];
+  xmlFile: string | null;
+}
+
 /** Missing-outputs notification — counts `missing` entries for the label. */
 export function logMissingOutputs(
   trace: AgentTrace,
-  info: { missing?: unknown[] } & Record<string, unknown>,
+  info: MissingOutputsLogInfo,
   stageId?: string,
 ): void {
-  const count = Array.isArray(info.missing) ? info.missing.length : 0;
   trace.domain({
     key: 'missingOutputs',
-    text: `${formatResultCount(count, 'output file')} missing`,
+    text: `${formatResultCount(info.missing.length, 'output file')} missing`,
     data: info,
     stageId,
   });

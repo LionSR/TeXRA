@@ -11,7 +11,7 @@ import {
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 // Local imports - progress view
-import { firstStreamId, isToolUseState } from './store';
+import { deleteStreamState, firstStreamId, isToolUseState } from './store';
 import { deleteFollowUpInputTransientState } from './followUpInputState';
 import { addResolvedProposalId, removePrompt } from './slices/permissionSlice';
 import { updateToolUseState } from './stateUtils';
@@ -53,10 +53,7 @@ export function handleStreamDelete(
   // Optimistic removal: apply delete locally before notifying backend
   appState.set(
     create(appState.get(), (draft) => {
-      draft.streamStates.delete(streamId);
-      draft.streamLogs.delete(streamId);
-      draft.processOutputs.delete(streamId);
-      draft.followupOptionsByStream.delete(streamId);
+      deleteStreamState(draft, streamId);
       draft.streamById.delete(streamId);
       if (draft.activeStreamId === streamId) {
         draft.activeStreamId = firstStreamId(draft.streamById);
