@@ -103,6 +103,7 @@ describe('desktop process resume owner', () => {
         emit: firstEmit,
         cancel: vi.fn(),
       });
+      await Promise.resolve();
       expect(firstEmit).toHaveBeenCalledOnce();
       expect(firstEmit).toHaveBeenCalledWith('requestShowError', {
         message: 'Resume failed: launch failed',
@@ -114,6 +115,7 @@ describe('desktop process resume owner', () => {
         emit: secondEmit,
         cancel: vi.fn(),
       });
+      await Promise.resolve();
       expect(secondEmit).not.toHaveBeenCalled();
     } finally {
       harness.dispose();

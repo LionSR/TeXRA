@@ -670,6 +670,7 @@ describe('createDesktopAgentExecution', () => {
       emit: firstEmit,
       cancel: vi.fn(),
     });
+    await Promise.resolve();
     expect(firstEmit).toHaveBeenCalledOnce();
     expect(firstEmit).toHaveBeenCalledWith('requestOpenFile', {
       location: {
@@ -682,6 +683,7 @@ describe('createDesktopAgentExecution', () => {
     detach();
     const secondEmit = vi.fn();
     session.useHostInteractions({ emit: secondEmit, cancel: vi.fn() });
+    await Promise.resolve();
     expect(secondEmit).not.toHaveBeenCalled();
   });
 
