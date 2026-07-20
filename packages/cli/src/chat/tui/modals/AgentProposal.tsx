@@ -51,9 +51,8 @@ export function agentProposalMetadataRows({
 }): number {
   return (
     1 +
-    wrappedRows(`Model: ${payload.model}`, width) +
     wrappedRows(
-      `Category: ${agentProposalCategoryLabel(payload.agentCategory)}`,
+      `Model: ${payload.model} · Category: ${agentProposalCategoryLabel(payload.agentCategory)}`,
       width,
     ) +
     (payload.workingDirectory
@@ -66,7 +65,8 @@ export function agentProposalMetadataRows({
             rows + wrappedRows(fileGroupText(group.label, group.files), width),
           0,
         )
-      : 0)
+      : 0) +
+    wrappedRows(DELEGATION_APPROVAL_COPY.cliExplanation, width)
   );
 }
 
@@ -121,8 +121,7 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
         <Text>
           <Text bold>Model: </Text>
           {props.payload.model}
-        </Text>
-        <Text>
+          {' · '}
           <Text bold>Category: </Text>
           {agentProposalCategoryLabel(props.payload.agentCategory)}
         </Text>
@@ -143,6 +142,7 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
             ))}
           </Box>
         ) : null}
+        <Text dimColor>{DELEGATION_APPROVAL_COPY.cliExplanation}</Text>
       </Box>
       <ScrollableModalText
         hiddenNoun={AGENT_PROPOSAL_HIDDEN_NOUN}

@@ -58,7 +58,7 @@ describe('approve-split-button', () => {
     expect(events).toEqual(['approve']);
   });
 
-  it('renders the Yolo split menu when canBypass is true', async () => {
+  it('renders the run-scoped edit and command action when canBypass is true', async () => {
     const element = await mount({ canBypass: true });
 
     expect(element.shadowRoot?.querySelector('.approve-split')).toBeTruthy();
@@ -66,7 +66,10 @@ describe('approve-split-button', () => {
       'wa-dropdown-item[value="approve-session"]',
     );
     expect(item).toBeTruthy();
-    expect(item?.textContent).toContain('Yolo (this session)');
+    expect(item?.textContent).toContain(
+      DELEGATION_APPROVAL_COPY.progressViewEditCommandAction,
+    );
+    expect(item?.textContent).not.toContain('Yolo');
   });
 
   it('emits approve on the main button click in split mode', async () => {
@@ -80,7 +83,7 @@ describe('approve-split-button', () => {
     expect(events).toEqual(['approve']);
   });
 
-  it('emits approve-session only for the Yolo menu item', async () => {
+  it('emits approve-session only for the edit and command menu item', async () => {
     const element = await mount({ canBypass: true });
     const events = recordEvents(element);
     const menu = element.shadowRoot?.querySelector('.approve-split-menu');
@@ -114,6 +117,11 @@ describe('approve-split-button', () => {
     expect(item?.textContent).toContain(
       DELEGATION_APPROVAL_COPY.progressViewAction,
     );
+    const tooltip = element.shadowRoot?.querySelector('wa-tooltip');
+    expect(tooltip?.textContent).toContain(
+      DELEGATION_APPROVAL_COPY.progressViewExplanation,
+    );
+    expect(tooltip?.textContent).not.toMatch(/stream|yolo/i);
     const menu = element.shadowRoot?.querySelector('.approve-split-menu');
     menu?.dispatchEvent(
       new CustomEvent('wa-select', {

@@ -270,10 +270,10 @@ export function handlePermissionAction(
   switch (detail.kind) {
     case PERMISSION_KIND.TOOL_EDIT: {
       const { data, decision } = detail;
-      // "Yolo (this session)" approves the current request like a normal
-      // approve and enables auto-approval (edits + bash) for the rest of the
-      // stream — mirroring the toolbar shield and the CLI's `a` = approve
-      // session. It never reaches the backend approval protocol.
+      // The broader action approves the current request like a normal approve
+      // and enables auto-approval (edits + bash) for the rest of the run —
+      // mirroring the toolbar shield and the CLI's broader `a` action. It never
+      // reaches the backend approval protocol.
       const isYolo = decision.action === APPROVE_SESSION_ACTION;
       // Set-on (not toggle) is inversion-proof: edit and bash bypass can be
       // decoupled on a delegated child stream. The button only renders with
