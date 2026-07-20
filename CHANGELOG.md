@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [0.39.8] - Unreleased
 
+### Shared (all surfaces)
+
+#### Bug Fixes
+
+- **Brief network interruptions no longer stop model turns immediately** —
+  requests retry automatically when a transport failure escapes the provider
+  client.
+
 ### Extension (VS Code)
 
 #### Bug Fixes
