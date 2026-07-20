@@ -87,7 +87,8 @@ export interface StatusBarDisplayInput {
   readonly queuedFollowUpMessages: readonly string[];
   readonly usage: TokenUsageStats | undefined;
   readonly roundStage: RoundStage | undefined;
-  readonly activeSubagents: number;
+  /** Retained and active direct subagents owned by the displayed stream. */
+  readonly subagents: number;
   readonly activeProcesses: number;
   readonly approvalDepth: number;
   readonly approvalKind?: ApprovalQueueStatusKind;
@@ -932,9 +933,10 @@ export function buildStatusBarDisplay(
   const queued = queuedFollowUpsCountSegment(input.queuedFollowUpMessages);
   if (queued) left.push(queued);
 
-  if (input.activeSubagents > 0) {
+  if (input.subagents > 0) {
     left.push({
-      text: `${input.activeSubagents} sub`,
+      text: `${input.subagents} subagent${input.subagents === 1 ? '' : 's'}`,
+      compactText: `${input.subagents} sub`,
       color: 'dim',
       compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
     });

@@ -14,6 +14,12 @@ All notable changes to this project will be documented in this file.
 
 ### CLI
 
+#### New Features
+
+- **Nested subagents remain visible** — a focused subagent reports how many
+  direct subagents it owns, including completed work that remains available in
+  its child list.
+
 #### Bug Fixes
 
 - **Model failures show their reason** — failed model requests now include a
