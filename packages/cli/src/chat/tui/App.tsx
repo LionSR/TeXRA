@@ -528,10 +528,13 @@ export function App(props: AppProps): React.JSX.Element {
       .transcripts.ensureLoaded(streamId)
       .then(() => {
         syncStreamLog(streamId, { forceFull: true });
+        const currentActiveStreamId = activeStreamIdSignal.get();
         const currentStreams = streamsSignal.get();
         const request = createTranscriptPrintRequest({
           afterEntryId: lastStaticEntryId(
-            activeStreamId ? currentStreams.get(activeStreamId) : undefined,
+            currentActiveStreamId
+              ? currentStreams.get(currentActiveStreamId)
+              : undefined,
           ),
           id: `printed-transcript:${nextTranscriptPrintId.current + 1}`,
           ownerKey: transcriptOwnerKey,
@@ -545,7 +548,7 @@ export function App(props: AppProps): React.JSX.Element {
         });
         nextTranscriptPrintId.current += 1;
         setTranscriptPrints((current) => [...current, request]);
-        if (activeStreamId !== streamId) syncStreamLog(streamId);
+        if (currentActiveStreamId !== streamId) syncStreamLog(streamId);
       })
       .catch((error: unknown) => {
         setTransientNotice(
