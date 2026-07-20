@@ -27,12 +27,20 @@ import { assertNever } from '@utils/core';
 export type ApprovalBypassKind = HostApprovalBypassKind;
 export type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
 
+export type TuiRetryRequest = RetryPermission & {
+  readonly personalApiKeyAvailable?: boolean;
+  readonly missingPersonalApiKeyMessage?: string;
+};
+
 export type ApprovalPayload =
   | { kind: 'bash'; payload: BashPermission }
   | { kind: 'toolEdit'; payload: ToolEditApprovalRequest }
   | { kind: 'plan'; payload: PlanApprovalPermission }
   | { kind: 'proposal'; payload: AgentProposalPermission }
-  | { kind: 'retry'; payload: RetryPermission }
+  | {
+      kind: 'retry';
+      payload: TuiRetryRequest;
+    }
   | { kind: 'externalInquiry'; payload: ExternalInquiryPermission }
   | { kind: 'userQuestion'; payload: UserQuestionPermission };
 

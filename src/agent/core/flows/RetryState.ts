@@ -7,6 +7,7 @@ import { Node } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
+import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { normalizeProviderError } from '@common/errors';
 import {
@@ -45,6 +46,7 @@ function getNodeRetryConfig(): { maxRetries: number; wait: number } {
 interface ManualRetryPromptResult {
   shouldRetry: boolean;
   userCancelled: boolean;
+  clientPrepared?: boolean;
 }
 
 /** success: model response | failed: retries exhausted | cancelled: user cancelled | skipped: shouldStop was true */
@@ -58,7 +60,10 @@ interface RetryableNodeServices {
   config: Pick<AgentConfig, 'model'>;
   logger: AgentTrace;
   setAbortController: (ac: AbortController | null) => void;
-  refreshClient?: () => Promise<void>;
+  refreshClient?: (
+    selection?: ModelCredentialSelection,
+    signal?: AbortSignal,
+  ) => Promise<void>;
 }
 
 /**
@@ -66,7 +71,12 @@ interface RetryableNodeServices {
  * Logs success or failure; returns true if refresh was attempted and succeeded.
  */
 async function tryRefreshClient(
-  refreshClient: (() => Promise<void>) | undefined,
+  refreshClient:
+    | ((
+        selection?: ModelCredentialSelection,
+        signal?: AbortSignal,
+      ) => Promise<void>)
+    | undefined,
   logger: AgentTrace,
   context: string,
 ): Promise<boolean> {
@@ -260,11 +270,13 @@ export abstract class RetryableInvocationNode<
       // credit-depletion flow), toggling included-access mode, rotating
       // a token after a relay 401, etc. Refreshing is cheap and keeps
       // the cached client in sync with current secrets/config.
-      await tryRefreshClient(
-        this.services.refreshClient,
-        this.services.logger,
-        'before manual retry',
-      );
+      if (result.clientPrepared !== true) {
+        await tryRefreshClient(
+          this.services.refreshClient,
+          this.services.logger,
+          'before manual retry',
+        );
+      }
     }
 
     return result.shouldRetry;
@@ -294,14 +306,28 @@ export abstract class RetryableInvocationNode<
       data: formatted.message ?? 'unknown error',
     });
     // No timeout: the retry panel waits indefinitely for the user's decision.
-    const interaction = session.interactions.requestRetry({
-      requestId: `retry-${nanoid()}`,
-      streamId,
-      operation: operationName,
-      model: this.services.config.model,
-      errorMessage: formatted.message,
-      errorDetails: formatted,
-    });
+    let clientPrepared = false;
+    const refreshClient = this.services.refreshClient;
+    const interaction = session.interactions.requestRetry(
+      {
+        requestId: `retry-${nanoid()}`,
+        streamId,
+        operation: operationName,
+        model: this.services.config.model,
+        errorMessage: formatted.message,
+        errorDetails: formatted,
+      },
+      refreshClient
+        ? {
+            prepareRetry: async (selection, signal) => {
+              signal?.throwIfAborted();
+              await refreshClient(selection, signal);
+              signal?.throwIfAborted();
+              clientPrepared = true;
+            },
+          }
+        : undefined,
+    );
     if (!interaction) {
       throw new Error('HostInteractions.requestRetry is required');
     }
@@ -312,7 +338,7 @@ export abstract class RetryableInvocationNode<
       streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
         trace: logger,
       });
-      return { shouldRetry: true, userCancelled: false };
+      return { shouldRetry: true, userCancelled: false, clientPrepared };
     }
 
     if (result.action === 'deny') {
