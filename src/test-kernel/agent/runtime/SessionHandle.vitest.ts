@@ -13,7 +13,7 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   SessionHandle,
   defaultSession,
-  getAllActiveExecutionIds,
+  killAllSessionBackgroundProcesses,
 } from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { type Plan, type StreamTabId } from '@shared/schemas';
@@ -44,6 +44,36 @@ function trackAgent(
 }
 
 describe('SessionHandle', () => {
+  it('awaits artifact writers before disposal and leaves the live-session registry', async () => {
+    const session = createTestSession();
+    let releaseWriter!: () => void;
+    const writerGate = new Promise<void>((resolve) => {
+      releaseWriter = resolve;
+    });
+    session.useArtifactFlusher(() => writerGate);
+    const dispose = vi.spyOn(session, 'dispose');
+    const killBackgroundProcesses = vi
+      .spyOn(session.executions, 'killBackgroundProcesses')
+      .mockImplementation(() => undefined);
+
+    const shutdown = (async () => {
+      await session.flushArtifacts();
+      session.dispose();
+    })();
+
+    await Promise.resolve();
+    expect(dispose).not.toHaveBeenCalled();
+    killAllSessionBackgroundProcesses();
+    expect(killBackgroundProcesses).toHaveBeenCalledOnce();
+
+    releaseWriter();
+    await shutdown;
+    expect(dispose).toHaveBeenCalledOnce();
+
+    killAllSessionBackgroundProcesses();
+    expect(killBackgroundProcesses).toHaveBeenCalledOnce();
+  });
+
   it('drains trace, transcript, and registered artifact writers together', async () => {
     const session = createTestSession();
     const order: string[] = [];
@@ -237,60 +267,18 @@ describe('SessionHandle', () => {
     expect(executions).toHaveBeenCalledOnce();
   });
 
-  it('can keep active executions visible until they settle', async () => {
+  it('rejects execution work registered after disposal', () => {
     const session = createTestSession();
     const { host } = createRecordingHost();
-    const executionId = 'exec:dispose-keep-active';
-    const streamId = 'stream:dispose-keep-active' as StreamTabId;
-    const cleanup = vi.spyOn(session.interactions, 'dispose');
-    const subscriptions = vi.spyOn(session.subscriptions, 'dispose');
-    try {
-      const handle = trackAgent(session, host, executionId, streamId);
+    session.dispose();
 
-      session.dispose({ keepActiveExecutions: true });
-
-      expect(session.executions.getHandle(executionId)).toBe(handle);
-      expect(getAllActiveExecutionIds()).toContain(executionId);
-      expect(cleanup).not.toHaveBeenCalled();
-      expect(subscriptions).not.toHaveBeenCalled();
-
-      session.executions.untrack(executionId);
-
-      await vi.waitFor(() => {
-        expect(getAllActiveExecutionIds()).not.toContain(executionId);
-      });
-      expect(cleanup).toHaveBeenCalledOnce();
-      expect(subscriptions).toHaveBeenCalledOnce();
-    } finally {
-      session.executions.untrack(executionId);
-      session.dispose();
-    }
-  });
-
-  it('makes deferred dispose idempotent while executions are active', async () => {
-    const session = createTestSession();
-    const { host } = createRecordingHost();
-    const executionId = 'exec:dispose-idempotent';
-    const streamId = 'stream:dispose-idempotent' as StreamTabId;
-    const executionsDispose = vi.spyOn(session.executions, 'dispose');
-    try {
-      const handle = trackAgent(session, host, executionId, streamId);
-
-      session.dispose({ keepActiveExecutions: true });
-      session.dispose();
-
-      expect(session.executions.getHandle(executionId)).toBe(handle);
-      expect(executionsDispose).not.toHaveBeenCalled();
-
-      session.executions.untrack(executionId);
-
-      await vi.waitFor(() => {
-        expect(session.executions.getHandle(executionId)).toBeUndefined();
-      });
-      expect(executionsDispose).toHaveBeenCalledOnce();
-    } finally {
-      session.executions.untrack(executionId);
-      session.dispose();
-    }
+    expect(() =>
+      trackAgent(session, host, 'exec:late', 'stream:late' as StreamTabId),
+    ).toThrow('Cannot register execution work after session disposal.');
+    expect(() =>
+      session.executions.registerChildRunLoop(
+        'stream:late-child' as StreamTabId,
+      ),
+    ).toThrow('Cannot register execution work after session disposal.');
   });
 });

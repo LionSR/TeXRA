@@ -9,7 +9,7 @@
  * {@link SessionHostInteractions} — plus the other session-scoped owners.
  *
  * A session is one per host context: extension activation (per VS Code window),
- * CLI process, or desktop `BrowserWindow`. The default instance is installed
+ * CLI process, or desktop Electron process. The default instance is installed
  * explicitly through {@link initializeDefaultSession}; {@link defaultSession}
  * only retrieves that process-wide owner. There is no other way to reach
  * these owners: the invariant is "no session-scoped mutable module export"
@@ -36,7 +36,6 @@ import { getActiveFlushers, unregisterFlushers } from '@transcript/runTrace';
 
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { getRunContextSession, tryUseRunContext } from './RunContext';
-import { AgentExecutionHandle, type ExecutionHandle } from './ExecutionHandle';
 import { ExecutionRegistry } from './executionRegistry';
 import { ExecutionSubscriptionBinder } from './ExecutionSubscriptionBinder';
 import { StreamStatusMachine } from './StreamStatusService';
@@ -54,6 +53,17 @@ import { releaseExecutionLeaseAfterArtifacts } from './executionOwnership';
 
 const logger = createChannelTrace('sessionHandle');
 
+interface ResultListenerRegistration {
+  readonly listener: (event: ResultEvent) => void;
+  readonly replayMissed: boolean;
+}
+
+function isReplayableTerminalResult(event: ResultEvent): boolean {
+  return (
+    !event.isSubagent && event.error != null && event.error.kind !== 'abort'
+  );
+}
+
 /** A valid transcript store is required; other owners may be injected. */
 export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
   Partial<
@@ -69,14 +79,6 @@ export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
       | 'workflowControls'
     >
   >;
-
-export interface SessionDisposeOptions {
-  /**
-   * Keep active executions registered after host teardown so process-wide
-   * running-execution guards still see headless runs until they settle.
-   */
-  keepActiveExecutions?: boolean;
-}
 
 export class SessionHandle {
   /** Per-run execution handles; owns the process-output poller + status sub. */
@@ -121,9 +123,8 @@ export class SessionHandle {
     const executions =
       init.executions ??
       new ExecutionRegistry({ streamStatus: status, events });
-    // Re-attaching on every `SessionHandle` construction — even when
-    // `executions` is caller-injected rather than fresh-built here — rebinds
-    // `publishResult` to *this* session's listeners.
+    // Attaching here also supports an explicitly supplied registry while
+    // keeping result publication scoped to this session's listeners.
     executions.attachSessionEvents(events, (event, streamId) =>
       this.publishRunEvent(streamId, event),
     );
@@ -200,18 +201,38 @@ export class SessionHandle {
   }
 
   /** Listeners for terminal run results in this session (the host channel). */
-  private readonly resultListeners = new Set<(event: ResultEvent) => void>();
+  private readonly resultListeners = new Set<ResultListenerRegistration>();
+  private readonly missedTerminalResults = new Map<
+    ResultEvent['executionId'],
+    ResultEvent
+  >();
+  private replayMissedResultsEnabled = false;
   private disposeStarted = false;
-  private idleDisposeStarted = false;
 
   /**
    * Subscribe to terminal `result` events for runs in this session. Hosts hold
    * the session, so this is how they receive a run's outcome — per-run traces
    * are created inside the run and are not reachable from the host otherwise.
    */
-  onResult(listener: (event: ResultEvent) => void): () => void {
-    this.resultListeners.add(listener);
-    return () => this.resultListeners.delete(listener);
+  onResult(
+    listener: (event: ResultEvent) => void,
+    options: { replayMissed?: boolean } = {},
+  ): () => void {
+    const registration: ResultListenerRegistration = {
+      listener,
+      replayMissed: options.replayMissed ?? false,
+    };
+    this.resultListeners.add(registration);
+    if (registration.replayMissed) {
+      this.replayMissedResultsEnabled = true;
+      queueMicrotask(() => {
+        if (!this.resultListeners.has(registration)) return;
+        const missed = [...this.missedTerminalResults.values()];
+        this.missedTerminalResults.clear();
+        for (const event of missed) this.notifyResultListener(listener, event);
+      });
+    }
+    return () => this.resultListeners.delete(registration);
   }
 
   /**
@@ -238,67 +259,53 @@ export class SessionHandle {
   publishRunEvent(streamId: StreamTabId, event: AgentEvent): void {
     this.events.emit({ scope: 'run', streamId, event });
     if (event.type !== 'result') return;
+    const replaying = [...this.resultListeners].some(
+      (registration) => registration.replayMissed,
+    );
+    if (replaying) {
+      this.missedTerminalResults.delete(event.executionId);
+    } else if (
+      this.replayMissedResultsEnabled &&
+      isReplayableTerminalResult(event)
+    ) {
+      this.missedTerminalResults.set(event.executionId, event);
+    }
     // Guard each listener so one throwing consumer can't starve the rest:
     // the whole fan-out is a single trace subscriber, so without this a throw
     // would skip the remaining listeners (TraceEmitter only guards at the
     // subscriber boundary, not between listeners).
-    for (const listener of this.resultListeners) {
-      try {
-        listener(event);
-      } catch (err) {
-        logger.warn('onResult listener threw', { data: err });
-      }
+    for (const registration of this.resultListeners) {
+      this.notifyResultListener(registration.listener, event);
+    }
+  }
+
+  private notifyResultListener(
+    listener: (event: ResultEvent) => void,
+    event: ResultEvent,
+  ): void {
+    try {
+      listener(event);
+    } catch (err) {
+      logger.warn('onResult listener threw', { data: err });
     }
   }
 
   /**
    * Tear down everything this session owns. Order matters: drain this session's
-   * pending trace writes, then either defer teardown while active executions
-   * must remain visible for process-wide guards, or drop subscription
-   * disposers, dispose the execution registry, settle pending host
-   * interactions via `interactions.dispose()`, and drop result listeners.
-   * Finally unregister this session's flusher set from the process-wide drain
-   * and deregister from `liveSessions` once no active executions remain —
-   * both in `finally` so a teardown throw can't strand a fully disposed
-   * session in the cross-session aggregate.
+   * pending trace writes, drop subscription disposers, dispose the execution
+   * registry, settle pending host interactions via `interactions.dispose()`,
+   * and drop result listeners. Finally unregister this session's flusher set
+   * from the process-wide drain and deregister it from `liveSessions`, both in
+   * `finally` so a teardown throw cannot strand a disposed session.
    */
-  dispose(options: SessionDisposeOptions = {}): void {
+  dispose(): void {
     if (this.disposeStarted) return;
     this.disposeStarted = true;
 
-    const keepActiveExecutions =
-      options.keepActiveExecutions === true &&
-      this.executions.getActiveIds().length > 0;
     try {
-      // Drain throttled writes before the flusher set leaves the drain registry
-      // (the default session's set is permanent; a fresh session's is not).
-      this.flushPendingTraces();
-      if (keepActiveExecutions) {
-        void this.disposeWhenIdle().catch((err) => {
-          logger.warn('Idle session disposal failed', { data: err });
-        });
-      } else {
-        this.teardownOwners();
-      }
-    } finally {
-      if (!keepActiveExecutions) {
-        this.deregisterSession();
-      }
-    }
-  }
-
-  private async disposeWhenIdle(): Promise<void> {
-    if (this.idleDisposeStarted) return;
-    this.idleDisposeStarted = true;
-    try {
-      while (true) {
-        const activeIds = this.executions.getActiveIds();
-        if (activeIds.length === 0) break;
-        await this.executions.waitForAnyChange(activeIds);
-      }
-    } finally {
       this.flushPendingTraces();
       this.teardownOwners();
+    } finally {
       this.deregisterSession();
     }
   }
@@ -313,88 +320,18 @@ export class SessionHandle {
     this.interactions.dispose();
     this.artifactFlushers.clear();
     this.resultListeners.clear();
+    this.missedTerminalResults.clear();
   }
 
-  /** Leave the process-wide trace drain and the cross-session registry. */
+  /** Leave the process-wide trace drain and live-session registry. */
   private deregisterSession(): void {
     unregisterFlushers(this.flushers);
     liveSessions.delete(this);
   }
 }
 
-/**
- * Every live session in this process, so global queries (e.g. a host's
- * "is this execution running anywhere" history guard) can aggregate across
- * sessions instead of seeing only one. Sessions register on construction and
- * deregister on {@link SessionHandle.dispose}.
- */
+/** Live sessions whose background processes must be stopped at shutdown. */
 const liveSessions = new Set<SessionHandle>();
-
-/**
- * Active execution ids across every live session — the cross-session view a
- * multi-window host needs so deleting history from one window still respects an
- * execution running in another. For a single-session process this equals the
- * one session's `executions.getActiveIds()`.
- */
-export function getAllActiveExecutionIds(): string[] {
-  const ids = new Set<string>();
-  for (const session of liveSessions) {
-    for (const id of session.executions.getActiveIds()) ids.add(id);
-  }
-  return [...ids];
-}
-
-/** A still-active execution found on some other live session, plus that
- * owning session itself. The owner's `status`/`executions` are the run's live
- * runtime spine — authoritative over any stale on-disk snapshot a rebinding
- * window may have separately hydrated — so a rebinder reads live status,
- * walks child handles, and forwards host interactions through it. */
-export interface ActiveAgentExecutionLookup {
-  readonly handle: AgentExecutionHandle;
-  readonly session: SessionHandle;
-}
-
-/**
- * Look up a still-active {@link AgentExecutionHandle} by id across every live
- * session, not just one. A desktop window's own session is fresh per
- * `BrowserWindow` (see the class doc), so a run kept alive across window
- * recreation (`SessionHandle.dispose({ keepActiveExecutions: true })`) lives
- * on in its *previous* window's retained session — invisible to a newly
- * created window's session unless explicitly rebound onto it.
- */
-export function findActiveAgentExecutionHandle(
-  executionId: string,
-): ActiveAgentExecutionLookup | undefined {
-  for (const session of liveSessions) {
-    const handle = session.executions.getHandle(executionId);
-    if (handle instanceof AgentExecutionHandle) {
-      return { handle, session };
-    }
-  }
-  return undefined;
-}
-
-/**
- * Untrack an execution handle from every live session that still has it
- * registered — not just the one session that happens to finalize it. A
- * cross-session rebind (via {@link findActiveAgentExecutionHandle} above)
- * tracks the same handle into a second session's registry without removing
- * it from the first. Without this, whichever session finalizes the run
- * (e.g. a user stop issued from a newly recreated window) only clears its
- * own registry, leaving the original `keepActiveExecutions` session's
- * registry non-idle forever: its `disposeWhenIdle` wait loop never observes
- * the change and that session never leaves {@link liveSessions} (#8148).
- *
- * Matches on the handle identity, not the execution id: a resume replaces a
- * rebound WAITING handle with a *fresh* handle under the same execution id
- * (#8229), and releasing the superseded handle by id alone would tear the
- * fresh, live registration out of its session's registry too.
- */
-export function untrackActiveAgentExecution(handle: ExecutionHandle): void {
-  for (const session of liveSessions) {
-    session.executions.untrackIfCurrent(handle);
-  }
-}
 
 /** Stop background OS processes owned by every live runtime session. */
 export function killAllSessionBackgroundProcesses(): void {

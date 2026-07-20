@@ -6,36 +6,18 @@ import { join } from 'node:path';
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports - desktop test paths
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
-
 const writeFileAtomicMock = vi.hoisted(() => vi.fn());
 
 vi.mock('write-file-atomic', () => ({
   default: writeFileAtomicMock,
 }));
 
-interface ImportBoundary {
-  readonly claims: readonly string[];
-  commit(migratedStreamIds: Iterable<string>): Promise<void>;
-}
-
-interface Module {
-  prepareDesktopLegacyStreamImport(
-    filePath: string,
-    evidence: {
-      transcriptStreamIds?: Iterable<string>;
-      sidecarStreamIds?: Iterable<string>;
-    },
-  ): Promise<ImportBoundary>;
-}
+type Module = typeof import('@desktop/main/desktopLegacyStreamImporter');
 
 type LegacyRow = Record<string, unknown> & { streamId: string };
 
 async function loadModule(): Promise<Module> {
-  return import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopLegacyStreamImporter.ts'))
-  ) as Promise<Module>;
+  return import('@desktop/main/desktopLegacyStreamImporter');
 }
 
 function makeLegacyRow(

@@ -322,9 +322,6 @@ export async function runFlowWithLifecycle(
     ctx.logger,
   );
   handle.enablePendingInterrupt();
-  // A session that binds this handle after launch (cross-window rebind) has
-  // missed the emitRunStart() `run.config` below and replays it from here (#8258).
-  handle.initialRunFacts = { config: ctx.config };
   session.executions.track(handle);
   let leaseLost = false;
   let keepLeaseWatcher = false;

@@ -46,12 +46,10 @@ describe('default session lifecycle', () => {
     ).toThrow('already been initialized');
 
     const originalDispose = first.dispose.bind(first);
-    const disposeSpy = vi
-      .spyOn(first, 'dispose')
-      .mockImplementation((options) => {
-        expect(tryDefaultSession()).toBeUndefined();
-        originalDispose(options);
-      });
+    const disposeSpy = vi.spyOn(first, 'dispose').mockImplementation(() => {
+      expect(tryDefaultSession()).toBeUndefined();
+      originalDispose();
+    });
 
     teardownDefaultSession();
 

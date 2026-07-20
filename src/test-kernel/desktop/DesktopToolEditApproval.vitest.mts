@@ -707,7 +707,7 @@ describe('desktop tool edit approval', () => {
 
         await expect(resultPromise).resolves.toMatchObject({
           accepted: false,
-          userMessage: 'Desktop session disposed.',
+          userMessage: 'Desktop presentation detached.',
         });
         expect(runtimeHost.shownToolEditPermissions).toEqual([]);
         expect(runtimeHost.resolvedToolEditPermissions).toEqual([]);
