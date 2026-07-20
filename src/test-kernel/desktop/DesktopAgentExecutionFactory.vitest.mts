@@ -309,9 +309,14 @@ describe('createDesktopAgentExecution', () => {
     const loadGate = new Promise<void>((resolve) => {
       finishLoad = resolve;
     });
+    let markDetectionStarted!: () => void;
+    const detectionStarted = new Promise<void>((resolve) => {
+      markDetectionStarted = resolve;
+    });
     const attached = vi.fn();
     const detached = vi.fn();
     const detectWaitingStreams = vi.fn(async () => {
+      markDetectionStarted();
       await loadGate;
       return new Set<StreamTabId>();
     });
@@ -334,7 +339,8 @@ describe('createDesktopAgentExecution', () => {
       },
     });
 
-    await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalledOnce());
+    await detectionStarted;
+    expect(detectWaitingStreams).toHaveBeenCalledOnce();
     controller.abort();
     expect(attached).not.toHaveBeenCalled();
     expect(detached).not.toHaveBeenCalled();

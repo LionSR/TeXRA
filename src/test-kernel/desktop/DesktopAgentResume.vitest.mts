@@ -2,27 +2,26 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { ToolUseAgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import * as SessionResumeRetrieval from '@agent/runtime/SessionResumeRetrieval';
+import * as AgentRunner from '@agent/runtime/runAgent';
 import {
   AgentCategory,
+  RUN_OUTCOME,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { StreamSnapshotStore } from '@transcript';
 
-const resumeMocks = vi.hoisted(() => ({
-  retrieveSessionResumeData: vi.fn(),
-  runAgent: vi.fn(async () => undefined),
-}));
-
-vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
-  retrieveSessionResumeData: resumeMocks.retrieveSessionResumeData,
-}));
-vi.mock('@agent/runtime/runAgent', () => ({ runAgent: resumeMocks.runAgent }));
+const retrieveSessionResumeData = vi.spyOn(
+  SessionResumeRetrieval,
+  'retrieveSessionResumeData',
+);
+const runAgent = vi.spyOn(AgentRunner, 'runAgent');
 
 const stream = 'headless-resume' as StreamTabId;
 const executionId = 'abc123' as ExecutionId;
@@ -39,13 +38,20 @@ function createSnapshots(): StreamSnapshotStore {
 }
 
 describe('desktop process resume owner', () => {
-  afterEach(() => {
-    resumeMocks.retrieveSessionResumeData.mockReset();
-    resumeMocks.runAgent.mockClear();
+  beforeEach(() => {
+    retrieveSessionResumeData.mockReset();
+    runAgent.mockReset().mockResolvedValue({
+      executionId,
+      streamId: stream,
+      category: 'workflow',
+      outcome: RUN_OUTCOME.COMPLETED,
+      outputs: [],
+      compileFailures: [],
+    });
   });
 
   it('resumes while no BrowserWindow presentation exists', async () => {
-    resumeMocks.retrieveSessionResumeData.mockResolvedValue({
+    retrieveSessionResumeData.mockResolvedValue({
       type: 'workflow',
       agentConfig: config,
       executionId,
@@ -61,7 +67,7 @@ describe('desktop process resume owner', () => {
 
     try {
       await expect(tryResumeDesktopStream(stream)).resolves.toBe(true);
-      expect(resumeMocks.runAgent).toHaveBeenCalledOnce();
+      expect(runAgent).toHaveBeenCalledOnce();
     } finally {
       dispose();
       session.dispose();
@@ -80,7 +86,7 @@ describe('desktop process resume owner', () => {
 
     dispose();
     await expect(tryResumeDesktopStream(stream)).resolves.toBe(false);
-    expect(resumeMocks.retrieveSessionResumeData).not.toHaveBeenCalled();
+    expect(retrieveSessionResumeData).not.toHaveBeenCalled();
     session.dispose();
   });
 
@@ -93,7 +99,7 @@ describe('desktop process resume owner', () => {
     const retrievalGate = new Promise<void>((resolve) => {
       releaseRetrieval = resolve;
     });
-    resumeMocks.retrieveSessionResumeData.mockImplementation(async () => {
+    retrieveSessionResumeData.mockImplementation(async () => {
       markRetrievalStarted();
       await retrievalGate;
       return { type: 'workflow', agentConfig: config, executionId };
@@ -113,7 +119,7 @@ describe('desktop process resume owner', () => {
     releaseRetrieval();
 
     await expect(resume).resolves.toBe(false);
-    expect(resumeMocks.runAgent).not.toHaveBeenCalled();
+    expect(runAgent).not.toHaveBeenCalled();
     session.dispose();
   });
 });
