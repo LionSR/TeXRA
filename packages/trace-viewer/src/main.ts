@@ -16,9 +16,9 @@ import {
   handleToolbarCommand,
 } from '@progressView/frontend/eventHandlers';
 
+import type { TraceDocument } from '@transcript';
 import { replayTrace } from './replayTrace';
 import { parseTraceData } from './traceDataSchema';
-import type { TraceDocument } from '@transcript';
 
 const root = document.querySelector<HTMLElement>('#app');
 if (root == null) throw new Error('Trace viewer root (#app) not found.');
@@ -57,8 +57,16 @@ conversationView.addEventListener(
  * a clear error here instead of failing deep inside `dispatchMessage`.
  */
 async function loadTrace(): Promise<TraceDocument> {
-  const inline = (window as { __TEXRA_TRACE__?: unknown }).__TEXRA_TRACE__;
-  if (inline) return parseTraceData(inline);
+  const globalWindow = window as { __TEXRA_TRACE__?: unknown };
+  const inline = globalWindow.__TEXRA_TRACE__;
+  if (inline) {
+    // Once consumed, drop the raw copy — nothing else reads this global, and
+    // this is a single-page app with no further navigation, so otherwise the
+    // whole raw trace document sits on `window` for the page's entire
+    // lifetime alongside whatever the progress-view store now holds.
+    delete globalWindow.__TEXRA_TRACE__;
+    return parseTraceData(inline);
+  }
 
   const params = new URLSearchParams(window.location.search);
   const file = params.get('trace') ?? 'trace.json';

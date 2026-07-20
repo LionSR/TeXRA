@@ -178,6 +178,18 @@ export function pushManualCriticism(entry: ManualCriticismEntry): boolean {
   );
 
   const existing = collection.get(uri) ?? [];
+  // This list is only ever cleared by the whole-feature enable/disable
+  // toggle, so a critique agent re-flagging the same line/message across
+  // repeated rounds would otherwise stack an unbounded number of identical
+  // squiggles. Skip re-adding an exact duplicate instead.
+  const isDuplicate = existing.some(
+    (d) =>
+      d.code === CODE_TOOL &&
+      d.range.start.line === range.start.line &&
+      d.message === diag.message,
+  );
+  if (isDuplicate) return true;
+
   collection.set(uri, [...existing, diag]);
   return true;
 }
