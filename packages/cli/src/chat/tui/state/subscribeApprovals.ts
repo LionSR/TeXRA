@@ -122,6 +122,10 @@ export function createTuiHostInteractions(
   context: CliContext,
 ): HostInteractions {
   const retryRoutes = new Map<string, ActiveRetryRoute>();
+  // The two persisted access fields commit as one choice within this TUI
+  // lifetime. Keeping the queue session-owned prevents stale work leaking
+  // across disposed hosts or tests.
+  const retryCredentialCommitQueue = new PQueue({ concurrency: 1 });
   const disposeApprovalClearListener = onApprovalsCleared(() => {
     invalidateRetryRoutes(retryRoutes, { cancel: true });
   });
@@ -201,7 +205,14 @@ export function createTuiHostInteractions(
     },
     requestRetry(request, options) {
       return withInteractionTimeout(
-        () => requestRetryInteraction(request, context, retryRoutes, options),
+        () =>
+          requestRetryInteraction(
+            request,
+            context,
+            retryRoutes,
+            retryCredentialCommitQueue,
+            options,
+          ),
         options,
         { action: 'timeout' },
         () => {
@@ -268,27 +279,23 @@ interface ActiveRetryRoute {
   readonly settle?: (result: RetryResult) => void;
 }
 
-// API mode and ChatGPT preference are two persisted fields that form one user
-// choice. Serialize only their commit/rollback window; candidate construction
-// happens before this queue while the published preference remains unchanged.
-const retryCredentialCommitQueue = new PQueue({ concurrency: 1 });
-
-function prepareRetryClient(
-  prepare: NonNullable<HostRetryInteractionOptions['prepareRetry']>,
-  selection: Parameters<
-    NonNullable<HostRetryInteractionOptions['prepareRetry']>
-  >[0],
+function runRetryTask<T>(
+  start: () => Promise<T>,
   signal: AbortSignal,
-): Promise<void> {
+): Promise<T> {
   signal.throwIfAborted();
-  return new Promise<void>((resolve, reject) => {
-    const onAbort = () => reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () =>
+      reject(
+        signal.reason ??
+          new DOMException('Retry preparation aborted.', 'AbortError'),
+      );
     signal.addEventListener('abort', onAbort, { once: true });
     try {
-      prepare(selection, signal).then(
-        () => {
+      start().then(
+        (value) => {
           signal.removeEventListener('abort', onAbort);
-          resolve();
+          resolve(value);
         },
         (error: unknown) => {
           signal.removeEventListener('abort', onAbort);
@@ -300,6 +307,16 @@ function prepareRetryClient(
       reject(error);
     }
   });
+}
+
+function prepareRetryClient(
+  prepare: NonNullable<HostRetryInteractionOptions['prepareRetry']>,
+  selection: Parameters<
+    NonNullable<HostRetryInteractionOptions['prepareRetry']>
+  >[0],
+  signal: AbortSignal,
+): Promise<void> {
+  return runRetryTask(() => prepare(selection, signal), signal);
 }
 
 const NEUTRAL_TIMEOUT_DECISION: ApprovalDecision = {
@@ -528,6 +545,7 @@ async function requestRetryInteraction(
   request: HostRetryRequest,
   context: CliContext,
   retryRoutes: Map<string, ActiveRetryRoute>,
+  retryCredentialCommitQueue: PQueue,
   options: HostRetryInteractionOptions | undefined,
 ): Promise<RetryResult> {
   cancelRetryRoute(retryRoutes, request.streamId);
@@ -607,6 +625,7 @@ async function requestRetryInteraction(
             isCurrent,
             prepareRetry: options?.prepareRetry,
             preparationSignal: preparationController.signal,
+            commitQueue: retryCredentialCommitQueue,
           });
         } else if (options?.prepareRetry) {
           await prepareRetryClient(
@@ -710,10 +729,12 @@ async function switchRetryToPersonalCredentials(
     isCurrent?: () => boolean;
     prepareRetry?: HostRetryInteractionOptions['prepareRetry'];
     preparationSignal?: AbortSignal;
-  } = {},
+    commitQueue: PQueue;
+  },
 ): Promise<void> {
   const isCurrent = () => options.isCurrent?.() ?? true;
   if (!isCurrent()) return;
+  const signal = options.preparationSignal ?? new AbortController().signal;
 
   const requestedProvider = request.errorDetails?.provider;
   if (!requestedProvider || !isApiProvider(requestedProvider)) {
@@ -725,9 +746,9 @@ async function switchRetryToPersonalCredentials(
     request.missingPersonalApiKeyMessage ??
     missingApiKeyRetryMessage(requestedProvider);
   const validateCurrentKey = async (): Promise<void> => {
-    const keyExists = await apiKeyExistsUncached(
-      platform().secrets,
-      requestedProvider,
+    const keyExists = await runRetryTask(
+      () => apiKeyExistsUncached(platform().secrets, requestedProvider),
+      signal,
     );
     if (!isCurrent()) throw new Error('Retry request was replaced.');
     if (!keyExists) throw new Error(missingKeyMessage);
@@ -741,14 +762,10 @@ async function switchRetryToPersonalCredentials(
   if (!options.prepareRetry) {
     throw new Error('The model client cannot be refreshed for this retry.');
   }
-  await prepareRetryClient(
-    options.prepareRetry,
-    'personal',
-    options.preparationSignal ?? new AbortController().signal,
-  );
+  await prepareRetryClient(options.prepareRetry, 'personal', signal);
   if (!isCurrent()) throw new Error('Retry request was replaced.');
 
-  await retryCredentialCommitQueue.add(async () => {
+  await options.commitQueue.add(async () => {
     if (!isCurrent()) throw new Error('Retry request was replaced.');
     const previousApiMode = getCliApiMode();
     const previousSubscriptionPreference = isPreferCodexSubscription();
@@ -756,13 +773,17 @@ async function switchRetryToPersonalCredentials(
     let subscriptionWriteStarted = false;
     try {
       if (decision.apiMode) {
+        const apiMode = decision.apiMode;
         apiModeWriteStarted = true;
-        await setCliApiMode(decision.apiMode);
+        await runRetryTask(() => setCliApiMode(apiMode), signal);
         if (!isCurrent()) throw new Error('Retry request was replaced.');
       }
       if (decision.disableChatGptSubscription) {
         subscriptionWriteStarted = true;
-        const update = await setCliCodexSubscription(false);
+        const update = await runRetryTask(
+          () => setCliCodexSubscription(false),
+          signal,
+        );
         if (update.effective) {
           throw new Error(
             'ChatGPT subscription remains enabled by a more specific setting.',

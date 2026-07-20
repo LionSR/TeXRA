@@ -815,6 +815,46 @@ describe('TUI retry approvals', () => {
     expect(laterPrepare).toHaveBeenCalledOnce();
   });
 
+  it('rolls back a cancelled persistence write and releases the session commit queue', async () => {
+    mocks.hasUsableApiKey.mockResolvedValue(true);
+    mocks.setCliApiMode.mockImplementationOnce(async (mode) => {
+      mocks.apiMode = mode;
+      await new Promise<void>(() => {
+        // Simulate storage that never settles after updating in-memory state.
+      });
+    });
+    const { interactions } = tui();
+    const { result } = await beginSubscriptionSwitch(
+      interactions,
+      'stalled-mode-persistence',
+    );
+    await vi.waitFor(() => expect(mocks.setCliApiMode).toHaveBeenCalledOnce());
+    expect(mocks.apiMode).toBe('personal');
+
+    interactions.cancel({
+      streamId: 'stalled-mode-persistence',
+      kind: 'retry',
+      cause: 'Cancelled in test.',
+    });
+    await expect(result).resolves.toEqual({ action: 'cancel' });
+    await vi.waitFor(() => expect(mocks.apiMode).toBe('included'));
+
+    const laterPrepare = vi.fn(async () => undefined);
+    const later = interactions.requestRetry?.(
+      relayRetry({
+        streamId: 'after-stalled-persistence',
+        provider: 'openai',
+      }),
+      { prepareRetry: laterPrepare },
+    );
+    await expect(later).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
+    expect(laterPrepare).toHaveBeenCalledOnce();
+    expect(mocks.apiMode).toBe('personal');
+  });
+
   it('reports any preference that cannot be restored after commit fails', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
     mocks.setCliCodexSubscription
@@ -1336,7 +1376,10 @@ describe('TUI retry approvals', () => {
       }),
     );
     await Promise.resolve();
-    expect(mocks.setCliApiMode).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() =>
+      expect(mocks.setCliApiMode).toHaveBeenCalledTimes(2),
+    );
+    expect(mocks.apiMode).toBe('included');
 
     firstModeSwitch.reject(new Error('stale mode switch failed'));
     await expect(second).resolves.toEqual({
