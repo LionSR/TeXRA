@@ -19,6 +19,8 @@ import type { StreamSlice } from './cliState';
 export interface StreamView {
   readonly id: StreamTabId;
   readonly label: string;
+  /** Canonical spawning tool retained with the child execution. */
+  readonly toolName?: string;
   readonly parentId?: StreamTabId;
   readonly parentLabel?: string;
   readonly slice: StreamSlice | undefined;
@@ -136,9 +138,12 @@ export function streamViewForId(init: {
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): StreamView {
   const parentId = init.parentStream.get(init.streamId);
+  const childEntry = init.childStreamEntries.get(init.streamId);
   return {
     id: init.streamId,
     label: streamDisplayLabel(init),
+    toolName:
+      childEntry?.kind === 'live' ? childEntry.summary?.toolName : undefined,
     parentId,
     parentLabel: parentId
       ? streamDisplayLabel({

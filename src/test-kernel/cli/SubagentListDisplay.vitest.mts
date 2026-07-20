@@ -12,13 +12,17 @@ import {
 } from '@cli/chat/tui/panes/SubagentList';
 import type { StreamSlice } from '@cli/chat/tui/state/cliState';
 import {
+  streamTreeViews,
+  type StreamView,
+} from '@cli/chat/tui/state/streamViews';
+import {
   nextSelectHighlightIndex,
   selectControlledHighlightIndex,
   visibleSelectRange,
   type SelectItem,
 } from '@cli/chat/tui/ui/Select';
-import type { StreamView } from '@cli/chat/tui/state/streamViews';
 import { AgentCategory, STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+import { buildChildStreamEntries } from '@test/support/childStreamEntries';
 import { loadInk } from '@test/support/inkTestHarness.mts';
 
 function session(id: string, active = false): StreamView {
@@ -230,43 +234,82 @@ describe('CLI child list display model', () => {
     ).toBe('45s');
   });
 
-  it('surfaces per-agent model, tool calls, and tokens for a focused run', async () => {
+  it('omits the model from bash rows while retaining agent row details', async () => {
     const { ink, React } = await loadInk();
     const run = 'run' as StreamTabId;
+    const bash = 'bash-1' as StreamTabId;
     const agent = 'agent-1' as StreamTabId;
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [run, workflowAgentSlice('run', { status: STREAM_PHASE.RUNNING })],
+      [
+        bash,
+        workflowAgentSlice('bash-1', {
+          model: 'gemini35f',
+          status: STREAM_PHASE.RUNNING,
+        }),
+      ],
+      [
+        agent,
+        workflowAgentSlice('agent-1', {
+          model: 'gpt56',
+          status: STREAM_PHASE.RUNNING,
+          conversation: { toolCallCount: 5 },
+          cumulativeUsage: {
+            inputTokens: 1000,
+            outputTokens: 39_900,
+            cost: 0,
+          },
+        }),
+      ],
+    ]);
+    const parentStream = new Map<StreamTabId, StreamTabId>([
+      [bash, run],
+      [agent, run],
+    ]);
+    const childStreamEntries = buildChildStreamEntries({
+      parentStreamId: run,
+      retained: [
+        {
+          kind: 'subagent',
+          executionId: 'bash-exec',
+          agentName: 'bash',
+          childStreamId: bash,
+          status: STREAM_PHASE.RUNNING,
+          toolName: 'bash',
+        },
+        {
+          kind: 'subagent',
+          executionId: 'agent-exec',
+          // A real agent may use the same visible label. Its canonical
+          // spawning tool, rather than that label, determines model display.
+          agentName: 'bash',
+          childStreamId: agent,
+          status: STREAM_PHASE.RUNNING,
+        },
+      ],
+    });
+    const sessions = streamTreeViews({
+      activeStreamId: run,
+      childStreamEntries,
+      parentStream,
+      rootStreamId: run,
+      streams,
+    });
     const output: string = ink.renderToString(
       React.createElement(SubagentList, {
         listRootStreamId: run,
         maxRows: 6,
         keyboardActive: false,
-        sessions: [
-          {
-            id: run,
-            label: 'workflow-run',
-            slice: workflowAgentSlice('run', { status: STREAM_PHASE.RUNNING }),
-            active: true,
-          },
-          {
-            id: agent,
-            label: 'coder',
-            slice: workflowAgentSlice('agent-1', {
-              model: 'claude-sonnet-4',
-              conversation: { toolCallCount: 5 },
-              cumulativeUsage: {
-                inputTokens: 1000,
-                outputTokens: 39_900,
-                cost: 0,
-              },
-            }),
-            active: false,
-          },
-        ],
+        sessions,
       }),
       { columns: 100 },
     );
 
-    expect(output).toContain('coder');
-    expect(output).toContain('claude-sonnet-4');
+    expect(sessions.find(({ id }) => id === bash)?.toolName).toBe('bash');
+    expect(sessions.find(({ id }) => id === agent)?.toolName).toBeUndefined();
+    expect(output.match(/bash running/g)).toHaveLength(2);
+    expect(output).not.toContain('gemini35f');
+    expect(output).toContain('bash running · gpt56');
     expect(output).toContain('5 tool calls');
     expect(output).toContain('↓40k');
   });
