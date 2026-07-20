@@ -1,3 +1,4 @@
+// Node imports
 import { basename } from 'node:path';
 
 // Local imports
@@ -6,11 +7,15 @@ import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { STREAM_PHASE } from '@shared/schemas';
+import {
+  formatSessionTitle,
+  type SessionTitleState,
+} from '@shared/sessionTitle';
 
 // Third-party type imports
 import type { BrowserWindow } from 'electron';
 
-export type DesktopSessionActivity = 'approval' | 'running' | 'idle';
+export type DesktopSessionActivity = SessionTitleState;
 
 type DesktopTitleSession = Pick<
   SessionHandle,
@@ -38,29 +43,13 @@ export function getDesktopSessionActivity(session: {
   return hasRunningAgent ? 'running' : 'idle';
 }
 
-/** Format the exact native title copy for one process session. */
-export function formatDesktopWindowTitle(
-  activity: DesktopSessionActivity,
-  workspaceName?: string,
-): string {
-  let activitySegment: string | undefined;
-  if (activity === 'approval') activitySegment = 'Approval needed';
-  if (activity === 'running') activitySegment = 'Running';
-  return ['TeXRA', activitySegment, workspaceName || undefined]
-    .filter((segment): segment is string => segment !== undefined)
-    .join(' — ');
-}
-
 /** Compute the current title synchronously, including before a window opens. */
 export function getDesktopWindowTitle(
   session: DesktopTitleSession,
   workspacePath: string | undefined,
 ): string {
   const workspaceName = workspacePath ? basename(workspacePath) : undefined;
-  return formatDesktopWindowTitle(
-    getDesktopSessionActivity(session),
-    workspaceName,
-  );
+  return formatSessionTitle(workspaceName, getDesktopSessionActivity(session));
 }
 
 /**

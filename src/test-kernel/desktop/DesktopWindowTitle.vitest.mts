@@ -10,12 +10,12 @@ import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  formatDesktopWindowTitle,
   getDesktopSessionActivity,
   getDesktopWindowTitle,
   installDesktopWindowTitle,
 } from '@desktop/main/desktopWindowTitle';
 import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+import { formatSessionTitle } from '@shared/sessionTitle';
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
@@ -61,14 +61,14 @@ function installTitle(
 
 describe('desktop process-session window title', () => {
   it('formats exact copy for absent and hostile workspace names', () => {
-    expect(formatDesktopWindowTitle('idle')).toBe('TeXRA');
-    expect(formatDesktopWindowTitle('running')).toBe('TeXRA — Running');
-    expect(formatDesktopWindowTitle('approval')).toBe(
+    expect(formatSessionTitle(undefined, 'idle')).toBe('TeXRA');
+    expect(formatSessionTitle(undefined, 'running')).toBe('TeXRA — Running');
+    expect(formatSessionTitle(undefined, 'approval')).toBe(
       'TeXRA — Approval needed',
     );
-    expect(
-      formatDesktopWindowTitle('approval', 'draft — Running <script>.tex'),
-    ).toBe('TeXRA — Approval needed — draft — Running <script>.tex');
+    expect(formatSessionTitle('draft — Running <script>.tex', 'approval')).toBe(
+      'TeXRA — Approval needed — draft — Running <script>.tex',
+    );
   });
 
   it('requires a registered agent with canonical RUNNING status', () => {
