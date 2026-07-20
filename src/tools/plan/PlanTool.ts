@@ -38,7 +38,6 @@ import {
   isGoalInFlight,
   type Goal,
 } from '@shared/schemas/goal';
-import { proposalApprovals } from '@tools/approval';
 import { requireStreamId } from '@tools/contextHelpers';
 import {
   GoalStore,
@@ -161,11 +160,7 @@ Best practices:
     const streamId = getRunContextStreamId(runContext);
     if (!streamId) {
       logger.warn('Plan created without streamId — skipping approval gate');
-      return this.buildApprovedResult({ autoApproved: false });
-    }
-    if (proposalApprovals().isBypassed(streamId)) {
-      logger.info('Plan auto-approved via delegated-task auto-approval');
-      return this.buildApprovedResult({ autoApproved: true });
+      return this.buildApprovedResult();
     }
     return this.requestApproval(plan, streamId, callContext.workPlanState);
   }
@@ -273,7 +268,7 @@ Best practices:
 
     if (result.action === 'approve') {
       logger.info('Plan approved by user');
-      return this.buildApprovedResult({ autoApproved: false });
+      return this.buildApprovedResult();
     }
 
     if (result.action === 'approve_and_goal') {
@@ -424,20 +419,12 @@ Best practices:
     }
   }
 
-  private buildApprovedResult({
-    autoApproved,
-  }: {
-    autoApproved: boolean;
-  }): ToolResult {
-    const prefix = autoApproved
-      ? 'Plan auto-approved via delegated-task auto-approval (user did not review).'
-      : 'Plan approved by the user.';
+  private buildApprovedResult(): ToolResult {
     return {
       status: 'executed',
-      summary: autoApproved
-        ? 'Plan auto-approved — proceed with implementation'
-        : 'Plan approved — proceed with implementation',
-      output: `${prefix} Work toward the objective, tracking concrete steps with the todo tool.`,
+      summary: 'Plan approved — proceed with implementation',
+      output:
+        'Plan approved by the user. Work toward the objective, tracking concrete steps with the todo tool.',
     };
   }
 }

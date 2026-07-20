@@ -206,7 +206,8 @@ jobs:
             edit-approval subagent-list-focus-full-frame hidden-root-approval-tab-return \
             orchestrate-launcher orchestrate-agent-submenu \
             orchestrate-delegated-history orchestrate-resume-submenu \
-            compact-orchestrate-launcher single-run-liveness
+            compact-orchestrate-launcher single-run-liveness \
+            agent-proposal-approve-all
 
       - name: Upload CLI TUI smoke frames
         if: always()

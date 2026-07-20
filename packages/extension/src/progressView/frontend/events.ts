@@ -53,7 +53,7 @@ export interface FollowupCommandDetail {
 }
 
 /**
- * Frontend-only panel action emitted by the inline "Yolo (this session)"
+ * Frontend-only panel action emitted by the inline edit/command approval
  * button / `a` shortcut on the edit and bash approval prompts.
  * `handlePermissionAction` decomposes it into a normal approve plus a
  * session-bypass enable, so — unlike `approve` / `reject` / `openDiff` — it
