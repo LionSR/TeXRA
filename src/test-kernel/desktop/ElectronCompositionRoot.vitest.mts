@@ -1,4 +1,5 @@
 // Node imports
+import { execFileSync } from 'node:child_process';
 import {
   mkdir,
   mkdtemp,
@@ -14,7 +15,12 @@ import { join, relative, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports - test support
-import { DESKTOP_SRC_DIR, REPO_ROOT, repoPath } from './desktopTestPaths.mjs';
+import {
+  DESKTOP_SRC_DIR,
+  REPO_ROOT,
+  desktopSourcePath,
+  repoPath,
+} from './desktopTestPaths.mjs';
 import { loadDesktopPlatformModule } from './loadDesktopPlatformModule.mjs';
 
 interface PathFixModule {
@@ -55,6 +61,40 @@ async function walkTypeScriptFiles(dir: string): Promise<string[]> {
     }
   }
   return files.sort();
+}
+
+function namedImportSources(source: string, importedName: string): string[] {
+  const bindingPattern = new RegExp(`\\b${importedName}\\b`, 'u');
+  return [
+    ...source.matchAll(
+      /\b(?:import|export)\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/gu,
+    ),
+    ...source.matchAll(
+      /\b(?:const|let|var)\s*\{([^}]*)\}\s*=\s*\(?\s*(?:await\s*)?import\s*\(\s*['"]([^'"]+)['"]\s*\)\s*\)?/gu,
+    ),
+  ]
+    .filter((match) => bindingPattern.test(match[1] ?? ''))
+    .map((match) => match[2])
+    .filter((specifier): specifier is string => specifier !== undefined);
+}
+
+function isDesktopProcessStoresSource(specifier: string): boolean {
+  return /(?:^|\/)desktopProcessStores(?:\.js)?$/u.test(specifier);
+}
+
+function trackedTypeScriptConsumers(identifier: string): string[] {
+  const pathspecs = ['src', 'packages'].flatMap((root) =>
+    ['ts', 'tsx', 'mts', 'cts'].map(
+      (extension) => `:(glob)${root}/**/*.${extension}`,
+    ),
+  );
+  return execFileSync(
+    'git',
+    ['grep', '-l', '-e', identifier, '--', ...pathspecs],
+    { cwd: REPO_ROOT, encoding: 'utf8' },
+  )
+    .trim()
+    .split('\n');
 }
 
 describe('desktop composition root and launch environment', () => {
@@ -133,6 +173,87 @@ describe('desktop composition root and launch environment', () => {
     expect(shutdownStart).toBeGreaterThanOrEqual(0);
     expect(disposeStores).toBeGreaterThan(shutdownStart);
     expect(dispose).toBeGreaterThan(disposeStores);
+  });
+
+  it('classifies supported process-store bindings and rejects the legacy module', () => {
+    const importedName = 'initializeDesktopProcessStores';
+    const sources = namedImportSources(
+      `
+        import { ${importedName} } from './desktopProcessStores.js';
+        export { ${importedName} } from '@desktop/main/desktopProcessStores';
+        const { ${importedName} } = await import('./desktopProcessStores.js');
+        const { ${importedName} } = (await import(
+          '@desktop/main/desktopProcessStores'
+        )) as DesktopProcessStoresModule;
+      `,
+      importedName,
+    );
+
+    expect(sources).toEqual([
+      './desktopProcessStores.js',
+      '@desktop/main/desktopProcessStores',
+      './desktopProcessStores.js',
+      '@desktop/main/desktopProcessStores',
+    ]);
+    expect(sources.every(isDesktopProcessStoresSource)).toBe(true);
+    expect(
+      isDesktopProcessStoresSource('./desktopLegacyStreamImporter.js'),
+    ).toBe(false);
+  });
+
+  it('keeps process-store composition out of the legacy importer', async () => {
+    const [rootSource, processStoresSource, legacyImporterSource] =
+      await Promise.all(
+        [
+          'index.ts',
+          'desktopProcessStores.ts',
+          'desktopLegacyStreamImporter.ts',
+        ].map((file) => readFile(desktopSourcePath('main', file), 'utf8')),
+      );
+    expect(
+      namedImportSources(rootSource, 'initializeDesktopProcessStores'),
+    ).toContain('./desktopProcessStores.js');
+    expect(
+      namedImportSources(
+        processStoresSource,
+        'prepareDesktopLegacyStreamImport',
+      ),
+    ).toContain('./desktopLegacyStreamImporter.js');
+    expect(processStoresSource).toMatch(
+      /\bprepareDesktopLegacyStreamImport\s*\(/u,
+    );
+    expect(legacyImporterSource).not.toMatch(
+      /\b(?:from|import)\s*\(?\s*['"](?:[^'"]*\/)?desktopProcessStores(?:\.js)?['"]/u,
+    );
+    expect(legacyImporterSource).not.toMatch(
+      /\b(?:initializeDesktopProcessStores|SessionStores)\b/u,
+    );
+
+    const exemptConsumers = new Set([
+      'packages/desktop/src/main/desktopProcessStores.ts',
+      'src/test-kernel/desktop/ElectronCompositionRoot.vitest.mts',
+    ]);
+    const consumersWithoutBindings: string[] = [];
+    const indirectConsumers: string[] = [];
+    for (const file of trackedTypeScriptConsumers(
+      'initializeDesktopProcessStores',
+    )) {
+      if (exemptConsumers.has(file)) continue;
+
+      const source = await readFile(repoPath(file), 'utf8');
+      const specifiers = namedImportSources(
+        source,
+        'initializeDesktopProcessStores',
+      );
+      if (specifiers.length === 0) consumersWithoutBindings.push(file);
+      for (const specifier of specifiers) {
+        if (!isDesktopProcessStoresSource(specifier)) {
+          indirectConsumers.push(`${file}: ${specifier}`);
+        }
+      }
+    }
+    expect(consumersWithoutBindings).toEqual([]);
+    expect(indirectConsumers).toEqual([]);
   });
 
   it('keeps platform initialization in the Electron composition root', async () => {
