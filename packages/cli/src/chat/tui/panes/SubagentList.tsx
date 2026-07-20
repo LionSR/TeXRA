@@ -275,8 +275,8 @@ function SubagentRowDetail({
 }): React.JSX.Element | null {
   return lines.length > 0 ? (
     <Box flexDirection="column" flexShrink={0} paddingLeft={4}>
-      {lines.map((line) => (
-        <Text key={line} dimColor wrap="truncate-end">
+      {lines.map((line, index) => (
+        <Text key={`${index}:${line}`} dimColor wrap="truncate-end">
           {line}
         </Text>
       ))}
@@ -418,7 +418,7 @@ export function SubagentList(
       if (key.ctrl || key.meta) return;
       const streamId = childListStreamId(props.selectedValue);
       const pressed = input.toLowerCase();
-      if (pressed === 'i') {
+      if (pressed === 'i' && streamId) {
         props.onToggleRowExpand?.();
         return;
       }
