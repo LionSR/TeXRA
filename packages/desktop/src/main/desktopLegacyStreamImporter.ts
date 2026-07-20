@@ -5,15 +5,28 @@ import { readFile, unlink } from 'node:fs/promises';
 import writeFileAtomic from 'write-file-atomic';
 import { z } from 'zod';
 
-// Local imports - errors
+// Agent imports
 import { createChannelTrace } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+
+// Common imports
 import { isFileNotFoundError } from '@common/errors';
+
+// Controller imports
 import { SessionStores } from '@controllers/progressView/backend/state/SessionStores';
+
+// Shared imports
+import { STREAM_PHASE } from '@shared/schemas';
+import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
+
+// Tool imports
 import { releaseStreamResources } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
+
+// Transcript imports
 import type { StreamSnapshotStore } from '@transcript';
 
+// Local imports
 import { toLogData } from './desktopLogUtils.js';
 
 const LEGACY_STREAMS_KEY = 'restoredStreams';
@@ -87,6 +100,10 @@ interface DesktopLegacyStreamImport {
 /**
  * Load the process-owned desktop stores in migration-safe order.
  *
+ * This composition root remains beside the legacy importer because claiming
+ * legacy identities must be the first step of opening the canonical stores.
+ * It performs the same canonical initialization when no legacy file exists.
+ *
  * Legacy identities must be claimed in the transcript index before orphaned
  * sidecars are swept. The returned callback detaches the snapshot projection
  * during process shutdown.
@@ -141,6 +158,17 @@ export async function initializeDesktopProcessStores(options: {
   });
   await stores.sweepOrphanedStreams(new Set(canonicalStreamIds));
   await snapshots.load(canonicalStreamIds);
+  // An unfinished canonical transcript is the process-restart evidence that
+  // the prior process owned an in-flight run. Restore that provisional phase
+  // before the presentation's lease/resume repair classifies it as waiting or
+  // failed; otherwise a failed group closure would still render as READY.
+  for (const streamId of transcripts.getUnfinishedStreamIds()) {
+    session.status.transition(
+      streamId,
+      STREAM_PHASE.RUNNING,
+      STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    );
+  }
 
   if (legacyImport) {
     try {
