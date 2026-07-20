@@ -79,11 +79,21 @@ export function attachFlowAutoRetryRequired(err: unknown): void {
   flowAutoRetryRequiredMetadata.attach(err, true);
 }
 
+/** Raw fetch failures have escaped the provider SDK's retry wrapper. Match
+ *  only the outer error: an SDK connection error may carry the same TypeError
+ *  as its cause after already exhausting the provider-managed retries. */
+function isRawFetchFailure(err: unknown): boolean {
+  return (
+    err instanceof TypeError &&
+    /^(?:fetch failed|failed to fetch)$/i.test(err.message.trim())
+  );
+}
+
 export function requiresFlowAutoRetry(err: unknown): boolean {
   return (
     findInCauseChain(err, (current) =>
       flowAutoRetryRequiredMetadata.detect(current) === true ? true : undefined,
-    ) ?? false
+    ) !== undefined || isRawFetchFailure(err)
   );
 }
 
