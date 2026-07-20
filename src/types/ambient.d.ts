@@ -88,7 +88,7 @@ declare module 'markdown-it/lib/index.mjs' {
           beforeName: string,
           ruleName: string,
           rule: MarkdownItBlockRule,
-          options?: { alt?: string[] },
+          options?: { alt?: readonly string[] },
         ): void;
       };
     };

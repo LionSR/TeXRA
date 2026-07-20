@@ -16,12 +16,12 @@ export interface TexmathPluginOptions {
   readonly engineOptions?: Record<string, unknown>;
 }
 
-const PARAGRAPH_INTERRUPTION_CHAINS = [
+const PARAGRAPH_INTERRUPTION_CHAINS = Object.freeze([
   'paragraph',
   'reference',
   'blockquote',
   'list',
-];
+]);
 
 /** Allow configured display-math rules to interrupt an adjacent paragraph. */
 function addDisplayMathParagraphInterruptions(
