@@ -5,7 +5,12 @@ import { access } from 'node:fs/promises';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { noopTrace, type AgentEvent, type AgentTrace } from '@agent/trace';
+import {
+  noopTrace,
+  type AgentEvent,
+  type AgentTrace,
+  type ResultEvent,
+} from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent, SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -204,6 +209,7 @@ type CreateBridgeOptions = {
   wakeQueuedFollowUpStream?: WakeQueuedFollowUpStream;
   showErrorMessage?: (message: string) => Promise<void> | void;
   showInfoMessage?: (message: string) => Promise<void> | void;
+  onRunCompleted?: () => void;
   openPath?: (filePath: string, line?: number) => Promise<void>;
   observeRendererMessage?: (message: unknown) => void;
   /** Captures `this.logger.error(...)` calls made by the bridge under test. */
@@ -236,6 +242,9 @@ type ProgressMessage = {
   };
   activeState?: unknown;
   permission?: { data?: { approvalId?: string } };
+  executionId?: string;
+  stdout?: string;
+  stderr?: string;
 };
 
 /** Shared fixture for the tool-use "search" agentConfig used across several
@@ -510,6 +519,9 @@ async function createBridge(
         ...(options.showInfoMessage
           ? { showInfoMessage: options.showInfoMessage }
           : {}),
+        ...(options.onRunCompleted
+          ? { onRunCompleted: options.onRunCompleted }
+          : {}),
         ...(options.openPath ? { openPath: options.openPath } : {}),
       }),
     },
@@ -668,6 +680,18 @@ function emitStatusFact(
   });
 }
 
+function completedRootResult(executionId: ExecutionId): ResultEvent {
+  return {
+    type: 'result',
+    outcome: RUN_OUTCOME.COMPLETED,
+    executionId,
+    streamId: 'onboarding-completed',
+    agentName: 'proofreader',
+    category: 'workflow',
+    isSubagent: false,
+  };
+}
+
 describe('DesktopProgressBridge', () => {
   afterEach(() => {
     vi.doUnmock('@agent/runtime/SessionResumeRetrieval');
@@ -698,6 +722,73 @@ describe('DesktopProgressBridge', () => {
       activeStream: 'parent',
       streams: [expect.objectContaining({ name: 'parent' })],
     });
+  });
+
+  it('reports a completed root result while canonical initialization is gated exactly once', async () => {
+    let releaseInitialization!: () => void;
+    let markInitializationStarted!: () => void;
+    const initializationStarted = new Promise<void>((resolve) => {
+      markInitializationStarted = resolve;
+    });
+    const initializationGate = new Promise<void>((resolve) => {
+      releaseInitialization = resolve;
+    });
+    const onRunCompleted = vi.fn();
+    const bridge = await createBridge([], {
+      deferReady: true,
+      detectWaitingStreams: vi.fn(async () => {
+        markInitializationStarted();
+        await initializationGate;
+        return new Set();
+      }),
+      onRunCompleted,
+    });
+    await initializationStarted;
+
+    const session = (bridge as unknown as { session: SessionHandle }).session;
+    session.publishRunEvent(
+      'onboarding-completed',
+      completedRootResult('onboarding-completed-1' as ExecutionId),
+    );
+    expect(onRunCompleted).toHaveBeenCalledOnce();
+
+    releaseInitialization();
+    await bridge.waitUntilReady();
+    expect(onRunCompleted).toHaveBeenCalledOnce();
+  });
+
+  it('detaches the completed-result listener when disposed during initialization', async () => {
+    let releaseInitialization!: () => void;
+    let markInitializationStarted!: () => void;
+    const initializationStarted = new Promise<void>((resolve) => {
+      markInitializationStarted = resolve;
+    });
+    const initializationGate = new Promise<void>((resolve) => {
+      releaseInitialization = resolve;
+    });
+    const onRunCompleted = vi.fn();
+    const bridge = await createBridge([], {
+      deferReady: true,
+      detectWaitingStreams: vi.fn(async () => {
+        markInitializationStarted();
+        await initializationGate;
+        return new Set();
+      }),
+      onRunCompleted,
+    });
+    await initializationStarted;
+
+    bridge.dispose();
+    const session = (bridge as unknown as { session: SessionHandle }).session;
+    session.publishRunEvent(
+      'onboarding-completed',
+      completedRootResult('onboarding-completed-2' as ExecutionId),
+    );
+    expect(onRunCompleted).not.toHaveBeenCalled();
+
+    releaseInitialization();
+    await bridge.waitUntilReady();
+    expect(onRunCompleted).not.toHaveBeenCalled();
   });
 
   it('leaves output-file host events to the session run-fact path', async () => {
@@ -2766,13 +2857,17 @@ describe('DesktopProgressBridge', () => {
         bridgeA.dispose();
       };
 
-      const reopen = async (reopenedMessages: unknown[] = []) => {
+      const reopen = async (
+        reopenedMessages: unknown[] = [],
+        observeRendererMessage?: (message: unknown) => void,
+      ) => {
         close();
         const errorsB: string[] = [];
         const infosB: string[] = [];
         const bridgeB = new bridgeModule.DesktopProgressBridge(
           (message) => {
             reopenedMessages.push(message);
+            observeRendererMessage?.(message);
           },
           {
             session: processSession,
@@ -2822,6 +2917,239 @@ describe('DesktopProgressBridge', () => {
         trace,
       };
     }
+
+    async function trackOutputProcess(
+      owner: Awaited<ReturnType<typeof createProcessOwner>>,
+      executionId: ExecutionId,
+    ) {
+      const { platform } = await import('@platform/platform');
+      const stdout = `/${executionId}-stdout.log`;
+      const stderr = `/${executionId}-stderr.log`;
+      await Promise.all([
+        platform().fs.writeFile(stdout, Buffer.from('')),
+        platform().fs.writeFile(stderr, Buffer.from('')),
+      ]);
+
+      const processHandle = new owner.ProcessExecutionHandle(
+        executionId,
+        owner.handle.childStreamId,
+        'bash',
+        () => true,
+        owner.noopAgentRuntimeHost,
+      );
+      processHandle.toolName = 'bash';
+      processHandle.outputPaths = { stdout, stderr };
+      owner.processSession.executions.track(processHandle);
+
+      const flush = () =>
+        (
+          owner.processSession.executions as unknown as {
+            processOutput: {
+              flush(handle: typeof processHandle): Promise<void>;
+            };
+          }
+        ).processOutput.flush(processHandle);
+      const appendStdout = (text: string) =>
+        platform().fs.appendFile(stdout, Buffer.from(text));
+      const appendStderr = (text: string) =>
+        platform().fs.appendFile(stderr, Buffer.from(text));
+      return { appendStdout, appendStderr, flush };
+    }
+
+    function processOutputMessages(messages: unknown[]): ProgressMessage[] {
+      return progressMessages(
+        messages,
+        PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT,
+      );
+    }
+
+    it('replays detached active-process output once and then delivers live output once', async () => {
+      const streamId = 'process-output-reopen' as StreamTabId;
+      const executionId = 'ec01a0' as ExecutionId;
+      const processExecutionId = 'ec01a1' as ExecutionId;
+      const owner = await createProcessOwner({ streamId, executionId });
+      const output = await trackOutputProcess(owner, processExecutionId);
+
+      owner.close();
+      await Promise.all([
+        output.appendStdout('detached stdout'),
+        output.appendStderr('detached stderr'),
+      ]);
+      await output.flush();
+      expect(
+        owner.processSession.executions
+          .getActiveProcessOutputSnapshots()
+          .get(processExecutionId),
+      ).toEqual({
+        stdout: 'detached stdout',
+        stderr: 'detached stderr',
+      });
+
+      const messagesB: unknown[] = [];
+      const { bridgeB } = await owner.reopen(messagesB);
+      try {
+        expect(processOutputMessages(messagesB)).toEqual([
+          expect.objectContaining({
+            stream: streamId,
+            executionId: processExecutionId,
+            stdout: 'detached stdout',
+            stderr: 'detached stderr',
+          }),
+        ]);
+
+        bridgeB.syncFullView();
+        expect(
+          progressMessages(messagesB, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(
+            -1,
+          ),
+        ).toMatchObject({
+          streamStates: {
+            [streamId]: {
+              activeProcesses: [
+                expect.objectContaining({
+                  executionId: processExecutionId,
+                  agentName: 'bash',
+                  kind: 'process',
+                  toolName: 'bash',
+                }),
+              ],
+            },
+          },
+        });
+
+        await Promise.all([
+          output.appendStdout(' live stdout'),
+          output.appendStderr(' live stderr'),
+        ]);
+        await output.flush();
+        expect(processOutputMessages(messagesB)).toEqual([
+          expect.objectContaining({
+            executionId: processExecutionId,
+            stdout: 'detached stdout',
+            stderr: 'detached stderr',
+          }),
+          expect.objectContaining({
+            executionId: processExecutionId,
+            stdout: ' live stdout',
+            stderr: ' live stderr',
+          }),
+        ]);
+      } finally {
+        bridgeB.dispose();
+      }
+    });
+
+    it('has no loss or duplication across a gated subscribe-snapshot boundary', async () => {
+      const streamId = 'process-output-subscribe-boundary' as StreamTabId;
+      const executionId = 'ec01a2' as ExecutionId;
+      const processExecutionId = 'ec01a3' as ExecutionId;
+      let detectCount = 0;
+      let markReplacementLoadStarted!: () => void;
+      let releaseReplacementLoad!: () => void;
+      const replacementLoadStarted = new Promise<void>((resolve) => {
+        markReplacementLoadStarted = resolve;
+      });
+      const replacementLoadGate = new Promise<void>((resolve) => {
+        releaseReplacementLoad = resolve;
+      });
+      const detectWaitingStreams = vi.fn(async () => {
+        detectCount += 1;
+        if (detectCount === 1) return new Set<StreamTabId>();
+        markReplacementLoadStarted();
+        await replacementLoadGate;
+        return new Set<StreamTabId>();
+      });
+      const owner = await createProcessOwner({
+        streamId,
+        executionId,
+        detectWaitingStreams,
+      });
+      const output = await trackOutputProcess(owner, processExecutionId);
+      owner.close();
+
+      const messagesB: unknown[] = [];
+      let postBoundaryFlush: Promise<void> | undefined;
+      const reopening = owner.reopen(messagesB, (message) => {
+        const processOutput = message as ProgressMessage;
+        if (
+          processOutput.command !==
+            PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT ||
+          processOutput.stdout !== 'before subscription'
+        ) {
+          return;
+        }
+        postBoundaryFlush = (async () => {
+          await output.appendStdout('after snapshot');
+          await output.flush();
+        })();
+      });
+      await replacementLoadStarted;
+      await output.appendStdout('before subscription');
+      await output.flush();
+      expect(messagesB).toEqual([]);
+
+      releaseReplacementLoad();
+      const { bridgeB } = await reopening;
+      try {
+        await vi.waitFor(() => expect(postBoundaryFlush).toBeDefined());
+        await postBoundaryFlush;
+        expect(processOutputMessages(messagesB)).toEqual([
+          expect.objectContaining({
+            executionId: processExecutionId,
+            stdout: 'before subscription',
+            stderr: '',
+          }),
+          expect.objectContaining({
+            executionId: processExecutionId,
+            stdout: 'after snapshot',
+            stderr: '',
+          }),
+        ]);
+      } finally {
+        bridgeB.dispose();
+      }
+    });
+
+    it('does not replay retained output after the process unregisters', async () => {
+      const streamId = 'process-output-finished-before-reopen' as StreamTabId;
+      const executionId = 'ec01a4' as ExecutionId;
+      const processExecutionId = 'ec01a5' as ExecutionId;
+      const owner = await createProcessOwner({ streamId, executionId });
+      const output = await trackOutputProcess(owner, processExecutionId);
+
+      owner.close();
+      await output.appendStdout('finished while detached');
+      await output.flush();
+      owner.processSession.executions.untrack(processExecutionId);
+      await vi.waitFor(() => {
+        expect(
+          owner.processSession.executions
+            .getActiveProcessOutputSnapshots()
+            .has(processExecutionId),
+        ).toBe(false);
+      });
+
+      const messagesB: unknown[] = [];
+      const { bridgeB } = await owner.reopen(messagesB);
+      try {
+        expect(processOutputMessages(messagesB)).toEqual([]);
+        expect(
+          owner.processSession.executions.getActiveChildren(streamId).processes,
+        ).toEqual([]);
+        bridgeB.syncFullView();
+        expect(
+          progressMessages(messagesB, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(
+            -1,
+          ),
+        ).toMatchObject({
+          streamStates: {
+            [streamId]: { activeProcesses: [] },
+          },
+        });
+      } finally {
+        bridgeB.dispose();
+      }
+    });
 
     it('keeps a live transcript append made while replacement state loads', async () => {
       const streamId = 'process-stream-live-reopen' as StreamTabId;
