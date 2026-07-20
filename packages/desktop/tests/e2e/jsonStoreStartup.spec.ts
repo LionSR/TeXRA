@@ -17,14 +17,22 @@ test('desktop main bundle completes its locked startup write', async () => {
 
   try {
     launched = await launchTexraApp({ workspacePath, userDataPath });
+    // Source of truth: initializeElectronPlatform() opens this store in
+    // packages/desktop/src/main/platform/index.ts.
+    const globalStatePath = join(userDataPath, 'state', 'global.json');
     const globalState = JSON.parse(
-      readFileSync(join(userDataPath, 'state', 'global.json'), 'utf8'),
+      readFileSync(globalStatePath, 'utf8'),
     ) as Record<string, unknown>;
 
     expect(globalState.lastKnownVersion).toEqual(expect.any(String));
   } finally {
     if (launched) await closeTexraApp(launched);
-    rmSync(workspacePath, { recursive: true, force: true });
-    rmSync(userDataPath, { recursive: true, force: true });
+    for (const path of [workspacePath, userDataPath]) {
+      try {
+        rmSync(path, { recursive: true, force: true });
+      } catch {
+        // Best-effort cleanup must not hide the startup assertion failure.
+      }
+    }
   }
 });
