@@ -272,6 +272,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return null;
   }
 
+  /** Capabilities captured for post-response pricing and usage attribution. */
+  protected getUsageProviderCapabilities(): ProviderCapabilityProfile | null {
+    return this.getActiveProviderCapabilities();
+  }
+
   private getOpenAIResponseCapabilities():
     OpenAIResponseProviderCapabilities | undefined {
     return this.getActiveProviderCapabilities()?.openAIResponses;
@@ -2411,7 +2416,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /** Price computation adapted for Responses API token fields. */
   computePrice(responseUsage: ResponseUsage): number {
-    const providerCapabilities = this.getActiveProviderCapabilities();
+    const providerCapabilities = this.getUsageProviderCapabilities();
     return computeOpenAIResponsePrice(
       responseUsage,
       providerCapabilities
@@ -2446,7 +2451,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.usageProvider,
       (usage) => this.computePrice(usage),
     );
-    const usageRoute = this.getActiveProviderCapabilities()?.usageRoute;
+    const usageRoute = this.getUsageProviderCapabilities()?.usageRoute;
     return usageRoute == null ? usage : { ...usage, usageRoute };
   }
 

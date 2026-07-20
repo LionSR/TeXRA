@@ -213,6 +213,16 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
     return this.configuredSubscriptionCapabilities();
   }
 
+  protected override getUsageProviderCapabilities(): ProviderCapabilityProfile | null {
+    const usageRoute = this.getLastCredentialUsageRoute();
+    if (usageRoute !== undefined) {
+      return usageRoute === 'chatgpt-subscription'
+        ? this.subscriptionCapabilities()
+        : null;
+    }
+    return this.configuredSubscriptionCapabilities();
+  }
+
   private subscriptionCapabilities(): ProviderCapabilityProfile | null {
     return resolveProviderCapabilities({
       model: this.config,

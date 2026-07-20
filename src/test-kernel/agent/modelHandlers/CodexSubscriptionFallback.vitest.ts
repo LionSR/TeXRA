@@ -338,7 +338,11 @@ describe('ModelHandlerCodex subscription fallback', () => {
     expect(handler.getEffectiveContextWindow()).toBe(
       largeWindowConfig.contextWindow,
     );
-    expect(handler.computePrice(RAW_USAGE)).toBeGreaterThan(0);
+    expect(handler.computePrice(RAW_USAGE)).toBe(0);
+    expect(handler.normalizeUsage(RAW_USAGE, 1000)).toMatchObject({
+      cost: 0,
+      usageRoute: 'chatgpt-subscription',
+    });
   });
 
   it('constructs a personal candidate without publishing the preference', async () => {
