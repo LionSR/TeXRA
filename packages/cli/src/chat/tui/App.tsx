@@ -421,6 +421,9 @@ export function App(props: AppProps): React.JSX.Element {
     dispatchChildListSelection({ kind: 'focusStream', streamId });
     focusStreamAndPromoteApprovals(streamId);
   }, []);
+  const toggleRowExpand = useCallback(() => {
+    dispatchChildListSelection({ kind: 'toggleRowExpand' });
+  }, []);
   const foregroundKind = foregroundSurfaceKind({
     activeFormOpen: activeForm !== undefined,
     formBusy,
@@ -729,6 +732,7 @@ export function App(props: AppProps): React.JSX.Element {
           rootStreamId,
           slashPaletteOpen,
           childListFocused,
+          rowExpanded: childListSelection.rowExpanded,
           sessionViews,
           selectedChildValue,
           streams,
@@ -747,6 +751,7 @@ export function App(props: AppProps): React.JSX.Element {
           taskDetailExecutionIdSignal.set(executionId)
         }
         onPrintStream={printStreamOutput}
+        onToggleRowExpand={toggleRowExpand}
         onChildSelectionChange={(value) =>
           dispatchChildListSelection({ kind: 'highlight', value })
         }

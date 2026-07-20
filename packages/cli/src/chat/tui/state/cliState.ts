@@ -119,6 +119,15 @@ export interface BypassState {
   readonly superYolo: boolean;
 }
 
+/** Per-category file counts captured from a stream's most recent
+ *  `'run.config'` fact. Drives the subagent row's compact file badge. */
+export interface ChildFileCounts {
+  readonly input: number;
+  readonly context: number;
+  readonly media: number;
+  readonly output: number;
+}
+
 export interface StreamSlice {
   readonly streamId: StreamTabId;
   /** Model identity captured from setTaskState for this specific stream. */
@@ -129,6 +138,18 @@ export interface StreamSlice {
   readonly category: AgentCategory | undefined;
   readonly status: StreamPhase | undefined;
   readonly substate?: StreamSubstate;
+  /** Per-category file counts from the stream's `'run.config'` fact; drives
+   *  the row's compact file badge (`in:2 ctx:1`). Absent until the fact
+   *  arrives, or if every category is empty. */
+  readonly fileCounts?: ChildFileCounts;
+  /** File paths from the same `'run.config'` fact, for the expand-on-focus
+   *  file detail panel (`i` keybinding). Only populated end-to-end today for
+   *  `inputFiles` on workflow-script `agent()` grandchildren; the other
+   *  three stay empty until the upstream DSL/runner gap is closed. */
+  readonly inputFiles?: readonly string[];
+  readonly contextFiles?: readonly string[];
+  readonly mediaFiles?: readonly string[];
+  readonly outputFiles?: readonly string[];
   /** Epoch ms when this stream last entered `RUNNING`; cleared on any other
    *  status. Drives the StatusBar's live elapsed-time segment so a long
    *  token-less "thinking" turn still shows liveness. */

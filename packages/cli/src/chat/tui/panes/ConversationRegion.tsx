@@ -31,15 +31,22 @@ import {
   queuedFollowUpPanelRowCount,
 } from './QueuedFollowUpsPanel';
 import { StaticConversationTranscript } from './StaticConversationTranscript';
-import { SubagentList } from './SubagentList';
+import { SubagentList, SubagentRowDetail } from './SubagentList';
+import { fileDetailLines } from './SubagentListDisplay';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 import type { ChildListTarget } from '../state/childControls';
-import type { ChildListValue } from '../state/childListSelection';
+import {
+  childListStreamId,
+  type ChildListValue,
+} from '../state/childListSelection';
 import type { StreamSlice } from '../state/cliState';
 import type { TranscriptPrintRequest } from '../state/transcriptLines';
 import type { StreamView } from '../state/streamViews';
+
+/** Bounds on the expand-on-focus file-detail panel's row need. */
+const DETAIL_PANEL_MAX_CONTENT_ROWS = 4;
 
 // Cap the bottom subagent/todos panels so they never crowd out the
 // conversation, even though they now render below the input bar.
@@ -54,6 +61,8 @@ interface ConversationRegionSnapshot {
   readonly slashPaletteOpen: boolean;
   readonly selectedChildValue: ChildListValue | undefined;
   readonly childListFocused: boolean;
+  /** Whether the highlighted row's file-detail panel (`i` keybinding) is open. */
+  readonly rowExpanded: boolean;
   readonly sessionViews: readonly StreamView[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly subagentExecutionLabels: ExecutionLabels;
@@ -82,6 +91,7 @@ interface ConversationRegionProps {
   readonly onRetryExecution: (executionId: string) => void;
   readonly onOpenProcessDetail: (executionId: string) => void;
   readonly onPrintStream: (streamId: StreamTabId) => void;
+  readonly onToggleRowExpand: () => void;
 }
 
 export function ConversationRegion({
@@ -95,6 +105,7 @@ export function ConversationRegion({
   onRetryExecution,
   onOpenProcessDetail,
   onPrintStream,
+  onToggleRowExpand,
   onStaticTranscriptChange,
   renderFooterChrome,
   renderForegroundSurface,
@@ -176,6 +187,22 @@ export function ConversationRegion({
     hasTodosPlanPanel && activeSlice
       ? todosPlanPanelRowCount(activeSlice.todos, activeSlice.plan)
       : 0;
+  // The highlighted row's file-detail panel only makes sense while a child
+  // row is actually highlighted — never for the list-root row (its file
+  // fields, if any, belong to the conversation the transcript already shows).
+  const expandedStreamId = snapshot.rowExpanded
+    ? childListStreamId(snapshot.selectedChildValue)
+    : undefined;
+  const expandedSlice =
+    expandedStreamId && expandedStreamId !== snapshot.childListTarget.streamId
+      ? snapshot.streams.get(expandedStreamId)
+      : undefined;
+  const detailWanted =
+    !foregroundOpen && snapshot.childListFocused && snapshot.rowExpanded;
+  const detailLines = detailWanted ? fileDetailLines(expandedSlice) : [];
+  const detailContentRows = detailWanted
+    ? clamp(Math.max(detailLines.length, 1), 1, DETAIL_PANEL_MAX_CONTENT_ROWS)
+    : 0;
   const {
     bottomPanelRows: bottomPanelBudget,
     sessionPanelRows: subagentRows,
@@ -185,6 +212,7 @@ export function ConversationRegion({
     processCount: foregroundOpen ? 0 : activeProcesses.length,
     sessionCount: foregroundOpen ? 0 : snapshot.sessionViews.length,
     childListFocused: snapshot.childListFocused,
+    detailContentRows,
     todosPlanContentRows,
     transcriptRows,
   });
@@ -192,6 +220,18 @@ export function ConversationRegion({
   const childListHasRows =
     snapshot.sessionViews.length > 0 || activeProcesses.length > 0;
   const childListVisible = childListHasRows && subagentRows > 1;
+  // subagentRows now covers the list plus any open detail panel; give the
+  // list what it actually needs first (never additive on top of the shared
+  // budget) and hand the remainder — up to what the detail panel asked
+  // for — to SubagentRowDetail. Starvation naturally yields 0 detail rows.
+  const childListNeededRows = childListHasRows
+    ? snapshot.sessionViews.length + activeProcesses.length + 1
+    : 0;
+  const listRows = Math.min(subagentRows, childListNeededRows);
+  const detailRows = Math.max(
+    0,
+    Math.min(detailContentRows, subagentRows - listRows),
+  );
   useLayoutEffect(() => {
     if (snapshot.childListFocused && !foregroundOpen && !childListVisible) {
       onCancelChildList();
@@ -253,13 +293,14 @@ export function ConversationRegion({
           <Box flexDirection="column" overflowY="hidden">
             <SubagentList
               keyboardActive={snapshot.childListFocused && childListVisible}
-              maxRows={subagentRows}
+              maxRows={listRows}
               onCancel={onCancelChildList}
               onFocusStream={onFocusSession}
               onKillExecution={onKillExecution}
               onSkipExecution={onSkipExecution}
               onRetryExecution={onRetryExecution}
               onOpenProcessDetail={onOpenProcessDetail}
+              onToggleRowExpand={onToggleRowExpand}
               onSelectionChange={onChildSelectionChange}
               onPrintStream={onPrintStream}
               pendingApprovals={snapshot.pendingApprovals}
@@ -270,6 +311,9 @@ export function ConversationRegion({
               activeSubagentExecutionIds={snapshot.activeSubagentExecutionIds}
               processOutput={snapshot.childListTarget.slice?.processOutput}
             />
+            {detailRows > 0 ? (
+              <SubagentRowDetail lines={detailLines} maxRows={detailRows} />
+            ) : null}
             <TodosPlanPanel maxRows={todosPlanRows} />
           </Box>
         ) : null}

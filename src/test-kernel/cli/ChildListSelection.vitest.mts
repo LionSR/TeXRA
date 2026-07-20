@@ -57,13 +57,18 @@ describe('CLI child list selection', () => {
       main,
     );
 
-    expect(state).toEqual({ focused: true, selectedValue: processValue });
+    expect(state).toEqual({
+      focused: true,
+      selectedValue: processValue,
+      rowExpanded: false,
+    });
   });
 
   it('preserves selection while hidden and restores it when rows return', () => {
     const selected: ChildListSelectionState = {
       focused: true,
       selectedValue: strategyValue,
+      rowExpanded: false,
     };
     const hidden = reconcileSelection(selected, [], main);
     const restored = reconcileSelection(
@@ -78,7 +83,7 @@ describe('CLI child list selection', () => {
 
   it('selects the owner when lifecycle completion changes the active stream', () => {
     const state = reduceChildListSelection(
-      { focused: true, selectedValue: strategyValue },
+      { focused: true, selectedValue: strategyValue, rowExpanded: false },
       {
         kind: 'syncActiveStream',
         streamId: main,
@@ -86,12 +91,16 @@ describe('CLI child list selection', () => {
       },
     );
 
-    expect(state).toEqual({ focused: true, selectedValue: mainValue });
+    expect(state).toEqual({
+      focused: true,
+      selectedValue: mainValue,
+      rowExpanded: false,
+    });
   });
 
   it('clears a stale row when the active stream is not in the projected list', () => {
     const state = reduceChildListSelection(
-      { focused: true, selectedValue: strategyValue },
+      { focused: true, selectedValue: strategyValue, rowExpanded: false },
       {
         kind: 'syncActiveStream',
         streamId: main,
@@ -99,12 +108,41 @@ describe('CLI child list selection', () => {
       },
     );
 
-    expect(state).toEqual({ focused: true, selectedValue: undefined });
+    expect(state).toEqual({
+      focused: true,
+      selectedValue: undefined,
+      rowExpanded: false,
+    });
+  });
+
+  it('collapses the file-detail panel when the highlight moves to a new row', () => {
+    const expanded: ChildListSelectionState = {
+      focused: true,
+      selectedValue: mainValue,
+      rowExpanded: true,
+    };
+    expect(
+      reduceChildListSelection(expanded, { kind: 'toggleRowExpand' }),
+    ).toEqual({ focused: true, selectedValue: mainValue, rowExpanded: false });
+    expect(
+      reduceChildListSelection(expanded, {
+        kind: 'highlight',
+        value: strategyValue,
+      }),
+    ).toEqual({
+      focused: true,
+      selectedValue: strategyValue,
+      rowExpanded: false,
+    });
   });
 
   it('falls back to the active stream and then the first row', () => {
     let state = reconcileSelection(
-      { focused: true, selectedValue: childProcessListValue('gone') },
+      {
+        focused: true,
+        selectedValue: childProcessListValue('gone'),
+        rowExpanded: false,
+      },
       [processValue, mainValue],
       main,
     );
@@ -126,14 +164,22 @@ describe('CLI child list selection', () => {
       kind: 'focus',
       value: processValue,
     });
-    expect(state).toEqual({ focused: true, selectedValue: processValue });
+    expect(state).toEqual({
+      focused: true,
+      selectedValue: processValue,
+      rowExpanded: false,
+    });
   });
 
   it('returns input after a stream is focused', () => {
     const state = reduceChildListSelection(
-      { focused: true, selectedValue: processValue },
+      { focused: true, selectedValue: processValue, rowExpanded: true },
       { kind: 'focusStream', streamId: strategy },
     );
-    expect(state).toEqual({ focused: false, selectedValue: strategyValue });
+    expect(state).toEqual({
+      focused: false,
+      selectedValue: strategyValue,
+      rowExpanded: false,
+    });
   });
 });

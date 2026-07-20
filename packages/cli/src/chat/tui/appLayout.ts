@@ -148,6 +148,7 @@ export function allocateConversationBottomPanelRows({
   processCount = 0,
   sessionCount,
   childListFocused,
+  detailContentRows = 0,
   todosPlanContentRows,
   transcriptRows,
 }: {
@@ -155,6 +156,10 @@ export function allocateConversationBottomPanelRows({
   readonly processCount?: number;
   readonly sessionCount: number;
   readonly childListFocused: boolean;
+  /** Rows the highlighted row's file-detail panel (`i` keybinding) wants,
+   *  when open. Folded into the child-list panel's own row need so it
+   *  competes for the same budget rather than adding a new ceiling. */
+  readonly detailContentRows?: number;
   readonly todosPlanContentRows: number;
   readonly transcriptRows: number;
 }): {
@@ -163,9 +168,12 @@ export function allocateConversationBottomPanelRows({
   readonly todosPlanRows: number;
 } {
   const childListRowCount = sessionCount + processCount;
-  // The persistent child list owns one blank separator row above its Select.
+  // The persistent child list owns one blank separator row above its Select,
+  // plus whatever the open file-detail panel wants.
   const sessionPanelContentRows =
-    childListRowCount > 0 ? childListRowCount + 1 : 0;
+    childListRowCount > 0
+      ? childListRowCount + 1 + Math.max(0, detailContentRows)
+      : 0;
   // The todos/plan panel likewise owns a separator row above its checklist.
   const todosPanelContentRows =
     todosPlanContentRows > 0 ? todosPlanContentRows + 1 : 0;

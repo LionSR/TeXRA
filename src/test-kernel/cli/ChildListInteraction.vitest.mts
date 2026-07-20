@@ -149,6 +149,43 @@ describe('CLI child list interaction', () => {
     }
   });
 
+  it('toggles the highlighted row file-detail panel on i', async () => {
+    const { ink, React } = await loadInk();
+    const root = 'root' as StreamTabId;
+    const child = 'child' as StreamTabId;
+    const onToggleRowExpand = vi.fn();
+
+    const stdin = new FakeStdin();
+    const instance = ink.render(
+      React.createElement(SubagentList, {
+        keyboardActive: true,
+        maxRows: 5,
+        onCancel: vi.fn(),
+        onSelectionChange: vi.fn(),
+        onToggleRowExpand,
+        selectedValue: childStreamListValue(child),
+        sessions: [session(root, true), session(child)],
+      }),
+      {
+        stdin,
+        stdout: new FakeStdout(100),
+        interactive: true,
+        exitOnCtrlC: false,
+        patchConsole: false,
+      },
+    );
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write('i');
+      await waitFor(() => onToggleRowExpand.mock.calls.length === 1);
+
+      expect(onToggleRowExpand).toHaveBeenCalledOnce();
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it('hands focus back to the input instead of wrapping past the last row', async () => {
     const { ink, React } = await loadInk();
     const root = 'root' as StreamTabId;

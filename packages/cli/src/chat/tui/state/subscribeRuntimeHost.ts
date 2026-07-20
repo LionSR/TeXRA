@@ -27,6 +27,7 @@ import {
   getCliStateGeneration,
   removeStream,
   patchStream,
+  type ChildFileCounts,
   type StreamSlice,
 } from './cliState';
 import {
@@ -85,15 +86,66 @@ function applySetActiveStream(payload: SetActiveStreamPayload): void {
   }
 }
 
+function fileFieldCounts(config: AgentConfig): ChildFileCounts {
+  return {
+    input: config.inputFiles.length,
+    context: config.contextFiles.length,
+    media: config.mediaFiles.length,
+    output: config.outputFiles.length,
+  };
+}
+
+function sameFileCounts(
+  left: ChildFileCounts | undefined,
+  right: ChildFileCounts,
+): boolean {
+  return (
+    left !== undefined &&
+    left.input === right.input &&
+    left.context === right.context &&
+    left.media === right.media &&
+    left.output === right.output
+  );
+}
+
+function sameFileList(
+  left: readonly string[] | undefined,
+  right: readonly string[],
+): boolean {
+  return (
+    left !== undefined &&
+    left.length === right.length &&
+    left.every((item, index) => item === right[index])
+  );
+}
+
+// `run.config` already carries the full normalized AgentConfig — including
+// inputFiles/contextFiles/mediaFiles/outputFiles — for every child stream
+// (see AgentRunLifecycle.emitRunStart). Retaining the file fields here is
+// what feeds the subagent row's file badge and its expand-on-focus detail.
 function applyRunConfig(streamId: StreamTabId, config: AgentConfig): void {
   patchStream(streamId, (s) => {
-    if (s.model === config.model && s.category === config.agentCategory) {
+    const fileCounts = fileFieldCounts(config);
+    if (
+      s.model === config.model &&
+      s.category === config.agentCategory &&
+      sameFileCounts(s.fileCounts, fileCounts) &&
+      sameFileList(s.inputFiles, config.inputFiles) &&
+      sameFileList(s.contextFiles, config.contextFiles) &&
+      sameFileList(s.mediaFiles, config.mediaFiles) &&
+      sameFileList(s.outputFiles, config.outputFiles)
+    ) {
       return s;
     }
     return {
       ...s,
       model: config.model,
       category: config.agentCategory,
+      fileCounts,
+      inputFiles: config.inputFiles,
+      contextFiles: config.contextFiles,
+      mediaFiles: config.mediaFiles,
+      outputFiles: config.outputFiles,
     };
   });
 }

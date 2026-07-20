@@ -590,6 +590,38 @@ describe('CLI TUI row allocation', () => {
     });
   });
 
+  it('folds the file-detail panel into the child list panel need, not the cap', () => {
+    // Plenty of room: the list gets its own rows plus the detail rows it asked for.
+    expect(
+      allocateConversationBottomPanelRows({
+        maxRows: 10,
+        sessionCount: 2,
+        childListFocused: true,
+        detailContentRows: 3,
+        todosPlanContentRows: 0,
+        transcriptRows: 8,
+      }),
+    ).toEqual({ bottomPanelRows: 6, sessionPanelRows: 6, todosPlanRows: 0 });
+    // Starved budget: the detail request is folded in but never grows the
+    // overall cap — same bottomPanelRows ceiling as an unexpanded row.
+    const starved = allocateConversationBottomPanelRows({
+      maxRows: 10,
+      sessionCount: 2,
+      childListFocused: true,
+      detailContentRows: 4,
+      todosPlanContentRows: 3,
+      transcriptRows: 5,
+    });
+    const unexpanded = allocateConversationBottomPanelRows({
+      maxRows: 10,
+      sessionCount: 2,
+      childListFocused: true,
+      todosPlanContentRows: 3,
+      transcriptRows: 5,
+    });
+    expect(starved.bottomPanelRows).toBe(unexpanded.bottomPanelRows);
+  });
+
   it('reserves a separator row above the todos panel', () => {
     // 2 todos + separator = 3 rows when the transcript allows it.
     expect(

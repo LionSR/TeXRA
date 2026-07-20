@@ -36,6 +36,7 @@ import { Select, visibleSelectRange } from '../ui/Select';
 import {
   CHILD_ROW_METADATA_MIN_COLUMNS,
   CHILD_STATUS_MARKER,
+  childFileBadgeText,
   childRowMetadataText,
   childStatusColor,
   pendingApprovalRowSuffix,
@@ -168,6 +169,11 @@ function SessionRow({
   // the conversation itself — echoing its own last exchange there is noise
   // (and the root can itself be a nested subagent when focus is scoped).
   const summary = isListRoot ? undefined : session.slice?.description;
+  // Last in the identity text — the first thing Ink truncates under width
+  // pressure, so a busy narrow terminal sheds it before status/model/elapsed.
+  const fileBadges = isListRoot
+    ? undefined
+    : childFileBadgeText(session.slice?.fileCounts);
   return (
     <Box
       flexDirection="row"
@@ -191,6 +197,7 @@ function SessionRow({
           {roundLabel ? ` · ${roundLabel}` : ''}
           {modelLabel ? ` · ${modelLabel}` : ''}
           {!metadataColumn && elapsed ? ` · ${elapsed}` : ''}
+          {fileBadges ? ` · ${fileBadges}` : ''}
         </Text>
       </Box>
       {summary ? (
@@ -259,6 +266,36 @@ function ProcessRow({
   );
 }
 
+const FILE_DETAIL_FALLBACK_LINE = 'No file info for this row';
+
+/** Expand-on-focus (`i`) file detail panel for the highlighted row. Bounded
+ *  and stateless: `lines` is precomputed by the caller from the highlighted
+ *  row's `StreamSlice`, `maxRows` is whatever the shared bottom-panel row
+ *  budget allotted it. Always shows at least the fallback line when open, so
+ *  the keypress gives visible feedback rather than a silent no-op. */
+export function SubagentRowDetail({
+  lines,
+  maxRows,
+}: {
+  readonly lines: readonly string[];
+  readonly maxRows: number;
+}): React.JSX.Element | null {
+  if (maxRows <= 0) return null;
+  const rows =
+    lines.length > 0 ? lines.slice(0, maxRows) : [FILE_DETAIL_FALLBACK_LINE];
+  return (
+    <Box flexDirection="column" paddingX={1} overflowY="hidden">
+      {rows.map((line, index) => (
+        // Static formatted lines rendered together each pass — index keys
+        // are safe here, there is no insert/remove to preserve identity for.
+        <Text key={index} dimColor wrap="truncate-end">
+          {line}
+        </Text>
+      ))}
+    </Box>
+  );
+}
+
 export interface SubagentListProps {
   readonly keyboardActive?: boolean;
   readonly maxRows?: number;
@@ -270,6 +307,8 @@ export interface SubagentListProps {
   /** Retry the focused, in-flight workflow-script grandchild `agent()` call. */
   readonly onRetryExecution?: (executionId: string) => void;
   readonly onOpenProcessDetail?: (executionId: string) => void;
+  /** Toggle the highlighted row's file-detail panel (`i` keybinding). */
+  readonly onToggleRowExpand?: () => void;
   readonly onSelectionChange?: (value: ChildListValue) => void;
   readonly onPrintStream?: (streamId: StreamTabId) => void;
   /** Pending approval kinds per stream id (see `pendingApprovalSummaries`,
@@ -391,6 +430,10 @@ export function SubagentList(
         if (!executionId) return;
         if (pressed === 's') props.onSkipExecution?.(executionId);
         else props.onRetryExecution?.(executionId);
+        return;
+      }
+      if (pressed === 'i') {
+        props.onToggleRowExpand?.();
         return;
       }
       if (pressed !== 'k') return;

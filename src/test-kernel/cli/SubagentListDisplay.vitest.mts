@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CHILD_STATUS_MARKER,
+  childFileBadgeText,
   childRowMetadataText,
   childStatusColor,
+  fileDetailLines,
   pendingApprovalRowSuffix,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
 import {
@@ -234,6 +236,39 @@ describe('CLI child list display model', () => {
     ).toBe('45s');
   });
 
+  it('builds the compact file-count badge from non-zero categories only', () => {
+    expect(childFileBadgeText(undefined)).toBeUndefined();
+    expect(
+      childFileBadgeText({ input: 0, context: 0, media: 0, output: 0 }),
+    ).toBeUndefined();
+    expect(
+      childFileBadgeText({ input: 2, context: 1, media: 0, output: 0 }),
+    ).toBe('in:2 ctx:1');
+    expect(
+      childFileBadgeText({ input: 0, context: 0, media: 1, output: 3 }),
+    ).toBe('media:1 out:3');
+  });
+
+  it('builds one file-detail line per non-empty category, in a fixed order', () => {
+    expect(fileDetailLines(undefined)).toEqual([]);
+    expect(
+      fileDetailLines({
+        inputFiles: [],
+        contextFiles: [],
+        mediaFiles: [],
+        outputFiles: [],
+      }),
+    ).toEqual([]);
+    expect(
+      fileDetailLines({
+        inputFiles: ['a.tex', 'b.bib'],
+        contextFiles: [],
+        mediaFiles: undefined,
+        outputFiles: ['out.tex'],
+      }),
+    ).toEqual(['Input: a.tex, b.bib', 'Output: out.tex']);
+  });
+
   it('omits the model from bash rows while retaining agent row details', async () => {
     const { ink, React } = await loadInk();
     const run = 'run' as StreamTabId;
@@ -312,5 +347,56 @@ describe('CLI child list display model', () => {
     expect(output).toContain('bash running · gpt56');
     expect(output).toContain('5 tool calls');
     expect(output).toContain('↓40k');
+  });
+
+  it('shows the file-count badge on a child row and omits it on the list root', async () => {
+    const { ink, React } = await loadInk();
+    const run = 'run' as StreamTabId;
+    const agent = 'agent-1' as StreamTabId;
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [run, workflowAgentSlice('run', { status: STREAM_PHASE.RUNNING })],
+      [
+        agent,
+        workflowAgentSlice('agent-1', {
+          model: 'gpt56',
+          status: STREAM_PHASE.RUNNING,
+          fileCounts: { input: 2, context: 1, media: 0, output: 0 },
+        }),
+      ],
+    ]);
+    const parentStream = new Map<StreamTabId, StreamTabId>([[agent, run]]);
+    const childStreamEntries = buildChildStreamEntries({
+      parentStreamId: run,
+      retained: [
+        {
+          kind: 'subagent',
+          executionId: 'agent-exec',
+          agentName: 'devise',
+          childStreamId: agent,
+          status: STREAM_PHASE.RUNNING,
+        },
+      ],
+    });
+    const sessions = streamTreeViews({
+      activeStreamId: run,
+      childStreamEntries,
+      parentStream,
+      rootStreamId: run,
+      streams,
+    });
+    const output: string = ink.renderToString(
+      React.createElement(SubagentList, {
+        listRootStreamId: run,
+        maxRows: 6,
+        keyboardActive: false,
+        sessions,
+      }),
+      { columns: 100 },
+    );
+
+    expect(output).toContain('gpt56 · in:2 ctx:1');
+    // The list-root row never shows a file badge, even if its own slice
+    // somehow carried file counts — it's the conversation, not a run.
+    expect(output.match(/in:2 ctx:1/g)).toHaveLength(1);
   });
 });

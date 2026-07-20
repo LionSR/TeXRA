@@ -2,6 +2,9 @@
 import { formatCompactTokenCount } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
+// Local imports - TUI rendering
+import { truncateSummaryToWidth } from '../render/terminalText';
+
 // Local imports - TUI state and presentation
 import { isChildExecutionErrorStatus } from '../state/childExecutionStatus';
 import {
@@ -12,6 +15,7 @@ import {
 } from '../ui/colors';
 import { STATUS_DOT, TOKENS_GENERATED } from '../ui/glyphs';
 import type { PendingApprovalKind } from '../state/approvalQueue';
+import type { ChildFileCounts, StreamSlice } from '../state/cliState';
 
 export function childStatusColor(status: string | undefined): string {
   if (!status) return COLOR_SUCCESS;
@@ -83,4 +87,62 @@ export function pendingApprovalRowSuffix(
   if (kinds === undefined || first === undefined) return undefined;
   const label = PENDING_APPROVAL_ROW_LABELS[first];
   return kinds.length > 1 ? `${label} +${kinds.length - 1}` : label;
+}
+
+/** Compact `in:2 ctx:1` badge appended last in a session row's identity
+ *  text — the first segment Ink truncates under width pressure, so it can
+ *  never crowd out status/model/elapsed. Categories at zero (or the whole
+ *  count still unarrived) are omitted rather than shown as `in:0`. */
+export function childFileBadgeText(
+  counts: ChildFileCounts | undefined,
+): string | undefined {
+  if (!counts) return undefined;
+  const parts = [
+    counts.input > 0 ? `in:${counts.input}` : undefined,
+    counts.context > 0 ? `ctx:${counts.context}` : undefined,
+    counts.media > 0 ? `media:${counts.media}` : undefined,
+    counts.output > 0 ? `out:${counts.output}` : undefined,
+  ].filter((part): part is string => part !== undefined);
+  return parts.length > 0 ? parts.join(' ') : undefined;
+}
+
+export type ChildFileDetail = Pick<
+  StreamSlice,
+  'inputFiles' | 'contextFiles' | 'mediaFiles' | 'outputFiles'
+>;
+
+const FILE_DETAIL_LABELS: ReadonlyArray<{
+  readonly key: keyof ChildFileDetail;
+  readonly label: string;
+}> = [
+  { key: 'inputFiles', label: 'Input' },
+  { key: 'contextFiles', label: 'Context' },
+  { key: 'mediaFiles', label: 'Media' },
+  { key: 'outputFiles', label: 'Output' },
+];
+
+const FILE_DETAIL_LINE_MAX_COLUMNS = 100;
+
+/** Up to 4 short `Label: a, b, c` lines for the expand-on-focus file detail
+ *  panel — one per non-empty category, empty categories omitted. Returns
+ *  `[]` when no file data has arrived yet (the panel then shows its own
+ *  dim fallback line, so the `i` keypress always gives visible feedback).
+ *  `truncateSummaryToWidth` collapses whitespace, so the label/list gap is
+ *  a single space regardless of how it's written here. */
+export function fileDetailLines(
+  detail: ChildFileDetail | undefined,
+): readonly string[] {
+  if (!detail) return [];
+  const lines: string[] = [];
+  for (const { key, label } of FILE_DETAIL_LABELS) {
+    const files = detail[key];
+    if (!files || files.length === 0) continue;
+    lines.push(
+      truncateSummaryToWidth(
+        `${label}: ${files.join(', ')}`,
+        FILE_DETAIL_LINE_MAX_COLUMNS,
+      ),
+    );
+  }
+  return lines;
 }

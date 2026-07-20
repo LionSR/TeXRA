@@ -30,6 +30,10 @@ export function childListProcessId(
 export interface ChildListSelectionState {
   readonly focused: boolean;
   readonly selectedValue: ChildListValue | undefined;
+  /** Whether the highlighted row's file-detail panel (`i` keybinding) is
+   *  open. Scoped to "the currently highlighted row": reset on every focus
+   *  or selection change so it never survives a moved highlight. */
+  readonly rowExpanded: boolean;
 }
 
 type ChildListSelectionAction =
@@ -37,6 +41,7 @@ type ChildListSelectionAction =
   | { readonly kind: 'focus'; readonly value?: ChildListValue }
   | { readonly kind: 'focusStream'; readonly streamId: StreamTabId }
   | { readonly kind: 'highlight'; readonly value: ChildListValue }
+  | { readonly kind: 'toggleRowExpand' }
   | {
       readonly kind: 'syncActiveStream';
       readonly streamId: StreamTabId;
@@ -51,6 +56,7 @@ type ChildListSelectionAction =
 export const INITIAL_CHILD_LIST_SELECTION: ChildListSelectionState = {
   focused: false,
   selectedValue: undefined,
+  rowExpanded: false,
 };
 
 function resolveChildSelectionValue(
@@ -74,19 +80,23 @@ export function reduceChildListSelection(
 ): ChildListSelectionState {
   switch (action.kind) {
     case 'blur':
-      return { ...state, focused: false };
+      return { ...state, focused: false, rowExpanded: false };
     case 'focus':
       return {
         focused: true,
         selectedValue: state.selectedValue ?? action.value,
+        rowExpanded: false,
       };
     case 'focusStream':
       return {
         focused: false,
         selectedValue: childStreamListValue(action.streamId),
+        rowExpanded: false,
       };
     case 'highlight':
-      return { ...state, selectedValue: action.value };
+      return { ...state, selectedValue: action.value, rowExpanded: false };
+    case 'toggleRowExpand':
+      return { ...state, rowExpanded: !state.rowExpanded };
     case 'syncActiveStream':
       return {
         ...state,
@@ -95,6 +105,7 @@ export function reduceChildListSelection(
           undefined,
           action.streamId,
         ),
+        rowExpanded: false,
       };
     case 'reconcile': {
       if (action.values.length === 0) return state;
@@ -105,7 +116,7 @@ export function reduceChildListSelection(
       );
       return selectedValue === state.selectedValue
         ? state
-        : { ...state, selectedValue };
+        : { ...state, selectedValue, rowExpanded: false };
     }
   }
 }
