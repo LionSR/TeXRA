@@ -163,6 +163,11 @@ export async function readCliStdinText(): Promise<string> {
   return chunks.join('');
 }
 
+/** Ambient shell cwd for CLI output that will be copied back into that shell. */
+export function readCliCwd(): string {
+  return process.cwd();
+}
+
 /** Raw CLI argv (post `node texra` slice). Allowlisted file for `process.argv`. */
 export function readCliArgv(): string[] {
   return process.argv.slice(2);
@@ -364,7 +369,7 @@ export async function resolveCliCwd(
   // should fail loudly instead of silently falling back to the resolved-but-
   // nonexistent string and running the agent against the wrong workspace.
   if (!isNonEmptyString(cwdFlag)) {
-    return canonicalizeWorkspacePath(process.cwd());
+    return canonicalizeWorkspacePath(readCliCwd());
   }
   const requested = path.resolve(cwdFlag.trim());
   let info: Awaited<ReturnType<typeof stat>>;
