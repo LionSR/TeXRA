@@ -26,6 +26,8 @@ export interface SessionStoresOptions {
     forget(stream: StreamTabId): Promise<void>;
     forgetMany(streams: readonly StreamTabId[]): Promise<void>;
   };
+  /** Runs after a canonical transcript stream is committed as deleted. */
+  onCanonicalStreamDeleted?: (stream: StreamTabId) => void | Promise<void>;
 }
 
 function throwAdjacentCleanupFailures(failures: readonly unknown[]): void {
@@ -62,12 +64,21 @@ export class SessionStores {
         forgetMany(streams: readonly StreamTabId[]): Promise<void>;
       }
     | undefined;
+  private readonly onCanonicalStreamDeleted:
+    ((stream: StreamTabId) => void | Promise<void>) | undefined;
+  private readonly pendingStreamDeletions = new Map<
+    StreamTabId,
+    Promise<DeleteStreamResult>
+  >();
+  private pendingDeleteAll: Promise<DeleteAllStreamsResult> | undefined;
+  private deletionTail: Promise<void> = Promise.resolve();
 
   constructor(options: SessionStoresOptions) {
     this.streamLogs = options.streamLogs;
     this.snapshots = options.snapshots;
     this.deleteExecution = options.deleteExecution ?? deleteStoredExecution;
     this.goalEntries = options.goalEntries;
+    this.onCanonicalStreamDeleted = options.onCanonicalStreamDeleted;
   }
 
   async waitForOwnedExecutionRelease(stream: StreamTabId): Promise<void> {
@@ -75,7 +86,71 @@ export class SessionStores {
     if (executionId) await waitForOwnedExecutionLeaseRelease(executionId);
   }
 
-  async deleteStream(stream: StreamTabId): Promise<DeleteStreamResult> {
+  deleteStream(stream: StreamTabId): Promise<DeleteStreamResult> {
+    const existing = this.pendingStreamDeletions.get(stream);
+    if (existing) return existing;
+    const pending = this.enqueueDeletion(async () => {
+      const hadCanonicalStream = this.streamLogs.has(stream);
+      const result = await this.deleteStreamOnce(stream);
+      if (result === 'deleted' && hadCanonicalStream) {
+        await this.notifyDeleted(stream);
+      }
+      return result;
+    });
+    this.pendingStreamDeletions.set(stream, pending);
+    void pending.then(
+      () => this.finishStreamDeletion(stream, pending),
+      () => this.finishStreamDeletion(stream, pending),
+    );
+    return pending;
+  }
+
+  async waitForPendingStreamDeletions(): Promise<void> {
+    while (
+      this.pendingStreamDeletions.size > 0 ||
+      this.pendingDeleteAll !== undefined
+    ) {
+      await Promise.all([
+        ...this.pendingStreamDeletions.values(),
+        ...(this.pendingDeleteAll ? [this.pendingDeleteAll] : []),
+      ]);
+    }
+  }
+
+  private enqueueDeletion<T>(operation: () => Promise<T>): Promise<T> {
+    const pending = this.deletionTail.then(operation, operation);
+    this.deletionTail = pending.then(
+      () => undefined,
+      () => undefined,
+    );
+    return pending;
+  }
+
+  private finishStreamDeletion(
+    stream: StreamTabId,
+    pending: Promise<DeleteStreamResult>,
+  ): void {
+    if (this.pendingStreamDeletions.get(stream) === pending) {
+      this.pendingStreamDeletions.delete(stream);
+    }
+  }
+
+  private async notifyDeleted(stream: StreamTabId): Promise<void> {
+    if (!this.onCanonicalStreamDeleted) return;
+    try {
+      await this.onCanonicalStreamDeleted(stream);
+    } catch (error) {
+      logger.warn(
+        CHANNEL,
+        `Stream ${stream} was deleted, but canonical session cleanup was incomplete: ${toErrorMessage(error)}`,
+        { data: error },
+      );
+    }
+  }
+
+  private async deleteStreamOnce(
+    stream: StreamTabId,
+  ): Promise<DeleteStreamResult> {
     if (!canUseStreamDataDir(stream)) return 'deleted';
 
     const executionId = await this.executionIdForStream(stream);
@@ -147,14 +222,30 @@ export class SessionStores {
     }
   }
 
-  async deleteAll(): Promise<DeleteAllStreamsResult> {
+  deleteAll(): Promise<DeleteAllStreamsResult> {
+    if (this.pendingDeleteAll) return this.pendingDeleteAll;
+    const pending = this.enqueueDeletion(() => this.deleteAllOnce());
+    this.pendingDeleteAll = pending;
+    void pending.then(
+      () => this.finishDeleteAll(pending),
+      () => this.finishDeleteAll(pending),
+    );
+    return pending;
+  }
+
+  private finishDeleteAll(pending: Promise<DeleteAllStreamsResult>): void {
+    if (this.pendingDeleteAll === pending) this.pendingDeleteAll = undefined;
+  }
+
+  private async deleteAllOnce(): Promise<DeleteAllStreamsResult> {
     await this.reconcileStagedDeletions(new Set(this.streamLogs.keys()));
     const [persistedStreams, stagedDeletions] = await Promise.all([
       this.snapshots.listPersistedStreams(),
       this.snapshots.listStagedDeletions(),
     ]);
     const snapshotStreams = unique([...persistedStreams, ...stagedDeletions]);
-    const streamIds = unique([...snapshotStreams, ...this.streamLogs.keys()]);
+    const canonicalStreams = new Set(this.streamLogs.keys());
+    const streamIds = unique([...snapshotStreams, ...canonicalStreams]);
     const executionIdsByStream = new Map(this.snapshots.getExecutionIdMap());
     for (const stream of snapshotStreams) {
       const executionId = await this.snapshots.readPersistedExecutionId(stream);
@@ -188,6 +279,7 @@ export class SessionStores {
       streamsWithoutExecution.map(async (stream) => {
         try {
           await this.deleteAdjacentStreamState(stream);
+          if (canonicalStreams.has(stream)) await this.notifyDeleted(stream);
         } catch (error) {
           logger.warn(
             CHANNEL,
@@ -213,6 +305,12 @@ export class SessionStores {
           });
           if (result.status === 'active') {
             for (const stream of streams) active.add(stream);
+          } else {
+            await Promise.all(
+              streams
+                .filter((stream) => canonicalStreams.has(stream))
+                .map((stream) => this.notifyDeleted(stream)),
+            );
           }
         } catch (error) {
           if (adjacentCleanupCompleted) {
@@ -220,6 +318,11 @@ export class SessionStores {
               CHANNEL,
               `Streams for execution ${executionId} were deleted, but execution cleanup was incomplete: ${toErrorMessage(error)}`,
               { data: error },
+            );
+            await Promise.all(
+              streams
+                .filter((stream) => canonicalStreams.has(stream))
+                .map((stream) => this.notifyDeleted(stream)),
             );
             return;
           }
@@ -233,6 +336,17 @@ export class SessionStores {
               ? failedAdjacentStreams
               : streams.filter((stream) => this.streamLogs.has(stream));
           for (const stream of retainedStreams) failed.add(stream);
+          if (failedAdjacentStreams.size > 0) {
+            await Promise.all(
+              streams
+                .filter(
+                  (stream) =>
+                    canonicalStreams.has(stream) &&
+                    !failedAdjacentStreams.has(stream),
+                )
+                .map((stream) => this.notifyDeleted(stream)),
+            );
+          }
         }
       }),
     );

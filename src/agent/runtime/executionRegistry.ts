@@ -133,6 +133,7 @@ export type ManualCompactionRequestResult =
 export class ExecutionRegistry {
   private readonly handles = new Map<string, ExecutionHandle>();
   private readonly activeChildRunLoops = new Set<StreamTabId>();
+  private disposed = false;
   private readonly changeCallbacks = new Map<string, Array<() => void>>();
   private readonly disposeStatusListener: () => void;
   private readonly processOutput: ProcessOutputPoller;
@@ -232,6 +233,8 @@ export class ExecutionRegistry {
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     this.disposeStatusListener();
     const executionIds = [...this.handles.keys()];
     this.handles.clear();
@@ -248,6 +251,7 @@ export class ExecutionRegistry {
 
   /** Register a live child-run loop and return its lifecycle disposer. */
   registerChildRunLoop(streamId: StreamTabId): () => void {
+    this.assertActive();
     this.activeChildRunLoops.add(streamId);
     return () => {
       this.activeChildRunLoops.delete(streamId);
@@ -261,6 +265,7 @@ export class ExecutionRegistry {
 
   /** Register an execution handle. */
   track(handle: ExecutionHandle): void {
+    this.assertActive();
     this.handles.set(handle.executionId, handle);
     if (handle instanceof AgentExecutionHandle) {
       if (handle.isChildExecution) {
@@ -286,6 +291,7 @@ export class ExecutionRegistry {
     handle: AgentExecutionHandle,
     options: TrackAgentExecutionOptions = {},
   ): void {
+    this.assertActive();
     if (options.status) {
       const previousStatus = this.streamStatus.get(handle.childStreamId);
       const cause =
@@ -301,6 +307,12 @@ export class ExecutionRegistry {
       );
     }
     this.track(handle);
+  }
+
+  private assertActive(): void {
+    if (this.disposed) {
+      throw new Error('Cannot register execution work after session disposal.');
+    }
   }
 
   /**

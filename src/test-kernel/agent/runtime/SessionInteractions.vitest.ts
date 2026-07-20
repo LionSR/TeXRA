@@ -127,6 +127,7 @@ function createPortSession(): {
   const interactions = createDesktopHostInteractions({
     runtimeHost,
     session,
+    showInfoMessage: vi.fn(),
     getApprovalHandlers: () => handlers,
     getToolEditApprovals: () => ({
       approvePendingForStream: async () => {},
@@ -294,85 +295,6 @@ describe('session.interactions immediate capabilities', () => {
     expect(notifyUnavailableTools).not.toHaveBeenCalled();
     session.dispose();
   });
-
-  it('forwards immediate capabilities to the target active adapter', async () => {
-    const source = createTestSession();
-    const target = createTestSession();
-    const readDiagnostics = vi.fn(async () => [diagnostic]);
-    const addCriticism = vi.fn(() => ({
-      accepted: false,
-      resolvedPath: '',
-    }));
-    const notifyUnavailableTools = vi.fn();
-    target.useHostInteractions({
-      readDiagnostics,
-      addCriticism,
-      notifyUnavailableTools,
-      cancel: vi.fn(),
-    });
-    source.useHostInteractions(target.interactions.createForwarder());
-
-    try {
-      expect(
-        await source.interactions.readDiagnostics?.(criticism.absolutePath),
-      ).toEqual([diagnostic]);
-      expect(source.interactions.addCriticism?.(criticism)).toEqual({
-        accepted: false,
-        resolvedPath: '',
-      });
-      source.interactions.notifyUnavailableTools?.(
-        'Lean tools are unavailable.',
-      );
-
-      expect(readDiagnostics).toHaveBeenCalledWith(criticism.absolutePath);
-      expect(addCriticism).toHaveBeenCalledWith(criticism);
-      expect(notifyUnavailableTools).toHaveBeenCalledWith(
-        'Lean tools are unavailable.',
-      );
-    } finally {
-      source.dispose();
-      target.dispose();
-    }
-  });
-
-  it('tracks target adapter replacement through a forwarder', async () => {
-    const source = createTestSession();
-    const target = createTestSession();
-    const firstRead = vi.fn(async () => [diagnostic]);
-    const firstNotify = vi.fn();
-    const secondRead = vi.fn(async () => []);
-    const secondNotify = vi.fn();
-    target.useHostInteractions({
-      readDiagnostics: firstRead,
-      notifyUnavailableTools: firstNotify,
-      cancel: vi.fn(),
-    });
-    source.useHostInteractions(target.interactions.createForwarder());
-    const detachSecond = target.useHostInteractions({
-      readDiagnostics: secondRead,
-      notifyUnavailableTools: secondNotify,
-      cancel: vi.fn(),
-    });
-
-    try {
-      await expect(
-        source.interactions.readDiagnostics?.(criticism.absolutePath),
-      ).resolves.toEqual([]);
-      source.interactions.notifyUnavailableTools?.('Second adapter');
-      expect(secondNotify).toHaveBeenCalledWith('Second adapter');
-
-      detachSecond();
-
-      await expect(
-        source.interactions.readDiagnostics?.(criticism.absolutePath),
-      ).resolves.toEqual([diagnostic]);
-      source.interactions.notifyUnavailableTools?.('First adapter');
-      expect(firstNotify).toHaveBeenCalledWith('First adapter');
-    } finally {
-      source.dispose();
-      target.dispose();
-    }
-  });
 });
 
 describe('session.interactions request bookkeeping (coordinator fold)', () => {
@@ -405,85 +327,6 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
     } finally {
       session.dispose();
     }
-  });
-
-  it('limits forwarded cancellation to the source owner requests', async () => {
-    const source = createTestSession();
-    const target = createTestSession();
-    const adapter = createControllablePlanAdapter();
-    const cancel = vi.fn(adapter.interactions.cancel);
-    target.useHostInteractions({ ...adapter.interactions, cancel });
-    source.useHostInteractions(target.interactions.createForwarder());
-
-    const sourceStream = 'stream:forwarded-owner' as StreamTabId;
-    const targetStream = sourceStream;
-    const sourcePending = source.interactions.requestPlanApproval({
-      approvalId: 'approval:forwarded-owner',
-      streamId: sourceStream,
-      plan,
-      goalEnabled: false,
-    });
-    const targetPending = target.interactions.requestPlanApproval({
-      approvalId: 'approval:target-owner',
-      streamId: targetStream,
-      plan,
-      goalEnabled: false,
-    });
-
-    source.dispose();
-
-    await expect(sourcePending).resolves.toEqual({
-      action: 'reject',
-      feedback: 'Session disposed.',
-    });
-    expect(cancel).toHaveBeenCalledWith({
-      kind: 'plan',
-      streamId: sourceStream,
-      cause: 'Session disposed.',
-      cancellationScope: expect.any(Object),
-    });
-    expect(adapter.submit('approval:target-owner', { action: 'approve' })).toBe(
-      true,
-    );
-    await expect(targetPending).resolves.toEqual({ action: 'approve' });
-    target.dispose();
-  });
-
-  it('tracks forwarded ownership before presentation can cancel reentrantly', async () => {
-    const source = createTestSession();
-    const target = createTestSession();
-    let settle: ((result: PlanApprovalResult) => void) | undefined;
-    const cancel = vi.fn(() => {
-      settle?.({ action: 'reject', feedback: 'Cancelled while presenting.' });
-    });
-    target.useHostInteractions({
-      requestPlanApproval: () =>
-        new Promise<PlanApprovalResult>((resolve) => {
-          settle = resolve;
-          source.dispose();
-        }),
-      cancel,
-    });
-    source.useHostInteractions(target.interactions.createForwarder());
-
-    const pending = source.interactions.requestPlanApproval({
-      approvalId: 'approval:reentrant-cancel',
-      streamId: 'stream:reentrant-cancel' as StreamTabId,
-      plan,
-      goalEnabled: false,
-    });
-
-    await expect(pending).resolves.toEqual({
-      action: 'reject',
-      feedback: 'Session disposed.',
-    });
-    expect(cancel).toHaveBeenCalledWith({
-      kind: 'plan',
-      streamId: 'stream:reentrant-cancel',
-      cause: 'Session disposed.',
-      cancellationScope: expect.any(Object),
-    });
-    target.dispose();
   });
 
   it('disposes attachments even when cancellation throws', () => {
@@ -546,6 +389,27 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
         true,
       );
       await expect(pending).resolves.toEqual({ action: 'approve' });
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('drops ordinary one-way events emitted while no host is attached', async () => {
+    const session = createTestSession();
+    const emit = vi.fn();
+    try {
+      session.interactions.emit('requestOpenFile', {
+        location: { kind: 'external', absolutePath: '/tmp/stale.pdf' },
+        preserveFocus: false,
+      });
+      session.interactions.emit('requestEnsureProgressView', {});
+      session.interactions.emit('showAgentConfigBanner', {
+        agentName: 'proofreader',
+      });
+
+      session.useHostInteractions({ emit, cancel: vi.fn() });
+      await Promise.resolve();
+      expect(emit).not.toHaveBeenCalled();
     } finally {
       session.dispose();
     }

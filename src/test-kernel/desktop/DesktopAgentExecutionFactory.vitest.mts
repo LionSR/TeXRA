@@ -7,6 +7,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { FileSystemProvider } from '@platform/interfaces';
 import type { Platform } from '@platform/platform';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
@@ -31,9 +32,7 @@ import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
 type DesktopExecution = {
   handleExecute(message: unknown): Promise<void>;
-  progress: {
-    openFileCompile(filePath: string): Promise<void>;
-  };
+  openFileCompile(filePath: string): Promise<void>;
   dispose(): void;
 };
 
@@ -176,6 +175,9 @@ async function createExecution(options: {
   legacyStreamFilePath?: string;
   legacyCleanupWriteError?: Error;
   prepareSnapshotStore?: (store: SnapshotStore) => Promise<void>;
+  presentationSignal?: AbortSignal;
+  inspectSession?: (session: SessionHandle) => void;
+  detectWaitingStreams?: ReturnType<typeof vi.fn>;
 }): Promise<DesktopExecution> {
   vi.resetModules();
   const { initPlatform } = await import('@platform/platform');
@@ -188,6 +190,10 @@ async function createExecution(options: {
   }));
   vi.doMock('@agent/runtime/runAgent', () => ({
     runAgent: options.runAgent ?? vi.fn(async () => {}),
+  }));
+  vi.doMock('@agent/storage/detectWaitingStreams', () => ({
+    detectWaitingStreams:
+      options.detectWaitingStreams ?? vi.fn(async () => new Set()),
   }));
   if (options.useRealStorage) {
     vi.doUnmock('@common/storage/KVStore');
@@ -230,16 +236,30 @@ async function createExecution(options: {
   const { createDesktopAgentExecution } = (await import(
     moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
   )) as DesktopAgentExecutionModule;
-  const { StreamSnapshotStore } = await import('@transcript');
+  const { StreamLogStore, StreamSnapshotStore } = await import('@transcript');
+  const { SessionHandle } = await import('@agent/runtime/SessionHandle');
+  const { initializeDesktopProcessStores } =
+    await import('@desktop/main/desktopLegacyStreamImporter');
+  const transcripts = await StreamLogStore.open();
+  const session = new SessionHandle({ transcripts });
+  options.inspectSession?.(session);
   const progressSnapshotStore = new StreamSnapshotStore();
   await options.prepareSnapshotStore?.(progressSnapshotStore);
-  return disposeAfterTest(
-    await createDesktopAgentExecution({
+  const processStores = await initializeDesktopProcessStores({
+    session,
+    snapshots: progressSnapshotStore,
+    ...(options.legacyStreamFilePath
+      ? { legacyStreamFilePath: options.legacyStreamFilePath }
+      : {}),
+  });
+  let execution: DesktopExecution;
+  try {
+    execution = await createDesktopAgentExecution({
       postToRenderer: options.postToRenderer ?? vi.fn(),
+      session,
       progressSnapshotStore,
-      ...(options.legacyStreamFilePath
-        ? { legacyStreamFilePath: options.legacyStreamFilePath }
-        : {}),
+      sessionStores: processStores.stores,
+      presentationSignal: options.presentationSignal,
       host: createStubDesktopAgentExecutionHost({
         ...(options.opener?.openPath
           ? { openPath: options.opener.openPath }
@@ -254,8 +274,20 @@ async function createExecution(options: {
           ? { onRunCompleted: options.onRunCompleted }
           : {}),
       }),
-    }),
-  );
+    });
+  } catch (error) {
+    processStores.dispose();
+    session.dispose();
+    throw error;
+  }
+  disposeAfterTest({
+    dispose: () => {
+      execution.dispose();
+      processStores.dispose();
+      session.dispose();
+    },
+  });
+  return execution;
 }
 
 describe('createDesktopAgentExecution', () => {
@@ -263,11 +295,52 @@ describe('createDesktopAgentExecution', () => {
     vi.doUnmock('@agent/runtime/SessionResumeRetrieval');
     vi.doUnmock('@agent/runtime/executeAgent');
     vi.doUnmock('@agent/runtime/runAgent');
+    vi.doUnmock('@agent/storage/detectWaitingStreams');
     vi.doUnmock('@common/storage/KVStore');
     vi.doUnmock('@controllers/mainView/MainViewExecutionController');
     vi.doUnmock('write-file-atomic');
     vi.restoreAllMocks();
     await cleanupTempDirs(tempDirs);
+  });
+
+  it('never attaches a presentation when its window closes during repair', async () => {
+    const controller = new AbortController();
+    let finishLoad!: () => void;
+    const loadGate = new Promise<void>((resolve) => {
+      finishLoad = resolve;
+    });
+    const attached = vi.fn();
+    const detached = vi.fn();
+    const detectWaitingStreams = vi.fn(async () => {
+      await loadGate;
+      return new Set<StreamTabId>();
+    });
+    const creation = createExecution({
+      presentationSignal: controller.signal,
+      prepareMainViewExecutionRequest: vi.fn(),
+      detectWaitingStreams,
+      inspectSession: (session) => {
+        const useHostInteractions = session.useHostInteractions.bind(session);
+        vi.spyOn(session, 'useHostInteractions').mockImplementation(
+          (interactions) => {
+            attached();
+            const detach = useHostInteractions(interactions);
+            return () => {
+              detached();
+              detach();
+            };
+          },
+        );
+      },
+    });
+
+    await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalledOnce());
+    controller.abort();
+    expect(attached).not.toHaveBeenCalled();
+    expect(detached).not.toHaveBeenCalled();
+
+    finishLoad();
+    await expect(creation).rejects.toMatchObject({ name: 'AbortError' });
   });
 
   it('durably registers a sidecar-only legacy claim before removing its source', async () => {
@@ -373,10 +446,7 @@ describe('createDesktopAgentExecution', () => {
     expect(await readFile(legacyFilePath, 'utf8')).toBe(malformed);
   });
 
-  it.each([
-    ['transcript-flush', 'Transcript flush failed'],
-    ['canonical-load', 'canonical transcript load failed'],
-  ] as const)(
+  it.each([['transcript-flush', 'Transcript flush failed']] as const)(
     'retains legacy state when %s fails before migration commit',
     async (failurePoint, expectedMessage) => {
       const streamId = `proofreader@gpt#${failurePoint}8544` as StreamTabId;
@@ -442,7 +512,7 @@ describe('createDesktopAgentExecution', () => {
     expect(await readFile(legacyFilePath, 'utf8')).toBe(original);
   });
 
-  it('fails initialization when persistent transcripts cannot be opened', async () => {
+  it('fails process-session initialization when persistent transcripts cannot be opened', async () => {
     const failure = new Error('desktop transcript storage unavailable');
 
     await expect(
@@ -552,8 +622,8 @@ describe('createDesktopAgentExecution', () => {
 
   it('fires onRunCompleted when a run reaches a completed terminal result', async () => {
     const onRunCompleted = vi.fn();
-    // The mock run bridges a trace into the window session's onResult channel
-    // (mirroring AgentLaunchContext.attachRunTrace) and emits a completed
+    // The mock run bridges a trace into the process session's onResult channel
+    // (matching AgentLaunchContext.attachRunTrace) and emits a completed
     // result — exactly what the lifecycle does after persisting firstRunDone.
     const runAgent = vi.fn(async (_request, options) => {
       const trace = makeFakeTrace();
@@ -657,7 +727,7 @@ describe('createDesktopAgentExecution', () => {
       })),
     });
 
-    await execution.progress.openFileCompile('/tmp/output.tex');
+    await execution.openFileCompile('/tmp/output.tex');
     expect(opener.openBuildDisplay).toHaveBeenCalledWith(
       expect.objectContaining({ absolutePath: '/tmp/output.tex' }),
     );

@@ -12,6 +12,11 @@ import type {
   UserQuestionPermission,
 } from '@shared/schemas';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
+import type {
+  AgentRuntimeEvent,
+  AgentRuntimeEventPayloads,
+  AgentRuntimeHost,
+} from './AgentRuntimeHost';
 
 export type DiagnosticsReader = (path: string) => Promise<GenericDiagnostic[]>;
 
@@ -269,12 +274,19 @@ export function matchesCancelSelector(
  * adapters own presentation, request-id resolution, and local disposal.
  */
 export interface HostInteractions {
+  /** Present an ignorable runtime event through the active host attachment. */
+  emit?<K extends AgentRuntimeEvent>(
+    event: K,
+    payload: AgentRuntimeEventPayloads[K],
+  ): void;
   /** Read diagnostics from the active host integration. */
   readonly readDiagnostics?: DiagnosticsReader;
   /** Add one manual criticism to the active host diagnostics surface. */
   readonly addCriticism?: AddCriticismSink;
   /** Surface unavailable tool groups through the active host UI. */
   readonly notifyUnavailableTools?: ToolNotificationHandler;
+  /** Present non-error information through the currently attached host. */
+  showInfoMessage?(message: string): Promise<void> | void;
   requestToolEditApproval?(
     request: ToolEditApprovalRequest,
     options?: HostInteractionOptions,
@@ -330,7 +342,9 @@ interface PendingSessionInteraction {
  * object once, while hosts may attach and detach presentation adapters without
  * cancelling requests owned by a still-running session.
  */
-export class SessionHostInteractions implements HostInteractions {
+export class SessionHostInteractions
+  implements HostInteractions, AgentRuntimeHost
+{
   private readonly attachments: HostInteractionAttachment[] = [];
   private readonly pending = new Set<PendingSessionInteraction>();
   private attachmentVersion = 0;
@@ -358,6 +372,13 @@ export class SessionHostInteractions implements HostInteractions {
     };
   }
 
+  emit<K extends AgentRuntimeEvent>(
+    event: K,
+    payload: AgentRuntimeEventPayloads[K],
+  ): void {
+    this.activeAttachment?.interactions.emit?.(event, payload);
+  }
+
   get readDiagnostics(): DiagnosticsReader | undefined {
     return this.activeAttachment?.interactions.readDiagnostics;
   }
@@ -368,6 +389,10 @@ export class SessionHostInteractions implements HostInteractions {
 
   get notifyUnavailableTools(): ToolNotificationHandler | undefined {
     return this.activeAttachment?.interactions.notifyUnavailableTools;
+  }
+
+  showInfoMessage(message: string): Promise<void> | void {
+    return this.activeAttachment?.interactions.showInfoMessage?.(message);
   }
 
   requestToolEditApproval(
@@ -501,18 +526,6 @@ export class SessionHostInteractions implements HostInteractions {
     if (firstError !== undefined) throw firstError;
   }
 
-  /**
-   * Return a presentation-only adapter for another session owner. Requests
-   * pass directly to this slot's current concrete host, so forwarding does not
-   * create a second session-owned pending record. Disposal is deliberately
-   * absent: detaching a forwarder must not dispose the target host adapter.
-   */
-  createForwarder(): HostInteractions {
-    return createHostInteractionsForwarder(
-      () => this.activeAttachment?.interactions,
-    );
-  }
-
   private get activeAttachment(): HostInteractionAttachment | undefined {
     return this.attachments.at(-1);
   }
@@ -600,117 +613,4 @@ export class SessionHostInteractions implements HostInteractions {
       this.attachmentVersion === version
     );
   }
-}
-
-/**
- * Build a non-owning adapter for forwarding one session's requests to another.
- * Disposal is intentionally not forwarded: detaching the adapter must not
- * dispose the target session's interaction owner.
- */
-function createHostInteractionsForwarder(
-  target: () => HostInteractions | undefined,
-): HostInteractions {
-  const pending = new Set<{
-    readonly kind: PendingInteractionKind;
-    readonly streamId?: StreamTabId;
-    readonly cancellationScope: object;
-  }>();
-
-  const forward = <T>(
-    kind: PendingInteractionKind,
-    streamId: StreamTabId | null | undefined,
-    options: HostInteractionOptions | undefined,
-    invoke: (
-      interactions: HostInteractions,
-      options: HostInteractionOptions,
-    ) => Promise<T> | undefined,
-  ): Promise<T> | undefined => {
-    const interactions = target();
-    if (!interactions) return undefined;
-    const cancellationScope = options?.cancellationScope ?? {};
-    const record = {
-      kind,
-      streamId: streamId ?? undefined,
-      cancellationScope,
-    };
-    pending.add(record);
-    let result: Promise<T> | undefined;
-    try {
-      result = invoke(interactions, { ...options, cancellationScope });
-    } catch (error) {
-      pending.delete(record);
-      throw error;
-    }
-    if (!result) {
-      pending.delete(record);
-      return undefined;
-    }
-    return result.finally(() => pending.delete(record));
-  };
-
-  return {
-    get readDiagnostics() {
-      return target()?.readDiagnostics;
-    },
-    get addCriticism() {
-      return target()?.addCriticism;
-    },
-    get notifyUnavailableTools() {
-      return target()?.notifyUnavailableTools;
-    },
-    requestToolEditApproval: (request, options) =>
-      forward(
-        'toolEdit',
-        request.streamId as StreamTabId | null | undefined,
-        options,
-        (interactions, forwardedOptions) =>
-          interactions.requestToolEditApproval?.(request, forwardedOptions),
-      ),
-    requestBashApproval: (request, options) =>
-      forward('bash', request.streamId, options, (interactions, forwarded) =>
-        interactions.requestBashApproval?.(request, forwarded),
-      ),
-    requestPlanApproval: (request, options) =>
-      forward('plan', request.streamId, options, (interactions, forwarded) =>
-        interactions.requestPlanApproval?.(request, forwarded),
-      ),
-    requestAgentProposal: (request, options) =>
-      forward(
-        'proposal',
-        request.streamId,
-        options,
-        (interactions, forwarded) =>
-          interactions.requestAgentProposal?.(request, forwarded),
-      ),
-    requestRetry: (request, options) =>
-      forward('retry', request.streamId, options, (interactions, forwarded) =>
-        interactions.requestRetry?.(request, forwarded),
-      ),
-    askUserQuestion: (request, options) =>
-      forward(
-        'userQuestion',
-        request.streamId,
-        options,
-        (interactions, forwarded) =>
-          interactions.askUserQuestion?.(request, forwarded),
-      ),
-    openExternalInquiry: (request) => target()?.openExternalInquiry?.(request),
-    setApprovalBypassState: (update) =>
-      target()?.setApprovalBypassState?.(update),
-    cancel: (selector = {}) => {
-      const interactions = target();
-      if (!interactions) return;
-      const scopes = [...pending].filter((record) =>
-        matchesCancelSelector(record, selector),
-      );
-      for (const scope of scopes) {
-        interactions.cancel({
-          kind: scope.kind,
-          streamId: scope.streamId ?? null,
-          cause: selector.cause,
-          cancellationScope: scope.cancellationScope,
-        });
-      }
-    },
-  };
 }

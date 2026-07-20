@@ -304,17 +304,12 @@ export async function initializeElectronPlatform(
 
   const resourcesPath = resolveResourcesPath(mainDirname);
 
-  // Persist per-stream sidecar data (todos, plan, usage, output files) via the
-  // shared, host-agnostic snapshot store. The desktop progress backend owns the
-  // bus event handling; the platform owns lifecycle flushing so app shutdown
-  // drains the same writer instead of creating a second bus subscriber.
+  // The Electron composition root attaches this process-owned snapshot store
+  // to its SessionHandle and flushes it with the other session artifacts.
   const snapshotStore = new StreamSnapshotStore();
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => snapshotStore.flush());
 
   // Register the shared Node-host agent runtime: memory + goal tool injections
-  // and the direct Lean language services (lake env lean --server). Registered
-  // after the snapshot-store shutdown handler so the snapshot flush still runs
-  // before the Lean adapter dispose.
+  // and the direct Lean language services (lake env lean --server).
   initNodeAgentRuntime(lifecycle);
   initializeNodeGoalPrompts(resourcesPath);
   initializeNodeRuntimeSkills({

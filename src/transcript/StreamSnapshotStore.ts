@@ -485,6 +485,16 @@ export class StreamSnapshotStore {
       (sessionEvent) => {
         if (sessionEvent.scope !== 'session') return;
         switch (sessionEvent.event.type) {
+          case 'clearMissingOutputs': {
+            const { streamId, streamConfig } = sessionEvent.event.payload;
+            let targets: StreamTabId[] = [];
+            if (streamId) targets = [streamId];
+            else if (streamConfig) {
+              targets = this.findWorkflowStreamsMatching(streamConfig);
+            }
+            for (const target of targets) this.clearMissingOutputs(target);
+            return;
+          }
           case 'updateStreamDescription':
             this.setDescription(
               sessionEvent.event.payload.streamId,

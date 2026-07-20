@@ -22,14 +22,17 @@ import {
   refresh,
 } from '@agent/index/agentRegistry';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
+import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
+import type { SessionStores } from '@controllers/progressView/backend/state/SessionStores';
 import type { TerminalRunResult } from '@hosts/uiHosts';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
-import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
+import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { normalizePlatform } from '@shared/constants/latex';
@@ -40,8 +43,7 @@ import {
 } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
-import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
-import type { StreamSnapshotStore } from '@transcript';
+import { StreamLogStore, type StreamSnapshotStore } from '@transcript';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config';
 import { debounce } from '@utils/core';
 import { BinaryResolver } from '@utils/system/binaryResolver';
@@ -49,8 +51,10 @@ import {
   checkToolInstalled,
   detectPackageManager,
 } from '@utils/system/toolUtils';
-import { setDesktopAgentResumeHandler } from './desktopAgentResume.js';
+import { launchDesktopAgent } from './desktopAgentLaunch.js';
+import { installDesktopProcessResumeHandler } from './desktopAgentResume.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
+import { initializeDesktopProcessStores } from './desktopLegacyStreamImporter.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
 import { installDesktopProtocolCallbackLifecycle } from './desktopProtocolCallbacks.js';
@@ -122,8 +126,8 @@ import {
   withWorkspacePathArg,
 } from '../workspacePath.js';
 import type {
-  DesktopAgentExecution,
   DesktopAgentExecutionOptions,
+  DesktopProgressBridge,
 } from './desktopAgentExecution.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 
@@ -304,8 +308,9 @@ function createWindow(options: {
   authCoordinator: DesktopAuthCoordinator;
   authCallbackState: DesktopAuthCallbackState;
   initializeCrashReporting: () => Promise<void>;
-  lifecycle: LifecycleHost;
+  processSession: SessionHandle;
   progressSnapshotStore: StreamSnapshotStore;
+  sessionStores: SessionStores;
   /**
    * Captured in `initializeElectronPlatform` BEFORE the bundled-agent sync
    * writes LAST_KNOWN_VERSION, so the onboarding backfill can tell a returning
@@ -510,7 +515,6 @@ function createWindow(options: {
   const setupSignInRegistration = registerDesktopSetupSignIn(
     signInForRemoteAgentCatalog,
   );
-  setOpenBuildDisplay(previewHost.openBuildDisplay);
   const folderPickerDefaultPath = options.workspacePath ?? app.getPath('home');
   const openLogsFolder = async () =>
     previewHost.openPath(getDesktopLogDirectory());
@@ -530,7 +534,9 @@ function createWindow(options: {
     app.relaunch({
       args: withWorkspacePathArg(process.argv.slice(1), selectedPath),
     });
-    app.exit(0);
+    // `app.exit()` bypasses before-quit; use the lifecycle-aware path so the
+    // process session drains before Electron starts the replacement process.
+    app.quit();
   };
   const openWorkspaceInNewWindow = async () => {
     const result = await dialog.showOpenDialog(window, {
@@ -601,16 +607,15 @@ function createWindow(options: {
   const agentExecutionOptions: DesktopAgentExecutionOptions = {
     postToRenderer: postToRendererIfAlive,
     host: agentExecutionHost,
+    session: options.processSession,
     progressSnapshotStore: options.progressSnapshotStore,
-    legacyStreamFilePath: protocolLifecycle.ownsSingleInstanceLock
-      ? join(app.getPath('userData'), 'streams.json')
-      : undefined,
+    sessionStores: options.sessionStores,
   };
-  let agentExecution: DesktopAgentExecution | undefined;
-  let agentExecutionLoad: Promise<DesktopAgentExecution> | undefined;
-  let agentExecutionShutdownRegistration: { dispose(): void } | undefined;
+  let agentExecution: DesktopProgressBridge | undefined;
+  let agentExecutionLoad: Promise<DesktopProgressBridge> | undefined;
   let windowClosed = false;
-  const getAgentExecution = async (): Promise<DesktopAgentExecution> => {
+  const presentationAbort = new AbortController();
+  const getAgentExecution = async (): Promise<DesktopProgressBridge> => {
     if (agentExecution) return agentExecution;
     if (windowClosed) {
       throw new Error(
@@ -620,19 +625,16 @@ function createWindow(options: {
 
     agentExecutionLoad ??= import('./desktopAgentExecution.js')
       .then(async ({ createDesktopAgentExecution }) => {
-        const created = await createDesktopAgentExecution(
-          agentExecutionOptions,
-        );
+        const created = await createDesktopAgentExecution({
+          ...agentExecutionOptions,
+          presentationSignal: presentationAbort.signal,
+        });
         if (windowClosed) {
           created.dispose();
           throw new Error(
             'Desktop window closed before agent execution finished loading.',
           );
         }
-        agentExecutionShutdownRegistration = options.lifecycle.onShutdown(
-          SHUTDOWN_PHASE.BEFORE,
-          () => created.flush(),
-        );
         agentExecution = created;
         return created;
       })
@@ -642,21 +644,6 @@ function createWindow(options: {
       });
     return agentExecutionLoad;
   };
-  const disposeAgentResumeHandler = setDesktopAgentResumeHandler({
-    async tryResumeStream(streamId) {
-      try {
-        return await (
-          await getAgentExecution()
-        ).progress.tryResumeStream(streamId);
-      } catch (error) {
-        if (!windowClosed) reportAsyncError(error);
-        return false;
-      }
-    },
-    isResumeInFlight(streamId) {
-      return agentExecution?.progress.isResumeInFlight(streamId) ?? false;
-    },
-  });
   const fileSelection = createDesktopFileSelection({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     showOpenFileDialog: async (options) => {
@@ -887,7 +874,7 @@ function createWindow(options: {
     revealStream: async (streamId) => {
       try {
         const execution = await getAgentExecution();
-        await execution.progress.revealStream(streamId);
+        await execution.revealStream(streamId);
       } catch (error) {
         if (!windowClosed) reportAsyncError(error);
       }
@@ -899,11 +886,10 @@ function createWindow(options: {
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     // Rerun and restore use the same host-neutral owners as the extension,
     // reached through the desktop execution bridge instead of VS Code commands.
-    runExecution: async (request) => {
-      await (await getAgentExecution()).progress.runExecution(request);
-    },
+    runExecution: (request) =>
+      getAgentExecution().then((execution) => execution.runExecution(request)),
     restoreTaskState: async (taskState) =>
-      (await getAgentExecution()).progress.restoreTaskState(taskState),
+      (await getAgentExecution()).restoreTaskState(taskState),
     openPath: settingsUi.openPath,
     showInfoMessage: settingsUi.showInfoMessage,
     showErrorMessage: settingsUi.showErrorMessage,
@@ -951,8 +937,8 @@ function createWindow(options: {
   settingsIpcRef.current = settingsIpc;
   const progressIpc = createDesktopProgressIpc({
     source: {
-      get: () => agentExecution?.progress,
-      ensure: async () => (await getAgentExecution()).progress,
+      get: () => agentExecution,
+      ensure: getAgentExecution,
     },
     onAsyncError: reportAsyncError,
     // A registry entry declared `unsupported(...)` carries a user-facing
@@ -1011,7 +997,20 @@ function createWindow(options: {
         // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
         const { loadAgents } = await import('@agent/index');
         await loadAgents();
-        await (await getAgentExecution()).handleExecute(message);
+        const preparation = prepareMainViewExecutionRequest(message);
+        if (!preparation.valid) {
+          await showErrorMessage(preparation.message);
+          throw new Error(preparation.message);
+        }
+        // Initialize the presentation subscription before launch so a fast
+        // terminal result is eligible for replay. This await ends before the
+        // process-owned run begins and therefore cannot retain the window for
+        // the duration of the run.
+        await getAgentExecution();
+        return launchDesktopAgent(preparation.request, {
+          ready: Promise.resolve(),
+          session: options.processSession,
+        });
       },
       signInWithChatGpt: async () => {
         // Welcome-card sign-in enables ChatGPT subscription routing so the
@@ -1105,8 +1104,10 @@ function createWindow(options: {
     },
   );
   const mainViewIpc = installDesktopMainViewIpc(window, {
-    executeAgent: async (message) =>
-      (await getAgentExecution()).handleExecute(message),
+    executeAgent: async (message) => {
+      const execution = await getAgentExecution();
+      void execution.handleExecute(message).catch(reportAsyncError);
+    },
     fileSelection,
     prompt: promptController,
     settings: settingsIpc,
@@ -1141,6 +1142,7 @@ function createWindow(options: {
   );
   window.once('closed', () => {
     windowClosed = true;
+    presentationAbort.abort();
     executionsWatcher?.close();
     if (mainWindow === window) {
       mainWindow = null;
@@ -1148,15 +1150,16 @@ function createWindow(options: {
         Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }]));
       }
     }
-    disposeAgentResumeHandler();
-    agentExecutionShutdownRegistration?.dispose();
-    agentExecutionShutdownRegistration = undefined;
     if (agentExecution) {
       agentExecution.dispose();
     } else {
       void agentExecutionLoad
         ?.then((execution) => execution.dispose())
-        .catch(reportAsyncError);
+        .catch((error: unknown) => {
+          if (!(error instanceof Error && error.name === 'AbortError')) {
+            reportAsyncError(error);
+          }
+        });
     }
     desktopAuth.dispose();
     setupSignInRegistration.dispose();
@@ -1179,77 +1182,119 @@ if (protocolLifecycle.shouldContinue) {
     .then(async () => {
       const platformInit = await initializeElectronPlatform(desktopMainDir);
       const { lifecycle } = platformInit;
-      registerAgentShutdownHandlers(lifecycle);
-
-      // before-quit semantics: hold every quit event until shutdown handlers
-      // have finished draining (a second Cmd+Q while we're mid-drain must NOT
-      // be allowed to terminate the process). Only after runShutdown resolves
-      // do we let Electron's own quit sequence proceed — and we mark
-      // shutdownStarted to avoid re-entering the runShutdown chain.
-      let shutdownStarted = false;
-      let quitting = false;
-      app.on('before-quit', (event) => {
-        if (quitting) return;
-        event.preventDefault();
-        if (shutdownStarted) return;
-        shutdownStarted = true;
-        void lifecycle.runShutdown().finally(() => {
-          quitting = true;
-          app.quit();
-        });
+      const transcripts = await StreamLogStore.open();
+      const processSession = new SessionHandle({ transcripts });
+      let disposeProcessStores = (): void => undefined;
+      let disposeAgentResumeHandler = (): void => undefined;
+      let sessionStores!: SessionStores;
+      lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => {
+        disposeAgentResumeHandler();
       });
-
-      let crashReportingInitialized = false;
-      let crashReportingInitialization: Promise<void> | undefined;
-      const initializeCrashReporting = async (): Promise<void> => {
-        if (crashReportingInitialized) return;
-        crashReportingInitialization ??= (async () => {
-          try {
-            crashReportingInitialized = await initializeDesktopCrashReporting({
-              globalState: platform().globalState,
-              secrets: platform().secrets,
-              sensitivePaths: [
-                platformInit.workspacePath,
-                app.getPath('userData'),
-                platformInit.dataRoot,
-              ],
-              log: console,
-            });
-          } finally {
-            if (!crashReportingInitialized) {
-              crashReportingInitialization = undefined;
-            }
-          }
-        })();
-        await crashReportingInitialization;
-      };
-      const authCoordinator = createDesktopAuthCoordinator({
-        secrets: platform().secrets,
-        log: console,
-      });
-      const authCallbackState = createDesktopAuthCallbackState(
-        platform().globalState,
-      );
-      initializeDesktopServerSideKeyAccess(console);
-      installContentSecurityPolicy();
-      reopenMainWindow = () =>
-        createWindow({
-          workspacePath: platformInit.workspacePath,
-          authCoordinator,
-          authCallbackState,
-          initializeCrashReporting,
-          lifecycle,
-          progressSnapshotStore: platformInit.progressSnapshotStore,
-          hasPriorInstall: platformInit.hasPriorInstall,
-          resourcesPath: platformInit.resourcesPath,
-        });
-      reopenMainWindow();
-
-      app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) {
-          reopenMainWindow?.();
+      lifecycle.onShutdown(SHUTDOWN_PHASE.ON, async () => {
+        try {
+          await processSession.flushArtifacts();
+        } finally {
+          disposeAgentResumeHandler();
+          disposeProcessStores();
+          processSession.dispose();
         }
       });
+
+      // Until the initial window is fully wired, any startup failure must run
+      // the same process-session shutdown used by an ordinary application
+      // exit. Once this block completes, the lifecycle owns that cleanup.
+      try {
+        const processStores = await initializeDesktopProcessStores({
+          session: processSession,
+          snapshots: platformInit.progressSnapshotStore,
+          legacyStreamFilePath: protocolLifecycle.ownsSingleInstanceLock
+            ? join(app.getPath('userData'), 'streams.json')
+            : undefined,
+        });
+        sessionStores = processStores.stores;
+        disposeProcessStores = () => processStores.dispose();
+        disposeAgentResumeHandler = installDesktopProcessResumeHandler({
+          session: processSession,
+          snapshots: platformInit.progressSnapshotStore,
+        });
+        registerAgentShutdownHandlers(lifecycle);
+
+        // before-quit semantics: hold every quit event until shutdown handlers
+        // have finished draining (a second Cmd+Q while we're mid-drain must NOT
+        // be allowed to terminate the process). Only after runShutdown resolves
+        // do we let Electron's own quit sequence proceed — and we mark
+        // shutdownStarted to avoid re-entering the runShutdown chain.
+        let shutdownStarted = false;
+        let quitting = false;
+        app.on('before-quit', (event) => {
+          if (quitting) return;
+          event.preventDefault();
+          if (shutdownStarted) return;
+          shutdownStarted = true;
+          void lifecycle.runShutdown().finally(() => {
+            quitting = true;
+            app.quit();
+          });
+        });
+
+        let crashReportingInitialized = false;
+        let crashReportingInitialization: Promise<void> | undefined;
+        const initializeCrashReporting = async (): Promise<void> => {
+          if (crashReportingInitialized) return;
+          crashReportingInitialization ??= (async () => {
+            try {
+              crashReportingInitialized = await initializeDesktopCrashReporting(
+                {
+                  globalState: platform().globalState,
+                  secrets: platform().secrets,
+                  sensitivePaths: [
+                    platformInit.workspacePath,
+                    app.getPath('userData'),
+                    platformInit.dataRoot,
+                  ],
+                  log: console,
+                },
+              );
+            } finally {
+              if (!crashReportingInitialized) {
+                crashReportingInitialization = undefined;
+              }
+            }
+          })();
+          await crashReportingInitialization;
+        };
+        const authCoordinator = createDesktopAuthCoordinator({
+          secrets: platform().secrets,
+          log: console,
+        });
+        const authCallbackState = createDesktopAuthCallbackState(
+          platform().globalState,
+        );
+        initializeDesktopServerSideKeyAccess(console);
+        installContentSecurityPolicy();
+        reopenMainWindow = () =>
+          createWindow({
+            workspacePath: platformInit.workspacePath,
+            authCoordinator,
+            authCallbackState,
+            initializeCrashReporting,
+            processSession,
+            progressSnapshotStore: platformInit.progressSnapshotStore,
+            sessionStores,
+            hasPriorInstall: platformInit.hasPriorInstall,
+            resourcesPath: platformInit.resourcesPath,
+          });
+        reopenMainWindow();
+
+        app.on('activate', () => {
+          if (BrowserWindow.getAllWindows().length === 0) {
+            reopenMainWindow?.();
+          }
+        });
+      } catch (error) {
+        await lifecycle.runShutdown();
+        throw error;
+      }
     })
     .catch((error: unknown) => {
       reportFatalStartupError(error);
