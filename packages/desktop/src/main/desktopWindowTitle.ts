@@ -5,10 +5,7 @@ import { basename } from 'node:path';
 import { type BrowserWindow } from 'electron';
 
 // Local imports
-import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { STREAM_PHASE } from '@shared/schemas';
 import {
   formatSessionTitle,
@@ -28,11 +25,9 @@ type DesktopTitleWindow = Pick<
 >;
 
 /** Derive aggregate activity from canonical process-session owners. */
-export function getDesktopSessionActivity(session: {
-  readonly executions: Pick<ExecutionRegistry, 'getAgentHandles'>;
-  readonly interactions: Pick<SessionHostInteractions, 'pendingCount'>;
-  readonly status: Pick<StreamStatusMachine, 'get'>;
-}): DesktopSessionActivity {
+export function getDesktopSessionActivity(
+  session: DesktopTitleSession,
+): DesktopSessionActivity {
   if (session.interactions.pendingCount > 0) return 'approval';
   const hasRunningAgent = session.executions.getAgentHandles().some(
     (handle) =>
