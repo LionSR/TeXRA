@@ -144,7 +144,9 @@ describe('CLI confirm-card key handling', () => {
     expect(
       confirmCardKeyHintsForWidth({
         alwaysAllowLabel: DELEGATION_APPROVAL_COPY.cliAction,
-        maxColumns: 72,
+        // ConfirmCard reserves four columns of an actual 72-column terminal
+        // for its border and padding.
+        maxColumns: 68,
       }),
     ).toContainEqual({
       key: 'a',
@@ -154,7 +156,7 @@ describe('CLI confirm-card key handling', () => {
       'approve this and all later tasks, edits & commands in this run',
     );
     expect(DELEGATION_APPROVAL_COPY.cliCompactAction).toBe(
-      'all later tasks + actions in run',
+      'later tasks + actions in run',
     );
   });
 

@@ -1,4 +1,4 @@
-/** Approve control with optional stream-scoped approval actions. */
+/** Approve control with optional run-scoped approval actions. */
 
 // Third-party imports
 import { css, html, LitElement, type TemplateResult } from 'lit';
@@ -156,7 +156,7 @@ export class ApproveSplitButton extends LitElement {
   /** When true, surface the edit/bash "Yolo (this session)" menu item. */
   @property({ type: Boolean }) canBypass = false;
 
-  /** When true, surface the proposal's stream-scoped approve-all action. */
+  /** When true, surface the proposal's run-scoped approve-all action. */
   @property({ type: Boolean }) canApproveAllDelegatedWork = false;
 
   /** Read-only trace-viewer export: render inert, no bypass split-menu. */
@@ -209,14 +209,15 @@ export class ApproveSplitButton extends LitElement {
             this.canApproveAllDelegatedWork,
             () =>
               html`<wa-dropdown-item value=${DELEGATED_WORK_VALUE}>
-                ${waIcon('rocket')} ${DELEGATION_APPROVAL_COPY.streamMenuAction}
+                ${waIcon('rocket')}
+                ${DELEGATION_APPROVAL_COPY.progressViewAction}
               </wa-dropdown-item>`,
           )}
         </wa-dropdown>
         <wa-tooltip for="approve-split-trigger-button">
           ${
             this.canApproveAllDelegatedWork
-              ? `${DELEGATION_APPROVAL_COPY.streamMenuAction} (a)`
+              ? `${DELEGATION_APPROVAL_COPY.progressViewAction} (a)`
               : 'Approve and stop asking this session (a)'
           }
         </wa-tooltip>

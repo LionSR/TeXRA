@@ -112,9 +112,9 @@ describe('approve-split-button', () => {
     );
 
     expect(item?.textContent).toContain(
-      DELEGATION_APPROVAL_COPY.streamMenuAction,
+      DELEGATION_APPROVAL_COPY.progressViewAction,
     );
-    expect(DELEGATION_APPROVAL_COPY.streamMenuAction).toBe(
+    expect(DELEGATION_APPROVAL_COPY.progressViewAction).toBe(
       'Approve this and all later tasks, edits & commands in this run',
     );
     const menu = element.shadowRoot?.querySelector('.approve-split-menu');
