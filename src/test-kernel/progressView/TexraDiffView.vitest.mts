@@ -102,7 +102,7 @@ describe('texra-diff-view', () => {
     const createDiffEditor = vi.fn(() => diffEditor);
     const setTheme = vi.fn();
 
-    vi.doMock('monaco-editor/esm/vs/editor/editor.api.js', () => ({
+    vi.doMock('monaco-editor/editor/editor.api.js', () => ({
       editor: {
         createDiffEditor,
         createModel,
