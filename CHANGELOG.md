@@ -38,6 +38,11 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Parallel tool calls keep their attachment summaries** — when an
+  OpenAI-family or OpenRouter model made several tool calls in one turn, the
+  follow-up message dropped the note listing files the tools produced, so the
+  model could not see or read those attachments. Summaries are now included for
+  parallel calls exactly as they are for single calls.
 - **Malformed saved goals report a clear dashboard error** — invalid goal data
   no longer disappears or gets overwritten, and unrelated settings continue
   loading.
