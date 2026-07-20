@@ -36,7 +36,7 @@ import { Select, visibleSelectRange } from '../ui/Select';
 import {
   CHILD_ROW_METADATA_MIN_COLUMNS,
   CHILD_STATUS_MARKER,
-  childFileBadgeText,
+  childFileDisplay,
   childRowMetadataText,
   childStatusColor,
   pendingApprovalRowSuffix,
@@ -148,7 +148,7 @@ function SessionRow({
   // this truncate-end text sheds inline elapsed (narrow mode only), the round,
   // and last the pending-approval kind. The metadata column never shrinks.
   const approvalSuffix = pendingApprovalRowSuffix(pendingKinds);
-  const fileBadge = childFileBadgeText(session.slice?.files);
+  const fileBadge = childFileDisplay(session.slice?.files).badge;
   const roundLabel = formatRoundStageLabel(session.slice?.roundStage);
   // The resolved model is per-agent identity (a workflow run's grandchildren
   // can each resolve a different model); the list-root row is the conversation

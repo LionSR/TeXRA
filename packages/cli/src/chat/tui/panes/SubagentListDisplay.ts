@@ -100,34 +100,32 @@ const FILE_CATEGORIES = [
   string,
 ])[];
 
-/** Compact, derived file counts for a child row. Empty categories consume no
- *  horizontal space, and an absent run configuration produces no badge. */
-export function childFileBadgeText(
+/** Derive both file surfaces from one role ordering. Row callers omit
+ *  `detailMaxColumns` and therefore pay only for the compact badge; the
+ *  expanded panel requests its bounded detail lines from the same API. */
+export function childFileDisplay(
   files: StreamFileMetadata | undefined,
-): string | undefined {
-  if (!files) return undefined;
-  const parts = FILE_CATEGORIES.flatMap(([key, badge]) =>
-    files[key].length > 0 ? [`${badge}:${files[key].length}`] : [],
+  detailMaxColumns?: number,
+): {
+  readonly badge: string | undefined;
+  readonly detailLines: readonly string[];
+} {
+  if (!files) return { badge: undefined, detailLines: [] };
+  const populated = FILE_CATEGORIES.filter(([key]) => files[key].length > 0);
+  const badge = populated.map(
+    ([key, label]) => `${label}:${files[key].length}`,
   );
-  return parts.length > 0 ? parts.join(' ') : undefined;
-}
-
-/** At most one bounded detail line per file role. Paths remain intact until
- *  the terminal-width boundary, where the shared Unicode-aware truncator clips
- *  the line. */
-export function fileDetailLines(
-  files: StreamFileMetadata | undefined,
-  maxColumns: number,
-): readonly string[] {
-  if (!files) return [];
-  return FILE_CATEGORIES.flatMap(([key, , label]) =>
-    files[key].length > 0
-      ? [
+  const detailLines =
+    detailMaxColumns === undefined
+      ? []
+      : populated.map(([key, , label]) =>
           truncateSummaryToWidth(
             `${label}  ${files[key].join(', ')}`,
-            maxColumns,
+            detailMaxColumns,
           ),
-        ]
-      : [],
-  );
+        );
+  return {
+    badge: badge.length > 0 ? badge.join(' ') : undefined,
+    detailLines,
+  };
 }
