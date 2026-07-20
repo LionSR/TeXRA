@@ -5,8 +5,13 @@ import pMap from 'p-map';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import {
+  PROCESS_OUTPUT_MAX_CHARS,
+  type StreamProcessOutput,
+} from '@shared/streams/streamMetaReducer';
 import { delay } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { appendTail } from '@utils/strings/appendTail';
 
 import type { ProcessExecutionHandle } from './ExecutionHandle';
 
@@ -40,6 +45,7 @@ interface FileReadState {
 interface OutputState {
   stdout: FileReadState;
   stderr: FileReadState;
+  output: StreamProcessOutput;
 }
 
 export class ProcessOutputPoller {
@@ -63,7 +69,21 @@ export class ProcessOutputPoller {
     this.processOutputs.set(handle.executionId, {
       handle,
     });
+    this.getOrCreateState(handle.executionId);
     this.reconcile();
+  }
+
+  /** Return detached stdout/stderr tails for every currently active process. */
+  getActiveOutputSnapshots(): ReadonlyMap<ExecutionId, StreamProcessOutput> {
+    const snapshots = new Map<ExecutionId, StreamProcessOutput>();
+    for (const executionId of this.processOutputs.keys()) {
+      const output = this.outputStates.get(executionId)?.output ?? {
+        stdout: '',
+        stderr: '',
+      };
+      snapshots.set(executionId, Object.freeze({ ...output }));
+    }
+    return snapshots;
   }
 
   unregister(executionId: string): void {
@@ -117,6 +137,7 @@ export class ProcessOutputPoller {
       state = {
         stdout: { offset: 0, decoder: new StringDecoder('utf8') },
         stderr: { offset: 0, decoder: new StringDecoder('utf8') },
+        output: { stdout: '', stderr: '' },
       };
       this.outputStates.set(executionId, state);
     }
@@ -248,11 +269,27 @@ export class ProcessOutputPoller {
   }
 
   private emitProcessOutput(payload: ProcessOutputPayload): void {
-    if (this.emitOutput) {
-      this.emitOutput(payload);
-      return;
+    if (!this.emitOutput) {
+      throw new Error('ProcessOutputPoller requires a process output emitter');
     }
-    throw new Error('ProcessOutputPoller requires a process output emitter');
+    this.emitOutput(payload);
+
+    // The emitter may synchronously unregister the process. Never recreate a
+    // tail after unregister/dispose has pruned it.
+    const state = this.outputStates.get(payload.executionId);
+    if (!state || !this.processOutputs.has(payload.executionId)) return;
+    state.output = {
+      stdout: appendTail(
+        state.output.stdout,
+        payload.stdout,
+        PROCESS_OUTPUT_MAX_CHARS,
+      ),
+      stderr: appendTail(
+        state.output.stderr,
+        payload.stderr,
+        PROCESS_OUTPUT_MAX_CHARS,
+      ),
+    };
   }
 }
 
