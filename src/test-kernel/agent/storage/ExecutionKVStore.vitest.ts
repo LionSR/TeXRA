@@ -594,4 +594,35 @@ describe('ExecutionKVStore loud typed reads (#6966 bullet 5)', () => {
       { data: expect.any(Error) },
     );
   });
+
+  it('warns and omits a malformed child record', async () => {
+    const id = 'bad-child-record' as ExecutionId;
+    const childId = 'valid-child' as ExecutionId;
+    const store = getExecutionStore(id);
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    await store.writeChild(childId, {
+      agent: 'reviewer',
+      timestamp: '2026-07-20T00:00:00.000Z',
+    });
+    await store.write('child-malformed', {
+      agent: 42,
+      timestamp: '2026-07-20T00:00:00.000Z',
+    });
+
+    await expect(store.readChildren()).resolves.toEqual([
+      {
+        id: childId,
+        agent: 'reviewer',
+        timestamp: '2026-07-20T00:00:00.000Z',
+      },
+    ]);
+    expect(warnSpy).toHaveBeenCalledExactlyOnceWith(
+      'ExecutionKVStore',
+      expect.stringContaining(
+        `Failed to parse execution ${id} child-malformed.json`,
+      ),
+      { data: expect.any(Error) },
+    );
+  });
 });
