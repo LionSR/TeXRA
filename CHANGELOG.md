@@ -16,6 +16,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Display equations render next to surrounding text** — bracketed and
+  dollar-delimited display mathematics no longer require blank lines before or
+  after the equation in agent responses.
 - **Kimi K3 stays easy to find when its route changes** — the model remains
   under Moonshot while showing whether requests use Moonshot, Kimi Code, or
   OpenRouter.
