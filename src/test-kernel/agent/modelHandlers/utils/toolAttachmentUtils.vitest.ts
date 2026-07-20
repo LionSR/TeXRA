@@ -6,6 +6,7 @@ import { describe, it } from 'vitest';
 import {
   checkToolResultTextLimit,
   formatToolResultAsText,
+  formatToolResultTextWithAttachments,
 } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
 import {
@@ -13,6 +14,7 @@ import {
   TOOL_RESULT_TRUNCATION_HEAD_CHARS,
   TOOL_RESULT_TRUNCATION_TAIL_CHARS,
 } from '@agent/modelHandlers/contextManagementConstants';
+import type { ToolFileAttachment } from '@shared/schemas/toolResult';
 
 describe('checkToolResultTextLimit', () => {
   it('returns null for text within limit', () => {
@@ -161,6 +163,40 @@ describe('formatToolResultAsText', () => {
       output: normalOutput,
     });
     assert.equal(result, normalOutput);
+  });
+});
+
+describe('formatToolResultTextWithAttachments', () => {
+  const attachments: ToolFileAttachment[] = [
+    { path: 'chart.png', mimeType: 'image/png' },
+  ];
+
+  it('appends the attachment summary when the handler can process attachments', () => {
+    const result = formatToolResultTextWithAttachments(
+      { status: 'executed', output: 'done' },
+      attachments,
+      true,
+    );
+    assert.ok(result.includes('done'));
+    assert.ok(result.includes('chart.png (image/png)'));
+  });
+
+  it('omits the summary when the handler cannot process attachments', () => {
+    const result = formatToolResultTextWithAttachments(
+      { status: 'executed', output: 'done' },
+      attachments,
+      false,
+    );
+    assert.equal(result, 'done');
+  });
+
+  it('omits the summary when there are no attachments', () => {
+    const result = formatToolResultTextWithAttachments(
+      { status: 'executed', output: 'done' },
+      [],
+      true,
+    );
+    assert.equal(result, 'done');
   });
 });
 
