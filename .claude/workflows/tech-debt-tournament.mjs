@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Recurring tech-debt tournament: seam mappers over a ROTATING slice of areas, architect lenses propose deletions, dedupe against known issues + do-not-do ledger, adversarial net-gain verification, output capped to a few issues per cycle.',
   whenToUse:
-    'Invoked by the tech-debt-tournament skill (scheduled campaign). Args: { campaignDate, cursor?, rotationSize?, knownIssues?, doNotDo?, areas?, maxFile? }. Deliberately scoped small per run (a handful of areas, a few issues filed) — breadth comes from repeated cycles rotating through areas, not from one large sweep.',
+    'Claude Code Workflow script invoked by the tech-debt-tournament skill (scheduled campaign); this is not a TeXRA delegate_workflow_script. Args: { campaignDate, cursor?, rotationSize?, knownIssues?, doNotDo?, areas?, maxFile? }. Deliberately scoped small per run (a handful of areas, a few issues filed) — breadth comes from repeated cycles rotating through areas, not from one large sweep.',
   phases: [
     { title: 'Map', detail: 'one read-only seam mapper per rotated area' },
     { title: 'Propose', detail: 'four architect lenses over all maps' },

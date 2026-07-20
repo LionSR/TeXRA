@@ -27,8 +27,9 @@ cursor from a previous conversation turn.
    until every page has been read, and reduce each issue to a `"#N <title>"`
    string for the `knownIssues` argument. Pull requests are not dedupe records.
 
-3. **Run the workflow.** Call `Workflow` with `name: "tech-debt-tournament"`
-   (or `scriptPath: ".claude/workflows/tech-debt-tournament.mjs"`) and args:
+3. **Run the workflow.** Call Claude Code's `Workflow` tool with
+   `name: "tech-debt-tournament"` (or
+   `scriptPath: ".claude/workflows/tech-debt-tournament.mjs"`) and args:
 
    ```text
    {
@@ -44,6 +45,10 @@ cursor from a previous conversation turn.
 
    The workflow is entirely read-only: agents may inspect the repository but
    must not edit files or run state-changing commands.
+
+   This script targets Claude Code's Workflow runtime and its inline `schema`
+   option. Do not pass it to TeXRA's separate `delegate_workflow_script` tool;
+   that host intentionally uses fixed result envelopes and JSON output files.
 
 4. **Inspect the result.** The workflow returns
    `{ campaignDate, areasThisCycle, nextCursor, toFile, contested, rejected,
