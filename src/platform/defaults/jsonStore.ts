@@ -159,8 +159,8 @@ export class JsonStore implements StateStore {
     missingFallback: JsonRecord,
   ): Promise<void> {
     await ensureDir(dirname(this.filePath), this.options.mode);
-    const { lock } = await import('proper-lockfile');
-    const release = await lock(this.filePath, {
+    const { default: properLockfile } = await import('proper-lockfile');
+    const release = await properLockfile.lock(this.filePath, {
       realpath: false,
       stale: LOCK_STALE_MS,
       retries: LOCK_RETRY_OPTIONS,
