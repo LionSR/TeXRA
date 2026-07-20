@@ -1,4 +1,5 @@
 import { createChannelTrace } from '@agent/trace';
+import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
@@ -50,6 +51,18 @@ export interface HostInteractionOptions {
   readonly timeoutMs?: number;
   /** Internal identity used to cancel one forwarded presentation request. */
   readonly cancellationScope?: object;
+}
+
+export interface HostRetryInteractionOptions extends HostInteractionOptions {
+  /**
+   * Rebuild the caller's model client after a host-side credential change.
+   * A host that calls this successfully has prepared the next attempt; a
+   * rejection leaves the caller's previous client unchanged.
+   */
+  readonly prepareRetry?: (
+    selection: ModelCredentialSelection,
+    signal?: AbortSignal,
+  ) => Promise<void>;
 }
 
 /** Delivery policy for a notification owned by a process session. */
@@ -314,7 +327,7 @@ export interface HostInteractions {
   ): Promise<ProposalResult> | undefined;
   requestRetry?(
     request: HostRetryRequest,
-    options?: HostInteractionOptions,
+    options?: HostRetryInteractionOptions,
   ): Promise<RetryResult> | undefined;
   askUserQuestion?(
     request: HostUserQuestionRequest,
@@ -490,7 +503,7 @@ export class SessionHostInteractions
 
   requestRetry(
     request: HostRetryRequest,
-    options?: HostInteractionOptions,
+    options?: HostRetryInteractionOptions,
   ): Promise<RetryResult> {
     return this.enqueue<RetryResult>(
       'retry',
