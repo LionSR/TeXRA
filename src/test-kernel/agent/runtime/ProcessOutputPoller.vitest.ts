@@ -15,6 +15,7 @@ import {
 } from '@agent/runtime/ProcessOutputPoller';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { StreamTabId } from '@shared/schemas';
+import { PROCESS_OUTPUT_MAX_CHARS } from '@shared/streams/streamMetaReducer';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { delay } from '@utils/core';
 
@@ -115,6 +116,74 @@ describe('ProcessOutputPoller', () => {
     ]);
   });
 
+  it('accumulates incremental stdout and stderr snapshots in order', async () => {
+    const { host, emitOutput } = createRuntimeHost();
+    emitOutput(vi.fn());
+    const { handle, stdoutPath, stderrPath } = await makeProcessHandle(host);
+    poller.register(handle);
+
+    await poller.flush(handle);
+    await fs.appendFile(stdoutPath, 'out-2');
+    await fs.appendFile(stderrPath, 'err-2');
+    await poller.flush(handle);
+
+    expect(poller.getActiveOutputSnapshots().get(handle.executionId)).toEqual({
+      stdout: 'out-1out-2',
+      stderr: 'err-1err-2',
+    });
+  });
+
+  it('retains exactly the shared per-process output bound', async () => {
+    const { host, emitOutput } = createRuntimeHost();
+    emitOutput(vi.fn());
+    const stdout = `discard${'o'.repeat(PROCESS_OUTPUT_MAX_CHARS)}`;
+    const stderr = `discard${'e'.repeat(PROCESS_OUTPUT_MAX_CHARS)}`;
+    const { handle } = await makeProcessHandle(host, { stdout, stderr });
+    poller.register(handle);
+
+    await poller.flush(handle);
+
+    const snapshot = poller.getActiveOutputSnapshots().get(handle.executionId);
+    expect(snapshot?.stdout).toBe('o'.repeat(PROCESS_OUTPUT_MAX_CHARS));
+    expect(snapshot?.stderr).toBe('e'.repeat(PROCESS_OUTPUT_MAX_CHARS));
+  });
+
+  it('returns detached immutable snapshots', async () => {
+    const { host, emitOutput } = createRuntimeHost();
+    emitOutput(vi.fn());
+    const { handle } = await makeProcessHandle(host);
+    poller.register(handle);
+    await poller.flush(handle);
+
+    const snapshots = poller.getActiveOutputSnapshots();
+    const output = snapshots.get(handle.executionId);
+    (snapshots as Map<string, unknown>).clear();
+    expect(() => {
+      (output as { stdout: string }).stdout = 'mutated';
+    }).toThrow(TypeError);
+
+    expect(poller.getActiveOutputSnapshots().get(handle.executionId)).toEqual({
+      stdout: 'out-1',
+      stderr: 'err-1',
+    });
+  });
+
+  it('clears snapshots on unregister and dispose', async () => {
+    const { host, emitOutput } = createRuntimeHost();
+    emitOutput(vi.fn());
+    const { handle } = await makeProcessHandle(host);
+    poller.register(handle);
+    await poller.flush(handle);
+
+    poller.unregister(handle.executionId);
+    expect(poller.getActiveOutputSnapshots()).toEqual(new Map());
+
+    poller.register(handle);
+    await poller.flush(handle);
+    poller.dispose();
+    expect(poller.getActiveOutputSnapshots()).toEqual(new Map());
+  });
+
   it('polls handles whose output paths are assigned after registration', async () => {
     const { host, events, emitOutput } = createRuntimeHost();
     emitOutput((payload) => events.push({ event: 'process.output', payload }));
@@ -166,9 +235,14 @@ describe('ProcessOutputPoller', () => {
       stdout: incompleteEmoji,
       stderr: '',
     });
+    poller.register(handle);
 
     await poller.flush(handle);
 
     expect(events).toEqual([outputEvent('\uFFFD', '')]);
+    expect(poller.getActiveOutputSnapshots().get(handle.executionId)).toEqual({
+      stdout: '\uFFFD',
+      stderr: '',
+    });
   });
 });

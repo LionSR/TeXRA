@@ -161,6 +161,7 @@ export class DesktopProgressBridge {
    * bookkeeping the extension uses, rather than a hand-rolled registry.
    */
   private unsubscribe: () => void = () => undefined;
+  private detachCompletedResult: () => void = () => undefined;
   private toolEditApprovals: DesktopToolEditApprovalController | undefined;
   private hostInteractions!: DesktopHostInteractions;
   private fileActions!: DesktopProgressFileActions;
@@ -262,6 +263,13 @@ export class DesktopProgressBridge {
     });
     this.state = this.backend.state;
     this.streamLogs = this.state.streamLogs;
+    const detachCompletedResult = this.session.onResult((event) => {
+      if (event.outcome === 'completed') this.options.host.onRunCompleted();
+    });
+    this.detachCompletedResult = () => {
+      detachCompletedResult();
+      this.detachCompletedResult = () => undefined;
+    };
     this.restartRepair = this.initializeCanonicalState(presentationHost);
   }
 
@@ -318,13 +326,8 @@ export class DesktopProgressBridge {
     this.agentProposalController = this.progressHost.agentProposalController;
     this.progressViewInboundHandlers = this.createProgressViewInboundHandlers();
     const backendSubscription = this.backend.setupEventListeners();
-    const unsubscribeResult = this.session.onResult((event) => {
-      if (event.outcome === 'completed') this.options.host.onRunCompleted();
-    });
-    this.unsubscribe = () => {
-      backendSubscription.dispose();
-      unsubscribeResult();
-    };
+    this.unsubscribe = () => backendSubscription.dispose();
+    this.replayActiveProcessOutput();
     if (this.disposed) {
       this.unsubscribe();
       return;
@@ -395,6 +398,36 @@ export class DesktopProgressBridge {
       }
     }
     this.presentationReady = true;
+  }
+
+  private replayActiveProcessOutput(): void {
+    // setupEventListeners() is already attached, so output produced after this
+    // synchronous snapshot boundary arrives live. No await may be introduced
+    // before the snapshot: retained output emitted before subscription must be
+    // replayed, while later output must not be included a second time.
+    const snapshots = this.session.executions.getActiveProcessOutputSnapshots();
+    for (const [executionId, output] of snapshots) {
+      if (this.disposed) return;
+      if (!output.stdout && !output.stderr) continue;
+      const handle = this.session.executions.getHandle(executionId);
+      if (!handle) continue;
+      const { parentStreamId } = handle;
+
+      // Sending an earlier process's output can synchronously re-enter host
+      // code. Validate each process against the current active child set so a
+      // process removed during that callback is never resurrected.
+      const stillActive = this.session.executions
+        .getActiveChildren(parentStreamId)
+        .processes.some((process) => process.executionId === executionId);
+      if (!stillActive) continue;
+      this.backend.factApplier.handleRunFact(parentStreamId, {
+        type: 'process.output',
+        parentStreamId,
+        executionId,
+        stdout: output.stdout,
+        stderr: output.stderr,
+      });
+    }
   }
 
   private createProgressViewHost(): ProgressViewHost {
@@ -663,6 +696,7 @@ export class DesktopProgressBridge {
     // Make this presentation sink inert before detaching resources owned by
     // the closing BrowserWindow.
     this.disposed = true;
+    this.detachCompletedResult();
     this.restartRepairRetry.dispose();
     // Detaching first advances the session's attachment generation. Any
     // cancellation produced while the old presenters are disposed is stale;

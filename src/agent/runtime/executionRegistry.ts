@@ -30,6 +30,7 @@ import {
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
+import type { StreamProcessOutput } from '@shared/streams/streamMetaReducer';
 import {
   isActivePhase,
   isInFlightPhase,
@@ -521,6 +522,14 @@ export class ExecutionRegistry {
 
   getActiveIds(): string[] {
     return [...this.handles.keys()];
+  }
+
+  /** Return detached output tails for every currently active process. */
+  getActiveProcessOutputSnapshots(): ReadonlyMap<
+    ExecutionId,
+    StreamProcessOutput
+  > {
+    return this.processOutput.getActiveOutputSnapshots();
   }
 
   /**
