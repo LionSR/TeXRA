@@ -5,7 +5,7 @@ import {
   ToolFileAttachmentSchema,
   type ToolResult,
   ToolResultSchema,
-  DIAGNOSTIC_TYPE_VALIDATION_ERROR,
+  ValidationErrorDiagnosticsSchema,
 } from '@shared/schemas/toolResult';
 
 const ERROR_PAYLOAD_STRIPPED_KEYS = new Set([
@@ -69,10 +69,16 @@ export function extractToolAttachments(
     if (status === 'error' && ERROR_PAYLOAD_STRIPPED_KEYS.has(key)) {
       continue;
     }
-    if (key === 'diagnostics' && value && typeof value === 'object') {
-      const diag = value as Record<string, unknown>;
-      if (diag.type === DIAGNOSTIC_TYPE_VALIDATION_ERROR && diag.formatted) {
-        sanitizedResult[key] = { type: diag.type, formatted: diag.formatted };
+    if (key === 'diagnostics') {
+      // Sanitized results only carry the validation-error diagnostics shape
+      // (see ToolResultSharedFields.diagnostics); any other tool's
+      // diagnostics payload — or a validation-error payload whose `formatted`
+      // doesn't actually match FormattedZodIssueSchema — is dropped here
+      // rather than passed through untyped.
+      const validationError = ValidationErrorDiagnosticsSchema.safeParse(value);
+      if (validationError.success) {
+        const { type, formatted } = validationError.data;
+        sanitizedResult[key] = { type, formatted };
       }
       continue;
     }
