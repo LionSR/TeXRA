@@ -554,6 +554,8 @@ export async function resumeToolUseFromResumeData(
           );
         }
 
+        await runSession.transcripts.ensureLoaded(runStreamId);
+
         const result = await runFlowWithLifecycle(
           ctx,
           async (handle, lifecycle) => {

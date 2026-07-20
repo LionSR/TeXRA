@@ -8,12 +8,21 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { subscribeStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
-import { streams, resetCliState } from '@cli/chat/tui/state/cliState';
+import {
+  subscribeStreamLog,
+  syncStreamLog,
+} from '@cli/chat/tui/state/subscribeStreamLog';
+import {
+  activeStreamId,
+  patchStream,
+  resetCliState,
+  streams,
+} from '@cli/chat/tui/state/cliState';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
+  STREAM_PHASE,
   type StreamTabId,
 } from '@shared/schemas';
 import type { StreamLogStore } from '@transcript';
@@ -69,12 +78,10 @@ describe('subscribeStreamLog batching and dispose', () => {
         .get(streamA)
         ?.entries.map((e) => e.text),
     ).toEqual(['hello']);
-    expect(
-      streams
-        .get()
-        .get(streamB)
-        ?.entries.map((e) => e.text),
-    ).toEqual(['world']);
+    expect(streams.get().get(streamB)).toMatchObject({
+      description: 'world',
+      entries: [],
+    });
 
     dispose();
   });
@@ -109,5 +116,64 @@ describe('subscribeStreamLog batching and dispose', () => {
     ).toEqual(['hello again']);
 
     secondDispose();
+  });
+
+  it('releases a dormant transcript whose focus load finishes late', async () => {
+    const store = defaultSession().transcripts;
+    appendUserMessage(store, streamA, 'a-1', 'loaded late');
+    patchStream(streamA, (slice) => ({
+      ...slice,
+      status: STREAM_PHASE.WAITING,
+    }));
+
+    let finishLoad = (): void => {};
+    let loadFinished = false;
+    const loadGate = new Promise<void>((resolve) => {
+      finishLoad = () => {
+        loadFinished = true;
+        resolve();
+      };
+    });
+    const originalGet = store.get.bind(store);
+    vi.spyOn(store, 'get').mockImplementation((streamId) =>
+      streamId === streamA && !loadFinished ? undefined : originalGet(streamId),
+    );
+    vi.spyOn(store, 'ensureLoaded').mockImplementation(async (streamId) => {
+      if (streamId === streamA) await loadGate;
+    });
+    const releaseEntries = vi.spyOn(store, 'releaseEntries');
+    const dispose = subscribeStreamLog();
+
+    activeStreamId.set(streamA);
+    await Promise.resolve();
+    activeStreamId.set(streamB);
+    await Promise.resolve();
+    finishLoad();
+    await loadGate;
+    await Promise.resolve();
+
+    expect(streams.get().get(streamA)).toMatchObject({
+      description: 'loaded late',
+      entries: [],
+    });
+    expect(releaseEntries).toHaveBeenCalledWith(streamA);
+
+    dispose();
+  });
+
+  it('does not release a background transcript before its status is known', () => {
+    const store = defaultSession().transcripts;
+    appendUserMessage(store, streamB, 'b-1', 'starting');
+    activeStreamId.set(streamA);
+    const releaseEntries = vi.spyOn(store, 'releaseEntries');
+
+    syncStreamLog(streamB);
+
+    expect(streams.get().get(streamB)).toMatchObject({
+      description: 'starting',
+      entries: [],
+      status: undefined,
+    });
+    expect(releaseEntries).not.toHaveBeenCalledWith(streamB);
   });
 });

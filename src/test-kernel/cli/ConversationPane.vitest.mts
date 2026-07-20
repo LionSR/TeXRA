@@ -95,7 +95,6 @@ function toolEntry(
     text: '',
     finalized: false,
     toolUse: {
-      parsed: {},
       toolName: 'Bash',
       errorText: '',
       outputText,
@@ -119,7 +118,6 @@ function compactExecutionsEntry(
     text: '',
     finalized: true,
     toolUse: {
-      parsed: {},
       toolName: 'executions',
       errorText: '',
       outputText: '',

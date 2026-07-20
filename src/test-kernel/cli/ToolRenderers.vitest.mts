@@ -17,7 +17,6 @@ function toolUse(
   overrides: Partial<NormalizedToolUse> = {},
 ): NormalizedToolUse {
   return {
-    parsed: {},
     toolName,
     errorText: '',
     outputText: '',
@@ -97,7 +96,7 @@ describe('CLI tool display lines', () => {
       {
         errorText: 'Command failed (exit 7)',
         isError: true,
-        parsed: { exitCode: 7 },
+        exitCode: 7,
       },
     );
 
@@ -180,7 +179,7 @@ describe('CLI tool display lines', () => {
         headerSummary: 'npm run lint',
         isError: true,
         outputText: 'checked 12 files\n2 problems found',
-        parsed: { output: { exitCode: 2 } },
+        exitCode: 2,
       },
     );
 
