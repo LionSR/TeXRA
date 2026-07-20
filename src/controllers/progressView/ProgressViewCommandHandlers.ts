@@ -164,8 +164,8 @@ export function createProgressViewCommandHandlers(
     sessionForStream?.(stream) ?? session;
 
   // Single source of truth for the coupled edit + bash session bypass behind
-  // the one Yolo concept. The shield toolbar button flips it; the inline "Yolo
-  // (this session)" prompt button forces it on. Bash rides along silently (the
+  // the one edit/command approval concept. The shield toolbar button flips it;
+  // the inline prompt button forces it on. Bash rides along silently (the
   // shield reflects tool-edit state), so both surfaces stay in lockstep.
   const applyCoupledBypass = async (
     stream: StreamTabId,
@@ -181,8 +181,8 @@ export function createProgressViewCommandHandlers(
     });
     await showInfo?.(
       enabled
-        ? 'YOLO mode enabled: Tool actions and bash commands will be auto-approved for this stream.'
-        : 'YOLO mode disabled: Tool actions and bash commands will prompt for approval.',
+        ? 'File edits and shell commands will be auto-approved for this run.'
+        : 'File edits and shell commands will require approval for this run.',
     );
   };
 
@@ -191,8 +191,8 @@ export function createProgressViewCommandHandlers(
   ): Promise<void> => {
     await showInfo?.(
       enabled
-        ? 'Task, file-edit, and command auto-approval enabled for this run.'
-        : 'Task, file-edit, and command auto-approval disabled for this run.',
+        ? 'Agent tasks, file edits, and shell commands will be auto-approved for this run.'
+        : 'Agent tasks, file edits, and shell commands will require approval for this run.',
     );
   };
 
@@ -248,10 +248,10 @@ export function createProgressViewCommandHandlers(
         data.stream,
         !isApprovalBypassedForStream(data.stream, bypassSession(data.stream)),
       ),
-    // Inline "Yolo (this session)" prompt button: force bypass ON. Unlike the
+    // Inline edit/command approval button: force bypass ON. Unlike the
     // shield toggle this is idempotent, so it can never invert an already-on
     // edit bypass on a stream whose bash is still gated (e.g. a delegated child
-    // where edit-YOLO and bash inheritance were granted independently).
+    // where edit and bash inheritance were granted independently).
     [PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS]: (data) =>
       applyCoupledBypass(data.stream, true),
     [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: (data) => {

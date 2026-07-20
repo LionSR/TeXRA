@@ -161,15 +161,19 @@ describe('child subagent stream approval inheritance', () => {
     const roundOne = 'stream:round-1' as StreamTabId;
     const roundTwo = 'stream:round-2' as StreamTabId;
 
-    setBashApprovalSessionBypass(roundOne, true, host, { silent: true });
+    setDelegatedWorkApprovalBypasses(roundOne, true, host);
     currentSession().approvals.registerStreamParent(roundTwo, roundOne);
 
+    expect(proposalApprovals().isBypassed(roundTwo)).toBe(true);
+    expect(isApprovalBypassedForStream(roundTwo)).toBe(true);
     expect(isBashApprovalBypassedForStream(roundTwo)).toBe(true);
 
     // An explicit toggle on the later round still wins over the inherited one.
     setBashApprovalSessionBypass(roundTwo, false, host, { silent: true });
     expect(isBashApprovalBypassedForStream(roundTwo)).toBe(false);
     expect(isBashApprovalBypassedForStream(roundOne)).toBe(true);
+    expect(proposalApprovals().isBypassed(roundTwo)).toBe(true);
+    expect(isApprovalBypassedForStream(roundTwo)).toBe(true);
   });
 
   it('toggling a stream that only inherits bypass turns it off on the first press', () => {

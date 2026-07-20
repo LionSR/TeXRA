@@ -1284,7 +1284,7 @@ describe('CLI StatusBar display model', () => {
     ]);
   });
 
-  it('preserves distinct YOLO, bash, and edit bypass badges', () => {
+  it('preserves distinct agent-task, bash, and edit bypass badges', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
@@ -1296,7 +1296,7 @@ describe('CLI StatusBar display model', () => {
       '◆',
       'running',
       PERSONAL_API_MODE_LABEL,
-      'YOLO',
+      'AUTO-TASK',
       'AUTO-BASH',
       'AUTO-EDIT',
     ]);

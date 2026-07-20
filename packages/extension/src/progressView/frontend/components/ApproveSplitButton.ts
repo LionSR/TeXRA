@@ -38,8 +38,8 @@ const DELEGATED_WORK_VALUE = 'approve-all-delegated-work';
  * (edit/bash prompts) or `canApproveAllDelegatedWork` (agent proposals) is set
  * it becomes a
  * split button: the main click emits `approve`; the ▾ caret opens a menu whose
- * "Yolo (this session)" item emits `approve-session` and whose delegated-work
- * item emits `approve-all-delegated-work`. Selection is handled via Web
+ * edit/command item emits `approve-session` and whose delegated-work item emits
+ * `approve-all-delegated-work`. Selection is handled via Web
  * Awesome's `wa-select` (Enter/Space dispatch `wa-select`, not a DOM click on
  * the item), so the menu stays keyboard-accessible. Layout/colors are scoped
  * here; the host is width-capped to match the `.action-button` rule in
@@ -153,7 +153,7 @@ export class ApproveSplitButton extends LitElement {
   /** Tooltip / aria-label for the main Approve button. */
   @property({ attribute: false }) approveTitle = '';
 
-  /** When true, surface the edit/bash "Yolo (this session)" menu item. */
+  /** When true, surface the edit/bash run-approval menu item. */
   @property({ type: Boolean }) canBypass = false;
 
   /** When true, surface the proposal's run-scoped approve-all action. */
@@ -202,7 +202,8 @@ export class ApproveSplitButton extends LitElement {
             this.canBypass,
             () =>
               html`<wa-dropdown-item value=${YOLO_VALUE}>
-                ${waIcon('shield')} Yolo (this session)
+                ${waIcon('shield')}
+                ${DELEGATION_APPROVAL_COPY.progressViewEditCommandAction}
               </wa-dropdown-item>`,
           )}
           ${when(
@@ -217,8 +218,8 @@ export class ApproveSplitButton extends LitElement {
         <wa-tooltip for="approve-split-trigger-button">
           ${
             this.canApproveAllDelegatedWork
-              ? `${DELEGATION_APPROVAL_COPY.progressViewAction} (a)`
-              : 'Approve and stop asking this session (a)'
+              ? `${DELEGATION_APPROVAL_COPY.progressViewExplanation} (a)`
+              : `${DELEGATION_APPROVAL_COPY.progressViewEditCommandAction} (a)`
           }
         </wa-tooltip>
       </div>

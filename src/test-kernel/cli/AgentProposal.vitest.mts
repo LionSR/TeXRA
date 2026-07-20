@@ -53,8 +53,8 @@ describe('CLI agent proposal approval layout', () => {
       width: 76,
     });
 
-    expect(metadataRows).toBe(3);
-    expect(budget).toBe(5);
+    expect(metadataRows).toBe(4);
+    expect(budget).toBe(4);
     expect(allRows.length).toBeGreaterThan(budget);
 
     const visible = boundedModalTextLines({

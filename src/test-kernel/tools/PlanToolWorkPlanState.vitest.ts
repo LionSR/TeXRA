@@ -23,6 +23,8 @@ import {
   cleanupApprovalsForStream,
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
+  proposalApprovals,
+  setDelegatedWorkApprovalBypasses,
 } from '@tools/approval';
 import { PlanTool } from '@tools/plan/PlanTool';
 
@@ -119,6 +121,42 @@ describe('PlanTool — update (plan approval)', () => {
     expect(result.output).toContain('todo tool');
     expect(workPlanState.plan).toEqual(plan);
     expect(workPlanState.planSummary).toBe(planSummaryLine(plan.objective));
+  });
+
+  it('keeps a later plan gated after delegated work approval is granted', async () => {
+    await installPlatform(false);
+    const streamId = 'stream:plan-after-delegation-grant' as StreamTabId;
+    const { decisions, events, host, interactions } = createRecordingHost();
+    const session = sessionWithInteractions(interactions);
+    const workPlanState = new WorkPlanState();
+
+    try {
+      setDelegatedWorkApprovalBypasses(streamId, true, host, session);
+      expect(proposalApprovals(session).isBypassed(streamId)).toBe(true);
+
+      const resultPromise = withToolEnvironment(
+        {
+          run: { runtimeHost: host, streamId, session },
+          call: {
+            tracker: new FileInteractionState(),
+            workPlanState,
+          },
+        },
+        () => new PlanTool().call({ command: 'update', ...followUpPlan }),
+      );
+
+      const approval = findPlanApproval(events);
+      expect((approval.payload as { plan: Plan }).plan).toEqual(followUpPlan);
+      expect(
+        submitPlanDecision(decisions, approval, { action: 'approve' }),
+      ).toBe(true);
+      await expect(resultPromise).resolves.toMatchObject({
+        status: 'executed',
+        summary: 'Plan approved — proceed with implementation',
+      });
+    } finally {
+      cleanupApprovalsForStream(streamId, session);
+    }
   });
 
   it('clears a rejected plan from displayed work-plan state', async () => {
