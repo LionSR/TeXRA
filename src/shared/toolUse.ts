@@ -62,7 +62,7 @@ function normalizedExitCode(data: unknown, input: unknown): number | undefined {
       candidate.exit_code ??
       (isObject(candidate.output) ? candidate.output.exitCode : undefined);
     if (typeof raw === 'number' && Number.isInteger(raw)) return raw;
-    if (typeof raw === 'string' && /^-?\d+$/.test(raw)) return Number(raw);
+    if (typeof raw === 'string' && /^\d+$/.test(raw)) return Number(raw);
   }
   return undefined;
 }
