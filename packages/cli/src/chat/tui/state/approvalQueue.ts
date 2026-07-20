@@ -27,9 +27,6 @@ import { assertNever } from '@utils/core';
 export type ApprovalBypassKind = HostApprovalBypassKind;
 export type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
 
-export const MISSING_OPENAI_KEY_RETRY_MESSAGE =
-  'No OpenAI API key is configured. Press n to give up, then use `/key` to add one.';
-
 export type TuiRetryRequest = RetryPermission & {
   readonly personalApiKeyAvailable?: boolean;
   readonly missingPersonalApiKeyMessage?: string;

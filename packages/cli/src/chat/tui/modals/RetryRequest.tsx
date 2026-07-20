@@ -7,10 +7,10 @@ import {
 import { ConfirmCard } from './ConfirmCard';
 import { COLOR_HINT, COLOR_WARNING } from '../ui/colors';
 import {
-  MISSING_OPENAI_KEY_RETRY_MESSAGE,
   type ApprovalDecision,
   type TuiRetryRequest,
 } from '../state/approvalQueue';
+import { missingApiKeyRetryMessage } from '../ui/retryCopy';
 
 export interface RetryRequestProps {
   readonly payload: TuiRetryRequest;
@@ -40,7 +40,7 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
     keyGuidance = (
       <Text color={COLOR_HINT}>
         {props.payload.missingPersonalApiKeyMessage ??
-          MISSING_OPENAI_KEY_RETRY_MESSAGE}
+          missingApiKeyRetryMessage('openai')}
       </Text>
     );
   } else if (canSwitchToPersonalKey) {

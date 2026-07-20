@@ -55,7 +55,6 @@ import {
 } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import { isUpstreamCreditDepletedError } from '@shared/schemas';
-import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import {
   setBashApprovalSessionBypass,
   setDelegatedWorkApprovalBypasses,
@@ -74,12 +73,12 @@ import {
   clearApprovalsWhere,
   clearRetryApprovalsForStream,
   enqueueApproval,
-  MISSING_OPENAI_KEY_RETRY_MESSAGE,
   onApprovalsCleared,
   type ApprovalDecision,
   type ApprovalPayload,
   type TuiRetryRequest,
 } from './approvalQueue';
+import { missingApiKeyRetryMessage } from '../ui/retryCopy';
 
 // =========================================================================
 // Retry auto-switch: skip the modal when a usable personal key exists
@@ -514,18 +513,14 @@ async function requestRetryInteraction(
             : undefined;
         const personalApiKeyAvailable = provider
           ? await hasUsableApiKey(platform().secrets, provider).catch(
+              // A keychain failure must not permit an automatic credential switch.
               () => false,
             )
           : false;
-        const providerName = provider
-          ? (PROVIDER_DISPLAY_NAMES[provider] ?? provider)
-          : undefined;
         promptRequest = {
           ...request,
           personalApiKeyAvailable,
-          missingPersonalApiKeyMessage: providerName
-            ? `No ${providerName} API key is configured. Press n to give up, then use \`/key\` to add one.`
-            : 'The failed API provider could not be identified. Press n to give up, then use `/key` to verify the correct provider key.',
+          missingPersonalApiKeyMessage: missingApiKeyRetryMessage(provider),
         };
       }
       if (!isCurrent()) return;
@@ -666,9 +661,7 @@ async function applyRetrySideEffects(
   }
   const missingKeyMessage =
     request.missingPersonalApiKeyMessage ??
-    (requestedProvider === 'openai'
-      ? MISSING_OPENAI_KEY_RETRY_MESSAGE
-      : `No ${PROVIDER_DISPLAY_NAMES[requestedProvider] ?? requestedProvider} API key is configured. Press n to give up, then use \`/key\` to add one.`);
+    missingApiKeyRetryMessage(requestedProvider);
   const validateCurrentKey = async (): Promise<void> => {
     const keyExists = await apiKeyExistsUncached(
       platform().secrets,
