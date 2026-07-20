@@ -291,13 +291,22 @@ export class DesktopProgressBridge {
       startExecution: (request) => {
         const logger = this.logger;
         const runtimeHost = this.runtimeHost;
-        void this.runExecution(request).catch((error: unknown) => {
-          logger.error('Failed to launch desktop merge execution', {
+        let lifecycleStarted = false;
+        void this.runExecution(request, {
+          onLifecycleStart: () => {
+            lifecycleStarted = true;
+          },
+        }).catch((error: unknown) => {
+          logger.error('Desktop merge execution failed', {
             data: toLogData(error),
           });
-          runtimeHost.emit('requestShowError', {
-            message: `Merge failed: ${toErrorMessage(error)}`,
-          });
+          // Once the lifecycle starts, the process-session result listener
+          // owns the one terminal error presentation.
+          if (!lifecycleStarted) {
+            runtimeHost.emit('requestShowError', {
+              message: `Merge failed: ${toErrorMessage(error)}`,
+            });
+          }
         });
       },
       listWorkspaceCandidateFiles: () => this.listWorkspaceCandidateFiles(),

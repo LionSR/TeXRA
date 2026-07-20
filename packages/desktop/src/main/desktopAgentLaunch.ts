@@ -25,6 +25,8 @@ export interface DesktopAgentLaunchContext {
 
 export interface DesktopAgentLaunchOptions {
   readonly modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
+  /** Reports that the run lifecycle now owns terminal error presentation. */
+  readonly onLifecycleStart?: () => void;
 }
 
 /** Start a desktop run with process-owned dependencies only. */
@@ -41,6 +43,7 @@ export async function launchDesktopAgent(
     session: context.session,
     runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+    onRun: options.onLifecycleStart,
     ...(context.canAcquireResumeLease && {
       canAcquireResumeLease: context.canAcquireResumeLease,
     }),

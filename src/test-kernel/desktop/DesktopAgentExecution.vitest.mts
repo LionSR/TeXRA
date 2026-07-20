@@ -68,6 +68,9 @@ type Bridge = {
 };
 
 type TestableBridge = Bridge & {
+  fileActions: {
+    host: { startExecution(request: unknown): void };
+  };
   hostInteractions: {
     submitPlanDecision(
       requestId: string,
@@ -1310,6 +1313,47 @@ describe('DesktopProgressBridge', () => {
     } finally {
       finishRepair(new Set());
     }
+  });
+
+  it('presents a merge failure that occurs before lifecycle startup', async () => {
+    const failure = new Error('model setup failed');
+    const runAgent = vi.fn(async () => {
+      throw failure;
+    });
+    const showErrorMessage = vi.fn(async () => undefined);
+    const bridge = await createBridge([], { runAgent, showErrorMessage });
+
+    bridge.fileActions.host.startExecution({
+      config: workflowTaskState().agentConfig,
+    });
+
+    await vi.waitFor(() =>
+      expect(showErrorMessage).toHaveBeenCalledWith(
+        'Merge failed: model setup failed',
+      ),
+    );
+  });
+
+  it('leaves a terminal merge failure to the session result presenter', async () => {
+    const runAgent = vi.fn(
+      async (
+        _request: unknown,
+        options: Parameters<RunExecutionRequest>[1],
+      ) => {
+        await options.onRun?.({});
+        throw new Error('merge execution failed');
+      },
+    );
+    const showErrorMessage = vi.fn(async () => undefined);
+    const bridge = await createBridge([], { runAgent, showErrorMessage });
+
+    bridge.fileActions.host.startExecution({
+      config: workflowTaskState().agentConfig,
+    });
+
+    await vi.waitFor(() => expect(runAgent).toHaveBeenCalledOnce());
+    await settleProgressEvents();
+    expect(showErrorMessage).not.toHaveBeenCalled();
   });
 
   it('does not expose the desktop bridge before transcript opening settles', async () => {
