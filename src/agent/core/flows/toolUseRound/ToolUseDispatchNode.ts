@@ -661,22 +661,22 @@ export class ToolUseDispatchNode<C> extends Node<
     // calls, batch all tool calls into a single message to preserve thought
     // signatures / reasoning_content.
     const { modelHandler } = this.services;
+    const batchedFollowUp = modelHandler.createBatchedToolUseFollowUpMessages;
     const shouldBatch =
       calls.length > 1 &&
       modelHandler.requiresBatchedParallelToolResults &&
-      !!modelHandler.createBatchedToolUseFollowUpMessages;
+      batchedFollowUp !== undefined;
 
-    if (shouldBatch) {
-      const followUpMsgs =
-        await modelHandler.createBatchedToolUseFollowUpMessages!(
-          calls.map((call, index) => ({
-            call,
-            result: extracted[index].sanitizedResult,
-            attachments: extracted[index].attachments,
-          })),
-          workspace,
-          assistantText || undefined,
-        );
+    if (shouldBatch && batchedFollowUp) {
+      const followUpMsgs = await batchedFollowUp(
+        calls.map((call, index) => ({
+          call,
+          result: extracted[index].sanitizedResult,
+          attachments: extracted[index].attachments,
+        })),
+        workspace,
+        assistantText || undefined,
+      );
       shared.messages.push(...followUpMsgs);
     } else {
       for (const [index, execResult] of allResults.entries()) {

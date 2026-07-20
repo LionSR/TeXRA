@@ -1,4 +1,4 @@
-// Local imports
+// Third-party imports
 import {
   AgentCategory,
   createStreamState,
@@ -13,6 +13,9 @@ import {
   type InquiryThreadUpdatedEvent,
   type ExternalInquiryThreadId,
 } from '@shared/schemas';
+import type { Draft } from 'mutative';
+
+// Local imports
 
 /**
  * Background process outputs, keyed by executionId → accumulated stdout/stderr.
@@ -88,6 +91,25 @@ export interface ProgressState {
   followupOptionsByStream: Map<StreamTabId, FollowupOptionsState>;
   /** Durable external inquiry thread summaries, keyed by thread id. */
   inquiries: Map<ExternalInquiryThreadId, InquiryThreadUpdatedEvent>;
+}
+
+/**
+ * Delete one stream's entry from every per-stream map it owns
+ * (`streamStates`, `streamLogs`, `processOutputs`, `followupOptionsByStream`).
+ * Single owner of that key list so a removed/renamed/added map can't drift
+ * out of sync between the lifecycle handlers that garbage-collect streams.
+ * Does not touch `streamById` — callers that also drop the stream from the
+ * tab list delete that key themselves, since some callers (bulk snapshot
+ * sync) replace it wholesale instead.
+ */
+export function deleteStreamState(
+  draft: Draft<ProgressState>,
+  streamId: StreamTabId,
+): void {
+  draft.streamStates.delete(streamId);
+  draft.streamLogs.delete(streamId);
+  draft.processOutputs.delete(streamId);
+  draft.followupOptionsByStream.delete(streamId);
 }
 
 /** Return the first stream ID from a streamById Map, or null if empty. */

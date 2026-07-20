@@ -9,7 +9,7 @@ import { ProgressEvents } from '../events';
 import { getFollowUpInputTransientState } from '../followUpInputState';
 import { BaseStreamContent } from './BaseStreamContent';
 import { renderStreamHeader } from './streamHeaderView';
-import type { ToolUseStreamState } from '../store';
+import { isToolUseState, type ToolUseStreamState } from '../store';
 
 // Local imports - components
 
@@ -26,9 +26,8 @@ import './FollowUpInput';
 @customElement('tool-use-stream-content')
 export class ToolUseStreamContent extends BaseStreamContent {
   private get currentState(): ToolUseStreamState | null {
-    const ctx = this.streamContext;
-    if (!ctx.isToolUse || !ctx.streamState) return null;
-    return ctx.streamState as ToolUseStreamState;
+    const { streamState } = this.streamContext;
+    return streamState && isToolUseState(streamState) ? streamState : null;
   }
 
   override render(): TemplateResult | typeof nothing {

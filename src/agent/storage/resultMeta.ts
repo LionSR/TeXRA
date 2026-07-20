@@ -5,6 +5,7 @@ import {
   ResultDiffSummarySchema,
   WorkflowAgentFinalResultSchema,
   buildAgentFinalResult,
+  projectToolUseFinalTextFields,
   type AgentFinalResult,
 } from '@agent/runtime/AgentFinalResult';
 import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
@@ -253,16 +254,7 @@ function buildLegacyAgentFinalResult(
   return AgentFinalResultSchema.parse({
     category,
     outcome,
-    response:
-      nested?.response ??
-      nested?.lastResponse ??
-      outer.response ??
-      outer.lastResponse,
-    files:
-      nested?.files ??
-      nested?.touchedFiles ??
-      outer.files ??
-      outer.touchedFiles,
+    ...projectToolUseFinalTextFields(nested, outer),
     cost,
   });
 }
