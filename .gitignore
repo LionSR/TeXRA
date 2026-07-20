@@ -47,3 +47,6 @@ references/openrouter-skills/
 .pnpm-store/
 # CI checks out a private trusted-actions repo here at runtime; never commit it.
 .trusted-actions/
+
+# Generated TypeScript compiler output
+out/
