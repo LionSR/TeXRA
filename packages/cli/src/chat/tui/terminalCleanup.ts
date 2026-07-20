@@ -1,16 +1,6 @@
 import { writeSync } from 'node:fs';
-import { basename } from 'node:path';
 
-import { Signal } from '@lit-labs/signals';
 import { kittyFlags } from 'ink';
-
-import { isActivePhase } from '@shared/streams/streamStatus';
-import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
-
-import { approvalQueueStatus } from './state/approvalQueue';
-import { rootRunPending, rootRunStreamId, streams } from './state/cliState';
-import { chatTuiCanStopActiveRun } from './state/sessionRunState';
-import { terminalCapabilities } from './state/terminalCapabilities';
 
 // Undo exactly the input/display modes the TUI turns on: mouse tracking
 // (1000/1003/1006), the kitty keyboard stack (<u), bracketed paste (2004), and
@@ -40,38 +30,6 @@ const REARM_INPUT_MODES = '\x1b[?2004h\x1b[?25l';
 // `<Static>` transcript lines persist in the primary-buffer scrollback.
 const CLEAR_SCREEN_AND_SCROLLBACK = '\x1b[2J\x1b[3J\x1b[H';
 const CLEAR_VISIBLE_SCREEN = '\x1b[2J\x1b[H';
-// Directory names can contain characters that would prematurely terminate
-// the OSC string (a stray BEL/ESC) or that some terminals in 8-bit mode
-// still interpret as escape-sequence introducers (the C1 range, e.g. 0x9d
-// as an 8-bit OSC); strip both C0 and C1 controls so a weird folder name
-// can't inject terminal escape sequences into the title.
-// eslint-disable-next-line no-control-regex -- stripping C0/C1 controls
-const TITLE_INVALID_CHARS = /[\x00-\x1f\x7f-\x9f]/g;
-
-/**
- * "TeXRA" alone when the cwd has no meaningful basename (e.g. filesystem
- * root, where `path.basename` returns `''`), else "TeXRA — <project folder>"
- * so a user running several sessions across different projects — the common
- * case here — can tell tabs apart at a glance instead of every tab reading
- * the launcher binary's own name (e.g. a local dev symlink like
- * `texra-local`).
- */
-type TerminalTitleState = 'idle' | 'running' | 'approval';
-
-export function terminalTitleText(
-  cwd: string,
-  state: TerminalTitleState = 'idle',
-): string {
-  const project = sanitizePathSegment(basename(cwd), {
-    invalidCharPattern: TITLE_INVALID_CHARS,
-    replacement: '',
-  });
-  let activity: string | undefined;
-  if (state === 'approval') activity = 'Approval needed';
-  if (state === 'running') activity = 'Running';
-  return ['TeXRA', activity, project].filter(Boolean).join(' — ');
-}
-
 export interface CleanupTerminalModesOptions {
   readonly clearItermProgress?: boolean;
 }
@@ -143,108 +101,4 @@ export function clearTerminalVisibleScreen(): void {
   } catch {
     // The terminal may have been closed mid-clear; nothing to do.
   }
-}
-
-/**
- * Set the terminal tab/window title via OSC 0. Gated on the same
- * `oscColorReports` capability the notifier uses for OSC 9/99 (see
- * `notifications/terminalNotifier.ts`): a terminal that didn't acknowledge
- * OSC support during DA1 discovery may garble an OSC sequence it doesn't
- * recognize rather than silently ignore it, and a title has no BEL-style
- * degrade to fall back to, so the safe move on an ungated terminal is to
- * leave the title alone entirely.
- */
-function writeTerminalTitle(title: string): void {
-  if (!terminalCapabilities.get().oscColorReports) return;
-  try {
-    writeSync(1, `\x1b]0;${title}\x07`);
-  } catch {
-    // The tab title is cosmetic; a write failure here isn't actionable.
-  }
-}
-
-function currentTerminalTitleState(): TerminalTitleState {
-  if (approvalQueueStatus.get().depth > 0) return 'approval';
-  const streamSlices = streams.get();
-  const rootStreamId = rootRunStreamId.get();
-  if (
-    chatTuiCanStopActiveRun({
-      runPending: rootRunPending.get(),
-      streamId: rootStreamId,
-      status: rootStreamId ? streamSlices.get(rootStreamId)?.status : undefined,
-    }) ||
-    [...streamSlices.values()].some((stream) => isActivePhase(stream.status))
-  ) {
-    return 'running';
-  }
-  return 'idle';
-}
-
-/**
- * Keep the terminal title synchronized with existing TUI state. Signal reads
- * run in a microtask because the signals polyfill forbids reads during a
- * Watcher notification; the single queued synchronization also coalesces
- * related state writes and suppresses duplicate OSC output.
- */
-export function installTerminalTitleUpdates(cwd: string) {
-  let disposed = false;
-  let suspended = false;
-  let synchronizationPending = false;
-  let lastTitle: string | undefined;
-  const synchronize = (): void => {
-    if (suspended) return;
-    const state = currentTerminalTitleState();
-    const title = terminalTitleText(cwd, state);
-    if (title === lastTitle) return;
-    lastTitle = title;
-    writeTerminalTitle(title);
-  };
-  const restoreIdleTitle = (): void => {
-    const idleTitle = terminalTitleText(cwd);
-    if (lastTitle === idleTitle) return;
-    lastTitle = idleTitle;
-    writeTerminalTitle(idleTitle);
-  };
-  const watcher = new Signal.subtle.Watcher(() => {
-    if (synchronizationPending) return;
-    synchronizationPending = true;
-    queueMicrotask(() => {
-      synchronizationPending = false;
-      if (disposed) return;
-      synchronize();
-      watcher.watch();
-    });
-  });
-  watcher.watch(approvalQueueStatus, rootRunPending, rootRunStreamId, streams);
-  synchronize();
-  // Synchronous signal exits bypass the normal disposer loop, but still emit
-  // `exit`; restore the title there as well as during graceful teardown.
-  process.on('exit', restoreIdleTitle);
-
-  const dispose = (): void => {
-    if (disposed) return;
-    disposed = true;
-    watcher.unwatch(
-      approvalQueueStatus,
-      rootRunPending,
-      rootRunStreamId,
-      streams,
-    );
-    process.off('exit', restoreIdleTitle);
-    restoreIdleTitle();
-  };
-
-  return {
-    suspend: () => {
-      if (disposed) return;
-      suspended = true;
-      restoreIdleTitle();
-    },
-    resume: () => {
-      if (disposed) return;
-      suspended = false;
-      synchronize();
-    },
-    dispose,
-  };
 }

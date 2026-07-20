@@ -14,12 +14,14 @@ import {
   setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import {
-  installTerminalTitleUpdates,
   installTerminalRestoreOnExit,
   supportsTerminalJobControl,
-  terminalTitleText,
   tuiInputModeRestoreSequence,
 } from '@cli/chat/tui/terminalCleanup';
+import {
+  installTerminalTitleUpdates,
+  terminalTitleText,
+} from '@cli/chat/tui/terminalTitle';
 import { STREAM_PHASE } from '@shared/schemas';
 
 vi.mock('node:fs', async (importOriginal) => ({

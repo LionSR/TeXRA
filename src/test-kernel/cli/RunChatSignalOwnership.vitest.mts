@@ -129,9 +129,17 @@ vi.mock('@cli/chat/tui/terminalCleanup', async (importOriginal) => {
     ...actual,
     cleanupTerminalModes: mocks.cleanupTerminalModes,
     installTerminalRestoreOnExit: mocks.installTerminalRestoreOnExit,
-    installTerminalTitleUpdates: mocks.installTerminalTitleUpdates,
     restoreTuiInputModes: mocks.restoreTuiInputModes,
     supportsTerminalJobControl: mocks.supportsTerminalJobControl,
+  };
+});
+
+vi.mock('@cli/chat/tui/terminalTitle', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@cli/chat/tui/terminalTitle')>();
+  return {
+    ...actual,
+    installTerminalTitleUpdates: mocks.installTerminalTitleUpdates,
   };
 });
 

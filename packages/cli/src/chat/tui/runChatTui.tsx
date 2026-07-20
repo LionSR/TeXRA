@@ -117,9 +117,9 @@ import {
 } from './state/transcript';
 import {
   clearTerminalScrollback,
-  installTerminalTitleUpdates,
   installTerminalRestoreOnExit,
 } from './terminalCleanup';
+import { installTerminalTitleUpdates } from './terminalTitle';
 import {
   chatTuiCanInterruptActiveRun,
   chatTuiCanSelectModel,
