@@ -19,56 +19,44 @@ import {
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { unsupported } from '@shared/utils/dispatcher';
 
-export interface DesktopAgentRegistryPort {
-  readonly loadAgents: typeof loadAgents;
-  readonly refreshAgents: typeof refresh;
-  readonly loadAgentOptionsData: typeof computeAgentOptionsData;
-  readonly getAgents: (category: AgentCategory) => AgentEntry[];
-  readonly getVisibleAgents: (category: AgentCategory) => AgentEntry[];
-}
-
-export interface DesktopAgentDirectoryPort {
-  readonly getCustomAgentDirectory: () => Promise<string>;
-  readonly getSourceDirectory: (
-    source: AgentSource,
-  ) => Promise<string | undefined>;
-  readonly selectCustomAgentDirectory: () => Promise<string | undefined>;
-  readonly openPath: (filePath: string) => Promise<void>;
-  readonly revealPath: (filePath: string) => Promise<void>;
-}
-
-export interface DesktopAgentRendererPort {
-  readonly postToRenderer: (message: unknown) => void;
-}
-
-export interface DesktopAgentPromptPort {
-  readonly promptText: (input: {
-    title: string;
-    prompt: string;
-  }) => Promise<string | undefined>;
-  readonly chooseTeamAvailability: (input: {
-    presetName: string;
-    unavailableNames: readonly string[];
-  }) => Promise<TeamAvailabilityChoice>;
-}
-
-export interface DesktopRemoteAgentCatalogPort {
-  readonly canAccess: () => Promise<boolean>;
-  readonly signIn: () => Promise<boolean>;
-}
-
-export interface DesktopAgentNotificationPort {
-  readonly showInfoMessage: (message: string) => Promise<void>;
-  readonly showErrorMessage: (message: string) => Promise<void>;
-}
-
 export interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePorts {
-  readonly registry: DesktopAgentRegistryPort;
-  readonly directory: DesktopAgentDirectoryPort;
-  readonly renderer: DesktopAgentRendererPort;
-  readonly prompts: DesktopAgentPromptPort;
-  readonly remoteCatalog: DesktopRemoteAgentCatalogPort;
-  readonly notifications: DesktopAgentNotificationPort;
+  readonly registry: {
+    readonly loadAgents: typeof loadAgents;
+    readonly refreshAgents: typeof refresh;
+    readonly loadAgentOptionsData: typeof computeAgentOptionsData;
+    readonly getAgents: (category: AgentCategory) => AgentEntry[];
+    readonly getVisibleAgents: (category: AgentCategory) => AgentEntry[];
+  };
+  readonly directory: {
+    readonly getCustomAgentDirectory: () => Promise<string>;
+    readonly getSourceDirectory: (
+      source: AgentSource,
+    ) => Promise<string | undefined>;
+    readonly selectCustomAgentDirectory: () => Promise<string | undefined>;
+    readonly openPath: (filePath: string) => Promise<void>;
+    readonly revealPath: (filePath: string) => Promise<void>;
+  };
+  readonly renderer: {
+    readonly postToRenderer: (message: unknown) => void;
+  };
+  readonly prompts: {
+    readonly promptText: (input: {
+      title: string;
+      prompt: string;
+    }) => Promise<string | undefined>;
+    readonly chooseTeamAvailability: (input: {
+      presetName: string;
+      unavailableNames: readonly string[];
+    }) => Promise<TeamAvailabilityChoice>;
+  };
+  readonly remoteCatalog: {
+    readonly canAccess: () => Promise<boolean>;
+    readonly signIn: () => Promise<boolean>;
+  };
+  readonly notifications: {
+    readonly showInfoMessage: (message: string) => Promise<void>;
+    readonly showErrorMessage: (message: string) => Promise<void>;
+  };
 }
 
 export interface DesktopAgentSettingsController {
@@ -84,12 +72,12 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   private readonly catalogController;
   private readonly directoryController;
   private readonly visibilityController;
-  private readonly registry: DesktopAgentRegistryPort;
-  private readonly directory: DesktopAgentDirectoryPort;
-  private readonly renderer: DesktopAgentRendererPort;
-  private readonly prompts: DesktopAgentPromptPort;
-  private readonly remoteCatalog: DesktopRemoteAgentCatalogPort;
-  private readonly notifications: DesktopAgentNotificationPort;
+  private readonly registry: DefaultDesktopAgentSettingsControllerOptions['registry'];
+  private readonly directory: DefaultDesktopAgentSettingsControllerOptions['directory'];
+  private readonly renderer: DefaultDesktopAgentSettingsControllerOptions['renderer'];
+  private readonly prompts: DefaultDesktopAgentSettingsControllerOptions['prompts'];
+  private readonly remoteCatalog: DefaultDesktopAgentSettingsControllerOptions['remoteCatalog'];
+  private readonly notifications: DefaultDesktopAgentSettingsControllerOptions['notifications'];
 
   constructor(options: DefaultDesktopAgentSettingsControllerOptions) {
     const {

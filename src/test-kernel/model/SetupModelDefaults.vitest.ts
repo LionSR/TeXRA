@@ -4,7 +4,6 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import {
   CHATGPT_SETUP_MODEL,
-  resolveSetupModel,
   SETUP_MODEL_BY_PROVIDER,
 } from '@model/setupModelDefaults';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
@@ -15,8 +14,8 @@ import { API_PROVIDERS } from '@model/apiProviders';
  * #7081: setup-probe models were 10 hardcoded per-provider literals — when
  * one retires (as `grok4` has, live in the registry today), the setup
  * assistant probes a dead model and a valid key's verification fails.
- * `resolveSetupModel` validates every pick against the live registry and
- * swaps to a still-active model when needed; these tests guard that no
+ * `SETUP_MODEL_BY_PROVIDER` validates every pick against the live registry
+ * and swaps to a still-active model when needed; these tests guard that no
  * provider's resolved model is ever retired or OpenRouter-only, regardless
  * of what happens to the curated preference table over time.
  */
@@ -53,7 +52,7 @@ describe('SETUP_MODEL_BY_PROVIDER', () => {
     // failure mode #7081 reported, exercised against real data rather than
     // a mock.
     assert.equal(MODEL_CONFIGS.grok4?.retired, true);
-    const resolved = resolveSetupModel('xai');
+    const resolved = SETUP_MODEL_BY_PROVIDER.xai;
     assert.ok(resolved, 'xai has a known preference, so this always resolves');
     assert.notEqual(resolved, 'grok4');
     assert.equal(MODEL_CONFIGS[resolved]?.retired ?? false, false);
@@ -62,14 +61,7 @@ describe('SETUP_MODEL_BY_PROVIDER', () => {
 
   it('keeps the preferred pick when it is still live (anthropic/opus48T)', () => {
     assert.equal(MODEL_CONFIGS.opus48T?.retired ?? false, false);
-    assert.equal(resolveSetupModel('anthropic'), 'opus48T');
-  });
-
-  it('returns the original preference unresolved for an unknown setup provider', () => {
-    // No fallback pool exists for a provider key we don't recognize; resolve
-    // degrades to the (possibly undefined) preferred literal rather than
-    // throwing.
-    assert.equal(resolveSetupModel('does-not-exist'), undefined);
+    assert.equal(SETUP_MODEL_BY_PROVIDER.anthropic, 'opus48T');
   });
 
   it('keeps CHATGPT_SETUP_MODEL Codex-eligible', () => {

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { fetchRecentCommits } from '@frontend/git/recentCommits';
+import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   LatexdiffMessage,
@@ -53,14 +53,28 @@ export class DiffManager extends BaseWebviewManager {
   }
 
   private async postRecentCommits(notifyWhenEmpty?: boolean): Promise<void> {
-    const { commits, isGitRepo } = await fetchRecentCommits({
-      notifyWhenEmpty,
-    });
+    const isGitRepo =
+      (await vscode.commands.executeCommand<boolean>(
+        'texra.isGitRepository',
+      )) ?? false;
+    const commits = isGitRepo
+      ? ((await vscode.commands.executeCommand<string[]>(
+          'texra.getRecentCommits',
+        )) ?? [])
+      : [];
+
+    if (notifyWhenEmpty && (commits.length === 0 || !isGitRepo)) {
+      const infoMessage = isGitRepo
+        ? 'No recent commits found for this repository.'
+        : 'This workspace is not a Git repository.';
+      logger.info(this.channel, infoMessage);
+      void vscode.window.showInformationMessage(infoMessage);
+    }
 
     this.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
       commits,
-      isGitRepo: Boolean(isGitRepo),
+      isGitRepo,
     });
   }
 }
