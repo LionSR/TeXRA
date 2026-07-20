@@ -178,6 +178,7 @@ export function createSessionExitController(
     runCliPlatformShutdownSequence(tryPlatform()?.lifecycle);
   const exitNow = (exitCode: number): void => {
     exiting = true;
+    ctx.suspendTerminalTitle();
     removeProcessHandlers();
     clearExitConfirmation();
     ink.unmount();

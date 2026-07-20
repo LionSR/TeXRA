@@ -331,6 +331,10 @@ describe('runChat signal ownership wiring', () => {
     process.on('newListener', observeNewListener);
     mocks.supportsTerminalJobControl.mockReturnValue(true);
     const kill = vi.spyOn(process, 'kill').mockReturnValue(true);
+    const exit = vi.spyOn(process, 'exit').mockImplementation(((code) => {
+      mocks.callOrder.push(`process.exit:${code}`);
+      return undefined as never;
+    }) as typeof process.exit);
 
     const agents = await import('@agent/index');
     const loadAgentsSpy = vi
@@ -396,10 +400,28 @@ describe('runChat signal ownership wiring', () => {
         workingDirectory: '/tmp/texra-chat',
       });
 
-      exitTui.resolve();
+      mocks.callOrder.length = 0;
+      mocks.terminalTitleSuspend.mockImplementationOnce(() => {
+        mocks.callOrder.push('terminalTitle.suspend');
+      });
+      mocks.unmount.mockImplementationOnce(() => {
+        mocks.callOrder.push('ink.unmount');
+        exitTui.resolve();
+      });
+      mocks.cleanupTerminalModes.mockImplementationOnce(() => {
+        mocks.callOrder.push('cleanupTerminalModes');
+      });
+      tuiListeners.get('SIGTERM')?.();
+      expect(mocks.callOrder.slice(0, 3)).toEqual([
+        'terminalTitle.suspend',
+        'ink.unmount',
+        'cleanupTerminalModes',
+      ]);
+
       await expect(runPromise).resolves.toEqual({
         exitCode: CliExitCode.Success,
       });
+      await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(143));
       for (const signal of targetSignals) {
         expect(process.listeners(signal)).toEqual(
           baselineListeners.get(signal) ?? [],
@@ -417,6 +439,7 @@ describe('runChat signal ownership wiring', () => {
       loadAgentsSpy.mockRestore();
       getVisibleAgentsSpy.mockRestore();
       kill.mockRestore();
+      exit.mockRestore();
     }
   });
 
