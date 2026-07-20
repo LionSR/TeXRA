@@ -6,26 +6,14 @@ import type {
   ConfigInspection,
   ConfigProvider,
   ConfigTarget,
-  StateStore,
 } from '@platform/interfaces';
+import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import {
   BASH_APPROVAL_CONFIG_TARGET,
   migrateLegacyGlobalBashApprovalOverride,
 } from '@shared/settingsView/handlers/approvalHandlers';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-
-class MemoryStateStore implements StateStore {
-  private readonly values = new Map<string, unknown>();
-
-  get<T>(key: string, defaultValue?: T): T {
-    return (this.values.has(key) ? this.values.get(key) : defaultValue) as T;
-  }
-
-  async update(key: string, value: unknown): Promise<void> {
-    this.values.set(key, value);
-  }
-}
 
 /**
  * Minimal in-memory `ConfigProvider` with real workspace -> global fallback
