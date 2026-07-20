@@ -187,7 +187,10 @@ export class SettingsModelSelectionController {
       const item: ModelSelectionItem = {
         name,
         label: option.label,
-        provider: option.provider ?? config.provider,
+        // Catalogue placement is a stable registry fact. `option.provider`
+        // describes the effective request route and may change with credentials.
+        provider: resolveModelSource(config) ?? config.provider,
+        routeLabel: option.routeLabel,
         enabled: enabledSet.has(name),
         deprecated: config.deprecated ?? false,
         contextWindow: option.context,
