@@ -2,21 +2,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - shared host bridge
+import {
+  ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
+  ELECTRON_WEBVIEW_PUSH_CHANNEL,
+} from '@desktop/hostBridgeChannels';
 import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
 interface HostBridgeModule {
-  ELECTRON_WEBVIEW_MESSAGE_CHANNEL: string;
-  ELECTRON_WEBVIEW_PUSH_CHANNEL: string;
-  createElectronHostBridge(
-    sendToMain: (channel: string, message: unknown) => void,
-  ): {
-    postMessage(message: unknown): void;
-    getState(): unknown;
-    setState(state: unknown): void;
-  };
   installElectronHostBridge(options: {
     exposeInMainWorld(name: string, api: unknown): void;
     onHostMessage(channel: string, listener: (message: unknown) => void): void;
@@ -73,12 +68,25 @@ describe('desktop Electron host bridge', () => {
   });
 
   it('exposes only the shared synchronous host bridge surface', async () => {
-    const { ELECTRON_WEBVIEW_MESSAGE_CHANNEL, createElectronHostBridge } =
-      await loadHostBridgeModule();
+    const { installElectronHostBridge } = await loadHostBridgeModule();
     const sends: Array<{ channel: string; message: unknown }> = [];
-    const bridge = createElectronHostBridge((channel, message) => {
-      sends.push({ channel, message });
+    const exposed: Record<string, unknown> = {};
+
+    installElectronHostBridge({
+      exposeInMainWorld: (name, api) => {
+        exposed[name] = api;
+      },
+      onHostMessage: () => undefined,
+      postToRenderer: () => undefined,
+      sendToMain: (channel, message) => {
+        sends.push({ channel, message });
+      },
     });
+    const bridge = exposed[HOST_BRIDGE_API_KEY] as {
+      postMessage(message: unknown): void;
+      getState(): unknown;
+      setState(state: unknown): void;
+    };
 
     expect(Object.keys(bridge).sort()).toEqual([
       'getState',
@@ -99,8 +107,7 @@ describe('desktop Electron host bridge', () => {
   });
 
   it('installs the bridge on the shared key and forwards host pushes', async () => {
-    const { ELECTRON_WEBVIEW_PUSH_CHANNEL, installElectronHostBridge } =
-      await loadHostBridgeModule();
+    const { installElectronHostBridge } = await loadHostBridgeModule();
     const exposed: Record<string, unknown> = {};
     const pushes: unknown[] = [];
     let pushListener: ((message: unknown) => void) | undefined;
@@ -128,8 +135,6 @@ describe('desktop Electron host bridge', () => {
   });
 
   it('routes main-process bridge messages over fixed Electron channels', async () => {
-    const { ELECTRON_WEBVIEW_MESSAGE_CHANNEL, ELECTRON_WEBVIEW_PUSH_CHANNEL } =
-      await loadHostBridgeModule();
     let rendererListener:
       ((event: { sender: unknown }, message: unknown) => void) | undefined;
     const ipcMain = {
@@ -190,7 +195,6 @@ describe('desktop Electron host bridge', () => {
   // the caller happened to build.
   describe('outbound schema validation (#8123)', () => {
     async function createBridge() {
-      const { ELECTRON_WEBVIEW_PUSH_CHANNEL } = await loadHostBridgeModule();
       const ipcMain = { on: vi.fn(), off: vi.fn() };
       const { installDesktopHostBridge } =
         await loadMainHostBridgeModule(ipcMain);

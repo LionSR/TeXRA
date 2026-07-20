@@ -6,7 +6,6 @@ import { createFsFromVolume, Volume, type IFs } from 'memfs';
 
 // Local imports
 import {
-  FileType,
   NO_TOOL_AVAILABILITY_HOST,
   type FileStat,
   type FileSystemProvider,
@@ -23,6 +22,10 @@ import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import {
+  fileTypeFor,
+  type FileTypeProbe,
+} from '@platform/defaults/fsEntryTypeBits';
 
 function fakeFsError(code: string, message: string): Error {
   return Object.assign(new Error(message), { code });
@@ -51,36 +54,7 @@ function hasChildPath(parent: string, candidate: string): boolean {
   return relativeChildPath(parent, candidate) !== undefined;
 }
 
-type FileTypeProbe = {
-  isSymbolicLink(): boolean;
-  isFile(): boolean;
-  isDirectory(): boolean;
-};
-
 type DirectoryEntryProbe = FileTypeProbe & { name: string };
-
-async function resolveSymlinkType(fs: IFs, target: string): Promise<number> {
-  let targetType: number = FileType.Unknown;
-  try {
-    const stats = await fs.promises.stat(target);
-    if (stats.isFile()) targetType = FileType.File;
-    else if (stats.isDirectory()) targetType = FileType.Directory;
-  } catch {
-    // Dangling symlink: preserve the symlink bit with an unknown target type.
-  }
-  return FileType.SymbolicLink | targetType;
-}
-
-async function fileTypeFor(
-  fs: IFs,
-  entry: FileTypeProbe,
-  target: string,
-): Promise<number> {
-  if (entry.isSymbolicLink()) return resolveSymlinkType(fs, target);
-  if (entry.isFile()) return FileType.File;
-  if (entry.isDirectory()) return FileType.Directory;
-  return FileType.Unknown;
-}
 
 export class FakeConfigProvider implements ConfigProvider {
   private readonly values = new Map<string, unknown>();

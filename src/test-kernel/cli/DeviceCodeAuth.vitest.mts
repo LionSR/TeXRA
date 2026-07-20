@@ -8,6 +8,8 @@ import {
   requestDeviceAuthorization,
 } from '@cli/runtime/supabaseAuthDeviceCode';
 
+import { jsonResponse } from './fixtures/fetchResponses';
+
 const SESSION_PAYLOAD = {
   access_token: 'access-token',
   refresh_token: 'refresh-token',
@@ -23,13 +25,6 @@ const AUTHORIZATION = {
   expires_in: 900,
   interval: 5,
 };
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
 
 /** Fetch fake that serves one queued result per call (Response or throw). */
 function queuedFetch(queue: Array<Response | Error>): {

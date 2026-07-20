@@ -8,50 +8,13 @@ import writeFileAtomicLib from 'write-file-atomic';
 
 import { isFileNotFoundError } from '@common/errors';
 
-import {
-  FileType,
-  type FileSystemProvider,
-  type FileStat,
-} from '../interfaces';
-
-/**
- * Resolve the target type of a symlink, producing combined bitmasks
- * (e.g. SymbolicLink | File = 65) matching vscode.FileType behavior.
- */
-async function resolveSymlinkType(target: string): Promise<number> {
-  let targetType: number = FileType.Unknown;
-  try {
-    const stats = await fs.promises.stat(target);
-    if (stats.isFile()) targetType = FileType.File;
-    else if (stats.isDirectory()) targetType = FileType.Directory;
-  } catch {
-    // Dangling symlink — target type stays Unknown
-  }
-  return FileType.SymbolicLink | targetType;
-}
-
-/**
- * Compute the bitmask file type for an lstat result or a directory entry.
- *
- * Node's Stats/Dirent type predicates are mutually exclusive: a symlink reports
- * isSymbolicLink() but not isFile()/isDirectory(), so we resolve the symlink
- * target to produce combined bitmasks matching vscode.FileType. `target` is the
- * entry's own path; for readDirectory, join the parent dir with the entry name.
- */
-async function fileTypeFor(
-  entry: Pick<fs.Stats, 'isSymbolicLink' | 'isFile' | 'isDirectory'>,
-  target: string,
-): Promise<number> {
-  if (entry.isSymbolicLink()) return resolveSymlinkType(target);
-  if (entry.isFile()) return FileType.File;
-  if (entry.isDirectory()) return FileType.Directory;
-  return FileType.Unknown;
-}
+import { type FileSystemProvider, type FileStat } from '../interfaces';
+import { fileTypeFor } from './fsEntryTypeBits';
 
 export const nodeFilesystem: FileSystemProvider = {
   async stat(target: string): Promise<FileStat> {
     const lstats = await fs.promises.lstat(target);
-    const type = await fileTypeFor(lstats, target);
+    const type = await fileTypeFor(fs, lstats, target);
     // For symlinks, use stat (follows link) for size/timestamps to match
     // vscode.workspace.fs.stat behavior. For non-symlinks, lstat === stat.
     if (lstats.isSymbolicLink()) {
@@ -147,7 +110,11 @@ export const nodeFilesystem: FileSystemProvider = {
     const entries = await fs.promises.readdir(target, { withFileTypes: true });
     return Promise.all(
       entries.map(async (entry) => {
-        const type = await fileTypeFor(entry, path.join(target, entry.name));
+        const type = await fileTypeFor(
+          fs,
+          entry,
+          path.join(target, entry.name),
+        );
         return [entry.name, type] as [string, number];
       }),
     );
