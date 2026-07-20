@@ -245,3 +245,26 @@ export function formatToolResultAsText(
 
   return combined;
 }
+
+/**
+ * Build the plain-text tool-result body for chat-style handlers (OpenAI,
+ * OpenRouter), appending the standard metadata attachment summary when the
+ * handler can surface tool-result attachments and any are present.
+ *
+ * Shared by each handler's single and batched follow-up paths so the two can't
+ * drift: the batched paths previously inlined `formatToolResultAsText(result)`
+ * without the summary, so parallel tool calls silently dropped their attachment
+ * summaries. Routing both paths through one helper makes that class of bug
+ * structurally impossible.
+ */
+export function formatToolResultTextWithAttachments(
+  result: ToolResult,
+  attachments: ToolFileAttachment[],
+  canProcessAttachments: boolean,
+): string {
+  const attachmentSummary =
+    canProcessAttachments && attachments.length > 0
+      ? formatAttachmentSummary(attachments)
+      : undefined;
+  return formatToolResultAsText(result, attachmentSummary);
+}

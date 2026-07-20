@@ -93,6 +93,48 @@ describe('ModelHandlerOpenAI.extractToolUse', () => {
   });
 });
 
+describe('ModelHandlerOpenAI tool-result attachment summaries', () => {
+  const attachments = [{ path: 'chart.png', mimeType: 'image/png' }] as never;
+  const call = {
+    raw: {
+      id: 'call_1',
+      type: 'function',
+      function: { name: 'do_thing', arguments: '{}' },
+    },
+  } as never;
+  const result = { status: 'executed', output: 'done' } as const;
+
+  function newHandler() {
+    const handler = new ModelHandlerOpenAI(
+      buildTestModelConfig({
+        provider: ModelProvider.OPENAI,
+        capabilities: { supportsVision: false },
+      }),
+    );
+    handler.setLogger({ ...noopTrace });
+    return handler;
+  }
+
+  it('single follow-up path includes the attachment summary', async () => {
+    const messages = await newHandler().createToolUseFollowUpMessages(
+      undefined,
+      call,
+      result,
+      attachments,
+    );
+    const toolMsg = messages.find((m) => m.role === 'tool') as any;
+    assert.ok(String(toolMsg.content).includes('chart.png (image/png)'));
+  });
+
+  it('batched follow-up path includes the attachment summary — regression for parallel tool calls silently dropping it', async () => {
+    const messages = await newHandler().createBatchedToolUseFollowUpMessages([
+      { call, result, attachments },
+    ] as never);
+    const toolMsg = messages.find((m) => m.role === 'tool') as any;
+    assert.ok(String(toolMsg.content).includes('chart.png (image/png)'));
+  });
+});
+
 describe('ModelHandlerOpenAI forced tool choice', () => {
   it('maps finalTool to a named function choice', async () => {
     const handler = new ModelHandlerOpenAI(
