@@ -62,6 +62,7 @@ interface ProxyConfig {
   requiresResponsesAPI?: boolean; // Models requiring direct API access (bypasses OpenRouter)
   forceDirectProvider?: boolean; // Runtime replay override that bypasses OpenRouter
   useServerSideKeys?: boolean; // Pre-computed by caller to avoid duplicated checks
+  useOpenRouter?: boolean; // Pre-computed by client construction for an atomic route snapshot
   logger?: { debug: (message: string) => void };
 }
 
@@ -145,7 +146,7 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
   // Below this point: standard routing (proxy.texra.ai, OpenRouter, or direct)
   // These paths are only used when server-side keys are NOT enabled.
 
-  const useOpenRouter = shouldUseOpenRouter(config);
+  const useOpenRouter = config.useOpenRouter ?? shouldUseOpenRouter(config);
   const useImprovedConnection = getConfig<boolean>(
     'texra.model.useImprovedConnection',
     false,

@@ -21,6 +21,7 @@ import type { StreamHandle } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
+import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
@@ -47,6 +48,7 @@ import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
 
 // Local file imports
 import {
+  type GoogleClientCache,
   isGemini3Model,
   resolveGeminiThinkingLevel,
   resolveGoogleClient,
@@ -101,7 +103,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 > {
   private static readonly INLINE_MEDIA_LIMIT_BYTES = 20 * 1024 * 1024;
 
-  private googleClient: GoogleGenAI | null = null;
+  private googleClient: GoogleClientCache | null = null;
 
   private supportsFileUploads(): boolean {
     return supportsGoogleFileUploads(this.capabilities);
@@ -167,18 +169,28 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return parts;
   }
 
-  async getClient(): Promise<GoogleGenAI> {
+  async getClient(
+    selection: ModelCredentialSelection = 'configured',
+  ): Promise<GoogleGenAI> {
+    const credential = await this.resolveClientCredential(selection);
     return resolveGoogleClient({
       sdkLabel: 'Native',
-      shouldUseServerSideKeys: this.shouldUseServerSideKeys(),
-      getApiKey: () => this.getApiKey(),
-      getBaseUrl: () => this.getBaseUrl(),
+      credential,
       logger: this.logger,
       cached: this.googleClient,
-      setCached: (client) => {
-        this.googleClient = client;
+      setCached: (cache) => {
+        this.googleClient = cache;
       },
+      rememberRoute: (client, route) =>
+        this.rememberClientCredentialRoute(client, route),
     });
+  }
+
+  override async refreshClient(
+    selection: ModelCredentialSelection = 'configured',
+  ): Promise<GoogleGenAI> {
+    this.googleClient = null;
+    return this.getClient(selection);
   }
   /**
    * Gemini carries thought signatures across parallel function calls, which must

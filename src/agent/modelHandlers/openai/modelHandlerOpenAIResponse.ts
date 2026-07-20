@@ -24,6 +24,7 @@ import type {
   CreateResponseOptions,
   CreateResponseResult,
   ExtractResponseResult,
+  ModelCredentialSelection,
   OpenAIResponseToolCall,
   TokenCountOptions,
 } from '@agent/types/ModelHandlerContracts';
@@ -271,13 +272,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return null;
   }
 
+  /** Capabilities captured for post-response pricing and usage attribution. */
+  protected getUsageProviderCapabilities(): ProviderCapabilityProfile | null {
+    return this.getActiveProviderCapabilities();
+  }
+
   private getOpenAIResponseCapabilities():
     OpenAIResponseProviderCapabilities | undefined {
     return this.getActiveProviderCapabilities()?.openAIResponses;
   }
 
-  private isOpenRouterRoutingEnabled(): boolean {
-    return shouldUseOpenRouter(this.config);
+  protected isOpenRouterRoutingEnabled(): boolean {
+    return this.activeCredentialRoute === undefined
+      ? shouldUseOpenRouter(this.config)
+      : this.activeCredentialRoute === 'openrouter';
   }
 
   public override getEffectiveContextWindow(): number {
@@ -1138,17 +1146,23 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /** Creates a configured OpenAI client instance. */
-  protected async createOpenAIClient(): Promise<OpenAI> {
-    const apiKey = await this.getApiKey();
-    const baseURL = this.getBaseUrl();
-    const client = new OpenAI({ apiKey, baseURL });
-    this.logOpenAICompatibleClientConfig(client.baseURL);
-    return client;
+  protected async createOpenAIClient(
+    selection: ModelCredentialSelection = 'configured',
+  ): Promise<OpenAI> {
+    const credential = await this.resolveClientCredential(selection);
+    const client = new OpenAI({
+      apiKey: credential.apiKey,
+      baseURL: credential.baseUrl,
+    });
+    this.logOpenAICompatibleClientConfig(client.baseURL, credential.route);
+    return this.rememberClientCredentialRoute(client, credential.route);
   }
 
   /** Returns OpenAI client with configured API key. */
-  async getClient(): Promise<OpenAI> {
-    return this.createOpenAIClient();
+  async getClient(
+    selection: ModelCredentialSelection = 'configured',
+  ): Promise<OpenAI> {
+    return this.createOpenAIClient(selection);
   }
 
   override isAutoRetryManagedByProvider(_error: Error): boolean {
@@ -2402,7 +2416,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /** Price computation adapted for Responses API token fields. */
   computePrice(responseUsage: ResponseUsage): number {
-    const providerCapabilities = this.getActiveProviderCapabilities();
+    const providerCapabilities = this.getUsageProviderCapabilities();
     return computeOpenAIResponsePrice(
       responseUsage,
       providerCapabilities
@@ -2437,7 +2451,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.usageProvider,
       (usage) => this.computePrice(usage),
     );
-    const usageRoute = this.getActiveProviderCapabilities()?.usageRoute;
+    const usageRoute = this.getUsageProviderCapabilities()?.usageRoute;
     return usageRoute == null ? usage : { ...usage, usageRoute };
   }
 
