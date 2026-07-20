@@ -5,4 +5,6 @@ export const DELEGATION_APPROVAL_COPY = {
   cliCompactAction: 'pending + later actions in run',
   progressViewAction:
     'Approve all pending and later tasks, edits & commands in this run',
+  progressViewToggle:
+    'Auto-approve tasks, file edits, and commands in this run',
 } as const;
