@@ -13,12 +13,14 @@ import {
 } from 'react';
 
 // Local imports - shared runtime
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
   AgentCategory,
   type ActiveChildInfo,
   type StreamTabId,
 } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - TUI surfaces and state
 import {
@@ -72,6 +74,7 @@ import {
   formProgress as formProgressSignal,
   infoPane as infoPaneSignal,
   reverseSearchOpen as reverseSearchOpenSignal,
+  setTransientNotice,
   slashPaletteOpen as slashPaletteOpenSignal,
   taskDetailExecutionId as taskDetailExecutionIdSignal,
   streams as streamsSignal,
@@ -100,6 +103,7 @@ import {
 } from './state/childListSelection';
 import { streamDisplayLabel, streamTreeViews } from './state/streamViews';
 import { useSignal } from './state/useSignal';
+import { syncStreamLog } from './state/subscribeStreamLog';
 import { transcriptViewportKey } from './state/transcriptViewportMode';
 import type { InputHistory } from './history/inputHistory';
 
@@ -520,22 +524,34 @@ export function App(props: AppProps): React.JSX.Element {
   };
 
   const printStreamOutput = (streamId: StreamTabId): void => {
-    nextTranscriptPrintId.current += 1;
-    setTranscriptPrints((current) => [
-      ...current,
-      createTranscriptPrintRequest({
-        afterEntryId: lastStaticEntryId(activeSlice),
-        id: `printed-transcript:${nextTranscriptPrintId.current}`,
-        ownerKey: transcriptOwnerKey,
-        slice: streams.get(streamId),
-        title: streamDisplayLabel({
-          childStreamEntries,
-          parentStream,
-          streamId,
-          streams,
-        }),
-      }),
-    ]);
+    void defaultSession()
+      .transcripts.ensureLoaded(streamId)
+      .then(() => {
+        syncStreamLog(streamId, { forceFull: true });
+        const currentStreams = streamsSignal.get();
+        const request = createTranscriptPrintRequest({
+          afterEntryId: lastStaticEntryId(
+            activeStreamId ? currentStreams.get(activeStreamId) : undefined,
+          ),
+          id: `printed-transcript:${nextTranscriptPrintId.current + 1}`,
+          ownerKey: transcriptOwnerKey,
+          slice: currentStreams.get(streamId),
+          title: streamDisplayLabel({
+            childStreamEntries,
+            parentStream,
+            streamId,
+            streams: currentStreams,
+          }),
+        });
+        nextTranscriptPrintId.current += 1;
+        setTranscriptPrints((current) => [...current, request]);
+        if (activeStreamId !== streamId) syncStreamLog(streamId);
+      })
+      .catch((error: unknown) => {
+        setTransientNotice(
+          `Could not load transcript: ${toErrorMessage(error)}`,
+        );
+      });
   };
 
   const scheduleEscapeInterrupt = () => {

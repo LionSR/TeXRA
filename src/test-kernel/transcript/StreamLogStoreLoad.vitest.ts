@@ -39,6 +39,7 @@ interface MockStorageOptions {
   logMtimes?: Record<string, number>;
   summaryMtimes?: Record<string, number>;
   onLogRead?: (key: string) => Promise<void> | void;
+  onLogWrite?: (key: string) => Promise<void> | void;
   pauseLogWriteKey?: string;
 }
 
@@ -128,6 +129,7 @@ function mockStorage({
   logMtimes = {},
   summaryMtimes = {},
   onLogRead,
+  onLogWrite,
   pauseLogWriteKey,
 }: MockStorageOptions): {
   deletes: string[];
@@ -231,6 +233,9 @@ function mockStorage({
       await new Promise<void>((resolve) => {
         releasePausedWriteImpl = resolve;
       });
+    }
+    if (target.startsWith(`${STREAM_LOGS_DIR}${path.sep}`)) {
+      await onLogWrite?.(streamKeyFromFile(target));
     }
 
     const text =
@@ -1393,6 +1398,34 @@ describe('StreamLogStore load', () => {
     await expect(store.flush()).rejects.toThrow(
       'Transcript flush failed after 3 retries',
     );
+  });
+
+  it('writes dirty transcripts sequentially', async () => {
+    let activeWrites = 0;
+    let maximumActiveWrites = 0;
+    const storage = mockStorage({
+      logs: {},
+      summaries: {},
+      onLogWrite: async () => {
+        activeWrites += 1;
+        maximumActiveWrites = Math.max(maximumActiveWrites, activeWrites);
+        await delay(1);
+        activeWrites -= 1;
+      },
+    });
+    const store = await StreamLogStore.open();
+    for (const streamId of ['alpha', 'beta', 'gamma']) {
+      store.append(streamId, logEntry(streamId, 1, 200));
+    }
+
+    await store.flush();
+
+    expect(maximumActiveWrites).toBe(1);
+    expect(
+      ['alpha', 'beta', 'gamma'].every((streamId) =>
+        storage.writes.has(storageFile(STREAM_LOGS_DIR, streamId)),
+      ),
+    ).toBe(true);
   });
 
   it('fails persistent opening for a corrupt startup log', async () => {

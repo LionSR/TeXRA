@@ -138,7 +138,11 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       runScope: {
         executionId,
         streamId,
-        session: { status: {}, flushArtifacts: vi.fn(async () => {}) },
+        session: {
+          status: {},
+          transcripts: { ensureLoaded: vi.fn(async () => {}) },
+          flushArtifacts: vi.fn(async () => {}),
+        },
       },
       config: { agent: 'test-agent', model: 'test-model' },
       attachedMemoryMisses: [],

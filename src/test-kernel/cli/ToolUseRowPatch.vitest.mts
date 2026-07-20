@@ -15,7 +15,6 @@ function toolUse(
   overrides: Partial<NormalizedToolUse> = {},
 ): NormalizedToolUse {
   return {
-    parsed: {},
     toolName,
     errorText: '',
     outputText: '',
@@ -170,7 +169,7 @@ describe('ToolUseRow edit patch rendering', () => {
             { length: 20 },
             (_, index) => `line ${index + 1}`,
           ).join('\n'),
-          parsed: { exitCode: 2 },
+          exitCode: 2,
         },
       ),
       2,
