@@ -42,8 +42,9 @@ All notable changes to this project will be documented in this file.
   navigation returns to the owning session after a subagent is stopped.
 - **API-key retries use the current saved key** — retrying after a relay or
   subscription limit rechecks the selected provider key before switching. If
-  no key is available, the CLI directs you to `/key`; a failed switch leaves
-  your access settings unchanged.
+  no key is available, the CLI directs you to `/key`. If a replacement client
+  cannot be prepared, the CLI restores the previous settings and reports any
+  setting whose persistence cannot be confirmed.
 
 ### Desktop
 
