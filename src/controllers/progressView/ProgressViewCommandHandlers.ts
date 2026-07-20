@@ -191,8 +191,8 @@ export function createProgressViewCommandHandlers(
   ): Promise<void> => {
     await showInfo?.(
       enabled
-        ? 'Task, file-edit, and command auto-approval enabled for this stream.'
-        : 'Task, file-edit, and command auto-approval disabled for this stream.',
+        ? 'Task, file-edit, and command auto-approval enabled for this run.'
+        : 'Task, file-edit, and command auto-approval disabled for this run.',
     );
   };
 
