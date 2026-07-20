@@ -53,6 +53,89 @@ describe('processMarkdownContent renders math and code', () => {
     expect(doc.querySelector('.katex')).not.toBeNull();
   });
 
+  it.each([
+    {
+      context: 'prose',
+      markdown: [
+        'The coefficient is',
+        '\\[',
+        'c_{\\alpha\\beta}^{\\gamma}(L)=\\operatorname{Tr}(\\chi^L).',
+        '\\]',
+        'The next paragraph follows.',
+      ].join('\n'),
+    },
+    {
+      context: 'a heading',
+      markdown: [
+        '### Exact criterion',
+        '\\[',
+        'c_{\\alpha\\beta}^{\\gamma}(L)=\\operatorname{Tr}(\\chi^L).',
+        '\\]',
+        'The next paragraph follows.',
+      ].join('\n'),
+    },
+    {
+      context: 'a list item',
+      markdown: [
+        '- The coefficient is',
+        '  \\[',
+        '  c_{\\alpha\\beta}^{\\gamma}(L)=\\operatorname{Tr}(\\chi^L).',
+        '  \\]',
+        '  The next paragraph follows.',
+      ].join('\n'),
+    },
+    {
+      context: 'a block quotation',
+      markdown: [
+        '> The coefficient is',
+        '> \\[',
+        '> c_{\\alpha\\beta}^{\\gamma}(L)=\\operatorname{Tr}(\\chi^L).',
+        '> \\]',
+        '> The next paragraph follows.',
+      ].join('\n'),
+    },
+  ])(
+    'renders bracketed display math immediately after $context',
+    ({ markdown }) => {
+      const doc = renderToDocument(markdown);
+      const displayMath = doc.querySelector('.katex-display');
+
+      expect(displayMath).not.toBeNull();
+      expect(displayMath?.querySelector('annotation')?.textContent).toContain(
+        'c_{\\alpha\\beta}^{\\gamma}(L)',
+      );
+      expect(doc.body.textContent).not.toContain('\\[');
+      expect(doc.body.textContent).not.toContain('\\]');
+    },
+  );
+
+  it('keeps adjacent prose in separate paragraphs around display math', () => {
+    const rendered = processMarkdownContent(
+      ['Before', '\\[', 'x^2', '\\]', 'After'].join('\n'),
+    );
+
+    expect(rendered).toMatch(/^<p>Before<\/p>\n<section>/);
+    expect(rendered).toMatch(/<\/section><p>After<\/p>\n$/);
+  });
+
+  it('renders dollar display math immediately after prose', () => {
+    const doc = renderToDocument(
+      ['The coefficient is', '$$c(L)=1+\\lambda^L$$', 'Exactly.'].join('\n'),
+    );
+
+    expect(doc.querySelector('.katex-display')).not.toBeNull();
+    expect(doc.body.textContent).not.toContain('$$');
+  });
+
+  it('leaves display-math delimiters literal inside fenced code', () => {
+    const doc = renderToDocument(
+      ['```tex', '\\[', 'x^2', '\\]', '```'].join('\n'),
+    );
+
+    expect(doc.querySelector('.katex')).toBeNull();
+    expect(doc.querySelector('code')?.textContent).toContain('\\[\nx^2\n\\]');
+  });
+
   it('syntax-highlights a fenced code block instead of leaving it plain', () => {
     const doc = renderToDocument(
       [
