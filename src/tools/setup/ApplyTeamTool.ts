@@ -6,10 +6,11 @@
  * with the same roster (PRD: agent-native onboarding). The discipline-picker
  * UI is never built — the setup agent asks in conversation and calls this.
  *
- * The roster write goes through the same shared application path as the
- * Settings "apply team" action, so the two can't
- * drift. Relay-served leads (orchestrators) that aren't in the registry yet
- * (signed out) are reported as "after sign-in" rather than silently dropped.
+ * The roster write goes through the same shared application path
+ * (`applyTeamRosterWithPreflight`) as the Settings "apply team" action, so the
+ * two can't drift. Relay-served leads (orchestrators) that aren't in the
+ * registry yet (signed out) are reported as "after sign-in" rather than
+ * silently dropped.
  */
 
 import { z } from 'zod';
@@ -17,17 +18,19 @@ import { z } from 'zod';
 import {
   createWorkspaceAgentRosterController,
   getAgentsByCategory,
+  loadAgents,
   refresh,
 } from '@agent/index/agentRegistry';
-import { preflightTeamAvailability } from '@common/teams/TeamAvailabilityPreflight';
 import {
   resolveTeamRoster,
   teamHostedNamesForPreflight,
+  type TeamRosterCatalog,
 } from '@common/teams/TeamRoster';
-import { resolveBuiltInTeamPreset } from '@common/teams/builtInTeamPresets';
+import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { agentName } from '@shared/schemas/agent';
 import {
   AGENT_MODE_PRESETS,
+  AGENT_MODE_PRESETS_BY_ID,
   STARTER_AGENT_MODE_PRESET,
 } from '@shared/schemas/agentPresets';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
@@ -80,8 +83,48 @@ ${describeTeams()}`,
   schema: ApplyTeamInputSchema,
 }) {
   protected async execute(input: ApplyTeamInput): Promise<ToolResult> {
-    const preset = resolveBuiltInTeamPreset(input.teamId);
-    if (!preset) {
+    const state = { getAgents: getAgentsByCategory };
+    const roster = createWorkspaceAgentRosterController();
+    const { signIn } = getSetupPlatform();
+    const authenticated = await getSetupAuthStatus();
+
+    // Applying the roster and recording it as the default team both go
+    // through this tool's adapter — the Settings "apply team" action commits
+    // only the roster, since it has no notion of a fresh-workspace default.
+    const catalog: TeamRosterCatalog = {
+      resolvePreset: (presetId) => {
+        const preset =
+          presetId === STARTER_AGENT_MODE_PRESET.id
+            ? STARTER_AGENT_MODE_PRESET
+            : AGENT_MODE_PRESETS_BY_ID.get(presetId);
+        if (!preset) return { ok: false, reason: 'unknownPreset' };
+        return {
+          ok: true,
+          preset,
+          resolution: resolveTeamRoster(state, preset),
+        };
+      },
+      // `resolution` is unused: roster.setTeam persists a live {kind:'team'}
+      // reference and re-resolves against the catalog on read, rather than
+      // committing the frozen per-agent-key snapshot the preflight computed.
+      commitPresetResolution: async (preset) => {
+        await roster.setTeam(preset.id);
+        await roster.setDefaultTeam(preset.id);
+      },
+    };
+
+    const result = await applyTeamRosterWithPreflight(input.teamId, {
+      catalog,
+      loadLocalCatalog: () => loadAgents({ includeRemote: false }),
+      canAccessRemoteCatalog: async () =>
+        authenticated.remoteAgentCatalogAvailable,
+      providedChoice: input.unavailableAction ?? undefined,
+      choose: async () => undefined,
+      signIn,
+      forceRefreshRemoteCatalog: () => refresh({ includeRemote: true }),
+    });
+
+    if (result.status === 'unknown') {
       // The schema gates ids, so this only fires if the enum and the preset
       // list ever disagree — fail loudly rather than half-apply.
       throw new ToolError(
@@ -89,60 +132,34 @@ ${describeTeams()}`,
       );
     }
 
-    const state = { getAgents: getAgentsByCategory };
-    const initial = {
-      preset,
-      resolution: resolveTeamRoster(state, preset),
-    };
-    const texraHostedNames = teamHostedNamesForPreflight(
-      preset,
-      initial.resolution.unresolvedNames,
-    );
-    const { signIn } = getSetupPlatform();
-    const authenticated = await getSetupAuthStatus();
-
-    const preflight = await preflightTeamAvailability({
-      initial,
-      unresolvedNames: (value) => value.resolution.unresolvedNames,
-      texraHostedNames,
-      canAccessRemoteCatalog: async () =>
-        authenticated.remoteAgentCatalogAvailable,
-      providedChoice: input.unavailableAction ?? undefined,
-      choose: async () => undefined,
-      signIn,
-      refresh: async () => {
-        await refresh({ includeRemote: true });
-        return { preset, resolution: resolveTeamRoster(state, preset) };
-      },
-    });
-
-    if (preflight.status === 'choice-required') {
-      const names = preflight.unavailableNames.join(', ');
+    if (result.status === 'choice-required') {
+      const names = result.unavailableNames.join(', ');
       return {
         status: 'executed',
         summary: `Team not applied; TeXRA-hosted members are unavailable: ${names}.`,
-        output: `The ${preset.name} team has unavailable TeXRA-hosted members: ${names}. Ask the user to choose one action: Sign in to TeXRA, Continue with available members, or Cancel. Then call apply_team again with unavailableAction set to "sign-in", "continue", or "cancel". No roster or default-team state was written.`,
+        output: `The ${result.preset.name} team has unavailable TeXRA-hosted members: ${names}. Ask the user to choose one action: Sign in to TeXRA, Continue with available members, or Cancel. Then call apply_team again with unavailableAction set to "sign-in", "continue", or "cancel". No roster or default-team state was written.`,
       };
     }
 
-    if (preflight.status === 'cancelled') {
+    if (result.status === 'cancelled') {
       return {
         status: 'executed',
-        summary: `Cancelled ${preset.name} team application.`,
+        summary: `Cancelled ${result.preset.name} team application.`,
         output: 'Cancelled. No roster or default-team state was written.',
       };
     }
-    if (preflight.status === 'unavailable') {
+    if (result.status === 'unavailable') {
       throw new ToolError(
-        `The ${preset.name} team is still unavailable after refreshing the TeXRA agent catalog: ${preflight.unavailableNames.join(', ')}.`,
+        `The ${result.preset.name} team is still unavailable after refreshing the TeXRA agent catalog: ${result.unavailableNames.join(', ')}.`,
       );
     }
 
-    const { workflowKeys, toolUseKeys, unresolvedNames } =
-      preflight.value.resolution;
-    const roster = createWorkspaceAgentRosterController();
-    await roster.setTeam(preset.id);
-    await roster.setDefaultTeam(preset.id);
+    const { preset } = result;
+    const { workflowKeys, toolUseKeys, unresolvedNames } = result.resolution;
+    const texraHostedNames = teamHostedNamesForPreflight(
+      preset,
+      unresolvedNames,
+    );
 
     // Names that didn't resolve in the registry right now stay in the roster
     // (visibility matches by name, so they activate the moment they appear).
