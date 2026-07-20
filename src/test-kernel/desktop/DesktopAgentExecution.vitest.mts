@@ -2764,7 +2764,7 @@ describe('DesktopProgressBridge', () => {
       await transcripts.flush();
       const processSession = createSession(transcripts);
       const { initializeDesktopProcessStores } =
-        await import('@desktop/main/desktopLegacyStreamImporter');
+        await import('@desktop/main/desktopProcessStores');
       const progressSnapshotStore = createProgressSnapshotStore();
       const processStores = await initializeDesktopProcessStores({
         session: processSession,
