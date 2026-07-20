@@ -13,7 +13,10 @@ import { describe, expect, it, vi, type Mock } from 'vitest';
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { BaseCycleFields } from '@agent/core/flows/CommonCycleTypes';
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
-import { RetryableInvocationNode } from '@agent/core/flows/RetryState';
+import {
+  RetryableInvocationNode,
+  handleInvocationResult,
+} from '@agent/core/flows/RetryState';
 import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import type {
   HostRetryRequest,
@@ -63,7 +66,7 @@ class ExposedRetryNode extends RetryableInvocationNode<
   TestRetryServices
 > {
   protected getOperationName(): string {
-    return 'Tool-use call';
+    return 'Model request';
   }
 
   promptFor(error: Error): Promise<unknown> {
@@ -155,6 +158,50 @@ function createModelInvocationNode(input: {
 }
 
 describe('RetryState', () => {
+  it('records whether a failed invocation already emitted its canonical error', () => {
+    const state: BaseCycleFields = {
+      messages: [],
+      shouldStop: false,
+      endTurn: true,
+    };
+
+    const result = handleInvocationResult(
+      {
+        kind: 'failed',
+        message: 'HTTP 503 Service Unavailable',
+        userRetryable: true,
+        failureLogEmitted: true,
+      },
+      state,
+      { logger: noopTrace, operationName: 'Model request' },
+    );
+
+    expect(result).toBeNull();
+    expect(state.lastError).toEqual({
+      message: 'HTTP 503 Service Unavailable',
+      userRetryable: true,
+    });
+    expect(state.failureLogEmitted).toBe(true);
+  });
+
+  it('leaves an empty model response available for the outer error logger', () => {
+    const state: BaseCycleFields = {
+      messages: [],
+      shouldStop: false,
+      endTurn: true,
+    };
+
+    const result = handleInvocationResult(
+      { kind: 'success', response: undefined },
+      state,
+      { logger: noopTrace, operationName: 'Model request' },
+    );
+
+    expect(result).toBeNull();
+    expect(state.lastError?.message).toContain('Model response was empty');
+    expect(state.failureLogEmitted).toBe(false);
+  });
+
   it('falls back to the canonical coreSettings default when texra.model.retry.maxAttempts is unset', () => {
     const node = new ExposedRetryNode();
 
@@ -171,6 +218,24 @@ describe('RetryState', () => {
 
     expect(node.shouldAutoRetry(abort)).toBe(false);
     expect(node.fallbackFor(abort)).toEqual({ kind: 'cancelled' });
+  });
+
+  it('does not claim an unprompted retryable fallback was already logged', () => {
+    const node = new ExposedRetryNode();
+    const error = new OpenAIAPIError(
+      503,
+      { message: 'transient provider failure' },
+      'transient provider failure',
+      undefined,
+    );
+    tagOpenAISdkError(error, 'openai');
+
+    expect(node.fallbackFor(error)).toMatchObject({
+      kind: 'failed',
+      message: 'HTTP 503 Service Unavailable – 503 transient provider failure',
+      userRetryable: true,
+      failureLogEmitted: false,
+    });
   });
 
   it('auto-retries a status-less OpenAI server_error response', () => {
@@ -256,7 +321,7 @@ describe('RetryState', () => {
       expect(requestRetry).toHaveBeenCalledWith(
         expect.objectContaining({
           streamId,
-          operation: 'Tool-use call',
+          operation: 'Model request',
           model: 'copilot:sonnet46',
         }),
         undefined,
@@ -355,6 +420,7 @@ describe('RetryState', () => {
       expect(node.fallbackFor(error)).toMatchObject({
         kind: 'failed',
         message: 'stream dropped before first token',
+        failureLogEmitted: true,
       });
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);
