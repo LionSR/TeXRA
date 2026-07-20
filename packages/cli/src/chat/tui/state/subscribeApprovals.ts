@@ -14,6 +14,7 @@
 
 import { nanoid } from 'nanoid';
 import pDefer from 'p-defer';
+import PQueue from 'p-queue';
 import pTimeout from 'p-timeout';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
@@ -24,6 +25,7 @@ import {
   type HostInteractionCancelSelector,
   type HostInteractionOptions,
   type HostInteractions,
+  type HostRetryInteractionOptions,
   type HostRetryRequest,
   type HostUserQuestionRequest,
   type HostUserQuestionResult,
@@ -32,7 +34,8 @@ import {
   type RetryResult,
 } from '@agent/runtime/HostInteractions';
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
-import { setCliApiMode } from '@cli/runtime/apiAccessMode';
+import { isPreferCodexSubscription } from '@auth/codex';
+import { getCliApiMode, setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   approvalPromptAllowed,
   humanInputDenialFeedback,
@@ -45,10 +48,10 @@ import {
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import {
-  API_PROVIDERS,
-  lookupApiKey,
+  apiKeyExistsUncached,
+  hasUsableApiKey,
+  invalidateApiKeyCache,
   isApiProvider,
-  type ApiProvider,
 } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import { isUpstreamCreditDepletedError } from '@shared/schemas';
@@ -58,6 +61,7 @@ import {
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { notify } from '../notifications/terminalNotifier';
 import { patchSessionMeta, patchStream } from './cliState';
@@ -72,17 +76,13 @@ import {
   onApprovalsCleared,
   type ApprovalDecision,
   type ApprovalPayload,
+  type TuiRetryRequest,
 } from './approvalQueue';
+import { missingApiKeyRetryMessage } from '../ui/retryCopy';
 
 // =========================================================================
 // Retry auto-switch: skip the modal when a usable personal key exists
 // =========================================================================
-
-/** Check whether a usable personal API key is stored for a provider. */
-async function hasUsablePersonalKey(provider: ApiProvider): Promise<boolean> {
-  const key = await lookupApiKey(platform().secrets, provider);
-  return typeof key === 'string' && key.trim().length > 0;
-}
 
 /**
  * When a retry is triggered by relay exhaustion and the stored personal key is
@@ -95,7 +95,7 @@ async function hasUsablePersonalKey(provider: ApiProvider): Promise<boolean> {
  * (no usable key stored, direct-key failure, or unknown provider).
  */
 async function maybeAutoSwitchRetry(
-  payload: RuntimeInteractionEventPayloads['showRetryRequest'],
+  payload: TuiRetryRequest,
 ): Promise<ApprovalDecision | undefined> {
   if (!isCliApiSwitchableRetry(payload)) return undefined;
   if (isCliChatGptSubscriptionRetry(payload)) return undefined;
@@ -106,22 +106,7 @@ async function maybeAutoSwitchRetry(
   // auto-switch to the stored value.
   if (isUpstreamCreditDepletedError(details)) return undefined;
 
-  // Relay exhaustion uses the provider from error details when known;
-  // provider-less relay failures can use any configured personal key.
-  let providers: readonly ApiProvider[];
-  if (details?.provider) {
-    providers = isApiProvider(details.provider) ? [details.provider] : [];
-  } else {
-    providers = API_PROVIDERS;
-  }
-  if (providers.length === 0) return undefined;
-
-  const hasKey = (
-    await Promise.all(
-      providers.map((provider) => hasUsablePersonalKey(provider)),
-    )
-  ).some(Boolean);
-  if (!hasKey) return undefined;
+  if (payload.personalApiKeyAvailable !== true) return undefined;
 
   return {
     accepted: true,
@@ -137,6 +122,10 @@ export function createTuiHostInteractions(
   context: CliContext,
 ): HostInteractions {
   const retryRoutes = new Map<string, ActiveRetryRoute>();
+  // The two persisted access fields commit as one choice within this TUI
+  // lifetime. Keeping the queue session-owned prevents stale work leaking
+  // across disposed hosts or tests.
+  const retryCredentialCommitQueue = new PQueue({ concurrency: 1 });
   const disposeApprovalClearListener = onApprovalsCleared(() => {
     invalidateRetryRoutes(retryRoutes, { cancel: true });
   });
@@ -216,7 +205,14 @@ export function createTuiHostInteractions(
     },
     requestRetry(request, options) {
       return withInteractionTimeout(
-        () => requestRetryInteraction(request, context, retryRoutes),
+        () =>
+          requestRetryInteraction(
+            request,
+            context,
+            retryRoutes,
+            retryCredentialCommitQueue,
+            options,
+          ),
         options,
         { action: 'timeout' },
         () => {
@@ -279,7 +275,48 @@ export function createTuiHostInteractions(
  */
 interface ActiveRetryRoute {
   readonly routeId: symbol;
+  readonly preparationController: AbortController;
   readonly settle?: (result: RetryResult) => void;
+}
+
+function runRetryTask<T>(
+  start: () => Promise<T>,
+  signal: AbortSignal,
+): Promise<T> {
+  signal.throwIfAborted();
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () =>
+      reject(
+        signal.reason ??
+          new DOMException('Retry preparation aborted.', 'AbortError'),
+      );
+    signal.addEventListener('abort', onAbort, { once: true });
+    try {
+      start().then(
+        (value) => {
+          signal.removeEventListener('abort', onAbort);
+          resolve(value);
+        },
+        (error: unknown) => {
+          signal.removeEventListener('abort', onAbort);
+          reject(error);
+        },
+      );
+    } catch (error) {
+      signal.removeEventListener('abort', onAbort);
+      reject(error);
+    }
+  });
+}
+
+function prepareRetryClient(
+  prepare: NonNullable<HostRetryInteractionOptions['prepareRetry']>,
+  selection: Parameters<
+    NonNullable<HostRetryInteractionOptions['prepareRetry']>
+  >[0],
+  signal: AbortSignal,
+): Promise<void> {
+  return runRetryTask(() => prepare(selection, signal), signal);
 }
 
 const NEUTRAL_TIMEOUT_DECISION: ApprovalDecision = {
@@ -350,6 +387,7 @@ function settleRetryRoute(
   const route = retryRoutes.get(streamId);
   if (!route) return;
   retryRoutes.delete(streamId);
+  route.preparationController.abort(new Error('Retry request was replaced.'));
   route.settle?.(result);
 }
 
@@ -391,6 +429,18 @@ async function decideWithPolicy<
       : immediateDecision(context);
   if (policy) return policy;
 
+  return decideAfterImmediatePolicy(context, kind, payload, options);
+}
+
+async function decideAfterImmediatePolicy<
+  K extends 'bash' | 'plan' | 'proposal' | 'retry',
+  P,
+>(
+  context: CliContext,
+  kind: K,
+  payload: P,
+  options: RouteWithPolicyOptions<P> = {},
+): Promise<ApprovalDecision> {
   let autoDecision: ApprovalDecision | undefined;
   if (options.beforeQueue) {
     try {
@@ -495,14 +545,18 @@ async function requestRetryInteraction(
   request: HostRetryRequest,
   context: CliContext,
   retryRoutes: Map<string, ActiveRetryRoute>,
+  retryCredentialCommitQueue: PQueue,
+  options: HostRetryInteractionOptions | undefined,
 ): Promise<RetryResult> {
   cancelRetryRoute(retryRoutes, request.streamId);
   const routeId = Symbol(request.streamId);
+  const preparationController = new AbortController();
   clearRetryApprovalsForStream(request.streamId);
 
   return await new Promise<RetryResult>((resolve) => {
     retryRoutes.set(request.streamId, {
       routeId,
+      preparationController,
       settle: resolve,
     });
     const isCurrent = () =>
@@ -512,10 +566,44 @@ async function requestRetryInteraction(
     };
 
     void (async () => {
-      const decision = await decideWithPolicy(context, 'retry', request, {
-        beforeQueue: maybeAutoSwitchRetry,
-        isCurrent,
-      });
+      const immediate: ApprovalDecision | undefined =
+        immediateDecisionForApproval('showRetryRequest', request, context);
+      let promptRequest: TuiRetryRequest = request;
+      if (!immediate && isCliApiSwitchableRetry(request)) {
+        const requestedProvider = request.errorDetails?.provider;
+        const provider =
+          requestedProvider && isApiProvider(requestedProvider)
+            ? requestedProvider
+            : undefined;
+        let personalApiKeyAvailable = false;
+        let missingPersonalApiKeyMessage = missingApiKeyRetryMessage(provider);
+        if (provider) {
+          try {
+            personalApiKeyAvailable = await hasUsableApiKey(
+              platform().secrets,
+              provider,
+            );
+          } catch {
+            // A keychain failure must not permit an automatic credential switch.
+            missingPersonalApiKeyMessage = missingApiKeyRetryMessage(
+              provider,
+              'unavailable',
+            );
+          }
+        }
+        promptRequest = {
+          ...request,
+          personalApiKeyAvailable,
+          missingPersonalApiKeyMessage,
+        };
+      }
+      if (!isCurrent()) return;
+      const decision =
+        immediate ??
+        (await decideAfterImmediatePolicy(context, 'retry', promptRequest, {
+          beforeQueue: maybeAutoSwitchRetry,
+          isCurrent,
+        }));
       if (!isCurrent()) return;
       if (
         decision.accepted &&
@@ -529,11 +617,29 @@ async function requestRetryInteraction(
         return;
       }
       try {
-        await applyRetrySideEffects(decision, { isCurrent });
+        const changesCredentialRoute =
+          decision.apiMode !== undefined ||
+          decision.disableChatGptSubscription === true;
+        if (changesCredentialRoute) {
+          await switchRetryToPersonalCredentials(decision, promptRequest, {
+            isCurrent,
+            prepareRetry: options?.prepareRetry,
+            preparationSignal: preparationController.signal,
+            commitQueue: retryCredentialCommitQueue,
+          });
+        } else if (options?.prepareRetry) {
+          await prepareRetryClient(
+            options.prepareRetry,
+            'configured',
+            preparationController.signal,
+          );
+        }
         if (!isCurrent()) return;
         resolve({ action: 'retry', feedback: decision.userMessage });
-      } catch {
-        if (isCurrent()) resolve({ action: 'cancel' });
+      } catch (error) {
+        if (isCurrent()) {
+          resolve({ action: 'deny', reason: toErrorMessage(error) });
+        }
       } finally {
         finish();
       }
@@ -616,21 +722,135 @@ function setTuiApprovalBypassState({
   }));
 }
 
-async function applyRetrySideEffects(
+async function switchRetryToPersonalCredentials(
   decision: ApprovalDecision,
-  options: { isCurrent?: () => boolean } = {},
+  request: TuiRetryRequest,
+  options: {
+    isCurrent?: () => boolean;
+    prepareRetry?: HostRetryInteractionOptions['prepareRetry'];
+    preparationSignal?: AbortSignal;
+    commitQueue: PQueue;
+  },
 ): Promise<void> {
   const isCurrent = () => options.isCurrent?.() ?? true;
   if (!isCurrent()) return;
-  if (decision.apiMode) {
-    await setCliApiMode(decision.apiMode);
-    if (!isCurrent()) return;
-    patchSessionMeta({ apiMode: decision.apiMode });
+  const signal = options.preparationSignal ?? new AbortController().signal;
+
+  const requestedProvider = request.errorDetails?.provider;
+  if (!requestedProvider || !isApiProvider(requestedProvider)) {
+    throw new Error(
+      'The failed API provider could not be identified, so TeXRA did not change access settings.',
+    );
   }
-  if (decision.disableChatGptSubscription) {
-    await setCliCodexSubscription(false);
-    if (!isCurrent()) return;
+  const missingKeyMessage =
+    request.missingPersonalApiKeyMessage ??
+    missingApiKeyRetryMessage(requestedProvider);
+  const validateCurrentKey = async (): Promise<void> => {
+    const keyExists = await runRetryTask(
+      () => apiKeyExistsUncached(platform().secrets, requestedProvider),
+      signal,
+    );
+    if (!isCurrent()) throw new Error('Retry request was replaced.');
+    if (!keyExists) throw new Error(missingKeyMessage);
+    // The presentation check is deliberately cached. Drop that cache only
+    // after the uncached commit check so getClient() must read the current key.
+    invalidateApiKeyCache();
+  };
+
+  await validateCurrentKey();
+
+  if (!options.prepareRetry) {
+    throw new Error('The model client cannot be refreshed for this retry.');
   }
+  await prepareRetryClient(options.prepareRetry, 'personal', signal);
+  if (!isCurrent()) throw new Error('Retry request was replaced.');
+
+  await options.commitQueue.add(async () => {
+    if (!isCurrent()) throw new Error('Retry request was replaced.');
+    const previousApiMode = getCliApiMode();
+    const previousSubscriptionPreference = isPreferCodexSubscription();
+    let apiModeWriteStarted = false;
+    let subscriptionWriteStarted = false;
+    try {
+      if (decision.apiMode) {
+        const apiMode = decision.apiMode;
+        apiModeWriteStarted = true;
+        await runRetryTask(() => setCliApiMode(apiMode), signal);
+        if (!isCurrent()) throw new Error('Retry request was replaced.');
+      }
+      if (decision.disableChatGptSubscription) {
+        subscriptionWriteStarted = true;
+        const update = await runRetryTask(
+          () => setCliCodexSubscription(false),
+          signal,
+        );
+        if (update.effective) {
+          throw new Error(
+            'ChatGPT subscription remains enabled by a more specific setting.',
+          );
+        }
+        if (!isCurrent()) throw new Error('Retry request was replaced.');
+      }
+      if (decision.apiMode) patchSessionMeta({ apiMode: decision.apiMode });
+      return;
+    } catch (error) {
+      const rollbackFailures: Error[] = [];
+      if (subscriptionWriteStarted && !isPreferCodexSubscription()) {
+        try {
+          const update = await setCliCodexSubscription(
+            previousSubscriptionPreference,
+          );
+          if (update.effective !== previousSubscriptionPreference) {
+            throw new Error(
+              `ChatGPT subscription preference remained ${String(update.effective)}.`,
+            );
+          }
+        } catch (rollbackError) {
+          const persistenceContext =
+            isPreferCodexSubscription() === previousSubscriptionPreference
+              ? 'The previous ChatGPT subscription preference appears restored in memory, but persistence could not be confirmed'
+              : 'Could not restore the ChatGPT subscription preference';
+          rollbackFailures.push(
+            new Error(
+              `${persistenceContext}: ${toErrorMessage(rollbackError)}`,
+              {
+                cause: rollbackError,
+              },
+            ),
+          );
+        }
+      }
+      if (apiModeWriteStarted && getCliApiMode() === decision.apiMode) {
+        try {
+          await setCliApiMode(previousApiMode);
+          if (getCliApiMode() !== previousApiMode) {
+            throw new Error(`API mode remained ${getCliApiMode()}.`);
+          }
+        } catch (rollbackError) {
+          const persistenceContext =
+            getCliApiMode() === previousApiMode
+              ? 'The previous API mode appears restored in memory, but persistence could not be confirmed'
+              : 'Could not restore API mode';
+          rollbackFailures.push(
+            new Error(
+              `${persistenceContext}: ${toErrorMessage(rollbackError)}`,
+              {
+                cause: rollbackError,
+              },
+            ),
+          );
+        }
+      }
+      if (rollbackFailures.length > 0) {
+        throw new AggregateError(
+          [error, ...rollbackFailures],
+          `${toErrorMessage(error)} Previous access settings could not be fully restored: ${rollbackFailures.map(toErrorMessage).join(' ')}`,
+          { cause: error },
+        );
+      }
+      throw error;
+    }
+  });
 }
 
 function handleExternalInquiry(
