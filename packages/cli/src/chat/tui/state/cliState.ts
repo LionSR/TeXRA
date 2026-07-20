@@ -578,8 +578,9 @@ export function getCliStateGeneration(): number {
   return CLI_STATE_GENERATION;
 }
 
-export function registerCliStateResetHook(resetHook: () => void): void {
+export function registerCliStateResetHook(resetHook: () => void): () => void {
   RESET_HOOKS.add(resetHook);
+  return () => RESET_HOOKS.delete(resetHook);
 }
 
 /** Submit-side state for the one active slash form. */

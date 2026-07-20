@@ -1207,6 +1207,32 @@ describe('CLI TUI row allocation', () => {
     }
   });
 
+  it('returns a user-stopped focused child to its immediate owner', () => {
+    const dispose = subscribeStreamStatus();
+    setParentStream(child1, root);
+    activeStreamId.set(child1);
+
+    try {
+      expect(
+        defaultSession().status.transition(
+          child1,
+          STREAM_PHASE.RUNNING,
+          'lifecycle',
+        ),
+      ).toBe(true);
+      expect(
+        defaultSession().status.transition(
+          child1,
+          STREAM_PHASE.CANCELLED,
+          'user-stop',
+        ),
+      ).toBe(true);
+      expect(activeStreamId.get()).toBe(root);
+    } finally {
+      dispose();
+    }
+  });
+
   it('does not auto-return for WAITING, repair, unrelated, or detached status events', () => {
     const dispose = subscribeStreamStatus();
     const detachedChild = 'detached-child' as StreamTabId;
@@ -2271,6 +2297,36 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     agentName: 'bash',
     status: 'running',
   };
+
+  it('keeps a session-scoped fact subscription live after state reset', () => {
+    const hub = new SessionEventHub();
+    const detach = attachTuiRunFactSubscription(hub);
+    const nextRoot = 'root-after-clear' as StreamTabId;
+    const todos: TodoItem[] = [
+      {
+        content: 'Continue after clear',
+        status: TODO_STATUS.PENDING,
+        activeForm: 'Continuing after clear',
+      },
+    ];
+
+    try {
+      resetCliState();
+      hub.emit({
+        scope: 'run',
+        streamId: nextRoot,
+        event: {
+          type: 'updateTodos',
+          streamId: nextRoot,
+          todos,
+        },
+      });
+
+      expect(streams.get().get(nextRoot)?.todos).toEqual(todos);
+    } finally {
+      detach();
+    }
+  });
 
   it('applies typed updateTodos run facts without host emission', () => {
     const hub = new SessionEventHub();

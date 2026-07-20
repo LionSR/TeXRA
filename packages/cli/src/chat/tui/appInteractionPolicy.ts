@@ -72,23 +72,27 @@ export interface EscapeInterruptState {
   readonly inputDisabled: boolean;
   readonly reverseSearchOpen: boolean;
   readonly slashPaletteOpen: boolean;
-  readonly canInterruptActiveRun: () => boolean;
-  readonly onInterruptActive: () => void;
+  readonly canInterruptStream: (streamId: StreamTabId) => boolean;
+  readonly onInterruptStream: (streamId: StreamTabId) => void;
 }
 
-export function triggerEscapeInterrupt(state: EscapeInterruptState): boolean {
+export function triggerEscapeInterrupt(
+  state: EscapeInterruptState,
+  streamId: StreamTabId | undefined,
+): boolean {
   if (
+    streamId === undefined ||
     !appEscapeInterruptActive({
       inputDisabled: state.inputDisabled,
       reverseSearchOpen: state.reverseSearchOpen,
-      runPending: state.canInterruptActiveRun(),
+      runPending: state.canInterruptStream(streamId),
       slashPaletteOpen: state.slashPaletteOpen,
     })
   ) {
     return false;
   }
 
-  state.onInterruptActive();
+  state.onInterruptStream(streamId);
   return true;
 }
 

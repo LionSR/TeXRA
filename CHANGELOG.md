@@ -38,6 +38,8 @@ All notable changes to this project will be documented in this file.
 
 - **Model failures show their reason** — failed model requests now include a
   concise provider message and are no longer labeled as tool failures.
+- **Escape stops only the focused agent** — other running agents continue, and
+  navigation returns to the owning session after a subagent is stopped.
 
 ### Desktop
 
