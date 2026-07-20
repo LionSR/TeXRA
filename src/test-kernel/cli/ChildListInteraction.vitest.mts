@@ -262,6 +262,7 @@ describe('CLI child list interaction', () => {
     const onKillExecution = vi.fn();
     const onOpenProcessDetail = vi.fn();
     const onPrintStream = vi.fn();
+    const onToggleRowExpand = vi.fn();
 
     const stdin = new FakeStdin();
     const instance = ink.render(
@@ -281,6 +282,7 @@ describe('CLI child list interaction', () => {
         onOpenProcessDetail,
         onSelectionChange: vi.fn(),
         onPrintStream,
+        onToggleRowExpand,
         selectedValue: processValue,
       }),
       {
@@ -294,6 +296,7 @@ describe('CLI child list interaction', () => {
 
     try {
       await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write('i');
       stdin.write('v');
       stdin.write('k');
       await waitFor(() => onKillExecution.mock.calls.length === 1);
@@ -301,6 +304,7 @@ describe('CLI child list interaction', () => {
       await waitFor(() => onOpenProcessDetail.mock.calls.length === 1);
 
       expect(onPrintStream).not.toHaveBeenCalled();
+      expect(onToggleRowExpand).not.toHaveBeenCalled();
       expect(onKillExecution).toHaveBeenCalledWith('process-exec');
       expect(onOpenProcessDetail).toHaveBeenCalledWith('process-exec');
     } finally {
