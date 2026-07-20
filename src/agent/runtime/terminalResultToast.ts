@@ -13,7 +13,7 @@
  *
  * `attachTerminalResultToast` wires that mapper to a session for hosts that
  * present through an {@link AgentRuntimeHost} (CLI, desktop). The `session` is
- * load-bearing: desktop passes its per-window session, while CLI/extension
+ * load-bearing: desktop passes its process session, while CLI/extension
  * pass the process {@link defaultSession}. A helper that hard-coded the
  * default would route desktop to the wrong session and never see its
  * results. Every host presents through its `runtimeHost`; in the extension,
@@ -102,13 +102,17 @@ export function terminalResultToast(
 export function attachTerminalResultToast(
   session: SessionHandle,
   runtimeHost: AgentRuntimeHost,
+  options: { replayWhenAttached?: boolean } = {},
 ): () => void {
-  return session.onResult((event) => {
-    const toast = terminalResultToast(event);
-    if (toast?.type === 'instruction') {
-      runtimeHost.emit('requestShowInstruction', toast.payload);
-    } else if (toast?.type === 'error') {
-      runtimeHost.emit('requestShowError', toast.payload);
-    }
-  });
+  return session.onResult(
+    (event) => {
+      const toast = terminalResultToast(event);
+      if (toast?.type === 'instruction') {
+        runtimeHost.emit('requestShowInstruction', toast.payload);
+      } else if (toast?.type === 'error') {
+        runtimeHost.emit('requestShowError', toast.payload);
+      }
+    },
+    options.replayWhenAttached ? { replayMissed: true } : undefined,
+  );
 }

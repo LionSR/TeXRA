@@ -30,8 +30,8 @@ export interface ResumeStreamPorts {
   /** Runtime host receiving the RESUMING/WAITING status updates. */
   readonly runtimeHost: AgentRuntimeHost;
   /**
-   * The status machine of the session that owns this stream — per-window on
-   * desktop, the default session's machine in the extension/CLI. The
+   * The status machine of the session that owns this stream — process-owned on
+   * desktop, and the default session's machine in the extension/CLI. The
    * active/resuming guards must read the machine the run actually writes
    * (`launchSession.status`); reading the process-global default here left
    * both guards permanently false in multi-session hosts.

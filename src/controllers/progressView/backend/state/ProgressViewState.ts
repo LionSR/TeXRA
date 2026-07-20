@@ -150,6 +150,7 @@ export class ProgressViewState {
     storage: StateStore,
     snapshots = new StreamSnapshotStore(),
     session: SessionHandle = defaultSession(),
+    stores?: SessionStores,
   ) {
     this.logger = createChannelTrace('ProgressViewState');
     this.session = session;
@@ -162,14 +163,16 @@ export class ProgressViewState {
     this.streamLogs = session.transcripts;
     this.followUps = session.followUps;
     this.snapshots = snapshots;
-    this.stores = new SessionStores({
-      streamLogs: this.streamLogs,
-      snapshots: this.snapshots,
-      goalEntries: {
-        forget: (stream) => GoalStore.forget(stream, this.session),
-        forgetMany: (streams) => GoalStore.forgetMany(streams, this.session),
-      },
-    });
+    this.stores =
+      stores ??
+      new SessionStores({
+        streamLogs: this.streamLogs,
+        snapshots: this.snapshots,
+        goalEntries: {
+          forget: (stream) => GoalStore.forget(stream, this.session),
+          forgetMany: (streams) => GoalStore.forgetMany(streams, this.session),
+        },
+      });
   }
 
   // -- Preferences ------------------------------------------------------------
@@ -311,22 +314,34 @@ export class ProgressViewState {
     stream: StreamTabId,
     taskState: TaskState,
     executionId?: ExecutionId,
+    stateOwnership: 'backend' | 'session' = 'backend',
   ): void {
-    this.snapshots.setTaskState(stream, taskState, executionId);
+    if (stateOwnership === 'backend') {
+      this.snapshots.setTaskState(stream, taskState, executionId);
+    }
     this.refreshStreamMetadataFromSnapshot(stream);
   }
 
   setStreamParent(
     stream: StreamTabId,
     parent: StreamTabId | null | undefined,
+    stateOwnership: 'backend' | 'session' = 'backend',
   ): void {
-    this.snapshots.setParentStream(stream, parent);
+    if (stateOwnership === 'backend') {
+      this.snapshots.setParentStream(stream, parent);
+    }
     const metadata = this.getOrCreateSession(stream).metadata;
     metadata.parentStreamId = parent ?? undefined;
   }
 
-  setStreamDescription(stream: StreamTabId, description: string): void {
-    this.snapshots.setDescription(stream, description);
+  setStreamDescription(
+    stream: StreamTabId,
+    description: string,
+    stateOwnership: 'backend' | 'session' = 'backend',
+  ): void {
+    if (stateOwnership === 'backend') {
+      this.snapshots.setDescription(stream, description);
+    }
     this.getOrCreateSession(stream).metadata.description = description;
   }
 
@@ -450,24 +465,28 @@ export class ProgressViewState {
     return deletion;
   }
 
-  async load(): Promise<void> {
+  async load(stateOwnership: 'backend' | 'session' = 'backend'): Promise<void> {
     this.logger.info('[Persistence] Starting state load from storage');
 
-    // Load stream logs first — they define the set of known streams
-    await this.streamLogs.reload();
+    // Persistent stores opened by this backend still need their initial disk
+    // refresh. A process-owned session has already opened its canonical live
+    // store; reloading it for a replacement presentation would race live appends.
+    if (stateOwnership === 'backend') await this.streamLogs.reload();
+    else await this.stores.waitForPendingStreamDeletions();
 
     const streamIds = this.streamLogs.keys();
     this.logger.info(`[Persistence] Discovered ${streamIds.length} stream(s)`);
 
-    const sweep = await this.stores.sweepOrphanedStreams(new Set(streamIds));
-    if (sweep.streams.length > 0) {
-      this.logger.info(
-        `[Persistence] Removed ${sweep.streams.length} orphaned stream sidecar(s) and ${sweep.executionIds.length} execution dir(s)`,
-        { data: sweep },
-      );
+    if (stateOwnership === 'backend') {
+      const sweep = await this.stores.sweepOrphanedStreams(new Set(streamIds));
+      if (sweep.streams.length > 0) {
+        this.logger.info(
+          `[Persistence] Removed ${sweep.streams.length} orphaned stream sidecar(s) and ${sweep.executionIds.length} execution dir(s)`,
+          { data: sweep },
+        );
+      }
+      await this.snapshots.load(streamIds);
     }
-
-    await this.snapshots.load(streamIds);
     for (const stream of streamIds) {
       this.resetStreamMetadataForRun(stream);
     }
