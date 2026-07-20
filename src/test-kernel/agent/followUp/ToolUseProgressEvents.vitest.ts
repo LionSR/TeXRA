@@ -205,6 +205,7 @@ describe('tool-use progress events', () => {
       outcome: 'failed',
       message: 'Model claude-opus-4-7 not found',
       userRetryable: false,
+      failureLogEmitted: false,
     });
 
     expect(transition).toBe(FlowTransition.DEFAULT);
@@ -215,6 +216,30 @@ describe('tool-use progress events', () => {
     expect(error).toHaveBeenCalledWith('Model claude-opus-4-7 not found', {
       messageType: MESSAGE_TYPES.ERROR,
     });
+  });
+
+  it('does not repeat a failed model request already logged by RetryState', async () => {
+    const prepRes = createPrepResult(AgentWorkspaceState.create());
+    const shared: Partial<ToolUseRunShared> = {};
+    const error = vi.fn();
+    const node = new ToolUseCycleNode().setServices({
+      logger: { error },
+    } as unknown as ToolUseServices);
+
+    const lastError = {
+      message: 'HTTP 503 Service Unavailable',
+      userRetryable: true,
+    };
+    await node.post(shared as ToolUseRunShared, prepRes, {
+      outcome: 'failed',
+      message: lastError.message,
+      userRetryable: lastError.userRetryable,
+      lastError,
+      failureLogEmitted: true,
+    });
+
+    expect(shared.lastError).toBe(lastError);
+    expect(error).not.toHaveBeenCalled();
   });
 
   it('persists a completed cycle structured result in shared state', async () => {
