@@ -16,21 +16,32 @@ export interface TexmathPluginOptions {
   readonly engineOptions?: Record<string, unknown>;
 }
 
-// `markdown-it-texmath` only defines `\[...\]` as a *block* rule out of the
-// box; we want it inline too so the renderer is consistent across hosts.
-// `texmath.rules.brackets.inline` is process-global, so guard with an
-// idempotency flag.
-let inlineRuleInstalled = false;
-function ensureInlineDisplayRule(): void {
-  if (inlineRuleInstalled) return;
-  texmath.rules.brackets.inline.push({
-    name: 'math_inline_display',
-    rex: /\\\[([\s\S]+?)\\\]/gy,
-    tmpl: '<section><eqn>$1</eqn></section>',
-    tag: '\\[',
-    displayMode: true,
-  });
-  inlineRuleInstalled = true;
+const PARAGRAPH_INTERRUPTION_CHAINS = Object.freeze([
+  'paragraph',
+  'reference',
+  'blockquote',
+  'list',
+]);
+
+/** Allow configured display-math rules to interrupt an adjacent paragraph. */
+function addDisplayMathParagraphInterruptions(
+  md: MarkdownItInstance,
+  delimiters: ReadonlyArray<string>,
+): void {
+  const blockRules = [
+    ...(delimiters.includes('dollars') ? texmath.rules.dollars.block : []),
+    ...(delimiters.includes('brackets') ? texmath.rules.brackets.block : []),
+    ...(delimiters.includes('beg_end') ? texmath.rules.beg_end.block : []),
+  ];
+
+  for (const [index, rule] of blockRules.entries()) {
+    md.block.ruler.before(
+      'paragraph',
+      `texmath_block_interrupt_${index}`,
+      texmath.block(rule),
+      { alt: PARAGRAPH_INTERRUPTION_CHAINS },
+    );
+  }
 }
 
 /**
@@ -40,12 +51,15 @@ function ensureInlineDisplayRule(): void {
 export function createTexmathPlugin(
   options: TexmathPluginOptions,
 ): (md: MarkdownItInstance) => MarkdownItInstance {
-  ensureInlineDisplayRule();
+  const delimiters = options.delimiters ?? ['dollars', 'brackets', 'beg_end'];
   type TexmathFn = Parameters<MarkdownItInstance['use']>[0];
-  return (md) =>
-    md.use(texmath as unknown as TexmathFn, {
+  return (md) => {
+    const configured = md.use(texmath as unknown as TexmathFn, {
       engine: options.engine,
-      delimiters: options.delimiters ?? ['dollars', 'brackets', 'beg_end'],
+      delimiters,
       katexOptions: options.engineOptions,
     });
+    addDisplayMathParagraphInterruptions(configured, delimiters);
+    return configured;
+  };
 }
