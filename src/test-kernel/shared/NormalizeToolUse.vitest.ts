@@ -62,6 +62,24 @@ describe('normalizeToolUseData', () => {
     expect(normalized?.headerSummary).toBe('ran 1 command');
   });
 
+  it('retains only the scalar exit code needed by renderers', () => {
+    const topLevel = normalizeToolUseData({
+      toolName: 'Bash',
+      exit_code: 7,
+      output: 'failed',
+      status: 'completed',
+    });
+    const nested = normalizeToolUseData({
+      toolName: 'Bash',
+      output: { exitCode: 3, output: 'failed' },
+      status: 'completed',
+    });
+
+    expect(topLevel?.exitCode).toBe(7);
+    expect(nested?.exitCode).toBe(3);
+    expect(topLevel).not.toHaveProperty('parsed');
+  });
+
   it('reports errors via isError and errorText', () => {
     const normalized = normalizeToolUseData({
       toolName: 'Bash',
