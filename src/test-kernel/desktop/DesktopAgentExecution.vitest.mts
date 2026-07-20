@@ -62,6 +62,11 @@ import {
 } from './desktopAgentExecutionTestHarness.mjs';
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
+type WakeQueuedFollowUpStream =
+  typeof import('@agent/followUp/ToolUseFollowUp').wakeQueuedFollowUpStream;
+type DesktopProgressBridgeOptions =
+  import('@desktop/main/desktopAgentExecution').DesktopProgressBridgeOptions;
+
 type Bridge = {
   openFileCompile(filePath: string): Promise<void>;
   dispose(): void;
@@ -196,8 +201,9 @@ type CreateBridgeOptions = {
   deferReady?: boolean;
   detectWaitingStreams?: ReturnType<typeof vi.fn>;
   repairRestartedStreams?: ReturnType<typeof vi.fn>;
-  wakeQueuedFollowUpStream?: ReturnType<typeof vi.fn>;
+  wakeQueuedFollowUpStream?: WakeQueuedFollowUpStream;
   showErrorMessage?: (message: string) => Promise<void> | void;
+  showInfoMessage?: (message: string) => Promise<void> | void;
   openPath?: (filePath: string, line?: number) => Promise<void>;
   observeRendererMessage?: (message: unknown) => void;
   /** Captures `this.logger.error(...)` calls made by the bridge under test. */
@@ -282,17 +288,6 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   vi.doMock('@agent/runtime/runAgent', () => ({
     runAgent: options.runAgent ?? vi.fn(),
   }));
-  vi.doMock('@agent/followUp/ToolUseFollowUp', async () => {
-    const actual = await vi.importActual<
-      typeof import('@agent/followUp/ToolUseFollowUp')
-    >('@agent/followUp/ToolUseFollowUp');
-    return options.wakeQueuedFollowUpStream
-      ? {
-          ...actual,
-          wakeQueuedFollowUpStream: options.wakeQueuedFollowUpStream,
-        }
-      : actual;
-  });
   vi.doMock('@agent/storage/detectWaitingStreams', () => ({
     detectWaitingStreams:
       options.detectWaitingStreams ?? vi.fn(async () => new Set()),
@@ -511,6 +506,9 @@ async function createBridge(
       host: createStubDesktopAgentExecutionHost({
         ...(options.showErrorMessage
           ? { showErrorMessage: options.showErrorMessage }
+          : {}),
+        ...(options.showInfoMessage
+          ? { showInfoMessage: options.showInfoMessage }
           : {}),
         ...(options.openPath ? { openPath: options.openPath } : {}),
       }),
@@ -1478,16 +1476,20 @@ describe('DesktopProgressBridge', () => {
     expect(order.indexOf('subscribe')).toBeLessThan(order.indexOf('render'));
   });
 
-  it('detaches when pending approval replay closes the presentation during attachment', async () => {
+  it('preserves queued notices when approval replay closes the attaching presentation', async () => {
     let finishDetection!: (value: Set<StreamTabId>) => void;
     const detectionGate = new Promise<Set<StreamTabId>>((resolve) => {
       finishDetection = resolve;
     });
     const detectWaitingStreams = vi.fn(async () => detectionGate);
-    let bridge: TestableBridge | undefined;
+    const firstInfo = vi.fn(async () => undefined);
+    const bridgeRef: { current?: TestableBridge } = {};
 
-    bridge = await createBridge([], {
+    const bridge = await createBridge([], {
       configureSession: (session) => {
+        session.interactions.showInfoMessage('survive approval replay', {
+          replayWhenAttached: true,
+        });
         void session.interactions.requestPlanApproval?.({
           approvalId: 'close-during-attachment',
           streamId: 'attachment-close-stream' as StreamTabId,
@@ -1497,16 +1499,18 @@ describe('DesktopProgressBridge', () => {
       },
       deferReady: true,
       detectWaitingStreams,
+      showInfoMessage: firstInfo,
       observeRendererMessage: (message) => {
         const progress = message as ProgressMessage;
         if (
           progress.command === PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION &&
           progress.action === 'show'
         ) {
-          bridge?.dispose();
+          bridgeRef.current?.dispose();
         }
       },
     });
+    bridgeRef.current = bridge;
     await vi.waitFor(() => expect(detectWaitingStreams).toHaveBeenCalled());
     finishDetection(new Set());
     await bridge.waitUntilReady();
@@ -1515,6 +1519,30 @@ describe('DesktopProgressBridge', () => {
       attachments: unknown[];
     };
     expect(interactions.attachments).toHaveLength(0);
+    expect(firstInfo).not.toHaveBeenCalled();
+
+    const internal = bridge as unknown as {
+      constructor: new (
+        postToRenderer: (message: unknown) => boolean | void,
+        options: DesktopProgressBridgeOptions,
+      ) => TestableBridge;
+      options: DesktopProgressBridgeOptions;
+    };
+    const replacementInfo = vi.fn(async () => undefined);
+    const replacement = disposeAfterTest(
+      new internal.constructor(() => undefined, {
+        ...internal.options,
+        host: createStubDesktopAgentExecutionHost({
+          showInfoMessage: replacementInfo,
+        }),
+      }),
+    );
+    await replacement.waitUntilReady();
+
+    expect(replacementInfo).toHaveBeenCalledOnce();
+    expect(replacementInfo).toHaveBeenCalledWith('survive approval replay');
+    await Promise.resolve();
+    expect(replacementInfo).toHaveBeenCalledOnce();
   });
 
   it('rechecks active executions after waiting detection before repairing logs', async () => {
@@ -2626,7 +2654,7 @@ describe('DesktopProgressBridge', () => {
       category?: AgentCategory;
       messages?: unknown[];
       detectWaitingStreams?: ReturnType<typeof vi.fn>;
-      wakeQueuedFollowUpStream?: ReturnType<typeof vi.fn>;
+      wakeQueuedFollowUpStream?: WakeQueuedFollowUpStream;
     }) {
       const {
         bridgeModule,
@@ -2634,10 +2662,7 @@ describe('DesktopProgressBridge', () => {
         createSession,
         openTranscripts,
         processResumeOwner,
-      } = await loadBridgeModule({
-        detectWaitingStreams,
-        wakeQueuedFollowUpStream,
-      });
+      } = await loadBridgeModule({ detectWaitingStreams });
       const { AgentExecutionHandle, ProcessExecutionHandle } =
         await import('@agent/runtime/ExecutionHandle');
       const { getExecutionStore } = await import('@agent/storage');
@@ -2683,6 +2708,9 @@ describe('DesktopProgressBridge', () => {
           session: processSession,
           sessionStores,
           progressSnapshotStore,
+          ...(wakeQueuedFollowUpStream
+            ? { wakeQueuedFollowUpStream }
+            : {}),
           host: createStubDesktopAgentExecutionHost({
             openDiff: async (original, proposed, title) => {
               diffPathsA.push({

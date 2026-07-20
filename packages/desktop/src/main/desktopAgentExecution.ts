@@ -108,6 +108,7 @@ export interface DesktopProgressBridgeOptions {
   logger?: AgentTrace;
   host: DesktopAgentExecutionHost;
   progressSnapshotStore: StreamSnapshotStore;
+  wakeQueuedFollowUpStream?: typeof wakeQueuedFollowUpStream;
 }
 
 async function wakeDesktopFollowUp(
@@ -117,12 +118,13 @@ async function wakeDesktopFollowUp(
     { status: 'sent' | 'queued' }
   >,
   session: SessionHandle,
+  wakeFollowUpStream: typeof wakeQueuedFollowUpStream = wakeQueuedFollowUpStream,
 ): Promise<void> {
   // This continuation deliberately accepts only the process SessionHandle.
   // It may outlive a window, so it must not capture a bridge or BrowserWindow
   // presentation. Its important failure notice explicitly survives a detached
   // interval and is delivered once when the next presentation attaches.
-  const wake = await wakeQueuedFollowUpStream(
+  const wake = await wakeFollowUpStream(
     streamId,
     result,
     platform().agentResume,
@@ -1112,13 +1114,16 @@ export class DesktopProgressBridge {
         },
       });
       const logger = this.logger;
-      void wakeDesktopFollowUp(streamId, result, this.session).catch(
-        (error: unknown) => {
-          logger.warn(`Failed to wake follow-up stream ${streamId}`, {
-            data: toLogData(error),
-          });
-        },
-      );
+      void wakeDesktopFollowUp(
+        streamId,
+        result,
+        this.session,
+        this.options.wakeQueuedFollowUpStream,
+      ).catch((error: unknown) => {
+        logger.warn(`Failed to wake follow-up stream ${streamId}`, {
+          data: toLogData(error),
+        });
+      });
       return;
     }
 

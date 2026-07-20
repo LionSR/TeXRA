@@ -296,7 +296,7 @@ describe('session.interactions immediate capabilities', () => {
     session.dispose();
   });
 
-  it('replays only opted-in presentation notices once after reattachment', () => {
+  it('replays only opted-in presentation notices once after reattachment', async () => {
     const session = createTestSession();
     const firstInfo = vi.fn();
     const firstEmit = vi.fn();
@@ -327,6 +327,11 @@ describe('session.interactions immediate capabilities', () => {
       showInfoMessage: secondInfo,
       cancel: vi.fn(),
     });
+    expect(secondInfo).not.toHaveBeenCalled();
+    expect(secondEmit).not.toHaveBeenCalled();
+
+    await Promise.resolve();
+
     expect(secondInfo).toHaveBeenCalledOnce();
     expect(secondInfo).toHaveBeenCalledWith('replay this');
     expect(secondEmit).toHaveBeenCalledOnce();
@@ -342,10 +347,50 @@ describe('session.interactions immediate capabilities', () => {
       showInfoMessage: thirdInfo,
       cancel: vi.fn(),
     });
+    await Promise.resolve();
+
     expect(thirdInfo).not.toHaveBeenCalled();
     expect(thirdEmit).not.toHaveBeenCalled();
     expect(firstInfo).not.toHaveBeenCalled();
     expect(firstEmit).not.toHaveBeenCalled();
+    session.dispose();
+  });
+
+  it('leaves remaining notices queued when replay detaches the host', async () => {
+    const session = createTestSession();
+    session.interactions.showInfoMessage('first', {
+      replayWhenAttached: true,
+    });
+    session.interactions.showInfoMessage('second', {
+      replayWhenAttached: true,
+    });
+
+    const firstInfo = vi.fn();
+    let detachFirst = (): void => undefined;
+    detachFirst = session.useHostInteractions({
+      showInfoMessage: (message) => {
+        firstInfo(message);
+        detachFirst();
+      },
+      cancel: vi.fn(),
+    });
+    await Promise.resolve();
+
+    expect(firstInfo).toHaveBeenCalledOnce();
+    expect(firstInfo).toHaveBeenCalledWith('first');
+
+    const secondInfo = vi.fn();
+    session.useHostInteractions({
+      showInfoMessage: secondInfo,
+      cancel: vi.fn(),
+    });
+    await Promise.resolve();
+
+    expect(secondInfo).toHaveBeenCalledOnce();
+    expect(secondInfo).toHaveBeenCalledWith('second');
+    await Promise.resolve();
+    expect(firstInfo).toHaveBeenCalledOnce();
+    expect(secondInfo).toHaveBeenCalledOnce();
     session.dispose();
   });
 

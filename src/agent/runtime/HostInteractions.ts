@@ -373,7 +373,7 @@ export class SessionHostInteractions
     };
     this.attachments.push(attachment);
     this.activateCurrentAttachment();
-    this.replayPendingPresentations();
+    queueMicrotask(() => this.replayPendingPresentations(attachment));
     return () => {
       if (attachment.disposed) return;
       const wasActive = this.activeAttachment === attachment;
@@ -594,11 +594,16 @@ export class SessionHostInteractions
     }
   }
 
-  private replayPendingPresentations(): void {
-    const attachment = this.activeAttachment;
-    if (!attachment || this.pendingPresentationReplays.length === 0) return;
-    const replays = this.pendingPresentationReplays.splice(0);
-    for (const replay of replays) {
+  private replayPendingPresentations(
+    attachment: HostInteractionAttachment,
+  ): void {
+    while (
+      !attachment.disposed &&
+      this.activeAttachment === attachment &&
+      this.pendingPresentationReplays.length > 0
+    ) {
+      const replay = this.pendingPresentationReplays.shift();
+      if (!replay) return;
       try {
         void Promise.resolve(replay(attachment.interactions)).catch(
           (error: unknown) => {
