@@ -274,6 +274,31 @@ describe('RetryState', () => {
     expect(node.shouldAutoRetry(streamError)).toBe(true);
   });
 
+  it('keeps flow-level auto-retry for a raw undici fetch failure', () => {
+    const node = createModelInvocationNode({
+      isAutoRetryManagedByProvider: () => true,
+    });
+    const transportError = Object.assign(
+      new Error('HTTP/2: "stream timeout after 300000"'),
+      { code: 'UND_ERR_INFO', name: 'InformationalError' },
+    );
+    const fetchError = new TypeError('fetch failed', {
+      cause: transportError,
+    });
+
+    expect(node.shouldAutoRetry(fetchError)).toBe(true);
+  });
+
+  it('does not duplicate provider retries for a wrapped fetch failure', () => {
+    const node = createModelInvocationNode({
+      isAutoRetryManagedByProvider: () => true,
+    });
+    const fetchError = new TypeError('fetch failed');
+    const sdkError = new Error('Connection error', { cause: fetchError });
+
+    expect(node.shouldAutoRetry(sdkError)).toBe(false);
+  });
+
   it('keeps flow-level auto-retry when the handler predicate excludes an error', () => {
     const node = createModelInvocationNode({
       isAutoRetryManagedByProvider: () => false,
