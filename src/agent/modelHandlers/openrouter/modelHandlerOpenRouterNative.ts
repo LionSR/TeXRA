@@ -57,10 +57,7 @@ import {
   insertMediaIntoChatUserMessage,
   prependTextToChatUserMessage,
 } from '../openai/openAIMessageUtils';
-import {
-  formatAttachmentSummary,
-  formatToolResultAsText,
-} from '../utils/toolAttachmentUtils';
+import { formatToolResultTextWithAttachments } from '../utils/toolAttachmentUtils';
 import { extractTextFromReasoningDetails } from '../utils/openRouterReasoning';
 import {
   OpenRouterStreamAggregator,
@@ -674,15 +671,14 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       ...(text ? { content: text } : {}),
     } as ChatMessages;
 
-    const attachmentSummary =
-      this.canProcessToolResultAttachments && attachments.length > 0
-        ? formatAttachmentSummary(attachments)
-        : undefined;
-
     const resultMsg: ChatMessages = {
       role: 'tool',
       toolCallId: call.callId,
-      content: formatToolResultAsText(result, attachmentSummary),
+      content: formatToolResultTextWithAttachments(
+        result,
+        attachments,
+        this.canProcessToolResultAttachments,
+      ),
     } as ChatMessages;
 
     return [callMsg, resultMsg];
@@ -706,11 +702,15 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     } as ChatMessages;
 
     const resultMsgs: ChatMessages[] = entries.map(
-      ({ call, result }) =>
+      ({ call, result, attachments }) =>
         ({
           role: 'tool',
           toolCallId: call.callId,
-          content: formatToolResultAsText(result),
+          content: formatToolResultTextWithAttachments(
+            result,
+            attachments,
+            this.canProcessToolResultAttachments,
+          ),
         }) as ChatMessages,
     );
 
