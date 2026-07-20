@@ -119,6 +119,15 @@ export interface BypassState {
   readonly superYolo: boolean;
 }
 
+/** File roles attached to one agent run. Kept as one optional value so the
+ *  transcript slice does not duplicate derived counts alongside the paths. */
+export interface StreamFileMetadata {
+  readonly input: readonly string[];
+  readonly context: readonly string[];
+  readonly media: readonly string[];
+  readonly output: readonly string[];
+}
+
 export interface StreamSlice {
   readonly streamId: StreamTabId;
   /** Model identity captured from setTaskState for this specific stream. */
@@ -127,6 +136,9 @@ export interface StreamSlice {
    *  from `setTaskState` or `setActiveStream`. Lets the exit hint list only
    *  resumable tool-use subagents (workflows don't resume). */
   readonly category: AgentCategory | undefined;
+  /** Normalized run files received with `run.config`. Absent until that fact
+   *  arrives; each category may then be empty. */
+  readonly files?: StreamFileMetadata | undefined;
   readonly status: StreamPhase | undefined;
   readonly substate?: StreamSubstate;
   /** Epoch ms when this stream last entered `RUNNING`; cleared on any other

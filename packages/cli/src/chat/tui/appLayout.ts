@@ -148,6 +148,7 @@ export function allocateConversationBottomPanelRows({
   processCount = 0,
   sessionCount,
   childListFocused,
+  detailContentRows = 0,
   todosPlanContentRows,
   transcriptRows,
 }: {
@@ -155,6 +156,7 @@ export function allocateConversationBottomPanelRows({
   readonly processCount?: number;
   readonly sessionCount: number;
   readonly childListFocused: boolean;
+  readonly detailContentRows?: number;
   readonly todosPlanContentRows: number;
   readonly transcriptRows: number;
 }): {
@@ -165,7 +167,7 @@ export function allocateConversationBottomPanelRows({
   const childListRowCount = sessionCount + processCount;
   // The persistent child list owns one blank separator row above its Select.
   const sessionPanelContentRows =
-    childListRowCount > 0 ? childListRowCount + 1 : 0;
+    childListRowCount > 0 ? childListRowCount + detailContentRows + 1 : 0;
   // The todos/plan panel likewise owns a separator row above its checklist.
   const todosPanelContentRows =
     todosPlanContentRows > 0 ? todosPlanContentRows + 1 : 0;

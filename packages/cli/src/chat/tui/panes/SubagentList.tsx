@@ -36,6 +36,7 @@ import { Select, visibleSelectRange } from '../ui/Select';
 import {
   CHILD_ROW_METADATA_MIN_COLUMNS,
   CHILD_STATUS_MARKER,
+  childFileDisplay,
   childRowMetadataText,
   childStatusColor,
   pendingApprovalRowSuffix,
@@ -147,6 +148,7 @@ function SessionRow({
   // this truncate-end text sheds inline elapsed (narrow mode only), the round,
   // and last the pending-approval kind. The metadata column never shrinks.
   const approvalSuffix = pendingApprovalRowSuffix(pendingKinds);
+  const fileBadge = childFileDisplay(session.slice?.files).badge;
   const roundLabel = formatRoundStageLabel(session.slice?.roundStage);
   // The resolved model is per-agent identity (a workflow run's grandchildren
   // can each resolve a different model); the list-root row is the conversation
@@ -198,6 +200,11 @@ function SessionRow({
           <Text dimColor wrap="truncate-end">
             {` · ${truncateSummaryToWidth(summary, SUBAGENT_SUMMARY_MAX_COLUMNS)}`}
           </Text>
+        </Box>
+      ) : null}
+      {fileBadge ? (
+        <Box minWidth={0} flexShrink={3}>
+          <Text dimColor wrap="truncate-end">{` · ${fileBadge}`}</Text>
         </Box>
       ) : null}
       {focused ? <HiddenRowSummary text={hiddenRowSummary} /> : null}
@@ -259,6 +266,24 @@ function ProcessRow({
   );
 }
 
+/** Focus-local file details. The caller has already bounded the lines to the
+ *  rows left after preserving at least one visible child row. */
+function SubagentRowDetail({
+  lines,
+}: {
+  readonly lines: readonly string[];
+}): React.JSX.Element | null {
+  return lines.length > 0 ? (
+    <Box flexDirection="column" flexShrink={0} paddingLeft={4}>
+      {lines.map((line, index) => (
+        <Text key={`${index}:${line}`} dimColor wrap="truncate-end">
+          {line}
+        </Text>
+      ))}
+    </Box>
+  ) : null;
+}
+
 export interface SubagentListProps {
   readonly keyboardActive?: boolean;
   readonly maxRows?: number;
@@ -272,6 +297,7 @@ export interface SubagentListProps {
   readonly onOpenProcessDetail?: (executionId: string) => void;
   readonly onSelectionChange?: (value: ChildListValue) => void;
   readonly onPrintStream?: (streamId: StreamTabId) => void;
+  readonly onToggleRowExpand?: () => void;
   /** Pending approval kinds per stream id (see `pendingApprovalSummaries`,
    *  root bucket already folded onto the root stream id by the caller). */
   readonly pendingApprovals?: ReadonlyMap<
@@ -285,6 +311,8 @@ export interface SubagentListProps {
   readonly activeProcesses?: readonly ActiveChildInfo[];
   readonly activeSubagentExecutionIds?: ReadonlyMap<StreamTabId, string>;
   readonly processOutput?: ReadonlyMap<string, ProcessOutputTail>;
+  /** Preformatted details for the selected row; empty when it is collapsed. */
+  readonly detailLines?: readonly string[];
 }
 
 export function SubagentList(
@@ -344,6 +372,17 @@ export function SubagentList(
   const metadataColumn = columns >= CHILD_ROW_METADATA_MIN_COLUMNS;
   const contentRows =
     props.maxRows === undefined ? undefined : Math.max(0, props.maxRows - 1);
+  // Preserve at least one selected-row slot. On a tight terminal the detail
+  // therefore sheds rows before the list does.
+  const detailRows =
+    contentRows === undefined
+      ? (props.detailLines?.length ?? 0)
+      : Math.min(props.detailLines?.length ?? 0, Math.max(0, contentRows - 1));
+  const visibleDetailLines = (props.detailLines ?? []).slice(0, detailRows);
+  const listRows =
+    contentRows === undefined
+      ? undefined
+      : Math.max(0, contentRows - detailRows);
   const selectedIndex = Math.max(
     0,
     items.findIndex((item) => item.value === props.selectedValue),
@@ -351,7 +390,7 @@ export function SubagentList(
   const visibleRange = visibleSelectRange({
     highlight: selectedIndex,
     itemCount: items.length,
-    maxVisibleItems: contentRows,
+    maxVisibleItems: listRows,
   });
   const visibleValues = new Set(
     items.slice(visibleRange.start, visibleRange.end).map((item) => item.value),
@@ -379,6 +418,10 @@ export function SubagentList(
       if (key.ctrl || key.meta) return;
       const streamId = childListStreamId(props.selectedValue);
       const pressed = input.toLowerCase();
+      if (pressed === 'i' && streamId) {
+        props.onToggleRowExpand?.();
+        return;
+      }
       if (pressed === 'v' && streamId) {
         props.onPrintStream?.(streamId);
         return;
@@ -431,7 +474,7 @@ export function SubagentList(
         hotkeys={false}
         isActive={props.keyboardActive}
         items={items}
-        maxVisibleItems={contentRows}
+        maxVisibleItems={listRows}
         onCancel={props.onCancel ?? (() => undefined)}
         // This panel is a standalone focus target, not a cyclic menu: Down
         // past the last row hands keyboard ownership back to the input
@@ -479,6 +522,7 @@ export function SubagentList(
           ) : null;
         }}
       />
+      <SubagentRowDetail lines={visibleDetailLines} />
     </Box>
   );
 }
