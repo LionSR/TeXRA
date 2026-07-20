@@ -2756,6 +2756,27 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'focused-subagent-shows-owned-children',
+    frame: 'viewport',
+    cols: 120,
+    rows: 18,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_NESTED_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: 'Tab children',
+    keys: ['\t', DOWN, DOWN, DOWN, '\r'],
+    expect: ['1 subagent', 'localChecker running', 'proof audit running'],
+    unexpect: [
+      'leanSolver',
+      'reviewer',
+      'signal read during notification phase',
+      'ERROR',
+    ],
+  },
+  {
     name: 'subagent-print-full-history',
     frame: 'scrollback',
     cols: 120,

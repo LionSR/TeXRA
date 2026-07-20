@@ -21,9 +21,9 @@ import {
 } from '../state/cliState';
 import { chatTuiCanStopVisibleRun } from '../state/sessionRunState';
 import {
-  activeSubagentsFor,
   childStreamEntries as childStreamEntriesSignal,
   parentStream as parentStreamSignal,
+  visibleSubagentRows,
 } from '../state/childExecutions';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { COLOR_ERROR } from '../ui/colors';
@@ -160,9 +160,9 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     queuedFollowUpMessages: statusSlice?.queuedFollowUpMessages ?? [],
     usage: statusSlice?.usage,
     roundStage: statusSlice?.roundStage,
-    activeSubagents:
+    subagents:
       target.displayStreamId !== undefined
-        ? activeSubagentsFor(
+        ? visibleSubagentRows(
             target.displayStreamId,
             childStreamEntries,
             streams,
