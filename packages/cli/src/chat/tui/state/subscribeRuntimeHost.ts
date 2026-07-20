@@ -87,13 +87,34 @@ function applySetActiveStream(payload: SetActiveStreamPayload): void {
 
 function applyRunConfig(streamId: StreamTabId, config: AgentConfig): void {
   patchStream(streamId, (s) => {
-    if (s.model === config.model && s.category === config.agentCategory) {
+    const files = {
+      input: config.inputFiles,
+      context: config.contextFiles,
+      media: config.mediaFiles,
+      output: config.outputFiles,
+    };
+    const sameFiles =
+      s.files !== undefined &&
+      (Object.keys(files) as (keyof typeof files)[]).every((key) => {
+        const previous = s.files?.[key] ?? [];
+        const next = files[key];
+        return (
+          previous.length === next.length &&
+          previous.every((path, index) => path === next[index])
+        );
+      });
+    if (
+      s.model === config.model &&
+      s.category === config.agentCategory &&
+      sameFiles
+    ) {
       return s;
     }
     return {
       ...s,
       model: config.model,
       category: config.agentCategory,
+      files,
     };
   });
 }

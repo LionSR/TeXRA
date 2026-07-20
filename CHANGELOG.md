@@ -19,6 +19,9 @@ All notable changes to this project will be documented in this file.
 - **Nested subagents remain visible** — a focused subagent reports how many
   direct subagents it owns, including completed work that remains available in
   its child list.
+- **Subagent rows show their working files** — rows summarize attached input,
+  context, media, and output files; press `i` while selecting a row to inspect
+  the paths without leaving the conversation.
 
 #### Bug Fixes
 

@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CHILD_STATUS_MARKER,
+  childFileBadgeText,
   childRowMetadataText,
   childStatusColor,
+  fileDetailLines,
   pendingApprovalRowSuffix,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
 import {
@@ -63,6 +65,31 @@ function workflowAgentSlice(
 }
 
 describe('CLI child list display model', () => {
+  it('formats only populated run-file categories for badges and details', () => {
+    const files = {
+      input: ['src/Main.lean', 'src/Lemma.lean'],
+      context: ['notes/proof.md'],
+      media: [],
+      output: ['Main.olean'],
+    };
+
+    expect(childFileBadgeText(files)).toBe('in:2 ctx:1 out:1');
+    expect(fileDetailLines(files, 80)).toEqual([
+      'Input src/Main.lean, src/Lemma.lean',
+      'Context notes/proof.md',
+      'Output Main.olean',
+    ]);
+    expect(childFileBadgeText(undefined)).toBeUndefined();
+    expect(
+      childFileBadgeText({ input: [], context: [], media: [], output: [] }),
+    ).toBeUndefined();
+    expect(fileDetailLines(files, 20)).toEqual([
+      'Input src/Main.lean…',
+      'Context notes/proof…',
+      'Output Main.olean',
+    ]);
+  });
+
   it('keeps status markers steady and status colors independent of focus', () => {
     expect(CHILD_STATUS_MARKER).toBe('● ');
     expect(childStatusColor(undefined)).toBe('green');
@@ -312,5 +339,33 @@ describe('CLI child list display model', () => {
     expect(output).toContain('bash running · gpt56');
     expect(output).toContain('5 tool calls');
     expect(output).toContain('↓40k');
+  });
+
+  it('renders a run-file badge as the least-essential row suffix', async () => {
+    const { ink, React } = await loadInk();
+    const run = 'run' as StreamTabId;
+    const output = ink.renderToString(
+      React.createElement(SubagentList, {
+        maxRows: 3,
+        sessions: [
+          {
+            id: run,
+            label: 'devise',
+            active: true,
+            slice: workflowAgentSlice('run', {
+              files: {
+                input: ['Main.lean', 'Lemma.lean'],
+                context: ['notes.md'],
+                media: [],
+                output: [],
+              },
+            }),
+          },
+        ],
+      }),
+      { columns: 100 },
+    );
+
+    expect(output).toContain('devise completed · in:2 ctx:1');
   });
 });
