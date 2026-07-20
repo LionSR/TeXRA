@@ -32,11 +32,15 @@ import {
 } from './QueuedFollowUpsPanel';
 import { StaticConversationTranscript } from './StaticConversationTranscript';
 import { SubagentList } from './SubagentList';
+import { childFileDisplay } from './SubagentListDisplay';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
+import {
+  childListStreamId,
+  type ChildListValue,
+} from '../state/childListSelection';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 import type { ChildListTarget } from '../state/childControls';
-import type { ChildListValue } from '../state/childListSelection';
 import type { StreamSlice } from '../state/cliState';
 import type { TranscriptPrintRequest } from '../state/transcriptLines';
 import type { StreamView } from '../state/streamViews';
@@ -54,6 +58,7 @@ interface ConversationRegionSnapshot {
   readonly slashPaletteOpen: boolean;
   readonly selectedChildValue: ChildListValue | undefined;
   readonly childListFocused: boolean;
+  readonly childListRowExpanded: boolean;
   readonly sessionViews: readonly StreamView[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly subagentExecutionLabels: ExecutionLabels;
@@ -82,6 +87,7 @@ interface ConversationRegionProps {
   readonly onRetryExecution: (executionId: string) => void;
   readonly onOpenProcessDetail: (executionId: string) => void;
   readonly onPrintStream: (streamId: StreamTabId) => void;
+  readonly onToggleChildRowExpand: () => void;
 }
 
 export function ConversationRegion({
@@ -95,6 +101,7 @@ export function ConversationRegion({
   onRetryExecution,
   onOpenProcessDetail,
   onPrintStream,
+  onToggleChildRowExpand,
   onStaticTranscriptChange,
   renderFooterChrome,
   renderForegroundSurface,
@@ -176,6 +183,21 @@ export function ConversationRegion({
     hasTodosPlanPanel && activeSlice
       ? todosPlanPanelRowCount(activeSlice.todos, activeSlice.plan)
       : 0;
+  const selectedChildStreamId = childListStreamId(snapshot.selectedChildValue);
+  const selectedChildFiles = selectedChildStreamId
+    ? snapshot.streams.get(selectedChildStreamId)?.files
+    : undefined;
+  const selectedFileDetailLines = childFileDisplay(
+    selectedChildFiles,
+    Math.max(1, columns - 6),
+  ).detailLines;
+  const expandedFileDetailLines =
+    selectedFileDetailLines.length > 0
+      ? selectedFileDetailLines
+      : ['No file info for this row'];
+  const childDetailLines = snapshot.childListRowExpanded
+    ? expandedFileDetailLines
+    : [];
   const {
     bottomPanelRows: bottomPanelBudget,
     sessionPanelRows: subagentRows,
@@ -185,6 +207,7 @@ export function ConversationRegion({
     processCount: foregroundOpen ? 0 : activeProcesses.length,
     sessionCount: foregroundOpen ? 0 : snapshot.sessionViews.length,
     childListFocused: snapshot.childListFocused,
+    detailContentRows: childDetailLines.length,
     todosPlanContentRows,
     transcriptRows,
   });
@@ -262,6 +285,7 @@ export function ConversationRegion({
               onOpenProcessDetail={onOpenProcessDetail}
               onSelectionChange={onChildSelectionChange}
               onPrintStream={onPrintStream}
+              onToggleRowExpand={onToggleChildRowExpand}
               pendingApprovals={snapshot.pendingApprovals}
               listRootStreamId={snapshot.childListTarget.streamId}
               selectedValue={snapshot.selectedChildValue}
@@ -269,6 +293,7 @@ export function ConversationRegion({
               activeProcesses={activeProcesses}
               activeSubagentExecutionIds={snapshot.activeSubagentExecutionIds}
               processOutput={snapshot.childListTarget.slice?.processOutput}
+              detailLines={childDetailLines}
             />
             <TodosPlanPanel maxRows={todosPlanRows} />
           </Box>
