@@ -29,7 +29,6 @@ import {
   ProgressBackend,
   type ProgressBackendOptions,
 } from '@controllers/progressView/backend/ProgressBackend';
-import type { MementoStorage } from '@controllers/progressView/backend/persistence/PersistentMapManager';
 import * as logger from '@logger/logUtils';
 import {
   AgentCategory,
@@ -53,6 +52,7 @@ import {
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { GoalStore } from '@tools/goal';
 import {
@@ -65,24 +65,6 @@ import {
   STREAM_DATA_DIR,
 } from '@transcript/streamDataPaths';
 import { StorageFS } from '@utils/files';
-
-class MemoryMementoStorage implements MementoStorage {
-  private readonly values = new Map<string, unknown>();
-
-  get<T>(key: string): T | undefined;
-  get<T>(key: string, defaultValue: T): T;
-  get<T>(key: string, defaultValue?: T): T | undefined {
-    return this.values.has(key) ? (this.values.get(key) as T) : defaultValue;
-  }
-
-  async update<T>(key: string, value: T | undefined): Promise<void> {
-    if (value === undefined) {
-      this.values.delete(key);
-      return;
-    }
-    this.values.set(key, value);
-  }
-}
 
 function createApprovalOptions() {
   return {
@@ -125,7 +107,7 @@ function createRecordingBackend(): {
 } {
   const messages: ProgressViewOutboundMessage[] = [];
   const backend = new ProgressBackend({
-    storage: new MemoryMementoStorage(),
+    storage: new FakeStateStore(),
     sendMessage: (message) => {
       messages.push(message);
       return true;
@@ -148,7 +130,7 @@ function createIsolatedRecordingBackend(
 } {
   const messages: ProgressViewOutboundMessage[] = [];
   const backend = new ProgressBackend({
-    storage: new MemoryMementoStorage(),
+    storage: new FakeStateStore(),
     snapshots: new StreamSnapshotStore(),
     session,
     sendMessage: (message) => {
@@ -252,7 +234,7 @@ function emitRunFact<K extends RunFactEventName>(
 describe('ProgressBackend', () => {
   it('constructs the shared progress backend service graph', () => {
     const backend = new ProgressBackend({
-      storage: new MemoryMementoStorage(),
+      storage: new FakeStateStore(),
       sendMessage: vi.fn(() => true),
       hasTarget: () => true,
       approvals: createApprovalOptions(),
@@ -293,7 +275,7 @@ describe('ProgressBackend', () => {
       throw new Error('closed renderer');
     });
     const backend = new ProgressBackend({
-      storage: new MemoryMementoStorage(),
+      storage: new FakeStateStore(),
       snapshots: new StreamSnapshotStore(),
       session,
       sendMessage: vi.fn(() => true),
@@ -378,7 +360,7 @@ describe('ProgressBackend', () => {
     const session = createTestSession();
     const deletedStreams: StreamTabId[] = [];
     const backend = new ProgressBackend({
-      storage: new MemoryMementoStorage(),
+      storage: new FakeStateStore(),
       session,
       sendMessage: vi.fn(() => true),
       hasTarget: () => true,
@@ -413,7 +395,7 @@ describe('ProgressBackend', () => {
   it('handles removeStream session facts before backend load', async () => {
     const session = createTestSession();
     const backend = new ProgressBackend({
-      storage: new MemoryMementoStorage(),
+      storage: new FakeStateStore(),
       session,
       sendMessage: vi.fn(() => true),
       hasTarget: () => true,
@@ -478,7 +460,7 @@ describe('ProgressBackend', () => {
     const messages: ProgressViewOutboundMessage[] = [];
     const lifecycle = createLifecycleOptions();
     const backend = new ProgressBackend({
-      storage: new MemoryMementoStorage(),
+      storage: new FakeStateStore(),
       snapshots: new StreamSnapshotStore(),
       session,
       sendMessage: (message) => {
@@ -786,7 +768,7 @@ describe('ProgressBackend', () => {
     const session = createTestSession();
     const lifecycle = createLifecycleOptions();
     const backend = new ProgressBackend({
-      storage: new MemoryMementoStorage(),
+      storage: new FakeStateStore(),
       snapshots: new StreamSnapshotStore(),
       session,
       sendMessage: vi.fn(),
@@ -816,7 +798,7 @@ describe('ProgressBackend', () => {
     const sent = vi.fn(() => true);
     let hasTarget = false;
     const backend = new ProgressBackend({
-      storage: new MemoryMementoStorage(),
+      storage: new FakeStateStore(),
       sendMessage: sent,
       hasTarget: () => hasTarget,
       approvals: createApprovalOptions(),
@@ -848,7 +830,7 @@ describe('ProgressBackend', () => {
       .mockRejectedValueOnce(new Error('closed transport'));
 
     const backend = new ProgressBackend({
-      storage: new MemoryMementoStorage(),
+      storage: new FakeStateStore(),
       sendMessage: sent,
       hasTarget: () => true,
       approvals: createApprovalOptions(),
