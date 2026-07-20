@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.39.7] - Unreleased
+## [0.39.7] - 2026-07-20
 
 ### Shared (all surfaces)
 
