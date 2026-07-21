@@ -1,5 +1,6 @@
 // Local imports - shared utilities
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import { clampIndex } from '@utils/core';
 
 // Local imports - progress view component types
 import { permissionId, type PermissionState } from '../permissionState';
@@ -63,7 +64,7 @@ export function selectExternalInquiryKey(
   if (selectedKey && keys.includes(selectedKey)) return selectedKey;
 
   const previousIndex = selectedKey ? previousKeys.indexOf(selectedKey) : 0;
-  const fallbackIndex = Math.min(Math.max(previousIndex, 0), keys.length - 1);
+  const fallbackIndex = clampIndex(previousIndex, keys.length);
   return keys[fallbackIndex] ?? null;
 }
 
