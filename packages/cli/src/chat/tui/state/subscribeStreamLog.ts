@@ -10,6 +10,7 @@ import { appendCliApiSwitchHint } from '@cli/runtime/approvalAdapter';
 import { redactSecrets } from '@logger/redaction';
 import {
   ErrorLogDataSchema,
+  GroupLogPayloadSchema,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   TOOL_USE_STATUS,
@@ -195,19 +196,16 @@ function phaseGroupData(
   ) {
     return null;
   }
-  const data = entry.data;
-  if (typeof data !== 'object' || data === null || !('kind' in data)) {
-    return null;
-  }
-  const { kind, index, total } = data as {
-    kind?: unknown;
-    index?: unknown;
-    total?: unknown;
-  };
+  // Same tolerant parse `updateTaskGroups` (progress-view logSlice) uses for
+  // the identical group-log payload: per-field `.catch(undefined)` so a
+  // malformed `index`/`total` drops just that field, not the whole header.
+  const { kind, index, total } = GroupLogPayloadSchema.catch({}).parse(
+    entry.data,
+  );
   if (kind !== 'phase') return null;
   return {
-    ...(typeof index === 'number' ? { index } : {}),
-    ...(typeof total === 'number' ? { total } : {}),
+    ...(index !== undefined ? { index } : {}),
+    ...(total !== undefined ? { total } : {}),
   };
 }
 

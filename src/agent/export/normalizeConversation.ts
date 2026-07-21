@@ -21,7 +21,10 @@ import {
   isFunctionCallOutputItem,
 } from '@agent/modelHandlers/openai/openAIResponseContent';
 import { isResponseFunctionToolCallItem } from '@agent/modelHandlers/openai/responseStreamEvents';
-import { extractWebFetchResultFields } from '@agent/types/ServerToolTypes';
+import {
+  ANTHROPIC_SERVER_TOOL_BLOCK_TYPES,
+  extractWebFetchResultFields,
+} from '@agent/types/ServerToolTypes';
 import { isObject } from '@utils/core';
 import type { Part } from '@google/genai';
 import type {
@@ -242,13 +245,12 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
       };
 
     // Anthropic server-side tool blocks (the provider executes these, not a
-    // local tool handler). This vocabulary must stay in sync with the
-    // `formatConversationBlock` switch in `@agent/storage/conversationFormat`
-    // — both classify the same three live Anthropic block types emitted by
-    // `AnthropicStreamHandler` (`server_tool_use`, `web_search_tool_result`,
-    // `web_fetch_tool_result`), just into different output shapes (a
+    // local tool handler). Shares the `ANTHROPIC_SERVER_TOOL_BLOCK_TYPES`
+    // vocabulary with the `formatConversationBlock` switch in
+    // `@agent/storage/conversationFormat` — both classify the same three
+    // live Anthropic block types, just into different output shapes (a
     // structured `ExportNode` here vs. a truncated marker string there).
-    case 'server_tool_use':
+    case ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.serverToolUse:
       if (block.name === 'web_search') {
         const query =
           block.input && typeof block.input === 'object'
@@ -258,7 +260,7 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
       }
       return null;
 
-    case 'web_search_tool_result': {
+    case ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.webSearchToolResult: {
       if (!Array.isArray(block.content)) return null;
       const results = (block.content as ContentBlock[])
         .filter((e) => e.type === 'web_search_result' && e.url)
@@ -266,7 +268,7 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
       return results.length ? { kind: 'web-search-results', results } : null;
     }
 
-    case 'web_fetch_tool_result': {
+    case ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.webFetchToolResult: {
       const result = extractWebFetchResultFields(block);
       if (!result) return null;
       return {
