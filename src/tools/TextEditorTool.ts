@@ -7,7 +7,9 @@ import { z } from 'zod';
 // Local imports - tool definitions
 import {
   getRunContextExecutionId,
+  getRunContextSession,
   tryUseRunContext,
+  type RunContext,
 } from '@agent/runtime/RunContext';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import * as logger from '@logger/logUtils';
@@ -88,19 +90,19 @@ export class TextEditorTool extends defineTool({
   // Tool API type
   private apiType: TextEditorApiType;
 
-  // File history for undo operations
-  private fileHistory: Map<string, string[]> = new Map();
+  // Undo snapshots owned by the execution that created them.
+  private fileHistory = new Map<string, Map<string, string[]>>();
+  private readonly observedExecutions = new Set<string>();
 
   /**
-   * Cap on retained full-file snapshots per (execution, file) key.
+   * Cap on retained full-file snapshots per execution and file.
    * `undo_edit` only ever pops the most recent snapshot (`history.at(-1)`),
    * so trimming the oldest entries beyond this depth never changes that
    * behavior — deep multi-level undo past this many edits in a single
    * execution isn't a documented or relied-upon usage pattern. Without this,
    * a long execution that edits the same file many times without ever
    * calling undo_edit retains every historical version of that file for the
-   * rest of the process's lifetime (fileHistory is a process-wide
-   * singleton, never cleared per-execution).
+   * lifetime of a long-running execution.
    */
   private static readonly MAX_HISTORY_PER_FILE = 50;
 
@@ -475,9 +477,10 @@ export class TextEditorTool extends defineTool({
     displayPath: string,
   ): Promise<ToolResult> {
     try {
-      const key = this.historyKey(filePath);
-      const history = this.fileHistory.get(key);
-      if (!history || history.length === 0) {
+      const executionId = this.currentExecutionId();
+      const executionHistory = this.fileHistory.get(executionId);
+      const history = executionHistory?.get(filePath);
+      if (!executionHistory || !history || history.length === 0) {
         throw new ToolError(`No edit history found for ${displayPath}.`);
       }
 
@@ -497,7 +500,10 @@ export class TextEditorTool extends defineTool({
         afterWrite: () => {
           history.pop();
           if (history.length === 0) {
-            this.fileHistory.delete(key);
+            executionHistory.delete(filePath);
+            if (executionHistory.size === 0) {
+              this.fileHistory.delete(executionId);
+            }
           }
         },
         present: ({ appliedContent }) => ({
@@ -511,29 +517,50 @@ export class TextEditorTool extends defineTool({
   }
 
   /**
-   * Scope undo history to the run that produced the edit. `fileHistory` is a
-   * process singleton (one TextEditorTool in the default registry), so keying by
-   * path alone bleeds edits across concurrent runs — a non-awaited subagent and
-   * its parent editing the same absolute path share the stack, so undo_edit could
-   * pop, or silently write to disk under YOLO, a foreign run's snapshot. Keying
-   * by the active run's executionId isolates them; with no run context
-   * (tests/manual) it collapses to the prior path-only behavior.
+   * Resolve the history owned by the active execution. With no run context,
+   * tests and one-shot manual calls share the legacy empty execution scope.
    */
-  private historyKey(filePath: string): string {
-    return `${getRunContextExecutionId(tryUseRunContext()) ?? ''}\u0000${filePath}`;
+  private currentExecutionId(): string {
+    return getRunContextExecutionId(tryUseRunContext()) ?? '';
   }
 
   private addToHistory(filePath: string, content: string): void {
-    const key = this.historyKey(filePath);
-    const history = this.fileHistory.get(key);
+    const context = tryUseRunContext();
+    const executionId = getRunContextExecutionId(context) ?? '';
+    let executionHistory = this.fileHistory.get(executionId);
+    if (!executionHistory) {
+      executionHistory = new Map();
+      this.fileHistory.set(executionId, executionHistory);
+      this.observeExecutionCompletion(executionId, context);
+    }
+
+    const history = executionHistory.get(filePath);
     if (history) {
       history.push(content);
       if (history.length > TextEditorTool.MAX_HISTORY_PER_FILE) {
         history.shift();
       }
     } else {
-      this.fileHistory.set(key, [content]);
+      executionHistory.set(filePath, [content]);
     }
+  }
+
+  /** Release all snapshots when their owning execution leaves the registry. */
+  private observeExecutionCompletion(
+    executionId: string,
+    context: RunContext | undefined,
+  ): void {
+    if (!executionId || this.observedExecutions.has(executionId)) return;
+
+    const registry = getRunContextSession(context)?.executions;
+    if (!registry?.getHandle(executionId)) return;
+
+    this.observedExecutions.add(executionId);
+    registry.addListener(executionId, (handle) => {
+      if (handle) return;
+      this.fileHistory.delete(executionId);
+      this.observedExecutions.delete(executionId);
+    });
   }
 
   private makeOutput(content: string, initLine: number = 1): string {
