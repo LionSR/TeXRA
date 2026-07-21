@@ -17,6 +17,7 @@ import {
 } from '@agent/core/definition/AgentCycleOptions';
 import {
   ProviderMessageArraySchema,
+  normalizeProviderMessages,
   type ProviderMessage,
 } from '@agent/types/ProviderMessage';
 import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
@@ -154,22 +155,18 @@ export function migrateSharedState(
   if (!obj || typeof obj !== 'object') return failedSharedMigration(obj);
 
   const record = obj as Record<string, unknown>;
-  const messages = ProviderMessageArraySchema.safeParse(record.messages);
-  const conversation = ProviderMessageArraySchema.safeParse(
-    record.conversation,
-  );
-  if (!messages.success && !conversation.success) {
+  // `normalizeProviderMessages` already prefers `record.messages` and falls
+  // back to the legacy `record.conversation` key — shared with the same
+  // messages/conversation normalization used to infer a keyless persisted
+  // run's model-handler compatibility key.
+  const messages = normalizeProviderMessages(record);
+  if (!messages) {
     return failedSharedMigration(obj);
   }
 
   const { conversation: _legacyConversation, ...candidate } = record;
-  let migrated = nested;
-  if (!messages.success) {
-    candidate.messages = conversation.data;
-  }
-  if (Object.hasOwn(record, 'conversation')) {
-    migrated = true;
-  }
+  candidate.messages = messages;
+  const migrated = nested || Object.hasOwn(record, 'conversation');
 
   const parsed = ToolUseRunSharedSchema.safeParse(candidate);
   if (!parsed.success) return parsed;
