@@ -956,7 +956,44 @@ export class ExecutionRegistry {
       category: handle.category,
       isSubagent: handle.isChildExecution,
     };
-    void this.finishWaitingTermination(handle, cancelledResult);
+    void this.finishWaitingTermination(handle, cancelledResult).catch(
+      (error: unknown) => {
+        const recoveryFailures = [error];
+        try {
+          markOwnedExecutionLeaseUndurable(handle.executionId);
+        } catch (recoveryError) {
+          recoveryFailures.push(recoveryError);
+        }
+        try {
+          handle.settleResult(cancelledResult);
+        } catch (recoveryError) {
+          recoveryFailures.push(recoveryError);
+        }
+        try {
+          this.untrackIfCurrent(handle);
+        } catch (recoveryError) {
+          recoveryFailures.push(recoveryError);
+        }
+        try {
+          this.cancelStreamStatus(handle.childStreamId, handle);
+        } catch (recoveryError) {
+          recoveryFailures.push(recoveryError);
+        }
+        if (!handle.isChildExecution) {
+          void this.releaseRootExecutionLease(handle.executionId).catch(
+            (recoveryError: unknown) => {
+              logger.warn(
+                'Waiting-execution recovery could not release ownership',
+                { data: { executionId: handle.executionId, recoveryError } },
+              );
+            },
+          );
+        }
+        logger.warn('Waiting-execution termination failed unexpectedly', {
+          data: { executionId: handle.executionId, recoveryFailures },
+        });
+      },
+    );
     return true;
   }
 

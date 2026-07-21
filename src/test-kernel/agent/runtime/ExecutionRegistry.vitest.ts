@@ -498,6 +498,45 @@ describe('executionRegistry', () => {
     }
   });
 
+  it('settles waiting termination when detached publication throws', async () => {
+    const streamStatus = new StreamStatusMachine();
+    const publishFailure = new Error('terminal subscriber failed');
+    const registry = new ExecutionRegistry({
+      streamStatus,
+      publishResult: () => {
+        throw publishFailure;
+      },
+    });
+    const executionId = 'exec-waiting-publication-failure' as ExecutionId;
+    const childStreamId = 'child-waiting-publication-failure' as StreamTabId;
+
+    try {
+      const handle = createHandle(
+        executionId,
+        'parent-waiting-publication-failure' as StreamTabId,
+        childStreamId,
+        createRecordingHost().host,
+      );
+      registry.track(handle);
+      handle.registerWaitingCleanup(() => {});
+      seedStreamStatusForTest(
+        streamStatus,
+        childStreamId,
+        STREAM_STATUS.WAITING,
+      );
+
+      expect(registry.kill(executionId)).toBe(true);
+      await expect(handle.result).resolves.toMatchObject({
+        type: 'result',
+        outcome: RUN_OUTCOME.CANCELLED,
+      });
+      expect(registry.getHandle(executionId)).toBeUndefined();
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it('settles and untracks a waiting handle when terminal metadata persistence fails', async () => {
     const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });

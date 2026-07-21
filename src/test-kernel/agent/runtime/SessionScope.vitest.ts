@@ -56,8 +56,11 @@ describe('session-scoped trace flushers (SDK Step 7d PR 3)', () => {
       store,
       sessionB.flushers,
     );
-    sessionB.flushers.set('manual', () => {
-      drained += 1;
+    sessionB.flushers.set('manual', {
+      state: 'active',
+      flush: () => {
+        drained += 1;
+      },
     });
 
     defaultSession().flushPendingTraces();

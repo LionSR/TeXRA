@@ -32,6 +32,7 @@ import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { StreamTabId } from '@shared/schemas';
+import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { getRunContextSession, tryUseRunContext } from './RunContext';
 import { ExecutionRegistry } from './executionRegistry';
@@ -108,7 +109,7 @@ export class SessionHandle {
   /** Session-owned follow-up queue owner. */
   readonly followUps: ToolUseFollowUpQueue;
   /** This session's execution-keyed trace flushers. */
-  readonly flushers: Map<string, () => void>;
+  readonly flushers: Map<string, RunTraceFlushEntry>;
   private readonly artifactFlushers = new Set<() => Promise<void>>();
   private pendingArtifactFlush: ArtifactFlushBatch | undefined;
   private artifactFlushWorkerRunning = false;
@@ -165,7 +166,7 @@ export class SessionHandle {
       init.workflowControls ?? new WorkflowControlRegistry();
     // Every session owns exactly one trace-flusher map. There is no
     // process-wide registry: a host drains the session it is shutting down.
-    this.flushers = init.flushers ?? new Map<string, () => void>();
+    this.flushers = init.flushers ?? new Map<string, RunTraceFlushEntry>();
     executions.attachRootExecutionLeaseRelease((executionId) =>
       releaseExecutionLeaseAfterArtifacts(this, executionId),
     );
@@ -183,11 +184,11 @@ export class SessionHandle {
       ownerKey === undefined
         ? [...this.flushers.values()]
         : [this.flushers.get(ownerKey)].filter(
-            (flush): flush is () => void => flush !== undefined,
+            (entry): entry is RunTraceFlushEntry => entry !== undefined,
           );
-    for (const flush of flushers) {
+    for (const entry of flushers) {
       try {
-        flush();
+        entry.flush();
       } catch (error) {
         failures.push(error);
       }

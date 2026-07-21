@@ -23,6 +23,14 @@ export interface RunTrace {
   readonly dispose: () => void;
 }
 
+export type RunTraceFlushEntry =
+  | { readonly state: 'active'; readonly flush: () => void }
+  | {
+      readonly state: 'failed';
+      readonly error: unknown;
+      readonly flush: () => void;
+    };
+
 /**
  * Produce a trace wired with the standard agent-run subscribers: per-channel
  * channel output AND the transcript recorder.
@@ -35,12 +43,13 @@ export interface RunTrace {
 export function createRunTrace(
   streamId: StreamTabId,
   store: StreamLogStore,
-  flushers: Map<string, () => void> = new Map(),
+  flushers: Map<string, RunTraceFlushEntry> = new Map(),
   ownerKey: string = streamId,
   reservedWriter?: TranscriptWriter,
 ): RunTrace {
   const writer = reservedWriter ?? store.acquireWriter(streamId, ownerKey);
-  if (flushers.has(ownerKey)) {
+  const previousEntry = flushers.get(ownerKey);
+  if (previousEntry?.state === 'active') {
     const ownershipError = new Error(
       `Execution ${ownerKey} already owns a run trace.`,
     );
@@ -81,9 +90,31 @@ export function createRunTrace(
     throw error;
   }
 
+  const pendingFailures =
+    previousEntry?.state === 'failed' ? [previousEntry.error] : [];
+  const activeEntry: RunTraceFlushEntry = {
+    state: 'active',
+    flush: () => {
+      const failures: unknown[] = [];
+      try {
+        transcript.flushPending();
+      } catch (error) {
+        failures.push(error);
+      }
+      if (pendingFailures.length > 0) {
+        failures.push(...pendingFailures);
+        pendingFailures.length = 0;
+      }
+      if (failures.length === 1) throw failures[0];
+      if (failures.length > 1) {
+        throw new AggregateError(failures, 'Run trace flush failed');
+      }
+    },
+  };
+
   // Register the flush by execution so durability boundaries drain only their
   // own trace, while session shutdown can still drain every trace.
-  flushers.set(ownerKey, transcript.flushPending);
+  flushers.set(ownerKey, activeEntry);
 
   let disposed = false;
 
@@ -108,7 +139,8 @@ export function createRunTrace(
       } catch (error) {
         failures.push(error);
       }
-      if (flushers.get(ownerKey) !== transcript.flushPending) return;
+      if (flushers.get(ownerKey) !== activeEntry) return;
+      failures.unshift(...pendingFailures);
       if (failures.length === 0) {
         flushers.delete(ownerKey);
         return;
@@ -117,13 +149,17 @@ export function createRunTrace(
         failures.length === 1
           ? failures[0]
           : new AggregateError(failures, 'Run trace cleanup failed');
-      const handoffFailure = (): void => {
-        if (flushers.get(ownerKey) === handoffFailure) {
-          flushers.delete(ownerKey);
-        }
-        throw failure;
+      const failedEntry: RunTraceFlushEntry = {
+        state: 'failed',
+        error: failure,
+        flush: () => {
+          if (flushers.get(ownerKey) === failedEntry) {
+            flushers.delete(ownerKey);
+          }
+          throw failure;
+        },
       };
-      flushers.set(ownerKey, handoffFailure);
+      flushers.set(ownerKey, failedEntry);
     },
   };
 }
