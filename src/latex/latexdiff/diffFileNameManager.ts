@@ -13,6 +13,8 @@ type GeneratedLatexdiffArtifactKind =
 export interface GeneratedLatexdiffArtifact {
   kind: GeneratedLatexdiffArtifactKind;
   sourcePath: string;
+  /** The commit hash embedded in the filename. Only set for `versionControlDiff`. */
+  commitHash?: string;
 }
 
 /**
@@ -86,12 +88,18 @@ export function generateDiffFileName(
 /**
  * Ordered from most specific to least so the VC/between-round hashes are
  * recognized before the bare `_diff` suffix that they also end with.
+ *
+ * The version-control hash range (4-40 hex chars) matches `COMMIT_HASH_PATTERN`
+ * in `packages/extension/src/commands/git/gitCommands.ts` — the git-commit
+ * validator that governs what hashes latexdiff-vc filenames can actually
+ * embed. Keep these two in sync; a narrower range here would silently fail to
+ * recognize a valid abbreviated-hash diff file as a generated artifact.
  */
 const GENERATED_LATEXDIFF_ARTIFACT_PATTERNS: {
   kind: GeneratedLatexdiffArtifactKind;
   regex: RegExp;
 }[] = [
-  { kind: 'versionControlDiff', regex: /^(.+)-diff[0-9a-f]{6,40}$/i },
+  { kind: 'versionControlDiff', regex: /^(.+)-diff([0-9a-f]{4,40})$/i },
   { kind: 'betweenRoundDiff', regex: /^(.+)_diffr\d+r\d+$/i },
   { kind: 'workspaceDiff', regex: /^(.+)_diff$/i },
 ];
@@ -113,6 +121,9 @@ export function detectGeneratedLatexdiffArtifact(
     return {
       kind: pattern.kind,
       sourcePath: path.join(parsed.dir, `${sourceStem}${parsed.ext}`),
+      ...(pattern.kind === 'versionControlDiff' && match[2]
+        ? { commitHash: match[2] }
+        : {}),
     };
   }
 

@@ -25,6 +25,7 @@ import {
   showLoggedErrorMessage,
   toErrorMessage,
 } from '@frontend/ui/errorHandlingUtils';
+import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewInboundMessage } from '@shared/schemas';
@@ -33,11 +34,7 @@ import {
   type CurrentFileType,
   type ExtendedDocumentFileType,
 } from '@shared/schemas/fileTypes';
-import {
-  WorkspaceFS,
-  parseLatexDiffMetadata,
-  deriveBaseFileFromLatexDiff,
-} from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 
 import { getConfig } from '@utils/config';
 import { getFileStem } from '@utils/core';
@@ -208,7 +205,9 @@ export class FileManager extends BaseWebviewManager {
     }
 
     if (fileType === 'base') {
-      const derivedBaseFile = deriveBaseFileFromLatexDiff(currentOpenFile);
+      const artifact = detectGeneratedLatexdiffArtifact(currentOpenFile);
+      const derivedBaseFile =
+        artifact?.kind === 'versionControlDiff' ? artifact.sourcePath : null;
       const derivedBaseFileExists = derivedBaseFile
         ? await WorkspaceFS.exists(derivedBaseFile)
         : false;
@@ -264,12 +263,12 @@ export class FileManager extends BaseWebviewManager {
 
   private async maybeSelectCommitFromDiffFile(filePath: string): Promise<void> {
     const fileName = path.basename(filePath);
-    const latexDiffMetadata = parseLatexDiffMetadata(filePath);
-    if (!latexDiffMetadata) {
+    const artifact = detectGeneratedLatexdiffArtifact(filePath);
+    if (artifact?.kind !== 'versionControlDiff' || !artifact.commitHash) {
       return;
     }
 
-    const { commitHash } = latexDiffMetadata;
+    const { commitHash } = artifact;
     const commitLabel = await vscode.commands.executeCommand<string | null>(
       'texra.findCommitInHistory',
       commitHash,

@@ -17,6 +17,16 @@ describe('detectGeneratedLatexdiffArtifact', () => {
       expected: {
         kind: 'versionControlDiff',
         sourcePath: path.join('/paper', 'main.tex'),
+        commitHash: 'ea268c1',
+      },
+    },
+    {
+      label: 'latexdiff-vc files with a minimum-length abbreviated hash',
+      input: '/paper/main-diffea26.tex',
+      expected: {
+        kind: 'versionControlDiff',
+        sourcePath: path.join('/paper', 'main.tex'),
+        commitHash: 'ea26',
       },
     },
     {
