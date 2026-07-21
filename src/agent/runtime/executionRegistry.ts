@@ -267,6 +267,18 @@ export class ExecutionRegistry {
   /** Register an execution handle. */
   track(handle: ExecutionHandle): void {
     this.assertActive();
+    const previous = this.handles.get(handle.executionId);
+    if (
+      previous instanceof AgentExecutionHandle &&
+      handle instanceof AgentExecutionHandle &&
+      previous.waitingTerminationStarted
+    ) {
+      // A resumed lifecycle can replace its suspended predecessor while the
+      // predecessor's asynchronous waiting cleanup is still in progress. The
+      // stop already claimed that execution, so carry it across the ownership
+      // handoff instead of allowing the successor to revive the run.
+      handle.interrupt();
+    }
     this.handles.set(handle.executionId, handle);
     if (handle instanceof AgentExecutionHandle) {
       if (handle.isChildExecution) {
@@ -1012,6 +1024,14 @@ export class ExecutionRegistry {
         'Waiting-execution cleanup failed; continuing terminal persistence',
         { data: { executionId: handle.executionId, error } },
       );
+    }
+
+    if (this.handles.get(handle.executionId) !== handle) {
+      // `track` transfers the pending stop to a resumed successor. The old
+      // handle still needs its private result settled, but it no longer owns
+      // the shared stream, execution metadata, or lease.
+      handle.settleResult(cancelledResult);
+      return;
     }
 
     if (handle.executionLeaseLost) {

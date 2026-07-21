@@ -498,6 +498,60 @@ describe('executionRegistry', () => {
     }
   });
 
+  it('hands a waiting stop to a successor tracked during cleanup', async () => {
+    storageMocks.finalizeExecution.mockClear();
+    const streamStatus = new StreamStatusMachine();
+    const publishResult = vi.fn();
+    const registry = new ExecutionRegistry({ streamStatus, publishResult });
+    const executionId = 'exec-waiting-stop-handoff' as ExecutionId;
+    const childStreamId = 'child-waiting-stop-handoff' as StreamTabId;
+    let finishCleanup = (): void => undefined;
+    const cleanupGate = new Promise<void>((resolve) => {
+      finishCleanup = resolve;
+    });
+
+    try {
+      const previous = createHandle(
+        executionId,
+        'parent-waiting-stop-handoff' as StreamTabId,
+        childStreamId,
+        createRecordingHost().host,
+      );
+      registry.track(previous);
+      previous.registerWaitingCleanup(() => cleanupGate);
+      seedStreamStatusForTest(
+        streamStatus,
+        childStreamId,
+        STREAM_STATUS.WAITING,
+      );
+
+      expect(registry.kill(executionId)).toBe(true);
+
+      const successor = createHandle(
+        executionId,
+        'parent-waiting-stop-handoff' as StreamTabId,
+        childStreamId,
+        createRecordingHost().host,
+      );
+      successor.enablePendingInterrupt();
+      registry.track(successor);
+
+      expect(successor.hasPendingInterrupt).toBe(true);
+      finishCleanup();
+      await expect(previous.result).resolves.toMatchObject({
+        type: 'result',
+        outcome: RUN_OUTCOME.CANCELLED,
+      });
+
+      expect(registry.getHandle(executionId)).toBe(successor);
+      expect(publishResult).not.toHaveBeenCalled();
+      expect(storageMocks.finalizeExecution).not.toHaveBeenCalled();
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.WAITING);
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it('settles waiting termination when detached publication throws', async () => {
     const streamStatus = new StreamStatusMachine();
     const publishFailure = new Error('terminal subscriber failed');
