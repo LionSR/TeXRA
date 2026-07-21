@@ -84,6 +84,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
   private pendingInterrupt = false;
   private waitingCleanups?: Set<() => void | Promise<void>>;
   private waitingCleanupCompletion: Promise<void> = Promise.resolve();
+  private _waitingTerminationStarted = false;
   private _executionLeaseLost = false;
 
   /** Stable tool name for UI identification (e.g. "bash", "codex"). */
@@ -279,6 +280,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
   runWaitingCleanup(): boolean {
     const cleanups = this.waitingCleanups;
     if (!cleanups || cleanups.size === 0) return false;
+    this._waitingTerminationStarted = true;
     this.waitingCleanups = undefined;
     this.waitingCleanupCompletion = Promise.all(
       [...cleanups].map(async (cleanup) => cleanup()),
@@ -288,6 +290,10 @@ export class AgentExecutionHandle implements ExecutionHandle {
     // durable finalization but must not create an unhandled rejection.
     void this.waitingCleanupCompletion.catch(() => undefined);
     return true;
+  }
+
+  get waitingTerminationStarted(): boolean {
+    return this._waitingTerminationStarted;
   }
 
   waitForWaitingCleanup(): Promise<void> {

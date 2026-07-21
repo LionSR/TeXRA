@@ -12,6 +12,7 @@ import {
   resumeToolUseFromResumeData,
   type SubagentRunOptions,
 } from './executeAgent';
+import { AgentExecutionHandle } from './ExecutionHandle';
 import { ResumeAdmissionCancelledError } from './resumeAdmission';
 import { defaultSession } from './SessionHandle';
 import type { ToolUseResumeData } from './SessionResumeRetrieval';
@@ -75,6 +76,14 @@ export async function resumeQueuedToolUseFromResumeData(
   const session = options.session ?? defaultSession();
   const streamStatus = session.status;
   const followUpsQueue = session.followUps;
+
+  const existingHandle = session.executions.getHandle(resume.executionId);
+  if (
+    existingHandle instanceof AgentExecutionHandle &&
+    existingHandle.waitingTerminationStarted
+  ) {
+    return false;
+  }
 
   followUpsQueue.acquire(streamId);
   streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
