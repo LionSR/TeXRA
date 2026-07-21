@@ -56,6 +56,10 @@ export type ExecutionLeasePresence =
   | { readonly status: 'owned'; readonly heartbeatAt: number }
   | { readonly status: 'foreign'; readonly heartbeatAt: number };
 
+export type OwnedExecutionLeaseScope = <T>(
+  operation: () => T | Promise<T>,
+) => T | Promise<T>;
+
 export class ExecutionLeaseActiveError extends Error {
   constructor(
     readonly executionId: ExecutionId,
@@ -74,7 +78,7 @@ export class ExecutionLeaseLostError extends Error {
 }
 
 const ownedLeases = new Map<string, OwnedExecutionLease>();
-const fencedOwnershipKeys = new Set<string>();
+const executionOwnership = new AsyncLocalStorage<ReadonlyMap<string, string>>();
 const maintenanceExecutions = new AsyncLocalStorage<ReadonlySet<string>>();
 let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -84,6 +88,16 @@ function storageRoot(): string {
 
 function ownershipKey(root: string, executionId: ExecutionId): string {
   return `${root}\0${executionId}`;
+}
+
+/** Prevent an execution-owned continuation from acting on a later generation. */
+function currentScopeOwnsLease(lease: OwnedExecutionLease): boolean {
+  const ownership = executionOwnership.getStore();
+  return (
+    ownership === undefined ||
+    ownership.get(ownershipKey(lease.storageRoot, lease.executionId)) ===
+      lease.ownerToken
+  );
 }
 
 function leasePath(root: string, executionId: ExecutionId): string {
@@ -188,12 +202,11 @@ async function readPersistedExecutionLiveness(
 
 function forgetOwnedLease(
   lease: OwnedExecutionLease,
-  options: { notifyLoss?: boolean; fenceWrites?: boolean } = {},
+  options: { notifyLoss?: boolean } = {},
 ): void {
   const key = ownershipKey(lease.storageRoot, lease.executionId);
   if (ownedLeases.get(key) === lease) {
     ownedLeases.delete(key);
-    if (options.fenceWrites) fencedOwnershipKeys.add(key);
     lease.resolveReleased();
     if (options.notifyLoss) {
       for (const listener of lease.lossListeners) {
@@ -220,7 +233,7 @@ async function performHeartbeat(lease: OwnedExecutionLease): Promise<void> {
     async () => {
       const current = await readLease(lease.executionId, lease.storageRoot);
       if (current?.ownerToken !== lease.ownerToken) {
-        forgetOwnedLease(lease, { notifyLoss: true, fenceWrites: true });
+        forgetOwnedLease(lease, { notifyLoss: true });
         return;
       }
       await writeLease(
@@ -268,7 +281,7 @@ function handleHeartbeatFailure(
     hasErrorCode(error, 'ECOMPROMISED') ||
     Date.now() - lease.lastConfirmedHeartbeatAt > EXECUTION_LEASE_STALE_MS;
   if (ownershipUnprovable) {
-    forgetOwnedLease(lease, { notifyLoss: true, fenceWrites: true });
+    forgetOwnedLease(lease, { notifyLoss: true });
   }
   logger.warn(
     CHANNEL,
@@ -276,7 +289,7 @@ function handleHeartbeatFailure(
     {
       data: {
         error,
-        ownershipFenced: ownershipUnprovable,
+        ownershipLost: ownershipUnprovable,
       },
     },
   );
@@ -305,7 +318,6 @@ function rememberOwnership(
     durabilityFailed: false,
   };
   ownedLeases.set(ownershipKey(root, executionId), lease);
-  fencedOwnershipKeys.delete(ownershipKey(root, executionId));
   if (!heartbeatTimer) {
     heartbeatTimer = setInterval(() => {
       for (const owned of ownedLeases.values()) {
@@ -334,7 +346,9 @@ export function onOwnedExecutionLeaseLost(
 
 /** Whether this process still owns the lease in the active storage root. */
 export function ownsExecutionLease(executionId: ExecutionId): boolean {
-  return ownedLeases.has(ownershipKey(storageRoot(), executionId));
+  const key = ownershipKey(storageRoot(), executionId);
+  const lease = ownedLeases.get(key);
+  return lease !== undefined && currentScopeOwnsLease(lease);
 }
 
 async function runWithValidatedOwnership<T>(
@@ -346,7 +360,7 @@ async function runWithValidatedOwnership<T>(
     async () => {
       const current = await readLease(lease.executionId, lease.storageRoot);
       if (current?.ownerToken !== lease.ownerToken) {
-        forgetOwnedLease(lease, { notifyLoss: true, fenceWrites: true });
+        forgetOwnedLease(lease, { notifyLoss: true });
         throw new ExecutionLeaseLostError(lease.executionId);
       }
       return operation();
@@ -355,12 +369,68 @@ async function runWithValidatedOwnership<T>(
   );
 }
 
+/**
+ * Carry this process's exact lease generation through asynchronous run work.
+ * A continuation from a displaced owner keeps its original token and cannot
+ * borrow a later local owner's lease for the same execution id.
+ */
+export function runWithOwnedExecutionLease<T>(
+  executionId: ExecutionId,
+  operation: () => T | Promise<T>,
+): T | Promise<T> {
+  return captureOwnedExecutionLease(executionId)(operation);
+}
+
+/** Capture the current generation so a delayed lifecycle root cannot borrow its successor. */
+export function captureOwnedExecutionLease(
+  executionId: ExecutionId,
+): OwnedExecutionLeaseScope {
+  const root = storageRoot();
+  const key = ownershipKey(root, executionId);
+  const lease = ownedLeases.get(key);
+  if (!lease || lease.releasing) {
+    throw new ExecutionLeaseLostError(executionId);
+  }
+  const currentOwnership = executionOwnership.getStore();
+  const currentOwnerToken = currentOwnership?.get(key);
+  if (
+    currentOwnerToken !== undefined &&
+    currentOwnerToken !== lease.ownerToken
+  ) {
+    throw new ExecutionLeaseLostError(executionId);
+  }
+  const ownerToken = lease.ownerToken;
+  return <T>(operation: () => T | Promise<T>): T | Promise<T> => {
+    const currentLease = ownedLeases.get(key);
+    if (currentLease?.ownerToken !== ownerToken || currentLease.releasing) {
+      throw new ExecutionLeaseLostError(executionId);
+    }
+    const ownership = new Map(executionOwnership.getStore());
+    ownership.set(key, ownerToken);
+    return executionOwnership.run(ownership, operation);
+  };
+}
+
+/** Return undefined only for an unleased run; stale ambient ownership throws. */
+export function captureOwnedExecutionLeaseIfPresent(
+  executionId: ExecutionId,
+): OwnedExecutionLeaseScope | undefined {
+  const key = ownershipKey(storageRoot(), executionId);
+  if (executionOwnership.getStore()?.has(key)) {
+    return captureOwnedExecutionLease(executionId);
+  }
+  return ownsExecutionLease(executionId)
+    ? captureOwnedExecutionLease(executionId)
+    : undefined;
+}
+
 /** Refresh and validate local ownership at a short durability boundary. */
 export async function renewOwnedExecutionLease(
   executionId: ExecutionId,
 ): Promise<void> {
-  const lease = ownedLeases.get(ownershipKey(storageRoot(), executionId));
-  if (!lease || lease.releasing) {
+  const key = ownershipKey(storageRoot(), executionId);
+  const lease = ownedLeases.get(key);
+  if (!lease || lease.releasing || !currentScopeOwnsLease(lease)) {
     throw new ExecutionLeaseLostError(executionId);
   }
   await heartbeat(lease);
@@ -381,14 +451,31 @@ export async function runWithExecutionLeaseWriteFence<T>(
   executionId: ExecutionId,
   operation: () => Promise<T>,
 ): Promise<T> {
-  const key = ownershipKey(storageRoot(), executionId);
+  const root = storageRoot();
+  const key = ownershipKey(root, executionId);
   if (maintenanceExecutions.getStore()?.has(key)) return operation();
   const lease = ownedLeases.get(key);
-  if (lease) return runWithValidatedOwnership(lease, operation);
-  if (fencedOwnershipKeys.has(key)) {
+  const ownerToken = executionOwnership.getStore()?.get(key);
+  if (lease && ownerToken === undefined) {
     throw new ExecutionLeaseLostError(executionId);
   }
-  return operation();
+  if (
+    ownerToken !== undefined &&
+    (lease?.ownerToken !== ownerToken || lease.releasing)
+  ) {
+    throw new ExecutionLeaseLostError(executionId);
+  }
+  if (lease) return runWithValidatedOwnership(lease, operation);
+  return withLeaseLock(
+    executionId,
+    async () => {
+      if (await readLease(executionId, root)) {
+        throw new ExecutionLeaseLostError(executionId);
+      }
+      return operation();
+    },
+    root,
+  );
 }
 
 function acquireExecutionLease(
@@ -467,7 +554,8 @@ export async function releaseOwnedExecutionLease(
   executionId: ExecutionId,
 ): Promise<void> {
   const ownerships = [...ownedLeases.values()].filter(
-    (lease) => lease.executionId === executionId,
+    (lease) =>
+      lease.executionId === executionId && currentScopeOwnsLease(lease),
   );
   await Promise.all(ownerships.map(releaseOwnership));
 }
@@ -480,7 +568,9 @@ export async function releaseOwnedExecutionLease(
 export function abandonOwnedExecutionLease(executionId: ExecutionId): void {
   const root = storageRoot();
   const lease = ownedLeases.get(ownershipKey(root, executionId));
-  if (lease) forgetOwnedLease(lease, { fenceWrites: true });
+  if (lease && currentScopeOwnsLease(lease)) {
+    forgetOwnedLease(lease);
+  }
 }
 
 /** Prevent release after a required execution artifact failed to persist. */
@@ -488,7 +578,9 @@ export function markOwnedExecutionLeaseUndurable(
   executionId: ExecutionId,
 ): void {
   const lease = ownedLeases.get(ownershipKey(storageRoot(), executionId));
-  if (lease) lease.durabilityFailed = true;
+  if (lease && currentScopeOwnsLease(lease)) {
+    lease.durabilityFailed = true;
+  }
 }
 
 /** Release a durable execution; otherwise stop renewal and retain its record. */
@@ -543,8 +635,6 @@ export async function waitForOwnedExecutionLeaseRelease(
 async function releaseOwnership(ownership: OwnedExecutionLease): Promise<void> {
   const root = ownership.storageRoot;
   const { executionId } = ownership;
-  let ownershipLost = false;
-  let releaseFailed = false;
   ownership.releasing = true;
   await ownership.heartbeatInFlight?.catch(() => undefined);
   if (ownedLeases.get(ownershipKey(root, executionId)) !== ownership) {
@@ -556,7 +646,6 @@ async function releaseOwnership(ownership: OwnedExecutionLease): Promise<void> {
       async () => {
         const current = await readLease(executionId, root);
         if (current?.ownerToken !== ownership.ownerToken) {
-          ownershipLost = true;
           return;
         }
         await StorageFS.delete(leasePath(root, executionId));
@@ -565,13 +654,10 @@ async function releaseOwnership(ownership: OwnedExecutionLease): Promise<void> {
     );
   } catch (error) {
     if (!isFileNotFoundError(error)) {
-      releaseFailed = true;
       throw error;
     }
   } finally {
-    forgetOwnedLease(ownership, {
-      fenceWrites: ownershipLost || releaseFailed,
-    });
+    forgetOwnedLease(ownership);
   }
 }
 
@@ -623,7 +709,7 @@ export async function runWithInactiveExecutionLease<T>(
         return { status: 'active', heartbeatAt: current.heartbeatAt };
       }
       if (local) {
-        forgetOwnedLease(local, { notifyLoss: true, fenceWrites: true });
+        forgetOwnedLease(local, { notifyLoss: true });
       }
       if (liveness.status === 'active') {
         return { status: 'active', heartbeatAt: liveness.heartbeatAt };

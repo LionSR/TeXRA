@@ -5,7 +5,11 @@ import {
   finalizeExecution,
   registerExecution,
 } from '@agent/storage';
-import { markOwnedExecutionLeaseUndurable } from '@agent/storage/executionLease';
+import {
+  captureOwnedExecutionLease,
+  markOwnedExecutionLeaseUndurable,
+  type OwnedExecutionLeaseScope,
+} from '@agent/storage/executionLease';
 
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
@@ -38,6 +42,8 @@ export interface RunAgentOptions extends Pick<
   openWorkflowOutput?: (result: WorkflowFlowResult) => Promise<void>;
   /** Persist host-owned final artifacts while this run still owns its lease. */
   beforeLeaseRelease?: () => Promise<void>;
+  /** Bind host callbacks that may run outside the agent's async context. */
+  onExecutionLeaseAcquired?: (scope: OwnedExecutionLeaseScope) => void;
   registerExecution?: boolean;
   /** Recheck canonical admission atomically while acquiring a resumed lease. */
   canAcquireResumeLease?: () => boolean;
@@ -72,6 +78,7 @@ export async function runAgent(
   const {
     openWorkflowOutput,
     beforeLeaseRelease,
+    onExecutionLeaseAcquired,
     registerExecution: registerExecutionOption,
     canAcquireResumeLease,
     preferHelperModel,
@@ -109,93 +116,97 @@ export async function runAgent(
     }
   }
 
-  let lifecycleStarted = false;
-  let runResult: AgentFlowResult | undefined;
-  let runFailure: { error: unknown } | undefined;
-  let artifactsDurable = false;
-  const callerOnRun = executeAgentOptions.onRun;
-  try {
+  const runWithOwnership = captureOwnedExecutionLease(executionId);
+  onExecutionLeaseAcquired?.(runWithOwnership);
+  return await runWithOwnership(async () => {
+    let lifecycleStarted = false;
+    let runResult: AgentFlowResult | undefined;
+    let runFailure: { error: unknown } | undefined;
+    let artifactsDurable = false;
+    const callerOnRun = executeAgentOptions.onRun;
     try {
-      const result = await executeAgent(config, executionId, {
-        ...executeAgentOptions,
-        onRun: async (handle) => {
-          lifecycleStarted = true;
-          await callerOnRun?.(handle);
-        },
-      });
-      if (result.category === 'workflow') {
-        await openWorkflowOutput?.(result);
-      }
-      runResult = result;
-    } catch (error) {
-      runFailure = { error };
-      if (shouldRegister && !lifecycleStarted) {
-        try {
-          const finalization = await finalizeExecution({
-            executionId,
-            terminalStatus: EXECUTION_STATUS.ERROR,
-            flowRecord: 'delete',
-          });
-          if (finalization.status === 'failed') {
+      try {
+        const result = await executeAgent(config, executionId, {
+          ...executeAgentOptions,
+          onRun: async (handle) => {
+            lifecycleStarted = true;
+            await callerOnRun?.(handle);
+          },
+        });
+        if (result.category === 'workflow') {
+          await openWorkflowOutput?.(result);
+        }
+        runResult = result;
+      } catch (error) {
+        runFailure = { error };
+        if (shouldRegister && !lifecycleStarted) {
+          try {
+            const finalization = await finalizeExecution({
+              executionId,
+              terminalStatus: EXECUTION_STATUS.ERROR,
+              flowRecord: 'delete',
+            });
+            if (finalization.status === 'failed') {
+              markOwnedExecutionLeaseUndurable(executionId);
+              runFailure = {
+                error: new AggregateError(
+                  [error, finalization.error],
+                  `Execution ${executionId} failed before lifecycle startup and its error status could not be persisted`,
+                ),
+              };
+            }
+          } catch (finalizationError) {
             markOwnedExecutionLeaseUndurable(executionId);
             runFailure = {
               error: new AggregateError(
-                [error, finalization.error],
+                [error, finalizationError],
                 `Execution ${executionId} failed before lifecycle startup and its error status could not be persisted`,
               ),
             };
           }
-        } catch (finalizationError) {
-          markOwnedExecutionLeaseUndurable(executionId);
-          runFailure = {
-            error: new AggregateError(
-              [error, finalizationError],
-              `Execution ${executionId} failed before lifecycle startup and its error status could not be persisted`,
-            ),
-          };
         }
       }
-    }
 
-    const artifactFailures: unknown[] = [];
-    try {
-      await beforeLeaseRelease?.();
-    } catch (error) {
-      artifactFailures.push(error);
-    }
-    try {
-      await flushOwnedExecutionArtifacts(runSession, executionId);
-    } catch (error) {
-      artifactFailures.push(error);
-    }
-    artifactsDurable = artifactFailures.length === 0;
-    const artifactFailure =
-      artifactFailures.length === 1
-        ? artifactFailures[0]
-        : new AggregateError(
-            artifactFailures,
-            `Execution ${executionId} has multiple final artifact failures`,
-          );
-
-    if (runFailure) {
-      if (artifactFailures.length > 0) {
-        throw new AggregateError(
-          [runFailure.error, artifactFailure],
-          `Execution ${executionId} failed and its final artifacts could not be persisted`,
-        );
+      const artifactFailures: unknown[] = [];
+      try {
+        await beforeLeaseRelease?.();
+      } catch (error) {
+        artifactFailures.push(error);
       }
-      throw runFailure.error;
+      try {
+        await flushOwnedExecutionArtifacts(runSession, executionId);
+      } catch (error) {
+        artifactFailures.push(error);
+      }
+      artifactsDurable = artifactFailures.length === 0;
+      const artifactFailure =
+        artifactFailures.length === 1
+          ? artifactFailures[0]
+          : new AggregateError(
+              artifactFailures,
+              `Execution ${executionId} has multiple final artifact failures`,
+            );
+
+      if (runFailure) {
+        if (artifactFailures.length > 0) {
+          throw new AggregateError(
+            [runFailure.error, artifactFailure],
+            `Execution ${executionId} failed and its final artifacts could not be persisted`,
+          );
+        }
+        throw runFailure.error;
+      }
+      if (artifactFailures.length > 0) throw artifactFailure;
+      if (!runResult) {
+        throw new Error(`Execution ${executionId} finished without a result.`);
+      }
+      return runResult;
+    } finally {
+      if (artifactsDurable) {
+        await completeOwnedExecutionLease(executionId);
+      } else {
+        abandonOwnedExecutionLease(executionId);
+      }
     }
-    if (artifactFailures.length > 0) throw artifactFailure;
-    if (!runResult) {
-      throw new Error(`Execution ${executionId} finished without a result.`);
-    }
-    return runResult;
-  } finally {
-    if (artifactsDurable) {
-      await completeOwnedExecutionLease(executionId);
-    } else {
-      abandonOwnedExecutionLease(executionId);
-    }
-  }
+  });
 }

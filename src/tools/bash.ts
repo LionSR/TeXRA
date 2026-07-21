@@ -9,6 +9,7 @@ import {
   releaseOwnedExecutionLeaseAfterFailure,
 } from '@agent/storage';
 import {
+  captureOwnedExecutionLease,
   markOwnedExecutionLeaseUndurable,
   onOwnedExecutionLeaseLost,
 } from '@agent/storage/executionLease';
@@ -269,17 +270,20 @@ export class BashTool extends defineTool({
       parentExecutionId,
       'process',
     );
+    const runWithOwnership = captureOwnedExecutionLease(executionId);
 
-    let childStream: ReturnType<typeof createChildStream>;
+    let childStream!: ReturnType<typeof createChildStream>;
     try {
-      childStream = createChildStream(executionId, parentStreamId, {
-        streamPrefix: 'bash@tool',
-        streamCategory: AgentCategory.ToolUse,
-        agentName: 'bash',
-        description: command,
-        config: syntheticConfig,
-        toolName: 'bash',
-        runtimeHost,
+      runWithOwnership(() => {
+        childStream = createChildStream(executionId, parentStreamId, {
+          streamPrefix: 'bash@tool',
+          streamCategory: AgentCategory.ToolUse,
+          agentName: 'bash',
+          description: command,
+          config: syntheticConfig,
+          toolName: 'bash',
+          runtimeHost,
+        });
       });
     } catch (error) {
       throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
@@ -322,42 +326,46 @@ export class BashTool extends defineTool({
     };
 
     const startedAt = Date.now();
-    const promise = executeCommand(command, {
-      cwd,
-      timeout: timeoutMs,
-      buffer: false,
-      onPid: (p) => {
-        session.setPid(p);
-      },
-      onStdout: (chunk) => {
-        stdoutTotalChars += chunk.length;
-        stdoutHead = appendHead(
-          stdoutHead,
-          chunk,
-          BACKGROUND_OUTPUT_HEAD_CHARS,
-        );
-        stdoutTail = appendTail(
-          stdoutTail,
-          chunk,
-          BACKGROUND_OUTPUT_TAIL_CHARS,
-        );
-        logChunk(chunk, 'info');
-      },
-      onStderr: (chunk) => {
-        stderrTotalChars += chunk.length;
-        stderrHead = appendHead(
-          stderrHead,
-          chunk,
-          BACKGROUND_OUTPUT_HEAD_CHARS,
-        );
-        stderrTail = appendTail(
-          stderrTail,
-          chunk,
-          BACKGROUND_OUTPUT_TAIL_CHARS,
-        );
-        logChunk(chunk, 'warn');
-      },
-    });
+    const promise = Promise.resolve(
+      runWithOwnership(() =>
+        executeCommand(command, {
+          cwd,
+          timeout: timeoutMs,
+          buffer: false,
+          onPid: (p) => {
+            session.setPid(p);
+          },
+          onStdout: (chunk) => {
+            stdoutTotalChars += chunk.length;
+            stdoutHead = appendHead(
+              stdoutHead,
+              chunk,
+              BACKGROUND_OUTPUT_HEAD_CHARS,
+            );
+            stdoutTail = appendTail(
+              stdoutTail,
+              chunk,
+              BACKGROUND_OUTPUT_TAIL_CHARS,
+            );
+            logChunk(chunk, 'info');
+          },
+          onStderr: (chunk) => {
+            stderrTotalChars += chunk.length;
+            stderrHead = appendHead(
+              stderrHead,
+              chunk,
+              BACKGROUND_OUTPUT_HEAD_CHARS,
+            );
+            stderrTail = appendTail(
+              stderrTail,
+              chunk,
+              BACKGROUND_OUTPUT_TAIL_CHARS,
+            );
+            logChunk(chunk, 'warn');
+          },
+        }),
+      ),
+    );
 
     const finalizeBackground = (
       options?: Parameters<typeof childStream.finalize>[0],
@@ -462,7 +470,7 @@ export class BashTool extends defineTool({
       await wakeParentFollowUp(enqueueResult);
     };
 
-    void (async () => {
+    void runWithOwnership(async () => {
       try {
         const outcome = await promise.then(
           (result) => ({ ok: true as const, result }),
@@ -556,7 +564,7 @@ export class BashTool extends defineTool({
           stopWatchingLease();
         }
       }
-    })();
+    });
 
     return {
       status: 'executed',

@@ -50,6 +50,12 @@ vi.mock('@agent/storage', () => ({
   getExecutionStore: mocks.getExecutionStore,
 }));
 
+vi.mock('@agent/storage/executionLease', () => ({
+  captureOwnedExecutionLease:
+    (_executionId: ExecutionId) => (operation: () => unknown) =>
+      operation(),
+}));
+
 vi.mock('@utils/files/taskRunStorage', () => ({
   ensureRunDir: mocks.ensureRunDir,
 }));
