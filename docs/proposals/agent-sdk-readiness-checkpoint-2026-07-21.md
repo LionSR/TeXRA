@@ -97,7 +97,7 @@ lands **two verified** improvements rather than only recording deferrals — the
 vestigial `bestConnectionMethodAnthropic` duplication and the helper-model
 precedence duplication. The
 candidate the core reader mis-flagged as "dead, zero callers" (A1) is not dead —
-but it *is* genuine vestigial duplication, and it was collapsed with the full
+but it _is_ genuine vestigial duplication, and it was collapsed with the full
 gate suite green.
 
 **What it was.** `bestConnectionMethodAnthropic`
@@ -164,8 +164,8 @@ deferrals — draining the standing backlog one carefully-gated change at a time
 rather than deferring the whole set indefinitely. The discipline is **verify
 before landing** (the incomplete-grep rejections above are why): confirm caller
 counts and test coverage in-tree, preserve behavior under the gate suite, and
-only then land. "Reviewed-train" now means *verify before landing*, not *never
-land unattended*.
+only then land. "Reviewed-train" now means _verify before landing_, not _never
+land unattended_.
 
 ## Genuinely-new / reviewed-train candidates — surfaced by this fan-out
 
