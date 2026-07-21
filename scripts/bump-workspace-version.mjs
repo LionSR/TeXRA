@@ -2,6 +2,7 @@
 
 import fs from 'node:fs';
 import process from 'node:process';
+import { parseArgs as parseCittyArgs } from 'citty';
 import semver from 'semver';
 
 const MANIFEST_PATHS = [
@@ -19,6 +20,12 @@ const RELEASE_TAG_PREFIX = /^(?:cli-v|v)/;
 // Release trains use patch values 0 through 10; after .10, development moves
 // to the next minor train.
 const MAX_PATCH_VERSION = 10;
+
+const ARGS_DEF = {
+  check: { type: 'boolean', default: false },
+  from: { type: 'string' },
+  version: { type: 'string' },
+};
 
 function printUsage() {
   console.error(
@@ -41,32 +48,28 @@ function fail(message) {
   process.exit(1);
 }
 
+const KNOWN_FLAGS = new Set(Object.keys(ARGS_DEF).map((name) => `--${name}`));
+
 function parseArgs(argv) {
-  const args = {
-    check: false,
-    from: undefined,
-    version: undefined,
-  };
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-
-    if (arg === '--check') {
-      args.check = true;
-      continue;
+  // citty's parser is intentionally lenient about unrecognized flags (it
+  // mirrors node:util's non-strict mode), so reject them ourselves before
+  // handing off — a typo'd flag should fail loudly, not fall through.
+  for (const token of argv) {
+    if (token.startsWith('--') && !KNOWN_FLAGS.has(token)) {
+      fail(`Unknown argument: ${token}`);
     }
+  }
 
-    if (arg === '--from' || arg === '--version') {
-      const value = argv[index + 1];
-      if (value == null || value.startsWith('--')) {
-        fail(`${arg} requires a value.`);
-      }
-      args[arg.slice(2)] = value;
-      index += 1;
-      continue;
-    }
+  let args;
+  try {
+    args = parseCittyArgs(argv, ARGS_DEF);
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  }
 
-    fail(`Unknown argument: ${arg}`);
+  const unknown = args._.filter((token) => token !== '--');
+  if (unknown.length > 0) {
+    fail(`Unknown argument: ${unknown[0]}`);
   }
 
   if ((args.from == null) === (args.version == null)) {

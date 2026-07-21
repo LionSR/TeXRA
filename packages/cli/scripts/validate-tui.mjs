@@ -42,6 +42,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { parseArgs as parseCittyArgs } from 'citty';
 
 const ESC = String.fromCharCode(27);
 const ETX = String.fromCharCode(3); // Ctrl-C
@@ -3309,70 +3310,76 @@ function printScenarioList() {
   console.log(SCENARIOS.map((scenario) => scenario.name).join('\n'));
 }
 
+const PARSE_ARGS_DEF = {
+  help: { type: 'boolean', alias: 'h' },
+  list: { type: 'boolean' },
+  listScenarios: { type: 'boolean' },
+  listSelected: { type: 'boolean' },
+  noBuild: { type: 'boolean' },
+  skipIfMissingDeps: { type: 'boolean' },
+  snapshotDir: { type: 'string' },
+};
+const KNOWN_FLAG_TOKENS = new Set([
+  '--help',
+  '-h',
+  '--list',
+  '--list-scenarios',
+  '--list-selected',
+  '--no-build',
+  '--skip-if-missing-deps',
+  '--snapshot-dir',
+]);
+
 function parseArgs(argv) {
-  const scenarios = [];
-  let snapshotDir;
-  let listSelected = false;
-  let noBuild = false;
-  let skipIfMissingDeps = false;
-  let endOfOptions = false;
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (!endOfOptions && arg === '--') {
-      // pnpm forwards a leading separator to scripts (`pnpm run x -- --flag`).
-      // Treat that package-manager separator as transparent when it precedes a
-      // script option; later `--` still follows normal end-of-options behavior.
-      if (index === 0 && argv[1]?.startsWith('-')) continue;
-      endOfOptions = true;
-      continue;
-    }
-    if (!endOfOptions && (arg === '--help' || arg === '-h')) {
-      printUsage();
-      process.exit(0);
-    }
-    if (!endOfOptions && (arg === '--list' || arg === '--list-scenarios')) {
-      printScenarioList();
-      process.exit(0);
-    }
-    if (!endOfOptions && arg === '--list-selected') {
-      listSelected = true;
-      continue;
-    }
-    if (!endOfOptions && arg === '--no-build') {
-      noBuild = true;
-      continue;
-    }
-    if (!endOfOptions && arg === '--skip-if-missing-deps') {
-      skipIfMissingDeps = true;
-      continue;
-    }
-    if (!endOfOptions && arg === '--snapshot-dir') {
-      const value = argv[index + 1];
-      if (!value) {
-        console.error('[validate-tui] --snapshot-dir requires a directory');
-        process.exit(1);
-      }
-      snapshotDir = path.resolve(process.cwd(), value);
-      index += 1;
-      continue;
-    }
-    if (!endOfOptions && arg?.startsWith('--snapshot-dir=')) {
-      const value = arg.slice('--snapshot-dir='.length);
-      if (!value) {
-        console.error('[validate-tui] --snapshot-dir requires a directory');
-        process.exit(1);
-      }
-      snapshotDir = path.resolve(process.cwd(), value);
-      continue;
-    }
-    if (!endOfOptions && arg?.startsWith('--')) {
-      console.error(`[validate-tui] unknown option: ${arg}`);
+  // pnpm forwards a leading separator to scripts (`pnpm run x -- --flag`).
+  // Treat that package-manager separator as transparent when it precedes a
+  // script option; a later `--` still marks end-of-options below.
+  const rest =
+    argv[0] === '--' && argv[1]?.startsWith('-') ? argv.slice(1) : argv;
+
+  // citty's parser is intentionally lenient about unrecognized flags, so
+  // reject them ourselves before handing off — a typo'd flag should fail
+  // loudly, not silently fall through as a stray positional.
+  for (const token of rest) {
+    if (token === '--') break; // end-of-options marker; rest are positionals
+    const isKnownFlag =
+      KNOWN_FLAG_TOKENS.has(token) || token.startsWith('--snapshot-dir=');
+    if (token.startsWith('-') && !isKnownFlag) {
+      console.error(`[validate-tui] unknown option: ${token}`);
       printUsage(console.error);
       process.exit(1);
     }
-    scenarios.push(arg);
   }
-  return { scenarios, snapshotDir, listSelected, noBuild, skipIfMissingDeps };
+
+  const args = parseCittyArgs(rest, PARSE_ARGS_DEF);
+
+  if (args.help) {
+    printUsage();
+    process.exit(0);
+  }
+  if (args.list || args.listScenarios) {
+    printScenarioList();
+    process.exit(0);
+  }
+
+  let snapshotDir;
+  if (args.snapshotDir !== undefined) {
+    if (!args.snapshotDir) {
+      console.error('[validate-tui] --snapshot-dir requires a directory');
+      process.exit(1);
+    }
+    snapshotDir = path.resolve(process.cwd(), args.snapshotDir);
+  }
+
+  const scenarios = args._.filter((token) => token !== '--');
+
+  return {
+    scenarios,
+    snapshotDir,
+    listSelected: Boolean(args.listSelected),
+    noBuild: Boolean(args.noBuild),
+    skipIfMissingDeps: Boolean(args.skipIfMissingDeps),
+  };
 }
 
 function frameOracleGraphFailure(allScenarios, byName) {
