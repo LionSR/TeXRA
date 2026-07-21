@@ -48,23 +48,23 @@ export function getHelperModelName(): string {
   const configuredModel = platform().globalState.get<string>(
     GlobalStateKey.HELPER_MODEL,
   );
-  if (!isNonEmptyString(configuredModel)) {
-    return DEFAULT_HELPER_MODEL;
-  }
-
-  const resolved = configuredModel.trim();
-  if (resolved === DEFAULT_HELPER_MODEL) return resolved;
-
   const enabledModels = platform().globalState.get<string[]>(
     GlobalStateKey.ENABLED_MODELS,
     [],
   );
-  // An empty/unset enabled-model list means "no restriction" here: accept the
-  // configured model as-is. This differs from the Settings UI, whose candidate
-  // list (`getVisibleModels()`) already substitutes `DEFAULT_MODELS` before it
-  // ever reaches `resolveEffectiveHelperModel`, so it never sees an empty list.
-  if (enabledModels.length === 0) {
-    return resolved;
+
+  // The only runtime-specific divergence from the shared precedence chain: an
+  // empty/unset enabled-model list means "no restriction" here, so a
+  // non-default configured model is accepted as-is. This differs from the
+  // Settings UI, whose candidate list (`getVisibleModels()`) already
+  // substitutes `DEFAULT_MODELS` before it ever reaches
+  // `resolveEffectiveHelperModel`, so it never sees an empty list. Everything
+  // else (empty/whitespace config, the built-in default, validate-against-
+  // candidates, else fall back) defers to the single-source-of-truth chain.
+  if (enabledModels.length === 0 && isNonEmptyString(configuredModel)) {
+    const resolved = configuredModel.trim();
+    if (resolved !== DEFAULT_HELPER_MODEL) return resolved;
   }
-  return resolveEffectiveHelperModel(resolved, enabledModels);
+
+  return resolveEffectiveHelperModel(configuredModel, enabledModels);
 }
