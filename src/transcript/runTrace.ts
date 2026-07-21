@@ -35,7 +35,7 @@ export interface RunTrace {
 export function createRunTrace(
   streamId: StreamTabId,
   store: StreamLogStore,
-  flushers: Set<() => void> = new Set(),
+  flushers: Map<string, () => void> = new Map(),
   ownerKey: string = streamId,
   reservedWriter?: TranscriptWriter,
 ): RunTrace {
@@ -47,9 +47,10 @@ export function createRunTrace(
   });
   const transcript = attachTranscriptRecorder(trace, writer);
 
-  // Register the flush in the run's session-scoped set so shutdown drains
+  // Register the flush by execution so durability boundaries drain only their
+  // own trace, while session shutdown can still drain every trace.
   // only the artifacts belonging to that session.
-  flushers.add(transcript.flushPending);
+  flushers.set(ownerKey, transcript.flushPending);
 
   let disposed = false;
 
@@ -58,7 +59,9 @@ export function createRunTrace(
     dispose: () => {
       if (disposed) return;
       disposed = true;
-      flushers.delete(transcript.flushPending);
+      if (flushers.get(ownerKey) === transcript.flushPending) {
+        flushers.delete(ownerKey);
+      }
       try {
         transcript.unsubscribe();
       } finally {

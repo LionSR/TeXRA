@@ -107,8 +107,8 @@ export class SessionHandle {
   readonly transcripts: StreamLogStore;
   /** Session-owned follow-up queue owner. */
   readonly followUps: ToolUseFollowUpQueue;
-  /** This session's trace-flush callbacks (drained on dispose / shutdown). */
-  readonly flushers: Set<() => void>;
+  /** This session's execution-keyed trace flushers. */
+  readonly flushers: Map<string, () => void>;
   private readonly artifactFlushers = new Set<() => Promise<void>>();
   private pendingArtifactFlush: ArtifactFlushBatch | undefined;
   private artifactFlushWorkerRunning = false;
@@ -163,9 +163,9 @@ export class SessionHandle {
     this.approvals = approvals;
     this.workflowControls =
       init.workflowControls ?? new WorkflowControlRegistry();
-    // Every session owns exactly one trace-flusher set. There is no
+    // Every session owns exactly one trace-flusher map. There is no
     // process-wide registry: a host drains the session it is shutting down.
-    this.flushers = init.flushers ?? new Set<() => void>();
+    this.flushers = init.flushers ?? new Map<string, () => void>();
     executions.attachRootExecutionLeaseRelease((executionId) =>
       releaseExecutionLeaseAfterArtifacts(this, executionId),
     );
@@ -176,10 +176,16 @@ export class SessionHandle {
     return this.interactions.use(interactions);
   }
 
-  /** Drain pending trace writes for this session's streams only. */
-  flushPendingTraces(): void {
+  /** Drain one execution's pending trace, or every trace during shutdown. */
+  flushPendingTraces(ownerKey?: string): void {
     const failures: unknown[] = [];
-    for (const flush of [...this.flushers]) {
+    const flushers =
+      ownerKey === undefined
+        ? [...this.flushers.values()]
+        : [this.flushers.get(ownerKey)].filter(
+            (flush): flush is () => void => flush !== undefined,
+          );
+    for (const flush of flushers) {
       try {
         flush();
       } catch (error) {
@@ -201,8 +207,14 @@ export class SessionHandle {
     return () => this.artifactFlushers.delete(flush);
   }
 
-  /** Persist every buffered session artifact before execution ownership ends. */
-  flushArtifacts(): Promise<void> {
+  /** Persist one execution's trace plus the session's shared artifact stores. */
+  flushArtifacts(ownerKey?: string): Promise<void> {
+    let traceFailure: unknown;
+    try {
+      this.flushPendingTraces(ownerKey);
+    } catch (error) {
+      traceFailure = error;
+    }
     this.pendingArtifactFlush ??= createArtifactFlushBatch();
     const batch = this.pendingArtifactFlush;
     if (!this.artifactFlushWorkerRunning) {
@@ -211,7 +223,18 @@ export class SessionHandle {
         void this.drainArtifactFlushBatches();
       });
     }
-    return batch.promise;
+    if (traceFailure === undefined) return batch.promise;
+    return batch.promise.then(
+      () => {
+        throw traceFailure;
+      },
+      (artifactFailure: unknown) => {
+        throw new AggregateError(
+          [traceFailure, artifactFailure],
+          'Trace and shared artifact writers failed to flush',
+        );
+      },
+    );
   }
 
   /**
@@ -234,22 +257,12 @@ export class SessionHandle {
   }
 
   private async flushArtifactsOnce(): Promise<void> {
-    const failures: unknown[] = [];
-    for (const flush of [...this.flushers]) {
-      try {
-        flush();
-      } catch (error) {
-        failures.push(error);
-      }
-    }
     const writers = [() => this.transcripts.flush(), ...this.artifactFlushers];
     const results = await Promise.allSettled(
       writers.map((flush) => Promise.resolve().then(flush)),
     );
-    failures.push(
-      ...results.flatMap((result) =>
-        result.status === 'rejected' ? [result.reason] : [],
-      ),
+    const failures = results.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : [],
     );
     if (failures.length === 1) throw failures[0];
     if (failures.length > 1) {

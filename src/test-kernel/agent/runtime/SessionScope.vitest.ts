@@ -56,7 +56,7 @@ describe('session-scoped trace flushers (SDK Step 7d PR 3)', () => {
       store,
       sessionB.flushers,
     );
-    sessionB.flushers.add(() => {
+    sessionB.flushers.set('manual', () => {
       drained += 1;
     });
 

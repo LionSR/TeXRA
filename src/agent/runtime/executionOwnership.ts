@@ -17,7 +17,7 @@ export async function flushOwnedExecutionArtifacts(
   executionId: ExecutionId,
 ): Promise<void> {
   await renewOwnedExecutionLease(executionId);
-  await session.flushArtifacts();
+  await session.flushArtifacts(executionId);
   await renewOwnedExecutionLease(executionId);
 }
 

@@ -16,13 +16,13 @@ describe('createRunTrace dispose', () => {
 
   it('removes the flusher from its owning session set on dispose', () => {
     vi.useFakeTimers();
-    const flushers = new Set<() => void>();
+    const flushers = new Map<string, () => void>();
     const handle = createRunTrace('disposed-stream', store, flushers);
     const stream = handle.trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
 
     stream.append('a');
     // Chunk is throttled (49ms window), but the owning session set reaches it.
-    for (const flush of flushers) flush();
+    for (const flush of flushers.values()) flush();
     expect(store.get('disposed-stream')?.getRange(0)[0]?.text).toBe('a');
 
     handle.dispose();
@@ -33,7 +33,7 @@ describe('createRunTrace dispose', () => {
     // it through. The chunk would still flush via its own per-stream timer,
     // so we verify by sampling before the timer fires.
     stream.append('b');
-    for (const flush of flushers) flush();
+    for (const flush of flushers.values()) flush();
     // Only the 'a' chunk should be visible — the 'b' chunk hasn't been
     // pushed because the flusher was unregistered and the throttled timer
     // hasn't fired.

@@ -77,7 +77,7 @@ describe('SessionHandle', () => {
   it('drains trace, transcript, and registered artifact writers together', async () => {
     const session = createTestSession();
     const order: string[] = [];
-    session.flushers.add(() => order.push('trace'));
+    session.flushers.set('exec:trace', () => order.push('trace'));
     vi.spyOn(session.transcripts, 'flush').mockImplementation(async () => {
       order.push('transcript');
     });
@@ -86,12 +86,12 @@ describe('SessionHandle', () => {
     });
 
     try {
-      await session.flushArtifacts();
+      await session.flushArtifacts('exec:trace');
       expect(order).toEqual(['trace', 'transcript', 'snapshot']);
 
       order.length = 0;
       detach();
-      await session.flushArtifacts();
+      await session.flushArtifacts('exec:trace');
       expect(order).toEqual(['trace', 'transcript']);
     } finally {
       session.dispose();
@@ -118,6 +118,30 @@ describe('SessionHandle', () => {
       ]);
       expect(laterWriter).toHaveBeenCalledOnce();
     } finally {
+      session.dispose();
+    }
+  });
+
+  it("keeps one execution's trace failure out of sibling durability", async () => {
+    const session = createTestSession();
+    const traceError = new Error('broken trace');
+    session.flushers.set('exec:broken', () => {
+      throw traceError;
+    });
+    session.flushers.set('exec:sibling', vi.fn());
+    const sharedFlush = vi
+      .spyOn(session.transcripts, 'flush')
+      .mockResolvedValue(undefined);
+
+    try {
+      const broken = session.flushArtifacts('exec:broken');
+      const sibling = session.flushArtifacts('exec:sibling');
+
+      await expect(broken).rejects.toBe(traceError);
+      await expect(sibling).resolves.toBeUndefined();
+      expect(sharedFlush).toHaveBeenCalledOnce();
+    } finally {
+      session.flushers.delete('exec:broken');
       session.dispose();
     }
   });
@@ -313,10 +337,10 @@ describe('SessionHandle', () => {
     const interactions = vi.spyOn(session.interactions, 'dispose');
     const subscriptions = vi.spyOn(session.subscriptions, 'dispose');
     const executions = vi.spyOn(session.executions, 'dispose');
-    session.flushers.add(() => {
+    session.flushers.set('failed', () => {
       throw failure;
     });
-    session.flushers.add(laterFlusher);
+    session.flushers.set('later', laterFlusher);
 
     expect(() => session.dispose()).toThrow(failure);
 

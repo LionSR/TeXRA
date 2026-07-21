@@ -18,10 +18,10 @@ function withStore(
   ) => void,
 ): void {
   const store = StreamLogStore.ephemeral('test');
-  const flushers = new Set<() => void>();
+  const flushers = new Map<string, () => void>();
   const handle = createRunTrace('stream', store, flushers);
   run(store, handle.trace, () => {
-    for (const flush of flushers) flush();
+    for (const flush of flushers.values()) flush();
   });
 }
 

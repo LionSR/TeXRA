@@ -21,6 +21,7 @@ import {
   onOwnedExecutionLeaseLost,
   ownsExecutionLease,
   releaseOwnedExecutionLease,
+  renewOwnedExecutionLease,
   runWithInactiveExecutionLease,
   waitForOwnedExecutionLeaseRelease,
 } from '@agent/storage/executionLease';
@@ -297,6 +298,19 @@ describe('cross-process execution leases', () => {
       releaseHeartbeat();
       vi.useRealTimers();
     }
+  });
+
+  it('retains recent ownership through a transient heartbeat failure', async () => {
+    const executionId = 'e86442' as ExecutionId;
+    await acquire(executionId);
+    vi.spyOn(platform().fileLocks, 'runExclusive').mockRejectedValueOnce(
+      new Error('temporary filesystem failure'),
+    );
+
+    await expect(
+      renewOwnedExecutionLease(executionId),
+    ).resolves.toBeUndefined();
+    expect(ownsExecutionLease(executionId)).toBe(true);
   });
 
   it('serializes deletion with a racing lease acquisition', async () => {

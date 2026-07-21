@@ -239,8 +239,7 @@ function heartbeat(lease: OwnedExecutionLease): Promise<void> {
 
   const work = performHeartbeat(lease)
     .catch((error: unknown) => {
-      handleHeartbeatFailure(lease, error);
-      throw error;
+      if (handleHeartbeatFailure(lease, error)) throw error;
     })
     .finally(() => {
       if (lease.heartbeatInFlight === work) {
@@ -264,7 +263,7 @@ function hasErrorCode(error: unknown, code: string): boolean {
 function handleHeartbeatFailure(
   lease: OwnedExecutionLease,
   error: unknown,
-): void {
+): boolean {
   const ownershipUnprovable =
     hasErrorCode(error, 'ECOMPROMISED') ||
     Date.now() - lease.lastConfirmedHeartbeatAt > EXECUTION_LEASE_STALE_MS;
@@ -281,6 +280,7 @@ function handleHeartbeatFailure(
       },
     },
   );
+  return ownershipUnprovable;
 }
 
 function rememberOwnership(
