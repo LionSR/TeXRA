@@ -58,15 +58,21 @@ union specifiers and unfenced, so the freeze is still worth installing").
   ratchet installed at a genuinely zero baseline exactly as the north-star
   predicted (§3).
 - **R-b (width freeze — the frozen per-host deep-import baseline)** is live as
-  `config/ratchets/host-agent-import-baseline.json` + the enforcement script
-  `packages/cli/scripts/check-host-imports.mjs`, wired as the CLI package's
-  `check:architecture` script. The baseline's own doc string states the R-b
-  contract verbatim ("The ratchet fails only when a host's distinct-specifier
-  count exceeds this baseline; a decrease … is welcome and should shrink this
-  file"), citing issue #7684 R-b. Two companion baselines
-  (`architecture-edges-baseline.json`, `host-agent-mock-baseline.json`) guard
-  adjacent edges. The `#9027` commit ("fix(desktop): preserve host import
-  ratchet") shows the ratchet is actively catching regressions.
+  `config/ratchets/host-agent-import-baseline.json`, enforced by the Vitest
+  architecture suite `src/test-kernel/architecture/hostAgentDeepImportRatchet.vitest.ts`
+  (which reads the baseline, recounts each host's distinct `@agent/*`
+  specifiers, and fails when a host exceeds its pinned count). The baseline's
+  own doc string states the R-b contract verbatim ("The ratchet fails only when
+  a host's distinct-specifier count exceeds this baseline; a decrease … is
+  welcome and should shrink this file"), citing issue #7684 R-b. Two companion
+  baselines (`architecture-edges-baseline.json`, `host-agent-mock-baseline.json`)
+  guard adjacent edges. (Note: `packages/cli/scripts/check-host-imports.mjs`,
+  wired as the CLI `check:architecture` script, is a **separate** boundary
+  checker — it enforces the CLI's `vscode`/`electron`-free + `process.*`-input
+  boundaries, and does **not** read the `@agent/*` width baseline; an earlier
+  draft mis-attributed R-b enforcement to it.) The `#9027` commit
+  ("fix(desktop): preserve host import ratchet") shows the ratchet is actively
+  catching regressions.
 
 This resolves the north-star's "the boundary is eroding while unfenced" concern
 (§3) — the width is no longer merely decelerating (the 07-18 signal) but
@@ -203,14 +209,27 @@ Several map onto already-tracked standing items (noted).
    `googleMessageHelpers` (~1,350 LOC together) is the single largest available
    simplification** _(strategic; gated on the flag retirement, #7097)_.
    Unchanged in substance from the README's standing note: `modelHandlerGoogleGenAI`
-   is a **feature-frozen** fallback reachable only when
+   is a **feature-frozen** fallback that **new** sessions instantiate only when
    `texra.model.useGoogleInteractionsAPI` is explicitly off (default is `true`,
-   `ModelFactory.ts:232`; OpenRouter also wins ahead of it), so in the default
-   configuration it is never instantiated. Its GenAI-only helper module
+   `ModelFactory.ts:232`; OpenRouter also wins ahead of it), so no new run under
+   the default constructs it. Its GenAI-only helper module
    (`googleMessageHelpers.ts`) is imported only by that handler + its test — not
-   shared despite living in the shared `google/` folder. Removing both once the
-   flag retires is the biggest LOC win in the provider layer. Gated on #7097,
-   not unattended-safe (deletes a handler + its tests).
+   shared despite living in the shared `google/` folder. **Caveat (Codex review,
+   P2 — corrects an earlier "default-unreachable" overstatement):** the handler
+   is **not** unreachable under the default. The resume path
+   `createModelHandlerForCompatibilityKey` (`ModelFactory.ts:454-474`)
+   explicitly reconstructs a handler from a persisted transcript's
+   `ModelHandlerCompatibilityKey` so the recorded format wins over today's
+   default route — and `ModelHandlerGoogleGenAI` is a valid persisted key
+   (`inferPersistedModelHandlerCompatibilityKey` can return it). So any existing
+   GenAI-format session still resumes into this handler regardless of the flag.
+   Removing it is therefore **not** a pure "flag retires → delete" win: it must
+   be gated behind a persisted-transcript migration or an explicit
+   compatibility-key-retirement policy, or existing GenAI sessions lose the
+   ability to resume. Still the biggest LOC win in the provider layer, but the
+   gate is transcript-format retirement, not just the config flag. Gated on
+   #7097 + resume-format retirement, not unattended-safe (deletes a handler +
+   its tests).
 
 3. **`ModelHandler.ts` is a ~1,931-line base class tangling ~7 concerns**
    _(MEDIUM; strategic — the standing `runTurn`/`streamTurn`-façade train)_.
@@ -252,18 +271,27 @@ Several map onto already-tracked standing items (noted).
    surface is `cancel` + the policy-unsatisfiable subset of the 6 approval
    gates; everything in the 5 presentation events is ignorable by contract.
 
-6. **`logger/redaction.ts` is partly over-structured / dead-in-prod**
-   _(LOW; reviewed-train — new concrete finding)_. The 14-entry
-   `PROVIDER_KEY_REDACTION_RULES` (`redaction.ts:28-71`) dedupes to ~4 distinct
-   regexes at `PROVIDER_KEY_PATTERNS` (`:73-81`) — the per-provider granularity
-   feeds mostly its own test. The `LogRedactionOptions` / `homeDir` /
-   `workspacePath` path-prefix redaction path (`:83-116`) has **no production
-   caller** — `logUtils.ts:77` always calls `redactSecrets(message)` with no
-   options; only `DesktopLogRedaction.vitest.mts` exercises the options path.
-   Trimming it deletes a **tested** seam and edits provider fixtures →
-   reviewed-train, not unattended-safe. The redaction **core** (JSON-property /
-   assignment / Bearer passes + 4 provider regexes) is single-purpose and
-   correct — keep.
+6. **`logger/redaction.ts` — provider-map granularity is the only soft spot;
+   the options path is load-bearing** _(LOW; reviewed-train — new concrete
+   finding, corrected)_. The 14-entry `PROVIDER_KEY_REDACTION_RULES`
+   (`redaction.ts:28-71`) dedupes to ~4 distinct regexes at
+   `PROVIDER_KEY_PATTERNS` (`:73-81`) — the per-provider granularity feeds mostly
+   its own test, a candidate to flatten. **Correction (Codex review, P2 — an
+   earlier draft wrongly called the options path "dead-in-prod"):** the
+   `LogRedactionOptions` / `homeDir` / `workspacePath` path-prefix redaction path
+   is **not** dead — it has a live, security-relevant production caller.
+   `packages/desktop/src/main/desktopAppLog.ts:63-81` (`readDesktopLogSnapshot`)
+   builds the options via `makeDesktopLogRedactionOptions(...)` and passes them
+   to `redactSecrets(path, opts)` / `redactSecrets(text, opts)` for the desktop
+   log-viewer snapshot (path, contents, and read-error text). Trimming the
+   path-prefix redaction would stop replacing home/workspace prefixes in those
+   snapshots — **leaking users' local paths** in the desktop log viewer and
+   copied diagnostics. So it is not a cleanup candidate at all: **keep the
+   options path.** (This is the same `src/`-only-grep error the audit agents kept
+   making — the logger reader missed the `packages/desktop` caller.) The only
+   real (low-value) trim is the provider-map granularity; the redaction **core**
+   (JSON-property / assignment / Bearer passes + 4 provider regexes) is
+   single-purpose and correct — keep.
 
 7. **`AgentFlowResult` → `AgentFinalResult` two-schema rename + a third builder**
    _(LOW; reviewed-train — record only)_. `buildAgentFinalResult`
@@ -275,11 +303,12 @@ Several map onto already-tracked standing items (noted).
    the canonical names, collapsible when the legacy persisted shape can be
    dropped. Crosses `storage/` + a schema change with tests → reviewed-train.
    (The shared projection helper `projectToolUseFinalTextFields` is legitimately
-   2-caller — keep.) Minor sibling notes: `inferAndLogPersistedModelHandlerCompatibilityKey`
-   (single-caller log wrapper, one caller `executeAgent.ts:505`) and the
-   duplicated helper-model precedence between `getHelperModelName` /
-   `resolveEffectiveHelperModel` in `helperModelName.ts` — both borderline,
-   both in the resume/helper path, reviewed-train.
+   2-caller — keep.) _(The two sibling candidates an earlier draft listed here —
+   `inferAndLogPersistedModelHandlerCompatibilityKey` and the helper-model
+   precedence duplication — have been resolved elsewhere in this doc and are
+   **not** open reviewed-train work: the former is a 4-caller tested helper kept
+   as-is (see "Candidates that did NOT survive verification"), and the latter
+   was consolidated this pass (see "Applied this pass"). Do not re-flag either.)
 
 ## Reviewed-train / strategic + adjudicated traps — held
 
@@ -417,9 +446,12 @@ landing rather than sweeping them unattended.
   (`HOST_LAYER_RESTRICTED_IMPORT_PATTERNS` forbids `src/**` → `@cli/**` /
   `@desktop/**` / 9 extension-homed aliases; plus
   `AGENT_CORE_RESTRICTED_IMPORT_PATTERNS`); R-b as
-  `config/ratchets/host-agent-import-baseline.json` +
-  `packages/cli/scripts/check-host-imports.mjs` (wired as CLI `check:architecture`);
-  `#9027` "preserve host import ratchet" confirms active enforcement.
+  `config/ratchets/host-agent-import-baseline.json`, enforced by the Vitest suite
+  `src/test-kernel/architecture/hostAgentDeepImportRatchet.vitest.ts` (which reads
+  the baseline and fails on any host exceeding its pinned count) — **not**
+  `packages/cli/scripts/check-host-imports.mjs`, which is a separate
+  vscode/electron + `process.*` boundary checker that does not read the width
+  baseline; `#9027` "preserve host import ratchet" confirms active enforcement.
 - Boundary metric recounted at `3612630`: distinct `@agent/*` deep-import
   specifiers — extension **41**, CLI **31**, desktop **26** (07-18: 44/34/29;
   north-star baseline 49/35/27). Core→host alias violations: **0**.
@@ -434,9 +466,12 @@ landing rather than sweeping them unattended.
 - Port width re-measured: `IModelHandler` = 40 `Pick`ed + 1 optional = **41**
   members (07-18 recorded 31); `ModelHandler.ts` **1,931** LOC (07-18 ~1,863),
   16 abstract methods; `AgentEvent` union **20** arms (unchanged).
-- `ModelHandlerGoogleGenAI` confirmed default-unreachable
-  (`useGoogleInteractionsAPI` default `true`, `ModelFactory.ts:232`); its
-  `googleMessageHelpers` imported only by that handler + test.
+- `ModelHandlerGoogleGenAI` confirmed not instantiated by **new** runs under
+  the default (`useGoogleInteractionsAPI` default `true`, `ModelFactory.ts:232`),
+  but **still reachable on resume** via `createModelHandlerForCompatibilityKey`
+  (`ModelFactory.ts:454-474`) when a persisted transcript carries its
+  compatibility key — so removal is gated on transcript-format retirement, not
+  just the flag; its `googleMessageHelpers` imported only by that handler + test.
 - `createNodePlatform` confirmed used by CLI + desktop, **not** by
   `packages/extension/src/extension.ts` (hand-inlined composition — deliberate
   bundle tradeoff).
