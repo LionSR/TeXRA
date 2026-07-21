@@ -411,8 +411,8 @@ export function captureOwnedExecutionLease(
   };
 }
 
-/** Capture ownership when this lifecycle is running under a leased execution. */
-export function tryCaptureOwnedExecutionLease(
+/** Return undefined only for an unleased run; stale ambient ownership throws. */
+export function captureOwnedExecutionLeaseIfPresent(
   executionId: ExecutionId,
 ): OwnedExecutionLeaseScope | undefined {
   const key = ownershipKey(storageRoot(), executionId);

@@ -25,7 +25,7 @@ import {
   renewOwnedExecutionLease,
   runWithInactiveExecutionLease,
   runWithOwnedExecutionLease,
-  tryCaptureOwnedExecutionLease,
+  captureOwnedExecutionLeaseIfPresent,
   waitForOwnedExecutionLeaseRelease,
 } from '@agent/storage/executionLease';
 import { platform } from '@platform/platform';
@@ -329,7 +329,7 @@ describe('cross-process execution leases', () => {
     const delayedCapture = Promise.resolve(
       runWithFirstOwner(async () => {
         await firstOwnerPaused;
-        return tryCaptureOwnedExecutionLease(executionId);
+        return captureOwnedExecutionLeaseIfPresent(executionId);
       }),
     );
     await writeForeignLease(

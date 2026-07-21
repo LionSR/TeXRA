@@ -9,7 +9,7 @@ import { createChannelTrace } from '@agent/trace';
 import {
   markOwnedExecutionLeaseUndurable,
   onOwnedExecutionLeaseLost,
-  tryCaptureOwnedExecutionLease,
+  captureOwnedExecutionLeaseIfPresent,
 } from '@agent/storage/executionLease';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -322,7 +322,7 @@ export async function runFlowWithLifecycle(
     runtimeHost,
     ctx.logger,
   );
-  const executionLeaseScope = tryCaptureOwnedExecutionLease(executionId);
+  const executionLeaseScope = captureOwnedExecutionLeaseIfPresent(executionId);
   if (executionLeaseScope) {
     handle.attachExecutionLeaseScope(executionLeaseScope);
   }
