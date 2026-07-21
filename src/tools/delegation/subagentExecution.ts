@@ -12,6 +12,7 @@ import {
   registerExecution,
   releaseOwnedExecutionLeaseAfterFailure,
 } from '@agent/storage';
+import { captureOwnedExecutionLease } from '@agent/storage/executionLease';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -161,87 +162,90 @@ export async function executeSubagent(
   const startedAt = Date.now();
   const config = AgentConfigSchema.parse(childConfigPayload);
   await registerExecution(executionId, config, agentName, parentExecutionId);
+  const runWithOwnership = captureOwnedExecutionLease(executionId);
 
-  const isToolUse = config.agentCategory === AgentCategory.ToolUse;
-  // Must match the id `buildAgentLaunchContext` actually reserves for this
-  // executionId (see AgentLaunchContext.ts's `reservedStreamId`), or the
-  // loop acquires the wrong follow-up queue/interrupt slot. That reservation
-  // uses the canonical config's agent/model — not the `agentName` parameter,
-  // which callers may resolve differently
-  // (e.g. an approved agent override's display name vs. its registry name).
-  // Derive from the exact same fields, not a parallel formula.
-  const childStreamId = getStreamTabId(config.agent, config.model, {
-    executionId,
-  });
-  const strategyParams = {
-    config,
-    agentCategoryExplicit: childConfigPayload.agentCategory !== undefined,
-    executionId,
-    agentName,
-    orchestratorStreamId,
-    parentSession,
-    runtimeHost,
-    startedAt,
-    workingDirectory,
-    approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
-    runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
-    onStreamResolved: inheritChildStreamApprovals,
-  };
+  return await runWithOwnership(async () => {
+    const isToolUse = config.agentCategory === AgentCategory.ToolUse;
+    // Must match the id `buildAgentLaunchContext` actually reserves for this
+    // executionId (see AgentLaunchContext.ts's `reservedStreamId`), or the
+    // loop acquires the wrong follow-up queue/interrupt slot. That reservation
+    // uses the canonical config's agent/model — not the `agentName` parameter,
+    // which callers may resolve differently
+    // (e.g. an approved agent override's display name vs. its registry name).
+    // Derive from the exact same fields, not a parallel formula.
+    const childStreamId = getStreamTabId(config.agent, config.model, {
+      executionId,
+    });
+    const strategyParams = {
+      config,
+      agentCategoryExplicit: childConfigPayload.agentCategory !== undefined,
+      executionId,
+      agentName,
+      orchestratorStreamId,
+      parentSession,
+      runtimeHost,
+      startedAt,
+      workingDirectory,
+      approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
+      runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
+      onStreamResolved: inheritChildStreamApprovals,
+    };
 
-  try {
-    if (isToolUse) {
-      const { createNativeToolUseStrategy } =
-        await import('./nativeToolUseStrategy');
-      startChildRunLoop({
-        childStreamId,
-        parentStreamId: orchestratorStreamId,
-        executionId,
-        agentName,
-        strategy: createNativeToolUseStrategy(strategyParams),
-        recordCost: settleSubagentCost,
-      });
-    } else {
-      const { createNativeWorkflowStrategy } =
-        await import('./nativeWorkflowStrategy');
-      startChildRunLoop({
-        childStreamId,
-        parentStreamId: orchestratorStreamId,
-        executionId,
-        agentName,
-        strategy: createNativeWorkflowStrategy(strategyParams),
-        recordCost: settleSubagentCost,
-      });
+    try {
+      if (isToolUse) {
+        const { createNativeToolUseStrategy } =
+          await import('./nativeToolUseStrategy');
+        startChildRunLoop({
+          childStreamId,
+          parentStreamId: orchestratorStreamId,
+          executionId,
+          agentName,
+          strategy: createNativeToolUseStrategy(strategyParams),
+          recordCost: settleSubagentCost,
+        });
+      } else {
+        const { createNativeWorkflowStrategy } =
+          await import('./nativeWorkflowStrategy');
+        startChildRunLoop({
+          childStreamId,
+          parentStreamId: orchestratorStreamId,
+          executionId,
+          agentName,
+          strategy: createNativeWorkflowStrategy(strategyParams),
+          recordCost: settleSubagentCost,
+        });
+      }
+    } catch (error) {
+      throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
     }
-  } catch (error) {
-    throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
-  }
 
-  const meta = options?.approvalMeta;
-  const metaLines: string[] = [];
-  if (meta) {
-    const modelInfo = meta.modelOverride
-      ? `Model: ${meta.modelOverride} (overridden from ${meta.requestedModel ?? 'default'})`
-      : `Model: ${childConfigPayload.model}`;
-    const agentInfo = meta.agentOverride
-      ? ` Agent: ${meta.agentOverride} (overridden from ${meta.requestedAgent ?? 'default'}).`
-      : '';
-    metaLines.push(
-      `Approval: ${meta.autoApproved ? 'auto-approved' : 'user-approved'}. ${modelInfo}.${agentInfo}`,
-    );
-  }
-  return {
-    status: 'executed',
-    summary: `Launched '${agentName}' (async)`,
-    output: [
-      `Subagent '${agentName}' launched. Result will be delivered automatically as a follow-up message when complete.`,
-      `Execution ID: ${executionId}`,
-      ...metaLines,
-      `To check intermediate progress: executions tool with path=/executions/${executionId} and action=wait (waits for next status change).`,
-      ...(isToolUse
-        ? [
-            `To send follow-up instructions after delivery: use delegate_agent with execution_id set to this ID.`,
-          ]
-        : []),
-    ].join('\n'),
-  };
+    const meta = options?.approvalMeta;
+    const metaLines: string[] = [];
+    if (meta) {
+      const modelInfo = meta.modelOverride
+        ? `Model: ${meta.modelOverride} (overridden from ${meta.requestedModel ?? 'default'})`
+        : `Model: ${childConfigPayload.model}`;
+      const agentInfo = meta.agentOverride
+        ? ` Agent: ${meta.agentOverride} (overridden from ${meta.requestedAgent ?? 'default'}).`
+        : '';
+      metaLines.push(
+        `Approval: ${meta.autoApproved ? 'auto-approved' : 'user-approved'}. ${modelInfo}.${agentInfo}`,
+      );
+    }
+    return {
+      status: 'executed',
+      summary: `Launched '${agentName}' (async)`,
+      output: [
+        `Subagent '${agentName}' launched. Result will be delivered automatically as a follow-up message when complete.`,
+        `Execution ID: ${executionId}`,
+        ...metaLines,
+        `To check intermediate progress: executions tool with path=/executions/${executionId} and action=wait (waits for next status change).`,
+        ...(isToolUse
+          ? [
+              `To send follow-up instructions after delivery: use delegate_agent with execution_id set to this ID.`,
+            ]
+          : []),
+      ].join('\n'),
+    };
+  });
 }

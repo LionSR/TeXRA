@@ -8,10 +8,12 @@ import {
 } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { EXECUTION_LEASE_STALE_MS } from '@agent/storage/executionLease';
 import { platform } from '@platform/platform';
 import type { ExecutionId } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import { StorageFS } from '@utils/files';
 
 function config(agent: string): AgentConfig {
   return {
@@ -121,6 +123,43 @@ describe('execution listing normalization', () => {
     );
     clearStoreCache();
 
+    expect(await listExecutions()).toEqual([
+      expect.objectContaining({ id, kind: 'agent' }),
+    ]);
+    expect(platform().workspaceState.get(legacyKey, [])).toEqual([]);
+  });
+
+  it('retains active legacy history and migrates it after its lease is stale', async () => {
+    const id = 'abc778' as ExecutionId;
+    const legacyKey = 'texra.agentHistory./workspace';
+    const legacyEntry = {
+      id,
+      timestamp: '2026-07-15T13:01:00.000Z',
+      agentConfig: config('assistant'),
+    };
+    await installPlatform({
+      workspacePath: '/workspace',
+      workspaceState: { [legacyKey]: [legacyEntry] },
+    });
+    clearStoreCache();
+    await StorageFS.ensureDir('executionLeases');
+    const writeLease = (heartbeatAt: number) =>
+      StorageFS.writeAtomic(
+        `executionLeases/${id}.json`,
+        JSON.stringify({
+          version: 1,
+          executionId: id,
+          ownerToken: '00000000-0000-4000-8000-000000000008',
+          acquiredAt: heartbeatAt,
+          heartbeatAt,
+        }),
+      );
+
+    await writeLease(Date.now());
+    expect(await listExecutions()).toEqual([]);
+    expect(platform().workspaceState.get(legacyKey, [])).toEqual([legacyEntry]);
+
+    await writeLease(Date.now() - EXECUTION_LEASE_STALE_MS - 1);
     expect(await listExecutions()).toEqual([
       expect.objectContaining({ id, kind: 'agent' }),
     ]);

@@ -15,6 +15,7 @@ import {
   ExecutionLeaseLostError,
   abandonOwnedExecutionLease,
   acquireResumedExecutionLease,
+  captureOwnedExecutionLease,
   completeOwnedExecutionLease,
   inspectExecutionLease,
   markOwnedExecutionLeaseUndurable,
@@ -23,6 +24,8 @@ import {
   releaseOwnedExecutionLease,
   renewOwnedExecutionLease,
   runWithInactiveExecutionLease,
+  runWithOwnedExecutionLease,
+  captureOwnedExecutionLeaseIfPresent,
   waitForOwnedExecutionLeaseRelease,
 } from '@agent/storage/executionLease';
 import { platform } from '@platform/platform';
@@ -247,26 +250,111 @@ describe('cross-process execution leases', () => {
     await acquire(executionId);
     const onLeaseLost = vi.fn();
     onOwnedExecutionLeaseLost(executionId, onLeaseLost);
+    await runWithOwnedExecutionLease(executionId, async () => {
+      await writeForeignLease(
+        executionId,
+        Date.now(),
+        '00000000-0000-4000-8000-000000000004',
+      );
+
+      await expect(
+        getExecutionStore(executionId).writeMeta({
+          timestamp: '2026-07-16T12:00:00.000Z',
+        }),
+      ).rejects.toBeInstanceOf(ExecutionLeaseLostError);
+
+      expect(onLeaseLost).toHaveBeenCalledOnce();
+      expect(ownsExecutionLease(executionId)).toBe(false);
+      await expect(
+        getExecutionStore(executionId).writeMeta({
+          timestamp: '2026-07-16T12:01:00.000Z',
+        }),
+      ).rejects.toBeInstanceOf(ExecutionLeaseLostError);
+    });
+    ownedExecutionIds.delete(executionId);
+  });
+
+  it('does not let a displaced continuation borrow a successor lease', async () => {
+    const executionId = 'e86444' as ExecutionId;
+    await acquire(executionId);
+    let startLateWrite = (): void => undefined;
+    const lateWriteGate = new Promise<void>((resolve) => {
+      startLateWrite = resolve;
+    });
+    const lateWrite = Promise.resolve(
+      runWithOwnedExecutionLease(executionId, async () => {
+        await lateWriteGate;
+        expect(ownsExecutionLease(executionId)).toBe(false);
+        markOwnedExecutionLeaseUndurable(executionId);
+        abandonOwnedExecutionLease(executionId);
+        await completeOwnedExecutionLease(executionId);
+        expect(() =>
+          runWithOwnedExecutionLease(executionId, () => undefined),
+        ).toThrow(ExecutionLeaseLostError);
+        await getExecutionStore(executionId).writeMeta({
+          timestamp: '2026-07-16T12:00:00.000Z',
+        });
+      }),
+    );
     await writeForeignLease(
       executionId,
-      Date.now(),
-      '00000000-0000-4000-8000-000000000004',
+      Date.now() - EXECUTION_LEASE_STALE_MS - 1,
+      '00000000-0000-4000-8000-000000000006',
     );
+    await acquireResumedExecutionLease(executionId);
+
+    startLateWrite();
+    await expect(lateWrite).rejects.toBeInstanceOf(ExecutionLeaseLostError);
+
+    await runWithOwnedExecutionLease(executionId, () =>
+      getExecutionStore(executionId).writeMeta({
+        timestamp: '2026-07-16T12:01:00.000Z',
+      }),
+    );
+    await expect(
+      getExecutionStore(executionId).readMeta(),
+    ).resolves.toMatchObject({
+      timestamp: '2026-07-16T12:01:00.000Z',
+    });
+  });
+
+  it('does not let a delayed lifecycle root capture a successor lease', async () => {
+    const executionId = 'e86445' as ExecutionId;
+    await acquire(executionId);
+    const runWithFirstOwner = captureOwnedExecutionLease(executionId);
+    let resumeFirstOwner = (): void => undefined;
+    const firstOwnerPaused = new Promise<void>((resolve) => {
+      resumeFirstOwner = resolve;
+    });
+    const delayedCapture = Promise.resolve(
+      runWithFirstOwner(async () => {
+        await firstOwnerPaused;
+        return captureOwnedExecutionLeaseIfPresent(executionId);
+      }),
+    );
+    await writeForeignLease(
+      executionId,
+      Date.now() - EXECUTION_LEASE_STALE_MS - 1,
+      '00000000-0000-4000-8000-000000000007',
+    );
+    await acquireResumedExecutionLease(executionId);
+
+    resumeFirstOwner();
+    await expect(delayedCapture).rejects.toBeInstanceOf(
+      ExecutionLeaseLostError,
+    );
+    expect(ownsExecutionLease(executionId)).toBe(true);
+  });
+
+  it('rejects unscoped writes while another owner has a lease', async () => {
+    const executionId = 'e86446' as ExecutionId;
+    await writeForeignLease(executionId, Date.now());
 
     await expect(
       getExecutionStore(executionId).writeMeta({
         timestamp: '2026-07-16T12:00:00.000Z',
       }),
     ).rejects.toBeInstanceOf(ExecutionLeaseLostError);
-
-    expect(onLeaseLost).toHaveBeenCalledOnce();
-    expect(ownsExecutionLease(executionId)).toBe(false);
-    await expect(
-      getExecutionStore(executionId).writeMeta({
-        timestamp: '2026-07-16T12:01:00.000Z',
-      }),
-    ).rejects.toBeInstanceOf(ExecutionLeaseLostError);
-    ownedExecutionIds.delete(executionId);
   });
 
   it('never overlaps heartbeat work for the same execution', async () => {

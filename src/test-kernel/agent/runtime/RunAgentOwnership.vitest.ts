@@ -21,8 +21,15 @@ vi.mock('@agent/storage', () => ({
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
+  captureOwnedExecutionLease:
+    (_executionId: ExecutionId) => (operation: () => unknown) =>
+      operation(),
   markOwnedExecutionLeaseUndurable: mocks.markOwnedExecutionLeaseUndurable,
   renewOwnedExecutionLease: mocks.renewOwnedExecutionLease,
+  runWithOwnedExecutionLease: (
+    _executionId: ExecutionId,
+    operation: () => unknown,
+  ) => operation(),
 }));
 
 vi.mock('@agent/runtime/executeAgent', () => ({

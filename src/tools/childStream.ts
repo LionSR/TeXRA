@@ -2,6 +2,7 @@
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { captureOwnedExecutionLeaseIfPresent } from '@agent/storage/executionLease';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   finalizeRunTerminal,
@@ -156,6 +157,10 @@ export function createChildStream(
     runtimeHost,
     runTrace.trace,
   );
+  const executionLeaseScope = captureOwnedExecutionLeaseIfPresent(executionId);
+  if (executionLeaseScope) {
+    handle.attachExecutionLeaseScope(executionLeaseScope);
+  }
   if (options.toolName) handle.toolName = options.toolName;
   // The process-owned snapshot listener persists both facts before handle
   // tracking; a later presentation replays them from the snapshot store during

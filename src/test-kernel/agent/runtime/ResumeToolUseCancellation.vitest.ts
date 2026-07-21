@@ -21,11 +21,18 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@agent/storage/executionLease', () => ({
   abandonOwnedExecutionLease: mocks.abandonOwnedExecutionLease,
   acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
+  captureOwnedExecutionLease:
+    (_executionId: ExecutionId) => (operation: () => unknown) =>
+      operation(),
   completeOwnedExecutionLease: mocks.completeOwnedExecutionLease,
   renewOwnedExecutionLease: mocks.renewOwnedExecutionLease,
   runWithExecutionLeaseWriteFence: mocks.runWithExecutionLeaseWriteFence,
   releaseOwnedExecutionLeaseAfterFailure:
     mocks.releaseOwnedExecutionLeaseAfterFailure,
+  runWithOwnedExecutionLease: (
+    _executionId: ExecutionId,
+    operation: () => unknown,
+  ) => operation(),
 }));
 
 vi.mock('@agent/runtime/AgentLaunchContext', () => ({

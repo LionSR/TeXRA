@@ -4,6 +4,7 @@ import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { registerExecution } from '@agent/storage/executionLifecycle';
+import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
 import type { Platform } from '@platform/platform';
 import {
   LOG_LEVELS,
@@ -266,6 +267,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
     const executionId = 'abc555' as ExecutionId;
     const cachedStreamId = 'orchestrator@deepseekproT#abc555' as StreamTabId;
     await registerExecution(executionId, MINIMAL_CONFIG, 'orchestrator');
+    await releaseOwnedExecutionLease(executionId);
     await getExecutionStore(executionId).writeMeta({
       timestamp: new Date().toISOString(),
       streamId: cachedStreamId,
@@ -287,6 +289,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
     const executionId = 'abc666' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#abc666' as StreamTabId;
     await registerExecution(executionId, MINIMAL_CONFIG, 'orchestrator');
+    await releaseOwnedExecutionLease(executionId);
 
     const store = new StreamSnapshotStore();
     store.setTaskState(streamId, taskState('orchestrator'), executionId);
@@ -314,6 +317,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       const parentStream = 'aOrchestrator@deepseekproT#abc777' as StreamTabId;
       const childStream = 'zBashTool@tool#abc777' as StreamTabId;
       await registerExecution(executionId, MINIMAL_CONFIG, 'orchestrator');
+      await releaseOwnedExecutionLease(executionId);
 
       const snapshotWriter = new StreamSnapshotStore();
       snapshotWriter.setTaskState(
