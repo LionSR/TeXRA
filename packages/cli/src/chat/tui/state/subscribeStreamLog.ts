@@ -23,7 +23,6 @@ import {
 } from '@shared/subagentFollowup';
 import { normalizeToolUseData } from '@shared/toolUse';
 import { isActivePhase } from '@shared/streams/streamStatus';
-import { flushPendingRunTraces } from '@transcript';
 import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateSummary } from '@utils/text/stringUtils';
@@ -443,6 +442,14 @@ function sortTranscriptCandidatesIfNeeded(
   return candidates;
 }
 
+function trySyncStreamLog(streamId: StreamTabId): void {
+  try {
+    syncStreamLog(streamId);
+  } catch (error) {
+    setTransientNotice(`Could not update transcript: ${toErrorMessage(error)}`);
+  }
+}
+
 export function subscribeStreamLog(): () => void {
   const store = defaultSession().transcripts;
   const pendingStreams = new Map<StreamTabId, number>();
@@ -457,7 +464,8 @@ export function subscribeStreamLog(): () => void {
     const streamIds = [...pendingStreams];
     pendingStreams.clear();
     for (const [id, generation] of streamIds) {
-      if (generation === getCliStateGeneration()) syncStreamLog(id);
+      if (generation !== getCliStateGeneration()) continue;
+      trySyncStreamLog(id);
     }
   }, STREAM_SYNC_THROTTLE_MS);
 
@@ -476,7 +484,7 @@ export function subscribeStreamLog(): () => void {
     previousActiveStreamId = nextActiveStreamId;
 
     if (previous && previous !== nextActiveStreamId) {
-      syncStreamLog(previous);
+      trySyncStreamLog(previous);
     }
     if (!nextActiveStreamId || nextActiveStreamId === previous) return;
 
@@ -485,7 +493,7 @@ export function subscribeStreamLog(): () => void {
       .ensureLoaded(nextActiveStreamId)
       .then(() => {
         if (generation === getCliStateGeneration()) {
-          syncStreamLog(nextActiveStreamId);
+          trySyncStreamLog(nextActiveStreamId);
         }
       })
       .catch((error: unknown) => {
@@ -518,8 +526,9 @@ export function syncStreamLog(
   // between two TUI sync ticks), the assistant text is still sitting in
   // an in-memory buffer and never reaches the transcript. Force any
   // pending flushers to materialize before we read.
-  flushPendingRunTraces();
-  const store = defaultSession().transcripts;
+  const session = defaultSession();
+  session.flushPendingTraces();
+  const store = session.transcripts;
   const log = store.get(streamId);
   if (!log) return;
 
@@ -628,7 +637,7 @@ export function syncStreamLog(
     return { ...slice, description, entries: next, thinkingActive };
   });
 
-  if (releaseAfterSync) store.releaseEntries(streamId);
+  if (releaseAfterSync) store.requestEviction(streamId);
 
   // Surface stream as active if we don't already have one — handles bare
   // `texra chat` where setActiveStream is the first signal the runtime emits.

@@ -30,7 +30,7 @@ import {
   PersistedState,
   createBackendStorage,
 } from '@shared/state/PersistedState';
-import { isInFlightPhase } from '@shared/streams/streamStatus';
+import { isActivePhase } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import { StreamSnapshotStore, type StreamLogStore } from '@transcript';
 import { clamp } from '@utils/core';
@@ -203,8 +203,8 @@ export class ProgressViewState {
    * call this on the stream being moved away from to close the loop.
    */
   releasePreviousActive(streamId: StreamTabId): void {
-    if (!isInFlightPhase(this.streamStatus.get(streamId))) {
-      this.streamLogs.releaseEntries(streamId);
+    if (!isActivePhase(this.streamStatus.get(streamId))) {
+      this.streamLogs.requestEviction(streamId);
     }
   }
 
@@ -542,37 +542,44 @@ export class ProgressViewState {
           const text = legacyInstruction.text.trim();
           if (!text) return;
 
-          await this.streamLogs.ensureLoaded(streamId);
-          const log = this.streamLogs.get(streamId);
-          if (!log) return;
+          const writer = await this.streamLogs.loadAndAcquireWriter(
+            streamId,
+            `legacy-instruction:${streamId}`,
+          );
+          try {
+            const log = this.streamLogs.get(streamId);
+            if (!log) return;
 
-          const alreadyPresent = log
-            .getRange(0, log.head)
-            .some(
-              (entry) =>
-                entry.type === STREAM_LOG_ENTRY_TYPES.LOG &&
-                entry.messageType === MESSAGE_TYPES.USER_MESSAGE &&
-                entry.text?.trim() === text,
-            );
-          if (alreadyPresent) return;
+            const alreadyPresent = log
+              .getRange(0, log.head)
+              .some(
+                (entry) =>
+                  entry.type === STREAM_LOG_ENTRY_TYPES.LOG &&
+                  entry.messageType === MESSAGE_TYPES.USER_MESSAGE &&
+                  entry.text?.trim() === text,
+              );
+            if (alreadyPresent) return;
 
-          const firstTimestamp = log.firstTimestamp;
-          const baseTimestamp =
-            legacyInstruction.timestamp ?? firstTimestamp ?? Date.now();
-          const timestamp =
-            firstTimestamp == null
-              ? baseTimestamp
-              : clamp(baseTimestamp, 0, firstTimestamp - 1);
+            const firstTimestamp = log.firstTimestamp;
+            const baseTimestamp =
+              legacyInstruction.timestamp ?? firstTimestamp ?? Date.now();
+            const timestamp =
+              firstTimestamp == null
+                ? baseTimestamp
+                : clamp(baseTimestamp, 0, firstTimestamp - 1);
 
-          this.streamLogs.append(streamId, {
-            id: `legacy-instruction:${streamId}:${timestamp}`,
-            type: STREAM_LOG_ENTRY_TYPES.LOG,
-            level: LOG_LEVELS.INFO,
-            timestamp,
-            messageType: MESSAGE_TYPES.USER_MESSAGE,
-            text: legacyInstruction.text,
-            data: { source: 'legacyInstruction' },
-          });
+            writer.append({
+              id: `legacy-instruction:${streamId}:${timestamp}`,
+              type: STREAM_LOG_ENTRY_TYPES.LOG,
+              level: LOG_LEVELS.INFO,
+              timestamp,
+              messageType: MESSAGE_TYPES.USER_MESSAGE,
+              text: legacyInstruction.text,
+              data: { source: 'legacyInstruction' },
+            });
+          } finally {
+            writer.close();
+          }
           restoredCount++;
         } catch (err) {
           this.logger.warn(

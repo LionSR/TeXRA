@@ -118,12 +118,12 @@ describe('subscribeStreamLog batching and dispose', () => {
     secondDispose();
   });
 
-  it('releases a dormant transcript whose focus load finishes late', async () => {
+  it('releases a completed transcript whose focus load finishes late', async () => {
     const store = defaultSession().transcripts;
     appendUserMessage(store, streamA, 'a-1', 'loaded late');
     patchStream(streamA, (slice) => ({
       ...slice,
-      status: STREAM_PHASE.WAITING,
+      status: STREAM_PHASE.COMPLETED,
     }));
 
     let finishLoad = (): void => {};
@@ -141,7 +141,7 @@ describe('subscribeStreamLog batching and dispose', () => {
     vi.spyOn(store, 'ensureLoaded').mockImplementation(async (streamId) => {
       if (streamId === streamA) await loadGate;
     });
-    const releaseEntries = vi.spyOn(store, 'releaseEntries');
+    const requestEviction = vi.spyOn(store, 'requestEviction');
     const dispose = subscribeStreamLog();
 
     activeStreamId.set(streamA);
@@ -156,7 +156,7 @@ describe('subscribeStreamLog batching and dispose', () => {
       description: 'loaded late',
       entries: [],
     });
-    expect(releaseEntries).toHaveBeenCalledWith(streamA);
+    expect(requestEviction).toHaveBeenCalledWith(streamA);
 
     dispose();
   });
@@ -165,7 +165,7 @@ describe('subscribeStreamLog batching and dispose', () => {
     const store = defaultSession().transcripts;
     appendUserMessage(store, streamB, 'b-1', 'starting');
     activeStreamId.set(streamA);
-    const releaseEntries = vi.spyOn(store, 'releaseEntries');
+    const requestEviction = vi.spyOn(store, 'requestEviction');
 
     syncStreamLog(streamB);
 
@@ -174,6 +174,21 @@ describe('subscribeStreamLog batching and dispose', () => {
       entries: [],
       status: undefined,
     });
-    expect(releaseEntries).not.toHaveBeenCalledWith(streamB);
+    expect(requestEviction).not.toHaveBeenCalledWith(streamB);
+  });
+
+  it('requests bounded residency for a hidden WAITING transcript', () => {
+    const store = defaultSession().transcripts;
+    appendUserMessage(store, streamB, 'b-1', 'waiting for retry');
+    patchStream(streamB, (slice) => ({
+      ...slice,
+      status: STREAM_PHASE.WAITING,
+    }));
+    activeStreamId.set(streamA);
+    const requestEviction = vi.spyOn(store, 'requestEviction');
+
+    syncStreamLog(streamB);
+
+    expect(requestEviction).toHaveBeenCalledWith(streamB);
   });
 });
