@@ -347,7 +347,7 @@ describe('StreamLogStore load', () => {
 
     store.ensureStream('empty-ephemeral');
     store.append('ephemeral-stream', logEntry('ephemeral-stream', 1, 100));
-    store.releaseEntries('ephemeral-stream');
+    store.requestEviction('ephemeral-stream');
     await store.flush();
 
     expect(store.mode).toEqual({
@@ -358,6 +358,134 @@ describe('StreamLogStore load', () => {
     expect(store.get('empty-ephemeral')?.size).toBe(0);
     expect(store.get('ephemeral-stream')?.size).toBe(1);
     expect(() => StreamLogStore.ephemeral('  ')).toThrow('requires a reason');
+  });
+
+  it('defers a requested eviction until the exact writer releases', async () => {
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 100)] },
+      summaries: {},
+    });
+    const store = await StreamLogStore.open();
+    await store.ensureLoaded('alpha');
+    const writer = store.acquireWriter('alpha', 'execution-alpha');
+
+    store.requestEviction('alpha');
+    writer.append(logEntry('alpha-live', 2, 200));
+    await store.flush();
+
+    expect(store.get('alpha')?.size).toBe(2);
+    writer.close();
+    expect(store.get('alpha')).toBeUndefined();
+    expect(() => writer.append(logEntry('late', 3, 300))).toThrow(
+      'has been released',
+    );
+  });
+
+  it('reserves a writer across rehydration and a concurrent eviction', async () => {
+    let markReadStarted = (): void => undefined;
+    const readStarted = new Promise<void>((resolve) => {
+      markReadStarted = resolve;
+    });
+    let releaseRead = (): void => undefined;
+    const readGate = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 100)] },
+      summaries: {
+        alpha: {
+          firstTimestamp: 100,
+          lastTimestamp: 100,
+          hasRunningGroup: false,
+        },
+      },
+      onLogRead: async () => {
+        markReadStarted();
+        await readGate;
+      },
+    });
+    const store = await StreamLogStore.open();
+    const writerPromise = store.loadAndAcquireWriter(
+      'alpha',
+      'execution-alpha',
+    );
+    await readStarted;
+
+    store.requestEviction('alpha');
+    releaseRead();
+    const writer = await writerPromise;
+
+    expect(store.get('alpha')?.size).toBe(1);
+    expect(() => writer.append(logEntry('alpha-live', 2, 200))).not.toThrow();
+    writer.close();
+    await store.flush();
+    expect(store.get('alpha')).toBeUndefined();
+  });
+
+  it('keeps a requested eviction resident until its sequential write finishes', async () => {
+    const storage = mockStorage({
+      logs: {},
+      summaries: {},
+      pauseLogWriteKey: 'alpha',
+    });
+    const store = await StreamLogStore.open();
+    const alphaWriter = store.acquireWriter('alpha', 'execution-alpha');
+    const betaWriter = store.acquireWriter('beta', 'execution-beta');
+    alphaWriter.append(logEntry('alpha', 1, 100));
+    betaWriter.append(logEntry('beta', 1, 200));
+
+    const flush = store.flush();
+    await storage.waitForPausedWrite();
+    store.requestEviction('beta');
+    betaWriter.close();
+
+    // Both dirty bits were moved into the active write batch. The explicit
+    // flushing guard must keep beta resident while the sequential writer is
+    // still blocked on alpha.
+    expect(store.get('beta')?.size).toBe(1);
+
+    storage.releasePausedWrite();
+    await flush;
+    expect(
+      storage.writes.get(storageFile(STREAM_LOGS_DIR, 'beta')),
+    ).toHaveLength(1);
+    expect(store.get('beta')).toBeUndefined();
+    alphaWriter.close();
+  });
+
+  it('keeps a same-owner successor valid after an older writer closes', () => {
+    const store = StreamLogStore.ephemeral('writer identity test');
+    const first = store.acquireWriter('alpha', 'execution-alpha');
+    const successor = store.acquireWriter('alpha', 'execution-alpha');
+
+    expect(() => store.acquireWriter('alpha', 'execution-beta')).toThrow(
+      'already owned by another writer',
+    );
+    first.close();
+    expect(() => first.append(logEntry('late', 1, 100))).toThrow(
+      'has been released',
+    );
+    expect(() => successor.append(logEntry('successor', 2, 200))).not.toThrow();
+    successor.close();
+  });
+
+  it('preserves queued eviction across a same-owner successor', async () => {
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 100)] },
+      summaries: {},
+    });
+    const store = await StreamLogStore.open();
+    await store.ensureLoaded('alpha');
+    const first = store.acquireWriter('alpha', 'execution-alpha');
+
+    store.requestEviction('alpha');
+    const successor = store.acquireWriter('alpha', 'execution-alpha');
+    first.close();
+    successor.append(logEntry('alpha-live', 2, 200));
+    await store.flush();
+    successor.close();
+
+    expect(store.get('alpha')).toBeUndefined();
   });
 
   it('rejects when persistent storage cannot be opened', async () => {

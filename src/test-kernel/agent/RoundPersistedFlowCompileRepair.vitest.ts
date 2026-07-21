@@ -247,7 +247,10 @@ describe('RoundPersistedFlow round outcome persistence (#8137)', () => {
       };
 
       store.ensureStream(streamId);
-      const recorder = attachTranscriptRecorder(logger, streamId, store);
+      const recorder = attachTranscriptRecorder(
+        logger,
+        store.acquireWriter(streamId, streamId),
+      );
 
       try {
         const run = flow.run(shared);

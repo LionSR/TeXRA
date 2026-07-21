@@ -32,8 +32,7 @@ import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { StreamTabId } from '@shared/schemas';
-import { getActiveFlushers, unregisterFlushers } from '@transcript/runTrace';
-
+import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { getRunContextSession, tryUseRunContext } from './RunContext';
 import { ExecutionRegistry } from './executionRegistry';
@@ -56,6 +55,22 @@ const logger = createChannelTrace('sessionHandle');
 interface ResultListenerRegistration {
   readonly listener: (event: ResultEvent) => void;
   readonly replayMissed: boolean;
+}
+
+interface ArtifactFlushBatch {
+  readonly promise: Promise<void>;
+  readonly resolve: () => void;
+  readonly reject: (error: unknown) => void;
+}
+
+function createArtifactFlushBatch(): ArtifactFlushBatch {
+  let resolve: () => void = () => undefined;
+  let reject: (error: unknown) => void = () => undefined;
+  const promise = new Promise<void>((settle, fail) => {
+    resolve = settle;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
 }
 
 function isReplayableTerminalResult(event: ResultEvent): boolean {
@@ -93,9 +108,11 @@ export class SessionHandle {
   readonly transcripts: StreamLogStore;
   /** Session-owned follow-up queue owner. */
   readonly followUps: ToolUseFollowUpQueue;
-  /** This session's trace-flush callbacks (drained on dispose / shutdown). */
-  readonly flushers: Set<() => void>;
+  /** This session's execution-keyed trace flushers. */
+  readonly flushers: Map<string, RunTraceFlushEntry>;
   private readonly artifactFlushers = new Set<() => Promise<void>>();
+  private pendingArtifactFlush: ArtifactFlushBatch | undefined;
+  private artifactFlushWorkerRunning = false;
   /** Session-scoped host interaction owner. */
   readonly interactions: SessionHostInteractions;
   /** Session-owned approval queues, pending registries, and bypass state. */
@@ -147,10 +164,9 @@ export class SessionHandle {
     this.approvals = approvals;
     this.workflowControls =
       init.workflowControls ?? new WorkflowControlRegistry();
-    // A fresh session owns its own flusher set; the default session aliases
-    // the process-module set (`getActiveFlushers()`) so the process-wide
-    // shutdown drain (`flushPendingRunTraces()`) still reaches it.
-    this.flushers = init.flushers ?? new Set<() => void>();
+    // Every session owns exactly one trace-flusher map. There is no
+    // process-wide registry: a host drains the session it is shutting down.
+    this.flushers = init.flushers ?? new Map<string, RunTraceFlushEntry>();
     executions.attachRootExecutionLeaseRelease((executionId) =>
       releaseExecutionLeaseAfterArtifacts(this, executionId),
     );
@@ -161,9 +177,29 @@ export class SessionHandle {
     return this.interactions.use(interactions);
   }
 
-  /** Drain pending trace writes for this session's streams only. */
-  flushPendingTraces(): void {
-    for (const flush of [...this.flushers]) flush();
+  /** Drain one execution's pending trace, or every trace during shutdown. */
+  flushPendingTraces(ownerKey?: string): void {
+    const failures: unknown[] = [];
+    const flushers =
+      ownerKey === undefined
+        ? [...this.flushers.values()]
+        : [this.flushers.get(ownerKey)].filter(
+            (entry): entry is RunTraceFlushEntry => entry !== undefined,
+          );
+    for (const entry of flushers) {
+      try {
+        entry.flush();
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1) {
+      throw new AggregateError(
+        failures,
+        'Multiple session trace writers failed to flush',
+      );
+    }
   }
 
   /** Register a session-owned durable writer such as a snapshot store. */
@@ -172,24 +208,62 @@ export class SessionHandle {
     return () => this.artifactFlushers.delete(flush);
   }
 
-  /** Persist every buffered session artifact before execution ownership ends. */
-  async flushArtifacts(): Promise<void> {
-    const failures: unknown[] = [];
-    for (const flush of [...this.flushers]) {
+  /** Persist one execution's trace plus the session's shared artifact stores. */
+  flushArtifacts(ownerKey?: string): Promise<void> {
+    let traceFailure: unknown;
+    try {
+      this.flushPendingTraces(ownerKey);
+    } catch (error) {
+      traceFailure = error;
+    }
+    this.pendingArtifactFlush ??= createArtifactFlushBatch();
+    const batch = this.pendingArtifactFlush;
+    if (!this.artifactFlushWorkerRunning) {
+      this.artifactFlushWorkerRunning = true;
+      queueMicrotask(() => {
+        void this.drainArtifactFlushBatches();
+      });
+    }
+    if (traceFailure === undefined) return batch.promise;
+    return batch.promise.then(
+      () => {
+        throw traceFailure;
+      },
+      (artifactFailure: unknown) => {
+        throw new AggregateError(
+          [traceFailure, artifactFailure],
+          'Trace and shared artifact writers failed to flush',
+        );
+      },
+    );
+  }
+
+  /**
+   * Drain one current batch and, when calls arrived during it, one trailing
+   * batch at a time. This preserves each caller's durability boundary without
+   * repeating a full session flush for every execution ending in one burst.
+   */
+  private async drainArtifactFlushBatches(): Promise<void> {
+    while (this.pendingArtifactFlush) {
+      const batch = this.pendingArtifactFlush;
+      this.pendingArtifactFlush = undefined;
       try {
-        flush();
+        await this.flushArtifactsOnce();
+        batch.resolve();
       } catch (error) {
-        failures.push(error);
+        batch.reject(error);
       }
     }
+    this.artifactFlushWorkerRunning = false;
+  }
+
+  private async flushArtifactsOnce(): Promise<void> {
     const writers = [() => this.transcripts.flush(), ...this.artifactFlushers];
     const results = await Promise.allSettled(
       writers.map((flush) => Promise.resolve().then(flush)),
     );
-    failures.push(
-      ...results.flatMap((result) =>
-        result.status === 'rejected' ? [result.reason] : [],
-      ),
+    const failures = results.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : [],
     );
     if (failures.length === 1) throw failures[0];
     if (failures.length > 1) {
@@ -294,19 +368,30 @@ export class SessionHandle {
    * Tear down everything this session owns. Order matters: drain this session's
    * pending trace writes, drop subscription disposers, dispose the execution
    * registry, settle pending host interactions via `interactions.dispose()`,
-   * and drop result listeners. Finally unregister this session's flusher set
-   * from the process-wide drain and deregister it from `liveSessions`, both in
-   * `finally` so a teardown throw cannot strand a disposed session.
+   * and drop result listeners. Deregistration from `liveSessions` happens even
+   * when either phase fails, and every collected failure returns only after
+   * teardown has been attempted.
    */
   dispose(): void {
     if (this.disposeStarted) return;
     this.disposeStarted = true;
 
+    const failures: unknown[] = [];
     try {
       this.flushPendingTraces();
+    } catch (error) {
+      failures.push(error);
+    }
+    try {
       this.teardownOwners();
+    } catch (error) {
+      failures.push(error);
     } finally {
       this.deregisterSession();
+    }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1) {
+      throw new AggregateError(failures, 'Session teardown failed');
     }
   }
 
@@ -323,9 +408,8 @@ export class SessionHandle {
     this.missedTerminalResults.clear();
   }
 
-  /** Leave the process-wide trace drain and live-session registry. */
+  /** Leave the live-session registry. */
   private deregisterSession(): void {
-    unregisterFlushers(this.flushers);
     liveSessions.delete(this);
   }
 }
@@ -351,10 +435,7 @@ export function initializeDefaultSession(
   if (cachedDefaultSession) {
     throw new Error('The default session has already been initialized.');
   }
-  cachedDefaultSession = new SessionHandle({
-    ...init,
-    flushers: getActiveFlushers(),
-  });
+  cachedDefaultSession = new SessionHandle(init);
   return cachedDefaultSession;
 }
 

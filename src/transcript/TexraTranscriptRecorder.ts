@@ -28,12 +28,11 @@ import {
   STREAM_PHASE,
   type LogLevel,
   type MessageType,
-  type StreamTabId,
   type ToolUseLog,
 } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
 
-import { type StreamLogStore } from './StreamLogStore';
+import type { TranscriptWriter } from './StreamLogStore';
 
 const STREAM_UPDATE_THROTTLE_MS = 50;
 
@@ -101,10 +100,19 @@ export interface TranscriptRecorderHandle {
 
 export function attachTranscriptRecorder(
   trace: AgentTrace,
-  streamId: StreamTabId,
-  store: StreamLogStore,
+  writer: TranscriptWriter,
 ): TranscriptRecorderHandle {
+  const { streamId } = writer;
   const streams = new Map<string, StreamSinkState>();
+  let pendingFailure: unknown;
+  const recordFailure = (error: unknown): void => {
+    pendingFailure ??= error;
+    for (const state of streams.values()) {
+      if (state.updateTimer) clearTimeout(state.updateTimer);
+      state.updateTimer = null;
+      state.enabled = false;
+    }
+  };
   // stage.start's `kind` lives only on that event — `store.update` at
   // stage.end replaces `data` wholesale (see StreamLog.update), so without
   // this the persisted GROUP_END row would forget whether the stage was the
@@ -134,7 +142,7 @@ export function attachTranscriptRecorder(
     if (!state.enabled) return;
 
     if (!state.created) {
-      const appended = store.append(streamId, {
+      const appended = writer.append({
         id,
         type: STREAM_LOG_ENTRY_TYPES.LOG,
         level: state.level,
@@ -151,12 +159,12 @@ export function attachTranscriptRecorder(
     }
 
     if (!state.ended && pendingText.length > 0) {
-      store.appendText(streamId, id, pendingText);
+      writer.appendText(id, pendingText);
       return;
     }
 
     if (state.ended) {
-      store.update(streamId, id, {
+      writer.update(id, {
         text: state.buffer,
         data: { status: 'completed' },
       });
@@ -167,12 +175,22 @@ export function attachTranscriptRecorder(
     if (state.updateTimer) return;
     state.updateTimer = setTimeout(() => {
       state.updateTimer = null;
-      flushStream(state, id);
+      try {
+        flushStream(state, id);
+      } catch (error) {
+        recordFailure(error);
+      }
     }, STREAM_UPDATE_THROTTLE_MS);
   };
 
   const flushPending = (): void => {
-    for (const [id, state] of streams) flushStream(state, id);
+    if (pendingFailure !== undefined) throw pendingFailure;
+    try {
+      for (const [id, state] of streams) flushStream(state, id);
+    } catch (error) {
+      recordFailure(error);
+      throw error;
+    }
   };
 
   // Append a generic text LOG row. Centralizes the boilerplate shared by the
@@ -186,7 +204,7 @@ export function attachTranscriptRecorder(
     data?: unknown;
     verbose?: boolean;
   }): void => {
-    store.append(streamId, {
+    writer.append({
       id: generateShortId(),
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: params.level ?? 'info',
@@ -200,276 +218,286 @@ export function attachTranscriptRecorder(
   };
 
   const subscriber: AgentTraceSubscriber = (event: AgentEvent) => {
-    switch (event.type) {
-      case 'log': {
-        const messageType = asMessageType(event.messageType);
-        if (!shouldEmit(event.level, messageType)) return;
-        appendLog({
-          level: event.level,
-          groupId: event.stageId,
-          messageType,
-          text: event.message,
-          data: event.data,
-          verbose: event.verbose,
-        });
-        return;
-      }
-
-      case 'stage.start':
-        if (event.kind) stageKinds.set(event.id, event.kind);
-        // A new round starts fresh: whatever MODEL_RESPONSE stream the
-        // previous round may have opened is no longer this round's to reuse.
-        if (event.kind === 'round') pendingModelResponseId = undefined;
-        store.append(streamId, {
-          id: event.id,
-          type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-          level: 'info',
-          timestamp: Date.now(),
-          groupId: event.parentId,
-          messageType: MESSAGE_TYPES.DEFAULT,
-          text: event.label,
-          data: {
-            status: STREAM_PHASE.RUNNING,
-            ...(event.kind ? { kind: event.kind } : {}),
-            ...(event.index !== undefined ? { index: event.index } : {}),
-            ...(event.total !== undefined ? { total: event.total } : {}),
-          },
-          verbose: isDebugModeEnabled(),
-        });
-        return;
-
-      case 'stage.end': {
-        const kind = stageKinds.get(event.id);
-        stageKinds.delete(event.id);
-        store.update(streamId, event.id, {
-          type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-          data: {
-            status: event.status ?? RUN_OUTCOME.COMPLETED,
-            endTime: Date.now(),
-            ...(kind ? { kind } : {}),
-          },
-        });
-        return;
-      }
-
-      case 'tool.start':
-        pendingModelResponseId = undefined;
-        // event.logId is the canonical id — SDK consumers correlate
-        // tool.start/end by it and the store entry shares the same id so
-        // callers can lookup with store.get(streamId).find(e => e.id === logId).
-        store.append(streamId, {
-          id: event.logId,
-          type: STREAM_LOG_ENTRY_TYPES.LOG,
-          level: 'info',
-          timestamp: Date.now(),
-          groupId: event.stageId,
-          messageType: MESSAGE_TYPES.TOOL_USE,
-          data: {
-            toolName: event.toolName,
-            input: redactToolInputForLog(event.toolName, event.input),
-            status: 'in_progress',
-          } satisfies ToolUseLog,
-          verbose: isDebugModeEnabled(),
-        });
-        return;
-
-      case 'tool.end': {
-        const result = (event.result ?? {}) as Partial<ToolUseLog>;
-        const redactedResult =
-          typeof result.toolName === 'string'
-            ? {
-                ...result,
-                input: redactToolInputForLog(result.toolName, result.input),
-              }
-            : result;
-        // Omit groupId on update — undefined would clobber the canonical
-        // value stamped at tool.start (deferred tools never copy the
-        // resolved id back into their ref).
-        store.update(streamId, event.logId, {
-          messageType: MESSAGE_TYPES.TOOL_USE,
-          data: {
-            ...redactedResult,
-            status: event.status,
-          } as ToolUseLog,
-        });
-        return;
-      }
-
-      case 'usage':
-        if (event.recordTranscript === false) return;
-        appendLog({
-          groupId: event.stageId,
-          messageType: MESSAGE_TYPES.STATISTICS,
-          text: `Usage - input: ${event.payload.usage.inputTokens}, output: ${event.payload.usage.outputTokens}`,
-          data: event.payload.usage,
-        });
-        return;
-
-      case 'status':
-        return;
-
-      case 'context.state': {
-        const utilizationPercent = computeUtilizationPercent(
-          event.inputTokens,
-          event.contextWindow,
-        );
-        appendLog({
-          groupId: event.stageId,
-          messageType: MESSAGE_TYPES.CONTEXT_STATE,
-          text: `Context: ${event.inputTokens}/${event.contextWindow} tokens (${utilizationPercent.toFixed(1)}%)`,
-          data: {
-            inputTokens: event.inputTokens,
-            contextWindow: event.contextWindow,
-            utilizationPercent,
-          },
-        });
-        return;
-      }
-
-      case 'stream.start': {
-        const state: StreamSinkState = {
-          buffer: '',
-          pending: [],
-          created: false,
-          ended: false,
-          enabled: true,
-          groupId: event.stageId,
-          level: 'info',
-          messageType: asMessageType(event.kind),
-          updateTimer: null,
-        };
-        streams.set(event.id, state);
-        if (state.messageType === MESSAGE_TYPES.MODEL_RESPONSE) {
-          pendingModelResponseId = event.id;
-        }
-        // The start IS the signal consumers care about — it marks the moment
-        // the phase began: a running THINKING entry drives the CLI's "model
-        // is thinking" indicator, and a running MODEL_RESPONSE entry says
-        // the response has started even when its content is withheld
-        // (phase-only workflow streams, hidden reasoning that never emits a
-        // chunk). Materialize the entry immediately; renderers already skip
-        // entries with empty text.
-        flushStream(state, event.id);
-        return;
-      }
-
-      case 'stream.chunk': {
-        const state = streams.get(event.id);
-        if (!state || !state.enabled) return;
-        state.pending.push(event.text);
-        // First content flushes immediately — the entry was materialized
-        // empty at stream.start, so without this the first paint would wait
-        // out the coalescing interval. Later chunks coalesce.
-        if (!state.created || state.buffer.length === 0) {
-          flushStream(state, event.id);
-        } else {
-          scheduleStreamUpdate(state, event.id);
-        }
-        return;
-      }
-
-      case 'stream.end': {
-        const state = streams.get(event.id);
-        if (!state) return;
-        if (typeof event.finalText === 'string') {
-          state.buffer = event.finalText;
-          state.pending = [];
-        }
-        state.ended = true;
-        flushStream(state, event.id);
-        streams.delete(event.id);
-        return;
-      }
-
-      case 'response.finalized': {
-        if (!event.text) return;
-        // Upsert by id, not by text: if this round's own MODEL_RESPONSE
-        // stream already wrote a (possibly raw, pre-replacement) entry,
-        // reconcile it to the authoritative text; otherwise this round never
-        // streamed (e.g. a non-streaming provider call), so append it fresh.
-        const correlatorId = pendingModelResponseId;
-        pendingModelResponseId = undefined;
-        if (correlatorId) {
-          store.update(streamId, correlatorId, {
-            text: event.text,
-            data: { status: 'completed' },
+    if (pendingFailure !== undefined) throw pendingFailure;
+    try {
+      switch (event.type) {
+        case 'log': {
+          const messageType = asMessageType(event.messageType);
+          if (!shouldEmit(event.level, messageType)) return;
+          appendLog({
+            level: event.level,
+            groupId: event.stageId,
+            messageType,
+            text: event.message,
+            data: event.data,
+            verbose: event.verbose,
           });
           return;
         }
-        appendLog({
-          groupId: event.stageId,
-          messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-          text: event.text,
-        });
-        return;
-      }
 
-      case 'domain': {
-        // Subscribers that care about specific keys can switch on event.key.
-        // filesLoaded has a richer payload shape; format the text accordingly.
-        if (event.key === 'filesLoaded') {
-          const payload = event.data as
-            | { category?: string; entries?: ReadonlyArray<{ ok?: boolean }> }
-            | undefined;
-          const entries = payload?.entries ?? [];
-          const okCount = entries.filter((e) => e?.ok).length;
+        case 'stage.start':
+          if (event.kind) stageKinds.set(event.id, event.kind);
+          // A new round starts fresh: whatever MODEL_RESPONSE stream the
+          // previous round may have opened is no longer this round's to reuse.
+          if (event.kind === 'round') pendingModelResponseId = undefined;
+          writer.append({
+            id: event.id,
+            type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+            level: 'info',
+            timestamp: Date.now(),
+            groupId: event.parentId,
+            messageType: MESSAGE_TYPES.DEFAULT,
+            text: event.label,
+            data: {
+              status: STREAM_PHASE.RUNNING,
+              ...(event.kind ? { kind: event.kind } : {}),
+              ...(event.index !== undefined ? { index: event.index } : {}),
+              ...(event.total !== undefined ? { total: event.total } : {}),
+            },
+            verbose: isDebugModeEnabled(),
+          });
+          return;
+
+        case 'stage.end': {
+          const kind = stageKinds.get(event.id);
+          stageKinds.delete(event.id);
+          writer.update(event.id, {
+            type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+            data: {
+              status: event.status ?? RUN_OUTCOME.COMPLETED,
+              endTime: Date.now(),
+              ...(kind ? { kind } : {}),
+            },
+          });
+          return;
+        }
+
+        case 'tool.start':
+          pendingModelResponseId = undefined;
+          // event.logId is the canonical id — SDK consumers correlate
+          // tool.start/end by it and the store entry shares the same id so
+          // callers can lookup with store.get(streamId).find(e => e.id === logId).
+          writer.append({
+            id: event.logId,
+            type: STREAM_LOG_ENTRY_TYPES.LOG,
+            level: 'info',
+            timestamp: Date.now(),
+            groupId: event.stageId,
+            messageType: MESSAGE_TYPES.TOOL_USE,
+            data: {
+              toolName: event.toolName,
+              input: redactToolInputForLog(event.toolName, event.input),
+              status: 'in_progress',
+            } satisfies ToolUseLog,
+            verbose: isDebugModeEnabled(),
+          });
+          return;
+
+        case 'tool.end': {
+          const result = (event.result ?? {}) as Partial<ToolUseLog>;
+          const redactedResult =
+            typeof result.toolName === 'string'
+              ? {
+                  ...result,
+                  input: redactToolInputForLog(result.toolName, result.input),
+                }
+              : result;
+          // Omit groupId on update — undefined would clobber the canonical
+          // value stamped at tool.start (deferred tools never copy the
+          // resolved id back into their ref).
+          writer.update(event.logId, {
+            messageType: MESSAGE_TYPES.TOOL_USE,
+            data: {
+              ...redactedResult,
+              status: event.status,
+            } as ToolUseLog,
+          });
+          return;
+        }
+
+        case 'usage':
+          if (event.recordTranscript === false) return;
           appendLog({
             groupId: event.stageId,
-            messageType: MESSAGE_TYPES.FILE_LIST,
-            text: `Loading ${payload?.category ?? ''} (${okCount}/${entries.length})`,
-            data: entries,
+            messageType: MESSAGE_TYPES.STATISTICS,
+            text: `Usage - input: ${event.payload.usage.inputTokens}, output: ${event.payload.usage.outputTokens}`,
+            data: event.payload.usage,
+          });
+          return;
+
+        case 'status':
+          return;
+
+        case 'context.state': {
+          const utilizationPercent = computeUtilizationPercent(
+            event.inputTokens,
+            event.contextWindow,
+          );
+          appendLog({
+            groupId: event.stageId,
+            messageType: MESSAGE_TYPES.CONTEXT_STATE,
+            text: `Context: ${event.inputTokens}/${event.contextWindow} tokens (${utilizationPercent.toFixed(1)}%)`,
+            data: {
+              inputTokens: event.inputTokens,
+              contextWindow: event.contextWindow,
+              utilizationPercent,
+            },
           });
           return;
         }
-        appendLog({
-          groupId: event.stageId,
-          messageType: DOMAIN_MESSAGE_TYPE[event.key] ?? MESSAGE_TYPES.DEFAULT,
-          text: event.text ?? event.key,
-          data: event.data,
-        });
-        return;
+
+        case 'stream.start': {
+          const state: StreamSinkState = {
+            buffer: '',
+            pending: [],
+            created: false,
+            ended: false,
+            enabled: true,
+            groupId: event.stageId,
+            level: 'info',
+            messageType: asMessageType(event.kind),
+            updateTimer: null,
+          };
+          streams.set(event.id, state);
+          if (state.messageType === MESSAGE_TYPES.MODEL_RESPONSE) {
+            pendingModelResponseId = event.id;
+          }
+          // The start IS the signal consumers care about — it marks the moment
+          // the phase began: a running THINKING entry drives the CLI's "model
+          // is thinking" indicator, and a running MODEL_RESPONSE entry says
+          // the response has started even when its content is withheld
+          // (phase-only workflow streams, hidden reasoning that never emits a
+          // chunk). Materialize the entry immediately; renderers already skip
+          // entries with empty text.
+          flushStream(state, event.id);
+          return;
+        }
+
+        case 'stream.chunk': {
+          const state = streams.get(event.id);
+          if (!state || !state.enabled) return;
+          state.pending.push(event.text);
+          // First content flushes immediately — the entry was materialized
+          // empty at stream.start, so without this the first paint would wait
+          // out the coalescing interval. Later chunks coalesce.
+          if (!state.created || state.buffer.length === 0) {
+            flushStream(state, event.id);
+          } else {
+            scheduleStreamUpdate(state, event.id);
+          }
+          return;
+        }
+
+        case 'stream.end': {
+          const state = streams.get(event.id);
+          if (!state) return;
+          if (typeof event.finalText === 'string') {
+            state.buffer = event.finalText;
+            state.pending = [];
+          }
+          state.ended = true;
+          flushStream(state, event.id);
+          streams.delete(event.id);
+          return;
+        }
+
+        case 'response.finalized': {
+          if (!event.text) return;
+          // Upsert by id, not by text: if this round's own MODEL_RESPONSE
+          // stream already wrote a (possibly raw, pre-replacement) entry,
+          // reconcile it to the authoritative text; otherwise this round never
+          // streamed (e.g. a non-streaming provider call), so append it fresh.
+          const correlatorId = pendingModelResponseId;
+          pendingModelResponseId = undefined;
+          if (correlatorId) {
+            writer.update(correlatorId, {
+              text: event.text,
+              data: { status: 'completed' },
+            });
+            return;
+          }
+          appendLog({
+            groupId: event.stageId,
+            messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+            text: event.text,
+          });
+          return;
+        }
+
+        case 'domain': {
+          // Subscribers that care about specific keys can switch on event.key.
+          // filesLoaded has a richer payload shape; format the text accordingly.
+          if (event.key === 'filesLoaded') {
+            const payload = event.data as
+              | { category?: string; entries?: ReadonlyArray<{ ok?: boolean }> }
+              | undefined;
+            const entries = payload?.entries ?? [];
+            const okCount = entries.filter((e) => e?.ok).length;
+            appendLog({
+              groupId: event.stageId,
+              messageType: MESSAGE_TYPES.FILE_LIST,
+              text: `Loading ${payload?.category ?? ''} (${okCount}/${entries.length})`,
+              data: entries,
+            });
+            return;
+          }
+          appendLog({
+            groupId: event.stageId,
+            messageType:
+              DOMAIN_MESSAGE_TYPE[event.key] ?? MESSAGE_TYPES.DEFAULT,
+            text: event.text ?? event.key,
+            data: event.data,
+          });
+          return;
+        }
+
+        case 'conversation.progress':
+        case 'updateTodos':
+        case 'updatePlan':
+        case 'addOutputFiles':
+        case 'updateMissingOutputs':
+        case 'updateCompileFailures':
+        case 'goalPaused':
+          return;
+
+        case 'result':
+          // The terminal outcome is consumed by hosts via `session.onResult`.
+          // The transcript already reflects completion through `stage.end`, so it
+          // adds no row here (keeps transcript output unchanged).
+          return;
+
+        case 'run.start':
+        case 'run.config':
+          // Run identity/config facts drive host state through the session plane.
+          // They are not transcript rows.
+          return;
+
+        case 'child.activity':
+        case 'process.output':
+          // Stage 3a child/process facts replace legacy progress events for UI
+          // badges and process panes; they were not transcript rows before.
+          return;
+
+        default: {
+          // Exhaustiveness check: adding a new event arm forces an error here.
+          const _exhaustive: never = event;
+          void _exhaustive;
+        }
       }
-
-      case 'conversation.progress':
-      case 'updateTodos':
-      case 'updatePlan':
-      case 'addOutputFiles':
-      case 'updateMissingOutputs':
-      case 'updateCompileFailures':
-      case 'goalPaused':
-        return;
-
-      case 'result':
-        // The terminal outcome is consumed by hosts via `session.onResult`.
-        // The transcript already reflects completion through `stage.end`, so it
-        // adds no row here (keeps transcript output unchanged).
-        return;
-
-      case 'run.start':
-      case 'run.config':
-        // Run identity/config facts drive host state through the session plane.
-        // They are not transcript rows.
-        return;
-
-      case 'child.activity':
-      case 'process.output':
-        // Stage 3a child/process facts replace legacy progress events for UI
-        // badges and process panes; they were not transcript rows before.
-        return;
-
-      default: {
-        // Exhaustiveness check: adding a new event arm forces an error here.
-        const _exhaustive: never = event;
-        void _exhaustive;
-      }
+    } catch (error) {
+      recordFailure(error);
+      throw error;
     }
   };
 
   const unsubscribe = trace.subscribe(subscriber);
   return {
     unsubscribe: () => {
-      flushPending();
-      unsubscribe();
+      try {
+        flushPending();
+      } finally {
+        unsubscribe();
+      }
     },
     flushPending,
   };
