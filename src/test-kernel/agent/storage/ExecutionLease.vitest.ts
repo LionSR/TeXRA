@@ -21,6 +21,7 @@ import {
   onOwnedExecutionLeaseLost,
   ownsExecutionLease,
   releaseOwnedExecutionLease,
+  renewOwnedExecutionLease,
   runWithInactiveExecutionLease,
   waitForOwnedExecutionLeaseRelease,
 } from '@agent/storage/executionLease';
@@ -265,6 +266,82 @@ describe('cross-process execution leases', () => {
         timestamp: '2026-07-16T12:01:00.000Z',
       }),
     ).rejects.toBeInstanceOf(ExecutionLeaseLostError);
+    ownedExecutionIds.delete(executionId);
+  });
+
+  it('never overlaps heartbeat work for the same execution', async () => {
+    const executionId = 'e86441' as ExecutionId;
+    vi.useFakeTimers();
+    let releaseHeartbeat = (): void => undefined;
+    try {
+      await acquire(executionId);
+      const originalRunExclusive = platform().fileLocks.runExclusive.bind(
+        platform().fileLocks,
+      );
+      const heartbeatGate = new Promise<void>((resolve) => {
+        releaseHeartbeat = resolve;
+      });
+      const runExclusive = vi
+        .spyOn(platform().fileLocks, 'runExclusive')
+        .mockImplementation(async (lockPath, operation) => {
+          await heartbeatGate;
+          return originalRunExclusive(lockPath, operation);
+        });
+
+      await vi.advanceTimersByTimeAsync(15_000);
+      for (let index = 0; index < 5; index += 1) await Promise.resolve();
+      expect(runExclusive).toHaveBeenCalledOnce();
+
+      await vi.advanceTimersByTimeAsync(45_000);
+      expect(runExclusive).toHaveBeenCalledOnce();
+    } finally {
+      releaseHeartbeat();
+      vi.useRealTimers();
+    }
+  });
+
+  it('retains recent ownership through a transient heartbeat failure', async () => {
+    const executionId = 'e86442' as ExecutionId;
+    await acquire(executionId);
+    vi.spyOn(platform().fileLocks, 'runExclusive').mockRejectedValueOnce(
+      new Error('temporary filesystem failure'),
+    );
+
+    await expect(
+      renewOwnedExecutionLease(executionId),
+    ).resolves.toBeUndefined();
+    expect(ownsExecutionLease(executionId)).toBe(true);
+  });
+
+  it('rejects renewal when release starts during its heartbeat', async () => {
+    const executionId = 'e86443' as ExecutionId;
+    await acquire(executionId);
+    const originalRunExclusive = platform().fileLocks.runExclusive.bind(
+      platform().fileLocks,
+    );
+    let markHeartbeatStarted = (): void => undefined;
+    const heartbeatStarted = new Promise<void>((resolve) => {
+      markHeartbeatStarted = resolve;
+    });
+    let releaseHeartbeat = (): void => undefined;
+    const heartbeatGate = new Promise<void>((resolve) => {
+      releaseHeartbeat = resolve;
+    });
+    vi.spyOn(platform().fileLocks, 'runExclusive').mockImplementationOnce(
+      async (lockPath, operation) => {
+        markHeartbeatStarted();
+        await heartbeatGate;
+        return originalRunExclusive(lockPath, operation);
+      },
+    );
+
+    const renewal = renewOwnedExecutionLease(executionId);
+    await heartbeatStarted;
+    const release = releaseOwnedExecutionLease(executionId);
+    releaseHeartbeat();
+
+    await expect(renewal).rejects.toBeInstanceOf(ExecutionLeaseLostError);
+    await release;
     ownedExecutionIds.delete(executionId);
   });
 

@@ -111,7 +111,7 @@ type TestableBridge = Bridge & {
         text: string;
       },
     ): unknown;
-    releaseEntries(streamId: StreamTabId): void;
+    requestEviction(streamId: StreamTabId): void;
     reload(): Promise<void>;
     ensureLoaded(streamId: StreamTabId): Promise<void>;
     getUnfinishedStreamIds(): StreamTabId[];
@@ -2715,7 +2715,7 @@ describe('DesktopProgressBridge', () => {
     await (
       bridge as unknown as { session: SessionHandle }
     ).session.flushArtifacts();
-    bridge.streamLogs.releaseEntries(streamId);
+    bridge.streamLogs.requestEviction(streamId);
     await bridge.streamLogs.reload();
     await bridge.streamLogs.ensureLoaded(streamId);
 

@@ -94,6 +94,7 @@ export function createChildStream(
     childStreamId,
     session.transcripts,
     session.flushers,
+    executionId,
   );
   const detachSessionTrace = session.attachRunTrace(
     runTrace.trace,

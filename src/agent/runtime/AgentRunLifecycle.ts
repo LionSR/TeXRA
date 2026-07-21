@@ -407,8 +407,9 @@ export async function runFlowWithLifecycle(
       // of ExecutionRegistry.terminate() finding no interrupt target and
       // no-oping — see AgentRunLifecycle/ExecutionRegistry issue #7287.
       const parentStageId = ctx.parentStage.id;
-      handle.registerWaitingCleanup(() => {
+      handle.registerWaitingCleanup(async () => {
         session.followUps.release(streamId);
+        if (handle.executionLeaseLost) return;
         // Close this turn's "Run: ..." transcript group so a killed suspended
         // subagent doesn't leave it stuck at `running` forever (every other
         // terminal path reaches this via `finalizeRunTerminal`'s stage end,
@@ -427,14 +428,23 @@ export async function runFlowWithLifecycle(
         // `beginRunStage` call, including on resume), so this can never
         // double-close a stage some other turn already ended.
         if (parentStageId) {
-          session.transcripts.update(streamId, parentStageId, {
-            type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-            data: {
-              status: RUN_OUTCOME.CANCELLED,
-              endTime: Date.now(),
-              kind: 'run',
-            },
-          });
+          const writer = await session.transcripts.loadAndAcquireWriter(
+            streamId,
+            handle.executionId,
+          );
+          try {
+            if (handle.executionLeaseLost) return;
+            writer.update(parentStageId, {
+              type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+              data: {
+                status: RUN_OUTCOME.CANCELLED,
+                endTime: Date.now(),
+                kind: 'run',
+              },
+            });
+          } finally {
+            writer.close();
+          }
         }
       });
       return result;

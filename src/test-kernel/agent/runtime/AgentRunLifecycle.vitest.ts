@@ -691,6 +691,11 @@ describe('runFlowWithLifecycle', () => {
         streamId,
         STREAM_STATUS.WAITING,
       );
+      const waitingHandle = defaultSession().executions.getHandle(executionId);
+      expect(waitingHandle).toBeInstanceOf(AgentExecutionHandle);
+      if (!(waitingHandle instanceof AgentExecutionHandle)) {
+        throw new Error('Expected a suspended agent execution handle.');
+      }
 
       // runToolUseFlow's finally detaches this stream's interrupt handler but
       // (post #7286) preserves the follow-up queue for WAITING — it does not
@@ -702,6 +707,7 @@ describe('runFlowWithLifecycle', () => {
       // fall back to the waiting-cleanup registered above and actually tear
       // the execution down.
       expect(defaultSession().executions.kill(executionId)).toBe(true);
+      await waitingHandle.result;
 
       // The bypassed runFlowWithLifecycle can't emit the terminal result, so
       // terminateWaitingHandle must — trace subscribers would otherwise miss
@@ -722,11 +728,13 @@ describe('runFlowWithLifecycle', () => {
         STREAM_PHASE.CANCELLED,
       );
       expect(followUpsRelease).toHaveBeenCalledWith(streamId);
-      expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
-        executionId,
-        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
-        flowRecord: 'delete',
-      });
+      await vi.waitFor(() =>
+        expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
+          executionId,
+          terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+          flowRecord: 'delete',
+        }),
+      );
       // The kill path never resumes, so the per-suspension parent stage must
       // be closed here rather than dangling open forever. `ctx.parentStage`
       // is already desubscribed by this point (disposeTrace ran in the
@@ -747,6 +755,70 @@ describe('runFlowWithLifecycle', () => {
         }),
       );
     } finally {
+      defaultSession().executions.untrack(executionId);
+      clearStreamStatusForTest(defaultSession().status, streamId);
+    }
+  });
+
+  it('does not close a waiting transcript group after lease loss', async () => {
+    const { executionId, streamId, ctx } = lifecycleFixture(
+      'lifecycle-waiting-cleanup-lease-loss',
+    );
+    const transcripts = ctx.runScope.session.transcripts;
+    const transcriptsUpdate = vi.spyOn(transcripts, 'update');
+    transcriptsUpdate.mockClear();
+    storageMocks.finalizeExecution.mockClear();
+    const originalLoadAndAcquireWriter =
+      transcripts.loadAndAcquireWriter.bind(transcripts);
+    let markWriterLoadStarted = (): void => undefined;
+    const writerLoadStarted = new Promise<void>((resolve) => {
+      markWriterLoadStarted = resolve;
+    });
+    let releaseWriterLoad = (): void => undefined;
+    const writerLoadGate = new Promise<void>((resolve) => {
+      releaseWriterLoad = resolve;
+    });
+    vi.spyOn(transcripts, 'loadAndAcquireWriter').mockImplementationOnce(
+      async (requestedStreamId, ownerKey) => {
+        markWriterLoadStarted();
+        await writerLoadGate;
+        return originalLoadAndAcquireWriter(requestedStreamId, ownerKey);
+      },
+    );
+
+    try {
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async () => ({
+          category: 'toolUse',
+          outcome: STREAM_PHASE.WAITING,
+          executionId,
+          streamId,
+        }),
+        { isSubagent: true },
+      );
+      expect(result.outcome).toBe(STREAM_PHASE.WAITING);
+      seedStreamStatusForTest(
+        defaultSession().status,
+        streamId,
+        STREAM_STATUS.WAITING,
+      );
+      const waitingHandle = defaultSession().executions.getHandle(executionId);
+      expect(waitingHandle).toBeInstanceOf(AgentExecutionHandle);
+      if (!(waitingHandle instanceof AgentExecutionHandle)) {
+        throw new Error('Expected a suspended agent execution handle.');
+      }
+
+      expect(defaultSession().executions.kill(executionId)).toBe(true);
+      await writerLoadStarted;
+      waitingHandle.markExecutionLeaseLost();
+      releaseWriterLoad();
+      await waitingHandle.result;
+
+      expect(transcriptsUpdate).not.toHaveBeenCalled();
+      expect(storageMocks.finalizeExecution).not.toHaveBeenCalled();
+    } finally {
+      releaseWriterLoad();
       defaultSession().executions.untrack(executionId);
       clearStreamStatusForTest(defaultSession().status, streamId);
     }
