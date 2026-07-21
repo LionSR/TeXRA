@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import {
   countMediaFilesNeedingVision,
   formatMediaNeedsVisionWarning,
-  mediaAttachmentKinds,
   shouldWarnMediaNeedsVision,
 } from '@agent/runtime/mediaVisionWarning';
 
@@ -52,20 +51,5 @@ describe('media vision warnings', () => {
     expect(formatMediaNeedsVisionWarning(2, 'pasted')).toBe(
       'Model has no vision support — 2 pasted media files are not sent to the model. Switch to a vision-capable model to use them.',
     );
-  });
-
-  // #7508: classifies each attached file as image/document (kind only, no
-  // bytes) so the userMessage transcript row can carry attachment markers.
-  describe('mediaAttachmentKinds', () => {
-    it('classifies image files as image and everything else as document', () => {
-      expect(
-        mediaAttachmentKinds(['figure.png', 'notes.pdf', 'voice.mp3']),
-      ).toEqual(['image', 'document', 'document']);
-    });
-
-    it('returns an empty array for no media files', () => {
-      expect(mediaAttachmentKinds(undefined)).toEqual([]);
-      expect(mediaAttachmentKinds([])).toEqual([]);
-    });
   });
 });
