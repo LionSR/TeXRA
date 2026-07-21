@@ -9,8 +9,12 @@ import { describe, it, beforeEach, afterEach } from 'vitest';
 
 // Local imports
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import {
+  defaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { TextEditorTool } from '@tools/TextEditorTool';
@@ -46,22 +50,31 @@ async function installPlatform(
   });
 }
 
-async function callTextEditor(tool: TextEditorTool, input: unknown) {
+async function callTextEditor(
+  tool: TextEditorTool,
+  input: unknown,
+  options: {
+    executionId?: string;
+    session?: SessionHandle;
+  } = {},
+) {
+  const executionId = options.executionId ?? EXECUTION_ID;
   return withRunContext(
     createRunContext({
       runtimeHost: noopAgentRuntimeHost,
-      streamId: `stream:${EXECUTION_ID}` as StreamTabId,
-      executionId: EXECUTION_ID,
+      streamId: `stream:${executionId}` as StreamTabId,
+      executionId,
+      session: options.session,
     }),
     () => tool.call(input),
   );
 }
 
 interface TextEditorToolInternals {
-  fileHistory: Map<string, string[]>;
+  fileHistory: Map<string, Map<string, string[]>>;
 }
 
-describe('TextEditorTool undo history cap', () => {
+describe('TextEditorTool undo history lifecycle', () => {
   beforeEach(async () => {
     await installPlatform();
     cleanupAllApprovals();
@@ -91,13 +104,13 @@ describe('TextEditorTool undo history cap', () => {
     assert.strictEqual(await WorkspaceFS.read('loop.tex'), `${EDIT_COUNT}\n`);
 
     const internals = tool as unknown as TextEditorToolInternals;
-    const key = [...internals.fileHistory.keys()].find((k) =>
-      k.endsWith('loop.tex'),
-    );
-    assert.ok(key, 'expected an undo-history entry for loop.tex');
+    const history = [
+      ...(internals.fileHistory.get(EXECUTION_ID)?.values() ?? []),
+    ].at(0);
+    assert.ok(history, 'expected an undo-history entry for loop.tex');
     assert.ok(
-      internals.fileHistory.get(key!)!.length <= 50,
-      `expected history capped at 50, got ${internals.fileHistory.get(key!)!.length}`,
+      history.length <= 50,
+      `expected history capped at 50, got ${history.length}`,
     );
 
     // The cap must never affect the one documented behavior: undoing the
@@ -111,5 +124,47 @@ describe('TextEditorTool undo history cap', () => {
       await WorkspaceFS.read('loop.tex'),
       `${EDIT_COUNT - 1}\n`,
     );
+  });
+
+  it('releases all snapshots when the owning execution completes', async () => {
+    await installPlatform({ '/workspace/lifecycle.tex': 'before\n' });
+    const tool = new TextEditorTool();
+    const session = defaultSession();
+    const streamId = `stream:${EXECUTION_ID}` as StreamTabId;
+    const handle = new AgentExecutionHandle(
+      EXECUTION_ID,
+      streamId,
+      streamId,
+      'orchestrator',
+      'toolUse',
+      noopAgentRuntimeHost,
+    );
+    session.executions.track(handle);
+
+    try {
+      const result = await callTextEditor(
+        tool,
+        {
+          command: 'str_replace',
+          path: 'lifecycle.tex',
+          old_str: 'before',
+          new_str: 'after',
+        },
+        { session },
+      );
+      assert.strictEqual(result.status, 'executed');
+
+      const internals = tool as unknown as TextEditorToolInternals;
+      assert.strictEqual(
+        [...(internals.fileHistory.get(EXECUTION_ID)?.values() ?? [])].at(0)
+          ?.length,
+        1,
+      );
+
+      session.executions.untrack(EXECUTION_ID);
+      assert.strictEqual(internals.fileHistory.has(EXECUTION_ID), false);
+    } finally {
+      session.executions.untrack(EXECUTION_ID);
+    }
   });
 });
