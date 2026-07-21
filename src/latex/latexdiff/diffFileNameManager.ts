@@ -84,14 +84,7 @@ export function generateDiffFileName(
   return `${editedBaseName}${suffix}.tex`;
 }
 
-/**
- * Sole definition of the latexdiff-vc filename grammar's hash group. Built
- * from the shared `COMMIT_HASH_HEX_RANGE` so this can't silently drift from
- * `COMMIT_HASH_PATTERN` in `packages/extension/src/commands/git/gitCommands.ts`
- * — the git-commit validator that governs what hashes latexdiff-vc filenames
- * can actually embed — the way the two independent copies of this grammar
- * used to.
- */
+/** Hash group sourced from `@utils/git/commitHashPattern` so it can't drift from the git-commit validator. */
 const VERSION_CONTROL_DIFF_PATTERN = new RegExp(
   `^(.+)-diff(${COMMIT_HASH_HEX_RANGE})$`,
   'i',
