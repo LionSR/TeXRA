@@ -556,6 +556,7 @@ export class TextEditorTool extends defineTool({
     if (!registry?.getHandle(executionId)) return;
 
     this.observedExecutions.add(executionId);
+    // The registry releases persistent listeners after this terminal callback.
     registry.addListener(executionId, (handle) => {
       if (handle) return;
       this.fileHistory.delete(executionId);
