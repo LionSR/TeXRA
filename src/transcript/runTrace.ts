@@ -40,16 +40,49 @@ export function createRunTrace(
   reservedWriter?: TranscriptWriter,
 ): RunTrace {
   const writer = reservedWriter ?? store.acquireWriter(streamId, ownerKey);
+  if (flushers.has(ownerKey)) {
+    const ownershipError = new Error(
+      `Execution ${ownerKey} already owns a run trace.`,
+    );
+    try {
+      writer.close();
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [ownershipError, cleanupError],
+        'Duplicate run trace setup and cleanup failed',
+      );
+    }
+    throw ownershipError;
+  }
   const trace = new TraceEmitter();
-  const unsubscribeChannel = attachChannelSubscriber(trace, {
-    channel: streamId,
-    isAgent: true,
-  });
-  const transcript = attachTranscriptRecorder(trace, writer);
+  let unsubscribeChannel: (() => void) | undefined;
+  let transcript: ReturnType<typeof attachTranscriptRecorder>;
+  try {
+    unsubscribeChannel = attachChannelSubscriber(trace, {
+      channel: streamId,
+      isAgent: true,
+    });
+    transcript = attachTranscriptRecorder(trace, writer);
+  } catch (error) {
+    const failures = [error];
+    try {
+      unsubscribeChannel?.();
+    } catch (cleanupError) {
+      failures.push(cleanupError);
+    }
+    try {
+      writer.close();
+    } catch (cleanupError) {
+      failures.push(cleanupError);
+    }
+    if (failures.length > 1) {
+      throw new AggregateError(failures, 'Run trace setup and cleanup failed');
+    }
+    throw error;
+  }
 
   // Register the flush by execution so durability boundaries drain only their
   // own trace, while session shutdown can still drain every trace.
-  // only the artifacts belonging to that session.
   flushers.set(ownerKey, transcript.flushPending);
 
   let disposed = false;
@@ -59,18 +92,38 @@ export function createRunTrace(
     dispose: () => {
       if (disposed) return;
       disposed = true;
-      if (flushers.get(ownerKey) === transcript.flushPending) {
-        flushers.delete(ownerKey);
-      }
+      const failures: unknown[] = [];
       try {
         transcript.unsubscribe();
-      } finally {
-        try {
-          unsubscribeChannel();
-        } finally {
-          writer.close();
-        }
+      } catch (error) {
+        failures.push(error);
       }
+      try {
+        unsubscribeChannel();
+      } catch (error) {
+        failures.push(error);
+      }
+      try {
+        writer.close();
+      } catch (error) {
+        failures.push(error);
+      }
+      if (flushers.get(ownerKey) !== transcript.flushPending) return;
+      if (failures.length === 0) {
+        flushers.delete(ownerKey);
+        return;
+      }
+      const failure =
+        failures.length === 1
+          ? failures[0]
+          : new AggregateError(failures, 'Run trace cleanup failed');
+      const handoffFailure = (): void => {
+        if (flushers.get(ownerKey) === handoffFailure) {
+          flushers.delete(ownerKey);
+        }
+        throw failure;
+      };
+      flushers.set(ownerKey, handoffFailure);
     },
   };
 }

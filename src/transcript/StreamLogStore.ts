@@ -363,7 +363,6 @@ export class StreamLogStore {
       throw new Error('A transcript writer requires a non-empty owner key.');
     }
 
-    this.pendingRelease.delete(streamId);
     if (
       !allowReleased &&
       this.mode.kind === 'persistent' &&
@@ -432,9 +431,9 @@ export class StreamLogStore {
   async ensureLoaded(streamId: StreamTabId): Promise<void> {
     if (this.mode.kind === 'ephemeral') return;
 
-    // Reactivation cancels any deferred release so the fresh agent work
-    // doesn't get evicted mid-run.
-    this.pendingRelease.delete(streamId);
+    // A direct read reactivates the stream. A writer-reserved load instead
+    // preserves an earlier eviction request until that writer closes.
+    if (!this.writers.has(streamId)) this.pendingRelease.delete(streamId);
     // Normally skip when already resident. A concurrent append may have
     // populated a fresh log before a rehydrate failed, so a retry must still
     // reunite it with persisted history before saves are re-enabled.

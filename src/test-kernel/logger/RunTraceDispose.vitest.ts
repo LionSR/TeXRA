@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MESSAGE_TYPES } from '@shared/schemas';
+import { MESSAGE_TYPES, type StreamTabId } from '@shared/schemas';
 import { createRunTrace, StreamLogStore } from '@transcript';
+import type { TranscriptWriter } from '@transcript/StreamLogStore';
 
 describe('createRunTrace dispose', () => {
   let store: StreamLogStore;
@@ -45,5 +46,62 @@ describe('createRunTrace dispose', () => {
     handle.dispose();
     // Calling dispose again should not throw and should be a no-op.
     expect(() => handle.dispose()).not.toThrow();
+  });
+
+  it('hands a latched cleanup failure to the execution durability flusher', () => {
+    vi.useFakeTimers();
+    const failure = new Error('delayed transcript write failed');
+    const writer: TranscriptWriter = {
+      streamId: 'failed-stream' as StreamTabId,
+      append: vi.fn((entry) => ({ ...entry, seqNo: 0 })),
+      update: vi.fn(),
+      appendText: vi.fn(() => {
+        throw failure;
+      }),
+      close: vi.fn(),
+    };
+    const flushers = new Map<string, () => void>();
+    const handle = createRunTrace(
+      writer.streamId,
+      store,
+      flushers,
+      'execution-failed',
+      writer,
+    );
+    const stream = handle.trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    stream.append('first');
+    stream.append('second');
+    vi.advanceTimersByTime(50);
+
+    expect(() => handle.dispose()).not.toThrow();
+    expect(flushers.has('execution-failed')).toBe(true);
+    expect(() => flushers.get('execution-failed')?.()).toThrow(failure);
+    expect(flushers.has('execution-failed')).toBe(false);
+    expect(writer.close).toHaveBeenCalledOnce();
+  });
+
+  it('closes a reserved writer when subscriber setup fails', () => {
+    const setupFailure = new Error('writer identity unavailable');
+    const close = vi.fn();
+    const writer = {
+      get streamId(): StreamTabId {
+        throw setupFailure;
+      },
+      append: vi.fn(),
+      update: vi.fn(),
+      appendText: vi.fn(),
+      close,
+    } satisfies TranscriptWriter;
+
+    expect(() =>
+      createRunTrace(
+        'setup-failed' as StreamTabId,
+        store,
+        new Map(),
+        'execution-setup-failed',
+        writer,
+      ),
+    ).toThrow(setupFailure);
+    expect(close).toHaveBeenCalledOnce();
   });
 });

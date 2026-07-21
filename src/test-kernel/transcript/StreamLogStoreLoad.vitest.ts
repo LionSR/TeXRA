@@ -469,6 +469,25 @@ describe('StreamLogStore load', () => {
     successor.close();
   });
 
+  it('preserves queued eviction across a same-owner successor', async () => {
+    mockStorage({
+      logs: { alpha: [logEntry('alpha', 1, 100)] },
+      summaries: {},
+    });
+    const store = await StreamLogStore.open();
+    await store.ensureLoaded('alpha');
+    const first = store.acquireWriter('alpha', 'execution-alpha');
+
+    store.requestEviction('alpha');
+    const successor = store.acquireWriter('alpha', 'execution-alpha');
+    first.close();
+    successor.append(logEntry('alpha-live', 2, 200));
+    await store.flush();
+    successor.close();
+
+    expect(store.get('alpha')).toBeUndefined();
+  });
+
   it('rejects when persistent storage cannot be opened', async () => {
     vi.spyOn(StorageFS, 'ensureDir').mockRejectedValue(
       new Error('storage permission denied'),
