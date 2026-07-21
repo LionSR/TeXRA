@@ -142,10 +142,10 @@ export function inferPersistedFlowModelHandlerCompatibilityKey(
   );
   if (parsedKey.success && parsedKey.data) return parsedKey.data;
 
-  const messages =
-    normalizeProviderMessages(record.messages) ??
-    normalizeProviderMessages(record.conversation) ??
-    normalizeProviderMessages(record);
+  // The union in `normalizeProviderMessages` already tries `record` as a bare
+  // messages array, then `record.messages`, then `record.conversation` — one
+  // call covers all three legacy shapes.
+  const messages = normalizeProviderMessages(record);
   if (!messages) return undefined;
 
   return inferPersistedModelHandlerCompatibilityKey(

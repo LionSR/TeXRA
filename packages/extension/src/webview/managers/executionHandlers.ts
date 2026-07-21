@@ -70,12 +70,25 @@ export async function handleExecute(
 }
 
 export function handleFileOperation(message: FileOperationMessage): void {
-  void vscode.commands.executeCommand(
-    `texra.${message.command}`,
-    'inputFile' in message ? message.inputFile : undefined,
-    'baseFile' in message ? message.baseFile : undefined,
-    message.editedFile,
-  );
+  switch (message.command) {
+    case MAIN_VIEW_COMMANDS.MERGE:
+      void vscode.commands.executeCommand(
+        `texra.${message.command}`,
+        message.inputFile,
+        undefined,
+        message.editedFile,
+      );
+      return;
+    case MAIN_VIEW_COMMANDS.COMPARE:
+    case MAIN_VIEW_COMMANDS.ACCEPT_EDITED:
+      void vscode.commands.executeCommand(
+        `texra.${message.command}`,
+        undefined,
+        message.baseFile,
+        message.editedFile,
+      );
+      return;
+  }
 }
 
 export function handleHousekeeping(message: HousekeepingMessage): void {
