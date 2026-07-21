@@ -9,10 +9,7 @@ const mocks = vi.hoisted(() => ({
   runFlowWithLifecycle: vi.fn(),
   runToolUseFlow: vi.fn(),
   acquireResumedExecutionLease: vi.fn(),
-  runWithOwnedExecutionLease: vi.fn(
-    async (_executionId: ExecutionId, operation: () => Promise<unknown>) =>
-      operation(),
-  ),
+  renewOwnedExecutionLease: vi.fn(),
   runWithExecutionLeaseWriteFence: vi.fn(
     async (_executionId: ExecutionId, operation: () => Promise<unknown>) =>
       operation(),
@@ -25,7 +22,7 @@ vi.mock('@agent/storage/executionLease', () => ({
   abandonOwnedExecutionLease: mocks.abandonOwnedExecutionLease,
   acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
   completeOwnedExecutionLease: mocks.completeOwnedExecutionLease,
-  runWithOwnedExecutionLease: mocks.runWithOwnedExecutionLease,
+  renewOwnedExecutionLease: mocks.renewOwnedExecutionLease,
   runWithExecutionLeaseWriteFence: mocks.runWithExecutionLeaseWriteFence,
   releaseOwnedExecutionLeaseAfterFailure:
     mocks.releaseOwnedExecutionLeaseAfterFailure,

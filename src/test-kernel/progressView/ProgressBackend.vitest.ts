@@ -499,7 +499,10 @@ describe('ProgressBackend', () => {
     const active = 'active-workflow' as StreamTabId;
     const hidden = 'hidden-tool-use' as StreamTabId;
     const visible = 'visible-workflow' as StreamTabId;
-    const releaseEntries = vi.spyOn(backend.state.streamLogs, 'releaseEntries');
+    const requestEviction = vi.spyOn(
+      backend.state.streamLogs,
+      'requestEviction',
+    );
 
     try {
       // The unfiltered durable fallback selects the last stream (`hidden`),
@@ -523,7 +526,7 @@ describe('ProgressBackend', () => {
 
       expect(backend.state.activeStream).toBe(visible);
       expect(lifecycle.activateStream).toHaveBeenCalledWith(visible);
-      expect(releaseEntries).toHaveBeenCalledWith(hidden);
+      expect(requestEviction).toHaveBeenCalledWith(hidden);
     } finally {
       backend.dispose();
       session.dispose();
@@ -1967,7 +1970,7 @@ describe('ProgressBackend', () => {
   it('keeps resident background entries during an in-flight status update', async () => {
     const { backend } = createRecordingBackend();
     const stream = 'background-stream' as StreamTabId;
-    const releaseSpy = vi.spyOn(backend.state.streamLogs, 'releaseEntries');
+    const releaseSpy = vi.spyOn(backend.state.streamLogs, 'requestEviction');
 
     try {
       backend.state.streamLogs.ensureStream(stream);

@@ -304,7 +304,10 @@ describe('tool-use round outcome persistence (#8023)', () => {
       const streamId = `stream:tool-use-round-${name}` as StreamTabId;
       const store = StreamLogStore.ephemeral('test');
       store.ensureStream(streamId);
-      const recorder = attachTranscriptRecorder(logger, streamId, store);
+      const recorder = attachTranscriptRecorder(
+        logger,
+        store.acquireWriter(streamId, streamId),
+      );
       const node = new ToolUseCycleNode().setServices({
         streamId,
         runtimeHost: host,

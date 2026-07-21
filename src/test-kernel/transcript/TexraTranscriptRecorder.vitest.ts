@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
 import {
@@ -18,7 +18,7 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)'
     const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:group-start-native' as StreamTabId;
     store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, streamId, store);
+    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
 
     const stage = trace.openStage('r0', { kind: 'round' });
 
@@ -36,7 +36,7 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)'
     const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:group-end-default-outcome' as StreamTabId;
     store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, streamId, store);
+    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
 
     const stage = trace.openStage('r0', { kind: 'round' });
     stage.end();
@@ -55,7 +55,7 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)'
     const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:group-end-explicit-outcome' as StreamTabId;
     store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, streamId, store);
+    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
 
     const stage = trace.openStage('r0', { kind: 'round' });
     stage.end(RUN_OUTCOME.CANCELLED);
@@ -73,7 +73,7 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)'
     const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:group-end-run-failure' as StreamTabId;
     store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, streamId, store);
+    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
 
     const stage = trace.openStage('r0', { kind: 'round' });
     await expect(
@@ -97,7 +97,7 @@ describe('attachTranscriptRecorder stage kind (issue #7267)', () => {
     const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:kind-preserved' as StreamTabId;
     store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, streamId, store);
+    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
 
     const round = trace.openStage('r0', { kind: 'round', index: 0 });
     round.end();
@@ -114,7 +114,7 @@ describe('attachTranscriptRecorder stage kind (issue #7267)', () => {
     const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:run-kind-preserved' as StreamTabId;
     store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, streamId, store);
+    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
 
     const runStage = trace.openStage('Run: agent', { kind: 'run' });
     runStage.end();
@@ -133,7 +133,7 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
     const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:upsert' as StreamTabId;
     store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, streamId, store);
+    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
 
     // The round's own stream writes raw provider text in real time...
     const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -157,7 +157,7 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
     const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:append' as StreamTabId;
     store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, streamId, store);
+    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
 
     trace.responseFinalized('The answer is 2.');
 
@@ -174,7 +174,7 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
     const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:round-reset' as StreamTabId;
     store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, streamId, store);
+    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
 
     const round0 = trace.openStage('r0', { kind: 'round', index: 0 });
     const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -206,7 +206,7 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
     const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:inner-round-reset' as StreamTabId;
     store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, streamId, store);
+    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
 
     const round = trace.openStage('r0', { kind: 'round', index: 0 });
     round.run(() => {
@@ -241,11 +241,42 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
     const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:empty' as StreamTabId;
     store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, streamId, store);
+    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
 
     trace.responseFinalized('');
 
     const entries = store.get(streamId)?.getRange(0) ?? [];
     expect(entries).toHaveLength(0);
+  });
+});
+
+describe('attachTranscriptRecorder timer failure boundary', () => {
+  it('latches a delayed write failure instead of throwing from the timer', () => {
+    vi.useFakeTimers();
+    const trace = new TraceEmitter();
+    const store = StreamLogStore.ephemeral('test');
+    const streamId = 'stream:timer-failure' as StreamTabId;
+    const writer = store.acquireWriter(streamId, streamId);
+    const appendText = writer.appendText.bind(writer);
+    const failure = new Error('delayed transcript write failed');
+    vi.spyOn(writer, 'appendText')
+      .mockImplementationOnce(appendText)
+      .mockImplementationOnce(() => {
+        throw failure;
+      });
+    const recorder = attachTranscriptRecorder(trace, writer);
+
+    try {
+      const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+      output.append('first');
+      output.append(' delayed');
+
+      expect(() => vi.advanceTimersByTime(50)).not.toThrow();
+      expect(() => recorder.flushPending()).toThrow(failure);
+      expect(() => recorder.unsubscribe()).toThrow(failure);
+    } finally {
+      writer.close();
+      vi.useRealTimers();
+    }
   });
 });

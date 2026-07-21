@@ -4,6 +4,7 @@ import '@test/support/defaultSessionTestSetup';
 // Test support imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
+import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { ResumeAdmissionCancelledError } from '@agent/runtime/resumeAdmission';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
@@ -29,7 +30,11 @@ import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
 } from '@test/helpers/streamStatusTestUtils';
-import { recordSessionEvents, sessionFactPayloads } from '../progressTestUtils';
+import {
+  createRecordingHost,
+  recordSessionEvents,
+  sessionFactPayloads,
+} from '../progressTestUtils';
 
 const STREAM = 'stream:tooluse-resume' as StreamTabId;
 const runtimeHost = { emit: vi.fn() };
@@ -114,6 +119,53 @@ describe('resumeQueuedToolUseFromResumeData', () => {
         'updateQueuedFollowUps',
       ),
     ).toContainEqual({ streamId: STREAM });
+  });
+
+  it('does not resume after waiting termination is claimed', async () => {
+    const session = createTestSession();
+    const executionId = 'exec-waiting-termination-claimed' as ExecutionId;
+    const resume = createToolUseResumeData({ executionId, streamId: STREAM });
+    let finishCleanup = (): void => undefined;
+    const cleanupGate = new Promise<void>((resolve) => {
+      finishCleanup = resolve;
+    });
+    const handle = new AgentExecutionHandle(
+      executionId,
+      'parent-waiting-termination-claimed' as StreamTabId,
+      STREAM,
+      'test-agent',
+      'toolUse',
+      createRecordingHost().host,
+    );
+
+    try {
+      session.executions.track(handle);
+      handle.registerWaitingCleanup(async () => cleanupGate);
+      seedStreamStatusForTest(session.status, STREAM, STREAM_STATUS.WAITING);
+      session.followUps.enqueue(
+        STREAM,
+        { text: 'do not resume' },
+        { force: true },
+      );
+
+      expect(session.executions.kill(executionId)).toBe(true);
+      expect(handle.waitingTerminationStarted).toBe(true);
+      await expect(
+        resumeQueuedToolUseFromResumeData(STREAM, resume, runtimeHost, {
+          session,
+          onError: vi.fn(),
+        }),
+      ).resolves.toBe(false);
+
+      expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
+      expect(session.followUps.getAll(STREAM)).toEqual(['do not resume']);
+      expect(session.status.get(STREAM)).toBe(STREAM_PHASE.WAITING);
+    } finally {
+      handle.markExecutionLeaseLost();
+      finishCleanup();
+      await handle.result;
+      session.dispose();
+    }
   });
 
   it('seeds an explicit follow-up ahead of the queued items', async () => {
