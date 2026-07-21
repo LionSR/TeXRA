@@ -1,4 +1,3 @@
-import type { MediaAttachmentKind } from '@shared/schemas';
 import { getMimeType } from '@utils/files';
 import type { ModelCapabilities } from 'llm-zoo';
 
@@ -6,21 +5,6 @@ type MediaVisionWarningKind = 'attached' | 'pasted';
 
 function needsVision(filePath: string): boolean {
   return !getMimeType(filePath)?.startsWith('audio/');
-}
-
-/**
- * Classify each attached media file as `image` or `document` (everything
- * non-image) by its MIME type — the same coarse split
- * `normalizeConversationForExport` renders attachment markers for. Feeds the
- * `userMessage` transcript row's attachment markers (#7508): kind + count
- * only, never bytes.
- */
-export function mediaAttachmentKinds(
-  mediaFiles: readonly string[] | undefined,
-): MediaAttachmentKind[] {
-  return (mediaFiles ?? []).map((filePath) =>
-    getMimeType(filePath)?.startsWith('image/') ? 'image' : 'document',
-  );
 }
 
 export function countMediaFilesNeedingVision(
