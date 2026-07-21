@@ -8,7 +8,7 @@
  * (`src/shared/schemas/stateSettings.ts`) are read via `readPlatformSetting()`,
  * which resolves the default from the entry's schema and snaps an
  * invalid/stale stored value back to that default. Keys not yet in the
- * catalog (the per-provider streaming/region toggles below) fall back to the
+ * catalog (the per-provider streaming toggles below) fall back to the
  * local `read()` helper, a thin `tryGlobalState()` wrapper — migrate a key to
  * `readPlatformSetting()` once it gets a catalog entry rather than adding a
  * fourth read path.
@@ -41,7 +41,10 @@ function read<T>(key: GlobalStateKey, defaultValue: T): T {
 
 function regionSet(provider: string): boolean | undefined {
   const region = entry(provider)?.region;
-  return region ? read(region.key, region.default) : undefined;
+  // Region keys are catalog-modeled, so the default comes from the entry's
+  // schema (kept aligned with the registry's `region.default` by the
+  // state-settings guardrail suite).
+  return region ? readPlatformSetting<boolean>(region.key) : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -146,16 +149,17 @@ export function getAnthropicDynamicFiltering(): boolean {
 }
 
 export function getGLMCodingPlan(): boolean {
-  return read(GlobalStateKey.GLM_CODING_PLAN, false);
+  return readPlatformSetting<boolean>(GlobalStateKey.GLM_CODING_PLAN);
 }
 
 /**
  * Whether the user opted to route dual-backend Kimi models (K3) through the
  * Kimi Code coding endpoint when a Kimi Code API key is set. The two
  * coding-only Kimi models always use that key regardless of this switch.
+ * Catalog-modeled (see `stateSettings.ts`).
  */
 export function getPreferKimiCode(): boolean {
-  return read(GlobalStateKey.KIMI_CODE_PREFER, false);
+  return readPlatformSetting<boolean>(GlobalStateKey.KIMI_CODE_PREFER);
 }
 
 /**

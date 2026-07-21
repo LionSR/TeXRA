@@ -9,6 +9,12 @@ import {
   LATEXDIFF_MATH_MARKUP_VALUES,
 } from '@shared/constants/latex';
 import {
+  DASHSCOPE_USE_CHINA_PROVIDER_SETTING,
+  GLM_CODING_PLAN_PROVIDER_SETTING,
+  GLM_USE_CHINA_PROVIDER_SETTING,
+  KIMI_CODE_PREFER_PROVIDER_SETTING,
+  MINIMAX_USE_CHINA_PROVIDER_SETTING,
+  MOONSHOT_USE_CHINA_PROVIDER_SETTING,
   PROVIDER_ENDPOINT_STATE_ENTRIES,
   USE_OPENROUTER_PROVIDER_SETTING,
 } from '@shared/constants/providers';
@@ -186,6 +192,18 @@ const OPENROUTER_ROUTING_RUNTIME_REACHABILITY = {
   through:
     'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/ModelFactory.ts -> src/utils/config/providerConfig.ts',
 } satisfies CliRuntimeReachability;
+const KIMI_CODE_PREFER_RUNTIME_REACHABILITY = {
+  // Requires a Kimi Code API key (`texra chat` /key flow or KIMI_CODE_API_KEY).
+  command: 'texra chat --model kimi3',
+  through:
+    'packages/cli/src/commands/chat.ts -> packages/cli/src/runtime/modelAccess.ts -> src/model/computeModelOptions.ts -> src/utils/config/providerConfig.ts',
+} satisfies CliRuntimeReachability;
+const PROVIDER_REGION_RUNTIME_REACHABILITY = {
+  command:
+    'texra agents run <tool-use-agent> --model <dashscope/minimax/moonshot/glm-model> --instruction "answer a short question"',
+  through:
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/ModelHandler.ts -> src/agent/modelHandlers/support/ProxyConfigResolver.ts',
+} satisfies CliRuntimeReachability;
 const PROVIDER_ENDPOINT_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --model <provider-model> --instruction "answer a short question"',
@@ -211,7 +229,7 @@ const TOOL_AVAILABILITY_RUNTIME_REACHABILITY = {
     'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/agentToolResolution.ts -> src/tools/toolAvailability.ts',
 } satisfies CliRuntimeReachability;
 
-const PROVIDER_ENDPOINT_CONSUMER =
+const PROXY_CONFIG_CONSUMER =
   'src/agent/modelHandlers/support/ProxyConfigResolver.ts';
 
 const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
@@ -224,7 +242,7 @@ const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
       category: 'model',
       store: 'globalState',
       hosts: ['cli'],
-      cliConsumer: PROVIDER_ENDPOINT_CONSUMER,
+      cliConsumer: PROXY_CONFIG_CONSUMER,
       cliRuntimeReachability: PROVIDER_ENDPOINT_RUNTIME_REACHABILITY,
     }) satisfies StateSettingEntry,
 );
@@ -546,6 +564,81 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     hosts: ['cli'],
     cliConsumer: 'src/utils/config/providerConfig.ts',
     cliRuntimeReachability: OPENROUTER_ROUTING_RUNTIME_REACHABILITY,
+  },
+
+  // --- Provider routing & region toggles --------------------------------------
+  // Same idiom as the OpenRouter row above: every toggle stays in
+  // PROVIDER_VSCODE_SETTINGS for the extension/desktop Models tab, and the
+  // catalog row is CLI-only so later settings-view catalog rendering does not
+  // duplicate those existing controls. Label/description are reused by
+  // reference from the named provider-setting consts; `.prefault()` matches
+  // the provider setting's `defaultValue` (absent = false) — both pinned
+  // against the live getters by the guardrail suite.
+  {
+    key: GlobalStateKey.KIMI_CODE_PREFER,
+    schema: z.boolean().prefault(false),
+    title: KIMI_CODE_PREFER_PROVIDER_SETTING.label,
+    description: KIMI_CODE_PREFER_PROVIDER_SETTING.description,
+    category: 'model',
+    store: 'globalState',
+    hosts: ['cli'],
+    cliConsumer: 'src/utils/config/providerConfig.ts',
+    cliRuntimeReachability: KIMI_CODE_PREFER_RUNTIME_REACHABILITY,
+  },
+  {
+    key: GlobalStateKey.MOONSHOT_USE_CHINA,
+    schema: z.boolean().prefault(true),
+    title: MOONSHOT_USE_CHINA_PROVIDER_SETTING.label,
+    description: MOONSHOT_USE_CHINA_PROVIDER_SETTING.description,
+    category: 'model',
+    store: 'globalState',
+    hosts: ['cli'],
+    cliConsumer: PROXY_CONFIG_CONSUMER,
+    cliRuntimeReachability: PROVIDER_REGION_RUNTIME_REACHABILITY,
+  },
+  {
+    key: GlobalStateKey.DASHSCOPE_USE_CHINA,
+    schema: z.boolean().prefault(false),
+    title: DASHSCOPE_USE_CHINA_PROVIDER_SETTING.label,
+    description: DASHSCOPE_USE_CHINA_PROVIDER_SETTING.description,
+    category: 'model',
+    store: 'globalState',
+    hosts: ['cli'],
+    cliConsumer: PROXY_CONFIG_CONSUMER,
+    cliRuntimeReachability: PROVIDER_REGION_RUNTIME_REACHABILITY,
+  },
+  {
+    key: GlobalStateKey.MINIMAX_USE_CHINA,
+    schema: z.boolean().prefault(false),
+    title: MINIMAX_USE_CHINA_PROVIDER_SETTING.label,
+    description: MINIMAX_USE_CHINA_PROVIDER_SETTING.description,
+    category: 'model',
+    store: 'globalState',
+    hosts: ['cli'],
+    cliConsumer: PROXY_CONFIG_CONSUMER,
+    cliRuntimeReachability: PROVIDER_REGION_RUNTIME_REACHABILITY,
+  },
+  {
+    key: GlobalStateKey.GLM_USE_CHINA,
+    schema: z.boolean().prefault(true),
+    title: GLM_USE_CHINA_PROVIDER_SETTING.label,
+    description: GLM_USE_CHINA_PROVIDER_SETTING.description,
+    category: 'model',
+    store: 'globalState',
+    hosts: ['cli'],
+    cliConsumer: PROXY_CONFIG_CONSUMER,
+    cliRuntimeReachability: PROVIDER_REGION_RUNTIME_REACHABILITY,
+  },
+  {
+    key: GlobalStateKey.GLM_CODING_PLAN,
+    schema: z.boolean().prefault(false),
+    title: GLM_CODING_PLAN_PROVIDER_SETTING.label,
+    description: GLM_CODING_PLAN_PROVIDER_SETTING.description,
+    category: 'model',
+    store: 'globalState',
+    hosts: ['cli'],
+    cliConsumer: PROXY_CONFIG_CONSUMER,
+    cliRuntimeReachability: PROVIDER_REGION_RUNTIME_REACHABILITY,
   },
 
   // --- External tool integrations ------------------------------------------

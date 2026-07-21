@@ -84,7 +84,21 @@ export async function applyCliProviderApiKey(
 ): Promise<string | undefined> {
   await saveProviderApiKey(provider, key);
   const access = await selectCliApiModelAccessRoute('personal');
-  return completeModelAccessSelection(access, context);
+  const message = await completeModelAccessSelection(access, context);
+  if (provider === 'kimiCode') {
+    // The coding-only models route through the subscription automatically;
+    // dual-backend K3 needs the opt-in switch, which is only discoverable if
+    // we name it here.
+    return collapseWhitespace(
+      [
+        message,
+        "Tip: the Kimi for Coding models use your subscription automatically; to route Kimi K3 through it too, enable 'Prefer Kimi Code' in /config.",
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    );
+  }
+  return message;
 }
 
 /** Set the session API mode and refresh access-dependent TUI views. */

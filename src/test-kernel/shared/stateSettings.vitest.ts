@@ -103,6 +103,14 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   [GlobalStateKey.WEBSOCKET_OPENAI]: false,
   ...PROVIDER_ENDPOINT_DEFAULTS,
   [GlobalStateKey.USE_OPENROUTER]: false,
+  [GlobalStateKey.KIMI_CODE_PREFER]: false,
+  // Region defaults mirror the PROVIDER_REGISTRY `region.default` facts the
+  // `regionSet()` getter reads (now via `readPlatformSetting`).
+  [GlobalStateKey.MOONSHOT_USE_CHINA]: true,
+  [GlobalStateKey.DASHSCOPE_USE_CHINA]: false,
+  [GlobalStateKey.MINIMAX_USE_CHINA]: false,
+  [GlobalStateKey.GLM_USE_CHINA]: true,
+  [GlobalStateKey.GLM_CODING_PLAN]: false,
   [GlobalStateKey.DISABLED_TOOLS]: [],
 };
 
@@ -355,6 +363,10 @@ describe('state settings catalog', () => {
     //    runs (and lets the Codex backend attempt WebSocket).
     //  - provider endpoints are read by the proxy resolver used by CLI model
     //    handlers before falling back to provider defaults.
+    //  - the provider routing/region toggles (Prefer Kimi Code, the China
+    //    region switches, GLM Coding Plan) are CLI-only catalog rows mirroring
+    //    the extension's PROVIDER_VSCODE_SETTINGS controls, read through
+    //    providerConfig/ProxyConfigResolver during CLI model dispatch.
     // auto-open-pdf (no CLI opener), latexdiff, and the formatter are
     // intentionally excluded. Changing the CLI roster must be a deliberate edit
     // here, not an accident of flipping `hosts`.
@@ -379,6 +391,12 @@ describe('state settings catalog', () => {
         ),
         GlobalStateKey.WEBSOCKET_OPENAI,
         GlobalStateKey.USE_OPENROUTER,
+        GlobalStateKey.KIMI_CODE_PREFER,
+        GlobalStateKey.MOONSHOT_USE_CHINA,
+        GlobalStateKey.DASHSCOPE_USE_CHINA,
+        GlobalStateKey.MINIMAX_USE_CHINA,
+        GlobalStateKey.GLM_USE_CHINA,
+        GlobalStateKey.GLM_CODING_PLAN,
         GlobalStateKey.DISABLED_TOOLS,
       ].sort(),
     );
