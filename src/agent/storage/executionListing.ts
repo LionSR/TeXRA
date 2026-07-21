@@ -133,8 +133,7 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
   }
 
   if (!migrated) {
-    await migrateIfNeeded();
-    migrated = true;
+    migrated = await migrateIfNeeded();
   }
 
   const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
@@ -305,36 +304,39 @@ export async function deleteAllExecutions(): Promise<DeleteAllExecutionsResult> 
 // Legacy migration (runs once on first listExecutions() call)
 // ============================================================================
 
-async function migrateIfNeeded(): Promise<void> {
-  await migrateIndexJson();
-  await migrateWorkspaceState();
+async function migrateIfNeeded(): Promise<boolean> {
+  const indexMigrated = await migrateIndexJson();
+  const workspaceStateMigrated = await migrateWorkspaceState();
+  return indexMigrated && workspaceStateMigrated;
 }
 
 /** Migrate entries from executions/index.json into per-execution KV. */
-async function migrateIndexJson(): Promise<void> {
+async function migrateIndexJson(): Promise<boolean> {
   let items: unknown[];
   try {
     const raw = await StorageFS.readJson<unknown[]>(INDEX_PATH);
-    if (!Array.isArray(raw) || raw.length === 0) return;
+    if (!Array.isArray(raw) || raw.length === 0) return true;
     items = raw;
   } catch {
-    return; // File doesn't exist
+    return true; // File doesn't exist
   }
 
-  await backfillEntries(items);
+  if (!(await backfillEntries(items))) return false;
 
   try {
     await StorageFS.delete(INDEX_PATH);
+    return true;
   } catch (error) {
     logger.warn(
       CHANNEL,
       `Failed to delete legacy ${INDEX_PATH}: ${toErrorMessage(error)}`,
     );
+    return false;
   }
 }
 
 /** Migrate entries from workspace state into per-execution KV. */
-async function migrateWorkspaceState(): Promise<void> {
+async function migrateWorkspaceState(): Promise<boolean> {
   const workspace = platform().workspace;
   const paths = [
     workspace.getWorkspacePath(),
@@ -344,21 +346,27 @@ async function migrateWorkspaceState(): Promise<void> {
     ...new Set(paths.map((path) => getWorkspaceStorageKey(path))),
   ];
 
+  let migratedAll = true;
   for (const storageKey of storageKeys) {
     const legacy = platform().workspaceState.get<unknown[]>(storageKey, []);
     if (!Array.isArray(legacy) || legacy.length === 0) continue;
 
-    await backfillEntries(legacy);
+    if (!(await backfillEntries(legacy))) {
+      migratedAll = false;
+      continue;
+    }
 
     try {
       await platform().workspaceState.update(storageKey, []);
     } catch (error) {
+      migratedAll = false;
       logger.warn(
         CHANNEL,
         `Failed to clear workspace state key: ${toErrorMessage(error)}`,
       );
     }
   }
+  return migratedAll;
 }
 
 function getWorkspaceStorageKey(workspacePath: string | undefined): string {
@@ -371,11 +379,11 @@ function getWorkspaceStorageKey(workspacePath: string | undefined): string {
  * Backfill per-execution KV from legacy history entries.
  * Only writes if meta.json doesn't already exist (no overwriting).
  */
-async function backfillEntries(entries: unknown[]): Promise<void> {
-  await pMap(
+async function backfillEntries(entries: unknown[]): Promise<boolean> {
+  const migrated = await pMap(
     entries,
     async (rawEntry) => {
-      if (!rawEntry || typeof rawEntry !== 'object') return;
+      if (!rawEntry || typeof rawEntry !== 'object') return true;
 
       const candidate = rawEntry as {
         id?: ExecutionId;
@@ -386,32 +394,39 @@ async function backfillEntries(entries: unknown[]): Promise<void> {
       };
 
       const rawConfig = candidate.agentConfig ?? candidate.config;
-      if (!candidate.id || !candidate.timestamp || !rawConfig) return;
+      if (!candidate.id || !candidate.timestamp || !rawConfig) return true;
+      const executionId = candidate.id;
+      const timestamp = candidate.timestamp;
 
       let normalizedConfig: AgentConfig;
       try {
         normalizedConfig = AgentConfigSchema.parse(rawConfig);
       } catch {
         logger.warn(CHANNEL, `Skipping malformed legacy entry ${candidate.id}`);
-        return;
+        return true;
       }
 
-      const store = getExecutionStore(candidate.id);
-
-      // Don't overwrite existing KV data
-      if (await store.exists('meta')) return;
-
-      await Promise.all([
-        store.writeMeta({
-          timestamp: candidate.timestamp,
-          parentExecutionId: candidate.parentExecutionId,
-        }),
-        store.writeConfig(normalizedConfig),
-      ]);
+      const result = await runWithInactiveExecutionLease(
+        executionId,
+        async () => {
+          const store = getExecutionStore(executionId);
+          // Don't overwrite existing KV data.
+          if (await store.exists('meta')) return;
+          await Promise.all([
+            store.writeMeta({
+              timestamp,
+              parentExecutionId: candidate.parentExecutionId,
+            }),
+            store.writeConfig(normalizedConfig),
+          ]);
+        },
+      );
+      return result.status === 'performed';
     },
     {
       concurrency: EXECUTION_STORAGE_CONCURRENCY,
       stopOnError: false,
     },
   );
+  return migrated.every(Boolean);
 }

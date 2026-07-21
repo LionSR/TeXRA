@@ -415,6 +415,10 @@ export function captureOwnedExecutionLease(
 export function tryCaptureOwnedExecutionLease(
   executionId: ExecutionId,
 ): OwnedExecutionLeaseScope | undefined {
+  const key = ownershipKey(storageRoot(), executionId);
+  if (executionOwnership.getStore()?.has(key)) {
+    return captureOwnedExecutionLease(executionId);
+  }
   return ownsExecutionLease(executionId)
     ? captureOwnedExecutionLease(executionId)
     : undefined;

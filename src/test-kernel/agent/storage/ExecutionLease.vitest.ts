@@ -25,6 +25,7 @@ import {
   renewOwnedExecutionLease,
   runWithInactiveExecutionLease,
   runWithOwnedExecutionLease,
+  tryCaptureOwnedExecutionLease,
   waitForOwnedExecutionLeaseRelease,
 } from '@agent/storage/executionLease';
 import { platform } from '@platform/platform';
@@ -321,6 +322,16 @@ describe('cross-process execution leases', () => {
     const executionId = 'e86445' as ExecutionId;
     await acquire(executionId);
     const runWithFirstOwner = captureOwnedExecutionLease(executionId);
+    let resumeFirstOwner = (): void => undefined;
+    const firstOwnerPaused = new Promise<void>((resolve) => {
+      resumeFirstOwner = resolve;
+    });
+    const delayedCapture = Promise.resolve(
+      runWithFirstOwner(async () => {
+        await firstOwnerPaused;
+        return tryCaptureOwnedExecutionLease(executionId);
+      }),
+    );
     await writeForeignLease(
       executionId,
       Date.now() - EXECUTION_LEASE_STALE_MS - 1,
@@ -328,13 +339,10 @@ describe('cross-process execution leases', () => {
     );
     await acquireResumedExecutionLease(executionId);
 
-    expect(() =>
-      runWithFirstOwner(() =>
-        getExecutionStore(executionId).writeMeta({
-          timestamp: '2026-07-16T12:00:00.000Z',
-        }),
-      ),
-    ).toThrow(ExecutionLeaseLostError);
+    resumeFirstOwner();
+    await expect(delayedCapture).rejects.toBeInstanceOf(
+      ExecutionLeaseLostError,
+    );
     expect(ownsExecutionLease(executionId)).toBe(true);
   });
 
