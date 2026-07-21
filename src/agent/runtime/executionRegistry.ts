@@ -12,6 +12,7 @@ import {
 import { createChannelTrace, type ResultEvent } from '@agent/trace';
 import {
   completeOwnedExecutionLease,
+  ExecutionLeaseLostError,
   markOwnedExecutionLeaseUndurable,
 } from '@agent/storage/executionLease';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -969,37 +970,44 @@ export class ExecutionRegistry {
       isSubagent: handle.isChildExecution,
     };
     void this.finishWaitingTermination(handle, cancelledResult).catch(
-      (error: unknown) => {
+      async (error: unknown) => {
         const recoveryFailures = [error];
-        try {
-          markOwnedExecutionLeaseUndurable(handle.executionId);
-        } catch (recoveryError) {
-          recoveryFailures.push(recoveryError);
+        if (!(error instanceof ExecutionLeaseLostError)) {
+          try {
+            await handle.runWithExecutionLease(async () => {
+              markOwnedExecutionLeaseUndurable(handle.executionId);
+              handle.settleResult(cancelledResult);
+              const untracked = this.untrackIfCurrent(handle);
+              if (untracked) {
+                this.cancelStreamStatus(handle.childStreamId, handle);
+              }
+              if (untracked && !handle.isChildExecution) {
+                await this.releaseRootExecutionLease(handle.executionId);
+              }
+            });
+            logger.warn('Waiting-execution termination failed unexpectedly', {
+              data: { executionId: handle.executionId, recoveryFailures },
+            });
+            return;
+          } catch (recoveryError) {
+            recoveryFailures.push(recoveryError);
+          }
         }
+
+        // A former generation owns only its private result. It must not mark,
+        // release, untrack, or cancel a locally reacquired successor.
         try {
           handle.settleResult(cancelledResult);
         } catch (recoveryError) {
           recoveryFailures.push(recoveryError);
         }
         try {
-          this.untrackIfCurrent(handle);
+          const untracked = this.untrackIfCurrent(handle);
+          if (untracked) {
+            this.cancelStreamStatus(handle.childStreamId, handle);
+          }
         } catch (recoveryError) {
           recoveryFailures.push(recoveryError);
-        }
-        try {
-          this.cancelStreamStatus(handle.childStreamId, handle);
-        } catch (recoveryError) {
-          recoveryFailures.push(recoveryError);
-        }
-        if (!handle.isChildExecution) {
-          void this.releaseRootExecutionLease(handle.executionId).catch(
-            (recoveryError: unknown) => {
-              logger.warn(
-                'Waiting-execution recovery could not release ownership',
-                { data: { executionId: handle.executionId, recoveryError } },
-              );
-            },
-          );
         }
         logger.warn('Waiting-execution termination failed unexpectedly', {
           data: { executionId: handle.executionId, recoveryFailures },

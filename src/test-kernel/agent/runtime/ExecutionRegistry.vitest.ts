@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import {
+  ExecutionLeaseLostError,
   getExecutionStore,
   type OwnedExecutionLeaseScope,
 } from '@agent/storage';
@@ -561,6 +562,47 @@ describe('executionRegistry', () => {
       expect(publishResult).not.toHaveBeenCalled();
       expect(storageMocks.finalizeExecution).not.toHaveBeenCalled();
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.WAITING);
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('does not let lost-generation recovery mutate a successor handle or lease', async () => {
+    const streamStatus = new StreamStatusMachine();
+    const registry = new ExecutionRegistry({ streamStatus });
+    const releaseLease = vi.fn(async () => undefined);
+    registry.attachRootExecutionLeaseRelease(releaseLease);
+    const executionId = 'exec-waiting-lost-generation' as ExecutionId;
+    const streamId = 'stream-waiting-lost-generation' as StreamTabId;
+    const lostScope: OwnedExecutionLeaseScope = () => {
+      throw new ExecutionLeaseLostError(executionId);
+    };
+
+    try {
+      const previous = createHandle(
+        executionId,
+        streamId,
+        streamId,
+        createRecordingHost().host,
+        { leaseScope: lostScope },
+      );
+      registry.track(previous);
+      previous.registerWaitingCleanup(() => undefined);
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.WAITING);
+
+      expect(registry.kill(executionId)).toBe(true);
+      const successor = createHandle(
+        executionId,
+        streamId,
+        streamId,
+        createRecordingHost().host,
+      );
+      registry.track(successor);
+
+      await previous.result;
+      expect(registry.getHandle(executionId)).toBe(successor);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
+      expect(releaseLease).not.toHaveBeenCalled();
     } finally {
       registry.dispose();
     }
