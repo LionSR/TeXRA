@@ -433,6 +433,7 @@ export async function runFlowWithLifecycle(
             handle.executionId,
           );
           try {
+            if (handle.executionLeaseLost) return;
             writer.update(parentStageId, {
               type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
               data: {

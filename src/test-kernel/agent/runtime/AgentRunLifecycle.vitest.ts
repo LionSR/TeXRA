@@ -760,6 +760,70 @@ describe('runFlowWithLifecycle', () => {
     }
   });
 
+  it('does not close a waiting transcript group after lease loss', async () => {
+    const { executionId, streamId, ctx } = lifecycleFixture(
+      'lifecycle-waiting-cleanup-lease-loss',
+    );
+    const transcripts = ctx.runScope.session.transcripts;
+    const transcriptsUpdate = vi.spyOn(transcripts, 'update');
+    transcriptsUpdate.mockClear();
+    storageMocks.finalizeExecution.mockClear();
+    const originalLoadAndAcquireWriter =
+      transcripts.loadAndAcquireWriter.bind(transcripts);
+    let markWriterLoadStarted = (): void => undefined;
+    const writerLoadStarted = new Promise<void>((resolve) => {
+      markWriterLoadStarted = resolve;
+    });
+    let releaseWriterLoad = (): void => undefined;
+    const writerLoadGate = new Promise<void>((resolve) => {
+      releaseWriterLoad = resolve;
+    });
+    vi.spyOn(transcripts, 'loadAndAcquireWriter').mockImplementationOnce(
+      async (requestedStreamId, ownerKey) => {
+        markWriterLoadStarted();
+        await writerLoadGate;
+        return originalLoadAndAcquireWriter(requestedStreamId, ownerKey);
+      },
+    );
+
+    try {
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async () => ({
+          category: 'toolUse',
+          outcome: STREAM_PHASE.WAITING,
+          executionId,
+          streamId,
+        }),
+        { isSubagent: true },
+      );
+      expect(result.outcome).toBe(STREAM_PHASE.WAITING);
+      seedStreamStatusForTest(
+        defaultSession().status,
+        streamId,
+        STREAM_STATUS.WAITING,
+      );
+      const waitingHandle = defaultSession().executions.getHandle(executionId);
+      expect(waitingHandle).toBeInstanceOf(AgentExecutionHandle);
+      if (!(waitingHandle instanceof AgentExecutionHandle)) {
+        throw new Error('Expected a suspended agent execution handle.');
+      }
+
+      expect(defaultSession().executions.kill(executionId)).toBe(true);
+      await writerLoadStarted;
+      waitingHandle.markExecutionLeaseLost();
+      releaseWriterLoad();
+      await waitingHandle.result;
+
+      expect(transcriptsUpdate).not.toHaveBeenCalled();
+      expect(storageMocks.finalizeExecution).not.toHaveBeenCalled();
+    } finally {
+      releaseWriterLoad();
+      defaultSession().executions.untrack(executionId);
+      clearStreamStatusForTest(defaultSession().status, streamId);
+    }
+  });
+
   // The canonical outcome is decided once and projected three ways. This
   // matrix pins the projections for every terminal path — in particular that
   // a user stop (the no-throw `cancelled` exit, the dominant stop path)

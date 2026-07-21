@@ -493,7 +493,7 @@ export function subscribeStreamLog(): () => void {
       .ensureLoaded(nextActiveStreamId)
       .then(() => {
         if (generation === getCliStateGeneration()) {
-          syncStreamLog(nextActiveStreamId);
+          trySyncStreamLog(nextActiveStreamId);
         }
       })
       .catch((error: unknown) => {
