@@ -14,6 +14,7 @@ import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { COMMIT_HASH_PATTERN } from '@utils/git/commitHashPattern';
 import {
   COMMIT_LABEL_FORMAT,
   splitCommitLines,
@@ -24,7 +25,6 @@ import { isGitRepository } from '@utils/system/isGitRepository';
 
 const CHANNEL = 'gitCommands';
 
-const COMMIT_HASH_PATTERN = /^[0-9a-fA-F]{4,40}$/;
 const OVERLEAF_GIT_TOKEN_URL = 'https://www.overleaf.com/user/settings';
 const OVERLEAF_TOKEN_DOCS_URL =
   'https://docs.overleaf.com/integrations-and-add-ons/git-integration-and-github-synchronization/git-integration/git-integration-authentication-tokens';

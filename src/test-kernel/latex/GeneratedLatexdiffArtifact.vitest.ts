@@ -6,6 +6,7 @@ import {
   buildBetweenRoundDiffSuffix,
   buildLatexdiffAwareFixInstruction,
   detectGeneratedLatexdiffArtifact,
+  parseVersionControlDiffFilename,
 } from '@latex/latexdiff/diffFileNameManager';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 
@@ -17,7 +18,6 @@ describe('detectGeneratedLatexdiffArtifact', () => {
       expected: {
         kind: 'versionControlDiff',
         sourcePath: path.join('/paper', 'main.tex'),
-        commitHash: 'ea268c1',
       },
     },
     {
@@ -26,7 +26,6 @@ describe('detectGeneratedLatexdiffArtifact', () => {
       expected: {
         kind: 'versionControlDiff',
         sourcePath: path.join('/paper', 'main.tex'),
-        commitHash: 'ea26',
       },
     },
     {
@@ -54,6 +53,61 @@ describe('detectGeneratedLatexdiffArtifact', () => {
     { label: 'non-TeX files', input: '/paper/main-diffabc123.pdf' },
   ])('ignores $label', ({ input }) => {
     expect(detectGeneratedLatexdiffArtifact(input)).toBeNull();
+  });
+});
+
+describe('parseVersionControlDiffFilename', () => {
+  it.each([
+    {
+      label: '.tex sources',
+      input: '/paper/main-diffea268c1.tex',
+      expected: {
+        sourcePath: path.join('/paper', 'main.tex'),
+        commitHash: 'ea268c1',
+      },
+    },
+    {
+      label: 'compiled .pdf previews',
+      input: '/paper/main-diffea268c1.pdf',
+      expected: {
+        sourcePath: path.join('/paper', 'main.pdf'),
+        commitHash: 'ea268c1',
+      },
+    },
+    {
+      label: '.ltx sources',
+      input: '/paper/main-diffea268c1.ltx',
+      expected: {
+        sourcePath: path.join('/paper', 'main.ltx'),
+        commitHash: 'ea268c1',
+      },
+    },
+    {
+      label: '.latex sources',
+      input: '/paper/main-diffea268c1.latex',
+      expected: {
+        sourcePath: path.join('/paper', 'main.latex'),
+        commitHash: 'ea268c1',
+      },
+    },
+    {
+      label: 'a minimum-length abbreviated hash',
+      input: '/paper/main-diffea26.tex',
+      expected: {
+        sourcePath: path.join('/paper', 'main.tex'),
+        commitHash: 'ea26',
+      },
+    },
+  ])('recognizes $label regardless of extension', ({ input, expected }) => {
+    expect(parseVersionControlDiffFilename(input)).toEqual(expected);
+  });
+
+  it.each([
+    { label: 'plain source files', input: '/paper/main.tex' },
+    { label: 'between-round diff files', input: '/paper/output_diffr2r1.tex' },
+    { label: 'workspace-side diff files', input: '/paper/revised_diff.tex' },
+  ])('ignores $label', ({ input }) => {
+    expect(parseVersionControlDiffFilename(input)).toBeNull();
   });
 });
 

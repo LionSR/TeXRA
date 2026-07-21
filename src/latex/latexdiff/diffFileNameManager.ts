@@ -6,6 +6,7 @@ import {
   extractLastRoundModelMatch,
 } from '@agent/utils/mergeFileUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
+import { COMMIT_HASH_HEX_RANGE } from '@utils/git/commitHashPattern';
 
 type GeneratedLatexdiffArtifactKind =
   'workspaceDiff' | 'versionControlDiff' | 'betweenRoundDiff';
@@ -13,8 +14,6 @@ type GeneratedLatexdiffArtifactKind =
 export interface GeneratedLatexdiffArtifact {
   kind: GeneratedLatexdiffArtifactKind;
   sourcePath: string;
-  /** The commit hash embedded in the filename. Only set for `versionControlDiff`. */
-  commitHash?: string;
 }
 
 /**
@@ -86,27 +85,35 @@ export function generateDiffFileName(
 }
 
 /**
+ * Sole definition of the latexdiff-vc filename grammar's hash group. Built
+ * from the shared `COMMIT_HASH_HEX_RANGE` so this can't silently drift from
+ * `COMMIT_HASH_PATTERN` in `packages/extension/src/commands/git/gitCommands.ts`
+ * — the git-commit validator that governs what hashes latexdiff-vc filenames
+ * can actually embed — the way the two independent copies of this grammar
+ * used to.
+ */
+const VERSION_CONTROL_DIFF_PATTERN = new RegExp(
+  `^(.+)-diff(${COMMIT_HASH_HEX_RANGE})$`,
+  'i',
+);
+
+/**
  * Ordered from most specific to least so the VC/between-round hashes are
  * recognized before the bare `_diff` suffix that they also end with.
- *
- * The version-control hash range (4-40 hex chars) matches `COMMIT_HASH_PATTERN`
- * in `packages/extension/src/commands/git/gitCommands.ts` — the git-commit
- * validator that governs what hashes latexdiff-vc filenames can actually
- * embed. Keep these two in sync; a narrower range here would silently fail to
- * recognize a valid abbreviated-hash diff file as a generated artifact.
  */
 const GENERATED_LATEXDIFF_ARTIFACT_PATTERNS: {
   kind: GeneratedLatexdiffArtifactKind;
   regex: RegExp;
 }[] = [
-  { kind: 'versionControlDiff', regex: /^(.+)-diff([0-9a-f]{4,40})$/i },
+  { kind: 'versionControlDiff', regex: VERSION_CONTROL_DIFF_PATTERN },
   { kind: 'betweenRoundDiff', regex: /^(.+)_diffr\d+r\d+$/i },
   { kind: 'workspaceDiff', regex: /^(.+)_diff$/i },
 ];
 
 /**
  * Recognize filenames TeXRA/latexdiff generates so source-editing commands can
- * avoid treating diff artifacts as editable paper sources.
+ * avoid treating diff artifacts as editable paper sources. Scoped to `.tex`
+ * — that's the only extension these commands ever consider editing.
  */
 export function detectGeneratedLatexdiffArtifact(
   filePath: string,
@@ -121,13 +128,39 @@ export function detectGeneratedLatexdiffArtifact(
     return {
       kind: pattern.kind,
       sourcePath: path.join(parsed.dir, `${sourceStem}${parsed.ext}`),
-      ...(pattern.kind === 'versionControlDiff' && match[2]
-        ? { commitHash: match[2] }
-        : {}),
     };
   }
 
   return null;
+}
+
+export interface VersionControlDiffFilename {
+  sourcePath: string;
+  commitHash: string;
+}
+
+/**
+ * Parse a latexdiff-vc filename regardless of extension — the compiled
+ * preview (`paper-diffHASH.pdf`) shares the same naming as the `.tex` source
+ * it was built from. Unlike `detectGeneratedLatexdiffArtifact` (deliberately
+ * `.tex`-only, for "should an editing tool treat this as a source file"),
+ * this answers "does this open file reference a version-control diff, and
+ * which commit" for any file type — e.g. selecting a base file or looking up
+ * a commit from whichever tab the user currently has open.
+ */
+export function parseVersionControlDiffFilename(
+  filePath: string,
+): VersionControlDiffFilename | null {
+  const parsed = path.parse(filePath);
+  const match = VERSION_CONTROL_DIFF_PATTERN.exec(parsed.name);
+  const sourceStem = match?.[1];
+  const commitHash = match?.[2];
+  if (!sourceStem || !commitHash) return null;
+
+  return {
+    sourcePath: path.join(parsed.dir, `${sourceStem}${parsed.ext}`),
+    commitHash,
+  };
 }
 
 /**
