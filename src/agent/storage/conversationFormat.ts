@@ -22,7 +22,10 @@
  * truncation for the CLI). Provider-native message and content recognition is
  * shared here.
  */
-import { extractWebFetchResultFields } from '@agent/types/ServerToolTypes';
+import {
+  ANTHROPIC_SERVER_TOOL_BLOCK_TYPES,
+  extractWebFetchResultFields,
+} from '@agent/types/ServerToolTypes';
 import { isObject } from '@utils/core';
 
 const DEFAULT_TRUNCATION_MARKER = '...';
@@ -291,21 +294,20 @@ function formatConversationBlock(
     case 'tool_result':
       return formatToolResultMarker(block.content, options);
     // Anthropic server-side tool blocks (the provider executes these, not a
-    // local tool handler). This vocabulary must stay in sync with the
-    // `assistantBlockToNode` switch in `@agent/export/normalizeConversation`
-    // — both classify the same three live Anthropic block types emitted by
-    // `AnthropicStreamHandler` (`server_tool_use`, `web_search_tool_result`,
-    // `web_fetch_tool_result`), just into different output shapes (a
+    // local tool handler). Shares the `ANTHROPIC_SERVER_TOOL_BLOCK_TYPES`
+    // vocabulary with the `assistantBlockToNode` switch in
+    // `@agent/export/normalizeConversation` — both classify the same three
+    // live Anthropic block types, just into different output shapes (a
     // truncated marker string here vs. a structured `ExportNode` there).
-    case 'server_tool_use':
+    case ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.serverToolUse:
       return formatToolUseMarker(
         asText(block.name) || 'unknown',
         block.input,
         options,
       );
-    case 'web_search_tool_result':
+    case ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.webSearchToolResult:
       return formatWebSearchResultMarker(block.content, options);
-    case 'web_fetch_tool_result':
+    case ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.webFetchToolResult:
       return formatWebFetchResultMarker(block, options);
     default:
       return truncate(

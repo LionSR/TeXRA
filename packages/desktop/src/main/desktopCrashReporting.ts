@@ -3,6 +3,7 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { unique } from '@utils/core';
+import type { ErrorEvent } from '@sentry/electron/main';
 
 export const DESKTOP_CRASH_REPORTING_DSN_SECRET =
   'texra.desktop.crashReporting.dsn';
@@ -21,19 +22,7 @@ export interface DesktopCrashReportingInitOptions {
   log?: Pick<Console, 'debug' | 'error'>;
 }
 
-type CrashEvent = {
-  platform?: string;
-  message?: string;
-  exception?: unknown;
-  breadcrumbs?: unknown;
-  extra?: unknown;
-  contexts?: unknown;
-  [key: string]: unknown;
-};
-
-type SentryMainModule = {
-  init(options: Record<string, unknown>): void;
-};
+type CrashEvent = ErrorEvent;
 
 function pathVariants(path: string): string[] {
   const trimmed = path.trim();
@@ -152,13 +141,12 @@ export async function initializeDesktopCrashReporting({
   const scrubCrashEvent = createDesktopCrashEventScrubber(sensitivePaths);
 
   try {
-    const sentry =
-      (await import('@sentry/electron/main')) as unknown as SentryMainModule;
+    const sentry = await import('@sentry/electron/main');
     sentry.init({
       dsn,
       tracesSampleRate: 0,
       attachScreenshot: false,
-      beforeSend: (event: unknown) => scrubCrashEvent(event as CrashEvent),
+      beforeSend: (event) => scrubCrashEvent(event),
     });
     return true;
   } catch (error) {
