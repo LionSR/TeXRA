@@ -90,10 +90,12 @@ the checked-in `cli` baseline list exactly, confirming the R-b baseline tracks
 the live surface. (This is an independent recount; ±1 vs a differently-tokenized
 census is possible, but the direction — down on all three — is unambiguous.)
 
-## Applied this pass — collapse the vestigial `bestConnectionMethodAnthropic` duplication
+## Applied this pass — two verified dedups (bar raised)
 
 Per the maintainer's "raise the bar every day" directive (2026-07-21), this pass
-lands one **verified** improvement rather than only recording deferrals. The
+lands **two verified** improvements rather than only recording deferrals — the
+vestigial `bestConnectionMethodAnthropic` duplication and the helper-model
+precedence duplication. The
 candidate the core reader mis-flagged as "dead, zero callers" (A1) is not dead —
 but it *is* genuine vestigial duplication, and it was collapsed with the full
 gate suite green.
@@ -129,11 +131,40 @@ test. This is the same discipline the 07-18 pass used for the
 `TextConnectionService` inline, applied one notch higher — a real
 cross-package dedup, fully verified.
 
+**Second cleanup applied — consolidate the helper-model precedence chain.**
+`getHelperModelName` (`helperModelName.ts`) re-implemented the head of
+`resolveEffectiveHelperModel`'s precedence chain inline (empty-config → default,
+trim + is-default short-circuit) before delegating the tail, so the "validate
+against candidates, else fall back" logic lived in two places despite the file's
+own "single source of truth" docstring. Collapsed `getHelperModelName` to its
+state reads + the one genuine runtime divergence (empty enabled-list = "no
+restriction", accept a non-default configured model as-is, #7582) and deferred
+everything else to `resolveEffectiveHelperModel`. Behavior-preserving: all 15
+`helperModelName`/`helperModelPreference` tests pass (including the #7582
+empty-candidate-list divergence guard), typecheck clean (six configs), eslint
+clean.
+
+**Candidates that did NOT survive verification (record — the audit's caller
+counts were unreliable again).** Three further "easy" fan-out candidates were
+examined and **rejected as keepers**, each an incomplete-grep artifact:
+`inferAndLogPersistedModelHandlerCompatibilityKey` (flagged "single caller" — it
+has **4** production callers across `executeAgent` / `SessionResumeRetrieval` /
+`runToolUseFlow` / `runReflectionFlow` + a dedicated test); `emitRunFact`
+(flagged inline-able — it has **15** callers and provides real name→payload
+type-safety, not a pass-through); and `createChannelWriter`'s eager
+`ensureChannel` (documented "ready-sink" intent — removing it changes when the
+OutputChannel registers). The `support/AnthropicStreamHandler` relocation pulls
+in a sibling `serverToolResultEmission` dependency — a genuine `support/`-boundary
+decision, left reviewed-train — and `redaction.ts`'s provider-map/options trim
+touches a security-sensitive path under test, deliberately **not** swept.
+
 **Go-forward posture (new this pass).** Each daily verification pass now aims to
 land **at least one verified improvement**, not merely re-document reviewed-train
 deferrals — draining the standing backlog one carefully-gated change at a time
-rather than deferring the whole set indefinitely. The reviewed-train items below
-remain the queue; "reviewed-train" now means *verify before landing*, not *never
+rather than deferring the whole set indefinitely. The discipline is **verify
+before landing** (the incomplete-grep rejections above are why): confirm caller
+counts and test coverage in-tree, preserve behavior under the gate suite, and
+only then land. "Reviewed-train" now means *verify before landing*, not *never
 land unattended*.
 
 ## Genuinely-new / reviewed-train candidates — surfaced by this fan-out
@@ -352,14 +383,16 @@ this pass is a **completed** north-star action, not new debt: **Step 0's R-a
 baseline + enforcement script) are both installed and enforcing** — the
 boundary the north-star flagged as "eroding while unfenced" is now fenced at a
 zero-violation baseline, and host deep-import width dropped on all three hosts
-this window (extension 44→41, CLI 34→31, desktop 29→26). **One verified
-improvement was applied** under the "raise the bar every day" directive: the
-vestigial `bestConnectionMethodAnthropic` duplication was collapsed (~−22 LOC,
-gated green across all six typecheck configs + lint + the retained test) — a
-real cross-package dedup, not a blind sweep. The core reader's "dead, zero
-callers" flag on it was the recurring `src/`-only-grep error (it had a live
-extension caller); the symbol was genuinely redundant, not genuinely dead.
-Every remaining item is reviewed-train
+this window (extension 44→41, CLI 34→31, desktop 29→26). **Two verified
+improvements were applied** under the "raise the bar every day" directive: the
+vestigial `bestConnectionMethodAnthropic` duplication (~−22 LOC) and the
+helper-model precedence duplication (`getHelperModelName` now defers its whole
+validate-else-fall-back chain to `resolveEffectiveHelperModel`) — both gated
+green across all six typecheck configs + lint + their tests, real dedups, not
+blind sweeps. Three further "easy" candidates were verified and **kept**
+(`inferAndLog…` 4 callers + test, `emitRunFact` 15 callers + type-safety,
+`createChannelWriter` eager sink documented) — the audit's caller counts were
+the recurring incomplete-grep error. Every remaining item is reviewed-train
 (`ModelHandler` decomposition, the `IModelHandler` port-width facets, the
 extension composition duplication, the `redaction.ts` provider-map/options
 trim, the `AgentFinalResult` two-schema rename) or strategic/gated (the frozen
