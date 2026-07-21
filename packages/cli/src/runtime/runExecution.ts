@@ -1,4 +1,7 @@
-import type { OwnedExecutionLeaseScope } from '@agent/storage';
+import {
+  ExecutionLeaseLostError,
+  type OwnedExecutionLeaseScope,
+} from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -224,11 +227,13 @@ export async function executeCliRequest(
       settleLeaseScope = resolve;
     },
   );
-  const disposeShutdownStatus = ownedExecutionId
-    ? tryPlatform()?.lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, async () => {
-        shutdownInterrupted = true;
-        const runWithOwnership = await leaseScopeReady;
-        if (!runWithOwnership) return;
+  let shutdownStatusFinalized: Promise<void> | undefined;
+  const finalizeShutdownStatus = (): Promise<void> => {
+    if (!shutdownInterrupted || !ownedExecutionId) return Promise.resolve();
+    shutdownStatusFinalized ??= (async () => {
+      const runWithOwnership = await leaseScopeReady;
+      if (!runWithOwnership) return;
+      try {
         await runWithOwnership(() =>
           finalizeCliExecution(
             ownedExecutionId,
@@ -237,22 +242,18 @@ export async function executeCliRequest(
             reportShutdownFinalizationFailure,
           ),
         );
-      })
-    : undefined;
-  let shutdownStatusFinalized: Promise<void> | undefined;
-  const finalizeShutdownStatus = (): Promise<void> => {
-    shutdownStatusFinalized ??= (async () => {
-      if (shutdownInterrupted && ownedExecutionId) {
-        await finalizeCliExecution(
-          ownedExecutionId,
-          EXECUTION_STATUS.INTERRUPTED,
-          'preserve',
-          reportShutdownFinalizationFailure,
-        );
+      } catch (error) {
+        if (!(error instanceof ExecutionLeaseLostError)) throw error;
       }
     })();
     return shutdownStatusFinalized;
   };
+  const disposeShutdownStatus = ownedExecutionId
+    ? tryPlatform()?.lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, async () => {
+        shutdownInterrupted = true;
+        await finalizeShutdownStatus();
+      })
+    : undefined;
   const invoke = async (): Promise<ExecuteAgentResult> => {
     try {
       return await runAgent(request, {

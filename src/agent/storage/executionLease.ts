@@ -411,6 +411,15 @@ export function captureOwnedExecutionLease(
   };
 }
 
+/** Capture ownership when this lifecycle is running under a leased execution. */
+export function tryCaptureOwnedExecutionLease(
+  executionId: ExecutionId,
+): OwnedExecutionLeaseScope | undefined {
+  return ownsExecutionLease(executionId)
+    ? captureOwnedExecutionLease(executionId)
+    : undefined;
+}
+
 /** Refresh and validate local ownership at a short durability boundary. */
 export async function renewOwnedExecutionLease(
   executionId: ExecutionId,

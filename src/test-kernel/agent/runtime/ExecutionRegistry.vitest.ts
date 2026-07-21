@@ -2,7 +2,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { getExecutionStore } from '@agent/storage';
+import {
+  getExecutionStore,
+  type OwnedExecutionLeaseScope,
+} from '@agent/storage';
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -84,9 +87,10 @@ function createHandle(
     agentName?: string;
     category?: AgentCategory;
     trace?: AgentTrace;
+    leaseScope?: OwnedExecutionLeaseScope;
   } = {},
 ): AgentExecutionHandle {
-  return new AgentExecutionHandle(
+  const handle = new AgentExecutionHandle(
     executionId,
     parentStreamId,
     childStreamId,
@@ -95,6 +99,10 @@ function createHandle(
     runtimeHost,
     overrides.trace,
   );
+  handle.attachExecutionLeaseScope(
+    overrides.leaseScope ?? ((operation) => operation()),
+  );
+  return handle;
 }
 
 describe('executionRegistry', () => {
@@ -399,6 +407,11 @@ describe('executionRegistry', () => {
     const childStreamId =
       'child-waiting-kill-publish-result-test' as StreamTabId;
     const trace: AgentTrace = { emit: vi.fn() } as unknown as AgentTrace;
+    const leaseScopeInvoked = vi.fn();
+    const leaseScope: OwnedExecutionLeaseScope = (operation) => {
+      leaseScopeInvoked();
+      return operation();
+    };
 
     try {
       const handle = createHandle(
@@ -406,7 +419,7 @@ describe('executionRegistry', () => {
         parentStreamId,
         childStreamId,
         createRecordingHost().host,
-        { trace },
+        { trace, leaseScope },
       );
       registry.track(handle);
       handle.registerWaitingCleanup(() => {});
@@ -419,6 +432,7 @@ describe('executionRegistry', () => {
 
       expect(registry.kill(executionId)).toBe(true);
       await handle.result;
+      expect(leaseScopeInvoked).toHaveBeenCalledOnce();
 
       expect(publishResult).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({

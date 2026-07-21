@@ -8,6 +8,7 @@
 import pDefer from 'p-defer';
 
 import type { AgentTrace, ResultEvent } from '@agent/trace';
+import type { OwnedExecutionLeaseScope } from '@agent/storage/executionLease';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
@@ -86,6 +87,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
   private waitingCleanupCompletion: Promise<void> = Promise.resolve();
   private _waitingTerminationStarted = false;
   private _executionLeaseLost = false;
+  private executionLeaseScope?: OwnedExecutionLeaseScope;
 
   /** Stable tool name for UI identification (e.g. "bash", "codex"). */
   toolName?: string;
@@ -230,6 +232,20 @@ export class AgentExecutionHandle implements ExecutionHandle {
 
   get executionLeaseLost(): boolean {
     return this._executionLeaseLost;
+  }
+
+  /** Bind deferred handle-owned work to the lease generation that created it. */
+  attachExecutionLeaseScope(scope: OwnedExecutionLeaseScope): void {
+    this.executionLeaseScope = scope;
+  }
+
+  /** Re-enter the creating lease generation from an external lifecycle call. */
+  runWithExecutionLease<T>(operation: () => T | Promise<T>): T | Promise<T> {
+    // Some in-memory/embedder runs deliberately have no durable lease. Their
+    // storage writes still pass through the execution-store write fence.
+    return this.executionLeaseScope
+      ? this.executionLeaseScope(operation)
+      : operation();
   }
 
   /**

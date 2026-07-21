@@ -9,6 +9,7 @@ import { createChannelTrace } from '@agent/trace';
 import {
   markOwnedExecutionLeaseUndurable,
   onOwnedExecutionLeaseLost,
+  tryCaptureOwnedExecutionLease,
 } from '@agent/storage/executionLease';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -321,6 +322,10 @@ export async function runFlowWithLifecycle(
     runtimeHost,
     ctx.logger,
   );
+  const executionLeaseScope = tryCaptureOwnedExecutionLease(executionId);
+  if (executionLeaseScope) {
+    handle.attachExecutionLeaseScope(executionLeaseScope);
+  }
   handle.enablePendingInterrupt();
   session.executions.track(handle);
   let leaseLost = false;

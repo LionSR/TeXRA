@@ -4,6 +4,7 @@ import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ExecutionLeaseLostError } from '@agent/storage';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { executeCliRequest } from '@cli/runtime/runExecution';
@@ -690,15 +691,10 @@ describe('executeCliRequest', () => {
         streamId: 'stream-1',
       },
     });
-    expect(mocks.finalizeExecution).toHaveBeenCalledTimes(2);
-    expect(mocks.finalizeExecution).toHaveBeenLastCalledWith({
-      executionId: 'exec-1',
-      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
-      flowRecord: 'preserve',
-    });
+    expect(mocks.finalizeExecution).toHaveBeenCalledOnce();
   });
 
-  it('retains the shutdown interrupt when the captured lease is already lost', async () => {
+  it('does not finalize shutdown through a captured lease that is already lost', async () => {
     const { initPlatform } = await import('@platform/platform');
     const platform = createFakePlatform();
     initPlatform(platform);
@@ -708,7 +704,7 @@ describe('executeCliRequest', () => {
       | undefined;
     mocks.runAgent.mockImplementation(async (_request, options) => {
       options.onExecutionLeaseAcquired?.(() => {
-        throw new Error('lease generation lost');
+        throw new ExecutionLeaseLostError('exec-1');
       });
       return new Promise((resolve) => {
         resolveRun = resolve;
@@ -729,12 +725,7 @@ describe('executeCliRequest', () => {
       streamId: 'stream-1',
     });
     await run;
-
-    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
-      executionId: 'exec-1',
-      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
-      flowRecord: 'preserve',
-    });
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
   });
 
   it('closes the runtime host when shutdown finalization fails', async () => {
@@ -787,7 +778,7 @@ describe('executeCliRequest', () => {
         streamId: 'stream-1',
       },
     });
-    expect(mocks.finalizeExecution).toHaveBeenCalledTimes(2);
+    expect(mocks.finalizeExecution).toHaveBeenCalledOnce();
     expect(mocks.emit).toHaveBeenCalledTimes(1);
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });

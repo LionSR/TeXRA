@@ -199,6 +199,28 @@ afterEach(() => {
 });
 
 describe('childRunLoop E2E fixtures', () => {
+  it('validates the captured lease before registering loop resources', () => {
+    const childStreamId = uniqueStreamId('lost-before-setup');
+    const { strategy, callCount } = createFakeStrategy();
+    mocks.runWithOwnedExecutionLease.mockImplementationOnce(() => {
+      throw new Error('lease generation lost');
+    });
+
+    expect(() =>
+      startChildRunLoop({
+        childStreamId,
+        parentStreamId: 'parent' as StreamTabId,
+        executionId: 'exec-lost-before-setup' as ExecutionId,
+        agentName: 'fake',
+        strategy,
+      }),
+    ).toThrow('lease generation lost');
+
+    expect(isChildRunLoopActive(childStreamId)).toBe(false);
+    expect(mocks.leaseLossListener).toBeUndefined();
+    expect(callCount()).toBe(0);
+  });
+
   it('interrupts an in-flight child when its execution lease is lost', async () => {
     const childStreamId = uniqueStreamId('lease-loss');
     const parentStreamId = 'parent' as StreamTabId;
@@ -211,10 +233,7 @@ describe('childRunLoop E2E fixtures', () => {
       agentName: 'fake',
       strategy,
     });
-    expect(mocks.runWithOwnedExecutionLease).toHaveBeenCalledWith(
-      'exec-lease-loss',
-      expect.any(Function),
-    );
+    expect(mocks.runWithOwnedExecutionLease).toHaveBeenCalledTimes(2);
     await vi.waitFor(() => expect(mocks.leaseLossListener).toBeDefined());
 
     mocks.leaseLossListener?.();
