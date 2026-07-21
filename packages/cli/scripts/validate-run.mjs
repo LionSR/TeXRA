@@ -135,7 +135,12 @@ function printUsage(stream = console.log) {
 
 const PARSE_ARGS_DEF = {
   help: { type: 'boolean', alias: 'h' },
-  noBuild: { type: 'boolean' },
+  // citty's parser intercepts any `--no-X` token as negation of `X` before
+  // the schema is even consulted, so a literal `noBuild: {type:'boolean'}`
+  // can never observe `--no-build` (it lands on the nonexistent `build`
+  // property instead). Modeling the positive form and negating it is the
+  // only way citty's `--no-*` negation syntax can drive this flag.
+  build: { type: 'boolean', default: true },
 };
 const KNOWN_FLAG_TOKENS = new Set(['--help', '-h', '--no-build']);
 
@@ -163,13 +168,21 @@ function parseArgs(argv) {
     process.exit(2);
   }
 
-  const args = parseCittyArgs(flagTokens, PARSE_ARGS_DEF);
+  let args;
+  try {
+    args = parseCittyArgs(flagTokens, PARSE_ARGS_DEF);
+  } catch (error) {
+    console.error(
+      `[validate-run] ${error instanceof Error ? error.message : String(error)}`,
+    );
+    process.exit(2);
+  }
   if (args.help) {
     printUsage();
     process.exit(0);
   }
 
-  return { noBuild: Boolean(args.noBuild) };
+  return { noBuild: args.build === false };
 }
 
 function preflightExistingValidationBundle() {

@@ -3315,7 +3315,12 @@ const PARSE_ARGS_DEF = {
   list: { type: 'boolean' },
   listScenarios: { type: 'boolean' },
   listSelected: { type: 'boolean' },
-  noBuild: { type: 'boolean' },
+  // citty's parser intercepts any `--no-X` token as negation of `X` before
+  // the schema is even consulted, so a literal `noBuild: {type:'boolean'}`
+  // can never observe `--no-build` (it lands on the nonexistent `build`
+  // property instead). Modeling the positive form and negating it is the
+  // only way citty's `--no-*` negation syntax can drive this flag.
+  build: { type: 'boolean', default: true },
   skipIfMissingDeps: { type: 'boolean' },
   snapshotDir: { type: 'string' },
 };
@@ -3340,8 +3345,13 @@ function parseArgs(argv) {
   // citty's parser is intentionally lenient about unrecognized flags, so
   // reject them ourselves before handing off — a typo'd flag should fail
   // loudly, not silently fall through as a stray positional.
-  for (const token of rest) {
+  for (let index = 0; index < rest.length; index += 1) {
+    const token = rest[index];
     if (token === '--') break; // end-of-options marker; rest are positionals
+    if (token === '--snapshot-dir') {
+      index += 1; // its value is free-form and may itself start with '-'
+      continue;
+    }
     const isKnownFlag =
       KNOWN_FLAG_TOKENS.has(token) || token.startsWith('--snapshot-dir=');
     if (token.startsWith('-') && !isKnownFlag) {
@@ -3351,7 +3361,15 @@ function parseArgs(argv) {
     }
   }
 
-  const args = parseCittyArgs(rest, PARSE_ARGS_DEF);
+  let args;
+  try {
+    args = parseCittyArgs(rest, PARSE_ARGS_DEF);
+  } catch (error) {
+    console.error(
+      `[validate-tui] ${error instanceof Error ? error.message : String(error)}`,
+    );
+    process.exit(1);
+  }
 
   if (args.help) {
     printUsage();
@@ -3377,7 +3395,7 @@ function parseArgs(argv) {
     scenarios,
     snapshotDir,
     listSelected: Boolean(args.listSelected),
-    noBuild: Boolean(args.noBuild),
+    noBuild: args.build === false,
     skipIfMissingDeps: Boolean(args.skipIfMissingDeps),
   };
 }

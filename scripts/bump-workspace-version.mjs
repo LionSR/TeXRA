@@ -53,9 +53,14 @@ const KNOWN_FLAGS = new Set(Object.keys(ARGS_DEF).map((name) => `--${name}`));
 function parseArgs(argv) {
   // citty's parser is intentionally lenient about unrecognized flags (it
   // mirrors node:util's non-strict mode), so reject them ourselves before
-  // handing off — a typo'd flag should fail loudly, not fall through.
+  // handing off — a typo'd flag should fail loudly, not fall through. This
+  // must also catch single-dash tokens: node:util's non-strict parser reads
+  // an unrecognized `-xyz` as bundled short flags (`-x -y -z`) rather than
+  // an error, so e.g. a `-check` typo would otherwise vanish silently
+  // instead of rejecting — and this script has no single-character flags,
+  // so any `-`-prefixed token that isn't a known long flag is a typo.
   for (const token of argv) {
-    if (token.startsWith('--') && !KNOWN_FLAGS.has(token)) {
+    if (token.startsWith('-') && !KNOWN_FLAGS.has(token)) {
       fail(`Unknown argument: ${token}`);
     }
   }
