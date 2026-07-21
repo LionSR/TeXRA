@@ -161,8 +161,11 @@ type-safety, not a pass-through); and `createChannelWriter`'s eager
 `ensureChannel` (documented "ready-sink" intent — removing it changes when the
 OutputChannel registers). The `support/AnthropicStreamHandler` relocation pulls
 in a sibling `serverToolResultEmission` dependency — a genuine `support/`-boundary
-decision, left reviewed-train — and `redaction.ts`'s provider-map/options trim
-touches a security-sensitive path under test, deliberately **not** swept.
+decision, left reviewed-train. The `redaction.ts` trim was **withdrawn
+entirely** on verification: both proposed cuts guard a security property (the
+options path is a live desktop path-redaction caller; the provider map is a
+`satisfies Record<ApiKeyProviderId>` exhaustiveness ratchet), so it is not a
+cleanup target at all (see item 6).
 
 **Go-forward posture (new this pass).** Each daily verification pass now aims to
 land **at least one verified improvement**, not merely re-document reviewed-train
@@ -283,36 +286,53 @@ Several map onto already-tracked standing items (noted).
    `setApprovalBypassState`, and `dispose` return `void`, `showInfoMessage`
    returns `Promise<void> | void`, and `readDiagnostics` / `addCriticism` /
    `notifyUnavailableTools` are callback-property members. The differing shapes
-   matter for the Step-1 conversion: it is specifically the ~6 runtime-hard-
-   required approval **request** methods (the `Promise|undefined` group) that
-   should become required. The north-star Step-1 target (convert 6/7 to required, riding
-   A2's legacy-fallback deletion) is unmet — expected, Step 1 is gated on #6968
-   Sweep 1. The headless CLI adapter
-   (`packages/cli/src/runtime/approvalAdapter.ts`) proves the minimal headless
-   surface is `cancel` + the policy-unsatisfiable subset of the 6 approval
-   gates; everything in the 5 presentation events is ignorable by contract.
+   matter for the Step-1 conversion: it is specifically the runtime-hard-required
+   approval **request** methods (the `Promise|undefined` group) that should
+   become required. **Count correction (Codex review, P2):** that group is **7,
+   not 6** — `openExternalInquiry` is also runtime-hard-required, not optional in
+   practice: selecting the registered external-inquiry tool reaches
+   `ExternalInquiryTool.ts` (`~:473-476`), which does
+   `ownerSession.interactions.openExternalInquiry(permission)` and **throws**
+   `'HostInteractions.openExternalInquiry is required'` if it's absent. All three
+   UI hosts and the headless CLI adapter already implement it. So the north-star
+   TD-2 "convert 6/7 to required" target should be **7/7** of the request methods
+   — leaving `openExternalInquiry` optional preserves a contract that crashes the
+   inquiry tool path. (Target still gated on #6968 Sweep 1.) The headless CLI
+   adapter (`packages/cli/src/runtime/approvalAdapter.ts`) proves the minimal
+   headless surface is `cancel` + the policy-unsatisfiable subset of those
+   request methods; everything in the 5 presentation events is ignorable by
+   contract.
 
-6. **`logger/redaction.ts` — provider-map granularity is the only soft spot;
-   the options path is load-bearing** _(LOW; reviewed-train — new concrete
-   finding, corrected)_. The 14-entry `PROVIDER_KEY_REDACTION_RULES`
-   (`redaction.ts:28-71`) dedupes to ~4 distinct regexes at
-   `PROVIDER_KEY_PATTERNS` (`:73-81`) — the per-provider granularity feeds mostly
-   its own test, a candidate to flatten. **Correction (Codex review, P2 — an
-   earlier draft wrongly called the options path "dead-in-prod"):** the
-   `LogRedactionOptions` / `homeDir` / `workspacePath` path-prefix redaction path
-   is **not** dead — it has a live, security-relevant production caller.
-   `packages/desktop/src/main/desktopAppLog.ts:63-81` (`readDesktopLogSnapshot`)
-   builds the options via `makeDesktopLogRedactionOptions(...)` and passes them
-   to `redactSecrets(path, opts)` / `redactSecrets(text, opts)` for the desktop
-   log-viewer snapshot (path, contents, and read-error text). Trimming the
-   path-prefix redaction would stop replacing home/workspace prefixes in those
-   snapshots — **leaking users' local paths** in the desktop log viewer and
-   copied diagnostics. So it is not a cleanup candidate at all: **keep the
-   options path.** (This is the same `src/`-only-grep error the audit agents kept
-   making — the logger reader missed the `packages/desktop` caller.) The only
-   real (low-value) trim is the provider-map granularity; the redaction **core**
-   (JSON-property / assignment / Bearer passes + 4 provider regexes) is
-   single-purpose and correct — keep.
+6. **`logger/redaction.ts` — withdrawn as a cleanup candidate; keep the whole
+   module** _(the "new finding" did not survive verification — two P2 catches)_.
+   The original finding claimed two trims (flatten the 14-entry provider map;
+   drop the "dead" options path). **Both are wrong, and each guards a security
+   property:**
+   - **The options path is load-bearing (Codex review, P2 — an earlier draft
+     wrongly called it "dead-in-prod").** The `LogRedactionOptions` / `homeDir` /
+     `workspacePath` path-prefix redaction has a live production caller:
+     `packages/desktop/src/main/desktopAppLog.ts:63-81` (`readDesktopLogSnapshot`)
+     builds the options via `makeDesktopLogRedactionOptions(...)` and passes them
+     to `redactSecrets(path, opts)` / `redactSecrets(text, opts)` for the desktop
+     log-viewer snapshot (path, contents, read-error text). Trimming it would
+     stop replacing home/workspace prefixes — **leaking users' local paths** in
+     the log viewer and copied diagnostics. (Same `src/`-only-grep error — the
+     logger reader missed the `packages/desktop` caller.)
+   - **The provider map is an exhaustiveness ratchet, not test-only granularity
+     (Codex review, P2).** `PROVIDER_KEY_REDACTION_RULES` (`redaction.ts:28-71`)
+     is declared `as const satisfies Record<ApiKeyProviderId, ProviderKeyRedactionRule>`
+     (`:71`), where `ApiKeyProviderId` derives from `API_KEY_PROVIDER_IDS`
+     (`@shared/constants/providers`, `:16`). That `satisfies` makes a **missing
+     provider a compile-time type error** — a security ratchet forcing every
+     direct-key provider to carry a redaction rule. Flattening to a bare
+     4-regex list would delete the ratchet, so a future direct-key provider
+     could reach logs **unredacted**. Keep the exhaustive map.
+
+   Net: `redaction.ts` is **not** a cleanup target — the runtime dedupe to ~4
+   regexes is an implementation detail behind a deliberate type-level guarantee,
+   and the redaction **core** (JSON-property / assignment / Bearer passes) is
+   single-purpose and correct. Keep all of it. (Record: this is a candidate the
+   fan-out surfaced that fully dissolved under verification.)
 
 7. **`AgentFlowResult` → `AgentFinalResult` two-schema rename + a third builder**
    _(LOW; reviewed-train — record only)_. `buildAgentFinalResult`
@@ -378,8 +398,17 @@ genuine parallel registries are the interaction/presentation two.
 `eventBus/AppSignals` is **correctly separate** (process-lifecycle, out of
 band). A unified design folds `SessionFact` into
 `AgentEvent` as session-scoped arms and replaces the hub's re-broadcast with a
-session-level multiplexer whose subscribers self-filter — collapsing four
-surfaces to one stream + `AppSignals`. This is the standing strategic item; the
+session-level multiplexer — collapsing four surfaces to one stream +
+`AppSignals`. **Design constraint (Codex review, P2 — corrects an earlier
+"subscribers self-filter" phrasing):** keep the **filtering broker-side in the
+multiplexer**, not on the subscriber callback. `SessionEventHub.emit`
+(`SessionEventHub.ts:94-121`) deliberately applies scope / stream / type filters
+**before** invoking each callback ("so high-volume stream chunks only reach
+consumers that explicitly asked for them"); moving that to callback-side
+self-filtering would hand every subscriber (progress view, CLI, snapshot store,
+…) every `stream.chunk` to discard, regressing streaming overhead. The
+consolidation unifies the vocabularies; it must **preserve** the broker-side
+pre-dispatch filter. This is the standing strategic item; the
 logger dual front door (functional `debug/info` + the
 `createChannelTrace`-as-module-logger idiom, **39** importers now, up from 36)
 is tracked in `logger-simplification-feasibility.md`. `logUtils.ts` /
@@ -457,12 +486,18 @@ green across all six typecheck configs + lint + their tests, real dedups, not
 blind sweeps. Three further "easy" candidates were verified and **kept**
 (`inferAndLog…` 4 callers + test, `emitRunFact` 15 callers + type-safety,
 `createChannelWriter` eager sink documented) — the audit's caller counts were
-the recurring incomplete-grep error. Every remaining item is reviewed-train
-(`ModelHandler` decomposition, the `IModelHandler` port-width facets, the
-extension composition duplication, the `redaction.ts` provider-map/options
-trim, the `AgentFinalResult` two-schema rename) or strategic/gated (the frozen
-`GoogleGenAI` handler behind #7097, message opacity → neutral transcript, the
-unified event stream, the `HostInteractions` required-methods conversion behind
+the recurring incomplete-grep error. The `redaction.ts` "finding" also fully
+dissolved under verification — both its proposed trims guard a security property
+(the options path is a live desktop path-redaction caller; the provider map is a
+`satisfies Record<ApiKeyProviderId>` exhaustiveness ratchet), so it is **not** a
+cleanup target. Every remaining item is reviewed-train (`ModelHandler`
+decomposition, the `IModelHandler` port-width facets — kept as overridable per
+the #7101 triage, not folded into `capabilities` — the extension composition
+duplication, the `AgentFinalResult` two-schema rename) or strategic/gated (the
+frozen `GoogleGenAI` handler gated on **#7097 _plus_ persisted-transcript /
+compatibility-key retirement** so existing GenAI sessions still resume, message
+opacity → neutral transcript, the unified event stream — preserving broker-side
+filtering — the `HostInteractions` **7/7** required-methods conversion behind
 Step 1). Do not re-open the traps; do not re-flag `followUpResumeDetection`,
 `IToolRegistry`, or `RetryableInvocationNode` as dead (each has a live caller or
 a test seam a `src/`-only grep misses); verify reviewed-train items before
