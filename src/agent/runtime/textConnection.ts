@@ -89,7 +89,8 @@ async function bestConnectionMethodWithHelperModel(
 }
 
 /**
- * Determines the best way to connect two strings in a LaTeX context.
+ * Determines the best way to connect two strings in a LaTeX context, using
+ * the configured helper model.
  */
 export async function bestConnectionMethod(
   str1: string,
@@ -100,22 +101,6 @@ export async function bestConnectionMethod(
     return await bestConnectionMethodWithHelperModel(str1, str2, n);
   } catch (err) {
     logConnectionError('bestConnectionMethod', err);
-    return DEFAULT_RESULT;
-  }
-}
-
-/**
- * Determines the best way to connect two strings through the configured helper model.
- */
-export async function bestConnectionMethodAnthropic(
-  str1: string,
-  str2: string,
-  n: number = 1,
-): Promise<ConnectionResult> {
-  try {
-    return await bestConnectionMethodWithHelperModel(str1, str2, n);
-  } catch (err) {
-    logConnectionError('bestConnectionMethodAnthropic', err);
     return DEFAULT_RESULT;
   }
 }

@@ -90,26 +90,51 @@ the checked-in `cli` baseline list exactly, confirming the R-b baseline tracks
 the live surface. (This is an independent recount; ±1 vs a differently-tokenized
 census is possible, but the direction — down on all three — is unambiguous.)
 
-## No unattended-safe cleanup this pass — the one candidate is a false positive
+## Applied this pass — collapse the vestigial `bestConnectionMethodAnthropic` duplication
 
-Unlike the 07-18 pass (which inlined the single-use `TextConnectionService`
-interface), this fan-out produced **no unattended-safe cleanup**. Its single
-delete candidate was verified and rejected:
+Per the maintainer's "raise the bar every day" directive (2026-07-21), this pass
+lands one **verified** improvement rather than only recording deferrals. The
+candidate the core reader mis-flagged as "dead, zero callers" (A1) is not dead —
+but it *is* genuine vestigial duplication, and it was collapsed with the full
+gate suite green.
 
-**`bestConnectionMethodAnthropic` is NOT dead / NOT safe to remove** (core
-reader finding A1, "dead identity duplicate, zero callers anywhere in `src/`
-or `packages/`"). This is the **recurring `src/`-only-grep methodology error**.
-`bestConnectionMethodAnthropic` (`src/agent/runtime/textConnection.ts:110-121`)
-is byte-for-byte identical to `bestConnectionMethod` (`:94-105`) except the
-error-label string — but a full-repo grep finds a live importer:
-`packages/extension/src/commands/tests/connectionTests.ts:7,48`, where
-`handleTestConnection` runs the LaTeX connection test cases through it under an
-"Anthropic" label alongside `bestConnectionMethod` under an "OpenAI" label.
-Because both functions now route through the same
-`bestConnectionMethodWithHelperModel`, that OpenAI/Anthropic split is
-**vestigial** — but the symbol is a live packaged-command import, so collapsing
-it edits `packages/**` and a diagnostic command. **Reviewed-train, not a
-sweep.** Record; do not re-flag as dead.
+**What it was.** `bestConnectionMethodAnthropic`
+(`src/agent/runtime/textConnection.ts`, formerly `:110-121`) was byte-for-byte
+identical to `bestConnectionMethod` (`:94-105`) except the error-label string.
+Its only importer — found by a **full-repo** grep (the core reader's "zero
+callers" was the recurring `src/`-only-grep methodology error) — was
+`packages/extension/src/commands/tests/connectionTests.ts`, whose
+`handleTestConnection` diagnostic command ran the LaTeX connection test cases
+through it under an "Anthropic" label alongside `bestConnectionMethod` under an
+"OpenAI" label. Both functions route through the same
+`bestConnectionMethodWithHelperModel`, so that OpenAI-vs-Anthropic comparison
+ran identical logic twice — dead-weight from when the two paths genuinely
+differed by provider.
+
+**What was applied.** Deleted `bestConnectionMethodAnthropic`; collapsed
+`handleTestConnection` to a single `runConnectionTests('helper model', …,
+bestConnectionMethod)` run (dropped the duplicate import and the second,
+identical run block). Net ~−22 LOC across the two files. No behavior change: the
+command still exercises the one real connection method; nothing else referenced
+the deleted symbol (grep-confirmed clean).
+
+**Why this cleared the raised bar (crosses `packages/**`, so verified, not
+swept).** Unlike the self-imposed "unattended-safe" bar of prior passes, this
+edits a packaged command — so it was gated, not swept: `npm run typecheck`
+exit 0 across **all six** project configs (root, test-kernel, extension, CLI,
+trace-viewer, desktop); `eslint` clean on both touched files;
+`TextConnectionHelperModel.vitest.ts` green (it exercises the retained
+`bestConnectionMethod`, unaffected). The removed symbol had **no** dedicated
+test. This is the same discipline the 07-18 pass used for the
+`TextConnectionService` inline, applied one notch higher — a real
+cross-package dedup, fully verified.
+
+**Go-forward posture (new this pass).** Each daily verification pass now aims to
+land **at least one verified improvement**, not merely re-document reviewed-train
+deferrals — draining the standing backlog one carefully-gated change at a time
+rather than deferring the whole set indefinitely. The reviewed-train items below
+remain the queue; "reviewed-train" now means *verify before landing*, not *never
+land unattended*.
 
 ## Genuinely-new / reviewed-train candidates — surfaced by this fan-out
 
@@ -327,18 +352,23 @@ this pass is a **completed** north-star action, not new debt: **Step 0's R-a
 baseline + enforcement script) are both installed and enforcing** — the
 boundary the north-star flagged as "eroding while unfenced" is now fenced at a
 zero-violation baseline, and host deep-import width dropped on all three hosts
-this window (extension 44→41, CLI 34→31, desktop 29→26). No unattended-safe
-cleanup was found — the sole delete candidate (`bestConnectionMethodAnthropic`)
-is a verified false positive (live extension caller, the recurring
-`src/`-only-grep error), and every remaining item is reviewed-train
+this window (extension 44→41, CLI 34→31, desktop 29→26). **One verified
+improvement was applied** under the "raise the bar every day" directive: the
+vestigial `bestConnectionMethodAnthropic` duplication was collapsed (~−22 LOC,
+gated green across all six typecheck configs + lint + the retained test) — a
+real cross-package dedup, not a blind sweep. The core reader's "dead, zero
+callers" flag on it was the recurring `src/`-only-grep error (it had a live
+extension caller); the symbol was genuinely redundant, not genuinely dead.
+Every remaining item is reviewed-train
 (`ModelHandler` decomposition, the `IModelHandler` port-width facets, the
 extension composition duplication, the `redaction.ts` provider-map/options
 trim, the `AgentFinalResult` two-schema rename) or strategic/gated (the frozen
 `GoogleGenAI` handler behind #7097, message opacity → neutral transcript, the
 unified event stream, the `HostInteractions` required-methods conversion behind
-Step 1). Do not re-open the traps; do not re-flag `bestConnectionMethodAnthropic`,
-`followUpResumeDetection`, `IToolRegistry`, or `RetryableInvocationNode` as dead;
-do not sweep the reviewed-train items unattended.
+Step 1). Do not re-open the traps; do not re-flag `followUpResumeDetection`,
+`IToolRegistry`, or `RetryableInvocationNode` as dead (each has a live caller or
+a test seam a `src/`-only grep misses); verify reviewed-train items before
+landing rather than sweeping them unattended.
 
 ## Verified (this checkpoint)
 
@@ -360,10 +390,14 @@ do not sweep the reviewed-train items unattended.
 - Boundary metric recounted at `3612630`: distinct `@agent/*` deep-import
   specifiers — extension **41**, CLI **31**, desktop **26** (07-18: 44/34/29;
   north-star baseline 49/35/27). Core→host alias violations: **0**.
-- False positive verified in-tree: `bestConnectionMethodAnthropic`
-  (`textConnection.ts:110`) is byte-identical to `bestConnectionMethod` but
-  imported and called by `packages/extension/src/commands/tests/connectionTests.ts:7,48`
-  — not dead; removal crosses `packages/**`.
+- Applied cleanup verified: `bestConnectionMethodAnthropic` (was
+  `textConnection.ts:110`, byte-identical to `bestConnectionMethod`) deleted and
+  its sole caller `handleTestConnection`
+  (`packages/extension/src/commands/tests/connectionTests.ts`) collapsed to a
+  single run; ~−22 LOC. `npm run typecheck` exit 0 (all six configs), `eslint`
+  clean on both files, `TextConnectionHelperModel.vitest.ts` green. The core
+  reader's "zero callers" was the recurring `src/`-only-grep error — the live
+  caller was in `packages/extension`.
 - Port width re-measured: `IModelHandler` = 40 `Pick`ed + 1 optional = **41**
   members (07-18 recorded 31); `ModelHandler.ts` **1,931** LOC (07-18 ~1,863),
   16 abstract methods; `AgentEvent` union **20** arms (unchanged).
