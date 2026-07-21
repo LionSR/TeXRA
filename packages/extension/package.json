@@ -1997,7 +1997,7 @@
     "@lit/context": "^1.1.6",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@openai/codex-sdk": "^0.144.6",
-    "@openrouter/sdk": "^0.13.66",
+    "@openrouter/sdk": "^1.0.0",
     "@supabase/supabase-js": "2.110.7",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
