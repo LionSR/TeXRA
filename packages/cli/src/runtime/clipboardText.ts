@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { platform as osPlatform } from 'node:os';
 import { basename } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { promisify } from 'node:util';
 
 import clipboard from 'clipboardy';
@@ -87,9 +88,7 @@ const FALLBACK_REAP_DELAY_MS = 300;
 async function reapWedgedCopyHelpers(platform: NodeJS.Platform): Promise<void> {
   for (let sweep = 0; sweep < 2; sweep += 1) {
     if (sweep > 0) {
-      await new Promise((resolve) =>
-        setTimeout(resolve, FALLBACK_REAP_DELAY_MS),
-      );
+      await sleep(FALLBACK_REAP_DELAY_MS);
     }
     try {
       await (platform === 'win32'
