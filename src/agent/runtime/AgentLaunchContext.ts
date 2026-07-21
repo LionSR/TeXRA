@@ -9,13 +9,13 @@ import {
   type ResolvedAgent,
 } from '@agent/index';
 import {
+  createChannelTrace,
   logSdkError,
   logUserMessage,
   type AgentTrace,
   type StageHandle,
 } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
-import { createChannelTrace } from '@agent/trace';
 import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';

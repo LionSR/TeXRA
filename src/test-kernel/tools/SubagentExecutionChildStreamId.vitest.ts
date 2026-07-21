@@ -28,6 +28,12 @@ vi.mock('@agent/storage', () => ({
   registerExecution: mocks.registerExecution,
 }));
 
+vi.mock('@agent/storage/executionLease', () => ({
+  captureOwnedExecutionLease:
+    (_executionId: string) => (operation: () => unknown) =>
+      operation(),
+}));
+
 vi.mock('@agent/runtime/RunContext', () => {
   const readRunContextField = (context: any, field: string) =>
     context?.kind === 'launch' ? context.runScope[field] : context?.[field];

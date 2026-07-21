@@ -33,6 +33,13 @@ vi.mock('@agent/storage', async (importOriginal) => {
   return { ...actual, registerExecution: mocks.registerExecution };
 });
 
+vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
+  captureOwnedExecutionLease:
+    (_executionId: ExecutionId) => (operation: () => unknown) =>
+      operation(),
+}));
+
 vi.mock('@agent/runtime/childRunLoop', () => ({
   startChildRunLoop: mocks.startChildRunLoop,
 }));

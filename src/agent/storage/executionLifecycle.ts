@@ -26,6 +26,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getExecutionStore } from './ExecutionKVStore';
 import {
   acquireFreshExecutionLease,
+  captureOwnedExecutionLease,
   releaseOwnedExecutionLease,
 } from './executionLease';
 import { ResultMetaSchema } from './resultMeta';
@@ -123,54 +124,57 @@ export async function registerExecution(
   category?: string,
 ): Promise<void> {
   await acquireFreshExecutionLease(executionId);
-  try {
-    const timestamp = new Date().toISOString();
-    const store = getExecutionStore(executionId);
-    const meta = {
-      timestamp,
-      parentExecutionId,
-      ...(category ? { category } : {}),
-    };
-    const persistedConfig = normalizeWriterCategory(
-      pinExecutionWorkingDirectory(config),
-      agentName,
-    );
-
-    const writes: Promise<void>[] = [
-      store.writeConfig(persistedConfig),
-      store.writeMeta(meta),
-    ];
-    if (parentExecutionId) {
-      writes.push(
-        getExecutionStore(parentExecutionId).writeChild(executionId, {
-          agent: agentName,
-          timestamp,
-        }),
-      );
-    }
-
-    const results = await Promise.allSettled(writes);
-    const errors = results.flatMap((result) =>
-      result.status === 'rejected' ? [result.reason] : [],
-    );
-    if (errors.length === 1) throw errors[0];
-    if (errors.length > 1) {
-      throw new AggregateError(
-        errors,
-        `Multiple execution registration writes failed for ${executionId}`,
-      );
-    }
-  } catch (error) {
+  const runWithOwnership = captureOwnedExecutionLease(executionId);
+  await runWithOwnership(async () => {
     try {
-      await releaseOwnedExecutionLease(executionId);
-    } catch (releaseError) {
-      throw new AggregateError(
-        [error, releaseError],
-        `Execution registration and lease rollback failed for ${executionId}`,
+      const timestamp = new Date().toISOString();
+      const store = getExecutionStore(executionId);
+      const meta = {
+        timestamp,
+        parentExecutionId,
+        ...(category ? { category } : {}),
+      };
+      const persistedConfig = normalizeWriterCategory(
+        pinExecutionWorkingDirectory(config),
+        agentName,
       );
+
+      const writes: Promise<void>[] = [
+        store.writeConfig(persistedConfig),
+        store.writeMeta(meta),
+      ];
+      if (parentExecutionId) {
+        writes.push(
+          getExecutionStore(parentExecutionId).writeChild(executionId, {
+            agent: agentName,
+            timestamp,
+          }),
+        );
+      }
+
+      const results = await Promise.allSettled(writes);
+      const errors = results.flatMap((result) =>
+        result.status === 'rejected' ? [result.reason] : [],
+      );
+      if (errors.length === 1) throw errors[0];
+      if (errors.length > 1) {
+        throw new AggregateError(
+          errors,
+          `Multiple execution registration writes failed for ${executionId}`,
+        );
+      }
+    } catch (error) {
+      try {
+        await releaseOwnedExecutionLease(executionId);
+      } catch (releaseError) {
+        throw new AggregateError(
+          [error, releaseError],
+          `Execution registration and lease rollback failed for ${executionId}`,
+        );
+      }
+      throw error;
     }
-    throw error;
-  }
+  });
 }
 
 /**

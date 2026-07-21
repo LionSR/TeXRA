@@ -56,4 +56,6 @@ export {
   markOwnedExecutionLeaseUndurable,
   releaseOwnedExecutionLeaseAfterFailure,
   ExecutionLeaseActiveError,
+  ExecutionLeaseLostError,
+  type OwnedExecutionLeaseScope,
 } from './executionLease';
