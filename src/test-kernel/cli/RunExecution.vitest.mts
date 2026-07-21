@@ -154,11 +154,16 @@ function stubRunExecutionDeps(): void {
     terminalStatusPersisted: true,
     flowRecord: 'deleted',
   });
-  mocks.runAgent.mockResolvedValue({
-    category: 'toolUse',
-    executionId: 'exec-1',
-    outcome: 'completed',
-    streamId: 'stream-1',
+  mocks.runAgent.mockImplementation(async (_request, options) => {
+    options.onExecutionLeaseAcquired?.((operation: () => unknown) =>
+      operation(),
+    );
+    return {
+      category: 'toolUse',
+      executionId: 'exec-1',
+      outcome: 'completed',
+      streamId: 'stream-1',
+    };
   });
 }
 
@@ -643,18 +648,27 @@ describe('executeCliRequest', () => {
     let resolveRun:
       | ((result: Awaited<ReturnType<typeof mocks.runAgent>>) => void)
       | undefined;
-    mocks.runAgent.mockReturnValue(
-      new Promise((resolve) => {
+    const runWithOwnership = vi.fn((operation: () => unknown) => operation());
+    let publishLeaseScope:
+      ((scope: typeof runWithOwnership) => void) | undefined;
+    mocks.runAgent.mockImplementation(async (_request, options) => {
+      publishLeaseScope = options.onExecutionLeaseAcquired;
+      return new Promise((resolve) => {
         resolveRun = resolve;
-      }),
-    );
+      });
+    });
 
     const run = executeCliRequest(request, cliContext(), {
       registerExecution: true,
     });
+    await vi.waitFor(() => expect(publishLeaseScope).toBeDefined());
+    const shutdown = platform.lifecycle.runShutdown();
     await Promise.resolve();
-    await platform.lifecycle.runShutdown();
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+    publishLeaseScope?.(runWithOwnership);
+    await shutdown;
 
+    expect(runWithOwnership).toHaveBeenCalledOnce();
     expect(mocks.finalizeExecution).toHaveBeenCalledWith({
       executionId: 'exec-1',
       terminalStatus: EXECUTION_STATUS.INTERRUPTED,
@@ -684,6 +698,45 @@ describe('executeCliRequest', () => {
     });
   });
 
+  it('retains the shutdown interrupt when the captured lease is already lost', async () => {
+    const { initPlatform } = await import('@platform/platform');
+    const platform = createFakePlatform();
+    initPlatform(platform);
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    let resolveRun:
+      | ((result: Awaited<ReturnType<typeof mocks.runAgent>>) => void)
+      | undefined;
+    mocks.runAgent.mockImplementation(async (_request, options) => {
+      options.onExecutionLeaseAcquired?.(() => {
+        throw new Error('lease generation lost');
+      });
+      return new Promise((resolve) => {
+        resolveRun = resolve;
+      });
+    });
+
+    const run = executeCliRequest(baseRequest(), cliContext(), {
+      registerExecution: true,
+    });
+    await Promise.resolve();
+    await platform.lifecycle.runShutdown();
+    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+
+    resolveRun?.({
+      category: 'toolUse',
+      executionId: 'exec-1',
+      outcome: 'completed',
+      streamId: 'stream-1',
+    });
+    await run;
+
+    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+      executionId: 'exec-1',
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      flowRecord: 'preserve',
+    });
+  });
+
   it('closes the runtime host when shutdown finalization fails', async () => {
     const { initPlatform } = await import('@platform/platform');
     const platform = createFakePlatform();
@@ -699,11 +752,14 @@ describe('executeCliRequest', () => {
     let resolveRun:
       | ((result: Awaited<ReturnType<typeof mocks.runAgent>>) => void)
       | undefined;
-    mocks.runAgent.mockReturnValue(
-      new Promise((resolve) => {
+    mocks.runAgent.mockImplementation(async (_request, options) => {
+      options.onExecutionLeaseAcquired?.((operation: () => unknown) =>
+        operation(),
+      );
+      return new Promise((resolve) => {
         resolveRun = resolve;
-      }),
-    );
+      });
+    });
 
     const run = executeCliRequest(baseRequest(), cliContext(), {
       registerExecution: true,

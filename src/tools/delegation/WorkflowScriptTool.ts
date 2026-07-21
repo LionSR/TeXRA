@@ -12,6 +12,7 @@ import {
   deriveWorkflowScriptCheckpointId,
   parseWorkflowScript,
 } from '@agent/workflowScript';
+import { captureOwnedExecutionLease } from '@agent/storage/executionLease';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -159,73 +160,83 @@ Tool inclusion is the opt-in boundary: do not add this tool to a default agent c
         `Failed to launch workflow script '${meta.name}': ${toErrorMessage(error)}`,
       );
     }
+    const runWithOwnership = captureOwnedExecutionLease(runExecutionId);
 
-    // createChildStream is inside the lease-protected try: it runs after the
-    // deterministic run lease is held, so a throw here (missing subscribers,
-    // duplicate stream tab) must release the lease — otherwise the lease
-    // survives to its heartbeat timeout and a prompt relaunch is refused.
-    let runChildStreamId: StreamTabId;
-    try {
-      const childStream = createChildStream(runExecutionId, runScope.streamId, {
-        streamPrefix: STREAM_PREFIX,
-        streamCategory: AgentCategory.Workflow,
-        agentName: meta.name,
-        description: meta.description,
-        config: runConfig,
-        toolName: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
-        runtimeHost: runScope.runtimeHost,
-      });
-      runChildStreamId = childStream.childStreamId;
+    return await runWithOwnership(async () => {
+      // createChildStream is inside the lease-protected try: it runs after the
+      // deterministic run lease is held, so a throw here (missing subscribers,
+      // duplicate stream tab) must release the lease — otherwise the lease
+      // survives to its heartbeat timeout and a prompt relaunch is refused.
+      let runChildStreamId: StreamTabId;
+      try {
+        const childStream = createChildStream(
+          runExecutionId,
+          runScope.streamId,
+          {
+            streamPrefix: STREAM_PREFIX,
+            streamCategory: AgentCategory.Workflow,
+            agentName: meta.name,
+            description: meta.description,
+            config: runConfig,
+            toolName: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+            runtimeHost: runScope.runtimeHost,
+          },
+        );
+        runChildStreamId = childStream.childStreamId;
 
-      // The run's own stream inherits the orchestrator's bypass so grandchild
-      // agent() calls, which link to this stream, still resolve it transitively.
-      configureDelegatedChildApprovals(
-        runChildStreamId,
-        runScope.streamId,
-        'inherit',
-        runScope.session,
-      );
+        // The run's own stream inherits the orchestrator's bypass so grandchild
+        // agent() calls, which link to this stream, still resolve it transitively.
+        configureDelegatedChildApprovals(
+          runChildStreamId,
+          runScope.streamId,
+          'inherit',
+          runScope.session,
+        );
 
-      startChildRunLoop({
-        childStream,
-        childStreamId: runChildStreamId,
-        parentStreamId: runScope.streamId,
-        executionId: runExecutionId,
-        agentName: meta.name,
-        strategy: createWorkflowScriptStrategy({
+        startChildRunLoop({
+          childStream,
+          childStreamId: runChildStreamId,
+          parentStreamId: runScope.streamId,
           executionId: runExecutionId,
-          logger: childStream.logger,
-          store,
-          checkpointId,
-          script: input.script,
-          args: input.args,
-          name: meta.name,
-          workflowControls: runScope.session.workflowControls,
-          createRunAgent: (hooks) =>
-            createWorkflowScriptAgentRunner(
-              parent,
-              input.agent,
-              checkpointId,
-              { executionId: runExecutionId, streamId: runChildStreamId },
-              hooks,
-            ),
-        }),
-        recordCost,
-      });
-    } catch (error) {
-      throw await releaseOwnedExecutionLeaseAfterFailure(runExecutionId, error);
-    }
+          agentName: meta.name,
+          strategy: createWorkflowScriptStrategy({
+            executionId: runExecutionId,
+            logger: childStream.logger,
+            store,
+            checkpointId,
+            script: input.script,
+            args: input.args,
+            name: meta.name,
+            workflowControls: runScope.session.workflowControls,
+            createRunAgent: (hooks) =>
+              createWorkflowScriptAgentRunner(
+                parent,
+                input.agent,
+                checkpointId,
+                { executionId: runExecutionId, streamId: runChildStreamId },
+                hooks,
+              ),
+          }),
+          recordCost,
+        });
+      } catch (error) {
+        throw await releaseOwnedExecutionLeaseAfterFailure(
+          runExecutionId,
+          error,
+        );
+      }
 
-    return {
-      status: 'executed',
-      summary: `Launched workflow script '${meta.name}' (async)`,
-      output: [
-        `Workflow script '${meta.name}' launched. Its result and run log will be delivered automatically as a follow-up message when the run completes.`,
-        `Execution ID: ${runExecutionId}`,
-        `Stream tab: ${runChildStreamId}`,
-        `To check intermediate progress: executions tool with path=/executions/${runExecutionId} and action=wait (waits for next status change).`,
-        `To resume after a timeout or interruption: call this tool again with the same meta.name.`,
-      ].join('\n'),
-    };
+      return {
+        status: 'executed',
+        summary: `Launched workflow script '${meta.name}' (async)`,
+        output: [
+          `Workflow script '${meta.name}' launched. Its result and run log will be delivered automatically as a follow-up message when the run completes.`,
+          `Execution ID: ${runExecutionId}`,
+          `Stream tab: ${runChildStreamId}`,
+          `To check intermediate progress: executions tool with path=/executions/${runExecutionId} and action=wait (waits for next status change).`,
+          `To resume after a timeout or interruption: call this tool again with the same meta.name.`,
+        ].join('\n'),
+      };
+    });
   }
 }

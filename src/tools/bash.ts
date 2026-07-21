@@ -9,6 +9,7 @@ import {
   releaseOwnedExecutionLeaseAfterFailure,
 } from '@agent/storage';
 import {
+  captureOwnedExecutionLease,
   markOwnedExecutionLeaseUndurable,
   onOwnedExecutionLeaseLost,
 } from '@agent/storage/executionLease';
@@ -269,21 +270,23 @@ export class BashTool extends defineTool({
       parentExecutionId,
       'process',
     );
+    const runWithOwnership = captureOwnedExecutionLease(executionId);
 
-    let childStream: ReturnType<typeof createChildStream>;
-    try {
-      childStream = createChildStream(executionId, parentStreamId, {
-        streamPrefix: 'bash@tool',
-        streamCategory: AgentCategory.ToolUse,
-        agentName: 'bash',
-        description: command,
-        config: syntheticConfig,
-        toolName: 'bash',
-        runtimeHost,
-      });
-    } catch (error) {
-      throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
-    }
+    const childStream = await runWithOwnership(async () => {
+      try {
+        return createChildStream(executionId, parentStreamId, {
+          streamPrefix: 'bash@tool',
+          streamCategory: AgentCategory.ToolUse,
+          agentName: 'bash',
+          description: command,
+          config: syntheticConfig,
+          toolName: 'bash',
+          runtimeHost,
+        });
+      } catch (error) {
+        throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
+      }
+    });
     const { childStreamId, logger } = childStream;
     let stdoutTail = '';
     let stderrTail = '';
@@ -462,7 +465,7 @@ export class BashTool extends defineTool({
       await wakeParentFollowUp(enqueueResult);
     };
 
-    void (async () => {
+    void runWithOwnership(async () => {
       try {
         const outcome = await promise.then(
           (result) => ({ ok: true as const, result }),
@@ -556,7 +559,7 @@ export class BashTool extends defineTool({
           stopWatchingLease();
         }
       }
-    })();
+    });
 
     return {
       status: 'executed',

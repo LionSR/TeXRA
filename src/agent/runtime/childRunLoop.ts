@@ -14,6 +14,7 @@ import { createChannelTrace } from '@agent/trace';
 import {
   markOwnedExecutionLeaseUndurable,
   onOwnedExecutionLeaseLost,
+  runWithOwnedExecutionLease,
 } from '@agent/storage/executionLease';
 import {
   currentSession,
@@ -570,7 +571,7 @@ export function startChildRunLoop<TTurn>(
   // (#8093). Interim (non-terminal) turns wake inline, immediately, since no
   // finalize is pending for them.
   let pendingDelivery: PendingChildDelivery | undefined;
-  void (async () => {
+  void runWithOwnedExecutionLease(executionId, async () => {
     let runner: (ac: AbortController) => Promise<TTurn> = (ac) =>
       strategy.launch(ports, ac);
     try {
@@ -760,5 +761,5 @@ export function startChildRunLoop<TTurn>(
         }
       }
     }
-  })();
+  });
 }

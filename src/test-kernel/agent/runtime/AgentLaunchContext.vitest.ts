@@ -89,10 +89,11 @@ describe('AgentLaunchContext', () => {
   it('projects model changes into the active run context', async () => {
     const explicit = createRecordingHost();
     const session = {} as SessionHandle;
+    const executionId = 'launch-context-execution';
     const runScope = createRunScope({
       runtimeHost: explicit.host,
       streamId: 'launch-context-stream',
-      executionId: 'launch-context-execution',
+      executionId,
       agentName: 'chat',
       session,
     });

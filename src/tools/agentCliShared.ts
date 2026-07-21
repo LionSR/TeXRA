@@ -6,6 +6,7 @@ import {
   releaseOwnedExecutionLeaseAfterFailure,
 } from '@agent/storage';
 import { type AgentTrace } from '@agent/trace';
+import { captureOwnedExecutionLease } from '@agent/storage/executionLease';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -182,33 +183,36 @@ export async function launchAgentCliSession(
   } catch {
     throw new ToolError(params.registerFailedMessage);
   }
+  const runWithOwnership = captureOwnedExecutionLease(executionId);
 
-  let childStream: ChildStream;
-  try {
-    childStream = createChildStream(executionId, params.parentStreamId, {
-      streamPrefix: params.streamPrefix,
-      streamCategory: AgentCategory.ToolUse,
-      agentName: params.agentName,
-      description: params.description,
-      config: params.config,
-      toolName: params.agentName,
-      runtimeHost: params.runtimeHost,
-    });
-    await params.startLoop({ childStream, executionId });
-  } catch (error) {
-    throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
-  }
+  return await runWithOwnership(async () => {
+    let childStream: ChildStream;
+    try {
+      childStream = createChildStream(executionId, params.parentStreamId, {
+        streamPrefix: params.streamPrefix,
+        streamCategory: AgentCategory.ToolUse,
+        agentName: params.agentName,
+        description: params.description,
+        config: params.config,
+        toolName: params.agentName,
+        runtimeHost: params.runtimeHost,
+      });
+      await params.startLoop({ childStream, executionId });
+    } catch (error) {
+      throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
+    }
 
-  return {
-    status: 'executed',
-    summary: params.summary,
-    output: [
-      params.launchedLine,
-      `Execution ID: ${executionId}`,
-      `Stream tab: ${childStream.childStreamId}`,
-      params.followUpLine,
-    ].join('\n'),
-  };
+    return {
+      status: 'executed',
+      summary: params.summary,
+      output: [
+        params.launchedLine,
+        `Execution ID: ${executionId}`,
+        `Stream tab: ${childStream.childStreamId}`,
+        params.followUpLine,
+      ].join('\n'),
+    };
+  });
 }
 
 /**

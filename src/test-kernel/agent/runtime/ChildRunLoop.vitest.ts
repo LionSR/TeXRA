@@ -19,6 +19,9 @@ const mocks = vi.hoisted(() => ({
   persistChildRunResultMeta: vi.fn(),
   enqueueChildRunFollowUp: vi.fn(),
   wakeChildRunFollowUp: vi.fn(),
+  runWithOwnedExecutionLease: vi.fn(
+    (_executionId: ExecutionId, operation: () => unknown) => operation(),
+  ),
   leaseLossListener: undefined as (() => void) | undefined,
 }));
 
@@ -31,6 +34,7 @@ vi.mock('@agent/storage', async (importOriginal) => ({
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
   markOwnedExecutionLeaseUndurable: vi.fn(),
+  runWithOwnedExecutionLease: mocks.runWithOwnedExecutionLease,
   onOwnedExecutionLeaseLost: vi.fn(
     (_executionId: ExecutionId, listener: () => void) => {
       mocks.leaseLossListener = listener;
@@ -207,6 +211,10 @@ describe('childRunLoop E2E fixtures', () => {
       agentName: 'fake',
       strategy,
     });
+    expect(mocks.runWithOwnedExecutionLease).toHaveBeenCalledWith(
+      'exec-lease-loss',
+      expect.any(Function),
+    );
     await vi.waitFor(() => expect(mocks.leaseLossListener).toBeDefined());
 
     mocks.leaseLossListener?.();
