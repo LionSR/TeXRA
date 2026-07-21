@@ -313,6 +313,38 @@ describe('cross-process execution leases', () => {
     expect(ownsExecutionLease(executionId)).toBe(true);
   });
 
+  it('rejects renewal when release starts during its heartbeat', async () => {
+    const executionId = 'e86443' as ExecutionId;
+    await acquire(executionId);
+    const originalRunExclusive = platform().fileLocks.runExclusive.bind(
+      platform().fileLocks,
+    );
+    let markHeartbeatStarted = (): void => undefined;
+    const heartbeatStarted = new Promise<void>((resolve) => {
+      markHeartbeatStarted = resolve;
+    });
+    let releaseHeartbeat = (): void => undefined;
+    const heartbeatGate = new Promise<void>((resolve) => {
+      releaseHeartbeat = resolve;
+    });
+    vi.spyOn(platform().fileLocks, 'runExclusive').mockImplementationOnce(
+      async (lockPath, operation) => {
+        markHeartbeatStarted();
+        await heartbeatGate;
+        return originalRunExclusive(lockPath, operation);
+      },
+    );
+
+    const renewal = renewOwnedExecutionLease(executionId);
+    await heartbeatStarted;
+    const release = releaseOwnedExecutionLease(executionId);
+    releaseHeartbeat();
+
+    await expect(renewal).rejects.toBeInstanceOf(ExecutionLeaseLostError);
+    await release;
+    ownedExecutionIds.delete(executionId);
+  });
+
   it('serializes deletion with a racing lease acquisition', async () => {
     const executionId = 'f8644f' as ExecutionId;
     let allowDeletion: (() => void) | undefined;

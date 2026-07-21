@@ -364,7 +364,10 @@ export async function renewOwnedExecutionLease(
     throw new ExecutionLeaseLostError(executionId);
   }
   await heartbeat(lease);
-  if (ownedLeases.get(ownershipKey(lease.storageRoot, executionId)) !== lease) {
+  if (
+    lease.releasing ||
+    ownedLeases.get(ownershipKey(lease.storageRoot, executionId)) !== lease
+  ) {
     throw new ExecutionLeaseLostError(executionId);
   }
 }
