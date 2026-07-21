@@ -105,6 +105,21 @@ export type WebFetchResult = z.infer<typeof WebFetchResultSchema>;
 // ============================================================================
 
 /**
+ * The three live Anthropic server-tool block `type` tags emitted by
+ * `AnthropicStreamHandler`. Single source of truth for the block-type
+ * vocabulary shared by `formatConversationBlock`
+ * (`@agent/storage/conversationFormat`) and `assistantBlockToNode`
+ * (`@agent/export/normalizeConversation`), which classify the same three
+ * block types into different output shapes (a truncated marker string vs. a
+ * structured `ExportNode`).
+ */
+export const ANTHROPIC_SERVER_TOOL_BLOCK_TYPES = {
+  serverToolUse: 'server_tool_use',
+  webSearchToolResult: 'web_search_tool_result',
+  webFetchToolResult: 'web_fetch_tool_result',
+} as const;
+
+/**
  * Union of all raw content block types that can be returned by server tools.
  * These blocks need to be preserved in conversation context for follow-up messages.
  *

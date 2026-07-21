@@ -11,6 +11,7 @@ import { redactSecrets } from '@logger/redaction';
 import {
   ErrorLogDataSchema,
   MESSAGE_TYPES,
+  PhaseGroupDataSchema,
   STREAM_LOG_ENTRY_TYPES,
   TOOL_USE_STATUS,
   type NormalizedToolUse,
@@ -195,19 +196,12 @@ function phaseGroupData(
   ) {
     return null;
   }
-  const data = entry.data;
-  if (typeof data !== 'object' || data === null || !('kind' in data)) {
-    return null;
-  }
-  const { kind, index, total } = data as {
-    kind?: unknown;
-    index?: unknown;
-    total?: unknown;
-  };
-  if (kind !== 'phase') return null;
+  const parsed = PhaseGroupDataSchema.safeParse(entry.data);
+  if (!parsed.success || parsed.data.kind !== 'phase') return null;
+  const { index, total } = parsed.data;
   return {
-    ...(typeof index === 'number' ? { index } : {}),
-    ...(typeof total === 'number' ? { total } : {}),
+    ...(index !== undefined ? { index } : {}),
+    ...(total !== undefined ? { total } : {}),
   };
 }
 

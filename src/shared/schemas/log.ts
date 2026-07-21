@@ -76,6 +76,18 @@ export const STREAM_LOG_ENTRY_TYPES = {
 
 const StreamLogEntryTypeSchema = z.enum(STREAM_LOG_ENTRY_TYPES);
 
+/**
+ * A `GROUP_START`/`GROUP_END` entry's `data` when it represents a
+ * `phase()` group (as opposed to a round/run/session group, which share the
+ * same entry `type` but a different `kind`). Loose: other group kinds carry
+ * unrelated fields on the same `data` bag.
+ */
+export const PhaseGroupDataSchema = z.looseObject({
+  kind: z.string(),
+  index: z.number().optional(),
+  total: z.number().optional(),
+});
+
 export const FileListEntrySchema = z.object({
   path: z.string(),
   ok: z.boolean(),
