@@ -49,6 +49,14 @@ vi.mock('@agent/storage', () => ({
   synchronizeAgentResultOutcome: mocks.synchronizeAgentResultOutcome,
 }));
 
+vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
+  runWithOwnedExecutionLease: (
+    _executionId: ExecutionId,
+    operation: () => unknown,
+  ) => operation(),
+}));
+
 vi.mock('@agent/runtime/executionOwnership', () => ({
   releaseExecutionLeaseAfterArtifacts: vi.fn(async () => {}),
 }));

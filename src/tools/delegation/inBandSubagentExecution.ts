@@ -15,6 +15,7 @@ import {
   type ResultMeta,
 } from '@agent/storage';
 import {
+  captureOwnedExecutionLease,
   markOwnedExecutionLeaseUndurable,
   ownsExecutionLease,
 } from '@agent/storage/executionLease';
@@ -477,147 +478,168 @@ async function executeInBand(
     }
     throw cause;
   }
-  if (stableAttempt) {
+  const runWithOwnership = captureOwnedExecutionLease(executionId);
+  return await runWithOwnership(async () => {
+    let executionFailure: InBandExecutionFailure | undefined;
     try {
-      await writeStableSubagentAttempt(getExecutionStore(executionId), {
-        ...stableAttempt,
-        phase: 'launched',
-      });
-    } catch (cause) {
-      throw await releaseOwnedExecutionLeaseAfterFailure(
-        executionId,
-        new SubagentDurabilityError(
-          `Failed to mark subagent ${executionId} as launched.`,
-          { cause },
-        ),
-      );
-    }
-  }
+      if (stableAttempt) {
+        try {
+          await writeStableSubagentAttempt(getExecutionStore(executionId), {
+            ...stableAttempt,
+            phase: 'launched',
+          });
+        } catch (cause) {
+          throw await releaseOwnedExecutionLeaseAfterFailure(
+            executionId,
+            new SubagentDurabilityError(
+              `Failed to mark subagent ${executionId} as launched.`,
+              { cause },
+            ),
+          );
+        }
+      }
 
-  let runError: unknown;
-  let detachAbort = (): void => {};
-  let flowResult: AgentFlowResult;
-  try {
-    flowResult = await executeAgent(config, executionId, {
-      runtimeHost: options.runtimeHost,
-      session: options.session,
-      isSubagent: true,
-      enforceCategory: true,
-      parentStreamId: options.parentStreamId,
-      approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-      runtimeUnavailableTools: options.runtimeUnavailableTools,
-      stopAfterCycle: true,
-      onStreamResolved: options.onStreamResolved,
-      onRunError: (error) => {
-        runError = error;
-      },
-      onRun: (handle) => {
-        detachAbort();
-        detachAbort = bindAbortSignal(options.signal, handle);
-      },
-    });
-  } catch (error) {
-    const errorResult = getAgentFlowErrorResult(error);
-    settleCost(errorResult?.totalCostUsd);
-    await persistFailure(
-      mode,
-      executionId,
-      stableAttempt,
-      options.agentName,
-      options.parentExecutionId,
-      config.agentCategory,
-      error,
-      errorResult,
-      startedAt,
-      workingDirectory,
-    );
-    throw error;
-  } finally {
-    detachAbort();
-  }
-
-  settleCost(flowResult.totalCostUsd);
-  if (flowResult.outcome === 'failed') {
-    const error = runError ?? new Error('Subagent ended with failed outcome.');
-    await persistFailure(
-      mode,
-      executionId,
-      stableAttempt,
-      options.agentName,
-      options.parentExecutionId,
-      config.agentCategory,
-      error,
-      flowResult,
-      startedAt,
-      workingDirectory,
-    );
-    throw error;
-  }
-
-  let built: BuiltSubagentResult;
-  try {
-    built = await buildSubagentResult(
-      executionId,
-      options.agentName,
-      flowResult,
-      {
-        startedAt,
-        workingDirectory,
-        parentExecutionId: options.parentExecutionId,
-      },
-    );
-  } catch (error) {
-    // The runtime has already finalized this child. A post-flow construction
-    // error must not rewrite a completed execution as failed or try to parse
-    // the same invalid flow data again through the failure-result builder.
-    if (mode === 'required-result') {
-      throw new SubagentDurabilityError(
-        `Failed to construct result for subagent ${executionId}.`,
-        { cause: error },
-      );
-    }
-    await persistReportBestEffort(
-      executionId,
-      formatSubagentError(executionId, options.agentName, error, {
-        wallTimeMs: Date.now() - startedAt,
-        workingDirectory,
-        memoryMisses: flowResult.memoryMisses,
-      }),
-    );
-    throw error;
-  }
-
-  let delivery: string | undefined;
-  if (mode === 'required-result') {
-    await persistResultMetaRequired(executionId, built.resultMeta);
-  } else {
-    try {
-      delivery = formatBuiltSubagentDelivery(
-        executionId,
-        options.agentName,
-        flowResult,
-        built,
-        workingDirectory,
-      );
-    } catch (error) {
-      await persistResultMetaBestEffort(executionId, built.resultMeta);
-      await persistReportBestEffort(
-        executionId,
-        formatSubagentError(executionId, options.agentName, error, {
-          wallTimeMs: built.wallTimeMs,
+      let runError: unknown;
+      let detachAbort = (): void => {};
+      let flowResult: AgentFlowResult;
+      try {
+        flowResult = await executeAgent(config, executionId, {
+          runtimeHost: options.runtimeHost,
+          session: options.session,
+          isSubagent: true,
+          enforceCategory: true,
+          parentStreamId: options.parentStreamId,
+          approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+          runtimeUnavailableTools: options.runtimeUnavailableTools,
+          stopAfterCycle: true,
+          onStreamResolved: options.onStreamResolved,
+          onRunError: (error) => {
+            runError = error;
+          },
+          onRun: (handle) => {
+            detachAbort();
+            detachAbort = bindAbortSignal(options.signal, handle);
+          },
+        });
+      } catch (error) {
+        const errorResult = getAgentFlowErrorResult(error);
+        settleCost(errorResult?.totalCostUsd);
+        await persistFailure(
+          mode,
+          executionId,
+          stableAttempt,
+          options.agentName,
+          options.parentExecutionId,
+          config.agentCategory,
+          error,
+          errorResult,
+          startedAt,
           workingDirectory,
-          memoryMisses: flowResult.memoryMisses,
-        }),
-      );
-      throw error;
-    }
-    await persistDeliveryBestEffort(executionId, delivery, built.resultMeta);
-  }
+        );
+        throw error;
+      } finally {
+        detachAbort();
+      }
 
-  // Post-flow artifact construction deliberately reaches a terminal record.
-  // Cancellation observed here rejects the caller without changing that record.
-  options.signal?.throwIfAborted();
-  return { executionId, built, delivery };
+      settleCost(flowResult.totalCostUsd);
+      if (flowResult.outcome === 'failed') {
+        const error =
+          runError ?? new Error('Subagent ended with failed outcome.');
+        await persistFailure(
+          mode,
+          executionId,
+          stableAttempt,
+          options.agentName,
+          options.parentExecutionId,
+          config.agentCategory,
+          error,
+          flowResult,
+          startedAt,
+          workingDirectory,
+        );
+        throw error;
+      }
+
+      let built: BuiltSubagentResult;
+      try {
+        built = await buildSubagentResult(
+          executionId,
+          options.agentName,
+          flowResult,
+          {
+            startedAt,
+            workingDirectory,
+            parentExecutionId: options.parentExecutionId,
+          },
+        );
+      } catch (error) {
+        // The runtime has already finalized this child. A post-flow construction
+        // error must not rewrite a completed execution as failed or try to parse
+        // the same invalid flow data again through the failure-result builder.
+        if (mode === 'required-result') {
+          throw new SubagentDurabilityError(
+            `Failed to construct result for subagent ${executionId}.`,
+            { cause: error },
+          );
+        }
+        await persistReportBestEffort(
+          executionId,
+          formatSubagentError(executionId, options.agentName, error, {
+            wallTimeMs: Date.now() - startedAt,
+            workingDirectory,
+            memoryMisses: flowResult.memoryMisses,
+          }),
+        );
+        throw error;
+      }
+
+      let delivery: string | undefined;
+      if (mode === 'required-result') {
+        await persistResultMetaRequired(executionId, built.resultMeta);
+      } else {
+        try {
+          delivery = formatBuiltSubagentDelivery(
+            executionId,
+            options.agentName,
+            flowResult,
+            built,
+            workingDirectory,
+          );
+        } catch (error) {
+          await persistResultMetaBestEffort(executionId, built.resultMeta);
+          await persistReportBestEffort(
+            executionId,
+            formatSubagentError(executionId, options.agentName, error, {
+              wallTimeMs: built.wallTimeMs,
+              workingDirectory,
+              memoryMisses: flowResult.memoryMisses,
+            }),
+          );
+          throw error;
+        }
+        await persistDeliveryBestEffort(
+          executionId,
+          delivery,
+          built.resultMeta,
+        );
+      }
+
+      // Post-flow artifact construction deliberately reaches a terminal record.
+      // Cancellation observed here rejects the caller without changing that record.
+      options.signal?.throwIfAborted();
+      return { executionId, built, delivery };
+    } catch (error) {
+      markOwnedExecutionLeaseUndurable(executionId);
+      executionFailure = { error };
+      throw error;
+    } finally {
+      await releaseInBandExecutionLease(
+        options.session,
+        executionId,
+        executionFailure,
+      );
+    }
+  });
 }
 
 /** Recover a logical child first; resolve launch-only state only when needed. */
@@ -744,29 +766,16 @@ export async function executeStableSubagentInBand(
         `Prepared subagent ${executionId} changed its parent execution.`,
       );
     }
-    let executionFailure: InBandExecutionFailure | undefined;
-    try {
-      const completed = await executeInBand(
-        prepared,
-        'required-result',
-        executionId,
-        attempt,
-      );
-      return {
-        executionId: completed.executionId,
-        result: completed.built.result,
-      };
-    } catch (error) {
-      markOwnedExecutionLeaseUndurable(executionId);
-      executionFailure = { error };
-      throw error;
-    } finally {
-      await releaseInBandExecutionLease(
-        prepared.session,
-        executionId,
-        executionFailure,
-      );
-    }
+    const completed = await executeInBand(
+      prepared,
+      'required-result',
+      executionId,
+      attempt,
+    );
+    return {
+      executionId: completed.executionId,
+      result: completed.built.result,
+    };
   });
 }
 
@@ -775,30 +784,17 @@ export async function executeSubagentForDeliveryInBand(
   options: InBandSubagentDeliveryOptions,
 ): Promise<InBandSubagentDeliveryResult> {
   const executionId = generateExecutionId() as ExecutionId;
-  let executionFailure: InBandExecutionFailure | undefined;
-  try {
-    const completed = await executeInBand(
-      options,
-      'best-effort-delivery',
-      executionId,
-    );
-    if (completed.delivery === undefined) {
-      throw new Error('Subagent delivery was not constructed.');
-    }
-    return {
-      executionId: completed.executionId,
-      result: completed.built.result,
-      delivery: completed.delivery,
-    };
-  } catch (error) {
-    markOwnedExecutionLeaseUndurable(executionId);
-    executionFailure = { error };
-    throw error;
-  } finally {
-    await releaseInBandExecutionLease(
-      options.session,
-      executionId,
-      executionFailure,
-    );
+  const completed = await executeInBand(
+    options,
+    'best-effort-delivery',
+    executionId,
+  );
+  if (completed.delivery === undefined) {
+    throw new Error('Subagent delivery was not constructed.');
   }
+  return {
+    executionId: completed.executionId,
+    result: completed.built.result,
+    delivery: completed.delivery,
+  };
 }

@@ -12,6 +12,7 @@ import {
 import { createChannelTrace, type ResultEvent } from '@agent/trace';
 import {
   completeOwnedExecutionLease,
+  ExecutionLeaseLostError,
   markOwnedExecutionLeaseUndurable,
 } from '@agent/storage/executionLease';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -969,37 +970,44 @@ export class ExecutionRegistry {
       isSubagent: handle.isChildExecution,
     };
     void this.finishWaitingTermination(handle, cancelledResult).catch(
-      (error: unknown) => {
+      async (error: unknown) => {
         const recoveryFailures = [error];
-        try {
-          markOwnedExecutionLeaseUndurable(handle.executionId);
-        } catch (recoveryError) {
-          recoveryFailures.push(recoveryError);
+        if (!(error instanceof ExecutionLeaseLostError)) {
+          try {
+            await handle.runWithExecutionLease(async () => {
+              markOwnedExecutionLeaseUndurable(handle.executionId);
+              handle.settleResult(cancelledResult);
+              const untracked = this.untrackIfCurrent(handle);
+              if (untracked) {
+                this.cancelStreamStatus(handle.childStreamId, handle);
+              }
+              if (untracked && !handle.isChildExecution) {
+                await this.releaseRootExecutionLease(handle.executionId);
+              }
+            });
+            logger.warn('Waiting-execution termination failed unexpectedly', {
+              data: { executionId: handle.executionId, recoveryFailures },
+            });
+            return;
+          } catch (recoveryError) {
+            recoveryFailures.push(recoveryError);
+          }
         }
+
+        // A former generation owns only its private result. It must not mark,
+        // release, untrack, or cancel a locally reacquired successor.
         try {
           handle.settleResult(cancelledResult);
         } catch (recoveryError) {
           recoveryFailures.push(recoveryError);
         }
         try {
-          this.untrackIfCurrent(handle);
+          const untracked = this.untrackIfCurrent(handle);
+          if (untracked) {
+            this.cancelStreamStatus(handle.childStreamId, handle);
+          }
         } catch (recoveryError) {
           recoveryFailures.push(recoveryError);
-        }
-        try {
-          this.cancelStreamStatus(handle.childStreamId, handle);
-        } catch (recoveryError) {
-          recoveryFailures.push(recoveryError);
-        }
-        if (!handle.isChildExecution) {
-          void this.releaseRootExecutionLease(handle.executionId).catch(
-            (recoveryError: unknown) => {
-              logger.warn(
-                'Waiting-execution recovery could not release ownership',
-                { data: { executionId: handle.executionId, recoveryError } },
-              );
-            },
-          );
         }
         logger.warn('Waiting-execution termination failed unexpectedly', {
           data: { executionId: handle.executionId, recoveryFailures },
@@ -1013,93 +1021,95 @@ export class ExecutionRegistry {
     handle: AgentExecutionHandle,
     cancelledResult: ResultEvent,
   ): Promise<void> {
-    try {
-      await handle.waitForWaitingCleanup();
-    } catch (error) {
-      // Transcript closure and terminal execution metadata are independent
-      // durable facts. Preserve the failed artifact fence, but still give the
-      // terminal status its own opportunity to reach disk.
-      markOwnedExecutionLeaseUndurable(handle.executionId);
-      logger.warn(
-        'Waiting-execution cleanup failed; continuing terminal persistence',
-        { data: { executionId: handle.executionId, error } },
-      );
-    }
+    return await handle.runWithExecutionLease(async () => {
+      try {
+        await handle.waitForWaitingCleanup();
+      } catch (error) {
+        // Transcript closure and terminal execution metadata are independent
+        // durable facts. Preserve the failed artifact fence, but still give the
+        // terminal status its own opportunity to reach disk.
+        markOwnedExecutionLeaseUndurable(handle.executionId);
+        logger.warn(
+          'Waiting-execution cleanup failed; continuing terminal persistence',
+          { data: { executionId: handle.executionId, error } },
+        );
+      }
 
-    if (this.handles.get(handle.executionId) !== handle) {
-      // `track` transfers the pending stop to a resumed successor. The old
-      // handle still needs its private result settled, but it no longer owns
-      // the shared stream, execution metadata, or lease.
-      handle.settleResult(cancelledResult);
-      return;
-    }
+      if (this.handles.get(handle.executionId) !== handle) {
+        // `track` transfers the pending stop to a resumed successor. The old
+        // handle still needs its private result settled, but it no longer owns
+        // the shared stream, execution metadata, or lease.
+        handle.settleResult(cancelledResult);
+        return;
+      }
 
-    if (handle.executionLeaseLost) {
-      logger.warn('Discarding a stopped waiting execution after lease loss', {
-        data: { executionId: handle.executionId },
-      });
-      // Settle the in-memory result only: the former owner must not publish or
-      // persist a terminal event, but this promise must resolve on every exit.
+      if (handle.executionLeaseLost) {
+        logger.warn('Discarding a stopped waiting execution after lease loss', {
+          data: { executionId: handle.executionId },
+        });
+        // Settle the in-memory result only: the former owner must not publish or
+        // persist a terminal event, but this promise must resolve on every exit.
+        handle.settleResult(cancelledResult);
+        this.untrackHandle(handle);
+        this.cancelStreamStatus(handle.childStreamId, handle);
+        return;
+      }
+
+      // Cleanup closes the suspended run's transcript group. Publish the
+      // terminal state only after that owned artifact is settled so every host
+      // observes one coherent cancellation boundary.
+      handle.trace?.emit(cancelledResult);
+      this.publishResult?.(cancelledResult, handle.childStreamId);
       handle.settleResult(cancelledResult);
       this.untrackHandle(handle);
       this.cancelStreamStatus(handle.childStreamId, handle);
-      return;
-    }
 
-    // Cleanup closes the suspended run's transcript group. Publish the
-    // terminal state only after that owned artifact is settled so every host
-    // observes one coherent cancellation boundary.
-    handle.trace?.emit(cancelledResult);
-    this.publishResult?.(cancelledResult, handle.childStreamId);
-    handle.settleResult(cancelledResult);
-    this.untrackHandle(handle);
-    this.cancelStreamStatus(handle.childStreamId, handle);
-
-    // No later result write is guaranteed here, including during RESUMING:
-    // the resume can fail before installing its own handle, while this method
-    // has already untracked the suspended one. Align the interim envelope only
-    // after durable terminal metadata exists. A turn that does continue will
-    // replace it with its own result.
-    try {
-      const result = await finalizeExecution({
-        executionId: handle.executionId,
-        terminalStatus: projectRunOutcome(RUN_OUTCOME.CANCELLED)
-          .executionStatus,
-        flowRecord: 'delete',
-      });
-      if (result.status === 'failed') {
-        markOwnedExecutionLeaseUndurable(handle.executionId);
-        logger.warn('Failed to finalize stopped waiting execution', {
-          data: {
-            executionId: handle.executionId,
-            stage: result.stage,
-            terminalStatusPersisted: result.terminalStatusPersisted,
-            error: result.error,
-          },
+      // No later result write is guaranteed here, including during RESUMING:
+      // the resume can fail before installing its own handle, while this method
+      // has already untracked the suspended one. Align the interim envelope only
+      // after durable terminal metadata exists. A turn that does continue will
+      // replace it with its own result.
+      try {
+        const result = await finalizeExecution({
+          executionId: handle.executionId,
+          terminalStatus: projectRunOutcome(RUN_OUTCOME.CANCELLED)
+            .executionStatus,
+          flowRecord: 'delete',
         });
-      }
-      if (result.terminalStatusPersisted) {
-        await synchronizeAgentResultOutcome(
-          handle.executionId,
-          RUN_OUTCOME.CANCELLED,
-        );
-      }
-    } catch (error) {
-      markOwnedExecutionLeaseUndurable(handle.executionId);
-      logger.warn('Waiting-execution finalizer rejected unexpectedly', {
-        data: { executionId: handle.executionId, error },
-      });
-    } finally {
-      if (!handle.isChildExecution) {
-        try {
-          await this.releaseRootExecutionLease(handle.executionId);
-        } catch (error) {
-          logger.warn('Waiting-execution artifact flush failed', {
-            data: { executionId: handle.executionId, error },
+        if (result.status === 'failed') {
+          markOwnedExecutionLeaseUndurable(handle.executionId);
+          logger.warn('Failed to finalize stopped waiting execution', {
+            data: {
+              executionId: handle.executionId,
+              stage: result.stage,
+              terminalStatusPersisted: result.terminalStatusPersisted,
+              error: result.error,
+            },
           });
         }
+        if (result.terminalStatusPersisted) {
+          await synchronizeAgentResultOutcome(
+            handle.executionId,
+            RUN_OUTCOME.CANCELLED,
+          );
+        }
+      } catch (error) {
+        markOwnedExecutionLeaseUndurable(handle.executionId);
+        logger.warn('Waiting-execution finalizer rejected unexpectedly', {
+          data: { executionId: handle.executionId, error },
+        });
+      } finally {
+        if (!handle.isChildExecution) {
+          try {
+            await this.releaseRootExecutionLease(handle.executionId);
+          } catch (error) {
+            logger.warn('Waiting-execution artifact flush failed', {
+              data: { executionId: handle.executionId, error },
+            });
+          }
+        }
       }
-    }
+    });
   }
 
   private streamStatusEmitOptions(

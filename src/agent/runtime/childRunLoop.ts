@@ -14,6 +14,7 @@ import { createChannelTrace } from '@agent/trace';
 import {
   markOwnedExecutionLeaseUndurable,
   onOwnedExecutionLeaseLost,
+  runWithOwnedExecutionLease,
 } from '@agent/storage/executionLease';
 import {
   currentSession,
@@ -504,6 +505,9 @@ export function startChildRunLoop<TTurn>(
   // own run trace inside `runFlowWithLifecycle`), so this is a channel-only
   // fallback for the loop's own turn-summary/warning lines.
   const logger = childStream?.logger ?? createChannelTrace('childRunLoop');
+  // The code below is synchronous until the scoped loop task is spawned, so a
+  // lost generation fails before any queue, listener, stage, or loop exists.
+  runWithOwnedExecutionLease(executionId, () => undefined);
 
   const runSession = currentSession();
   const loop = new ChildRunInterruptible(runSession, childStreamId);
@@ -570,7 +574,7 @@ export function startChildRunLoop<TTurn>(
   // (#8093). Interim (non-terminal) turns wake inline, immediately, since no
   // finalize is pending for them.
   let pendingDelivery: PendingChildDelivery | undefined;
-  void (async () => {
+  void runWithOwnedExecutionLease(executionId, async () => {
     let runner: (ac: AbortController) => Promise<TTurn> = (ac) =>
       strategy.launch(ports, ac);
     try {
@@ -760,5 +764,5 @@ export function startChildRunLoop<TTurn>(
         }
       }
     }
-  })();
+  });
 }

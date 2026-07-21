@@ -62,8 +62,14 @@ vi.mock('@agent/storage', () => ({
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
+  captureOwnedExecutionLease:
+    (_executionId: ExecutionId) => (operation: () => unknown) =>
+      operation(),
   markOwnedExecutionLeaseUndurable: vi.fn(),
   ownsExecutionLease: vi.fn(() => true),
+  runWithOwnedExecutionLease: vi.fn(
+    (_executionId: ExecutionId, operation: () => unknown) => operation(),
+  ),
 }));
 
 vi.mock('@agent/runtime/executionOwnership', () => ({

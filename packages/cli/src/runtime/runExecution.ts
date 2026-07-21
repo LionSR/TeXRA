@@ -1,3 +1,7 @@
+import {
+  ExecutionLeaseLostError,
+  type OwnedExecutionLeaseScope,
+} from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -215,46 +219,66 @@ export async function executeCliRequest(
     shutdownFinalizationFailureReported = true;
     reportFinalizationFailure(error);
   };
-  const disposeShutdownStatus = ownedExecutionId
-    ? tryPlatform()?.lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, async () => {
-        shutdownInterrupted = true;
-        await finalizeCliExecution(
-          ownedExecutionId,
-          EXECUTION_STATUS.INTERRUPTED,
-          'preserve',
-          reportShutdownFinalizationFailure,
-        );
-      })
-    : undefined;
+  let settleLeaseScope: (
+    scope: OwnedExecutionLeaseScope | undefined,
+  ) => void = () => undefined;
+  const leaseScopeReady = new Promise<OwnedExecutionLeaseScope | undefined>(
+    (resolve) => {
+      settleLeaseScope = resolve;
+    },
+  );
   let shutdownStatusFinalized: Promise<void> | undefined;
   const finalizeShutdownStatus = (): Promise<void> => {
+    if (!shutdownInterrupted || !ownedExecutionId) return Promise.resolve();
     shutdownStatusFinalized ??= (async () => {
-      if (shutdownInterrupted && ownedExecutionId) {
-        await finalizeCliExecution(
-          ownedExecutionId,
-          EXECUTION_STATUS.INTERRUPTED,
-          'preserve',
-          reportShutdownFinalizationFailure,
+      const runWithOwnership = await leaseScopeReady;
+      if (!runWithOwnership) return;
+      try {
+        await runWithOwnership(() =>
+          finalizeCliExecution(
+            ownedExecutionId,
+            EXECUTION_STATUS.INTERRUPTED,
+            'preserve',
+            reportShutdownFinalizationFailure,
+          ),
         );
+      } catch (error) {
+        if (!(error instanceof ExecutionLeaseLostError)) throw error;
       }
     })();
     return shutdownStatusFinalized;
   };
-  const invoke = (): Promise<ExecuteAgentResult> =>
-    runAgent(request, {
-      runtimeHost,
-      session,
-      enforceCategory: options.enforceCategory,
-      registerExecution: options.registerExecution,
-      openWorkflowOutput: options.openWorkflowOutput,
-      beforeLeaseRelease: finalizeShutdownStatus,
-      stopAfterCycle: options.stopAfterCycle,
-      approvalPromptsUnavailable: approvalPromptsUnavailable(runContext),
-      runtimeUnavailableTools: [
-        ...CLI_UNAVAILABLE_TOOLS,
-        ...(options.runtimeUnavailableTools ?? []),
-      ],
-    });
+  const disposeShutdownStatus = ownedExecutionId
+    ? tryPlatform()?.lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, async () => {
+        shutdownInterrupted = true;
+        await finalizeShutdownStatus();
+      })
+    : undefined;
+  const invoke = async (): Promise<ExecuteAgentResult> => {
+    try {
+      return await runAgent(request, {
+        runtimeHost,
+        session,
+        enforceCategory: options.enforceCategory,
+        registerExecution: options.registerExecution,
+        openWorkflowOutput: options.openWorkflowOutput,
+        beforeLeaseRelease: finalizeShutdownStatus,
+        onExecutionLeaseAcquired: (runWithOwnership) => {
+          settleLeaseScope(runWithOwnership);
+        },
+        stopAfterCycle: options.stopAfterCycle,
+        approvalPromptsUnavailable: approvalPromptsUnavailable(runContext),
+        runtimeUnavailableTools: [
+          ...CLI_UNAVAILABLE_TOOLS,
+          ...(options.runtimeUnavailableTools ?? []),
+        ],
+      });
+    } finally {
+      // Unblock an in-flight shutdown when acquisition failed before a scope
+      // became available. Promise resolution is one-shot after success.
+      settleLeaseScope(undefined);
+    }
+  };
 
   let runResult:
     | { readonly ok: true; readonly result: ExecuteAgentResult }
