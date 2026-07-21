@@ -197,16 +197,28 @@ Several map onto already-tracked standing items (noted).
    `extractAssistantContent` (`IModelHandler.ts:77`) is overridden only by
    Anthropic (`modelHandlerAnthropic.ts`; base is a `[]` stub), and
    `extractServerToolData` (`:72`) only by Anthropic + OpenAIResponse — every
-   other handler no-ops them; (b) **six provider-trait booleans**
+   other handler no-ops them; (b) **six provider-trait predicates**
    (`supportsManualCompaction`, `supportsForcedToolChoice`,
    `requiresPerCallSystemPrompt`, `isAutoRetryManagedByProvider`,
    `requiresBatchedParallelToolResults`, `isBackgroundModeActive`) are
-   first-class port members that a traits object (`capabilities` already
-   exists) would fold. Both are facets of the same port-width item — reviewed,
-   gated with the transcript-neutralization lever.
+   first-class port members. **Caveat (Codex review, P2 — corrects an earlier
+   "fold into a `capabilities` object" suggestion):** these are **not** foldable
+   into a static traits object. `ModelHandler.ts:653-687,720-784` records the
+   #7101 triage explicitly — each stays an overridable getter/method because its
+   value is computed per-handler at runtime, not read from a capability profile:
+   `supportsManualCompaction` combines llm-zoo family eligibility with tool-use
+   mode (Anthropic) or reads the ChatGPT-subscription profile with an OpenRouter
+   fallback (OpenAIResponse); batching / per-call-system-prompt depend on
+   concrete wire routing, not model capability; and OpenRouter's
+   `isAutoRetryManagedByProvider(error)` branches on the actual error object.
+   The narrow-surface observation stands (these do widen the port), but the fix
+   is _not_ collapsing them into `capabilities` — keep them overridable. Facet
+   of the same port-width item — reviewed, gated with the
+   transcript-neutralization lever.
 
-2. **`ModelHandlerGoogleGenAI` (~1,136 LOC) + its GenAI-only
-   `googleMessageHelpers` (~1,350 LOC together) is the single largest available
+2. **`ModelHandlerGoogleGenAI` (1,136 LOC) + its GenAI-only
+   `googleMessageHelpers` (66 LOC; **1,202 LOC together**, recounted at
+   `3612630`) is the single largest available
    simplification** _(strategic; gated on the flag retirement, #7097)_.
    Unchanged in substance from the README's standing note: `modelHandlerGoogleGenAI`
    is a **feature-frozen** fallback that **new** sessions instantiate only when
@@ -262,9 +274,18 @@ Several map onto already-tracked standing items (noted).
 5. **`HostInteractions` is still 0/N required except `cancel`** _(TD-2 contract
    residue; tracked)_. The host reader re-confirmed the north-star TD-2 item:
    `HostInteractions` has 15 members, only `cancel` mandatory
-   (`HostInteractions.ts:341`); the other 14 are `?`-optional with
-   `Promise|undefined` returns while ~6 approval gates are runtime-hard-required
-   in practice. The north-star Step-1 target (convert 6/7 to required, riding
+   (`HostInteractions.ts:341`); the other 14 are `?`-optional. **Return-shape
+   correction (Codex review, P2):** they do not uniformly return
+   `Promise|undefined` — only the **seven request methods**
+   (`requestToolEditApproval` / `requestBashApproval` / `requestPlanApproval` /
+   `requestAgentProposal` / `requestRetry` / `askUserQuestion` /
+   `openExternalInquiry`) return `Promise<…> | undefined`; `emit`,
+   `setApprovalBypassState`, and `dispose` return `void`, `showInfoMessage`
+   returns `Promise<void> | void`, and `readDiagnostics` / `addCriticism` /
+   `notifyUnavailableTools` are callback-property members. The differing shapes
+   matter for the Step-1 conversion: it is specifically the ~6 runtime-hard-
+   required approval **request** methods (the `Promise|undefined` group) that
+   should become required. The north-star Step-1 target (convert 6/7 to required, riding
    A2's legacy-fallback deletion) is unmet — expected, Step 1 is gated on #6968
    Sweep 1. The headless CLI adapter
    (`packages/cli/src/runtime/approvalAdapter.ts`) proves the minimal headless
@@ -345,10 +366,17 @@ vocabularies" observation and sharpened it: `AgentTrace`/`TraceEmitter`
 **already the Agent-SDK-style single stream**; `SessionEventHub`'s `run` scope
 is a **verbatim re-broadcast** of each run's `TraceEmitter`
 (`SessionHandle.publishRunEvent`), union'd with the session-only `SessionFact`
-vocabulary; and `runFactEvents` / `runtimeInteractionEvents` /
-`runtimePresentationEvents` are three parallel host-routing name-registries over
-the same "things that happen." `eventBus/AppSignals` is **correctly separate**
-(process-lifecycle, out of band). A unified design folds `SessionFact` into
+vocabulary; and `runtimeInteractionEvents` / `runtimePresentationEvents` are two
+parallel host-routing name-registries over the same "things that happen."
+**Correction (Codex review, P2):** `runFactEvents` is **not** a third such
+registry — `runFactEvents.ts:28-33`'s `emitRunFact` is a type-safe helper that
+emits run facts (`updateTodos`, `updatePlan`, …) **directly into `AgentTrace`**,
+and those facts are already arms of `AgentEvent`; it is not a separate delivery
+surface, so counting it here overstates the duplication (and folding the event
+stream must **not** delete that type-safe helper — it reduces no channel). The
+genuine parallel registries are the interaction/presentation two.
+`eventBus/AppSignals` is **correctly separate** (process-lifecycle, out of
+band). A unified design folds `SessionFact` into
 `AgentEvent` as session-scoped arms and replaces the hub's re-broadcast with a
 session-level multiplexer whose subscribers self-filter — collapsing four
 surfaces to one stream + `AppSignals`. This is the standing strategic item; the
@@ -397,11 +425,19 @@ prompt, no loop, no tools, all through the shared `createHelperModelKit` /
 5. Decompose in-agent multi-phase workflow agents into draft → Verifier →
    apply hand-offs — gated by #4.
 
-**Gating observation (unchanged, re-verified):** delegation depth is tracked but
-never gated — there is still no `maxDelegationDepth` runtime setting (grep: **0
-hits** across `src/` and `packages/`). A real depth cap remains a prerequisite
-before exposing recursive `delegateTo(...)` as a public SDK surface (split
-point #2).
+**Gating observation (corrected this pass — Codex review, P2):** prior
+checkpoints said "delegation depth is tracked but never gated." That overstates
+what exists. What the runtime tracks is **immediate parent lineage**
+(`parentStreamId` / `parentExecutionId`), **not depth** — the persisted
+`delegationDepth` field was retired and is now explicitly discarded on load
+(`ExecutionKVStore.vitest.ts:109` "legacy-delegation-depth" fixture;
+`traceViewerSchema.vitest.ts:148` asserts `.not.toHaveProperty('delegationDepth')`).
+There is likewise no `maxDelegationDepth` runtime setting (grep: **0 hits**
+across `src/` and `packages/`). So a real depth cap is a **two-part**
+prerequisite before exposing recursive `delegateTo(...)` as a public SDK surface
+(split point #2): first **derive or reintroduce a depth counter** from the
+lineage chain, then gate a maximum on it. It is not merely "add enforcement to
+an already-tracked depth."
 
 ## Recommendation
 
@@ -477,7 +513,11 @@ landing rather than sweeping them unattended.
   bundle tradeoff).
 - Logger census: `createChannelTrace` importers **39** (07-18: 36). No
   `platform().log` port (`platform.ts:31-34`).
-- Delegation depth verified still tracked-but-ungated (no `maxDelegationDepth`,
-  0 grep hits across `src/` + `packages/`).
+- Delegation: parent **lineage** tracked (`parentStreamId`/`parentExecutionId`),
+  but **depth is not** — the persisted `delegationDepth` field was retired and is
+  discarded on load (`ExecutionKVStore.vitest.ts:109`;
+  `traceViewerSchema.vitest.ts:148`), and there is no `maxDelegationDepth` (0
+  grep hits across `src/` + `packages/`). A depth cap must first derive/reintroduce
+  depth, then gate it.
 - This checkpoint is added under `docs/proposals/`, an internal directory
   excluded from the texra.ai publish allowlist — not a root-level doc.
