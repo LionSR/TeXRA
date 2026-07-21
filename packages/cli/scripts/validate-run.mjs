@@ -15,6 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { parseArgs as parseCittyArgs } from 'citty';
 
 const cliRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const repoRoot = path.dirname(path.dirname(cliRoot));
@@ -132,32 +133,56 @@ function printUsage(stream = console.log) {
   stream(formatUsage());
 }
 
+const PARSE_ARGS_DEF = {
+  help: { type: 'boolean', alias: 'h' },
+  // citty's parser intercepts any `--no-X` token as negation of `X` before
+  // the schema is even consulted, so a literal `noBuild: {type:'boolean'}`
+  // can never observe `--no-build` (it lands on the nonexistent `build`
+  // property instead). Modeling the positive form and negating it is the
+  // only way citty's `--no-*` negation syntax can drive this flag.
+  build: { type: 'boolean', default: true },
+};
+const KNOWN_FLAG_TOKENS = new Set(['--help', '-h', '--no-build']);
+
 function parseArgs(argv) {
-  let noBuild = false;
-  let endOfOptions = false;
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (!endOfOptions && arg === '--') {
-      // pnpm can forward a leading separator to scripts (`pnpm run x -- --flag`).
-      // Treat that package-manager separator as transparent when it precedes a
-      // script option; later `--` still follows normal end-of-options behavior.
-      if (index === 0 && argv[1]?.startsWith('-')) continue;
-      endOfOptions = true;
-      continue;
-    }
-    if (!endOfOptions && (arg === '--help' || arg === '-h')) {
-      printUsage();
-      process.exit(0);
-    }
-    if (!endOfOptions && arg === '--no-build') {
-      noBuild = true;
-      continue;
-    }
-    console.error(`[validate-run] unknown argument: ${arg}`);
+  // pnpm can forward a leading separator to scripts (`pnpm run x -- --flag`).
+  // Treat that package-manager separator as transparent when it precedes a
+  // script option; a later `--` still marks end-of-options below.
+  const rest =
+    argv[0] === '--' && argv[1]?.startsWith('-') ? argv.slice(1) : argv;
+
+  // This script never accepts positional arguments, so anything at or past
+  // an end-of-options `--` is unconditionally an error, same as an
+  // unrecognized flag before it.
+  const separatorIndex = rest.indexOf('--');
+  const flagTokens =
+    separatorIndex === -1 ? rest : rest.slice(0, separatorIndex);
+  const trailingToken =
+    separatorIndex === -1 ? undefined : rest[separatorIndex + 1];
+
+  const unknownToken =
+    flagTokens.find((token) => !KNOWN_FLAG_TOKENS.has(token)) ?? trailingToken;
+  if (unknownToken !== undefined) {
+    console.error(`[validate-run] unknown argument: ${unknownToken}`);
     printUsage(console.error);
     process.exit(2);
   }
-  return { noBuild };
+
+  let args;
+  try {
+    args = parseCittyArgs(flagTokens, PARSE_ARGS_DEF);
+  } catch (error) {
+    console.error(
+      `[validate-run] ${error instanceof Error ? error.message : String(error)}`,
+    );
+    process.exit(2);
+  }
+  if (args.help) {
+    printUsage();
+    process.exit(0);
+  }
+
+  return { noBuild: args.build === false };
 }
 
 function preflightExistingValidationBundle() {
