@@ -40,15 +40,12 @@ export interface ExtractedClipboardImage {
 export function clipboardImageFiles(
   event: ClipboardEvent,
 ): Array<{ file: File; type: string }> {
-  const list = event.clipboardData?.items;
-  const images: Array<{ file: File; type: string }> = [];
-  for (let i = 0; i < (list?.length ?? 0); i++) {
-    const item = list?.[i];
-    if (!item || !item.type.startsWith('image/')) continue;
+  const items = [...(event.clipboardData?.items ?? [])];
+  return items.flatMap((item) => {
+    if (!item.type.startsWith('image/')) return [];
     const file = item.getAsFile();
-    if (file) images.push({ file, type: item.type });
-  }
-  return images;
+    return file ? [{ file, type: item.type }] : [];
+  });
 }
 
 /** Read a File to base64 (no data-URL prefix), or null on failure. */
