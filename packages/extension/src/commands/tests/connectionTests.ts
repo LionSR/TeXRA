@@ -2,10 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import {
-  bestConnectionMethod,
-  bestConnectionMethodAnthropic,
-} from '@agent/runtime/textConnection';
+import { bestConnectionMethod } from '@agent/runtime/textConnection';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 
@@ -40,13 +37,7 @@ export async function handleTestConnection(): Promise<void> {
   ];
 
   try {
-    await runConnectionTests('OpenAI', testCases, bestConnectionMethod);
-    logger.info(CHANNEL, '\n-------------------\n');
-    await runConnectionTests(
-      'Anthropic',
-      testCases,
-      bestConnectionMethodAnthropic,
-    );
+    await runConnectionTests('helper model', testCases, bestConnectionMethod);
 
     vscode.window.showInformationMessage(
       'Check Debug Console for test results',
