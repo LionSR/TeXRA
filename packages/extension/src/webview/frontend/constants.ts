@@ -21,6 +21,18 @@ export type { SessionType, DocumentFileType, MultipleDocumentFileType };
 export const DOCUMENT_FILE_TYPES = DocumentFileTypeSchema.options;
 export { MULTIPLE_DOCUMENT_FILE_TYPES };
 
+/** Narrows a broader file-type value (e.g. `CurrentFileType`) to `DocumentFileType`. */
+export function isDocumentFileType(value: string): value is DocumentFileType {
+  return (DOCUMENT_FILE_TYPES as readonly string[]).includes(value);
+}
+
+/** Narrows a broader file-type value (e.g. `ExtendedDocumentFileType`) to `MultipleDocumentFileType`. */
+export function isMultipleDocumentFileType(
+  value: string,
+): value is MultipleDocumentFileType {
+  return (MULTIPLE_DOCUMENT_FILE_TYPES as readonly string[]).includes(value);
+}
+
 export function parseSessionType(
   sessionType: string | null | undefined,
 ): SessionType | undefined {

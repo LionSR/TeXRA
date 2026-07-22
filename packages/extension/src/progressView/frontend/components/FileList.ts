@@ -18,7 +18,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import { getEffectiveDiffBase } from '@shared/schemas';
+import { getEffectiveDiffBase, roundIndexedEntries } from '@shared/schemas';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
@@ -288,16 +288,9 @@ export class FileList extends LitElement {
 
   protected override willUpdate(changedProperties: PropertyValues): void {
     if (changedProperties.has('filesByRound')) {
-      this.sortedRounds = Object.entries(this.filesByRound)
-        .map(
-          ([round, files]) =>
-            [Number(round), files] as [number, OutputFileInfo[]],
-        )
-        .filter(
-          ([round, files]) =>
-            !Number.isNaN(round) && Array.isArray(files) && files.length > 0,
-        )
-        .sort((a, b) => a[0] - b[0]);
+      this.sortedRounds = roundIndexedEntries(this.filesByRound).filter(
+        ([, files]) => files.length > 0,
+      );
     }
     if (changedProperties.has('failuresByRound')) {
       this.failureByPath = new Map();

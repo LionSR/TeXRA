@@ -10,6 +10,10 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 
+import {
+  CurrentFileTypeSchema,
+  ExtendedDocumentFileTypeSchema,
+} from '../fileTypes';
 import { commandOnly, withFilesArray } from '../messageFactories';
 import { OnboardingFunnelStateSchema } from '../onboarding';
 import { AgentCategory } from '../agent';
@@ -84,7 +88,7 @@ const SetRecentCommitsMessageSchema = z.object({
 const SetCurrentFileMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_CURRENT_FILE),
   filePath: z.string(),
-  fileType: z.string(),
+  fileType: CurrentFileTypeSchema,
 });
 
 const SetSelectedCommitMessageSchema = z.object({
@@ -96,7 +100,7 @@ const SetSelectedCommitMessageSchema = z.object({
 const SetOpenedFilesMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_OPENED_FILES),
   files: FileListSchema,
-  fileType: z.string(),
+  fileType: ExtendedDocumentFileTypeSchema,
   shouldFilter: z.boolean().nullish(),
 });
 
