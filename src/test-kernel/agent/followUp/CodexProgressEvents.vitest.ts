@@ -178,6 +178,7 @@ describe('codex progress events', () => {
             usage: {
               input_tokens: 5,
               cached_input_tokens: 0,
+              cache_write_input_tokens: 0,
               output_tokens: 2,
               reasoning_output_tokens: 0,
             },
@@ -225,4 +226,67 @@ describe('codex progress events', () => {
     ).input;
     expect(typeof turnInput?.wallTimeMs).toBe('number');
   });
+
+  it('finalizes the running turn card when the stream errors', async () => {
+    const store = StreamLogStore.ephemeral('test');
+    await store.clear();
+
+    const logger = createRunTrace(streamId, store).trace;
+    const thread = {
+      runStreamed: async () => ({
+        events: streamEvents([
+          { type: 'turn.started' },
+          { type: 'error', message: 'boom' },
+        ]),
+      }),
+    } as unknown as Thread;
+
+    await expect(
+      runStreamedTurn(thread, 'Do the thing', streamId, logger),
+    ).rejects.toThrow('boom');
+
+    const turnEntry = findTurnEntry(store);
+    expect(turnEntry).toMatchObject({
+      toolName: CODEX_TURN_TOOL,
+      input: { state: 'failed' },
+      error: 'boom',
+      isError: true,
+    });
+  });
+
+  it('finalizes the running turn card when the stream ends without a terminal turn event', async () => {
+    const store = StreamLogStore.ephemeral('test');
+    await store.clear();
+
+    const logger = createRunTrace(streamId, store).trace;
+    const thread = {
+      runStreamed: async () => ({
+        // No turn.completed / turn.failed — the loop exits with the card open.
+        events: streamEvents([{ type: 'turn.started' }]),
+      }),
+    } as unknown as Thread;
+
+    await runStreamedTurn(thread, 'Do the thing', streamId, logger);
+
+    const turnEntry = findTurnEntry(store);
+    // Even without an error message the card is marked as an error so the
+    // progress view renders failure chrome instead of a success check.
+    expect(turnEntry).toMatchObject({
+      toolName: CODEX_TURN_TOOL,
+      input: { state: 'failed' },
+      isError: true,
+    });
+    expect(turnEntry).not.toHaveProperty('error');
+  });
 });
+
+function findTurnEntry(
+  store: StreamLogStore,
+): Record<string, unknown> | undefined {
+  const log = store.get(streamId);
+  const entries = log?.getRange(0, log.head) ?? [];
+  return entries
+    .filter((entry) => entry.messageType === MESSAGE_TYPES.TOOL_USE)
+    .map((entry) => entry.data as Record<string, unknown>)
+    .find((data) => data.toolName === CODEX_TURN_TOOL);
+}

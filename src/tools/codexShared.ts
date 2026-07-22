@@ -208,11 +208,13 @@ export function buildCodexTurnToolLog(options?: {
     toolName: CODEX_TURN_TOOL,
     summary: codexTurnSummary(state),
     input,
-    ...(state === 'failed' &&
-      options?.error && {
-        error: options.error,
-        isError: true,
-      }),
+    // A failed turn is always an error card so the progress view shows failure
+    // chrome; the error message is attached when the caller has one (turn.failed
+    // / stream error) but omitted for abort or an early stream end.
+    ...(state === 'failed' && {
+      isError: true,
+      ...(options?.error && { error: options.error }),
+    }),
     status: state === 'running' ? 'in_progress' : 'completed',
   };
 }
