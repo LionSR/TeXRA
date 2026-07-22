@@ -3,7 +3,10 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
 import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import { isCodexSubscriptionActive } from '@model/providerCapabilities';
+import {
+  isCodexSubscriptionActive,
+  isKimiCodeSubscriptionActive,
+} from '@model/providerCapabilities';
 import { GoalStore } from '@tools/goal';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -158,6 +161,10 @@ export async function handleTuiSlashCommand(
                 accessTarget.model,
                 accessTarget.category,
               );
+        const kimiCodeActive =
+          accessTarget.category === undefined
+            ? false
+            : await isKimiCodeSubscriptionActive(accessTarget.model);
         appendLocalAssistantTranscript(
           formatCliSessionStatus({
             agent: meta.agent || context.initialAgent,
@@ -166,6 +173,7 @@ export async function handleTuiSlashCommand(
             modelAccess: resolveCliModelAccessRoute({
               apiMode: meta.apiMode,
               subscriptionActive,
+              kimiCodeActive,
               usageRoute: slice?.usage?.usageRoute,
             }),
             approval: formatCliApprovalPolicy(context.getApprovalPolicy()),

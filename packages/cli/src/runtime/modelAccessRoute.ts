@@ -2,12 +2,14 @@ import type { UsageRoute } from '@shared/schemas';
 
 import { parseCliApiMode, type CliApiMode } from './apiAccessMode';
 
-export type CliModelAccessRoute = 'chatgpt' | 'included' | 'personal';
+export type CliModelAccessRoute =
+  'chatgpt' | 'kimi-code' | 'included' | 'personal';
 
 export interface CliModelAccessStatus {
   readonly active: CliModelAccessRoute;
   readonly chatGptSignedIn: boolean;
   readonly chatGptAccountLabel?: string;
+  readonly kimiCodeKeySet?: boolean;
   readonly texraSignedIn?: boolean;
 }
 
@@ -27,6 +29,10 @@ export function parseCliModelAccessRoute(
     case 'chatgpt':
     case 'subscription':
       return 'chatgpt';
+    case 'kimi':
+    case 'kimicode':
+    case 'kimi-code':
+      return 'kimi-code';
     default:
       return undefined;
   }
@@ -36,10 +42,12 @@ export function parseCliModelAccessRoute(
 export function resolveCliModelAccessRoute({
   apiMode,
   subscriptionActive,
+  kimiCodeActive,
   usageRoute,
 }: {
   readonly apiMode: CliApiMode;
   readonly subscriptionActive: boolean;
+  readonly kimiCodeActive?: boolean;
   readonly usageRoute?: UsageRoute;
 }): CliModelAccessRoute {
   if (usageRoute !== undefined) {
@@ -49,22 +57,31 @@ export function resolveCliModelAccessRoute({
       case 'relay':
         return 'included';
       case 'api-key':
+        // Kimi Code usage records as a plain `api-key`; a completed request's
+        // route cannot change, so never relabel it from live preferences.
         return 'personal';
       default:
         return usageRoute satisfies never;
     }
   }
-  return subscriptionActive ? 'chatgpt' : apiMode;
+  if (subscriptionActive) return 'chatgpt';
+  // The Kimi Code route only describes personal access — under included
+  // access the relay owns eligible models.
+  if (kimiCodeActive === true && apiMode === 'personal') return 'kimi-code';
+  return apiMode;
 }
 
 export function shortCliModelAccessRoute(route: CliModelAccessRoute): string {
-  return route === 'chatgpt' ? 'subscription' : route;
+  if (route === 'chatgpt') return 'subscription';
+  return route;
 }
 
 export function formatCliModelAccessRoute(route: CliModelAccessRoute): string {
   switch (route) {
     case 'chatgpt':
       return 'ChatGPT subscription';
+    case 'kimi-code':
+      return 'Kimi Code subscription';
     case 'included':
       return 'Included TeXRA access';
     case 'personal':
@@ -79,12 +96,13 @@ export function formatCliModelAccessRouteInline(
   route: CliModelAccessRoute,
 ): string {
   const label = formatCliModelAccessRoute(route);
-  return route === 'chatgpt'
+  // Proper-noun labels keep their casing; plain labels lowercase like prose.
+  return route === 'chatgpt' || route === 'kimi-code'
     ? label
     : label.charAt(0).toLowerCase() + label.slice(1);
 }
 
-/** Build the canonical three choices shown by every model-access picker. */
+/** Build the canonical choices shown by every model-access picker. */
 export function buildCliModelAccessItems(
   status: CliModelAccessStatus,
 ): CliModelAccessItem[] {
@@ -97,11 +115,25 @@ export function buildCliModelAccessItems(
     chatGptDescription = 'Sign in with ChatGPT Plus/Pro/Team';
   }
 
+  let kimiCodeDescription: string;
+  if (status.kimiCodeKeySet !== true) {
+    kimiCodeDescription = 'Add a key with /key (kimi.com/code/console)';
+  } else if (status.active === 'kimi-code') {
+    kimiCodeDescription = 'On · key configured';
+  } else {
+    kimiCodeDescription = 'Off · key configured';
+  }
+
   return [
     {
       value: 'chatgpt',
       label: 'Prefer ChatGPT subscription',
       description: chatGptDescription,
+    },
+    {
+      value: 'kimi-code',
+      label: 'Prefer Kimi Code subscription',
+      description: kimiCodeDescription,
     },
     {
       value: 'included',

@@ -28,7 +28,8 @@ import {
 } from './slashContext';
 import { loadCliAccountStatusLines } from './statusAssembly';
 
-const MODEL_ACCESS_USAGE = 'Usage: /api chatgpt | included | personal | status';
+const MODEL_ACCESS_USAGE =
+  'Usage: /api chatgpt | kimi-code | included | personal | status';
 
 async function reconcileRootModelAfterApiModeChange(
   context: SlashCommandContext | undefined,

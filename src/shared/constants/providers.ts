@@ -291,6 +291,15 @@ export const USE_OPENROUTER_PROVIDER_SETTING = {
   globalStateKey: GlobalStateKey.USE_OPENROUTER,
 } satisfies ProviderVscodeSettingDef;
 
+export const KIMI_CODE_PREFER_PROVIDER_SETTING = {
+  key: GlobalStateKey.KIMI_CODE_PREFER,
+  label: 'Prefer Kimi Code',
+  description:
+    'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
+  defaultValue: false,
+  globalStateKey: GlobalStateKey.KIMI_CODE_PREFER,
+} satisfies ProviderVscodeSettingDef;
+
 /** VS Code config settings to surface per provider in the Models tab. */
 export const PROVIDER_VSCODE_SETTINGS: Record<
   string,
@@ -421,16 +430,7 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
   // Keyed lowercase: getProviderVscodeSettings looks these up by
   // `provider.toLowerCase()`, so the camelCase `kimiCode` provider id resolves
   // here as `kimicode`. (The other entries' ids are already lowercase.)
-  kimicode: [
-    {
-      key: GlobalStateKey.KIMI_CODE_PREFER,
-      label: 'Prefer Kimi Code',
-      description:
-        'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
-      defaultValue: false,
-      globalStateKey: GlobalStateKey.KIMI_CODE_PREFER,
-    },
-  ],
+  kimicode: [KIMI_CODE_PREFER_PROVIDER_SETTING],
   openrouter: [USE_OPENROUTER_PROVIDER_SETTING],
 };
 
