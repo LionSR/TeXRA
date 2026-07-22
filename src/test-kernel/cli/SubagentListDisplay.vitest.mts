@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CHILD_STATUS_MARKER,
-  childFileDisplay,
   childRowMetadataText,
   childStatusColor,
   pendingApprovalRowSuffix,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
+import { selectedSubagentDetailLines } from '@cli/chat/tui/panes/SubagentDetailPanel';
 import {
   SubagentList,
   compactChildRowText,
@@ -64,32 +64,98 @@ function workflowAgentSlice(
 }
 
 describe('CLI child list display model', () => {
-  it('formats only populated run-file categories for badges and details', () => {
+  it('formats selected workflow progress and files outside the list row', () => {
     const files = {
       input: ['src/Main.lean', 'src/Lemma.lean'],
       context: ['notes/proof.md'],
       media: [],
-      output: ['Main.olean'],
+      output: [],
+    };
+    const detailSession: StreamView = {
+      id: 'devise' as StreamTabId,
+      label: 'devise',
+      active: false,
+      parentId: 'main' as StreamTabId,
+      slice: workflowAgentSlice('devise', {
+        status: STREAM_PHASE.RUNNING,
+        files,
+        outputFilesByRound: {
+          0: [
+            {
+              source: 'Main.lean',
+              location: {
+                kind: 'runStorage',
+                executionId: 'exec-abc',
+                relativePath: 'r1/Main.lean',
+                absolutePath: '/tmp/executions/abc/r1/Main.lean',
+              },
+              round: 0,
+              lineage: null,
+              diff: null,
+            },
+          ],
+          1: [
+            {
+              source: 'Main.lean',
+              location: {
+                kind: 'runStorage',
+                executionId: 'exec-abc',
+                relativePath: 'r2/Main.lean',
+                absolutePath: '/tmp/executions/abc/r2/Main.lean',
+              },
+              round: 1,
+              lineage: null,
+              diff: null,
+            },
+            {
+              source: 'Notes.lean',
+              location: {
+                kind: 'runStorage',
+                executionId: 'exec-abc',
+                relativePath: 'r2/Notes.lean',
+                absolutePath: '/tmp/executions/abc/r2/Notes.lean',
+              },
+              round: 1,
+              lineage: null,
+              diff: null,
+            },
+          ],
+        },
+        roundStage: { index: 1, total: 3 },
+        conversation: { toolCallCount: 2 },
+      }),
     };
 
-    expect(childFileDisplay(files).badge).toBe('in:2 ctx:1 out:1');
-    expect(childFileDisplay(files, 80).detailLines).toEqual([
-      'Input src/Main.lean, src/Lemma.lean',
-      'Context notes/proof.md',
-      'Output Main.olean',
+    expect(selectedSubagentDetailLines(detailSession, 100)).toEqual([
+      'Selected workflow agent: devise',
+      'Progress: running · r2/3 · 2 tool calls',
+      'Input: src/Main.lean',
+      'Input: src/Lemma.lean',
+      'Context: notes/proof.md',
+      'Output r2: /tmp/executions/abc/r2/Main.lean',
+      'Output r2: /tmp/executions/abc/r2/Notes.lean',
+      'Output r1: /tmp/executions/abc/r1/Main.lean',
     ]);
-    expect(childFileDisplay(undefined)).toEqual({
-      badge: undefined,
-      detailLines: [],
-    });
+    expect(selectedSubagentDetailLines(undefined, 100)).toEqual([]);
+    const configuredOutputSession: StreamView = {
+      ...detailSession,
+      slice: workflowAgentSlice('devise', {
+        files: {
+          ...files,
+          output: ['out/Main.lean', 'out/Notes.lean'],
+        },
+      }),
+    };
     expect(
-      childFileDisplay({ input: [], context: [], media: [], output: [] }).badge,
-    ).toBeUndefined();
-    expect(childFileDisplay(files, 20).detailLines).toEqual([
-      'Input src/Main.lean…',
-      'Context notes/proof…',
-      'Output Main.olean',
-    ]);
+      selectedSubagentDetailLines(configuredOutputSession, 100).filter((line) =>
+        line.startsWith('Output:'),
+      ),
+    ).toEqual(['Output: out/Main.lean', 'Output: out/Notes.lean']);
+    expect(
+      selectedSubagentDetailLines(detailSession, 20).every(
+        (line) => line.length <= 20,
+      ),
+    ).toBe(true);
   });
 
   it('keeps status markers steady and status colors independent of focus', () => {
@@ -343,7 +409,7 @@ describe('CLI child list display model', () => {
     expect(output).toContain('↓40k');
   });
 
-  it('renders a run-file badge as the least-essential row suffix', async () => {
+  it('keeps run-file metadata out of the compact row', async () => {
     const { ink, React } = await loadInk();
     const run = 'run' as StreamTabId;
     const output = ink.renderToString(
@@ -368,6 +434,8 @@ describe('CLI child list display model', () => {
       { columns: 100 },
     );
 
-    expect(output).toContain('devise completed · in:2 ctx:1');
+    expect(output).toContain('devise completed');
+    expect(output).not.toContain('in:2');
+    expect(output).not.toContain('ctx:1');
   });
 });

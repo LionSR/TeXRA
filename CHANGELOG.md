@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Shared (all surfaces)
 
+#### New Features
+
+- **The Mathematician team includes the critique workflow** — mathematical team
+  runs can delegate a dedicated critical review directly.
+
 #### Bug Fixes
 
 - **Parallel agents resume reliably after model connection failures** —
@@ -17,6 +22,10 @@ All notable changes to this project will be documented in this file.
 - **Parallel runs finish reliably after long pauses** — delayed storage work
   no longer causes the application to exit while several agents are saving
   their final results.
+- **PDF attachments work with ChatGPT subscriptions** — documents can be sent
+  directly to supported models.
+- **Parent agents can inspect generated workflow files directly** — delegated
+  workflows make every output available for follow-up review.
 - **Latexdiff artifacts with short abbreviated commit hashes are recognized
   consistently** — a generated `basename-diffHASH.tex` file with a 4-5
   character hash is now reliably treated as a diff artifact everywhere
@@ -48,9 +57,10 @@ All notable changes to this project will be documented in this file.
 - **Nested subagents remain visible** — a focused subagent reports how many
   direct subagents it owns, including completed work that remains available in
   its child list.
-- **Subagent rows show their working files** — rows summarize attached input,
-  context, media, and output files; press `i` while selecting a row to inspect
-  the paths without leaving the conversation.
+- **Selected subagents show their working files and live workflow progress** —
+  selecting a child opens a separate detail surface for input, context, media,
+  latest-round output paths, round progress, and tool-call counts while the
+  child list remains compact; press `i` to hide or restore the details.
 
 #### Bug Fixes
 

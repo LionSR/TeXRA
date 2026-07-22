@@ -162,6 +162,8 @@ export function allocateConversationBottomPanelRows({
 }): {
   readonly bottomPanelRows: number;
   readonly sessionPanelRows: number;
+  readonly childListRows: number;
+  readonly detailPanelRows: number;
   readonly todosPlanRows: number;
 } {
   const childListRowCount = sessionCount + processCount;
@@ -193,6 +195,8 @@ export function allocateConversationBottomPanelRows({
     return {
       bottomPanelRows: 0,
       sessionPanelRows: 0,
+      childListRows: 0,
+      detailPanelRows: 0,
       todosPlanRows: 0,
     };
   }
@@ -213,28 +217,37 @@ export function allocateConversationBottomPanelRows({
     sessionPanelContentRows > 0
       ? Math.max(minimumSessionRows, allocated.subagentRows)
       : 0;
-  const todosPlanRows = bottomPanelRows - sessionPanelRows;
+  let finalBottomPanelRows = bottomPanelRows;
+  let finalSessionPanelRows = sessionPanelRows;
+  let todosPlanRows = bottomPanelRows - sessionPanelRows;
   // A lone row cannot hold the separator plus content; hand it back instead
   // of rendering a dead blank line under the child list. When the child list
   // has rows above its own minimum, transfer one first so both panels remain
   // useful under a proportional split.
   if (todosPanelContentRows > 0 && todosPlanRows === 1) {
     if (sessionPanelRows > minimumSessionRows) {
-      return {
-        bottomPanelRows,
-        sessionPanelRows: sessionPanelRows - 1,
-        todosPlanRows: 2,
-      };
+      finalSessionPanelRows -= 1;
+      todosPlanRows = 2;
+    } else {
+      finalBottomPanelRows -= 1;
+      todosPlanRows = 0;
     }
-    return {
-      bottomPanelRows: bottomPanelRows - 1,
-      sessionPanelRows,
-      todosPlanRows: 0,
-    };
   }
+  const detailPanelCapacity = Math.max(
+    0,
+    finalSessionPanelRows - minimumSessionRows,
+  );
+  // A detail surface needs both its separator and at least one content row.
+  // Leave a lone spare row with the child list instead of reserving dead space.
+  const detailPanelRows =
+    detailPanelCapacity >= 2
+      ? Math.min(detailContentRows, detailPanelCapacity)
+      : 0;
   return {
-    bottomPanelRows,
-    sessionPanelRows,
+    bottomPanelRows: finalBottomPanelRows,
+    sessionPanelRows: finalSessionPanelRows,
+    childListRows: finalSessionPanelRows - detailPanelRows,
+    detailPanelRows,
     todosPlanRows,
   };
 }
