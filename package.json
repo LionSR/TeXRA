@@ -80,7 +80,7 @@
     "eslint-plugin-unicorn": "^72.0.0",
     "globals": "^17.7.0",
     "jsdom": "^29.1.1",
-    "knip": "^6.27.0",
+    "knip": "^6.29.0",
     "memfs": "^4.64.0",
     "nunjucks": "^3.2.4",
     "prettier": "^3.9.6",
