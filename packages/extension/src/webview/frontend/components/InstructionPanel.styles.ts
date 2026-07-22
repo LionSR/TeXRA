@@ -217,7 +217,50 @@ export const instructionPanelStyles: CSSResult = css`
   }
 
   .launcher-picker-fade {
-    animation: session-hint-fade 150ms ease;
+    position: relative;
+  }
+
+  .launcher-picker-pane {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+    transition: opacity 150ms ease;
+  }
+
+  .team-picker-pane {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .agent-picker-pane {
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+  }
+
+  .team-picker-visible .team-picker-pane {
+    opacity: 1;
+    pointer-events: auto;
+    position: static;
+  }
+
+  .team-picker-visible .agent-picker-pane {
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
+  }
+
+  .agent-picker-visible .agent-picker-pane {
+    opacity: 1;
+    pointer-events: auto;
+    position: static;
+  }
+
+  .agent-picker-visible .team-picker-pane {
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
   }
 
   .model-selection-footer wa-icon,
@@ -324,8 +367,8 @@ export const instructionPanelStyles: CSSResult = css`
 
   @media (prefers-reduced-motion: reduce) {
     .session-hint,
-    .launcher-picker-fade {
-      animation: none;
+    .launcher-picker-pane {
+      transition: none;
     }
   }
 

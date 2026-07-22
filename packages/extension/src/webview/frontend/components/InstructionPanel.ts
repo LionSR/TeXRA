@@ -355,48 +355,48 @@ export class InstructionPanel extends LitElement {
   }
 
   private renderLauncherPicker(session: SessionContextValue): TemplateResult {
+    const isTeam = session.launchTarget === 'team';
     return html`
       <div
-        class="select-group agent-select-group agent-model-select-group launcher-picker-fade"
+        class="select-group agent-select-group agent-model-select-group launcher-picker-fade ${
+          isTeam ? 'team-picker-visible' : 'agent-picker-visible'
+        }"
       >
-        ${
-          session.launchTarget === 'team'
-            ? html`
-                ${renderIconActionButton({
-                  id: 'teamSettingsButton',
-                  icon: 'organization',
-                  label: 'Team settings',
-                  tooltip: 'Team settings',
-                  className: 'settings-button',
-                  onClick: this.handleTeamSettings,
-                })}
-                <wa-select
-                  id="teamPicker"
-                  class="agent-select team-select"
-                  aria-label="Team"
-                  placement="top"
-                  placeholder="Team…"
-                  .value=${session.selectedTeamId}
-                  @focus=${this.handleTeamFocus}
-                  @change=${this.handleTeamChange}
-                >
-                  ${renderTeamOptions(session.teamOptions, {
-                    includeManageTeams: true,
-                  })}
-                </wa-select>
-              `
-            : html`
-                ${renderIconActionButton({
-                  id: 'agentSettingsButton',
-                  icon: 'sparkle',
-                  label: 'Agent settings',
-                  tooltip: 'Agent settings',
-                  className: 'settings-button',
-                  onClick: this.handleAgentSettings,
-                })}
-                ${this.renderAgentSelect(session)}
-              `
-        }
+        <div class="launcher-picker-pane team-picker-pane">
+          ${renderIconActionButton({
+            id: 'teamSettingsButton',
+            icon: 'organization',
+            label: 'Team settings',
+            tooltip: 'Team settings',
+            className: 'settings-button',
+            onClick: this.handleTeamSettings,
+          })}
+          <wa-select
+            id="teamPicker"
+            class="agent-select team-select"
+            aria-label="Team"
+            placement="top"
+            placeholder="Team…"
+            .value=${session.selectedTeamId}
+            @focus=${this.handleTeamFocus}
+            @change=${this.handleTeamChange}
+          >
+            ${renderTeamOptions(session.teamOptions, {
+              includeManageTeams: true,
+            })}
+          </wa-select>
+        </div>
+        <div class="launcher-picker-pane agent-picker-pane">
+          ${renderIconActionButton({
+            id: 'agentSettingsButton',
+            icon: 'sparkle',
+            label: 'Agent settings',
+            tooltip: 'Agent settings',
+            className: 'settings-button',
+            onClick: this.handleAgentSettings,
+          })}
+          ${this.renderAgentSelect(session)}
+        </div>
       </div>
     `;
   }
@@ -528,12 +528,7 @@ export class InstructionPanel extends LitElement {
                 <wa-radio id="launchTargetTeam" value="team"> Team </wa-radio>
               </wa-radio-group>
             </div>
-            ${
-              // `keyed` forces the picker div to be re-created when the launch
-              // target changes, restarting the launcher-picker-fade CSS
-              // animation so the swap cross-fades instead of jump-cutting.
-              keyed(session.launchTarget, this.renderLauncherPicker(session))
-            }
+            ${this.renderLauncherPicker(session)}
             <div
               class="select-group model-select-group agent-model-select-group"
             >

@@ -154,8 +154,15 @@ describe('instruction-panel launcher', () => {
 
       expect(query(element, '#toolUseAgent')).toBeTruthy();
       expect(query(element, '#agentSettingsButton')).toBeTruthy();
-      expect(query(element, '#teamPicker')).toBeNull();
-      expect(query(element, '#teamSettingsButton')).toBeNull();
+      // Cross-fade renders both panes; in agent mode the team pane is hidden
+      // via opacity, not removed from DOM.
+      expect(
+        query(element, '.launcher-picker-fade')?.classList.contains(
+          'agent-picker-visible',
+        ),
+      ).toBe(true);
+      expect(query(element, '#teamPicker')).toBeTruthy();
+      expect(query(element, '#teamSettingsButton')).toBeTruthy();
     });
 
     it('shows the workflow agent picker in workflow sessions', async () => {
@@ -211,8 +218,15 @@ describe('instruction-panel launcher', () => {
       expect(picker).toBeTruthy();
       expect((picker as unknown as { value: string }).value).toBe('physicist');
       expect(query(element, '#teamSettingsButton')).toBeTruthy();
-      expect(query(element, '#toolUseAgent')).toBeNull();
-      expect(query(element, '#agentSettingsButton')).toBeNull();
+      // Cross-fade renders both panes simultaneously; in team mode the agent
+      // pane is hidden via opacity, not removed from the DOM.
+      expect(
+        query(element, '.launcher-picker-fade')?.classList.contains(
+          'team-picker-visible',
+        ),
+      ).toBe(true);
+      expect(query(element, '#toolUseAgent')).toBeTruthy();
+      expect(query(element, '#agentSettingsButton')).toBeTruthy();
 
       const options = [
         ...(element.shadowRoot?.querySelectorAll('#teamPicker wa-option') ??
