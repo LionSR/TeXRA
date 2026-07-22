@@ -7,7 +7,7 @@ import {
 // Local imports - utils
 import { isNonEmptyString } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
-import { appendTail } from '@utils/strings/appendTail';
+import { appendHead, appendTail } from '@utils/strings/appendTail';
 
 // Local imports - model handlers
 import {
@@ -102,18 +102,6 @@ export async function loadAttachmentBuffer(
 }
 
 /**
- * Keep the first `maxChars` UTF-16 code units of `text` without splitting a
- * surrogate pair at the cut point (the low half alone renders as `?`).
- */
-function takeHead(text: string, maxChars: number): string {
-  if (text.length <= maxChars) return text;
-  let cut = maxChars;
-  const code = text.charCodeAt(cut);
-  if (code >= 0xdc00 && code <= 0xdfff) cut -= 1;
-  return text.slice(0, cut);
-}
-
-/**
  * Fixed textual overhead of the message template below (labels, punctuation,
  * the elision marker, and the character-count numbers themselves) reserved
  * out of `maxLength` so head+tail content plus framing never balloons past
@@ -165,7 +153,7 @@ export function checkToolResultTextLimit(
 
   const headLen = Math.min(headBudget, text.length);
   const tailLen = Math.min(tailBudget, text.length - headLen);
-  const head = takeHead(text, headLen);
+  const head = appendHead('', text, headLen);
   const tail = tailLen > 0 ? appendTail('', text, tailLen) : '';
   const elidedChars = text.length - head.length - tail.length;
 
@@ -179,7 +167,9 @@ export function checkToolResultTextLimit(
   // exact accounting of the template above, so hard-trim as a last resort to
   // guarantee the maxLength invariant for every input — including maxLength
   // values too small to fit the template text at all.
-  return message.length > maxLength ? takeHead(message, maxLength) : message;
+  return message.length > maxLength
+    ? appendHead('', message, maxLength)
+    : message;
 }
 
 /**

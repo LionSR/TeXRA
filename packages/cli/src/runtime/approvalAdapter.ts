@@ -30,8 +30,8 @@ import {
   type ApprovalDecision,
   type CliApprovalPromptHooks,
   askApproval,
+  askUserQuestionDenial,
   approvalPromptAllowed,
-  humanInputDenialFeedback,
   immediateDecision,
   immediateDecisionForApproval,
   markApprovalDenied,
@@ -49,6 +49,7 @@ import { parseUserQuestionAnswer } from './userQuestionAnswer';
 export {
   appendCliApiSwitchHint,
   approvalPromptAllowed,
+  askUserQuestionDenial,
   hasCliApprovalDenied,
   humanInputDenialFeedback,
   immediateDecision,
@@ -157,15 +158,8 @@ async function askHeadlessUserQuestion(
   context: CliContext,
   hooks: CliApprovalPromptHooks,
 ): Promise<HostUserQuestionResult> {
-  if (!approvalPromptAllowed(context)) {
-    return {
-      submitted: false,
-      feedback: humanInputDenialFeedback(
-        context,
-        'User question requires human input; yolo mode cannot synthesize an answer.',
-      ),
-    };
-  }
+  const denial = askUserQuestionDenial(context);
+  if (denial) return denial;
 
   const answers: UserQuestionAnswers = {};
   try {

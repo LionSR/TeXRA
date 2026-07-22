@@ -21,7 +21,7 @@ import {
   EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
 } from '@shared/toolUse';
-import { isObject } from '@utils/core';
+import { clamp, isObject } from '@utils/core';
 import {
   collapseWhitespace,
   truncateWithEllipsis,
@@ -52,8 +52,9 @@ const TIMEOUT_GATED_BY_ACTION: Record<string, string> = {
 
 export function getExecutionsWaitTimeoutSeconds(timeout: unknown): number {
   return typeof timeout === 'number' && Number.isFinite(timeout)
-    ? Math.min(
-        Math.max(timeout, EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS),
+    ? clamp(
+        timeout,
+        EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
         EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
       )
     : EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS;

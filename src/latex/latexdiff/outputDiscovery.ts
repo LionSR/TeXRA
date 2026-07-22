@@ -30,6 +30,7 @@ import {
   findRunDir,
   pathToLocation,
 } from '@utils/files';
+import { toNewestFirstByTimestamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
@@ -213,8 +214,8 @@ export async function discoverLatestExecutionOutputs(query: {
     // matching execution.
     const normalizedInput = path.normalize(query.inputFile);
 
-    const candidates = executions
-      .filter(
+    const candidates = toNewestFirstByTimestamp(
+      executions.filter(
         (entry): entry is Extract<ExecutionListingEntry, { kind: 'agent' }> => {
           if (
             entry.kind !== 'agent' ||
@@ -229,8 +230,9 @@ export async function discoverLatestExecutionOutputs(query: {
             path.normalize(entryInput) === normalizedInput
           );
         },
-      )
-      .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      ),
+      (entry) => entry.timestamp,
+    );
 
     const snapshots = new StreamSnapshotStore();
     for (const candidate of candidates) {

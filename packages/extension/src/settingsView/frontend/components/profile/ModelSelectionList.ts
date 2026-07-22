@@ -37,9 +37,9 @@ import {
   type ProviderKeyStatus,
   type ReasoningLevel,
 } from '@shared/schemas/settingsViewMessages';
+import { readSelectValue } from '@shared/utils/selectTemplates';
 import { modelSelectionListStyles } from './ModelSelectionList.styles';
 import { resolveProviderKeyRows } from './providerKeyRows';
-import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 interface ProviderGroup {
@@ -119,19 +119,14 @@ export class ModelSelectionList extends LitElement {
     this.expandedDeprecated = next;
   }
 
-  private readSelectValue(e: Event): string {
-    const select = e.currentTarget as WaSelect | null;
-    return typeof select?.value === 'string' ? select.value : '';
-  }
-
   private handleHelperModelChange(e: Event): void {
     postMessage(SETTINGS_VIEW_COMMANDS.SET_HELPER_MODEL, {
-      modelName: this.readSelectValue(e),
+      modelName: readSelectValue(e),
     });
   }
 
   private handleReasoningLevelChange(modelName: string, e: Event): void {
-    const value = this.readSelectValue(e);
+    const value = readSelectValue(e);
     postMessage(SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL, {
       modelName,
       level: value === '' ? null : value,

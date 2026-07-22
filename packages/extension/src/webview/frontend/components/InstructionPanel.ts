@@ -24,6 +24,7 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 // Local imports - shared utils
 import {
   BROWSE_ALL_AGENTS_OPTION_VALUE,
+  readSelectValue,
   renderAgentOptions,
   renderModelOptions,
 } from '@shared/utils/selectTemplates';
@@ -190,9 +191,9 @@ export class InstructionPanel extends LitElement {
   }
 
   private handleModelChange(event: Event): void {
-    const select = event.currentTarget as WaSelect | null;
-    const value = typeof select?.value === 'string' ? select.value : '';
-    this.dispatchEvent(MainViewEvents.modelChange({ value }));
+    this.dispatchEvent(
+      MainViewEvents.modelChange({ value: readSelectValue(event) }),
+    );
   }
 
   private handleInput(event: Event): void {
