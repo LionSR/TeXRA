@@ -30,6 +30,13 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
+- **Kimi Code subscription joins model access** — the launcher and `/api` now
+  offer Kimi Code alongside ChatGPT subscription, included TeXRA access, and
+  personal API keys. Selecting it routes Kimi models through your Kimi Code
+  membership while other models fall back to your saved keys.
+- **API keys can be set from `/config`** — a new "API keys" entry opens the
+  masked key-entry form for every provider, and a "Prefer Kimi Code" toggle
+  appears under "Models and providers".
 - **Nested subagents remain visible** — a focused subagent reports how many
   direct subagents it owns, including completed work that remains available in
   its child list.

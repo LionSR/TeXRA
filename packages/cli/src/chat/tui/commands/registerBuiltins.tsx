@@ -282,7 +282,12 @@ export function registerBuiltinSlashCommands(options?: {
   const onModelAccessSelect: ModelAccessSelectHandler =
     options?.onModelAccessSelect ??
     ((route, output) => {
-      if (route !== 'chatgpt') patchSessionMeta({ apiMode: route });
+      if (route !== 'chatgpt') {
+        // The Kimi Code route rides on personal API-key access underneath.
+        patchSessionMeta({
+          apiMode: route === 'kimi-code' ? 'personal' : route,
+        });
+      }
       output.appendOutcome(`Model access set to ${route}.`);
     });
   const onApiKeySave: ApiKeySaveHandler =
@@ -555,7 +560,8 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'api',
-    description: 'Choose ChatGPT, included TeXRA, or personal model access',
+    description:
+      'Choose ChatGPT, Kimi Code, included TeXRA, or personal model access',
     category: 'configuration',
     echo: 'ifPersists',
     argHandler: applyCliModelAccessSelection,

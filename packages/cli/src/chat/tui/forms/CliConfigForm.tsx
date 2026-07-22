@@ -1,5 +1,6 @@
 import { cliSettingsStores } from '@cli/runtime/settingsStores';
 import { applyCliGitAuthorConfig } from '@cli/runtime/gitAuthor';
+import { saveProviderApiKey } from '@cli/runtime/providerApiKey';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import {
   readSetting,
@@ -12,6 +13,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { AgentRosterForm } from './AgentRosterForm';
 import { ConfigForm, type ConfigFormProps } from './ConfigForm';
+import { ProviderApiKeyForm } from './ProviderApiKeyForm';
 import { ToolsListForm } from './ToolsListForm';
 
 export interface CliConfigFormProps {
@@ -46,11 +48,17 @@ export function createCliConfigFormProps(
         invalidateModelOptionsCache();
         if (value === true) await props.onApiModePersonal?.();
       }
+      if (entry.key === GlobalStateKey.KIMI_CODE_PREFER) {
+        invalidateModelOptionsCache();
+      }
     },
     resetValue: async (entry) => {
       await resetSetting(entry, stores, 'cli');
       if (entry.category === 'git') applyCliGitAuthorConfig(stores.config);
       if (entry.key === GlobalStateKey.USE_OPENROUTER) {
+        invalidateModelOptionsCache();
+      }
+      if (entry.key === GlobalStateKey.KIMI_CODE_PREFER) {
         invalidateModelOptionsCache();
       }
     },
@@ -60,6 +68,12 @@ export function createCliConfigFormProps(
         label: 'Agents',
         description: 'workspace roster and user default team',
       },
+      {
+        name: 'api-keys',
+        label: 'API keys',
+        description:
+          'set personal provider keys (OpenAI, Anthropic, Kimi Code, …)',
+      },
     ],
     formRenderers: {
       agents: (onBack) => (
@@ -67,6 +81,17 @@ export function createCliConfigFormProps(
           availableRows={props.availableRows}
           onClose={onBack}
           onError={props.onError}
+        />
+      ),
+      'api-keys': (onBack) => (
+        <ProviderApiKeyForm
+          availableRows={props.availableRows}
+          onSave={async (provider, key) => {
+            await saveProviderApiKey(provider, key);
+            await props.onApiModePersonal?.();
+          }}
+          onDone={onBack}
+          onCancel={onBack}
         />
       ),
       tools: (onBack) => (

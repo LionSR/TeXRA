@@ -403,7 +403,7 @@ describe('/config slash command wiring', () => {
         if (route === 'chatgpt') return;
         sessionMeta.set({
           ...sessionMeta.get(),
-          apiMode: route,
+          apiMode: route === 'kimi-code' ? 'personal' : route,
         });
       },
     });

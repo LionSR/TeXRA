@@ -153,9 +153,15 @@ export function getGLMCodingPlan(): boolean {
  * Whether the user opted to route dual-backend Kimi models (K3) through the
  * Kimi Code coding endpoint when a Kimi Code API key is set. The two
  * coding-only Kimi models always use that key regardless of this switch.
+ * Catalog-modeled (see `stateSettings.ts`), so the default comes from the
+ * schema via the shared accessor.
  */
 export function getPreferKimiCode(): boolean {
-  return read(GlobalStateKey.KIMI_CODE_PREFER, false);
+  return readPlatformSetting<boolean>(GlobalStateKey.KIMI_CODE_PREFER);
+}
+
+export async function setPreferKimiCode(enabled: boolean): Promise<void> {
+  await tryGlobalState()?.update(GlobalStateKey.KIMI_CODE_PREFER, enabled);
 }
 
 /**

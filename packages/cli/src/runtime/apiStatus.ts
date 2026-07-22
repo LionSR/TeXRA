@@ -65,13 +65,18 @@ export async function loadCliModelAccessOverview(
       access.chatGptSignedIn,
       access.chatGptAccountLabel,
     ),
+    `Kimi Code: ${
+      access.kimiCodeKeySet === true
+        ? 'key configured'
+        : 'no key (add with /key)'
+    }`,
     formatAccountStatusLine(
       'TeXRA',
       profile.authenticated,
       profile.accountLabel,
     ),
   ];
-  if (access.active === 'chatgpt') {
+  if (access.active === 'chatgpt' || access.active === 'kimi-code') {
     lines.push(`API fallback: ${formatCliModelAccessRoute(apiMode)}`);
   }
   if (profile.note) lines.push(profile.note);
