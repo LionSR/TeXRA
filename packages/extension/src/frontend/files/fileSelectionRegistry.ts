@@ -1,5 +1,6 @@
 // Local imports - shared webview commands
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import type { MultipleDocumentFileType } from '@shared/schemas/fileTypes';
 
 export const FILE_SELECTION_COMMAND_IDS = {
   selectInputFiles: 'texra.selectInputFiles',
@@ -13,15 +14,12 @@ export const FILE_SELECTION_COMMAND_IDS = {
   getCurrentFile: 'texra.getCurrentFile',
 } as const;
 
-/** File categories that support multiple file selection */
-export type MultiFileCategory = 'input' | 'context' | 'media' | 'output';
-
 /**
  * Commands for multi-file selection operations.
  * Note: 'edited' is in ExtendedDocumentFileType but not here (no multi-select for edited).
  */
 export const MULTIPLE_FILE_COMMANDS: ReadonlyMap<
-  MultiFileCategory,
+  MultipleDocumentFileType,
   { selectCommand: string; responseCommand: string }
 > = new Map([
   [

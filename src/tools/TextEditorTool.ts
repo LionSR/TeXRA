@@ -58,6 +58,68 @@ const API_TYPE_TO_NAME = {
 
 type TextEditorApiType = keyof typeof API_TYPE_TO_NAME;
 
+/**
+ * Undo snapshots keyed by execution, then by file path. Owns the two-level
+ * get-or-create/prune bookkeeping in one place instead of spreading it across
+ * every caller that touches the nested map.
+ */
+class ExecutionFileHistory {
+  private readonly byExecution = new Map<string, Map<string, string[]>>();
+
+  hasExecution(executionId: string): boolean {
+    return this.byExecution.has(executionId);
+  }
+
+  /** Record a pre-edit snapshot, trimming the oldest once `maxPerFile` is exceeded. */
+  push(
+    executionId: string,
+    filePath: string,
+    content: string,
+    maxPerFile: number,
+  ): void {
+    let files = this.byExecution.get(executionId);
+    if (!files) {
+      files = new Map();
+      this.byExecution.set(executionId, files);
+    }
+    const history = files.get(filePath);
+    if (!history) {
+      files.set(filePath, [content]);
+      return;
+    }
+    history.push(content);
+    if (history.length > maxPerFile) history.shift();
+  }
+
+  /** Most recent snapshot for a file, or `undefined` if none was recorded. */
+  last(executionId: string, filePath: string): string | undefined {
+    return this.byExecution.get(executionId)?.get(filePath)?.at(-1);
+  }
+
+  /** Pop the most recent snapshot, pruning the file/execution entry once empty. */
+  popLast(executionId: string, filePath: string): void {
+    const files = this.byExecution.get(executionId);
+    const history = files?.get(filePath);
+    if (!files || !history) return;
+    history.pop();
+    if (history.length === 0) {
+      files.delete(filePath);
+      if (files.size === 0) this.byExecution.delete(executionId);
+    }
+  }
+
+  clearExecution(executionId: string): void {
+    this.byExecution.delete(executionId);
+  }
+
+  /** Read-only per-file snapshot view for one execution (test inspection only). */
+  filesFor(
+    executionId: string,
+  ): ReadonlyMap<string, readonly string[]> | undefined {
+    return this.byExecution.get(executionId);
+  }
+}
+
 const TextEditorInputSchema = z.strictObject({
   command: z.enum(['view', 'create', 'str_replace', 'insert', 'undo_edit']),
   path: z.string(),
@@ -91,7 +153,7 @@ export class TextEditorTool extends defineTool({
   private apiType: TextEditorApiType;
 
   // Undo snapshots owned by the execution that created them.
-  private fileHistory = new Map<string, Map<string, string[]>>();
+  private readonly fileHistory = new ExecutionFileHistory();
   private readonly observedExecutions = new Set<string>();
 
   /**
@@ -478,9 +540,8 @@ export class TextEditorTool extends defineTool({
   ): Promise<ToolResult> {
     try {
       const executionId = this.currentExecutionId();
-      const executionHistory = this.fileHistory.get(executionId);
-      const history = executionHistory?.get(filePath);
-      if (!executionHistory || !history || history.length === 0) {
+      const previousContent = this.fileHistory.last(executionId, filePath);
+      if (previousContent === undefined) {
         throw new ToolError(`No edit history found for ${displayPath}.`);
       }
 
@@ -489,7 +550,6 @@ export class TextEditorTool extends defineTool({
         return loaded.blocked;
       }
 
-      const previousContent = history.at(-1)!;
       return applyApprovedFileEdit({
         path: filePath,
         displayPath,
@@ -498,13 +558,7 @@ export class TextEditorTool extends defineTool({
         sourceTool: 'text_editor:undo_edit',
         diffSeparator: '\n',
         afterWrite: () => {
-          history.pop();
-          if (history.length === 0) {
-            executionHistory.delete(filePath);
-            if (executionHistory.size === 0) {
-              this.fileHistory.delete(executionId);
-            }
-          }
+          this.fileHistory.popLast(executionId, filePath);
         },
         present: ({ appliedContent }) => ({
           summary: `Undid edit on ${displayPath}`,
@@ -527,21 +581,15 @@ export class TextEditorTool extends defineTool({
   private addToHistory(filePath: string, content: string): void {
     const context = tryUseRunContext();
     const executionId = getRunContextExecutionId(context) ?? '';
-    let executionHistory = this.fileHistory.get(executionId);
-    if (!executionHistory) {
-      executionHistory = new Map();
-      this.fileHistory.set(executionId, executionHistory);
+    const isNewExecution = !this.fileHistory.hasExecution(executionId);
+    this.fileHistory.push(
+      executionId,
+      filePath,
+      content,
+      TextEditorTool.MAX_HISTORY_PER_FILE,
+    );
+    if (isNewExecution) {
       this.observeExecutionCompletion(executionId, context);
-    }
-
-    const history = executionHistory.get(filePath);
-    if (history) {
-      history.push(content);
-      if (history.length > TextEditorTool.MAX_HISTORY_PER_FILE) {
-        history.shift();
-      }
-    } else {
-      executionHistory.set(filePath, [content]);
     }
   }
 
@@ -559,7 +607,7 @@ export class TextEditorTool extends defineTool({
     // The registry releases persistent listeners after this terminal callback.
     registry.addListener(executionId, (handle) => {
       if (handle) return;
-      this.fileHistory.delete(executionId);
+      this.fileHistory.clearExecution(executionId);
       this.observedExecutions.delete(executionId);
     });
   }

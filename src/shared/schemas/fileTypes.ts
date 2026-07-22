@@ -13,8 +13,29 @@ export type MultipleDocumentFileType = z.infer<
 export const MULTIPLE_DOCUMENT_FILE_TYPES =
   MultipleDocumentFileTypeSchema.options;
 
+/** Narrows a broader file-type value (e.g. `ExtendedDocumentFileType`) to `MultipleDocumentFileType`. */
+export function isMultipleDocumentFileType(
+  value: string,
+): value is MultipleDocumentFileType {
+  return (MULTIPLE_DOCUMENT_FILE_TYPES as readonly string[]).includes(value);
+}
+
 export const ExtendedDocumentFileTypeSchema = z.enum([
   ...DocumentFileTypeSchema.options,
   'edited',
   'output',
 ]);
+export type ExtendedDocumentFileType = z.infer<
+  typeof ExtendedDocumentFileTypeSchema
+>;
+
+/**
+ * Values accepted by the "get/set current editor file" round trip
+ * (`GET_CURRENT_FILE` / `SET_CURRENT_FILE`): a document file type, or the
+ * diff-view pseudo-types 'base'/'edited', which aren't real file lists.
+ */
+export const CurrentFileTypeSchema = z.union([
+  DocumentFileTypeSchema,
+  z.enum(['base', 'edited']),
+]);
+export type CurrentFileType = z.infer<typeof CurrentFileTypeSchema>;

@@ -7,6 +7,15 @@ import type { ToolDefinition } from '@model';
 // Local file imports
 import { BaseTool } from './base';
 
+/** Convert a tool's Zod input schema into the JSON Schema `parameters` every `ToolDefinition` carries. */
+export function toToolParameters(schema: ZodType): Record<string, unknown> {
+  return toJSONSchema(schema, {
+    target: 'draft-2020-12',
+    unrepresentable: 'any',
+    io: 'input',
+  }) as Record<string, unknown>;
+}
+
 /**
  * Define a tool with type-safe schema and either a static or dynamic description.
  *
@@ -38,11 +47,7 @@ export function defineTool<T>(def: {
   ): ToolDefinition => ({
     name: def.name,
     description: getDescription(),
-    parameters: toJSONSchema(def.schema, {
-      target: 'draft-2020-12',
-      unrepresentable: 'any',
-      io: 'input',
-    }) as Record<string, unknown>,
+    parameters: toToolParameters(def.schema),
     // Include original Zod schema for SDK-native conversions (OpenAI, Anthropic)
     zodSchema: def.schema,
     ...override,
