@@ -1,8 +1,8 @@
 // Local imports - shared schemas
 import {
-  DocumentFileTypeSchema,
   MULTIPLE_DOCUMENT_FILE_TYPES,
   SessionTypeSchema,
+  isMultipleDocumentFileType,
   type DocumentFileType,
   type MultipleDocumentFileType,
   type SessionType,
@@ -18,20 +18,8 @@ export const SESSION_TYPES = {
 
 export type { SessionType, DocumentFileType, MultipleDocumentFileType };
 
-export const DOCUMENT_FILE_TYPES = DocumentFileTypeSchema.options;
 export { MULTIPLE_DOCUMENT_FILE_TYPES };
-
-/** Narrows a broader file-type value (e.g. `CurrentFileType`) to `DocumentFileType`. */
-export function isDocumentFileType(value: string): value is DocumentFileType {
-  return (DOCUMENT_FILE_TYPES as readonly string[]).includes(value);
-}
-
-/** Narrows a broader file-type value (e.g. `ExtendedDocumentFileType`) to `MultipleDocumentFileType`. */
-export function isMultipleDocumentFileType(
-  value: string,
-): value is MultipleDocumentFileType {
-  return (MULTIPLE_DOCUMENT_FILE_TYPES as readonly string[]).includes(value);
-}
+export { isMultipleDocumentFileType };
 
 export function parseSessionType(
   sessionType: string | null | undefined,

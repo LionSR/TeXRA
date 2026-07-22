@@ -168,7 +168,10 @@ describe('TextEditorTool undo history lifecycle', () => {
       );
 
       session.executions.untrack(EXECUTION_ID);
-      assert.strictEqual(internals.fileHistory.hasExecution(EXECUTION_ID), false);
+      assert.strictEqual(
+        internals.fileHistory.hasExecution(EXECUTION_ID),
+        false,
+      );
     } finally {
       session.executions.untrack(EXECUTION_ID);
     }

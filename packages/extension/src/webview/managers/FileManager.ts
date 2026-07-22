@@ -19,7 +19,6 @@ import {
   FILE_SELECTION_COMMAND_IDS,
   MULTIPLE_FILE_COMMANDS,
   getFileLister,
-  isMultipleFileType,
 } from '@frontend/files';
 import { selectFiles } from '@frontend/ui/dialogs';
 import {
@@ -28,11 +27,12 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import type {
-  CurrentFileType,
-  ExtendedDocumentFileType,
-  MainViewInboundMessage,
-} from '@shared/schemas';
+import type { MainViewInboundMessage } from '@shared/schemas';
+import {
+  isMultipleDocumentFileType,
+  type CurrentFileType,
+  type ExtendedDocumentFileType,
+} from '@shared/schemas/fileTypes';
 import {
   WorkspaceFS,
   parseLatexDiffMetadata,
@@ -148,7 +148,7 @@ export class FileManager extends BaseWebviewManager {
     message: SelectMultipleFilesMessage,
   ): Promise<void> {
     const { fileType, currentFile } = message;
-    const commands = isMultipleFileType(fileType)
+    const commands = isMultipleDocumentFileType(fileType)
       ? MULTIPLE_FILE_COMMANDS.get(fileType)
       : undefined;
     if (!commands) {

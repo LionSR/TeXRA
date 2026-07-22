@@ -9,7 +9,7 @@ import type { MainViewHandlerRegistry, MainViewMessage } from '@shared/schemas';
 import { unique } from '@utils/core';
 
 // Local imports - main view
-import { isDocumentFileType, isMultipleDocumentFileType } from '../constants';
+import { isMultipleDocumentFileType } from '../constants';
 import {
   commit$,
   fileOptions$,
@@ -137,7 +137,11 @@ export const documentHandlers = {
 
     // Workflow categories (input/context/media): prepend the active editor's
     // file to the multi-list head so it becomes the "primary" file.
-    if (isDocumentFileType(fileType)) {
+    if (
+      fileType === 'input' ||
+      fileType === 'context' ||
+      fileType === 'media'
+    ) {
       const listId = FILE_TYPE_TO_KEY[fileType];
       const mf = multiFiles$.get();
       const existing = mf[listId] ?? [];

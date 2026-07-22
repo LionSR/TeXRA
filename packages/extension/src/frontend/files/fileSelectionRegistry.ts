@@ -1,9 +1,6 @@
 // Local imports - shared webview commands
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  MULTIPLE_DOCUMENT_FILE_TYPES,
-  type MultipleDocumentFileType,
-} from '@shared/schemas/fileTypes';
+import type { MultipleDocumentFileType } from '@shared/schemas/fileTypes';
 
 export const FILE_SELECTION_COMMAND_IDS = {
   selectInputFiles: 'texra.selectInputFiles',
@@ -54,10 +51,3 @@ export const MULTIPLE_FILE_COMMANDS: ReadonlyMap<
     },
   ],
 ]);
-
-/** Narrows a broader file-type value to the subset `MULTIPLE_FILE_COMMANDS` supports. */
-export function isMultipleFileType(
-  value: string,
-): value is MultipleDocumentFileType {
-  return (MULTIPLE_DOCUMENT_FILE_TYPES as readonly string[]).includes(value);
-}
