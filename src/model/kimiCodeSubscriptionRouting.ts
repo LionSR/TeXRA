@@ -85,20 +85,27 @@ export function isKimiCodeExclusiveModel(
  *  - not eligible → `null`
  *  - exclusive → `'kimiCode'` when a key is set, else `null` (no other backend)
  *  - dual-backend → `'kimiCode'` only when the OpenRouter toggle is off, the
- *    "Prefer Kimi Code" switch is on, and a key is set; otherwise `null`
- *    (falls back to the Moonshot open platform).
+ *    relay is not serving the request (included access off or unavailable),
+ *    the "Prefer Kimi Code" switch is on, and a key is set; otherwise `null`
+ *    (falls back to the Moonshot open platform or the relay). The relay guard
+ *    keeps credential resolution coherent: a rerouted config pins the coding
+ *    `baseUrl`, which outranks the relay URL in `resolveBaseUrl` and would
+ *    send the relay token to the wrong host.
  */
 export function resolveKimiCodeRoute(
   config: KimiSubscriptionModelFields,
   useOpenRouter: boolean,
   keySet: boolean,
   preferKimiCode: boolean,
+  includedAccess: boolean,
 ): 'kimiCode' | null {
   if (!isKimiSubscriptionEligible(config)) return null;
   if (isKimiCodeExclusiveModel(config)) {
     return keySet ? 'kimiCode' : null;
   }
-  if (useOpenRouter || !preferKimiCode || !keySet) return null;
+  if (useOpenRouter || includedAccess || !preferKimiCode || !keySet) {
+    return null;
+  }
   return 'kimiCode';
 }
 

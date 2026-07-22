@@ -321,6 +321,11 @@ describe('CLI orchestration items', () => {
         description: 'Off · researcher@example.com',
       },
       {
+        value: 'kimi-code',
+        label: 'Prefer Kimi Code subscription',
+        description: 'Add a key with /key (kimi.com/code/console)',
+      },
+      {
         value: 'included',
         label: 'Included TeXRA access',
         description: 'Use your TeXRA account',
@@ -331,6 +336,43 @@ describe('CLI orchestration items', () => {
         description: 'Use keys configured on this computer',
       },
     ]);
+  });
+
+  it('describes the Kimi Code route by key state and activity', () => {
+    expect(
+      buildCliModelAccessItems({
+        active: 'personal',
+        chatGptSignedIn: false,
+        kimiCodeKeySet: true,
+      })[1],
+    ).toEqual({
+      value: 'kimi-code',
+      label: 'Prefer Kimi Code subscription',
+      description: 'Off · key configured',
+    });
+    expect(
+      buildCliModelAccessItems({
+        active: 'kimi-code',
+        chatGptSignedIn: false,
+        kimiCodeKeySet: true,
+      })[1].description,
+    ).toBe('On · key configured');
+
+    const items = buildCliOrchestrationItems({
+      presetPlans: [],
+      history: [],
+      toolUseAgents: [],
+      modelAccess: {
+        active: 'kimi-code',
+        chatGptSignedIn: false,
+        kimiCodeKeySet: true,
+      },
+    });
+    expect(items[1]).toEqual({
+      label: 'Model access',
+      description: 'Kimi Code subscription · key configured',
+      value: { kind: 'configure-model-access' },
+    });
   });
 
   it('offers account management as one startup row with provider actions', () => {
@@ -374,7 +416,7 @@ describe('CLI orchestration items', () => {
         active: 'personal',
         chatGptSignedIn: false,
         texraSignedIn: false,
-      })[1]?.description,
+      }).find((item) => item.value === 'included')?.description,
     ).toBe('Sign in through Account to use included models');
   });
 
