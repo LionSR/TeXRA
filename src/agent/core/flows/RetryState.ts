@@ -13,11 +13,10 @@ import type {
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { normalizeProviderError } from '@common/errors';
 import {
-  isContextWindowError,
+  isProviderErrorAutoRetryable,
   isUserAbort,
 } from '@common/errors/sdkErrorUtils';
 import {
-  isCredentialExhausted,
   STREAM_PHASE,
   toRetryErrorInfo,
   type RetryErrorInfo,
@@ -266,14 +265,7 @@ export abstract class RetryableInvocationNode<
    *  errors nobody already recovered from are stopped here. `userRetryable`
    *  only gates the manual retry UI; auto-retry is a stricter subset. */
   shouldAutoRetry(error: Error): boolean {
-    if (isUserAbort(error)) return false;
-    if (isContextWindowError(error)) return false;
-
-    const formatted = normalizeProviderError(error);
-    if (isCredentialExhausted(formatted)) return false;
-    if (!formatted.userRetryable) return false;
-    const code = formatted.statusCode;
-    return code !== StatusCodes.UNAUTHORIZED && code !== StatusCodes.FORBIDDEN;
+    return isProviderErrorAutoRetryable(error);
   }
 
   protected isBackgroundModeActive(): boolean {

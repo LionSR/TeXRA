@@ -49,9 +49,9 @@ describe('helper model completion retries', () => {
     expect(createResponse).toHaveBeenCalledTimes(3);
   });
 
-  it('does not retry deterministic failures', async () => {
-    const invalid = Object.assign(new Error('invalid request'), {
-      status: 400,
+  it('does not retry credential failures', async () => {
+    const invalid = Object.assign(new Error('invalid credential'), {
+      status: 401,
     });
     const createResponse = vi.fn().mockRejectedValue(invalid);
 

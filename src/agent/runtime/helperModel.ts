@@ -12,8 +12,7 @@ import pRetry from 'p-retry';
 // Local imports
 import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
-import { normalizeProviderError } from '@common/errors';
-import { isUserAbort } from '@common/errors/sdkErrorUtils';
+import { isProviderErrorAutoRetryable } from '@common/errors/sdkErrorUtils';
 import { getModelUnavailableReason } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 
@@ -100,8 +99,7 @@ export async function runHelperModelCompletion(
       minTimeout: 500,
       factor: 2,
       randomize: true,
-      shouldRetry: ({ error }) =>
-        !isUserAbort(error) && normalizeProviderError(error).userRetryable,
+      shouldRetry: ({ error }) => isProviderErrorAutoRetryable(error),
     },
   );
   return kit.handler.extractResponse(result.response, '').text;

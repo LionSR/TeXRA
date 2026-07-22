@@ -37,6 +37,7 @@ export {
 export {
   formatProviderHttpError,
   normalizeProviderError,
+  isProviderErrorAutoRetryable,
   getSdkErrorMessage,
   buildErrorLogData,
   buildFailedRetryInfo,

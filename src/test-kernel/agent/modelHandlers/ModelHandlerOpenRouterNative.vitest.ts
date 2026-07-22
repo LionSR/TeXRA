@@ -453,4 +453,40 @@ describe('ModelHandlerOpenRouterNative compaction retries', () => {
     });
     assert.equal(send.mock.calls.length, 3);
   });
+
+  it('does not retry a compaction credential failure', async () => {
+    const handler = new ModelHandlerOpenRouterNative(
+      buildTestModelConfig(OPENROUTER_TEST_CONFIG),
+    );
+    const target = handler as unknown as {
+      runClientCompaction: (
+        messages: unknown[],
+        inputTokens: number,
+        summarize: (
+          messages: ChatMessages[],
+          systemPrompt: string,
+        ) => Promise<unknown>,
+      ) => Promise<{ compactedMessages: ChatMessages[]; didCompact: boolean }>;
+      compactConversation: (
+        client: OpenRouter,
+        messages: ChatMessages[],
+      ) => Promise<{ compactedMessages: ChatMessages[]; didCompact: boolean }>;
+    };
+    target.runClientCompaction = async (_messages, _inputTokens, summarize) => {
+      await summarize([], 'Summarize the conversation.');
+      return { compactedMessages: [], didCompact: true };
+    };
+    const credentialFailure = Object.assign(new Error('invalid credential'), {
+      status: 401,
+    });
+    const send = vi.fn().mockRejectedValue(credentialFailure);
+
+    await expect(
+      target.compactConversation(
+        { chat: { send } } as unknown as OpenRouter,
+        [],
+      ),
+    ).rejects.toBe(credentialFailure);
+    expect(send).toHaveBeenCalledOnce();
+  });
 });

@@ -18,10 +18,9 @@ import type {
   ModelCredentialSelection,
   OpenRouterToolCall,
 } from '@agent/types/ModelHandlerContracts';
-import { normalizeProviderError } from '@common/errors';
 import {
   handleStreamingFailure,
-  isUserAbort,
+  isProviderErrorAutoRetryable,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
@@ -392,9 +391,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
             factor: 2,
             randomize: true,
             ...(signal ? { signal } : {}),
-            shouldRetry: ({ error }) =>
-              !isUserAbort(error) &&
-              normalizeProviderError(error).userRetryable,
+            shouldRetry: ({ error }) => isProviderErrorAutoRetryable(error),
           },
         );
         if (isOpenRouterChatStream(summaryResponse)) {

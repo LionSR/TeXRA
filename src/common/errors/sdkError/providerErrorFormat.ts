@@ -1,4 +1,5 @@
 import stableStringify from 'fast-json-stable-stringify';
+import { StatusCodes } from 'http-status-codes';
 
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import {
@@ -15,7 +16,7 @@ import {
   toErrorMessage,
 } from '@utils/errors/errorMessage';
 import { findInCauseChain, isDiskFullError } from '../errorPredicates';
-import { isContextWindowError } from './errorPatterns';
+import { isContextWindowError, isUserAbort } from './errorPatterns';
 import {
   detectPartialText,
   detectSdkErrorMetadata,
@@ -396,6 +397,19 @@ export function normalizeProviderError(err: unknown): ProviderError {
   // cause. Only explicit `attachProviderError` at provider/flow boundaries seeds
   // the cache the lookup above recovers.
   return formatProviderHttpError(err);
+}
+
+/** Whether repeating the same provider request can recover without user action. */
+export function isProviderErrorAutoRetryable(err: unknown): boolean {
+  if (isUserAbort(err) || isContextWindowError(err)) return false;
+
+  const formatted = normalizeProviderError(err);
+  return (
+    formatted.userRetryable &&
+    formatted.exhaustionReason === undefined &&
+    formatted.statusCode !== StatusCodes.UNAUTHORIZED &&
+    formatted.statusCode !== StatusCodes.FORBIDDEN
+  );
 }
 
 export function getSdkErrorMessage(err: unknown): string {
