@@ -6,7 +6,9 @@ import type {
   AgentEntry,
 } from '@agent/index/agentRegistry';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
+import { loadTeamOptions } from '@common/teams/TeamPlan';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
+import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
@@ -144,7 +146,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   async refreshCatalogData(): Promise<void> {
     await Promise.all([
       this.postAgentSelectionData(),
-      this.postMainAgentOptionsData(),
+      this.postMainAgentAndTeamOptionsData(),
     ]);
   }
 
@@ -165,6 +167,30 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       optionsData: await this.registry.loadAgentOptionsData(),
       ...(selectedToolUseAgent ? { selectedToolUseAgent } : {}),
     });
+  }
+
+  private async postMainTeamOptionsData(): Promise<void> {
+    this.renderer.postToRenderer({
+      command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
+      optionsData: await loadTeamOptions(createTeamCatalogPorts()),
+    });
+  }
+
+  /**
+   * Every catalog-refresh path posts agent and team options together,
+   * mirroring the extension host's `refreshAgentOptions` pairing — team
+   * availability depends on the same catalog (sign-in, remote load, roster,
+   * and custom-dir changes), so refreshing one without the other leaves the
+   * main-view team picker stale. Startup is exempt: the main-view startup
+   * controller already posts both.
+   */
+  private async postMainAgentAndTeamOptionsData(
+    selectedToolUseAgent?: string,
+  ): Promise<void> {
+    await Promise.all([
+      this.postMainAgentOptionsData(selectedToolUseAgent),
+      this.postMainTeamOptionsData(),
+    ]);
   }
 
   private async postCustomAgentDir(): Promise<void> {
@@ -212,7 +238,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     await Promise.all([
       this.postCustomAgentDir(),
       this.postAgentSelectionData(),
-      this.postMainAgentOptionsData(),
+      this.postMainAgentAndTeamOptionsData(),
     ]);
   }
 
@@ -221,7 +247,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     await Promise.all([
       this.postCustomAgentDir(),
       this.postAgentSelectionData(),
-      this.postMainAgentOptionsData(),
+      this.postMainAgentAndTeamOptionsData(),
     ]);
   }
 
@@ -295,9 +321,10 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     }
     await Promise.all([
       this.postAgentSelectionData(),
-      this.postMainAgentOptionsData(
+      this.postMainAgentAndTeamOptionsData(
         this.catalogController.getPresetToolUseRoot(
           result.preset.toolUseAgents,
+          result.preset.id,
         ),
       ),
     ]);

@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import type { AgentEntry } from '@agent/index/agentRegistry';
 import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { TeamOptionDataSchema } from '@shared/schemas/mainView/state';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { isUnsupported } from '@shared/utils/dispatcher';
 
@@ -30,6 +32,7 @@ interface ControllerFixtureOptions {
   readonly canAccessRemoteCatalog?: () => Promise<boolean>;
   readonly signInForRemoteCatalog?: () => Promise<boolean>;
   readonly getCustomAgentDirectory?: () => Promise<string>;
+  readonly selectCustomAgentDirectory?: () => Promise<string | undefined>;
 }
 
 function createControllerFixture(options: ControllerFixtureOptions = {}) {
@@ -66,7 +69,8 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
       getCustomAgentDirectory:
         options.getCustomAgentDirectory ?? (async () => '/agents/custom'),
       getSourceDirectory: async (source) => `/agents/${source}`,
-      selectCustomAgentDirectory: async () => undefined,
+      selectCustomAgentDirectory:
+        options.selectCustomAgentDirectory ?? (async () => undefined),
       openPath: async (filePath) => {
         opened.push(filePath);
       },
@@ -202,6 +206,58 @@ describe('DefaultDesktopAgentSettingsController', () => {
     );
   });
 
+  it('posts well-formed team options when the catalog refreshes', async () => {
+    const { controller, posted } = createControllerFixture({
+      catalog: physicistCatalog(),
+    });
+
+    await controller.refreshCatalogData();
+
+    expect(
+      posted.some(
+        (message) =>
+          messageCommand(message) === MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+      ),
+    ).toBe(true);
+    const teamOptionsMessage = posted.find(
+      (message) =>
+        messageCommand(message) === MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
+    ) as { optionsData?: unknown } | undefined;
+    expect(teamOptionsMessage).toBeDefined();
+    const teamOptions = z
+      .array(TeamOptionDataSchema)
+      .parse(teamOptionsMessage?.optionsData);
+    expect(teamOptions.map((option) => option.value)).toEqual(
+      expect.arrayContaining([
+        'lean-project',
+        'physicist',
+        'mathematician',
+        'cs-ml',
+        'software-engineer',
+      ]),
+    );
+  });
+
+  it('posts team options when the custom agent directory changes', async () => {
+    const { controller, posted } = createControllerFixture({
+      catalog: physicistCatalog(),
+      selectCustomAgentDirectory: async () => '/agents/selected',
+    });
+    const setCustomDir = requireAction(
+      controller.actions.setCustomDir,
+    ) as () => Promise<void>;
+
+    await setCustomDir();
+
+    expect(posted.map(messageCommand)).toEqual(
+      expect.arrayContaining([
+        SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
+        MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+        MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
+      ]),
+    );
+  });
+
   it('applies source-qualified teams and selects the tool-use root', async () => {
     const { controller, infoMessages, posted, workspaceState } =
       createControllerFixture({
@@ -237,6 +293,12 @@ describe('DefaultDesktopAgentSettingsController', () => {
       command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
       selectedToolUseAgent: 'orchestrator',
     });
+    expect(
+      posted.some(
+        (message) =>
+          messageCommand(message) === MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
+      ),
+    ).toBe(true);
     expect(
       posted.some(
         (message) =>

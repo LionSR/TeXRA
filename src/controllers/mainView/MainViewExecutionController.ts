@@ -101,6 +101,9 @@ function buildMainViewExecutionRequest(
     };
   }
 
+  // The webview's session preset id is always nullish; only teamFields is
+  // authoritative, so strip it rather than relying on spread order.
+  const { cliMultiAgentPresetId: _, ...sessionFields } = message.session ?? {};
   const validation = validateExecutionRequest({
     config: {
       agent,
@@ -108,7 +111,7 @@ function buildMainViewExecutionRequest(
       instruction: message.instruction,
       displayInstruction: message.displayInstruction,
       memories: message.memories,
-      ...message.session,
+      ...sessionFields,
       ...files,
       agentCategory,
       ...teamFields,
