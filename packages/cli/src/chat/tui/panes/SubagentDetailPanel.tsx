@@ -53,9 +53,9 @@ export function selectedSubagentDetailLines(
     lines.push(`${label}: ${paths.join(', ')}`);
   }
 
-  const outputRounds = roundIndexedEntries(
-    slice?.outputFilesByRound ?? {},
-  ).filter(([, files]) => files.length > 0);
+  const outputRounds = roundIndexedEntries(slice?.outputFilesByRound ?? {})
+    .filter(([, files]) => files.length > 0)
+    .toReversed();
   if (outputRounds.length === 0) {
     const configuredOutputs = slice?.files?.output ?? [];
     if (configuredOutputs.length > 0) {

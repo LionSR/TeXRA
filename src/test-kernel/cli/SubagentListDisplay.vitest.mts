@@ -119,8 +119,8 @@ describe('CLI child list display model', () => {
       'Progress: running · r2/3 · 2 tool calls',
       'Input: src/Main.lean, src/Lemma.lean',
       'Context: notes/proof.md',
-      'Output r1: /tmp/executions/abc/r1/Main.lean',
       'Output r2: /tmp/executions/abc/r2/Main.lean',
+      'Output r1: /tmp/executions/abc/r1/Main.lean',
     ]);
     expect(selectedSubagentDetailLines(undefined, 100)).toEqual([]);
     expect(

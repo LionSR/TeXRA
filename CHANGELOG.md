@@ -19,8 +19,8 @@ All notable changes to this project will be documented in this file.
 - **Parallel runs finish reliably after long pauses** — delayed storage work
   no longer causes the application to exit while several agents are saving
   their final results.
-- **PDF attachments work with ChatGPT subscriptions** — documents sent directly
-  to the model are encoded in the form accepted by the Responses endpoint.
+- **PDF attachments work with ChatGPT subscriptions** — documents can be sent
+  directly to supported models.
 - **Workflow results include absolute output paths** — parent agents receive
   the direct storage path for every generated file alongside its run-relative
   path.
