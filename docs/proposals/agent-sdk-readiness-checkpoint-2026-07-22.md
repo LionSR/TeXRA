@@ -30,7 +30,7 @@ cap was already present before this commit and is unchanged by it),
 `agent/implementations/flows/tooluse/nodes/types.ts`,
 `agent/runtime/modelHandlerCompatibilityInference.ts`), and `b64b18d` / #9038
 (the 07-21 checkpoint's own applied cleanup, already recorded in that
-checkpoint). This range is 6 commits, not 5: `f71007a`, `0dc0f8b`, `09d5aea`,
+checkpoint). The omitted set is 6 commits: `f71007a`, `0dc0f8b`, `09d5aea`,
 `9bc9af2`, `b64b18d`, plus `c08e698` — the **substantive** commit of the two
 under PR #9039 (163 insertions, 101 deletions across 5 files); its child
 `1b5732a` has an identical tree and contributes no diff, making `1b5732a`,
