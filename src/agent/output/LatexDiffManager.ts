@@ -15,7 +15,6 @@ import {
   type RoundIndexed,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { LATEX_CONFIG_RANGES } from '@shared/constants/latex';
 import {
   createRunStorageLocation,
   FlexibleFS,
@@ -30,7 +29,10 @@ import {
   publishCompiledPdfArtifact,
   type CompiledPdfArtifact,
 } from './compiledPdfArtifacts';
-import { resolveWorkspaceSourceDir } from './compileCheck';
+import {
+  getWorkflowAutoCompileTimeoutMs,
+  resolveWorkspaceSourceDir,
+} from './compileCheck';
 import { tryOperation } from './outputOperations';
 import type { RoundFileEntry, RoundFileMapping } from './types';
 
@@ -383,12 +385,7 @@ export class LatexDiffManager {
     );
     // Reuse the workflow compile-check timeout so a hanging diff build
     // gets killed by execa instead of orphaning latexmk/pdflatex.
-    const timeoutMs = Math.max(
-      LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min,
-      readPlatformSetting<number>(
-        WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-      ),
-    );
+    const timeoutMs = getWorkflowAutoCompileTimeoutMs();
     // The diff `.tex` is written to `diff/r{round}/`, away from both the
     // revised round output and the live workspace source. Search the revised
     // round directory first so same-round sibling edits win, then fall back to

@@ -12,14 +12,13 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-import { nanoid } from 'nanoid';
-
 import * as logger from '@logger/logUtils';
 import {
   RUN_OUTCOME,
   type RunOutcome,
   type UpdateStreamUsagePayload,
 } from '@shared/schemas';
+import { generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type {
@@ -222,7 +221,7 @@ export class TraceEmitter implements AgentTrace {
       return new SkippedStageHandle(this, parentId);
     }
 
-    const id = options.id ?? nanoid();
+    const id = options.id ?? generateShortId();
     this.emit({
       type: 'stage.start',
       id,
@@ -238,7 +237,7 @@ export class TraceEmitter implements AgentTrace {
   // ─── Streams ───────────────────────────────────────────────────────
 
   openStream(kind: StreamKind, options: StreamOptions = {}): StreamHandle {
-    const id = options.id ?? nanoid();
+    const id = options.id ?? generateShortId();
     const progressEnabled = options.progressViewEnabled ?? true;
 
     if (!progressEnabled) {

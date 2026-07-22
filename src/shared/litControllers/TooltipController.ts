@@ -1,3 +1,5 @@
+import { clamp } from '@utils/core';
+
 /**
  * Tooltip delay in ms before showing (matches VS Code native tooltip timing).
  */
@@ -70,10 +72,7 @@ function show(anchor: Element): void {
 
     // Clamp to viewport edges
     const margin = 4;
-    left = Math.max(
-      margin,
-      Math.min(left, window.innerWidth - tooltipRect.width - margin),
-    );
+    left = clamp(left, margin, window.innerWidth - tooltipRect.width - margin);
 
     tooltipEl.style.left = `${left}px`;
     tooltipEl.style.top = `${rect.bottom + 4}px`;
