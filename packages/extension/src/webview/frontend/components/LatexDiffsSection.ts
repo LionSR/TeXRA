@@ -20,6 +20,7 @@ import {
   compactIconActionButtonStyles,
   designTokens,
 } from '@shared/styles';
+import { readSelectValue } from '@shared/utils/selectTemplates';
 import {
   renderIconActionButton,
   renderLabeledActionButtonParts,
@@ -27,7 +28,6 @@ import {
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import { MainViewEvents } from '../events';
 import { fileSelectLayoutStyles } from '../styles/fileSelectStyles';
-import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 type LatexDiffsAction = LatexDiffsActionDetail['action'];
 
@@ -224,26 +224,21 @@ export class LatexDiffsSection extends LitElement {
     this.dispatchEvent(MainViewEvents.latexDiffsToggle({ visible }));
   }
 
-  private selectValue(event: Event): string {
-    const select = event.currentTarget as WaSelect | null;
-    return typeof select?.value === 'string' ? select.value : '';
-  }
-
   private handleBaseSelectChange(event: Event): void {
     this.dispatchEvent(
-      MainViewEvents.baseFileChange({ value: this.selectValue(event) }),
+      MainViewEvents.baseFileChange({ value: readSelectValue(event) }),
     );
   }
 
   private handleEditedSelectChange(event: Event): void {
     this.dispatchEvent(
-      MainViewEvents.editedFileChange({ value: this.selectValue(event) }),
+      MainViewEvents.editedFileChange({ value: readSelectValue(event) }),
     );
   }
 
   private handleCommitSelectChange(event: Event): void {
     this.dispatchEvent(
-      MainViewEvents.commitChange({ value: this.selectValue(event) }),
+      MainViewEvents.commitChange({ value: readSelectValue(event) }),
     );
   }
 
