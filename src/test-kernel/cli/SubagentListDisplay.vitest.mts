@@ -107,6 +107,18 @@ describe('CLI child list display model', () => {
               lineage: null,
               diff: null,
             },
+            {
+              source: 'Notes.lean',
+              location: {
+                kind: 'runStorage',
+                executionId: 'exec-abc',
+                relativePath: 'r2/Notes.lean',
+                absolutePath: '/tmp/executions/abc/r2/Notes.lean',
+              },
+              round: 1,
+              lineage: null,
+              diff: null,
+            },
           ],
         },
         roundStage: { index: 1, total: 3 },
@@ -120,6 +132,7 @@ describe('CLI child list display model', () => {
       'Input: src/Main.lean, src/Lemma.lean',
       'Context: notes/proof.md',
       'Output r2: /tmp/executions/abc/r2/Main.lean',
+      'Output r2: /tmp/executions/abc/r2/Notes.lean',
       'Output r1: /tmp/executions/abc/r1/Main.lean',
     ]);
     expect(selectedSubagentDetailLines(undefined, 100)).toEqual([]);

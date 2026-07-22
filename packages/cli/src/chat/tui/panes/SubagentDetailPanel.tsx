@@ -63,11 +63,9 @@ export function selectedSubagentDetailLines(
     }
   } else {
     for (const [round, files] of outputRounds) {
-      lines.push(
-        `Output r${round + 1}: ${files
-          .map((file) => file.location.absolutePath)
-          .join(', ')}`,
-      );
+      for (const file of files) {
+        lines.push(`Output r${round + 1}: ${file.location.absolutePath}`);
+      }
     }
   }
 
