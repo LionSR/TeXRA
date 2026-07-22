@@ -212,14 +212,14 @@ export function teamAvailability(plan: TeamRunPlan): TeamAvailability {
 }
 
 export function teamExecutionFields<T extends TeamCatalogAgent>(
-  plan: TeamRunPlan<T>,
+  plan: TeamRunPlan<T> & { readonly rootAgent: T },
 ): {
   agent: string;
   delegationAgentScope: AgentDelegationScope;
   cliMultiAgentPresetId: string;
 } {
   return {
-    agent: agentKeyOf(plan.rootAgent!),
+    agent: agentKeyOf(plan.rootAgent),
     delegationAgentScope: {
       workflowAgentKeys: [...plan.workflowAgentKeys],
       toolUseAgentKeys: [...plan.toolUseAgentKeys],

@@ -295,7 +295,10 @@ describe('plan status and launchability', () => {
 
 describe('teamExecutionFields', () => {
   it('builds execution fields from a launchable plan', () => {
-    expect(teamExecutionFields(manualPlan())).toEqual({
+    const plan = manualPlan();
+    if (!canLaunchTeam(plan)) throw new Error('Expected a launchable plan');
+
+    expect(teamExecutionFields(plan)).toEqual({
       agent: 'builtInToolUse:lead',
       delegationAgentScope: {
         workflowAgentKeys: ['builtInWorkflow:writer'],

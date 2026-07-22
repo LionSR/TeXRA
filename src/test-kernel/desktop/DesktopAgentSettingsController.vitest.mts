@@ -439,9 +439,14 @@ describe('DefaultDesktopAgentSettingsController', () => {
     ]);
     expect(infoMessages).toEqual(['Saved team "Paper Team"']);
     expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
-      customPresets: [expect.objectContaining({ name: 'Paper Team' })],
+      command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
     });
+    expect(posted).toContainEqual(
+      expect.objectContaining({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
+        customPresets: [expect.objectContaining({ name: 'Paper Team' })],
+      }),
+    );
   });
 
   it('deletes custom teams and reports unknown team ids', async () => {
@@ -470,9 +475,14 @@ describe('DefaultDesktopAgentSettingsController', () => {
       [],
     );
     expect(posted.at(-1)).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
-      customPresets: [],
+      command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
     });
+    expect(posted).toContainEqual(
+      expect.objectContaining({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
+        customPresets: [],
+      }),
+    );
 
     await deletePreset('missing-team');
 

@@ -342,6 +342,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     await this.registry.loadAgents();
     const preset = await this.catalogController.saveCurrentPreset(name);
     this.postAgentModePresets();
+    await this.postMainTeamOptionsData();
     await this.notifications.showInfoMessage(`Saved team "${preset.name}"`);
   }
 
@@ -354,5 +355,6 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       return;
     }
     this.postAgentModePresets();
+    await this.postMainTeamOptionsData();
   }
 }
