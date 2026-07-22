@@ -64,6 +64,7 @@ export type IModelHandler<
   | 'initializeOutputAndPrefill'
   | 'normalizeUsage'
   | 'getLastCredentialUsageRoute'
+  | 'getCredentialRouteForClient'
   | 'updateMessageContent'
   | 'shouldContinue'
   | 'checkStopConditions'
