@@ -10,10 +10,30 @@ addendum, and the `-2026-06-25` → `-2026-07-21` checkpoints (most recently
 
 This pass re-verified the standing audit against `claude/eager-noether-2kgehc`
 at HEAD `395e229` (v0.39.8-dev, 11 commits above the `3612630` pin the 07-21
-checkpoint recorded — the intervening commits are dependency bumps (#9056,
-#9058, #9060), the citty CLI arg-parse refactor (#9039), and the
-consolidate-onto-native-helpers refactor (#9036); none touch the agent
-spine). As on every prior pass it ran a **fresh, uninformed four-way fan-out
+checkpoint recorded). **Correction (Codex, P2): the initial commit census for
+this range was itself incomplete** — it named only 5 of the 11 (dependency
+bumps #9056/#9058/#9060, the citty refactor #9039, `#9036`) and asserted
+"none touch the agent spine," which is false. The 6 omitted commits are
+`f71007a` (delete a dead `mediaVisionWarning` export — spine, trivial),
+`0dc0f8b` / **#9035** "fix: scope execution writes to lease owners" (a
+**substantial** spine rewrite: `executeAgent.ts` ±412, `executionRegistry.ts`
+±206, `runAgent.ts` ±163, plus `AgentRunLifecycle.ts`, `ExecutionHandle.ts`,
+`childRunLoop.ts`, `agent/storage/executionLease.ts` and
+`executionLifecycle.ts`), `09d5aea` / #9055 (tools, `TextEditorTool.ts`
+history-cap fix), `9bc9af2` / #9054 (dedup pass touching `agent/export`,
+`agent/implementations/flows/tooluse/nodes/types.ts`,
+`agent/runtime/modelHandlerCompatibilityInference.ts`), and `b64b18d` / #9038
+(the 07-21 checkpoint's own applied cleanup, already recorded in that
+checkpoint). The lease-scoping rewrite (`0dc0f8b`) is the one with real
+spine-shape risk. This pass's fan-out readers read `runAgent.ts`,
+`RunContext.ts`, `SessionHandle.ts`, and the delegation/`childRunLoop`
+subsystem fresh at `395e229` (post-rewrite) and found no new debt in them —
+so the standing conclusions **do** reflect the rewritten code — but the
+readers did not specifically diff against the lease-scoping change or open
+`executionRegistry.ts`/`ExecutionHandle.ts`/`AgentRunLifecycle.ts` this pass,
+so "unchanged since 07-21" for those three specific files rests on their
+current-state read being clean, not on an explicit before/after diff. As on
+every prior pass it ran a **fresh, uninformed four-way fan-out
 audit** — four separate readers for (1) `agent/core` + `agent/implementations/flows`,
 (2) `agent/modelHandlers` + `toolConversion` + `IModelHandler`, (3)
 `agent/runtime` + `logger` + the trace/`SessionEventHub`/`AppSignals` surfaces,
@@ -29,13 +49,22 @@ refactoring is warranted.** The four fresh, uninformed readers independently
 re-reached the standing conclusion (the same reconvergence the 07-21 pass
 recorded). Every substantive candidate the fan-out surfaced maps onto an
 **already-adjudicated trap** (ruling held), an **already-tracked
-strategic / reviewed-train** item, or a **verified false positive** — and the
-recurring `src/`-only-grep methodology error struck twice this pass: once in
-the fan-out itself (the runtime reader proposed un-exporting `useRunContext`;
-it is imported by two test files and cannot be un-exported — see below), and
-once in this checkpoint's own verification of an applied change (an
-incomplete `MapToolRegistry` caller census, caught only after the change had
-already been pushed — see "Applied-then-reverted" below).
+strategic / reviewed-train** item, or a **verified false positive**. Two
+distinct census failures struck this pass — **neither was actually a
+`src/`-only-grep scope problem**, despite this checkpoint initially
+describing them that way (Codex, P2, caught the mischaracterization):
+`src/test-kernel/` is itself under `src/`, so a plain `grep -rn <symbol> src`
+already reaches it. (1) The runtime reader proposed un-exporting
+`useRunContext` ("0 external callers"); a full `src/`-scoped grep does find
+its two test-kernel importers, so whichever narrower scope the reader
+actually searched, it was not "all of `src/`" — the true search boundary
+that produced the miss isn't reconstructed here, and this doc should not
+assert one. (2) This checkpoint's own `MapToolRegistry` caller census, used
+to justify an applied change, undercounted 16 real constructions as 14 — and
+a full-repo grep run earlier in the same session already contained all 16
+correctly; the "14 across 5" figure that made it into the applied change's
+rationale was a transcription error in synthesizing that already-correct
+data, not a tool or scope limitation. See "Applied-then-reverted" below.
 
 ## Applied-then-reverted this pass — a self-caught verification failure
 
@@ -85,8 +114,11 @@ exported symbol for 2 LOC, with no caller demanding the removal.
 intact — byte-identical to the pre-checkpoint code. The class doc-comment is
 back to "Map- or Record-backed".
 
-**Verified after revert.** `npm run typecheck` exit 0 (root + test-kernel
-configs); `eslint` clean on the touched file; all **9**
+**Verified after revert.** `npm run typecheck` exit 0 — the full command
+(all **six** configs: root, test-kernel, extension, CLI, trace-viewer,
+desktop; correcting an earlier draft of this doc that under-described the
+scope as "root + test-kernel" when only those two direct `tsc` invocations
+had been run in the moment); `eslint` clean on the touched file; all **9**
 `MapToolRegistry`-constructing suites green — **106 tests**
 (`ToolUseDispatchParallel`, `ToolUseToolResolution`, `structuredOutput`,
 `BashTool`, `SessionResumeRetrieval`, plus the 4 initially-missed suites:
@@ -113,8 +145,10 @@ incomplete-grep or already-adjudicated artifact:
   un-exported"). Full-repo grep shows it imported by
   `src/test-kernel/agent/runtime/RunContext.vitest.ts` and
   `AgentLaunchContext.vitest.ts` via `@agent/runtime/RunContext` — the export
-  is load-bearing for the test seam. **Keep.** (The `src/`-only grep that
-  motivated the suggestion missed the test-kernel importers.)
+  is load-bearing for the test seam. **Keep.** (Both files are under `src/`,
+  so this was not a plain `src/`-scope miss; the actual search the reader ran
+  was narrower than that, and its exact boundary isn't reconstructed here —
+  see the Verdict section's correction.)
 - **The Anthropic empty-response magic number**
   `responseObject.usage.output_tokens === 3`
   (`modelHandlerAnthropic.ts:973`, model-handler reader re-surfaced it as a
@@ -160,8 +194,18 @@ prior ruling.
   `IToolUseSession`, `IToolRegistry`** — all re-derived and match the held
   rulings: the factories _are_ the prescribed `Node.exec() → createFlow().run()`
   shape (fresh stateful node graph per round); `withModelClient` is the
-  load-bearing live-`client` getter for relay-401 rebinding; the single-impl
-  ports are legitimate `core → implementations`/`core → tools` seams. **Keep.**
+  load-bearing live-`client` getter for relay-401 rebinding; `IToolUseSession`
+  is a legitimate single-impl `core → implementations` seam. **Correction
+  (Codex, P2): `IToolRegistry` is no longer single-impl** — besides
+  `MapToolRegistry`, `src/tools/structuredOutput.ts:228-236`'s
+  `buildTerminalToolRegistry` returns a second, structurally-typed
+  implementation (a per-run overlay resolving `submit_output` to the
+  run-scoped terminal tool while delegating everything else to the base
+  registry, so concurrent runs don't share one terminal tool). The **Keep**
+  verdict is unchanged — both are genuine, load-bearing implementations — but
+  the "single-impl" characterization was stale (this pass's own agent-core
+  reader had already surfaced the second implementation; the checkpoint's
+  synthesis dropped it when carrying forward the 07-21 phrasing).
 - **Four event/subscribe surfaces** (`AgentTrace.subscribe`,
   `SessionEventHub.subscribe`, `SessionHandle.onResult`, `AppSignals.on`) —
   the runtime reader re-derived the run-`result` overlap. This is the standing
@@ -230,16 +274,36 @@ already recorded in `-07-18`). This checkpoint's own host-import
 boundary-width figure is also corrected, **55 → 54** (Codex, P2): the raw
 token grep counted a comment-only `@agent/review` reference
 (`agentReviewCommands.ts:6`, prose, never used as a real import specifier)
-as if it were one. Every remaining item is reviewed-train (`ModelHandler`
+as if it were one. This doc also self-corrected three further accuracy
+issues an external review caught after the first draft: an incomplete
+intervening-commit census that wrongly claimed none of the 11 commits since
+the 07-21 pin touch the agent spine (one, `0dc0f8b`/#9035, is a substantial
+execution-lease rewrite), a stale "single-impl" characterization of
+`IToolRegistry` (it has two: `MapToolRegistry` and
+`buildTerminalToolRegistry`'s overlay), and a five-checkpoint-old reference
+to a `followUpResumeDetection` symbol that does not exist in the tree — see
+the corresponding sections above and the README fix alongside this change.
+Every remaining item is reviewed-train (`ModelHandler`
 decomposition, the `IModelHandler` port-width facets kept overridable per the
 `#7101` triage) or strategic/gated (the unified event stream preserving
 broker-side filtering, the `HostInteractions` 7/7 required-methods conversion
 behind Step 1, the frozen `GoogleGenAI` handler gated on `#7097` +
 transcript-format retirement, the no-public-surface Steps 1–3). Do not re-open
-the traps; do not re-flag `useRunContext`, `IToolRegistry`, `IModelHandler`,
-or `followUpResumeDetection` as dead (each has a live caller or a test seam a
-`src/`-only grep misses); do not re-attempt the `MapToolRegistry` narrowing
-without also providing a deliberate compatibility boundary for `Map` inputs.
+the traps; do not re-flag `useRunContext`, `IToolRegistry`, or `IModelHandler`
+as dead (each has a live caller or a test seam that a narrower-than-`src/`
+search can miss); do not re-attempt the `MapToolRegistry` narrowing without
+also providing a deliberate compatibility boundary for `Map` inputs.
+**Correction (Codex, P2): retire `followUpResumeDetection` from this
+keep-list — it names a symbol that does not exist at `395e229`.** No file or
+export by that name is in the tree (confirmed: no matching path, and no
+non-stale grep hit); it had been carried, unverified, through every
+checkpoint since `-07-10` on the strength of a stale table entry in
+`src/agent/runtime/README.md` (now corrected in this same change). The
+resume-detection behavior this was meant to protect is implemented today as
+the private `lazyDetectWaitingStatus` function in
+`packages/extension/src/commands/agent/followUpCommand.ts` — a real,
+live-caller symbol, but a different one, in a different file, than the
+five-checkpoint-old claim named.
 
 ## Verified (this checkpoint)
 
@@ -261,11 +325,33 @@ without also providing a deliberate compatibility boundary for `Map` inputs.
   `Map<string, ITool> | Record<string, ITool>` (byte-identical to
   pre-checkpoint) after Codex P2 review. Full-repo recount after the catch: 16
   constructions across 10 files (1 production + 15 test across 9 test files,
-  not 14 across 5 as first reported). `npm run typecheck` exit 0 (root +
-  test-kernel), `eslint` clean, all 9 constructing suites green — 106 tests.
+  not 14 across 5 as first reported). `npm run typecheck` exit 0 — the actual
+  full six-config command re-run post-revert (root, test-kernel, extension,
+  CLI, trace-viewer, desktop), `eslint` clean, all 9 constructing suites
+  green — 106 tests.
 - Rejected candidates verified: `useRunContext` imported by
-  `RunContext.vitest.ts` + `AgentLaunchContext.vitest.ts` (export required);
-  `output_tokens === 3` already flagged in `-2026-07-18`.
+  `RunContext.vitest.ts` + `AgentLaunchContext.vitest.ts` (export required,
+  both files under `src/`); `output_tokens === 3` already flagged in
+  `-2026-07-18`.
+- Commit-census correction: `git log 3612630..395e229` is 11 commits, not the
+  5 this doc first named. The 6 omitted — `f71007a`, `0dc0f8b`/#9035,
+  `09d5aea`/#9055, `9bc9af2`/#9054, `b64b18d`/#9038, plus the duplicate citty
+  commit `c08e698` — include a substantial spine rewrite (`0dc0f8b`:
+  `executeAgent.ts`, `executionRegistry.ts`, `runAgent.ts`,
+  `AgentRunLifecycle.ts`, `ExecutionHandle.ts`, `childRunLoop.ts`,
+  `agent/storage/executionLease.ts`/`executionLifecycle.ts`). This pass's
+  readers read those files fresh at `395e229` and found no new debt, but did
+  not explicitly diff them against the lease-scoping rewrite.
+- `IToolRegistry` implementation count corrected: 2, not 1 —
+  `MapToolRegistry` (`ToolTypes.ts:47`) and `buildTerminalToolRegistry`'s
+  returned overlay object (`src/tools/structuredOutput.ts:228-236`). **Keep**
+  verdict unchanged; only the single-impl characterization was stale.
+- `followUpResumeDetection` retired from the standing keep-list: no such
+  file/export exists at `395e229` (confirmed by path search and grep); it
+  had propagated unverified since the `-07-10` checkpoint via a stale entry
+  in `src/agent/runtime/README.md`'s module-map table, corrected in this same
+  change. The live implementation is `lazyDetectWaitingStatus` in
+  `packages/extension/src/commands/agent/followUpCommand.ts`.
 - MCP-exposure observation: no proposal mentions exposing the TeXRA tool
   registry as an MCP server (grep across `docs/proposals/`); `claude_code` tool
   confirmed at `src/tools/claudeAgent.ts` importing
