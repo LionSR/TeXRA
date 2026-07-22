@@ -170,7 +170,14 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     description:
       'For math research -- attacking open problems, proofs, Lean 4 formalization, and LaTeX correction.',
     icon: 'symbol-number',
-    workflowAgents: ['correct', 'polish', 'generic', 'devise', 'apply'],
+    workflowAgents: [
+      'correct',
+      'polish',
+      'generic',
+      'devise',
+      'apply',
+      'criticize',
+    ],
     toolUseAgents: [
       'prover',
       'lean',
@@ -186,6 +193,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'generic',
       'devise',
       'apply',
+      'criticize',
       'lean',
       'simplifier',
       'progressCheck',

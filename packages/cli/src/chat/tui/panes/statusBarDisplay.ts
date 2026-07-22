@@ -605,7 +605,7 @@ function childListBindingsText(
       : undefined;
   const fileInfoBinding =
     selectionKind === 'stream'
-      ? keyHintText({ key: 'i', action: 'files' })
+      ? keyHintText({ key: 'i', action: 'details' })
       : undefined;
   const killBinding = selectionKillable
     ? keyHintText({ key: 'k', action: 'kill' })

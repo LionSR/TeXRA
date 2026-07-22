@@ -258,7 +258,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('Up/Down select');
     expect(display.bindings).toContain('Enter focus');
     expect(display.bindings).toContain('v full output');
-    expect(display.bindings).toContain('i files');
+    expect(display.bindings).toContain('i details');
     expect(display.bindings).toContain('k kill');
     expect(display.bindings).toContain('Tab input');
     expect(display.bindings).toContain('Esc input');
@@ -279,7 +279,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('Enter details');
     expect(display.bindings).toContain('k kill');
     expect(display.bindings).not.toContain('v full output');
-    expect(display.bindings).not.toContain('i files');
+    expect(display.bindings).not.toContain('i details');
   });
 
   it('shows foreground actions while a list-owned surface is open', () => {

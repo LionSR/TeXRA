@@ -31,8 +31,11 @@ import {
   queuedFollowUpPanelRowCount,
 } from './QueuedFollowUpsPanel';
 import { StaticConversationTranscript } from './StaticConversationTranscript';
+import {
+  selectedSubagentDetailLines,
+  SubagentDetailPanel,
+} from './SubagentDetailPanel';
 import { SubagentList } from './SubagentList';
-import { childFileDisplay } from './SubagentListDisplay';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
 import {
   childListStreamId,
@@ -58,7 +61,7 @@ interface ConversationRegionSnapshot {
   readonly slashPaletteOpen: boolean;
   readonly selectedChildValue: ChildListValue | undefined;
   readonly childListFocused: boolean;
-  readonly childListRowExpanded: boolean;
+  readonly childDetailsVisible: boolean;
   readonly sessionViews: readonly StreamView[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly subagentExecutionLabels: ExecutionLabels;
@@ -87,7 +90,7 @@ interface ConversationRegionProps {
   readonly onRetryExecution: (executionId: string) => void;
   readonly onOpenProcessDetail: (executionId: string) => void;
   readonly onPrintStream: (streamId: StreamTabId) => void;
-  readonly onToggleChildRowExpand: () => void;
+  readonly onToggleChildDetails: () => void;
 }
 
 export function ConversationRegion({
@@ -101,7 +104,7 @@ export function ConversationRegion({
   onRetryExecution,
   onOpenProcessDetail,
   onPrintStream,
-  onToggleChildRowExpand,
+  onToggleChildDetails,
   onStaticTranscriptChange,
   renderFooterChrome,
   renderForegroundSurface,
@@ -184,30 +187,32 @@ export function ConversationRegion({
       ? todosPlanPanelRowCount(activeSlice.todos, activeSlice.plan)
       : 0;
   const selectedChildStreamId = childListStreamId(snapshot.selectedChildValue);
-  const selectedChildFiles = selectedChildStreamId
-    ? snapshot.streams.get(selectedChildStreamId)?.files
+  const selectedChildSession = selectedChildStreamId
+    ? snapshot.sessionViews.find(({ id }) => id === selectedChildStreamId)
     : undefined;
-  const selectedFileDetailLines = childFileDisplay(
-    selectedChildFiles,
+  const selectedDetailLines = selectedSubagentDetailLines(
+    selectedChildSession,
     Math.max(1, columns - 6),
-  ).detailLines;
-  const expandedFileDetailLines =
-    selectedFileDetailLines.length > 0
-      ? selectedFileDetailLines
-      : ['No file info for this row'];
-  const childDetailLines = snapshot.childListRowExpanded
-    ? expandedFileDetailLines
-    : [];
+  );
+  const childDetailLines =
+    snapshot.childDetailsVisible && selectedChildSession
+      ? selectedDetailLines
+      : [];
+  // The detail view is a sibling of the list and owns its own separator row.
+  const childDetailPanelNeed =
+    childDetailLines.length > 0 ? childDetailLines.length + 1 : 0;
   const {
     bottomPanelRows: bottomPanelBudget,
     sessionPanelRows: subagentRows,
+    childListRows,
+    detailPanelRows,
     todosPlanRows,
   } = allocateConversationBottomPanelRows({
     maxRows: BOTTOM_PANEL_MAX_ROWS,
     processCount: foregroundOpen ? 0 : activeProcesses.length,
     sessionCount: foregroundOpen ? 0 : snapshot.sessionViews.length,
     childListFocused: snapshot.childListFocused,
-    detailContentRows: childDetailLines.length,
+    detailContentRows: childDetailPanelNeed,
     todosPlanContentRows,
     transcriptRows,
   });
@@ -276,7 +281,7 @@ export function ConversationRegion({
           <Box flexDirection="column" overflowY="hidden">
             <SubagentList
               keyboardActive={snapshot.childListFocused && childListVisible}
-              maxRows={subagentRows}
+              maxRows={childListRows}
               onCancel={onCancelChildList}
               onFocusStream={onFocusSession}
               onKillExecution={onKillExecution}
@@ -285,7 +290,7 @@ export function ConversationRegion({
               onOpenProcessDetail={onOpenProcessDetail}
               onSelectionChange={onChildSelectionChange}
               onPrintStream={onPrintStream}
-              onToggleRowExpand={onToggleChildRowExpand}
+              onToggleDetails={onToggleChildDetails}
               pendingApprovals={snapshot.pendingApprovals}
               listRootStreamId={snapshot.childListTarget.streamId}
               selectedValue={snapshot.selectedChildValue}
@@ -293,7 +298,10 @@ export function ConversationRegion({
               activeProcesses={activeProcesses}
               activeSubagentExecutionIds={snapshot.activeSubagentExecutionIds}
               processOutput={snapshot.childListTarget.slice?.processOutput}
-              detailLines={childDetailLines}
+            />
+            <SubagentDetailPanel
+              lines={childDetailLines}
+              maxRows={detailPanelRows}
             />
             <TodosPlanPanel maxRows={todosPlanRows} />
           </Box>

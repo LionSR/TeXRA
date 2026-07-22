@@ -13,8 +13,10 @@ import {
   type ConversationProgress,
   type MessageType,
   type NormalizedToolUse,
+  type OutputFileInfo,
   type Plan,
   type ProcessOutputTail,
+  type RoundIndexed,
   type RoundStage,
   type StreamPhase,
   type StreamSubstate,
@@ -121,7 +123,7 @@ export interface BypassState {
 
 /** File roles attached to one agent run. Kept as one optional value so the
  *  transcript slice does not duplicate derived counts alongside the paths. */
-export interface StreamFileMetadata {
+interface StreamFileMetadata {
   readonly input: readonly string[];
   readonly context: readonly string[];
   readonly media: readonly string[];
@@ -139,6 +141,8 @@ export interface StreamSlice {
   /** Normalized run files received with `run.config`. Absent until that fact
    *  arrives; each category may then be empty. */
   readonly files?: StreamFileMetadata | undefined;
+  /** Canonical streamed workflow outputs, preserving every announced round. */
+  readonly outputFilesByRound?: RoundIndexed<OutputFileInfo> | undefined;
   readonly status: StreamPhase | undefined;
   readonly substate?: StreamSubstate;
   /** Epoch ms when this stream last entered `RUNNING`; cleared on any other
@@ -208,6 +212,7 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
     substate: undefined,
     runStartedAt: undefined,
     description: undefined,
+    outputFilesByRound: undefined,
     thinkingActive: false,
     usage: undefined,
     cumulativeUsage: undefined,

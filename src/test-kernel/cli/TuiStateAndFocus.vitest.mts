@@ -556,6 +556,8 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({
       bottomPanelRows: 0,
       sessionPanelRows: 0,
+      childListRows: 0,
+      detailPanelRows: 0,
       todosPlanRows: 0,
     });
     expect(
@@ -570,6 +572,8 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({
       bottomPanelRows: 0,
       sessionPanelRows: 0,
+      childListRows: 0,
+      detailPanelRows: 0,
       todosPlanRows: 0,
     });
   });
@@ -586,6 +590,8 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({
       bottomPanelRows: 3,
       sessionPanelRows: 3,
+      childListRows: 3,
+      detailPanelRows: 0,
       todosPlanRows: 0,
     });
   });
@@ -603,6 +609,27 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({
       bottomPanelRows: 7,
       sessionPanelRows: 7,
+      childListRows: 3,
+      detailPanelRows: 4,
+      todosPlanRows: 0,
+    });
+  });
+
+  it('keeps a lone unusable detail row with the child list', () => {
+    expect(
+      allocateConversationBottomPanelRows({
+        maxRows: 10,
+        sessionCount: 2,
+        childListFocused: true,
+        detailContentRows: 4,
+        todosPlanContentRows: 0,
+        transcriptRows: 3,
+      }),
+    ).toEqual({
+      bottomPanelRows: 3,
+      sessionPanelRows: 3,
+      childListRows: 3,
+      detailPanelRows: 0,
       todosPlanRows: 0,
     });
   });
@@ -650,6 +677,8 @@ describe('CLI TUI row allocation', () => {
     expect(allocation).toEqual({
       bottomPanelRows: 0,
       sessionPanelRows: 0,
+      childListRows: 0,
+      detailPanelRows: 0,
       todosPlanRows: 0,
     });
   });
@@ -666,6 +695,8 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({
       bottomPanelRows: 10,
       sessionPanelRows: 8,
+      childListRows: 8,
+      detailPanelRows: 0,
       todosPlanRows: 2,
     });
   });
@@ -682,6 +713,8 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({
       bottomPanelRows: 0,
       sessionPanelRows: 0,
+      childListRows: 0,
+      detailPanelRows: 0,
       todosPlanRows: 0,
     });
   });
@@ -2733,6 +2766,86 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
           output: ['build/Main.olean'],
         },
         conversation: { toolCallCount: 3 },
+      });
+    } finally {
+      detach();
+    }
+  });
+
+  it('streams every workflow output round into selected-agent state', () => {
+    const hub = new SessionEventHub();
+    const detach = attachTuiRunFactSubscription(hub);
+    const executionId = 'exec-output' as ExecutionId;
+
+    try {
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'addOutputFiles',
+          streamId: root,
+          executionId,
+          filesByRound: {
+            0: [
+              {
+                source: 'draft.tex',
+                location: {
+                  kind: 'runStorage',
+                  executionId,
+                  relativePath: 'r1/draft.tex',
+                  absolutePath:
+                    '/tmp/texra/executions/exec-output/r1/draft.tex',
+                },
+                round: 0,
+                lineage: null,
+                diff: null,
+              },
+            ],
+          },
+        },
+      });
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'addOutputFiles',
+          streamId: root,
+          executionId,
+          filesByRound: {
+            1: [
+              {
+                source: 'paper.tex',
+                location: {
+                  kind: 'runStorage',
+                  executionId,
+                  relativePath: 'r2/paper.tex',
+                  absolutePath:
+                    '/tmp/texra/executions/exec-output/r2/paper.tex',
+                },
+                round: 1,
+                lineage: null,
+                diff: null,
+              },
+            ],
+          },
+        },
+      });
+
+      expect(streams.get().get(root)?.outputFilesByRound).toEqual({
+        0: [
+          expect.objectContaining({
+            location: expect.objectContaining({
+              absolutePath: '/tmp/texra/executions/exec-output/r1/draft.tex',
+            }),
+          }),
+        ],
+        1: [
+          expect.objectContaining({
+            location: expect.objectContaining({
+              absolutePath: '/tmp/texra/executions/exec-output/r2/paper.tex',
+            }),
+          }),
+        ],
       });
     } finally {
       detach();
