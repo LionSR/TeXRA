@@ -67,7 +67,7 @@ interface RetryableNodeServices {
     selection?: ModelCredentialSelection,
     signal?: AbortSignal,
   ) => Promise<void>;
-  clientCredentialRoute?: ModelCredentialRoute;
+  readonly clientCredentialRoute?: ModelCredentialRoute;
 }
 
 /**
