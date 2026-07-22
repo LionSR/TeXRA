@@ -463,7 +463,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     // from inside the outer `create()` mock, the one point still inside that
     // window, rather than reading it back after `createResponse()` resolves.
     let tokensAfterDuringCall: number | undefined;
-    const client = {
+    const client = withSdkOptions({
       responses: {
         compact: async (params: any) => {
           compactRequests.push(params);
@@ -499,7 +499,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
             : createResponse('resp-after-client-side-compaction', 150);
         },
       },
-    };
+    });
     const firstTurnMessages = createMessages(2);
     const secondTurnMessages = createMessages(3);
 
@@ -519,6 +519,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
 
     // The client-side path summarizes via a throwaway streaming call.
     expect(streamRequests).toHaveLength(1);
+    expect(client.withOptions).toHaveBeenCalledWith({ maxRetries: 2 });
     expect(streamRequests[0].instructions).toBe(COMPACTION_SYSTEM_PROMPT);
     expect(streamRequests[0].input).toEqual([
       ...secondTurnMessages,
@@ -575,7 +576,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const oversizedDeltas = Array.from({ length: 200 }, () => 'x'.repeat(100));
     const fullSummaryChars = oversizedDeltas.join('').length;
     let capturedStream: ReturnType<typeof createStreamMock> | undefined;
-    const client = {
+    const client = withSdkOptions({
       responses: {
         compact: async () => {
           throw new Error('stateless backend must not call /responses/compact');
@@ -600,7 +601,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
             : createResponse('resp-after-bounded-compaction', 150);
         },
       },
-    };
+    });
 
     await handler.createResponse({
       client: client as any,
@@ -645,7 +646,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     // would skip compaction and let the Codex run grow unbounded).
     const handler = createClientSideCompactionHandler();
     const requests: any[] = [];
-    const client = {
+    const client = withSdkOptions({
       responses: {
         compact: async () => {
           throw new Error('stateless backend must not call /responses/compact');
@@ -668,7 +669,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
             : createResponse('resp-after-client-side-compaction', 150);
         },
       },
-    };
+    });
 
     await handler.createResponse({
       client: client as any,

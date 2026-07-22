@@ -47,10 +47,7 @@ import {
 } from '@auth/relayToken';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { AuthTokenProvider } from '@auth/TokenProvider';
-import {
-  attachContextWindowError,
-  attachProviderError,
-} from '@common/errors/sdkErrorUtils';
+import { attachContextWindowError } from '@common/errors/sdkErrorUtils';
 import {
   STREAM_PHASE,
   STREAM_STATUS,
@@ -506,12 +503,8 @@ describe('RetryState', () => {
     );
     const { node } = createRetryNode(streamId, refreshClient, 'relay');
     SupabaseClient.setAuthProvider(createAuthTokenProvider());
-    const unauthorized = new Error('relay token expired');
-    attachProviderError(unauthorized, {
-      message: unauthorized.message,
-      statusCode: 401,
-      userRetryable: true,
-      isRelayError: true,
+    const unauthorized = Object.assign(new Error('relay token expired'), {
+      status: 401,
     });
     const operation = vi
       .fn<(signal: AbortSignal) => Promise<string>>()

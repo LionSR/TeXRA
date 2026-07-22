@@ -987,26 +987,28 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       messages,
       tokensBefore,
       async (conversationMessages, compactionSystemPrompt) => {
-        const stream = await client.responses.stream(
-          {
-            model: this.config.fullName,
-            instructions: compactionSystemPrompt,
-            input: [
-              ...conversationMessages,
-              {
-                type: 'message',
-                role: 'user',
-                content: [createInputText(COMPACTION_USER_PROMPT)],
-              },
-            ],
-            max_output_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
-            store: this.storesResponsesServerSide,
-            ...(this.capabilities.supportsReasoning && {
-              reasoning: { effort: 'low' },
-            }),
-          },
-          { signal },
-        );
+        const stream = await client
+          .withOptions({ maxRetries: 2 })
+          .responses.stream(
+            {
+              model: this.config.fullName,
+              instructions: compactionSystemPrompt,
+              input: [
+                ...conversationMessages,
+                {
+                  type: 'message',
+                  role: 'user',
+                  content: [createInputText(COMPACTION_USER_PROMPT)],
+                },
+              ],
+              max_output_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+              store: this.storesResponsesServerSide,
+              ...(this.capabilities.supportsReasoning && {
+                reasoning: { effort: 'low' },
+              }),
+            },
+            { signal },
+          );
 
         // The ChatGPT-subscription (Codex) backend strips `max_output_tokens`
         // at the wire (it answers `400 Unsupported parameter: max_output_tokens`

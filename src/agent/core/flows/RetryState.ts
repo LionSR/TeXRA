@@ -189,7 +189,8 @@ export abstract class RetryableInvocationNode<
   ): (() => Promise<T>) | undefined {
     const formatted = normalizeProviderError(originalError);
     if (
-      !formatted.isRelayError ||
+      (!formatted.isRelayError &&
+        this.services.clientCredentialRoute !== 'relay') ||
       formatted.statusCode !== StatusCodes.UNAUTHORIZED ||
       this._hasAttemptedTokenRefresh
     ) {
