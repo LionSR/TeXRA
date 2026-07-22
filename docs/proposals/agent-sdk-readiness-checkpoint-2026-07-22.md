@@ -374,12 +374,13 @@ five-checkpoint-old claim named.
 - Spine re-confirmed at HEAD `395e229`: `src/agent/core/index.ts` **absent**
   (no barrel regression); `IModelHandler` = `Pick<ModelHandler>`
   (`src/agent/types/IModelHandler.ts:41`); the `Node.exec → createFlow().run`
-  shape intact. **Retracted (Codex, P2): "delegation strategy subsystem
-  intact" is not a verified claim this pass** — `executionRegistry.ts`,
-  `childRunLoop.ts`, and the other 5 files `0dc0f8b` changed were not opened
-  (see the acknowledged coverage gap above); an admitted gap is not a
-  reconfirmed-clean result, and this bullet should not have implied
-  otherwise.
+  shape intact. **Retracted (Codex, P2 — twice, as the file count itself
+  needed a second correction): "delegation strategy subsystem intact" is not
+  a verified claim this pass** — `executionRegistry.ts`, `childRunLoop.ts`,
+  and 8 other runtime/storage files `0dc0f8b` changed (10 of the 11 total,
+  all but `runAgent.ts`) were not opened (see the acknowledged coverage gap
+  above); an admitted gap is not a reconfirmed-clean result, and this bullet
+  should not have implied otherwise.
 - Boundary width: hosts still deep-import **54** distinct `@agent/*`
   specifiers (union, a different metric than the per-host baseline below) /
   26 of 51 `runtime/` files (independent recount, ±1 vs a differently
