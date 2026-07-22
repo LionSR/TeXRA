@@ -75,6 +75,16 @@ export class BackgroundTasksPanel extends LitElement {
         flex-direction: column;
       }
 
+      /* The shared panel header already supplies the section boundary and
+         lowered surface. Strip Web Awesome's surrounding card so expanding
+         Background Tasks does not introduce a second white, rounded panel
+         around the quiet child sections. */
+      wa-details.panel-collapsible::part(base) {
+        background: transparent;
+        border: none;
+        border-radius: 0;
+      }
+
       .section-content {
         max-height: clamp(12rem, 42vh, 24rem);
         overflow-y: auto;

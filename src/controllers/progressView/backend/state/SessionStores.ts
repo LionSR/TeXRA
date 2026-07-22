@@ -90,22 +90,46 @@ export class SessionStores {
   }
 
   deleteStream(stream: StreamTabId): Promise<DeleteStreamResult> {
+    return this.trackStreamDeletion(stream, () =>
+      this.enqueueDeletion(() => this.deleteStreamAndNotify(stream)),
+    );
+  }
+
+  deleteStreamAfterOwnedExecutionRelease(
+    stream: StreamTabId,
+  ): Promise<DeleteStreamResult> {
+    return this.trackStreamDeletion(stream, async () => {
+      // Track the whole wait so a presentation attaching during terminal
+      // artifact persistence cannot replay a stream already marked removed.
+      await this.waitForOwnedExecutionRelease(stream);
+      return this.enqueueDeletion(() => this.deleteStreamAndNotify(stream));
+    });
+  }
+
+  private trackStreamDeletion(
+    stream: StreamTabId,
+    start: () => Promise<DeleteStreamResult>,
+  ): Promise<DeleteStreamResult> {
     const existing = this.pendingStreamDeletions.get(stream);
     if (existing) return existing;
-    const pending = this.enqueueDeletion(async () => {
-      const hadCanonicalStream = this.streamLogs.has(stream);
-      const result = await this.deleteStreamOnce(stream);
-      if (result === 'deleted' && hadCanonicalStream) {
-        await this.notifyDeleted(stream);
-      }
-      return result;
-    });
+    const pending = start();
     this.pendingStreamDeletions.set(stream, pending);
     void pending.then(
       () => this.finishStreamDeletion(stream, pending),
       () => this.finishStreamDeletion(stream, pending),
     );
     return pending;
+  }
+
+  private async deleteStreamAndNotify(
+    stream: StreamTabId,
+  ): Promise<DeleteStreamResult> {
+    const hadCanonicalStream = this.streamLogs.has(stream);
+    const result = await this.deleteStreamOnce(stream);
+    if (result === 'deleted' && hadCanonicalStream) {
+      await this.notifyDeleted(stream);
+    }
+    return result;
   }
 
   async waitForPendingStreamDeletions(): Promise<void> {
@@ -118,6 +142,13 @@ export class SessionStores {
         ...(this.pendingDeleteAll ? [this.pendingDeleteAll] : []),
       ]);
     }
+  }
+
+  flushSnapshotsAfterStartedDeletions(): Promise<void> {
+    // Serialize the flush after deletion work that has reached durable
+    // storage, without waiting on pre-deletion lease barriers that this flush
+    // may itself release.
+    return this.enqueueDeletion(() => this.snapshots.flush());
   }
 
   private enqueueDeletion<T>(operation: () => Promise<T>): Promise<T> {
