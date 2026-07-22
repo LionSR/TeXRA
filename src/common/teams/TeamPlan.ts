@@ -24,7 +24,7 @@ import {
 } from './TeamAvailabilityPreflight';
 import { teamHostedNamesForPreflight } from './TeamRoster';
 
-export type TeamPresetSource = 'built-in' | 'custom';
+type TeamPresetSource = 'built-in' | 'custom';
 
 export interface TeamPreset extends AgentModePreset {
   readonly source: TeamPresetSource;
