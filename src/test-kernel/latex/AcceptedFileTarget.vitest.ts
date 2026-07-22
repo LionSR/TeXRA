@@ -203,7 +203,10 @@ describe('commitAcceptedFile', () => {
       '/ws/paper_correct.tex',
       'paper_correct.tex',
     );
-    const copy = createWorkspaceLocation('/ws/paper_copy.tex', 'paper_copy.tex');
+    const copy = createWorkspaceLocation(
+      '/ws/paper_copy.tex',
+      'paper_copy.tex',
+    );
     const ports = buildCommitPorts();
 
     await commitAcceptedFile(
@@ -215,7 +218,10 @@ describe('commitAcceptedFile', () => {
     );
 
     assert.strictEqual(ports.written.length, 1);
-    assert.strictEqual(ports.written[0].location.absolutePath, copy.absolutePath);
+    assert.strictEqual(
+      ports.written[0].location.absolutePath,
+      copy.absolutePath,
+    );
     assert.strictEqual(ports.written[0].content, 'edited content');
     assert.strictEqual(ports.infoMessages.length, 1);
     assert.match(ports.infoMessages[0], /created/);
@@ -246,7 +252,10 @@ describe('commitAcceptedFile', () => {
       '/ws/paper_correct.tex',
       'paper_correct.tex',
     );
-    const copy = createWorkspaceLocation('/ws/paper_copy.tex', 'paper_copy.tex');
+    const copy = createWorkspaceLocation(
+      '/ws/paper_copy.tex',
+      'paper_copy.tex',
+    );
     const deleted: FileLocation[] = [];
     const ports = buildCommitPorts({
       deleteFile: async (location) => {

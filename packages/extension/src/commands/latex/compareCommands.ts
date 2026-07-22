@@ -275,7 +275,6 @@ async function handleAcceptEdited(
       resolved,
       targetExisted,
       {
-        exists: (location) => FlexibleFS.exists(location),
         readFile: (location) => FlexibleFS.read(location),
         writeFile: (location, content) => FlexibleFS.write(location, content),
         emitWritten: (absolutePath) =>

@@ -98,7 +98,6 @@ function buildAcceptSuccessMessage(
  * sequence.
  */
 export interface CommitAcceptedFilePorts {
-  exists: (location: FileLocation) => Promise<boolean>;
   readFile: (location: FileLocation) => Promise<string>;
   writeFile: (location: FileLocation, content: string) => Promise<void>;
   /** Notify the host that a workspace file was written at this absolute path. */
@@ -119,6 +118,7 @@ export interface CommitAcceptedFilePorts {
  * host emit) without each side re-implementing the confirm / commit sequence.
  */
 export interface AcceptEditedFileReplacePorts extends CommitAcceptedFilePorts {
+  exists: (location: FileLocation) => Promise<boolean>;
   /** Confirm the (possibly overwriting) write; return false to abort. */
   confirm: (message: string) => Promise<boolean>;
 }
