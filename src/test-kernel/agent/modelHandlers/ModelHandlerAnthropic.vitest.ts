@@ -907,7 +907,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     });
 
     assert.deepEqual(callOrder, ['countTokens', 'upload', 'create']);
-    assert.deepEqual(client.withOptions.mock.calls, []);
+    assert.deepEqual(client.withOptions.mock.calls, [[{ maxRetries: 2 }]]);
     assert.equal(response.response.stop_reason, 'end_turn');
   });
 

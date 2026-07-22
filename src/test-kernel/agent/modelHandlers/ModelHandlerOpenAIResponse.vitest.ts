@@ -923,7 +923,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.equal(result.response.id, 'resp-retrieve-retry');
     assert.equal(streamCalls, 1);
     assert.equal(tokenCountCalls, 1);
-    assert.deepEqual(client.withOptions.mock.calls, []);
+    assert.deepEqual(client.withOptions.mock.calls, [[{ maxRetries: 2 }]]);
     assert.deepEqual(retrieveCalls, [
       {
         id: 'resp-retrieve-retry',
