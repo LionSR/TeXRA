@@ -129,7 +129,8 @@ describe('CLI child list display model', () => {
     expect(selectedSubagentDetailLines(detailSession, 100)).toEqual([
       'Selected workflow agent: devise',
       'Progress: running · r2/3 · 2 tool calls',
-      'Input: src/Main.lean, src/Lemma.lean',
+      'Input: src/Main.lean',
+      'Input: src/Lemma.lean',
       'Context: notes/proof.md',
       'Output r2: /tmp/executions/abc/r2/Main.lean',
       'Output r2: /tmp/executions/abc/r2/Notes.lean',

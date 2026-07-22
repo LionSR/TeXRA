@@ -49,8 +49,9 @@ export function selectedSubagentDetailLines(
 
   for (const [key, label] of FILE_CATEGORIES) {
     const paths = slice?.files?.[key] ?? [];
-    if (paths.length === 0) continue;
-    lines.push(`${label}: ${paths.join(', ')}`);
+    for (const path of paths) {
+      lines.push(`${label}: ${path}`);
+    }
   }
 
   const outputRounds = roundIndexedEntries(slice?.outputFilesByRound ?? {})
