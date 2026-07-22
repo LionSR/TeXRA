@@ -291,6 +291,35 @@ describe('buildCodexTurnToolLog', () => {
       status: 'in_progress',
     });
   });
+
+  it('marks a failed turn as an error even without an error message', () => {
+    const log = buildCodexTurnToolLog({ state: 'failed' });
+
+    assert.deepEqual(log, {
+      toolName: CODEX_TURN_TOOL,
+      summary: 'Failed',
+      input: {
+        state: 'failed',
+      },
+      isError: true,
+      status: 'completed',
+    });
+  });
+
+  it('attaches the error message when a failed turn has one', () => {
+    const log = buildCodexTurnToolLog({ state: 'failed', error: 'boom' });
+
+    assert.deepEqual(log, {
+      toolName: CODEX_TURN_TOOL,
+      summary: 'Failed',
+      input: {
+        state: 'failed',
+      },
+      error: 'boom',
+      isError: true,
+      status: 'completed',
+    });
+  });
 });
 
 describe('buildCodexUsageStats', () => {
