@@ -15,8 +15,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import {
   acceptEditedFileReplace,
-  buildAcceptSuccessMessage,
-  cleanupStaleDiffFile,
+  commitAcceptedFile,
   getAcceptedFileTarget,
   siblingLocation,
 } from '@latex/acceptedFileTarget';
@@ -268,35 +267,28 @@ async function handleAcceptEdited(
     );
     if (!resolved) return false;
 
-    const { targetLocation, targetFileName } = resolved;
-    const targetExisted = await FlexibleFS.exists(targetLocation);
+    const targetExisted = await FlexibleFS.exists(resolved.targetLocation);
 
-    const editedContent = await FlexibleFS.read(editedLocation);
-    await FlexibleFS.write(targetLocation, editedContent);
-
-    if (targetLocation.kind === 'workspace') {
-      appSignals.emit('workspaceFilesWritten', {
-        absolutePaths: [targetLocation.absolutePath],
-      });
-    }
-
-    // No-ops unless targetLocation is fileToUseLocation itself: "save as
-    // copy" and an extension-mismatched "replace" both leave the base (and
-    // its diff) untouched, so cleanup would delete a still-meaningful diff.
-    await cleanupStaleDiffFile(
+    await commitAcceptedFile(
       fileToUseLocation,
-      editedLocation.absolutePath,
-      targetLocation,
-      deleteDiffFileNonFatal,
-    );
-
-    const successMessage = buildAcceptSuccessMessage(
-      targetFileName,
-      editedLocation.absolutePath,
+      editedLocation,
+      resolved,
       targetExisted,
+      {
+        exists: (location) => FlexibleFS.exists(location),
+        readFile: (location) => FlexibleFS.read(location),
+        writeFile: (location, content) => FlexibleFS.write(location, content),
+        emitWritten: (absolutePath) =>
+          appSignals.emit('workspaceFilesWritten', {
+            absolutePaths: [absolutePath],
+          }),
+        showInfo: (message) => {
+          vscode.window.showInformationMessage(message);
+          logger.info(CHANNEL, message);
+        },
+        deleteFile: deleteDiffFileNonFatal,
+      },
     );
-    vscode.window.showInformationMessage(successMessage);
-    logger.info(CHANNEL, successMessage);
     return true;
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error accepting changes', err);

@@ -5,8 +5,10 @@ import { describe, it } from 'vitest';
 import {
   acceptEditedFileReplace,
   cleanupStaleDiffFile,
+  commitAcceptedFile,
   diffFileLocation,
   type AcceptEditedFileReplacePorts,
+  type CommitAcceptedFilePorts,
 } from '@latex/acceptedFileTarget';
 import type { FileLocation } from '@shared/schemas';
 import { createWorkspaceLocation } from '@utils/files';
@@ -166,5 +168,100 @@ describe('acceptEditedFileReplace', () => {
 
     assert.strictEqual(accepted, true);
     assert.strictEqual(ports.deleted.length, 0);
+  });
+});
+
+describe('commitAcceptedFile', () => {
+  function buildCommitPorts(
+    overrides: Partial<CommitAcceptedFilePorts> = {},
+  ): CommitAcceptedFilePorts & {
+    written: Array<{ location: FileLocation; content: string }>;
+    infoMessages: string[];
+  } {
+    const written: Array<{ location: FileLocation; content: string }> = [];
+    const infoMessages: string[] = [];
+    return {
+      exists: async () => false,
+      readFile: async () => 'edited content',
+      writeFile: async (location, content) => {
+        written.push({ location, content });
+      },
+      emitWritten: () => undefined,
+      showInfo: async (message) => {
+        infoMessages.push(message);
+      },
+      deleteFile: async () => undefined,
+      written,
+      infoMessages,
+      ...overrides,
+    };
+  }
+
+  it('writes the edited content into the resolved target and reports success', async () => {
+    const base = createWorkspaceLocation('/ws/paper.tex', 'paper.tex');
+    const edited = createWorkspaceLocation(
+      '/ws/paper_correct.tex',
+      'paper_correct.tex',
+    );
+    const copy = createWorkspaceLocation('/ws/paper_copy.tex', 'paper_copy.tex');
+    const ports = buildCommitPorts();
+
+    await commitAcceptedFile(
+      base,
+      edited,
+      { targetLocation: copy, targetFileName: 'paper_copy.tex' },
+      false,
+      ports,
+    );
+
+    assert.strictEqual(ports.written.length, 1);
+    assert.strictEqual(ports.written[0].location.absolutePath, copy.absolutePath);
+    assert.strictEqual(ports.written[0].content, 'edited content');
+    assert.strictEqual(ports.infoMessages.length, 1);
+    assert.match(ports.infoMessages[0], /created/);
+  });
+
+  it('reports "replaced" when the caller says the target already existed', async () => {
+    const base = createWorkspaceLocation('/ws/paper.tex', 'paper.tex');
+    const edited = createWorkspaceLocation(
+      '/ws/paper_correct.tex',
+      'paper_correct.tex',
+    );
+    const ports = buildCommitPorts();
+
+    await commitAcceptedFile(
+      base,
+      edited,
+      { targetLocation: base, targetFileName: 'paper.tex' },
+      true,
+      ports,
+    );
+
+    assert.match(ports.infoMessages[0], /replaced/);
+  });
+
+  it('leaves the copy target untouched by diff cleanup (save-as-copy leaves base intact)', async () => {
+    const base = createWorkspaceLocation('/ws/paper.tex', 'paper.tex');
+    const edited = createWorkspaceLocation(
+      '/ws/paper_correct.tex',
+      'paper_correct.tex',
+    );
+    const copy = createWorkspaceLocation('/ws/paper_copy.tex', 'paper_copy.tex');
+    const deleted: FileLocation[] = [];
+    const ports = buildCommitPorts({
+      deleteFile: async (location) => {
+        deleted.push(location);
+      },
+    });
+
+    await commitAcceptedFile(
+      base,
+      edited,
+      { targetLocation: copy, targetFileName: 'paper_copy.tex' },
+      false,
+      ports,
+    );
+
+    assert.strictEqual(deleted.length, 0);
   });
 });
