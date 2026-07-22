@@ -9,7 +9,6 @@ import { apiKeySecretName } from '@model/apiProviders';
 import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 import { ListApiKeysTool } from '@tools/setup/ListApiKeysTool';
 
-const FAKE_PROVIDERS = ['anthropic', 'openai'] as const;
 const mocks = vi.hoisted(() => ({
   listStoredKeys: vi.fn<() => Promise<readonly string[]>>(),
 }));

@@ -27,6 +27,7 @@ const SHARED_LITERALS = [
   ['DEFAULT_POLLING_BACKOFF_CONFIG', DEFAULT_POLLING_BACKOFF_CONFIG],
   ['GoalStore', GoalStore],
   ['setupSecrets', setupSecrets],
+  ['setupSecrets.providers', setupSecrets.providers],
   ['texraScopedConfig', texraScopedConfig],
   ['ARXIV_CONSTANTS', ARXIV_CONSTANTS],
   ['CROSSREF_CONSTANTS', CROSSREF_CONSTANTS],
