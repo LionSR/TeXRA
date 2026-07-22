@@ -1223,51 +1223,58 @@ export class DesktopProgressBridge {
   async handleExecute(message: MainViewExecuteMessage): Promise<void> {
     let preparation;
     if (message.session?.launchTarget === 'team') {
-      const teamId = message.session.teamId;
-      if (!teamId) {
-        await this.options.host.showErrorMessage(
-          TEAM_SELECTION_REQUIRED_MESSAGE,
-        );
-        return;
-      }
+      try {
+        const teamId = message.session.teamId;
+        if (!teamId) {
+          await this.options.host.showErrorMessage(
+            TEAM_SELECTION_REQUIRED_MESSAGE,
+          );
+          return;
+        }
 
-      const resolution = await resolveTeamLaunch({
-        teamId,
-        ...createTeamCatalogPorts(),
-        choose: (unavailableNames) =>
-          this.options.host.chooseTeamAvailability(unavailableNames),
-        signIn: () => this.options.host.signInForRemoteAgentCatalog(),
-      });
+        const resolution = await resolveTeamLaunch({
+          teamId,
+          ...createTeamCatalogPorts(),
+          choose: (unavailableNames) =>
+            this.options.host.chooseTeamAvailability(unavailableNames),
+          signIn: () => this.options.host.signInForRemoteAgentCatalog(),
+        });
 
-      if (resolution.status === 'cancelled') return;
-      if (resolution.status === 'unknown-team') {
-        await this.options.host.showErrorMessage(
-          formatUnknownTeamMessage(teamId),
-        );
-        return;
-      }
-      if (resolution.status === 'blocked') {
-        await this.options.host.showErrorMessage(
-          formatTeamLaunchBlockedMessage(teamId, resolution.reason),
-        );
-        return;
-      }
-      if (resolution.status === 'unavailable') {
-        await this.options.host.showErrorMessage(
-          formatTeamUnavailableMessage(teamId, resolution.unavailableNames),
-        );
-        return;
-      }
+        if (resolution.status === 'cancelled') return;
+        if (resolution.status === 'unknown-team') {
+          await this.options.host.showErrorMessage(
+            formatUnknownTeamMessage(teamId),
+          );
+          return;
+        }
+        if (resolution.status === 'blocked') {
+          await this.options.host.showErrorMessage(
+            formatTeamLaunchBlockedMessage(teamId, resolution.reason),
+          );
+          return;
+        }
+        if (resolution.status === 'unavailable') {
+          await this.options.host.showErrorMessage(
+            formatTeamUnavailableMessage(teamId, resolution.unavailableNames),
+          );
+          return;
+        }
 
-      if (resolution.partial) {
-        await this.options.host.showInfoMessage(
-          formatPartialTeamLaunchMessage(resolution.missingNames),
+        if (resolution.partial) {
+          await this.options.host.showInfoMessage(
+            formatPartialTeamLaunchMessage(resolution.missingNames),
+          );
+        }
+        preparation = prepareMainViewTeamExecutionRequest(
+          message,
+          resolution.fields,
         );
+      } catch (error) {
+        await this.options.host.showErrorMessage(
+          `Team launch failed: ${toErrorMessage(error)}`,
+        );
+        return;
       }
-      preparation = prepareMainViewTeamExecutionRequest(
-        message,
-        resolution.fields,
-      );
     } else {
       preparation = prepareMainViewExecutionRequest(message);
     }

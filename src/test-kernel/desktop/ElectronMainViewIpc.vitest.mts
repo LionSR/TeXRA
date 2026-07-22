@@ -555,6 +555,7 @@ describe('desktop main-view IPC', () => {
         workflow: [],
         toolUse: [],
       })),
+      loadAgents: vi.fn(async () => undefined),
       getAgentsByCategory: vi.fn(() => []),
       refresh: vi.fn(async () => undefined),
     }));

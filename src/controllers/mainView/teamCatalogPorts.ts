@@ -1,5 +1,5 @@
 // Local imports
-import { getAgentsByCategory, refresh } from '@agent/index';
+import { getAgentsByCategory, loadAgents, refresh } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { platform } from '@platform/platform';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -13,6 +13,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
  */
 export function createTeamCatalogPorts(): {
   readonly customPresetsRaw: unknown;
+  readonly ensureCatalogLoaded: () => Promise<void>;
   readonly getAgents: typeof getAgentsByCategory;
   readonly canAccessRemoteCatalog: () => Promise<boolean>;
   readonly refreshRemote: () => Promise<void>;
@@ -21,6 +22,7 @@ export function createTeamCatalogPorts(): {
     customPresetsRaw: platform().workspaceState.get<unknown>(
       WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
     ),
+    ensureCatalogLoaded: () => loadAgents(),
     getAgents: getAgentsByCategory,
     canAccessRemoteCatalog: () => SupabaseClient.canAccessRemoteAgentCatalog(),
     refreshRemote: () => refresh({ includeRemote: true }),

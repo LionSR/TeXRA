@@ -267,10 +267,12 @@ export function buildTeamOptions(
 
 export async function loadTeamOptions<T extends TeamCatalogAgent>(ports: {
   customPresetsRaw: unknown;
+  ensureCatalogLoaded: () => Promise<void>;
   getAgents: (category: AgentCategory) => readonly T[];
   canAccessRemoteCatalog: () => Promise<boolean>;
   refreshRemote: () => Promise<void>;
 }): Promise<TeamOptionData[]> {
+  await ports.ensureCatalogLoaded();
   const presets = teamPresets(ports.customPresetsRaw);
   const planCurrent = () =>
     planTeamRuns(presets, currentCatalogOptions(ports.getAgents));
@@ -308,6 +310,7 @@ export type TeamLaunchResolution =
 export async function resolveTeamLaunch<T extends TeamCatalogAgent>(args: {
   teamId: string;
   customPresetsRaw: unknown;
+  ensureCatalogLoaded: () => Promise<void>;
   getAgents: (category: AgentCategory) => readonly T[];
   canAccessRemoteCatalog: () => Promise<boolean>;
   refreshRemote: () => Promise<void>;
@@ -323,6 +326,7 @@ export async function resolveTeamLaunch<T extends TeamCatalogAgent>(args: {
   );
   if (!preset) return { status: 'unknown-team' };
 
+  await args.ensureCatalogLoaded();
   const planCurrent = () =>
     planTeamRun(preset, currentCatalogOptions(args.getAgents));
   const refreshed = await refreshRemoteCatalogForGaps(

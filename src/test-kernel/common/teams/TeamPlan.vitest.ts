@@ -365,6 +365,7 @@ describe('buildTeamOptions', () => {
 describe('loadTeamOptions', () => {
   it('refreshes a gapped plan when remote access exists and builds final options', async () => {
     let refreshed = false;
+    const ensureCatalogLoaded = vi.fn(async () => undefined);
     const refreshRemote = vi.fn(async () => {
       refreshed = true;
     });
@@ -372,6 +373,7 @@ describe('loadTeamOptions', () => {
 
     const options = await loadTeamOptions({
       customPresetsRaw: [custom],
+      ensureCatalogLoaded,
       getAgents: (category) => {
         if (!refreshed) return [];
         return category === 'workflow'
@@ -382,6 +384,7 @@ describe('loadTeamOptions', () => {
       refreshRemote,
     });
 
+    expect(ensureCatalogLoaded).toHaveBeenCalledOnce();
     expect(refreshRemote).toHaveBeenCalledOnce();
     expect(options.find((option) => option.value === custom.id)).toMatchObject({
       disabled: undefined,
@@ -395,12 +398,33 @@ describe('loadTeamOptions', () => {
 
     await loadTeamOptions({
       customPresetsRaw: [preset()],
+      ensureCatalogLoaded: async () => undefined,
       getAgents: () => [],
       canAccessRemoteCatalog: async () => false,
       refreshRemote,
     });
 
     expect(refreshRemote).not.toHaveBeenCalled();
+  });
+
+  it('loads the catalog before planning team options', async () => {
+    let loaded = false;
+    const getAgents = vi.fn(() => {
+      expect(loaded).toBe(true);
+      return [];
+    });
+
+    await loadTeamOptions({
+      customPresetsRaw: [],
+      ensureCatalogLoaded: async () => {
+        loaded = true;
+      },
+      getAgents,
+      canAccessRemoteCatalog: async () => false,
+      refreshRemote: async () => undefined,
+    });
+
+    expect(getAgents).toHaveBeenCalled();
   });
 });
 
@@ -416,6 +440,7 @@ describe('resolveTeamLaunch', () => {
     return {
       teamId: 'custom-team',
       customPresetsRaw: [preset()],
+      ensureCatalogLoaded: async () => undefined,
       getAgents: (category: string) =>
         category === 'workflow' ? workflowAgents : toolUseAgents,
       canAccessRemoteCatalog: async () => false,
@@ -448,6 +473,28 @@ describe('resolveTeamLaunch', () => {
       partial: false,
       missingNames: [],
     });
+  });
+
+  it('loads the catalog before planning a team launch', async () => {
+    let loaded = false;
+    const getAgents = vi.fn((category: string) => {
+      expect(loaded).toBe(true);
+      return category === 'workflow'
+        ? [agent('writer', { source: 'builtInWorkflow' })]
+        : [agent('lead', { tools: delegateTools }), agent('member')];
+    });
+
+    await expect(
+      resolveTeamLaunch(
+        launchArgs({
+          ensureCatalogLoaded: async () => {
+            loaded = true;
+          },
+          getAgents,
+        }),
+      ),
+    ).resolves.toMatchObject({ status: 'ready' });
+    expect(getAgents).toHaveBeenCalled();
   });
 
   it('continues with available members and reports a partial team', async () => {
