@@ -160,6 +160,10 @@ export class OpenAIResponseWebSocketTransport {
       const onError = (err: Error): void => {
         cleanup();
         closeQuietly(ws);
+        attachSdkErrorMetadata(err, {
+          provider: 'openai',
+          kind: 'connection',
+        });
         reject(err);
       };
       const onAbort = (): void => {

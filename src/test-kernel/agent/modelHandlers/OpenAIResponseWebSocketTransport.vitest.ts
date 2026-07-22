@@ -17,12 +17,13 @@ import type OpenAI from 'openai';
 
 const WS_OPEN = 1;
 
-const { createdSockets } = vi.hoisted(() => ({
+const { createdSockets, socketControl } = vi.hoisted(() => ({
   createdSockets: [] as InstanceType<typeof FakeResponsesWS>[],
+  socketControl: { nextReadyState: 1 },
 }));
 
 class FakeSocket extends EventEmitter {
-  readyState = WS_OPEN;
+  readyState = socketControl.nextReadyState;
   platformSocket = { terminate: vi.fn(), ping: vi.fn() };
   close = vi.fn();
 }
@@ -94,6 +95,21 @@ const fakeClient = {} as unknown as OpenAI;
 describe('OpenAIResponseWebSocketTransport idle connection errors', () => {
   beforeEach(() => {
     createdSockets.length = 0;
+    socketControl.nextReadyState = WS_OPEN;
+  });
+
+  it('tags a failed handshake as a connection failure', async () => {
+    socketControl.nextReadyState = 0;
+    const transport = createTransport();
+    const connection = internals(transport).getOrCreateWebSocket(fakeClient);
+    const ws = createdSockets[0]!;
+    const error = new Error('TLS handshake failed');
+
+    ws.socket.emit('error', error);
+
+    await expect(connection).rejects.toBe(error);
+    expect(detectSdkErrorMetadata(error)?.kind).toBe('connection');
+    expect(ws.close).toHaveBeenCalledOnce();
   });
 
   it('does not crash the process when the pooled connection errors with no request in flight', async () => {
