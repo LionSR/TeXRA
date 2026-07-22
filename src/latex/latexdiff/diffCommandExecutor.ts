@@ -32,7 +32,7 @@ const ERROR_MESSAGES = {
       : `Failed to run ${commandType}`,
 } as const;
 
-export const LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS = [
+export const LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS = Object.freeze([
   'cite\\*?',
   'citep\\*?',
   'citet\\*?',
@@ -47,7 +47,7 @@ export const LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS = [
   'footcite\\*?',
   'supercite\\*?',
   'smartcite\\*?',
-] as const;
+] as const);
 
 export function buildLatexdiffTextCommandExclusionFlag(): string {
   return `--exclude-textcmd=${LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS.join(',')}`;

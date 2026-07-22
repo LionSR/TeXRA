@@ -32,6 +32,6 @@ export interface AgentRuntimeHost {
   ): void;
 }
 
-export const noopAgentRuntimeHost: AgentRuntimeHost = {
+export const noopAgentRuntimeHost: AgentRuntimeHost = Object.freeze({
   emit: () => {},
-};
+});
