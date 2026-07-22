@@ -65,4 +65,12 @@ describe('model retry policy', () => {
 
     expect(classifyModelRouteFailure(error)).toEqual({ retryAfterMs: 12_000 });
   });
+
+  it('classifies an HTTP conflict as a shared transient failure', () => {
+    const error = Object.assign(new Error('conflict'), { status: 409 });
+
+    expect(classifyModelRouteFailure(error)).toEqual({
+      retryAfterMs: undefined,
+    });
+  });
 });

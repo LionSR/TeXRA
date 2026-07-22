@@ -352,13 +352,14 @@ describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
   });
 });
 
-describe('ModelHandlerOpenRouterNative getClient retryConfig', () => {
-  it('disables SDK retries so the session gate owns them', async () => {
+describe('ModelHandlerOpenRouterNative getClient retry policy', () => {
+  it('disables SDK retries and records the configured endpoint', async () => {
+    const endpoint = 'https://openrouter.example/v1';
     class TestableHandler extends ModelHandlerOpenRouterNative {
       protected override async resolveClientCredential(): Promise<ResolvedClientCredential> {
         return {
           apiKey: 'test-api-key',
-          baseUrl: null,
+          baseUrl: endpoint,
           route: 'openrouter',
         };
       }
@@ -379,5 +380,6 @@ describe('ModelHandlerOpenRouterNative getClient retryConfig', () => {
       ._options;
 
     assert.deepEqual(options.retryConfig, { strategy: 'none' });
+    assert.equal(handler.getRetryEndpoint(client), endpoint);
   });
 });

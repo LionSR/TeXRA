@@ -34,6 +34,7 @@ import { extractMimeSubtype } from '@utils/text/stringUtils';
 // Local file imports
 import { toDataUrl } from '../support/dataUrl';
 import { getDeclaredMaxReasoningEffort } from '../support/reasoningEffort';
+import { OPENROUTER_BASE_URL } from '../support/ProxyConfigResolver';
 import {
   resolveMoonshotRequestParameters,
   type MoonshotRequestParameters,
@@ -98,6 +99,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   ChatResult,
   ChatContentItems
 > {
+  private readonly retryEndpoints = new WeakMap<OpenRouter, string>();
+
   // ── Client-side compaction state ──────────────────────────────────────
   private lastKnownInputTokens = 0;
 
@@ -145,11 +148,12 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       // TeXRA's session gate owns retry timing and admission.
       retryConfig: { strategy: 'none' },
     });
+    this.retryEndpoints.set(client, credential.baseUrl ?? OPENROUTER_BASE_URL);
     return this.rememberClientCredentialRoute(client, credential.route);
   }
 
   override getRetryEndpoint(client: OpenRouter): string {
-    return String((client as unknown as { _baseURL: string | URL })._baseURL);
+    return this.retryEndpoints.get(client) ?? OPENROUTER_BASE_URL;
   }
 
   // ---------------------------------------------------------------------------

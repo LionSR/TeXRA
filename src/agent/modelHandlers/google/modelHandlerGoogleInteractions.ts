@@ -51,6 +51,7 @@ import { getConfig } from '@utils/config/configUtils';
 // Local file imports
 import {
   type GoogleClientCache,
+  getGoogleRetryEndpoint,
   isGemini3Model,
   resolveGeminiThinkingLevel,
   resolveGoogleClient,
@@ -556,6 +557,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   ): Promise<GoogleGenAI> {
     this.googleClient = null;
     return this.getClient(selection);
+  }
+
+  override getRetryEndpoint(client: GoogleGenAI): string {
+    return getGoogleRetryEndpoint(client);
   }
 
   /**

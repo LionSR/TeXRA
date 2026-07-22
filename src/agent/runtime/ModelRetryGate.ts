@@ -92,7 +92,8 @@ export class ModelRetryGate {
     const error = new DOMException('Model retry gate disposed', 'AbortError');
     for (const state of this.routes.values()) {
       if (state.timer) clearTimeout(state.timer);
-      for (const waiter of state.waiters) {
+      const waiters = state.waiters.splice(0);
+      for (const waiter of waiters) {
         waiter.signal.removeEventListener('abort', waiter.onAbort);
         waiter.reject(error);
       }

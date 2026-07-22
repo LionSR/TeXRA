@@ -154,12 +154,14 @@ export function sdkErrorKindFromStatusCode(
   );
 }
 
-/** Server errors (5xx), rate limits (429), and request timeouts (408) are retryable
- *  — these are transient. Other client errors (4xx) are deterministic. */
+/** Server errors (5xx), conflicts (409), rate limits (429), and request timeouts
+ *  (408) are retryable — these are transient. Other client errors (4xx) are
+ *  deterministic. */
 export function isRetryableStatusCode(statusCode?: number): boolean {
   if (statusCode === undefined) return false;
   if (statusCode >= 500) return true;
   return (
+    statusCode === StatusCodes.CONFLICT ||
     statusCode === StatusCodes.TOO_MANY_REQUESTS ||
     statusCode === StatusCodes.REQUEST_TIMEOUT
   );

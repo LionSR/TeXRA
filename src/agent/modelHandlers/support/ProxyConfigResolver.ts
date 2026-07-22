@@ -22,6 +22,7 @@ import {
 // keys (texra.model.baseUrl*) are no longer read — globalSM is the single source.
 
 const DEFAULT_PROXY_DOMAIN = 'proxy.texra.ai';
+export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 
 /** Normalize a URL-like string to `host/path` form (no protocol, no trailing slashes). */
 function normalizeUrl(input: string): string {
@@ -175,7 +176,7 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
     }
   }
 
-  if (useOpenRouter) return 'https://openrouter.ai/api/v1';
+  if (useOpenRouter) return OPENROUTER_BASE_URL;
 
   // Per-provider custom endpoint from dashboard settings (globalSM)
   const customUrl = getProviderEndpoint(config.provider);

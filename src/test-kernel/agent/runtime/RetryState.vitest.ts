@@ -269,7 +269,7 @@ describe('RetryState', () => {
     expect(state.failureLogEmitted).toBe(false);
   });
 
-  it('falls back to the canonical coreSettings default when texra.model.retry.maxAttempts is unset', () => {
+  it('falls back to the canonical retry count and delay when settings are unset', () => {
     const node = new ExposedRetryNode();
 
     // Node.maxRetries counts the initial attempt plus auto-retries, so an
@@ -277,6 +277,7 @@ describe('RetryState', () => {
     expect(node.maxRetries).toBe(
       1 + DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
     );
+    expect(node.wait).toBe(DEFAULT_CORE_SETTINGS.model.retry.backoffMs / 1000);
   });
 
   it('treats user aborts as cancellations instead of failed invocations', () => {
@@ -316,6 +317,56 @@ describe('RetryState', () => {
     };
     const error = new OpenAIAPIError(undefined, body, body.message, undefined);
     tagOpenAISdkError(error, 'openai');
+
+    expect(node.shouldAutoRetry(error)).toBe(true);
+  });
+
+  it('delays an unclassified retryable failure before the next attempt', async () => {
+    class StatuslessServerErrorNode extends ExposedRetryNode {
+      attempts = 0;
+
+      override async exec(): Promise<string> {
+        this.attempts += 1;
+        if (this.attempts > 1) return 'recovered';
+
+        const body = {
+          type: 'server_error',
+          code: 'server_error',
+          message: 'temporary provider failure',
+        };
+        const error = new OpenAIAPIError(
+          undefined,
+          body,
+          body.message,
+          undefined,
+        );
+        tagOpenAISdkError(error, 'openai');
+        throw error;
+      }
+    }
+
+    vi.useFakeTimers();
+    try {
+      const node = new StatuslessServerErrorNode();
+      const retry = node._exec(undefined);
+      const delayMs = DEFAULT_CORE_SETTINGS.model.retry.backoffMs;
+
+      await vi.advanceTimersByTimeAsync(delayMs - 1);
+      expect(node.attempts).toBe(1);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(retry).resolves.toBe('recovered');
+      expect(node.attempts).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('auto-retries an HTTP conflict after provider SDK retries are disabled', () => {
+    const node = new ExposedRetryNode();
+    const error = Object.assign(new Error('request lock is still held'), {
+      status: 409,
+    });
 
     expect(node.shouldAutoRetry(error)).toBe(true);
   });

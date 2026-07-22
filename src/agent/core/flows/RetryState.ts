@@ -112,7 +112,7 @@ export abstract class RetryableInvocationNode<
 
   constructor() {
     const config = getNodeRetryConfig();
-    super(config.maxRetries, 0);
+    super(config.maxRetries, config.backoffMs / 1000);
     this._retryBackoffMs = config.backoffMs;
   }
 
@@ -267,8 +267,10 @@ export abstract class RetryableInvocationNode<
 
     this.maxRetries = maxRetries;
     this._retryBackoffMs = config.backoffMs;
-    // The session retry gate owns timing; pRetry owns only the attempt count.
-    this.wait = 0;
+    // This local delay is the fallback for retryable failures that do not
+    // implicate a shared route. For classified route failures it overlaps the
+    // gate's cooling interval, so the gate waits only for any remaining time.
+    this.wait = config.backoffMs / 1000;
     return super._exec(prepRes);
   }
 
