@@ -626,6 +626,29 @@ describe('RetryState', () => {
       expect(operation).toHaveBeenCalledOnce();
     });
 
+    it('skips the relay client rebuild when the session refresh returns null', async () => {
+      const streamId =
+        'retry-state-proactive-relay-null-refresh' as StreamTabId;
+      const refreshClient = vi.fn(async () => undefined);
+      const { node } = createRetryNode(streamId, refreshClient, 'relay');
+      SupabaseClient.setTokenExpiry(Date.now() + 60_000);
+      // Refresh failed or no session: ensureFreshToken resolves null and the
+      // expiry clock stays inside the threshold, so no rotation is observed.
+      const ensureFreshToken = vi.fn(async () => null);
+      SupabaseClient.setAuthProvider(
+        createAuthTokenProvider({ ensureFreshToken }),
+      );
+
+      const operation = vi.fn(async () => 'response');
+      await expect(node.runWithAbort(operation)).resolves.toBe('response');
+
+      // No rebuild when no fresh token materialized — the reactive 401 path
+      // remains the net.
+      expect(ensureFreshToken).toHaveBeenCalledOnce();
+      expect(refreshClient).not.toHaveBeenCalled();
+      expect(operation).toHaveBeenCalledOnce();
+    });
+
     it('does no auth work for a relay client whose token is fresh', async () => {
       const streamId = 'retry-state-proactive-relay-fresh' as StreamTabId;
       const refreshClient = vi.fn(async () => undefined);
