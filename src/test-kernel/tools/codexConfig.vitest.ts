@@ -299,6 +299,7 @@ describe('buildCodexUsageStats', () => {
       input_tokens: 1200,
       output_tokens: 80,
       cached_input_tokens: 300,
+      cache_write_input_tokens: 0,
       reasoning_output_tokens: 0,
     });
 
