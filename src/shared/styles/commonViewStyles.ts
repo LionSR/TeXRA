@@ -154,15 +154,6 @@ export const commonViewStyles: CSSResult = css`
     border-top: var(--border-thin) solid var(--color-border);
   }
 
-  /* The host rules above and below own panel boundaries, while the header
-     supplies the lowered surface. Remove Web Awesome's default card chrome
-     so stacked panels and nested round disclosures remain flat. */
-  .panel-collapsible::part(base) {
-    background: transparent;
-    border: none;
-    border-radius: 0;
-  }
-
   /* Boxed variant: also rule off the bottom edge so the panel reads as a
      standalone band (used by the Plan and Todos panels in the progress board). */
   .panel-collapsible.is-boxed {
