@@ -20,10 +20,10 @@ import {
 } from '@controllers/mainView/MainViewExecutionController';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import type { FileOperationMessage } from '@shared/schemas/mainView/inbound';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'ExecutionHandlers';
 
