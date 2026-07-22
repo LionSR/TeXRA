@@ -10,16 +10,10 @@ import type {
 } from '@agent/types/ModelHandlerContracts';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
-import {
-  LongRunningModelTransport,
-  MODEL_STREAM_INACTIVITY_TIMEOUT_MS,
-} from '@agent/modelHandlers/support/longRunningModelFetch';
+import { MODEL_STREAM_INACTIVITY_TIMEOUT_MS } from '@agent/modelHandlers/support/longRunningModelFetch';
 import * as serverKeysModule from '@auth/serverKeys';
 import { KIMI_CODE_BASE_URL } from '@model/kimiCodeSubscriptionRouting';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-
-// Type imports
-import type { Agent } from 'undici';
 
 const MOONSHOT_BASE_URL = 'https://api.moonshot.ai/v1';
 const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
@@ -50,9 +44,8 @@ class TestModelHandlerOpenAI extends ModelHandlerOpenAI {
   constructor(
     config: ModelConfig,
     private readonly useRelay: boolean,
-    modelTransport?: LongRunningModelTransport,
   ) {
-    super(config, modelTransport);
+    super(config);
   }
 
   protected override shouldUseServerSideKeys(): boolean {
@@ -145,25 +138,8 @@ describe('OpenAI-compatible client diagnostics', () => {
       transports.push((client as unknown as { fetch: unknown }).fetch);
       handler.dispose();
     }
-    expect(transports[0]).not.toBe(transports[1]);
+    expect(transports[0]).toBe(transports[1]);
     expect(MODEL_STREAM_INACTIVITY_TIMEOUT_MS).toBe(30 * 60 * 1000);
-  });
-
-  it('closes the handler-owned model transport exactly once', () => {
-    const close = vi.fn((callback: () => void) => callback());
-    const transport = new LongRunningModelTransport({
-      close,
-    } as unknown as Agent);
-    const handler = new TestModelHandlerOpenAI(
-      buildTestModelConfig(KIMI_DIAGNOSTICS_CONFIG),
-      false,
-      transport,
-    );
-
-    handler.dispose();
-    handler.dispose();
-
-    expect(close).toHaveBeenCalledOnce();
   });
 
   it('reports the Moonshot credential owner and request model', async () => {

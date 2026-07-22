@@ -49,32 +49,34 @@ function createHandler(): ModelHandlerAnthropic {
 function createClient() {
   const createCalls: unknown[] = [];
   const countCalls: unknown[] = [];
-  const client = {
-    beta: {
-      messages: {
-        countTokens: vi.fn(async (params: unknown) => {
-          countCalls.push(params);
-          return { input_tokens: 10 };
-        }),
-        create: vi.fn(async (params: unknown) => {
-          createCalls.push(params);
-          return {
-            id: 'msg',
-            type: 'message',
-            role: 'assistant',
-            model: 'claude-test',
-            content: [{ type: 'text', text: 'ok' }],
-            stop_reason: 'end_turn',
-            usage: {
-              input_tokens: 1,
-              output_tokens: 1,
-              cache_read_input_tokens: 0,
-              cache_creation_input_tokens: 0,
-            },
-          };
-        }),
-      },
+  const beta = {
+    messages: {
+      countTokens: vi.fn(async (params: unknown) => {
+        countCalls.push(params);
+        return { input_tokens: 10 };
+      }),
+      create: vi.fn(async (params: unknown) => {
+        createCalls.push(params);
+        return {
+          id: 'msg',
+          type: 'message',
+          role: 'assistant',
+          model: 'claude-test',
+          content: [{ type: 'text', text: 'ok' }],
+          stop_reason: 'end_turn',
+          usage: {
+            input_tokens: 1,
+            output_tokens: 1,
+            cache_read_input_tokens: 0,
+            cache_creation_input_tokens: 0,
+          },
+        };
+      }),
     },
+  };
+  const client = {
+    beta,
+    withOptions: vi.fn(() => ({ beta })),
   };
 
   return {

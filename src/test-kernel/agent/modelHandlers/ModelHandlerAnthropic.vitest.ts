@@ -617,7 +617,6 @@ describe('ModelHandlerAnthropic message guards', () => {
         },
       },
     } as any;
-
     const response = await handler.createResponse({
       client,
       messages,
@@ -899,6 +898,7 @@ describe('ModelHandlerAnthropic message guards', () => {
         },
       },
     } as any;
+    client.withOptions = vi.fn(() => client);
 
     const response = await handler.createResponse({
       client,
@@ -907,6 +907,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     });
 
     assert.deepEqual(callOrder, ['countTokens', 'upload', 'create']);
+    assert.deepEqual(client.withOptions.mock.calls, [[{ maxRetries: 2 }]]);
     assert.equal(response.response.stop_reason, 'end_turn');
   });
 

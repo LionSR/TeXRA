@@ -49,7 +49,6 @@ import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
 // Local file imports
 import {
   type GoogleClientCache,
-  getGoogleRetryEndpoint,
   isGemini3Model,
   resolveGeminiThinkingLevel,
   resolveGoogleClient,
@@ -194,9 +193,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return this.getClient(selection);
   }
 
-  override getRetryEndpoint(client: GoogleGenAI): string {
-    return getGoogleRetryEndpoint(client);
-  }
   /**
    * Gemini carries thought signatures across parallel function calls, which must
    * be preserved by batching the results into a single follow-up message.

@@ -501,11 +501,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /** Release all resources held by this handler (WebSocket, keepalive). */
   override dispose(): void {
-    try {
-      this.wsTransport?.dispose();
-    } finally {
-      super.dispose();
-    }
+    this.wsTransport?.dispose();
   }
 
   /**
@@ -1394,10 +1390,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }),
     };
 
-    const tokenCount = await client.responses.inputTokens.count(
-      countParams,
-      options?.signal ? { signal: options.signal } : undefined,
-    );
+    const tokenCount = await client
+      .withOptions({ maxRetries: 2 })
+      .responses.inputTokens.count(
+        countParams,
+        options?.signal ? { signal: options.signal } : undefined,
+      );
 
     this.logger.debug(`Token count of message: ${tokenCount.input_tokens}`);
     return tokenCount.input_tokens;

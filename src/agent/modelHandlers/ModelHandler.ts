@@ -98,7 +98,7 @@ import {
 } from './contextManagementConstants';
 import { computeUtilizationPercent } from './support/contextUtilization';
 import { logCompactionEvent } from './support/compactionLogging';
-import { LongRunningModelTransport } from './support/longRunningModelFetch';
+import { longRunningModelFetch } from './support/longRunningModelFetch';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import {
   reportMediaAttachmentFailure,
@@ -203,7 +203,6 @@ export abstract class ModelHandler<
     object,
     ModelCredentialRoute
   >();
-  private readonly modelTransport: LongRunningModelTransport;
   private activeAttemptCredentialRoute: ModelCredentialRoute | undefined;
   private lastAttemptCredentialRoute: ModelCredentialRoute | undefined;
   public config: ModelConfig;
@@ -264,11 +263,7 @@ export abstract class ModelHandler<
     return false;
   }
 
-  constructor(
-    config: ModelConfig,
-    modelTransport = new LongRunningModelTransport(),
-  ) {
-    this.modelTransport = modelTransport;
+  constructor(config: ModelConfig) {
     this.config = { ...config };
     this.capabilities = structuredClone(config.capabilities);
     this.continueLimit = DEFAULT_CONTINUE_LIMIT;
@@ -288,9 +283,9 @@ export abstract class ModelHandler<
     });
   }
 
-  /** Fetch implementation whose connection pool is owned by this handler. */
+  /** Fetch implementation with explicit long-stream inactivity timeouts. */
   protected get longRunningModelFetch(): typeof fetch {
-    return this.modelTransport.fetch;
+    return longRunningModelFetch;
   }
 
   public setLogger(logger: AgentTrace): void {
@@ -1928,6 +1923,6 @@ export abstract class ModelHandler<
    * Override in subclasses that hold long-lived resources (e.g., WebSocket connections).
    */
   dispose(): void {
-    this.modelTransport.dispose();
+    // No-op by default
   }
 }

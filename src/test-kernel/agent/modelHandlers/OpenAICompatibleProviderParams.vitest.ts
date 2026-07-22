@@ -2,7 +2,7 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { describe, it } from 'vitest';
+import { describe, it, vi } from 'vitest';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 // Local imports
@@ -29,35 +29,38 @@ const XAI_TEST_CONFIG = Object.freeze({
 
 function createClientStub() {
   const createCalls: any[] = [];
-  return {
-    createCalls,
-    client: {
-      chat: {
-        completions: {
-          create: async (params: any) => {
-            createCalls.push(params);
-            return {
-              id: `completion-${createCalls.length}`,
-              choices: [
-                {
-                  index: 0,
-                  message: {
-                    role: 'assistant',
-                    content: createCalls.length === 1 ? 'summary' : 'ok',
-                  },
-                  finish_reason: 'stop',
+  const client = {
+    chat: {
+      completions: {
+        create: async (params: any) => {
+          createCalls.push(params);
+          return {
+            id: `completion-${createCalls.length}`,
+            choices: [
+              {
+                index: 0,
+                message: {
+                  role: 'assistant',
+                  content: createCalls.length === 1 ? 'summary' : 'ok',
                 },
-              ],
-              usage: {
-                prompt_tokens: 100,
-                completion_tokens: 10,
-                total_tokens: 110,
+                finish_reason: 'stop',
               },
-            };
-          },
+            ],
+            usage: {
+              prompt_tokens: 100,
+              completion_tokens: 10,
+              total_tokens: 110,
+            },
+          };
         },
       },
     },
+  };
+  const withOptions = vi.fn(() => client);
+  return {
+    createCalls,
+    client: Object.assign(client, { withOptions }),
+    withOptions,
   };
 }
 
@@ -110,7 +113,7 @@ describe('OpenAI-compatible provider request params', () => {
       (handler as any).getStreamingConfig = () => false;
       (handler as any).estimateTokenCount = async () => 100;
 
-      const { client, createCalls } = createClientStub();
+      const { client, createCalls, withOptions } = createClientStub();
       await handler.createResponse({
         client: client as any,
         messages: [
@@ -122,6 +125,7 @@ describe('OpenAI-compatible provider request params', () => {
       });
 
       assert.equal(createCalls.length, 2);
+      assert.deepEqual(withOptions.mock.calls, [[{ maxRetries: 2 }]]);
       assert.equal(createCalls[0].temperature, 1);
       assert.equal(createCalls[0].thinking, undefined);
     },

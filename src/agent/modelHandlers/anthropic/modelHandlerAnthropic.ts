@@ -351,8 +351,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
       countTokensParams.betas = [...countTokenBetas];
     }
 
-    const responseTokenCount =
-      await client.beta.messages.countTokens(countTokensParams);
+    const responseTokenCount = await client
+      .withOptions({ maxRetries: 2 })
+      .beta.messages.countTokens(countTokensParams);
 
     this.logger.debug(
       `Token count of message: ${responseTokenCount.input_tokens}`,

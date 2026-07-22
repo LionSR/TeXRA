@@ -94,7 +94,6 @@ function classifyModelRouteFailure(
   if (
     !sharedAuthenticationFailure &&
     statusCode !== 408 &&
-    statusCode !== 409 &&
     statusCode !== 429 &&
     (statusCode == null || statusCode < 500) &&
     !transportFailure

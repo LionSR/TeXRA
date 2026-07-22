@@ -1,7 +1,8 @@
 // Third-party imports
 import {
-  Agent,
   fetch as undiciFetch,
+  getGlobalDispatcher,
+  type Dispatcher,
   type RequestInfo as UndiciRequestInfo,
   type RequestInit as UndiciRequestInit,
 } from 'undici';
@@ -33,38 +34,26 @@ async function normalizeRequest(
   ];
 }
 
-/** Handler-owned fetch transport for long model streams. */
-export class LongRunningModelTransport {
-  private dispatcher: Agent | undefined;
-  private disposed = false;
+const withLongStreamTimeouts =
+  (dispatch: Dispatcher['dispatch']): Dispatcher['dispatch'] =>
+  (options, handler) =>
+    dispatch(
+      {
+        ...options,
+        bodyTimeout: MODEL_STREAM_INACTIVITY_TIMEOUT_MS,
+        headersTimeout: 10 * 60 * 1000,
+      },
+      handler,
+    );
 
-  constructor(dispatcher?: Agent) {
-    this.dispatcher = dispatcher;
-  }
-
-  readonly fetch: typeof fetch = async (input, init) => {
-    if (this.disposed) {
-      throw new Error('Long-running model transport has been disposed.');
-    }
-    this.dispatcher ??= new Agent({
-      allowH2: true,
-      bodyTimeout: MODEL_STREAM_INACTIVITY_TIMEOUT_MS,
-      headersTimeout: 10 * 60 * 1000,
-    });
-    const [requestInput, requestInit] = await normalizeRequest(input, init);
-    // Undici implements the Web Fetch response contract at runtime, but its
-    // package-local types are not assignable to the DOM library's Response.
-    return undiciFetch(requestInput, {
-      ...requestInit,
-      dispatcher: this.dispatcher,
-    }) as unknown as Promise<Response>;
-  };
-
-  dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    const dispatcher = this.dispatcher;
-    this.dispatcher = undefined;
-    dispatcher?.close(() => undefined);
-  }
-}
+/** Fetch transport with long-stream timeouts and the host's current proxy policy. */
+export const longRunningModelFetch: typeof fetch = async (input, init) => {
+  const [requestInput, requestInit] = await normalizeRequest(input, init);
+  const dispatcher = getGlobalDispatcher().compose(withLongStreamTimeouts);
+  // Undici implements the Web Fetch response contract at runtime, but its
+  // package-local types are not assignable to the DOM library's Response.
+  return undiciFetch(requestInput, {
+    ...requestInit,
+    dispatcher,
+  }) as unknown as Promise<Response>;
+};

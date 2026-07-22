@@ -652,11 +652,12 @@ describe('RetryState', () => {
     expect(classifyFailure(error)).toEqual({ retryAfterMs: 12_000 });
   });
 
-  it('classifies HTTP conflicts after provider retries are disabled', async () => {
+  it('retries HTTP conflicts locally without cooling the shared route', async () => {
     const { classifyFailure } = await captureModelRetry();
     const error = Object.assign(new Error('conflict'), { status: 409 });
 
-    expect(classifyFailure(error)).toEqual({ retryAfterMs: undefined });
+    expect(createModelInvocationNode().shouldAutoRetry(error)).toBe(true);
+    expect(classifyFailure(error)).toBeUndefined();
   });
 
   it('never auto-retries a context-window overflow, even one tagged flow-auto-retry-required', () => {

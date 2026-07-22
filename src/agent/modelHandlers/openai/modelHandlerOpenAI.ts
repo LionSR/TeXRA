@@ -222,10 +222,9 @@ export class ModelHandlerOpenAI<
           normalizedConversation,
           compactionSystemPrompt,
         );
-        const summaryResponse = await client.chat.completions.create(
-          summaryParams,
-          { signal },
-        );
+        const summaryResponse = await client
+          .withOptions({ maxRetries: 2 })
+          .chat.completions.create(summaryParams, { signal });
         return {
           summaryText:
             summaryResponse.choices[0]?.message?.content?.trim() ?? '',

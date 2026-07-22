@@ -15,14 +15,6 @@ import { isNonEmptyString } from '@utils/core';
 import { DEFAULT_ATTACHMENT_MIME_TYPE } from '../utils/toolAttachmentUtils';
 import type { MediaFileResult } from '../support/MediaAttachmentProcessor';
 
-const GOOGLE_GENAI_BASE_URL = 'https://generativelanguage.googleapis.com/';
-const googleClientRetryEndpoints = new WeakMap<GoogleGenAI, string>();
-
-/** Endpoint captured when a Google SDK client was constructed. */
-export function getGoogleRetryEndpoint(client: GoogleGenAI): string {
-  return googleClientRetryEndpoints.get(client) ?? GOOGLE_GENAI_BASE_URL;
-}
-
 /**
  * Shared helpers for the two Google handlers (generateContent chat handler and
  * the Interactions handler). Both use the SAME `GoogleGenAI` SDK, so client
@@ -96,10 +88,6 @@ export async function resolveGoogleClient(
         retryOptions: { attempts: 1 },
       },
     });
-    googleClientRetryEndpoints.set(
-      client,
-      credential.baseUrl ?? GOOGLE_GENAI_BASE_URL,
-    );
     return rememberRoute(client, credential.route);
   };
 

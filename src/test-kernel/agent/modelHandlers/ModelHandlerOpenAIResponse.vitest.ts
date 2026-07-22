@@ -132,6 +132,12 @@ function createResponse(id: string, usage?: { input_tokens: number }) {
   };
 }
 
+function withSdkOptions<T extends { responses: object }>(client: T) {
+  return Object.assign(client, {
+    withOptions: vi.fn(() => client),
+  });
+}
+
 describe('ModelHandlerOpenAIResponse auxiliary requests', () => {
   it('restores SDK retries for tool-result uploads outside the model gate', async () => {
     const handler = createHandler({ openRouterOnly: false });
@@ -837,7 +843,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     let streamCalls = 0;
     let tokenCountCalls = 0;
     const retrieveCalls: Array<{ id: string; params: unknown }> = [];
-    const client = {
+    const client = withSdkOptions({
       responses: {
         inputTokens: {
           count: async () => {
@@ -872,7 +878,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
           });
         },
       },
-    };
+    });
 
     await assert.rejects(
       handler.createResponse({
@@ -892,6 +898,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.equal(result.response.id, 'resp-retrieve-retry');
     assert.equal(streamCalls, 1);
     assert.equal(tokenCountCalls, 1);
+    assert.deepEqual(client.withOptions.mock.calls, [[{ maxRetries: 2 }]]);
     assert.deepEqual(retrieveCalls, [
       {
         id: 'resp-retrieve-retry',
@@ -1003,7 +1010,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     });
     const requests: any[] = [];
     let tokenCountCalls = 0;
-    const client = {
+    const client = withSdkOptions({
       responses: {
         inputTokens: {
           count: async () => {
@@ -1027,7 +1034,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
           return createResponse('resp-rebuilt', { input_tokens: 100500 });
         },
       },
-    };
+    });
     const firstTurnMessages = createMessages(2);
     const rebuiltMessages = createMessages(3);
 
@@ -1067,7 +1074,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     const compactCalls: ResponseInputItem[][] = [];
     const requests: any[] = [];
     let tokenCountCalls = 0;
-    const client = {
+    const client = withSdkOptions({
       responses: {
         inputTokens: {
           count: async () => {
@@ -1085,7 +1092,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
           });
         },
       },
-    };
+    });
     (
       handler as unknown as { compactConversation: unknown }
     ).compactConversation = async (
@@ -1130,7 +1137,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     const compactCalls: ResponseInputItem[][] = [];
     const requests: any[] = [];
     let tokenCountCalls = 0;
-    const client = {
+    const client = withSdkOptions({
       responses: {
         inputTokens: {
           count: async () => {
@@ -1148,7 +1155,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
           });
         },
       },
-    };
+    });
     (
       handler as unknown as {
         compactConversation: unknown;
@@ -1207,7 +1214,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     const compactCalls: ResponseInputItem[][] = [];
     const requests: any[] = [];
     let tokenCountCalls = 0;
-    const client = {
+    const client = withSdkOptions({
       responses: {
         inputTokens: {
           count: async () => {
@@ -1222,7 +1229,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
           });
         },
       },
-    };
+    });
     (
       handler as unknown as { compactConversation: unknown }
     ).compactConversation = async (
@@ -1267,7 +1274,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     const compactCalls: ResponseInputItem[][] = [];
     const requests: any[] = [];
     let tokenCountCalls = 0;
-    const client = {
+    const client = withSdkOptions({
       responses: {
         inputTokens: {
           count: async () => {
@@ -1290,7 +1297,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
           });
         },
       },
-    };
+    });
     (
       handler as unknown as { compactConversation: unknown }
     ).compactConversation = async (

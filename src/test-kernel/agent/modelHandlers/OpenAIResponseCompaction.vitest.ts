@@ -411,7 +411,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const handler = createUnsupportedCompactionHandler();
     const requests: any[] = [];
     const compactRequests: any[] = [];
-    const client = {
+    const client = withSdkOptions({
       responses: {
         inputTokens: {
           count: async () => ({ input_tokens: 100 }),
@@ -430,7 +430,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
             : createResponse('resp-without-compaction', 850);
         },
       },
-    };
+    });
     const firstTurnMessages = createMessages(2);
     const secondTurnMessages = createMessages(3);
 
