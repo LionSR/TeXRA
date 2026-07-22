@@ -13,7 +13,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { keyed } from 'lit/directives/keyed.js';
 
 // Local imports - shared schemas and types
-import type { ModelOptionData } from '@shared/schemas';
+import type { LaunchTarget, ModelOptionData } from '@shared/schemas';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
@@ -24,8 +24,10 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 // Local imports - shared utils
 import {
   BROWSE_ALL_AGENTS_OPTION_VALUE,
+  MANAGE_TEAMS_OPTION_VALUE,
   renderAgentOptions,
   renderModelOptions,
+  renderTeamOptions,
 } from '@shared/utils/selectTemplates';
 import { getTextareaValue } from '@shared/utils/textarea';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
@@ -51,7 +53,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
-type SessionHintKey = SessionType | 'orchestrator';
+type SessionHintKey = SessionType | 'orchestrator' | 'team';
 
 const SESSION_HINT_COPY: Record<
   SessionHintKey,
@@ -75,6 +77,12 @@ const SESSION_HINT_COPY: Record<
     time: 'E.g., “use polish on the intro, then review the math” — or leave it blank. Approve tasks in Progress as they arrive.',
     ariaLabel: 'About orchestrator mode',
   },
+  team: {
+    lede: 'Team run.',
+    body: 'Starts the team lead in an interactive session with delegation limited to this team.',
+    time: '',
+    ariaLabel: 'About team runs',
+  },
 };
 
 function getSessionTitle(type: SessionType): string {
@@ -83,6 +91,9 @@ function getSessionTitle(type: SessionType): string {
 }
 
 function resolveSessionHintKey(session: SessionContextValue): SessionHintKey {
+  // The team hint describes the launcher, so it takes precedence over the
+  // orchestrator hint (which describes the selected agent).
+  if (session.launchTarget === 'team') return 'team';
   if (
     session.sessionType === SESSION_TYPES.TOOL_USE &&
     session.isOrchestratorSelected
@@ -143,7 +154,11 @@ export class InstructionPanel extends LitElement {
           <span class="session-hint-lede">${copy.lede}</span>
           <span class="session-hint-body">
             ${copy.body}
-            <span class="session-hint-time">${copy.time}</span>
+            ${
+              copy.time
+                ? html`<span class="session-hint-time">${copy.time}</span>`
+                : nothing
+            }
           </span>
           ${renderIconActionButton({
             id: 'dismissSessionHintButton',
@@ -171,6 +186,12 @@ export class InstructionPanel extends LitElement {
     this.dispatchEvent(MainViewEvents.sessionTypeChange({ value }));
   }
 
+  private handleLaunchTargetChange(event: Event): void {
+    const target = event.target as HTMLInputElement | null;
+    const value: LaunchTarget = target?.value === 'team' ? 'team' : 'agent';
+    this.dispatchEvent(MainViewEvents.launchTargetChange({ value }));
+  }
+
   private handleAgentChange(event: Event): void {
     const select = event.currentTarget as (WaSelect & HTMLElement) | null;
     if (!select) return;
@@ -187,6 +208,18 @@ export class InstructionPanel extends LitElement {
       return;
     }
     this.dispatchEvent(MainViewEvents.agentChange({ sessionType, value }));
+  }
+
+  private handleTeamChange(event: Event): void {
+    const select = event.currentTarget as WaSelect | null;
+    if (!select) return;
+    const value = typeof select.value === 'string' ? select.value : '';
+    if (value === MANAGE_TEAMS_OPTION_VALUE) {
+      select.value = this.sessionData?.selectedTeamId ?? '';
+      this.dispatchEvent(MainViewEvents.manageTeams());
+      return;
+    }
+    this.dispatchEvent(MainViewEvents.teamChange({ value }));
   }
 
   private handleModelChange(event: Event): void {
@@ -246,6 +279,10 @@ export class InstructionPanel extends LitElement {
     this.dispatchEvent(MainViewEvents.agentSettings());
   }
 
+  private handleTeamSettings(): void {
+    this.dispatchEvent(MainViewEvents.teamSettings());
+  }
+
   private handleModelSettings(): void {
     this.dispatchEvent(MainViewEvents.modelSettings());
   }
@@ -259,11 +296,23 @@ export class InstructionPanel extends LitElement {
     );
   }
 
+  private handleTeamFocus(): void {
+    this.dispatchEvent(
+      MainViewEvents.focusInstruction({
+        key: 'teamPicker',
+        text: 'Select which team will handle your request.',
+      }),
+    );
+  }
+
   private handleModelFocus(): void {
+    const teamSelected = this.sessionData?.launchTarget === 'team';
     this.dispatchEvent(
       MainViewEvents.focusInstruction({
         key: 'modelPicker',
-        text: 'Choose the AI model used by the selected agent.',
+        text: teamSelected
+          ? 'Choose the AI model used by the team lead.'
+          : 'Choose the AI model used by the selected agent.',
       }),
     );
   }
@@ -302,6 +351,56 @@ export class InstructionPanel extends LitElement {
         })}
       </wa-select>
     `;
+  }
+
+  private renderLauncherPicker(session: SessionContextValue): unknown {
+    return keyed(
+      session.launchTarget,
+      session.launchTarget === 'team'
+        ? html`
+            <div
+              class="select-group agent-select-group agent-model-select-group launcher-picker-fade"
+            >
+              ${renderIconActionButton({
+                id: 'teamSettingsButton',
+                icon: 'organization',
+                label: 'Team settings',
+                tooltip: 'Team settings',
+                className: 'settings-button',
+                onClick: this.handleTeamSettings,
+              })}
+              <wa-select
+                id="teamPicker"
+                class="agent-select team-select"
+                aria-label="Team"
+                placement="top"
+                placeholder="Team…"
+                .value=${session.selectedTeamId}
+                @focus=${this.handleTeamFocus}
+                @change=${this.handleTeamChange}
+              >
+                ${renderTeamOptions(session.teamOptions, {
+                  includeManageTeams: true,
+                })}
+              </wa-select>
+            </div>
+          `
+        : html`
+            <div
+              class="select-group agent-select-group agent-model-select-group launcher-picker-fade"
+            >
+              ${renderIconActionButton({
+                id: 'agentSettingsButton',
+                icon: 'sparkle',
+                label: 'Agent settings',
+                tooltip: 'Agent settings',
+                className: 'settings-button',
+                onClick: this.handleAgentSettings,
+              })}
+              ${this.renderAgentSelect(session)}
+            </div>
+          `,
+    );
   }
 
   override render(): TemplateResult | typeof nothing {
@@ -417,19 +516,21 @@ export class InstructionPanel extends LitElement {
         ></wa-textarea>
         <div class="instruction-controls">
           <div class="model-selection-footer">
-            <div
-              class="select-group agent-select-group agent-model-select-group"
-            >
-              ${renderIconActionButton({
-                id: 'agentSettingsButton',
-                icon: 'sparkle',
-                label: 'Agent settings',
-                tooltip: 'Agent settings',
-                className: 'settings-button',
-                onClick: this.handleAgentSettings,
-              })}
-              ${this.renderAgentSelect(session)}
+            <div class="select-group launch-target-group">
+              <wa-radio-group
+                id="launchTargetToggle"
+                aria-label="Choose who runs this request"
+                orientation="horizontal"
+                .value=${session.launchTarget}
+                @change=${this.handleLaunchTargetChange}
+              >
+                <wa-radio id="launchTargetAgent" value="agent">
+                  Agent
+                </wa-radio>
+                <wa-radio id="launchTargetTeam" value="team"> Team </wa-radio>
+              </wa-radio-group>
             </div>
+            ${this.renderLauncherPicker(session)}
             <div
               class="select-group model-select-group agent-model-select-group"
             >
@@ -445,7 +546,7 @@ export class InstructionPanel extends LitElement {
                 id="model"
                 class="model-select"
                 placement="top"
-                aria-label="Model"
+                aria-label=${session.launchTarget === 'team' ? 'Lead model' : 'Model'}
                 placeholder="Select model…"
                 title=${
                   this.getModelTooltip(session.modelOptions, session.model) ||
@@ -467,11 +568,16 @@ export class InstructionPanel extends LitElement {
             @click=${this.handleExecute}
           >
             ${waIcon('play', { slot: 'start' })}
-            <span class="execute-button__label">Run</span>
+            <span class="execute-button__label">
+              ${session.launchTarget === 'team' ? 'Run team' : 'Run'}
+            </span>
           </wa-button>
           <wa-tooltip for="executeButton">
             Execute (${this.executeShortcutLabel})
           </wa-tooltip>
+        </div>
+        <div class="visually-hidden" aria-live="polite">
+          ${session.statusAnnouncement}
         </div>
       </div>
     `;

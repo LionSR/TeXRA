@@ -1,12 +1,20 @@
-import { computeAgentOptionsData } from '@agent/index/agentRegistry';
+import {
+  computeAgentOptionsData,
+  getAgentsByCategory,
+  refresh,
+} from '@agent/index';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { loadTeamOptions } from '@common/teams/TeamPlan';
 import {
   MainViewStartupController,
   type MainViewStartupOptions,
 } from '@controllers/mainView/MainViewStartupController';
 import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import { platform } from '@platform/platform';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory } from '@shared/schemas/agent';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getConfig } from '@utils/config/configUtils';
 
 import {
@@ -39,18 +47,32 @@ export function createDesktopMainViewStartup({
     loadOptions: async () => {
       await modelListRefresh;
       if (loadOptions != null) return loadOptions();
-      const [agentOptions, workflowModelOptions, toolUseModelOptions] =
-        await Promise.all([
-          computeAgentOptionsData(),
-          computeModelOptionsData(undefined, undefined, {
-            agentCategory: AgentCategory.Workflow,
-          }),
-          computeModelOptionsData(undefined, undefined, {
-            agentCategory: AgentCategory.ToolUse,
-          }),
-        ]);
+      const [
+        agentOptions,
+        teamOptions,
+        workflowModelOptions,
+        toolUseModelOptions,
+      ] = await Promise.all([
+        computeAgentOptionsData(),
+        loadTeamOptions({
+          customPresetsRaw: platform().workspaceState.get<unknown>(
+            WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+          ),
+          getAgents: getAgentsByCategory,
+          canAccessRemoteCatalog: () =>
+            SupabaseClient.canAccessRemoteAgentCatalog(),
+          refreshRemote: () => refresh({ includeRemote: true }),
+        }),
+        computeModelOptionsData(undefined, undefined, {
+          agentCategory: AgentCategory.Workflow,
+        }),
+        computeModelOptionsData(undefined, undefined, {
+          agentCategory: AgentCategory.ToolUse,
+        }),
+      ]);
       return {
         agentOptions,
+        teamOptions,
         modelOptions: workflowModelOptions,
         modelOptionsByCategory: {
           workflow: workflowModelOptions,

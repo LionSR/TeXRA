@@ -13,6 +13,7 @@ import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 import { SESSION_TYPES } from '../constants';
 import {
   modelOptions$,
+  teamOptions$,
   toolUseAgent$,
   toolUseAgentOptions$,
   toolUseModelOptions$,
@@ -23,6 +24,7 @@ import {
 import {
   enterToolUseSession,
   refreshModelSelectionForActiveSession,
+  validateTeamSelection,
 } from '../mainViewActions';
 
 /**
@@ -118,5 +120,13 @@ export const catalogHandlers = {
         enterToolUseSession();
       }
     }
+  },
+
+  [MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS]: (message) => {
+    teamOptions$.set(message.optionsData);
+    // Only now that the resolved options have arrived can a restored team
+    // selection be checked — the initially empty async list is not proof
+    // the team vanished. Validates + persists inside.
+    validateTeamSelection();
   },
 } satisfies Partial<MainViewHandlerRegistry>;

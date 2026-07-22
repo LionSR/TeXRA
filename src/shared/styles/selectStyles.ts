@@ -131,4 +131,12 @@ export const selectStyles: CSSResult = css`
     font-style: normal;
     margin-left: var(--wa-space-3xs);
   }
+
+  /* Quiet trailing marker on picker options (e.g. the team picker's "Custom"
+     provenance tag) — text, not color alone, carries the distinction. */
+  .option-suffix {
+    color: var(--wa-color-text-quiet);
+    font-style: normal;
+    margin-left: var(--wa-space-3xs);
+  }
 `;

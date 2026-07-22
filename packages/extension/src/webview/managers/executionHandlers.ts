@@ -1,11 +1,20 @@
 import * as vscode from 'vscode';
 
-import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
+import { getAgentsByCategory, refresh } from '@agent/index';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { AUTH_COMMANDS } from '@commands/auth';
+import { resolveTeamLaunch } from '@common/teams/TeamPlan';
+import {
+  prepareMainViewExecutionRequest,
+  prepareMainViewTeamExecutionRequest,
+} from '@controllers/mainView/MainViewExecutionController';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
+import { platform } from '@platform/platform';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import type { FileOperationMessage } from '@shared/schemas/mainView/inbound';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 const CHANNEL = 'ExecutionHandlers';
 
@@ -41,7 +50,73 @@ export interface MultipleOperationMessage {
 export async function handleExecute(
   message: MainViewExecuteMessage,
 ): Promise<void> {
-  const preparation = prepareMainViewExecutionRequest(message);
+  let preparation;
+  if (message.session?.launchTarget === 'team') {
+    const teamId = message.session.teamId;
+    if (!teamId) {
+      vscode.window.showErrorMessage('Team selection required.');
+      return;
+    }
+
+    const signInLabel = 'Sign In to TeXRA';
+    const continueLabel = 'Continue with Available Members';
+    const cancelLabel = 'Cancel';
+    const resolution = await resolveTeamLaunch({
+      teamId,
+      customPresetsRaw: platform().workspaceState.get<unknown>(
+        WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+      ),
+      getAgents: getAgentsByCategory,
+      canAccessRemoteCatalog: () =>
+        SupabaseClient.canAccessRemoteAgentCatalog(),
+      refreshRemote: () => refresh({ includeRemote: true }),
+      choose: async (unavailableNames) => {
+        const choice = await vscode.window.showWarningMessage(
+          `This team has unavailable TeXRA-hosted members: ${unavailableNames.join(', ')}.`,
+          signInLabel,
+          continueLabel,
+          cancelLabel,
+        );
+        if (choice === signInLabel) return 'sign-in';
+        if (choice === continueLabel) return 'continue';
+        return 'cancel';
+      },
+      signIn: async () =>
+        Boolean(
+          await vscode.commands.executeCommand<boolean>(AUTH_COMMANDS.SIGN_IN),
+        ),
+    });
+
+    if (resolution.status === 'cancelled') return;
+    if (resolution.status === 'unknown-team') {
+      vscode.window.showErrorMessage(`Unknown team "${teamId}".`);
+      return;
+    }
+    if (resolution.status === 'blocked') {
+      vscode.window.showErrorMessage(
+        `Team "${teamId}" cannot run: ${resolution.reason}.`,
+      );
+      return;
+    }
+    if (resolution.status === 'unavailable') {
+      vscode.window.showErrorMessage(
+        `Team "${teamId}" is unavailable: ${resolution.unavailableNames.join(', ')}.`,
+      );
+      return;
+    }
+
+    if (resolution.partial) {
+      await vscode.window.showInformationMessage(
+        `This team will run with available members only. Unavailable members: ${resolution.missingNames.join(', ')}.`,
+      );
+    }
+    preparation = prepareMainViewTeamExecutionRequest(
+      message,
+      resolution.fields,
+    );
+  } else {
+    preparation = prepareMainViewExecutionRequest(message);
+  }
   if (!preparation.valid) {
     logErrorMessage(
       CHANNEL,

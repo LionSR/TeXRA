@@ -13,7 +13,11 @@ import {
 import { commandOnly, withFilesArray } from '../messageFactories';
 import { OnboardingFunnelStateSchema } from '../onboarding';
 import { AgentCategory } from '../agent';
-import { AgentOptionDataSchema, ModelOptionDataSchema } from './state';
+import {
+  AgentOptionDataSchema,
+  ModelOptionDataSchema,
+  TeamOptionDataSchema,
+} from './state';
 
 const FileListSchema = z.array(z.string());
 const SingleFileSelectedSchema = z.object({ filePath: z.string() });
@@ -38,6 +42,11 @@ const SetAgentOptionsMessageSchema = z.object({
     })
     .optional(),
   selectedToolUseAgent: z.string().optional(),
+});
+
+const SetTeamOptionsMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS),
+  optionsData: z.array(TeamOptionDataSchema).prefault([]),
 });
 
 const SetEditedFileMessageSchema = withFilesArray(
@@ -159,6 +168,7 @@ const SetOnboardingFunnelMessageSchema = z.object({
 export const MainViewMessageSchema = z.discriminatedUnion('command', [
   SetModelOptionsMessageSchema,
   SetAgentOptionsMessageSchema,
+  SetTeamOptionsMessageSchema,
   SetEditedFileMessageSchema,
   SetBaseFileMessageSchema,
   EditedFileSelectedMessageSchema,

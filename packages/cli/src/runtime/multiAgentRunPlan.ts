@@ -1,6 +1,7 @@
 import { getAgentsByCategory, loadAgents, refresh } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { refreshRemoteCatalogForGaps } from '@common/teams/TeamPlan';
 
 import { missingMultiAgentPresetMessage } from './agents';
 import { CliUsageError } from './cliContext';
@@ -116,11 +117,14 @@ async function reloadRemoteAgentsForGaps<T>(
   hasGaps: (value: T) => boolean,
   replan: () => T,
 ): Promise<RemoteAgentPlanReloadResult<T>> {
-  if (hasGaps(value) && (await SupabaseClient.canAccessRemoteAgentCatalog())) {
-    await refresh({ includeRemote: true });
-    return { value: replan(), remoteAgentLoadAttempted: true };
-  }
-  return { value, remoteAgentLoadAttempted: false };
+  const result = await refreshRemoteCatalogForGaps(value, hasGaps, replan, {
+    canAccessRemoteCatalog: () => SupabaseClient.canAccessRemoteAgentCatalog(),
+    refreshRemote: () => refresh({ includeRemote: true }),
+  });
+  return {
+    value: result.value,
+    remoteAgentLoadAttempted: result.remoteCatalogRefreshAttempted,
+  };
 }
 
 export function writeMissingPresetAgents(

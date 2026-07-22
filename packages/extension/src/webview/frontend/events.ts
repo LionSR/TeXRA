@@ -20,12 +20,14 @@ import type {
   InstructionChangeDetail,
   LatexDiffsActionDetail,
   LatexDiffsToggleDetail,
+  LaunchTargetChangeDetail,
   ModelChangeDetail,
   MultipleFilesActionDetail,
   MultipleFilesTypeActionDetail,
   ReorderFilesDetail,
   RemoveFileDetail,
   SessionTypeChangeDetail,
+  TeamChangeDetail,
 } from '@shared/schemas';
 import { createEvent } from '@shared/utils/events';
 export const MainViewEvents = {
@@ -121,6 +123,11 @@ export const MainViewEvents = {
   sessionTypeChange: (detail: SessionTypeChangeDetail) =>
     createEvent('session-type-change', detail),
 
+  launchTargetChange: (detail: LaunchTargetChangeDetail) =>
+    createEvent('launch-target-change', detail),
+
+  teamChange: (detail: TeamChangeDetail) => createEvent('team-change', detail),
+
   agentChange: (detail: AgentChangeDetail) =>
     createEvent('agent-change', detail),
 
@@ -137,6 +144,10 @@ export const MainViewEvents = {
   agentSettings: () => createEvent('agent-settings', undefined),
 
   browseAllAgents: () => createEvent('browse-all-agents', undefined),
+
+  teamSettings: () => createEvent('team-settings', undefined),
+
+  manageTeams: () => createEvent('manage-teams', undefined),
 
   modelSettings: () => createEvent('model-settings', undefined),
 

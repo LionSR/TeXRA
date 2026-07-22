@@ -1,9 +1,11 @@
 // Local imports
+import { planTeamRun, type TeamPreset } from '@common/teams/TeamPlan';
 import {
   commitTeamRoster,
   resolveTeamRoster,
   type TeamRosterResolution,
 } from '@common/teams/TeamRoster';
+import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
 import {
   AGENT_MODE_PRESETS_BY_ID,
@@ -109,10 +111,40 @@ export class SettingsAgentCatalogController {
   }
 
   getPresetToolUseRoot(toolUseAgents: string[]): string | undefined {
-    const orchestratorNames = new Set(this.getOrchestratorAgentNames());
-    return toolUseAgents.find(
-      (name) => orchestratorNames.has(name) || isOrchestratorLikeName(name),
-    );
+    const preset: TeamPreset = {
+      id: 'settings-preview',
+      name: 'Settings preview',
+      description: '',
+      icon: 'bookmark',
+      workflowAgents: [],
+      toolUseAgents: [
+        ...toolUseAgents,
+        ...BUILTIN_TEAM_ROOT_AGENT_NAMES.filter(
+          (name) => !toolUseAgents.includes(name),
+        ),
+      ],
+      source: 'custom',
+    };
+    const catalogAgents = this.deps.state.getAgents('toolUse');
+    const knownBuiltInRoots = new Set([
+      ...BUILTIN_TEAM_ROOT_AGENT_NAMES,
+      ...(this.deps.builtInOrchestratorAgentNames ?? []),
+    ]);
+    const rootCandidates = [
+      ...catalogAgents,
+      ...[...knownBuiltInRoots]
+        .filter((name) => !catalogAgents.some((agent) => agent.name === name))
+        .map((name): SettingsAgentCatalogEntry => ({
+          name,
+          source: 'builtInToolUse',
+          category: 'toolUse',
+          tools: ['delegate_agent'],
+        })),
+    ];
+    return planTeamRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: rootCandidates,
+    }).rootAgent?.name;
   }
 
   async applyPreset(presetId: string): Promise<SettingsAgentPresetApplyResult> {
@@ -223,8 +255,4 @@ export class SettingsAgentCatalogController {
       AGENT_MODE_PRESETS_BY_ID.get(presetId) ?? this.getCustomPreset(presetId)
     );
   }
-}
-
-function isOrchestratorLikeName(name: string): boolean {
-  return name.toLowerCase().endsWith('orchestrator');
 }

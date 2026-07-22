@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { getAgentsByCategory, refresh } from '@agent/index';
 import type { AgentTrace } from '@agent/trace';
 
 import { createChannelTrace } from '@agent/trace';
@@ -24,12 +25,14 @@ import {
   wakeQueuedFollowUpStream,
 } from '@agent/followUp/ToolUseFollowUp';
 import { isRuntimePresentationEvent } from '@agent/runtime/runtimePresentationEvents';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import {
   getFileListConfig,
   loadFileListSettings,
   type ListableFileType,
 } from '@common/files/fileListingRules';
+import { resolveTeamLaunch } from '@common/teams/TeamPlan';
 import {
   repairRestartedStreams,
   RestartRepairRetryScheduler,
@@ -45,7 +48,10 @@ import {
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
-import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
+import {
+  prepareMainViewExecutionRequest,
+  prepareMainViewTeamExecutionRequest,
+} from '@controllers/mainView/MainViewExecutionController';
 import type { SessionStores } from '@controllers/progressView/backend/state/SessionStores';
 import { platform } from '@platform/platform';
 import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
@@ -64,6 +70,7 @@ import {
   formatStreamDeletionRetention,
 } from '@shared/copy/executionHistory';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { cleanupUnscopedApprovals } from '@tools/approval';
 import type { StreamSnapshotStore } from '@transcript';
 import { getConfig } from '@utils/config/configUtils';
@@ -1208,12 +1215,62 @@ export class DesktopProgressBridge {
     );
   }
 
-  handleExecute(message: MainViewExecuteMessage): Promise<void> {
-    const preparation = prepareMainViewExecutionRequest(message);
+  async handleExecute(message: MainViewExecuteMessage): Promise<void> {
+    let preparation;
+    if (message.session?.launchTarget === 'team') {
+      const teamId = message.session.teamId;
+      if (!teamId) {
+        await this.options.host.showErrorMessage('Team selection required.');
+        return;
+      }
+
+      const resolution = await resolveTeamLaunch({
+        teamId,
+        customPresetsRaw: platform().workspaceState.get<unknown>(
+          WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+        ),
+        getAgents: getAgentsByCategory,
+        canAccessRemoteCatalog: () =>
+          SupabaseClient.canAccessRemoteAgentCatalog(),
+        refreshRemote: () => refresh({ includeRemote: true }),
+        choose: (unavailableNames) =>
+          this.options.host.chooseTeamAvailability(unavailableNames),
+        signIn: () => this.options.host.signInForRemoteAgentCatalog(),
+      });
+
+      if (resolution.status === 'cancelled') return;
+      if (resolution.status === 'unknown-team') {
+        await this.options.host.showErrorMessage(`Unknown team "${teamId}".`);
+        return;
+      }
+      if (resolution.status === 'blocked') {
+        await this.options.host.showErrorMessage(
+          `Team "${teamId}" cannot run: ${resolution.reason}.`,
+        );
+        return;
+      }
+      if (resolution.status === 'unavailable') {
+        await this.options.host.showErrorMessage(
+          `Team "${teamId}" is unavailable: ${resolution.unavailableNames.join(', ')}.`,
+        );
+        return;
+      }
+
+      if (resolution.partial) {
+        await this.options.host.showInfoMessage(
+          `This team will run with available members only. Unavailable members: ${resolution.missingNames.join(', ')}.`,
+        );
+      }
+      preparation = prepareMainViewTeamExecutionRequest(
+        message,
+        resolution.fields,
+      );
+    } else {
+      preparation = prepareMainViewExecutionRequest(message);
+    }
     if (!preparation.valid) {
-      return Promise.resolve(
-        this.options.host.showErrorMessage(preparation.message),
-      ).then(() => undefined);
+      await this.options.host.showErrorMessage(preparation.message);
+      return;
     }
     return this.runExecution(preparation.request);
   }

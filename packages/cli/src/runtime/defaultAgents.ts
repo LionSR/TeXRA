@@ -1,26 +1,17 @@
 import { agentName } from '@shared/schemas';
-import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
+import {
+  PREFERRED_TOOL_USE_AGENTS,
+  implicitDefaultToolUseAgents,
+} from '@shared/constants/agents';
+
+// The implicit-default eligibility rule lives in @shared/constants/agents so
+// team planning (src/common/teams/TeamPlan) and the CLI share one definition.
+export {
+  isImplicitDefaultEligible,
+  implicitDefaultToolUseAgents,
+} from '@shared/constants/agents';
 
 export const BUILTIN_DEFAULT_CHAT_AGENT = 'assistant';
-
-// Agents that exist in the catalog but must never be auto-selected as the
-// implicit chat default — e.g. `simplifier` is a code utility, not a chat
-// partner. They remain available when chosen explicitly with `--agent`.
-const NON_DEFAULT_TOOL_USE_AGENTS = new Set(['simplifier']);
-
-/** Whether `agent` may be chosen as the implicit default tool-use agent. */
-export function isImplicitDefaultEligible(agent: string): boolean {
-  return !NON_DEFAULT_TOOL_USE_AGENTS.has(
-    agentName(agent.trim()).toLowerCase(),
-  );
-}
-
-/** The subset of `agents` eligible to be the implicit default. */
-export function implicitDefaultToolUseAgents<
-  T extends { readonly name: string },
->(agents: readonly T[]): T[] {
-  return agents.filter((agent) => isImplicitDefaultEligible(agent.name));
-}
 
 // Priority for the implicit default: the built-in default first, then the shared
 // preferred order with the built-in removed so it isn't re-checked (it already

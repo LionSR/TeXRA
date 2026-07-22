@@ -1,0 +1,495 @@
+import {
+  BUILTIN_TEAM_ROOT_AGENT_NAMES,
+  implicitDefaultToolUseAgents,
+} from '@shared/constants/agents';
+import { hasDelegationTool } from '@shared/constants/delegationTools';
+import {
+  AgentCategory,
+  agentKeyOf,
+  agentMatchesIdentifier,
+  type AgentSource,
+} from '@shared/schemas/agent';
+import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
+import {
+  AGENT_MODE_PRESETS,
+  STARTER_AGENT_MODE_PRESET,
+  parseAgentModePresets,
+  type AgentModePreset,
+} from '@shared/schemas/agentPresets';
+import type { TeamOptionData } from '@shared/schemas/mainView/state';
+
+import {
+  preflightTeamAvailability,
+  type TeamAvailabilityChoice,
+} from './TeamAvailabilityPreflight';
+import { teamHostedNamesForPreflight } from './TeamRoster';
+
+export type TeamPresetSource = 'built-in' | 'custom';
+
+export interface TeamPreset extends AgentModePreset {
+  readonly source: TeamPresetSource;
+}
+
+/**
+ * Return launchable team presets in display order. Built-in ids are reserved:
+ * a custom preset with the same id is dropped so the built-in always wins. The
+ * setup-only starter id is reserved as well and never appears in this listing.
+ */
+export function teamPresets(customRaw: unknown): TeamPreset[] {
+  const builtInIds = new Set([
+    ...AGENT_MODE_PRESETS.map((preset) => preset.id),
+    STARTER_AGENT_MODE_PRESET.id,
+  ]);
+  return [
+    ...AGENT_MODE_PRESETS.map((preset) => ({
+      ...preset,
+      source: 'built-in' as const,
+    })),
+    ...parseAgentModePresets(customRaw)
+      .filter((preset) => !builtInIds.has(preset.id))
+      .map((preset) => ({ ...preset, source: 'custom' as const })),
+  ];
+}
+
+export function findTeamPreset(
+  presets: readonly TeamPreset[],
+  query: string,
+): TeamPreset | undefined {
+  const key = lookupKey(query);
+  return presets.find(
+    (preset) =>
+      lookupKey(preset.id) === key ||
+      lookupKey(preset.name) === key ||
+      slugKey(preset.name) === key,
+  );
+}
+
+export interface TeamCatalogAgent {
+  readonly name: string;
+  readonly source: AgentSource;
+  readonly tools?: string[];
+}
+
+export interface TeamRunPlan<T extends TeamCatalogAgent = TeamCatalogAgent> {
+  readonly preset: TeamPreset;
+  readonly rootAgent?: T;
+  readonly missingAgentOverride?: string;
+  readonly workflowAgentKeys: readonly string[];
+  readonly toolUseAgentKeys: readonly string[];
+  readonly missingWorkflowAgents: readonly string[];
+  readonly missingToolUseAgents: readonly string[];
+}
+
+interface TeamRunOptions<T extends TeamCatalogAgent> {
+  readonly workflowAgents: readonly T[];
+  readonly toolUseAgents: readonly T[];
+  readonly agentOverride?: string;
+}
+
+export function planTeamRun<T extends TeamCatalogAgent>(
+  preset: TeamPreset,
+  options: TeamRunOptions<T>,
+): TeamRunPlan<T> {
+  const workflow = resolvePresetAgents(
+    preset.workflowAgents,
+    options.workflowAgents,
+  );
+  const toolUse = resolvePresetAgents(
+    preset.toolUseAgents,
+    options.toolUseAgents,
+  );
+  const override = resolveAgentOverride(
+    options.agentOverride,
+    options.toolUseAgents,
+  );
+  const rootAgent =
+    override.agent ??
+    selectTeamRootAgent(toolUse.resolved, {
+      presetOrder: preset.toolUseAgents,
+      presetSource: preset.source,
+    });
+  const toolUseAgents = rootAgent
+    ? includeAgent(toolUse.resolved, rootAgent)
+    : toolUse.resolved;
+
+  return {
+    preset,
+    rootAgent,
+    missingAgentOverride: override.missing,
+    workflowAgentKeys: workflow.resolved.map(agentKeyOf),
+    toolUseAgentKeys: toolUseAgents.map(agentKeyOf),
+    missingWorkflowAgents: workflow.missing,
+    missingToolUseAgents: toolUse.missing,
+  };
+}
+
+export function planTeamRuns<T extends TeamCatalogAgent>(
+  presets: readonly TeamPreset[],
+  options: TeamRunOptions<T>,
+): TeamRunPlan<T>[] {
+  return presets.map((preset) => planTeamRun(preset, options));
+}
+
+export function teamPlanHasGaps(plan: TeamRunPlan): boolean {
+  return (
+    !plan.rootAgent ||
+    plan.missingAgentOverride !== undefined ||
+    plan.missingWorkflowAgents.length > 0 ||
+    plan.missingToolUseAgents.length > 0
+  );
+}
+
+/** TeXRA-hosted definitions missing from this plan, independent of models. */
+export function teamTexraHostedMissingNames(plan: TeamRunPlan): string[] {
+  const missing = [...plan.missingWorkflowAgents, ...plan.missingToolUseAgents];
+  const hosted = teamHostedNamesForPreflight(plan.preset, missing);
+  return missing.filter((name) => hosted.has(name));
+}
+
+export function teamLaunchBlockReason(plan: TeamRunPlan): string | undefined {
+  if (!plan.rootAgent) return 'no runnable team root';
+  if (!hasDelegationTool(plan.rootAgent.tools)) {
+    return `team root ${plan.rootAgent.name} is not a delegating agent`;
+  }
+  if (availableTeamMemberCount(plan) === 0) {
+    return 'no available team members';
+  }
+  return undefined;
+}
+
+export function canLaunchTeam<T extends TeamCatalogAgent>(
+  plan: TeamRunPlan<T>,
+): plan is TeamRunPlan<T> & { readonly rootAgent: T } {
+  return teamLaunchBlockReason(plan) === undefined;
+}
+
+export type TeamPlanStatus = 'available' | 'degraded' | 'unavailable';
+
+export function teamPlanStatus(plan: TeamRunPlan): TeamPlanStatus {
+  if (teamLaunchBlockReason(plan)) return 'unavailable';
+  return teamPlanHasGaps(plan) ? 'degraded' : 'available';
+}
+
+export interface TeamAgentAvailability {
+  readonly available: number;
+  readonly total: number;
+  readonly missing: readonly string[];
+  readonly label: string;
+}
+
+export interface TeamAvailability {
+  readonly status: TeamPlanStatus;
+  readonly workflow: TeamAgentAvailability;
+  readonly toolUse: TeamAgentAvailability;
+  readonly rootAgent?: {
+    readonly key: string;
+    readonly name: string;
+    readonly source: AgentSource;
+  };
+  readonly missingAgentOverride?: string;
+}
+
+export function teamAvailability(plan: TeamRunPlan): TeamAvailability {
+  return {
+    status: teamPlanStatus(plan),
+    workflow: presetAgentAvailability(
+      plan.preset.workflowAgents,
+      plan.missingWorkflowAgents,
+    ),
+    toolUse: presetAgentAvailability(
+      plan.preset.toolUseAgents,
+      plan.missingToolUseAgents,
+    ),
+    rootAgent: plan.rootAgent
+      ? {
+          key: agentKeyOf(plan.rootAgent),
+          name: plan.rootAgent.name,
+          source: plan.rootAgent.source,
+        }
+      : undefined,
+    missingAgentOverride: plan.missingAgentOverride,
+  };
+}
+
+export function teamExecutionFields<T extends TeamCatalogAgent>(
+  plan: TeamRunPlan<T>,
+): {
+  agent: string;
+  delegationAgentScope: AgentDelegationScope;
+  cliMultiAgentPresetId: string;
+} {
+  if (!canLaunchTeam(plan)) {
+    throw new Error(
+      `Cannot build execution fields for team "${plan.preset.id}".`,
+    );
+  }
+  return {
+    agent: agentKeyOf(plan.rootAgent),
+    delegationAgentScope: {
+      workflowAgentKeys: [...plan.workflowAgentKeys],
+      toolUseAgentKeys: [...plan.toolUseAgentKeys],
+    },
+    cliMultiAgentPresetId: plan.preset.id,
+  };
+}
+
+export function buildTeamOptions(
+  plans: readonly TeamRunPlan[],
+): TeamOptionData[] {
+  const builtInOrder = new Map(
+    AGENT_MODE_PRESETS.map((preset, index) => [preset.id, index]),
+  );
+  return [...plans]
+    .sort((left, right) => {
+      if (left.preset.source !== right.preset.source) {
+        return left.preset.source === 'built-in' ? -1 : 1;
+      }
+      if (left.preset.source === 'custom') {
+        return left.preset.name.localeCompare(right.preset.name);
+      }
+      return (
+        (builtInOrder.get(left.preset.id) ?? Number.MAX_SAFE_INTEGER) -
+        (builtInOrder.get(right.preset.id) ?? Number.MAX_SAFE_INTEGER)
+      );
+    })
+    .map((plan) => {
+      const blockReason = teamLaunchBlockReason(plan);
+      return {
+        value: plan.preset.id,
+        label: plan.preset.name,
+        icon: plan.preset.icon,
+        source: plan.preset.source,
+        description: plan.preset.description,
+        unavailableMembers: [
+          ...plan.missingWorkflowAgents,
+          ...plan.missingToolUseAgents,
+        ],
+        rootAgentName: plan.rootAgent?.name ?? null,
+        disabled: blockReason ? true : undefined,
+        disabledReason: blockReason
+          ? formatTeamOptionDisabledReason(blockReason)
+          : undefined,
+      };
+    });
+}
+
+export async function loadTeamOptions<T extends TeamCatalogAgent>(ports: {
+  customPresetsRaw: unknown;
+  getAgents: (category: AgentCategory) => readonly T[];
+  canAccessRemoteCatalog: () => Promise<boolean>;
+  refreshRemote: () => Promise<void>;
+}): Promise<TeamOptionData[]> {
+  const presets = teamPresets(ports.customPresetsRaw);
+  const planCurrent = () =>
+    planTeamRuns(presets, {
+      workflowAgents: ports.getAgents(AgentCategory.Workflow),
+      toolUseAgents: ports.getAgents(AgentCategory.ToolUse),
+    });
+  const result = await refreshRemoteCatalogForGaps(
+    planCurrent(),
+    (plans) => plans.some(teamPlanHasGaps),
+    planCurrent,
+    ports,
+  );
+  return buildTeamOptions(result.value);
+}
+
+export type TeamLaunchResolution =
+  | {
+      readonly status: 'ready';
+      readonly fields: ReturnType<typeof teamExecutionFields>;
+      readonly partial: boolean;
+      readonly missingNames: readonly string[];
+    }
+  | { readonly status: 'cancelled' }
+  | { readonly status: 'unknown-team' }
+  | { readonly status: 'blocked'; readonly reason: string }
+  | {
+      readonly status: 'unavailable';
+      readonly unavailableNames: readonly string[];
+    };
+
+export async function resolveTeamLaunch<T extends TeamCatalogAgent>(args: {
+  teamId: string;
+  customPresetsRaw: unknown;
+  getAgents: (category: AgentCategory) => readonly T[];
+  canAccessRemoteCatalog: () => Promise<boolean>;
+  refreshRemote: () => Promise<void>;
+  choose: (
+    unavailableNames: readonly string[],
+  ) => Promise<TeamAvailabilityChoice | undefined>;
+  signIn: () => Promise<boolean>;
+  providedChoice?: TeamAvailabilityChoice;
+}): Promise<TeamLaunchResolution> {
+  const preset = findTeamPreset(
+    teamPresets(args.customPresetsRaw),
+    args.teamId,
+  );
+  if (!preset) return { status: 'unknown-team' };
+
+  const planCurrent = () =>
+    planTeamRun(preset, {
+      workflowAgents: args.getAgents(AgentCategory.Workflow),
+      toolUseAgents: args.getAgents(AgentCategory.ToolUse),
+    });
+  const refreshed = await refreshRemoteCatalogForGaps(
+    planCurrent(),
+    teamPlanHasGaps,
+    planCurrent,
+    args,
+  );
+  const missing = [
+    ...refreshed.value.missingWorkflowAgents,
+    ...refreshed.value.missingToolUseAgents,
+  ];
+  const preflight = await preflightTeamAvailability({
+    initial: refreshed.value,
+    unresolvedNames: teamTexraHostedMissingNames,
+    texraHostedNames: teamHostedNamesForPreflight(preset, missing),
+    canAccessRemoteCatalog: args.canAccessRemoteCatalog,
+    providedChoice: args.providedChoice,
+    choose: args.choose,
+    signIn: args.signIn,
+    refresh: async () => {
+      await args.refreshRemote();
+      return planCurrent();
+    },
+    remoteCatalogRefreshAttempted: refreshed.remoteCatalogRefreshAttempted,
+  });
+
+  if (preflight.status === 'cancelled') return { status: 'cancelled' };
+  if (preflight.status === 'choice-required') {
+    // This is reachable only when no provided choice exists and the interactive
+    // choice port returns no decision. Hosts treat that dismissal as cancel.
+    return { status: 'cancelled' };
+  }
+  if (preflight.status === 'unavailable') {
+    return {
+      status: 'unavailable',
+      unavailableNames: preflight.unavailableNames,
+    };
+  }
+
+  const plan = preflight.value;
+  if (!canLaunchTeam(plan)) {
+    return {
+      status: 'blocked',
+      reason: teamLaunchBlockReason(plan)!,
+    };
+  }
+  return {
+    status: 'ready',
+    fields: teamExecutionFields(plan),
+    partial: preflight.partial,
+    missingNames: [...plan.missingWorkflowAgents, ...plan.missingToolUseAgents],
+  };
+}
+
+export async function refreshRemoteCatalogForGaps<T>(
+  value: T,
+  hasGaps: (value: T) => boolean,
+  replan: () => T,
+  ports: {
+    canAccessRemoteCatalog: () => Promise<boolean>;
+    refreshRemote: () => Promise<void>;
+  },
+): Promise<{ value: T; remoteCatalogRefreshAttempted: boolean }> {
+  if (hasGaps(value) && (await ports.canAccessRemoteCatalog())) {
+    await ports.refreshRemote();
+    return { value: replan(), remoteCatalogRefreshAttempted: true };
+  }
+  return { value, remoteCatalogRefreshAttempted: false };
+}
+
+function resolvePresetAgents<T extends TeamCatalogAgent>(
+  names: readonly string[],
+  agents: readonly T[],
+): { resolved: T[]; missing: string[] } {
+  const resolved: T[] = [];
+  const missing: string[] = [];
+  for (const name of names) {
+    const entry = agents.find((agent) => agentMatchesIdentifier(agent, name));
+    if (entry) resolved.push(entry);
+    else missing.push(name);
+  }
+  return { resolved, missing };
+}
+
+function resolveAgentOverride<T extends TeamCatalogAgent>(
+  override: string | undefined,
+  agents: readonly T[],
+): { agent?: T; missing?: string } {
+  const query = override?.trim();
+  if (!query) return {};
+  const agent = agents.find((entry) => agentMatchesIdentifier(entry, query));
+  return agent ? { agent } : { missing: query };
+}
+
+function selectTeamRootAgent<T extends TeamCatalogAgent>(
+  agents: readonly T[],
+  options: {
+    readonly presetOrder: readonly string[];
+    readonly presetSource: TeamPresetSource;
+  },
+): T | undefined {
+  const delegatingAgents = implicitDefaultToolUseAgents(agents).filter(
+    (agent) => hasDelegationTool(agent.tools),
+  );
+  const searchOrder =
+    options.presetSource === 'built-in'
+      ? BUILTIN_TEAM_ROOT_AGENT_NAMES
+      : [...options.presetOrder, ...BUILTIN_TEAM_ROOT_AGENT_NAMES];
+  for (const identifier of searchOrder) {
+    const preferredRoot = delegatingAgents.find((agent) =>
+      agentMatchesIdentifier(agent, identifier),
+    );
+    if (preferredRoot) return preferredRoot;
+  }
+  return options.presetSource === 'built-in' ? undefined : delegatingAgents[0];
+}
+
+function includeAgent<T extends TeamCatalogAgent>(
+  agents: readonly T[],
+  rootAgent: T,
+): T[] {
+  const rootKey = agentKeyOf(rootAgent);
+  return agents.some((agent) => agentKeyOf(agent) === rootKey)
+    ? [...agents]
+    : [...agents, rootAgent];
+}
+
+function availableTeamMemberCount(plan: TeamRunPlan): number {
+  const rootKey = plan.rootAgent ? agentKeyOf(plan.rootAgent) : undefined;
+  const memberKeys = [
+    ...plan.workflowAgentKeys,
+    ...plan.toolUseAgentKeys.filter((key) => key !== rootKey),
+  ];
+  return new Set(memberKeys).size;
+}
+
+function presetAgentAvailability(
+  presetAgents: readonly string[],
+  missingAgents: readonly string[],
+): TeamAgentAvailability {
+  const total = presetAgents.length;
+  const available = total - missingAgents.length;
+  return {
+    available,
+    total,
+    missing: [...missingAgents],
+    label: missingAgents.length === 0 ? String(total) : `${available}/${total}`,
+  };
+}
+
+function formatTeamOptionDisabledReason(reason: string): string {
+  if (reason === 'no runnable team root') return 'No runnable team lead.';
+  return `${reason.charAt(0).toUpperCase()}${reason.slice(1)}.`;
+}
+
+function lookupKey(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function slugKey(value: string): string {
+  return lookupKey(value).replaceAll(/\s+/g, '-');
+}

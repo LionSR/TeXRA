@@ -607,6 +607,23 @@ function createWindow(options: {
       });
       return result.response === 0;
     },
+    chooseTeamAvailability: async (unavailableNames) => {
+      const result = await dialog.showMessageBox(window, {
+        type: 'warning',
+        message: `This team has unavailable TeXRA-hosted members: ${unavailableNames.join(', ')}.`,
+        buttons: [
+          'Sign In to TeXRA',
+          'Continue with Available Members',
+          'Cancel',
+        ],
+        defaultId: 0,
+        cancelId: 2,
+      });
+      if (result.response === 0) return 'sign-in';
+      if (result.response === 1) return 'continue';
+      return 'cancel';
+    },
+    signInForRemoteAgentCatalog,
     showInfoMessage,
     showErrorMessage,
     // Recompute the onboarding funnel after a run completes so a user's first
