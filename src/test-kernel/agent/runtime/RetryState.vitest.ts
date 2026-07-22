@@ -47,7 +47,10 @@ import {
 } from '@auth/relayToken';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { AuthTokenProvider } from '@auth/TokenProvider';
-import { attachContextWindowError } from '@common/errors/sdkErrorUtils';
+import {
+  attachContextWindowError,
+  attachSdkErrorMetadata,
+} from '@common/errors/sdkErrorUtils';
 import {
   STREAM_PHASE,
   STREAM_STATUS,
@@ -202,6 +205,7 @@ function createModelInvocationNode(): ModelInvocationNode<BaseCycleFields> {
 
 interface CapturedModelRetry {
   readonly sharedRoute: string;
+  readonly recheckedSharedRoute: string;
   readonly classifySharedFailure: (
     error: Error,
   ) => { retryAfterMs?: number } | undefined;
@@ -217,7 +221,7 @@ async function captureModelRetry(
   credentialRoute: ModelCredentialRoute = 'api-key',
   refreshClient?: () => Promise<void>,
   model = 'openai:test',
-  clientRevision = 0,
+  clientCredentialIdentity = 'credential-a',
 ): Promise<CapturedModelRetry> {
   const streamId = 'model-retry-policy' as StreamTabId;
   const session = createTestSession();
@@ -240,7 +244,7 @@ async function captureModelRetry(
     config: { model: 'openai:test' },
     setAbortController: vi.fn(),
     client,
-    clientRevision,
+    clientCredentialIdentity,
     clientCredentialRoute: credentialRoute,
     refreshClient,
   } as never);
@@ -251,8 +255,10 @@ async function captureModelRetry(
     );
     const [sharedRoute, sharedOptions] = run.mock.calls[0]!;
     const [modelRateLimitRoute, modelRateLimitOptions] = run.mock.calls[1]!;
+    const [recheckedSharedRoute] = run.mock.calls[2]!;
     return {
       sharedRoute,
+      recheckedSharedRoute,
       classifySharedFailure: sharedOptions.classifyFailure,
       modelRateLimitRoute,
       classifyModelRateLimitFailure: modelRateLimitOptions.classifyFailure,
@@ -587,6 +593,7 @@ describe('RetryState', () => {
     });
 
     expect(first.sharedRoute).toBe(second.sharedRoute);
+    expect(first.recheckedSharedRoute).toBe(first.sharedRoute);
     expect(first.modelRateLimitRoute).not.toBe(second.modelRateLimitRoute);
     expect(first.classifySharedFailure(rateLimit)).toBeUndefined();
     expect(first.classifyModelRateLimitFailure(rateLimit)).toEqual({
@@ -594,24 +601,101 @@ describe('RetryState', () => {
     });
   });
 
-  it('isolates rate-limit recovery after the model client changes', async () => {
+  it('isolates rate-limit recovery by stable credential identity', async () => {
     const first = await captureModelRetry(
       'https://api.example/v1',
       'api-key',
       undefined,
       'openai:model-a',
-      0,
+      'credential-a',
+    );
+    const sameCredential = await captureModelRetry(
+      'https://api.example/v1',
+      'api-key',
+      undefined,
+      'openai:model-a',
+      'credential-a',
     );
     const replacement = await captureModelRetry(
       'https://api.example/v1',
       'api-key',
       undefined,
       'openai:model-a',
-      1,
+      'credential-b',
     );
 
     expect(replacement.sharedRoute).toBe(first.sharedRoute);
+    expect(sameCredential.modelRateLimitRoute).toBe(first.modelRateLimitRoute);
     expect(replacement.modelRateLimitRoute).not.toBe(first.modelRateLimitRoute);
+  });
+
+  it('reacquires the rate-limit scope when shared admission changes the client', async () => {
+    const streamId = 'model-retry-rekey-after-shared' as StreamTabId;
+    const session = createTestSession();
+    let credentialIdentity = 'credential-a';
+    const run = vi.spyOn(session.modelRetries, 'run');
+    run.mockImplementation((async (_route, _options, operation) => {
+      // Outer shared gate, model gate, then the shared recheck. Simulate a
+      // client rebuild at that recheck; the provider call must first enter
+      // the replacement credential's model-rate scope.
+      if (run.mock.calls.length === 3) {
+        credentialIdentity = 'credential-b';
+      }
+      return operation();
+    }) as typeof session.modelRetries.run);
+    const createResponse = vi.fn(async () => ({ response: 'ok' }));
+    const node = new ModelInvocationNode<BaseCycleFields>({
+      operationName: 'Model call',
+      streaming: false,
+      storeResponse: vi.fn(),
+    }).setServices({
+      modelHandler: {
+        config: { provider: 'openai', fullName: 'openai:model-a' },
+        createResponse,
+        getRetryEndpoint: () => 'https://api.example/v1',
+        isBackgroundModeActive: () => false,
+        setOutputStreaming: () => {},
+      },
+      logger: noopTrace,
+      setting: { temperature: 0 },
+      config: { model: 'openai:model-a' },
+      setAbortController: vi.fn(),
+      client: {},
+      get clientCredentialIdentity() {
+        return credentialIdentity;
+      },
+      clientCredentialRoute: 'api-key',
+    } as never);
+
+    try {
+      await withRetryRunContext(streamId, session, () =>
+        node.exec({ shouldStop: false, messages: [] }),
+      );
+
+      const routes = run.mock.calls.map(([route]) => route);
+      expect(routes).toEqual([
+        JSON.stringify(['openai', 'api-key', 'https://api.example/v1']),
+        JSON.stringify([
+          'openai',
+          'api-key',
+          'https://api.example/v1',
+          'openai:model-a',
+          'credential-a',
+        ]),
+        JSON.stringify(['openai', 'api-key', 'https://api.example/v1']),
+        JSON.stringify([
+          'openai',
+          'api-key',
+          'https://api.example/v1',
+          'openai:model-a',
+          'credential-b',
+        ]),
+        JSON.stringify(['openai', 'api-key', 'https://api.example/v1']),
+      ]);
+      expect(createResponse).toHaveBeenCalledOnce();
+    } finally {
+      session.dispose();
+    }
   });
 
   it('recognizes the nested Undici stream timeout from long model calls', async () => {
@@ -624,6 +708,21 @@ describe('RetryState', () => {
     const sdkError = new Error('Connection error', { cause: fetchError });
 
     expect(classifySharedFailure(sdkError)).toEqual({
+      retryAfterMs: undefined,
+    });
+  });
+
+  it('recognizes handler-tagged connection closures as route failures', async () => {
+    const { classifySharedFailure } = await captureModelRetry();
+    const closure = new Error(
+      'WebSocket closed unexpectedly (code: 1006, reason: idle timeout)',
+    );
+    attachSdkErrorMetadata(closure, {
+      provider: 'openai',
+      kind: 'connection',
+    });
+
+    expect(classifySharedFailure(closure)).toEqual({
       retryAfterMs: undefined,
     });
   });

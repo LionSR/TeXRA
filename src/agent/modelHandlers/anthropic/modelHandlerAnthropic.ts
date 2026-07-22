@@ -35,6 +35,7 @@ import type {
   TokenCountOptions,
 } from '@agent/types/ModelHandlerContracts';
 import {
+  attachSdkErrorMetadata,
   attachStreamDiagnostics,
   handleStreamingFailure,
   isUserAbort,
@@ -268,6 +269,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         maxRetries: 0,
       }),
       credential.route,
+      credential.apiKey,
     );
   }
 
@@ -452,13 +454,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // resolved with a truncated response rather than an SDK error.
       const diagnostics = streamHandler.getDiagnostics();
       if (!diagnostics.messageStopReceived) {
-        throw new Error(
+        const error = new Error(
           `Stream ended without message_stop after ${diagnostics.elapsedSecs}s ` +
             `(${diagnostics.eventsProcessed} events, ` +
             `${diagnostics.thinkingChars} thinking chars, ` +
             `${diagnostics.textChars} text chars). ` +
             'Stream truncated, likely proxy idle timeout during extended thinking.',
         );
+        attachSdkErrorMetadata(error, {
+          provider: this.config.provider,
+          kind: 'connection',
+        });
+        throw error;
       }
 
       this.processThinkingBlock(response);

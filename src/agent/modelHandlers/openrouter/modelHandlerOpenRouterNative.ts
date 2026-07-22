@@ -152,7 +152,11 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       retryConfig: { strategy: 'none' },
     });
     this.retryEndpoints.set(client, credential.baseUrl ?? OPENROUTER_BASE_URL);
-    return this.rememberClientCredentialRoute(client, credential.route);
+    return this.rememberClientCredentialRoute(
+      client,
+      credential.route,
+      credential.apiKey,
+    );
   }
 
   override getRetryEndpoint(client: OpenRouter): string {

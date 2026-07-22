@@ -27,8 +27,12 @@ function handler(
 }
 
 class CredentialRouteProbe extends ModelHandlerGoogleGenAI {
-  tag(client: GoogleGenAI, route: ModelCredentialRoute): void {
-    this.rememberClientCredentialRoute(client, route);
+  tag(
+    client: GoogleGenAI,
+    route: ModelCredentialRoute,
+    credentialSecret: string,
+  ): void {
+    this.rememberClientCredentialRoute(client, route, credentialSecret);
   }
 }
 
@@ -107,34 +111,62 @@ describe('model client route publication', () => {
       [initial, 'relay'],
       [candidate, 'api-key'],
     ]);
+    const identities = new Map<TestClient, string>([
+      [initial, 'relay'],
+      [candidate, 'personal-key-fingerprint'],
+    ]);
     const modelHandler = {
       getClient: vi.fn(async () => initial),
       refreshClient: vi.fn(async () => candidate),
       getCredentialRouteForClient: vi.fn((client: TestClient) =>
         routes.get(client),
       ),
+      getCredentialIdentityForClient: vi.fn((client: TestClient) =>
+        identities.get(client),
+      ),
     } as unknown as IModelHandler;
     const services = await withModelClient({}, modelHandler);
 
     expect(services.clientCredentialRoute).toBe('relay');
-    expect(services.clientRevision).toBe(0);
+    expect(services.clientCredentialIdentity).toBe('relay');
 
     await services.refreshClient?.('personal');
     expect(services.client).toBe(candidate);
     expect(services.clientCredentialRoute).toBe('api-key');
-    expect(services.clientRevision).toBe(1);
+    expect(services.clientCredentialIdentity).toBe('personal-key-fingerprint');
   });
 
-  it('returns the captured route for a tagged client and undefined for a foreign one', () => {
+  it('publishes stable credential identities without retaining the secret', () => {
     const probe = new CredentialRouteProbe(
       buildTestModelConfig({ provider: ModelProvider.GOOGLE }),
     );
-    const tagged = {} as GoogleGenAI;
-    probe.tag(tagged, 'relay');
+    const first = {} as GoogleGenAI;
+    const sameCredential = {} as GoogleGenAI;
+    const replacement = {} as GoogleGenAI;
+    const relayAfterRefresh = {} as GoogleGenAI;
+    probe.tag(first, 'api-key', 'secret-a');
+    probe.tag(sameCredential, 'api-key', 'secret-a');
+    probe.tag(replacement, 'api-key', 'secret-b');
+    probe.tag(relayAfterRefresh, 'relay', 'rotated-relay-token');
 
-    expect(probe.getCredentialRouteForClient(tagged)).toBe('relay');
+    expect(probe.getCredentialRouteForClient(first)).toBe('api-key');
+    expect(probe.getCredentialIdentityForClient(first)).toBe(
+      probe.getCredentialIdentityForClient(sameCredential),
+    );
+    expect(probe.getCredentialIdentityForClient(first)).not.toBe(
+      probe.getCredentialIdentityForClient(replacement),
+    );
+    expect(probe.getCredentialIdentityForClient(first)).not.toContain(
+      'secret-a',
+    );
+    expect(probe.getCredentialIdentityForClient(relayAfterRefresh)).toBe(
+      'relay',
+    );
     expect(
       probe.getCredentialRouteForClient({} as GoogleGenAI),
+    ).toBeUndefined();
+    expect(
+      probe.getCredentialIdentityForClient({} as GoogleGenAI),
     ).toBeUndefined();
   });
 });

@@ -1158,7 +1158,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       maxRetries: 0,
     });
     this.logOpenAICompatibleClientConfig(client.baseURL, credential.route);
-    return this.rememberClientCredentialRoute(client, credential.route);
+    return this.rememberClientCredentialRoute(
+      client,
+      credential.route,
+      credential.apiKey,
+    );
   }
 
   /** Returns OpenAI client with configured API key. */

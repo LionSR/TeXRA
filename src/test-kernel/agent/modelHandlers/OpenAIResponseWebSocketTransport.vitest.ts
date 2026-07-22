@@ -9,6 +9,7 @@ import { WebSocketError } from 'openai/resources/responses/internal-base';
 import type { AgentTrace } from '@agent/trace';
 import { OpenAIResponseWebSocketTransport } from '@agent/modelHandlers/openai/OpenAIResponseWebSocketTransport';
 import type { ResponseStreamProcessor } from '@agent/modelHandlers/openai/ResponseStreamProcessor';
+import { detectSdkErrorMetadata } from '@common/errors/sdkErrorUtils';
 
 // Third-party type imports
 import type OpenAI from 'openai';
@@ -149,5 +150,18 @@ describe('OpenAIResponseWebSocketTransport idle connection errors', () => {
     ws.emit('error', error);
 
     await expect(request).rejects.toBe(error);
+    expect(detectSdkErrorMetadata(error)?.kind).toBe('connection');
+  });
+
+  it('tags an unexpected in-flight socket close as a connection failure', async () => {
+    const transport = createTransport();
+    const ws = await internals(transport).getOrCreateWebSocket(fakeClient);
+    const request = internals(transport).executeViaWebSocket(ws, {});
+
+    ws.socket.emit('close', 1006, Buffer.from('idle timeout'));
+
+    const error = await request.catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(Error);
+    expect(detectSdkErrorMetadata(error)?.kind).toBe('connection');
   });
 });

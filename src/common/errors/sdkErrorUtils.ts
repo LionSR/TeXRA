@@ -13,6 +13,7 @@ export {
 
 export {
   attachSdkErrorMetadata,
+  detectSdkErrorMetadata,
   attachStreamDiagnostics,
   attachPartialText,
   detectPartialText,

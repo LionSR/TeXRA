@@ -94,7 +94,7 @@ class StatelessResponseHandler extends ModelHandlerOpenAIResponse {
 
 class ResponseRouteProbe extends ModelHandlerOpenAIResponse {
   tagClient(client: OpenAI, route: ModelCredentialRoute): OpenAI {
-    return this.rememberClientCredentialRoute(client, route);
+    return this.rememberClientCredentialRoute(client, route, 'test-credential');
   }
 
   usesOpenRouter(): boolean {

@@ -546,8 +546,8 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       setCached: (cache) => {
         this.googleClient = cache;
       },
-      rememberRoute: (client, route) =>
-        this.rememberClientCredentialRoute(client, route),
+      rememberRoute: (client, route, credentialSecret) =>
+        this.rememberClientCredentialRoute(client, route, credentialSecret),
     });
   }
 

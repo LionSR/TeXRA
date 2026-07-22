@@ -17,6 +17,7 @@ import type {
 } from '@agent/types/ModelHandlerContracts';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import { normalizeProviderError } from '@common/errors';
+import { detectSdkErrorMetadata } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
 import { isObject } from '@utils/core';
 
@@ -99,19 +100,25 @@ function classifyModelRouteFailure(
   const hasStructuredUndiciFailure = candidates.some(({ code }) =>
     code.startsWith('UND_ERR_'),
   );
-  const transportFailure = candidates.some(({ code, name, message }) => {
-    if (
-      TRANSPORT_ERROR_CODES.has(code) ||
-      (code === 'UND_ERR_INFO' && /\b(?:stream )?timeout\b/i.test(message))
-    ) {
-      return true;
-    }
-    return (
-      !hasStructuredUndiciFailure &&
-      (/(?:Connection|Timeout)Error$/.test(name) ||
-        /^(?:fetch failed|failed to fetch)$/i.test(message.trim()))
-    );
+  const taggedTransportFailure = chain.some((current) => {
+    const kind = detectSdkErrorMetadata(current)?.kind;
+    return kind === 'connection' || kind === 'connection_timeout';
   });
+  const transportFailure =
+    taggedTransportFailure ||
+    candidates.some(({ code, name, message }) => {
+      if (
+        TRANSPORT_ERROR_CODES.has(code) ||
+        (code === 'UND_ERR_INFO' && /\b(?:stream )?timeout\b/i.test(message))
+      ) {
+        return true;
+      }
+      return (
+        !hasStructuredUndiciFailure &&
+        (/(?:Connection|Timeout)Error$/.test(name) ||
+          /^(?:fetch failed|failed to fetch)$/i.test(message.trim()))
+      );
+    });
   const statusCode = chain
     .map((current) => normalizeProviderError(current).statusCode)
     .find((status) => status !== undefined);
@@ -184,7 +191,7 @@ type InvocationServices = Pick<
 > &
   Pick<BaseFlowContextInit, 'setAbortController'> & {
     readonly client: unknown;
-    readonly clientRevision?: number;
+    readonly clientCredentialIdentity?: string;
     readonly clientCredentialRoute?: ModelCredentialRoute;
     readonly refreshClient?: (
       selection?: ModelCredentialSelection,
@@ -241,11 +248,6 @@ export class ModelInvocationNode<
         services.modelHandler.getRetryEndpoint(services.client),
       ];
       const sharedRoute = JSON.stringify(routeIdentity);
-      const modelRateLimitRoute = JSON.stringify([
-        ...routeIdentity,
-        services.modelHandler.config.fullName,
-        services.clientRevision ?? 0,
-      ]);
       const gate = useLaunchRunContext().runScope.session.modelRetries;
       const invoke = async () => {
         const start = Date.now();
@@ -270,50 +272,78 @@ export class ModelInvocationNode<
         };
       };
 
-      return gate.run(
-        sharedRoute,
-        {
-          signal,
-          baseBackoffMs: this._retryBackoffMs,
-          // Route state and node retry eligibility answer different questions.
-          // Shared authentication failures must keep peers behind the gate while
-          // the relay refreshes, even though pRetry must not repeat a stale
-          // credential without that recovery step.
-          classifyFailure: (error) =>
-            classifyModelRouteFailure(error, services.clientCredentialRoute),
-          recoverFailure: (error, retry) =>
-            this.getRelay401Recovery(error, () => retry(), signal),
-          onAdmitted:
-            services.clientCredentialRoute === 'relay'
-              ? async () => {
-                  await tryRefreshClient(
-                    services.refreshClient,
-                    services.logger,
-                    'after shared recovery',
-                    signal,
-                  );
-                }
-              : undefined,
-          onWait: (delayMs) =>
-            services.logger.debug(
-              `Waiting ${delayMs}ms for the shared model recovery probe.`,
+      const runWithSharedRoute = <T>(operation: () => Promise<T>) =>
+        gate.run(
+          sharedRoute,
+          {
+            signal,
+            baseBackoffMs: this._retryBackoffMs,
+            // Route state and node retry eligibility answer different questions.
+            // Shared authentication failures must keep peers behind the gate while
+            // the relay refreshes, even though pRetry must not repeat a stale
+            // credential without that recovery step.
+            classifyFailure: (error) =>
+              classifyModelRouteFailure(error, services.clientCredentialRoute),
+            recoverFailure: (error, retry) =>
+              this.getRelay401Recovery(error, () => retry(), signal),
+            onAdmitted:
+              services.clientCredentialRoute === 'relay'
+                ? async () => {
+                    await tryRefreshClient(
+                      services.refreshClient,
+                      services.logger,
+                      'after shared recovery',
+                      signal,
+                    );
+                  }
+                : undefined,
+            onWait: (delayMs) =>
+              services.logger.debug(
+                `Waiting ${delayMs}ms for the shared model recovery probe.`,
+              ),
+          },
+          operation,
+        );
+
+      const getModelRateLimitRoute = () =>
+        JSON.stringify([
+          services.modelHandler.config.provider,
+          services.clientCredentialRoute ?? 'configured',
+          services.modelHandler.getRetryEndpoint(services.client),
+          services.modelHandler.config.fullName,
+          services.clientCredentialIdentity ?? 'unknown-credential',
+        ]);
+      const runWithModelRateLimit = (): ReturnType<typeof invoke> => {
+        const modelRateLimitRoute = getModelRateLimitRoute();
+        return gate.run(
+          modelRateLimitRoute,
+          {
+            signal,
+            baseBackoffMs: this._retryBackoffMs,
+            classifyFailure: classifyModelRateLimitFailure,
+            onWait: (delayMs) =>
+              services.logger.debug(
+                `Waiting ${delayMs}ms for the model rate-limit recovery probe.`,
+              ),
+          },
+          () =>
+            runWithSharedRoute(() =>
+              // Shared-route admission can rebuild the client. If that changes
+              // the credential, endpoint, or route, the permit above belongs
+              // to the old rate-limit scope; acquire the live scope before
+              // calling the provider.
+              getModelRateLimitRoute() === modelRateLimitRoute
+                ? invoke()
+                : runWithModelRateLimit(),
             ),
-        },
-        () =>
-          gate.run(
-            modelRateLimitRoute,
-            {
-              signal,
-              baseBackoffMs: this._retryBackoffMs,
-              classifyFailure: classifyModelRateLimitFailure,
-              onWait: (delayMs) =>
-                services.logger.debug(
-                  `Waiting ${delayMs}ms for the model rate-limit recovery probe.`,
-                ),
-            },
-            invoke,
-          ),
-      );
+        );
+      };
+
+      // The model gate may wait after the first shared permit was issued.
+      // Re-enter the shared gate immediately before the provider call so a
+      // concurrent transport/authentication failure cannot leave this
+      // invocation running under a stale outer permit.
+      return runWithSharedRoute(runWithModelRateLimit);
     });
   }
 

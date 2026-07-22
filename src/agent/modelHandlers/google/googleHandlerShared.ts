@@ -59,6 +59,7 @@ interface ResolveGoogleClientParams {
   rememberRoute: (
     client: GoogleGenAI,
     route: ModelCredentialRoute,
+    credentialSecret: string,
   ) => GoogleGenAI;
 }
 
@@ -88,7 +89,7 @@ export async function resolveGoogleClient(
         retryOptions: { attempts: 1 },
       },
     });
-    return rememberRoute(client, credential.route);
+    return rememberRoute(client, credential.route, credential.apiKey);
   };
 
   if (credential.route === 'relay') {

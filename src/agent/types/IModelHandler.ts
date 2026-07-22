@@ -65,6 +65,7 @@ export type IModelHandler<
   | 'normalizeUsage'
   | 'getLastCredentialUsageRoute'
   | 'getCredentialRouteForClient'
+  | 'getCredentialIdentityForClient'
   | 'updateMessageContent'
   | 'shouldContinue'
   | 'checkStopConditions'

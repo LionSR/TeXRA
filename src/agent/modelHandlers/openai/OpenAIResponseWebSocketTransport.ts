@@ -14,6 +14,7 @@ import { WebSocketError } from 'openai/resources/responses/internal-base';
 import type { AgentTrace } from '@agent/trace';
 import {
   attachPartialText,
+  attachSdkErrorMetadata,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
@@ -347,6 +348,10 @@ export class OpenAIResponseWebSocketTransport {
         // The server may close the socket after sending the error, but the close event
         // fires after this handler and would be a no-op (settled=true).
         this.closeWebSocket();
+        attachSdkErrorMetadata(error, {
+          provider: 'openai',
+          kind: 'connection',
+        });
         rejectWithPartial(error);
       };
 
@@ -356,11 +361,14 @@ export class OpenAIResponseWebSocketTransport {
         settled = true;
         cleanup();
         this.closeWebSocket();
-        rejectWithPartial(
-          new Error(
-            `WebSocket closed unexpectedly (code: ${code}, reason: ${reason.toString()})`,
-          ),
+        const error = new Error(
+          `WebSocket closed unexpectedly (code: ${code}, reason: ${reason.toString()})`,
         );
+        attachSdkErrorMetadata(error, {
+          provider: 'openai',
+          kind: 'connection',
+        });
+        rejectWithPartial(error);
       };
 
       const cleanup = (): void => {

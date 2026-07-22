@@ -322,6 +322,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
         maxRetries: 0,
       }),
       'chatgpt-subscription',
+      apiKey,
     );
   }
 

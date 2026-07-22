@@ -1,4 +1,5 @@
 // Node imports
+import { createHash } from 'node:crypto';
 import { dirname } from 'node:path';
 
 // Third-party imports
@@ -259,6 +260,7 @@ export abstract class ModelHandler<
     object,
     ModelCredentialRoute
   >();
+  private readonly clientCredentialIdentities = new WeakMap<object, string>();
   private activeAttemptCredentialRoute: ModelCredentialRoute | undefined;
   private lastAttemptCredentialRoute: ModelCredentialRoute | undefined;
   public config: ModelConfig;
@@ -633,8 +635,18 @@ export abstract class ModelHandler<
   protected rememberClientCredentialRoute<Candidate extends object>(
     client: Candidate,
     route: ModelCredentialRoute,
+    credentialSecret: string,
   ): Candidate {
     this.clientCredentialRoutes.set(client, route);
+    const identity =
+      route === 'relay' || route === 'chatgpt-subscription'
+        ? route
+        : createHash('sha256')
+            .update(route)
+            .update('\0')
+            .update(credentialSecret)
+            .digest('base64url');
+    this.clientCredentialIdentities.set(client, identity);
     return client;
   }
 
@@ -642,6 +654,13 @@ export abstract class ModelHandler<
   getCredentialRouteForClient(client: C): ModelCredentialRoute | undefined {
     return typeof client === 'object' && client !== null
       ? this.clientCredentialRoutes.get(client)
+      : undefined;
+  }
+
+  /** Stable, non-secret identity for the credential captured by a client. */
+  getCredentialIdentityForClient(client: C): string | undefined {
+    return typeof client === 'object' && client !== null
+      ? this.clientCredentialIdentities.get(client)
       : undefined;
   }
 
