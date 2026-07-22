@@ -36,17 +36,27 @@ under PR #9039 (163 insertions, 101 deletions across 5 files); its child
 `1b5732a` has an identical tree and contributes no diff, making `1b5732a`,
 not `c08e698`, the no-op duplicate (correcting an earlier draft of this doc,
 which had the two backwards). The lease-scoping
-rewrite (`0dc0f8b`) is the one with real spine-shape risk, touching
+rewrite (`0dc0f8b`) is the one with real spine-shape risk. **Correction
+(Codex, P2): the file census for this commit was itself incomplete** — an
+earlier draft of this doc named 8 files; `git diff 0dc0f8b^ 0dc0f8b --
+src/agent/runtime src/agent/storage` alone shows **11**:
 `executeAgent.ts`, `executionRegistry.ts`, `runAgent.ts`,
 `AgentRunLifecycle.ts`, `ExecutionHandle.ts`, `childRunLoop.ts`,
-`executionLease.ts`, and `executionLifecycle.ts` — 8 files. This pass's
-fan-out readers opened only **one** of those 8 fresh at `395e229`:
-`runAgent.ts`. `RunContext.ts` and `SessionHandle.ts` were also read fresh
-this pass, but as part of the general runtime review, not because `0dc0f8b`
-touched them — it didn't. The other 7 files `0dc0f8b` changed
+`AgentLaunchContext.ts` (omitted from the earlier count),
+`executionLease.ts`, `executionLifecycle.ts`, `executionListing.ts`
+(omitted), and `storage/index.ts` (omitted) — and the full commit touches
+34 files total, including `src/tools/bash.ts`,
+`src/tools/agentCliShared.ts`, and the delegation tool call sites
+(`subagentExecution.ts`, `inBandSubagentExecution.ts`,
+`WorkflowScriptTool.ts`). This pass's fan-out readers opened only **one** of
+those 11 runtime/storage files fresh at `395e229`: `runAgent.ts`.
+`RunContext.ts` and `SessionHandle.ts` were also read fresh this pass, but
+as part of the general runtime review, not because `0dc0f8b` touched them —
+it didn't. The other 10 `runtime`/`storage` files `0dc0f8b` changed
 (`executeAgent.ts`, `executionRegistry.ts`, `AgentRunLifecycle.ts`,
-`ExecutionHandle.ts`, `childRunLoop.ts`, `executionLease.ts`,
-`executionLifecycle.ts`) were **not** opened this pass, so "unchanged since
+`ExecutionHandle.ts`, `childRunLoop.ts`, `AgentLaunchContext.ts`,
+`executionLease.ts`, `executionLifecycle.ts`, `executionListing.ts`,
+`storage/index.ts`) were **not** opened this pass, so "unchanged since
 07-21" is not established for any of them — a real residual gap in this
 checkpoint's coverage, not a reassurance, and a future pass should read them
 explicitly. As on every prior pass it ran a **fresh,
@@ -331,7 +341,8 @@ A fourth review round caught three more: the desktop deep-import baseline is
 prose table without checking it against the checked-in
 `config/ratchets/host-agent-import-baseline.json`; the claim that
 `childRunLoop.ts` was read fresh this pass was false (only `runAgent.ts`,
-among the 8 files `0dc0f8b` touched, was actually opened); and this
+among the 11 `runtime`/`storage` files `0dc0f8b` touched — itself corrected
+up from an initially-undercounted 8 — was actually opened); and this
 checkpoint's own "MCP tool exposure" observation has been **retracted in
 full** — a detailed PRD (`docs/prds/2026-05-04-prd-cli-app.md` §24) already
 covers that ground and deliberately defers it, so it was never a gap to
@@ -403,16 +414,19 @@ five-checkpoint-old claim named.
   substantive citty commit, not its no-op child `1b5732a`, which an earlier
   draft mislabeled as the duplicate — verified via `git show -s --format=%T`
   on both SHAs: identical tree, so `1b5732a` contributes no diff) — include a
-  substantial spine rewrite (`0dc0f8b`:
-  `executeAgent.ts`, `executionRegistry.ts`, `runAgent.ts`,
+  substantial spine rewrite (`0dc0f8b`). **Correction (Codex, P2): the file
+  census for `0dc0f8b` was itself incomplete** — an earlier draft of this
+  doc named 8 files;
+  `git diff 0dc0f8b^ 0dc0f8b -- src/agent/runtime src/agent/storage` shows
+  **11**: `executeAgent.ts`, `executionRegistry.ts`, `runAgent.ts`,
   `AgentRunLifecycle.ts`, `ExecutionHandle.ts`, `childRunLoop.ts`,
-  `agent/storage/executionLease.ts`/`executionLifecycle.ts`). Of those 8
-  changed files, this pass's readers opened only `runAgent.ts` fresh at
-  `395e229` and found no new debt in it; `executeAgent.ts`,
-  `executionRegistry.ts`, `AgentRunLifecycle.ts`, `ExecutionHandle.ts`,
-  `childRunLoop.ts`, `executionLease.ts`, and `executionLifecycle.ts` were
-  **not** opened this pass — an acknowledged coverage gap, not a
-  reverified-clean result, for those 7 files.
+  `AgentLaunchContext.ts`, `executionLease.ts`, `executionLifecycle.ts`,
+  `executionListing.ts`, and `storage/index.ts` (the last 3 were omitted);
+  the full commit touches 34 files total, also including `src/tools/bash.ts`
+  and the delegation tool call sites. Of the 11 `runtime`/`storage` files,
+  this pass's readers opened only `runAgent.ts` fresh at `395e229` and found
+  no new debt in it; the other 10 were **not** opened this pass — an
+  acknowledged coverage gap, not a reverified-clean result.
 - `IToolRegistry` implementation count corrected: 2, not 1 —
   `MapToolRegistry` (`ToolTypes.ts:47`) and `buildTerminalToolRegistry`'s
   returned overlay object (`src/tools/structuredOutput.ts:228-236`). **Keep**
