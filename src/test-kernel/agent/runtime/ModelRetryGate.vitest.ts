@@ -11,7 +11,7 @@ function options(signal: AbortSignal, baseBackoffMs = 1000) {
   return {
     signal,
     baseBackoffMs,
-    classifyTransient: () => ({}),
+    classifyFailure: () => ({}),
   };
 }
 

@@ -25,14 +25,14 @@ interface RetryPermit {
   readonly waited: boolean;
 }
 
-interface TransientFailure {
+interface RouteFailure {
   readonly retryAfterMs?: number;
 }
 
 interface RunOptions {
   readonly signal: AbortSignal;
   readonly baseBackoffMs: number;
-  readonly classifyTransient: (error: Error) => TransientFailure | undefined;
+  readonly classifyFailure: (error: Error) => RouteFailure | undefined;
   readonly onWait?: (delayMs: number) => void;
   readonly onAdmitted?: () => void;
 }
@@ -44,10 +44,10 @@ function abortReason(signal: AbortSignal): unknown {
 /**
  * Coordinates retries for model calls sharing one provider route.
  *
- * Healthy routes remain fully concurrent. After a transient failure, calls on
- * the affected route wait through one shared backoff and exactly one becomes
- * the recovery probe. A successful probe releases the other calls; another
- * transient failure increases the shared backoff. The gate does not decide
+ * Healthy routes remain fully concurrent. After a shared-route failure, calls
+ * on the affected route wait through one shared backoff and exactly one
+ * becomes the recovery probe. A successful probe releases the other calls;
+ * another route failure increases the shared backoff. The gate does not decide
  * how many times a node retries—that remains the node retry loop's concern.
  */
 export class ModelRetryGate {
@@ -69,13 +69,13 @@ export class ModelRetryGate {
       if (options.signal.aborted) {
         this.abandon(route, permit);
       } else {
-        const transient = options.classifyTransient(error as Error);
-        if (transient) {
-          this.markTransientFailure(
+        const failure = options.classifyFailure(error as Error);
+        if (failure) {
+          this.markRouteFailure(
             route,
             permit,
             options.baseBackoffMs,
-            transient.retryAfterMs,
+            failure.retryAfterMs,
           );
         } else {
           this.markReachable(route, permit);
@@ -148,7 +148,7 @@ export class ModelRetryGate {
     });
   }
 
-  private markTransientFailure(
+  private markRouteFailure(
     route: string,
     permit: RetryPermit,
     baseBackoffMs: number,

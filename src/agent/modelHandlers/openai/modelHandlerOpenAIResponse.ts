@@ -2694,10 +2694,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     let uploadedAttachments: UploadedOpenAIResponseAttachment[] = [];
     if (canUploadFiles && attachments.length > 0 && client) {
-      uploadedAttachments = await uploadToolAttachments(client, attachments, {
-        openRouterRouting: this.isOpenRouterRoutingEnabled(),
-        logger: this.logger,
-      });
+      // This upload occurs while assembling the next turn, outside the model
+      // invocation gate. Restore the SDK's ordinary two retries for this
+      // auxiliary request; generation requests keep maxRetries: 0.
+      uploadedAttachments = await uploadToolAttachments(
+        client.withOptions({ maxRetries: 2 }),
+        attachments,
+        {
+          openRouterRouting: this.isOpenRouterRoutingEnabled(),
+          logger: this.logger,
+        },
+      );
       if (finalResult.status === 'executed' && uploadedAttachments.length > 0) {
         finalResult.files = uploadedAttachments.map(
           ({ attachment, fileId }) => ({

@@ -8,10 +8,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
-- **Parallel agents recover from model connection failures without retry
-  storms** — runs sharing an affected model route now wait for one recovery
-  request before continuing, while unattended approved retries continue until
-  success or cancellation.
+- **Parallel agents resume reliably after model connection failures** —
+  concurrent runs recover without overwhelming the provider, while unattended
+  approved retries continue until success or cancellation.
 - **Brief network interruptions no longer stop model turns immediately** —
   requests retry automatically when a transport failure escapes the provider
   client.

@@ -15,15 +15,117 @@ import type {
   ModelCredentialRoute,
 } from '@agent/types/ModelHandlerContracts';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
+import { detectStatusCode } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
+import { isObject } from '@utils/core';
 
 import { FlowTransition } from './FlowTransitions';
-import { classifyModelRouteFailure, modelRetryRoute } from './modelRetryPolicy';
 import {
   type InvocationResult,
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
+
+const TRANSPORT_ERROR_CODES = new Set([
+  'EAI_AGAIN',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ETIMEDOUT',
+  'UND_ERR_BODY_TIMEOUT',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_SOCKET',
+]);
+
+function errorCauseChain(error: Error): unknown[] {
+  const chain: unknown[] = [];
+  for (
+    let current: unknown = error;
+    isObject(current);
+    current = (current as { cause?: unknown }).cause
+  ) {
+    chain.push(current);
+  }
+  return chain;
+}
+
+/** Classify only failures that carry evidence about a shared wire route. */
+function classifyModelRouteFailure(
+  error: Error,
+): { retryAfterMs?: number } | undefined {
+  const chain = errorCauseChain(error);
+  const candidates = chain.map((current) => {
+    const candidate = current as {
+      code?: unknown;
+      message?: unknown;
+      name?: unknown;
+    };
+    return {
+      code: typeof candidate.code === 'string' ? candidate.code : '',
+      name: typeof candidate.name === 'string' ? candidate.name : '',
+      message: typeof candidate.message === 'string' ? candidate.message : '',
+    };
+  });
+  const hasStructuredUndiciFailure = candidates.some(({ code }) =>
+    code.startsWith('UND_ERR_'),
+  );
+  const transportFailure = candidates.some(({ code, name, message }) => {
+    if (
+      TRANSPORT_ERROR_CODES.has(code) ||
+      (code === 'UND_ERR_INFO' && /\b(?:stream )?timeout\b/i.test(message))
+    ) {
+      return true;
+    }
+    return (
+      !hasStructuredUndiciFailure &&
+      (/(?:Connection|Timeout)Error$/.test(name) ||
+        /^(?:fetch failed|failed to fetch)$/i.test(message.trim()))
+    );
+  });
+  const statusCode = detectStatusCode(error);
+  if (
+    statusCode !== 401 &&
+    statusCode !== 403 &&
+    statusCode !== 408 &&
+    statusCode !== 409 &&
+    statusCode !== 429 &&
+    (statusCode == null || statusCode < 500) &&
+    !transportFailure
+  ) {
+    return undefined;
+  }
+
+  for (const current of chain) {
+    const headers = (current as { headers?: unknown }).headers;
+    if (!isObject(headers)) continue;
+    const get = Reflect.get(headers, 'get');
+    const read = (name: string): unknown =>
+      typeof get === 'function'
+        ? Reflect.apply(get, headers, [name])
+        : Reflect.get(headers, name);
+    const rawExplicitMs = read('retry-after-ms');
+    if (rawExplicitMs != null) {
+      const explicitMs = Number(rawExplicitMs);
+      if (Number.isFinite(explicitMs) && explicitMs >= 0) {
+        return { retryAfterMs: explicitMs };
+      }
+    }
+
+    const retryAfter = read('retry-after');
+    if (typeof retryAfter !== 'string') continue;
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds >= 0) {
+      return { retryAfterMs: seconds * 1000 };
+    }
+    const date = Date.parse(retryAfter);
+    if (Number.isFinite(date)) {
+      return { retryAfterMs: Math.max(0, date - Date.now()) };
+    }
+  }
+  return { retryAfterMs: undefined };
+}
 
 export interface ModelInvocationConfig<TShared, TServices> {
   operationName: string;
@@ -114,20 +216,21 @@ export class ModelInvocationNode<
     services.modelHandler.setOutputStreaming(this._config.streaming);
 
     return this.withAbortController(async (signal) => {
-      const route = modelRetryRoute({
-        provider: services.modelHandler.config.provider,
-        credentialRoute: services.clientCredentialRoute,
-        endpoint: services.modelHandler.getRetryEndpoint(services.client),
-      });
+      const route = JSON.stringify([
+        services.modelHandler.config.provider,
+        services.clientCredentialRoute ?? 'configured',
+        services.modelHandler.getRetryEndpoint(services.client),
+      ]);
       return useLaunchRunContext().runScope.session.modelRetries.run(
         route,
         {
           signal,
           baseBackoffMs: this._retryBackoffMs,
-          classifyTransient: (error) => {
-            if (!super.shouldAutoRetry(error)) return undefined;
-            return classifyModelRouteFailure(error);
-          },
+          // Route state and node retry eligibility answer different questions.
+          // Shared authentication failures must keep peers behind the gate while
+          // the relay refreshes, even though pRetry must not repeat a stale
+          // credential without that recovery step.
+          classifyFailure: classifyModelRouteFailure,
           onWait: (delayMs) =>
             services.logger.debug(
               `Waiting ${delayMs}ms for the shared model recovery probe.`,

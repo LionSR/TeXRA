@@ -1373,8 +1373,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const pageLimitExceeded: ToolFileAttachment[] = [];
 
     if (canUploadFiles && attachments.length > 0 && client) {
+      // This upload occurs while assembling the next turn, outside the model
+      // invocation gate. Restore the SDK's ordinary two retries for this
+      // auxiliary request; generation requests keep maxRetries: 0.
       const uploadResult = await uploadToolAttachments(
-        client,
+        client.withOptions({ maxRetries: 2 }),
         attachments,
         this.logger,
         this.uploadedPdfPageCounts,
