@@ -93,7 +93,7 @@ prior ruling.
 
 - **`ModelHandler.ts` ~1,931-LOC base tangling ~7 concerns** — model-handler
   reader re-derived it; the `#7101` triage doc-comments (the ~40-line
-  justifications per capability getter) are a *feature* preventing
+  justifications per capability getter) are a _feature_ preventing
   re-litigation. **Reviewed-train** (the standing `runTurn`/`streamTurn`-façade
   decomposition item); do not collapse. Optional future: extract the
   credential-routing / token-count-template blocks into injected collaborators —
@@ -111,7 +111,7 @@ prior ruling.
 - **Anthropic handler delegates to `@anthropic-ai/sdk`** — streaming via
   `client.beta.messages.stream` + `finalMessage()`, retries via
   `isAutoRetryManagedByProvider() === true`, caching via SDK `cache_control`.
-  Very little is re-implemented; the document-continuation loop it *does* own
+  Very little is re-implemented; the document-continuation loop it _does_ own
   is required by the multi-provider unification. **Keep.**
 - **OpenAI-compatible subclasses** (`ReasoningModelHandlerOpenAI` + the
   per-provider handlers) — each carries genuine wire-format divergence; the
@@ -120,7 +120,7 @@ prior ruling.
 - **`ResponseCycleFlow`/`ToolUseRoundFlow` primitives, `createResponseCycleFlow`
   /`createToolUseRoundFlow` factories, `withModelClient`, `ModelInvocationNode`,
   `IToolUseSession`, `IToolRegistry`** — all re-derived and match the held
-  rulings: the factories *are* the prescribed `Node.exec() → createFlow().run()`
+  rulings: the factories _are_ the prescribed `Node.exec() → createFlow().run()`
   shape (fresh stateful node graph per round); `withModelClient` is the
   load-bearing live-`client` getter for relay-401 rebinding; the single-impl
   ports are legitimate `core → implementations`/`core → tools` seams. **Keep.**
@@ -129,7 +129,7 @@ prior ruling.
   the runtime reader re-derived the run-`result` overlap. This is the standing
   **Observability / unified-stream** strategic item; the 07-21 pass already
   refined it (the genuine parallel registries are interaction/presentation;
-  `emitRunFact` is *not* a third delivery surface; the broker-side pre-dispatch
+  `emitRunFact` is _not_ a third delivery surface; the broker-side pre-dispatch
   filter in `SessionEventHub.emit` must be preserved). No new action.
 - **Logger** — thin, justified sink (host-injectable channel factory, secret
   redaction, dedup); `redaction.ts` guards security properties (desktop
@@ -162,7 +162,7 @@ sequenced path. Nothing this pass changes that sequencing.
 ## One genuinely-uncaptured observation — MCP tool exposure (strategic, product-facing)
 
 The SDK-alignment reader noted an angle the readiness series (focused on the
-*runtime-as-external-SDK* direction) does not capture: TeXRA already **embeds**
+_runtime-as-external-SDK_ direction) does not capture: TeXRA already **embeds**
 the Agent SDK as a delegated tool (`src/tools/claudeAgent.ts`, the `claude_code`
 tool over `@anthropic-ai/claude-agent-sdk`), but its ~55-tool registry
 (`src/tools/registry.ts`, incl. the domain tools — arxiv, latex figure/bib/tikz,
@@ -207,7 +207,7 @@ as dead (each has a live caller or a test seam a `src/`-only grep misses).
   Step 0 R-a/R-b ratchets present and enforcing.
 - Applied cleanup verified: `MapToolRegistry` constructor narrowed to
   `Record<string, ITool>` (`src/agent/core/tools/ToolTypes.ts:50`), `instanceof
-  Map` branch removed. Full-repo grep: 1 production + 14 test constructions, all
+Map` branch removed. Full-repo grep: 1 production + 14 test constructions, all
   `Record`; **0** pass a `Map`. `npm run typecheck` exit 0 (all six configs),
   `eslint` clean on the touched file, 73 tests green across the five
   `MapToolRegistry`-constructing suites.
