@@ -18,6 +18,7 @@ import {
   type OverleafRemote,
 } from '@latex/overleafProject';
 import { executeCommandSync } from '@utils/system/execUtils';
+import { extendEnvPath } from '@utils/system/platformPaths';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - runtime
@@ -64,7 +65,7 @@ function buildOverleafClonePorts(
     deleteStoredToken: (key) => secrets.delete(key),
     storeToken: (key, token) => secrets.set(key, token),
     promptToken: async (spec) => {
-      if (context.mode !== 'interactive') {
+      if (context.mode !== 'interactive' || context.outputFormat !== 'text') {
         throw new CliUsageError(
           `No saved ${spec.tokenTitle} is available. Run this command in an interactive terminal to enter and save one.`,
         );
@@ -99,7 +100,7 @@ function buildOverleafClonePorts(
     runClone: async (remoteUrl, workspacePath) => {
       await execa('git', ['clone', remoteUrl, '.'], {
         cwd: workspacePath,
-        env: { GIT_TERMINAL_PROMPT: '0' },
+        env: { GIT_TERMINAL_PROMPT: '0', PATH: extendEnvPath() },
       });
     },
     showCloneSucceeded: (label) => {
