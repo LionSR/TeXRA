@@ -98,6 +98,21 @@ describe('CLI child list selection', () => {
     });
   });
 
+  it('preserves hidden details when active-stream sync keeps the same row', () => {
+    const hidden: ChildListSelectionState = {
+      focused: true,
+      selectedValue: mainValue,
+      detailsVisible: false,
+    };
+    const state = reduceChildListSelection(hidden, {
+      kind: 'syncActiveStream',
+      streamId: main,
+      values: [mainValue, strategyValue],
+    });
+
+    expect(state).toBe(hidden);
+  });
+
   it('clears a stale row when the active stream is not in the projected list', () => {
     const state = reduceChildListSelection(
       { focused: true, selectedValue: strategyValue, detailsVisible: true },

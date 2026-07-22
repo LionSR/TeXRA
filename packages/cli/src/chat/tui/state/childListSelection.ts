@@ -112,12 +112,14 @@ export function reduceChildListSelection(
         undefined,
         action.streamId,
       );
-      return {
-        ...state,
-        selectedValue: activeValue,
-        detailsVisible:
-          state.focused && childListStreamId(activeValue) !== undefined,
-      };
+      return activeValue === state.selectedValue
+        ? state
+        : {
+            ...state,
+            selectedValue: activeValue,
+            detailsVisible:
+              state.focused && childListStreamId(activeValue) !== undefined,
+          };
     }
     case 'reconcile': {
       if (action.values.length === 0) return state;
