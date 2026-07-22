@@ -1,7 +1,6 @@
 /** Retry state management: Node retry config, error tracking, and retryable node base class. */
 
 import { StatusCodes } from 'http-status-codes';
-import { nanoid } from 'nanoid';
 
 import { Node } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
@@ -21,6 +20,7 @@ import {
   type RetryErrorInfo,
 } from '@shared/schemas';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
+import { generateShortId } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -310,7 +310,7 @@ export abstract class RetryableInvocationNode<
     const refreshClient = this.services.refreshClient;
     const interaction = session.interactions.requestRetry(
       {
-        requestId: `retry-${nanoid()}`,
+        requestId: `retry-${generateShortId()}`,
         streamId,
         operation: operationName,
         model: this.services.config.model,

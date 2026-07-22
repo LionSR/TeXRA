@@ -24,6 +24,7 @@ import {
 } from '@shared/utils/clipboardImages';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
+import { filterNotNullish } from '@utils/core';
 import { generatePastedImageName } from '@utils/files/pastedImageUtils';
 import {
   archivedContext,
@@ -284,7 +285,7 @@ export class FollowUpInput extends LitElement {
           },
         ),
       )
-    ).filter((image): image is ExtractedClipboardImage => image !== undefined);
+    ).filter(filterNotNullish);
     if (pasteRevision !== transientState.imagePasteRevision) return;
     if (added.length === 0) return;
     const chipText = added.map(({ fileName }) => `[${fileName}]`).join(' ');

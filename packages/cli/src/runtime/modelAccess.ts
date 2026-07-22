@@ -8,6 +8,7 @@ import {
 } from '@model/runModelDecision';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import type { AgentCategory } from '@shared/schemas/agent';
+import { unique } from '@utils/core';
 
 // Local file imports
 import { resolveKnownCliModelId } from './cliConfig';
@@ -641,9 +642,9 @@ export async function selectCliRunnableModel(
           ]
         : [];
     });
-  const requestedModels = [
-    ...new Set(requestedCandidates.map((candidate) => candidate.model)),
-  ];
+  const requestedModels = unique(
+    requestedCandidates.map((candidate) => candidate.model),
+  );
   const hiddenEntries = await Promise.allSettled(
     requestedModels.map((model) =>
       loadCliModelAccessEntry(model, {

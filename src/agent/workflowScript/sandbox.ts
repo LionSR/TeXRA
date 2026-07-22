@@ -1,3 +1,6 @@
+// Node imports
+import { setImmediate as setImmediateAsync } from 'node:timers/promises';
+
 // Third-party imports
 import quickJsReleaseVariant from '@jitl/quickjs-wasmfile-release-sync';
 import quickJsWasm from '@jitl/quickjs-wasmfile-release-sync/wasm';
@@ -600,7 +603,7 @@ async function pumpJobs(
 
     if (executed === MAX_JOBS_PER_TURN || runtime.hasPendingJob()) {
       // Give host promises, sibling runtimes, and abort listeners a turn.
-      await new Promise<void>((resolve) => setImmediate(resolve));
+      await setImmediateAsync();
       continue;
     }
 

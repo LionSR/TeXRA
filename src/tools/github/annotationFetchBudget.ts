@@ -18,6 +18,8 @@
  * queue-and-wait contract, which doesn't fit either requirement.
  */
 
+import { clamp } from '@utils/core';
+
 // Bound annotation endpoint traffic across all PR subscriptions in this
 // process. Pagination claims one unit per annotations page, so this budget
 // permits at most 3,000 annotation requests per hour, leaving room for the
@@ -77,10 +79,7 @@ export class AnnotationFetchBudget {
     nowMs = Date.now(),
   ): void {
     this.lastRefillMs = nowMs;
-    this.tokens = Math.max(
-      0,
-      Math.min(this.maxRequestsPerWindow, remainingRequests),
-    );
+    this.tokens = clamp(remainingRequests, 0, this.maxRequestsPerWindow);
   }
 }
 

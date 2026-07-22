@@ -1,3 +1,5 @@
+import { filterNotNullish } from '@utils/core';
+
 const RUN_MODEL_PRECEDENCE = {
   'explicit-override': 0,
   environment: 1,
@@ -48,7 +50,7 @@ export function decideRunModel(
 ): RunModelDecision | null {
   const ordered = candidates
     .map(normalizeCandidate)
-    .filter((candidate) => candidate != null)
+    .filter(filterNotNullish)
     .toSorted(
       (left, right) =>
         RUN_MODEL_PRECEDENCE[left.reason] - RUN_MODEL_PRECEDENCE[right.reason],

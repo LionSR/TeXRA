@@ -23,6 +23,7 @@ import {
 } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
+import { unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory, isSymlink } from '@utils/files/fsEntryType';
 import { makeMachineGitEnv } from '@utils/system/platformPaths';
@@ -235,18 +236,15 @@ export async function listBaseBranchCandidates(
     ]),
   ]);
   const current = headOut?.trim();
-  const seen = new Set<string>();
-  const candidates: BaseBranchCandidate[] = [];
-  for (const ref of [
-    ...splitOutputLines(localsOut ?? ''),
-    ...splitOutputLines(remotesOut ?? ''),
-  ]) {
-    // `origin/HEAD` is a symbolic alias, not a real branch to diff against.
-    if (!ref || ref === 'origin/HEAD' || seen.has(ref)) continue;
-    seen.add(ref);
-    candidates.push({ ref, current: ref === current });
-  }
-  return candidates;
+  return (
+    unique([
+      ...splitOutputLines(localsOut ?? ''),
+      ...splitOutputLines(remotesOut ?? ''),
+    ])
+      // `origin/HEAD` is a symbolic alias, not a real branch to diff against.
+      .filter((ref) => ref && ref !== 'origin/HEAD')
+      .map((ref) => ({ ref, current: ref === current }))
+  );
 }
 
 /**
