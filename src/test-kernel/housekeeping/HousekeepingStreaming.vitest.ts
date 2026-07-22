@@ -1,9 +1,10 @@
 // Third-party imports
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Local imports
+import { WorkspaceFS } from '@utils/files';
 
 const mocks = vi.hoisted(() => ({
-  delete: vi.fn(),
-  getPath: vi.fn(() => '/workspace'),
   globIterate: vi.fn(),
 }));
 
@@ -16,18 +17,15 @@ vi.mock('llm-zoo', async (importActual) => ({
   MODELS: ['test-model'],
 }));
 
-vi.mock('@utils/files', () => ({
-  WorkspaceFS: {
-    delete: mocks.delete,
-    getPath: mocks.getPath,
-  },
-}));
-
 const { runCleanOutput } = await import('@housekeeping/clean');
 
 describe('housekeeping streaming cleanup', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('deletes each output before requesting the next match', async () => {
@@ -44,16 +42,19 @@ describe('housekeeping streaming cleanup', () => {
       yield 'second.tex';
     });
 
-    mocks.delete.mockImplementation(async (file: string) => {
-      if (file === 'first.tex') {
-        expect(requestedSecondMatch).toBe(false);
-        releaseSecondMatch?.();
-      }
-    });
+    vi.spyOn(WorkspaceFS, 'getPath').mockReturnValue('/workspace');
+    const deleteFile = vi
+      .spyOn(WorkspaceFS, 'delete')
+      .mockImplementation(async (file: string) => {
+        if (file === 'first.tex') {
+          expect(requestedSecondMatch).toBe(false);
+          releaseSecondMatch?.();
+        }
+      });
 
     await runCleanOutput();
 
-    expect(mocks.delete).toHaveBeenNthCalledWith(1, 'first.tex');
-    expect(mocks.delete).toHaveBeenNthCalledWith(2, 'second.tex');
+    expect(deleteFile).toHaveBeenNthCalledWith(1, 'first.tex');
+    expect(deleteFile).toHaveBeenNthCalledWith(2, 'second.tex');
   });
 });

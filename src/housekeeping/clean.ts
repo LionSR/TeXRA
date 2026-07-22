@@ -40,44 +40,20 @@ export async function runCleanSingle(
   logger.debug(CHANNEL, `Using extensions: ${extensions}`);
 
   try {
-    let firstFile: string | undefined;
-    let deletedFile = false;
-
-    // Preserve the legacy safety rule that a lone match equal to the input
-    // document is not deleted, while retaining at most this one deferred path.
+    let foundFile = false;
     for await (const filePath of findFilesFromPatterns(
       inputDir,
       filePatterns,
       extensions,
     )) {
-      if (firstFile === undefined) {
-        firstFile = filePath;
-        continue;
-      }
-
-      if (!deletedFile && filePath === firstFile) {
-        continue;
-      }
-
-      if (!deletedFile) {
-        logger.debug(CHANNEL, `Deleting file: ${firstFile}`);
-        await WorkspaceFS.delete(firstFile);
-        deletedFile = true;
-      }
-
       logger.debug(CHANNEL, `Deleting file: ${filePath}`);
       await WorkspaceFS.delete(filePath);
-      deletedFile = true;
+      foundFile = true;
     }
 
-    if (firstFile === undefined || (!deletedFile && firstFile === inputFile)) {
+    if (!foundFile) {
       logger.warn(CHANNEL, `No matching files found to clean for ${inputFile}`);
       return { status: 'noFiles' };
-    }
-
-    if (!deletedFile) {
-      logger.debug(CHANNEL, `Deleting file: ${firstFile}`);
-      await WorkspaceFS.delete(firstFile);
     }
 
     logger.info(CHANNEL, `Cleanup complete for ${inputFile}`);
