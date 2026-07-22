@@ -25,6 +25,7 @@ import {
   type InvocationResult,
   RetryableInvocationNode,
   handleInvocationResult,
+  tryRefreshClient,
 } from './RetryState';
 
 const TRANSPORT_ERROR_CODES = new Set([
@@ -282,7 +283,14 @@ export class ModelInvocationNode<
             this.getRelay401Recovery(error, () => retry(), signal),
           onAdmitted:
             services.clientCredentialRoute === 'relay'
-              ? () => services.refreshClient?.(undefined, signal)
+              ? async () => {
+                  await tryRefreshClient(
+                    services.refreshClient,
+                    services.logger,
+                    'after shared recovery',
+                    signal,
+                  );
+                }
               : undefined,
           onWait: (delayMs) =>
             services.logger.debug(

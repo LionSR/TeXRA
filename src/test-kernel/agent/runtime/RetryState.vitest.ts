@@ -695,6 +695,20 @@ describe('RetryState', () => {
     expect(refreshClient).toHaveBeenCalledOnce();
   });
 
+  it('keeps admission refresh failures out of route classification', async () => {
+    const refreshClient = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValue(new Error('local client rebuild failed'));
+    const { onAdmitted } = await captureModelRetry(
+      'https://api.example/v1',
+      'relay',
+      refreshClient,
+    );
+
+    await expect(onAdmitted?.()).resolves.toBeUndefined();
+    expect(refreshClient).toHaveBeenCalledOnce();
+  });
+
   it.each(['api-key', 'openrouter', 'chatgpt-subscription'] as const)(
     'does not gate unrelated calls after a 401 on the %s route',
     async (credentialRoute) => {

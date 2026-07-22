@@ -74,7 +74,7 @@ interface RetryableNodeServices {
  * Attempts to refresh the model client using the provided refreshClient function.
  * Logs success or failure; returns true if refresh was attempted and succeeded.
  */
-async function tryRefreshClient(
+export async function tryRefreshClient(
   refreshClient:
     | ((
         selection?: ModelCredentialSelection,
