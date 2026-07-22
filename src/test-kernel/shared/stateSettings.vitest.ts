@@ -103,6 +103,7 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   [GlobalStateKey.WEBSOCKET_OPENAI]: false,
   ...PROVIDER_ENDPOINT_DEFAULTS,
   [GlobalStateKey.USE_OPENROUTER]: false,
+  [GlobalStateKey.KIMI_CODE_PREFER]: false,
   [GlobalStateKey.DISABLED_TOOLS]: [],
 };
 
@@ -355,6 +356,8 @@ describe('state settings catalog', () => {
     //    runs (and lets the Codex backend attempt WebSocket).
     //  - provider endpoints are read by the proxy resolver used by CLI model
     //    handlers before falling back to provider defaults.
+    //  - the Kimi Code prefer switch is read by ModelFactory when dispatching
+    //    dual-backend Kimi models in CLI runs.
     // auto-open-pdf (no CLI opener), latexdiff, and the formatter are
     // intentionally excluded. Changing the CLI roster must be a deliberate edit
     // here, not an accident of flipping `hosts`.
@@ -379,6 +382,7 @@ describe('state settings catalog', () => {
         ),
         GlobalStateKey.WEBSOCKET_OPENAI,
         GlobalStateKey.USE_OPENROUTER,
+        GlobalStateKey.KIMI_CODE_PREFER,
         GlobalStateKey.DISABLED_TOOLS,
       ].sort(),
     );

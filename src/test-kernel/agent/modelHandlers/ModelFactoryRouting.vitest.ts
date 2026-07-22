@@ -893,6 +893,14 @@ describe('routing precedence: compat-key ↔ createModelHandler invariant', () =
       createModelHandler: create,
       activeModelHandlerCompatibilityKey: activeKey,
     } = await import('@agent/runtime/ModelFactory');
+    // Stub the relay service on the same fresh module instance the re-imported
+    // factory reads (static imports are desynced by this file's resetModules).
+    const { setServerSideKeyService: setService } =
+      await import('@auth/serverKeys');
+    setService({
+      getUseIncludedModelAccess: () => false,
+      canUseServerSideKeys: async () => false,
+    } as never);
 
     const mismatches: string[] = [];
     for (const [name, config] of Object.entries(MODEL_CONFIGS)) {
@@ -915,5 +923,54 @@ describe('routing precedence: compat-key ↔ createModelHandler invariant', () =
       }
     }
     expect(mismatches).toEqual([]);
+  });
+});
+
+describe('Kimi Code reroute under included access', () => {
+  const dualBackendKimi = {
+    ...modelConfig(ModelProvider.MOONSHOT),
+    kimiSubscription: true,
+  } as ModelConfig;
+
+  async function createKimiHandler(options: {
+    readonly includedAccess: boolean;
+  }): Promise<ModelConfig> {
+    // Re-import alongside a freshly-initialized platform — see the invariant
+    // test above for why this file cannot rely on the static factory import.
+    await installPlatform({
+      globalState: { 'texra.kimiCode.prefer': true },
+      secrets: { 'apiKey.kimiCode': 'test-kimi-code-key' },
+    });
+    const { createModelHandler: create } =
+      await import('@agent/runtime/ModelFactory');
+    const { setServerSideKeyService: setService } =
+      await import('@auth/serverKeys');
+    const { invalidateApiKeyCache } = await import('@model/apiProviders');
+    setService({
+      getUseIncludedModelAccess: () => options.includedAccess,
+      canUseServerSideKeys: async () => options.includedAccess,
+    } as never);
+    invalidateApiKeyCache();
+
+    const handler = await create(dualBackendKimi);
+    try {
+      return handler.config;
+    } finally {
+      handler.dispose();
+    }
+  }
+
+  it('does not reroute dual-backend Kimi models while the relay serves requests', async () => {
+    // The rerouted config pins the coding baseUrl, which outranks the relay
+    // URL in resolveBaseUrl while the credential layer resolves a relay
+    // token — under serving included access the config must stay untouched.
+    const config = await createKimiHandler({ includedAccess: true });
+    expect(config.baseUrl).toBeUndefined();
+    expect(config.fullName).toBe(dualBackendKimi.fullName);
+  });
+
+  it('reroutes to the coding endpoint when the relay cannot serve', async () => {
+    const config = await createKimiHandler({ includedAccess: false });
+    expect(config.baseUrl).toBe('https://api.kimi.com/coding/v1');
   });
 });

@@ -12,6 +12,7 @@ import {
   formatCodexAuthUnavailableMessage,
   isCodexSessionRoutable,
 } from '@auth/codex';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import { AgentError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { apiKeyExists } from '@model/apiProviders';
@@ -536,8 +537,12 @@ async function createModelHandlerForResolvedCompatibilityKey(
   // already carry the pinned coding baseUrl (the registry-fact predicates route
   // their key and endpoint automatically), so they keep `config` untouched.
   // Dual-backend `kimi3` is rerouted only while the "Prefer Kimi Code" switch
-  // is on and a key is stored, by swapping in a synthesized runtime config that
-  // the normal ModelHandlerKimi switch below then builds.
+  // is on, a key is stored, and the relay is not actually serving requests —
+  // under included (relay) access the relay owns eligible models, and the
+  // rerouted config's pinned coding `baseUrl` would outrank the relay URL
+  // while the credential layer still resolves a relay token (see
+  // resolveClientCredential). The reroute swaps in a synthesized runtime
+  // config that the normal ModelHandlerKimi switch below then builds.
   //
   // On the resume path `useOpenRouter` is derived from the compatibility key
   // (false unless it's `ModelHandlerOpenRouterNative`), not the live global
@@ -546,17 +551,26 @@ async function createModelHandlerForResolvedCompatibilityKey(
   // never `ModelHandlerKimi`. Reaching this branch therefore means the session
   // was a *direct* Kimi session, for which OpenRouter is irrelevant; honoring
   // the current Prefer-Kimi-Code + key on resume keeps a Kimi-Code-only user's
-  // resumed sessions runnable (they have no Moonshot key to fall back to).
+  // resumed sessions runnable when the relay cannot serve them (signed out or
+  // included access off — they have no Moonshot key to fall back to).
   if (
     compatibilityKey === 'ModelHandlerKimi' &&
     isKimiSubscriptionEligible(config)
   ) {
+    const serverSideKeyService = getServerSideKeyService();
+    // The relay only owns the model when included access is on AND the account
+    // can actually use it — a signed-out user with the default-on toggle must
+    // still reach their Kimi Code key, matching picker availability.
+    const includedAccess = serverSideKeyService.getUseIncludedModelAccess()
+      ? await serverSideKeyService.canUseServerSideKeys()
+      : false;
     const keySet = await apiKeyExists(platform().secrets, 'kimiCode');
     const route = resolveKimiCodeRoute(
       config,
       useOpenRouter,
       keySet,
       getPreferKimiCode(),
+      includedAccess,
     );
     if (route === 'kimiCode' && !isKimiCodeExclusiveModel(config)) {
       config = kimiCodeRuntimeConfig(config);

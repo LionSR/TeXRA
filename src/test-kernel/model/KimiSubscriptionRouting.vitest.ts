@@ -66,25 +66,40 @@ describe('resolveKimiCodeRoute', () => {
         false,
         true,
         true,
+        false,
       ),
     ).toBeNull();
   });
 
-  it('routes exclusive models whenever a key is set, ignoring both toggles', () => {
-    // key + prefer off + openRouter on: still routes (no other backend).
-    expect(resolveKimiCodeRoute(exclusive, true, true, false)).toBe('kimiCode');
+  it('routes exclusive models whenever a key is set, ignoring the toggles', () => {
+    // key + prefer off + openRouter on + included on: still routes (no other
+    // backend exists for coding-only models, and they never allow the relay).
+    expect(resolveKimiCodeRoute(exclusive, true, true, false, true)).toBe(
+      'kimiCode',
+    );
     // no key: cannot route.
-    expect(resolveKimiCodeRoute(exclusive, false, false, true)).toBeNull();
+    expect(
+      resolveKimiCodeRoute(exclusive, false, false, true, false),
+    ).toBeNull();
   });
 
   it('routes dual-backend only with prefer on, a key set, and OpenRouter off', () => {
-    expect(resolveKimiCodeRoute(dual, false, true, true)).toBe('kimiCode');
+    expect(resolveKimiCodeRoute(dual, false, true, true, false)).toBe(
+      'kimiCode',
+    );
     // prefer off → open platform.
-    expect(resolveKimiCodeRoute(dual, false, true, false)).toBeNull();
+    expect(resolveKimiCodeRoute(dual, false, true, false, false)).toBeNull();
     // no key → open platform.
-    expect(resolveKimiCodeRoute(dual, false, false, true)).toBeNull();
+    expect(resolveKimiCodeRoute(dual, false, false, true, false)).toBeNull();
     // OpenRouter on → open-router path wins.
-    expect(resolveKimiCodeRoute(dual, true, true, true)).toBeNull();
+    expect(resolveKimiCodeRoute(dual, true, true, true, false)).toBeNull();
+  });
+
+  it('leaves dual-backend models to the relay under included access', () => {
+    // Included (relay) access owns eligible models: the rerouted config's
+    // pinned coding baseUrl would outrank the relay URL while the credential
+    // layer resolves a relay token, so the reroute must not happen.
+    expect(resolveKimiCodeRoute(dual, false, true, true, true)).toBeNull();
   });
 });
 
