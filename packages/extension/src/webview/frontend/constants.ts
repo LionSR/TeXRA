@@ -2,7 +2,6 @@
 import {
   MULTIPLE_DOCUMENT_FILE_TYPES,
   SessionTypeSchema,
-  isMultipleDocumentFileType,
   type DocumentFileType,
   type MultipleDocumentFileType,
   type SessionType,
@@ -19,7 +18,6 @@ export const SESSION_TYPES = {
 export type { SessionType, DocumentFileType, MultipleDocumentFileType };
 
 export { MULTIPLE_DOCUMENT_FILE_TYPES };
-export { isMultipleDocumentFileType };
 
 export function parseSessionType(
   sessionType: string | null | undefined,

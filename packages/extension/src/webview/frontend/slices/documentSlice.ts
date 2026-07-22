@@ -6,10 +6,14 @@
 // Local imports - shared IPC and schemas
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewHandlerRegistry, MainViewMessage } from '@shared/schemas';
+import {
+  DocumentFileTypeSchema,
+  isMultipleDocumentFileType,
+  type DocumentFileType,
+} from '@shared/schemas/fileTypes';
 import { unique } from '@utils/core';
 
 // Local imports - main view
-import { isMultipleDocumentFileType } from '../constants';
 import {
   commit$,
   fileOptions$,
@@ -44,6 +48,14 @@ function handleSetMultipleFiles(message: SetMultipleFilesMessage): void {
 
   multiFiles$.set({ ...multiFiles$.get(), [listId]: files });
   saveState();
+}
+
+// File-local (not exported): narrows a `CurrentFileType` to `DocumentFileType`
+// via the schema itself, so a future addition to `DocumentFileTypeSchema`
+// takes effect here without a matching hand-written literal check.
+const DOCUMENT_FILE_TYPES = new Set<string>(DocumentFileTypeSchema.options);
+function isDocumentFileType(value: string): value is DocumentFileType {
+  return DOCUMENT_FILE_TYPES.has(value);
 }
 
 /** Check if a commit hash exists in the options array. */
@@ -137,11 +149,7 @@ export const documentHandlers = {
 
     // Workflow categories (input/context/media): prepend the active editor's
     // file to the multi-list head so it becomes the "primary" file.
-    if (
-      fileType === 'input' ||
-      fileType === 'context' ||
-      fileType === 'media'
-    ) {
+    if (isDocumentFileType(fileType)) {
       const listId = FILE_TYPE_TO_KEY[fileType];
       const mf = multiFiles$.get();
       const existing = mf[listId] ?? [];
