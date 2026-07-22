@@ -2,9 +2,6 @@
 import { formatCompactTokenCount } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-// Local imports - TUI rendering and state
-import { truncateSummaryToWidth } from '../render/terminalText';
-
 // Local imports - TUI state and presentation
 import { isChildExecutionErrorStatus } from '../state/childExecutionStatus';
 import {
@@ -15,7 +12,6 @@ import {
 } from '../ui/colors';
 import { STATUS_DOT, TOKENS_GENERATED } from '../ui/glyphs';
 import type { PendingApprovalKind } from '../state/approvalQueue';
-import type { StreamFileMetadata } from '../state/cliState';
 
 export function childStatusColor(status: string | undefined): string {
   if (!status) return COLOR_SUCCESS;
@@ -87,45 +83,4 @@ export function pendingApprovalRowSuffix(
   if (kinds === undefined || first === undefined) return undefined;
   const label = PENDING_APPROVAL_ROW_LABELS[first];
   return kinds.length > 1 ? `${label} +${kinds.length - 1}` : label;
-}
-
-const FILE_CATEGORIES = [
-  ['input', 'in', 'Input'],
-  ['context', 'ctx', 'Context'],
-  ['media', 'media', 'Media'],
-  ['output', 'out', 'Output'],
-] as const satisfies readonly (readonly [
-  keyof StreamFileMetadata,
-  string,
-  string,
-])[];
-
-/** Derive both file surfaces from one role ordering. Row callers omit
- *  `detailMaxColumns` and therefore pay only for the compact badge; the
- *  expanded panel requests its bounded detail lines from the same API. */
-export function childFileDisplay(
-  files: StreamFileMetadata | undefined,
-  detailMaxColumns?: number,
-): {
-  readonly badge: string | undefined;
-  readonly detailLines: readonly string[];
-} {
-  if (!files) return { badge: undefined, detailLines: [] };
-  const populated = FILE_CATEGORIES.filter(([key]) => files[key].length > 0);
-  const badge = populated.map(
-    ([key, label]) => `${label}:${files[key].length}`,
-  );
-  const detailLines =
-    detailMaxColumns === undefined
-      ? []
-      : populated.map(([key, , label]) =>
-          truncateSummaryToWidth(
-            `${label}  ${files[key].join(', ')}`,
-            detailMaxColumns,
-          ),
-        );
-  return {
-    badge: badge.length > 0 ? badge.join(' ') : undefined,
-    detailLines,
-  };
 }
