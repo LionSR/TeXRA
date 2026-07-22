@@ -365,4 +365,22 @@ describe('ModelRetryGate', () => {
       message: 'Model retry gate disposed',
     });
   });
+
+  it('cancels the cooldown timer when its final waiter aborts', async () => {
+    const gate = new ModelRetryGate();
+    await openGate(gate);
+    const controller = new AbortController();
+    const waiting = gate.run(
+      ROUTE,
+      options(controller.signal),
+      async () => undefined,
+    );
+
+    expect(vi.getTimerCount()).toBe(1);
+    controller.abort(new DOMException('cancelled', 'AbortError'));
+
+    await expect(waiting).rejects.toMatchObject({ name: 'AbortError' });
+    expect(vi.getTimerCount()).toBe(0);
+    gate.dispose();
+  });
 });

@@ -204,7 +204,7 @@ function createModelInvocationNode(): ModelInvocationNode<BaseCycleFields> {
 }
 
 interface CapturedModelRetry {
-  readonly modelRoute: string;
+  readonly wireRoute: string;
   readonly classifyFailure: (
     error: Error,
   ) => { retryAfterMs?: number } | undefined;
@@ -249,9 +249,9 @@ async function captureModelRetry(
     await withRetryRunContext(streamId, session, () =>
       node.exec({ shouldStop: false, messages: [] }),
     );
-    const [modelRoute, modelOptions] = run.mock.calls[0]!;
+    const [wireRoute, modelOptions] = run.mock.calls[0]!;
     return {
-      modelRoute,
+      wireRoute,
       classifyFailure: modelOptions.classifyFailure,
       onAdmitted: modelOptions.onAdmitted,
       gateCalls: run.mock.calls.length,
@@ -546,7 +546,7 @@ describe('RetryState', () => {
     expect(node.shouldAutoRetry(sdkError)).toBe(true);
   });
 
-  it('uses one recovery gate for an effective model route', async () => {
+  it('uses one recovery gate for a credential and endpoint', async () => {
     const first = await captureModelRetry(
       'https://first.example/v1',
       'chatgpt-subscription',
@@ -556,20 +556,19 @@ describe('RetryState', () => {
       'chatgpt-subscription',
     );
 
-    expect(first.modelRoute).toBe(
+    expect(first.wireRoute).toBe(
       JSON.stringify([
         'openai',
         'chatgpt-subscription',
         'https://first.example/v1',
-        'openai:test',
         'credential-a',
       ]),
     );
     expect(first.gateCalls).toBe(1);
-    expect(second.modelRoute).not.toBe(first.modelRoute);
+    expect(second.wireRoute).not.toBe(first.wireRoute);
   });
 
-  it('isolates rate-limit recovery by model', async () => {
+  it('coordinates rate-limit recovery across one wire route', async () => {
     const first = await captureModelRetry(
       'https://api.example/v1',
       'api-key',
@@ -587,7 +586,7 @@ describe('RetryState', () => {
       headers: { 'retry-after': '3' },
     });
 
-    expect(first.modelRoute).not.toBe(second.modelRoute);
+    expect(first.wireRoute).toBe(second.wireRoute);
     expect(first.classifyFailure(rateLimit)).toEqual({
       retryAfterMs: 3_000,
     });
@@ -616,8 +615,8 @@ describe('RetryState', () => {
       'credential-b',
     );
 
-    expect(sameCredential.modelRoute).toBe(first.modelRoute);
-    expect(replacement.modelRoute).not.toBe(first.modelRoute);
+    expect(sameCredential.wireRoute).toBe(first.wireRoute);
+    expect(replacement.wireRoute).not.toBe(first.wireRoute);
   });
 
   it('recognizes the nested Undici stream timeout from long model calls', async () => {

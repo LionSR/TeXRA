@@ -242,11 +242,10 @@ export class ModelInvocationNode<
     services.modelHandler.setOutputStreaming(this._config.streaming);
 
     return this.withAbortController(async (signal) => {
-      const modelRoute = JSON.stringify([
+      const wireRoute = JSON.stringify([
         services.modelHandler.config.provider,
         services.clientCredentialRoute ?? 'configured',
         services.modelHandler.getRetryEndpoint(services.client),
-        services.modelHandler.config.fullName,
         services.clientCredentialIdentity ?? 'unknown-credential',
       ]);
       const gate = useLaunchRunContext().runScope.session.modelRetries;
@@ -274,14 +273,13 @@ export class ModelInvocationNode<
       };
 
       return gate.run(
-        modelRoute,
+        wireRoute,
         {
           signal,
           baseBackoffMs: this._retryBackoffMs,
-          // One effective model route owns both transport/authentication and
-          // rate-limit recovery. A single admission cannot form lock cycles,
-          // while calls that can contend for the same provider capacity still
-          // share their backoff and recovery probe.
+          // One wire route owns transport, authentication, and rate-limit
+          // recovery. This coordinates every call sharing a credential and
+          // endpoint without the lock cycles of nested recovery scopes.
           classifyFailure: (error) =>
             classifyModelRateLimitFailure(error) ??
             classifyModelRouteFailure(error, services.clientCredentialRoute),

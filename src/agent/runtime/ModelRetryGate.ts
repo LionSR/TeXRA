@@ -211,6 +211,10 @@ export class ModelRetryGate {
         onAbort: () => {
           const index = state.waiters.indexOf(waiter);
           if (index >= 0) state.waiters.splice(index, 1);
+          if (state.waiters.length === 0 && state.timer) {
+            clearTimeout(state.timer);
+            state.timer = undefined;
+          }
           reject(abortReason(options.signal));
         },
       };
