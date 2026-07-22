@@ -304,12 +304,6 @@ describe('teamExecutionFields', () => {
       cliMultiAgentPresetId: 'custom-team',
     });
   });
-
-  it('throws for a non-launchable plan', () => {
-    expect(() =>
-      teamExecutionFields(manualPlan({ rootAgent: undefined })),
-    ).toThrow('Cannot build execution fields');
-  });
 });
 
 describe('buildTeamOptions', () => {

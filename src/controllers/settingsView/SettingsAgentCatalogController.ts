@@ -1,5 +1,10 @@
 // Local imports
-import { planTeamRun, type TeamPreset } from '@common/teams/TeamPlan';
+import {
+  findTeamPreset,
+  planTeamRun,
+  teamPresets,
+  type TeamPreset,
+} from '@common/teams/TeamPlan';
 import {
   commitTeamRoster,
   resolveTeamRoster,
@@ -119,9 +124,25 @@ export class SettingsAgentCatalogController {
    * definitions may be missing from the catalog before the remote catalog
    * loads or the user signs in, so delegation-capable entries are synthesized
    * for built-in root names the preset itself lists.
+   *
+   * When `presetId` resolves to a launchable preset, the preview reuses that
+   * preset's provenance and member lists so a built-in team plans with
+   * built-in root semantics (search only BUILTIN_TEAM_ROOT_AGENT_NAMES, no
+   * preset-order-first or first-delegating-member fallback) — the same root
+   * `planTeamRun` picks for that team at launch. Ad-hoc member lists without
+   * a resolvable id keep custom-preset semantics.
    */
-  getPresetToolUseRoot(toolUseAgents: string[]): string | undefined {
-    const preset: TeamPreset = {
+  getPresetToolUseRoot(
+    toolUseAgents: string[],
+    presetId?: string,
+  ): string | undefined {
+    const knownPreset = presetId
+      ? findTeamPreset(
+          teamPresets(this.deps.state.getCustomPresetsRaw()),
+          presetId,
+        )
+      : undefined;
+    const preset: TeamPreset = knownPreset ?? {
       id: 'settings-preview',
       name: 'Settings preview',
       description: '',
@@ -135,7 +156,10 @@ export class SettingsAgentCatalogController {
       workflowAgents: [],
       toolUseAgents: [
         ...catalogAgents,
-        ...this.synthesizedBuiltInRootEntries(toolUseAgents, catalogAgents),
+        ...this.synthesizedBuiltInRootEntries(
+          preset.toolUseAgents,
+          catalogAgents,
+        ),
       ],
     }).rootAgent?.name;
   }
@@ -264,7 +288,12 @@ export class SettingsAgentCatalogController {
               { source: 'builtInToolUse', name },
               identifier,
             ),
-          ) && !catalogAgents.some((agent) => agent.name === name),
+          ) &&
+          !catalogAgents.some(
+            (agent) =>
+              agentMatchesIdentifier(agent, name) ||
+              agentMatchesIdentifier(agent, `builtInToolUse:${name}`),
+          ),
       )
       .map((name): SettingsAgentCatalogEntry => ({
         name,

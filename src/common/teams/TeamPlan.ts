@@ -218,13 +218,8 @@ export function teamExecutionFields<T extends TeamCatalogAgent>(
   delegationAgentScope: AgentDelegationScope;
   cliMultiAgentPresetId: string;
 } {
-  if (!canLaunchTeam(plan)) {
-    throw new Error(
-      `Cannot build execution fields for team "${plan.preset.id}".`,
-    );
-  }
   return {
-    agent: agentKeyOf(plan.rootAgent),
+    agent: agentKeyOf(plan.rootAgent!),
     delegationAgentScope: {
       workflowAgentKeys: [...plan.workflowAgentKeys],
       toolUseAgentKeys: [...plan.toolUseAgentKeys],
@@ -292,6 +287,13 @@ export type TeamLaunchResolution =
   | {
       readonly status: 'ready';
       readonly fields: ReturnType<typeof teamExecutionFields>;
+      /**
+       * Reflects ONLY TeXRA-hosted member gaps skipped after a preflight
+       * 'continue' choice. Non-hosted missing members populate
+       * `missingNames` but leave `partial: false` and never trigger the
+       * preflight dialog, because only hosted members can potentially be
+       * resolved via sign-in/refresh.
+       */
       readonly partial: boolean;
       readonly missingNames: readonly string[];
     }
