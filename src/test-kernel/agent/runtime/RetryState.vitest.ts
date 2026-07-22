@@ -347,7 +347,13 @@ describe('RetryState', () => {
 
     vi.useFakeTimers();
     try {
-      const node = new StatuslessServerErrorNode();
+      const node = new StatuslessServerErrorNode().setServices({
+        config: { model: 'openai:test' },
+        streamId: 'retry-delay' as StreamTabId,
+        runtimeHost: noopAgentRuntimeHost,
+        logger: noopTrace,
+        setAbortController: vi.fn(),
+      });
       const retry = node._exec(undefined);
       const delayMs = DEFAULT_CORE_SETTINGS.model.retry.backoffMs;
 
@@ -362,6 +368,54 @@ describe('RetryState', () => {
     }
   });
 
+  it('keeps interruption active throughout the automatic retry delay', async () => {
+    class InterruptibleBackoffNode extends ExposedRetryNode {
+      attempts = 0;
+
+      override async exec(): Promise<never> {
+        this.attempts += 1;
+        throw Object.assign(new Error('temporary provider failure'), {
+          status: 503,
+        });
+      }
+
+      override async execFallback(
+        _prepRes: unknown,
+        error: Error,
+      ): Promise<unknown> {
+        return this.fallbackFor(error);
+      }
+    }
+
+    vi.useFakeTimers();
+    try {
+      const activeController: { current: AbortController | null } = {
+        current: null,
+      };
+      const node = new InterruptibleBackoffNode().setServices({
+        config: { model: 'openai:test' },
+        streamId: 'retry-interrupt' as StreamTabId,
+        runtimeHost: noopAgentRuntimeHost,
+        logger: noopTrace,
+        setAbortController: (controller) => {
+          activeController.current = controller;
+        },
+      });
+      const retry = node._exec(undefined);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(node.attempts).toBe(1);
+
+      activeController.current?.abort(
+        new DOMException('Run interrupted', 'AbortError'),
+      );
+      await expect(retry).resolves.toEqual({ kind: 'cancelled' });
+      expect(node.attempts).toBe(1);
+      expect(activeController.current).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('auto-retries an HTTP conflict after provider SDK retries are disabled', () => {
     const node = new ExposedRetryNode();
     const error = Object.assign(new Error('request lock is still held'), {
@@ -369,6 +423,19 @@ describe('RetryState', () => {
     });
 
     expect(node.shouldAutoRetry(error)).toBe(true);
+  });
+
+  it('does not prompt for a manual retry after cancellation', async () => {
+    const streamId = 'retry-cancelled' as StreamTabId;
+    const { node, requestRetry } = createRetryNode(streamId);
+
+    await expect(
+      node.retryPrompt(
+        undefined,
+        new DOMException('Model retry gate disposed', 'AbortError'),
+      ),
+    ).resolves.toBe(false);
+    expect(requestRetry).not.toHaveBeenCalled();
   });
 
   it('keeps node-level auto-retry for transient stream failures', () => {

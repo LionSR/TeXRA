@@ -6,6 +6,7 @@ import {
   classifyModelRouteFailure,
   modelRetryRoute,
 } from '@agent/core/flows/modelRetryPolicy';
+import { attachFlowAutoRetryRequired } from '@common/errors/sdkErrorUtils';
 
 describe('model retry policy', () => {
   it('coordinates one endpoint and credential route independently of model', () => {
@@ -55,6 +56,13 @@ describe('model retry policy', () => {
     expect(
       classifyModelRouteFailure(new Error('unexpected response invariant')),
     ).toBeUndefined();
+  });
+
+  it('keeps per-response flow retries local to their invocation', () => {
+    const error = new Error('stream ended before the final response event');
+    attachFlowAutoRetryRequired(error);
+
+    expect(classifyModelRouteFailure(error)).toBeUndefined();
   });
 
   it('honors provider retry-after guidance for shared HTTP failures', () => {

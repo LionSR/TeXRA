@@ -134,6 +134,7 @@ export abstract class RetryableInvocationNode<
   private async attemptRelay401Recovery<T>(
     originalError: unknown,
     operation: (signal: AbortSignal) => Promise<T>,
+    signal: AbortSignal,
   ): Promise<T> {
     const services = this.services;
     this._hasAttemptedTokenRefresh = true;
@@ -152,14 +153,10 @@ export abstract class RetryableInvocationNode<
       'after token refresh',
     );
 
-    // Retry with a fresh AbortController
-    const retryController = new AbortController();
-    this.signal = retryController.signal;
-    services.setAbortController(retryController);
     services.logger.debug('Token refreshed, retrying immediately');
 
     try {
-      const result = await operation(retryController.signal);
+      const result = await operation(signal);
       // Success — reset flag so future expirations can trigger refresh again
       this._hasAttemptedTokenRefresh = false;
       return result;
@@ -187,9 +184,14 @@ export abstract class RetryableInvocationNode<
     }
 
     const services = this.services;
-    const controller = new AbortController();
-    this.signal = controller.signal;
-    services.setAbortController(controller);
+    let ownedController: AbortController | undefined;
+    let signal = this.signal;
+    if (!signal) {
+      ownedController = new AbortController();
+      signal = ownedController.signal;
+      this.signal = signal;
+      services.setAbortController(ownedController);
+    }
 
     // Proactive relay token refresh before the request. Only relay-route
     // clients present the Supabase session token, so only they consult the
@@ -215,7 +217,7 @@ export abstract class RetryableInvocationNode<
     }
 
     try {
-      return await operation(controller.signal);
+      return await operation(signal);
     } catch (err) {
       // Reactive 401 recovery: refresh token and retry once
       const formatted = normalizeProviderError(err);
@@ -224,11 +226,14 @@ export abstract class RetryableInvocationNode<
         formatted.statusCode === StatusCodes.UNAUTHORIZED &&
         !this._hasAttemptedTokenRefresh
       ) {
-        return this.attemptRelay401Recovery(err, operation);
+        return this.attemptRelay401Recovery(err, operation, signal);
       }
       throw err;
     } finally {
-      services.setAbortController(null);
+      if (ownedController) {
+        services.setAbortController(null);
+        this.signal = undefined;
+      }
     }
   }
 
@@ -258,6 +263,7 @@ export abstract class RetryableInvocationNode<
 
   async _exec(prepRes: unknown): Promise<unknown> {
     this._failureLogEmitted = false;
+    this._userCancelled = false;
     const config = getNodeRetryConfig();
     let maxRetries = config.maxRetries;
 
@@ -271,10 +277,27 @@ export abstract class RetryableInvocationNode<
     // implicate a shared route. For classified route failures it overlaps the
     // gate's cooling interval, so the gate waits only for any remaining time.
     this.wait = config.backoffMs / 1000;
-    return super._exec(prepRes);
+    const controller = new AbortController();
+    controller.signal.addEventListener(
+      'abort',
+      () => {
+        this._userCancelled = true;
+      },
+      { once: true },
+    );
+    this.signal = controller.signal;
+    this.services.setAbortController(controller);
+    try {
+      return await super._exec(prepRes);
+    } finally {
+      this.services.setAbortController(null);
+      this.signal = undefined;
+    }
   }
 
   async retryPrompt(_prepRes: unknown, error: Error): Promise<boolean> {
+    if (isUserAbort(error)) return false;
+
     const result = await this.handleManualRetryPrompt(error);
 
     if (result.userCancelled) {

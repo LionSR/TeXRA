@@ -1,8 +1,5 @@
 import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
-import {
-  detectStatusCode,
-  requiresFlowAutoRetry,
-} from '@common/errors/sdkErrorUtils';
+import { detectStatusCode } from '@common/errors/sdkErrorUtils';
 import { isObject } from '@utils/core';
 
 const TRANSPORT_ERROR_CODES = new Set([
@@ -94,7 +91,6 @@ export function classifyModelRouteFailure(
     statusCode !== 409 &&
     statusCode !== 429 &&
     (statusCode == null || statusCode < 500) &&
-    !requiresFlowAutoRetry(error) &&
     !isTransportFailure(error)
   ) {
     return undefined;

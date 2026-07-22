@@ -17,6 +17,8 @@ const modelDispatcher = new Agent({
 
 /** Fetch transport with an explicit inactivity policy for long model streams. */
 export const longRunningModelFetch: typeof fetch = (input, init) =>
+  // Undici implements the Web Fetch response contract at runtime, but its
+  // package-local types are not assignable to the DOM library's Response.
   undiciFetch(input as UndiciRequestInfo, {
     ...(init as UndiciRequestInit),
     dispatcher: modelDispatcher,

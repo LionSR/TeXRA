@@ -7,10 +7,10 @@ import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 const ROUTE = 'openai:subscription:gpt-5.6';
 const TRANSIENT = new Error('temporary connection failure');
 
-function options(signal: AbortSignal) {
+function options(signal: AbortSignal, baseBackoffMs = 1000) {
   return {
     signal,
-    baseBackoffMs: 1000,
+    baseBackoffMs,
     classifyTransient: () => ({}),
   };
 }
@@ -63,6 +63,28 @@ describe('ModelRetryGate', () => {
     resolveProbe();
     await Promise.all([first, sibling]);
     expect(siblingOperation).toHaveBeenCalledOnce();
+    gate.dispose();
+  });
+
+  it('honors an explicitly disabled shared backoff', async () => {
+    const gate = new ModelRetryGate();
+    const controller = new AbortController();
+    await expect(
+      gate.run(ROUTE, options(controller.signal, 0), async () => {
+        throw TRANSIENT;
+      }),
+    ).rejects.toBe(TRANSIENT);
+
+    const operation = vi.fn(async () => undefined);
+    const retry = gate.run(
+      ROUTE,
+      options(new AbortController().signal, 0),
+      operation,
+    );
+    expect(operation).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(0);
+    await retry;
+    expect(operation).toHaveBeenCalledOnce();
     gate.dispose();
   });
 
