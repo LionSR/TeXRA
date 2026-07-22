@@ -38,6 +38,7 @@ export {
   type ExecutionListingEntry,
   type DeleteExecutionOptions,
   type DeleteExecutionResult,
+  type DeleteAllExecutionsResult,
   listExecutions,
   deleteExecution,
   deleteAllExecutions,
