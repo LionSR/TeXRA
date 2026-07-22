@@ -191,6 +191,8 @@ export async function* findFilesFromPatterns(
         }
 
         if (foundExactMatch) {
+          // Exact extensions prefer the input directory; `build/` is only the
+          // fallback when the corresponding root-level artifact is absent.
           break;
         }
       }
