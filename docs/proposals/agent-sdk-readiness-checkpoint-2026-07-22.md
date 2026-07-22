@@ -30,43 +30,81 @@ re-reached the standing conclusion (the same reconvergence the 07-21 pass
 recorded). Every substantive candidate the fan-out surfaced maps onto an
 **already-adjudicated trap** (ruling held), an **already-tracked
 strategic / reviewed-train** item, or a **verified false positive** — and the
-recurring `src/`-only-grep methodology error struck the fan-out again (the
-runtime reader proposed un-exporting `useRunContext`; it is imported by two
-test files and cannot be un-exported — see below).
+recurring `src/`-only-grep methodology error struck twice this pass: once in
+the fan-out itself (the runtime reader proposed un-exporting `useRunContext`;
+it is imported by two test files and cannot be un-exported — see below), and
+once in this checkpoint's own verification of an applied change (an
+incomplete `MapToolRegistry` caller census, caught only after the change had
+already been pushed — see "Applied-then-reverted" below).
 
-## Applied this pass — one verified dedup (dead constructor branch)
+## Applied-then-reverted this pass — a self-caught verification failure
 
 Per the maintainer's "raise the bar every day — land at least one verified
-improvement" directive, this pass lands one gated, behavior-preserving
-simplification.
+improvement" directive, this pass initially applied, gated, and pushed one
+candidate. An external automated review (Codex, three P2 comments) then
+caught that the "verification" was itself incomplete in two distinct ways,
+and that the change carried a real safety regression. All three catches were
+independently re-verified and the change was reverted in full. Recording this
+in detail because it is exactly the failure mode this checkpoint series
+exists to catch — this time the recurring error hit the audit-and-apply step,
+not just the audit.
 
-**What it was.** `MapToolRegistry` (`src/agent/core/tools/ToolTypes.ts:47-61`)
-accepted `Map<string, ITool> | Record<string, ITool>` and branched on
-`tools instanceof Map ? tools : new Map(Object.entries(tools))`. The `Map`
-input arm was speculative generality: a **full-repo** grep of every
-`new MapToolRegistry(...)` construction (1 production site —
-`src/tools/registry.ts:178`, passing `createDefaultTools()` which returns a
-`Record`; 14 test sites, all passing object literals or a `Record`-typed
-`opts.tools`) confirmed **no caller anywhere passes a `Map`**, and no test
-passes a `Map` either. The `instanceof Map` branch was therefore dead code.
+**What was proposed and initially applied.** `MapToolRegistry`
+(`src/agent/core/tools/ToolTypes.ts:47-61`) accepted
+`Map<string, ITool> | Record<string, ITool>` and branched on
+`tools instanceof Map ? tools : new Map(Object.entries(tools))`. A grep of
+`new MapToolRegistry(...)` was read as showing 1 production + 14 test call
+sites across 5 files, all passing `Record`, so the `instanceof Map` arm was
+narrowed away (constructor changed to `Record<string, ITool>` only).
 
-**What was applied.** Narrowed the constructor to
-`constructor(tools: Record<string, ITool>)` and dropped the `instanceof Map`
-branch (`this.tools = new Map(Object.entries(tools))`); updated the class
-doc-comment from "Map- or Record-backed" to "Record-backed". Net −2 LOC, one
-narrowed public signature on a `core` type.
+**Catch 1 (Codex, P2) — the caller census itself was incomplete.** The actual
+full-repo grep returns **16** constructions across **10** files (1 production
+and **15** test, not 14, across **9** test files not 5) — the omitted suites
+were `ToolUseDispatchInterruption`, `ToolUseRoundFollowUpMedia`,
+`DelegationAgentAvailability`, and `DelegationWorktreeAvailability`. All 4
+missed suites (33 additional tests) were run after the catch and pass with
+`Record`-typed arguments, so the underlying conclusion ("no in-repo caller
+passes a `Map`") happened to still hold — but the stated validation scope
+("73 tests across five suites") was false. A second, distinct incomplete-grep
+error, layered on top of the audit's already-diagnosed recurring failure mode.
 
-**Why this cleared the bar (src-only, but a core-type signature change, so
-gated not swept).** `npm run typecheck` exit 0 across **all six** project
-configs (root, test-kernel, extension, CLI, trace-viewer, desktop); `eslint`
-clean on the touched file; the five test files that construct
-`MapToolRegistry` (`ToolUseDispatchParallel`, `ToolUseToolResolution`,
-`structuredOutput`, `BashTool`, `SessionResumeRetrieval`) green — 73 tests
-passing. Behavior-preserving: the retained path is byte-identical to the old
-`Record` branch. This candidate is **not** recorded in any prior checkpoint —
-genuinely new, but trivial.
+**Catch 2 (Codex, P2) — narrowing an exported constructor's accepted input is
+not "removing dead code."** `MapToolRegistry` is `export`ed; its `Map` branch
+was a documented, explicitly-accepted input shape, not a provably-unreachable
+code path. "No current in-repo caller exercises it" is a usage argument, not
+an unreachability argument — it says nothing about a type-unsafe or future
+caller (an `as any` cast, a dynamically-loaded consumer) that does pass a
+`Map`. Worse, the failure mode is **silent**, not a compile error:
+`Object.entries(mapInstance)` returns `[]`, so a `Map` input after the change
+would silently construct an **empty** registry rather than fail loudly.
+Removing the branch traded a real, if narrow, correctness guarantee on an
+exported symbol for 2 LOC, with no caller demanding the removal.
 
-## Candidates that did NOT survive verification (record — caller counts again)
+**What was reverted.** The constructor is restored to
+`Map<string, ITool> | Record<string, ITool>` with the `instanceof Map` branch
+intact — byte-identical to the pre-checkpoint code. The class doc-comment is
+back to "Map- or Record-backed".
+
+**Verified after revert.** `npm run typecheck` exit 0 (root + test-kernel
+configs); `eslint` clean on the touched file; all **9**
+`MapToolRegistry`-constructing suites green — **106 tests**
+(`ToolUseDispatchParallel`, `ToolUseToolResolution`, `structuredOutput`,
+`BashTool`, `SessionResumeRetrieval`, plus the 4 initially-missed suites:
+`ToolUseDispatchInterruption`, `ToolUseRoundFollowUpMedia`,
+`DelegationAgentAvailability`, `DelegationWorktreeAvailability`).
+
+**Net effect.** No code change lands this pass after all — the dead-branch
+candidate did not survive verification once the verification itself was
+corrected. This replaces last pass's "raise the bar" applied-improvement with
+a documented non-improvement: a real signature-narrowing change was drafted,
+gated on an incomplete test/caller audit, pushed, then reverted after
+independent review caught both the incomplete audit and the safety
+regression it was masking. The discipline holds — verify before landing, and
+re-verify when an outside reviewer disagrees — but this time the "verify"
+step needed a second pass from a reviewer outside the checkpoint's own
+fan-out.
+
+## Other candidates rejected outright (record — caller counts again)
 
 Two further "easy" fan-out candidates were examined and **rejected**, each an
 incomplete-grep or already-adjudicated artifact:
@@ -180,20 +218,28 @@ somewhere.
 
 **SDK-ready in shape; no structural refactoring warranted.** The tree is
 healthy at `395e229` (v0.39.8-dev); a fresh four-way fan-out reconverged on the
-standing verdict. **One verified improvement was applied** — the dead `Map`
-input branch on `MapToolRegistry`'s constructor was removed (−2 LOC, signature
-narrowed to `Record`), gated green across all six typecheck configs + lint + 73
-tests, a real dead-branch dedup not a blind sweep. Two further candidates were
-verified and rejected (`useRunContext` export is needed by two test files;
-the `output_tokens === 3` heuristic is already recorded in `-07-18`). Every
-remaining item is reviewed-train (`ModelHandler` decomposition, the
-`IModelHandler` port-width facets kept overridable per the `#7101` triage) or
-strategic/gated (the unified event stream preserving broker-side filtering, the
-`HostInteractions` 7/7 required-methods conversion behind Step 1, the frozen
-`GoogleGenAI` handler gated on `#7097` + transcript-format retirement, the
-no-public-surface Steps 1–3). Do not re-open the traps; do not re-flag
-`useRunContext`, `IToolRegistry`, `IModelHandler`, or `followUpResumeDetection`
-as dead (each has a live caller or a test seam a `src/`-only grep misses).
+standing verdict. **No net code change lands this pass.** The one candidate
+this pass initially applied — narrowing `MapToolRegistry`'s constructor away
+from its `Map` input — was pushed, then **reverted** after an external review
+(Codex, P2 ×2) caught both an incomplete caller census (16 constructions
+across 10 files, not 14 across 5) and a real silent-failure regression on the
+exported class's accepted `Map` input; see "Applied-then-reverted" above. Two
+further candidates were verified and rejected outright (`useRunContext`
+export is needed by two test files; the `output_tokens === 3` heuristic is
+already recorded in `-07-18`). This checkpoint's own host-import
+boundary-width figure is also corrected, **55 → 54** (Codex, P2): the raw
+token grep counted a comment-only `@agent/review` reference
+(`agentReviewCommands.ts:6`, prose, never used as a real import specifier)
+as if it were one. Every remaining item is reviewed-train (`ModelHandler`
+decomposition, the `IModelHandler` port-width facets kept overridable per the
+`#7101` triage) or strategic/gated (the unified event stream preserving
+broker-side filtering, the `HostInteractions` 7/7 required-methods conversion
+behind Step 1, the frozen `GoogleGenAI` handler gated on `#7097` +
+transcript-format retirement, the no-public-surface Steps 1–3). Do not re-open
+the traps; do not re-flag `useRunContext`, `IToolRegistry`, `IModelHandler`,
+or `followUpResumeDetection` as dead (each has a live caller or a test seam a
+`src/`-only grep misses); do not re-attempt the `MapToolRegistry` narrowing
+without also providing a deliberate compatibility boundary for `Map` inputs.
 
 ## Verified (this checkpoint)
 
@@ -201,16 +247,22 @@ as dead (each has a live caller or a test seam a `src/`-only grep misses).
   (no barrel regression); `IModelHandler` = `Pick<ModelHandler>`
   (`src/agent/types/IModelHandler.ts:41`); the `Node.exec → createFlow().run`
   shape intact; delegation strategy subsystem intact.
-- Boundary width: hosts still deep-import 55 distinct `@agent/*` specifiers
-  (union) / 26 of 51 `runtime/` files (independent recount, ±1 vs a
+- Boundary width: hosts still deep-import **54** distinct `@agent/*`
+  specifiers (union) / 26 of 51 `runtime/` files (independent recount, ±1 vs a
   differently-tokenized census; consistent with the 07-21 per-host 41/31/26).
+  Corrected from an initial raw-token count of 55 (Codex, P2): the token grep
+  matched a comment-only `@agent/review` reference
+  (`packages/extension/src/commands/review/agentReviewCommands.ts:6`, doc-comment
+  prose, not an import) as if it were a real specifier — confirmed via
+  `grep -rn "from '@agent/review'"` returning zero hits for that bare path.
   Step 0 R-a/R-b ratchets present and enforcing.
-- Applied cleanup verified: `MapToolRegistry` constructor narrowed to
-  `Record<string, ITool>` (`src/agent/core/tools/ToolTypes.ts:50`), `instanceof
-Map` branch removed. Full-repo grep: 1 production + 14 test constructions, all
-  `Record`; **0** pass a `Map`. `npm run typecheck` exit 0 (all six configs),
-  `eslint` clean on the touched file, 73 tests green across the five
-  `MapToolRegistry`-constructing suites.
+- `MapToolRegistry` (`src/agent/core/tools/ToolTypes.ts:47-61`) — narrowed to
+  `Record<string, ITool>`, pushed, then **reverted** to
+  `Map<string, ITool> | Record<string, ITool>` (byte-identical to
+  pre-checkpoint) after Codex P2 review. Full-repo recount after the catch: 16
+  constructions across 10 files (1 production + 15 test across 9 test files,
+  not 14 across 5 as first reported). `npm run typecheck` exit 0 (root +
+  test-kernel), `eslint` clean, all 9 constructing suites green — 106 tests.
 - Rejected candidates verified: `useRunContext` imported by
   `RunContext.vitest.ts` + `AgentLaunchContext.vitest.ts` (export required);
   `output_tokens === 3` already flagged in `-2026-07-18`.

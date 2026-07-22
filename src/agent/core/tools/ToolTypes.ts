@@ -43,12 +43,12 @@ export interface IToolRegistry {
   has(name: string): boolean;
 }
 
-/** Record-backed IToolRegistry. */
+/** Map- or Record-backed IToolRegistry. */
 export class MapToolRegistry implements IToolRegistry {
   private readonly tools: Map<string, ITool>;
 
-  constructor(tools: Record<string, ITool>) {
-    this.tools = new Map(Object.entries(tools));
+  constructor(tools: Map<string, ITool> | Record<string, ITool>) {
+    this.tools = tools instanceof Map ? tools : new Map(Object.entries(tools));
   }
 
   get(name: string): ITool | undefined {
