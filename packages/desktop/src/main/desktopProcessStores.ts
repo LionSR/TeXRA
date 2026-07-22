@@ -113,13 +113,18 @@ export async function initializeDesktopProcessStores(options: {
         sessionEvent.scope === 'session' &&
         sessionEvent.event.type === 'removeStream'
       ) {
-        void stores
-          .deleteStream(sessionEvent.event.payload.streamId)
-          .catch((error: unknown) => {
-            logger.warn('Failed to delete a headless desktop stream', {
-              data: toLogData(error),
-            });
+        const { streamId } = sessionEvent.event.payload;
+        void (async () => {
+          // A child is untracked before its terminal artifacts release the
+          // execution lease. Wait outside SessionStores' deletion queue so
+          // the artifact flush cannot deadlock on its own pending deletion.
+          await stores.waitForOwnedExecutionRelease(streamId);
+          return stores.deleteStream(streamId);
+        })().catch((error: unknown) => {
+          logger.warn('Failed to delete a headless desktop stream', {
+            data: toLogData(error),
           });
+        });
       }
     },
     { scope: 'session' },

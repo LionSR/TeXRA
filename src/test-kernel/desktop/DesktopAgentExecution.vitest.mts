@@ -4037,8 +4037,10 @@ describe('DesktopProgressBridge', () => {
           payload: { streamId: childStreamId },
         },
       });
+      await vi.waitFor(() =>
+        expect(owner.processSession.transcripts.has(childStreamId)).toBe(false),
+      );
       await owner.sessionStores.waitForPendingStreamDeletions();
-      expect(owner.processSession.transcripts.has(childStreamId)).toBe(false);
       expect(owner.processSession.status.get(childStreamId)).toBeUndefined();
       expect(owner.processSession.followUps.getAll(childStreamId)).toEqual([]);
       await expect(pendingApproval).resolves.toEqual({
@@ -4070,6 +4072,50 @@ describe('DesktopProgressBridge', () => {
         ).not.toContain(childStreamId);
       } finally {
         bridgeB.dispose();
+      }
+    });
+
+    it('waits for a terminal child lease before headless auto-close deletion', async () => {
+      const streamId = 'headless-lease-parent' as StreamTabId;
+      const childStreamId = 'bash#headless-lease-child' as StreamTabId;
+      const owner = await createProcessOwner({
+        streamId,
+        executionId: 'ec00f8' as ExecutionId,
+      });
+      owner.processSession.transcripts.ensureStream(childStreamId);
+      owner.close();
+
+      let releaseLease!: () => void;
+      const leaseReleased = new Promise<void>((resolve) => {
+        releaseLease = resolve;
+      });
+      const waitForRelease = vi
+        .spyOn(owner.sessionStores, 'waitForOwnedExecutionRelease')
+        .mockReturnValue(leaseReleased);
+      const deleteStream = vi
+        .spyOn(owner.sessionStores, 'deleteStream')
+        .mockResolvedValue('deleted');
+
+      try {
+        owner.processSession.events.emit({
+          scope: 'session',
+          event: {
+            type: 'removeStream',
+            payload: { streamId: childStreamId },
+          },
+        });
+
+        await vi.waitFor(() =>
+          expect(waitForRelease).toHaveBeenCalledWith(childStreamId),
+        );
+        expect(deleteStream).not.toHaveBeenCalled();
+
+        releaseLease();
+        await vi.waitFor(() =>
+          expect(deleteStream).toHaveBeenCalledWith(childStreamId),
+        );
+      } finally {
+        releaseLease();
       }
     });
 
