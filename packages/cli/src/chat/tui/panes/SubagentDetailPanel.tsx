@@ -59,8 +59,8 @@ export function selectedSubagentDetailLines(
     .toReversed();
   if (outputRounds.length === 0) {
     const configuredOutputs = slice?.files?.output ?? [];
-    if (configuredOutputs.length > 0) {
-      lines.push(`Output: ${configuredOutputs.join(', ')}`);
+    for (const path of configuredOutputs) {
+      lines.push(`Output: ${path}`);
     }
   } else {
     for (const [round, files] of outputRounds) {

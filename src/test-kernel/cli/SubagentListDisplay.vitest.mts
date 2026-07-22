@@ -137,6 +137,20 @@ describe('CLI child list display model', () => {
       'Output r1: /tmp/executions/abc/r1/Main.lean',
     ]);
     expect(selectedSubagentDetailLines(undefined, 100)).toEqual([]);
+    const configuredOutputSession: StreamView = {
+      ...detailSession,
+      slice: workflowAgentSlice('devise', {
+        files: {
+          ...files,
+          output: ['out/Main.lean', 'out/Notes.lean'],
+        },
+      }),
+    };
+    expect(
+      selectedSubagentDetailLines(configuredOutputSession, 100).filter((line) =>
+        line.startsWith('Output:'),
+      ),
+    ).toEqual(['Output: out/Main.lean', 'Output: out/Notes.lean']);
     expect(
       selectedSubagentDetailLines(detailSession, 20).every(
         (line) => line.length <= 20,
