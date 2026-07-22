@@ -132,8 +132,10 @@ describe('filename-era workflow output grammar', () => {
   });
 
   it('deletes a file matched by overlapping legacy patterns only once', async () => {
+    const inputPath = path.join(workspacePath, 'paper.tex');
     const relativePath = 'paper_polish_r0_full_gpt-45.tex';
     const absolutePath = path.join(workspacePath, relativePath);
+    await writeFile(inputPath, 'source');
     await writeFile(absolutePath, 'fixture');
 
     await expect(
@@ -142,5 +144,6 @@ describe('filename-era workflow output grammar', () => {
     await expect(access(absolutePath)).rejects.toMatchObject({
       code: 'ENOENT',
     });
+    await expect(access(inputPath)).resolves.toBeUndefined();
   });
 });
