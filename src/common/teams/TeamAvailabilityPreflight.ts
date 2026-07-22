@@ -47,6 +47,16 @@ function unavailableTexraHostedNames<T>(
 export async function preflightTeamAvailability<T>(
   options: TeamAvailabilityPreflightOptions<T>,
 ): Promise<TeamAvailabilityPreflightResult<T>> {
+  const refreshAndRecheck = async (): Promise<
+    TeamAvailabilityPreflightResult<T>
+  > => {
+    const refreshed = await options.refresh();
+    const unavailableNames = unavailableTexraHostedNames(refreshed, options);
+    return unavailableNames.length === 0
+      ? { status: 'proceed', value: refreshed, partial: false }
+      : { status: 'unavailable', value: refreshed, unavailableNames };
+  };
+
   const initialUnavailable = unavailableTexraHostedNames(
     options.initial,
     options,
@@ -71,11 +81,7 @@ export async function preflightTeamAvailability<T>(
         unavailableNames: initialUnavailable,
       };
     }
-    const refreshed = await options.refresh();
-    const unavailableNames = unavailableTexraHostedNames(refreshed, options);
-    return unavailableNames.length === 0
-      ? { status: 'proceed', value: refreshed, partial: false }
-      : { status: 'unavailable', value: refreshed, unavailableNames };
+    return refreshAndRecheck();
   }
 
   const choice =
@@ -98,9 +104,5 @@ export async function preflightTeamAvailability<T>(
     return { status: 'cancelled', value: options.initial };
   }
 
-  const refreshed = await options.refresh();
-  const unavailableNames = unavailableTexraHostedNames(refreshed, options);
-  return unavailableNames.length === 0
-    ? { status: 'proceed', value: refreshed, partial: false }
-    : { status: 'unavailable', value: refreshed, unavailableNames };
+  return refreshAndRecheck();
 }

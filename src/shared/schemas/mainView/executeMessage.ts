@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
 import { ToolConfigInputFieldsSchema } from '../toolConfig';
+import { LaunchTargetSchema } from './state';
 
 const MainViewExecuteToolConfigSchema = ToolConfigInputFieldsSchema.partial();
 
@@ -24,6 +25,10 @@ const MainViewExecuteSessionSchema = z.object({
   workingDirectory: z.string().nullish(),
   cliOutputFile: z.string().nullish(),
   cliMultiAgentPresetId: z.string().nullish(),
+  // Team runs send team identity only; hosts resolve the roster at the
+  // execution boundary where catalog/auth state is authoritative.
+  launchTarget: LaunchTargetSchema.nullish(),
+  teamId: z.string().nullish(),
 });
 
 /**

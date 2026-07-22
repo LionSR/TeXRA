@@ -26,6 +26,7 @@ import {
 } from '@frontend/auth/agentCatalogRefreshScope';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { loadMainViewModelOptions } from '@frontend/agents/optionsLoader';
+import { loadMainViewTeamOptions } from '@frontend/agents/teamOptionsLoader';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { MainViewPersistedStateSchema } from '@shared/schemas';
 import { agentKeyOf } from '@shared/schemas/agent';
@@ -228,6 +229,10 @@ export class MainViewProvider
     view.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
       optionsData,
+    });
+    view.webview.postMessage({
+      command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
+      optionsData: await loadMainViewTeamOptions(),
     });
   }
 

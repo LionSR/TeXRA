@@ -7,6 +7,7 @@ import { arXivCommands } from '@commands/latex';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { gitCommands } from '@commands/git/gitCommands';
 import { loadMainViewModelOptions } from '@frontend/agents/optionsLoader';
+import { loadMainViewTeamOptions } from '@frontend/agents/teamOptionsLoader';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
@@ -55,6 +56,13 @@ function postAgentOptions(
   });
 }
 
+async function postTeamOptions(webview: vscode.WebviewView): Promise<void> {
+  webview.webview.postMessage({
+    command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
+    optionsData: await loadMainViewTeamOptions(),
+  });
+}
+
 async function runRefresh(
   label: string,
   apply: (webview: vscode.WebviewView) => Promise<void>,
@@ -92,6 +100,7 @@ export function registerMainViewCommands(
         runRefresh('agent options', async (webview) => {
           await refresh();
           postAgentOptions(webview, await computeAgentOptionsData());
+          await postTeamOptions(webview);
         }),
     },
     {
@@ -109,6 +118,7 @@ export function registerMainViewCommands(
             agentOptionsData,
             args?.selectedToolUseAgent,
           );
+          await postTeamOptions(webview);
         }),
     },
   ]);

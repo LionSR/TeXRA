@@ -3,6 +3,8 @@ import { getHelperModelName } from '@agent/runtime/helperModelName';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { AgentCategory } from '@shared/schemas/agent';
 
+import { loadMainViewTeamOptions } from './teamOptionsLoader';
+
 type ModelOptionsData = Awaited<ReturnType<typeof computeModelOptionsData>>;
 
 export interface MainViewModelOptionsByCategory {
@@ -14,6 +16,7 @@ export interface OptionsPayload {
   agentOptions: Awaited<ReturnType<typeof computeAgentOptionsData>>;
   modelOptions: ModelOptionsData;
   modelOptionsByCategory: MainViewModelOptionsByCategory;
+  teamOptions: Awaited<ReturnType<typeof loadMainViewTeamOptions>>;
   defaultMergeModel: string;
 }
 
@@ -33,10 +36,13 @@ export async function loadMainViewModelOptions(
 }
 
 export async function loadOptions(): Promise<OptionsPayload> {
-  const [modelOptionsByCategory, agentOptions] = await Promise.all([
-    loadMainViewModelOptions(),
-    computeAgentOptionsData(),
-  ]);
+  const [modelOptionsByCategory, agentOptions, teamOptions] = await Promise.all(
+    [
+      loadMainViewModelOptions(),
+      computeAgentOptionsData(),
+      loadMainViewTeamOptions(),
+    ],
+  );
 
   const defaultMergeModel = getHelperModelName();
 
@@ -44,6 +50,7 @@ export async function loadOptions(): Promise<OptionsPayload> {
     agentOptions,
     modelOptions: modelOptionsByCategory.workflow,
     modelOptionsByCategory,
+    teamOptions,
     defaultMergeModel,
   };
 }

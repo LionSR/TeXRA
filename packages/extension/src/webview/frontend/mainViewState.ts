@@ -23,10 +23,12 @@ import type {
   CheckboxValues,
   DependencyBannerState,
   FileOptions,
+  LaunchTarget,
   ModelOptionData,
   MultiFiles,
   OnboardingFunnelState,
   SingleFiles,
+  TeamOptionData,
 } from '@shared/schemas';
 
 // Local imports - main view
@@ -58,6 +60,8 @@ export type WebviewOnboardingFunnelState = OnboardingFunnelState | 'pending';
 // ---------------------------------------------------------------------------
 
 export const sessionType$ = signal<SessionType>(DEFAULT_STATE.sessionType);
+export const launchTarget$ = signal<LaunchTarget>(DEFAULT_STATE.launchTarget);
+export const selectedTeamId$ = signal(DEFAULT_STATE.selectedTeamId);
 export const workflowAgent$ = signal(DEFAULT_STATE.workflowAgent);
 export const toolUseAgent$ = signal(DEFAULT_STATE.toolUseAgent);
 export const model$ = signal(DEFAULT_STATE.model);
@@ -110,6 +114,7 @@ export const toolUseModelOptions$ = signal<ModelOptionData[] | undefined>(
 );
 export const workflowAgentOptions$ = signal<AgentOptionData[]>([]);
 export const toolUseAgentOptions$ = signal<AgentOptionData[]>([]);
+export const teamOptions$ = signal<TeamOptionData[]>([]);
 
 // ---------------------------------------------------------------------------
 // Chat / voice state
@@ -117,6 +122,13 @@ export const toolUseAgentOptions$ = signal<AgentOptionData[]>([]);
 
 export const isRecording$ = signal(false);
 export const isPolishing$ = signal(false);
+
+/**
+ * Last status line pushed to the InstructionPanel's visually-hidden aria-live
+ * region (screen-reader announcements for launcher/target fallbacks). Not
+ * persisted; cleared on remount.
+ */
+export const statusAnnouncement$ = signal('');
 
 // ---------------------------------------------------------------------------
 // Banners / onboarding state
@@ -194,6 +206,8 @@ export const fileStateContext$ = new Signal.Computed(
 
 export const sessionContext$ = new Signal.Computed((): SessionContextValue => ({
   sessionType: sessionType$.get(),
+  launchTarget: launchTarget$.get(),
+  selectedTeamId: selectedTeamId$.get(),
   instruction: instruction$.get(),
   placeholder: instructionPlaceholder$.get(),
   workflowAgent: workflowAgent$.get(),
@@ -202,10 +216,12 @@ export const sessionContext$ = new Signal.Computed((): SessionContextValue => ({
   workflowAgentOptions: workflowAgentOptions$.get(),
   toolUseAgentOptions: toolUseAgentOptions$.get(),
   modelOptions: getModelOptionsForSession(sessionType$.get()),
+  teamOptions: teamOptions$.get(),
   isRecording: isRecording$.get(),
   isPolishing: isPolishing$.get(),
   debugMode: debugMode$.get(),
   isOrchestratorSelected: isSelectedAgentOrchestrator$.get(),
+  statusAnnouncement: statusAnnouncement$.get(),
 }));
 
 /**
@@ -217,6 +233,8 @@ export const sessionContext$ = new Signal.Computed((): SessionContextValue => ({
  */
 export function resetMainViewState(): void {
   sessionType$.set(DEFAULT_STATE.sessionType);
+  launchTarget$.set(DEFAULT_STATE.launchTarget);
+  selectedTeamId$.set(DEFAULT_STATE.selectedTeamId);
   workflowAgent$.set(DEFAULT_STATE.workflowAgent);
   toolUseAgent$.set(DEFAULT_STATE.toolUseAgent);
   model$.set(DEFAULT_STATE.model);
@@ -239,8 +257,10 @@ export function resetMainViewState(): void {
   toolUseModelOptions$.set(undefined);
   workflowAgentOptions$.set([]);
   toolUseAgentOptions$.set([]);
+  teamOptions$.set([]);
   isRecording$.set(false);
   isPolishing$.set(false);
+  statusAnnouncement$.set('');
   apiKeyBanner$.set({ visible: false });
   agentConfigBanner$.set({ visible: false });
   dependencyBanner$.set({ visible: false });

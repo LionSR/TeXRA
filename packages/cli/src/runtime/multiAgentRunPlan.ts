@@ -1,6 +1,7 @@
 import { getAgentsByCategory, loadAgents, refresh } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { refreshRemoteCatalogForGaps } from '@common/teams/TeamPlan';
 
 import { missingMultiAgentPresetMessage } from './agents';
 import { CliUsageError } from './cliContext';
@@ -19,15 +20,6 @@ import {
 interface MultiAgentRunPlanInit {
   readonly preset: string;
   readonly agent?: string;
-}
-
-interface MultiAgentRunPlanLoadOptions {
-  readonly reloadRemoteAgents?: boolean;
-}
-
-interface RemoteAgentPlanReloadResult<T> {
-  readonly value: T;
-  readonly remoteAgentLoadAttempted: boolean;
 }
 
 export interface MultiAgentRunPlanLoadResult {
@@ -75,7 +67,7 @@ function planLoadedCliMultiAgentPresets(
  */
 export async function loadCliMultiAgentRunPlan(
   init: MultiAgentRunPlanInit,
-  options: MultiAgentRunPlanLoadOptions = {},
+  options: { readonly reloadRemoteAgents?: boolean } = {},
 ): Promise<MultiAgentRunPlanLoadResult> {
   await loadAgents({ includeRemote: false });
   const localPlan = planCurrentMultiAgentRun(init);
@@ -115,12 +107,15 @@ async function reloadRemoteAgentsForGaps<T>(
   value: T,
   hasGaps: (value: T) => boolean,
   replan: () => T,
-): Promise<RemoteAgentPlanReloadResult<T>> {
-  if (hasGaps(value) && (await SupabaseClient.canAccessRemoteAgentCatalog())) {
-    await refresh({ includeRemote: true });
-    return { value: replan(), remoteAgentLoadAttempted: true };
-  }
-  return { value, remoteAgentLoadAttempted: false };
+): Promise<{ readonly value: T; readonly remoteAgentLoadAttempted: boolean }> {
+  const result = await refreshRemoteCatalogForGaps(value, hasGaps, replan, {
+    canAccessRemoteCatalog: () => SupabaseClient.canAccessRemoteAgentCatalog(),
+    refreshRemote: () => refresh({ includeRemote: true }),
+  });
+  return {
+    value: result.value,
+    remoteAgentLoadAttempted: result.remoteCatalogRefreshAttempted,
+  };
 }
 
 export function writeMissingPresetAgents(

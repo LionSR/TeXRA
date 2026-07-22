@@ -6,11 +6,19 @@ import { describe, it } from 'vitest';
 
 // Local imports - shared
 import {
+  findTeamPreset,
+  planTeamRun,
+  teamPresets,
+} from '@common/teams/TeamPlan';
+import {
   SettingsAgentCatalogController,
   type SettingsAgentCatalogEntry,
 } from '@controllers/settingsView/SettingsAgentCatalogController';
 import type { AgentCategory } from '@shared/schemas/agent';
-import type { AgentModePreset } from '@shared/schemas/agentPresets';
+import {
+  AGENT_MODE_PRESETS_BY_ID,
+  type AgentModePreset,
+} from '@shared/schemas/agentPresets';
 
 // Local imports - controllers
 
@@ -243,6 +251,131 @@ describe('SettingsAgentCatalogController', () => {
         'leanOrchestrator',
       ]),
       'leanOrchestrator',
+    );
+  });
+
+  it('previews no root for a custom team with no delegating members', () => {
+    const { controller } = createController();
+
+    // The launcher disables this team with "no runnable team root"; the
+    // preview must agree instead of inventing a built-in root.
+    assert.equal(
+      controller.getPresetToolUseRoot(['review', 'customTool']),
+      undefined,
+    );
+  });
+
+  it('previews the engineer root for the built-in Software Engineer team', () => {
+    const { controller } = createController();
+    const softwareEngineer = AGENT_MODE_PRESETS_BY_ID.get('software-engineer');
+
+    assert.ok(softwareEngineer);
+    assert.equal(
+      controller.getPresetToolUseRoot(softwareEngineer.toolUseAgents),
+      'engineer',
+    );
+  });
+
+  it('previews the orchestrator root for a built-in team before the catalog loads', () => {
+    const { controller } = createController({
+      agents: { toolUse: [] },
+    });
+    const physicist = AGENT_MODE_PRESETS_BY_ID.get('physicist');
+
+    assert.ok(physicist);
+    assert.equal(
+      controller.getPresetToolUseRoot(physicist.toolUseAgents),
+      'orchestrator',
+    );
+  });
+
+  it('previews a built-in team with the root planTeamRun picks for it', () => {
+    const delegatingLean: SettingsAgentCatalogEntry = {
+      source: 'remote',
+      name: 'lean',
+      category: 'toolUse',
+      tools: ['delegate_agent'],
+    };
+    const { controller } = createController({
+      agents: { toolUse: [delegatingLean] },
+    });
+    const mathematician = AGENT_MODE_PRESETS_BY_ID.get('mathematician');
+    assert.ok(mathematician);
+
+    const preview = controller.getPresetToolUseRoot(
+      mathematician.toolUseAgents,
+      mathematician.id,
+    );
+
+    // Built-in semantics search only the built-in root names, so the
+    // delegating 'lean' member earlier in preset order must not win.
+    assert.equal(preview, 'orchestrator');
+    const realPreset = findTeamPreset(teamPresets([]), mathematician.id);
+    assert.ok(realPreset);
+    assert.equal(
+      preview,
+      planTeamRun(realPreset, {
+        workflowAgents: [],
+        toolUseAgents: [
+          delegatingLean,
+          // Stand-in for the controller's synthesized built-in root entry.
+          {
+            source: 'builtInToolUse',
+            name: 'orchestrator',
+            category: 'toolUse',
+            tools: ['delegate_agent'],
+          },
+        ],
+      }).rootAgent?.name,
+    );
+    // The same member list previewed ad-hoc keeps custom semantics and
+    // picks the preset-order-first delegating member instead.
+    assert.equal(
+      controller.getPresetToolUseRoot(mathematician.toolUseAgents),
+      'lean',
+    );
+  });
+
+  it('keeps custom root semantics when a custom team is previewed by id', () => {
+    const customPreset = {
+      id: 'custom-team',
+      name: 'Custom Team',
+      description: 'test',
+      icon: 'bookmark',
+      workflowAgents: [],
+      toolUseAgents: ['teamLead', 'orchestrator'],
+    };
+    const { controller } = createController({
+      agents: {
+        toolUse: [
+          {
+            source: 'custom',
+            name: 'teamLead',
+            category: 'toolUse',
+            tools: ['delegate_agent'],
+          },
+        ],
+      },
+      customPresets: [customPreset],
+    });
+
+    // Preset order wins for custom teams, even over the built-in root the
+    // member list names (synthesized because the catalog lacks it).
+    assert.equal(
+      controller.getPresetToolUseRoot(
+        customPreset.toolUseAgents,
+        'custom-team',
+      ),
+      'teamLead',
+    );
+  });
+
+  it('falls back to custom semantics for an unresolvable preset id', () => {
+    const { controller } = createController();
+
+    assert.equal(
+      controller.getPresetToolUseRoot(['review', 'customTool'], 'missing-team'),
+      undefined,
     );
   });
 

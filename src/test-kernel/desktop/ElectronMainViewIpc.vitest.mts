@@ -9,6 +9,7 @@ import {
   SETTINGS_VIEW_COMMANDS,
 } from '@shared/ipc';
 import { AgentCategory } from '@shared/schemas/agent';
+import { AGENT_MODE_PRESETS } from '@shared/schemas/agentPresets';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
@@ -215,7 +216,9 @@ function createMainViewCommandCapabilities() {
 describe('desktop main-view IPC', () => {
   afterEach(() => {
     vi.doUnmock('electron');
+    vi.doUnmock('@agent/index');
     vi.doUnmock('@agent/index/agentRegistry');
+    vi.doUnmock('@auth/SupabaseClient');
     vi.doUnmock('@model/computeModelOptions');
     vi.doUnmock('@model/modelOptionsBasic');
   });
@@ -270,6 +273,13 @@ describe('desktop main-view IPC', () => {
       settings,
       progress,
       executeAgent,
+      // This test only cares about theme/debug pushes; keep the startup
+      // catalog loader (which reads platform workspace state) out of scope.
+      loadStartupOptions: async () => ({
+        agentOptions: { workflow: [], toolUse: [] },
+        modelOptions: [],
+        teamOptions: [],
+      }),
     });
 
     expect(ipcMain.on).toHaveBeenCalledWith(
@@ -536,11 +546,23 @@ describe('desktop main-view IPC', () => {
     });
     const nativeTheme = createNativeThemeMock();
     const modelListRefresh = createDeferred();
-    vi.doMock('@agent/index/agentRegistry', () => ({
+    // desktopMainViewStartup resolves the whole startup catalog through the
+    // `@agent/index` barrel (agent options plus the team-option loader's
+    // catalog/refresh ports), so the barrel — not the agentRegistry leaf
+    // module — is the mock boundary here.
+    vi.doMock('@agent/index', () => ({
       computeAgentOptionsData: vi.fn(async () => ({
         workflow: [],
         toolUse: [],
       })),
+      loadAgents: vi.fn(async () => undefined),
+      getAgentsByCategory: vi.fn(() => []),
+      refresh: vi.fn(async () => undefined),
+    }));
+    vi.doMock('@auth/SupabaseClient', () => ({
+      SupabaseClient: {
+        canAccessRemoteAgentCatalog: vi.fn(async () => false),
+      },
     }));
     vi.doMock('@model/computeModelOptions', () => ({
       // `label` is required by `ModelOptionDataSchema` (PickerOptionBaseSchema)
@@ -552,6 +574,14 @@ describe('desktop main-view IPC', () => {
     }));
     const { ELECTRON_WEBVIEW_PUSH_CHANNEL, installDesktopMainViewIpc } =
       await loadDesktopMainViewIpcModule({ ipcMain, nativeTheme });
+    // The default startup loader reads custom team presets through the
+    // platform workspace state; re-init the fresh module instance that
+    // loadDesktopMainViewIpcModule's vi.resetModules() just produced.
+    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
+      import('@platform/platform'),
+      import('@test/support/FakePlatform'),
+    ]);
+    initPlatform(createFakePlatform({}));
     const sends: Array<{ channel: string; message: unknown }> = [];
     const { window, webContents } = createWindowMock(sends);
 
@@ -589,5 +619,98 @@ describe('desktop main-view IPC', () => {
         optionsData: [{ value: 'fresh-model' }],
       },
     });
+
+    // The default loader also resolves team options: every built-in team is
+    // listed (disabled while its roster cannot resolve in this environment).
+    const teamPush = sends.find(
+      ({ channel, message }) =>
+        channel === ELECTRON_WEBVIEW_PUSH_CHANNEL &&
+        (message as { command?: string }).command ===
+          MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
+    );
+    expect(teamPush).toBeDefined();
+    const teamOptions = (teamPush!.message as { optionsData: unknown[] })
+      .optionsData;
+    expect(
+      teamOptions.map((option) => (option as { value?: string }).value),
+    ).toEqual(AGENT_MODE_PRESETS.map((preset) => preset.id));
+    expect(
+      teamOptions.every(
+        (option) => (option as { source?: string }).source === 'built-in',
+      ),
+    ).toBe(true);
+  });
+
+  it('posts the injected startup team options on main-view ready', async () => {
+    let rendererListener: RendererListener | undefined;
+    const ipcMain = createIpcMainMock((listener) => {
+      rendererListener = listener;
+    });
+    const nativeTheme = createNativeThemeMock();
+    const { ELECTRON_WEBVIEW_PUSH_CHANNEL, installDesktopMainViewIpc } =
+      await loadDesktopMainViewIpcModule({ ipcMain, nativeTheme });
+    const sends: Array<{ channel: string; message: unknown }> = [];
+    const { window, webContents } = createWindowMock(sends);
+
+    const teamOptions = [
+      {
+        value: 'physicist',
+        label: 'Physicist',
+        icon: 'atom',
+        source: 'built-in',
+        description: 'A physics research team.',
+        unavailableMembers: [],
+        rootAgentName: 'orchestrator',
+      },
+      {
+        value: 'my-team',
+        label: 'My Team',
+        icon: 'bookmark',
+        source: 'custom',
+        description: '',
+        unavailableMembers: ['writer'],
+        rootAgentName: 'lead',
+      },
+    ];
+    installDesktopMainViewIpc(window, {
+      ...createMainViewCommandCapabilities(),
+      loadStartupOptions: async () => ({
+        agentOptions: { workflow: [], toolUse: [] },
+        modelOptions: [],
+        teamOptions,
+      }),
+    });
+    rendererListener?.(
+      { sender: webContents },
+      { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY, view: 'main' },
+    );
+    await flushAsyncWork();
+
+    const teamPush = sends.find(
+      ({ channel, message }) =>
+        channel === ELECTRON_WEBVIEW_PUSH_CHANNEL &&
+        (message as { command?: string }).command ===
+          MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
+    );
+    expect(teamPush).toMatchObject({
+      message: {
+        command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
+        optionsData: teamOptions,
+      },
+    });
+    // Startup pushes land in controller order: model, agent, team, login.
+    const startupCommands = sends
+      .filter(({ channel }) => channel === ELECTRON_WEBVIEW_PUSH_CHANNEL)
+      .map(({ message }) => (message as { command?: string }).command);
+    const teamIndex = startupCommands.indexOf(
+      MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
+    );
+    expect(teamIndex).toBeGreaterThan(-1);
+    expect(startupCommands[teamIndex - 1]).toBe(
+      MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+    );
+    expect(startupCommands[teamIndex + 1]).toBe(
+      MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
+    );
   });
 });

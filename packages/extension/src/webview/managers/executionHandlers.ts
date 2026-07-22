@@ -1,11 +1,30 @@
 import * as vscode from 'vscode';
 
-import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
+import { AUTH_COMMANDS } from '@commands/auth';
+import {
+  formatPartialTeamLaunchMessage,
+  formatTeamLaunchBlockedMessage,
+  formatTeamUnavailableMessage,
+  formatUnavailableTeamMembersMessage,
+  formatUnknownTeamMessage,
+  resolveTeamLaunch,
+  TEAM_LAUNCH_CANCEL_LABEL,
+  TEAM_LAUNCH_CONTINUE_LABEL,
+  TEAM_LAUNCH_SIGN_IN_LABEL,
+  TEAM_SELECTION_REQUIRED_MESSAGE,
+} from '@common/teams/TeamPlan';
+import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
+import {
+  type MainViewExecutionPreparationResult,
+  prepareMainViewExecutionRequest,
+  prepareMainViewTeamExecutionRequest,
+} from '@controllers/mainView/MainViewExecutionController';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import type { FileOperationMessage } from '@shared/schemas/mainView/inbound';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'ExecutionHandlers';
 
@@ -41,7 +60,73 @@ export interface MultipleOperationMessage {
 export async function handleExecute(
   message: MainViewExecuteMessage,
 ): Promise<void> {
-  const preparation = prepareMainViewExecutionRequest(message);
+  let preparation: MainViewExecutionPreparationResult;
+  if (message.session?.launchTarget === 'team') {
+    try {
+      const teamId = message.session.teamId;
+      if (!teamId) {
+        vscode.window.showErrorMessage(TEAM_SELECTION_REQUIRED_MESSAGE);
+        return;
+      }
+
+      const resolution = await resolveTeamLaunch({
+        teamId,
+        ...createTeamCatalogPorts(),
+        choose: async (unavailableNames) => {
+          const choice = await vscode.window.showWarningMessage(
+            formatUnavailableTeamMembersMessage(unavailableNames),
+            TEAM_LAUNCH_SIGN_IN_LABEL,
+            TEAM_LAUNCH_CONTINUE_LABEL,
+            TEAM_LAUNCH_CANCEL_LABEL,
+          );
+          if (choice === TEAM_LAUNCH_SIGN_IN_LABEL) return 'sign-in';
+          if (choice === TEAM_LAUNCH_CONTINUE_LABEL) return 'continue';
+          return 'cancel';
+        },
+        signIn: async () =>
+          Boolean(
+            await vscode.commands.executeCommand<boolean>(
+              AUTH_COMMANDS.SIGN_IN,
+            ),
+          ),
+      });
+
+      if (resolution.status === 'cancelled') return;
+      if (resolution.status === 'unknown-team') {
+        vscode.window.showErrorMessage(formatUnknownTeamMessage(teamId));
+        return;
+      }
+      if (resolution.status === 'blocked') {
+        vscode.window.showErrorMessage(
+          formatTeamLaunchBlockedMessage(teamId, resolution.reason),
+        );
+        return;
+      }
+      if (resolution.status === 'unavailable') {
+        vscode.window.showErrorMessage(
+          formatTeamUnavailableMessage(teamId, resolution.unavailableNames),
+        );
+        return;
+      }
+
+      if (resolution.partial) {
+        await vscode.window.showInformationMessage(
+          formatPartialTeamLaunchMessage(resolution.missingNames),
+        );
+      }
+      preparation = prepareMainViewTeamExecutionRequest(
+        message,
+        resolution.fields,
+      );
+    } catch (error) {
+      vscode.window.showErrorMessage(
+        `Team launch failed: ${toErrorMessage(error)}`,
+      );
+      return;
+    }
+  } else {
+    preparation = prepareMainViewExecutionRequest(message);
+  }
   if (!preparation.valid) {
     logErrorMessage(
       CHANNEL,
