@@ -36,7 +36,7 @@ export interface CliMultiAgentTeamLaunchBlockMessageOptions {
 
 type CliMultiAgentPresetAgentAvailability = TeamAgentAvailability;
 
-export type CliMultiAgentPresetAvailability = TeamAvailability;
+type CliMultiAgentPresetAvailability = TeamAvailability;
 
 /**
  * Machine-readable `multi-agent list` record. It preserves the raw preset
