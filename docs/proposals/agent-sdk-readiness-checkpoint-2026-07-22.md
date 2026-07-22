@@ -9,18 +9,24 @@ addendum, and the `-2026-06-25` → `-2026-07-21` checkpoints (most recently
 [`-2026-07-21`](./agent-sdk-readiness-checkpoint-2026-07-21.md)).
 
 This pass re-verified the standing audit against `claude/eager-noether-2kgehc`
-at HEAD `395e229` (v0.39.8-dev, 11 commits above the `3612630` pin the 07-21
+at HEAD `395e229` (v0.39.8, unreleased per `CHANGELOG.md`'s `[0.39.8] -
+Unreleased` heading; 11 commits above the `3612630` pin the 07-21
 checkpoint recorded). **Correction (Codex, P2): the initial commit census for
 this range was itself incomplete** — it named only 5 of the 11 (dependency
 bumps #9056/#9058/#9060, the citty refactor #9039, `#9036`) and asserted
 "none touch the agent spine," which is false. The 6 omitted commits are
-`f71007a` (delete a dead `mediaVisionWarning` export — spine, trivial),
-`0dc0f8b` / **#9035** "fix: scope execution writes to lease owners" (a
-**substantial** spine rewrite: `executeAgent.ts` ±412, `executionRegistry.ts`
-±206, `runAgent.ts` ±163, plus `AgentRunLifecycle.ts`, `ExecutionHandle.ts`,
-`childRunLoop.ts`, `agent/storage/executionLease.ts` and
-`executionLifecycle.ts`), `09d5aea` / #9055 (tools, `TextEditorTool.ts`
-history-cap fix), `9bc9af2` / #9054 (dedup pass touching `agent/export`,
+`f71007a` (deletes the dead `mediaAttachmentKinds` export from
+`mediaVisionWarning.ts` — spine-adjacent, trivial; the file's other three
+exports are untouched), `0dc0f8b` / **#9035** "fix: scope execution writes to
+lease owners" (a **substantial** spine rewrite: `executeAgent.ts` ±412,
+`executionRegistry.ts` ±206, `runAgent.ts` ±163, plus `AgentRunLifecycle.ts`,
+`ExecutionHandle.ts`, `childRunLoop.ts`, `agent/storage/executionLease.ts`
+and `executionLifecycle.ts`), `09d5aea` / #9055 (scopes `TextEditorTool.ts`'s
+undo-history storage per execution — nesting `fileHistory` under
+`executionId` — and adds an execution-registry listener that releases a
+finished execution's snapshots; the pre-existing `MAX_HISTORY_PER_FILE = 50`
+cap was already present before this commit and is unchanged by it),
+`9bc9af2` / #9054 (dedup pass touching `agent/export`,
 `agent/implementations/flows/tooluse/nodes/types.ts`,
 `agent/runtime/modelHandlerCompatibilityInference.ts`), and `b64b18d` / #9038
 (the 07-21 checkpoint's own applied cleanup, already recorded in that
@@ -28,12 +34,13 @@ checkpoint). The lease-scoping rewrite (`0dc0f8b`) is the one with real
 spine-shape risk. This pass's fan-out readers read `runAgent.ts`,
 `RunContext.ts`, `SessionHandle.ts`, and the delegation/`childRunLoop`
 subsystem fresh at `395e229` (post-rewrite) and found no new debt in them —
-so the standing conclusions **do** reflect the rewritten code — but the
-readers did not specifically diff against the lease-scoping change or open
-`executionRegistry.ts`/`ExecutionHandle.ts`/`AgentRunLifecycle.ts` this pass,
-so "unchanged since 07-21" for those three specific files rests on their
-current-state read being clean, not on an explicit before/after diff. As on
-every prior pass it ran a **fresh, uninformed four-way fan-out
+so the standing conclusions **do** reflect the rewritten code for those
+specific files. They did **not** open `executionRegistry.ts`,
+`ExecutionHandle.ts`, or `AgentRunLifecycle.ts` this pass, so "unchanged
+since 07-21" is not established for those three — that is a real residual
+gap in this checkpoint's coverage, not a reassurance, and a future pass
+should read them explicitly. As on every prior pass it ran a **fresh,
+uninformed four-way fan-out
 audit** — four separate readers for (1) `agent/core` + `agent/implementations/flows`,
 (2) `agent/modelHandlers` + `toolConversion` + `IModelHandler`, (3)
 `agent/runtime` + `logger` + the trace/`SessionEventHub`/`AppSignals` surfaces,
@@ -248,10 +255,13 @@ _runtime-as-external-SDK_ direction) does not capture: TeXRA already **embeds**
 the Agent SDK as a delegated tool (`src/tools/claudeAgent.ts`, the `claude_code`
 tool over `@anthropic-ai/claude-agent-sdk`), but its ~55-tool registry
 (`src/tools/registry.ts`, incl. the domain tools — arxiv, latex figure/bib/tikz,
-zotero, lean, wolfram, crossref) is **in-process only**. There is no proposal
-(grep-confirmed) on wrapping that registry as an **in-process MCP server** so
-the embedded `claude_code` agent (and any external SDK/CLI consumer) could
-reach TeXRA's domain tools instead of only SDK built-ins. `parallelSafe` /
+zotero, lean, wolfram, crossref) is **in-process only**. Before this
+checkpoint, no proposal (grep-confirmed against the standing
+`docs/proposals/` tree) discussed wrapping that registry as an **in-process
+MCP server** so the embedded `claude_code` agent (and any external SDK/CLI
+consumer) could reach TeXRA's domain tools instead of only SDK built-ins —
+this section is that first proposal, not a report that the idea remains
+absent from the repo (a later grep will of course find it here). `parallelSafe` /
 `requiresApproval` map cleanly onto MCP annotations + the SDK permission layer.
 Recorded as a **strategic product idea**, not a readiness-refactoring item — it
 adds surface rather than removing it, so it does not change the "no structural
@@ -261,7 +271,7 @@ somewhere.
 ## Recommendation
 
 **SDK-ready in shape; no structural refactoring warranted.** The tree is
-healthy at `395e229` (v0.39.8-dev); a fresh four-way fan-out reconverged on the
+healthy at `395e229` (v0.39.8, unreleased); a fresh four-way fan-out reconverged on the
 standing verdict. **No net code change lands this pass.** The one candidate
 this pass initially applied — narrowing `MapToolRegistry`'s constructor away
 from its `Map` input — was pushed, then **reverted** after an external review
@@ -339,9 +349,11 @@ five-checkpoint-old claim named.
   commit `c08e698` — include a substantial spine rewrite (`0dc0f8b`:
   `executeAgent.ts`, `executionRegistry.ts`, `runAgent.ts`,
   `AgentRunLifecycle.ts`, `ExecutionHandle.ts`, `childRunLoop.ts`,
-  `agent/storage/executionLease.ts`/`executionLifecycle.ts`). This pass's
-  readers read those files fresh at `395e229` and found no new debt, but did
-  not explicitly diff them against the lease-scoping rewrite.
+  `agent/storage/executionLease.ts`/`executionLifecycle.ts`). Of those, this
+  pass's readers opened only `runAgent.ts` fresh at `395e229` and found no
+  new debt in it; `executionRegistry.ts`, `ExecutionHandle.ts`, and
+  `AgentRunLifecycle.ts` were **not** opened this pass — an acknowledged
+  coverage gap, not a reverified-clean result, for those three files.
 - `IToolRegistry` implementation count corrected: 2, not 1 —
   `MapToolRegistry` (`ToolTypes.ts:47`) and `buildTerminalToolRegistry`'s
   returned overlay object (`src/tools/structuredOutput.ts:228-236`). **Keep**
@@ -352,9 +364,10 @@ five-checkpoint-old claim named.
   in `src/agent/runtime/README.md`'s module-map table, corrected in this same
   change. The live implementation is `lazyDetectWaitingStatus` in
   `packages/extension/src/commands/agent/followUpCommand.ts`.
-- MCP-exposure observation: no proposal mentions exposing the TeXRA tool
-  registry as an MCP server (grep across `docs/proposals/`); `claude_code` tool
-  confirmed at `src/tools/claudeAgent.ts` importing
-  `@anthropic-ai/claude-agent-sdk`.
+- MCP-exposure observation: no **prior** proposal mentioned exposing the
+  TeXRA tool registry as an MCP server (grep across the pre-existing
+  `docs/proposals/` tree, before this checkpoint's own MCP section was
+  written) — this checkpoint is the first; `claude_code` tool confirmed at
+  `src/tools/claudeAgent.ts` importing `@anthropic-ai/claude-agent-sdk`.
 - This checkpoint is added under `docs/proposals/`, an internal directory
   excluded from the texra.ai publish allowlist — not a root-level doc.
