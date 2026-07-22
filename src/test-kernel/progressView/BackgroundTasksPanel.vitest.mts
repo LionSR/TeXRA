@@ -18,7 +18,7 @@ describe('background-tasks-panel', () => {
     () => import('@progressView/frontend/components/BackgroundTasksPanel'),
   );
 
-  it('strips the redundant Web Awesome card around its contents', () => {
+  it('inherits the flat shared panel surface', () => {
     const element = document.createElement(
       'background-tasks-panel',
     ) as BackgroundTasksPanel;
@@ -37,7 +37,7 @@ describe('background-tasks-panel', () => {
     const rule = [...(styleElement.sheet?.cssRules ?? [])].find(
       (candidate) =>
         (candidate as CSSStyleRule).selectorText ===
-        'wa-details.panel-collapsible::part(base)',
+        '.panel-collapsible::part(base)',
     ) as CSSStyleRule | undefined;
     styleElement.remove();
 
