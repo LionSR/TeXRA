@@ -201,7 +201,11 @@ export class ProgressBackend {
     if (ownedLocally && isInFlightPhase(this.session.status.get(stream))) {
       await this.lifecycle.stopStream(stream);
     }
-    if (ownedLocally) await this.state.waitForOwnedExecutionRelease(stream);
+
+    // A terminal child is untracked before its artifact flush releases the
+    // execution lease. Auto-close can land in that interval, so the handle is
+    // not a reliable indication that local durable writes have finished.
+    await this.state.waitForOwnedExecutionRelease(stream);
 
     const deletion = await this.state.clearStream(stream);
     if (deletion !== 'deleted') {

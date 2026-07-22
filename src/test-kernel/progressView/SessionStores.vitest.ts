@@ -13,6 +13,47 @@ import { releaseStreamResources } from '@tools/approval';
 import { StreamSnapshotStore } from '@transcript';
 
 describe('SessionStores deletion coordination', () => {
+  it('tracks lease-gated deletion without blocking its artifact flush', async () => {
+    const session = createTestSession();
+    const stream = 'lease-gated-delete' as StreamTabId;
+    session.transcripts.ensureStream(stream);
+    const snapshots = new StreamSnapshotStore();
+    const stores = new SessionStores({
+      streamLogs: session.transcripts,
+      snapshots,
+    });
+    let releaseLease!: () => void;
+    const leaseReleased = new Promise<void>((resolve) => {
+      releaseLease = resolve;
+    });
+    vi.spyOn(stores, 'waitForOwnedExecutionRelease').mockReturnValue(
+      leaseReleased,
+    );
+    const flush = vi.spyOn(snapshots, 'flush');
+
+    try {
+      const deletion = stores.deleteStreamAfterOwnedExecutionRelease(stream);
+      const drain = stores.waitForPendingStreamDeletions();
+      let drainFinished = false;
+      void drain.then(() => {
+        drainFinished = true;
+      });
+
+      await stores.flushSnapshotsAfterStartedDeletions();
+      expect(flush).toHaveBeenCalledOnce();
+      expect(drainFinished).toBe(false);
+      expect(session.transcripts.has(stream)).toBe(true);
+
+      releaseLease();
+      await expect(deletion).resolves.toBe('deleted');
+      await drain;
+      expect(session.transcripts.has(stream)).toBe(false);
+    } finally {
+      releaseLease();
+      session.dispose();
+    }
+  });
+
   it('releases one canonical stream once when single and bulk deletion overlap', async () => {
     const session = createTestSession();
     const stream = 'tool@test#abc001' as StreamTabId;

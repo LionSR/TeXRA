@@ -455,6 +455,40 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('waits for a terminal child lease after its handle is untracked', async () => {
+    const { backend, session } = createIsolatedRecordingBackend();
+    const stream = 'completed-background-bash' as StreamTabId;
+    let releaseLease!: () => void;
+    const leaseReleased = new Promise<void>((resolve) => {
+      releaseLease = resolve;
+    });
+    const waitForRelease = vi
+      .spyOn(backend.state, 'waitForOwnedExecutionRelease')
+      .mockReturnValue(leaseReleased);
+    const clearStream = vi.spyOn(backend.state, 'clearStream');
+
+    try {
+      backend.state.streamLogs.ensureStream(stream);
+      expect(session.executions.getAgentHandleByStream(stream)).toBeUndefined();
+
+      const deletion = backend.deleteStream(stream);
+      await vi.waitFor(() =>
+        expect(waitForRelease).toHaveBeenCalledWith(stream),
+      );
+      expect(clearStream).not.toHaveBeenCalled();
+
+      releaseLease();
+      await deletion;
+
+      expect(clearStream).toHaveBeenCalledWith(stream);
+      expect(backend.state.streamLogs.has(stream)).toBe(false);
+    } finally {
+      releaseLease();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('deletes an active stream and activates the next visible stream', async () => {
     const session = createTestSession();
     const messages: ProgressViewOutboundMessage[] = [];
