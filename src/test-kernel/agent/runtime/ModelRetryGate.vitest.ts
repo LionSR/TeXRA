@@ -185,6 +185,46 @@ describe('ModelRetryGate', () => {
     gate.dispose();
   });
 
+  it('preserves client refresh after a cooled probe recovery fails', async () => {
+    const gate = new ModelRetryGate();
+    await openGate(gate);
+
+    const recoveryError = new Error('provider still unavailable');
+    const failedRecoveryProbe = gate.run(
+      ROUTE,
+      {
+        ...options(new AbortController().signal),
+        recoverFailure: () => () => Promise.reject(recoveryError),
+      },
+      async () => {
+        throw TRANSIENT;
+      },
+    );
+    const failedRecoveryResult =
+      expect(failedRecoveryProbe).rejects.toBe(recoveryError);
+    await vi.advanceTimersByTimeAsync(1000);
+    await failedRecoveryResult;
+
+    const order: string[] = [];
+    const next = gate.run(
+      ROUTE,
+      {
+        ...options(new AbortController().signal),
+        onAdmitted: () => {
+          order.push('refresh');
+        },
+      },
+      async () => {
+        order.push('operation');
+      },
+    );
+
+    await vi.advanceTimersByTimeAsync(2000);
+    await next;
+    expect(order).toEqual(['refresh', 'operation']);
+    gate.dispose();
+  });
+
   it('honors an explicitly disabled shared backoff', async () => {
     const gate = new ModelRetryGate();
     const controller = new AbortController();

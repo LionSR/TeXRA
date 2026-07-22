@@ -137,7 +137,10 @@ export class ModelRetryGate {
   ): RetryPermit | undefined {
     const state = this.routes.get(route);
     if (!state || permit.version !== state.version) return undefined;
-    if (state.phase === 'probing' && permit.probe) return permit;
+    if (state.phase === 'probing' && permit.probe) {
+      state.refreshOnAdmission = true;
+      return permit;
+    }
     if (state.phase !== 'healthy') return undefined;
 
     state.version += 1;
