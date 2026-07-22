@@ -23,7 +23,6 @@ interface RouteState {
 interface RetryPermit {
   readonly version: number;
   readonly probe: boolean;
-  readonly waited: boolean;
   readonly sharedRecoveryCompleted: boolean;
 }
 
@@ -150,7 +149,6 @@ export class ModelRetryGate {
     return {
       version: state.version,
       probe: true,
-      waited: permit.waited,
       sharedRecoveryCompleted: permit.sharedRecoveryCompleted,
     };
   }
@@ -195,7 +193,6 @@ export class ModelRetryGate {
       return Promise.resolve({
         version: healthyState.version,
         probe: false,
-        waited: false,
         sharedRecoveryCompleted: false,
       });
     }
@@ -272,7 +269,6 @@ export class ModelRetryGate {
       waiter.resolve({
         version: state.version,
         probe: false,
-        waited: true,
         sharedRecoveryCompleted: refreshOnAdmission,
       });
     }
@@ -315,7 +311,6 @@ export class ModelRetryGate {
         waiter.resolve({
           version: state.version,
           probe: true,
-          waited: true,
           sharedRecoveryCompleted: state.refreshOnAdmission,
         });
       },
