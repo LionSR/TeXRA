@@ -181,7 +181,6 @@ describe('commitAcceptedFile', () => {
     const written: Array<{ location: FileLocation; content: string }> = [];
     const infoMessages: string[] = [];
     return {
-      exists: async () => false,
       readFile: async () => 'edited content',
       writeFile: async (location, content) => {
         written.push({ location, content });
@@ -197,16 +196,23 @@ describe('commitAcceptedFile', () => {
     };
   }
 
+  function buildCommitLocations(): {
+    base: FileLocation;
+    edited: FileLocation;
+    copy: FileLocation;
+  } {
+    return {
+      base: createWorkspaceLocation('/ws/paper.tex', 'paper.tex'),
+      edited: createWorkspaceLocation(
+        '/ws/paper_correct.tex',
+        'paper_correct.tex',
+      ),
+      copy: createWorkspaceLocation('/ws/paper_copy.tex', 'paper_copy.tex'),
+    };
+  }
+
   it('writes the edited content into the resolved target and reports success', async () => {
-    const base = createWorkspaceLocation('/ws/paper.tex', 'paper.tex');
-    const edited = createWorkspaceLocation(
-      '/ws/paper_correct.tex',
-      'paper_correct.tex',
-    );
-    const copy = createWorkspaceLocation(
-      '/ws/paper_copy.tex',
-      'paper_copy.tex',
-    );
+    const { base, edited, copy } = buildCommitLocations();
     const ports = buildCommitPorts();
 
     await commitAcceptedFile(
@@ -228,11 +234,7 @@ describe('commitAcceptedFile', () => {
   });
 
   it('reports "replaced" when the caller says the target already existed', async () => {
-    const base = createWorkspaceLocation('/ws/paper.tex', 'paper.tex');
-    const edited = createWorkspaceLocation(
-      '/ws/paper_correct.tex',
-      'paper_correct.tex',
-    );
+    const { base, edited } = buildCommitLocations();
     const ports = buildCommitPorts();
 
     await commitAcceptedFile(
@@ -247,15 +249,7 @@ describe('commitAcceptedFile', () => {
   });
 
   it('leaves the copy target untouched by diff cleanup (save-as-copy leaves base intact)', async () => {
-    const base = createWorkspaceLocation('/ws/paper.tex', 'paper.tex');
-    const edited = createWorkspaceLocation(
-      '/ws/paper_correct.tex',
-      'paper_correct.tex',
-    );
-    const copy = createWorkspaceLocation(
-      '/ws/paper_copy.tex',
-      'paper_copy.tex',
-    );
+    const { base, edited, copy } = buildCommitLocations();
     const deleted: FileLocation[] = [];
     const ports = buildCommitPorts({
       deleteFile: async (location) => {
