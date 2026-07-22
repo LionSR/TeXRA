@@ -13,6 +13,16 @@ import type { ExecutionId } from '@shared/schemas';
 
 const EXECUTION_ID = 'abc123' as ExecutionId;
 
+function latexResultFixture(
+  overrides: Partial<Parameters<typeof describeLatexExportResult>[0]> = {},
+): Parameters<typeof describeLatexExportResult>[0] {
+  return {
+    storagePath: 'executions/abc/chat.tex',
+    absolutePath: '/tmp/executions/abc/chat.tex',
+    ...overrides,
+  };
+}
+
 describe('HistoryActionOutcomes', () => {
   it('maps export-input error statuses to messages', () => {
     expect(exportInputErrorMessage('config_missing')).toBe(
@@ -39,11 +49,9 @@ describe('HistoryActionOutcomes', () => {
   });
 
   it('describes a compiled LaTeX export', () => {
-    const outcome = describeLatexExportResult({
-      storagePath: 'executions/abc/chat.tex',
-      absolutePath: '/tmp/executions/abc/chat.tex',
-      pdfPath: '/tmp/executions/abc/chat.pdf',
-    });
+    const outcome = describeLatexExportResult(
+      latexResultFixture({ pdfPath: '/tmp/executions/abc/chat.pdf' }),
+    );
 
     expect(outcome).toEqual({
       kind: 'compiled',
@@ -53,11 +61,9 @@ describe('HistoryActionOutcomes', () => {
   });
 
   it('describes a failed LaTeX compilation with a log tail', () => {
-    const outcome = describeLatexExportResult({
-      storagePath: 'executions/abc/chat.tex',
-      absolutePath: '/tmp/executions/abc/chat.tex',
-      logTail: '! Undefined control sequence.',
-    });
+    const outcome = describeLatexExportResult(
+      latexResultFixture({ logTail: '! Undefined control sequence.' }),
+    );
 
     expect(outcome).toEqual({
       kind: 'compileFailed',
@@ -70,10 +76,7 @@ describe('HistoryActionOutcomes', () => {
   });
 
   it('describes a failed LaTeX compilation without a log tail', () => {
-    const outcome = describeLatexExportResult({
-      storagePath: 'executions/abc/chat.tex',
-      absolutePath: '/tmp/executions/abc/chat.tex',
-    });
+    const outcome = describeLatexExportResult(latexResultFixture());
 
     expect(outcome).toEqual({
       kind: 'compileFailed',

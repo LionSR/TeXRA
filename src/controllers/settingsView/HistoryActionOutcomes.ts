@@ -17,7 +17,7 @@ import * as path from 'node:path';
 import type {
   DeleteAllExecutionsResult,
   DeleteExecutionResult,
-} from '@agent/storage';
+} from '@agent/storage/executionListing';
 import { formatExecutionHistoryRetention } from '@shared/copy/executionHistory';
 import type {
   ExportInputStatus,
@@ -59,7 +59,7 @@ export function exportedFileMessage(storagePath: string): string {
   return `Chat exported: ${path.basename(storagePath)}`;
 }
 
-export type LatexExportOutcome =
+type LatexExportOutcome =
   | {
       readonly kind: 'compiled';
       readonly pathToOpen: string;
@@ -98,7 +98,7 @@ export function describeLatexExportResult(
   };
 }
 
-export type DeleteExecutionOutcome =
+type DeleteExecutionOutcome =
   | { readonly kind: 'active' }
   | { readonly kind: 'not-found'; readonly message: string }
   | { readonly kind: 'deleted' };
@@ -117,7 +117,7 @@ export function describeDeleteExecutionResult(
   return { kind: 'deleted' };
 }
 
-export type ClearHistoryOutcome =
+type ClearHistoryOutcome =
   | { readonly kind: 'cleared' }
   | { readonly kind: 'retained'; readonly message: string };
 
