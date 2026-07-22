@@ -47,7 +47,6 @@ import {
 } from '@model/providerCapabilities';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { longRunningModelFetch } from '../support/longRunningModelFetch';
 import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 
@@ -169,42 +168,38 @@ export function rewriteCodexRequestBody(
   return rewritten;
 }
 
-/**
- * Custom `fetch` for the Codex client: a thin parse → {@link
- * rewriteCodexRequestBody} → serialize adapter on the generation endpoint, so
- * the large base request-builder is untouched. The handler forces the streaming
- * path (`getStreamingConfig` → true), so the SDK's own `ResponseStream`
- * accumulates the deltas natively — no SSE parsing here. Token-counting /
- * compaction endpoints are disabled at the capability level, so only the
- * generation endpoint reaches this rewrite.
- */
-const codexFetch = (async (input, init) => {
-  const url = requestUrl(input);
-  if (
-    !init ||
-    init.method !== 'POST' ||
-    typeof init.body !== 'string' ||
-    !isGenerationRequest(url)
-  ) {
-    return longRunningModelFetch(input, init);
-  }
-
-  try {
-    const body = JSON.parse(init.body) as Record<string, unknown>;
-    init = { ...init, body: JSON.stringify(rewriteCodexRequestBody(body)) };
-  } catch (error) {
-    // Body isn't JSON we can edit — the backend will reject it (missing
-    // stream/instructions). Log so the resulting 400 is diagnosable.
-    logger.warn(
-      CHANNEL,
-      `Could not adapt Codex request body: ${toErrorMessage(error)}`,
-    );
-  }
-
-  return longRunningModelFetch(input, init);
-}) satisfies typeof fetch;
-
 export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
+  /**
+   * Thin request-body adapter for the Codex generation endpoint. The SDK
+   * continues to own response streaming; this only rewrites the outgoing JSON
+   * before delegating to the handler-owned long-running transport.
+   */
+  private readonly codexFetch: typeof fetch = async (input, init) => {
+    const url = requestUrl(input);
+    if (
+      !init ||
+      init.method !== 'POST' ||
+      typeof init.body !== 'string' ||
+      !isGenerationRequest(url)
+    ) {
+      return this.longRunningModelFetch(input, init);
+    }
+
+    try {
+      const body = JSON.parse(init.body) as Record<string, unknown>;
+      init = { ...init, body: JSON.stringify(rewriteCodexRequestBody(body)) };
+    } catch (error) {
+      // Body is not JSON we can edit; the backend will reject it because the
+      // required stream and instruction fields could not be installed.
+      logger.warn(
+        CHANNEL,
+        `Could not adapt Codex request body: ${toErrorMessage(error)}`,
+      );
+    }
+
+    return this.longRunningModelFetch(input, init);
+  };
+
   protected override getActiveProviderCapabilities(): ProviderCapabilityProfile | null {
     if (this.activeCredentialRoute !== undefined) {
       return this.activeCredentialRoute === 'chatgpt-subscription'
@@ -323,7 +318,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
         apiKey,
         baseURL: CODEX_BACKEND_BASE_URL,
         defaultHeaders,
-        fetch: codexFetch,
+        fetch: this.codexFetch,
         maxRetries: 0,
       }),
       'chatgpt-subscription',

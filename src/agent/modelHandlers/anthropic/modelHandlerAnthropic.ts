@@ -67,7 +67,6 @@ import {
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
 } from '../contextManagementConstants';
 import { AnthropicStreamHandler } from '../support/AnthropicStreamHandler';
-import { longRunningModelFetch } from '../support/longRunningModelFetch';
 import { toAnthropicTools } from '../toolConversion';
 import {
   describeAttachments,
@@ -266,7 +265,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       new Anthropic({
         apiKey: credential.apiKey,
         baseURL: credential.baseUrl,
-        fetch: longRunningModelFetch,
+        fetch: this.longRunningModelFetch,
         maxRetries: 0,
       }),
       credential.route,

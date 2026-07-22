@@ -23,6 +23,7 @@ interface RetryPermit {
   readonly version: number;
   readonly probe: boolean;
   readonly waited: boolean;
+  readonly sharedRecoveryCompleted: boolean;
 }
 
 interface RouteFailure {
@@ -43,7 +44,7 @@ interface RunOptions<T> {
     retry: () => Promise<T>,
   ) => (() => Promise<T>) | undefined;
   readonly onWait?: (delayMs: number) => void;
-  readonly onAdmitted?: () => void;
+  readonly onAdmitted?: () => void | Promise<void>;
 }
 
 function abortReason(signal: AbortSignal): unknown {
@@ -69,8 +70,8 @@ export class ModelRetryGate {
     operation: () => Promise<T>,
   ): Promise<T> {
     const permit = await this.acquire(route, options);
-    if (permit.waited) options.onAdmitted?.();
     try {
+      if (permit.sharedRecoveryCompleted) await options.onAdmitted?.();
       const result = await operation();
       this.markReachable(route, permit);
       return result;
@@ -92,7 +93,7 @@ export class ModelRetryGate {
 
             try {
               const result = await recovery();
-              this.markReachable(route, recoveryPermit);
+              this.markReachable(route, recoveryPermit, true);
               return result;
             } catch (recoveryError) {
               if (options.signal.aborted) {
@@ -141,7 +142,12 @@ export class ModelRetryGate {
     state.version += 1;
     state.phase = 'probing';
     state.retryAt = Date.now();
-    return { version: state.version, probe: true, waited: permit.waited };
+    return {
+      version: state.version,
+      probe: true,
+      waited: permit.waited,
+      sharedRecoveryCompleted: permit.sharedRecoveryCompleted,
+    };
   }
 
   dispose(): void {
@@ -184,6 +190,7 @@ export class ModelRetryGate {
         version: healthyState.version,
         probe: false,
         waited: false,
+        sharedRecoveryCompleted: false,
       });
     }
 
@@ -232,7 +239,11 @@ export class ModelRetryGate {
     this.scheduleProbe(state);
   }
 
-  private markReachable(route: string, permit: RetryPermit): void {
+  private markReachable(
+    route: string,
+    permit: RetryPermit,
+    sharedRecoveryCompleted = false,
+  ): void {
     const state = this.routes.get(route);
     if (!state || state.phase === 'healthy') return;
     if (permit.version !== state.version) return;
@@ -251,6 +262,7 @@ export class ModelRetryGate {
         version: state.version,
         probe: false,
         waited: true,
+        sharedRecoveryCompleted,
       });
     }
   }
@@ -289,7 +301,12 @@ export class ModelRetryGate {
         if (!waiter) return;
         waiter.signal.removeEventListener('abort', waiter.onAbort);
         state.phase = 'probing';
-        waiter.resolve({ version: state.version, probe: true, waited: true });
+        waiter.resolve({
+          version: state.version,
+          probe: true,
+          waited: true,
+          sharedRecoveryCompleted: false,
+        });
       },
       Math.max(0, state.retryAt - Date.now()),
     );

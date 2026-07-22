@@ -158,6 +158,12 @@ function createMessages(count: number): ResponseInputItem[] {
   })) as ResponseInputItem[];
 }
 
+function withSdkOptions<T extends { responses: object }>(client: T) {
+  return Object.assign(client, {
+    withOptions: vi.fn(() => client),
+  });
+}
+
 describe('ModelHandlerOpenAIResponse automatic compaction', () => {
   it('compacts before the next response when the live count crosses the threshold', async () => {
     const handler = createHandler();
@@ -170,7 +176,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
         content: [{ type: 'input_text', text: 'compacted state' }],
       },
     ] as unknown as ResponseInputItem[];
-    const client = {
+    const client = withSdkOptions({
       responses: {
         inputTokens: {
           // 800 > the 75% threshold (750) of the 1000-token window. Turn 1
@@ -192,7 +198,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
             : createResponse('resp-after-compaction', 150);
         },
       },
-    };
+    });
     const firstTurnMessages = createMessages(2);
     const secondTurnMessages = createMessages(3);
 
@@ -208,6 +214,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     });
 
     expect(compactRequests).toHaveLength(1);
+    expect(client.withOptions).toHaveBeenCalledWith({ maxRetries: 2 });
     expect(compactRequests[0].input).toEqual(secondTurnMessages);
     expect(requests).toHaveLength(2);
     expect(requests[1].previous_response_id).toBeUndefined();
@@ -232,7 +239,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
         content: [{ type: 'input_text', text: 'compacted state' }],
       },
     ] as unknown as ResponseInputItem[];
-    const client = {
+    const client = withSdkOptions({
       responses: {
         inputTokens: {
           // Over the 750-token threshold: turn 2's live count triggers the
@@ -259,7 +266,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
           return createResponse('resp-after-compaction', 150);
         },
       },
-    };
+    });
     const firstTurnMessages = createMessages(2);
     const secondTurnMessages = createMessages(3);
 
@@ -316,7 +323,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
       },
     ] as unknown as ResponseInputItem[];
     let tokenCountCalls = 0;
-    const client = {
+    const client = withSdkOptions({
       responses: {
         inputTokens: {
           count: async () => {
@@ -343,7 +350,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
           return createResponse('resp-turn3', 160);
         },
       },
-    };
+    });
 
     // One shared array, exactly as `shared.messages` is across the real
     // PocketFlow cycle.

@@ -208,11 +208,13 @@ interface CapturedModelRetry {
   readonly classifyFailure: (
     error: Error,
   ) => { retryAfterMs?: number } | undefined;
+  readonly onAdmitted?: () => void | Promise<void>;
 }
 
 async function captureModelRetry(
   endpoint = 'https://api.example/v1',
   credentialRoute: ModelCredentialRoute = 'api-key',
+  refreshClient?: () => Promise<void>,
 ): Promise<CapturedModelRetry> {
   const streamId = 'model-retry-policy' as StreamTabId;
   const session = createTestSession();
@@ -236,6 +238,7 @@ async function captureModelRetry(
     setAbortController: vi.fn(),
     client,
     clientCredentialRoute: credentialRoute,
+    refreshClient,
   } as never);
 
   try {
@@ -246,6 +249,7 @@ async function captureModelRetry(
     return {
       route,
       classifyFailure: options.classifyFailure,
+      onAdmitted: options.onAdmitted,
     };
   } finally {
     session.dispose();
@@ -549,6 +553,17 @@ describe('RetryState', () => {
     expect(classifyFailure(sdkError)).toEqual({ retryAfterMs: undefined });
   });
 
+  it('recognizes a retryable HTTP status carried by an SDK error cause', async () => {
+    const { classifyFailure } = await captureModelRetry();
+    const providerError = Object.assign(new Error('service unavailable'), {
+      status: 503,
+      headers: { 'retry-after': '7' },
+    });
+    const sdkError = new Error('request failed', { cause: providerError });
+
+    expect(classifyFailure(sdkError)).toEqual({ retryAfterMs: 7_000 });
+  });
+
   it('does not classify deterministic Undici request errors as route failures', async () => {
     const { classifyFailure } = await captureModelRetry();
     const invalidRequest = Object.assign(new Error('invalid request option'), {
@@ -570,7 +585,10 @@ describe('RetryState', () => {
   });
 
   it('keeps peers gated while a shared credential is being recovered', async () => {
-    const { classifyFailure } = await captureModelRetry();
+    const { classifyFailure } = await captureModelRetry(
+      'https://api.example/v1',
+      'relay',
+    );
     const unauthorized = Object.assign(new Error('relay token expired'), {
       status: 401,
     });
@@ -581,6 +599,47 @@ describe('RetryState', () => {
     expect(classifyFailure(unauthorized)).toEqual({
       retryAfterMs: undefined,
     });
+  });
+
+  it('rebuilds a queued relay client before it re-enters the provider', async () => {
+    const refreshClient = vi.fn(async () => undefined);
+    const { onAdmitted } = await captureModelRetry(
+      'https://api.example/v1',
+      'relay',
+      refreshClient,
+    );
+
+    await onAdmitted?.();
+
+    expect(refreshClient).toHaveBeenCalledOnce();
+  });
+
+  it.each(['api-key', 'openrouter', 'chatgpt-subscription'] as const)(
+    'does not gate unrelated calls after a 401 on the %s route',
+    async (credentialRoute) => {
+      const { classifyFailure } = await captureModelRetry(
+        'https://api.example/v1',
+        credentialRoute,
+      );
+      const unauthorized = Object.assign(new Error('credential rejected'), {
+        status: 401,
+      });
+
+      expect(classifyFailure(unauthorized)).toBeUndefined();
+    },
+  );
+
+  it('does not share model-specific permission failures across relay calls', async () => {
+    const { classifyFailure } = await captureModelRetry(
+      'https://api.example/v1',
+      'relay',
+    );
+
+    expect(
+      classifyFailure(
+        Object.assign(new Error('model access denied'), { status: 403 }),
+      ),
+    ).toBeUndefined();
   });
 
   it('honors retry-after guidance for shared HTTP failures', async () => {

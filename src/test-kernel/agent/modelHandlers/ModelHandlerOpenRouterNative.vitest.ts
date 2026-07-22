@@ -6,14 +6,6 @@ import { HTTPClient } from '@openrouter/sdk';
 import { describe, it, afterEach, vi } from 'vitest';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
-const transportMocks = vi.hoisted(() => ({
-  longRunningModelFetch: vi.fn<typeof fetch>(),
-}));
-
-vi.mock('@agent/modelHandlers/support/longRunningModelFetch', () => ({
-  longRunningModelFetch: transportMocks.longRunningModelFetch,
-}));
-
 // Local imports
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
@@ -364,7 +356,12 @@ describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
 describe('ModelHandlerOpenRouterNative getClient retry policy', () => {
   it('uses the long-running transport, disables SDK retries, and records the endpoint', async () => {
     const endpoint = 'https://openrouter.example/v1';
+    const transportFetch = vi.fn<typeof fetch>();
     class TestableHandler extends ModelHandlerOpenRouterNative {
+      protected override get longRunningModelFetch(): typeof fetch {
+        return transportFetch;
+      }
+
       protected override async resolveClientCredential(): Promise<ResolvedClientCredential> {
         return {
           apiKey: 'test-api-key',
@@ -391,16 +388,11 @@ describe('ModelHandlerOpenRouterNative getClient retry policy', () => {
     assert.deepEqual(options.retryConfig, { strategy: 'none' });
     assert.equal(handler.getRetryEndpoint(client), endpoint);
 
-    transportMocks.longRunningModelFetch.mockResolvedValueOnce(
-      new Response(null, { status: 204 }),
-    );
+    transportFetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
     const request = new Request(`${endpoint}/models`);
     const response = await (options.httpClient as HTTPClient).request(request);
     assert.equal(response.status, 204);
-    assert.equal(transportMocks.longRunningModelFetch.mock.calls.length, 1);
-    assert.equal(
-      transportMocks.longRunningModelFetch.mock.calls[0]?.[0],
-      request,
-    );
+    assert.equal(transportFetch.mock.calls.length, 1);
+    assert.equal(transportFetch.mock.calls[0]?.[0], request);
   });
 });

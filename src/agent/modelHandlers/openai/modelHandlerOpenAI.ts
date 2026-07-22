@@ -47,7 +47,6 @@ import { getConfig } from '@utils/config/configUtils';
 
 // Local file imports
 import { toDataUrl } from '../support/dataUrl';
-import { longRunningModelFetch } from '../support/longRunningModelFetch';
 import {
   getDeclaredMaxReasoningEffort,
   toOpenAIReasoningEffort,
@@ -252,7 +251,7 @@ export class ModelHandlerOpenAI<
     const client = new OpenAI({
       apiKey: credential.apiKey,
       baseURL: credential.baseUrl,
-      fetch: longRunningModelFetch,
+      fetch: this.longRunningModelFetch,
       maxRetries: 0,
     });
     this.logOpenAICompatibleClientConfig(client.baseURL, credential.route);

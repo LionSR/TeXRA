@@ -13,6 +13,7 @@ import type {
 import type {
   FinalTool,
   ModelCredentialRoute,
+  ModelCredentialSelection,
 } from '@agent/types/ModelHandlerContracts';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import { detectStatusCode } from '@common/errors/sdkErrorUtils';
@@ -54,6 +55,7 @@ function errorCauseChain(error: Error): unknown[] {
 /** Classify only failures that carry evidence about a shared wire route. */
 function classifyModelRouteFailure(
   error: Error,
+  credentialRoute: ModelCredentialRoute | undefined,
 ): { retryAfterMs?: number } | undefined {
   const chain = errorCauseChain(error);
   const candidates = chain.map((current) => {
@@ -84,10 +86,13 @@ function classifyModelRouteFailure(
         /^(?:fetch failed|failed to fetch)$/i.test(message.trim()))
     );
   });
-  const statusCode = detectStatusCode(error);
+  const statusCode = chain
+    .map((current) => detectStatusCode(current))
+    .find((status) => status !== undefined);
+  const sharedAuthenticationFailure =
+    credentialRoute === 'relay' && statusCode === 401;
   if (
-    statusCode !== 401 &&
-    statusCode !== 403 &&
+    !sharedAuthenticationFailure &&
     statusCode !== 408 &&
     statusCode !== 409 &&
     statusCode !== 429 &&
@@ -170,7 +175,10 @@ type InvocationServices = Pick<
   Pick<BaseFlowContextInit, 'setAbortController'> & {
     readonly client: unknown;
     readonly clientCredentialRoute?: ModelCredentialRoute;
-    readonly refreshClient?: () => Promise<void>;
+    readonly refreshClient?: (
+      selection?: ModelCredentialSelection,
+      signal?: AbortSignal,
+    ) => Promise<void>;
   };
 
 export class ModelInvocationNode<
@@ -230,9 +238,14 @@ export class ModelInvocationNode<
           // Shared authentication failures must keep peers behind the gate while
           // the relay refreshes, even though pRetry must not repeat a stale
           // credential without that recovery step.
-          classifyFailure: classifyModelRouteFailure,
+          classifyFailure: (error) =>
+            classifyModelRouteFailure(error, services.clientCredentialRoute),
           recoverFailure: (error, retry) =>
             this.getRelay401Recovery(error, () => retry(), signal),
+          onAdmitted:
+            services.clientCredentialRoute === 'relay'
+              ? () => services.refreshClient?.(undefined, signal)
+              : undefined,
           onWait: (delayMs) =>
             services.logger.debug(
               `Waiting ${delayMs}ms for the shared model recovery probe.`,

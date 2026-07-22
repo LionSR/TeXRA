@@ -11,12 +11,15 @@ import type {
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import {
-  longRunningModelFetch,
+  LongRunningModelTransport,
   MODEL_STREAM_INACTIVITY_TIMEOUT_MS,
 } from '@agent/modelHandlers/support/longRunningModelFetch';
 import * as serverKeysModule from '@auth/serverKeys';
 import { KIMI_CODE_BASE_URL } from '@model/kimiCodeSubscriptionRouting';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+
+// Type imports
+import type { Agent } from 'undici';
 
 const MOONSHOT_BASE_URL = 'https://api.moonshot.ai/v1';
 const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
@@ -47,8 +50,9 @@ class TestModelHandlerOpenAI extends ModelHandlerOpenAI {
   constructor(
     config: ModelConfig,
     private readonly useRelay: boolean,
+    modelTransport?: LongRunningModelTransport,
   ) {
-    super(config);
+    super(config, modelTransport);
   }
 
   protected override shouldUseServerSideKeys(): boolean {
@@ -133,15 +137,33 @@ describe('OpenAI-compatible client diagnostics', () => {
 
   it('leaves automatic retries to the session retry gate', async () => {
     const config = buildTestModelConfig(KIMI_DIAGNOSTICS_CONFIG);
+    const transports: unknown[] = [];
 
     for (const handler of createHandlers(config, false)) {
       const client = await handler.getClient();
       expect(client.maxRetries).toBe(0);
-      expect((client as unknown as { fetch: unknown }).fetch).toBe(
-        longRunningModelFetch,
-      );
+      transports.push((client as unknown as { fetch: unknown }).fetch);
+      handler.dispose();
     }
+    expect(transports[0]).not.toBe(transports[1]);
     expect(MODEL_STREAM_INACTIVITY_TIMEOUT_MS).toBe(30 * 60 * 1000);
+  });
+
+  it('closes the handler-owned model transport exactly once', () => {
+    const close = vi.fn((callback: () => void) => callback());
+    const transport = new LongRunningModelTransport({
+      close,
+    } as unknown as Agent);
+    const handler = new TestModelHandlerOpenAI(
+      buildTestModelConfig(KIMI_DIAGNOSTICS_CONFIG),
+      false,
+      transport,
+    );
+
+    handler.dispose();
+    handler.dispose();
+
+    expect(close).toHaveBeenCalledOnce();
   });
 
   it('reports the Moonshot credential owner and request model', async () => {

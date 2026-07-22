@@ -45,6 +45,7 @@ describe('ModelRetryGate', () => {
     });
     const probeOperation = vi.fn(() => probeResult);
     const siblingOperation = vi.fn(async () => undefined);
+    const onAdmitted = vi.fn(async () => undefined);
     const first = gate.run(
       ROUTE,
       options(new AbortController().signal),
@@ -52,7 +53,7 @@ describe('ModelRetryGate', () => {
     );
     const sibling = gate.run(
       ROUTE,
-      options(new AbortController().signal),
+      { ...options(new AbortController().signal), onAdmitted },
       siblingOperation,
     );
 
@@ -63,6 +64,7 @@ describe('ModelRetryGate', () => {
     resolveProbe();
     await Promise.all([first, sibling]);
     expect(siblingOperation).toHaveBeenCalledOnce();
+    expect(onAdmitted).not.toHaveBeenCalled();
     gate.dispose();
   });
 
@@ -84,6 +86,11 @@ describe('ModelRetryGate', () => {
     const recoveryStarted = new Promise<void>((resolve) => {
       announceRecovery = resolve;
     });
+    let releaseAdmission = (): void => undefined;
+    const admissionMayFinish = new Promise<void>((resolve) => {
+      releaseAdmission = resolve;
+    });
+    const onAdmitted = vi.fn(() => admissionMayFinish);
     const recoveryRuns = vi.fn(async (retry: () => Promise<string>) => {
       announceRecovery();
       await recoveryMayFinish;
@@ -105,6 +112,7 @@ describe('ModelRetryGate', () => {
       ...options(new AbortController().signal),
       recoverFailure: (_error: Error, retry: () => Promise<string>) =>
         recoveries(retry),
+      onAdmitted,
     };
 
     const primary = gate.run(ROUTE, recoverableOptions, primaryOperation);
@@ -131,6 +139,10 @@ describe('ModelRetryGate', () => {
 
     releaseRecovery();
     await expect(primary).resolves.toBe('primary recovered');
+    await Promise.resolve();
+    expect(onAdmitted).toHaveBeenCalledOnce();
+    expect(peerOperation).toHaveBeenCalledOnce();
+    releaseAdmission();
     await expect(peer).resolves.toBe('peer recovered');
     expect(primaryOperation).toHaveBeenCalledTimes(2);
     expect(peerOperation).toHaveBeenCalledTimes(2);

@@ -60,7 +60,6 @@ import { getConfig } from '@utils/config/configUtils';
 import { computeUtilizationPercent } from '../support/contextUtilization';
 import { logCompactionEvent } from '../support/compactionLogging';
 import { toDataUrl } from '../support/dataUrl';
-import { longRunningModelFetch } from '../support/longRunningModelFetch';
 import { shouldUseOpenRouter } from '../support/ProxyConfigResolver';
 import {
   getDeclaredMaxReasoningEffort,
@@ -502,7 +501,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /** Release all resources held by this handler (WebSocket, keepalive). */
   override dispose(): void {
-    this.wsTransport?.dispose();
+    try {
+      this.wsTransport?.dispose();
+    } finally {
+      super.dispose();
+    }
   }
 
   /**
@@ -867,8 +870,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // previous_response_id would cause double-counting and exceed context window.
 
     try {
-      const compactedResponse: CompactedResponse =
-        await client.responses.compact(compactParams);
+      const compactedResponse: CompactedResponse = await client
+        .withOptions({ maxRetries: 2 })
+        .responses.compact(compactParams);
 
       // Note: SDK types CompactedResponse.output as ResponseOutputItem[], but the
       // compact endpoint returns ResponseInputItem[] suitable for re-submission.
@@ -1154,7 +1158,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const client = new OpenAI({
       apiKey: credential.apiKey,
       baseURL: credential.baseUrl,
-      fetch: longRunningModelFetch,
+      fetch: this.longRunningModelFetch,
       maxRetries: 0,
     });
     this.logOpenAICompatibleClientConfig(client.baseURL, credential.route);
