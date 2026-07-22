@@ -10,6 +10,18 @@ import { repeat } from 'lit/directives/repeat.js';
 import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { AGENT_DECORATORS, getModelProviderDecorator } from './icons';
+import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
+
+/**
+ * Read the current value from a `wa-select` change event, defaulting to ''.
+ * Reads from `currentTarget` (the wa-select host) instead of `target` — wa-
+ * select can retarget events from internal elements, and
+ * `HTMLSelectElement` is the wrong type for this Web Component anyway.
+ */
+export function readSelectValue(event: Event): string {
+  const select = event.currentTarget as WaSelect | null;
+  return typeof select?.value === 'string' ? select.value : '';
+}
 
 /**
  * Sentinel option value for the launcher dropdown's "Browse all agents…"

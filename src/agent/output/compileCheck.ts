@@ -53,6 +53,16 @@ export interface CompileCheckResult {
   compileResult?: CompileResult;
 }
 
+/** Workflow auto-compile timeout, floored at the config-range minimum. */
+export function getWorkflowAutoCompileTimeoutMs(): number {
+  return Math.max(
+    MIN_TIMEOUT_MS,
+    readPlatformSetting<number>(
+      WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+    ),
+  );
+}
+
 /**
  * Return a human-readable display name for an output file in compile messages.
  * Prefers the `source` field (which carries the original document name, e.g.
@@ -123,12 +133,7 @@ export async function runCompileCheck(
     return { failures: [], artifacts: [] };
   }
 
-  const timeoutMs = Math.max(
-    MIN_TIMEOUT_MS,
-    readPlatformSetting<number>(
-      WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-    ),
-  );
+  const timeoutMs = getWorkflowAutoCompileTimeoutMs();
   // compileRoot is created lazily on first failure so successful rounds leave
   // no trace — the orchestrator can use "no compile/*.log entries" as proof
   // the build succeeded.

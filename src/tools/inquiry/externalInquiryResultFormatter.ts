@@ -1,4 +1,6 @@
 // Local imports - inquiry storage
+import { unique } from '@utils/core';
+
 import type { ExternalInquiryThreadManifest } from './externalInquiryStorage';
 
 /**
@@ -11,17 +13,12 @@ export function collectKnownSessionLinks(
 ): string[] | undefined {
   if (!manifest) return undefined;
 
-  const known: string[] = [];
-  const seen = new Set<string>();
-
-  for (const turn of manifest.turns.toReversed()) {
-    if (turn.kind === 'open') continue;
-    for (const link of turn.sessionLinks ?? []) {
-      if (seen.has(link)) continue;
-      seen.add(link);
-      known.push(link);
-    }
-  }
+  const known = unique(
+    manifest.turns
+      .toReversed()
+      .filter((turn) => turn.kind !== 'open')
+      .flatMap((turn) => turn.sessionLinks ?? []),
+  );
 
   return known.length ? known : undefined;
 }

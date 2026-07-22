@@ -13,7 +13,7 @@
  * helper functions but ultimately reduce to the same `toolStart` /
  * `toolEnd` emissions.
  */
-import { nanoid } from 'nanoid';
+import { generateShortId } from '@utils/core';
 
 import type { AgentTrace } from './AgentTrace';
 import type { ToolStatus } from './events';
@@ -34,7 +34,7 @@ export function startToolUseCard(
   input: unknown,
   stageId?: string,
 ): ToolUseCardRef {
-  const logId = nanoid();
+  const logId = generateShortId();
   const groupId = stageId ?? trace.activeStageId();
   trace.toolStart({ logId, toolName, input }, { stageId: groupId });
   return { logId, groupId };

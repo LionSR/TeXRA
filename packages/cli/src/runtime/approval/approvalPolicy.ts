@@ -1,3 +1,4 @@
+import type { HostUserQuestionResult } from '@agent/runtime/HostInteractions';
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import { isRelayMonthlyLimitMessage } from '@common/errors/sdkErrorUtils';
 import {
@@ -246,4 +247,23 @@ export function humanInputDenialFeedback(
   if (context.approvalPolicy === 'yolo') return yoloMessage;
   markApprovalDenied(context);
   return denyMessage(context.approvalPolicy);
+}
+
+/**
+ * Shared "no human input available" guard for user-question requests, used
+ * by both the headless adapter and the TUI approval queue. Returns the
+ * unsubmitted result to hand straight back to the caller, or `undefined`
+ * when a prompt is allowed and the caller should proceed.
+ */
+export function askUserQuestionDenial(
+  context: CliContext,
+): HostUserQuestionResult | undefined {
+  if (approvalPromptAllowed(context)) return undefined;
+  return {
+    submitted: false,
+    feedback: humanInputDenialFeedback(
+      context,
+      'User question requires human input; yolo mode cannot synthesize an answer.',
+    ),
+  };
 }

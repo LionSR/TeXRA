@@ -31,6 +31,7 @@ import {
 import { postMessage } from '@shared/hostBridge';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import {
+  readSelectValue,
   renderAgentOptions,
   renderModelOptions,
 } from '@shared/utils/selectTemplates';
@@ -51,21 +52,12 @@ import { proposalRequestPanelStyles } from './ProposalRequestPanel.styles';
 import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '../events';
 import { processMarkdownContent } from '../formatters/markdownRenderer';
 import { getComposedPathElement } from '../utils';
-import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type { PermissionState } from '../permissionState';
 
 function proposalIdOf(
   p: PermissionState | null | undefined,
 ): string | undefined {
   return p?.kind === PERMISSION_KIND.PROPOSAL ? p.data.proposalId : undefined;
-}
-
-// Read from currentTarget (the wa-select host) instead of target. wa-select can
-// retarget events from internal elements, and HTMLSelectElement is the wrong type
-// for this Web Component anyway.
-function readSelectValue(event: Event): string {
-  const select = event.currentTarget as WaSelect | null;
-  return typeof select?.value === 'string' ? select.value : '';
 }
 
 @customElement('proposal-request-panel')
