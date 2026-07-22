@@ -30,16 +30,23 @@ cap was already present before this commit and is unchanged by it),
 `agent/implementations/flows/tooluse/nodes/types.ts`,
 `agent/runtime/modelHandlerCompatibilityInference.ts`), and `b64b18d` / #9038
 (the 07-21 checkpoint's own applied cleanup, already recorded in that
-checkpoint). The lease-scoping rewrite (`0dc0f8b`) is the one with real
-spine-shape risk. This pass's fan-out readers read `runAgent.ts`,
-`RunContext.ts`, `SessionHandle.ts`, and the delegation/`childRunLoop`
-subsystem fresh at `395e229` (post-rewrite) and found no new debt in them —
-so the standing conclusions **do** reflect the rewritten code for those
-specific files. They did **not** open `executionRegistry.ts`,
-`ExecutionHandle.ts`, or `AgentRunLifecycle.ts` this pass, so "unchanged
-since 07-21" is not established for those three — that is a real residual
-gap in this checkpoint's coverage, not a reassurance, and a future pass
-should read them explicitly. As on every prior pass it ran a **fresh,
+checkpoint). This range is 6 commits, not 5: `f71007a`, `0dc0f8b`, `09d5aea`,
+`9bc9af2`, `b64b18d`, plus the duplicate citty commit `c08e698` (same PR,
+re-landed under a second SHA — see the Verified section). The lease-scoping
+rewrite (`0dc0f8b`) is the one with real spine-shape risk, touching
+`executeAgent.ts`, `executionRegistry.ts`, `runAgent.ts`,
+`AgentRunLifecycle.ts`, `ExecutionHandle.ts`, `childRunLoop.ts`,
+`executionLease.ts`, and `executionLifecycle.ts` — 8 files. This pass's
+fan-out readers opened only **one** of those 8 fresh at `395e229`:
+`runAgent.ts`. `RunContext.ts` and `SessionHandle.ts` were also read fresh
+this pass, but as part of the general runtime review, not because `0dc0f8b`
+touched them — it didn't. The other 7 files `0dc0f8b` changed
+(`executeAgent.ts`, `executionRegistry.ts`, `AgentRunLifecycle.ts`,
+`ExecutionHandle.ts`, `childRunLoop.ts`, `executionLease.ts`,
+`executionLifecycle.ts`) were **not** opened this pass, so "unchanged since
+07-21" is not established for any of them — a real residual gap in this
+checkpoint's coverage, not a reassurance, and a future pass should read them
+explicitly. As on every prior pass it ran a **fresh,
 uninformed four-way fan-out
 audit** — four separate readers for (1) `agent/core` + `agent/implementations/flows`,
 (2) `agent/modelHandlers` + `toolConversion` + `IModelHandler`, (3)
@@ -238,8 +245,15 @@ prior ruling.
 ## No-public-surface — the central item, still the north-star's NS-1
 
 The host→core import surface remains the one real SDK-readiness gap (hosts
-still deep-import ~26 of 51 `runtime/` files; distinct `@agent/*` specifiers
-per host were 41/31/26 at the 07-21 pin). This is **not new** and is **not
+still deep-import ~26 of 51 `runtime/` files — a distinct metric, the union
+count of directly-imported `@agent/runtime/*` files, not a per-host
+specifier count). The checked-in per-host deep-import baseline
+(`config/ratchets/host-agent-import-baseline.json`, verified identically at
+both the `3612630` and `395e229` pins) is **extension 41, CLI 31, desktop
+27** — correcting an earlier draft of this doc, which wrote "26" for desktop
+by carrying forward the 07-21 checkpoint's own prose table without
+re-checking it against the checked-in baseline file (the actual R-b
+enforcement artifact). This is **not new** and is **not
 eroding unfenced** anymore: Step 0's R-a (inbound host-import freeze in
 `eslint.config.mjs`) and R-b (frozen per-host deep-import baseline +
 `hostAgentDeepImportRatchet.vitest.ts`) are both installed and enforcing at a
@@ -248,25 +262,41 @@ Step 1 (the TD-2 contract-residue quartet + executable consumer-contract
 suite) and Step 3 (packaging, gated on a real external consumer) remain the
 sequenced path. Nothing this pass changes that sequencing.
 
-## One genuinely-uncaptured observation — MCP tool exposure (strategic, product-facing)
+## Retracted — "MCP tool exposure" was not a genuine gap
 
-The SDK-alignment reader noted an angle the readiness series (focused on the
-_runtime-as-external-SDK_ direction) does not capture: TeXRA already **embeds**
-the Agent SDK as a delegated tool (`src/tools/claudeAgent.ts`, the `claude_code`
-tool over `@anthropic-ai/claude-agent-sdk`), but its ~55-tool registry
-(`src/tools/registry.ts`, incl. the domain tools — arxiv, latex figure/bib/tikz,
-zotero, lean, wolfram, crossref) is **in-process only**. Before this
-checkpoint, no proposal (grep-confirmed against the standing
-`docs/proposals/` tree) discussed wrapping that registry as an **in-process
-MCP server** so the embedded `claude_code` agent (and any external SDK/CLI
-consumer) could reach TeXRA's domain tools instead of only SDK built-ins —
-this section is that first proposal, not a report that the idea remains
-absent from the repo (a later grep will of course find it here). `parallelSafe` /
-`requiresApproval` map cleanly onto MCP annotations + the SDK permission layer.
-Recorded as a **strategic product idea**, not a readiness-refactoring item — it
-adds surface rather than removing it, so it does not change the "no structural
-refactoring warranted" verdict; noting it only so the option is captured
-somewhere.
+An earlier draft of this checkpoint proposed exposing TeXRA's tool registry
+as an in-process MCP server as a "genuinely-uncaptured observation,"
+supported by a grep scoped to `docs/proposals/` only. **That grep was
+incomplete and the premise was wrong (Codex, P2 ×3).** A detailed PRD already
+covers this exact ground: [`docs/prds/2026-05-04-prd-cli-app.md`](../prds/2026-05-04-prd-cli-app.md)
+§24, `texra mcp serve` — a stdio MCP server exposing three tools
+(`run_workflow`, `run_chat`, `list_agents`) to any MCP-speaking caller
+(Claude Code, Codex, opencode), with a `McpHostAdapter`, a per-`tools/call`
+`RunContext`, and an MCP-mode approval policy forced to `never`/`yolo` (no
+TTY for interactive prompts). It was promoted to v1 scope in that PRD's round
+2, then explicitly deferred out of the v1.x roadmap in round 4 by direct user
+instruction ("Don't do MCP yet," reinforced 2026-05-09) — a deliberate
+deprioritization, not an oversight.
+
+The retracted draft also elided real design problems that PRD's `run_chat`
+tool already has to solve and a from-scratch "wrap the registry" version
+would not, for free: (1) `parallelSafe` is consumed today only as an
+in-process ordering barrier inside `ToolUseDispatchNode` — MCP's
+read-only/destructive/idempotent tool annotations are advisory metadata to
+the calling client, not a serialization mechanism, so directly re-exporting
+registry entries would not preserve that barrier for a client issuing
+concurrent `tools/call`s; (2) an in-process server is reachable only from
+the embedded `claude_code` process, not from an external CLI/SDK consumer,
+which needs an actual stdio/HTTP transport (exactly what `texra mcp serve`
+provides); (3) exposing the full default registry would also expose
+`claude_code`/`delegate_agent`/the workflow delegation tools themselves,
+and — since this same checkpoint's "Subagent split points" item above notes
+delegation has no depth cap yet (only parent lineage, not a counted depth) —
+a bypassed or approved recursive call could spawn children indefinitely.
+
+**Do not re-flag MCP tool exposure as an uncaptured gap in a future
+checkpoint.** If it becomes relevant again, start from PRD §24, not from this
+retracted section.
 
 ## Recommendation
 
@@ -293,7 +323,17 @@ execution-lease rewrite), a stale "single-impl" characterization of
 `buildTerminalToolRegistry`'s overlay), and a five-checkpoint-old reference
 to a `followUpResumeDetection` symbol that does not exist in the tree — see
 the corresponding sections above and the README fix alongside this change.
-Every remaining item is reviewed-train (`ModelHandler`
+A fourth review round caught three more: the desktop deep-import baseline is
+**27**, not the "26" this doc carried forward from the 07-21 checkpoint's
+prose table without checking it against the checked-in
+`config/ratchets/host-agent-import-baseline.json`; the claim that
+`childRunLoop.ts` was read fresh this pass was false (only `runAgent.ts`,
+among the 8 files `0dc0f8b` touched, was actually opened); and this
+checkpoint's own "MCP tool exposure" observation has been **retracted in
+full** — a detailed PRD (`docs/prds/2026-05-04-prd-cli-app.md` §24) already
+covers that ground and deliberately defers it, so it was never a gap to
+begin with (see the retraction section above). Every remaining item is
+reviewed-train (`ModelHandler`
 decomposition, the `IModelHandler` port-width facets kept overridable per the
 `#7101` triage) or strategic/gated (the unified event stream preserving
 broker-side filtering, the `HostInteractions` 7/7 required-methods conversion
@@ -322,14 +362,20 @@ five-checkpoint-old claim named.
   (`src/agent/types/IModelHandler.ts:41`); the `Node.exec → createFlow().run`
   shape intact; delegation strategy subsystem intact.
 - Boundary width: hosts still deep-import **54** distinct `@agent/*`
-  specifiers (union) / 26 of 51 `runtime/` files (independent recount, ±1 vs a
-  differently-tokenized census; consistent with the 07-21 per-host 41/31/26).
-  Corrected from an initial raw-token count of 55 (Codex, P2): the token grep
-  matched a comment-only `@agent/review` reference
+  specifiers (union, a different metric than the per-host baseline below) /
+  26 of 51 `runtime/` files (independent recount, ±1 vs a differently
+  tokenized census). Corrected from an initial raw-token count of 55 (Codex,
+  P2): the token grep matched a comment-only `@agent/review` reference
   (`packages/extension/src/commands/review/agentReviewCommands.ts:6`, doc-comment
   prose, not an import) as if it were a real specifier — confirmed via
   `grep -rn "from '@agent/review'"` returning zero hits for that bare path.
   Step 0 R-a/R-b ratchets present and enforcing.
+- Per-host deep-import baseline corrected: `config/ratchets/host-agent-import-baseline.json`
+  reads **extension 41, CLI 31, desktop 27** at both `3612630` and `395e229`
+  (verified directly via `git show <sha>:config/ratchets/host-agent-import-baseline.json`
+  at each pin) — not the "26" for desktop this doc's first draft carried
+  forward from the 07-21 checkpoint's own prose table without re-checking it
+  against the checked-in file.
 - `MapToolRegistry` (`src/agent/core/tools/ToolTypes.ts:47-61`) — narrowed to
   `Record<string, ITool>`, pushed, then **reverted** to
   `Map<string, ITool> | Record<string, ITool>` (byte-identical to
@@ -349,11 +395,13 @@ five-checkpoint-old claim named.
   commit `c08e698` — include a substantial spine rewrite (`0dc0f8b`:
   `executeAgent.ts`, `executionRegistry.ts`, `runAgent.ts`,
   `AgentRunLifecycle.ts`, `ExecutionHandle.ts`, `childRunLoop.ts`,
-  `agent/storage/executionLease.ts`/`executionLifecycle.ts`). Of those, this
-  pass's readers opened only `runAgent.ts` fresh at `395e229` and found no
-  new debt in it; `executionRegistry.ts`, `ExecutionHandle.ts`, and
-  `AgentRunLifecycle.ts` were **not** opened this pass — an acknowledged
-  coverage gap, not a reverified-clean result, for those three files.
+  `agent/storage/executionLease.ts`/`executionLifecycle.ts`). Of those 8
+  changed files, this pass's readers opened only `runAgent.ts` fresh at
+  `395e229` and found no new debt in it; `executeAgent.ts`,
+  `executionRegistry.ts`, `AgentRunLifecycle.ts`, `ExecutionHandle.ts`,
+  `childRunLoop.ts`, `executionLease.ts`, and `executionLifecycle.ts` were
+  **not** opened this pass — an acknowledged coverage gap, not a
+  reverified-clean result, for those 7 files.
 - `IToolRegistry` implementation count corrected: 2, not 1 —
   `MapToolRegistry` (`ToolTypes.ts:47`) and `buildTerminalToolRegistry`'s
   returned overlay object (`src/tools/structuredOutput.ts:228-236`). **Keep**
