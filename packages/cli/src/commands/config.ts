@@ -4,6 +4,7 @@ import { InvalidAgentTeamError } from '@agent/index';
 import { readSetting } from '@shared/config/settingsAccess';
 import { agentKeyOf } from '@shared/schemas/agent';
 import { CLI_STATE_SETTINGS } from '@shared/schemas/stateSettings';
+import { unique } from '@utils/core';
 
 import {
   CliUsageError,
@@ -27,14 +28,12 @@ import { emitCliResult } from './_helpers/output';
 
 function parseAgentKeys(value: string | undefined): string[] {
   if (!value) return [];
-  return [
-    ...new Set(
-      value
-        .split(',')
-        .map((item) => item.trim())
-        .filter(Boolean),
-    ),
-  ];
+  return unique(
+    value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean),
+  );
 }
 
 function formatConfigValue(value: unknown): string {

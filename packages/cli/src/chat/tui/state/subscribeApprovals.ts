@@ -37,14 +37,14 @@ import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInte
 import { isPreferCodexSubscription } from '@auth/codex';
 import { getCliApiMode, setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
-  approvalPromptAllowed,
-  humanInputDenialFeedback,
+  askUserQuestionDenial,
   immediateDecision,
   immediateDecisionForApproval,
   isCliApiSwitchableRetry,
   isCliChatGptSubscriptionRetry,
   markApprovalDenied,
 } from '@cli/runtime/approvalAdapter';
+import { denyExternalInquiryIfNoHumanInput } from '@cli/runtime/approval/humanInputHandlers';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import {
@@ -651,15 +651,8 @@ async function requestUserQuestionInteraction(
   payload: HostUserQuestionRequest,
   context: CliContext,
 ): Promise<HostUserQuestionResult> {
-  if (!approvalPromptAllowed(context)) {
-    return {
-      submitted: false,
-      feedback: humanInputDenialFeedback(
-        context,
-        'User question requires human input; yolo mode cannot synthesize an answer.',
-      ),
-    };
-  }
+  const denial = askUserQuestionDenial(context);
+  if (denial) return denial;
 
   const decision = await enqueueTuiApproval({ kind: 'userQuestion', payload });
   markIfRejected(context, decision);
@@ -860,14 +853,7 @@ function handleExternalInquiry(
   const threadId = payload.threadId;
   if (!threadId) return;
 
-  if (!approvalPromptAllowed(context)) {
-    const feedback = humanInputDenialFeedback(
-      context,
-      'External inquiry requires human input; yolo mode cannot synthesize an external answer.',
-    );
-    void handleExternalInquiryAction({ action: 'drop', threadId, feedback });
-    return;
-  }
+  if (denyExternalInquiryIfNoHumanInput(threadId, context)) return;
   void enqueueTuiApproval({ kind: 'externalInquiry', payload }).then(
     (decision) => {
       markIfRejected(context, decision);

@@ -2,9 +2,8 @@
  * No-op AgentTrace. Used as the default for SDK consumers who don't
  * subscribe to the run's event stream.
  */
-import { nanoid } from 'nanoid';
-
 import type { RunOutcome } from '@shared/schemas';
+import { generateShortId } from '@utils/core';
 
 import type {
   AgentTrace,
@@ -25,7 +24,7 @@ class NoopStageHandle implements StageHandle {
     return Promise.resolve(fn());
   }
   child(_label: string, _options?: StageOptions): StageHandle {
-    return new NoopStageHandle(nanoid());
+    return new NoopStageHandle(generateShortId());
   }
 }
 
@@ -57,9 +56,9 @@ export const noopTrace: AgentTrace = {
   responseFinalized: NOOP,
 
   openStage(_label, options) {
-    return new NoopStageHandle(options?.id ?? nanoid());
+    return new NoopStageHandle(options?.id ?? generateShortId());
   },
   openStream(_kind, options) {
-    return new NoopStreamHandle(options?.id ?? nanoid());
+    return new NoopStreamHandle(options?.id ?? generateShortId());
   },
 };

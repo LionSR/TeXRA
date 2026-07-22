@@ -59,7 +59,7 @@ import {
 } from '@shared/constants/latex';
 
 // Local imports - shared utilities
-import { clamp, filterNotNullish } from '@utils/core';
+import { clampOptional, filterNotNullish } from '@utils/core';
 import { latexTabStyles } from './LaTeXTab.styles';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
@@ -783,10 +783,7 @@ export class LaTeXTab extends LitElement {
               // Coerce to integer first — paste / spinner can produce decimals
               // that the backend `.int()` schema would silently reject.
               const integer = Math.round(raw);
-              const clamped =
-                opts.max !== undefined
-                  ? clamp(integer, opts.min, opts.max)
-                  : Math.max(opts.min, integer);
+              const clamped = clampOptional(integer, opts.min, opts.max);
               this.dispatchSetConfigValue(opts.field, clamped);
             }}
             class="setting-number-input"

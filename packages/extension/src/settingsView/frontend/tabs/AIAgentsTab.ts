@@ -34,12 +34,12 @@ import {
 } from '@shared/schemas/stateSettings';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { CLAUDE_AGENT_DEFAULT_MODEL } from '@shared/schemas/agentCliSettings';
+import { readSelectValue } from '@shared/utils/selectTemplates';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
-import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 // Side-effect: register tool card component
 import '../components/tools/ToolCard';
@@ -176,8 +176,7 @@ export class AIAgentsTab extends LitElement {
   @property({ type: String }) claudeAgentEffort: ClaudeAgentEffort = 'high';
 
   private postSelect(key: WorkspaceStateKey, e: Event): void {
-    const select = e.currentTarget as WaSelect | null;
-    const value = typeof select?.value === 'string' ? select.value : '';
+    const value = readSelectValue(e);
     if (value) {
       postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, { key, value });
     }

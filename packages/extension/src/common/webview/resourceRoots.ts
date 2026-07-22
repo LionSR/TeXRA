@@ -27,16 +27,10 @@ export function getCombinedLocalResourceRoots(
   context: vscode.ExtensionContext,
   viewFolders: string[],
 ): vscode.Uri[] {
-  const seen = new Set<string>();
-  const roots: vscode.Uri[] = [];
-  for (const folder of viewFolders) {
-    for (const uri of getSharedLocalResourceRoots(context, folder)) {
-      const key = uri.toString();
-      if (!seen.has(key)) {
-        seen.add(key);
-        roots.push(uri);
-      }
-    }
-  }
-  return roots;
+  const byKey = new Map(
+    viewFolders
+      .flatMap((folder) => getSharedLocalResourceRoots(context, folder))
+      .map((uri) => [uri.toString(), uri] as const),
+  );
+  return [...byKey.values()];
 }

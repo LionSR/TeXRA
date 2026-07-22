@@ -1,5 +1,4 @@
 // Third-party imports
-import { nanoid } from 'nanoid';
 import {
   GoogleGenAI,
   PartMediaResolutionLevel,
@@ -45,7 +44,7 @@ import type {
   ToolResult,
 } from '@shared/schemas/toolResult';
 import { getShortDisplayPath } from '@utils/files';
-import { filterNotNull, isNonEmptyString } from '@utils/core';
+import { filterNotNull, generateShortId, isNonEmptyString } from '@utils/core';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
 import { getConfig } from '@utils/config/configUtils';
 
@@ -1032,7 +1031,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       if (step.type !== 'function_call') continue;
       results.push({
         provider: 'google',
-        callId: step.id ?? nanoid(),
+        callId: step.id ?? generateShortId(),
         name: step.name,
         input: step.arguments,
         // GoogleToolCall.raw is a chat `FunctionCall`; reconstruct the shape the
@@ -1235,7 +1234,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     for (const call of calls) {
       steps.push({
         type: 'function_call',
-        id: call.callId ?? nanoid(),
+        id: call.callId ?? generateShortId(),
         name: call.name ?? '',
         arguments: (call.input ?? {}) as Record<string, unknown>,
       } satisfies FunctionCallStep);
@@ -1928,7 +1927,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
       const response: GoogleGenAIInteraction = {
         ...(completedInteraction ?? {}),
-        id: completedInteraction?.id ?? interactionId ?? nanoid(),
+        id: completedInteraction?.id ?? interactionId ?? generateShortId(),
         status,
         usage,
         steps:
@@ -2026,7 +2025,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       } else if (slot.type === 'function_call') {
         steps.push({
           type: 'function_call',
-          id: slot.callId ?? nanoid(),
+          id: slot.callId ?? generateShortId(),
           name: slot.callName ?? '',
           arguments:
             slot.args ??

@@ -25,6 +25,7 @@ import {
   filterNotNullish,
   formatCompactDuration,
   formatCompactTokenCount,
+  unique,
 } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -419,13 +420,11 @@ function fitStatusBarLeftSegments(
   }
 
   const compacted = [...segments];
-  const priorities = [
-    ...new Set(
-      compacted
-        .map((segment) => segment.compactPriority)
-        .filter(filterNotNullish),
-    ),
-  ].sort((a, b) => a - b);
+  const priorities = unique(
+    compacted
+      .map((segment) => segment.compactPriority)
+      .filter(filterNotNullish),
+  ).sort((a, b) => a - b);
 
   // Lowest-priority segments compact first; returns as soon as the row fits.
   const sweep = (
