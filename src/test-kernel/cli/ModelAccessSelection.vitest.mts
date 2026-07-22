@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   updateGlobalState: vi.fn(),
   apiKeyExists: vi.fn(),
   getPreferKimiCode: vi.fn(),
+  getUseOpenRouter: vi.fn(),
   setPreferKimiCode: vi.fn(),
 }));
 
@@ -48,6 +49,7 @@ vi.mock('@model/apiProviders', () => ({
 
 vi.mock('@utils/config/providerConfig', () => ({
   getPreferKimiCode: mocks.getPreferKimiCode,
+  getUseOpenRouter: mocks.getUseOpenRouter,
   setPreferKimiCode: mocks.setPreferKimiCode,
 }));
 
@@ -87,6 +89,7 @@ beforeEach(() => {
   mocks.shouldUseChatGptDeviceCode.mockReturnValue(false);
   mocks.apiKeyExists.mockResolvedValue(false);
   mocks.getPreferKimiCode.mockReturnValue(false);
+  mocks.getUseOpenRouter.mockReturnValue(false);
   mocks.setPreferKimiCode.mockResolvedValue(undefined);
 });
 
@@ -126,7 +129,9 @@ describe('CLI model access routes', () => {
     ).toBe('personal');
   });
 
-  it('credits api-key usage to Kimi Code only while that route is active', () => {
+  it('never relabels recorded api-key usage from live preferences', () => {
+    // A completed request's route cannot change — `api-key` usage stays
+    // personal even while the Kimi Code route is currently active.
     expect(
       resolveCliModelAccessRoute({
         apiMode: 'personal',
@@ -134,22 +139,25 @@ describe('CLI model access routes', () => {
         kimiCodeActive: true,
         usageRoute: 'api-key',
       }),
-    ).toBe('kimi-code');
+    ).toBe('personal');
+  });
+
+  it('describes a prospective Kimi Code route only for personal access', () => {
     expect(
       resolveCliModelAccessRoute({
         apiMode: 'personal',
         subscriptionActive: false,
-        kimiCodeActive: false,
-        usageRoute: 'api-key',
+        kimiCodeActive: true,
       }),
-    ).toBe('personal');
+    ).toBe('kimi-code');
+    // Under included access the relay owns eligible models.
     expect(
       resolveCliModelAccessRoute({
         apiMode: 'included',
         subscriptionActive: false,
         kimiCodeActive: true,
       }),
-    ).toBe('kimi-code');
+    ).toBe('included');
   });
 
   it('formats the shared access routes for detailed and compact surfaces', () => {
@@ -233,6 +241,15 @@ describe('CLI model access routes', () => {
       active: 'personal',
       kimiCodeKeySet: false,
     });
+
+    // OpenRouter suppresses dual-backend Kimi Code dispatch, so the route is
+    // not reported active while the toggle is on.
+    mocks.apiKeyExists.mockResolvedValue(true);
+    mocks.getUseOpenRouter.mockReturnValue(true);
+    await expect(readCliModelAccessStatus('personal')).resolves.toMatchObject({
+      active: 'personal',
+      kimiCodeKeySet: true,
+    });
   });
 
   it('enables Kimi Code routing on a personal fallback when a key exists', async () => {
@@ -276,6 +293,32 @@ describe('CLI model access routes', () => {
 
     expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(false);
     expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
+  });
+
+  it('preserves the Kimi prefer switch on the key-save path', async () => {
+    // Saving or rotating a key is a credential operation, not an explicit
+    // "Personal API keys" picker choice — it must not clear the preference.
+    await selectCliApiModelAccessRoute('personal');
+
+    expect(mocks.setPreferKimiCode).not.toHaveBeenCalled();
+    expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
+  });
+
+  it('reports when a more specific setting keeps ChatGPT preferred over Kimi', async () => {
+    mocks.apiKeyExists.mockResolvedValue(true);
+    mocks.setPreferCodexSubscription.mockResolvedValue({
+      effective: true,
+      target: 'workspace',
+    });
+
+    const result = await selectCliModelAccessRoute(context, 'kimi-code', {
+      writeProgress: vi.fn(),
+    });
+
+    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(true);
+    expect(result.message).toContain(
+      'keeps ChatGPT subscription preferred (workspace config)',
+    );
   });
 
   it('keeps the Kimi Code prefer switch when included access is chosen', async () => {

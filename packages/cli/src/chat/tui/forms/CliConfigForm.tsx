@@ -1,16 +1,19 @@
 import { cliSettingsStores } from '@cli/runtime/settingsStores';
 import { applyCliGitAuthorConfig } from '@cli/runtime/gitAuthor';
 import { saveProviderApiKey } from '@cli/runtime/providerApiKey';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import {
   readSetting,
   resetSetting,
   writeSetting,
   type SettingsStores,
 } from '@shared/config/settingsAccess';
-import { CLI_STATE_SETTINGS } from '@shared/schemas/stateSettings';
+import {
+  CLI_STATE_SETTINGS,
+  stateSettingByKey,
+} from '@shared/schemas/stateSettings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
+import { refreshCodexPreferenceViews } from '../state/codexSubscription';
 import { AgentRosterForm } from './AgentRosterForm';
 import { ConfigForm, type ConfigFormProps } from './ConfigForm';
 import { ProviderApiKeyForm } from './ProviderApiKeyForm';
@@ -45,21 +48,27 @@ export function createCliConfigFormProps(
       await writeSetting(entry, value, stores, 'cli');
       if (entry.category === 'git') applyCliGitAuthorConfig(stores.config);
       if (entry.key === GlobalStateKey.USE_OPENROUTER) {
-        invalidateModelOptionsCache();
+        refreshCodexPreferenceViews();
         if (value === true) await props.onApiModePersonal?.();
       }
       if (entry.key === GlobalStateKey.KIMI_CODE_PREFER) {
-        invalidateModelOptionsCache();
+        // Dual-backend Kimi routing refuses the OpenRouter toggle, so enabling
+        // the preference here turns that toggle off like `/api kimi-code`.
+        if (value === true) {
+          const openRouter = stateSettingByKey(GlobalStateKey.USE_OPENROUTER);
+          if (openRouter) await writeSetting(openRouter, false, stores, 'cli');
+        }
+        refreshCodexPreferenceViews();
       }
     },
     resetValue: async (entry) => {
       await resetSetting(entry, stores, 'cli');
       if (entry.category === 'git') applyCliGitAuthorConfig(stores.config);
       if (entry.key === GlobalStateKey.USE_OPENROUTER) {
-        invalidateModelOptionsCache();
+        refreshCodexPreferenceViews();
       }
       if (entry.key === GlobalStateKey.KIMI_CODE_PREFER) {
-        invalidateModelOptionsCache();
+        refreshCodexPreferenceViews();
       }
     },
     formLinks: [

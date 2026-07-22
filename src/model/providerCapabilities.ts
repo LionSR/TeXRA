@@ -5,6 +5,7 @@ import {
   isCodexSubscriptionToolUseOnly,
   isPreferCodexSubscription,
 } from '@auth/codex';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import { platform } from '@platform/platform';
 import type { UsageRoute } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
@@ -193,13 +194,19 @@ export async function isCodexSubscriptionActive(
  * Whether the model currently routes through the Kimi Code coding endpoint
  * (Moonshot coding subscription, authenticated by the Kimi Code API key).
  * Mirrors ModelFactory's dispatch facts: registry eligibility, the OpenRouter
- * toggle, a stored key, and the "Prefer Kimi Code" switch.
+ * toggle, included (relay) access, a stored key, and the "Prefer Kimi Code"
+ * switch.
  */
 export async function isKimiCodeSubscriptionActive(
   modelId: string,
 ): Promise<boolean> {
   const config = await resolveRuntimeModelConfig(modelId);
   if (!config || !isKimiSubscriptionEligible(config)) return false;
+  const serverSideKeyService = getServerSideKeyService();
+  // The relay only owns the model when included access can actually serve it.
+  const includedAccess = serverSideKeyService.getUseIncludedModelAccess()
+    ? await serverSideKeyService.canUseServerSideKeys()
+    : false;
   const keySet = await apiKeyExists(platform().secrets, 'kimiCode');
   return (
     resolveKimiCodeRoute(
@@ -207,6 +214,7 @@ export async function isKimiCodeSubscriptionActive(
       getUseOpenRouter(),
       keySet,
       getPreferKimiCode(),
+      includedAccess,
     ) === 'kimiCode'
   );
 }

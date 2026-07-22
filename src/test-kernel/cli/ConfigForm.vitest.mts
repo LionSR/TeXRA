@@ -434,6 +434,28 @@ describe('/config slash command wiring', () => {
     expect(invalidateModelOptionsCache).toHaveBeenCalledTimes(2);
   });
 
+  it('turns OpenRouter off when Prefer Kimi Code is enabled', async () => {
+    const { stores, globalState } = makeFakeSettingsStores();
+    await globalState.update(GlobalStateKey.USE_OPENROUTER, true);
+    registerBuiltinSlashCommands({ getConfigStores: () => stores });
+    openCliSlashCommandForm('config', '');
+
+    const props = renderConfigFormProps();
+    const preferKimiCode = entryByKey(GlobalStateKey.KIMI_CODE_PREFER);
+    await props.writeValue?.(preferKimiCode, true);
+
+    expect(globalState.get(GlobalStateKey.KIMI_CODE_PREFER)).toBe(true);
+    expect(props.readValue?.(entryByKey(GlobalStateKey.USE_OPENROUTER))).toBe(
+      false,
+    );
+    expect(invalidateModelOptionsCache).toHaveBeenCalled();
+
+    // Disabling the preference leaves the OpenRouter toggle untouched.
+    await globalState.update(GlobalStateKey.USE_OPENROUTER, true);
+    await props.writeValue?.(preferKimiCode, false);
+    expect(globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(true);
+  });
+
   it('delegates catalog form rows through the slash form registry', () => {
     registerBuiltinSlashCommands({
       getConfigStores: () => makeFakeSettingsStores().stores,
@@ -457,9 +479,12 @@ describe('/config slash command wiring', () => {
       { props?: { availableRows?: number } } | undefined;
     const agents = props.formRenderers?.agents?.(() => undefined) as
       { props?: { availableRows?: number } } | undefined;
+    const apiKeys = props.formRenderers?.['api-keys']?.(() => undefined) as
+      { props?: { availableRows?: number } } | undefined;
 
     expect(props.availableRows).toBe(20);
     expect(tools?.props?.availableRows).toBe(20);
     expect(agents?.props?.availableRows).toBe(20);
+    expect(apiKeys?.props?.availableRows).toBe(20);
   });
 });

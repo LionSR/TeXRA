@@ -9,9 +9,13 @@ import {
 } from '@cli/runtime/loginOptions';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import type { ApiProvider } from '@model/apiProviders';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { platform } from '@platform/platform';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+import { setPreferKimiCode } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 
@@ -281,12 +285,20 @@ export function registerBuiltinSlashCommands(options?: {
     options?.onModelSelect ?? setCliSessionModelOverride;
   const onModelAccessSelect: ModelAccessSelectHandler =
     options?.onModelAccessSelect ??
-    ((route, output) => {
-      if (route !== 'chatgpt') {
-        // The Kimi Code route rides on personal API-key access underneath.
-        patchSessionMeta({
-          apiMode: route === 'kimi-code' ? 'personal' : route,
-        });
+    (async (route, output) => {
+      if (route === 'kimi-code') {
+        // Fallback for hosts without full wiring (the TUI harness, tests):
+        // mirror the state transition `selectCliModelAccessRoute` performs —
+        // production chat always supplies its own handler that routes there.
+        patchSessionMeta({ apiMode: 'personal' });
+        await setPreferKimiCode(true);
+        await platform().globalState.update(
+          GlobalStateKey.USE_OPENROUTER,
+          false,
+        );
+        invalidateModelOptionsCache();
+      } else if (route !== 'chatgpt') {
+        patchSessionMeta({ apiMode: route });
       }
       output.appendOutcome(`Model access set to ${route}.`);
     });
@@ -695,6 +707,11 @@ export function registerBuiltinSlashCommands(options?: {
               await options?.onError?.(error);
             },
             onApiModePersonal: async () => {
+              // A key save only needs the mode switch when leaving included
+              // access — already-personal sessions (including an active Kimi
+              // Code route) must not be treated as an explicit "Personal API
+              // keys" picker choice, which would clear the Kimi preference.
+              if (sessionMeta.get().apiMode === 'personal') return;
               await onModelAccessSelect(
                 'personal',
                 transcriptSlashCommandOutput,

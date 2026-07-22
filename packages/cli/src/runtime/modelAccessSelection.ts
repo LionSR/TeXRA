@@ -9,6 +9,7 @@ import { platform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   getPreferKimiCode,
+  getUseOpenRouter,
   setPreferKimiCode,
 } from '@utils/config/providerConfig';
 
@@ -52,11 +53,14 @@ export async function readCliModelAccessStatus(
   ]);
   const chatGptActive = chatGpt.signedIn && isPreferCodexSubscription();
   // The Kimi Code route is a personal-key route: it only describes the active
-  // access while the API fallback mode is personal and the prefer switch is on.
+  // access while the API fallback mode is personal, the prefer switch is on,
+  // and dispatch can actually honor it (OpenRouter off — dual-backend models
+  // refuse the coding endpoint while it is on).
   const kimiCodeActive =
     !chatGptActive &&
     apiMode === 'personal' &&
     getPreferKimiCode() &&
+    !getUseOpenRouter() &&
     kimiCodeKeySet;
   let active: CliModelAccessStatus['active'] = apiMode;
   if (chatGptActive) active = 'chatgpt';
@@ -74,9 +78,6 @@ export async function selectCliApiModelAccessRoute(
   route: CliApiMode,
 ): Promise<CliModelAccessSelectionResult> {
   const update = await setPreferCodexSubscription(false);
-  // An explicit "personal keys" choice leaves the Kimi Code route; the prefer
-  // switch stays available under /config → Models and providers.
-  if (route === 'personal') await setPreferKimiCode(false);
   await setCliApiMode(route);
   return {
     apiMode: route,
@@ -94,7 +95,15 @@ export async function selectCliModelAccessRoute(
     readonly signal?: AbortSignal;
   },
 ): Promise<CliModelAccessSelectionResult> {
-  if (route === 'included' || route === 'personal') {
+  if (route === 'included') {
+    return selectCliApiModelAccessRoute(route);
+  }
+
+  if (route === 'personal') {
+    // An explicit "personal keys" picker choice leaves the Kimi Code route;
+    // saving a key never clears the switch (see applyCliProviderApiKey), and
+    // the prefer toggle stays available under /config → Models and providers.
+    await setPreferKimiCode(false);
     return selectCliApiModelAccessRoute(route);
   }
 
@@ -108,7 +117,7 @@ export async function selectCliModelAccessRoute(
           'No Kimi Code API key configured — add one with /key or /config → API keys (get one at https://www.kimi.com/code/console).',
       };
     }
-    await setPreferCodexSubscription(false);
+    const update = await setPreferCodexSubscription(false);
     await setPreferKimiCode(true);
     // Dual-backend Kimi routing requires the OpenRouter toggle off.
     await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
@@ -117,8 +126,9 @@ export async function selectCliModelAccessRoute(
     invalidateModelOptionsCache();
     return {
       apiMode: 'personal',
-      message:
-        'Prefer Kimi Code subscription enabled for Kimi models · fallback: personal API keys.',
+      message: update.effective
+        ? `Prefer Kimi Code subscription enabled for Kimi models, but a more specific setting keeps ChatGPT subscription preferred (${update.target} config).`
+        : 'Prefer Kimi Code subscription enabled for Kimi models · fallback: personal API keys.',
     };
   }
 

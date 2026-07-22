@@ -57,15 +57,17 @@ export function resolveCliModelAccessRoute({
       case 'relay':
         return 'included';
       case 'api-key':
-        // Kimi Code usage reports as a plain API key; credit the subscription
-        // route when the prefer switch is on and a key is stored.
-        return kimiCodeActive === true ? 'kimi-code' : 'personal';
+        // Kimi Code usage records as a plain `api-key`; a completed request's
+        // route cannot change, so never relabel it from live preferences.
+        return 'personal';
       default:
         return usageRoute satisfies never;
     }
   }
   if (subscriptionActive) return 'chatgpt';
-  if (kimiCodeActive === true) return 'kimi-code';
+  // The Kimi Code route only describes personal access — under included
+  // access the relay owns eligible models.
+  if (kimiCodeActive === true && apiMode === 'personal') return 'kimi-code';
   return apiMode;
 }
 
