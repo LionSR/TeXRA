@@ -25,7 +25,7 @@
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "@types/semver": "^7.7.1",
-    "electron": "^43.1.1",
+    "electron": "^43.2.0",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.1",
     "playwright": "^1.61.1",
