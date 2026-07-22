@@ -43,6 +43,13 @@ function findPreset(id: string) {
 }
 
 describe('CLI multi-agent presets', () => {
+  it('includes critical review in the mathematician team', () => {
+    const preset = findPreset('mathematician');
+
+    expect(preset.workflowAgents).toContain('criticize');
+    expect(preset.texraHostedAgents).toContain('criticize');
+  });
+
   it('preserves missing hosted provenance on a legacy custom preset', () => {
     const presets = cliMultiAgentPresets([
       {

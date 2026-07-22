@@ -1300,7 +1300,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           createInputText(`Document: ${media.file_name}`),
           {
             type: 'input_file',
-            file_data: media.data,
+            file_data: toDataUrl(mediaType, media.data),
             filename: media.file_name,
           },
         ];

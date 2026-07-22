@@ -48,17 +48,25 @@ export type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
 // ============================================================================
 
 /**
- * Format a single output file summary as XML.
+ * Format a single output file summary as XML. `path` remains run-relative for
+ * acceptance tools; `read-path` identifies the model-facing route to inspect
+ * the generated artifact.
  * When diff info is provided, includes a `diff` attribute pointing to the diff
  * file path (readable via /executions/{id}/files/...). Large changes are
  * flagged with `large-change="true"` but still include a diff file.
  */
 function formatOutputFile(
   o: OutputFileSummary,
+  executionId: ExecutionId,
   diffInfo?: ResultDiffSummary,
 ): string {
+  const readPath =
+    o.location === 'runStorage'
+      ? `/executions/${executionId}/files/${o.relativePath}`
+      : o.absolutePath;
   const attrs = [
     `path="${escapeAttr(o.relativePath)}"`,
+    `read-path="${escapeAttr(readPath)}"`,
     `location="${escapeAttr(o.location)}"`,
     o.originalPath !== null && `original="${escapeAttr(o.originalPath)}"`,
     o.added !== null && `added="${o.added}"`,
@@ -82,6 +90,7 @@ function formatOutputFile(
  */
 function formatWorkflowOutputs(
   outputs: OutputFileSummary[],
+  executionId: ExecutionId,
   diffInfos?: ReadonlyMap<string, ResultDiffSummary>,
 ): string[] {
   const rounds = new Set(outputs.map((o) => o.round));
@@ -89,7 +98,7 @@ function formatWorkflowOutputs(
     return [
       '<output-files>',
       ...outputs.map((o) =>
-        formatOutputFile(o, diffInfos?.get(o.absolutePath)),
+        formatOutputFile(o, executionId, diffInfos?.get(o.absolutePath)),
       ),
       '</output-files>',
     ];
@@ -101,7 +110,7 @@ function formatWorkflowOutputs(
     lines.push(`<round number="${round}">`);
     lines.push(
       ...roundFiles.map((o) =>
-        formatOutputFile(o, diffInfos?.get(o.absolutePath)),
+        formatOutputFile(o, executionId, diffInfos?.get(o.absolutePath)),
       ),
     );
     lines.push('</round>');
@@ -178,7 +187,13 @@ export function formatSubagentDelivery(
       const diffsByPath = new Map(
         result.diffs.map((diff) => [diff.path, diff] as const),
       );
-      lines.push(...formatWorkflowOutputs(result.outputs, diffsByPath));
+      lines.push(
+        ...formatWorkflowOutputs(
+          result.outputs,
+          options.executionId,
+          diffsByPath,
+        ),
+      );
     }
     if (result.compileFailures.length > 0) {
       lines.push('<compile-failures>');
