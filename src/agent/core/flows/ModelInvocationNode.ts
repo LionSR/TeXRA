@@ -15,6 +15,7 @@ import type {
   ModelCredentialRoute,
   ModelCredentialSelection,
 } from '@agent/types/ModelHandlerContracts';
+import type { ModelRetryAdmission } from '@agent/runtime/ModelRetryGate';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import { normalizeProviderError } from '@common/errors';
 import { detectSdkErrorMetadata } from '@common/errors/sdkErrorUtils';
@@ -272,7 +273,9 @@ export class ModelInvocationNode<
         };
       };
 
-      const runWithSharedRoute = <T>(operation: () => Promise<T>) =>
+      const runWithSharedRoute = <T>(
+        operation: (admission: ModelRetryAdmission<T>) => Promise<T>,
+      ) =>
         gate.run(
           sharedRoute,
           {
@@ -313,7 +316,11 @@ export class ModelInvocationNode<
           services.modelHandler.config.fullName,
           services.clientCredentialIdentity ?? 'unknown-credential',
         ]);
-      const runWithModelRateLimit = (): ReturnType<typeof invoke> => {
+      const runWithModelRateLimit = (
+        sharedAdmission: ModelRetryAdmission<
+          Awaited<ReturnType<typeof invoke>>
+        >,
+      ): ReturnType<typeof invoke> => {
         const modelRateLimitRoute = getModelRateLimitRoute();
         return gate.run(
           modelRateLimitRoute,
@@ -326,16 +333,17 @@ export class ModelInvocationNode<
                 `Waiting ${delayMs}ms for the model rate-limit recovery probe.`,
               ),
           },
-          () =>
-            runWithSharedRoute(() =>
+          async () => {
+            return sharedAdmission.recheck((liveSharedAdmission) =>
               // Shared-route admission can rebuild the client. If that changes
               // the credential, endpoint, or route, the permit above belongs
               // to the old rate-limit scope; acquire the live scope before
               // calling the provider.
               getModelRateLimitRoute() === modelRateLimitRoute
                 ? invoke()
-                : runWithModelRateLimit(),
-            ),
+                : runWithModelRateLimit(liveSharedAdmission),
+            );
+          },
         );
       };
 

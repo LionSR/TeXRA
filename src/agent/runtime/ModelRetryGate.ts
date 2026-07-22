@@ -31,6 +31,13 @@ interface RouteFailure {
   readonly retryAfterMs?: number;
 }
 
+/** Keeps a route admission current without reacquiring an owned probe. */
+export interface ModelRetryAdmission<T> {
+  recheck(
+    operation: (admission: ModelRetryAdmission<T>) => Promise<T>,
+  ): Promise<T>;
+}
+
 interface RunOptions<T> {
   readonly signal: AbortSignal;
   readonly baseBackoffMs: number;
@@ -68,12 +75,12 @@ export class ModelRetryGate {
   async run<T>(
     route: string,
     options: RunOptions<T>,
-    operation: () => Promise<T>,
+    operation: (admission: ModelRetryAdmission<T>) => Promise<T>,
   ): Promise<T> {
     const permit = await this.acquire(route, options);
     try {
       if (permit.sharedRecoveryCompleted) await options.onAdmitted?.();
-      const result = await operation();
+      const result = await this.runAdmitted(route, options, permit, operation);
       this.markReachable(route, permit);
       return result;
     } catch (error) {
@@ -82,9 +89,15 @@ export class ModelRetryGate {
       } else {
         const failure = options.classifyFailure(error as Error);
         if (failure) {
-          const recovery = options.recoverFailure?.(error as Error, operation);
+          let recoveryPermit: RetryPermit | undefined;
+          const recovery = options.recoverFailure?.(error as Error, () => {
+            if (!recoveryPermit) {
+              throw new Error('Model recovery ran before claiming its probe');
+            }
+            return this.runAdmitted(route, options, recoveryPermit, operation);
+          });
           if (recovery) {
-            const recoveryPermit = this.claimRecovery(route, permit);
+            recoveryPermit = this.claimRecovery(route, permit);
             if (!recoveryPermit) {
               // Another in-flight call already owns recovery. Re-enter the
               // gate so this stale call waits for that probe, then retries
@@ -129,6 +142,20 @@ export class ModelRetryGate {
       }
       throw error;
     }
+  }
+
+  private runAdmitted<T>(
+    route: string,
+    options: RunOptions<T>,
+    permit: RetryPermit,
+    operation: (admission: ModelRetryAdmission<T>) => Promise<T>,
+  ): Promise<T> {
+    const admission: ModelRetryAdmission<T> = {
+      recheck: permit.probe
+        ? async (next) => next(admission)
+        : (next) => this.run(route, options, next),
+    };
+    return operation(admission);
   }
 
   private claimRecovery(

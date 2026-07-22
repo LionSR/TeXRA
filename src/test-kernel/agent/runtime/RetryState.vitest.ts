@@ -634,15 +634,24 @@ describe('RetryState', () => {
     const session = createTestSession();
     let credentialIdentity = 'credential-a';
     const run = vi.spyOn(session.modelRetries, 'run');
-    run.mockImplementation((async (_route, _options, operation) => {
+    const routes: string[] = [];
+    const runThroughGate: typeof session.modelRetries.run = async (
+      route,
+      options,
+      operation,
+    ) => {
+      routes.push(route);
       // Outer shared gate, model gate, then the shared recheck. Simulate a
       // client rebuild at that recheck; the provider call must first enter
       // the replacement credential's model-rate scope.
-      if (run.mock.calls.length === 3) {
+      if (routes.length === 3) {
         credentialIdentity = 'credential-b';
       }
-      return operation();
-    }) as typeof session.modelRetries.run);
+      return operation({
+        recheck: (next) => runThroughGate(route, options, next),
+      });
+    };
+    run.mockImplementation(runThroughGate);
     const createResponse = vi.fn(async () => ({ response: 'ok' }));
     const node = new ModelInvocationNode<BaseCycleFields>({
       operationName: 'Model call',
@@ -672,7 +681,6 @@ describe('RetryState', () => {
         node.exec({ shouldStop: false, messages: [] }),
       );
 
-      const routes = run.mock.calls.map(([route]) => route);
       expect(routes).toEqual([
         JSON.stringify(['openai', 'api-key', 'https://api.example/v1']),
         JSON.stringify([
@@ -692,6 +700,60 @@ describe('RetryState', () => {
         ]),
         JSON.stringify(['openai', 'api-key', 'https://api.example/v1']),
       ]);
+      expect(createResponse).toHaveBeenCalledOnce();
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('does not reacquire a shared route while owning its recovery probe', async () => {
+    const streamId = 'model-retry-shared-probe' as StreamTabId;
+    const session = createTestSession();
+    const run = vi.spyOn(session.modelRetries, 'run');
+    let runCount = 0;
+    const runThroughGate: typeof session.modelRetries.run = async (
+      route,
+      options,
+      operation,
+    ) => {
+      runCount += 1;
+      const ownsProbe = runCount === 1;
+      const admission: Parameters<typeof operation>[0] = {
+        recheck: ownsProbe
+          ? async (next) => next(admission)
+          : (next) => runThroughGate(route, options, next),
+      };
+      return operation(admission);
+    };
+    run.mockImplementation(runThroughGate);
+    const createResponse = vi.fn(async () => ({ response: 'ok' }));
+    const node = new ModelInvocationNode<BaseCycleFields>({
+      operationName: 'Model call',
+      streaming: false,
+      storeResponse: vi.fn(),
+    }).setServices({
+      modelHandler: {
+        config: { provider: 'openai', fullName: 'openai:model-a' },
+        createResponse,
+        getRetryEndpoint: () => 'https://api.example/v1',
+        isBackgroundModeActive: () => false,
+        setOutputStreaming: () => {},
+      },
+      logger: noopTrace,
+      setting: { temperature: 0 },
+      config: { model: 'openai:model-a' },
+      setAbortController: vi.fn(),
+      client: {},
+      clientCredentialIdentity: 'credential-a',
+      clientCredentialRoute: 'api-key',
+    } as never);
+
+    try {
+      await withRetryRunContext(streamId, session, () =>
+        node.exec({ shouldStop: false, messages: [] }),
+      );
+
+      expect(runCount).toBe(2);
       expect(createResponse).toHaveBeenCalledOnce();
     } finally {
       session.dispose();
