@@ -78,7 +78,9 @@ import {
   buildCodexCommandToolLog,
   buildCodexFileChangeToolLog,
   buildCodexMcpToolLog,
+  buildCodexThreadToolLog,
   buildCodexTodoToolLog,
+  buildCodexTurnToolLog,
   buildCodexUsageStats,
 } from './codexShared';
 
@@ -295,43 +297,78 @@ export async function runStreamedTurn(
   let usage: RunResult['usage'] = null;
   const itemLogRefs = new Map<string, CodexToolLogRef>();
 
-  for await (const event of events) {
-    switch (event.type) {
-      case 'item.started':
-      case 'item.updated':
-        publishCodexItemProgress({
-          item: event.item,
-          status: 'in_progress',
-          childStreamId,
-          logger,
-          refs: itemLogRefs,
-        });
-        break;
-      case 'item.completed': {
-        const { item } = event;
-        const wasRenderedAsProgress = publishCodexItemProgress({
-          item,
-          status: 'completed',
-          childStreamId,
-          logger,
-          refs: itemLogRefs,
-        });
-        if (!wasRenderedAsProgress) {
-          logCodexItem(item, childStreamId, logger);
+  // The live "Codex Turn" card is opened on turn.started and closed on
+  // turn.completed / turn.failed with the measured wall time. The finally
+  // below closes it on any other exit (stream error, abort, or an early stream
+  // end) so the progress view never keeps a spinning Running card after the
+  // turn is already dead. finalizeTurnCard is a no-op once the card is closed.
+  let turnLogRef: CodexToolLogRef | null = null;
+  let turnStartedMs = Date.now();
+  const finalizeTurnCard = (state: 'completed' | 'failed', error?: string) => {
+    if (!turnLogRef) return;
+    const { status = 'completed', ...rest } = buildCodexTurnToolLog({
+      state,
+      wallTimeMs: Date.now() - turnStartedMs,
+      ...(error != null && { error }),
+    });
+    endToolUseCard(logger, turnLogRef, rest, status);
+    turnLogRef = null;
+  };
+
+  try {
+    for await (const event of events) {
+      switch (event.type) {
+        case 'thread.started':
+          emitToolUseCard(logger, buildCodexThreadToolLog(event));
+          break;
+        case 'turn.started':
+          turnStartedMs = Date.now();
+          turnLogRef = emitToolUseCard(
+            logger,
+            buildCodexTurnToolLog({ state: 'running' }),
+          );
+          break;
+        case 'item.started':
+        case 'item.updated':
+          publishCodexItemProgress({
+            item: event.item,
+            status: 'in_progress',
+            childStreamId,
+            logger,
+            refs: itemLogRefs,
+          });
+          break;
+        case 'item.completed': {
+          const { item } = event;
+          const wasRenderedAsProgress = publishCodexItemProgress({
+            item,
+            status: 'completed',
+            childStreamId,
+            logger,
+            refs: itemLogRefs,
+          });
+          if (!wasRenderedAsProgress) {
+            logCodexItem(item, childStreamId, logger);
+          }
+          if (item.type === 'agent_message') {
+            responseParts.push(item.text);
+          }
+          break;
         }
-        if (item.type === 'agent_message') {
-          responseParts.push(item.text);
-        }
-        break;
+        case 'turn.completed':
+          usage = event.usage ?? null;
+          finalizeTurnCard('completed');
+          break;
+        case 'turn.failed':
+          finalizeTurnCard('failed', event.error.message);
+          throw new ToolError(event.error.message ?? 'Codex turn failed');
+        case 'error':
+          finalizeTurnCard('failed', event.message);
+          throw new ToolError(event.message ?? 'Codex stream error');
       }
-      case 'turn.completed':
-        usage = event.usage ?? null;
-        break;
-      case 'turn.failed':
-        throw new ToolError(event.error.message ?? 'Codex turn failed');
-      case 'error':
-        throw new ToolError(event.message ?? 'Codex stream error');
     }
+  } finally {
+    finalizeTurnCard('failed');
   }
 
   return {
