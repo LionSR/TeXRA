@@ -29,6 +29,16 @@ import {
 } from '@controllers/settingsView/ChatExportController';
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
 import {
+  ACTIVE_EXECUTION_DELETE_BLOCKED_MESSAGE,
+  describeClearHistoryResult,
+  describeDeleteExecutionResult,
+  describeLatexExportResult,
+  exportedFileMessage,
+  exportInputErrorMessage,
+  HISTORY_ITEM_NOT_FOUND_MESSAGE,
+  htmlExportErrorMessage,
+} from '@controllers/settingsView/HistoryActionOutcomes';
+import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
@@ -39,7 +49,6 @@ import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
 } from '@shared/schemas/settingsViewMessages';
-import { formatExecutionHistoryRetention } from '@shared/copy/executionHistory';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
 
@@ -100,18 +109,19 @@ export class HistoryHandlers {
   ): Promise<void> {
     try {
       const result = await deleteExecution(data.historyId as ExecutionId);
-      if (result.status === 'active') {
-        await vscode.window.showWarningMessage(
-          'Cannot delete an execution that is active in TeXRA',
-        );
-        return;
-      }
-      if (result.status === 'deleted') {
-        await this.ctx.withActiveWebview((w) => this.sendHistoryData(w));
-      } else {
-        await vscode.window.showWarningMessage(
-          `History item not found: ${data.historyId}`,
-        );
+      const outcome = describeDeleteExecutionResult(result);
+      switch (outcome.kind) {
+        case 'active':
+          await vscode.window.showWarningMessage(
+            ACTIVE_EXECUTION_DELETE_BLOCKED_MESSAGE,
+          );
+          return;
+        case 'not-found':
+          await vscode.window.showWarningMessage(outcome.message);
+          return;
+        case 'deleted':
+          await this.ctx.withActiveWebview((w) => this.sendHistoryData(w));
+          return;
       }
     } catch (error) {
       await showLoggedErrorMessage(
@@ -125,7 +135,8 @@ export class HistoryHandlers {
   async handleClearHistory(): Promise<void> {
     try {
       const result = await deleteAllExecutions();
-      if (result.active.length === 0 && result.failed.length === 0) {
+      const outcome = describeClearHistoryResult(result);
+      if (outcome.kind === 'cleared') {
         await vscode.window.showInformationMessage('Agent history cleared');
         await this.ctx.withActiveWebview(async (w) => {
           await w.postMessage({
@@ -133,12 +144,7 @@ export class HistoryHandlers {
           });
         });
       } else {
-        await vscode.window.showInformationMessage(
-          formatExecutionHistoryRetention(
-            result.active.length,
-            result.failed.length,
-          ),
-        );
+        await vscode.window.showInformationMessage(outcome.message);
         await this.ctx.withActiveWebview((w) => this.sendHistoryData(w));
       }
     } catch (error) {
@@ -202,17 +208,7 @@ export class HistoryHandlers {
   private reportExportInputError(
     status: Exclude<ExportInputStatus, 'ok'>,
   ): void {
-    switch (status) {
-      case 'config_missing':
-        void showLoggedMessage(this.ctx.channel, 'History item not found');
-        return;
-      case 'conversation_missing':
-        void showLoggedMessage(
-          this.ctx.channel,
-          'No conversation data available for this execution',
-        );
-        return;
-    }
+    void showLoggedMessage(this.ctx.channel, exportInputErrorMessage(status));
   }
 
   /**
@@ -222,17 +218,7 @@ export class HistoryHandlers {
   private reportHtmlExportError(
     status: 'config_missing' | 'streamLogs_missing',
   ): void {
-    switch (status) {
-      case 'config_missing':
-        void showLoggedMessage(this.ctx.channel, 'History item not found');
-        return;
-      case 'streamLogs_missing':
-        void showLoggedMessage(
-          this.ctx.channel,
-          'No stored transcript available for this execution — it may predate transcript persistence.',
-        );
-        return;
-    }
+    void showLoggedMessage(this.ctx.channel, htmlExportErrorMessage(status));
   }
 
   private async exportAndOpenMarkdown(
@@ -243,43 +229,38 @@ export class HistoryHandlers {
       await this.chatExportController.exportAsMarkdown(historyId, exportInput);
     const doc = await vscode.workspace.openTextDocument(absolutePath);
     await vscode.window.showTextDocument(doc, { preview: false });
-    const filename = path.basename(storagePath);
-    void vscode.window.showInformationMessage(`Chat exported: ${filename}`);
+    void vscode.window.showInformationMessage(exportedFileMessage(storagePath));
   }
 
   private async exportAndOpenLatex(
     historyId: string,
     exportInput: ChatExportInput,
   ): Promise<void> {
-    const { absolutePath, storagePath, pdfPath, logTail } =
-      await this.chatExportController.exportAsLatex(historyId, exportInput);
+    const result = await this.chatExportController.exportAsLatex(
+      historyId,
+      exportInput,
+    );
+    const outcome = describeLatexExportResult(result);
 
-    if (pdfPath) {
-      // Open the generated PDF
-      const pdfUri = vscode.Uri.file(pdfPath);
+    if (outcome.kind === 'compiled') {
+      const pdfUri = vscode.Uri.file(outcome.pathToOpen);
       await vscode.commands.executeCommand('vscode.open', pdfUri);
-      const filename = path.basename(storagePath);
-      void vscode.window.showInformationMessage(
-        `Chat exported and compiled: ${filename.replace('.tex', '.pdf')}`,
-      );
-    } else {
-      // Compilation failed — open the .tex source instead, and log the
-      // compile log tail so the failure reason is discoverable. Included in
-      // the visible message itself, not just `data` — the logger only shows
-      // `data` when texra.logger.debugMode is on (default off).
-      if (logTail) {
-        this.ctx.logger.error(
-          this.ctx.channel,
-          `LaTeX export compilation failed for ${storagePath}:\n${logTail}`,
-          { data: { storagePath, logTail } },
-        );
-      }
-      const doc = await vscode.workspace.openTextDocument(absolutePath);
-      await vscode.window.showTextDocument(doc, { preview: false });
-      void vscode.window.showWarningMessage(
-        'LaTeX compilation failed. The .tex source file has been opened instead.',
-      );
+      void vscode.window.showInformationMessage(outcome.message);
+      return;
     }
+
+    // Compilation failed — open the .tex source instead, and log the
+    // compile log tail so the failure reason is discoverable. Included in
+    // the visible message itself, not just `data` — the logger only shows
+    // `data` when texra.logger.debugMode is on (default off).
+    if (outcome.logDetail) {
+      this.ctx.logger.error(this.ctx.channel, outcome.logDetail, {
+        data: { storagePath: result.storagePath, logTail: result.logTail },
+      });
+    }
+    const doc = await vscode.workspace.openTextDocument(outcome.pathToOpen);
+    await vscode.window.showTextDocument(doc, { preview: false });
+    void vscode.window.showWarningMessage(outcome.message);
   }
 
   private async exportAndOpenHtml(historyId: string): Promise<void> {
@@ -295,9 +276,7 @@ export class HistoryHandlers {
 
     const { absolutePath, storagePath } = outcome.result;
     await vscode.env.openExternal(vscode.Uri.file(absolutePath));
-    void vscode.window.showInformationMessage(
-      `Chat exported: ${path.basename(storagePath)}`,
-    );
+    void vscode.window.showInformationMessage(exportedFileMessage(storagePath));
   }
 
   private async withHistoryConfig(
@@ -310,7 +289,10 @@ export class HistoryHandlers {
         historyId as ExecutionId,
       ).readConfig();
       if (!raw) {
-        await showLoggedMessage(this.ctx.channel, 'History item not found');
+        await showLoggedMessage(
+          this.ctx.channel,
+          HISTORY_ITEM_NOT_FOUND_MESSAGE,
+        );
         return;
       }
       const config = AgentConfigSchema.parse(raw);
