@@ -113,8 +113,12 @@ export async function initializeDesktopProcessStores(options: {
         sessionEvent.scope === 'session' &&
         sessionEvent.event.type === 'removeStream'
       ) {
+        const { streamId } = sessionEvent.event.payload;
+        // SessionStores tracks the lease barrier immediately so a window
+        // reattaching before terminal artifact persistence finishes cannot
+        // replay a stream already marked removed.
         void stores
-          .deleteStream(sessionEvent.event.payload.streamId)
+          .deleteStreamAfterOwnedExecutionRelease(streamId)
           .catch((error: unknown) => {
             logger.warn('Failed to delete a headless desktop stream', {
               data: toLogData(error),
@@ -125,8 +129,7 @@ export async function initializeDesktopProcessStores(options: {
     { scope: 'session' },
   );
   const detachArtifactFlusher = session.useArtifactFlusher(async () => {
-    await stores.waitForPendingStreamDeletions();
-    await snapshots.flush();
+    await stores.flushSnapshotsAfterStartedDeletions();
   });
   return {
     stores,
