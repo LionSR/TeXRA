@@ -617,6 +617,35 @@ describe('RetryState', () => {
     expect(classifySharedFailure(sdkError)).toEqual({ retryAfterMs: 7_000 });
   });
 
+  it.each([
+    (() => {
+      const body = {
+        type: 'server_error',
+        code: 'server_error',
+        message: 'temporary provider failure',
+      };
+      const error = new OpenAIAPIError(
+        undefined,
+        body,
+        body.message,
+        undefined,
+      );
+      tagOpenAISdkError(error, 'openai');
+      return error;
+    })(),
+    Object.assign(new Error('background response failed'), {
+      provider: 'openai',
+      error: {
+        code: 'server_error',
+        message: 'temporary background failure',
+      },
+    }),
+  ])('coordinates a structured status-less server failure', async (error) => {
+    const { classifySharedFailure } = await captureModelRetry();
+
+    expect(classifySharedFailure(error)).toEqual({ retryAfterMs: undefined });
+  });
+
   it('does not classify deterministic Undici request errors as route failures', async () => {
     const { classifySharedFailure } = await captureModelRetry();
     const invalidRequest = Object.assign(new Error('invalid request option'), {

@@ -6,8 +6,14 @@
  * LLM calls that share the same configured "helper model" setting.
  */
 
+// Third-party imports
+import pRetry from 'p-retry';
+
+// Local imports
 import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
+import { normalizeProviderError } from '@common/errors';
+import { isUserAbort } from '@common/errors/sdkErrorUtils';
 import { getModelUnavailableReason } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 
@@ -79,11 +85,24 @@ export async function runHelperModelCompletion(
     undefined,
     systemPrompt,
   );
-  const result = await kit.handler.createResponse({
-    client: kit.client,
-    messages,
-    temperature,
-    systemPrompt,
-  });
+  // Helper calls execute outside ModelInvocationNode, so they need their own
+  // bounded retry policy now that generation clients disable SDK retries.
+  const result = await pRetry(
+    () =>
+      kit.handler.createResponse({
+        client: kit.client,
+        messages,
+        temperature,
+        systemPrompt,
+      }),
+    {
+      retries: 2,
+      minTimeout: 500,
+      factor: 2,
+      randomize: true,
+      shouldRetry: ({ error }) =>
+        !isUserAbort(error) && normalizeProviderError(error).userRetryable,
+    },
+  );
   return kit.handler.extractResponse(result.response, '').text;
 }

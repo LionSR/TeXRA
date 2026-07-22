@@ -16,7 +16,7 @@ import type {
   ModelCredentialSelection,
 } from '@agent/types/ModelHandlerContracts';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
-import { detectStatusCode } from '@common/errors/sdkErrorUtils';
+import { normalizeProviderError } from '@common/errors';
 import type { ToolDefinition } from '@model';
 import { isObject } from '@utils/core';
 
@@ -112,7 +112,7 @@ function classifyModelRouteFailure(
     );
   });
   const statusCode = chain
-    .map((current) => detectStatusCode(current))
+    .map((current) => normalizeProviderError(current).statusCode)
     .find((status) => status !== undefined);
   const sharedAuthenticationFailure =
     credentialRoute === 'relay' && statusCode === 401;
@@ -134,7 +134,7 @@ function classifyModelRateLimitFailure(
 ): { retryAfterMs?: number } | undefined {
   const chain = errorCauseChain(error);
   const statusCode = chain
-    .map((current) => detectStatusCode(current))
+    .map((current) => normalizeProviderError(current).statusCode)
     .find((status) => status !== undefined);
   return statusCode === 429
     ? { retryAfterMs: detectRetryAfterMs(chain) }
