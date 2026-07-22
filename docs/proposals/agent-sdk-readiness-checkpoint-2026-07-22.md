@@ -31,8 +31,11 @@ cap was already present before this commit and is unchanged by it),
 `agent/runtime/modelHandlerCompatibilityInference.ts`), and `b64b18d` / #9038
 (the 07-21 checkpoint's own applied cleanup, already recorded in that
 checkpoint). This range is 6 commits, not 5: `f71007a`, `0dc0f8b`, `09d5aea`,
-`9bc9af2`, `b64b18d`, plus the duplicate citty commit `c08e698` (same PR,
-re-landed under a second SHA — see the Verified section). The lease-scoping
+`9bc9af2`, `b64b18d`, plus `c08e698` — the **substantive** commit of the two
+under PR #9039 (163 insertions, 101 deletions across 5 files); its child
+`1b5732a` has an identical tree and contributes no diff, making `1b5732a`,
+not `c08e698`, the no-op duplicate (correcting an earlier draft of this doc,
+which had the two backwards). The lease-scoping
 rewrite (`0dc0f8b`) is the one with real spine-shape risk, touching
 `executeAgent.ts`, `executionRegistry.ts`, `runAgent.ts`,
 `AgentRunLifecycle.ts`, `ExecutionHandle.ts`, `childRunLoop.ts`,
@@ -360,7 +363,12 @@ five-checkpoint-old claim named.
 - Spine re-confirmed at HEAD `395e229`: `src/agent/core/index.ts` **absent**
   (no barrel regression); `IModelHandler` = `Pick<ModelHandler>`
   (`src/agent/types/IModelHandler.ts:41`); the `Node.exec → createFlow().run`
-  shape intact; delegation strategy subsystem intact.
+  shape intact. **Retracted (Codex, P2): "delegation strategy subsystem
+  intact" is not a verified claim this pass** — `executionRegistry.ts`,
+  `childRunLoop.ts`, and the other 5 files `0dc0f8b` changed were not opened
+  (see the acknowledged coverage gap above); an admitted gap is not a
+  reconfirmed-clean result, and this bullet should not have implied
+  otherwise.
 - Boundary width: hosts still deep-import **54** distinct `@agent/*`
   specifiers (union, a different metric than the per-host baseline below) /
   26 of 51 `runtime/` files (independent recount, ±1 vs a differently
@@ -391,8 +399,11 @@ five-checkpoint-old claim named.
   `-2026-07-18`.
 - Commit-census correction: `git log 3612630..395e229` is 11 commits, not the
   5 this doc first named. The 6 omitted — `f71007a`, `0dc0f8b`/#9035,
-  `09d5aea`/#9055, `9bc9af2`/#9054, `b64b18d`/#9038, plus the duplicate citty
-  commit `c08e698` — include a substantial spine rewrite (`0dc0f8b`:
+  `09d5aea`/#9055, `9bc9af2`/#9054, `b64b18d`/#9038, plus `c08e698` (the
+  substantive citty commit, not its no-op child `1b5732a`, which an earlier
+  draft mislabeled as the duplicate — verified via `git show -s --format=%T`
+  on both SHAs: identical tree, so `1b5732a` contributes no diff) — include a
+  substantial spine rewrite (`0dc0f8b`:
   `executeAgent.ts`, `executionRegistry.ts`, `runAgent.ts`,
   `AgentRunLifecycle.ts`, `ExecutionHandle.ts`, `childRunLoop.ts`,
   `agent/storage/executionLease.ts`/`executionLifecycle.ts`). Of those 8
