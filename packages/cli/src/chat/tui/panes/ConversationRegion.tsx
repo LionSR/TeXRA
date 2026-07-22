@@ -204,6 +204,8 @@ export function ConversationRegion({
   const {
     bottomPanelRows: bottomPanelBudget,
     sessionPanelRows: subagentRows,
+    childListRows,
+    detailPanelRows,
     todosPlanRows,
   } = allocateConversationBottomPanelRows({
     maxRows: BOTTOM_PANEL_MAX_ROWS,
@@ -214,12 +216,6 @@ export function ConversationRegion({
     todosPlanContentRows,
     transcriptRows,
   });
-  const childListMinimumRows = 2;
-  const detailPanelRows = Math.min(
-    childDetailPanelNeed,
-    Math.max(0, subagentRows - childListMinimumRows),
-  );
-  const childListRows = subagentRows - detailPanelRows;
   const conversationRows = transcriptRows - bottomPanelBudget;
   const childListHasRows =
     snapshot.sessionViews.length > 0 || activeProcesses.length > 0;

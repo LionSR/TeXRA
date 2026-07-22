@@ -556,6 +556,8 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({
       bottomPanelRows: 0,
       sessionPanelRows: 0,
+      childListRows: 0,
+      detailPanelRows: 0,
       todosPlanRows: 0,
     });
     expect(
@@ -570,6 +572,8 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({
       bottomPanelRows: 0,
       sessionPanelRows: 0,
+      childListRows: 0,
+      detailPanelRows: 0,
       todosPlanRows: 0,
     });
   });
@@ -586,6 +590,8 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({
       bottomPanelRows: 3,
       sessionPanelRows: 3,
+      childListRows: 3,
+      detailPanelRows: 0,
       todosPlanRows: 0,
     });
   });
@@ -603,6 +609,27 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({
       bottomPanelRows: 7,
       sessionPanelRows: 7,
+      childListRows: 3,
+      detailPanelRows: 4,
+      todosPlanRows: 0,
+    });
+  });
+
+  it('keeps a lone unusable detail row with the child list', () => {
+    expect(
+      allocateConversationBottomPanelRows({
+        maxRows: 10,
+        sessionCount: 2,
+        childListFocused: true,
+        detailContentRows: 4,
+        todosPlanContentRows: 0,
+        transcriptRows: 3,
+      }),
+    ).toEqual({
+      bottomPanelRows: 3,
+      sessionPanelRows: 3,
+      childListRows: 3,
+      detailPanelRows: 0,
       todosPlanRows: 0,
     });
   });
@@ -650,6 +677,8 @@ describe('CLI TUI row allocation', () => {
     expect(allocation).toEqual({
       bottomPanelRows: 0,
       sessionPanelRows: 0,
+      childListRows: 0,
+      detailPanelRows: 0,
       todosPlanRows: 0,
     });
   });
@@ -666,6 +695,8 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({
       bottomPanelRows: 10,
       sessionPanelRows: 8,
+      childListRows: 8,
+      detailPanelRows: 0,
       todosPlanRows: 2,
     });
   });
@@ -682,6 +713,8 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({
       bottomPanelRows: 0,
       sessionPanelRows: 0,
+      childListRows: 0,
+      detailPanelRows: 0,
       todosPlanRows: 0,
     });
   });
