@@ -29,10 +29,19 @@ interface RouteFailure {
   readonly retryAfterMs?: number;
 }
 
-interface RunOptions {
+interface RunOptions<T> {
   readonly signal: AbortSignal;
   readonly baseBackoffMs: number;
   readonly classifyFailure: (error: Error) => RouteFailure | undefined;
+  /**
+   * Return a deferred recovery for failures the current call can repair. The
+   * gate claims the recovery probe before invoking it, so peer calls remain
+   * queued while the repair and immediate retry run.
+   */
+  readonly recoverFailure?: (
+    error: Error,
+    retry: () => Promise<T>,
+  ) => (() => Promise<T>) | undefined;
   readonly onWait?: (delayMs: number) => void;
   readonly onAdmitted?: () => void;
 }
@@ -56,7 +65,7 @@ export class ModelRetryGate {
 
   async run<T>(
     route: string,
-    options: RunOptions,
+    options: RunOptions<T>,
     operation: () => Promise<T>,
   ): Promise<T> {
     const permit = await this.acquire(route, options);
@@ -71,6 +80,41 @@ export class ModelRetryGate {
       } else {
         const failure = options.classifyFailure(error as Error);
         if (failure) {
+          const recovery = options.recoverFailure?.(error as Error, operation);
+          if (recovery) {
+            const recoveryPermit = this.claimRecovery(route, permit);
+            if (!recoveryPermit) {
+              // Another in-flight call already owns recovery. Re-enter the
+              // gate so this stale call waits for that probe, then retries
+              // with the repaired shared credential or route.
+              return this.run(route, options, operation);
+            }
+
+            try {
+              const result = await recovery();
+              this.markReachable(route, recoveryPermit);
+              return result;
+            } catch (recoveryError) {
+              if (options.signal.aborted) {
+                this.abandon(route, recoveryPermit);
+              } else {
+                const recoveryFailure = options.classifyFailure(
+                  recoveryError as Error,
+                );
+                if (recoveryFailure) {
+                  this.markRouteFailure(
+                    route,
+                    recoveryPermit,
+                    options.baseBackoffMs,
+                    recoveryFailure.retryAfterMs,
+                  );
+                } else {
+                  this.markReachable(route, recoveryPermit);
+                }
+              }
+              throw recoveryError;
+            }
+          }
           this.markRouteFailure(
             route,
             permit,
@@ -83,6 +127,21 @@ export class ModelRetryGate {
       }
       throw error;
     }
+  }
+
+  private claimRecovery(
+    route: string,
+    permit: RetryPermit,
+  ): RetryPermit | undefined {
+    const state = this.routes.get(route);
+    if (!state || permit.version !== state.version) return undefined;
+    if (state.phase === 'probing' && permit.probe) return permit;
+    if (state.phase !== 'healthy') return undefined;
+
+    state.version += 1;
+    state.phase = 'probing';
+    state.retryAt = Date.now();
+    return { version: state.version, probe: true, waited: permit.waited };
   }
 
   dispose(): void {
@@ -100,7 +159,10 @@ export class ModelRetryGate {
     this.routes.clear();
   }
 
-  private acquire(route: string, options: RunOptions): Promise<RetryPermit> {
+  private acquire(
+    route: string,
+    options: Pick<RunOptions<never>, 'signal' | 'onWait'>,
+  ): Promise<RetryPermit> {
     if (this.disposed) {
       return Promise.reject(
         new DOMException('Model retry gate disposed', 'AbortError'),

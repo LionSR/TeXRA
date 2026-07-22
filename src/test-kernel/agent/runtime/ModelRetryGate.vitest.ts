@@ -66,6 +66,77 @@ describe('ModelRetryGate', () => {
     gate.dispose();
   });
 
+  it('keeps stale peers behind one immediate credential recovery', async () => {
+    const gate = new ModelRetryGate();
+    let rejectPrimary = (_error: Error): void => undefined;
+    let rejectPeer = (_error: Error): void => undefined;
+    let releaseRecovery = (): void => undefined;
+    let announceRecovery = (): void => undefined;
+    const primaryFailure = new Promise<string>((_resolve, reject) => {
+      rejectPrimary = reject;
+    });
+    const peerFailure = new Promise<string>((_resolve, reject) => {
+      rejectPeer = reject;
+    });
+    const recoveryMayFinish = new Promise<void>((resolve) => {
+      releaseRecovery = resolve;
+    });
+    const recoveryStarted = new Promise<void>((resolve) => {
+      announceRecovery = resolve;
+    });
+    const recoveryRuns = vi.fn(async (retry: () => Promise<string>) => {
+      announceRecovery();
+      await recoveryMayFinish;
+      return retry();
+    });
+    const recoveries = vi.fn(
+      (retry: () => Promise<string>) => (): Promise<string> =>
+        recoveryRuns(retry),
+    );
+    const primaryOperation = vi
+      .fn<() => Promise<string>>()
+      .mockImplementationOnce(() => primaryFailure)
+      .mockResolvedValue('primary recovered');
+    const peerOperation = vi
+      .fn<() => Promise<string>>()
+      .mockImplementationOnce(() => peerFailure)
+      .mockResolvedValue('peer recovered');
+    const recoverableOptions = {
+      ...options(new AbortController().signal),
+      recoverFailure: (_error: Error, retry: () => Promise<string>) =>
+        recoveries(retry),
+    };
+
+    const primary = gate.run(ROUTE, recoverableOptions, primaryOperation);
+    const peer = gate.run(ROUTE, recoverableOptions, peerOperation);
+    await Promise.resolve();
+    expect(primaryOperation).toHaveBeenCalledOnce();
+    expect(peerOperation).toHaveBeenCalledOnce();
+
+    rejectPrimary(TRANSIENT);
+    await recoveryStarted;
+    rejectPeer(TRANSIENT);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(recoveries).toHaveBeenCalledTimes(2);
+    expect(recoveryRuns).toHaveBeenCalledOnce();
+    expect(peerOperation).toHaveBeenCalledOnce();
+
+    // Recovery owns the probe rather than a cooling timer. Even when token
+    // refresh takes much longer than the ordinary backoff, a stale peer must
+    // remain queued until that recovery completes.
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(peerOperation).toHaveBeenCalledOnce();
+
+    releaseRecovery();
+    await expect(primary).resolves.toBe('primary recovered');
+    await expect(peer).resolves.toBe('peer recovered');
+    expect(primaryOperation).toHaveBeenCalledTimes(2);
+    expect(peerOperation).toHaveBeenCalledTimes(2);
+    gate.dispose();
+  });
+
   it('honors an explicitly disabled shared backoff', async () => {
     const gate = new ModelRetryGate();
     const controller = new AbortController();

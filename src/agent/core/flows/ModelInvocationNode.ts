@@ -231,6 +231,8 @@ export class ModelInvocationNode<
           // the relay refreshes, even though pRetry must not repeat a stale
           // credential without that recovery step.
           classifyFailure: classifyModelRouteFailure,
+          recoverFailure: (error, retry) =>
+            this.getRelay401Recovery(error, () => retry(), signal),
           onWait: (delayMs) =>
             services.logger.debug(
               `Waiting ${delayMs}ms for the shared model recovery probe.`,

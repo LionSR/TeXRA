@@ -175,6 +175,27 @@ export abstract class RetryableInvocationNode<
     }
   }
 
+  /**
+   * Build, but do not start, recovery for a relay-authentication failure.
+   * Deferring execution lets the shared route gate establish one recovery
+   * owner before token refresh begins.
+   */
+  protected getRelay401Recovery<T>(
+    originalError: unknown,
+    operation: (signal: AbortSignal) => Promise<T>,
+    signal: AbortSignal,
+  ): (() => Promise<T>) | undefined {
+    const formatted = normalizeProviderError(originalError);
+    if (
+      !formatted.isRelayError ||
+      formatted.statusCode !== StatusCodes.UNAUTHORIZED ||
+      this._hasAttemptedTokenRefresh
+    ) {
+      return undefined;
+    }
+    return () => this.attemptRelay401Recovery(originalError, operation, signal);
+  }
+
   /** Wraps operation with AbortController management and relay token refresh. */
   protected async withAbortController<T>(
     operation: (signal: AbortSignal) => Promise<T>,
@@ -219,15 +240,9 @@ export abstract class RetryableInvocationNode<
     try {
       return await operation(signal);
     } catch (err) {
-      // Reactive 401 recovery: refresh token and retry once
-      const formatted = normalizeProviderError(err);
-      if (
-        formatted.isRelayError &&
-        formatted.statusCode === StatusCodes.UNAUTHORIZED &&
-        !this._hasAttemptedTokenRefresh
-      ) {
-        return this.attemptRelay401Recovery(err, operation, signal);
-      }
+      // Reactive 401 recovery: refresh token and retry once.
+      const recovery = this.getRelay401Recovery(err, operation, signal);
+      if (recovery) return recovery();
       throw err;
     } finally {
       if (ownedController) {

@@ -1,5 +1,5 @@
 // Third-party imports
-import { OpenRouter } from '@openrouter/sdk';
+import { HTTPClient, OpenRouter } from '@openrouter/sdk';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 // Local imports
@@ -34,6 +34,7 @@ import { extractMimeSubtype } from '@utils/text/stringUtils';
 // Local file imports
 import { toDataUrl } from '../support/dataUrl';
 import { getDeclaredMaxReasoningEffort } from '../support/reasoningEffort';
+import { longRunningModelFetch } from '../support/longRunningModelFetch';
 import { OPENROUTER_BASE_URL } from '../support/ProxyConfigResolver';
 import {
   resolveMoonshotRequestParameters,
@@ -145,6 +146,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       apiKey: credential.apiKey,
       appTitle: 'TeXRA.ai',
       ...(credential.baseUrl ? { serverURL: credential.baseUrl } : {}),
+      httpClient: new HTTPClient({ fetcher: longRunningModelFetch }),
       // TeXRA's session gate owns retry timing and admission.
       retryConfig: { strategy: 'none' },
     });

@@ -2,8 +2,17 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
+import { HTTPClient } from '@openrouter/sdk';
 import { describe, it, afterEach, vi } from 'vitest';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
+
+const transportMocks = vi.hoisted(() => ({
+  longRunningModelFetch: vi.fn<typeof fetch>(),
+}));
+
+vi.mock('@agent/modelHandlers/support/longRunningModelFetch', () => ({
+  longRunningModelFetch: transportMocks.longRunningModelFetch,
+}));
 
 // Local imports
 import { noopTrace } from '@agent/trace';
@@ -353,7 +362,7 @@ describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
 });
 
 describe('ModelHandlerOpenRouterNative getClient retry policy', () => {
-  it('disables SDK retries and records the configured endpoint', async () => {
+  it('uses the long-running transport, disables SDK retries, and records the endpoint', async () => {
     const endpoint = 'https://openrouter.example/v1';
     class TestableHandler extends ModelHandlerOpenRouterNative {
       protected override async resolveClientCredential(): Promise<ResolvedClientCredential> {
@@ -381,5 +390,17 @@ describe('ModelHandlerOpenRouterNative getClient retry policy', () => {
 
     assert.deepEqual(options.retryConfig, { strategy: 'none' });
     assert.equal(handler.getRetryEndpoint(client), endpoint);
+
+    transportMocks.longRunningModelFetch.mockResolvedValueOnce(
+      new Response(null, { status: 204 }),
+    );
+    const request = new Request(`${endpoint}/models`);
+    const response = await (options.httpClient as HTTPClient).request(request);
+    assert.equal(response.status, 204);
+    assert.equal(transportMocks.longRunningModelFetch.mock.calls.length, 1);
+    assert.equal(
+      transportMocks.longRunningModelFetch.mock.calls[0]?.[0],
+      request,
+    );
   });
 });
