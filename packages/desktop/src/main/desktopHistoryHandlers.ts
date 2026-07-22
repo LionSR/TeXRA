@@ -20,10 +20,18 @@ import type {
   ChatExportController,
   ExportInputStatus,
 } from '@controllers/settingsView/ChatExportController';
+import {
+  ACTIVE_EXECUTION_DELETE_BLOCKED_MESSAGE,
+  describeClearHistoryResult,
+  describeDeleteExecutionResult,
+  describeLatexExportResult,
+  exportedFileMessage,
+  exportInputErrorMessage,
+  htmlExportErrorMessage,
+} from '@controllers/settingsView/HistoryActionOutcomes';
 import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import type { ExecutionId } from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { formatExecutionHistoryRetention } from '@shared/copy/executionHistory';
 
 type HistoryExportFormat = 'md' | 'tex' | 'html';
 
@@ -77,35 +85,32 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
 
   private async deleteItem(historyId: string): Promise<void> {
     const result = await deleteExecution(historyId as ExecutionId);
-    if (result.status === 'active') {
-      await this.dependencies.showInfoMessage(
-        'Cannot delete an execution that is active in TeXRA',
-      );
-      return;
+    const outcome = describeDeleteExecutionResult(result);
+    switch (outcome.kind) {
+      case 'active':
+        await this.dependencies.showInfoMessage(
+          ACTIVE_EXECUTION_DELETE_BLOCKED_MESSAGE,
+        );
+        return;
+      case 'not-found':
+        await this.dependencies.showInfoMessage(outcome.message);
+        return;
+      case 'deleted':
+        await this.postHistoryData();
+        return;
     }
-    if (result.status === 'not-found') {
-      await this.dependencies.showInfoMessage(
-        `History item not found: ${historyId}`,
-      );
-      return;
-    }
-    await this.postHistoryData();
   }
 
   private async clear(): Promise<void> {
     const result = await deleteAllExecutions();
-    if (result.active.length === 0 && result.failed.length === 0) {
+    const outcome = describeClearHistoryResult(result);
+    if (outcome.kind === 'cleared') {
       this.dependencies.postToRenderer({
         command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
       });
       return;
     }
-    await this.dependencies.showInfoMessage(
-      formatExecutionHistoryRetention(
-        result.active.length,
-        result.failed.length,
-      ),
-    );
+    await this.dependencies.showInfoMessage(outcome.message);
     await this.postHistoryData();
   }
 
@@ -182,31 +187,13 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
   private async reportExportInputError(
     status: Exclude<ExportInputStatus, 'ok'>,
   ): Promise<void> {
-    switch (status) {
-      case 'config_missing':
-        await this.dependencies.showInfoMessage('History item not found');
-        return;
-      case 'conversation_missing':
-        await this.dependencies.showInfoMessage(
-          'No conversation data available for this execution',
-        );
-        return;
-    }
+    await this.dependencies.showInfoMessage(exportInputErrorMessage(status));
   }
 
   private async reportHtmlExportError(
     status: 'config_missing' | 'streamLogs_missing',
   ): Promise<void> {
-    switch (status) {
-      case 'config_missing':
-        await this.dependencies.showInfoMessage('History item not found');
-        return;
-      case 'streamLogs_missing':
-        await this.dependencies.showInfoMessage(
-          'No stored transcript available for this execution — it may predate transcript persistence.',
-        );
-        return;
-    }
+    await this.dependencies.showInfoMessage(htmlExportErrorMessage(status));
   }
 
   private async exportChatHtml(historyId: string): Promise<void> {
@@ -225,9 +212,7 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
     }
     const { absolutePath, storagePath } = outcome.result;
     await this.dependencies.openPath(absolutePath);
-    await this.dependencies.showInfoMessage(
-      `Chat exported: ${path.basename(storagePath)}`,
-    );
+    await this.dependencies.showInfoMessage(exportedFileMessage(storagePath));
   }
 
   private async exportChat(
@@ -253,31 +238,16 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
         exportInput,
       );
       await this.dependencies.openPath(absolutePath);
-      await this.dependencies.showInfoMessage(
-        `Chat exported: ${path.basename(storagePath)}`,
-      );
+      await this.dependencies.showInfoMessage(exportedFileMessage(storagePath));
       return;
     }
 
-    const { absolutePath, storagePath, pdfPath, logTail } =
-      await controller.exportAsLatex(historyId, exportInput);
-    if (pdfPath) {
-      await this.dependencies.openPath(pdfPath);
-      await this.dependencies.showInfoMessage(
-        `Chat exported and compiled: ${path.basename(storagePath).replace('.tex', '.pdf')}`,
-      );
-      return;
+    const latexResult = await controller.exportAsLatex(historyId, exportInput);
+    const outcome = describeLatexExportResult(latexResult);
+    if (outcome.kind === 'compileFailed' && outcome.logDetail) {
+      this.dependencies.onError(new Error(outcome.logDetail));
     }
-    if (logTail) {
-      this.dependencies.onError(
-        new Error(
-          `LaTeX export compilation failed for ${storagePath}:\n${logTail}`,
-        ),
-      );
-    }
-    await this.dependencies.openPath(absolutePath);
-    await this.dependencies.showInfoMessage(
-      'LaTeX compilation failed. The .tex source file has been opened instead.',
-    );
+    await this.dependencies.openPath(outcome.pathToOpen);
+    await this.dependencies.showInfoMessage(outcome.message);
   }
 }
