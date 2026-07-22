@@ -5,6 +5,7 @@ import { Box, Text } from 'ink';
 
 // Local imports - shared stream display
 import { AgentCategory } from '@shared/schemas';
+import { roundIndexedEntries } from '@shared/schemas/roundIndexed';
 import {
   formatRoundStageLabel,
   formatStreamStatusLabel,
@@ -19,7 +20,6 @@ const FILE_CATEGORIES = [
   ['input', 'Input'],
   ['context', 'Context'],
   ['media', 'Media'],
-  ['output', 'Output'],
 ] as const;
 
 /** Build the extension-style selected-stream summary used by the TUI. */
@@ -48,11 +48,27 @@ export function selectedSubagentDetailLines(
   if (progress.length > 0) lines.push(`Progress: ${progress.join(' · ')}`);
 
   for (const [key, label] of FILE_CATEGORIES) {
-    const generated = key === 'output' ? slice?.generatedOutput : undefined;
-    const paths = generated?.paths ?? slice?.files?.[key] ?? [];
+    const paths = slice?.files?.[key] ?? [];
     if (paths.length === 0) continue;
-    const roundLabel = generated ? ` r${generated.roundIndex + 1}` : '';
-    lines.push(`${label}${roundLabel}: ${paths.join(', ')}`);
+    lines.push(`${label}: ${paths.join(', ')}`);
+  }
+
+  const outputRounds = roundIndexedEntries(
+    slice?.outputFilesByRound ?? {},
+  ).filter(([, files]) => files.length > 0);
+  if (outputRounds.length === 0) {
+    const configuredOutputs = slice?.files?.output ?? [];
+    if (configuredOutputs.length > 0) {
+      lines.push(`Output: ${configuredOutputs.join(', ')}`);
+    }
+  } else {
+    for (const [round, files] of outputRounds) {
+      lines.push(
+        `Output r${round + 1}: ${files
+          .map((file) => file.location.absolutePath)
+          .join(', ')}`,
+      );
+    }
   }
 
   return lines.map((line) => truncateSummaryToWidth(line, maxColumns));

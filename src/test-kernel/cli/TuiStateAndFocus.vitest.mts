@@ -2739,12 +2739,38 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     }
   });
 
-  it('streams latest-round absolute workflow outputs into selected-agent state', () => {
+  it('streams every workflow output round into selected-agent state', () => {
     const hub = new SessionEventHub();
     const detach = attachTuiRunFactSubscription(hub);
     const executionId = 'exec-output' as ExecutionId;
 
     try {
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'addOutputFiles',
+          streamId: root,
+          executionId,
+          filesByRound: {
+            0: [
+              {
+                source: 'draft.tex',
+                location: {
+                  kind: 'runStorage',
+                  executionId,
+                  relativePath: 'r1/draft.tex',
+                  absolutePath:
+                    '/tmp/texra/executions/exec-output/r1/draft.tex',
+                },
+                round: 0,
+                lineage: null,
+                diff: null,
+              },
+            ],
+          },
+        },
+      });
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -2772,9 +2798,21 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         },
       });
 
-      expect(streams.get().get(root)?.generatedOutput).toEqual({
-        roundIndex: 1,
-        paths: ['/tmp/texra/executions/exec-output/r2/paper.tex'],
+      expect(streams.get().get(root)?.outputFilesByRound).toEqual({
+        0: [
+          expect.objectContaining({
+            location: expect.objectContaining({
+              absolutePath: '/tmp/texra/executions/exec-output/r1/draft.tex',
+            }),
+          }),
+        ],
+        1: [
+          expect.objectContaining({
+            location: expect.objectContaining({
+              absolutePath: '/tmp/texra/executions/exec-output/r2/paper.tex',
+            }),
+          }),
+        ],
       });
     } finally {
       detach();

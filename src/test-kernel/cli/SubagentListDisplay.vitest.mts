@@ -79,9 +79,35 @@ describe('CLI child list display model', () => {
       slice: workflowAgentSlice('devise', {
         status: STREAM_PHASE.RUNNING,
         files,
-        generatedOutput: {
-          roundIndex: 1,
-          paths: ['/tmp/executions/abc/r2/Main.lean'],
+        outputFilesByRound: {
+          0: [
+            {
+              source: 'Main.lean',
+              location: {
+                kind: 'runStorage',
+                executionId: 'exec-abc',
+                relativePath: 'r1/Main.lean',
+                absolutePath: '/tmp/executions/abc/r1/Main.lean',
+              },
+              round: 0,
+              lineage: null,
+              diff: null,
+            },
+          ],
+          1: [
+            {
+              source: 'Main.lean',
+              location: {
+                kind: 'runStorage',
+                executionId: 'exec-abc',
+                relativePath: 'r2/Main.lean',
+                absolutePath: '/tmp/executions/abc/r2/Main.lean',
+              },
+              round: 1,
+              lineage: null,
+              diff: null,
+            },
+          ],
         },
         roundStage: { index: 1, total: 3 },
         conversation: { toolCallCount: 2 },
@@ -93,6 +119,7 @@ describe('CLI child list display model', () => {
       'Progress: running · r2/3 · 2 tool calls',
       'Input: src/Main.lean, src/Lemma.lean',
       'Context: notes/proof.md',
+      'Output r1: /tmp/executions/abc/r1/Main.lean',
       'Output r2: /tmp/executions/abc/r2/Main.lean',
     ]);
     expect(selectedSubagentDetailLines(undefined, 100)).toEqual([]);
