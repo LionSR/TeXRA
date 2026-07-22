@@ -15,6 +15,7 @@ import {
 } from '@common/teams/TeamPlan';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import {
+  type MainViewExecutionPreparationResult,
   prepareMainViewExecutionRequest,
   prepareMainViewTeamExecutionRequest,
 } from '@controllers/mainView/MainViewExecutionController';
@@ -59,7 +60,7 @@ export interface MultipleOperationMessage {
 export async function handleExecute(
   message: MainViewExecuteMessage,
 ): Promise<void> {
-  let preparation;
+  let preparation: MainViewExecutionPreparationResult;
   if (message.session?.launchTarget === 'team') {
     try {
       const teamId = message.session.teamId;

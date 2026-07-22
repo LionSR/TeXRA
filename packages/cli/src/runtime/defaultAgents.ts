@@ -2,14 +2,12 @@ import { agentName } from '@shared/schemas';
 import {
   PREFERRED_TOOL_USE_AGENTS,
   implicitDefaultToolUseAgents,
+  isImplicitDefaultEligible,
 } from '@shared/constants/agents';
 
 // The implicit-default eligibility rule lives in @shared/constants/agents so
 // team planning (src/common/teams/TeamPlan) and the CLI share one definition.
-export {
-  isImplicitDefaultEligible,
-  implicitDefaultToolUseAgents,
-} from '@shared/constants/agents';
+export { isImplicitDefaultEligible, implicitDefaultToolUseAgents };
 
 export const BUILTIN_DEFAULT_CHAT_AGENT = 'assistant';
 

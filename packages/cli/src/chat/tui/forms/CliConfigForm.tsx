@@ -58,19 +58,16 @@ export function createCliConfigFormProps(
       await writeSetting(entry, value, stores, 'cli');
       if (entry.category === 'git') applyCliGitAuthorConfig(stores.config);
       if (MODEL_ROUTING_SETTING_KEYS.has(entry.key)) {
-        refreshCodexPreferenceViews();
-        if (entry.key === GlobalStateKey.USE_OPENROUTER && value === true) {
-          await props.onApiModePersonal?.();
-        }
-      }
-      if (entry.key === GlobalStateKey.KIMI_CODE_PREFER) {
-        // Dual-backend Kimi routing refuses the OpenRouter toggle, so enabling
-        // the preference here turns that toggle off like `/api kimi-code`.
-        if (value === true) {
+        if (entry.key === GlobalStateKey.KIMI_CODE_PREFER && value === true) {
+          // Dual-backend Kimi routing refuses the OpenRouter toggle, so enabling
+          // the preference here turns that toggle off like `/api kimi-code`.
           const openRouter = stateSettingByKey(GlobalStateKey.USE_OPENROUTER);
           if (openRouter) await writeSetting(openRouter, false, stores, 'cli');
         }
         refreshCodexPreferenceViews();
+        if (entry.key === GlobalStateKey.USE_OPENROUTER && value === true) {
+          await props.onApiModePersonal?.();
+        }
       }
     },
     resetValue: async (entry) => {
