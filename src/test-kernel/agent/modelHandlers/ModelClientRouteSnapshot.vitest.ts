@@ -1,9 +1,16 @@
+import { ModelProvider } from 'llm-zoo';
 import pDefer from 'p-defer';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { withModelClient } from '@agent/core/flows/CycleServices';
+import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 import type { IModelHandler } from '@agent/types/IModelHandler';
+import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+
+// Third-party imports
+import type { GoogleGenAI } from '@google/genai';
 
 interface TestClient {
   readonly route: 'configured' | 'personal';
@@ -17,6 +24,12 @@ function handler(
     getClient: vi.fn(async () => initial),
     refreshClient,
   } as unknown as IModelHandler;
+}
+
+class CredentialRouteProbe extends ModelHandlerGoogleGenAI {
+  tag(client: GoogleGenAI, route: ModelCredentialRoute): void {
+    this.rememberClientCredentialRoute(client, route);
+  }
 }
 
 describe('model client route publication', () => {
@@ -85,5 +98,41 @@ describe('model client route publication', () => {
       services.refreshClient?.('personal', controller.signal),
     ).rejects.toThrow('cancelled after construction');
     expect(services.client).toBe(initial);
+  });
+
+  it('reflects the current client route and rebinds after refresh swaps the client', async () => {
+    const initial = { route: 'configured' } as const;
+    const candidate = { route: 'personal' } as const;
+    const routes = new Map<TestClient, ModelCredentialRoute>([
+      [initial, 'relay'],
+      [candidate, 'api-key'],
+    ]);
+    const modelHandler = {
+      getClient: vi.fn(async () => initial),
+      refreshClient: vi.fn(async () => candidate),
+      getCredentialRouteForClient: vi.fn((client: TestClient) =>
+        routes.get(client),
+      ),
+    } as unknown as IModelHandler;
+    const services = await withModelClient({}, modelHandler);
+
+    expect(services.clientCredentialRoute).toBe('relay');
+
+    await services.refreshClient?.('personal');
+    expect(services.client).toBe(candidate);
+    expect(services.clientCredentialRoute).toBe('api-key');
+  });
+
+  it('returns the captured route for a tagged client and undefined for a foreign one', () => {
+    const probe = new CredentialRouteProbe(
+      buildTestModelConfig({ provider: ModelProvider.GOOGLE }),
+    );
+    const tagged = {} as GoogleGenAI;
+    probe.tag(tagged, 'relay');
+
+    expect(probe.getCredentialRouteForClient(tagged)).toBe('relay');
+    expect(
+      probe.getCredentialRouteForClient({} as GoogleGenAI),
+    ).toBeUndefined();
   });
 });

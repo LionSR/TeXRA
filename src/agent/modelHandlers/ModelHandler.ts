@@ -576,6 +576,13 @@ export abstract class ModelHandler<
     return client;
   }
 
+  /** Route of the credential a client built by this handler captured, if known. */
+  getCredentialRouteForClient(client: C): ModelCredentialRoute | undefined {
+    return typeof client === 'object' && client !== null
+      ? this.clientCredentialRoutes.get(client)
+      : undefined;
+  }
+
   /** Route currently executing, excluding the last completed attempt. */
   protected get activeCredentialRoute(): ModelCredentialRoute | undefined {
     return this.activeAttemptCredentialRoute;

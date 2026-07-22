@@ -209,4 +209,20 @@ describe('SupabaseClient', () => {
       'host auth unavailable',
     );
   });
+
+  it('reports no expiry pressure when no token expiry is tracked', () => {
+    assert.equal(SupabaseClient.isTokenExpiringSoon(), false);
+  });
+
+  it('does not treat a token an hour out as expiring soon', () => {
+    SupabaseClient.setTokenExpiry(Date.now() + 3_600_000);
+
+    assert.equal(SupabaseClient.isTokenExpiringSoon(), false);
+  });
+
+  it('treats a token expiring within a minute as expiring soon', () => {
+    SupabaseClient.setTokenExpiry(Date.now() + 60_000);
+
+    assert.equal(SupabaseClient.isTokenExpiringSoon(), true);
+  });
 });

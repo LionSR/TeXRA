@@ -6,7 +6,10 @@ import { Node } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
-import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
+import type {
+  ModelCredentialRoute,
+  ModelCredentialSelection,
+} from '@agent/types/ModelHandlerContracts';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { normalizeProviderError } from '@common/errors';
 import {
@@ -64,6 +67,7 @@ interface RetryableNodeServices {
     selection?: ModelCredentialSelection,
     signal?: AbortSignal,
   ) => Promise<void>;
+  clientCredentialRoute?: ModelCredentialRoute;
 }
 
 /**
@@ -185,16 +189,27 @@ export abstract class RetryableInvocationNode<
     this.signal = controller.signal;
     services.setAbortController(controller);
 
-    // Proactive relay token refresh before the request
-    if (SupabaseClient.isTokenExpiringSoon()) {
-      services.logger.debug(
-        'Token nearing expiry, refreshing client proactively',
-      );
-      await tryRefreshClient(
-        services.refreshClient,
-        services.logger,
-        'proactive pre-invocation',
-      );
+    // Proactive relay token refresh before the request. Only relay-route
+    // clients present the Supabase session token, so only they consult the
+    // expiry clock — personal-key / openrouter / subscription clients must
+    // never rebuild for a credential the call doesn't use.
+    if (
+      services.clientCredentialRoute === 'relay' &&
+      SupabaseClient.isTokenExpiringSoon()
+    ) {
+      // Threshold-gated and mutex-deduped: refreshes the session (updating
+      // tokenExpiresAt) only when actually near expiry. For a configured CI
+      // relay token this is a cache-only read with no side effects.
+      await SupabaseClient.getRelayAccessToken();
+      // Rebuild only when the token actually rotated — rebuilding with the
+      // same JWT changes nothing, and is exactly the loop this branch caused.
+      if (!SupabaseClient.isTokenExpiringSoon()) {
+        await tryRefreshClient(
+          services.refreshClient,
+          services.logger,
+          'proactive pre-invocation',
+        );
+      }
     }
 
     try {
