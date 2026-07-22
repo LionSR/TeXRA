@@ -1,20 +1,14 @@
-import {
-  computeAgentOptionsData,
-  getAgentsByCategory,
-  refresh,
-} from '@agent/index';
-import { SupabaseClient } from '@auth/SupabaseClient';
+import { computeAgentOptionsData } from '@agent/index';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import {
   MainViewStartupController,
   type MainViewStartupOptions,
 } from '@controllers/mainView/MainViewStartupController';
 import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
+import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import { computeModelOptionsData } from '@model/computeModelOptions';
-import { platform } from '@platform/platform';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory } from '@shared/schemas/agent';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getConfig } from '@utils/config/configUtils';
 
 import {
@@ -54,15 +48,7 @@ export function createDesktopMainViewStartup({
         toolUseModelOptions,
       ] = await Promise.all([
         computeAgentOptionsData(),
-        loadTeamOptions({
-          customPresetsRaw: platform().workspaceState.get<unknown>(
-            WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-          ),
-          getAgents: getAgentsByCategory,
-          canAccessRemoteCatalog: () =>
-            SupabaseClient.canAccessRemoteAgentCatalog(),
-          refreshRemote: () => refresh({ includeRemote: true }),
-        }),
+        loadTeamOptions(createTeamCatalogPorts()),
         computeModelOptionsData(undefined, undefined, {
           agentCategory: AgentCategory.Workflow,
         }),

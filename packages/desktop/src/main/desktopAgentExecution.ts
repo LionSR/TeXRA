@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { getAgentsByCategory, refresh } from '@agent/index';
 import type { AgentTrace } from '@agent/trace';
 
 import { createChannelTrace } from '@agent/trace';
@@ -25,14 +24,20 @@ import {
   wakeQueuedFollowUpStream,
 } from '@agent/followUp/ToolUseFollowUp';
 import { isRuntimePresentationEvent } from '@agent/runtime/runtimePresentationEvents';
-import { SupabaseClient } from '@auth/SupabaseClient';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import {
   getFileListConfig,
   loadFileListSettings,
   type ListableFileType,
 } from '@common/files/fileListingRules';
-import { resolveTeamLaunch } from '@common/teams/TeamPlan';
+import {
+  formatPartialTeamLaunchMessage,
+  formatTeamLaunchBlockedMessage,
+  formatTeamUnavailableMessage,
+  formatUnknownTeamMessage,
+  resolveTeamLaunch,
+  TEAM_SELECTION_REQUIRED_MESSAGE,
+} from '@common/teams/TeamPlan';
 import {
   repairRestartedStreams,
   RestartRepairRetryScheduler,
@@ -48,6 +53,7 @@ import {
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
+import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import {
   prepareMainViewExecutionRequest,
   prepareMainViewTeamExecutionRequest,
@@ -70,7 +76,6 @@ import {
   formatStreamDeletionRetention,
 } from '@shared/copy/executionHistory';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { cleanupUnscopedApprovals } from '@tools/approval';
 import type { StreamSnapshotStore } from '@transcript';
 import { getConfig } from '@utils/config/configUtils';
@@ -1220,19 +1225,15 @@ export class DesktopProgressBridge {
     if (message.session?.launchTarget === 'team') {
       const teamId = message.session.teamId;
       if (!teamId) {
-        await this.options.host.showErrorMessage('Team selection required.');
+        await this.options.host.showErrorMessage(
+          TEAM_SELECTION_REQUIRED_MESSAGE,
+        );
         return;
       }
 
       const resolution = await resolveTeamLaunch({
         teamId,
-        customPresetsRaw: platform().workspaceState.get<unknown>(
-          WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-        ),
-        getAgents: getAgentsByCategory,
-        canAccessRemoteCatalog: () =>
-          SupabaseClient.canAccessRemoteAgentCatalog(),
-        refreshRemote: () => refresh({ includeRemote: true }),
+        ...createTeamCatalogPorts(),
         choose: (unavailableNames) =>
           this.options.host.chooseTeamAvailability(unavailableNames),
         signIn: () => this.options.host.signInForRemoteAgentCatalog(),
@@ -1240,25 +1241,27 @@ export class DesktopProgressBridge {
 
       if (resolution.status === 'cancelled') return;
       if (resolution.status === 'unknown-team') {
-        await this.options.host.showErrorMessage(`Unknown team "${teamId}".`);
+        await this.options.host.showErrorMessage(
+          formatUnknownTeamMessage(teamId),
+        );
         return;
       }
       if (resolution.status === 'blocked') {
         await this.options.host.showErrorMessage(
-          `Team "${teamId}" cannot run: ${resolution.reason}.`,
+          formatTeamLaunchBlockedMessage(teamId, resolution.reason),
         );
         return;
       }
       if (resolution.status === 'unavailable') {
         await this.options.host.showErrorMessage(
-          `Team "${teamId}" is unavailable: ${resolution.unavailableNames.join(', ')}.`,
+          formatTeamUnavailableMessage(teamId, resolution.unavailableNames),
         );
         return;
       }
 
       if (resolution.partial) {
         await this.options.host.showInfoMessage(
-          `This team will run with available members only. Unavailable members: ${resolution.missingNames.join(', ')}.`,
+          formatPartialTeamLaunchMessage(resolution.missingNames),
         );
       }
       preparation = prepareMainViewTeamExecutionRequest(

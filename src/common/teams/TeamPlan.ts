@@ -24,7 +24,7 @@ import {
 } from './TeamAvailabilityPreflight';
 import { teamHostedNamesForPreflight } from './TeamRoster';
 
-type TeamPresetSource = 'built-in' | 'custom';
+export type TeamPresetSource = 'built-in' | 'custom';
 
 export interface TeamPreset extends AgentModePreset {
   readonly source: TeamPresetSource;
@@ -393,6 +393,48 @@ export async function refreshRemoteCatalogForGaps<T>(
   return { value, remoteCatalogRefreshAttempted: false };
 }
 
+// ---------------------------------------------------------------------------
+// Launch dialog copy. Hosts render these strings through their own dialogs
+// (VS Code vs Electron native); keeping the literals here stops them drifting.
+// ---------------------------------------------------------------------------
+
+/** Button labels for the unavailable-members choice, in display order. */
+export const TEAM_LAUNCH_SIGN_IN_LABEL = 'Sign In to TeXRA';
+export const TEAM_LAUNCH_CONTINUE_LABEL = 'Continue with Available Members';
+export const TEAM_LAUNCH_CANCEL_LABEL = 'Cancel';
+
+export const TEAM_SELECTION_REQUIRED_MESSAGE = 'Team selection required.';
+
+export function formatUnknownTeamMessage(teamId: string): string {
+  return `Unknown team "${teamId}".`;
+}
+
+export function formatTeamLaunchBlockedMessage(
+  teamId: string,
+  reason: string,
+): string {
+  return `Team "${teamId}" cannot run: ${reason}.`;
+}
+
+export function formatTeamUnavailableMessage(
+  teamId: string,
+  unavailableNames: readonly string[],
+): string {
+  return `Team "${teamId}" is unavailable: ${unavailableNames.join(', ')}.`;
+}
+
+export function formatUnavailableTeamMembersMessage(
+  unavailableNames: readonly string[],
+): string {
+  return `This team has unavailable TeXRA-hosted members: ${unavailableNames.join(', ')}.`;
+}
+
+export function formatPartialTeamLaunchMessage(
+  missingNames: readonly string[],
+): string {
+  return `This team will run with available members only. Unavailable members: ${missingNames.join(', ')}.`;
+}
+
 /** Snapshot the current agent catalog into run options for (re)planning. */
 function currentCatalogOptions<T extends TeamCatalogAgent>(
   getAgents: (category: AgentCategory) => readonly T[],
@@ -465,7 +507,8 @@ function includeAgent<T extends TeamCatalogAgent>(
     : [...agents, rootAgent];
 }
 
-function availableTeamMemberCount(plan: TeamRunPlan): number {
+/** Distinct member keys available to the run, excluding the root itself. */
+export function availableTeamMemberCount(plan: TeamRunPlan): number {
   const rootKey = plan.rootAgent ? agentKeyOf(plan.rootAgent) : undefined;
   const memberKeys = [
     ...plan.workflowAgentKeys,

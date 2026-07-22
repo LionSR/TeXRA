@@ -218,10 +218,11 @@ describe('main-view launch target', () => {
 
       expect(selectedTeamId$.get()).toBe('physicist');
       expect(launchTarget$.get()).toBe('team');
-      expect(mocks.saveState).toHaveBeenCalledOnce();
+      // Nothing changed, so nothing is persisted.
+      expect(mocks.saveState).not.toHaveBeenCalled();
     });
 
-    it('falls back to the first non-disabled option when the restored team vanished', () => {
+    it('falls back to the first non-disabled option with an announcement when the restored team vanished', async () => {
       launchTarget$.set('team');
       selectedTeamId$.set('deleted-team');
       teamOptions$.set([
@@ -231,33 +232,57 @@ describe('main-view launch target', () => {
       ]);
 
       validateTeamSelection();
+      await flushAnnouncements();
 
       expect(selectedTeamId$.get()).toBe('physicist');
       expect(launchTarget$.get()).toBe('team');
+      expect(statusAnnouncement$.get()).toBe(
+        'Selected team is no longer available. Switched to "physicist".',
+      );
       expect(mocks.saveState).toHaveBeenCalledOnce();
     });
 
-    it('falls back when the restored team is present but disabled', () => {
+    it('keeps a present-but-disabled team without rewriting the persisted selection', async () => {
       launchTarget$.set('team');
       selectedTeamId$.set('broken');
       teamOptions$.set([
-        teamOption('broken', { disabled: true }),
+        teamOption('broken', { disabled: true, disabledReason: 'No lead.' }),
         teamOption('physicist'),
       ]);
 
       validateTeamSelection();
+      await flushAnnouncements();
 
-      expect(selectedTeamId$.get()).toBe('physicist');
+      // The disable may be transient (e.g. remote catalog reload flapping):
+      // the picker renders the option disabled with its reason instead of
+      // silently stealing the user's persisted selection.
+      expect(selectedTeamId$.get()).toBe('broken');
+      expect(launchTarget$.get()).toBe('team');
+      expect(mocks.saveState).not.toHaveBeenCalled();
+      expect(statusAnnouncement$.get()).toBe('');
     });
 
-    it('drops to the agent launcher with an announcement when no team is runnable', async () => {
+    it('keeps a present-but-disabled team even when no team is runnable', () => {
       launchTarget$.set('team');
       selectedTeamId$.set('broken');
       teamOptions$.set([teamOption('broken', { disabled: true })]);
 
       validateTeamSelection();
+
+      expect(selectedTeamId$.get()).toBe('broken');
+      expect(launchTarget$.get()).toBe('team');
+      expect(mocks.saveState).not.toHaveBeenCalled();
+    });
+
+    it('drops to the agent launcher with an announcement when the vanished team has no runnable fallback', async () => {
+      launchTarget$.set('team');
+      selectedTeamId$.set('deleted-team');
+      teamOptions$.set([teamOption('broken', { disabled: true })]);
+
+      validateTeamSelection();
       await flushAnnouncements();
 
+      expect(selectedTeamId$.get()).toBe('deleted-team');
       expect(launchTarget$.get()).toBe('agent');
       expect(statusAnnouncement$.get()).toBe(
         'No runnable teams available. Agent launcher selected.',
@@ -274,7 +299,7 @@ describe('main-view launch target', () => {
       });
     }
 
-    it('stores the pushed options and revalidates the restored selection', () => {
+    it('stores the pushed options and revalidates the restored selection', async () => {
       launchTarget$.set('team');
       selectedTeamId$.set('deleted-team');
 
@@ -284,12 +309,16 @@ describe('main-view launch target', () => {
       expect(selectedTeamId$.get()).toBe('deleted-team');
 
       setTeamOptions([teamOption('physicist')]);
+      await flushAnnouncements();
 
       expect(teamOptions$.get().map((option) => option.value)).toEqual([
         'physicist',
       ]);
       expect(selectedTeamId$.get()).toBe('physicist');
       expect(launchTarget$.get()).toBe('team');
+      expect(statusAnnouncement$.get()).toBe(
+        'Selected team is no longer available. Switched to "physicist".',
+      );
     });
 
     it('keeps a still-valid restored selection when the push arrives', () => {

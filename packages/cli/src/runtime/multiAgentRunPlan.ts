@@ -22,15 +22,6 @@ interface MultiAgentRunPlanInit {
   readonly agent?: string;
 }
 
-interface MultiAgentRunPlanLoadOptions {
-  readonly reloadRemoteAgents?: boolean;
-}
-
-interface RemoteAgentPlanReloadResult<T> {
-  readonly value: T;
-  readonly remoteAgentLoadAttempted: boolean;
-}
-
 export interface MultiAgentRunPlanLoadResult {
   readonly plan: CliMultiAgentPresetRunPlan;
   readonly remoteAgentLoadAttempted: boolean;
@@ -76,7 +67,7 @@ function planLoadedCliMultiAgentPresets(
  */
 export async function loadCliMultiAgentRunPlan(
   init: MultiAgentRunPlanInit,
-  options: MultiAgentRunPlanLoadOptions = {},
+  options: { readonly reloadRemoteAgents?: boolean } = {},
 ): Promise<MultiAgentRunPlanLoadResult> {
   await loadAgents({ includeRemote: false });
   const localPlan = planCurrentMultiAgentRun(init);
@@ -116,7 +107,7 @@ async function reloadRemoteAgentsForGaps<T>(
   value: T,
   hasGaps: (value: T) => boolean,
   replan: () => T,
-): Promise<RemoteAgentPlanReloadResult<T>> {
+): Promise<{ readonly value: T; readonly remoteAgentLoadAttempted: boolean }> {
   const result = await refreshRemoteCatalogForGaps(value, hasGaps, replan, {
     canAccessRemoteCatalog: () => SupabaseClient.canAccessRemoteAgentCatalog(),
     refreshRemote: () => refresh({ includeRemote: true }),

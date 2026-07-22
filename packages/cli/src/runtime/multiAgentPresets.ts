@@ -1,6 +1,7 @@
 import type { AgentEntry } from '@agent/index';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
+  availableTeamMemberCount,
   canLaunchTeam,
   findTeamPreset,
   planTeamRun,
@@ -18,7 +19,6 @@ import {
 } from '@common/teams/TeamPlan';
 import { platform } from '@platform/platform';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
-import { agentKeyOf } from '@shared/schemas/agent';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { formatResultCount, pluralize } from '@utils/text/stringUtils';
 
@@ -36,7 +36,7 @@ export interface CliMultiAgentTeamLaunchBlockMessageOptions {
 
 type CliMultiAgentPresetAgentAvailability = TeamAgentAvailability;
 
-type CliMultiAgentPresetAvailability = TeamAvailability;
+export type CliMultiAgentPresetAvailability = TeamAvailability;
 
 /**
  * Machine-readable `multi-agent list` record. It preserves the raw preset
@@ -177,7 +177,6 @@ export function cliMultiAgentPresetNdjsonRecords(
 
 export const cliMultiAgentPlanHasGaps = teamPlanHasGaps;
 export const cliMultiAgentTexraHostedMissingNames = teamTexraHostedMissingNames;
-const cliMultiAgentPlanStatus = teamPlanStatus;
 export const cliMultiAgentPresetTeamLaunchBlockReason = teamLaunchBlockReason;
 export const cliMultiAgentPresetCanLaunchTeam = canLaunchTeam<AgentEntry>;
 
@@ -213,15 +212,15 @@ export function formatCliMultiAgentPresetRunWarnings(
     `WARN preset ${plan.preset.id} references unavailable agents: ${missing.join(', ')}`,
   ];
 
-  if (!plan.rootAgent || !agentHasDelegationTools(plan.rootAgent)) {
+  if (!plan.rootAgent || !hasDelegationTool(plan.rootAgent.tools)) {
     return warnings;
   }
 
-  const availableTeamMembers = availablePresetTeamMemberCount(plan);
+  const availableTeamMembers = availableTeamMemberCount(plan);
   if (availableTeamMembers === 0) return warnings;
 
   warnings.push(
-    `WARN preset ${plan.preset.id} is degraded; running root agent ${plan.rootAgent.name} with ${formatAvailableTeamAgentCount(availableTeamMembers)}.`,
+    `WARN preset ${plan.preset.id} is degraded; running root agent ${plan.rootAgent.name} with ${formatResultCount(availableTeamMembers, 'available team agent')}.`,
   );
   return warnings;
 }
@@ -274,21 +273,6 @@ export function cliMultiAgentPresetListRecords(
 
 export const planCliMultiAgentPresetRun = planTeamRun<AgentEntry>;
 
-function availablePresetTeamMemberCount(
-  plan: CliMultiAgentPresetRunPlan,
-): number {
-  const rootKey = plan.rootAgent ? agentKeyOf(plan.rootAgent) : undefined;
-  const memberKeys = [
-    ...plan.workflowAgentKeys,
-    ...plan.toolUseAgentKeys.filter((key) => key !== rootKey),
-  ];
-  return new Set(memberKeys).size;
-}
-
-function formatAvailableTeamAgentCount(count: number): string {
-  return formatResultCount(count, 'available team agent');
-}
-
 function formatPresetAvailabilityForLauncher(
   availability: CliMultiAgentPresetAvailability,
   blockReason: string | undefined,
@@ -334,10 +318,6 @@ function launcherAgentKindLabel(
   return pluralize(count, kind === 'tool-use' ? 'tool' : 'workflow');
 }
 
-function agentHasDelegationTools(agent: AgentEntry): boolean {
-  return hasDelegationTool(agent.tools);
-}
-
 function availablePresetAgents(
   presetAgents: readonly string[],
   missingAgents: readonly string[],
@@ -356,7 +336,7 @@ function cliMultiAgentPresetListHint(
   options: CliMultiAgentPresetFormatOptions,
 ): string | undefined {
   const hasIncompletePreset = plans.some(
-    (plan) => cliMultiAgentPlanStatus(plan) !== 'available',
+    (plan) => teamPlanStatus(plan) !== 'available',
   );
   const hints = [
     hasIncompletePreset ? MULTI_AGENT_SHOW_HINT : undefined,

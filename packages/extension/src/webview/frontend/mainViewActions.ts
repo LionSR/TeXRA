@@ -355,18 +355,24 @@ export function changeTeam(value: string): void {
  * Validate the restored team selection once the host has pushed the resolved
  * options. Called only from the SET_TEAM_OPTIONS handler — an initially empty
  * async list is not proof that a restored team vanished.
+ *
+ * Only a team that is absent from the options (deleted) triggers the
+ * fallback. A present-but-disabled team keeps its selection: the disable may
+ * be transient (e.g. remote catalog reload flapping), and the picker already
+ * renders the option disabled with its reason — no silent rewrite, no
+ * persistence change.
  */
 export function validateTeamSelection(): void {
   if (launchTarget$.get() !== 'team') return;
   const options = teamOptions$.get();
   const current = options.find((opt) => opt.value === selectedTeamId$.get());
-  if (current && !current.disabled) {
-    saveState();
-    return;
-  }
+  if (current) return;
   const fallback = options.find((opt) => !opt.disabled);
   if (fallback) {
     selectedTeamId$.set(fallback.value);
+    announce(
+      `Selected team is no longer available. Switched to "${fallback.label}".`,
+    );
   } else {
     launchTarget$.set('agent');
     announce('No runnable teams available. Agent launcher selected.');

@@ -25,6 +25,12 @@ import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import {
+  formatUnavailableTeamMembersMessage,
+  TEAM_LAUNCH_CANCEL_LABEL,
+  TEAM_LAUNCH_CONTINUE_LABEL,
+  TEAM_LAUNCH_SIGN_IN_LABEL,
+} from '@common/teams/TeamPlan';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
@@ -610,11 +616,11 @@ function createWindow(options: {
     chooseTeamAvailability: async (unavailableNames) => {
       const result = await dialog.showMessageBox(window, {
         type: 'warning',
-        message: `This team has unavailable TeXRA-hosted members: ${unavailableNames.join(', ')}.`,
+        message: formatUnavailableTeamMembersMessage(unavailableNames),
         buttons: [
-          'Sign In to TeXRA',
-          'Continue with Available Members',
-          'Cancel',
+          TEAM_LAUNCH_SIGN_IN_LABEL,
+          TEAM_LAUNCH_CONTINUE_LABEL,
+          TEAM_LAUNCH_CANCEL_LABEL,
         ],
         defaultId: 0,
         cancelId: 2,

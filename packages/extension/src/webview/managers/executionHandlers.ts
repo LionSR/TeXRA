@@ -1,20 +1,28 @@
 import * as vscode from 'vscode';
 
-import { getAgentsByCategory, refresh } from '@agent/index';
-import { SupabaseClient } from '@auth/SupabaseClient';
 import { AUTH_COMMANDS } from '@commands/auth';
-import { resolveTeamLaunch } from '@common/teams/TeamPlan';
+import {
+  formatPartialTeamLaunchMessage,
+  formatTeamLaunchBlockedMessage,
+  formatTeamUnavailableMessage,
+  formatUnavailableTeamMembersMessage,
+  formatUnknownTeamMessage,
+  resolveTeamLaunch,
+  TEAM_LAUNCH_CANCEL_LABEL,
+  TEAM_LAUNCH_CONTINUE_LABEL,
+  TEAM_LAUNCH_SIGN_IN_LABEL,
+  TEAM_SELECTION_REQUIRED_MESSAGE,
+} from '@common/teams/TeamPlan';
+import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import {
   prepareMainViewExecutionRequest,
   prepareMainViewTeamExecutionRequest,
 } from '@controllers/mainView/MainViewExecutionController';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
-import { platform } from '@platform/platform';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import type { FileOperationMessage } from '@shared/schemas/mainView/inbound';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 const CHANNEL = 'ExecutionHandlers';
 
@@ -54,31 +62,22 @@ export async function handleExecute(
   if (message.session?.launchTarget === 'team') {
     const teamId = message.session.teamId;
     if (!teamId) {
-      vscode.window.showErrorMessage('Team selection required.');
+      vscode.window.showErrorMessage(TEAM_SELECTION_REQUIRED_MESSAGE);
       return;
     }
 
-    const signInLabel = 'Sign In to TeXRA';
-    const continueLabel = 'Continue with Available Members';
-    const cancelLabel = 'Cancel';
     const resolution = await resolveTeamLaunch({
       teamId,
-      customPresetsRaw: platform().workspaceState.get<unknown>(
-        WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-      ),
-      getAgents: getAgentsByCategory,
-      canAccessRemoteCatalog: () =>
-        SupabaseClient.canAccessRemoteAgentCatalog(),
-      refreshRemote: () => refresh({ includeRemote: true }),
+      ...createTeamCatalogPorts(),
       choose: async (unavailableNames) => {
         const choice = await vscode.window.showWarningMessage(
-          `This team has unavailable TeXRA-hosted members: ${unavailableNames.join(', ')}.`,
-          signInLabel,
-          continueLabel,
-          cancelLabel,
+          formatUnavailableTeamMembersMessage(unavailableNames),
+          TEAM_LAUNCH_SIGN_IN_LABEL,
+          TEAM_LAUNCH_CONTINUE_LABEL,
+          TEAM_LAUNCH_CANCEL_LABEL,
         );
-        if (choice === signInLabel) return 'sign-in';
-        if (choice === continueLabel) return 'continue';
+        if (choice === TEAM_LAUNCH_SIGN_IN_LABEL) return 'sign-in';
+        if (choice === TEAM_LAUNCH_CONTINUE_LABEL) return 'continue';
         return 'cancel';
       },
       signIn: async () =>
@@ -89,25 +88,25 @@ export async function handleExecute(
 
     if (resolution.status === 'cancelled') return;
     if (resolution.status === 'unknown-team') {
-      vscode.window.showErrorMessage(`Unknown team "${teamId}".`);
+      vscode.window.showErrorMessage(formatUnknownTeamMessage(teamId));
       return;
     }
     if (resolution.status === 'blocked') {
       vscode.window.showErrorMessage(
-        `Team "${teamId}" cannot run: ${resolution.reason}.`,
+        formatTeamLaunchBlockedMessage(teamId, resolution.reason),
       );
       return;
     }
     if (resolution.status === 'unavailable') {
       vscode.window.showErrorMessage(
-        `Team "${teamId}" is unavailable: ${resolution.unavailableNames.join(', ')}.`,
+        formatTeamUnavailableMessage(teamId, resolution.unavailableNames),
       );
       return;
     }
 
     if (resolution.partial) {
       await vscode.window.showInformationMessage(
-        `This team will run with available members only. Unavailable members: ${resolution.missingNames.join(', ')}.`,
+        formatPartialTeamLaunchMessage(resolution.missingNames),
       );
     }
     preparation = prepareMainViewTeamExecutionRequest(
