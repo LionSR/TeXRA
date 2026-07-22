@@ -215,6 +215,9 @@ function effectiveKimiCodeConfig(
     ctx.useOpenRouter,
     ctx.kimiCodeKeySet,
     ctx.preferKimiCode,
+    // The relay only owns the model when included access can actually serve
+    // it — mirrors ModelFactory's dispatch facts.
+    ctx.useIncludedAccess && ctx.hasServerAccess,
   );
   if (route === 'kimiCode' && !isKimiCodeExclusiveModel(config)) {
     return kimiCodeRuntimeConfig(config);

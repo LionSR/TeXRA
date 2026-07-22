@@ -71,6 +71,7 @@ describe('loadCliApiStatusLines', () => {
       active: 'chatgpt',
       chatGptSignedIn: true,
       chatGptAccountLabel: 'chatgpt@example.com',
+      kimiCodeKeySet: false,
     });
     mocks.getCliAuthProfile.mockResolvedValue({
       authenticated: true,
@@ -84,12 +85,34 @@ describe('loadCliApiStatusLines', () => {
         active: 'chatgpt',
         chatGptSignedIn: true,
         chatGptAccountLabel: 'chatgpt@example.com',
+        kimiCodeKeySet: false,
         texraSignedIn: true,
       },
       lines: [
         'model access: ChatGPT subscription',
         'ChatGPT: signed in as chatgpt@example.com',
+        'Kimi Code: no key (add with /key)',
         'TeXRA: signed in as texra@example.com',
+        'API fallback: Personal API keys',
+      ],
+    });
+  });
+
+  it('reports an active Kimi Code route with its personal fallback', async () => {
+    mocks.readCliModelAccessStatus.mockResolvedValue({
+      active: 'kimi-code',
+      chatGptSignedIn: false,
+      kimiCodeKeySet: true,
+    });
+
+    await expect(
+      loadCliModelAccessOverview({ apiMode: 'personal' }),
+    ).resolves.toMatchObject({
+      lines: [
+        'model access: Kimi Code subscription',
+        'ChatGPT: signed out',
+        'Kimi Code: key configured',
+        'TeXRA: signed out',
         'API fallback: Personal API keys',
       ],
     });

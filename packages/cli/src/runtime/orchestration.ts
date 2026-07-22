@@ -299,13 +299,18 @@ export function buildCliAgentItems(
 }
 
 function modelAccessItem(status: CliModelAccessStatus): CliOrchestrationItem {
+  let description: string;
+  if (status.active === 'chatgpt' && status.chatGptAccountLabel) {
+    description = `ChatGPT subscription · ${status.chatGptAccountLabel}`;
+  } else if (status.active === 'kimi-code') {
+    description = 'Kimi Code subscription · key configured';
+  } else {
+    description = formatCliModelAccessRoute(status.active);
+  }
   return {
     value: { kind: 'configure-model-access' },
     label: 'Model access',
-    description:
-      status.active === 'chatgpt' && status.chatGptAccountLabel
-        ? `ChatGPT subscription · ${status.chatGptAccountLabel}`
-        : formatCliModelAccessRoute(status.active),
+    description,
   };
 }
 

@@ -9,6 +9,7 @@ import {
   LATEXDIFF_MATH_MARKUP_VALUES,
 } from '@shared/constants/latex';
 import {
+  KIMI_CODE_PREFER_PROVIDER_SETTING,
   PROVIDER_ENDPOINT_STATE_ENTRIES,
   USE_OPENROUTER_PROVIDER_SETTING,
 } from '@shared/constants/providers';
@@ -185,6 +186,12 @@ const OPENROUTER_ROUTING_RUNTIME_REACHABILITY = {
     'texra agents run <tool-use-agent> --model <openrouter-routable-model> --instruction "answer a short question"',
   through:
     'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/ModelFactory.ts -> src/utils/config/providerConfig.ts',
+} satisfies CliRuntimeReachability;
+const KIMI_CODE_ROUTING_RUNTIME_REACHABILITY = {
+  command:
+    'texra agents run <tool-use-agent> --model kimi3 --instruction "answer a short question"',
+  through:
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/ModelFactory.ts -> src/model/kimiCodeSubscriptionRouting.ts',
 } satisfies CliRuntimeReachability;
 const PROVIDER_ENDPOINT_RUNTIME_REACHABILITY = {
   command:
@@ -546,6 +553,23 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     hosts: ['cli'],
     cliConsumer: 'src/utils/config/providerConfig.ts',
     cliRuntimeReachability: OPENROUTER_ROUTING_RUNTIME_REACHABILITY,
+  },
+
+  // --- Kimi Code routing -------------------------------------------------------
+  // The extension/desktop Models tab already surfaces this toggle through
+  // provider settings; the catalog row is CLI-only so later settings-view
+  // catalog rendering does not duplicate that existing control. Read by
+  // `getPreferKimiCode()` during model-handler dispatch.
+  {
+    key: GlobalStateKey.KIMI_CODE_PREFER,
+    schema: z.boolean().prefault(false),
+    title: KIMI_CODE_PREFER_PROVIDER_SETTING.label,
+    description: KIMI_CODE_PREFER_PROVIDER_SETTING.description,
+    category: 'model',
+    store: 'globalState',
+    hosts: ['cli'],
+    cliConsumer: 'src/agent/runtime/ModelFactory.ts',
+    cliRuntimeReachability: KIMI_CODE_ROUTING_RUNTIME_REACHABILITY,
   },
 
   // --- External tool integrations ------------------------------------------
