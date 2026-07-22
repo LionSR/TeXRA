@@ -184,6 +184,7 @@ type InvocationServices = Pick<
 > &
   Pick<BaseFlowContextInit, 'setAbortController'> & {
     readonly client: unknown;
+    readonly clientRevision?: number;
     readonly clientCredentialRoute?: ModelCredentialRoute;
     readonly refreshClient?: (
       selection?: ModelCredentialSelection,
@@ -243,6 +244,7 @@ export class ModelInvocationNode<
       const modelRateLimitRoute = JSON.stringify([
         ...routeIdentity,
         services.modelHandler.config.fullName,
+        services.clientRevision ?? 0,
       ]);
       const gate = useLaunchRunContext().runScope.session.modelRetries;
       const invoke = async () => {

@@ -117,10 +117,12 @@ describe('model client route publication', () => {
     const services = await withModelClient({}, modelHandler);
 
     expect(services.clientCredentialRoute).toBe('relay');
+    expect(services.clientRevision).toBe(0);
 
     await services.refreshClient?.('personal');
     expect(services.client).toBe(candidate);
     expect(services.clientCredentialRoute).toBe('api-key');
+    expect(services.clientRevision).toBe(1);
   });
 
   it('returns the captured route for a tagged client and undefined for a foreign one', () => {

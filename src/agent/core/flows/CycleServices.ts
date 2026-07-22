@@ -34,6 +34,7 @@ import type { TaskRunFileService } from '@utils/files';
  */
 export interface ModelClientServices<C = unknown> {
   readonly client: C;
+  readonly clientRevision?: number;
   readonly clientCredentialRoute?: ModelCredentialRoute | undefined;
   readonly refreshClient?: (
     selection?: ModelCredentialSelection,
@@ -59,10 +60,14 @@ export async function withModelClient<C, T extends object>(
   modelHandler: IModelHandler<ProviderMessage, unknown, SdkToolCall, C>,
 ): Promise<T & ModelClientServices<C>> {
   let client = await modelHandler.getClient();
+  let clientRevision = 0;
   return {
     ...base,
     get client(): C {
       return client;
+    },
+    get clientRevision(): number {
+      return clientRevision;
     },
     get clientCredentialRoute(): ModelCredentialRoute | undefined {
       return modelHandler.getCredentialRouteForClient(client);
@@ -75,6 +80,7 @@ export async function withModelClient<C, T extends object>(
       const replacement = await modelHandler.refreshClient(selection);
       signal?.throwIfAborted();
       client = replacement;
+      clientRevision += 1;
     },
   };
 }

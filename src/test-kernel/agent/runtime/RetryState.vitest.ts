@@ -217,6 +217,7 @@ async function captureModelRetry(
   credentialRoute: ModelCredentialRoute = 'api-key',
   refreshClient?: () => Promise<void>,
   model = 'openai:test',
+  clientRevision = 0,
 ): Promise<CapturedModelRetry> {
   const streamId = 'model-retry-policy' as StreamTabId;
   const session = createTestSession();
@@ -239,6 +240,7 @@ async function captureModelRetry(
     config: { model: 'openai:test' },
     setAbortController: vi.fn(),
     client,
+    clientRevision,
     clientCredentialRoute: credentialRoute,
     refreshClient,
   } as never);
@@ -590,6 +592,26 @@ describe('RetryState', () => {
     expect(first.classifyModelRateLimitFailure(rateLimit)).toEqual({
       retryAfterMs: 3_000,
     });
+  });
+
+  it('isolates rate-limit recovery after the model client changes', async () => {
+    const first = await captureModelRetry(
+      'https://api.example/v1',
+      'api-key',
+      undefined,
+      'openai:model-a',
+      0,
+    );
+    const replacement = await captureModelRetry(
+      'https://api.example/v1',
+      'api-key',
+      undefined,
+      'openai:model-a',
+      1,
+    );
+
+    expect(replacement.sharedRoute).toBe(first.sharedRoute);
+    expect(replacement.modelRateLimitRoute).not.toBe(first.modelRateLimitRoute);
   });
 
   it('recognizes the nested Undici stream timeout from long model calls', async () => {
