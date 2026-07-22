@@ -23,13 +23,13 @@ function session(id: StreamTabId, active = false): StreamView {
 describe('CLI child list interaction', () => {
   it('toggles file details with i while the list owns the keyboard', async () => {
     const { ink, React } = await loadInk();
-    const onToggleRowExpand = vi.fn();
+    const onToggleDetails = vi.fn();
     const stdin = new FakeStdin();
     const instance = ink.render(
       React.createElement(SubagentList, {
         keyboardActive: true,
         maxRows: 4,
-        onToggleRowExpand,
+        onToggleDetails,
         selectedValue: childStreamListValue('root' as StreamTabId),
         sessions: [session('root' as StreamTabId, true)],
       }),
@@ -45,8 +45,8 @@ describe('CLI child list interaction', () => {
     try {
       await waitFor(() => stdin.listenerCount('readable') > 0);
       stdin.write('i');
-      await waitFor(() => onToggleRowExpand.mock.calls.length === 1);
-      expect(onToggleRowExpand).toHaveBeenCalledOnce();
+      await waitFor(() => onToggleDetails.mock.calls.length === 1);
+      expect(onToggleDetails).toHaveBeenCalledOnce();
     } finally {
       instance.unmount();
     }
@@ -262,7 +262,7 @@ describe('CLI child list interaction', () => {
     const onKillExecution = vi.fn();
     const onOpenProcessDetail = vi.fn();
     const onPrintStream = vi.fn();
-    const onToggleRowExpand = vi.fn();
+    const onToggleDetails = vi.fn();
 
     const stdin = new FakeStdin();
     const instance = ink.render(
@@ -282,7 +282,7 @@ describe('CLI child list interaction', () => {
         onOpenProcessDetail,
         onSelectionChange: vi.fn(),
         onPrintStream,
-        onToggleRowExpand,
+        onToggleDetails,
         selectedValue: processValue,
       }),
       {
@@ -304,7 +304,7 @@ describe('CLI child list interaction', () => {
       await waitFor(() => onOpenProcessDetail.mock.calls.length === 1);
 
       expect(onPrintStream).not.toHaveBeenCalled();
-      expect(onToggleRowExpand).not.toHaveBeenCalled();
+      expect(onToggleDetails).not.toHaveBeenCalled();
       expect(onKillExecution).toHaveBeenCalledWith('process-exec');
       expect(onOpenProcessDetail).toHaveBeenCalledWith('process-exec');
     } finally {

@@ -30,7 +30,9 @@ export function childListProcessId(
 export interface ChildListSelectionState {
   readonly focused: boolean;
   readonly selectedValue: ChildListValue | undefined;
-  readonly rowExpanded: boolean;
+  /** Stream details open automatically on selection and remain
+   *  user-toggleable while the child list owns the keyboard. */
+  readonly detailsVisible: boolean;
 }
 
 type ChildListSelectionAction =
@@ -38,7 +40,7 @@ type ChildListSelectionAction =
   | { readonly kind: 'focus'; readonly value?: ChildListValue }
   | { readonly kind: 'focusStream'; readonly streamId: StreamTabId }
   | { readonly kind: 'highlight'; readonly value: ChildListValue }
-  | { readonly kind: 'toggleRowExpand' }
+  | { readonly kind: 'toggleDetails' }
   | {
       readonly kind: 'syncActiveStream';
       readonly streamId: StreamTabId;
@@ -53,7 +55,7 @@ type ChildListSelectionAction =
 export const INITIAL_CHILD_LIST_SELECTION: ChildListSelectionState = {
   focused: false,
   selectedValue: undefined,
-  rowExpanded: false,
+  detailsVisible: false,
 };
 
 function resolveChildSelectionValue(
@@ -77,37 +79,46 @@ export function reduceChildListSelection(
 ): ChildListSelectionState {
   switch (action.kind) {
     case 'blur':
-      return { ...state, focused: false, rowExpanded: false };
-    case 'focus':
+      return { ...state, focused: false, detailsVisible: false };
+    case 'focus': {
+      const selectedValue = state.selectedValue ?? action.value;
       return {
         focused: true,
-        selectedValue: state.selectedValue ?? action.value,
-        rowExpanded: false,
+        selectedValue,
+        detailsVisible: childListStreamId(selectedValue) !== undefined,
       };
+    }
     case 'focusStream':
       return {
         focused: false,
         selectedValue: childStreamListValue(action.streamId),
-        rowExpanded: false,
+        detailsVisible: false,
       };
     case 'highlight':
       return action.value === state.selectedValue
         ? state
-        : { ...state, selectedValue: action.value, rowExpanded: false };
-    case 'toggleRowExpand':
+        : {
+            ...state,
+            selectedValue: action.value,
+            detailsVisible: childListStreamId(action.value) !== undefined,
+          };
+    case 'toggleDetails':
       return state.focused
-        ? { ...state, rowExpanded: !state.rowExpanded }
+        ? { ...state, detailsVisible: !state.detailsVisible }
         : state;
-    case 'syncActiveStream':
+    case 'syncActiveStream': {
+      const activeValue = resolveChildSelectionValue(
+        action.values,
+        undefined,
+        action.streamId,
+      );
       return {
         ...state,
-        selectedValue: resolveChildSelectionValue(
-          action.values,
-          undefined,
-          action.streamId,
-        ),
-        rowExpanded: false,
+        selectedValue: activeValue,
+        detailsVisible:
+          state.focused && childListStreamId(activeValue) !== undefined,
       };
+    }
     case 'reconcile': {
       if (action.values.length === 0) return state;
       const selectedValue = resolveChildSelectionValue(
@@ -117,7 +128,12 @@ export function reduceChildListSelection(
       );
       return selectedValue === state.selectedValue
         ? state
-        : { ...state, selectedValue, rowExpanded: false };
+        : {
+            ...state,
+            selectedValue,
+            detailsVisible:
+              state.focused && childListStreamId(selectedValue) !== undefined,
+          };
     }
   }
 }

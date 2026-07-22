@@ -128,6 +128,14 @@ export interface StreamFileMetadata {
   readonly output: readonly string[];
 }
 
+/** Latest workflow outputs announced by the run, kept separately from the
+ *  configured output names so the selected-agent view can show the actual
+ *  absolute storage paths produced by the current round. */
+export interface GeneratedOutputMetadata {
+  readonly roundIndex: number;
+  readonly paths: readonly string[];
+}
+
 export interface StreamSlice {
   readonly streamId: StreamTabId;
   /** Model identity captured from setTaskState for this specific stream. */
@@ -139,6 +147,7 @@ export interface StreamSlice {
   /** Normalized run files received with `run.config`. Absent until that fact
    *  arrives; each category may then be empty. */
   readonly files?: StreamFileMetadata | undefined;
+  readonly generatedOutput?: GeneratedOutputMetadata | undefined;
   readonly status: StreamPhase | undefined;
   readonly substate?: StreamSubstate;
   /** Epoch ms when this stream last entered `RUNNING`; cleared on any other
@@ -208,6 +217,7 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
     substate: undefined,
     runStartedAt: undefined,
     description: undefined,
+    generatedOutput: undefined,
     thinkingActive: false,
     usage: undefined,
     cumulativeUsage: undefined,

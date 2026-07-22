@@ -2739,6 +2739,48 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     }
   });
 
+  it('streams latest-round absolute workflow outputs into selected-agent state', () => {
+    const hub = new SessionEventHub();
+    const detach = attachTuiRunFactSubscription(hub);
+    const executionId = 'exec-output' as ExecutionId;
+
+    try {
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'addOutputFiles',
+          streamId: root,
+          executionId,
+          filesByRound: {
+            1: [
+              {
+                source: 'paper.tex',
+                location: {
+                  kind: 'runStorage',
+                  executionId,
+                  relativePath: 'r2/paper.tex',
+                  absolutePath:
+                    '/tmp/texra/executions/exec-output/r2/paper.tex',
+                },
+                round: 1,
+                lineage: null,
+                diff: null,
+              },
+            ],
+          },
+        },
+      });
+
+      expect(streams.get().get(root)?.generatedOutput).toEqual({
+        roundIndex: 1,
+        paths: ['/tmp/texra/executions/exec-output/r2/paper.tex'],
+      });
+    } finally {
+      detach();
+    }
+  });
+
   it('applies direct usage sequences exactly once', () => {
     const hub = new SessionEventHub();
     const detach = attachTuiRunFactSubscription(hub);

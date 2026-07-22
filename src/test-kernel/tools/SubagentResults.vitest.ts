@@ -276,6 +276,7 @@ describe('formatSubagentDelivery', () => {
     );
     expect(delivery).toContain('read the output files directly');
     expect(delivery).toContain('<file path="paper.tex"');
+    expect(delivery).toContain('absolute-path="/ws/paper.tex"');
   });
 
   it('omits the diffs-unavailable element on clean deliveries', () => {

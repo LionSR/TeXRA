@@ -48,7 +48,8 @@ export type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
 // ============================================================================
 
 /**
- * Format a single output file summary as XML.
+ * Format a single output file summary as XML. `path` remains run-relative for
+ * acceptance tools; `absolute-path` points directly to the generated artifact.
  * When diff info is provided, includes a `diff` attribute pointing to the diff
  * file path (readable via /executions/{id}/files/...). Large changes are
  * flagged with `large-change="true"` but still include a diff file.
@@ -59,6 +60,7 @@ function formatOutputFile(
 ): string {
   const attrs = [
     `path="${escapeAttr(o.relativePath)}"`,
+    `absolute-path="${escapeAttr(o.absolutePath)}"`,
     `location="${escapeAttr(o.location)}"`,
     o.originalPath !== null && `original="${escapeAttr(o.originalPath)}"`,
     o.added !== null && `added="${o.added}"`,

@@ -60,7 +60,7 @@ describe('CLI child list selection', () => {
     expect(state).toEqual({
       focused: true,
       selectedValue: processValue,
-      rowExpanded: false,
+      detailsVisible: false,
     });
   });
 
@@ -68,7 +68,7 @@ describe('CLI child list selection', () => {
     const selected: ChildListSelectionState = {
       focused: true,
       selectedValue: strategyValue,
-      rowExpanded: false,
+      detailsVisible: false,
     };
     const hidden = reconcileSelection(selected, [], main);
     const restored = reconcileSelection(
@@ -83,7 +83,7 @@ describe('CLI child list selection', () => {
 
   it('selects the owner when lifecycle completion changes the active stream', () => {
     const state = reduceChildListSelection(
-      { focused: true, selectedValue: strategyValue, rowExpanded: true },
+      { focused: true, selectedValue: strategyValue, detailsVisible: true },
       {
         kind: 'syncActiveStream',
         streamId: main,
@@ -94,13 +94,13 @@ describe('CLI child list selection', () => {
     expect(state).toEqual({
       focused: true,
       selectedValue: mainValue,
-      rowExpanded: false,
+      detailsVisible: true,
     });
   });
 
   it('clears a stale row when the active stream is not in the projected list', () => {
     const state = reduceChildListSelection(
-      { focused: true, selectedValue: strategyValue, rowExpanded: true },
+      { focused: true, selectedValue: strategyValue, detailsVisible: true },
       {
         kind: 'syncActiveStream',
         streamId: main,
@@ -111,7 +111,7 @@ describe('CLI child list selection', () => {
     expect(state).toEqual({
       focused: true,
       selectedValue: undefined,
-      rowExpanded: false,
+      detailsVisible: false,
     });
   });
 
@@ -120,7 +120,7 @@ describe('CLI child list selection', () => {
       {
         focused: true,
         selectedValue: childProcessListValue('gone'),
-        rowExpanded: false,
+        detailsVisible: false,
       },
       [processValue, mainValue],
       main,
@@ -146,32 +146,28 @@ describe('CLI child list selection', () => {
     expect(state).toEqual({
       focused: true,
       selectedValue: processValue,
-      rowExpanded: false,
+      detailsVisible: false,
     });
   });
 
   it('returns input after a stream is focused', () => {
     const state = reduceChildListSelection(
-      { focused: true, selectedValue: processValue, rowExpanded: true },
+      { focused: true, selectedValue: processValue, detailsVisible: true },
       { kind: 'focusStream', streamId: strategy },
     );
     expect(state).toEqual({
       focused: false,
       selectedValue: strategyValue,
-      rowExpanded: false,
+      detailsVisible: false,
     });
   });
 
-  it('expands only while focused and closes details when selection changes', () => {
+  it('shows stream files on focus and selection while preserving the toggle', () => {
     let state = reduceChildListSelection(
-      {
-        focused: true,
-        selectedValue: mainValue,
-        rowExpanded: false,
-      },
-      { kind: 'toggleRowExpand' },
+      { focused: false, selectedValue: mainValue, detailsVisible: false },
+      { kind: 'focus' },
     );
-    expect(state.rowExpanded).toBe(true);
+    expect(state.detailsVisible).toBe(true);
 
     state = reduceChildListSelection(state, {
       kind: 'highlight',
@@ -180,11 +176,14 @@ describe('CLI child list selection', () => {
     expect(state).toEqual({
       focused: true,
       selectedValue: strategyValue,
-      rowExpanded: false,
+      detailsVisible: true,
     });
 
+    state = reduceChildListSelection(state, { kind: 'toggleDetails' });
+    expect(state.detailsVisible).toBe(false);
+
     state = reduceChildListSelection(state, { kind: 'blur' });
-    expect(reduceChildListSelection(state, { kind: 'toggleRowExpand' })).toBe(
+    expect(reduceChildListSelection(state, { kind: 'toggleDetails' })).toBe(
       state,
     );
   });

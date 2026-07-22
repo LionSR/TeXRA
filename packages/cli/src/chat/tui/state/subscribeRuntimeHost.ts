@@ -145,6 +145,29 @@ function applyRoundStage(payload: UpdateRoundStagePayload): void {
   });
 }
 
+function applyOutputFiles(
+  event: Extract<AgentEvent, { type: 'addOutputFiles' }>,
+): void {
+  const latest = Object.entries(event.filesByRound)
+    .map(([round, files]) => ({
+      roundIndex: Number.parseInt(round, 10),
+      paths: files.map((file) => file.location.absolutePath),
+    }))
+    .toSorted((left, right) => left.roundIndex - right.roundIndex)
+    .at(-1);
+  if (!latest) return;
+
+  patchStream(event.streamId, (s) => {
+    const previous = s.generatedOutput;
+    if (previous && previous.roundIndex > latest.roundIndex) return s;
+    const unchanged =
+      previous?.roundIndex === latest.roundIndex &&
+      previous.paths.length === latest.paths.length &&
+      previous.paths.every((path, index) => path === latest.paths[index]);
+    return unchanged ? s : { ...s, generatedOutput: latest };
+  });
+}
+
 function applyActiveSubagents(payload: {
   parentStreamId: StreamTabId;
   children: readonly ActiveChildInfo[];
@@ -231,6 +254,8 @@ function applyDirectTuiRunEvent(
       appendGoalPausedTranscriptNotice(event);
       return true;
     case 'addOutputFiles':
+      applyOutputFiles(event);
+      return true;
     case 'updateMissingOutputs':
     case 'updateCompileFailures':
       return false;

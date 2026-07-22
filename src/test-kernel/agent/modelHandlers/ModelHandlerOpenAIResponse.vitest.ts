@@ -136,6 +136,31 @@ function createMessages(count: number): ResponseInputItem[] {
   })) as ResponseInputItem[];
 }
 
+describe('ModelHandlerOpenAIResponse.createMediaContent', () => {
+  it('sends inline PDFs as data URLs', () => {
+    const handler = createNonChainingHandler({ openRouterOnly: false });
+
+    assert.deepEqual(
+      handler.createMediaContent([
+        {
+          file_name: 'paper.pdf',
+          data: 'JVBERi0xLjc=',
+          media_type: 'application/pdf',
+          media_category: 'image',
+        },
+      ]),
+      [
+        { type: 'input_text', text: 'Document: paper.pdf' },
+        {
+          type: 'input_file',
+          file_data: 'data:application/pdf;base64,JVBERi0xLjc=',
+          filename: 'paper.pdf',
+        },
+      ],
+    );
+  });
+});
+
 describe('ModelHandlerOpenAIResponse.createResponse', () => {
   it('uses the client route instead of mutable OpenRouter configuration during an attempt', async () => {
     const handler = setupHandler(
