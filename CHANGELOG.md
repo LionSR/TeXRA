@@ -21,9 +21,8 @@ All notable changes to this project will be documented in this file.
   their final results.
 - **PDF attachments work with ChatGPT subscriptions** — documents can be sent
   directly to supported models.
-- **Workflow results include absolute output paths** — parent agents receive
-  the direct storage path for every generated file alongside its run-relative
-  path.
+- **Parent agents can inspect generated workflow files directly** — delegated
+  workflows make every output available for follow-up review.
 - **Latexdiff artifacts with short abbreviated commit hashes are recognized
   consistently** — a generated `basename-diffHASH.tex` file with a 4-5
   character hash is now reliably treated as a diff artifact everywhere

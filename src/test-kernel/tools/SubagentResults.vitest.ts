@@ -254,8 +254,8 @@ describe('formatSubagentDelivery', () => {
         {
           round: 0,
           relativePath: 'paper.tex',
-          absolutePath: '/ws/paper.tex',
-          location: 'workspace',
+          absolutePath: '/storage/executions/abc123/paper.tex',
+          location: 'runStorage',
           originalPath: '/ws/.texra/paper.orig.tex',
           added: 3,
           removed: 1,
@@ -276,7 +276,10 @@ describe('formatSubagentDelivery', () => {
     );
     expect(delivery).toContain('read the output files directly');
     expect(delivery).toContain('<file path="paper.tex"');
-    expect(delivery).toContain('absolute-path="/ws/paper.tex"');
+    expect(delivery).toContain(
+      'read-path="/executions/abc123/files/paper.tex"',
+    );
+    expect(delivery).not.toContain('absolute-path=');
   });
 
   it('omits the diffs-unavailable element on clean deliveries', () => {
