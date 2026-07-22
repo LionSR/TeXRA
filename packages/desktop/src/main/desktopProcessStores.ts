@@ -114,24 +114,22 @@ export async function initializeDesktopProcessStores(options: {
         sessionEvent.event.type === 'removeStream'
       ) {
         const { streamId } = sessionEvent.event.payload;
-        void (async () => {
-          // A child is untracked before its terminal artifacts release the
-          // execution lease. Wait outside SessionStores' deletion queue so
-          // the artifact flush cannot deadlock on its own pending deletion.
-          await stores.waitForOwnedExecutionRelease(streamId);
-          return stores.deleteStream(streamId);
-        })().catch((error: unknown) => {
-          logger.warn('Failed to delete a headless desktop stream', {
-            data: toLogData(error),
+        // SessionStores tracks the lease barrier immediately so a window
+        // reattaching before terminal artifact persistence finishes cannot
+        // replay a stream already marked removed.
+        void stores
+          .deleteStreamAfterOwnedExecutionRelease(streamId)
+          .catch((error: unknown) => {
+            logger.warn('Failed to delete a headless desktop stream', {
+              data: toLogData(error),
+            });
           });
-        });
       }
     },
     { scope: 'session' },
   );
   const detachArtifactFlusher = session.useArtifactFlusher(async () => {
-    await stores.waitForPendingStreamDeletions();
-    await snapshots.flush();
+    await stores.flushSnapshotsAfterStartedDeletions();
   });
   return {
     stores,

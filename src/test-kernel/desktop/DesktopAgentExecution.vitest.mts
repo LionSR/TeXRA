@@ -4092,9 +4092,6 @@ describe('DesktopProgressBridge', () => {
       const waitForRelease = vi
         .spyOn(owner.sessionStores, 'waitForOwnedExecutionRelease')
         .mockReturnValue(leaseReleased);
-      const deleteStream = vi
-        .spyOn(owner.sessionStores, 'deleteStream')
-        .mockResolvedValue('deleted');
 
       try {
         owner.processSession.events.emit({
@@ -4108,12 +4105,28 @@ describe('DesktopProgressBridge', () => {
         await vi.waitFor(() =>
           expect(waitForRelease).toHaveBeenCalledWith(childStreamId),
         );
-        expect(deleteStream).not.toHaveBeenCalled();
+        const pendingDrain = vi.spyOn(
+          owner.sessionStores,
+          'waitForPendingStreamDeletions',
+        );
+        let reopened = false;
+        const reopening = owner.reopen().then((result) => {
+          reopened = true;
+          return result;
+        });
+        await vi.waitFor(() => expect(pendingDrain).toHaveBeenCalled());
+        expect(reopened).toBe(false);
 
         releaseLease();
-        await vi.waitFor(() =>
-          expect(deleteStream).toHaveBeenCalledWith(childStreamId),
-        );
+        const { bridgeB } = await reopening;
+        try {
+          bridgeB.syncFullView();
+          expect(owner.processSession.transcripts.has(childStreamId)).toBe(
+            false,
+          );
+        } finally {
+          bridgeB.dispose();
+        }
       } finally {
         releaseLease();
       }
