@@ -60,6 +60,7 @@ import { getConfig } from '@utils/config/configUtils';
 import { computeUtilizationPercent } from '../support/contextUtilization';
 import { logCompactionEvent } from '../support/compactionLogging';
 import { toDataUrl } from '../support/dataUrl';
+import { longRunningModelFetch } from '../support/longRunningModelFetch';
 import { shouldUseOpenRouter } from '../support/ProxyConfigResolver';
 import {
   getDeclaredMaxReasoningEffort,
@@ -1153,6 +1154,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const client = new OpenAI({
       apiKey: credential.apiKey,
       baseURL: credential.baseUrl,
+      fetch: longRunningModelFetch,
+      maxRetries: 0,
     });
     this.logOpenAICompatibleClientConfig(client.baseURL, credential.route);
     return this.rememberClientCredentialRoute(client, credential.route);
@@ -1165,8 +1168,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return this.createOpenAIClient(selection);
   }
 
-  override isAutoRetryManagedByProvider(_error: Error): boolean {
-    return true;
+  override getRetryEndpoint(client: OpenAI): string {
+    return client.baseURL;
   }
 
   /** Reset conversation bookkeeping when starting a new session. */

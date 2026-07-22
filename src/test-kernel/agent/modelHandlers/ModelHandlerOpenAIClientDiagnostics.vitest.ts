@@ -10,6 +10,10 @@ import type {
 } from '@agent/types/ModelHandlerContracts';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
+import {
+  longRunningModelFetch,
+  MODEL_STREAM_INACTIVITY_TIMEOUT_MS,
+} from '@agent/modelHandlers/support/longRunningModelFetch';
 import * as serverKeysModule from '@auth/serverKeys';
 import { KIMI_CODE_BASE_URL } from '@model/kimiCodeSubscriptionRouting';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
@@ -125,6 +129,19 @@ function expectBothHandlers(messages: string[], expected: string): void {
 describe('OpenAI-compatible client diagnostics', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('leaves automatic retries to the session retry gate', async () => {
+    const config = buildTestModelConfig(KIMI_DIAGNOSTICS_CONFIG);
+
+    for (const handler of createHandlers(config, false)) {
+      const client = await handler.getClient();
+      expect(client.maxRetries).toBe(0);
+      expect((client as unknown as { fetch: unknown }).fetch).toBe(
+        longRunningModelFetch,
+      );
+    }
+    expect(MODEL_STREAM_INACTIVITY_TIMEOUT_MS).toBe(30 * 60 * 1000);
   });
 
   it('reports the Moonshot credential owner and request model', async () => {

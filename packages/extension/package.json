@@ -874,9 +874,9 @@
         "properties": {
           "texra.model.retry.maxAttempts": {
             "type": "number",
-            "default": 0,
+            "default": 2,
             "minimum": 0,
-            "description": "Flow-managed retry attempts (Google, OpenRouter 429/408, background transients). Anthropic/OpenAI/OpenAIResponse retries are provider-managed by their SDKs (default 2); this setting does not affect them.",
+            "description": "Automatic retry attempts for transient model failures. Parallel runs share one recovery probe per affected model route.",
             "scope": "resource"
           },
           "texra.model.retry.backoffMs": {

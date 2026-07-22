@@ -47,6 +47,7 @@ import { getConfig } from '@utils/config/configUtils';
 
 // Local file imports
 import { toDataUrl } from '../support/dataUrl';
+import { longRunningModelFetch } from '../support/longRunningModelFetch';
 import {
   getDeclaredMaxReasoningEffort,
   toOpenAIReasoningEffort,
@@ -251,6 +252,8 @@ export class ModelHandlerOpenAI<
     const client = new OpenAI({
       apiKey: credential.apiKey,
       baseURL: credential.baseUrl,
+      fetch: longRunningModelFetch,
+      maxRetries: 0,
     });
     this.logOpenAICompatibleClientConfig(client.baseURL, credential.route);
     return this.rememberClientCredentialRoute(client, credential.route);
@@ -263,8 +266,8 @@ export class ModelHandlerOpenAI<
     return this.createOpenAIClient(selection);
   }
 
-  override isAutoRetryManagedByProvider(_error: Error): boolean {
-    return true;
+  override getRetryEndpoint(client: OpenAI): string {
+    return client.baseURL;
   }
 
   /**

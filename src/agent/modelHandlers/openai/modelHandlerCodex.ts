@@ -47,6 +47,7 @@ import {
 } from '@model/providerCapabilities';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+import { longRunningModelFetch } from '../support/longRunningModelFetch';
 import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 
@@ -185,7 +186,7 @@ const codexFetch = (async (input, init) => {
     typeof init.body !== 'string' ||
     !isGenerationRequest(url)
   ) {
-    return fetch(input, init);
+    return longRunningModelFetch(input, init);
   }
 
   try {
@@ -200,7 +201,7 @@ const codexFetch = (async (input, init) => {
     );
   }
 
-  return fetch(input, init);
+  return longRunningModelFetch(input, init);
 }) satisfies typeof fetch;
 
 export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
@@ -323,6 +324,7 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
         baseURL: CODEX_BACKEND_BASE_URL,
         defaultHeaders,
         fetch: codexFetch,
+        maxRetries: 0,
       }),
       'chatgpt-subscription',
     );

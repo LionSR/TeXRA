@@ -30,7 +30,7 @@ const SETTINGS_RELIABILITY_SETTINGS: readonly SettingsReliabilitySetting[] = [
     key: 'texra.model.retry.maxAttempts',
     label: 'Retry attempts',
     description:
-      'Flow-managed retry attempts (Google, OpenRouter 429/408, background transients). Anthropic/OpenAI/OpenAIResponse retries are provider-managed by their SDKs (default 2); this setting does not affect them.',
+      'Automatic retry attempts for transient model failures. Parallel runs share one recovery probe per affected model route.',
     min: 0,
     defaultValue: DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
   },

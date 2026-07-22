@@ -14,10 +14,11 @@ import type {
   FinalTool,
   ModelCredentialRoute,
 } from '@agent/types/ModelHandlerContracts';
-import { requiresFlowAutoRetry } from '@common/errors/sdkErrorUtils';
+import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { ToolDefinition } from '@model';
 
 import { FlowTransition } from './FlowTransitions';
+import { classifyModelRouteFailure, modelRetryRoute } from './modelRetryPolicy';
 import {
   type InvocationResult,
   RetryableInvocationNode,
@@ -93,26 +94,6 @@ export class ModelInvocationNode<
     );
   }
 
-  override shouldAutoRetry(error: Error): boolean {
-    if (!super.shouldAutoRetry(error)) return false;
-
-    if (requiresFlowAutoRetry(error)) {
-      this.services.logger.debug(
-        'Using flow-level auto-retry; the failure is outside the provider-managed retry boundary.',
-      );
-      return true;
-    }
-
-    if (this.services.modelHandler.isAutoRetryManagedByProvider(error)) {
-      this.services.logger.debug(
-        'Skipping flow-level auto-retry; the model handler uses provider-managed auto-retry.',
-      );
-      return false;
-    }
-
-    return true;
-  }
-
   async prep(shared: TShared): Promise<BaseInvocationPrepResult> {
     return {
       shouldStop: shared.shouldStop,
@@ -132,28 +113,49 @@ export class ModelInvocationNode<
     const services = this.services;
     services.modelHandler.setOutputStreaming(this._config.streaming);
 
-    const start = Date.now();
-
     return this.withAbortController(async (signal) => {
-      const result = await services.modelHandler.createResponse({
-        client: services.client,
-        messages: prepRes.messages,
-        temperature: services.setting.temperature,
-        systemPrompt: prepRes.systemPrompt,
-        endTag: this._config.getEndTag?.(services),
-        signal,
-        tools: this._config.getTools
-          ? this._config.getTools(services)
-          : services.setting.tools,
-        finalTool: prepRes.finalTool,
+      const route = modelRetryRoute({
+        provider: services.modelHandler.config.provider,
+        credentialRoute: services.clientCredentialRoute,
+        endpoint: services.modelHandler.getRetryEndpoint(services.client),
       });
+      return useLaunchRunContext().runScope.session.modelRetries.run(
+        route,
+        {
+          signal,
+          baseBackoffMs: this._retryBackoffMs,
+          classifyTransient: (error) => {
+            if (!super.shouldAutoRetry(error)) return undefined;
+            return classifyModelRouteFailure(error);
+          },
+          onWait: (delayMs) =>
+            services.logger.debug(
+              `Waiting ${delayMs}ms for the shared model recovery probe.`,
+            ),
+        },
+        async () => {
+          const start = Date.now();
+          const result = await services.modelHandler.createResponse({
+            client: services.client,
+            messages: prepRes.messages,
+            temperature: services.setting.temperature,
+            systemPrompt: prepRes.systemPrompt,
+            endTag: this._config.getEndTag?.(services),
+            signal,
+            tools: this._config.getTools
+              ? this._config.getTools(services)
+              : services.setting.tools,
+            finalTool: prepRes.finalTool,
+          });
 
-      return {
-        kind: 'success',
-        response: result.response,
-        responseTimeMs: Date.now() - start,
-        updatedMessages: result.updatedMessages,
-      };
+          return {
+            kind: 'success' as const,
+            response: result.response,
+            responseTimeMs: Date.now() - start,
+            updatedMessages: result.updatedMessages,
+          };
+        },
+      );
     });
   }
 

@@ -2,10 +2,6 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import {
-  ConnectionError as OpenRouterConnectionError,
-  RequestTimeoutError as OpenRouterRequestTimeoutError,
-} from '@openrouter/sdk/models/errors';
 import { describe, it, afterEach, vi } from 'vitest';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
@@ -37,12 +33,6 @@ function stubServerSideKeyService(): void {
     getRelayBaseUrl: (provider: string) =>
       `https://relay.example.com/functions/v1/relay/${provider}/v1`,
   } as unknown as ReturnType<typeof serverKeysModule.getServerSideKeyService>);
-}
-
-function statusError(statusCode: number): Error {
-  return Object.assign(new Error(`OpenRouter HTTP ${statusCode}`), {
-    statusCode,
-  });
 }
 
 describe('ModelHandlerOpenRouterNative routing precedence', () => {
@@ -362,33 +352,8 @@ describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
   });
 });
 
-describe('ModelHandlerOpenRouterNative retry ownership', () => {
-  it('matches the OpenRouter SDK retry boundary', () => {
-    const handler = new ModelHandlerOpenRouterNative(
-      buildTestModelConfig(OPENROUTER_TEST_CONFIG),
-    );
-
-    assert.equal(handler.isAutoRetryManagedByProvider(statusError(500)), true);
-    assert.equal(handler.isAutoRetryManagedByProvider(statusError(529)), true);
-    assert.equal(handler.isAutoRetryManagedByProvider(statusError(429)), false);
-    assert.equal(handler.isAutoRetryManagedByProvider(statusError(408)), false);
-    assert.equal(
-      handler.isAutoRetryManagedByProvider(
-        new OpenRouterConnectionError('connection failed'),
-      ),
-      true,
-    );
-    assert.equal(
-      handler.isAutoRetryManagedByProvider(
-        new OpenRouterRequestTimeoutError('request timed out'),
-      ),
-      true,
-    );
-  });
-});
-
 describe('ModelHandlerOpenRouterNative getClient retryConfig', () => {
-  it('bounds the SDK retry window instead of the 1h default (#7643)', async () => {
+  it('disables SDK retries so the session gate owns them', async () => {
     class TestableHandler extends ModelHandlerOpenRouterNative {
       protected override async resolveClientCredential(): Promise<ResolvedClientCredential> {
         return {
@@ -413,15 +378,6 @@ describe('ModelHandlerOpenRouterNative getClient retryConfig', () => {
     const options = (client as unknown as { _options: Record<string, unknown> })
       ._options;
 
-    assert.deepEqual(options.retryConfig, {
-      strategy: 'backoff',
-      backoff: {
-        initialInterval: 500,
-        maxInterval: 8_000,
-        exponent: 1.5,
-        maxElapsedTime: 30_000,
-      },
-      retryConnectionErrors: true,
-    });
+    assert.deepEqual(options.retryConfig, { strategy: 'none' });
   });
 });

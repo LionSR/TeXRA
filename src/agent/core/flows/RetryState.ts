@@ -29,8 +29,8 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 const BACKGROUND_MODE_MIN_RETRIES = 3;
 
-/** Returns maxRetries (1 initial + N auto-retries) and wait (seconds between retries). */
-function getNodeRetryConfig(): { maxRetries: number; wait: number } {
+/** Returns one initial attempt plus configured retries and their base backoff. */
+function getNodeRetryConfig(): { maxRetries: number; backoffMs: number } {
   const maxAutoAttempts = getConfig<number>(
     'texra.model.retry.maxAttempts',
     DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
@@ -42,7 +42,7 @@ function getNodeRetryConfig(): { maxRetries: number; wait: number } {
 
   return {
     maxRetries: 1 + Math.max(0, maxAutoAttempts),
-    wait: backoffMs / 1000,
+    backoffMs,
   };
 }
 
@@ -108,10 +108,12 @@ export abstract class RetryableInvocationNode<
   protected _hasAttemptedTokenRefresh = false;
   protected _persistent401Error: Error | null = null;
   protected _failureLogEmitted = false;
+  protected _retryBackoffMs: number;
 
   constructor() {
     const config = getNodeRetryConfig();
-    super(config.maxRetries, config.wait);
+    super(config.maxRetries, 0);
+    this._retryBackoffMs = config.backoffMs;
   }
 
   protected abstract getOperationName(): string;
@@ -264,7 +266,9 @@ export abstract class RetryableInvocationNode<
     }
 
     this.maxRetries = maxRetries;
-    this.wait = config.wait;
+    this._retryBackoffMs = config.backoffMs;
+    // The session retry gate owns timing; pRetry owns only the attempt count.
+    this.wait = 0;
     return super._exec(prepRes);
   }
 

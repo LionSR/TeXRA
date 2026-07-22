@@ -22,6 +22,7 @@ function buildRound(supportsForcedToolChoice: boolean) {
   const modelHandler = {
     addMediaToUserMessage: vi.fn(async () => []),
     capabilities: { supportsVision: true },
+    config: { provider: 'openai', fullName: 'test-model' },
     createAssistantMessageFromResponse: vi.fn(
       (_response: unknown, text: string) =>
         ({ role: 'assistant', content: text }) as ProviderMessage,
@@ -45,8 +46,8 @@ function buildRound(supportsForcedToolChoice: boolean) {
       webSearchResults: [],
     }),
     extractToolUse: () => [],
+    getRetryEndpoint: () => 'https://api.openai.com/v1',
     getStreamingConfig: () => false,
-    isAutoRetryManagedByProvider: () => false,
     isEndTurnStop: () => true,
     processThinkingBlock: () => null,
     setOutputStreaming: vi.fn(),

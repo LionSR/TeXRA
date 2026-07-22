@@ -67,6 +67,7 @@ import {
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
 } from '../contextManagementConstants';
 import { AnthropicStreamHandler } from '../support/AnthropicStreamHandler';
+import { longRunningModelFetch } from '../support/longRunningModelFetch';
 import { toAnthropicTools } from '../toolConversion';
 import {
   describeAttachments,
@@ -265,13 +266,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
       new Anthropic({
         apiKey: credential.apiKey,
         baseURL: credential.baseUrl,
+        fetch: longRunningModelFetch,
+        maxRetries: 0,
       }),
       credential.route,
     );
   }
 
-  override isAutoRetryManagedByProvider(_error: Error): boolean {
-    return true;
+  override getRetryEndpoint(client: Anthropic): string {
+    return client.baseURL;
   }
 
   /**

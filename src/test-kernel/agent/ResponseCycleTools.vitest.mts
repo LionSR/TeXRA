@@ -5,6 +5,7 @@ import { responseCycleToolsForModel } from '@agent/core/flows/ResponseCycleFlow'
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
 import { getDefaultToolRegistry } from '@tools/registry';
+import { withTestRunContext } from './progressTestUtils';
 
 function toolNames(tools: readonly { name: string }[] | undefined): string[] {
   return tools?.map((tool) => tool.name) ?? [];
@@ -18,6 +19,8 @@ function responseServices({
   return {
     toolRegistry: getDefaultToolRegistry(),
     modelHandler: {
+      config: { provider: 'openai', fullName: 'test-model' },
+      getRetryEndpoint: () => 'https://api.openai.com/v1',
       capabilities: { supportsFunctionCalling },
     },
     setting: {
@@ -114,7 +117,9 @@ describe('response cycle tool visibility', () => {
       config: {},
       logger: { debug: vi.fn(), warn: vi.fn() },
       modelHandler: {
+        config: { provider: 'openai', fullName: 'test-model' },
         createResponse,
+        getRetryEndpoint: () => 'https://api.openai.com/v1',
         isBackgroundModeActive: () => false,
         setOutputStreaming: vi.fn(),
       },
@@ -127,10 +132,15 @@ describe('response cycle tool visibility', () => {
       streamId: 'stream-1',
     } as any);
 
-    await node.run({
-      messages: [],
-      shouldStop: false,
-    } as any);
+    await withTestRunContext(
+      { emit: vi.fn() },
+      'response-cycle-invocation',
+      () =>
+        node.run({
+          messages: [],
+          shouldStop: false,
+        } as any),
+    );
 
     expect(createResponse).toHaveBeenCalledWith(
       expect.objectContaining({ tools: undefined }),

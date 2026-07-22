@@ -1,9 +1,5 @@
 // Third-party imports
 import { OpenRouter } from '@openrouter/sdk';
-import {
-  ConnectionError as OpenRouterConnectionError,
-  RequestTimeoutError as OpenRouterRequestTimeoutError,
-} from '@openrouter/sdk/models/errors';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 // Local imports
@@ -22,7 +18,6 @@ import type {
   OpenRouterToolCall,
 } from '@agent/types/ModelHandlerContracts';
 import {
-  detectStatusCode,
   handleStreamingFailure,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
@@ -147,42 +142,14 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       apiKey: credential.apiKey,
       appTitle: 'TeXRA.ai',
       ...(credential.baseUrl ? { serverURL: credential.baseUrl } : {}),
-      // @openrouter/sdk@0.13.31 chatSend.js:46-58 defaults retryConfig to a
-      // 3_600_000ms (1h) maxElapsedTime backoff, so a transient 5XX can hang
-      // inside a single "attempt" for up to an hour before TeXRA's flow-level
-      // retry ever sees it (#7643). Bound it here instead: same backoff shape,
-      // maxElapsedTime capped to 30s (~5 attempts of transient-blip
-      // resilience), then the failure surfaces through the flow's visible
-      // retry/failure path. Ownership of 5XX retries is unchanged — see
-      // isAutoRetryManagedByProvider below.
-      retryConfig: {
-        strategy: 'backoff',
-        backoff: {
-          initialInterval: 500,
-          maxInterval: 8_000,
-          exponent: 1.5,
-          maxElapsedTime: 30_000,
-        },
-        retryConnectionErrors: true,
-      },
+      // TeXRA's session gate owns retry timing and admission.
+      retryConfig: { strategy: 'none' },
     });
     return this.rememberClientCredentialRoute(client, credential.route);
   }
 
-  override isAutoRetryManagedByProvider(error: Error): boolean {
-    if (
-      error instanceof OpenRouterConnectionError ||
-      error instanceof OpenRouterRequestTimeoutError
-    ) {
-      return true;
-    }
-
-    const statusCode = detectStatusCode(error);
-    // @openrouter/sdk v0.13.31 defaults chatSend retryCodes to ["5XX"]; the
-    // SDK's retry window is now bounded to 30s (see getClient() above), but
-    // ownership is unchanged — 5XX HTTP responses remain provider-managed here,
-    // and 429/408 HTTP responses remain owned by TeXRA's flow retry.
-    return statusCode !== undefined && statusCode >= 500;
+  override getRetryEndpoint(client: OpenRouter): string {
+    return String((client as unknown as { _baseURL: string | URL })._baseURL);
   }
 
   // ---------------------------------------------------------------------------

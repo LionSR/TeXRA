@@ -631,6 +631,11 @@ export abstract class ModelHandler<
     });
   }
 
+  /** Stable endpoint identity used to coordinate retries for one client. */
+  public getRetryEndpoint(_client: C): string {
+    return this.getBaseUrl() ?? `${this.config.provider}:default`;
+  }
+
   /** Log the resolved credential route and final wire request config. */
   protected logOpenAICompatibleClientConfig(
     baseURL: string,
@@ -669,7 +674,7 @@ export abstract class ModelHandler<
   // runtime combinators over profile data (`shouldUseServerSideKeys`,
   // `getEffectiveReasoningEffort`) and genuinely per-provider behavior that
   // stays an overridable method/getter (`supportsManualCompaction`,
-  // `isAutoRetryManagedByProvider`, `isBackgroundModeActive`, etc.).
+  // `isBackgroundModeActive`, etc.).
 
   /**
    * Whether parallel tool calls in a single turn must be batched into one
@@ -768,27 +773,6 @@ export abstract class ModelHandler<
    * on `config` itself.
    */
   get requiresPerCallSystemPrompt(): boolean {
-    return false;
-  }
-
-  /**
-   * Whether the provider SDK already retries this error internally, so the
-   * flow-level auto-retry loop should stand down. Override in subclasses that
-   * delegate retries to the provider; the default is no provider-managed retry.
-   *
-   * Not foldable into a single predicate (#7101 triage): Anthropic, OpenAI,
-   * and OpenAIResponse each override to an unconditional `true` — a
-   * provider-wide fact about that SDK's own retry wrapper, not data on
-   * `capabilities`/`config`. `ModelHandlerOpenRouterNative`'s override is
-   * qualitatively different, not just a different boolean: it inspects the
-   * concrete `_error` instance (`OpenRouterConnectionError`/
-   * `OpenRouterRequestTimeoutError`, or an HTTP status code ≥500) rather than
-   * returning a constant, since the OpenRouter SDK's own retry coverage
-   * depends on the failure kind. Each override encodes what that provider's
-   * SDK actually does internally; nothing here is provider-identity data
-   * that a `config` read could reproduce.
-   */
-  isAutoRetryManagedByProvider(_error: Error): boolean {
     return false;
   }
 

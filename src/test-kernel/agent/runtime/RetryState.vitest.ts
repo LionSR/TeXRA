@@ -190,16 +190,13 @@ async function withSessionRetryRunContext<T>(
   return await withRunContext(context, fn);
 }
 
-function createModelInvocationNode(input: {
-  isAutoRetryManagedByProvider: (error: Error) => boolean;
-}): ModelInvocationNode<BaseCycleFields> {
+function createModelInvocationNode(): ModelInvocationNode<BaseCycleFields> {
   return new ModelInvocationNode<BaseCycleFields>({
     operationName: 'Model call',
     streaming: false,
     storeResponse: vi.fn(),
   }).setServices({
     modelHandler: {
-      isAutoRetryManagedByProvider: input.isAutoRetryManagedByProvider,
       isBackgroundModeActive: () => false,
     },
     logger: noopTrace,
@@ -323,20 +320,8 @@ describe('RetryState', () => {
     expect(node.shouldAutoRetry(error)).toBe(true);
   });
 
-  it('skips flow-level auto-retry when the model handler delegates retries to the provider', () => {
-    const node = createModelInvocationNode({
-      isAutoRetryManagedByProvider: () => true,
-    });
-
-    expect(node.shouldAutoRetry(new Error('temporary provider failure'))).toBe(
-      false,
-    );
-  });
-
-  it('keeps flow-level auto-retry for errors outside the provider retry boundary', () => {
-    const node = createModelInvocationNode({
-      isAutoRetryManagedByProvider: () => true,
-    });
+  it('keeps node-level auto-retry for transient stream failures', () => {
+    const node = createModelInvocationNode();
     const streamError = new Error('stream closed after response started');
 
     attachFlowAutoRetryRequired(streamError);
@@ -345,9 +330,7 @@ describe('RetryState', () => {
   });
 
   it('keeps flow-level auto-retry for a raw undici fetch failure', () => {
-    const node = createModelInvocationNode({
-      isAutoRetryManagedByProvider: () => true,
-    });
+    const node = createModelInvocationNode();
     const transportError = Object.assign(
       new Error('HTTP/2: "stream timeout after 300000"'),
       { code: 'UND_ERR_INFO', name: 'InformationalError' },
@@ -359,22 +342,12 @@ describe('RetryState', () => {
     expect(node.shouldAutoRetry(fetchError)).toBe(true);
   });
 
-  it('does not duplicate provider retries for a wrapped fetch failure', () => {
-    const node = createModelInvocationNode({
-      isAutoRetryManagedByProvider: () => true,
-    });
+  it('owns retrying a wrapped provider fetch failure', () => {
+    const node = createModelInvocationNode();
     const fetchError = new TypeError('fetch failed');
     const sdkError = new Error('Connection error', { cause: fetchError });
 
-    expect(node.shouldAutoRetry(sdkError)).toBe(false);
-  });
-
-  it('keeps flow-level auto-retry when the handler predicate excludes an error', () => {
-    const node = createModelInvocationNode({
-      isAutoRetryManagedByProvider: () => false,
-    });
-
-    expect(node.shouldAutoRetry(new Error('rate limit'))).toBe(true);
+    expect(node.shouldAutoRetry(sdkError)).toBe(true);
   });
 
   it('never auto-retries a context-window overflow, even one tagged flow-auto-retry-required', () => {
@@ -388,9 +361,7 @@ describe('RetryState', () => {
     // must refuse a context-window error unconditionally, regardless of any
     // flow-auto-retry tag, so unrecovered overflows fail once instead of
     // storming.
-    const node = createModelInvocationNode({
-      isAutoRetryManagedByProvider: () => false,
-    });
+    const node = createModelInvocationNode();
     const overflow = new Error('OpenAI WebSocket response failed: overflow');
     attachContextWindowError(overflow);
     attachFlowAutoRetryRequired(overflow);

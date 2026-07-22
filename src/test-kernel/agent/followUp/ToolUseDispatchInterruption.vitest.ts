@@ -90,6 +90,7 @@ describe('ToolUseDispatchNode interruption', () => {
         StreamLogStore.ephemeral('test'),
       ).trace,
       modelHandler: {
+        config: { provider: 'openai', fullName: 'test-model' },
         addMediaToUserMessage: vi.fn(async () => []),
         capabilities: { supportsVision: true },
         createAssistantMessageFromResponse: vi.fn(
@@ -129,6 +130,7 @@ describe('ToolUseDispatchNode interruption', () => {
                 },
               ]
             : [],
+        getRetryEndpoint: () => 'https://api.openai.com/v1',
         getStreamingConfig: () => false,
         isEndTurnStop: (stopReason: string) => stopReason === 'stop',
         processThinkingBlock: () => null,
@@ -263,6 +265,7 @@ describe('ToolUseDispatchNode interruption', () => {
         StreamLogStore.ephemeral('test'),
       ).trace,
       modelHandler: {
+        config: { provider: 'openai', fullName: 'test-model' },
         addMediaToUserMessage: vi.fn(async () => []),
         capabilities: { supportsVision: true },
         createAssistantMessageFromResponse: vi.fn(
@@ -302,6 +305,7 @@ describe('ToolUseDispatchNode interruption', () => {
                 },
               ]
             : [],
+        getRetryEndpoint: () => 'https://api.openai.com/v1',
         getStreamingConfig: () => false,
         isEndTurnStop: (stopReason: string) => stopReason === 'stop',
         processThinkingBlock: () => null,
