@@ -470,6 +470,7 @@ export class AgentHandlers {
       await this.refreshAfterAgentMutation(
         this.catalogController.getPresetToolUseRoot(
           result.preset.toolUseAgents,
+          result.preset.id,
         ),
         true,
       );
@@ -504,7 +505,10 @@ export class AgentHandlers {
 
       await this.catalogController.saveCurrentPreset(name);
 
-      await this.ctx.withActiveWebview((w) => this.sendAgentModePresets(w));
+      await Promise.all([
+        this.ctx.withActiveWebview((w) => this.sendAgentModePresets(w)),
+        this.refreshAfterAgentMutation(undefined, true),
+      ]);
 
       void vscode.window.showInformationMessage(`Saved team "${name.trim()}"`);
     } catch (error) {
@@ -532,7 +536,10 @@ export class AgentHandlers {
 
       await this.catalogController.deleteCustomPreset(data.presetId);
 
-      await this.ctx.withActiveWebview((w) => this.sendAgentModePresets(w));
+      await Promise.all([
+        this.ctx.withActiveWebview((w) => this.sendAgentModePresets(w)),
+        this.refreshAfterAgentMutation(undefined, true),
+      ]);
     } catch (error) {
       await showLoggedErrorMessage(
         this.ctx.channel,

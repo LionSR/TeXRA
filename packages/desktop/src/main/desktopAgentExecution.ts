@@ -31,6 +31,14 @@ import {
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import {
+  formatPartialTeamLaunchMessage,
+  formatTeamLaunchBlockedMessage,
+  formatTeamUnavailableMessage,
+  formatUnknownTeamMessage,
+  resolveTeamLaunch,
+  TEAM_SELECTION_REQUIRED_MESSAGE,
+} from '@common/teams/TeamPlan';
+import {
   repairRestartedStreams,
   RestartRepairRetryScheduler,
   type RestartRepairResult,
@@ -45,7 +53,11 @@ import {
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
-import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
+import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
+import {
+  prepareMainViewExecutionRequest,
+  prepareMainViewTeamExecutionRequest,
+} from '@controllers/mainView/MainViewExecutionController';
 import type { SessionStores } from '@controllers/progressView/backend/state/SessionStores';
 import { platform } from '@platform/platform';
 import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
@@ -1208,12 +1220,67 @@ export class DesktopProgressBridge {
     );
   }
 
-  handleExecute(message: MainViewExecuteMessage): Promise<void> {
-    const preparation = prepareMainViewExecutionRequest(message);
+  async handleExecute(message: MainViewExecuteMessage): Promise<void> {
+    let preparation;
+    if (message.session?.launchTarget === 'team') {
+      try {
+        const teamId = message.session.teamId;
+        if (!teamId) {
+          await this.options.host.showErrorMessage(
+            TEAM_SELECTION_REQUIRED_MESSAGE,
+          );
+          return;
+        }
+
+        const resolution = await resolveTeamLaunch({
+          teamId,
+          ...createTeamCatalogPorts(),
+          choose: (unavailableNames) =>
+            this.options.host.chooseTeamAvailability(unavailableNames),
+          signIn: () => this.options.host.signInForRemoteAgentCatalog(),
+        });
+
+        if (resolution.status === 'cancelled') return;
+        if (resolution.status === 'unknown-team') {
+          await this.options.host.showErrorMessage(
+            formatUnknownTeamMessage(teamId),
+          );
+          return;
+        }
+        if (resolution.status === 'blocked') {
+          await this.options.host.showErrorMessage(
+            formatTeamLaunchBlockedMessage(teamId, resolution.reason),
+          );
+          return;
+        }
+        if (resolution.status === 'unavailable') {
+          await this.options.host.showErrorMessage(
+            formatTeamUnavailableMessage(teamId, resolution.unavailableNames),
+          );
+          return;
+        }
+
+        if (resolution.partial) {
+          await this.options.host.showInfoMessage(
+            formatPartialTeamLaunchMessage(resolution.missingNames),
+          );
+        }
+        preparation = prepareMainViewTeamExecutionRequest(
+          message,
+          resolution.fields,
+        );
+      } catch (error) {
+        await this.options.host.showErrorMessage(
+          `Team launch failed: ${toErrorMessage(error)}`,
+        );
+        return;
+      }
+    } else {
+      preparation = prepareMainViewExecutionRequest(message);
+    }
     if (!preparation.valid) {
-      return Promise.resolve(
-        this.options.host.showErrorMessage(preparation.message),
-      ).then(() => undefined);
+      await this.options.host.showErrorMessage(preparation.message);
+      return;
     }
     return this.runExecution(preparation.request);
   }

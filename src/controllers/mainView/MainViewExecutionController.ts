@@ -4,6 +4,7 @@ import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
+import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import {
   DEFAULT_TOOL_CONFIG,
@@ -36,7 +37,49 @@ export function prepareMainViewExecutionRequest(
     };
   }
 
-  const isToolUse = Boolean(message.isToolUseAgent);
+  return buildMainViewExecutionRequest(
+    message,
+    message.agent,
+    message.isToolUseAgent ? AgentCategory.ToolUse : AgentCategory.Workflow,
+  );
+}
+
+export function prepareMainViewTeamExecutionRequest(
+  message: MainViewExecuteMessage,
+  fields: {
+    agent: string;
+    delegationAgentScope: AgentDelegationScope;
+    cliMultiAgentPresetId: string;
+  },
+): MainViewExecutionPreparationResult {
+  if (!message.model) {
+    return {
+      valid: false,
+      message:
+        'Model selection required. Please select a model before running.',
+    };
+  }
+
+  // The renderer's selected agent is intentionally ignored: the authoritative
+  // team plan resolves both the root and delegation roster at launch time.
+  return buildMainViewExecutionRequest(
+    message,
+    fields.agent,
+    AgentCategory.ToolUse,
+    fields,
+  );
+}
+
+function buildMainViewExecutionRequest(
+  message: MainViewExecuteMessage,
+  agent: string,
+  agentCategory: AgentCategory,
+  teamFields?: {
+    readonly delegationAgentScope: AgentDelegationScope;
+    readonly cliMultiAgentPresetId: string;
+  },
+): MainViewExecutionPreparationResult {
+  const isToolUse = agentCategory === AgentCategory.ToolUse;
   const files = message.files ?? {};
   if (!isToolUse && (files.inputFiles?.length ?? 0) === 0) {
     return {
@@ -58,16 +101,20 @@ export function prepareMainViewExecutionRequest(
     };
   }
 
+  // The webview's session preset id is always nullish; only teamFields is
+  // authoritative, so strip it rather than relying on spread order.
+  const { cliMultiAgentPresetId: _, ...sessionFields } = message.session ?? {};
   const validation = validateExecutionRequest({
     config: {
-      agent: message.agent,
+      agent,
       model: message.model,
       instruction: message.instruction,
       displayInstruction: message.displayInstruction,
       memories: message.memories,
-      ...message.session,
+      ...sessionFields,
       ...files,
-      agentCategory: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
+      agentCategory,
+      ...teamFields,
       // Workflow output paths are implicit in the input list. Agent settings
       // may still declare generated filenames later during prompt rendering.
       outputFiles: [],

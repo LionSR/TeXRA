@@ -3,6 +3,7 @@ import type {
   AgentOptionData,
   MainViewMessage,
   ModelOptionData,
+  TeamOptionData,
 } from '@shared/schemas';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
@@ -19,6 +20,7 @@ export interface MainViewStartupOptions {
     workflow?: AgentOptionData[];
     toolUse?: AgentOptionData[];
   };
+  teamOptions: TeamOptionData[];
 }
 
 export interface MainViewStartupControllerDeps {
@@ -33,6 +35,7 @@ type MainViewStartupMessage = Extract<
   | { command: typeof MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER }
   | { command: typeof MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS }
   | { command: typeof MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS }
+  | { command: typeof MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS }
   | { command: typeof MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER }
   | { command: typeof MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER }
 >;
@@ -53,8 +56,10 @@ export class MainViewStartupController {
   }
 
   async getOptionsAndLoginMessages(): Promise<MainViewStartupMessage[]> {
-    const [{ modelOptions, modelOptionsByCategory, agentOptions }, authStatus] =
-      await Promise.all([this.deps.loadOptions(), this.deps.getAuthStatus()]);
+    const [
+      { modelOptions, modelOptionsByCategory, agentOptions, teamOptions },
+      authStatus,
+    ] = await Promise.all([this.deps.loadOptions(), this.deps.getAuthStatus()]);
 
     const showLoginBanner =
       !authStatus.authenticated &&
@@ -71,6 +76,10 @@ export class MainViewStartupController {
       {
         command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
         optionsData: agentOptions,
+      },
+      {
+        command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
+        optionsData: teamOptions,
       },
       {
         command: showLoginBanner

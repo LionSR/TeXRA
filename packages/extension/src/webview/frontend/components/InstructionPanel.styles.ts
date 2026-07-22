@@ -160,37 +160,50 @@ export const instructionPanelStyles: CSSResult = css`
   .instruction-controls {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--wa-space-2xs);
+    gap: var(--wa-space-2xs) var(--wa-space-s);
     flex-wrap: wrap;
     width: 100%;
+    min-height: var(--height-control);
   }
 
+  /* Promote the footer's groups into the controls flex row so every group,
+     including Execute, wraps in DOM order. This keeps the primary action at
+     the right edge of whichever row is final instead of vertically centering
+     it beside a separately wrapped picker container. */
   .model-selection-footer {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-m);
-    flex: 1 1 auto;
-    flex-wrap: wrap;
-    min-width: 0;
+    display: contents;
   }
 
   .model-selection-footer .select-group {
     display: flex;
     align-items: center;
     gap: var(--wa-space-2xs);
-    flex: 0 1 auto;
+    flex: 0 0 auto;
     min-width: 0;
   }
 
-  .model-selection-footer .agent-select-group {
-    position: relative;
-    flex: 0 0
-      calc(
-        var(--agent-select-max-width) + var(--height-control) +
-          var(--wa-space-2xs)
-      );
-    min-width: 0;
+  .model-selection-footer .launch-target-group {
+    flex: 0 0 auto;
+  }
+
+  .launch-target-group wa-radio-group {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+  }
+
+  .launch-target-group wa-radio {
+    flex: 0 0 auto;
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+  }
+
+  .model-selection-footer .agent-select-group,
+  .model-selection-footer .model-select-group {
+    flex-basis: calc(
+      var(--agent-select-max-width) + var(--height-control) +
+        var(--wa-space-2xs)
+    );
     max-width: calc(
       var(--agent-select-max-width) + var(--height-control) +
         var(--wa-space-2xs)
@@ -203,23 +216,58 @@ export const instructionPanelStyles: CSSResult = css`
     gap: var(--wa-space-2xs);
   }
 
-  .model-selection-footer .agent-select-group wa-select {
-    position: absolute;
-    left: calc(var(--height-control) + var(--wa-space-2xs));
-    top: 0;
+  .launcher-picker-fade {
+    position: relative;
   }
 
-  .model-selection-footer .model-select-group {
-    max-width: calc(
-      var(--agent-select-max-width) + var(--height-control) +
-        var(--wa-space-2xs)
-    );
+  .launcher-picker-pane {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+    transition: opacity 150ms ease;
+  }
+
+  .team-picker-pane {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .agent-picker-pane {
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+  }
+
+  .team-picker-visible .team-picker-pane {
+    opacity: 1;
+    pointer-events: auto;
+    position: static;
+  }
+
+  .team-picker-visible .agent-picker-pane {
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
+  }
+
+  .agent-picker-visible .agent-picker-pane {
+    opacity: 1;
+    pointer-events: auto;
+    position: static;
+  }
+
+  .agent-picker-visible .team-picker-pane {
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
   }
 
   .model-selection-footer wa-icon,
   .model-selection-footer wa-button {
     display: flex;
     align-items: center;
+    flex: 0 0 auto;
     line-height: 1;
   }
 
@@ -237,6 +285,7 @@ export const instructionPanelStyles: CSSResult = css`
     min-width: auto;
     height: auto;
     flex: 0 0 auto;
+    margin-left: auto;
   }
 
   wa-button.execute-button::part(base) {
@@ -291,6 +340,36 @@ export const instructionPanelStyles: CSSResult = css`
   wa-select::part(listbox) {
     bottom: 100%;
     top: auto;
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  @media (max-width: 420px) {
+    .model-selection-footer .launch-target-group {
+      flex-basis: 100%;
+    }
+
+    .launch-target-group wa-radio-group,
+    .launch-target-group wa-radio {
+      min-width: max-content;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .session-hint,
+    .launcher-picker-pane {
+      transition: none;
+    }
   }
 
   .recording {

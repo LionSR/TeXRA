@@ -108,6 +108,7 @@ export const MAIN_VIEW_COMMANDS = {
   SET_SELECTED_COMMIT: 'setSelectedCommit',
   SET_MODEL_OPTIONS: 'setModelOptions',
   SET_AGENT_OPTIONS: 'setAgentOptions',
+  SET_TEAM_OPTIONS: 'setTeamOptions',
   SET_SELECTED_AGENT: 'setSelectedAgent',
 
   // File refresh and update operations

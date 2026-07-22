@@ -166,6 +166,7 @@ async function createExecution(options: {
     openBuildDisplay?(location: { absolutePath: string }): Promise<void>;
   };
   showErrorMessage?: (message: string) => Promise<void> | void;
+  resolveTeamLaunch?: (...args: unknown[]) => Promise<unknown>;
   prepareMainViewExecutionRequest: (message: unknown) => unknown;
   runAgent?: RunExecutionRequest;
   onRunCompleted?: () => void;
@@ -195,6 +196,12 @@ async function createExecution(options: {
     detectWaitingStreams:
       options.detectWaitingStreams ?? vi.fn(async () => new Set()),
   }));
+  if (options.resolveTeamLaunch) {
+    vi.doMock('@common/teams/TeamPlan', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('@common/teams/TeamPlan')>()),
+      resolveTeamLaunch: options.resolveTeamLaunch,
+    }));
+  }
   if (options.useRealStorage) {
     vi.doUnmock('@common/storage/KVStore');
   } else {
@@ -232,6 +239,7 @@ async function createExecution(options: {
   }
   vi.doMock('@controllers/mainView/MainViewExecutionController', () => ({
     prepareMainViewExecutionRequest: options.prepareMainViewExecutionRequest,
+    prepareMainViewTeamExecutionRequest: vi.fn(),
   }));
   const { createDesktopAgentExecution } = (await import(
     moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
@@ -297,6 +305,7 @@ describe('createDesktopAgentExecution', () => {
     vi.doUnmock('@agent/runtime/runAgent');
     vi.doUnmock('@agent/storage/detectWaitingStreams');
     vi.doUnmock('@common/storage/KVStore');
+    vi.doUnmock('@common/teams/TeamPlan');
     vi.doUnmock('@controllers/mainView/MainViewExecutionController');
     vi.doUnmock('write-file-atomic');
     vi.restoreAllMocks();
@@ -549,6 +558,27 @@ describe('createDesktopAgentExecution', () => {
     );
     expect(postToRenderer).not.toHaveBeenCalled();
     expect(runAgent).not.toHaveBeenCalled();
+  });
+
+  it('surfaces team launch errors through the host error path', async () => {
+    const showErrorMessage = vi.fn();
+    const execution = await createExecution({
+      showErrorMessage,
+      resolveTeamLaunch: vi.fn(async () => {
+        throw new Error('catalog unavailable');
+      }),
+      prepareMainViewExecutionRequest: vi.fn(),
+    });
+
+    await expect(
+      execution.handleExecute({
+        command: 'execute',
+        session: { launchTarget: 'team', teamId: 'physicist' },
+      }),
+    ).resolves.toBeUndefined();
+    expect(showErrorMessage).toHaveBeenCalledWith(
+      'Team launch failed: catalog unavailable',
+    );
   });
 
   it('lets runtime execution errors propagate to the IPC error handler', async () => {

@@ -15,6 +15,7 @@ import type {
   LatexDiffsActionDetail,
   LatexdiffMessage,
   LatexdiffvcMessage,
+  LaunchTarget,
   MergeMessage,
   MultiFiles,
   PackLatexdiffvcMessage,
@@ -46,11 +47,15 @@ import {
   isPolishing$,
   isRecording$,
   isSelectedAgentOrchestrator$,
+  launchTarget$,
   model$,
   multiFiles$,
   primaryInputFile,
+  selectedTeamId$,
   sessionType$,
   singleFiles$,
+  statusAnnouncement$,
+  teamOptions$,
   toolUseAgent$,
   toolUseInstruction$,
   workflowAgent$,
@@ -98,8 +103,12 @@ export function swapModeInstruction(from: SessionType, to: SessionType): void {
 }
 
 export function refreshInstructionPlaceholder(): void {
+  // Team runs share the orchestrator placeholder set: the team lead plans
+  // and delegates, so the steering examples are the same shape.
   const placeholderKey: keyof typeof ONBOARDING_PLACEHOLDERS =
-    isSelectedAgentOrchestrator$.get() ? 'orchestrator' : sessionType$.get();
+    launchTarget$.get() === 'team' || isSelectedAgentOrchestrator$.get()
+      ? 'orchestrator'
+      : sessionType$.get();
   const placeholders = ONBOARDING_PLACEHOLDERS[placeholderKey];
   if (!placeholders.length) return;
   const current = instructionPlaceholder$.get();
@@ -107,6 +116,17 @@ export function refreshInstructionPlaceholder(): void {
   if (!current || currentIndex === -1) {
     instructionPlaceholder$.set(placeholders[0]);
   }
+}
+
+/**
+ * Push a status line to the panel's aria-live region. Clear-then-set across a
+ * microtask so repeated identical messages still re-announce: the clear render
+ * commits before the set render (Lit flushes updates in a microtask queued
+ * ahead of ours), so assistive tech observes a removal + insertion.
+ */
+export function announce(message: string): void {
+  statusAnnouncement$.set('');
+  queueMicrotask(() => statusAnnouncement$.set(message));
 }
 
 // ---------------------------------------------------------------------------
@@ -274,7 +294,23 @@ export function setCommit(value: string): void {
 export function changeSessionType(value: string): void {
   const parsed = parseSessionType(value) ?? SESSION_TYPES.WORKFLOW;
   const prev = sessionType$.get();
-  if (parsed === prev) return;
+
+  // Workflows run a single workflow agent, so a team launch target cannot
+  // survive the transition — drop back to the agent launcher in the same
+  // save rather than leaving a hidden team selection behind.
+  const resetTeamLauncher =
+    parsed === SESSION_TYPES.WORKFLOW && launchTarget$.get() === 'team';
+  if (resetTeamLauncher) {
+    launchTarget$.set('agent');
+    announce('Workflow uses a single workflow agent.');
+  }
+  if (parsed === prev) {
+    if (resetTeamLauncher) {
+      refreshInstructionPlaceholder();
+      saveState();
+    }
+    return;
+  }
 
   swapModeInstruction(prev, parsed);
   sessionType$.set(parsed);
@@ -288,6 +324,60 @@ export function changeSessionType(value: string): void {
   if (parsed === SESSION_TYPES.TOOL_USE) {
     updateMultiFiles('outputFiles', []);
   }
+  saveState();
+}
+
+/**
+ * Switch between the single-agent and team launchers. Team runs are
+ * interactive-only, so entering team mode from workflow reuses the shared
+ * tool-use transition (draft retention, model revalidation, output reset);
+ * leaving team mode never resurrects workflow.
+ */
+export function changeLaunchTarget(value: LaunchTarget): void {
+  if (value === launchTarget$.get()) return;
+  launchTarget$.set(value);
+  if (value === 'team') {
+    enterToolUseSession();
+    announce('Team launcher selected. Interactive mode.');
+  } else {
+    refreshInstructionPlaceholder();
+    saveState();
+    announce('Agent launcher selected.');
+  }
+}
+
+export function changeTeam(value: string): void {
+  selectedTeamId$.set(value);
+  saveState();
+}
+
+/**
+ * Validate the restored team selection once the host has pushed the resolved
+ * options. Called only from the SET_TEAM_OPTIONS handler — an initially empty
+ * async list is not proof that a restored team vanished.
+ *
+ * Only a team that is absent from the options (deleted) triggers the
+ * fallback. A present-but-disabled team keeps its selection: the disable may
+ * be transient (e.g. remote catalog reload flapping), and the picker already
+ * renders the option disabled with its reason — no silent rewrite, no
+ * persistence change.
+ */
+export function validateTeamSelection(): void {
+  if (launchTarget$.get() !== 'team') return;
+  const options = teamOptions$.get();
+  const current = options.find((opt) => opt.value === selectedTeamId$.get());
+  if (current) return;
+  const fallback = options.find((opt) => !opt.disabled);
+  if (fallback) {
+    selectedTeamId$.set(fallback.value);
+    announce(
+      `Selected team is no longer available. Switched to "${fallback.label}".`,
+    );
+  } else {
+    launchTarget$.set('agent');
+    announce('No runnable teams available. Agent launcher selected.');
+  }
+  refreshInstructionPlaceholder();
   saveState();
 }
 
@@ -316,15 +406,25 @@ export function changeModel(value: string): void {
 // ---------------------------------------------------------------------------
 
 export function buildExecuteMessage(): MainViewExecuteMessage {
+  const launchTarget = launchTarget$.get();
   return buildMainViewExecuteMessage({
     sessionType: sessionType$.get(),
     workflowAgent: workflowAgent$.get(),
+    // Team runs still send the current tool-use agent: the host resolves the
+    // roster root from teamId, and `agent` stays required by validation.
     toolUseAgent: toolUseAgent$.get(),
     model: model$.get(),
     instruction: instruction$.get(),
     singleFiles: singleFiles$.get(),
     multiFiles: multiFiles$.get(),
     checkboxValues: checkboxValues$.get(),
+    session: {
+      launchTarget,
+      teamId:
+        launchTarget === 'team'
+          ? selectedTeamId$.get() || undefined
+          : undefined,
+    },
   });
 }
 

@@ -4,6 +4,7 @@ import type {
 } from '../schemas/mainView/executeMessage';
 import type {
   CheckboxValues,
+  LaunchTarget,
   MultiFiles,
   SessionType,
   SingleFiles,
@@ -18,6 +19,14 @@ export interface MainViewExecutionFormState {
   readonly singleFiles: SingleFiles;
   readonly multiFiles: MultiFiles;
   readonly checkboxValues: CheckboxValues;
+  /**
+   * Launch intent for the run. Team runs carry team identity only — hosts
+   * resolve the roster from `teamId` at the execution boundary.
+   */
+  readonly session?: {
+    readonly launchTarget: LaunchTarget;
+    readonly teamId?: string | undefined;
+  };
 }
 
 type MainViewMultipleFileSelections = Pick<
@@ -44,6 +53,7 @@ export function buildMainViewExecuteMessage(
       baseFile: state.singleFiles.baseFile,
       ...buildMainViewMultipleFileSelections(state.multiFiles),
     },
+    session: state.session,
     toolConfig: state.checkboxValues,
   };
 }
