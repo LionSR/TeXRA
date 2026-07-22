@@ -845,6 +845,18 @@ export abstract class ModelHandler<
    */
   protected compactionRequested = false;
 
+  /**
+   * A successful client-side compaction whose generation request has not yet
+   * succeeded. The outer model node may repeat the same input after a
+   * transport failure; retaining the compacted payload prevents another paid
+   * summarization call. A successful generation commits the payload to the
+   * flow and clears this pending value.
+   */
+  private pendingClientCompaction?: {
+    sourceMessages: M[];
+    result: ClientCompactionResult<M>;
+  };
+
   /** Request compaction on the next API call. */
   requestCompaction(): void {
     this.compactionRequested = true;
@@ -1121,6 +1133,12 @@ export abstract class ModelHandler<
       ).finally(() => {
         this.activeAttemptCredentialRoute = undefined;
       });
+    }).then((result) => {
+      // The caller can now commit result.updatedMessages. Retaining the
+      // pending payload beyond this point could reuse it for a later turn if
+      // the caller mutates the same message array in place.
+      this.pendingClientCompaction = undefined;
+      return result;
     });
   }
 
@@ -1290,6 +1308,11 @@ export abstract class ModelHandler<
     inputTokens: number,
     compact: () => Promise<ClientCompactionResult<M>>,
   ): Promise<ClientCompactionResult<M>> {
+    if (this.pendingClientCompaction?.sourceMessages === messages) {
+      return this.pendingClientCompaction.result;
+    }
+    this.pendingClientCompaction = undefined;
+
     if (!this.shouldCompactByInputTokens(inputTokens)) {
       return { compactedMessages: messages, didCompact: false };
     }
@@ -1321,7 +1344,11 @@ export abstract class ModelHandler<
       },
     );
 
-    return compact();
+    const result = await compact();
+    if (result.didCompact) {
+      this.pendingClientCompaction = { sourceMessages: messages, result };
+    }
+    return result;
   }
 
   /**

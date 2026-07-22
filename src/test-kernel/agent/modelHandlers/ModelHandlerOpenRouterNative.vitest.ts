@@ -10,9 +10,8 @@ import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import type { ResolvedClientCredential } from '@agent/types/ModelHandlerContracts';
-
-// Modules to stub via vi.spyOn
 import * as serverKeysModule from '@auth/serverKeys';
+import { AgentCategory } from '@shared/schemas/agent';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import * as providerConfigModule from '@utils/config/providerConfig';
 
@@ -488,5 +487,76 @@ describe('ModelHandlerOpenRouterNative compaction retries', () => {
       ),
     ).rejects.toBe(credentialFailure);
     expect(send).toHaveBeenCalledOnce();
+  });
+
+  it('reuses successful compaction until generation succeeds', async () => {
+    class TestableHandler extends ModelHandlerOpenRouterNative {
+      compactForTest(
+        messages: ChatMessages[],
+        compact: () => Promise<{
+          compactedMessages: ChatMessages[];
+          didCompact: boolean;
+        }>,
+      ) {
+        return this.maybeCompactByInputTokens(messages, 1, compact);
+      }
+    }
+
+    const handler = new TestableHandler(
+      buildTestModelConfig(OPENROUTER_TEST_CONFIG),
+    );
+    handler.setAgentCategory(AgentCategory.ToolUse);
+    vi.spyOn(handler, 'getStreamingConfig').mockReturnValue(false);
+
+    const messages: ChatMessages[] = [
+      { role: 'user', content: 'original conversation' },
+    ];
+    const compactedMessages: ChatMessages[] = [
+      { role: 'user', content: 'compacted conversation' },
+    ];
+    const compact = vi.fn(async () => ({
+      compactedMessages,
+      didCompact: true,
+    }));
+
+    handler.requestCompaction();
+    await handler.compactForTest(messages, compact);
+
+    const transient = Object.assign(new Error('provider unavailable'), {
+      status: 503,
+    });
+    const send = vi
+      .fn()
+      .mockRejectedValueOnce(transient)
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: { role: 'assistant', content: 'ok' },
+            finishReason: 'stop',
+          },
+        ],
+        usage: { promptTokens: 1, completionTokens: 1 },
+      });
+    const client = { chat: { send } } as unknown as OpenRouter;
+    const options = { client, messages, temperature: 0 };
+
+    await expect(handler.createResponse(options)).rejects.toBe(transient);
+    await expect(handler.createResponse(options)).resolves.toMatchObject({
+      updatedMessages: compactedMessages,
+    });
+
+    expect(compact).toHaveBeenCalledOnce();
+    expect(send).toHaveBeenCalledTimes(2);
+    for (const [request] of send.mock.calls) {
+      expect(request.chatRequest.messages).toBe(compactedMessages);
+    }
+
+    const nextCompact = vi.fn(async () => ({
+      compactedMessages,
+      didCompact: true,
+    }));
+    handler.requestCompaction();
+    await handler.compactForTest(messages, nextCompact);
+    expect(nextCompact).toHaveBeenCalledOnce();
   });
 });
