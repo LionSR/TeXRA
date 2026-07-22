@@ -192,11 +192,12 @@ const OPENROUTER_ROUTING_RUNTIME_REACHABILITY = {
   through:
     'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/ModelFactory.ts -> src/utils/config/providerConfig.ts',
 } satisfies CliRuntimeReachability;
-const KIMI_CODE_PREFER_RUNTIME_REACHABILITY = {
+const KIMI_CODE_ROUTING_RUNTIME_REACHABILITY = {
   // Requires a Kimi Code API key (`texra chat` /key flow or KIMI_CODE_API_KEY).
-  command: 'texra chat --model kimi3',
+  command:
+    'texra agents run <tool-use-agent> --model kimi3 --instruction "answer a short question"',
   through:
-    'packages/cli/src/commands/chat.ts -> packages/cli/src/runtime/modelAccess.ts -> src/model/computeModelOptions.ts -> src/utils/config/providerConfig.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/ModelFactory.ts -> src/model/kimiCodeSubscriptionRouting.ts',
 } satisfies CliRuntimeReachability;
 const PROVIDER_REGION_RUNTIME_REACHABILITY = {
   command:
@@ -573,7 +574,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // duplicate those existing controls. Label/description are reused by
   // reference from the named provider-setting consts; `.prefault()` matches
   // the provider setting's `defaultValue` (absent = false) — both pinned
-  // against the live getters by the guardrail suite.
+  // against the live getters by the guardrail suite. The Kimi Code prefer
+  // switch is read by `getPreferKimiCode()` during model-handler dispatch.
   {
     key: GlobalStateKey.KIMI_CODE_PREFER,
     schema: z.boolean().prefault(false),
@@ -582,8 +584,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'model',
     store: 'globalState',
     hosts: ['cli'],
-    cliConsumer: 'src/utils/config/providerConfig.ts',
-    cliRuntimeReachability: KIMI_CODE_PREFER_RUNTIME_REACHABILITY,
+    cliConsumer: 'src/agent/runtime/ModelFactory.ts',
+    cliRuntimeReachability: KIMI_CODE_ROUTING_RUNTIME_REACHABILITY,
   },
   {
     key: GlobalStateKey.MOONSHOT_USE_CHINA,

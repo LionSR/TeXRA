@@ -17,6 +17,7 @@ import {
 import { SwitchViewMessageSchema } from '../commonViewMessages';
 import { commandOnly, withFilesArray } from '../messageFactories';
 import {
+  CurrentFileTypeSchema,
   ExtendedDocumentFileTypeSchema,
   MultipleDocumentFileTypeSchema,
 } from '../fileTypes';
@@ -150,7 +151,7 @@ const SetFilesMessages = [
 const FileOperationMessages = [
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.GET_CURRENT_FILE),
-    fileType: z.string().optional(),
+    fileType: CurrentFileTypeSchema.optional(),
     baseFile: z.string().optional(),
   }),
   commandOnly(MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES),

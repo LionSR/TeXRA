@@ -50,7 +50,7 @@ import './components/LatexDiffsSection';
 import './components/InstructionPanel';
 import './components/OnboardingWelcomeCard';
 import './components/OnboardingSetupCard';
-import { SESSION_TYPES, type DocumentFileType } from './constants';
+import { SESSION_TYPES } from './constants';
 import {
   agentConfigBanner$,
   apiKeyBanner$,
@@ -473,7 +473,7 @@ export class MainApp extends MainAppBase {
                       detail,
                     }: CustomEvent<MultipleFilesTypeActionDetail>) => {
                       if (detail.type !== 'output') {
-                        addOpenedFiles(detail.type as DocumentFileType);
+                        addOpenedFiles(detail.type);
                       }
                     }}
                     @empty-files=${({

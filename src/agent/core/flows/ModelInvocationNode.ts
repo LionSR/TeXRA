@@ -10,7 +10,10 @@ import type {
   AgentCore,
   BaseFlowContextInit,
 } from '@agent/core/flows/BaseFlowServices';
-import type { FinalTool } from '@agent/types/ModelHandlerContracts';
+import type {
+  FinalTool,
+  ModelCredentialRoute,
+} from '@agent/types/ModelHandlerContracts';
 import { requiresFlowAutoRetry } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
 
@@ -63,6 +66,7 @@ type InvocationServices = Pick<
 > &
   Pick<BaseFlowContextInit, 'setAbortController'> & {
     readonly client: unknown;
+    readonly clientCredentialRoute?: ModelCredentialRoute;
     readonly refreshClient?: () => Promise<void>;
   };
 

@@ -14,6 +14,11 @@ All notable changes to this project will be documented in this file.
 - **Parallel runs finish reliably after long pauses** — delayed storage work
   no longer causes the application to exit while several agents are saving
   their final results.
+- **Latexdiff artifacts with short abbreviated commit hashes are recognized
+  consistently** — a generated `basename-diffHASH.tex` file with a 4-5
+  character hash is now reliably treated as a diff artifact everywhere
+  (source-editing tools, cleanup/pack commands, follow-up routing) instead of
+  being misclassified as an editable source file in some code paths.
 
 ### Extension (VS Code)
 
@@ -30,6 +35,13 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
+- **Kimi Code subscription joins model access** — the launcher and `/api` now
+  offer Kimi Code alongside ChatGPT subscription, included TeXRA access, and
+  personal API keys. Selecting it routes Kimi models through your Kimi Code
+  membership while other models fall back to your saved keys.
+- **API keys can be set from `/config`** — a new "API keys" entry opens the
+  masked key-entry form for every provider, and a "Prefer Kimi Code" toggle
+  appears under "Models and providers".
 - **Nested subagents remain visible** — a focused subagent reports how many
   direct subagents it owns, including completed work that remains available in
   its child list.

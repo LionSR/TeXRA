@@ -3,7 +3,10 @@ import { Badge } from '@inkjs/ui';
 import { useEffect, useState } from 'react';
 
 import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
-import { isCodexSubscriptionActive } from '@model/providerCapabilities';
+import {
+  isCodexSubscriptionActive,
+  isKimiCodeSubscriptionActive,
+} from '@model/providerCapabilities';
 import { isActivePhase } from '@shared/streams/streamStatus';
 
 import { approvalQueueStatus } from '../state/approvalQueue';
@@ -85,7 +88,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const accessTarget = streamAccessTarget(statusSlice, sessionMeta);
 
   // Whether the selected stream's model/category would currently route through
-  // the ChatGPT subscription (preference + eligibility + signed in). The
+  // the ChatGPT subscription (preference + eligibility + signed in) or the Kimi
+  // Code coding endpoint (prefer switch + eligibility + stored key). The
   // completed usage snapshot supersedes this prospective value in the display.
   // Polling re-reads external config changes; an in-process access change also
   // bumps `codexPreferenceVersion` for an immediate refresh.
@@ -95,41 +99,51 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     readonly category: typeof accessTarget.category;
     readonly preferenceVersion: number;
     readonly active: boolean;
+    readonly kimiCodeActive: boolean;
   }>();
-  const subscriptionActive =
+  const resolutionCurrent =
     subscriptionResolution?.model === accessTarget.model &&
     subscriptionResolution.category === accessTarget.category &&
-    subscriptionResolution.preferenceVersion === codexPreferenceVersion
-      ? subscriptionResolution.active
-      : false;
+    subscriptionResolution.preferenceVersion === codexPreferenceVersion;
+  const subscriptionActive = resolutionCurrent
+    ? (subscriptionResolution?.active ?? false)
+    : false;
+  const kimiCodeActive = resolutionCurrent
+    ? (subscriptionResolution?.kimiCodeActive ?? false)
+    : false;
   const modelAccess = resolveCliModelAccessRoute({
     apiMode: sessionMeta.apiMode,
     subscriptionActive,
+    kimiCodeActive,
     usageRoute: statusSlice?.usage?.usageRoute,
   });
 
   useEffect(() => {
     let cancelled = false;
-    const resolve = (active: boolean): void => {
+    const resolve = (active: boolean, kimiActive: boolean): void => {
       if (cancelled) return;
       setSubscriptionResolution({
         ...accessTarget,
         preferenceVersion: codexPreferenceVersion,
         active,
+        kimiCodeActive: kimiActive,
       });
     };
     const agentCategory = accessTarget.category;
     if (agentCategory === undefined) {
-      resolve(false);
+      resolve(false, false);
       return;
     }
     let inFlight = false;
     const refresh = (): void => {
       if (inFlight) return; // Skip if the previous read has not resolved.
       inFlight = true;
-      void isCodexSubscriptionActive(accessTarget.model, agentCategory)
-        .then(resolve)
-        .catch(() => resolve(false))
+      void Promise.all([
+        isCodexSubscriptionActive(accessTarget.model, agentCategory),
+        isKimiCodeSubscriptionActive(accessTarget.model),
+      ])
+        .then(([active, kimiActive]) => resolve(active, kimiActive))
+        .catch(() => resolve(false, false))
         .finally(() => {
           inFlight = false;
         });

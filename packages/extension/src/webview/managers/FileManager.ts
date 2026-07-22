@@ -19,21 +19,22 @@ import {
   FILE_SELECTION_COMMAND_IDS,
   MULTIPLE_FILE_COMMANDS,
   getFileLister,
-  type MultiFileCategory,
 } from '@frontend/files';
 import { selectFiles } from '@frontend/ui/dialogs';
 import {
   showLoggedErrorMessage,
   toErrorMessage,
 } from '@frontend/ui/errorHandlingUtils';
+import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewInboundMessage } from '@shared/schemas';
 import {
-  WorkspaceFS,
-  parseLatexDiffMetadata,
-  deriveBaseFileFromLatexDiff,
-} from '@utils/files';
+  isMultipleDocumentFileType,
+  type CurrentFileType,
+  type ExtendedDocumentFileType,
+} from '@shared/schemas/fileTypes';
+import { WorkspaceFS } from '@utils/files';
 
 import { getConfig } from '@utils/config';
 import { getFileStem } from '@utils/core';
@@ -144,7 +145,9 @@ export class FileManager extends BaseWebviewManager {
     message: SelectMultipleFilesMessage,
   ): Promise<void> {
     const { fileType, currentFile } = message;
-    const commands = MULTIPLE_FILE_COMMANDS.get(fileType as MultiFileCategory);
+    const commands = isMultipleDocumentFileType(fileType)
+      ? MULTIPLE_FILE_COMMANDS.get(fileType)
+      : undefined;
     if (!commands) {
       logger.warn(CHANNEL, `Unsupported multiple file selection: ${fileType}`);
       return;
@@ -202,7 +205,8 @@ export class FileManager extends BaseWebviewManager {
     }
 
     if (fileType === 'base') {
-      const derivedBaseFile = deriveBaseFileFromLatexDiff(currentOpenFile);
+      const derivedBaseFile =
+        parseVersionControlDiffFilename(currentOpenFile)?.sourcePath ?? null;
       const derivedBaseFileExists = derivedBaseFile
         ? await WorkspaceFS.exists(derivedBaseFile)
         : false;
@@ -227,7 +231,7 @@ export class FileManager extends BaseWebviewManager {
   /** Apply a host-neutral base-file selection plan to the VS Code host. */
   private async applyBaseFileSelectionPlan(
     plan: MainViewBaseFileSelectionPlan,
-    fileType: string,
+    fileType: CurrentFileType,
     currentOpenFile: string,
   ): Promise<void> {
     if (plan.log) {
@@ -258,12 +262,12 @@ export class FileManager extends BaseWebviewManager {
 
   private async maybeSelectCommitFromDiffFile(filePath: string): Promise<void> {
     const fileName = path.basename(filePath);
-    const latexDiffMetadata = parseLatexDiffMetadata(filePath);
-    if (!latexDiffMetadata) {
+    const parsed = parseVersionControlDiffFilename(filePath);
+    if (!parsed) {
       return;
     }
 
-    const { commitHash } = latexDiffMetadata;
+    const { commitHash } = parsed;
     const commitLabel = await vscode.commands.executeCommand<string | null>(
       'texra.findCommitInHistory',
       commitHash,
@@ -286,7 +290,9 @@ export class FileManager extends BaseWebviewManager {
     }
   }
 
-  async handleAddOpenedFiles(fileType: string): Promise<void> {
+  async handleAddOpenedFiles(
+    fileType: ExtendedDocumentFileType,
+  ): Promise<void> {
     const openedFiles = await this.getOpenedFiles();
     const allowedExtensions = new Set(
       getIncludedExtensions(fileType as ExtensionCategory).map(

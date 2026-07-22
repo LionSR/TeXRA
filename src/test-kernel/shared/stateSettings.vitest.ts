@@ -367,6 +367,8 @@ describe('state settings catalog', () => {
     //    region switches, GLM Coding Plan) are CLI-only catalog rows mirroring
     //    the extension's PROVIDER_VSCODE_SETTINGS controls, read through
     //    providerConfig/ProxyConfigResolver during CLI model dispatch.
+    //  - the Kimi Code prefer switch is read by ModelFactory when dispatching
+    //    dual-backend Kimi models in CLI runs.
     // auto-open-pdf (no CLI opener), latexdiff, and the formatter are
     // intentionally excluded. Changing the CLI roster must be a deliberate edit
     // here, not an accident of flipping `hosts`.

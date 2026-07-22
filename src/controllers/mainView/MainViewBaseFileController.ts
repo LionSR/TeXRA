@@ -33,7 +33,7 @@ export interface MainViewBaseFileSelectionPlan {
  * keeps the current file with a notification when it does not.
  *
  * The caller is responsible for deriving the base file path (via
- * `deriveBaseFileFromLatexDiff`) and checking disk existence (via
+ * `parseVersionControlDiffFilename`) and checking disk existence (via
  * `WorkspaceFS.exists`). This function only decides what to do with
  * those results.
  *

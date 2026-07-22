@@ -1,6 +1,5 @@
 // Local imports - shared schemas
 import {
-  DocumentFileTypeSchema,
   MULTIPLE_DOCUMENT_FILE_TYPES,
   SessionTypeSchema,
   type DocumentFileType,
@@ -18,7 +17,6 @@ export const SESSION_TYPES = {
 
 export type { SessionType, DocumentFileType, MultipleDocumentFileType };
 
-export const DOCUMENT_FILE_TYPES = DocumentFileTypeSchema.options;
 export { MULTIPLE_DOCUMENT_FILE_TYPES };
 
 export function parseSessionType(

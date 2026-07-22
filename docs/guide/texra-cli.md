@@ -188,7 +188,8 @@ texra agents run review --input main.tex --instruction "Check the proof." --prin
 ```
 
 Slash commands inside the session: `/tools` lists and toggles integrations,
-`/api` switches between hosted and personal-key access, `/model` switches to
+`/api` switches between ChatGPT or Kimi Code subscriptions, hosted access,
+and personal-key access, `/model` switches to
 another model from the same provider mid-session (the change applies
 immediately and persists on resume), `/skills` lists available skills and
 applies one to your next request, and `/resume` restores a stored execution.

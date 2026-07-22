@@ -7,7 +7,6 @@ export { StorageFS, GlobalStorageFS } from './storageFS';
 export * from './mimeUtils';
 export * from './taskRunStorage';
 export * from './flexibleFS';
-export * from './latexDiffUtils';
 
 // Note: pastedImageUtils, rulesUtils, and varsUtils are NOT re-exported.
 // Import directly from their source modules:

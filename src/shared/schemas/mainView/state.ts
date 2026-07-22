@@ -12,6 +12,7 @@ import {
   requiredFileListFields,
 } from '../fileFields';
 import {
+  CurrentFileTypeSchema,
   DocumentFileTypeSchema,
   MultipleDocumentFileTypeSchema,
 } from '../fileTypes';
@@ -268,7 +269,7 @@ export type InstructionChangeDetail = StringValueDetail;
 export type CommitChangeDetail = StringValueDetail;
 
 const FileActionDetailSchema = z.object({
-  type: z.union([DocumentFileTypeSchema, z.enum(['base', 'edited'])]),
+  type: CurrentFileTypeSchema,
 });
 export type FileActionDetail = z.infer<typeof FileActionDetailSchema>;
 

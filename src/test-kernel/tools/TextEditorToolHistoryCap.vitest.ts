@@ -71,7 +71,12 @@ async function callTextEditor(
 }
 
 interface TextEditorToolInternals {
-  fileHistory: Map<string, Map<string, string[]>>;
+  fileHistory: {
+    hasExecution(executionId: string): boolean;
+    filesFor(
+      executionId: string,
+    ): ReadonlyMap<string, readonly string[]> | undefined;
+  };
 }
 
 describe('TextEditorTool undo history lifecycle', () => {
@@ -105,7 +110,7 @@ describe('TextEditorTool undo history lifecycle', () => {
 
     const internals = tool as unknown as TextEditorToolInternals;
     const history = [
-      ...(internals.fileHistory.get(EXECUTION_ID)?.values() ?? []),
+      ...(internals.fileHistory.filesFor(EXECUTION_ID)?.values() ?? []),
     ].at(0);
     assert.ok(history, 'expected an undo-history entry for loop.tex');
     assert.ok(
@@ -156,13 +161,17 @@ describe('TextEditorTool undo history lifecycle', () => {
 
       const internals = tool as unknown as TextEditorToolInternals;
       assert.strictEqual(
-        [...(internals.fileHistory.get(EXECUTION_ID)?.values() ?? [])].at(0)
-          ?.length,
+        [...(internals.fileHistory.filesFor(EXECUTION_ID)?.values() ?? [])].at(
+          0,
+        )?.length,
         1,
       );
 
       session.executions.untrack(EXECUTION_ID);
-      assert.strictEqual(internals.fileHistory.has(EXECUTION_ID), false);
+      assert.strictEqual(
+        internals.fileHistory.hasExecution(EXECUTION_ID),
+        false,
+      );
     } finally {
       session.executions.untrack(EXECUTION_ID);
     }
