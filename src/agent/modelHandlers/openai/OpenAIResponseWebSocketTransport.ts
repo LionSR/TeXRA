@@ -344,14 +344,16 @@ export class OpenAIResponseWebSocketTransport {
         if (settled) return;
         settled = true;
         cleanup();
-        // Invalidate the connection on error events (e.g., websocket_connection_limit_reached).
-        // The server may close the socket after sending the error, but the close event
-        // fires after this handler and would be a no-op (settled=true).
-        this.closeWebSocket();
-        attachSdkErrorMetadata(error, {
-          provider: 'openai',
-          kind: 'connection',
-        });
+        // The SDK emits both provider error events and socket failures through
+        // this channel. Structured provider errors must retain their own code;
+        // only an error without an API event is evidence that the route broke.
+        if (!error.error) {
+          this.closeWebSocket();
+          attachSdkErrorMetadata(error, {
+            provider: 'openai',
+            kind: 'connection',
+          });
+        }
         rejectWithPartial(error);
       };
 

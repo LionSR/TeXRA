@@ -9,6 +9,7 @@ import { WebSocketError } from 'openai/resources/responses/internal-base';
 import type { AgentTrace } from '@agent/trace';
 import { OpenAIResponseWebSocketTransport } from '@agent/modelHandlers/openai/OpenAIResponseWebSocketTransport';
 import type { ResponseStreamProcessor } from '@agent/modelHandlers/openai/ResponseStreamProcessor';
+import { normalizeProviderError } from '@common/errors';
 import { detectSdkErrorMetadata } from '@common/errors/sdkErrorUtils';
 
 // Third-party type imports
@@ -151,6 +152,26 @@ describe('OpenAIResponseWebSocketTransport idle connection errors', () => {
 
     await expect(request).rejects.toBe(error);
     expect(detectSdkErrorMetadata(error)?.kind).toBe('connection');
+  });
+
+  it('preserves structured provider errors without cooling the connection', async () => {
+    const transport = createTransport();
+    const ws = await internals(transport).getOrCreateWebSocket(fakeClient);
+    const request = internals(transport).executeViaWebSocket(ws, {});
+    const error = new WebSocketError('invalid request', {
+      type: 'error',
+      code: 'invalid_request_error',
+      message: 'invalid request',
+      param: null,
+      sequence_number: 1,
+    });
+
+    ws.emit('error', error);
+
+    await expect(request).rejects.toBe(error);
+    expect(detectSdkErrorMetadata(error)).toBeUndefined();
+    expect(normalizeProviderError(error).statusCode).toBe(400);
+    expect(internals(transport).wsConnection).toBe(ws);
   });
 
   it('tags an unexpected in-flight socket close as a connection failure', async () => {
