@@ -1,5 +1,5 @@
 // Third-party imports
-import { toJSONSchema, z } from 'zod';
+import { z } from 'zod';
 
 // Local imports
 import {
@@ -19,7 +19,7 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { defineTool } from './core/define';
+import { defineTool, toToolParameters } from './core/define';
 
 const CHANNEL = 'DiagnosticsTool';
 
@@ -95,11 +95,7 @@ export function withoutDiagnosticsAddCommand(
   return {
     ...tool,
     description: DIAGNOSTICS_READ_ONLY_DESCRIPTION,
-    parameters: toJSONSchema(DiagnosticsReadInputSchema, {
-      target: 'draft-2020-12',
-      unrepresentable: 'any',
-      io: 'input',
-    }) as Record<string, unknown>,
+    parameters: toToolParameters(DiagnosticsReadInputSchema),
     zodSchema: DiagnosticsReadInputSchema,
   };
 }
