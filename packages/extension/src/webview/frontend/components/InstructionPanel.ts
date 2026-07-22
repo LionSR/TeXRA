@@ -362,7 +362,11 @@ export class InstructionPanel extends LitElement {
           isTeam ? 'team-picker-visible' : 'agent-picker-visible'
         }"
       >
-        <div class="launcher-picker-pane team-picker-pane">
+        <div
+          class="launcher-picker-pane team-picker-pane"
+          ?inert=${!isTeam}
+          aria-hidden=${isTeam ? 'false' : 'true'}
+        >
           ${renderIconActionButton({
             id: 'teamSettingsButton',
             icon: 'organization',
@@ -386,7 +390,11 @@ export class InstructionPanel extends LitElement {
             })}
           </wa-select>
         </div>
-        <div class="launcher-picker-pane agent-picker-pane">
+        <div
+          class="launcher-picker-pane agent-picker-pane"
+          ?inert=${isTeam}
+          aria-hidden=${isTeam ? 'true' : 'false'}
+        >
           ${renderIconActionButton({
             id: 'agentSettingsButton',
             icon: 'sparkle',

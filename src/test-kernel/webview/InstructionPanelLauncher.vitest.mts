@@ -163,6 +163,18 @@ describe('instruction-panel launcher', () => {
       ).toBe(true);
       expect(query(element, '#teamPicker')).toBeTruthy();
       expect(query(element, '#teamSettingsButton')).toBeTruthy();
+      expect(query(element, '.agent-picker-pane')?.hasAttribute('inert')).toBe(
+        false,
+      );
+      expect(
+        query(element, '.agent-picker-pane')?.getAttribute('aria-hidden'),
+      ).toBe('false');
+      expect(query(element, '.team-picker-pane')?.hasAttribute('inert')).toBe(
+        true,
+      );
+      expect(
+        query(element, '.team-picker-pane')?.getAttribute('aria-hidden'),
+      ).toBe('true');
     });
 
     it('shows the workflow agent picker in workflow sessions', async () => {
@@ -227,6 +239,18 @@ describe('instruction-panel launcher', () => {
       ).toBe(true);
       expect(query(element, '#toolUseAgent')).toBeTruthy();
       expect(query(element, '#agentSettingsButton')).toBeTruthy();
+      expect(query(element, '.team-picker-pane')?.hasAttribute('inert')).toBe(
+        false,
+      );
+      expect(
+        query(element, '.team-picker-pane')?.getAttribute('aria-hidden'),
+      ).toBe('false');
+      expect(query(element, '.agent-picker-pane')?.hasAttribute('inert')).toBe(
+        true,
+      );
+      expect(
+        query(element, '.agent-picker-pane')?.getAttribute('aria-hidden'),
+      ).toBe('true');
 
       const options = [
         ...(element.shadowRoot?.querySelectorAll('#teamPicker wa-option') ??
