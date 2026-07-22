@@ -26,20 +26,14 @@ import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import { selectStyles } from '@shared/styles/selectStyles';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import {
+  readSelectValue,
   renderAgentOptions,
   renderModelOptions,
 } from '@shared/utils/selectTemplates';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 import { ProgressEvents } from '../events';
-import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type { FollowupOptionsState } from '../store';
-
-/** Read the current value from a wa-select change event, defaulting to ''. */
-function readSelectValue(event: Event): string {
-  const select = event.currentTarget as WaSelect | null;
-  return typeof select?.value === 'string' ? select.value : '';
-}
 
 @customElement('workflow-tool-use-followup-section')
 export class WorkflowToolUseFollowupSection extends LitElement {

@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-import { normalizeFilePath } from '@utils/core';
+import { byString, byStringProp, normalizeFilePath } from '@utils/core';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
 
 import {
@@ -35,7 +35,7 @@ export async function listWorkspaceFiles(
     relativeDirectory: string,
   ): Promise<void> {
     const entries = await options.readDirectory(directory);
-    entries.sort(([left], [right]) => left.localeCompare(right));
+    entries.sort(byStringProp(([name]) => name));
 
     for (const [name, type] of entries) {
       const relativePath = normalizeFilePath(
@@ -57,5 +57,5 @@ export async function listWorkspaceFiles(
   }
 
   await visit(options.root, '');
-  return results.sort((left, right) => left.localeCompare(right));
+  return results.sort(byString);
 }

@@ -1,5 +1,6 @@
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { getBasename, getFileStem, normalizeFilePath } from '@utils/core';
+import { getPathSegments } from '@utils/core/pathCore';
 
 import {
   LEGACY_AUXILIARY_KEYWORDS_KEY,
@@ -39,10 +40,6 @@ export interface PreparedFileFilters {
 }
 
 type ConfigReader = (key: string, fallback: string[]) => string[];
-
-function getPathSegments(filePath: string): string[] {
-  return normalizeFilePath(filePath).split('/');
-}
 
 function normalizeList(values: readonly string[]): string[] {
   return values

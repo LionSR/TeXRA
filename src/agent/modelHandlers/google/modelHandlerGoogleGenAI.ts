@@ -1,5 +1,4 @@
 // Third-party imports
-import { nanoid } from 'nanoid';
 import {
   GoogleGenAI,
   FunctionCallingConfigMode,
@@ -43,6 +42,7 @@ import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas/toolResult';
+import { generateShortId } from '@utils/core';
 import { getShortDisplayPath } from '@utils/files';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
 
@@ -862,7 +862,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       if (!call?.name) continue;
       results.push({
         provider: 'google',
-        callId: call.id ?? nanoid(),
+        callId: call.id ?? generateShortId(),
         name: call.name,
         input: call.args,
         raw: call,
