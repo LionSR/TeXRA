@@ -14,6 +14,11 @@ All notable changes to this project will be documented in this file.
 - **Parallel runs finish reliably after long pauses** — delayed storage work
   no longer causes the application to exit while several agents are saving
   their final results.
+- **Latexdiff artifacts with short abbreviated commit hashes are recognized
+  consistently** — a generated `basename-diffHASH.tex` file with a 4-5
+  character hash is now reliably treated as a diff artifact everywhere
+  (source-editing tools, cleanup/pack commands, follow-up routing) instead of
+  being misclassified as an editable source file in some code paths.
 
 ### Extension (VS Code)
 
