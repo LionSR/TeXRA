@@ -13,6 +13,7 @@ import {
 } from '@shared/schemas/agentPresets';
 import {
   agentKeyOf,
+  agentMatchesIdentifier,
   type AgentCategory,
   type AgentSource,
 } from '@shared/schemas/agent';
@@ -110,6 +111,15 @@ export class SettingsAgentCatalogController {
     return [...names].sort();
   }
 
+  /**
+   * Preview the team root for a preset's tool-use member list. Mirrors launch
+   * semantics: the preview plans with the preset's own members only, so a
+   * custom team with no delegating members previews no root — the same state
+   * the launcher disables with "no runnable team root". Built-in root
+   * definitions may be missing from the catalog before the remote catalog
+   * loads or the user signs in, so delegation-capable entries are synthesized
+   * for built-in root names the preset itself lists.
+   */
   getPresetToolUseRoot(toolUseAgents: string[]): string | undefined {
     const preset: TeamPreset = {
       id: 'settings-preview',
@@ -117,33 +127,16 @@ export class SettingsAgentCatalogController {
       description: '',
       icon: 'bookmark',
       workflowAgents: [],
-      toolUseAgents: [
-        ...toolUseAgents,
-        ...BUILTIN_TEAM_ROOT_AGENT_NAMES.filter(
-          (name) => !toolUseAgents.includes(name),
-        ),
-      ],
+      toolUseAgents,
       source: 'custom',
     };
     const catalogAgents = this.deps.state.getAgents('toolUse');
-    const knownBuiltInRoots = new Set([
-      ...BUILTIN_TEAM_ROOT_AGENT_NAMES,
-      ...(this.deps.builtInOrchestratorAgentNames ?? []),
-    ]);
-    const rootCandidates = [
-      ...catalogAgents,
-      ...[...knownBuiltInRoots]
-        .filter((name) => !catalogAgents.some((agent) => agent.name === name))
-        .map((name): SettingsAgentCatalogEntry => ({
-          name,
-          source: 'builtInToolUse',
-          category: 'toolUse',
-          tools: ['delegate_agent'],
-        })),
-    ];
     return planTeamRun(preset, {
       workflowAgents: [],
-      toolUseAgents: rootCandidates,
+      toolUseAgents: [
+        ...catalogAgents,
+        ...this.synthesizedBuiltInRootEntries(toolUseAgents, catalogAgents),
+      ],
     }).rootAgent?.name;
   }
 
@@ -248,6 +241,37 @@ export class SettingsAgentCatalogController {
         enabledKeys === undefined ||
         enabledKeysIncludeAgent(enabledKeys, entry),
     };
+  }
+
+  /**
+   * Delegation-capable stand-ins for built-in team roots the preset lists but
+   * the catalog has not loaded yet (pre-sign-in or pre-remote-fetch), so the
+   * preview can plan with them without inventing phantom catalog members.
+   */
+  private synthesizedBuiltInRootEntries(
+    toolUseAgents: readonly string[],
+    catalogAgents: readonly SettingsAgentCatalogEntry[],
+  ): SettingsAgentCatalogEntry[] {
+    const knownBuiltInRoots = new Set([
+      ...BUILTIN_TEAM_ROOT_AGENT_NAMES,
+      ...(this.deps.builtInOrchestratorAgentNames ?? []),
+    ]);
+    return [...knownBuiltInRoots]
+      .filter(
+        (name) =>
+          toolUseAgents.some((identifier) =>
+            agentMatchesIdentifier(
+              { source: 'builtInToolUse', name },
+              identifier,
+            ),
+          ) && !catalogAgents.some((agent) => agent.name === name),
+      )
+      .map((name): SettingsAgentCatalogEntry => ({
+        name,
+        source: 'builtInToolUse',
+        category: 'toolUse',
+        tools: ['delegate_agent'],
+      }));
   }
 
   private getPreset(presetId: string): AgentModePreset | null {

@@ -432,6 +432,14 @@ describe('resolveTeamLaunch', () => {
     };
   }
 
+  /** A custom team whose single workflow member is missing and TeXRA-hosted. */
+  function hostedWriterPreset(): TeamPreset {
+    return preset({
+      workflowAgents: ['hosted-writer'],
+      texraHostedAgents: ['hosted-writer'],
+    });
+  }
+
   it('returns execution-scoped fields for a ready team', async () => {
     await expect(resolveTeamLaunch(launchArgs())).resolves.toEqual({
       status: 'ready',
@@ -473,12 +481,7 @@ describe('resolveTeamLaunch', () => {
     await expect(
       resolveTeamLaunch(
         launchArgs({
-          customPresetsRaw: [
-            preset({
-              workflowAgents: ['hosted-writer'],
-              texraHostedAgents: ['hosted-writer'],
-            }),
-          ],
+          customPresetsRaw: [hostedWriterPreset()],
           providedChoice: 'continue',
           choose,
         }),
@@ -491,24 +494,14 @@ describe('resolveTeamLaunch', () => {
     await expect(
       resolveTeamLaunch(
         launchArgs({
-          customPresetsRaw: [
-            preset({
-              workflowAgents: ['hosted-writer'],
-              texraHostedAgents: ['hosted-writer'],
-            }),
-          ],
+          customPresetsRaw: [hostedWriterPreset()],
         }),
       ),
     ).resolves.toEqual({ status: 'cancelled' });
     await expect(
       resolveTeamLaunch(
         launchArgs({
-          customPresetsRaw: [
-            preset({
-              workflowAgents: ['hosted-writer'],
-              texraHostedAgents: ['hosted-writer'],
-            }),
-          ],
+          customPresetsRaw: [hostedWriterPreset()],
           choose: async () => undefined,
         }),
       ),
@@ -520,12 +513,7 @@ describe('resolveTeamLaunch', () => {
     await expect(
       resolveTeamLaunch(
         launchArgs({
-          customPresetsRaw: [
-            preset({
-              workflowAgents: ['hosted-writer'],
-              texraHostedAgents: ['hosted-writer'],
-            }),
-          ],
+          customPresetsRaw: [hostedWriterPreset()],
           canAccessRemoteCatalog: async () => true,
           refreshRemote,
         }),

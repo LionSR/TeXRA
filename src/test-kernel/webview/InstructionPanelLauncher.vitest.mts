@@ -6,11 +6,11 @@ import type { SessionContextValue, TeamOptionData } from '@shared/schemas';
 
 // Local imports - component type and context
 import type { InstructionPanel } from '@webview/frontend/components/InstructionPanel';
-import type { ContextProvider } from '@lit/context';
 import type { sessionContext } from '@webview/frontend/contexts/mainViewContexts';
 
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+import type { ContextProvider } from '@lit/context';
 
 // @lit/context's request/provider event classes capture the global `Event`
 // constructor at module-evaluation time, so every import that transitively

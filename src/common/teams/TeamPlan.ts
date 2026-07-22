@@ -141,7 +141,7 @@ export function teamPlanHasGaps(plan: TeamRunPlan): boolean {
 
 /** TeXRA-hosted definitions missing from this plan, independent of models. */
 export function teamTexraHostedMissingNames(plan: TeamRunPlan): string[] {
-  const missing = [...plan.missingWorkflowAgents, ...plan.missingToolUseAgents];
+  const missing = missingMemberNames(plan);
   const hosted = teamHostedNamesForPreflight(plan.preset, missing);
   return missing.filter((name) => hosted.has(name));
 }
@@ -260,10 +260,7 @@ export function buildTeamOptions(
         icon: plan.preset.icon,
         source: plan.preset.source,
         description: plan.preset.description,
-        unavailableMembers: [
-          ...plan.missingWorkflowAgents,
-          ...plan.missingToolUseAgents,
-        ],
+        unavailableMembers: missingMemberNames(plan),
         rootAgentName: plan.rootAgent?.name ?? null,
         disabled: blockReason ? true : undefined,
         disabledReason: blockReason
@@ -281,10 +278,7 @@ export async function loadTeamOptions<T extends TeamCatalogAgent>(ports: {
 }): Promise<TeamOptionData[]> {
   const presets = teamPresets(ports.customPresetsRaw);
   const planCurrent = () =>
-    planTeamRuns(presets, {
-      workflowAgents: ports.getAgents(AgentCategory.Workflow),
-      toolUseAgents: ports.getAgents(AgentCategory.ToolUse),
-    });
+    planTeamRuns(presets, currentCatalogOptions(ports.getAgents));
   const result = await refreshRemoteCatalogForGaps(
     planCurrent(),
     (plans) => plans.some(teamPlanHasGaps),
@@ -328,24 +322,20 @@ export async function resolveTeamLaunch<T extends TeamCatalogAgent>(args: {
   if (!preset) return { status: 'unknown-team' };
 
   const planCurrent = () =>
-    planTeamRun(preset, {
-      workflowAgents: args.getAgents(AgentCategory.Workflow),
-      toolUseAgents: args.getAgents(AgentCategory.ToolUse),
-    });
+    planTeamRun(preset, currentCatalogOptions(args.getAgents));
   const refreshed = await refreshRemoteCatalogForGaps(
     planCurrent(),
     teamPlanHasGaps,
     planCurrent,
     args,
   );
-  const missing = [
-    ...refreshed.value.missingWorkflowAgents,
-    ...refreshed.value.missingToolUseAgents,
-  ];
   const preflight = await preflightTeamAvailability({
     initial: refreshed.value,
     unresolvedNames: teamTexraHostedMissingNames,
-    texraHostedNames: teamHostedNamesForPreflight(preset, missing),
+    texraHostedNames: teamHostedNamesForPreflight(
+      preset,
+      missingMemberNames(refreshed.value),
+    ),
     canAccessRemoteCatalog: args.canAccessRemoteCatalog,
     providedChoice: args.providedChoice,
     choose: args.choose,
@@ -357,10 +347,12 @@ export async function resolveTeamLaunch<T extends TeamCatalogAgent>(args: {
     remoteCatalogRefreshAttempted: refreshed.remoteCatalogRefreshAttempted,
   });
 
-  if (preflight.status === 'cancelled') return { status: 'cancelled' };
-  if (preflight.status === 'choice-required') {
-    // This is reachable only when no provided choice exists and the interactive
-    // choice port returns no decision. Hosts treat that dismissal as cancel.
+  // 'choice-required' is reachable only when no provided choice exists and the
+  // interactive choice port returns no decision; hosts treat dismissal as cancel.
+  if (
+    preflight.status === 'cancelled' ||
+    preflight.status === 'choice-required'
+  ) {
     return { status: 'cancelled' };
   }
   if (preflight.status === 'unavailable') {
@@ -381,7 +373,7 @@ export async function resolveTeamLaunch<T extends TeamCatalogAgent>(args: {
     status: 'ready',
     fields: teamExecutionFields(plan),
     partial: preflight.partial,
-    missingNames: [...plan.missingWorkflowAgents, ...plan.missingToolUseAgents],
+    missingNames: missingMemberNames(plan),
   };
 }
 
@@ -399,6 +391,21 @@ export async function refreshRemoteCatalogForGaps<T>(
     return { value: replan(), remoteCatalogRefreshAttempted: true };
   }
   return { value, remoteCatalogRefreshAttempted: false };
+}
+
+/** Snapshot the current agent catalog into run options for (re)planning. */
+function currentCatalogOptions<T extends TeamCatalogAgent>(
+  getAgents: (category: AgentCategory) => readonly T[],
+): TeamRunOptions<T> {
+  return {
+    workflowAgents: getAgents(AgentCategory.Workflow),
+    toolUseAgents: getAgents(AgentCategory.ToolUse),
+  };
+}
+
+/** Missing workflow and tool-use member names, in preset-declaration order. */
+function missingMemberNames(plan: TeamRunPlan): string[] {
+  return [...plan.missingWorkflowAgents, ...plan.missingToolUseAgents];
 }
 
 function resolvePresetAgents<T extends TeamCatalogAgent>(

@@ -10,7 +10,10 @@ import {
   type SettingsAgentCatalogEntry,
 } from '@controllers/settingsView/SettingsAgentCatalogController';
 import type { AgentCategory } from '@shared/schemas/agent';
-import type { AgentModePreset } from '@shared/schemas/agentPresets';
+import {
+  AGENT_MODE_PRESETS_BY_ID,
+  type AgentModePreset,
+} from '@shared/schemas/agentPresets';
 
 // Local imports - controllers
 
@@ -243,6 +246,41 @@ describe('SettingsAgentCatalogController', () => {
         'leanOrchestrator',
       ]),
       'leanOrchestrator',
+    );
+  });
+
+  it('previews no root for a custom team with no delegating members', () => {
+    const { controller } = createController();
+
+    // The launcher disables this team with "no runnable team root"; the
+    // preview must agree instead of inventing a built-in root.
+    assert.equal(
+      controller.getPresetToolUseRoot(['review', 'customTool']),
+      undefined,
+    );
+  });
+
+  it('previews the engineer root for the built-in Software Engineer team', () => {
+    const { controller } = createController();
+    const softwareEngineer = AGENT_MODE_PRESETS_BY_ID.get('software-engineer');
+
+    assert.ok(softwareEngineer);
+    assert.equal(
+      controller.getPresetToolUseRoot(softwareEngineer.toolUseAgents),
+      'engineer',
+    );
+  });
+
+  it('previews the orchestrator root for a built-in team before the catalog loads', () => {
+    const { controller } = createController({
+      agents: { toolUse: [] },
+    });
+    const physicist = AGENT_MODE_PRESETS_BY_ID.get('physicist');
+
+    assert.ok(physicist);
+    assert.equal(
+      controller.getPresetToolUseRoot(physicist.toolUseAgents),
+      'orchestrator',
     );
   });
 
