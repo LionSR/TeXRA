@@ -78,7 +78,9 @@ import {
   buildCodexCommandToolLog,
   buildCodexFileChangeToolLog,
   buildCodexMcpToolLog,
+  buildCodexThreadToolLog,
   buildCodexTodoToolLog,
+  buildCodexTurnToolLog,
   buildCodexUsageStats,
 } from './codexShared';
 
@@ -295,8 +297,33 @@ export async function runStreamedTurn(
   let usage: RunResult['usage'] = null;
   const itemLogRefs = new Map<string, CodexToolLogRef>();
 
+  // The live "Codex Turn" card is opened on turn.started and closed on
+  // turn.completed / turn.failed with the measured wall time.
+  let turnLogRef: CodexToolLogRef | null = null;
+  let turnStartedMs = Date.now();
+  const finalizeTurnCard = (state: 'completed' | 'failed', error?: string) => {
+    if (!turnLogRef) return;
+    const { status = 'completed', ...rest } = buildCodexTurnToolLog({
+      state,
+      wallTimeMs: Date.now() - turnStartedMs,
+      ...(error != null && { error }),
+    });
+    endToolUseCard(logger, turnLogRef, rest, status);
+    turnLogRef = null;
+  };
+
   for await (const event of events) {
     switch (event.type) {
+      case 'thread.started':
+        emitToolUseCard(logger, buildCodexThreadToolLog(event));
+        break;
+      case 'turn.started':
+        turnStartedMs = Date.now();
+        turnLogRef = emitToolUseCard(
+          logger,
+          buildCodexTurnToolLog({ state: 'running' }),
+        );
+        break;
       case 'item.started':
       case 'item.updated':
         publishCodexItemProgress({
@@ -326,8 +353,10 @@ export async function runStreamedTurn(
       }
       case 'turn.completed':
         usage = event.usage ?? null;
+        finalizeTurnCard('completed');
         break;
       case 'turn.failed':
+        finalizeTurnCard('failed', event.error.message);
         throw new ToolError(event.error.message ?? 'Codex turn failed');
       case 'error':
         throw new ToolError(event.message ?? 'Codex stream error');

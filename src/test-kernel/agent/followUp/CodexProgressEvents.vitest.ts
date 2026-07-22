@@ -13,6 +13,7 @@ import type {
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { publishAgentCliStreamUsage } from '@tools/agentCliShared';
 import { publishCodexTodos, runStreamedTurn } from '@tools/codex';
+import { CODEX_THREAD_TOOL, CODEX_TURN_TOOL } from '@tools/codexShared';
 import { createRunTrace, StreamLogStore } from '@transcript';
 
 // Local file imports
@@ -156,5 +157,72 @@ describe('codex progress events', () => {
       output: 'building...\ndone',
       status: 'completed',
     });
+  });
+
+  it('emits Codex thread and turn cards across the turn lifecycle', async () => {
+    const store = StreamLogStore.ephemeral('test');
+    await store.clear();
+
+    const logger = createRunTrace(streamId, store).trace;
+    const thread = {
+      runStreamed: async () => ({
+        events: streamEvents([
+          { type: 'thread.started', thread_id: 'thread_abc' },
+          { type: 'turn.started' },
+          {
+            type: 'item.completed',
+            item: { id: 'msg-1', type: 'agent_message', text: 'Done.' },
+          },
+          {
+            type: 'turn.completed',
+            usage: {
+              input_tokens: 5,
+              cached_input_tokens: 0,
+              output_tokens: 2,
+              reasoning_output_tokens: 0,
+            },
+          },
+        ]),
+      }),
+    } as unknown as Thread;
+
+    const result = await runStreamedTurn(
+      thread,
+      'Do the thing',
+      streamId,
+      logger,
+    );
+
+    expect(result.finalResponse).toBe('Done.');
+
+    const log = store.get(streamId);
+    const entries = log?.getRange(0, log.head) ?? [];
+    const toolEntries = entries.filter(
+      (entry) => entry.messageType === MESSAGE_TYPES.TOOL_USE,
+    );
+
+    // A one-shot thread card, then a running->completed turn card.
+    expect(
+      toolEntries.map(
+        (entry) => (entry.data as { toolName?: string }).toolName,
+      ),
+    ).toEqual([CODEX_THREAD_TOOL, CODEX_TURN_TOOL]);
+
+    expect(toolEntries[0].data).toMatchObject({
+      toolName: CODEX_THREAD_TOOL,
+      input: { threadId: 'thread_abc' },
+      status: 'completed',
+    });
+
+    expect(toolEntries[1].data).toMatchObject({
+      toolName: CODEX_TURN_TOOL,
+      input: { state: 'completed' },
+      status: 'completed',
+    });
+
+    const turnInput = (
+      toolEntries[1].data as { input?: { wallTimeMs?: number } }
+    ).input;
+    expect(typeof turnInput?.wallTimeMs).toBe('number');
   });
 });
