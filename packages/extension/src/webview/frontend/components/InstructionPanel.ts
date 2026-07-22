@@ -363,13 +363,13 @@ export class InstructionPanel extends LitElement {
           session.launchTarget === 'team'
             ? html`
                 ${renderIconActionButton({
-                id: 'teamSettingsButton',
-                icon: 'organization',
-                label: 'Team settings',
-                tooltip: 'Team settings',
-                className: 'settings-button',
-                onClick: this.handleTeamSettings,
-              })}
+                  id: 'teamSettingsButton',
+                  icon: 'organization',
+                  label: 'Team settings',
+                  tooltip: 'Team settings',
+                  className: 'settings-button',
+                  onClick: this.handleTeamSettings,
+                })}
                 <wa-select
                   id="teamPicker"
                   class="agent-select team-select"
@@ -381,19 +381,19 @@ export class InstructionPanel extends LitElement {
                   @change=${this.handleTeamChange}
                 >
                   ${renderTeamOptions(session.teamOptions, {
-                  includeManageTeams: true,
-                })}
+                    includeManageTeams: true,
+                  })}
                 </wa-select>
               `
             : html`
                 ${renderIconActionButton({
-                id: 'agentSettingsButton',
-                icon: 'sparkle',
-                label: 'Agent settings',
-                tooltip: 'Agent settings',
-                className: 'settings-button',
-                onClick: this.handleAgentSettings,
-              })}
+                  id: 'agentSettingsButton',
+                  icon: 'sparkle',
+                  label: 'Agent settings',
+                  tooltip: 'Agent settings',
+                  className: 'settings-button',
+                  onClick: this.handleAgentSettings,
+                })}
                 ${this.renderAgentSelect(session)}
               `
         }
