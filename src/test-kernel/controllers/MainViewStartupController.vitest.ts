@@ -14,7 +14,11 @@ describe('MainViewStartupController', () => {
   it('uses config to choose the orchestrator banner message', () => {
     const controller = new MainViewStartupController({
       getConfig: (_key, defaultValue) => defaultValue,
-      loadOptions: async () => ({ modelOptions: [], agentOptions: {} }),
+      loadOptions: async () => ({
+        modelOptions: [],
+        agentOptions: {},
+        teamOptions: [],
+      }),
       getAuthStatus: async () => ({ authenticated: false }),
     });
 
@@ -26,7 +30,11 @@ describe('MainViewStartupController', () => {
   it('hides the orchestrator banner when disabled', () => {
     const controller = new MainViewStartupController({
       getConfig: <T>() => false as T,
-      loadOptions: async () => ({ modelOptions: [], agentOptions: {} }),
+      loadOptions: async () => ({
+        modelOptions: [],
+        agentOptions: {},
+        teamOptions: [],
+      }),
       getAuthStatus: async () => ({ authenticated: false }),
     });
 
@@ -48,6 +56,17 @@ describe('MainViewStartupController', () => {
           workflow: [{ value: 'correct', label: 'Correct' }],
           toolUse: [{ value: 'orchestrator', label: 'Orchestrator' }],
         },
+        teamOptions: [
+          {
+            value: 'physicist',
+            label: 'Physicist',
+            icon: 'atom',
+            source: 'built-in',
+            description: 'A physics research team.',
+            unavailableMembers: [],
+            rootAgentName: 'orchestrator',
+          },
+        ],
       }),
       getAuthStatus: async () => ({ authenticated: false }),
     });
@@ -68,6 +87,20 @@ describe('MainViewStartupController', () => {
           toolUse: [{ value: 'orchestrator', label: 'Orchestrator' }],
         },
       },
+      {
+        command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
+        optionsData: [
+          {
+            value: 'physicist',
+            label: 'Physicist',
+            icon: 'atom',
+            source: 'built-in',
+            description: 'A physics research team.',
+            unavailableMembers: [],
+            rootAgentName: 'orchestrator',
+          },
+        ],
+      },
       { command: MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER },
     ]);
   });
@@ -75,7 +108,11 @@ describe('MainViewStartupController', () => {
   it('hides the login banner for signed-in users', async () => {
     const controller = new MainViewStartupController({
       getConfig: (_key, defaultValue) => defaultValue,
-      loadOptions: async () => ({ modelOptions: [], agentOptions: {} }),
+      loadOptions: async () => ({
+        modelOptions: [],
+        agentOptions: {},
+        teamOptions: [],
+      }),
       getAuthStatus: async () => ({ authenticated: true }),
     });
 

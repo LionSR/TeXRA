@@ -25,6 +25,12 @@ import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import {
+  formatUnavailableTeamMembersMessage,
+  TEAM_LAUNCH_CANCEL_LABEL,
+  TEAM_LAUNCH_CONTINUE_LABEL,
+  TEAM_LAUNCH_SIGN_IN_LABEL,
+} from '@common/teams/TeamPlan';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
@@ -607,6 +613,23 @@ function createWindow(options: {
       });
       return result.response === 0;
     },
+    chooseTeamAvailability: async (unavailableNames) => {
+      const result = await dialog.showMessageBox(window, {
+        type: 'warning',
+        message: formatUnavailableTeamMembersMessage(unavailableNames),
+        buttons: [
+          TEAM_LAUNCH_SIGN_IN_LABEL,
+          TEAM_LAUNCH_CONTINUE_LABEL,
+          TEAM_LAUNCH_CANCEL_LABEL,
+        ],
+        defaultId: 0,
+        cancelId: 2,
+      });
+      if (result.response === 0) return 'sign-in';
+      if (result.response === 1) return 'continue';
+      return 'cancel';
+    },
+    signInForRemoteAgentCatalog,
     showInfoMessage,
     showErrorMessage,
     // Recompute the onboarding funnel after a run completes so a user's first

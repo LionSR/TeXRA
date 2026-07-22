@@ -1,37 +1,29 @@
-import {
-  BUILTIN_TEAM_ROOT_AGENT_NAMES,
-  findAgentByIdentifier,
-  type AgentEntry,
-} from '@agent/index';
+import type { AgentEntry } from '@agent/index';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { teamHostedNamesForPreflight } from '@common/teams/TeamRoster';
-import { platform } from '@platform/platform';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { hasDelegationTool } from '@shared/constants/delegationTools';
-import { agentKeyOf } from '@shared/schemas/agent';
 import {
-  AGENT_MODE_PRESETS,
-  parseAgentModePresets,
-  type AgentModePreset,
-} from '@shared/schemas/agentPresets';
+  availableTeamMemberCount,
+  canLaunchTeam,
+  findTeamPreset,
+  planTeamRun,
+  planTeamRuns,
+  teamAvailability,
+  teamLaunchBlockReason,
+  teamPlanHasGaps,
+  teamPlanStatus,
+  teamPresets,
+  teamTexraHostedMissingNames,
+  type TeamAgentAvailability,
+  type TeamAvailability,
+  type TeamPreset,
+  type TeamRunPlan,
+} from '@common/teams/TeamPlan';
+import { platform } from '@platform/platform';
+import { hasDelegationTool } from '@shared/constants/delegationTools';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { formatResultCount, pluralize } from '@utils/text/stringUtils';
-import { implicitDefaultToolUseAgents } from './defaultAgents';
 
-type CliMultiAgentPresetSource = 'built-in' | 'custom';
-
-export interface CliMultiAgentPreset extends AgentModePreset {
-  readonly source: CliMultiAgentPresetSource;
-}
-
-export interface CliMultiAgentPresetRunPlan {
-  readonly preset: CliMultiAgentPreset;
-  readonly rootAgent?: AgentEntry;
-  readonly missingAgentOverride?: string;
-  readonly workflowAgentKeys: readonly string[];
-  readonly toolUseAgentKeys: readonly string[];
-  readonly missingWorkflowAgents: readonly string[];
-  readonly missingToolUseAgents: readonly string[];
-}
+export type CliMultiAgentPreset = TeamPreset;
+export type CliMultiAgentPresetRunPlan = TeamRunPlan<AgentEntry>;
 
 export interface CliMultiAgentPresetFormatOptions {
   readonly includeLoginHint?: boolean;
@@ -42,26 +34,9 @@ export interface CliMultiAgentTeamLaunchBlockMessageOptions {
   readonly followUpAdvice?: string;
 }
 
-type CliMultiAgentPlanStatus = 'available' | 'degraded' | 'unavailable';
+type CliMultiAgentPresetAgentAvailability = TeamAgentAvailability;
 
-interface CliMultiAgentPresetAgentAvailability {
-  readonly available: number;
-  readonly total: number;
-  readonly missing: readonly string[];
-  readonly label: string;
-}
-
-export interface CliMultiAgentPresetAvailability {
-  readonly status: CliMultiAgentPlanStatus;
-  readonly workflow: CliMultiAgentPresetAgentAvailability;
-  readonly toolUse: CliMultiAgentPresetAgentAvailability;
-  readonly rootAgent?: {
-    readonly key: string;
-    readonly name: string;
-    readonly source: AgentEntry['source'];
-  };
-  readonly missingAgentOverride?: string;
-}
+type CliMultiAgentPresetAvailability = TeamAvailability;
 
 /**
  * Machine-readable `multi-agent list` record. It preserves the raw preset
@@ -109,43 +84,9 @@ export function readCliMultiAgentPresetName(
   return findCliMultiAgentPreset(readCliMultiAgentPresets(), presetId)?.name;
 }
 
-export function cliMultiAgentPresets(
-  customRaw: unknown,
-): CliMultiAgentPreset[] {
-  return [
-    ...AGENT_MODE_PRESETS.map((preset) => ({
-      ...preset,
-      source: 'built-in' as const,
-    })),
-    ...parseAgentModePresets(customRaw).map((preset) => ({
-      ...preset,
-      source: 'custom' as const,
-    })),
-  ];
-}
-
-export function findCliMultiAgentPreset(
-  presets: readonly CliMultiAgentPreset[],
-  query: string,
-): CliMultiAgentPreset | undefined {
-  const key = lookupKey(query);
-  return presets.find(
-    (preset) =>
-      lookupKey(preset.id) === key ||
-      lookupKey(preset.name) === key ||
-      slugKey(preset.name) === key,
-  );
-}
-
-export function planCliMultiAgentPresets(
-  presets: readonly CliMultiAgentPreset[],
-  options: {
-    readonly workflowAgents: readonly AgentEntry[];
-    readonly toolUseAgents: readonly AgentEntry[];
-  },
-): CliMultiAgentPresetRunPlan[] {
-  return presets.map((preset) => planCliMultiAgentPresetRun(preset, options));
-}
+export const cliMultiAgentPresets = teamPresets;
+export const findCliMultiAgentPreset = findTeamPreset;
+export const planCliMultiAgentPresets = planTeamRuns<AgentEntry>;
 
 function cliMultiAgentPresetAvailabilityParts(
   plan: CliMultiAgentPresetRunPlan,
@@ -234,59 +175,10 @@ export function cliMultiAgentPresetNdjsonRecords(
   }));
 }
 
-/**
- * True when a planned run is missing any preset member — either no root agent
- * could be selected, or some workflow/tool-use agents the preset names aren't
- * resolvable from the loaded registry. Used to decide whether a remote agent
- * load is worth attempting for an authenticated user (relay-served premium
- * agents like the orchestrator and delegation specialists are only visible
- * after a remote load).
- */
-export function cliMultiAgentPlanHasGaps(
-  plan: CliMultiAgentPresetRunPlan,
-): boolean {
-  return (
-    !plan.rootAgent ||
-    plan.missingAgentOverride !== undefined ||
-    plan.missingWorkflowAgents.length > 0 ||
-    plan.missingToolUseAgents.length > 0
-  );
-}
-
-/** TeXRA-hosted definitions missing from this plan, independent of models. */
-export function cliMultiAgentTexraHostedMissingNames(
-  plan: CliMultiAgentPresetRunPlan,
-): string[] {
-  const missing = [...plan.missingWorkflowAgents, ...plan.missingToolUseAgents];
-  const hosted = teamHostedNamesForPreflight(plan.preset, missing);
-  return missing.filter((name) => hosted.has(name));
-}
-
-function cliMultiAgentPlanStatus(
-  plan: CliMultiAgentPresetRunPlan,
-): CliMultiAgentPlanStatus {
-  if (cliMultiAgentPresetTeamLaunchBlockReason(plan)) return 'unavailable';
-  return cliMultiAgentPlanHasGaps(plan) ? 'degraded' : 'available';
-}
-
-export function cliMultiAgentPresetTeamLaunchBlockReason(
-  plan: CliMultiAgentPresetRunPlan,
-): string | undefined {
-  if (!plan.rootAgent) return MULTI_AGENT_NO_TEAM_ROOT_REASON;
-  if (!agentHasDelegationTools(plan.rootAgent)) {
-    return `team root ${plan.rootAgent.name} is not a delegating agent`;
-  }
-  if (availablePresetTeamMemberCount(plan) === 0) {
-    return 'no available team members';
-  }
-  return undefined;
-}
-
-export function cliMultiAgentPresetCanLaunchTeam(
-  plan: CliMultiAgentPresetRunPlan,
-): plan is CliMultiAgentPresetRunPlan & { readonly rootAgent: AgentEntry } {
-  return cliMultiAgentPresetTeamLaunchBlockReason(plan) === undefined;
-}
+export const cliMultiAgentPlanHasGaps = teamPlanHasGaps;
+export const cliMultiAgentTexraHostedMissingNames = teamTexraHostedMissingNames;
+export const cliMultiAgentPresetTeamLaunchBlockReason = teamLaunchBlockReason;
+export const cliMultiAgentPresetCanLaunchTeam = canLaunchTeam<AgentEntry>;
 
 export function formatCliMultiAgentTeamLaunchBlockMessage(
   plan: CliMultiAgentPresetRunPlan,
@@ -320,15 +212,15 @@ export function formatCliMultiAgentPresetRunWarnings(
     `WARN preset ${plan.preset.id} references unavailable agents: ${missing.join(', ')}`,
   ];
 
-  if (!plan.rootAgent || !agentHasDelegationTools(plan.rootAgent)) {
+  if (!plan.rootAgent || !hasDelegationTool(plan.rootAgent.tools)) {
     return warnings;
   }
 
-  const availableTeamMembers = availablePresetTeamMemberCount(plan);
+  const availableTeamMembers = availableTeamMemberCount(plan);
   if (availableTeamMembers === 0) return warnings;
 
   warnings.push(
-    `WARN preset ${plan.preset.id} is degraded; running root agent ${plan.rootAgent.name} with ${formatAvailableTeamAgentCount(availableTeamMembers)}.`,
+    `WARN preset ${plan.preset.id} is degraded; running root agent ${plan.rootAgent.name} with ${formatResultCount(availableTeamMembers, 'available team agent')}.`,
   );
   return warnings;
 }
@@ -362,29 +254,7 @@ export function formatCliMultiAgentPresetLauncherHints(
   ].filter((hint): hint is string => hint !== undefined);
 }
 
-export function cliMultiAgentPresetAvailability(
-  plan: CliMultiAgentPresetRunPlan,
-): CliMultiAgentPresetAvailability {
-  return {
-    status: cliMultiAgentPlanStatus(plan),
-    workflow: presetAgentAvailability(
-      plan.preset.workflowAgents,
-      plan.missingWorkflowAgents,
-    ),
-    toolUse: presetAgentAvailability(
-      plan.preset.toolUseAgents,
-      plan.missingToolUseAgents,
-    ),
-    rootAgent: plan.rootAgent
-      ? {
-          key: agentKeyOf(plan.rootAgent),
-          name: plan.rootAgent.name,
-          source: plan.rootAgent.source,
-        }
-      : undefined,
-    missingAgentOverride: plan.missingAgentOverride,
-  };
-}
+export const cliMultiAgentPresetAvailability = teamAvailability;
 
 export function cliMultiAgentPresetListRecord(
   plan: CliMultiAgentPresetRunPlan,
@@ -401,128 +271,7 @@ export function cliMultiAgentPresetListRecords(
   return plans.map(cliMultiAgentPresetListRecord);
 }
 
-export function planCliMultiAgentPresetRun(
-  preset: CliMultiAgentPreset,
-  options: {
-    readonly workflowAgents: readonly AgentEntry[];
-    readonly toolUseAgents: readonly AgentEntry[];
-    readonly agentOverride?: string;
-  },
-): CliMultiAgentPresetRunPlan {
-  const workflow = resolvePresetAgents(
-    preset.workflowAgents,
-    options.workflowAgents,
-  );
-  const toolUse = resolvePresetAgents(
-    preset.toolUseAgents,
-    options.toolUseAgents,
-  );
-  const override = resolveAgentOverride(
-    options.agentOverride,
-    options.toolUseAgents,
-  );
-  const rootAgent =
-    override.agent ??
-    selectPresetRootAgent(toolUse.resolved, {
-      presetOrder: preset.toolUseAgents,
-      presetSource: preset.source,
-    });
-  const toolUseAgents = rootAgent
-    ? includeAgent(toolUse.resolved, rootAgent)
-    : toolUse.resolved;
-
-  return {
-    preset,
-    rootAgent,
-    missingAgentOverride: override.missing,
-    workflowAgentKeys: workflow.resolved.map(agentKeyOf),
-    toolUseAgentKeys: toolUseAgents.map(agentKeyOf),
-    missingWorkflowAgents: workflow.missing,
-    missingToolUseAgents: toolUse.missing,
-  };
-}
-
-function resolvePresetAgents(
-  names: readonly string[],
-  agents: readonly AgentEntry[],
-): { resolved: AgentEntry[]; missing: string[] } {
-  const resolved: AgentEntry[] = [];
-  const missing: string[] = [];
-  for (const name of names) {
-    const entry = findAgentByIdentifier(agents, name);
-    if (entry) {
-      resolved.push(entry);
-    } else {
-      missing.push(name);
-    }
-  }
-  return { resolved, missing };
-}
-
-function resolveAgentOverride(
-  override: string | undefined,
-  agents: readonly AgentEntry[],
-): { agent?: AgentEntry; missing?: string } {
-  const query = override?.trim();
-  if (!query) return {};
-  // Accepts a bare name or a source-qualified key via the registry's canonical
-  // identity matcher, instead of re-implementing the name-or-key rule here.
-  const agent = findAgentByIdentifier(agents, query);
-  return agent ? { agent } : { missing: query };
-}
-
-function selectPresetRootAgent(
-  agents: readonly AgentEntry[],
-  options: {
-    readonly presetOrder: readonly string[];
-    readonly presetSource: CliMultiAgentPresetSource;
-  },
-): AgentEntry | undefined {
-  const delegatingAgents = implicitDefaultToolUseAgents(agents).filter(
-    agentHasDelegationTools,
-  );
-  const searchOrder =
-    options.presetSource === 'built-in'
-      ? BUILTIN_TEAM_ROOT_AGENT_NAMES
-      : [...options.presetOrder, ...BUILTIN_TEAM_ROOT_AGENT_NAMES];
-  for (const name of searchOrder) {
-    const preferredRoot = delegatingAgents.find((agent) => agent.name === name);
-    if (preferredRoot) return preferredRoot;
-  }
-
-  if (options.presetSource === 'built-in') {
-    // Built-in teams have dedicated orchestrator roots. Local specialists such
-    // as `lean`, `research`, or `numerics` are members, not safe root fallbacks.
-    return undefined;
-  }
-
-  return delegatingAgents[0];
-}
-
-function includeAgent(
-  agents: readonly AgentEntry[],
-  rootAgent: AgentEntry,
-): AgentEntry[] {
-  const rootKey = agentKeyOf(rootAgent);
-  return agents.some((agent) => agentKeyOf(agent) === rootKey)
-    ? [...agents]
-    : [...agents, rootAgent];
-}
-
-function availablePresetTeamMemberCount(
-  plan: CliMultiAgentPresetRunPlan,
-): number {
-  const rootKey = plan.rootAgent ? agentKeyOf(plan.rootAgent) : undefined;
-  const memberKeys = [
-    ...plan.workflowAgentKeys,
-    ...plan.toolUseAgentKeys.filter((key) => key !== rootKey),
-  ];
-  return new Set(memberKeys).size;
-}
-
-function formatAvailableTeamAgentCount(count: number): string {
-  return formatResultCount(count, 'available team agent');
-}
+export const planCliMultiAgentPresetRun = planTeamRun<AgentEntry>;
 
 function formatPresetAvailabilityForLauncher(
   availability: CliMultiAgentPresetAvailability,
@@ -569,30 +318,12 @@ function launcherAgentKindLabel(
   return pluralize(count, kind === 'tool-use' ? 'tool' : 'workflow');
 }
 
-function agentHasDelegationTools(agent: AgentEntry): boolean {
-  return hasDelegationTool(agent.tools);
-}
-
 function availablePresetAgents(
   presetAgents: readonly string[],
   missingAgents: readonly string[],
 ): string[] {
   const missing = new Set(missingAgents);
   return presetAgents.filter((agent) => !missing.has(agent));
-}
-
-function presetAgentAvailability(
-  presetAgents: readonly string[],
-  missingAgents: readonly string[],
-): CliMultiAgentPresetAgentAvailability {
-  const total = presetAgents.length;
-  const available = total - missingAgents.length;
-  return {
-    available,
-    total,
-    missing: [...missingAgents],
-    label: missingAgents.length === 0 ? String(total) : `${available}/${total}`,
-  };
 }
 
 function formatAgentNames(names: readonly string[]): string {
@@ -605,7 +336,7 @@ function cliMultiAgentPresetListHint(
   options: CliMultiAgentPresetFormatOptions,
 ): string | undefined {
   const hasIncompletePreset = plans.some(
-    (plan) => cliMultiAgentPlanStatus(plan) !== 'available',
+    (plan) => teamPlanStatus(plan) !== 'available',
   );
   const hints = [
     hasIncompletePreset ? MULTI_AGENT_SHOW_HINT : undefined,
@@ -627,12 +358,4 @@ function cliMultiAgentPresetShouldIncludeLoginHint(
 
 function builtInPresetHasGaps(plan: CliMultiAgentPresetRunPlan): boolean {
   return plan.preset.source === 'built-in' && cliMultiAgentPlanHasGaps(plan);
-}
-
-function lookupKey(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-function slugKey(value: string): string {
-  return lookupKey(value).replaceAll(/\s+/g, '-');
 }

@@ -32,6 +32,16 @@ export interface CreateCliConfigFormPropsInput extends CliConfigFormProps {
 }
 
 /**
+ * Settings whose change alters model routing or picker availability, so the
+ * cached model options must be recomputed (computeModelOptions reads both
+ * toggles when resolving per-model routes).
+ */
+const MODEL_ROUTING_SETTING_KEYS: ReadonlySet<string> = new Set([
+  GlobalStateKey.USE_OPENROUTER,
+  GlobalStateKey.KIMI_CODE_PREFER,
+]);
+
+/**
  * Construct the canonical CLI configuration interface. Both the standalone
  * command and the in-chat form use this function, so persistence and runtime
  * side effects cannot diverge between entry points.
@@ -47,27 +57,23 @@ export function createCliConfigFormProps(
     writeValue: async (entry, value) => {
       await writeSetting(entry, value, stores, 'cli');
       if (entry.category === 'git') applyCliGitAuthorConfig(stores.config);
-      if (entry.key === GlobalStateKey.USE_OPENROUTER) {
-        refreshCodexPreferenceViews();
-        if (value === true) await props.onApiModePersonal?.();
-      }
-      if (entry.key === GlobalStateKey.KIMI_CODE_PREFER) {
-        // Dual-backend Kimi routing refuses the OpenRouter toggle, so enabling
-        // the preference here turns that toggle off like `/api kimi-code`.
-        if (value === true) {
+      if (MODEL_ROUTING_SETTING_KEYS.has(entry.key)) {
+        if (entry.key === GlobalStateKey.KIMI_CODE_PREFER && value === true) {
+          // Dual-backend Kimi routing refuses the OpenRouter toggle, so enabling
+          // the preference here turns that toggle off like `/api kimi-code`.
           const openRouter = stateSettingByKey(GlobalStateKey.USE_OPENROUTER);
           if (openRouter) await writeSetting(openRouter, false, stores, 'cli');
         }
         refreshCodexPreferenceViews();
+        if (entry.key === GlobalStateKey.USE_OPENROUTER && value === true) {
+          await props.onApiModePersonal?.();
+        }
       }
     },
     resetValue: async (entry) => {
       await resetSetting(entry, stores, 'cli');
       if (entry.category === 'git') applyCliGitAuthorConfig(stores.config);
-      if (entry.key === GlobalStateKey.USE_OPENROUTER) {
-        refreshCodexPreferenceViews();
-      }
-      if (entry.key === GlobalStateKey.KIMI_CODE_PREFER) {
+      if (MODEL_ROUTING_SETTING_KEYS.has(entry.key)) {
         refreshCodexPreferenceViews();
       }
     },
