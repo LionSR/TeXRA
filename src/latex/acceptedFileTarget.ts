@@ -80,7 +80,7 @@ function buildAcceptConfirmMessage(
  * Success message shown after writing accepted content. `replaced` is whether
  * the target already existed (true → "replaced", false → "created").
  */
-export function buildAcceptSuccessMessage(
+function buildAcceptSuccessMessage(
   targetFileName: string,
   editedPath: string,
   replaced: boolean,
@@ -90,18 +90,16 @@ export function buildAcceptSuccessMessage(
 }
 
 /**
- * Host capabilities the accept-edited replace flow reaches through, so the
- * host-neutral orchestration can run on both the VS Code command (FlexibleFS,
- * warning dialog, app signals) and the desktop bridge (node fs, runtime
- * host emit) without each side re-implementing the confirm / write / emit /
- * success sequence.
+ * Host capabilities the accept-edited commit step reaches through: writing
+ * the edited content into the resolved target, notifying the host, cleaning
+ * up the stale diff companion, and reporting success. Shared by every accept
+ * path (replace, save-as-copy) across every host (VS Code command, desktop
+ * bridge) so none of them re-implement the write / emit / cleanup / success
+ * sequence.
  */
-export interface AcceptEditedFileReplacePorts {
-  exists: (location: FileLocation) => Promise<boolean>;
+export interface CommitAcceptedFilePorts {
   readFile: (location: FileLocation) => Promise<string>;
   writeFile: (location: FileLocation, content: string) => Promise<void>;
-  /** Confirm the (possibly overwriting) write; return false to abort. */
-  confirm: (message: string) => Promise<boolean>;
   /** Notify the host that a workspace file was written at this absolute path. */
   emitWritten: (absolutePath: string) => void;
   showInfo: (message: string) => void | Promise<void>;
@@ -114,32 +112,36 @@ export interface AcceptEditedFileReplacePorts {
 }
 
 /**
- * Resolve the accept target beside the base file, confirm the write, then copy
- * the edited content into it, emitting a workspace-write notification and a
- * success message. Returns whether the write happened (false when the user
- * declined the confirmation). Shared by the desktop file actions and the VS
- * Code compare command's replace branch; the latter wraps this with its own
- * replace-vs-copy quick pick when run metadata is available.
+ * Host capabilities the accept-edited replace flow reaches through, so the
+ * host-neutral orchestration can run on both the VS Code command (FlexibleFS,
+ * warning dialog, app signals) and the desktop bridge (node fs, runtime
+ * host emit) without each side re-implementing the confirm / commit sequence.
  */
-export async function acceptEditedFileReplace(
+export interface AcceptEditedFileReplacePorts extends CommitAcceptedFilePorts {
+  exists: (location: FileLocation) => Promise<boolean>;
+  /** Confirm the (possibly overwriting) write; return false to abort. */
+  confirm: (message: string) => Promise<boolean>;
+}
+
+/**
+ * Write `editedLocation`'s content into `target`, emitting a workspace-write
+ * notification, cleaning up the stale diff companion, and reporting success.
+ * Shared by every "accept edited content" path once a target has already
+ * been resolved and (if needed) confirmed — replace, save-as-copy, or the
+ * desktop bridge's single-confirm flow. `targetExisted` (whether the target
+ * already had content, for the "replaced" vs "created" wording) is the
+ * caller's to compute, since the replace path already needs it to word its
+ * confirmation prompt and shouldn't check twice.
+ */
+export async function commitAcceptedFile(
   baseLocation: FileLocation,
   editedLocation: FileLocation,
-  ports: AcceptEditedFileReplacePorts,
-): Promise<boolean> {
+  target: { targetLocation: FileLocation; targetFileName: string },
+  targetExisted: boolean,
+  ports: CommitAcceptedFilePorts,
+): Promise<void> {
+  const { targetLocation, targetFileName } = target;
   const editedPath = editedLocation.absolutePath;
-  const target = getAcceptedFileTarget(baseLocation, editedPath);
-  const { targetLocation, targetFileName, isNewFile } = target;
-  const targetExists = isNewFile && (await ports.exists(targetLocation));
-
-  const confirmed = await ports.confirm(
-    buildAcceptConfirmMessage(
-      target,
-      baseLocation.absolutePath,
-      editedPath,
-      targetExists,
-    ),
-  );
-  if (!confirmed) return false;
 
   const editedContent = await ports.readFile(editedLocation);
   await ports.writeFile(targetLocation, editedContent);
@@ -155,11 +157,44 @@ export async function acceptEditedFileReplace(
   );
 
   await ports.showInfo(
-    buildAcceptSuccessMessage(
-      targetFileName,
+    buildAcceptSuccessMessage(targetFileName, editedPath, targetExisted),
+  );
+}
+
+/**
+ * Resolve the accept target beside the base file, confirm the write, then
+ * commit it via {@link commitAcceptedFile}. Returns whether the write
+ * happened (false when the user declined the confirmation). Shared by the
+ * desktop file actions and the VS Code compare command's replace branch; the
+ * latter wraps this with its own replace-vs-copy quick pick when run
+ * metadata is available.
+ */
+export async function acceptEditedFileReplace(
+  baseLocation: FileLocation,
+  editedLocation: FileLocation,
+  ports: AcceptEditedFileReplacePorts,
+): Promise<boolean> {
+  const editedPath = editedLocation.absolutePath;
+  const target = getAcceptedFileTarget(baseLocation, editedPath);
+  const { targetLocation, isNewFile } = target;
+  const targetExists = isNewFile && (await ports.exists(targetLocation));
+
+  const confirmed = await ports.confirm(
+    buildAcceptConfirmMessage(
+      target,
+      baseLocation.absolutePath,
       editedPath,
-      !isNewFile || targetExists,
+      targetExists,
     ),
+  );
+  if (!confirmed) return false;
+
+  await commitAcceptedFile(
+    baseLocation,
+    editedLocation,
+    target,
+    !isNewFile || targetExists,
+    ports,
   );
   return true;
 }
