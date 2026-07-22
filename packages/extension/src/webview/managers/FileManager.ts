@@ -19,7 +19,6 @@ import {
   FILE_SELECTION_COMMAND_IDS,
   MULTIPLE_FILE_COMMANDS,
   getFileLister,
-  type MultiFileCategory,
 } from '@frontend/files';
 import { selectFiles } from '@frontend/ui/dialogs';
 import {
@@ -29,6 +28,11 @@ import {
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewInboundMessage } from '@shared/schemas';
+import {
+  isMultipleDocumentFileType,
+  type CurrentFileType,
+  type ExtendedDocumentFileType,
+} from '@shared/schemas/fileTypes';
 import {
   WorkspaceFS,
   parseLatexDiffMetadata,
@@ -144,7 +148,9 @@ export class FileManager extends BaseWebviewManager {
     message: SelectMultipleFilesMessage,
   ): Promise<void> {
     const { fileType, currentFile } = message;
-    const commands = MULTIPLE_FILE_COMMANDS.get(fileType as MultiFileCategory);
+    const commands = isMultipleDocumentFileType(fileType)
+      ? MULTIPLE_FILE_COMMANDS.get(fileType)
+      : undefined;
     if (!commands) {
       logger.warn(CHANNEL, `Unsupported multiple file selection: ${fileType}`);
       return;
@@ -227,7 +233,7 @@ export class FileManager extends BaseWebviewManager {
   /** Apply a host-neutral base-file selection plan to the VS Code host. */
   private async applyBaseFileSelectionPlan(
     plan: MainViewBaseFileSelectionPlan,
-    fileType: string,
+    fileType: CurrentFileType,
     currentOpenFile: string,
   ): Promise<void> {
     if (plan.log) {
@@ -286,7 +292,9 @@ export class FileManager extends BaseWebviewManager {
     }
   }
 
-  async handleAddOpenedFiles(fileType: string): Promise<void> {
+  async handleAddOpenedFiles(
+    fileType: ExtendedDocumentFileType,
+  ): Promise<void> {
     const openedFiles = await this.getOpenedFiles();
     const allowedExtensions = new Set(
       getIncludedExtensions(fileType as ExtensionCategory).map(
