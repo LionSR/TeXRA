@@ -11,6 +11,7 @@ import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import type { IModelHandler } from '@agent/types/IModelHandler';
 import type {
   FinalTool,
+  ModelCredentialRoute,
   ModelCredentialSelection,
   SdkToolCall,
 } from '@agent/types/ModelHandlerContracts';
@@ -22,6 +23,8 @@ import type { TaskRunFileService } from '@utils/files';
  * runs a `ModelInvocationNode`.
  *
  * - `client` is the provider SDK client for the run's active model.
+ * - `clientCredentialRoute` is the credential route that client captured
+ *   (e.g. `'relay'` vs `'api-key'`), read live from the model handler.
  * - `refreshClient` re-fetches it after a mid-run model switch so the retry
  *   path picks up the new handler.
  *
@@ -31,6 +34,7 @@ import type { TaskRunFileService } from '@utils/files';
  */
 export interface ModelClientServices<C = unknown> {
   readonly client: C;
+  readonly clientCredentialRoute?: ModelCredentialRoute | undefined;
   readonly refreshClient?: (
     selection?: ModelCredentialSelection,
     signal?: AbortSignal,
@@ -41,10 +45,11 @@ export interface ModelClientServices<C = unknown> {
  * Bridge the live model client into a cycle/round services object before the
  * outer node runs the inner flow.
  *
- * The `client` getter and `refreshClient` are defined on the **returned
- * literal** — never spread from a pre-evaluated object — so the relay-401
- * token-refresh path keeps live rebinding: `refreshClient()` re-fetches the
- * provider client after a mid-run model switch and the getter reflects it on
+ * The `client` and `clientCredentialRoute` getters plus `refreshClient` are
+ * defined on the **returned literal** — never spread from a pre-evaluated
+ * object — so the relay-401 token-refresh path keeps live rebinding:
+ * `refreshClient()` re-fetches the provider client after a mid-run model
+ * switch and the getters reflect it (and its captured credential route) on
  * the next read. Spreading the result of this call elsewhere would snapshot
  * `client` and silently break that liveness, so callers pass the result
  * straight to `flow.setServices(...)`.
@@ -58,6 +63,9 @@ export async function withModelClient<C, T extends object>(
     ...base,
     get client(): C {
       return client;
+    },
+    get clientCredentialRoute(): ModelCredentialRoute | undefined {
+      return modelHandler.getCredentialRouteForClient(client);
     },
     async refreshClient(
       selection: ModelCredentialSelection = 'configured',

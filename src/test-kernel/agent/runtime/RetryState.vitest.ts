@@ -7,7 +7,15 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { APIError as OpenAIAPIError } from 'openai';
-import { describe, expect, it, vi, type Mock } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from 'vitest';
 
 // Local imports
 import { noopTrace, type AgentTrace } from '@agent/trace';
@@ -31,6 +39,14 @@ import {
   noopAgentRuntimeHost,
   type AgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
+import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
+import {
+  RELAY_CI_TOKEN_PREFIX,
+  RELAY_TOKEN_ENV_VAR,
+  resetRelayTokenTierCacheForTests,
+} from '@auth/relayToken';
+import { SupabaseClient } from '@auth/SupabaseClient';
+import type { AuthTokenProvider } from '@auth/TokenProvider';
 import {
   attachContextWindowError,
   attachFlowAutoRetryRequired,
@@ -61,6 +77,7 @@ interface TestRetryServices {
   logger: AgentTrace;
   setAbortController: (ac: AbortController | null) => void;
   refreshClient?: () => Promise<void>;
+  clientCredentialRoute?: ModelCredentialRoute;
 }
 
 class ExposedRetryNode extends RetryableInvocationNode<
@@ -73,6 +90,10 @@ class ExposedRetryNode extends RetryableInvocationNode<
 
   promptFor(error: Error): Promise<unknown> {
     return this.handleManualRetryPrompt(error);
+  }
+
+  runWithAbort<T>(op: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    return this.withAbortController(op);
   }
 
   fallbackFor(error: Error): unknown {
@@ -110,6 +131,7 @@ interface RetryNodeKit {
 function createRetryNode(
   streamId: StreamTabId,
   refreshClient?: () => Promise<void>,
+  clientCredentialRoute?: ModelCredentialRoute,
 ): RetryNodeKit {
   const streamStatus = new StreamStatusMachine();
   const requestRetry = vi.fn<RetryNodeKit['requestRetry']>();
@@ -124,6 +146,7 @@ function createRetryNode(
     logger: noopTrace,
     setAbortController: vi.fn(),
     refreshClient,
+    clientCredentialRoute,
   });
   return { node, session, streamStatus, requestRetry };
 }
@@ -183,7 +206,22 @@ function createModelInvocationNode(input: {
   } as never);
 }
 
+function createAuthTokenProvider(
+  overrides: Partial<AuthTokenProvider> = {},
+): AuthTokenProvider {
+  return {
+    whenReady: async () => {},
+    ensureFreshToken: async () => 'access-token',
+    getSessionTokens: async () => null,
+    ...overrides,
+  };
+}
+
 describe('RetryState', () => {
+  afterEach(() => {
+    SupabaseClient.resetForTests();
+  });
+
   it('records whether a failed invocation already emitted its canonical error', () => {
     const state: BaseCycleFields = {
       messages: [],
@@ -508,5 +546,124 @@ describe('RetryState', () => {
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);
     }
+  });
+
+  describe('proactive relay token refresh', () => {
+    beforeEach(() => {
+      // A CI relay token exported in the shell would satisfy the non-forced
+      // getRelayAccessToken() read cache-only and skip the session refresh
+      // these cases exercise; pin it unset unless a case opts in.
+      vi.stubEnv(RELAY_TOKEN_ENV_VAR, '');
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+      resetRelayTokenTierCacheForTests();
+    });
+
+    it.each([
+      'api-key',
+      'openrouter',
+      'chatgpt-subscription',
+      undefined,
+    ] as const)(
+      'never rebuilds a client on route %s for an expiring session token',
+      async (route) => {
+        const streamId =
+          `retry-state-proactive-${route ?? 'unknown'}` as StreamTabId;
+        const refreshClient = vi.fn(async () => undefined);
+        const { node } = createRetryNode(streamId, refreshClient, route);
+        SupabaseClient.setTokenExpiry(Date.now() + 60_000);
+
+        const operation = vi.fn(async () => 'response');
+        await expect(node.runWithAbort(operation)).resolves.toBe('response');
+
+        expect(operation).toHaveBeenCalledOnce();
+        expect(refreshClient).not.toHaveBeenCalled();
+      },
+    );
+
+    it('rebuilds the relay client once when the session token rotates', async () => {
+      const streamId = 'retry-state-proactive-relay-rotation' as StreamTabId;
+      const refreshClient = vi.fn(async () => undefined);
+      const { node } = createRetryNode(streamId, refreshClient, 'relay');
+      SupabaseClient.setTokenExpiry(Date.now() + 60_000);
+      const ensureFreshToken = vi.fn(async () => {
+        // Simulate rotation: the refresh pushes the session expiry out.
+        SupabaseClient.setTokenExpiry(Date.now() + 3_600_000);
+        return 'fresh-session-token';
+      });
+      SupabaseClient.setAuthProvider(
+        createAuthTokenProvider({ ensureFreshToken }),
+      );
+
+      const operation = vi.fn(async () => 'response');
+      await expect(node.runWithAbort(operation)).resolves.toBe('response');
+
+      expect(ensureFreshToken).toHaveBeenCalledOnce();
+      expect(refreshClient).toHaveBeenCalledOnce();
+      expect(operation).toHaveBeenCalledOnce();
+    });
+
+    it('skips the relay client rebuild when the token did not rotate', async () => {
+      const streamId = 'retry-state-proactive-relay-stale' as StreamTabId;
+      const refreshClient = vi.fn(async () => undefined);
+      const { node } = createRetryNode(streamId, refreshClient, 'relay');
+      SupabaseClient.setTokenExpiry(Date.now() + 60_000);
+      // The provider answers with the stale token and leaves the expiry
+      // clock inside the threshold, so no rotation is observed.
+      const ensureFreshToken = vi.fn(async () => 'stale-session-token');
+      SupabaseClient.setAuthProvider(
+        createAuthTokenProvider({ ensureFreshToken }),
+      );
+
+      const operation = vi.fn(async () => 'response');
+      await expect(node.runWithAbort(operation)).resolves.toBe('response');
+
+      // No rebuild without rotation — the reactive 401 path remains the net.
+      expect(ensureFreshToken).toHaveBeenCalledOnce();
+      expect(refreshClient).not.toHaveBeenCalled();
+      expect(operation).toHaveBeenCalledOnce();
+    });
+
+    it('does no auth work for a relay client whose token is fresh', async () => {
+      const streamId = 'retry-state-proactive-relay-fresh' as StreamTabId;
+      const refreshClient = vi.fn(async () => undefined);
+      const { node } = createRetryNode(streamId, refreshClient, 'relay');
+      SupabaseClient.setTokenExpiry(Date.now() + 3_600_000);
+      const ensureFreshToken = vi.fn(async () => 'session-token');
+      SupabaseClient.setAuthProvider(
+        createAuthTokenProvider({ ensureFreshToken }),
+      );
+
+      const operation = vi.fn(async () => 'response');
+      await expect(node.runWithAbort(operation)).resolves.toBe('response');
+
+      expect(ensureFreshToken).not.toHaveBeenCalled();
+      expect(refreshClient).not.toHaveBeenCalled();
+      expect(operation).toHaveBeenCalledOnce();
+    });
+
+    it('makes no auth or rebuild calls for a CI-token relay client', async () => {
+      const streamId = 'retry-state-proactive-relay-ci-token' as StreamTabId;
+      const refreshClient = vi.fn(async () => undefined);
+      const { node } = createRetryNode(streamId, refreshClient, 'relay');
+      vi.stubEnv(RELAY_TOKEN_ENV_VAR, `${RELAY_CI_TOKEN_PREFIX}fakeci123`);
+      SupabaseClient.setTokenExpiry(Date.now() + 60_000);
+      const ensureFreshToken = vi.fn(async () => 'session-token');
+      SupabaseClient.setAuthProvider(
+        createAuthTokenProvider({ ensureFreshToken }),
+      );
+
+      const operation = vi.fn(async () => 'response');
+      await expect(node.runWithAbort(operation)).resolves.toBe('response');
+
+      // The configured CI token satisfies the non-forced read cache-only: the
+      // session is never consulted and the expiry clock stays stale, so the
+      // rebuild is skipped too.
+      expect(ensureFreshToken).not.toHaveBeenCalled();
+      expect(refreshClient).not.toHaveBeenCalled();
+      expect(operation).toHaveBeenCalledOnce();
+    });
   });
 });
