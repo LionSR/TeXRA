@@ -1,6 +1,7 @@
 // Third-party imports
 import { HTTPClient, OpenRouter } from '@openrouter/sdk';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
+import pRetry from 'p-retry';
 
 // Local imports
 import type { StreamHandle } from '@agent/trace';
@@ -17,8 +18,10 @@ import type {
   ModelCredentialSelection,
   OpenRouterToolCall,
 } from '@agent/types/ModelHandlerContracts';
+import { normalizeProviderError } from '@common/errors';
 import {
   handleStreamingFailure,
+  isUserAbort,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
@@ -240,7 +243,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       const aggregator = new OpenRouterStreamAggregator();
       let thinking: StreamHandle | undefined;
       let output: StreamHandle | undefined;
-      let streamConnected = false;
 
       try {
         const stream = await client.chat.send(
@@ -252,7 +254,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
             'OpenRouter returned a non-streaming response for a streaming request',
           );
         }
-        streamConnected = true;
         // Opened after the SDK request-retry boundary returns; the deferred
         // starts fire (if ever) at the first reasoning/content delta.
         thinking = this.createThinkingStream();
@@ -295,7 +296,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           // can show the tail (parity with the other streaming providers).
           partialTail: () =>
             takeTail(aggregator.partialContent, PARTIAL_TEXT_TAIL_MAX),
-          retryEligible: (tail) => streamConnected || tail.length > 0,
         });
       }
     }
@@ -384,9 +384,18 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
             ? { reasoning: { effort: 'low' } }
             : {}),
         };
-        const summaryResponse = await client.chat.send(
-          { chatRequest: summaryRequest },
-          { signal },
+        const summaryResponse = await pRetry(
+          () => client.chat.send({ chatRequest: summaryRequest }, { signal }),
+          {
+            retries: 2,
+            minTimeout: 500,
+            factor: 2,
+            randomize: true,
+            ...(signal ? { signal } : {}),
+            shouldRetry: ({ error }) =>
+              !isUserAbort(error) &&
+              normalizeProviderError(error).userRetryable,
+          },
         );
         if (isOpenRouterChatStream(summaryResponse)) {
           throw new Error(

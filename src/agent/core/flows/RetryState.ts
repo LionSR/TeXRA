@@ -83,12 +83,13 @@ async function tryRefreshClient(
     | undefined,
   logger: AgentTrace,
   context: string,
+  signal?: AbortSignal,
 ): Promise<boolean> {
   if (!refreshClient) {
     return false;
   }
   try {
-    await refreshClient();
+    await refreshClient(undefined, signal);
     logger.debug(`Refreshed model client ${context}`);
     return true;
   } catch (refreshError) {
@@ -151,6 +152,7 @@ export abstract class RetryableInvocationNode<
       services.refreshClient,
       services.logger,
       'after token refresh',
+      signal,
     );
 
     services.logger.debug('Token refreshed, retrying immediately');
@@ -233,6 +235,7 @@ export abstract class RetryableInvocationNode<
           services.refreshClient,
           services.logger,
           'proactive pre-invocation',
+          signal,
         );
       }
     }

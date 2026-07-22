@@ -52,6 +52,31 @@ function errorCauseChain(error: Error): unknown[] {
   return chain;
 }
 
+function detectRetryAfterMs(chain: readonly unknown[]): number | undefined {
+  for (const current of chain) {
+    const headers = (current as { headers?: unknown }).headers;
+    if (!isObject(headers)) continue;
+    const get = Reflect.get(headers, 'get');
+    const read = (name: string): unknown =>
+      typeof get === 'function'
+        ? Reflect.apply(get, headers, [name])
+        : Reflect.get(headers, name);
+    const rawExplicitMs = read('retry-after-ms');
+    if (rawExplicitMs != null) {
+      const explicitMs = Number(rawExplicitMs);
+      if (Number.isFinite(explicitMs) && explicitMs >= 0) return explicitMs;
+    }
+
+    const retryAfter = read('retry-after');
+    if (typeof retryAfter !== 'string') continue;
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+    const date = Date.parse(retryAfter);
+    if (Number.isFinite(date)) return Math.max(0, date - Date.now());
+  }
+  return undefined;
+}
+
 /** Classify only failures that carry evidence about a shared wire route. */
 function classifyModelRouteFailure(
   error: Error,
@@ -94,41 +119,26 @@ function classifyModelRouteFailure(
   if (
     !sharedAuthenticationFailure &&
     statusCode !== 408 &&
-    statusCode !== 429 &&
     (statusCode == null || statusCode < 500) &&
     !transportFailure
   ) {
     return undefined;
   }
 
-  for (const current of chain) {
-    const headers = (current as { headers?: unknown }).headers;
-    if (!isObject(headers)) continue;
-    const get = Reflect.get(headers, 'get');
-    const read = (name: string): unknown =>
-      typeof get === 'function'
-        ? Reflect.apply(get, headers, [name])
-        : Reflect.get(headers, name);
-    const rawExplicitMs = read('retry-after-ms');
-    if (rawExplicitMs != null) {
-      const explicitMs = Number(rawExplicitMs);
-      if (Number.isFinite(explicitMs) && explicitMs >= 0) {
-        return { retryAfterMs: explicitMs };
-      }
-    }
+  return { retryAfterMs: detectRetryAfterMs(chain) };
+}
 
-    const retryAfter = read('retry-after');
-    if (typeof retryAfter !== 'string') continue;
-    const seconds = Number(retryAfter);
-    if (Number.isFinite(seconds) && seconds >= 0) {
-      return { retryAfterMs: seconds * 1000 };
-    }
-    const date = Date.parse(retryAfter);
-    if (Number.isFinite(date)) {
-      return { retryAfterMs: Math.max(0, date - Date.now()) };
-    }
-  }
-  return { retryAfterMs: undefined };
+/** Rate limits are commonly model-specific even on one provider endpoint. */
+function classifyModelRateLimitFailure(
+  error: Error,
+): { retryAfterMs?: number } | undefined {
+  const chain = errorCauseChain(error);
+  const statusCode = chain
+    .map((current) => detectStatusCode(current))
+    .find((status) => status !== undefined);
+  return statusCode === 429
+    ? { retryAfterMs: detectRetryAfterMs(chain) }
+    : undefined;
 }
 
 export interface ModelInvocationConfig<TShared, TServices> {
@@ -223,13 +233,42 @@ export class ModelInvocationNode<
     services.modelHandler.setOutputStreaming(this._config.streaming);
 
     return this.withAbortController(async (signal) => {
-      const route = JSON.stringify([
+      const routeIdentity = [
         services.modelHandler.config.provider,
         services.clientCredentialRoute ?? 'configured',
         services.modelHandler.getRetryEndpoint(services.client),
+      ];
+      const sharedRoute = JSON.stringify(routeIdentity);
+      const modelRateLimitRoute = JSON.stringify([
+        ...routeIdentity,
+        services.modelHandler.config.fullName,
       ]);
-      return useLaunchRunContext().runScope.session.modelRetries.run(
-        route,
+      const gate = useLaunchRunContext().runScope.session.modelRetries;
+      const invoke = async () => {
+        const start = Date.now();
+        const result = await services.modelHandler.createResponse({
+          client: services.client,
+          messages: prepRes.messages,
+          temperature: services.setting.temperature,
+          systemPrompt: prepRes.systemPrompt,
+          endTag: this._config.getEndTag?.(services),
+          signal,
+          tools: this._config.getTools
+            ? this._config.getTools(services)
+            : services.setting.tools,
+          finalTool: prepRes.finalTool,
+        });
+
+        return {
+          kind: 'success' as const,
+          response: result.response,
+          responseTimeMs: Date.now() - start,
+          updatedMessages: result.updatedMessages,
+        };
+      };
+
+      return gate.run(
+        sharedRoute,
         {
           signal,
           baseBackoffMs: this._retryBackoffMs,
@@ -250,28 +289,20 @@ export class ModelInvocationNode<
               `Waiting ${delayMs}ms for the shared model recovery probe.`,
             ),
         },
-        async () => {
-          const start = Date.now();
-          const result = await services.modelHandler.createResponse({
-            client: services.client,
-            messages: prepRes.messages,
-            temperature: services.setting.temperature,
-            systemPrompt: prepRes.systemPrompt,
-            endTag: this._config.getEndTag?.(services),
-            signal,
-            tools: this._config.getTools
-              ? this._config.getTools(services)
-              : services.setting.tools,
-            finalTool: prepRes.finalTool,
-          });
-
-          return {
-            kind: 'success' as const,
-            response: result.response,
-            responseTimeMs: Date.now() - start,
-            updatedMessages: result.updatedMessages,
-          };
-        },
+        () =>
+          gate.run(
+            modelRateLimitRoute,
+            {
+              signal,
+              baseBackoffMs: this._retryBackoffMs,
+              classifyFailure: classifyModelRateLimitFailure,
+              onWait: (delayMs) =>
+                services.logger.debug(
+                  `Waiting ${delayMs}ms for the model rate-limit recovery probe.`,
+                ),
+            },
+            invoke,
+          ),
       );
     });
   }

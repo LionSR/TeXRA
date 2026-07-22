@@ -29,7 +29,6 @@ import {
   detectRequestId,
   isMissingFinishReasonError,
   handleStreamingFailure,
-  trackStreamConnect,
   isUserAbort,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
@@ -441,7 +440,6 @@ export class ModelHandlerOpenAI<
     const streamingAggregator = this.createStreamingAggregator();
     let requestId: string | undefined;
     let stream: ChatCompletionStream | undefined;
-    let connect: ReturnType<typeof trackStreamConnect> | undefined;
     const abortReconstructedStream = () => stream?.abort();
     signal?.addEventListener('abort', abortReconstructedStream, { once: true });
 
@@ -467,7 +465,6 @@ export class ModelHandlerOpenAI<
       requestId = detectRequestId({ headers: response.headers });
       stream = ChatCompletionStream.fromReadableStream(data.toReadableStream());
       if (signal?.aborted) stream.abort();
-      connect = trackStreamConnect(stream);
       stream.on('content.delta', onContentDelta);
       stream.on('chunk', onChunk);
 
@@ -513,8 +510,6 @@ export class ModelHandlerOpenAI<
             stream?.currentChatCompletionSnapshot,
             PARTIAL_TEXT_TAIL_MAX,
           ),
-        retryEligible: (tail) =>
-          (connect?.isConnected() ?? false) || tail.length > 0,
         decorateError: (err, tail) => {
           // Tag at the boundary so abort identity survives wrapping and
           // minification (mirrors the Anthropic stream catch).
@@ -536,7 +531,6 @@ export class ModelHandlerOpenAI<
       });
     } finally {
       signal?.removeEventListener('abort', abortReconstructedStream);
-      connect?.cleanup();
       stream?.off('content.delta', onContentDelta);
       stream?.off('chunk', onChunk);
     }

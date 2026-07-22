@@ -2,8 +2,8 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { HTTPClient } from '@openrouter/sdk';
-import { describe, it, afterEach, vi } from 'vitest';
+import { HTTPClient, type OpenRouter } from '@openrouter/sdk';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 // Local imports
@@ -15,6 +15,9 @@ import type { ResolvedClientCredential } from '@agent/types/ModelHandlerContract
 import * as serverKeysModule from '@auth/serverKeys';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import * as providerConfigModule from '@utils/config/providerConfig';
+
+// Type imports
+import type { ChatMessages } from '@openrouter/sdk/models';
 
 const OPENROUTER_TEST_CONFIG = Object.freeze({
   name: 'gpt-5.5',
@@ -394,5 +397,60 @@ describe('ModelHandlerOpenRouterNative getClient retry policy', () => {
     assert.equal(response.status, 204);
     assert.equal(transportFetch.mock.calls.length, 1);
     assert.equal(transportFetch.mock.calls[0]?.[0], request);
+  });
+});
+
+describe('ModelHandlerOpenRouterNative compaction retries', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('retries a transient auxiliary compaction request twice', async () => {
+    vi.useFakeTimers();
+    const handler = new ModelHandlerOpenRouterNative(
+      buildTestModelConfig(OPENROUTER_TEST_CONFIG),
+    );
+    const target = handler as unknown as {
+      runClientCompaction: (
+        messages: unknown[],
+        inputTokens: number,
+        summarize: (
+          messages: ChatMessages[],
+          systemPrompt: string,
+        ) => Promise<unknown>,
+      ) => Promise<{ compactedMessages: ChatMessages[]; didCompact: boolean }>;
+      compactConversation: (
+        client: OpenRouter,
+        messages: ChatMessages[],
+      ) => Promise<{ compactedMessages: ChatMessages[]; didCompact: boolean }>;
+    };
+    target.runClientCompaction = async (_messages, _inputTokens, summarize) => {
+      await summarize([], 'Summarize the conversation.');
+      return { compactedMessages: [], didCompact: true };
+    };
+    const transient = Object.assign(new Error('provider unavailable'), {
+      status: 503,
+    });
+    const send = vi
+      .fn()
+      .mockRejectedValueOnce(transient)
+      .mockRejectedValueOnce(transient)
+      .mockResolvedValueOnce({
+        choices: [{ message: { content: 'summary' } }],
+        usage: { completionTokens: 1 },
+      });
+
+    const result = target.compactConversation(
+      { chat: { send } } as unknown as OpenRouter,
+      [],
+    );
+    await vi.runAllTimersAsync();
+
+    await expect(result).resolves.toEqual({
+      compactedMessages: [],
+      didCompact: true,
+    });
+    assert.equal(send.mock.calls.length, 3);
   });
 });

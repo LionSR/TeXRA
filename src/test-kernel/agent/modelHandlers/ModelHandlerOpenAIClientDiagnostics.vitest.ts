@@ -10,7 +10,6 @@ import type {
 } from '@agent/types/ModelHandlerContracts';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
-import { MODEL_STREAM_INACTIVITY_TIMEOUT_MS } from '@agent/modelHandlers/support/longRunningModelFetch';
 import * as serverKeysModule from '@auth/serverKeys';
 import { KIMI_CODE_BASE_URL } from '@model/kimiCodeSubscriptionRouting';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
@@ -139,7 +138,6 @@ describe('OpenAI-compatible client diagnostics', () => {
       handler.dispose();
     }
     expect(transports[0]).toBe(transports[1]);
-    expect(MODEL_STREAM_INACTIVITY_TIMEOUT_MS).toBe(30 * 60 * 1000);
   });
 
   it('reports the Moonshot credential owner and request model', async () => {

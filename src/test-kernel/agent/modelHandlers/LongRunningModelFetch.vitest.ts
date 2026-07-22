@@ -1,4 +1,5 @@
 // Third-party imports
+import { ModelProvider } from 'llm-zoo';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const transportMocks = vi.hoisted(() => ({
@@ -16,13 +17,29 @@ vi.mock('undici', async (importOriginal) => {
 });
 
 // Local imports
-import {
-  longRunningModelFetch,
-  MODEL_STREAM_INACTIVITY_TIMEOUT_MS,
-} from '@agent/modelHandlers/support/longRunningModelFetch';
+import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Type imports
 import type { Dispatcher } from 'undici';
+
+class TestableModelHandler extends ModelHandlerOpenAI {
+  modelFetch(): typeof fetch {
+    return this.longRunningModelFetch;
+  }
+}
+
+function modelFetch(): typeof fetch {
+  return new TestableModelHandler(
+    buildTestModelConfig({
+      name: 'transport-test',
+      label: 'Transport Test',
+      fullName: 'transport-test',
+      shortName: 'transport-test',
+      provider: ModelProvider.OPENAI,
+    }),
+  ).modelFetch();
+}
 
 describe('longRunningModelFetch', () => {
   afterEach(() => {
@@ -55,7 +72,7 @@ describe('longRunningModelFetch', () => {
       body: JSON.stringify({ prompt: 'hello' }),
     });
 
-    await expect(longRunningModelFetch(request)).resolves.toBe(response);
+    await expect(modelFetch()(request)).resolves.toBe(response);
 
     const [input, init] = transportMocks.undiciFetch.mock.calls[0] ?? [];
     expect(input).toBe('https://openrouter.example/v1/chat');
@@ -73,7 +90,7 @@ describe('longRunningModelFetch', () => {
     );
     expect(baseDispatch).toHaveBeenCalledWith(
       expect.objectContaining({
-        bodyTimeout: MODEL_STREAM_INACTIVITY_TIMEOUT_MS,
+        bodyTimeout: 30 * 60 * 1000,
         headersTimeout: 10 * 60 * 1000,
       }),
       expect.anything(),

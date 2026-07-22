@@ -35,8 +35,6 @@ import {
   isContextWindowError,
   isPreviousResponseIdError,
   handleStreamingFailure,
-  trackStreamConnect,
-  type StreamConnectTracker,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
@@ -2077,8 +2075,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Hoisted so the catch can finalize the progress streams on a mid-stream
     // failure (otherwise the progress view hangs in a loading state).
     let processor: ResponseStreamProcessor | undefined;
-    let streamEventObserved = false;
-    let connect: StreamConnectTracker | undefined;
     // Captured from `response.created` so a stream event outside the SDK's
     // typed union (see isUnhandledStreamEventError) can fall back to polling
     // by id instead of failing an otherwise-healthy turn.
@@ -2088,7 +2084,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const streamParams: ResponseStreamParams = { ...rest, stream: true };
       const retrieveParams = responseRetrieveParamsFor(params);
       const stream = await client.responses.stream(streamParams, { signal });
-      connect = trackStreamConnect(stream);
 
       // Processor handles interleaved thinking and web search
       // GPT can: think → web_search → think more → web_search → text
@@ -2137,7 +2132,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       let response: Response | undefined;
       try {
         for await (const event of stream) {
-          streamEventObserved = true;
           if (event.type === 'response.created') {
             responseId = event.response.id;
           }
@@ -2202,13 +2196,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // the retry UI receives the same structured error shape downstream.
         partialTail: () =>
           streamedText ? takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX) : '',
-        retryEligible: () =>
-          (connect?.isConnected() ?? false) ||
-          streamEventObserved ||
-          streamedText.length > 0,
       });
-    } finally {
-      connect?.cleanup();
     }
   }
 

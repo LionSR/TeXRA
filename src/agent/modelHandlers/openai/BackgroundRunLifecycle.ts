@@ -13,11 +13,7 @@
 // it across concurrent invocations (see the handler's class doc).
 
 import type { AgentTrace } from '@agent/trace';
-import {
-  attachFlowAutoRetryRequired,
-  detectStatusCode,
-  isUserAbort,
-} from '@common/errors/sdkErrorUtils';
+import { detectStatusCode, isUserAbort } from '@common/errors/sdkErrorUtils';
 
 import {
   BackgroundPoller,
@@ -151,7 +147,6 @@ export class BackgroundRunLifecycle {
       const { providerError, shouldRetainPendingResponse } =
         classifyOpenAIBackgroundResumeError(err, this.deps.provider);
       if (shouldRetainPendingResponse) {
-        attachFlowAutoRetryRequired(err);
         throw err;
       }
       this.logger.warn(
@@ -248,8 +243,6 @@ export class BackgroundRunLifecycle {
         classifyOpenAIBackgroundResumeError(err, this.deps.provider);
       if (!shouldRetainPendingResponse) {
         this.clearPending();
-      } else {
-        attachFlowAutoRetryRequired(err);
       }
       throw err;
     }
@@ -275,70 +268,61 @@ export class BackgroundRunLifecycle {
     this.rememberPending(initialResponse.id, retrieveParams);
 
     let pollStats: BackgroundPollStats | undefined;
-    let polled: T;
-    try {
-      polled = (await this.backgroundPoller.poll({
-        initialResponse,
-        retrieve: async (responseId, sig) => {
-          try {
-            return (await client.responses.retrieve(
-              responseId,
-              retrieveParams,
-              sig ? { signal: sig } : undefined,
-            )) as T;
-          } catch (err) {
-            // Tag before checking: retrieve() throws the SDK's APIUserAbortError,
-            // not a DOMException, when the signal fires.
-            tagOpenAISdkError(err, this.deps.provider);
-            if (isUserAbort(err)) {
-              // User cancelled during retrieve — clear pending ID to prevent
-              // ghost-resume on next call.
-              this.clearPending();
-              throw err;
-            }
-            // 404 "response not found" during polling means the response is truly
-            // gone server-side. Clear the pending ID so the next retry creates a
-            // fresh background request instead of routing through tryResume to
-            // rediscover the 404.
-            const statusCode = detectStatusCode(err);
-            if (statusCode === 404) {
-              this.clearPending();
-              throw createOpenAIBackgroundPollingError(
-                responseId,
-                err,
-                this.deps.provider,
-              );
-            }
-            attachFlowAutoRetryRequired(err);
-            // All other errors (401, 403, 5xx, network, etc.) propagate unchanged
-            // so downstream handlers (relay 401 token refresh, retryability checks,
-            // non-retryable classification) work correctly with full HTTP metadata.
-            // The ID is intentionally NOT cleared — retry may resume the same response.
+    const polled = (await this.backgroundPoller.poll({
+      initialResponse,
+      retrieve: async (responseId, sig) => {
+        try {
+          return (await client.responses.retrieve(
+            responseId,
+            retrieveParams,
+            sig ? { signal: sig } : undefined,
+          )) as T;
+        } catch (err) {
+          // Tag before checking: retrieve() throws the SDK's APIUserAbortError,
+          // not a DOMException, when the signal fires.
+          tagOpenAISdkError(err, this.deps.provider);
+          if (isUserAbort(err)) {
+            // User cancelled during retrieve — clear pending ID to prevent
+            // ghost-resume on next call.
+            this.clearPending();
             throw err;
           }
-        },
-        extractId: (r) => r.id,
-        extractStatus: (r) => r.status ?? 'unknown',
-        signal,
-        resourceLabel: 'response',
-        providerLabel: 'OpenAI',
-        onAbort: () => this.clearPending(),
-        formatTimeoutError: ({ responseId, maxDurationMs }) =>
-          `OpenAI response ${responseId} exceeded maximum polling duration of ${maxDurationMs} ms. ` +
-          `Retry later or cancel the job with client.responses.cancel("${responseId}").`,
-        extraFinishData: (response) => ({
-          usage: response.usage ?? undefined,
-        }),
-        onFinished: (_response, stats) => {
-          pollStats = stats;
-        },
-      })) as T;
-    } catch (err) {
-      if (!isUserAbort(err)) {
-        attachFlowAutoRetryRequired(err);
-      }
-      throw err;
-    }
+          // 404 "response not found" during polling means the response is truly
+          // gone server-side. Clear the pending ID so the next retry creates a
+          // fresh background request instead of routing through tryResume to
+          // rediscover the 404.
+          const statusCode = detectStatusCode(err);
+          if (statusCode === 404) {
+            this.clearPending();
+            throw createOpenAIBackgroundPollingError(
+              responseId,
+              err,
+              this.deps.provider,
+            );
+          }
+          // All other errors (401, 403, 5xx, network, etc.) propagate unchanged
+          // so downstream handlers (relay 401 token refresh, retryability checks,
+          // non-retryable classification) work correctly with full HTTP metadata.
+          // The ID is intentionally NOT cleared — retry may resume the same response.
+          throw err;
+        }
+      },
+      extractId: (r) => r.id,
+      extractStatus: (r) => r.status ?? 'unknown',
+      signal,
+      resourceLabel: 'response',
+      providerLabel: 'OpenAI',
+      onAbort: () => this.clearPending(),
+      formatTimeoutError: ({ responseId, maxDurationMs }) =>
+        `OpenAI response ${responseId} exceeded maximum polling duration of ${maxDurationMs} ms. ` +
+        `Retry later or cancel the job with client.responses.cancel("${responseId}").`,
+      extraFinishData: (response) => ({
+        usage: response.usage ?? undefined,
+      }),
+      onFinished: (_response, stats) => {
+        pollStats = stats;
+      },
+    })) as T;
 
     if (polled.status === 'completed') {
       return polled;

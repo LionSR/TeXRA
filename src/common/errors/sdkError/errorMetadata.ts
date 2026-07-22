@@ -65,37 +65,6 @@ export function attachPartialText(err: unknown, text: string): void {
 
 export const detectPartialText = partialTextMetadata.detect;
 
-const flowAutoRetryRequiredMetadata = createErrorMetadata<boolean>(
-  'flowAutoRetryRequired',
-  (v): v is boolean => v === true,
-);
-
-/**
- * Marks errors that are outside the provider SDK's automatic retry boundary.
- * Examples include failures while consuming an already-open stream or polling
- * an already-created background response.
- */
-export function attachFlowAutoRetryRequired(err: unknown): void {
-  flowAutoRetryRequiredMetadata.attach(err, true);
-}
-
-/** Match only a raw outer fetch failure. An SDK connection error may carry
- *  the same TypeError as its cause after adding provider-specific context. */
-function isRawFetchFailure(err: unknown): boolean {
-  return (
-    err instanceof TypeError &&
-    /^(?:fetch failed|failed to fetch)$/i.test(err.message.trim())
-  );
-}
-
-export function requiresFlowAutoRetry(err: unknown): boolean {
-  return (
-    findInCauseChain(err, (current) =>
-      flowAutoRetryRequiredMetadata.detect(current) === true ? true : undefined,
-    ) !== undefined || isRawFetchFailure(err)
-  );
-}
-
 const contextWindowErrorMetadata = createErrorMetadata<boolean>(
   'contextWindowError',
   (v): v is boolean => v === true,

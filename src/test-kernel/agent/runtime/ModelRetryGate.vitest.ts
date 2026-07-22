@@ -149,6 +149,42 @@ describe('ModelRetryGate', () => {
     gate.dispose();
   });
 
+  it('refreshes an admitted client after the recovery probe fails', async () => {
+    const gate = new ModelRetryGate();
+    const recoveryError = new Error('provider still unavailable');
+    const failedRecovery = gate.run(
+      ROUTE,
+      {
+        ...options(new AbortController().signal),
+        recoverFailure: () => () => Promise.reject(recoveryError),
+      },
+      async () => {
+        throw TRANSIENT;
+      },
+    );
+
+    await expect(failedRecovery).rejects.toBe(recoveryError);
+
+    const order: string[] = [];
+    const next = gate.run(
+      ROUTE,
+      {
+        ...options(new AbortController().signal),
+        onAdmitted: () => {
+          order.push('refresh');
+        },
+      },
+      async () => {
+        order.push('operation');
+      },
+    );
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await next;
+    expect(order).toEqual(['refresh', 'operation']);
+    gate.dispose();
+  });
+
   it('honors an explicitly disabled shared backoff', async () => {
     const gate = new ModelRetryGate();
     const controller = new AbortController();

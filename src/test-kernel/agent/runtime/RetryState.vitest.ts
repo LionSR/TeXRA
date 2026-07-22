@@ -49,7 +49,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import type { AuthTokenProvider } from '@auth/TokenProvider';
 import {
   attachContextWindowError,
-  attachFlowAutoRetryRequired,
+  attachProviderError,
 } from '@common/errors/sdkErrorUtils';
 import {
   STREAM_PHASE,
@@ -76,7 +76,7 @@ interface TestRetryServices {
   runtimeHost: AgentRuntimeHost;
   logger: AgentTrace;
   setAbortController: (ac: AbortController | null) => void;
-  refreshClient?: () => Promise<void>;
+  refreshClient?: (selection?: unknown, signal?: AbortSignal) => Promise<void>;
   clientCredentialRoute?: ModelCredentialRoute;
 }
 
@@ -130,7 +130,7 @@ interface RetryNodeKit {
 
 function createRetryNode(
   streamId: StreamTabId,
-  refreshClient?: () => Promise<void>,
+  refreshClient?: (selection?: unknown, signal?: AbortSignal) => Promise<void>,
   clientCredentialRoute?: ModelCredentialRoute,
 ): RetryNodeKit {
   const streamStatus = new StreamStatusMachine();
@@ -204,8 +204,12 @@ function createModelInvocationNode(): ModelInvocationNode<BaseCycleFields> {
 }
 
 interface CapturedModelRetry {
-  readonly route: string;
-  readonly classifyFailure: (
+  readonly sharedRoute: string;
+  readonly classifySharedFailure: (
+    error: Error,
+  ) => { retryAfterMs?: number } | undefined;
+  readonly modelRateLimitRoute: string;
+  readonly classifyModelRateLimitFailure: (
     error: Error,
   ) => { retryAfterMs?: number } | undefined;
   readonly onAdmitted?: () => void | Promise<void>;
@@ -215,6 +219,7 @@ async function captureModelRetry(
   endpoint = 'https://api.example/v1',
   credentialRoute: ModelCredentialRoute = 'api-key',
   refreshClient?: () => Promise<void>,
+  model = 'openai:test',
 ): Promise<CapturedModelRetry> {
   const streamId = 'model-retry-policy' as StreamTabId;
   const session = createTestSession();
@@ -226,7 +231,7 @@ async function captureModelRetry(
     storeResponse: vi.fn(),
   }).setServices({
     modelHandler: {
-      config: { provider: 'openai' },
+      config: { provider: 'openai', fullName: model },
       createResponse: async () => ({ response: 'ok' }),
       getRetryEndpoint: () => endpoint,
       isBackgroundModeActive: () => false,
@@ -245,11 +250,14 @@ async function captureModelRetry(
     await withRetryRunContext(streamId, session, () =>
       node.exec({ shouldStop: false, messages: [] }),
     );
-    const [route, options] = run.mock.calls[0]!;
+    const [sharedRoute, sharedOptions] = run.mock.calls[0]!;
+    const [modelRateLimitRoute, modelRateLimitOptions] = run.mock.calls[1]!;
     return {
-      route,
-      classifyFailure: options.classifyFailure,
-      onAdmitted: options.onAdmitted,
+      sharedRoute,
+      classifySharedFailure: sharedOptions.classifyFailure,
+      modelRateLimitRoute,
+      classifyModelRateLimitFailure: modelRateLimitOptions.classifyFailure,
+      onAdmitted: sharedOptions.onAdmitted,
     };
   } finally {
     session.dispose();
@@ -491,11 +499,35 @@ describe('RetryState', () => {
     expect(requestRetry).not.toHaveBeenCalled();
   });
 
+  it('passes the active abort signal to relay recovery client refresh', async () => {
+    const streamId = 'retry-relay-refresh-abort' as StreamTabId;
+    const refreshClient = vi.fn(
+      async (_selection?: unknown, _signal?: AbortSignal) => undefined,
+    );
+    const { node } = createRetryNode(streamId, refreshClient, 'relay');
+    SupabaseClient.setAuthProvider(createAuthTokenProvider());
+    const unauthorized = new Error('relay token expired');
+    attachProviderError(unauthorized, {
+      message: unauthorized.message,
+      statusCode: 401,
+      userRetryable: true,
+      isRelayError: true,
+    });
+    const operation = vi
+      .fn<(signal: AbortSignal) => Promise<string>>()
+      .mockRejectedValueOnce(unauthorized)
+      .mockResolvedValueOnce('recovered');
+
+    await expect(node.runWithAbort(operation)).resolves.toBe('recovered');
+
+    const refreshSignal = refreshClient.mock.calls[0]?.[1];
+    expect(refreshSignal).toBeInstanceOf(AbortSignal);
+    expect(refreshSignal?.aborted).toBe(false);
+  });
+
   it('keeps node-level auto-retry for transient stream failures', () => {
     const node = createModelInvocationNode();
     const streamError = new Error('stream closed after response started');
-
-    attachFlowAutoRetryRequired(streamError);
 
     expect(node.shouldAutoRetry(streamError)).toBe(true);
   });
@@ -531,18 +563,44 @@ describe('RetryState', () => {
       'chatgpt-subscription',
     );
 
-    expect(first.route).toBe(
+    expect(first.sharedRoute).toBe(
       JSON.stringify([
         'openai',
         'chatgpt-subscription',
         'https://first.example/v1',
       ]),
     );
-    expect(second.route).not.toBe(first.route);
+    expect(second.sharedRoute).not.toBe(first.sharedRoute);
+  });
+
+  it('isolates rate-limit recovery by model on a shared route', async () => {
+    const first = await captureModelRetry(
+      'https://api.example/v1',
+      'api-key',
+      undefined,
+      'openai:model-a',
+    );
+    const second = await captureModelRetry(
+      'https://api.example/v1',
+      'api-key',
+      undefined,
+      'openai:model-b',
+    );
+    const rateLimit = Object.assign(new Error('rate limited'), {
+      status: 429,
+      headers: { 'retry-after': '3' },
+    });
+
+    expect(first.sharedRoute).toBe(second.sharedRoute);
+    expect(first.modelRateLimitRoute).not.toBe(second.modelRateLimitRoute);
+    expect(first.classifySharedFailure(rateLimit)).toBeUndefined();
+    expect(first.classifyModelRateLimitFailure(rateLimit)).toEqual({
+      retryAfterMs: 3_000,
+    });
   });
 
   it('recognizes the nested Undici stream timeout from long model calls', async () => {
-    const { classifyFailure } = await captureModelRetry();
+    const { classifySharedFailure } = await captureModelRetry();
     const transport = Object.assign(
       new Error('HTTP/2: "stream timeout after 300000"'),
       { code: 'UND_ERR_INFO' },
@@ -550,22 +608,24 @@ describe('RetryState', () => {
     const fetchError = new TypeError('fetch failed', { cause: transport });
     const sdkError = new Error('Connection error', { cause: fetchError });
 
-    expect(classifyFailure(sdkError)).toEqual({ retryAfterMs: undefined });
+    expect(classifySharedFailure(sdkError)).toEqual({
+      retryAfterMs: undefined,
+    });
   });
 
   it('recognizes a retryable HTTP status carried by an SDK error cause', async () => {
-    const { classifyFailure } = await captureModelRetry();
+    const { classifySharedFailure } = await captureModelRetry();
     const providerError = Object.assign(new Error('service unavailable'), {
       status: 503,
       headers: { 'retry-after': '7' },
     });
     const sdkError = new Error('request failed', { cause: providerError });
 
-    expect(classifyFailure(sdkError)).toEqual({ retryAfterMs: 7_000 });
+    expect(classifySharedFailure(sdkError)).toEqual({ retryAfterMs: 7_000 });
   });
 
   it('does not classify deterministic Undici request errors as route failures', async () => {
-    const { classifyFailure } = await captureModelRetry();
+    const { classifySharedFailure } = await captureModelRetry();
     const invalidRequest = Object.assign(new Error('invalid request option'), {
       code: 'UND_ERR_INVALID_ARG',
     });
@@ -573,19 +633,18 @@ describe('RetryState', () => {
       cause: invalidRequest,
     });
 
-    expect(classifyFailure(fetchError)).toBeUndefined();
+    expect(classifySharedFailure(fetchError)).toBeUndefined();
   });
 
   it('keeps per-response flow retries local to their invocation', async () => {
-    const { classifyFailure } = await captureModelRetry();
+    const { classifySharedFailure } = await captureModelRetry();
     const error = new Error('stream ended before the final response event');
-    attachFlowAutoRetryRequired(error);
 
-    expect(classifyFailure(error)).toBeUndefined();
+    expect(classifySharedFailure(error)).toBeUndefined();
   });
 
   it('keeps peers gated while a shared credential is being recovered', async () => {
-    const { classifyFailure } = await captureModelRetry(
+    const { classifySharedFailure } = await captureModelRetry(
       'https://api.example/v1',
       'relay',
     );
@@ -596,7 +655,7 @@ describe('RetryState', () => {
     expect(createModelInvocationNode().shouldAutoRetry(unauthorized)).toBe(
       false,
     );
-    expect(classifyFailure(unauthorized)).toEqual({
+    expect(classifySharedFailure(unauthorized)).toEqual({
       retryAfterMs: undefined,
     });
   });
@@ -617,7 +676,7 @@ describe('RetryState', () => {
   it.each(['api-key', 'openrouter', 'chatgpt-subscription'] as const)(
     'does not gate unrelated calls after a 401 on the %s route',
     async (credentialRoute) => {
-      const { classifyFailure } = await captureModelRetry(
+      const { classifySharedFailure } = await captureModelRetry(
         'https://api.example/v1',
         credentialRoute,
       );
@@ -625,56 +684,52 @@ describe('RetryState', () => {
         status: 401,
       });
 
-      expect(classifyFailure(unauthorized)).toBeUndefined();
+      expect(classifySharedFailure(unauthorized)).toBeUndefined();
     },
   );
 
   it('does not share model-specific permission failures across relay calls', async () => {
-    const { classifyFailure } = await captureModelRetry(
+    const { classifySharedFailure } = await captureModelRetry(
       'https://api.example/v1',
       'relay',
     );
 
     expect(
-      classifyFailure(
+      classifySharedFailure(
         Object.assign(new Error('model access denied'), { status: 403 }),
       ),
     ).toBeUndefined();
   });
 
   it('honors retry-after guidance for shared HTTP failures', async () => {
-    const { classifyFailure } = await captureModelRetry();
+    const { classifySharedFailure } = await captureModelRetry();
     const error = Object.assign(new Error('busy'), {
       status: 503,
       headers: { 'retry-after': '12' },
     });
 
-    expect(classifyFailure(error)).toEqual({ retryAfterMs: 12_000 });
+    expect(classifySharedFailure(error)).toEqual({ retryAfterMs: 12_000 });
   });
 
   it('retries HTTP conflicts locally without cooling the shared route', async () => {
-    const { classifyFailure } = await captureModelRetry();
+    const { classifySharedFailure } = await captureModelRetry();
     const error = Object.assign(new Error('conflict'), { status: 409 });
 
     expect(createModelInvocationNode().shouldAutoRetry(error)).toBe(true);
-    expect(classifyFailure(error)).toBeUndefined();
+    expect(classifySharedFailure(error)).toBeUndefined();
   });
 
-  it('never auto-retries a context-window overflow, even one tagged flow-auto-retry-required', () => {
+  it('never auto-retries a context-window overflow', () => {
     // Regression for the retry storm where a context-window overflow that
     // slipped past provider-specific compaction recovery (e.g. no
     // previous_response_id to chain from) was flattened into a plain,
-    // code-free Error and unconditionally tagged attachFlowAutoRetryRequired
-    // by the WebSocket transport before classification ran — so it looked
-    // identical to a genuinely transient failure and got auto-retried with
-    // the exact same oversized payload forever. The base shouldAutoRetry gate
-    // must refuse a context-window error unconditionally, regardless of any
-    // flow-auto-retry tag, so unrecovered overflows fail once instead of
-    // storming.
+    // code-free Error by the WebSocket transport before classification ran,
+    // so it looked identical to a genuinely transient failure and got
+    // auto-retried with the exact same oversized payload forever. The base
+    // shouldAutoRetry gate must refuse a context-window error unconditionally.
     const node = createModelInvocationNode();
     const overflow = new Error('OpenAI WebSocket response failed: overflow');
     attachContextWindowError(overflow);
-    attachFlowAutoRetryRequired(overflow);
 
     expect(node.shouldAutoRetry(overflow)).toBe(false);
   });

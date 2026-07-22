@@ -16,20 +16,12 @@ export {
   attachStreamDiagnostics,
   attachPartialText,
   detectPartialText,
-  attachFlowAutoRetryRequired,
-  requiresFlowAutoRetry,
   attachProviderError,
   attachContextWindowError,
   hasContextWindowErrorMarker,
 } from './sdkError/errorMetadata';
 
-export {
-  type ConnectTrackableStream,
-  type StreamConnectTracker,
-  annotateStreamFailure,
-  handleStreamingFailure,
-  trackStreamConnect,
-} from './sdkError/streamFailure';
+export { handleStreamingFailure } from './sdkError/streamFailure';
 
 export { detectRequestId, detectStatusCode } from './sdkError/errorInspection';
 

@@ -38,7 +38,6 @@ import {
   attachStreamDiagnostics,
   handleStreamingFailure,
   isUserAbort,
-  trackStreamConnect,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
@@ -430,7 +429,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       throw new AnthropicUserAbortError();
     }
 
-    const connect = trackStreamConnect(stream);
     const abortStream = (): void => stream.controller.abort();
     signal?.addEventListener('abort', abortStream, { once: true });
 
@@ -470,7 +468,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // Anthropic finalizes unconditionally below, including on success.
         partialTail: () =>
           extractPartialTextTail(stream.currentMessage, PARTIAL_TEXT_TAIL_MAX),
-        retryEligible: (tail) => connect.isConnected() || tail.length > 0,
         decorateError: (error, partialText) =>
           this.decorateStreamError(
             error,
@@ -481,7 +478,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       });
     } finally {
       streamHandler.finalize();
-      connect.cleanup();
       signal?.removeEventListener('abort', abortStream);
     }
   }

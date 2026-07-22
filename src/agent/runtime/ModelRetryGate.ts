@@ -15,6 +15,7 @@ interface RouteState {
   phase: RoutePhase;
   failures: number;
   retryAt: number;
+  refreshOnAdmission: boolean;
   timer: ReturnType<typeof setTimeout> | undefined;
   readonly waiters: WaitingAttempt[];
 }
@@ -142,6 +143,7 @@ export class ModelRetryGate {
     state.version += 1;
     state.phase = 'probing';
     state.retryAt = Date.now();
+    state.refreshOnAdmission = true;
     return {
       version: state.version,
       probe: true,
@@ -182,6 +184,7 @@ export class ModelRetryGate {
         phase: 'healthy' as const,
         failures: 0,
         retryAt: 0,
+        refreshOnAdmission: false,
         timer: undefined,
         waiters: [],
       };
@@ -249,10 +252,15 @@ export class ModelRetryGate {
     if (permit.version !== state.version) return;
     if (state.phase === 'probing' && !permit.probe) return;
 
+    const refreshOnAdmission =
+      sharedRecoveryCompleted ||
+      permit.sharedRecoveryCompleted ||
+      state.refreshOnAdmission;
     state.version += 1;
     state.phase = 'healthy';
     state.failures = 0;
     state.retryAt = 0;
+    state.refreshOnAdmission = false;
     if (state.timer) clearTimeout(state.timer);
     state.timer = undefined;
     const waiters = state.waiters.splice(0);
@@ -262,7 +270,7 @@ export class ModelRetryGate {
         version: state.version,
         probe: false,
         waited: true,
-        sharedRecoveryCompleted,
+        sharedRecoveryCompleted: refreshOnAdmission,
       });
     }
   }
@@ -305,7 +313,7 @@ export class ModelRetryGate {
           version: state.version,
           probe: true,
           waited: true,
-          sharedRecoveryCompleted: false,
+          sharedRecoveryCompleted: state.refreshOnAdmission,
         });
       },
       Math.max(0, state.retryAt - Date.now()),
