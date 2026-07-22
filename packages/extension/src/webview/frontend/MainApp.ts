@@ -26,12 +26,14 @@ import {
   type InstructionChangeDetail,
   type LatexDiffsActionDetail,
   type LatexDiffsToggleDetail,
+  type LaunchTargetChangeDetail,
   type ModelChangeDetail,
   type MultipleFilesActionDetail,
   type MultipleFilesTypeActionDetail,
   type ReorderFilesDetail,
   type RemoveFileDetail,
   type SessionTypeChangeDetail,
+  type TeamChangeDetail,
 } from '@shared/schemas';
 import {
   registerTeXRAWebAwesomeIcons,
@@ -77,8 +79,10 @@ import {
 import {
   addOpenedFiles,
   changeAgent,
+  changeLaunchTarget,
   changeModel,
   changeSessionType,
+  changeTeam,
   emptyFile,
   emptyFiles,
   executeAgent,
@@ -174,6 +178,12 @@ export class MainApp extends MainAppBase {
   private readonly onDismissSessionHint = (): void => {
     postMessage(MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER);
     sessionHintDismissed$.set(true);
+  };
+
+  /** Team settings + the team picker's "Manage teams…" tail both open the
+   * multi-agent settings section. */
+  private readonly onOpenMultiAgentSettings = (): void => {
+    postMessage(MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS);
   };
 
   private readonly onLatexDiffsToggle = ({
@@ -363,6 +373,12 @@ export class MainApp extends MainAppBase {
               detail,
             }: CustomEvent<SessionTypeChangeDetail>) =>
               changeSessionType(detail.value)}
+            @launch-target-change=${({
+              detail,
+            }: CustomEvent<LaunchTargetChangeDetail>) =>
+              changeLaunchTarget(detail.value)}
+            @team-change=${({ detail }: CustomEvent<TeamChangeDetail>) =>
+              changeTeam(detail.value)}
             @agent-change=${({ detail }: CustomEvent<AgentChangeDetail>) =>
               changeAgent(detail.sessionType, detail.value)}
             @model-change=${({ detail }: CustomEvent<ModelChangeDetail>) =>
@@ -374,6 +390,8 @@ export class MainApp extends MainAppBase {
             @execute=${() => executeAgent()}
             @agent-settings=${() => runAgentConfigAction('edit')}
             @browse-all-agents=${() => runAgentConfigAction('edit')}
+            @team-settings=${this.onOpenMultiAgentSettings}
+            @manage-teams=${this.onOpenMultiAgentSettings}
             @model-settings=${() =>
               postMessage(MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS)}
             @focus-instruction=${({

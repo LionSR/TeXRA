@@ -46,8 +46,6 @@ export {
   // Visible agents (for dropdowns and tools)
   getVisibleAgents,
   createWorkspaceAgentRosterController,
-  // Canonical name-or-key identity matcher (shared by out-of-registry callers)
-  findAgentByIdentifier,
   // All built-in delegating team roots (relay-served + bundled)
   BUILTIN_TEAM_ROOT_AGENT_NAMES,
 } from './agentRegistry';

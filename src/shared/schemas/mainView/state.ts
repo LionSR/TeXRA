@@ -25,6 +25,10 @@ import { ToolConfigFieldsSchema } from '../toolConfig';
 export const SessionTypeSchema = z.enum(['toolUse', 'workflow']);
 export type SessionType = z.infer<typeof SessionTypeSchema>;
 
+/** Who runs a main-view request: a single agent or a multi-agent team. */
+export const LaunchTargetSchema = z.enum(['agent', 'team']);
+export type LaunchTarget = z.infer<typeof LaunchTargetSchema>;
+
 // ============================================================
 // Option Data Schemas
 // ============================================================
@@ -94,6 +98,30 @@ export const AgentOptionDataSchema = PickerOptionBaseSchema.extend({
 });
 export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
 
+/**
+ * Team picker option row for the main-view "Run with: Team" target. `value`
+ * carries the preset id (one of the built-ins in `AGENT_MODE_PRESETS` or a
+ * user-saved custom team); hosts resolve the roster, so the renderer only
+ * ever sends team identity back. Availability is resolved against the full
+ * live catalog, not just the workspace's enabled roster.
+ */
+export const TeamOptionDataSchema = PickerOptionBaseSchema.extend({
+  /** Provenance uses the shared `'built-in' | 'custom'` team vocabulary. */
+  source: z.enum(['built-in', 'custom']),
+  /** Web Awesome icon name registered in `src/shared/wa/webAwesomeIcons.ts`. */
+  icon: z.string(),
+  /** Preset description, surfaced as the option `title`. */
+  description: z.string().prefault(''),
+  /** Catalog members that did not resolve; empty means fully runnable. */
+  unavailableMembers: z.array(z.string()).prefault([]),
+  /** Resolved delegation-capable team lead; null when none. */
+  rootAgentName: z.string().nullish(),
+  /** Marks "no runnable team lead"; `disabledReason` carries the human explanation. */
+  disabled: z.boolean().optional(),
+  disabledReason: z.string().nullish(),
+});
+export type TeamOptionData = z.infer<typeof TeamOptionDataSchema>;
+
 // ============================================================
 // Persisted State Schema
 // ============================================================
@@ -107,6 +135,8 @@ const MainViewPersistedStateBaseSchema = UIFileFieldsSchema.merge(
   WorkflowToolConfigFieldsSchema,
 ).extend({
   sessionType: SessionTypeSchema.prefault('toolUse'),
+  launchTarget: LaunchTargetSchema.prefault('agent'),
+  selectedTeamId: z.string().prefault(''),
   workflowAgent: z.string().prefault('correct'),
   toolUseAgent: z.string().prefault('orchestrator'),
   model: z.string().prefault(DEFAULT_AGENT_MODEL),
@@ -207,6 +237,8 @@ export type FileStateContextValue = z.infer<typeof FileStateContextSchema>;
 
 const SessionContextSchema = z.object({
   sessionType: SessionTypeSchema,
+  launchTarget: LaunchTargetSchema,
+  selectedTeamId: z.string(),
   instruction: z.string(),
   placeholder: z.string(),
   workflowAgent: z.string(),
@@ -215,10 +247,13 @@ const SessionContextSchema = z.object({
   workflowAgentOptions: z.array(AgentOptionDataSchema),
   toolUseAgentOptions: z.array(AgentOptionDataSchema),
   modelOptions: z.array(ModelOptionDataSchema),
+  teamOptions: z.array(TeamOptionDataSchema),
   isRecording: z.boolean(),
   isPolishing: z.boolean(),
   debugMode: z.boolean(),
   isOrchestratorSelected: z.boolean(),
+  /** Last status line pushed to the panel's aria-live region. */
+  statusAnnouncement: z.string(),
 });
 export type SessionContextValue = z.infer<typeof SessionContextSchema>;
 
@@ -353,6 +388,18 @@ const AgentChangeDetailSchema = z.object({
   value: z.string(),
 });
 export type AgentChangeDetail = z.infer<typeof AgentChangeDetailSchema>;
+
+const LaunchTargetChangeDetailSchema = z.object({
+  value: LaunchTargetSchema,
+});
+export type LaunchTargetChangeDetail = z.infer<
+  typeof LaunchTargetChangeDetailSchema
+>;
+
+const TeamChangeDetailSchema = z.object({
+  value: z.string(),
+});
+export type TeamChangeDetail = z.infer<typeof TeamChangeDetailSchema>;
 
 const ActionDetailSchema = z.object({
   action: z.string(),

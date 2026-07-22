@@ -39,8 +39,10 @@ import {
   fileSelectionOpen$,
   instruction$,
   latexdiffsVisible$,
+  launchTarget$,
   model$,
   multiFiles$,
+  selectedTeamId$,
   sessionType$,
   singleFiles$,
   toolUseAgent$,
@@ -95,6 +97,8 @@ export function saveState(): void {
 
   const persisted: MainViewPersistedState = {
     sessionType: sessionType$.get(),
+    launchTarget: launchTarget$.get(),
+    selectedTeamId: selectedTeamId$.get(),
     workflowAgent: workflowAgent$.get(),
     toolUseAgent: toolUseAgent$.get(),
     model: model$.get(),
@@ -179,6 +183,8 @@ export function handleRestoreState(
 /** Apply one parsed snapshot regardless of whether storage or the host sent it. */
 function applyState(state: MainViewPersistedState): void {
   sessionType$.set(state.sessionType);
+  launchTarget$.set(state.launchTarget);
+  selectedTeamId$.set(state.selectedTeamId);
   fileSelectionOpen$.set(state.sessionType === SESSION_TYPES.WORKFLOW);
   workflowAgent$.set(state.workflowAgent);
   toolUseAgent$.set(state.toolUseAgent);

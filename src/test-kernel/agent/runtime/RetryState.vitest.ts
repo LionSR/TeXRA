@@ -218,7 +218,13 @@ function createAuthTokenProvider(
 }
 
 describe('RetryState', () => {
+  beforeEach(() => {
+    vi.stubEnv(RELAY_TOKEN_ENV_VAR, '');
+  });
+
   afterEach(() => {
+    vi.unstubAllEnvs();
+    resetRelayTokenTierCacheForTests();
     SupabaseClient.resetForTests();
   });
 
@@ -549,18 +555,10 @@ describe('RetryState', () => {
   });
 
   describe('proactive relay token refresh', () => {
-    beforeEach(() => {
-      // A CI relay token exported in the shell would satisfy the non-forced
-      // getRelayAccessToken() read cache-only and skip the session refresh
-      // these cases exercise; pin it unset unless a case opts in.
-      vi.stubEnv(RELAY_TOKEN_ENV_VAR, '');
-    });
-
-    afterEach(() => {
-      vi.unstubAllEnvs();
-      resetRelayTokenTierCacheForTests();
-    });
-
+    // A CI relay token exported in the shell would satisfy the non-forced
+    // getRelayAccessToken() read cache-only and skip the session refresh
+    // these cases exercise; the outer beforeEach pins it unset for every
+    // test in this file unless a case opts in.
     it.each([
       'api-key',
       'openrouter',

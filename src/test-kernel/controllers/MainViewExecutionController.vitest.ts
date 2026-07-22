@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
+import {
+  prepareMainViewExecutionRequest,
+  prepareMainViewTeamExecutionRequest,
+} from '@controllers/mainView/MainViewExecutionController';
 
 describe('MainViewExecutionController', () => {
   it('keeps missing selections explicit before schema prefaults apply', () => {
@@ -53,6 +56,55 @@ describe('MainViewExecutionController', () => {
         attachDiagnostics: false,
       },
     });
+  });
+
+  it('builds team requests from resolved fields and ignores the UI agent', () => {
+    const result = prepareMainViewTeamExecutionRequest(
+      {
+        agent: 'stale-renderer-agent',
+        model: 'gpt-5.4',
+        session: { cliMultiAgentPresetId: 'stale-preset' },
+      },
+      {
+        agent: 'builtInToolUse:lead',
+        delegationAgentScope: {
+          workflowAgentKeys: ['builtInWorkflow:writer'],
+          toolUseAgentKeys: ['builtInToolUse:lead', 'builtInToolUse:member'],
+        },
+        cliMultiAgentPresetId: 'custom-team',
+      },
+    );
+
+    expect(result.valid).toBe(true);
+    if (!result.valid) return;
+    expect(result.request.config).toMatchObject({
+      agent: 'builtInToolUse:lead',
+      model: 'gpt-5.4',
+      agentCategory: AgentCategory.ToolUse,
+      delegationAgentScope: {
+        workflowAgentKeys: ['builtInWorkflow:writer'],
+        toolUseAgentKeys: ['builtInToolUse:lead', 'builtInToolUse:member'],
+      },
+      cliMultiAgentPresetId: 'custom-team',
+    });
+  });
+
+  it('requires a lead model but not a renderer agent for team requests', () => {
+    const fields = {
+      agent: 'builtInToolUse:lead',
+      delegationAgentScope: {
+        workflowAgentKeys: ['builtInWorkflow:writer'],
+        toolUseAgentKeys: ['builtInToolUse:lead'],
+      },
+      cliMultiAgentPresetId: 'custom-team',
+    };
+
+    expect(
+      prepareMainViewTeamExecutionRequest({ agent: 'ignored' }, fields).valid,
+    ).toBe(false);
+    expect(
+      prepareMainViewTeamExecutionRequest({ model: 'gpt-5.4' }, fields).valid,
+    ).toBe(true);
   });
 
   it('ignores stale UI output file selections', () => {
