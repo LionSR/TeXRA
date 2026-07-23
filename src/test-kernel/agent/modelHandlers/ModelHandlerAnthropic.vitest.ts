@@ -1224,24 +1224,54 @@ describe('ModelHandlerAnthropic message guards', () => {
           ],
         },
       ],
+      trackedPdfPages: 0,
+      expectedAtRequest: ['started'],
+      expectedFinal: ['started', 'finished'],
+    },
+    {
+      label: 'file-backed',
+      messages: [
+        {
+          role: 'user' as const,
+          content: [
+            {
+              type: 'document' as const,
+              source: {
+                type: 'file' as const,
+                file_id: 'file_existing',
+              },
+              title: 'sample.pdf',
+            } as unknown as ContentBlockParam,
+          ],
+        },
+      ],
+      trackedPdfPages: 50,
       expectedAtRequest: ['started'],
       expectedFinal: ['started', 'finished'],
     },
     {
       label: 'small',
       messages: helloMessages(),
+      trackedPdfPages: 0,
       expectedAtRequest: [],
       expectedFinal: [],
     },
   ])(
     'uses a fallback estimate for a $label unmeasured non-streaming request',
-    async ({ messages, expectedAtRequest, expectedFinal }) => {
+    async ({ messages, trackedPdfPages, expectedAtRequest, expectedFinal }) => {
       const handler = createAnthropicHandler({
+        supportsNativePdf: true,
         supportsTokenCounting: false,
         supportsReasoning: false,
       });
       handler.config.fullName = 'claude-opus-4-6';
       handler.setAgentCategory(AgentCategory.ToolUse);
+      if (trackedPdfPages > 0) {
+        (handler as any).uploadedPdfPageCounts.set(
+          'file_existing',
+          trackedPdfPages,
+        );
+      }
 
       const activityStates: string[] = [];
       stubHandlerForTest(handler, {
