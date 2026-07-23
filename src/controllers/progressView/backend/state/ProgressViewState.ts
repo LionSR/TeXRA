@@ -30,6 +30,7 @@ import {
   PersistedState,
   createBackendStorage,
 } from '@shared/state/PersistedState';
+import { isProcessAgent } from '@shared/streams/agentKind';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import { StreamSnapshotStore, type StreamLogStore } from '@transcript';
@@ -45,19 +46,42 @@ import {
  *  mirroring `StreamSnapshotStore`'s own per-stream disk-read concurrency. */
 const LEGACY_INSTRUCTION_BACKFILL_CONCURRENCY = 8;
 
+/**
+ * Config-derived run details: undefined until the stream's `RunConfig`
+ * snapshot resolves (see `applySnapshotMetadata`), at which point `kind` and
+ * every field below are always populated together from that one `AgentConfig`
+ * — they can't drift independently of each other the way top-level
+ * `ProgressStreamMetadata` fields (set by separate calls at separate times)
+ * can. `kind` mirrors the process/agent distinction `buildStreamTabInfo`
+ * renders differently: a "process" stream runs a raw OS tool (e.g. the
+ * `bash` tool) and carries no meaningful model; an "agent" stream is an
+ * LLM-driven run and may carry `inputFile`/`model`.
+ */
+type ProgressStreamRunDetails =
+  | {
+      kind: 'process';
+      agent: string;
+      instruction: string;
+      workingDirectory?: string;
+    }
+  | {
+      kind: 'agent';
+      agent: string;
+      inputFile?: string;
+      model: string;
+      instruction: string;
+      workingDirectory?: string;
+    };
+
 /** Canonical current metadata used by every progress-view stream consumer. */
 export interface ProgressStreamMetadata {
-  agent?: string;
   agentCategory?: AgentCategory;
-  inputFile?: string;
   isRemote?: boolean;
   creationTimestamp: number;
   executionId?: ExecutionId;
   parentStreamId?: StreamTabId;
   description?: string;
-  model?: string;
-  instruction?: string;
-  workingDirectory?: string;
+  run?: ProgressStreamRunDetails;
 }
 
 /** Ephemeral session state per stream (not persisted). */
@@ -247,12 +271,23 @@ export class ProgressViewState {
   ): void {
     const config = this.snapshots.getRunConfig(stream);
     if (config) {
-      metadata.agent = config.agent;
       metadata.agentCategory = config.agentCategory;
-      metadata.inputFile = config.inputFiles?.at(0) ?? metadata.inputFile;
-      metadata.model = config.model;
-      metadata.instruction = config.instruction;
-      metadata.workingDirectory = config.workingDirectory ?? undefined;
+      const workingDirectory = config.workingDirectory ?? undefined;
+      metadata.run = isProcessAgent(config.agent)
+        ? {
+            kind: 'process',
+            agent: config.agent,
+            instruction: config.instruction,
+            workingDirectory,
+          }
+        : {
+            kind: 'agent',
+            agent: config.agent,
+            inputFile: config.inputFiles?.at(0),
+            model: config.model,
+            instruction: config.instruction,
+            workingDirectory,
+          };
     }
 
     metadata.executionId =

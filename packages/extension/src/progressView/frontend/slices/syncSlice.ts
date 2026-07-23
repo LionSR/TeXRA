@@ -6,6 +6,7 @@ import {
   type ProgressViewOutboundHandlerRegistry,
   type StreamContentRenderPayload,
 } from '@shared/schemas';
+import { deriveGoalState } from '@shared/schemas/goal';
 
 // Local imports
 import {
@@ -48,6 +49,13 @@ export const syncHandlers = {
       }));
     } else {
       const { workPlan, controls } = data;
+      const goal = deriveGoalState({
+        goalActive: controls.goal.active,
+        goalStatus: controls.goal.active ? controls.goal.status : undefined,
+        goalObjective: controls.goal.active
+          ? controls.goal.objective
+          : undefined,
+      });
       updateToolUseState(data.stream, (prev) => ({
         ...prev,
         ...activeStateFields(data),
@@ -58,11 +66,9 @@ export const syncHandlers = {
         queuedFollowUps: workPlan.queuedFollowUps,
         toolEditBypass: controls.toolEditBypass,
         superYoloBypass: controls.superYoloBypass,
-        goalActive: controls.goal.active,
-        goalStatus: controls.goal.active ? controls.goal.status : undefined,
-        goalObjective: controls.goal.active
-          ? controls.goal.objective
-          : undefined,
+        goalActive: goal.active,
+        goalStatus: goal.active ? goal.status : undefined,
+        goalObjective: goal.active ? goal.objective : undefined,
       }));
     }
 

@@ -36,6 +36,37 @@ export function isGoalInFlight(
   return goal != null;
 }
 
+/**
+ * Canonical goal-state shape: status/objective only exist while a goal is
+ * active. Mirrors `ProgressStreamControls`'s goal member
+ * (`src/controllers/progressView/backend/events/ProgressFactApplier.ts`),
+ * which is the authoritative source this type is derived from.
+ */
+export type GoalState =
+  | { active: false }
+  | { active: true; status: GoalStatus; objective: string };
+
+/**
+ * Single source of truth for the "status/objective are only meaningful while
+ * a goal is active" invariant. Wire messages and `ToolUseStreamState`
+ * (`streamState.ts`) can't carry the canonical discriminated union directly
+ * (three independently-optional fields on the wire), so every reader of that
+ * flattened shape — frontend slices, UI components — must call this instead
+ * of re-deriving the active/status/objective guard ad hoc at each site.
+ */
+export function deriveGoalState(input: {
+  goalActive?: boolean;
+  goalStatus?: GoalStatus;
+  goalObjective?: string;
+}): GoalState {
+  if (!input.goalActive) return { active: false };
+  return {
+    active: true,
+    status: input.goalStatus ?? 'active',
+    objective: input.goalObjective ?? '',
+  };
+}
+
 export const GoalSchema = z.object({
   goalId: z.string().min(1),
   streamId: StreamTabIdSchema,

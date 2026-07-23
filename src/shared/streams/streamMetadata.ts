@@ -15,11 +15,9 @@ import {
  * `StreamMetadataSchema` (every field optional except `kind`) rather than
  * hand-duplicated, so it can't drift from the wire schema.
  */
-export const StreamMetadataInputsSchema = StreamMetadataSchema.partial().extend(
-  {
-    kind: AgentCategorySchema,
-  },
-);
+const StreamMetadataInputsSchema = StreamMetadataSchema.partial().extend({
+  kind: AgentCategorySchema,
+});
 
 export type StreamMetadataInputs = z.infer<typeof StreamMetadataInputsSchema>;
 
