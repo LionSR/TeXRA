@@ -66,7 +66,9 @@ recommended groups at the bottom are a good starting point.
   `schema` is a JSON Schema object, runs a tool-use agent (name one via
   `agentName`) that finishes by calling `submit_output`; the call resolves to an
   envelope whose `.structured` is the validated object. It is intentionally
-  absent from the recommended orchestrator set.
+  absent from the recommended orchestrator set. Also gated by the "Workflow
+  Script" switch in Settings → Tools, which disables the tool for every agent
+  regardless of its configured tool list.
 - `delegate_agent` — delegate to another tool-use agent. Pass `agent`,
   `model`, and `instruction` for a fresh run, or `execution_id` +
   `instruction` to resume a WAITING subagent.

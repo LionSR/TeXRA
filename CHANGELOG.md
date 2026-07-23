@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
 
 - **The Mathematician team includes the critique workflow** — mathematical team
   runs can delegate a dedicated critical review directly.
+- **A switch for the workflow script tool** — the Tools dashboard (and CLI
+  `/tools`) now lists "Workflow Script" as a toggleable integration. Turning
+  it off removes `delegate_workflow_script` from every agent's tool list,
+  even agents whose configuration names it explicitly.
 
 #### Bug Fixes
 

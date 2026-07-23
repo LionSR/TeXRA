@@ -18,6 +18,7 @@ import { z } from 'zod';
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
+import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 import type { RegisteredToolName } from '@tools/registry';
 import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
 import {
@@ -377,6 +378,19 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       return lines.join('\n');
     },
   },
+  {
+    id: 'workflow-script',
+    tools: [DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME],
+    name: 'Workflow Script',
+    category: 'workflow',
+    description:
+      'Run deterministic JavaScript workflow scripts that fan out, pipeline, and join calls to sub-agents, resuming safely after interruption. An agent only gets this tool if its own configuration names it — this switch is an additional kill switch on top of that per-agent opt-in.',
+    configNotes:
+      'No local install required. Turning this off removes delegate_workflow_script from every agent tool list, even agents whose configuration names it explicitly.',
+    toggleable: true,
+    check: async () => true,
+  },
+
   {
     // ID kept as `github-pr-subscription` for back-compat with persisted
     // disabled-tool preferences. The user-facing name has expanded to

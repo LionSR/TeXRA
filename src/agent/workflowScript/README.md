@@ -122,6 +122,10 @@ subagent runner, durable checkpoint store, task-run file hand-off, progress
 projection, parent cancellation, and completed-journal cost settlement. It is
 registered but absent from every default agent configuration; explicitly adding
 the tool to an agent is the consent boundary for automated workflow fan-out.
+A second, global gate sits on top: the "Workflow Script" toggle in the Tools
+dashboard (`src/tools/externalToolDefs.ts`, id `workflow-script`) strips
+`delegate_workflow_script` from every agent's resolved tools when switched
+off, regardless of what any individual agent configuration names.
 
 Domain-specific structures should travel as JSON output files rather than
 per-call result schemas. Cost settlement covers completed logical calls retained
