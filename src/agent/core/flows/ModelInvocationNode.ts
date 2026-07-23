@@ -16,138 +16,15 @@ import type {
   ModelCredentialSelection,
 } from '@agent/types/ModelHandlerContracts';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
-import { normalizeProviderError } from '@common/errors';
-import { detectSdkErrorMetadata } from '@common/errors/sdkErrorUtils';
+import { classifyWireRouteFailure } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
-import { isObject } from '@utils/core';
 
 import { FlowTransition } from './FlowTransitions';
 import {
   type InvocationResult,
   RetryableInvocationNode,
   handleInvocationResult,
-  tryRefreshClient,
 } from './RetryState';
-
-const TRANSPORT_ERROR_CODES = new Set([
-  'EAI_AGAIN',
-  'ECONNREFUSED',
-  'ECONNRESET',
-  'EHOSTUNREACH',
-  'ENETUNREACH',
-  'ETIMEDOUT',
-  'UND_ERR_BODY_TIMEOUT',
-  'UND_ERR_CONNECT_TIMEOUT',
-  'UND_ERR_HEADERS_TIMEOUT',
-  'UND_ERR_SOCKET',
-]);
-
-function errorCauseChain(error: Error): unknown[] {
-  const chain: unknown[] = [];
-  for (
-    let current: unknown = error;
-    isObject(current);
-    current = (current as { cause?: unknown }).cause
-  ) {
-    chain.push(current);
-  }
-  return chain;
-}
-
-function detectRetryAfterMs(chain: readonly unknown[]): number | undefined {
-  for (const current of chain) {
-    const headers = (current as { headers?: unknown }).headers;
-    if (!isObject(headers)) continue;
-    const get = Reflect.get(headers, 'get');
-    const read = (name: string): unknown =>
-      typeof get === 'function'
-        ? Reflect.apply(get, headers, [name])
-        : Reflect.get(headers, name);
-    const rawExplicitMs = read('retry-after-ms');
-    if (rawExplicitMs != null) {
-      const explicitMs = Number(rawExplicitMs);
-      if (Number.isFinite(explicitMs) && explicitMs >= 0) return explicitMs;
-    }
-
-    const retryAfter = read('retry-after');
-    if (typeof retryAfter !== 'string') continue;
-    const seconds = Number(retryAfter);
-    if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
-    const date = Date.parse(retryAfter);
-    if (Number.isFinite(date)) return Math.max(0, date - Date.now());
-  }
-  return undefined;
-}
-
-/** Classify only failures that carry evidence about a shared wire route. */
-function classifyModelRouteFailure(
-  error: Error,
-  credentialRoute: ModelCredentialRoute | undefined,
-): { retryAfterMs?: number } | undefined {
-  const chain = errorCauseChain(error);
-  const candidates = chain.map((current) => {
-    const candidate = current as {
-      code?: unknown;
-      message?: unknown;
-      name?: unknown;
-    };
-    return {
-      code: typeof candidate.code === 'string' ? candidate.code : '',
-      name: typeof candidate.name === 'string' ? candidate.name : '',
-      message: typeof candidate.message === 'string' ? candidate.message : '',
-    };
-  });
-  const hasStructuredUndiciFailure = candidates.some(({ code }) =>
-    code.startsWith('UND_ERR_'),
-  );
-  const taggedTransportFailure = chain.some((current) => {
-    const kind = detectSdkErrorMetadata(current)?.kind;
-    return kind === 'connection' || kind === 'connection_timeout';
-  });
-  const transportFailure =
-    taggedTransportFailure ||
-    candidates.some(({ code, name, message }) => {
-      if (
-        TRANSPORT_ERROR_CODES.has(code) ||
-        (code === 'UND_ERR_INFO' && /\b(?:stream )?timeout\b/i.test(message))
-      ) {
-        return true;
-      }
-      return (
-        !hasStructuredUndiciFailure &&
-        (/(?:Connection|Timeout)Error$/.test(name) ||
-          /^(?:fetch failed|failed to fetch)$/i.test(message.trim()))
-      );
-    });
-  const statusCode = chain
-    .map((current) => normalizeProviderError(current).statusCode)
-    .find((status) => status !== undefined);
-  const sharedAuthenticationFailure =
-    credentialRoute === 'relay' && statusCode === 401;
-  if (
-    !sharedAuthenticationFailure &&
-    statusCode !== 408 &&
-    (statusCode == null || statusCode < 500) &&
-    !transportFailure
-  ) {
-    return undefined;
-  }
-
-  return { retryAfterMs: detectRetryAfterMs(chain) };
-}
-
-/** Rate limits are commonly model-specific even on one provider endpoint. */
-function classifyModelRateLimitFailure(
-  error: Error,
-): { retryAfterMs?: number } | undefined {
-  const chain = errorCauseChain(error);
-  const statusCode = chain
-    .map((current) => normalizeProviderError(current).statusCode)
-    .find((status) => status !== undefined);
-  return statusCode === 429
-    ? { retryAfterMs: detectRetryAfterMs(chain) }
-    : undefined;
-}
 
 export interface ModelInvocationConfig<TShared, TServices> {
   operationName: string;
@@ -191,7 +68,6 @@ type InvocationServices = Pick<
 > &
   Pick<BaseFlowContextInit, 'setAbortController'> & {
     readonly client: unknown;
-    readonly clientCredentialIdentity?: string;
     readonly clientCredentialRoute?: ModelCredentialRoute;
     readonly refreshClient?: (
       selection?: ModelCredentialSelection,
@@ -242,12 +118,7 @@ export class ModelInvocationNode<
     services.modelHandler.setOutputStreaming(this._config.streaming);
 
     return this.withAbortController(async (signal) => {
-      const wireRoute = JSON.stringify([
-        services.modelHandler.config.provider,
-        services.clientCredentialRoute ?? 'configured',
-        services.modelHandler.getRetryEndpoint(services.client),
-        services.clientCredentialIdentity ?? 'unknown-credential',
-      ]);
+      const wireRoute = services.modelHandler.getWireRouteKey(services.client);
       const gate = useLaunchRunContext().runScope.session.modelRetries;
       const invoke = async () => {
         const start = Date.now();
@@ -277,25 +148,10 @@ export class ModelInvocationNode<
         {
           signal,
           baseBackoffMs: this._retryBackoffMs,
-          // One wire route owns transport, authentication, and rate-limit
-          // recovery. This coordinates every call sharing a credential and
+          // One wire route owns transport, server-failure, and rate-limit
+          // cooling. This coordinates every call sharing a credential and
           // endpoint without the lock cycles of nested recovery scopes.
-          classifyFailure: (error) =>
-            classifyModelRateLimitFailure(error) ??
-            classifyModelRouteFailure(error, services.clientCredentialRoute),
-          recoverFailure: (error, retry) =>
-            this.getRelay401Recovery(error, () => retry(), signal),
-          onAdmitted:
-            services.clientCredentialRoute === 'relay'
-              ? async () => {
-                  await tryRefreshClient(
-                    services.refreshClient,
-                    services.logger,
-                    'after model route recovery',
-                    signal,
-                  );
-                }
-              : undefined,
+          classifyFailure: classifyWireRouteFailure,
           onWait: (delayMs) =>
             services.logger.debug(
               `Waiting ${delayMs}ms for the model recovery probe.`,

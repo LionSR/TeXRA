@@ -349,10 +349,13 @@ export class OpenAIResponseWebSocketTransport {
         settled = true;
         cleanup();
         // The SDK emits both provider error events and socket failures through
-        // this channel. Structured provider errors must retain their own code;
-        // only an error without an API event is evidence that the route broke.
+        // this channel. Structured provider errors must retain their own code
+        // (only an error without an API event is evidence that the route
+        // broke), but the connection is invalidated either way: the server may
+        // refuse further service on this socket after a structured error
+        // (e.g. websocket_connection_limit_reached) without closing it.
+        this.closeWebSocket();
         if (!error.error) {
-          this.closeWebSocket();
           attachSdkErrorMetadata(error, {
             provider: 'openai',
             kind: 'connection',

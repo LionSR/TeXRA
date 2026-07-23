@@ -24,12 +24,14 @@ import {
   providerErrorMetadata,
 } from './errorMetadata';
 import {
+  type HeaderBag,
   detectProvider,
   detectRawErrorBody,
   detectRequestId,
   detectStatusCode,
   detectStatusText,
   getErrorClassNames,
+  getHeaderValue,
   pickStringField,
   safeGetReasonPhrase,
 } from './errorInspection';
@@ -397,6 +399,122 @@ export function normalizeProviderError(err: unknown): ProviderError {
   // cause. Only explicit `attachProviderError` at provider/flow boundaries seeds
   // the cache the lookup above recovers.
   return formatProviderHttpError(err);
+}
+
+const TRANSPORT_ERROR_CODES = new Set([
+  'EAI_AGAIN',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ETIMEDOUT',
+  'UND_ERR_BODY_TIMEOUT',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_SOCKET',
+]);
+
+function causeChain(error: unknown): unknown[] {
+  const chain: unknown[] = [];
+  const seen = new Set<unknown>();
+  for (
+    let current: unknown = error;
+    current != null && typeof current === 'object' && !seen.has(current);
+    current = (current as { cause?: unknown }).cause
+  ) {
+    seen.add(current);
+    chain.push(current);
+  }
+  return chain;
+}
+
+function detectRetryAfterMs(chain: readonly unknown[]): number | undefined {
+  for (const current of chain) {
+    const headers = (current as { headers?: HeaderBag }).headers;
+    const explicitMs = getHeaderValue(headers, 'retry-after-ms');
+    if (explicitMs !== undefined) {
+      const ms = Number(explicitMs);
+      if (Number.isFinite(ms) && ms >= 0) return ms;
+    }
+
+    const retryAfter = getHeaderValue(headers, 'retry-after');
+    if (retryAfter === undefined) continue;
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+    const date = Date.parse(retryAfter);
+    if (Number.isFinite(date)) return Math.max(0, date - Date.now());
+  }
+  return undefined;
+}
+
+/**
+ * Classify a failure that carries evidence about a shared wire route
+ * (provider + credential + endpoint): transport failures, 5xx/408 server
+ * failures, and 429 rate limits. Retryable failures outside this set (e.g.
+ * 409 conflicts) stay node-local — a conflict does not imply the route is
+ * unhealthy. Relay 401s are also deliberately absent: token refresh is
+ * single-flighted at the auth boundary and repaired by each call's own
+ * reactive recovery, so cooling the route would only serialize peers.
+ */
+export function classifyWireRouteFailure(
+  error: Error,
+): { retryAfterMs?: number } | undefined {
+  const chain = causeChain(error);
+  const candidates = chain.map((current) => {
+    const candidate = current as {
+      code?: unknown;
+      message?: unknown;
+      name?: unknown;
+    };
+    return {
+      code: typeof candidate.code === 'string' ? candidate.code : '',
+      name: typeof candidate.name === 'string' ? candidate.name : '',
+      message: typeof candidate.message === 'string' ? candidate.message : '',
+    };
+  });
+  const hasStructuredUndiciFailure = candidates.some(({ code }) =>
+    code.startsWith('UND_ERR_'),
+  );
+  const taggedTransportFailure = chain.some((current) => {
+    const kind = detectSdkErrorMetadata(current)?.kind;
+    return kind === 'connection' || kind === 'connection_timeout';
+  });
+  const transportFailure =
+    taggedTransportFailure ||
+    candidates.some(({ code, name, message }) => {
+      if (
+        TRANSPORT_ERROR_CODES.has(code) ||
+        (code === 'UND_ERR_INFO' && /\b(?:stream )?timeout\b/i.test(message))
+      ) {
+        return true;
+      }
+      return (
+        !hasStructuredUndiciFailure &&
+        (/(?:Connection|Timeout)Error$/.test(name) ||
+          /^(?:fetch failed|failed to fetch)$/i.test(message.trim()))
+      );
+    });
+  // Per-element field reads with an HTTP range guard, so a wrapper's non-HTTP
+  // numeric `code` (an errno, a gRPC status) cannot shadow a real status
+  // deeper in the chain. The full normalizer runs once at the top as the
+  // fallback for statuses only inferable from provider bodies (e.g. relay).
+  const statusCode =
+    findInCauseChain(error, (current) => {
+      const status = detectStatusCode(current);
+      return status !== undefined && status >= 100 && status <= 599
+        ? status
+        : undefined;
+    }) ?? normalizeProviderError(error).statusCode;
+  if (
+    statusCode !== StatusCodes.TOO_MANY_REQUESTS &&
+    statusCode !== StatusCodes.REQUEST_TIMEOUT &&
+    (statusCode == null || statusCode < 500) &&
+    !transportFailure
+  ) {
+    return undefined;
+  }
+
+  return { retryAfterMs: detectRetryAfterMs(chain) };
 }
 
 /** Whether repeating the same provider request can recover without user action. */

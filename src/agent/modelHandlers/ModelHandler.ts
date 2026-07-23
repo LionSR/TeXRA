@@ -157,15 +157,32 @@ const withLongStreamTimeouts =
       handler,
     );
 
-/** Fetch transport with long-stream timeouts and the host's current proxy policy. */
+/** Composes the host's current dispatcher (proxy policy stays host-owned) with
+ *  the long-stream timeouts. Composed per call so a runtime proxy change is
+ *  honored by the next request. */
+function composeLongRunningDispatcher(): Dispatcher {
+  return getGlobalDispatcher().compose(withLongStreamTimeouts);
+}
+
+/**
+ * Fetch transport with long-stream timeouts and the host's current proxy
+ * policy.
+ *
+ * Deliberately package-undici fetch, not the SDKs' `fetchOptions.dispatcher`
+ * seam over native fetch: pairing this package's fetch with this package's
+ * composed dispatcher keeps the dispatch-handler interface version-locked,
+ * where native fetch would couple our dispatcher to whatever undici the host
+ * Node embeds. That same choice is why {@link normalizeModelRequest} exists —
+ * package-undici fetch rejects native `Request` instances (OpenRouter's
+ * HTTPClient passes one), so it is rebuilt from interoperable primitives.
+ */
 const longRunningModelFetch: typeof fetch = async (input, init) => {
   const [requestInput, requestInit] = await normalizeModelRequest(input, init);
-  const dispatcher = getGlobalDispatcher().compose(withLongStreamTimeouts);
   // Undici implements the Web Fetch response contract at runtime, but its
   // package-local types are not assignable to the DOM library's Response.
   return undiciFetch(requestInput, {
     ...requestInit,
-    dispatcher,
+    dispatcher: composeLongRunningDispatcher(),
   }) as unknown as Promise<Response>;
 };
 
@@ -256,11 +273,10 @@ export abstract class ModelHandler<
   Resp = unknown,
   Media = unknown,
 > {
-  private readonly clientCredentialRoutes = new WeakMap<
+  private readonly clientWireIdentities = new WeakMap<
     object,
-    ModelCredentialRoute
+    { route: ModelCredentialRoute; credentialIdentity: string }
   >();
-  private readonly clientCredentialIdentities = new WeakMap<object, string>();
   private activeAttemptCredentialRoute: ModelCredentialRoute | undefined;
   private lastAttemptCredentialRoute: ModelCredentialRoute | undefined;
   public config: ModelConfig;
@@ -344,6 +360,17 @@ export abstract class ModelHandler<
   /** Fetch implementation with explicit long-stream inactivity timeouts. */
   protected get longRunningModelFetch(): typeof fetch {
     return longRunningModelFetch;
+  }
+
+  /**
+   * The long-stream dispatcher alone, for SDKs that hardwire native fetch and
+   * only accept per-request `RequestInit` extras (Google Interactions). The
+   * compose wrapper only merges timeout fields into dispatch options, so it
+   * stays interface-transparent even when native fetch's embedded undici
+   * differs from the package version.
+   */
+  protected longRunningModelDispatcher(): Dispatcher {
+    return composeLongRunningDispatcher();
   }
 
   public setLogger(logger: AgentTrace): void {
@@ -637,8 +664,10 @@ export abstract class ModelHandler<
     route: ModelCredentialRoute,
     credentialSecret: string,
   ): Candidate {
-    this.clientCredentialRoutes.set(client, route);
-    const identity =
+    // Relay and subscription routes have stable route identities so ordinary
+    // token rotation does not split recovery coordination; direct credentials
+    // use a non-secret fingerprint so distinct keys stay distinct routes.
+    const credentialIdentity =
       route === 'relay' || route === 'chatgpt-subscription'
         ? route
         : createHash('sha256')
@@ -646,22 +675,34 @@ export abstract class ModelHandler<
             .update('\0')
             .update(credentialSecret)
             .digest('base64url');
-    this.clientCredentialIdentities.set(client, identity);
+    this.clientWireIdentities.set(client, { route, credentialIdentity });
     return client;
   }
 
   /** Route of the credential a client built by this handler captured, if known. */
   getCredentialRouteForClient(client: C): ModelCredentialRoute | undefined {
     return typeof client === 'object' && client !== null
-      ? this.clientCredentialRoutes.get(client)
+      ? this.clientWireIdentities.get(client)?.route
       : undefined;
   }
 
-  /** Stable, non-secret identity for the credential captured by a client. */
-  getCredentialIdentityForClient(client: C): string | undefined {
-    return typeof client === 'object' && client !== null
-      ? this.clientCredentialIdentities.get(client)
-      : undefined;
+  /**
+   * Stable key for the wire route this client's requests share: provider,
+   * credential route, endpoint, and a non-secret credential identity. Owned
+   * here so the retry gate's key format has a single owner; the flow layer
+   * treats it as opaque.
+   */
+  getWireRouteKey(client: C): string {
+    const wireIdentity =
+      typeof client === 'object' && client !== null
+        ? this.clientWireIdentities.get(client)
+        : undefined;
+    return JSON.stringify([
+      this.config.provider,
+      wireIdentity?.route ?? 'configured',
+      this.getRetryEndpoint(client),
+      wireIdentity?.credentialIdentity ?? 'unknown-credential',
+    ]);
   }
 
   /** Route currently executing, excluding the last completed attempt. */
@@ -870,11 +911,27 @@ export abstract class ModelHandler<
    * transport failure; retaining the compacted payload prevents another paid
    * summarization call. A successful generation commits the payload to the
    * flow and clears this pending value.
+   *
+   * Reuse is guarded by a content fingerprint, not just array identity: after
+   * a failed turn the root tool-use flow appends the user's follow-up onto
+   * the SAME messages array (a push, or — for Google Interactions — an
+   * in-place merge into the last step), and replaying the stale pre-follow-up
+   * payload would silently drop that message from the request and, via the
+   * flow's in-place commit, from the conversation history.
    */
   private pendingClientCompaction?: {
     sourceMessages: M[];
+    sourceFingerprint: string;
     result: ClientCompactionResult<M>;
   };
+
+  /** Cheap mutation detector for a messages array reused across attempts:
+   *  follow-ups either push (length changes) or merge into the last message
+   *  in place (its serialized size changes). */
+  protected messagesTailFingerprint(messages: M[]): string {
+    const last = messages.at(-1);
+    return `${messages.length}:${last === undefined ? 0 : JSON.stringify(last).length}`;
+  }
 
   /** Request compaction on the next API call. */
   requestCompaction(): void {
@@ -1142,7 +1199,7 @@ export abstract class ModelHandler<
   ): Promise<CreateResponseResult<Resp, M>> {
     let credentialRoute: ModelCredentialRoute | undefined;
     if (typeof options.client === 'object' && options.client !== null) {
-      credentialRoute = this.clientCredentialRoutes.get(options.client);
+      credentialRoute = this.clientWireIdentities.get(options.client)?.route;
     }
     return this.withCreateResponseGuard(() => {
       this.activeAttemptCredentialRoute = credentialRoute;
@@ -1327,7 +1384,11 @@ export abstract class ModelHandler<
     inputTokens: number,
     compact: () => Promise<ClientCompactionResult<M>>,
   ): Promise<ClientCompactionResult<M>> {
-    if (this.pendingClientCompaction?.sourceMessages === messages) {
+    if (
+      this.pendingClientCompaction?.sourceMessages === messages &&
+      this.pendingClientCompaction.sourceFingerprint ===
+        this.messagesTailFingerprint(messages)
+    ) {
       return this.pendingClientCompaction.result;
     }
     this.pendingClientCompaction = undefined;
@@ -1365,7 +1426,11 @@ export abstract class ModelHandler<
 
     const result = await compact();
     if (result.didCompact) {
-      this.pendingClientCompaction = { sourceMessages: messages, result };
+      this.pendingClientCompaction = {
+        sourceMessages: messages,
+        sourceFingerprint: this.messagesTailFingerprint(messages),
+        result,
+      };
     }
     return result;
   }

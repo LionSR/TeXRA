@@ -34,7 +34,6 @@ import type { TaskRunFileService } from '@utils/files';
  */
 export interface ModelClientServices<C = unknown> {
   readonly client: C;
-  readonly clientCredentialIdentity?: string;
   readonly clientCredentialRoute?: ModelCredentialRoute | undefined;
   readonly refreshClient?: (
     selection?: ModelCredentialSelection,
@@ -64,9 +63,6 @@ export async function withModelClient<C, T extends object>(
     ...base,
     get client(): C {
       return client;
-    },
-    get clientCredentialIdentity(): string | undefined {
-      return modelHandler.getCredentialIdentityForClient(client);
     },
     get clientCredentialRoute(): ModelCredentialRoute | undefined {
       return modelHandler.getCredentialRouteForClient(client);

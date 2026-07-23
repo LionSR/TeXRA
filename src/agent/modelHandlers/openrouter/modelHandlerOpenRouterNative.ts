@@ -1,7 +1,6 @@
 // Third-party imports
 import { HTTPClient, OpenRouter } from '@openrouter/sdk';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
-import pRetry from 'p-retry';
 
 // Local imports
 import type { StreamHandle } from '@agent/trace';
@@ -20,7 +19,6 @@ import type {
 } from '@agent/types/ModelHandlerContracts';
 import {
   handleStreamingFailure,
-  isProviderErrorAutoRetryable,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
@@ -35,6 +33,7 @@ import { extractMimeSubtype } from '@utils/text/stringUtils';
 
 // Local file imports
 import { toDataUrl } from '../support/dataUrl';
+import { auxiliaryRetry } from '../support/auxiliaryRetry';
 import { getDeclaredMaxReasoningEffort } from '../support/reasoningEffort';
 import { OPENROUTER_BASE_URL } from '../support/ProxyConfigResolver';
 import {
@@ -101,8 +100,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   ChatResult,
   ChatContentItems
 > {
-  private readonly retryEndpoints = new WeakMap<OpenRouter, string>();
-
   // ── Client-side compaction state ──────────────────────────────────────
   private lastKnownInputTokens = 0;
 
@@ -151,7 +148,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       // TeXRA's session gate owns retry timing and admission.
       retryConfig: { strategy: 'none' },
     });
-    this.retryEndpoints.set(client, credential.baseUrl ?? OPENROUTER_BASE_URL);
     return this.rememberClientCredentialRoute(
       client,
       credential.route,
@@ -160,7 +156,10 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   }
 
   override getRetryEndpoint(client: OpenRouter): string {
-    return this.retryEndpoints.get(client) ?? OPENROUTER_BASE_URL;
+    // ClientSDK declares `_baseURL` as typed public and the SDK's own funcs/
+    // modules consume it, making it the supported access path despite the
+    // underscore prefix.
+    return client._baseURL?.href ?? OPENROUTER_BASE_URL;
   }
 
   // ---------------------------------------------------------------------------
@@ -387,16 +386,9 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
             ? { reasoning: { effort: 'low' } }
             : {}),
         };
-        const summaryResponse = await pRetry(
+        const summaryResponse = await auxiliaryRetry(
           () => client.chat.send({ chatRequest: summaryRequest }, { signal }),
-          {
-            retries: 2,
-            minTimeout: 500,
-            factor: 2,
-            randomize: true,
-            ...(signal ? { signal } : {}),
-            shouldRetry: ({ error }) => isProviderErrorAutoRetryable(error),
-          },
+          signal,
         );
         if (isOpenRouterChatStream(summaryResponse)) {
           throw new Error(

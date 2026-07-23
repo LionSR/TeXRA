@@ -57,6 +57,7 @@ import { getConfig } from '@utils/config/configUtils';
 // Local file imports
 import { computeUtilizationPercent } from '../support/contextUtilization';
 import { logCompactionEvent } from '../support/compactionLogging';
+import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';
 import { toDataUrl } from '../support/dataUrl';
 import { shouldUseOpenRouter } from '../support/ProxyConfigResolver';
 import {
@@ -742,6 +743,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     compactedMessages: ResponseInputItem[];
     tokensAfter: number;
     sourceMessages: ResponseInputItem[];
+    sourceFingerprint: string;
   };
 
   /**
@@ -865,7 +867,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     try {
       const compactedResponse: CompactedResponse = await client
-        .withOptions({ maxRetries: 2 })
+        .withOptions({ maxRetries: AUXILIARY_MAX_RETRIES })
         .responses.compact(compactParams);
 
       // Note: SDK types CompactedResponse.output as ResponseOutputItem[], but the
@@ -923,6 +925,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         compactedMessages,
         tokensAfter,
         sourceMessages: messages,
+        sourceFingerprint: this.messagesTailFingerprint(messages),
       };
 
       return compactedMessages;
@@ -988,7 +991,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       tokensBefore,
       async (conversationMessages, compactionSystemPrompt) => {
         const stream = await client
-          .withOptions({ maxRetries: 2 })
+          .withOptions({ maxRetries: AUXILIARY_MAX_RETRIES })
           .responses.stream(
             {
               model: this.config.fullName,
@@ -1083,6 +1086,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // then rejects.
       tokensAfter: this.estimateResentInputTokens(compactedMessages),
       sourceMessages: messages,
+      sourceFingerprint: this.messagesTailFingerprint(messages),
     };
     return compactedMessages;
   }
@@ -1395,7 +1399,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     };
 
     const tokenCount = await client
-      .withOptions({ maxRetries: 2 })
+      .withOptions({ maxRetries: AUXILIARY_MAX_RETRIES })
       .responses.inputTokens.count(
         countParams,
         options?.signal ? { signal: options.signal } : undefined,
@@ -1571,7 +1575,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // applyCompactionState() clearing compactionResult on every successful
     // call; this line only ever matters while a compaction from a still-in-
     // flight (unsuccessful) attempt is pending.
-    if (this.compactionResult?.sourceMessages !== messages) {
+    if (
+      this.compactionResult !== undefined &&
+      (this.compactionResult.sourceMessages !== messages ||
+        this.compactionResult.sourceFingerprint !==
+          this.messagesTailFingerprint(messages))
+    ) {
+      // Reference or content changed — a follow-up appended after a failed
+      // turn mutates the SAME array in place, so identity alone would replay
+      // a stale pre-follow-up payload and silently drop the user's message.
       this.compactionResult = undefined;
     }
 
@@ -1613,7 +1625,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     let compactedThisCall = false;
     // Store compacted messages for return value (captured when compaction succeeds)
     let compactedMessages: ResponseInputItem[] | undefined;
-    if (this.compactionResult?.sourceMessages === messages) {
+    if (
+      this.compactionResult?.sourceMessages === messages &&
+      this.compactionResult.sourceFingerprint ===
+        this.messagesTailFingerprint(messages)
+    ) {
       // Same-turn retry of an input that already compacted successfully on a
       // prior attempt (see the cache check above): reuse it instead of
       // hitting the compact endpoint again. Re-running compaction here would
@@ -2694,7 +2710,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // invocation gate. Restore the SDK's ordinary two retries for this
       // auxiliary request; generation requests keep maxRetries: 0.
       uploadedAttachments = await uploadToolAttachments(
-        client.withOptions({ maxRetries: 2 }),
+        client.withOptions({ maxRetries: AUXILIARY_MAX_RETRIES }),
         attachments,
         {
           openRouterRouting: this.isOpenRouterRoutingEnabled(),

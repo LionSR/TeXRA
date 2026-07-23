@@ -82,11 +82,16 @@ export async function resolveGoogleClient(
     logger.debug(
       `Using Google GenAI ${sdkLabel} SDK${relayAuth ? ' with relay auth' : ''}. Base URL: ${credential.baseUrl}`,
     );
+    // No `retryOptions`: absent, the SDK's apiCall does a single plain fetch
+    // (zero SDK retries — the node loop owns retries) and failures surface as
+    // structured ApiError WITH `status`. Any retryOptions value — including
+    // `{ attempts: 1 }` — switches apiCall into a pRetry wrapper that converts
+    // non-ok responses into bare Errors with no status field, blinding the
+    // route gate's 429/5xx classification for Google.
     const client = new GoogleGenAI({
       apiKey: credential.apiKey,
       httpOptions: {
         baseUrl: credential.baseUrl ?? undefined,
-        retryOptions: { attempts: 1 },
       },
     });
     return rememberRoute(client, credential.route, credential.apiKey);

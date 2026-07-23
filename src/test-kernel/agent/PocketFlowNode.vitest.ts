@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { BaseNode } from '@agent/node';
+import { BaseNode, Node } from '@agent/node';
 import * as logger from '@logger/logUtils';
 
 class TestNode extends BaseNode<Record<string, never>> {}
@@ -44,5 +44,28 @@ describe('BaseNode.getNextNode', () => {
 
     expect(node.getNextNode('anything')).toBeUndefined();
     expect(warnSpy).not.toHaveBeenCalled();
+  });
+});
+
+class ApprovedRetryNode extends Node {
+  calls = 0;
+
+  override async exec(): Promise<string> {
+    this.calls += 1;
+    if (this.calls <= 101) throw new Error('temporary failure');
+    return 'completed';
+  }
+
+  override async retryPrompt(): Promise<boolean> {
+    return true;
+  }
+}
+
+describe('Node manual retry', () => {
+  it('continues beyond the former 100-approval ceiling', async () => {
+    const node = new ApprovedRetryNode(1, 0);
+
+    await expect(node._exec(undefined)).resolves.toBe('completed');
+    expect(node.calls).toBe(102);
   });
 });

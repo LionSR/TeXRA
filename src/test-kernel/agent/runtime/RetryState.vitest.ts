@@ -208,7 +208,6 @@ interface CapturedModelRetry {
   readonly classifyFailure: (
     error: Error,
   ) => { retryAfterMs?: number } | undefined;
-  readonly onAdmitted?: () => void | Promise<void>;
   readonly gateCalls: number;
 }
 
@@ -231,7 +230,14 @@ async function captureModelRetry(
     modelHandler: {
       config: { provider: 'openai', fullName: model },
       createResponse: async () => ({ response: 'ok' }),
-      getRetryEndpoint: () => endpoint,
+      // Mirrors ModelHandler.getWireRouteKey; the node treats it as opaque.
+      getWireRouteKey: () =>
+        JSON.stringify([
+          'openai',
+          credentialRoute,
+          endpoint,
+          clientCredentialIdentity,
+        ]),
       isBackgroundModeActive: () => false,
       setOutputStreaming: () => {},
     },
@@ -240,7 +246,6 @@ async function captureModelRetry(
     config: { model: 'openai:test' },
     setAbortController: vi.fn(),
     client,
-    clientCredentialIdentity,
     clientCredentialRoute: credentialRoute,
     refreshClient,
   } as never);
@@ -253,7 +258,6 @@ async function captureModelRetry(
     return {
       wireRoute,
       classifyFailure: modelOptions.classifyFailure,
-      onAdmitted: modelOptions.onAdmitted,
       gateCalls: run.mock.calls.length,
     };
   } finally {
@@ -707,7 +711,10 @@ describe('RetryState', () => {
     expect(classifyFailure(error)).toBeUndefined();
   });
 
-  it('keeps peers gated while a shared credential is being recovered', async () => {
+  it('keeps relay 401s out of route cooling and out of auto-retry', async () => {
+    // Token refresh is single-flighted at the auth boundary and repaired by
+    // withAbortController's reactive recovery inside the same node attempt;
+    // cooling the shared route on a 401 would only serialize healthy peers.
     const { classifyFailure } = await captureModelRetry(
       'https://api.example/v1',
       'relay',
@@ -719,39 +726,10 @@ describe('RetryState', () => {
     expect(createModelInvocationNode().shouldAutoRetry(unauthorized)).toBe(
       false,
     );
-    expect(classifyFailure(unauthorized)).toEqual({
-      retryAfterMs: undefined,
-    });
+    expect(classifyFailure(unauthorized)).toBeUndefined();
   });
 
-  it('rebuilds a queued relay client before it re-enters the provider', async () => {
-    const refreshClient = vi.fn(async () => undefined);
-    const { onAdmitted } = await captureModelRetry(
-      'https://api.example/v1',
-      'relay',
-      refreshClient,
-    );
-
-    await onAdmitted?.();
-
-    expect(refreshClient).toHaveBeenCalledOnce();
-  });
-
-  it('keeps admission refresh failures out of route classification', async () => {
-    const refreshClient = vi
-      .fn<() => Promise<void>>()
-      .mockRejectedValue(new Error('local client rebuild failed'));
-    const { onAdmitted } = await captureModelRetry(
-      'https://api.example/v1',
-      'relay',
-      refreshClient,
-    );
-
-    await expect(onAdmitted?.()).resolves.toBeUndefined();
-    expect(refreshClient).toHaveBeenCalledOnce();
-  });
-
-  it.each(['api-key', 'openrouter', 'chatgpt-subscription'] as const)(
+  it.each(['api-key', 'openrouter', 'chatgpt-subscription', 'relay'] as const)(
     'does not gate unrelated calls after a 401 on the %s route',
     async (credentialRoute) => {
       const { classifyFailure } = await captureModelRetry(

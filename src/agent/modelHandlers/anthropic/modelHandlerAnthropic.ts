@@ -35,7 +35,6 @@ import type {
   TokenCountOptions,
 } from '@agent/types/ModelHandlerContracts';
 import {
-  attachSdkErrorMetadata,
   attachStreamDiagnostics,
   handleStreamingFailure,
   isUserAbort,
@@ -67,6 +66,7 @@ import {
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
 } from '../contextManagementConstants';
 import { AnthropicStreamHandler } from '../support/AnthropicStreamHandler';
+import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';
 import { toAnthropicTools } from '../toolConversion';
 import {
   describeAttachments,
@@ -352,9 +352,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       countTokensParams.betas = [...countTokenBetas];
     }
 
-    const responseTokenCount = await client
-      .withOptions({ maxRetries: 2 })
-      .beta.messages.countTokens(countTokensParams);
+    const responseTokenCount = await client.beta.messages.countTokens(
+      countTokensParams,
+      { maxRetries: AUXILIARY_MAX_RETRIES },
+    );
 
     this.logger.debug(
       `Token count of message: ${responseTokenCount.input_tokens}`,
@@ -448,25 +449,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     try {
       streamHandler.attachToStream(stream);
+      // A clean close before message_stop rejects finalMessage() natively
+      // (BetaMessageStream only records a message on the message_stop event
+      // and #getFinalMessage throws when none was recorded), so no separate
+      // truncation check is needed here.
       const response = await stream.finalMessage();
-
-      // A relay can close cleanly before message_stop, leaving finalMessage()
-      // resolved with a truncated response rather than an SDK error.
-      const diagnostics = streamHandler.getDiagnostics();
-      if (!diagnostics.messageStopReceived) {
-        const error = new Error(
-          `Stream ended without message_stop after ${diagnostics.elapsedSecs}s ` +
-            `(${diagnostics.eventsProcessed} events, ` +
-            `${diagnostics.thinkingChars} thinking chars, ` +
-            `${diagnostics.textChars} text chars). ` +
-            'Stream truncated, likely proxy idle timeout during extended thinking.',
-        );
-        attachSdkErrorMetadata(error, {
-          provider: this.config.provider,
-          kind: 'connection',
-        });
-        throw error;
-      }
 
       this.processThinkingBlock(response);
       return response;
@@ -1380,7 +1367,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // invocation gate. Restore the SDK's ordinary two retries for this
       // auxiliary request; generation requests keep maxRetries: 0.
       const uploadResult = await uploadToolAttachments(
-        client.withOptions({ maxRetries: 2 }),
+        client.withOptions({ maxRetries: AUXILIARY_MAX_RETRIES }),
         attachments,
         this.logger,
         this.uploadedPdfPageCounts,

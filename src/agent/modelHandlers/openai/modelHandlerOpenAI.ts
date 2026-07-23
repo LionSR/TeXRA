@@ -45,6 +45,7 @@ import { extractMimeSubtype } from '@utils/text/stringUtils';
 import { getConfig } from '@utils/config/configUtils';
 
 // Local file imports
+import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';
 import { toDataUrl } from '../support/dataUrl';
 import {
   getDeclaredMaxReasoningEffort,
@@ -221,9 +222,10 @@ export class ModelHandlerOpenAI<
           normalizedConversation,
           compactionSystemPrompt,
         );
-        const summaryResponse = await client
-          .withOptions({ maxRetries: 2 })
-          .chat.completions.create(summaryParams, { signal });
+        const summaryResponse = await client.chat.completions.create(
+          summaryParams,
+          { signal, maxRetries: AUXILIARY_MAX_RETRIES },
+        );
         return {
           summaryText:
             summaryResponse.choices[0]?.message?.content?.trim() ?? '',

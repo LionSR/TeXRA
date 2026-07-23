@@ -36,6 +36,7 @@ export {
 } from './sdkError/errorPatterns';
 
 export {
+  classifyWireRouteFailure,
   formatProviderHttpError,
   normalizeProviderError,
   isProviderErrorAutoRetryable,

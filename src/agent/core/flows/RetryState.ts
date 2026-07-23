@@ -73,7 +73,7 @@ interface RetryableNodeServices {
  * Attempts to refresh the model client using the provided refreshClient function.
  * Logs success or failure; returns true if refresh was attempted and succeeded.
  */
-export async function tryRefreshClient(
+async function tryRefreshClient(
   refreshClient:
     | ((
         selection?: ModelCredentialSelection,
@@ -176,28 +176,6 @@ export abstract class RetryableInvocationNode<
     }
   }
 
-  /**
-   * Build, but do not start, recovery for a relay-authentication failure.
-   * Deferring execution lets the shared route gate establish one recovery
-   * owner before token refresh begins.
-   */
-  protected getRelay401Recovery<T>(
-    originalError: unknown,
-    operation: (signal: AbortSignal) => Promise<T>,
-    signal: AbortSignal,
-  ): (() => Promise<T>) | undefined {
-    const formatted = normalizeProviderError(originalError);
-    if (
-      (!formatted.isRelayError &&
-        this.services.clientCredentialRoute !== 'relay') ||
-      formatted.statusCode !== StatusCodes.UNAUTHORIZED ||
-      this._hasAttemptedTokenRefresh
-    ) {
-      return undefined;
-    }
-    return () => this.attemptRelay401Recovery(originalError, operation, signal);
-  }
-
   /** Wraps operation with AbortController management and relay token refresh. */
   protected async withAbortController<T>(
     operation: (signal: AbortSignal) => Promise<T>,
@@ -243,9 +221,19 @@ export abstract class RetryableInvocationNode<
     try {
       return await operation(signal);
     } catch (err) {
-      // Reactive 401 recovery: refresh token and retry once.
-      const recovery = this.getRelay401Recovery(err, operation, signal);
-      if (recovery) return recovery();
+      // Reactive 401 recovery: refresh token (single-flighted at the auth
+      // boundary) and retry once within this same node attempt. 401 is not
+      // auto-retryable, so without this the run would halt at the manual
+      // retry prompt on every token rotation.
+      const formatted = normalizeProviderError(err);
+      if (
+        (formatted.isRelayError ||
+          services.clientCredentialRoute === 'relay') &&
+        formatted.statusCode === StatusCodes.UNAUTHORIZED &&
+        !this._hasAttemptedTokenRefresh
+      ) {
+        return this.attemptRelay401Recovery(err, operation, signal);
+      }
       throw err;
     } finally {
       if (ownedController) {

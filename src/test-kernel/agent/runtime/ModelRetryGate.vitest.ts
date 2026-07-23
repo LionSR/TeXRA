@@ -45,7 +45,6 @@ describe('ModelRetryGate', () => {
     });
     const probeOperation = vi.fn(() => probeResult);
     const siblingOperation = vi.fn(async () => undefined);
-    const onAdmitted = vi.fn(async () => undefined);
     const first = gate.run(
       ROUTE,
       options(new AbortController().signal),
@@ -53,7 +52,7 @@ describe('ModelRetryGate', () => {
     );
     const sibling = gate.run(
       ROUTE,
-      { ...options(new AbortController().signal), onAdmitted },
+      options(new AbortController().signal),
       siblingOperation,
     );
 
@@ -64,164 +63,110 @@ describe('ModelRetryGate', () => {
     resolveProbe();
     await Promise.all([first, sibling]);
     expect(siblingOperation).toHaveBeenCalledOnce();
-    expect(onAdmitted).not.toHaveBeenCalled();
     gate.dispose();
   });
 
-  it('keeps stale peers behind one immediate credential recovery', async () => {
-    const gate = new ModelRetryGate();
-    let rejectPrimary = (_error: Error): void => undefined;
-    let rejectPeer = (_error: Error): void => undefined;
-    let releaseRecovery = (): void => undefined;
-    let announceRecovery = (): void => undefined;
-    const primaryFailure = new Promise<string>((_resolve, reject) => {
-      rejectPrimary = reject;
-    });
-    const peerFailure = new Promise<string>((_resolve, reject) => {
-      rejectPeer = reject;
-    });
-    const recoveryMayFinish = new Promise<void>((resolve) => {
-      releaseRecovery = resolve;
-    });
-    const recoveryStarted = new Promise<void>((resolve) => {
-      announceRecovery = resolve;
-    });
-    let releaseAdmission = (): void => undefined;
-    const admissionMayFinish = new Promise<void>((resolve) => {
-      releaseAdmission = resolve;
-    });
-    const onAdmitted = vi.fn(() => admissionMayFinish);
-    const recoveryRuns = vi.fn(async (retry: () => Promise<string>) => {
-      announceRecovery();
-      await recoveryMayFinish;
-      return retry();
-    });
-    const recoveries = vi.fn(
-      (retry: () => Promise<string>) => (): Promise<string> =>
-        recoveryRuns(retry),
-    );
-    const primaryOperation = vi
-      .fn<() => Promise<string>>()
-      .mockImplementationOnce(() => primaryFailure)
-      .mockResolvedValue('primary recovered');
-    const peerOperation = vi
-      .fn<() => Promise<string>>()
-      .mockImplementationOnce(() => peerFailure)
-      .mockResolvedValue('peer recovered');
-    const recoverableOptions = {
-      ...options(new AbortController().signal),
-      recoverFailure: (_error: Error, retry: () => Promise<string>) =>
-        recoveries(retry),
-      onAdmitted,
-    };
-
-    const primary = gate.run(ROUTE, recoverableOptions, primaryOperation);
-    const peer = gate.run(ROUTE, recoverableOptions, peerOperation);
-    await Promise.resolve();
-    expect(primaryOperation).toHaveBeenCalledOnce();
-    expect(peerOperation).toHaveBeenCalledOnce();
-
-    rejectPrimary(TRANSIENT);
-    await recoveryStarted;
-    rejectPeer(TRANSIENT);
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(recoveries).toHaveBeenCalledTimes(2);
-    expect(recoveryRuns).toHaveBeenCalledOnce();
-    expect(peerOperation).toHaveBeenCalledOnce();
-
-    // Recovery owns the probe rather than a cooling timer. Even when token
-    // refresh takes much longer than the ordinary backoff, a stale peer must
-    // remain queued until that recovery completes.
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect(peerOperation).toHaveBeenCalledOnce();
-
-    releaseRecovery();
-    await expect(primary).resolves.toBe('primary recovered');
-    await Promise.resolve();
-    expect(onAdmitted).toHaveBeenCalledOnce();
-    expect(peerOperation).toHaveBeenCalledOnce();
-    releaseAdmission();
-    await expect(peer).resolves.toBe('peer recovered');
-    expect(primaryOperation).toHaveBeenCalledTimes(2);
-    expect(peerOperation).toHaveBeenCalledTimes(2);
-    gate.dispose();
-  });
-
-  it('refreshes an admitted client after the recovery probe fails', async () => {
-    const gate = new ModelRetryGate();
-    const recoveryError = new Error('provider still unavailable');
-    const failedRecovery = gate.run(
-      ROUTE,
-      {
-        ...options(new AbortController().signal),
-        recoverFailure: () => () => Promise.reject(recoveryError),
-      },
-      async () => {
-        throw TRANSIENT;
-      },
-    );
-
-    await expect(failedRecovery).rejects.toBe(recoveryError);
-
-    const order: string[] = [];
-    const next = gate.run(
-      ROUTE,
-      {
-        ...options(new AbortController().signal),
-        onAdmitted: () => {
-          order.push('refresh');
-        },
-      },
-      async () => {
-        order.push('operation');
-      },
-    );
-
-    await vi.advanceTimersByTimeAsync(1000);
-    await next;
-    expect(order).toEqual(['refresh', 'operation']);
-    gate.dispose();
-  });
-
-  it('preserves client refresh after a cooled probe recovery fails', async () => {
+  it('grows the shared backoff when the released herd re-fails after a probe', async () => {
+    // Regression: resetting the failure streak on probe success capped the
+    // backoff at its base forever on capacity-limited (429) routes — the rate
+    // window fits one probe, the released herd re-fails, and the counter
+    // restarts from zero every round.
     const gate = new ModelRetryGate();
     await openGate(gate);
 
-    const recoveryError = new Error('provider still unavailable');
-    const failedRecoveryProbe = gate.run(
+    const probeOperation = vi.fn(async () => undefined);
+    const probe = gate.run(
       ROUTE,
-      {
-        ...options(new AbortController().signal),
-        recoverFailure: () => () => Promise.reject(recoveryError),
-      },
+      options(new AbortController().signal),
+      probeOperation,
+    );
+    const herdOperation = vi.fn(async () => {
+      throw TRANSIENT;
+    });
+    const herd = gate.run(
+      ROUTE,
+      options(new AbortController().signal),
+      herdOperation,
+    );
+
+    const herdResult = expect(herd).rejects.toBe(TRANSIENT);
+    await vi.advanceTimersByTimeAsync(1000);
+    await probe;
+    await herdResult;
+    expect(probeOperation).toHaveBeenCalledOnce();
+    expect(herdOperation).toHaveBeenCalledOnce();
+
+    // Second failure on the route: backoff must now be 2x the base, not base.
+    const nextOperation = vi.fn(async () => undefined);
+    const next = gate.run(
+      ROUTE,
+      options(new AbortController().signal),
+      nextOperation,
+    );
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(nextOperation).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await next;
+    expect(nextOperation).toHaveBeenCalledOnce();
+
+    // Third failure keeps growing: 4x the base.
+    const thirdFailure = gate.run(
+      ROUTE,
+      options(new AbortController().signal),
       async () => {
         throw TRANSIENT;
       },
     );
-    const failedRecoveryResult =
-      expect(failedRecoveryProbe).rejects.toBe(recoveryError);
-    await vi.advanceTimersByTimeAsync(1000);
-    await failedRecoveryResult;
-
-    const order: string[] = [];
-    const next = gate.run(
+    await expect(thirdFailure).rejects.toBe(TRANSIENT);
+    const finalOperation = vi.fn(async () => undefined);
+    const final = gate.run(
       ROUTE,
-      {
-        ...options(new AbortController().signal),
-        onAdmitted: () => {
-          order.push('refresh');
-        },
-      },
-      async () => {
-        order.push('operation');
-      },
+      options(new AbortController().signal),
+      finalOperation,
+    );
+    await vi.advanceTimersByTimeAsync(3999);
+    expect(finalOperation).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await final;
+    gate.dispose();
+  });
+
+  it('ends the failure streak after a clean round-trip on the healthy route', async () => {
+    const gate = new ModelRetryGate();
+    await openGate(gate);
+
+    // Recover the route via a successful probe (streak carries over)...
+    const probe = gate.run(
+      ROUTE,
+      options(new AbortController().signal),
+      async () => undefined,
+    );
+    await vi.advanceTimersByTimeAsync(1000);
+    await probe;
+
+    // ...then a success admitted while the route is already healthy resets it.
+    await gate.run(
+      ROUTE,
+      options(new AbortController().signal),
+      async () => undefined,
     );
 
-    await vi.advanceTimersByTimeAsync(2000);
+    await expect(
+      gate.run(ROUTE, options(new AbortController().signal), async () => {
+        throw TRANSIENT;
+      }),
+    ).rejects.toBe(TRANSIENT);
+
+    // Cooling restarts at the base backoff, not the previous streak's tier.
+    const nextOperation = vi.fn(async () => undefined);
+    const next = gate.run(
+      ROUTE,
+      options(new AbortController().signal),
+      nextOperation,
+    );
+    await vi.advanceTimersByTimeAsync(1000);
     await next;
-    expect(order).toEqual(['refresh', 'operation']);
+    expect(nextOperation).toHaveBeenCalledOnce();
     gate.dispose();
   });
 

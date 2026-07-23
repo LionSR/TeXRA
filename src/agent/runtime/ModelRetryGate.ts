@@ -15,7 +15,6 @@ interface RouteState {
   phase: RoutePhase;
   failures: number;
   retryAt: number;
-  refreshOnAdmission: boolean;
   timer: ReturnType<typeof setTimeout> | undefined;
   readonly waiters: WaitingAttempt[];
 }
@@ -23,28 +22,17 @@ interface RouteState {
 interface RetryPermit {
   readonly version: number;
   readonly probe: boolean;
-  readonly sharedRecoveryCompleted: boolean;
 }
 
 interface RouteFailure {
   readonly retryAfterMs?: number;
 }
 
-interface RunOptions<T> {
+interface RunOptions {
   readonly signal: AbortSignal;
   readonly baseBackoffMs: number;
   readonly classifyFailure: (error: Error) => RouteFailure | undefined;
-  /**
-   * Return a deferred recovery for failures the current call can repair. The
-   * gate claims the recovery probe before invoking it, so peer calls remain
-   * queued while the repair and immediate retry run.
-   */
-  readonly recoverFailure?: (
-    error: Error,
-    retry: () => Promise<T>,
-  ) => (() => Promise<T>) | undefined;
   readonly onWait?: (delayMs: number) => void;
-  readonly onAdmitted?: () => void | Promise<void>;
 }
 
 function abortReason(signal: AbortSignal): unknown {
@@ -59,6 +47,9 @@ function abortReason(signal: AbortSignal): unknown {
  * becomes the recovery probe. A successful probe releases the other calls;
  * another route failure increases the shared backoff. The gate does not decide
  * how many times a node retries—that remains the node retry loop's concern.
+ * Relay-authentication recovery is likewise not the gate's concern: the token
+ * refresh is single-flighted at the auth boundary, and each call's own
+ * reactive 401 recovery repairs its client within the same node attempt.
  */
 export class ModelRetryGate {
   private readonly routes = new Map<string, RouteState>();
@@ -66,12 +57,11 @@ export class ModelRetryGate {
 
   async run<T>(
     route: string,
-    options: RunOptions<T>,
+    options: RunOptions,
     operation: () => Promise<T>,
   ): Promise<T> {
     const permit = await this.acquire(route, options);
     try {
-      if (permit.sharedRecoveryCompleted) await options.onAdmitted?.();
       const result = await operation();
       this.markReachable(route, permit);
       return result;
@@ -81,41 +71,6 @@ export class ModelRetryGate {
       } else {
         const failure = options.classifyFailure(error as Error);
         if (failure) {
-          const recovery = options.recoverFailure?.(error as Error, operation);
-          if (recovery) {
-            const recoveryPermit = this.claimRecovery(route, permit);
-            if (!recoveryPermit) {
-              // Another in-flight call already owns recovery. Re-enter the
-              // gate so this stale call waits for that probe, then retries
-              // with the repaired shared credential or route.
-              return this.run(route, options, operation);
-            }
-
-            try {
-              const result = await recovery();
-              this.markReachable(route, recoveryPermit, true);
-              return result;
-            } catch (recoveryError) {
-              if (options.signal.aborted) {
-                this.abandon(route, recoveryPermit);
-              } else {
-                const recoveryFailure = options.classifyFailure(
-                  recoveryError as Error,
-                );
-                if (recoveryFailure) {
-                  this.markRouteFailure(
-                    route,
-                    recoveryPermit,
-                    options.baseBackoffMs,
-                    recoveryFailure.retryAfterMs,
-                  );
-                } else {
-                  this.markReachable(route, recoveryPermit);
-                }
-              }
-              throw recoveryError;
-            }
-          }
           this.markRouteFailure(
             route,
             permit,
@@ -128,29 +83,6 @@ export class ModelRetryGate {
       }
       throw error;
     }
-  }
-
-  private claimRecovery(
-    route: string,
-    permit: RetryPermit,
-  ): RetryPermit | undefined {
-    const state = this.routes.get(route);
-    if (!state || permit.version !== state.version) return undefined;
-    if (state.phase === 'probing' && permit.probe) {
-      state.refreshOnAdmission = true;
-      return permit;
-    }
-    if (state.phase !== 'healthy') return undefined;
-
-    state.version += 1;
-    state.phase = 'probing';
-    state.retryAt = Date.now();
-    state.refreshOnAdmission = true;
-    return {
-      version: state.version,
-      probe: true,
-      sharedRecoveryCompleted: permit.sharedRecoveryCompleted,
-    };
   }
 
   dispose(): void {
@@ -170,7 +102,7 @@ export class ModelRetryGate {
 
   private acquire(
     route: string,
-    options: Pick<RunOptions<never>, 'signal' | 'onWait'>,
+    options: Pick<RunOptions, 'signal' | 'onWait'>,
   ): Promise<RetryPermit> {
     if (this.disposed) {
       return Promise.reject(
@@ -185,7 +117,6 @@ export class ModelRetryGate {
         phase: 'healthy' as const,
         failures: 0,
         retryAt: 0,
-        refreshOnAdmission: false,
         timer: undefined,
         waiters: [],
       };
@@ -193,7 +124,6 @@ export class ModelRetryGate {
       return Promise.resolve({
         version: healthyState.version,
         probe: false,
-        sharedRecoveryCompleted: false,
       });
     }
 
@@ -246,25 +176,24 @@ export class ModelRetryGate {
     this.scheduleProbe(state);
   }
 
-  private markReachable(
-    route: string,
-    permit: RetryPermit,
-    sharedRecoveryCompleted = false,
-  ): void {
+  private markReachable(route: string, permit: RetryPermit): void {
     const state = this.routes.get(route);
-    if (!state || state.phase === 'healthy') return;
+    if (!state) return;
+    if (state.phase === 'healthy') {
+      // A success admitted while the route was already healthy proves a clean
+      // round-trip, so the failure streak ends here — not on probe success,
+      // whose released cohort may immediately re-fail (a rate window that fits
+      // one probe rarely fits the herd). Resetting on probe success would cap
+      // the shared backoff at its base forever in exactly that cycle.
+      state.failures = 0;
+      return;
+    }
     if (permit.version !== state.version) return;
     if (state.phase === 'probing' && !permit.probe) return;
 
-    const refreshOnAdmission =
-      sharedRecoveryCompleted ||
-      permit.sharedRecoveryCompleted ||
-      state.refreshOnAdmission;
     state.version += 1;
     state.phase = 'healthy';
-    state.failures = 0;
     state.retryAt = 0;
-    state.refreshOnAdmission = false;
     if (state.timer) clearTimeout(state.timer);
     state.timer = undefined;
     const waiters = state.waiters.splice(0);
@@ -273,7 +202,6 @@ export class ModelRetryGate {
       waiter.resolve({
         version: state.version,
         probe: false,
-        sharedRecoveryCompleted: refreshOnAdmission,
       });
     }
   }
@@ -315,7 +243,6 @@ export class ModelRetryGate {
         waiter.resolve({
           version: state.version,
           probe: true,
-          sharedRecoveryCompleted: state.refreshOnAdmission,
         });
       },
       Math.max(0, state.retryAt - Date.now()),

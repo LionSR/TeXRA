@@ -388,7 +388,8 @@ describe('ModelHandlerOpenRouterNative getClient retry policy', () => {
       ._options;
 
     assert.deepEqual(options.retryConfig, { strategy: 'none' });
-    assert.equal(handler.getRetryEndpoint(client), endpoint);
+    // ClientSDK normalizes its public _baseURL with a trailing slash.
+    assert.equal(handler.getRetryEndpoint(client), `${endpoint}/`);
 
     transportFetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
     const request = new Request(`${endpoint}/models`);
@@ -558,5 +559,57 @@ describe('ModelHandlerOpenRouterNative compaction retries', () => {
     handler.requestCompaction();
     await handler.compactForTest(messages, nextCompact);
     expect(nextCompact).toHaveBeenCalledOnce();
+  });
+
+  it('drops a pending compaction when a follow-up mutates the same array', async () => {
+    // Regression: after a failed turn the root tool-use flow appends the
+    // user's follow-up IN PLACE onto the same messages array. Reference
+    // identity alone would replay the stale pre-follow-up payload and
+    // silently drop the follow-up from the request and — via the flow's
+    // in-place commit — from the conversation history.
+    class TestableHandler extends ModelHandlerOpenRouterNative {
+      compactForTest(
+        messages: ChatMessages[],
+        compact: () => Promise<{
+          compactedMessages: ChatMessages[];
+          didCompact: boolean;
+        }>,
+      ) {
+        return this.maybeCompactByInputTokens(messages, 1, compact);
+      }
+    }
+
+    const handler = new TestableHandler(
+      buildTestModelConfig(OPENROUTER_TEST_CONFIG),
+    );
+    handler.setAgentCategory(AgentCategory.ToolUse);
+    vi.spyOn(handler, 'getStreamingConfig').mockReturnValue(false);
+    const messages: ChatMessages[] = [
+      { role: 'user', content: 'original conversation' },
+    ];
+    const compact = vi.fn(async () => ({
+      compactedMessages: [
+        { role: 'user' as const, content: 'compacted conversation' },
+      ],
+      didCompact: true,
+    }));
+
+    handler.requestCompaction();
+    await handler.compactForTest(messages, compact);
+    expect(compact).toHaveBeenCalledOnce();
+
+    // Push-style follow-up (OpenAI/OpenRouter shape): length changes.
+    messages.push({ role: 'user', content: 'follow-up after failure' });
+    handler.requestCompaction();
+    await handler.compactForTest(messages, compact);
+    expect(compact).toHaveBeenCalledTimes(2);
+
+    // Merge-style follow-up (Google Interactions shape): same length, the
+    // last message mutates in place.
+    const last = messages.at(-1) as { role: 'user'; content: string };
+    last.content += ' with merged continuation';
+    handler.requestCompaction();
+    await handler.compactForTest(messages, compact);
+    expect(compact).toHaveBeenCalledTimes(3);
   });
 });
