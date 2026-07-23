@@ -246,26 +246,29 @@ export class ModelHandlerAnthropic extends ModelHandler<
     messages: MessageParam[],
     signal?: AbortSignal,
   ): Promise<number> {
-    const fileIds = new Set<string>();
+    const fileReferenceCounts = new Map<string, number>();
     for (const message of messages) {
       if (!Array.isArray(message.content)) continue;
       for (const block of extractDocumentBlocks(message.content)) {
         const source = block.source as
           { type: string; file_id?: string } | undefined;
         if (source?.type === 'file' && source.file_id) {
-          fileIds.add(source.file_id);
+          fileReferenceCounts.set(
+            source.file_id,
+            (fileReferenceCounts.get(source.file_id) ?? 0) + 1,
+          );
         }
       }
     }
 
     let total = 0;
-    for (const fileId of fileIds) {
+    for (const [fileId, referenceCount] of fileReferenceCounts) {
       signal?.throwIfAborted();
       const pageEstimate =
         (this.uploadedPdfPageCounts.get(fileId) ?? 0) *
         ANTHROPIC_PDF_TOKENS_PER_PAGE_ESTIMATE;
       if (pageEstimate > 0) {
-        total += pageEstimate;
+        total += pageEstimate * referenceCount;
         continue;
       }
 
@@ -289,7 +292,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           );
         }
       }
-      total += sizeEstimate ?? 0;
+      total += (sizeEstimate ?? 0) * referenceCount;
     }
     return total;
   }

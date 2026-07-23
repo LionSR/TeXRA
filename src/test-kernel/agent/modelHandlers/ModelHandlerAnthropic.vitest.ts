@@ -1209,16 +1209,19 @@ describe('ModelHandlerAnthropic message guards', () => {
     assert.deepEqual(activityStates, ['started', 'finished']);
   });
 
-  it('drops tracked PDF pages covered by the latest compaction block', () => {
+  it('drops tracked file metadata covered by the latest compaction block', () => {
     const handler = createAnthropicHandler({ supportsNativePdf: true });
     const target = handler as unknown as {
       uploadedPdfPageCounts: Map<string, number>;
-      pruneTrackedPdfPages(messages: MessageParam[]): void;
+      fileTokenEstimates: Map<string, number>;
+      pruneTrackedFileMetadata(messages: MessageParam[]): void;
     };
     target.uploadedPdfPageCounts.set('file_before_compaction', 50);
     target.uploadedPdfPageCounts.set('file_after_compaction', 2);
+    target.fileTokenEstimates.set('file_before_compaction', 150_000);
+    target.fileTokenEstimates.set('file_after_compaction', 6_000);
 
-    target.pruneTrackedPdfPages([
+    target.pruneTrackedFileMetadata([
       {
         role: 'user',
         content: [
@@ -1249,6 +1252,10 @@ describe('ModelHandlerAnthropic message guards', () => {
     assert.deepEqual(
       [...target.uploadedPdfPageCounts.entries()],
       [['file_after_compaction', 2]],
+    );
+    assert.deepEqual(
+      [...target.fileTokenEstimates.entries()],
+      [['file_after_compaction', 6_000]],
     );
   });
 
@@ -1453,6 +1460,10 @@ describe('ModelHandlerAnthropic message guards', () => {
             type: 'document',
             source: { type: 'file', file_id: 'file_tracked' },
           },
+          {
+            type: 'document',
+            source: { type: 'file', file_id: 'file_tracked' },
+          },
         ] as unknown as ContentBlockParam[],
       },
     ];
@@ -1471,8 +1482,42 @@ describe('ModelHandlerAnthropic message guards', () => {
       messages,
     );
 
-    assert.equal(estimate, 3_000);
+    assert.equal(estimate, 6_000);
     assert.equal(retrieveMetadata.mock.calls.length, 0);
+  });
+
+  it('counts repeated file references while caching their metadata', async () => {
+    const handler = createAnthropicHandler({ supportsNativePdf: true });
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: { type: 'file', file_id: 'file_repeated' },
+          },
+          {
+            type: 'document',
+            source: { type: 'file', file_id: 'file_repeated' },
+          },
+        ] as unknown as ContentBlockParam[],
+      },
+    ];
+    const target = handler as unknown as {
+      estimateFileReferenceTokens(
+        client: unknown,
+        messages: MessageParam[],
+      ): Promise<number>;
+    };
+    const retrieveMetadata = vi.fn(async () => ({ size_bytes: 800_000 }));
+
+    const estimate = await target.estimateFileReferenceTokens(
+      { beta: { files: { retrieveMetadata } } },
+      messages,
+    );
+
+    assert.equal(estimate, 400_000);
+    assert.equal(retrieveMetadata.mock.calls.length, 1);
   });
 
   it('stops file metadata estimation immediately after cancellation', async () => {
