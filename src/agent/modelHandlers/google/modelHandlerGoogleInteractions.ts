@@ -1727,7 +1727,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       const polled = await this.backgroundPoller.poll({
         initialResponse: initial,
         retrieve: async (id, sig) => {
-          const opts = sig ? this.interactionsRequestOptions(sig) : requestOptions;
+          const opts = sig
+            ? this.interactionsRequestOptions(sig)
+            : requestOptions;
           try {
             return await client.interactions.get(
               id,
