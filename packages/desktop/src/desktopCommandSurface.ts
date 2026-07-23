@@ -336,15 +336,21 @@ export function dispatchDesktopCommand(
     id,
     DESKTOP_COMMAND_HANDLERS,
     actions,
-    (unhandledId) => {
+    (failure) => {
+      if (failure.kind === 'invalidArguments') {
+        console.error(
+          `[desktop] dispatch: invalid arguments for ${failure.id}: ${failure.error.message}`,
+        );
+        return;
+      }
       // The unavailable-command IDs (texra.execute etc.) are valid menu
       // entries with no handler by design — silent fallthrough is correct.
       // Only IDs absent from both the registry AND the unavailable list
       // indicate a stale IPC payload or schema drift; surface those at
       // error level so the bug shows up in support logs without crashing
       // the click handler / IPC dispatcher.
-      if (DESKTOP_UNAVAILABLE_COMMANDS.has(unhandledId as CommandId)) return;
-      console.error(`[desktop] dispatch: unhandled command ${unhandledId}`);
+      if (DESKTOP_UNAVAILABLE_COMMANDS.has(failure.id as CommandId)) return;
+      console.error(`[desktop] dispatch: unhandled command ${failure.id}`);
     },
   );
 }

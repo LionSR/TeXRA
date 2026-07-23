@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { z } from 'zod';
 
 import { formatError } from '@common/errors';
 import * as logger from '@logger/logUtils';
@@ -9,25 +8,6 @@ export { toErrorMessage };
 
 /** Valid documentation identifiers for error messages. */
 export type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';
-
-/** Parse data with a Zod schema and show a user-friendly error if parsing fails. */
-export async function parseWithErrorDisplay<T>(
-  channel: string,
-  schema: z.ZodType<T>,
-  data: unknown,
-  context?: string,
-): Promise<T | null> {
-  const result = schema.safeParse(data);
-  if (!result.success) {
-    const prefix = context ? `Invalid ${context}` : 'Invalid input';
-    await showLoggedMessage(
-      channel,
-      `${prefix}: ${z.prettifyError(result.error)}`,
-    );
-    return null;
-  }
-  return result.data;
-}
 
 /** Log a formatted error message and return it. */
 export function logErrorMessage(
