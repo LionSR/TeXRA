@@ -9,6 +9,7 @@ import {
 } from '@anthropic-ai/sdk';
 
 // Local imports
+import { logCompactionActivity } from '@agent/trace';
 import {
   type AgentSetting,
   hasEndTag,
@@ -726,9 +727,33 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Phase 4: EXECUTE - Dispatch through the provider's two SDK paths.
-    const response = useStreaming
-      ? await this.executeStreamingResponse(client, options, signal)
-      : await client.beta.messages.create(options, { signal });
+    // Non-streaming responses have no block-start event, so use the token
+    // count that configured the request to announce compaction before the
+    // potentially long SDK call. The response/failure boundary owns the
+    // matching finish marker.
+    const compactionEdit = options.context_management?.edits?.find(
+      (edit) => edit.type === 'compact_20260112',
+    );
+    const nonStreamingCompactionExpected =
+      !useStreaming &&
+      measuredInputTokens !== undefined &&
+      compactionEdit?.trigger?.type === 'input_tokens' &&
+      measuredInputTokens >= compactionEdit.trigger.value;
+
+    if (nonStreamingCompactionExpected) {
+      logCompactionActivity(this.logger, 'started');
+    }
+
+    let response: BetaMessage;
+    try {
+      response = useStreaming
+        ? await this.executeStreamingResponse(client, options, signal)
+        : await client.beta.messages.create(options, { signal });
+    } finally {
+      if (nonStreamingCompactionExpected) {
+        logCompactionActivity(this.logger, 'finished');
+      }
+    }
 
     // Log server-side compaction events when present in response content.
     logContextManagementFromResponse(

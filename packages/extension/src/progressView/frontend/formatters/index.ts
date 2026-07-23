@@ -145,7 +145,7 @@ const TEMPLATE_FORMATTERS: Record<string, TemplateFormatterFn | null> = {
 
   // Special cases
   contextState: () => null, // Displayed in footer
-  contextCompactionActivity: () => null, // Ephemeral CLI/TUI status signal
+  contextCompactionActivity: () => null, // Filtered during live ingestion
   userMessage: wrapWithErrorHandling(formatUserMessageTemplate, 'user message'),
   progressStatus: wrapWithErrorHandling(
     formatProgressStatusTemplate,
