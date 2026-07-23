@@ -60,14 +60,12 @@ import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionS
 import { runCleanBuild, runCleanOutput } from '@housekeeping';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import type { AgentCategory } from '@shared/schemas/agent';
 import { dispatchCommandFromRegistry } from '@shared/commands/registry';
 import { SETTINGS_QUERY } from '@utils/config';
 
 // Local file imports
 import {
   EXTENSION_COMMAND_HANDLERS,
-  EXTENSION_PARAMETERIZED_HANDLERS,
   type ExtensionCommandActions,
 } from './extensionCommandHandlers';
 
@@ -177,11 +175,10 @@ export function createExtensionCommandActions(
 
 /*
  * Duplicate-registration audit (#3787 follow-up):
- * Every command id in `EXTENSION_COMMAND_HANDLERS` +
- * `EXTENSION_PARAMETERIZED_HANDLERS` has been verified to have no stale
- * `vscode.commands.registerCommand(...)` call elsewhere. The remaining
- * legacy `registerCommand` call sites all register ids NOT tagged
- * `extensionRegistry` in `commandCatalog` — they're legitimate VS
+ * Every command id in `EXTENSION_COMMAND_HANDLERS` has been verified to
+ * have no stale `vscode.commands.registerCommand(...)` call elsewhere.
+ * The remaining legacy `registerCommand` call sites all register ids NOT
+ * tagged `extensionRegistry` in `commandCatalog` — they're legitimate VS
  * Code-only handlers (file ops, git, latex tools, pack/clean variants).
  */
 
@@ -214,16 +211,6 @@ export function registerExtensionCommandRegistry(
           },
           rawArg,
         ),
-      ),
-    );
-  }
-
-  for (const id of Object.keys(
-    EXTENSION_PARAMETERIZED_HANDLERS,
-  ) as ReadonlyArray<keyof typeof EXTENSION_PARAMETERIZED_HANDLERS>) {
-    context.subscriptions.push(
-      vscode.commands.registerCommand(id, (arg?: AgentCategory) =>
-        EXTENSION_PARAMETERIZED_HANDLERS[id](actions, arg),
       ),
     );
   }
