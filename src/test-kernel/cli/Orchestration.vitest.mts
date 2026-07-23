@@ -261,6 +261,78 @@ describe('CLI orchestration items', () => {
     });
   });
 
+  it('keeps compact signed-in auth after the API mode on short launchers', () => {
+    const statusLines = [
+      'api: included TeXRA access',
+      'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 25% used, 75% remaining',
+    ];
+
+    const layout = orchestrationLauncherLayout({
+      rows: 14,
+      columns: 80,
+      itemCount: 7,
+      headerLines: ORCHESTRATION_TEST_HEADER_LINES,
+      statusLines,
+      footerHints: [],
+    });
+
+    expect(layout).toEqual({
+      statusLines: [
+        'api: included TeXRA access',
+        'auth: signed in as researcher@example.com',
+      ],
+      footerHints: [],
+      maxVisibleItems: 4,
+      showOverflow: true,
+    });
+  });
+
+  it('keeps footer hints when compact auth creates enough room', () => {
+    const statusLines = [
+      'api: included TeXRA access',
+      'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 25% used, 75% remaining',
+    ];
+    const footerHints = ['Team settings are available from the launcher.'];
+
+    const layout = orchestrationLauncherLayout({
+      rows: 16,
+      columns: 80,
+      itemCount: 7,
+      headerLines: ORCHESTRATION_TEST_HEADER_LINES,
+      statusLines,
+      footerHints,
+    });
+
+    expect(layout.statusLines).toEqual([
+      'api: included TeXRA access',
+      'auth: signed in as researcher@example.com',
+    ]);
+    expect(layout.footerHints).toEqual(footerHints);
+    expect(layout.maxVisibleItems).toBe(4);
+  });
+
+  it('uses the compact auth fallback when the launcher is narrow', () => {
+    const statusLines = [
+      'api: personal API keys',
+      'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 25% used, 75% remaining',
+    ];
+
+    const layout = orchestrationLauncherLayout({
+      rows: 16,
+      columns: 40,
+      itemCount: 7,
+      headerLines: ORCHESTRATION_TEST_HEADER_LINES,
+      statusLines,
+      footerHints: [],
+    });
+
+    expect(layout.statusLines).toEqual([
+      'api: personal API keys',
+      'auth: signed in as researcher@example.com',
+    ]);
+    expect(layout.maxVisibleItems).toBe(4);
+  });
+
   it('keeps visible choices instead of overflow-only output on tiny row budgets', () => {
     const layout = orchestrationLauncherLayout({
       rows: 7,
@@ -394,10 +466,15 @@ describe('CLI orchestration items', () => {
       'Settings',
       'Help',
     ]);
-    expect(buildCliAccountItems(account).map((item) => item.value)).toEqual([
-      { kind: 'account', provider: 'chatgpt', operation: 'sign-in' },
-      { kind: 'account', provider: 'texra', operation: 'switch' },
-      { kind: 'account', provider: 'texra', operation: 'sign-out' },
+    expect(buildCliAccountItems(account)).toEqual([
+      expect.objectContaining({
+        value: { kind: 'account', provider: 'chatgpt', operation: 'sign-in' },
+      }),
+      expect.objectContaining({
+        label: 'Log out of TeXRA',
+        description: '',
+        value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
+      }),
     ]);
   });
 
@@ -407,9 +484,15 @@ describe('CLI orchestration items', () => {
       chatGptSignedIn: false,
     };
 
-    expect(buildCliAccountItems(account).map((item) => item.value)).toEqual([
-      { kind: 'account', provider: 'chatgpt', operation: 'sign-in' },
-      { kind: 'account', provider: 'texra', operation: 'sign-in' },
+    expect(buildCliAccountItems(account)).toEqual([
+      expect.objectContaining({
+        value: { kind: 'account', provider: 'chatgpt', operation: 'sign-in' },
+      }),
+      expect.objectContaining({
+        label: 'Log in to TeXRA',
+        description: '',
+        value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
+      }),
     ]);
     expect(
       buildCliModelAccessItems({
@@ -428,13 +511,14 @@ describe('CLI orchestration items', () => {
     });
 
     expect(items[1]).toMatchObject({
-      label: 'TeXRA relay token',
+      label: 'Log out of TeXRA',
+      value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
       disabled: true,
       description: 'Managed by the TEXRA_RELAY_TOKEN environment variable',
     });
   });
 
-  it('groups resumable executions into one launcher row before agent selection', () => {
+  it('places Team before Resume and Agent when all three are available', () => {
     const history = [
       historyEntry('aaaaaaaaaaaa', {
         agent: 'review',
@@ -446,7 +530,7 @@ describe('CLI orchestration items', () => {
       }),
     ];
     const items = buildCliOrchestrationItems({
-      presetPlans: [],
+      presetPlans: [readyPresetPlan()],
       history,
       toolUseAgents: [
         toolUseAgent('assistant'),
@@ -457,12 +541,13 @@ describe('CLI orchestration items', () => {
 
     expect(items.map((item) => item.label)).toEqual([
       'New chat',
+      'Team',
       'Resume',
       'Agent',
       'Settings',
       'Help',
     ]);
-    expect(items[1]?.description).toBe('2 resumable sessions');
+    expect(items[2]?.description).toBe('2 resumable sessions');
     expect(buildCliResumeItems(history).map((item) => item.label)).toEqual([
       'aaaaaaaaaaaa',
       'bbbbbbbbbbbb',

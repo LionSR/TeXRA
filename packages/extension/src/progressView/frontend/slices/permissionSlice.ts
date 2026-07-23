@@ -9,6 +9,7 @@ import { create } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewOutboundHandlerRegistry } from '@shared/schemas';
+import { deriveGoalState } from '@shared/schemas/goal';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 
@@ -100,13 +101,16 @@ export const permissionHandlers = {
   },
 
   [PROGRESS_VIEW_COMMANDS.GOAL_ACTIVE_UPDATED]: (data) => {
+    const goal = deriveGoalState({
+      goalActive: data.active,
+      goalStatus: data.status,
+      goalObjective: data.objective,
+    });
     updateToolUseState(data.stream, (prev) =>
       create(prev, (draft) => {
-        draft.goalActive = data.active;
-        draft.goalStatus = data.active ? (data.status ?? undefined) : undefined;
-        draft.goalObjective = data.active
-          ? (data.objective ?? undefined)
-          : undefined;
+        draft.goalActive = goal.active;
+        draft.goalStatus = goal.active ? goal.status : undefined;
+        draft.goalObjective = goal.active ? goal.objective : undefined;
       }),
     );
   },

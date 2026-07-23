@@ -36,7 +36,6 @@ import { DEFAULT_MULTI_FILES, FILE_TYPE_TO_KEY } from './store';
 import {
   checkboxValues$,
   commit$,
-  fileSelectionOpen$,
   instruction$,
   latexdiffsVisible$,
   launchTarget$,
@@ -183,9 +182,10 @@ export function handleRestoreState(
 /** Apply one parsed snapshot regardless of whether storage or the host sent it. */
 function applyState(state: MainViewPersistedState): void {
   sessionType$.set(state.sessionType);
-  launchTarget$.set(state.launchTarget);
+  launchTarget$.set(
+    state.sessionType === SESSION_TYPES.WORKFLOW ? 'agent' : state.launchTarget,
+  );
   selectedTeamId$.set(state.selectedTeamId);
-  fileSelectionOpen$.set(state.sessionType === SESSION_TYPES.WORKFLOW);
   workflowAgent$.set(state.workflowAgent);
   toolUseAgent$.set(state.toolUseAgent);
   model$.set(state.model);

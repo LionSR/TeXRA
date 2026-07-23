@@ -11,6 +11,16 @@ import * as path from 'node:path';
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
+vi.mock('@tools/goal', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tools/goal')>();
+  return {
+    ...actual,
+    // ProgressBackend tests replace cleanup methods to exercise failures.
+    // The GoalStore suite separately tests the canonical frozen singleton.
+    GoalStore: { ...actual.GoalStore },
+  };
+});
+
 // Local imports
 import type { AgentEvent } from '@agent/trace';
 import {
@@ -2201,10 +2211,12 @@ describe('ProgressBackend', () => {
 
     try {
       backend.state.streamLogs.ensureStream(stream);
+      // Provisional patches only ever carry agentCategory/isRemote in
+      // production (see ProgressFactApplier.handleSetActiveStream) — agent/
+      // inputFile/model come exclusively from the RunConfig-derived `run`
+      // union, set atomically by applySnapshotMetadata.
       backend.state.updateStreamMetadata(stream, {
-        agent: 'provisional-workflow',
         agentCategory: AgentCategory.Workflow,
-        inputFile: 'draft.tex',
         isRemote: true,
         creationTimestamp: 123,
       });
@@ -2215,17 +2227,19 @@ describe('ProgressBackend', () => {
       );
       // A late provisional event cannot replace task-state authority.
       backend.state.updateStreamMetadata(stream, {
-        agent: 'late-workflow',
         agentCategory: AgentCategory.Workflow,
       });
 
       expect(backend.state.getStreamMetadata(stream)).toMatchObject({
-        agent: 'search',
         agentCategory: AgentCategory.ToolUse,
-        model: 'deepseekproT',
         isRemote: true,
         creationTimestamp: 123,
         executionId,
+        run: expect.objectContaining({
+          kind: 'agent',
+          agent: 'search',
+          model: 'deepseekproT',
+        }),
       });
 
       const toolUseInfos = buildStreamInfos(backend.state, 'toolUse');

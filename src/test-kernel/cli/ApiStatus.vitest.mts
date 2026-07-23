@@ -43,8 +43,9 @@ describe('CLI API status text', () => {
       formatCliAuthStatusLine({
         authenticated: true,
         accountLabel: 'user@example.edu',
+        tier: 'Ultra',
       }),
-    ).toBe('auth: signed in as user@example.edu');
+    ).toBe('auth: signed in as user@example.edu · tier: Ultra');
   });
 
   it('keeps non-email account labels readable', () => {

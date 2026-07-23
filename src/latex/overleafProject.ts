@@ -11,6 +11,10 @@ const GIT_URL_PATTERN =
   /^https?:\/\/(?:git@)?([^/]+)(\/git)?\/([a-f0-9]{24})$/i;
 const PROJECT_URL_PATTERN = /^https?:\/\/([^/]+)\/project\/([a-f0-9]{24})\/?$/i;
 
+export const OVERLEAF_GIT_TOKEN_URL = 'https://www.overleaf.com/user/settings';
+export const OVERLEAF_TOKEN_DOCS_URL =
+  'https://docs.overleaf.com/integrations-and-add-ons/git-integration-and-github-synchronization/git-integration/git-integration-authentication-tokens';
+
 /** A resolved Overleaf/ShareLaTeX git remote. */
 export interface OverleafRemote {
   /** Git host the project clones from (e.g. `git.overleaf.com`). */

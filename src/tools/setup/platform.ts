@@ -104,11 +104,11 @@ export interface SetupPlatform {
 }
 
 /** Setup tools that require a VS Code-specific adapter. */
-export const SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES = [
+export const SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES = Object.freeze([
   'invoke_command',
   'install_vscode_extension',
   'send_to_terminal',
-] as const;
+] as const);
 
 function assertTexraScopedKey(key: string): void {
   if (!key.startsWith('texra.')) {
@@ -151,23 +151,25 @@ export async function getSetupAuthStatus(): Promise<{
 }
 
 /** Value-free credential capability exposed to setup tools. */
-export const setupSecrets: SetupSecretsAdapter = {
-  providers: API_PROVIDERS,
-  deleteApiKey: (provider) =>
-    currentPlatform().secrets.delete(apiKeySecretName(provider)),
-  hasUsableApiKey: (provider) =>
-    hasUsableApiKey(currentPlatform().secrets, provider),
-  apiKeyOrigin: (provider) =>
-    lookupApiKeyOrigin(currentPlatform().secrets, provider),
-  storedApiKeyExists: async (provider) =>
-    (await currentPlatform().secrets.listStoredKeys()).includes(
-      apiKeySecretName(provider),
-    ),
-  anyUsableCredentialExists: () =>
-    hasUsableSetupCredential(currentPlatform().secrets),
-  gitHubTokenExists: () => resolveGitHubTokenSource(currentPlatform().secrets),
-  listStoredKeys: () => currentPlatform().secrets.listStoredKeys(),
-};
+export const setupSecrets: SetupSecretsAdapter =
+  Object.freeze<SetupSecretsAdapter>({
+    providers: API_PROVIDERS,
+    deleteApiKey: (provider) =>
+      currentPlatform().secrets.delete(apiKeySecretName(provider)),
+    hasUsableApiKey: (provider) =>
+      hasUsableApiKey(currentPlatform().secrets, provider),
+    apiKeyOrigin: (provider) =>
+      lookupApiKeyOrigin(currentPlatform().secrets, provider),
+    storedApiKeyExists: async (provider) =>
+      (await currentPlatform().secrets.listStoredKeys()).includes(
+        apiKeySecretName(provider),
+      ),
+    anyUsableCredentialExists: () =>
+      hasUsableSetupCredential(currentPlatform().secrets),
+    gitHubTokenExists: () =>
+      resolveGitHubTokenSource(currentPlatform().secrets),
+    listStoredKeys: () => currentPlatform().secrets.listStoredKeys(),
+  });
 
 /** Subscription access reported separately from provider API keys. */
 export async function getChatGptSubscriptionStatus(): Promise<{
@@ -187,7 +189,7 @@ export async function getChatGptSubscriptionStatus(): Promise<{
 }
 
 /** Configuration operations scoped to `texra.*` keys. */
-export const texraScopedConfig = {
+export const texraScopedConfig = Object.freeze({
   get(key: string): unknown {
     assertTexraScopedKey(key);
     return currentPlatform().config.get(key);
@@ -204,7 +206,7 @@ export const texraScopedConfig = {
       target === 'workspace' ? 'workspace' : 'global',
     );
   },
-};
+});
 
 let override: SetupPlatform | undefined;
 

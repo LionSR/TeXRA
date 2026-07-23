@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { sync as globSync } from 'glob';
+import { globIterate } from 'glob';
 
 // Local imports
 import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
@@ -144,11 +144,18 @@ export function resolveHousekeepingTargets(
   return { baseName, inputDir, filePatterns };
 }
 
-export function findFilesFromPatterns(
+/**
+ * Yield matching workspace files as they are discovered.
+ *
+ * Overlapping patterns may yield the same path more than once. Consumers that
+ * retain the complete result set must deduplicate it; cleanup consumers delete
+ * each yielded file before advancing, so later patterns cannot rediscover it.
+ */
+export async function* findFilesFromPatterns(
   inputDir: string,
   patterns: string[],
   extensions: string[],
-): string[] {
+): AsyncGenerator<string, void, void> {
   logger.debug(
     CHANNEL,
     `Finding files in ${inputDir} using patterns ${patterns} and extensions ${extensions}`,
@@ -156,7 +163,7 @@ export function findFilesFromPatterns(
 
   const workspacePath = WorkspaceFS.getPath();
   if (!workspacePath) {
-    return [];
+    return;
   }
 
   const searchDirs = [path.join(workspacePath, inputDir)];
@@ -164,30 +171,31 @@ export function findFilesFromPatterns(
     searchDirs.push(path.join(workspacePath, inputDir, 'build'));
   }
 
-  const results = new Set<string>();
-
   for (const pattern of patterns) {
     for (const ext of extensions) {
       const isGlob = ext.includes('*');
       for (const dir of searchDirs) {
-        const matches = globSync(path.join(dir, `${pattern}${ext}`), {
-          nodir: true,
-        });
-        if (matches.length === 0) continue;
+        let foundExactMatch = false;
+        for await (const match of globIterate(
+          path.join(dir, `${pattern}${ext}`),
+          { nodir: true },
+        )) {
+          const relativePath = WorkspaceFS.relativePath(match);
+          logger.debug(CHANNEL, `Found file: ${relativePath}`);
+          yield relativePath;
 
-        if (isGlob) {
-          for (const match of matches) {
-            results.add(WorkspaceFS.relativePath(match));
+          if (!isGlob) {
+            foundExactMatch = true;
+            break;
           }
-        } else {
-          results.add(WorkspaceFS.relativePath(matches[0]));
+        }
+
+        if (foundExactMatch) {
+          // Exact extensions prefer the input directory; `build/` is only the
+          // fallback when the corresponding root-level artifact is absent.
           break;
         }
       }
     }
   }
-
-  const found = [...results];
-  logger.debug(CHANNEL, `Found files: ${found.join(', ')}`);
-  return found;
 }

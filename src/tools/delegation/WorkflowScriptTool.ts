@@ -54,7 +54,13 @@ type WorkflowScriptToolInput = z.infer<typeof WorkflowScriptToolInputSchema>;
 
 const STREAM_PREFIX = 'workflow-script';
 
-/** Execute a durable, deterministic workflow script from an opted-in agent. */
+/**
+ * Execute a durable, deterministic workflow script from an agent whose tool
+ * list names it. Gated by the "Workflow Script" dashboard switch (id
+ * `workflow-script` in {@link @tools/externalToolDefs}), which
+ * `resolveAgentTools()` enforces regardless of any agent's configured tools —
+ * new installs start with the switch off.
+ */
 export class WorkflowScriptTool extends defineTool({
   name: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
   slow: true,
@@ -78,9 +84,7 @@ const correctedFiles = results
   .flatMap((result) => result.outputs.map((output) => output.absolutePath))
 return await agent('Merge the corrected drafts.', { inputFiles: correctedFiles })
 
-Durability: the journal is keyed by meta.name within this session. If the run times out or is interrupted, call this tool again with the SAME meta.name: completed agent() calls replay for free (the script may be revised; only changed or unfinished calls execute). Use a new meta.name to start over. The default whole-run wall clock is 10 minutes; set meta.timeoutMs (1s to 60min) for longer runs.
-
-Tool inclusion is the opt-in boundary: do not add this tool to a default agent configuration.`,
+Durability: the journal is keyed by meta.name within this session. If the run times out or is interrupted, call this tool again with the SAME meta.name: completed agent() calls replay for free (the script may be revised; only changed or unfinished calls execute). Use a new meta.name to start over. The default whole-run wall clock is 10 minutes; set meta.timeoutMs (1s to 60min) for longer runs.`,
   schema: WorkflowScriptToolInputSchema,
 }) {
   protected async execute(input: WorkflowScriptToolInput): Promise<ToolResult> {

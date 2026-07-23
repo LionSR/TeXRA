@@ -4,7 +4,6 @@ import { dirname } from 'node:path';
 
 // Third-party imports
 import {
-  type ModelConfig,
   ModelProvider,
   type ModelCapabilities,
   ReasoningEffort,
@@ -76,6 +75,7 @@ import {
   allowsModelRelay,
   resolveDirectModelApiKeyProvider,
   resolveModelSource,
+  type ResolvedModelConfig,
 } from '@model/openRouterRouting';
 import { isGpt5ModelName } from '@model/modelNames';
 import { getApiKey, type ApiProvider } from '@model/apiProviders';
@@ -116,6 +116,7 @@ import {
   resolveBaseUrl,
   shouldUseOpenRouter,
   usesServerSideKeysRoute,
+  type ProxyConfig,
 } from './support/ProxyConfigResolver';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 
@@ -279,7 +280,7 @@ export abstract class ModelHandler<
   >();
   private activeAttemptCredentialRoute: ModelCredentialRoute | undefined;
   private lastAttemptCredentialRoute: ModelCredentialRoute | undefined;
-  public config: ModelConfig;
+  public config: ResolvedModelConfig;
   public capabilities: ModelCapabilities;
   public continueLimit: number;
   public inputTokenLimit: number;
@@ -337,7 +338,7 @@ export abstract class ModelHandler<
     return false;
   }
 
-  constructor(config: ModelConfig) {
+  constructor(config: ResolvedModelConfig) {
     this.config = { ...config };
     this.capabilities = structuredClone(config.capabilities);
     this.continueLimit = DEFAULT_CONTINUE_LIMIT;
@@ -604,18 +605,7 @@ export abstract class ModelHandler<
       );
       return {
         apiKey,
-        baseUrl: resolveBaseUrl({
-          provider: this.config.provider,
-          openRouterOnly: this.config.openRouterOnly,
-          customBaseUrl: this.config.baseUrl,
-          requiresResponsesAPI: this.config.requiresResponsesAPI,
-          forceDirectProvider: (
-            this.config as { forceDirectProvider?: boolean }
-          ).forceDirectProvider,
-          useServerSideKeys: true,
-          useOpenRouter: false,
-          logger: this.logger,
-        }),
+        baseUrl: resolveBaseUrl(this.buildProxyConfig(true, false)),
         route: 'relay',
       };
     }
@@ -643,18 +633,38 @@ export abstract class ModelHandler<
     );
     return {
       apiKey,
-      baseUrl: resolveBaseUrl({
-        provider: this.config.provider,
-        openRouterOnly: this.config.openRouterOnly,
-        customBaseUrl: this.config.baseUrl,
-        requiresResponsesAPI: this.config.requiresResponsesAPI,
-        forceDirectProvider: (this.config as { forceDirectProvider?: boolean })
-          .forceDirectProvider,
-        useServerSideKeys: false,
-        useOpenRouter,
-        logger: this.logger,
-      }),
+      baseUrl: resolveBaseUrl(this.buildProxyConfig(false, useOpenRouter)),
       route: useOpenRouter ? 'openrouter' : 'api-key',
+    };
+  }
+
+  /**
+   * Build the {@link ProxyConfig} route for the current config plus a
+   * caller-resolved server-side-keys / OpenRouter decision. A per-model
+   * custom base URL always wins over both, matching `resolveBaseUrl`'s
+   * documented precedence — encoding that choice here (rather than at each
+   * call site) is what keeps `useServerSideKeys` and `useOpenRouter` from
+   * ever being set together on the same `ProxyConfig`.
+   */
+  private buildProxyConfig(
+    useServerSideKeys: boolean,
+    useOpenRouter: boolean,
+  ): ProxyConfig {
+    if (this.config.baseUrl) {
+      return { route: 'custom', url: this.config.baseUrl, logger: this.logger };
+    }
+    if (useServerSideKeys) {
+      return {
+        route: 'serverSideKeys',
+        provider: this.config.provider,
+        logger: this.logger,
+      };
+    }
+    return {
+      route: 'direct',
+      provider: this.config.provider,
+      useOpenRouter,
+      logger: this.logger,
     };
   }
 
@@ -737,20 +747,14 @@ export abstract class ModelHandler<
   public getBaseUrl(): string | null {
     const activeRoute = this.activeAttemptCredentialRoute;
     // Use centralized check to ensure consistency with getApiKey()
-    // Pass the decision to resolveBaseUrl to avoid duplicate checks
-    return resolveBaseUrl({
-      provider: this.config.provider,
-      openRouterOnly: this.config.openRouterOnly,
-      customBaseUrl: this.config.baseUrl,
-      requiresResponsesAPI: this.config.requiresResponsesAPI,
-      forceDirectProvider: (this.config as { forceDirectProvider?: boolean })
-        .forceDirectProvider,
-      useServerSideKeys: this.shouldUseServerSideKeys(),
-      ...(activeRoute !== undefined && {
-        useOpenRouter: activeRoute === 'openrouter',
-      }),
-      logger: this.logger,
-    });
+    // Pass the decision along to avoid duplicate checks
+    const useOpenRouter =
+      activeRoute !== undefined
+        ? activeRoute === 'openrouter'
+        : shouldUseOpenRouter(this.config);
+    return resolveBaseUrl(
+      this.buildProxyConfig(this.shouldUseServerSideKeys(), useOpenRouter),
+    );
   }
 
   /** Stable endpoint identity used to coordinate retries for one client. */

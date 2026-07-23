@@ -11,7 +11,7 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 import { ThemeSchema } from '../commonViewMessages';
-import { GoalStatusSchema } from '../goal';
+import { GoalStateSchema, GoalStatusSchema } from '../goal';
 import { AgentCategory } from '../agent';
 
 import { StreamTabIdSchema } from '../identifiers';
@@ -326,15 +326,6 @@ const WorkflowStreamContentMessageSchema = z.strictObject({
   }),
 });
 
-const GoalSyncSchema = z.discriminatedUnion('active', [
-  z.strictObject({ active: z.literal(false) }),
-  z.strictObject({
-    active: z.literal(true),
-    status: GoalStatusSchema,
-    objective: z.string(),
-  }),
-]);
-
 const ToolUseStreamContentMessageSchema = z.strictObject({
   ...StreamContentRenderFields,
   kind: z.literal(AgentCategory.ToolUse),
@@ -346,7 +337,7 @@ const ToolUseStreamContentMessageSchema = z.strictObject({
   controls: z.strictObject({
     toolEditBypass: z.boolean(),
     superYoloBypass: z.boolean(),
-    goal: GoalSyncSchema,
+    goal: GoalStateSchema,
   }),
 });
 

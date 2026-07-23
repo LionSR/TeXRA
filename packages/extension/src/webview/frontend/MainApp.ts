@@ -3,7 +3,6 @@ import { provide } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { SignalWatcher } from '@shared/signals';
@@ -35,10 +34,7 @@ import {
   type SessionTypeChangeDetail,
   type TeamChangeDetail,
 } from '@shared/schemas';
-import {
-  registerTeXRAWebAwesomeIcons,
-  waIcon,
-} from '@shared/wa/webAwesomeIcons';
+import { registerTeXRAWebAwesomeIcons } from '@shared/wa/webAwesomeIcons';
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 import { renderViewHeader } from '@shared/wa/viewHeader';
 import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
@@ -58,7 +54,6 @@ import {
   debugMode$,
   dependencyBanner$,
   fileOptions$,
-  fileSelectionOpen$,
   fileStateContext,
   fileStateContext$,
   gettingStartedDismissed$,
@@ -440,28 +435,8 @@ export class MainApp extends MainAppBase {
           ></banner-group>
 
           <wa-divider></wa-divider>
-          <wa-details
-            class="file-selection-details"
-            ?open=${fileSelectionOpen$.get()}
-            @wa-show=${(event: Event) => {
-              // Filter by event source: child wa-dropdown components
-              // inside the panel also emit wa-show/wa-hide which bubble
-              // up. Without this guard, opening any dropdown inside
-              // the Files panel re-flips fileSelectionOpen on the next
-              // dropdown close (see webawesome#1540).
-              if (event.target === event.currentTarget) {
-                fileSelectionOpen$.set(true);
-              }
-            }}
-            @wa-hide=${(event: Event) => {
-              if (event.target === event.currentTarget) {
-                fileSelectionOpen$.set(false);
-              }
-            }}
-          >
-            <span slot="summary" class="file-selection-summary">
-              ${waIcon('folder-tree')} Files
-            </span>
+          <section class="file-selection" aria-labelledby="filesHeading">
+            <h2 id="filesHeading" class="file-selection-heading">Files</h2>
             <div class="file-selection-group">
               ${repeat(
                 visibleFileConfigs,
@@ -500,7 +475,7 @@ export class MainApp extends MainAppBase {
                 `,
               )}
             </div>
-          </wa-details>
+          </section>
         </div>
 
         ${

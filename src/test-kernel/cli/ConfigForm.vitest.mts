@@ -1,3 +1,4 @@
+import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
@@ -18,16 +19,30 @@ import {
   configCategoryLabel,
 } from '@cli/chat/tui/forms/configCategories';
 import {
+  CliConfigForm,
+  createCliConfigFormProps,
+} from '@cli/chat/tui/forms/CliConfigForm';
+import {
+  buildProviderApiKeyItems,
+  formatProviderApiKeySummary,
+} from '@cli/chat/tui/forms/ProviderApiKeyForm';
+import {
   listSlashCommands,
   unregisterSlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import { openCliSlashCommandForm } from '@cli/chat/tui/commands/slashForms';
+import { ConfigApp } from '@cli/config/runConfigTui';
 import {
   activeForm,
   resetCliState,
   sessionMeta,
 } from '@cli/chat/tui/state/cliState';
+import {
+  API_PROVIDERS,
+  type ApiKeyStatus,
+  type ApiProvider,
+} from '@model/apiProviders';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { AgentCategory } from '@shared/schemas/agent';
 import {
@@ -36,6 +51,12 @@ import {
   STATE_SETTINGS,
   type StateSettingEntry,
 } from '@shared/schemas/stateSettings';
+import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
+import {
+  FakeStdin,
+  FakeStdout,
+  loadInk,
+} from '@test/support/inkTestHarness.mts';
 import {
   isStored,
   makeFakeSettingsStores,
@@ -43,13 +64,50 @@ import {
 import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 
 const invalidateModelOptionsCache = vi.hoisted(() => vi.fn());
+const providerApiKeyRuntime = vi.hoisted(() => ({
+  load: vi.fn(),
+  save: vi.fn(),
+}));
 
 vi.mock('@model/computeModelOptions', () => ({
   invalidateModelOptionsCache,
 }));
+vi.mock('@cli/runtime/providerApiKey', () => ({
+  loadProviderApiKeyStatuses: providerApiKeyRuntime.load,
+  saveProviderApiKey: providerApiKeyRuntime.save,
+}));
+
+function apiKeyStatuses(
+  overrides: Partial<Record<ApiProvider, ApiKeyStatus>> = {},
+): Record<ApiProvider, ApiKeyStatus> {
+  return Object.fromEntries(
+    API_PROVIDERS.map((provider) => [
+      provider,
+      overrides[provider] ?? 'not-set',
+    ]),
+  ) as Record<ApiProvider, ApiKeyStatus>;
+}
+
+function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+  readonly reject: (error: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
 
 beforeEach(() => {
   invalidateModelOptionsCache.mockClear();
+  providerApiKeyRuntime.load.mockReset();
+  providerApiKeyRuntime.load.mockResolvedValue(apiKeyStatuses());
+  providerApiKeyRuntime.save.mockReset();
+  providerApiKeyRuntime.save.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -61,6 +119,38 @@ function entryByKey(key: string): StateSettingEntry {
   const entry = STATE_SETTINGS.find((candidate) => candidate.key === key);
   if (!entry) throw new Error(`missing catalog entry ${key}`);
   return entry;
+}
+
+async function renderInkElement(element: unknown): Promise<{
+  readonly stdin: FakeStdin;
+  readonly stdout: FakeStdout;
+  readonly instance: { unmount(): void };
+}> {
+  const { ink } = await loadInk();
+  const stdin = new FakeStdin();
+  const stdout = new FakeStdout(100, 30);
+  const instance = ink.render(element, {
+    stdin,
+    stdout,
+    interactive: true,
+    exitOnCtrlC: false,
+    patchConsole: false,
+  });
+  await waitFor(() => stdin.listenerCount('readable') > 0);
+  return { stdin, stdout, instance };
+}
+
+async function submitOpenAiApiKey(
+  stdin: FakeStdin,
+  stdout: FakeStdout,
+  key = 'sk-private-test-key',
+): Promise<void> {
+  stdin.write('2');
+  await waitFor(() => stdout.output.includes('Add provider API key'));
+  stdin.write('1');
+  await waitFor(() => stdout.output.includes('Use my own provider API key'));
+  stdin.write(key);
+  stdin.write('\r');
 }
 
 function renderConfigFormProps(): {
@@ -76,6 +166,11 @@ function renderConfigFormProps(): {
   formRenderers?: Readonly<
     Record<string, (onBack: () => void) => React.JSX.Element>
   >;
+  formLinks?: readonly {
+    readonly name: string;
+    readonly label: string;
+    readonly description: string;
+  }[];
   availableRows?: number;
 } {
   const node = activeForm.get()?.render(() => {}, 20) as {
@@ -86,8 +181,17 @@ function renderConfigFormProps(): {
     throw new TypeError('Expected /config form adapter element');
   }
   const rendered = node.type(node.props) as {
+    type?: unknown;
     props?: ReturnType<typeof Object>;
   };
+  if (rendered.type === CliConfigForm) {
+    const props = rendered.props as Parameters<typeof CliConfigForm>[0];
+    if (!props.stores) throw new TypeError('Expected /config stores');
+    return createCliConfigFormProps({
+      ...props,
+      stores: props.stores,
+    }) as ReturnType<typeof renderConfigFormProps>;
+  }
   return (rendered.props ?? {}) as ReturnType<typeof renderConfigFormProps>;
 }
 
@@ -175,6 +279,89 @@ describe('ConfigForm helpers', () => {
     expect(formatSettingValue('')).toBe('(empty)');
     expect(formatSettingValue('latexindent')).toBe('latexindent');
     expect(formatSettingValue(120000)).toBe('120000');
+  });
+
+  it('summarizes configured provider keys without exposing values', () => {
+    expect(
+      formatProviderApiKeySummary({
+        statuses: {
+          openai: 'set',
+          anthropic: 'not-set',
+          kimiCode: 'env',
+        },
+        loading: false,
+        error: false,
+      }),
+    ).toBe('Configured: OpenAI, Kimi Code');
+    expect(
+      formatProviderApiKeySummary({
+        statuses: { openai: 'not-set' },
+        loading: false,
+        error: false,
+      }),
+    ).toBe('No personal provider keys set');
+    expect(formatProviderApiKeySummary({ loading: false, error: true })).toBe(
+      'Status unavailable',
+    );
+  });
+
+  it('uses configured provider names in the parent API keys row', () => {
+    const props = createCliConfigFormProps({
+      stores: makeFakeSettingsStores().stores,
+      apiKeyStatusView: {
+        statuses: { openai: 'set', anthropic: 'not-set' },
+        loading: false,
+        error: false,
+      },
+      onClose: () => undefined,
+    });
+    expect(props.formLinks?.find((link) => link.name === 'api-keys')).toEqual({
+      name: 'api-keys',
+      label: 'API keys',
+      description: 'Configured: OpenAI',
+    });
+  });
+
+  it('labels configured and unconfigured provider key rows', () => {
+    const items = buildProviderApiKeyItems({
+      statuses: {
+        openai: 'set',
+        anthropic: 'not-set',
+        kimiCode: 'env',
+      },
+      loading: false,
+      error: false,
+    });
+    expect(items.find((item) => item.value === 'openai')).toMatchObject({
+      label: 'OpenAI',
+      description: 'Key set',
+    });
+    expect(items.find((item) => item.value === 'anthropic')).toMatchObject({
+      label: 'Anthropic',
+      description: 'Not set',
+    });
+    expect(items.find((item) => item.value === 'kimiCode')).toMatchObject({
+      label: 'Kimi Code',
+      description: 'Env',
+    });
+  });
+
+  it('makes provider routing setting labels self-identifying', () => {
+    expect(
+      settingDisplayName(entryByKey(GlobalStateKey.DASHSCOPE_USE_CHINA)),
+    ).toBe('Qwen China Region (Bailian)');
+    expect(
+      settingDisplayName(entryByKey(GlobalStateKey.MINIMAX_USE_CHINA)),
+    ).toBe('MiniMax China Region');
+    expect(
+      settingDisplayName(entryByKey(GlobalStateKey.MOONSHOT_USE_CHINA)),
+    ).toBe('Kimi/Moonshot China Region');
+    expect(settingDisplayName(entryByKey(GlobalStateKey.GLM_USE_CHINA))).toBe(
+      'GLM China Region',
+    );
+    expect(settingDisplayName(entryByKey(GlobalStateKey.GLM_CODING_PLAN))).toBe(
+      'GLM Coding Plan',
+    );
   });
 
   it('labels the store the CLI reads from (cliStore wins)', () => {
@@ -283,6 +470,223 @@ describe('ConfigForm helpers', () => {
 
   it('exports a renderable component', () => {
     expect(typeof ConfigForm).toBe('function');
+  });
+});
+
+describe('CliConfigForm API-key status lifecycle', () => {
+  it('renders initial loading and then configured status from the resolved request', async () => {
+    const initial = deferred<Record<ApiProvider, ApiKeyStatus>>();
+    providerApiKeyRuntime.load.mockReturnValueOnce(initial.promise);
+    const { React } = await loadInk();
+    const rendered = await renderInkElement(
+      React.createElement(CliConfigForm, {
+        stores: makeFakeSettingsStores().stores,
+        onClose: () => undefined,
+      }),
+    );
+
+    try {
+      await waitFor(() =>
+        rendered.stdout.output.includes('Checking configured keys'),
+      );
+      rendered.stdout.output = '';
+      initial.resolve(apiKeyStatuses({ openai: 'set' }));
+      await waitFor(() =>
+        rendered.stdout.output.includes('Configured: OpenAI'),
+      );
+    } finally {
+      rendered.instance.unmount();
+    }
+  });
+
+  it('settles a failed initial load to a stable unavailable state', async () => {
+    const initial = deferred<Record<ApiProvider, ApiKeyStatus>>();
+    const onError = vi.fn();
+    providerApiKeyRuntime.load.mockReturnValueOnce(initial.promise);
+    const { React } = await loadInk();
+    const rendered = await renderInkElement(
+      React.createElement(CliConfigForm, {
+        stores: makeFakeSettingsStores().stores,
+        onClose: () => undefined,
+        onError,
+      }),
+    );
+
+    try {
+      await waitFor(() =>
+        rendered.stdout.output.includes('Checking configured keys'),
+      );
+      rendered.stdout.output = '';
+      initial.reject(new Error('status backend unavailable'));
+      await waitFor(() =>
+        rendered.stdout.output.includes('Status unavailable'),
+      );
+      expect(rendered.stdout.output).not.toContain('Checking configured keys');
+      expect(onError).toHaveBeenCalledOnce();
+    } finally {
+      rendered.instance.unmount();
+    }
+  });
+
+  it('refreshes provider status after saving without rendering the secret', async () => {
+    const refreshed = deferred<Record<ApiProvider, ApiKeyStatus>>();
+    providerApiKeyRuntime.load
+      .mockResolvedValueOnce(apiKeyStatuses())
+      .mockReturnValueOnce(refreshed.promise);
+    const { React } = await loadInk();
+    const rendered = await renderInkElement(
+      React.createElement(CliConfigForm, {
+        stores: makeFakeSettingsStores().stores,
+        onClose: () => undefined,
+      }),
+    );
+
+    try {
+      await waitFor(() =>
+        rendered.stdout.output.includes('No personal provider keys set'),
+      );
+      rendered.stdout.output = '';
+      await submitOpenAiApiKey(rendered.stdin, rendered.stdout);
+      await waitFor(() => providerApiKeyRuntime.load.mock.calls.length === 2);
+      expect(providerApiKeyRuntime.save).toHaveBeenCalledWith(
+        'openai',
+        'sk-private-test-key',
+      );
+      expect(rendered.stdout.output).not.toContain('sk-private-test-key');
+      refreshed.resolve(apiKeyStatuses({ openai: 'set' }));
+      await waitFor(() =>
+        rendered.stdout.output.includes('Configured: OpenAI'),
+      );
+    } finally {
+      rendered.instance.unmount();
+    }
+  });
+
+  it('keeps a successfully saved key configured when its refresh fails', async () => {
+    const refreshed = deferred<Record<ApiProvider, ApiKeyStatus>>();
+    const onError = vi.fn();
+    providerApiKeyRuntime.load
+      .mockResolvedValueOnce(apiKeyStatuses({ openai: 'not-set' }))
+      .mockReturnValueOnce(refreshed.promise);
+    const { React } = await loadInk();
+    const rendered = await renderInkElement(
+      React.createElement(CliConfigForm, {
+        stores: makeFakeSettingsStores().stores,
+        onClose: () => undefined,
+        onError,
+      }),
+    );
+
+    try {
+      await waitFor(() =>
+        rendered.stdout.output.includes('No personal provider keys set'),
+      );
+      rendered.stdout.output = '';
+      await submitOpenAiApiKey(rendered.stdin, rendered.stdout);
+      await waitFor(() => providerApiKeyRuntime.load.mock.calls.length === 2);
+      rendered.stdout.output = '';
+      refreshed.reject(new Error('refresh failed'));
+      await waitFor(() =>
+        rendered.stdout.output.includes(
+          'Configured: OpenAI · status unavailable',
+        ),
+      );
+      expect(rendered.stdout.output).not.toContain('refreshing');
+      rendered.stdout.output = '';
+      rendered.stdin.write('2');
+      await waitFor(() =>
+        rendered.stdout.output.includes('Add provider API key'),
+      );
+      expect(rendered.stdout.output).toContain('OpenAI — Key set');
+      expect(onError).toHaveBeenCalledOnce();
+    } finally {
+      rendered.instance.unmount();
+    }
+  });
+
+  it('suppresses a stale mount response after the post-save refresh wins', async () => {
+    const initial = deferred<Record<ApiProvider, ApiKeyStatus>>();
+    const refreshed = deferred<Record<ApiProvider, ApiKeyStatus>>();
+    providerApiKeyRuntime.load
+      .mockReturnValueOnce(initial.promise)
+      .mockReturnValueOnce(refreshed.promise);
+    const { React } = await loadInk();
+    const rendered = await renderInkElement(
+      React.createElement(CliConfigForm, {
+        stores: makeFakeSettingsStores().stores,
+        onClose: () => undefined,
+      }),
+    );
+
+    try {
+      await waitFor(() =>
+        rendered.stdout.output.includes('Checking configured keys'),
+      );
+      await submitOpenAiApiKey(rendered.stdin, rendered.stdout);
+      await waitFor(() => providerApiKeyRuntime.load.mock.calls.length === 2);
+      refreshed.resolve(apiKeyStatuses({ openai: 'set' }));
+      await waitFor(() =>
+        rendered.stdout.output.includes('Configured: OpenAI'),
+      );
+      rendered.stdout.output = '';
+      initial.resolve(apiKeyStatuses());
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(stripAnsi(rendered.stdout.output)).toBe('');
+    } finally {
+      rendered.instance.unmount();
+    }
+  });
+
+  it('ignores a pending status response after unmount', async () => {
+    const initial = deferred<Record<ApiProvider, ApiKeyStatus>>();
+    const onError = vi.fn();
+    providerApiKeyRuntime.load.mockReturnValueOnce(initial.promise);
+    const { React } = await loadInk();
+    const rendered = await renderInkElement(
+      React.createElement(CliConfigForm, {
+        stores: makeFakeSettingsStores().stores,
+        onClose: () => undefined,
+        onError,
+      }),
+    );
+
+    await waitFor(() => providerApiKeyRuntime.load.mock.calls.length === 1);
+    rendered.instance.unmount();
+    rendered.stdout.output = '';
+    initial.resolve(apiKeyStatuses({ openai: 'set' }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(rendered.stdout.output).toBe('');
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('uses the same status-aware form in standalone config and /config', async () => {
+    providerApiKeyRuntime.load.mockResolvedValue(
+      apiKeyStatuses({
+        openai: 'set',
+      }),
+    );
+    const { React } = await loadInk();
+    const standalone = await renderInkElement(
+      React.createElement(ConfigApp, {}),
+    );
+
+    registerBuiltinSlashCommands({
+      getConfigStores: () => makeFakeSettingsStores().stores,
+    });
+    openCliSlashCommandForm('config', '');
+    const slash = await renderInkElement(
+      activeForm.get()?.render(() => undefined, 30),
+    );
+
+    try {
+      await waitFor(() =>
+        standalone.stdout.output.includes('Configured: OpenAI'),
+      );
+      await waitFor(() => slash.stdout.output.includes('Configured: OpenAI'));
+    } finally {
+      standalone.instance.unmount();
+      slash.instance.unmount();
+    }
   });
 });
 

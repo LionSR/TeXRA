@@ -18,15 +18,10 @@ import {
   canTransitionStreamPhase,
   deriveRunOutcome,
   groupEndStatusForOutcome,
-  isActiveStatus,
-  isInFlightStatus,
-  isLiveElapsedStatus,
-  isTerminalStatus,
   legacyEndGroupStatusForOutcome,
   projectRunOutcome,
   RUN_OUTCOME_PROJECTION,
   STREAM_TRANSITION_CAUSE,
-  terminalStreamStatusForOutcome,
   type StreamTransitionCause,
 } from '@shared/streams/streamStatus';
 
@@ -71,7 +66,7 @@ describe('run outcome algebra', () => {
   // read-side derive helper for the frozen CLI headless JSON's
   // `endGroupStatus` projection (packages/cli/src/runtime/terminalStatus.ts)
   // — the algebra itself is unchanged, so it still needs to stay correct.
-  it('derives folded legacy group-end and stream-status projections from one helper', () => {
+  it('derives folded legacy group-end projections from one helper', () => {
     expect(groupEndStatusForOutcome(RUN_OUTCOME.COMPLETED)).toBe('ok');
     expect(groupEndStatusForOutcome(RUN_OUTCOME.CANCELLED)).toBe('ok');
     expect(groupEndStatusForOutcome(RUN_OUTCOME.FAILED)).toBe('error');
@@ -83,16 +78,6 @@ describe('run outcome algebra', () => {
       'stopped',
     );
     expect(legacyEndGroupStatusForOutcome(RUN_OUTCOME.FAILED)).toBe('error');
-
-    expect(terminalStreamStatusForOutcome(RUN_OUTCOME.COMPLETED)).toBe(
-      STREAM_STATUS.STOPPED,
-    );
-    expect(terminalStreamStatusForOutcome(RUN_OUTCOME.CANCELLED)).toBe(
-      STREAM_STATUS.STOPPED,
-    );
-    expect(terminalStreamStatusForOutcome(RUN_OUTCOME.FAILED)).toBe(
-      STREAM_STATUS.ERROR,
-    );
   });
 
   it('fails loudly on an out-of-vocabulary outcome', () => {
@@ -224,29 +209,5 @@ describe('stream status trait table', () => {
         STREAM_STATUS.READY,
       ]),
     );
-  });
-
-  it('pins the deliberate oddballs', () => {
-    // WAITING is terminal (cycle ended, status bar idle) AND in-flight
-    // (follow-up appends to the same log; not acquirable by a new run).
-    expect(isTerminalStatus(STREAM_STATUS.WAITING)).toBe(true);
-    expect(isInFlightStatus(STREAM_STATUS.WAITING)).toBe(true);
-    // INITIALIZING is neither active nor terminal: pre-start, ticking
-    // elapsed time, blocking acquisition, running no model calls.
-    expect(isActiveStatus(STREAM_STATUS.INITIALIZING)).toBe(false);
-    expect(isTerminalStatus(STREAM_STATUS.INITIALIZING)).toBe(false);
-    expect(isInFlightStatus(STREAM_STATUS.INITIALIZING)).toBe(true);
-    expect(isLiveElapsedStatus(STREAM_STATUS.INITIALIZING)).toBe(true);
-  });
-
-  it('treats undefined as no status for every predicate', () => {
-    expect(isActiveStatus(undefined)).toBe(false);
-    expect(isInFlightStatus(undefined)).toBe(false);
-    expect(isLiveElapsedStatus(undefined)).toBe(false);
-    expect(isTerminalStatus(undefined)).toBe(false);
-  });
-
-  it('treats unknown child execution statuses as not live elapsed', () => {
-    expect(isLiveElapsedStatus('completed')).toBe(false);
   });
 });

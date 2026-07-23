@@ -22,6 +22,7 @@ import {
   type StreamSubstate,
   type StreamTabInfo,
 } from '@shared/schemas';
+import { deriveGoalState, type GoalStatus } from '@shared/schemas/goal';
 import {
   formatStreamStatusLabel,
   streamStatusDisplayKey,
@@ -468,12 +469,19 @@ export class StreamHeader extends LitElement {
   }
 
   private renderGoalChip(): TemplateResult | typeof nothing {
-    if (!this.goalActive) return nothing;
-    const isPaused = this.goalStatus === 'paused';
+    // `goalActive`/`goalStatus`/`goalObjective` are three independently-set
+    // properties (mirroring the wire/storage shape) — derive the canonical
+    // "status/objective only meaningful when active" union once here rather
+    // than guarding ad hoc.
+    const goal = deriveGoalState({
+      goalActive: this.goalActive,
+      goalStatus: (this.goalStatus || undefined) as GoalStatus | undefined,
+      goalObjective: this.goalObjective || undefined,
+    });
+    if (!goal.active) return nothing;
+    const isPaused = goal.status === 'paused';
     const label = isPaused ? 'Goal paused' : 'Goal';
-    const tooltip = this.goalObjective
-      ? `${label}: ${this.goalObjective}`
-      : label;
+    const tooltip = goal.objective ? `${label}: ${goal.objective}` : label;
     return html`<wa-badge
         id=${ELEMENT_IDS.GOAL_CHIP}
         class="goal-chip"

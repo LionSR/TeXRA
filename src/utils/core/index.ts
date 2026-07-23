@@ -210,6 +210,50 @@ export function createFlushableDebounce(
   };
 }
 
+/** Minimal read/write cache shape satisfied by LRUCache and plain Maps. */
+export interface AsyncCoalesceStore<Key, Value> {
+  get(key: Key): Value | undefined;
+  set(key: Key, value: Value): void;
+}
+
+/**
+ * Coalesce concurrent async requests for the same key: return a resolved
+ * value from `resolved` if present, otherwise share one in-flight promise
+ * per key via `pending` so concurrent callers await the same computation.
+ * Only caches the result (and clears the in-flight entry) if `pending`
+ * still points at this exact promise once it settles — this guards against
+ * an external `pending.clear()`/`resolved.clear()` invalidation racing the
+ * in-flight computation, which would otherwise let a stale result get
+ * cached after the fact.
+ */
+export async function coalesceAsync<Key, Value>(
+  resolved: AsyncCoalesceStore<Key, Value>,
+  pending: Map<Key, Promise<Value>>,
+  key: Key,
+  compute: () => Promise<Value>,
+): Promise<Value> {
+  const cached = resolved.get(key);
+  if (cached !== undefined) return cached;
+
+  const inFlight = pending.get(key);
+  if (inFlight) return inFlight;
+
+  const request = compute();
+  pending.set(key, request);
+
+  try {
+    const value = await request;
+    if (pending.get(key) === request) {
+      resolved.set(key, value);
+    }
+    return value;
+  } finally {
+    if (pending.get(key) === request) {
+      pending.delete(key);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // comparators
 // ---------------------------------------------------------------------------

@@ -221,10 +221,10 @@ export function createWorkflowScriptAgentRunner(
             signal: invocation.signal,
             approvalPromptsUnavailable: parent.approvalPromptsUnavailable,
             runtimeUnavailableTools: parent.runtimeUnavailableTools,
-            // Live per-kind ancestry, matching LLM delegation: bash and
-            // tool-edit each follow the parent's own bypass; proposal stays
-            // unlinked so a child's own delegations still prompt. The run's own
-            // stream inherits from the orchestrator, so this stays transitive.
+            // Live per-kind ancestry, matching LLM delegation: each approval
+            // follows the parent's corresponding bypass. The run's own stream
+            // inherits from the orchestrator, so nested delegation remains
+            // transitive.
             onStreamResolved: (resolvedStreamId) => {
               configureDelegatedChildApprovals(
                 resolvedStreamId,

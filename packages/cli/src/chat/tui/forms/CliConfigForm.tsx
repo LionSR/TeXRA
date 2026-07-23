@@ -1,6 +1,12 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { cliSettingsStores } from '@cli/runtime/settingsStores';
 import { applyCliGitAuthorConfig } from '@cli/runtime/gitAuthor';
-import { saveProviderApiKey } from '@cli/runtime/providerApiKey';
+import {
+  loadProviderApiKeyStatuses,
+  saveProviderApiKey,
+} from '@cli/runtime/providerApiKey';
+import type { ApiProvider } from '@model/apiProviders';
 import {
   readSetting,
   resetSetting,
@@ -16,11 +22,16 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { refreshCodexPreferenceViews } from '../state/codexSubscription';
 import { AgentRosterForm } from './AgentRosterForm';
 import { ConfigForm, type ConfigFormProps } from './ConfigForm';
-import { ProviderApiKeyForm } from './ProviderApiKeyForm';
+import {
+  formatProviderApiKeySummary,
+  ProviderApiKeyForm,
+  type ProviderApiKeyStatusView,
+} from './ProviderApiKeyForm';
 import { ToolsListForm } from './ToolsListForm';
 
 export interface CliConfigFormProps {
   readonly availableRows?: number;
+  readonly stores?: SettingsStores;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
   readonly openExternalForm?: (formName: string) => void;
@@ -29,6 +40,9 @@ export interface CliConfigFormProps {
 
 export interface CreateCliConfigFormPropsInput extends CliConfigFormProps {
   readonly stores: SettingsStores;
+  readonly apiKeyStatusView?: ProviderApiKeyStatusView;
+  readonly markProviderApiKeySet?: (provider: ApiProvider) => void;
+  readonly refreshApiKeyStatuses?: () => void | Promise<void>;
 }
 
 /**
@@ -50,6 +64,10 @@ export function createCliConfigFormProps(
   props: CreateCliConfigFormPropsInput,
 ): ConfigFormProps {
   const { stores } = props;
+  const apiKeyStatusView = props.apiKeyStatusView ?? {
+    loading: true,
+    error: false,
+  };
   return {
     availableRows: props.availableRows,
     entries: CLI_STATE_SETTINGS,
@@ -86,8 +104,7 @@ export function createCliConfigFormProps(
       {
         name: 'api-keys',
         label: 'API keys',
-        description:
-          'set personal provider keys (OpenAI, Anthropic, Kimi Code, …)',
+        description: formatProviderApiKeySummary(apiKeyStatusView),
       },
     ],
     formRenderers: {
@@ -101,8 +118,11 @@ export function createCliConfigFormProps(
       'api-keys': (onBack) => (
         <ProviderApiKeyForm
           availableRows={props.availableRows}
+          statusView={apiKeyStatusView}
           onSave={async (provider, key) => {
             await saveProviderApiKey(provider, key);
+            props.markProviderApiKeySet?.(provider);
+            await props.refreshApiKeyStatuses?.();
             await props.onApiModePersonal?.();
           }}
           onDone={onBack}
@@ -119,13 +139,71 @@ export function createCliConfigFormProps(
   };
 }
 
+const INITIAL_API_KEY_STATUS_VIEW: ProviderApiKeyStatusView = {
+  loading: true,
+  error: false,
+};
+
 /** Canonical CLI configuration form, shared by `texra config` and `/config`. */
 export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
+  const [stores] = useState(() => props.stores ?? cliSettingsStores());
+  const [apiKeyStatusView, setApiKeyStatusView] =
+    useState<ProviderApiKeyStatusView>(INITIAL_API_KEY_STATUS_VIEW);
+  const mounted = useRef(false);
+  const requestSequence = useRef(0);
+  const onError = useRef(props.onError);
+  onError.current = props.onError;
+
+  const markProviderApiKeySet = useCallback((provider: ApiProvider) => {
+    if (!mounted.current) return;
+    setApiKeyStatusView((current) => ({
+      statuses: { ...current.statuses, [provider]: 'set' },
+      loading: current.loading,
+      error: false,
+    }));
+  }, []);
+
+  const refreshApiKeyStatuses = useCallback(async () => {
+    const request = ++requestSequence.current;
+    if (mounted.current) {
+      setApiKeyStatusView((current) => ({
+        ...current,
+        loading: true,
+        error: false,
+      }));
+    }
+    try {
+      const statuses = await loadProviderApiKeyStatuses();
+      if (!mounted.current || request !== requestSequence.current) return;
+      setApiKeyStatusView({ statuses, loading: false, error: false });
+    } catch (error: unknown) {
+      if (!mounted.current || request !== requestSequence.current) return;
+      setApiKeyStatusView((current) => ({
+        ...current,
+        loading: false,
+        error: true,
+      }));
+      onError.current?.(error);
+    }
+  }, []);
+
+  useEffect(() => {
+    mounted.current = true;
+    void refreshApiKeyStatuses();
+    return () => {
+      mounted.current = false;
+      requestSequence.current += 1;
+    };
+  }, [refreshApiKeyStatuses]);
+
   return (
     <ConfigForm
       {...createCliConfigFormProps({
         ...props,
-        stores: cliSettingsStores(),
+        stores,
+        apiKeyStatusView,
+        markProviderApiKeySet,
+        refreshApiKeyStatuses,
       })}
     />
   );

@@ -196,7 +196,7 @@ VALUES (
   'tool-use/orchestrator.yaml',
   ARRAY['public'],
   'toolUse',
-  ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'extract_figures', 'extract_bib_entries', 'texcount', 'inquiry', 'codex', 'claude_code', 'github_subscription']
+  ARRAY['delegate_workflow', 'delegate_agent', 'executions', 'accept_run_files', 'delegate_workflow_script', 'todo_write', 'plan', 'read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep', 'extract_figures', 'extract_bib_entries', 'texcount', 'inquiry', 'codex', 'claude_code', 'github_subscription']
 )
 ON CONFLICT (name) DO UPDATE SET
   description    = EXCLUDED.description,

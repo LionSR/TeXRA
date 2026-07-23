@@ -56,16 +56,34 @@ const BASE_URLS: Record<ModelProvider, string | null> = {
   [ModelProvider.OTHERS]: null,
 };
 
-interface ProxyConfig {
-  provider: ModelProvider;
-  openRouterOnly: boolean;
-  customBaseUrl?: string; // Per-model custom base URL (overrides provider default)
-  requiresResponsesAPI?: boolean; // Models requiring direct API access (bypasses OpenRouter)
-  forceDirectProvider?: boolean; // Runtime replay override that bypasses OpenRouter
-  useServerSideKeys?: boolean; // Pre-computed by caller to avoid duplicated checks
-  useOpenRouter?: boolean; // Pre-computed by client construction for an atomic route snapshot
-  logger?: { debug: (message: string) => void };
-}
+type ProxyLogger = { debug: (message: string) => void };
+
+/**
+ * The base-URL route for one API request, as a discriminated union over
+ * `route` instead of a bag of optional booleans. Each variant carries exactly
+ * the fields `resolveBaseUrl` needs for that route, so a caller can no longer
+ * construct an ambiguous config (e.g. `useServerSideKeys: true` together with
+ * `useOpenRouter: true`) — the precedence documented on `resolveBaseUrl`
+ * (custom > server-side keys > everything else) is enforced by callers
+ * picking exactly one variant, not by priority-ordered `if` checks inside the
+ * resolver.
+ *
+ * The 'direct' variant covers the remaining precedence tiers (improved
+ * connection proxy, OpenRouter, per-provider custom endpoint, provider
+ * default): those aren't caller-selectable — which one applies depends on
+ * global settings and provider metadata resolved inside `resolveBaseUrl` —
+ * so they stay an internal cascade parameterized by `useOpenRouter`, the one
+ * fact every call site already knows.
+ */
+export type ProxyConfig =
+  | { route: 'custom'; url: string; logger?: ProxyLogger }
+  | { route: 'serverSideKeys'; provider: ModelProvider; logger?: ProxyLogger }
+  | {
+      route: 'direct';
+      provider: ModelProvider;
+      useOpenRouter: boolean;
+      logger?: ProxyLogger;
+    };
 
 /**
  * Determines whether OpenRouter should be used for API routing.
@@ -109,45 +127,60 @@ export function usesServerSideKeysRoute(
  * Resolves the base URL for API requests.
  *
  * Priority order (mutually exclusive):
- * 1. Custom base URL (per-model override)
- * 2. Server-side keys relay (experimental, for Ultra users)
+ * 1. Custom base URL (per-model override) — `route: 'custom'`
+ * 2. Server-side keys relay (experimental, for Ultra users) — `route: 'serverSideKeys'`
  * 3. Improved connection proxy (proxy.texra.ai)
  * 4. OpenRouter
  * 5. Per-provider custom endpoint (dashboard settings)
  * 6. Provider default URLs
  *
+ * Tiers 3-6 are the internal cascade of `route: 'direct'` (see
+ * {@link resolveDirectBaseUrl}): none of them is caller-selectable, since
+ * which one applies depends on global settings and provider metadata read
+ * here, not on a decision the caller has already made.
+ *
  * Note: Server-side keys and proxy.texra.ai are MUTUALLY EXCLUSIVE.
  * When server-side keys are enabled, the relay handles everything
- * and proxy.texra.ai is not used.
+ * and proxy.texra.ai is not used — enforced structurally here since
+ * `route: 'serverSideKeys'` and `route: 'direct'` cannot both be selected.
  */
 export function resolveBaseUrl(config: ProxyConfig): string | null {
-  // Per-model custom base URL takes highest precedence (e.g., temporary endpoints)
-  if (config.customBaseUrl) {
-    config.logger?.debug(
-      `Using custom base URL for model: ${config.customBaseUrl}`,
-    );
-    return config.customBaseUrl;
+  switch (config.route) {
+    // Per-model custom base URL (e.g., temporary endpoints).
+    case 'custom':
+      config.logger?.debug(`Using custom base URL for model: ${config.url}`);
+      return config.url;
+
+    // Server-side keys via relay (experimental feature for Ultra users).
+    // The caller (ModelHandler.shouldUseServerSideKeys) pre-computes this
+    // route to ensure consistency between URL routing and API key retrieval.
+    case 'serverSideKeys': {
+      const relayUrl = getServerSideKeyService().getRelayBaseUrl(
+        config.provider,
+      );
+      config.logger?.debug(
+        `Using server-side keys relay for ${config.provider}: ${relayUrl}`,
+      );
+      return relayUrl;
+    }
+
+    case 'direct':
+      return resolveDirectBaseUrl(config);
   }
+}
 
-  // Server-side keys via relay (experimental feature for Ultra users)
-  // IMPORTANT: This path is MUTUALLY EXCLUSIVE with proxy.texra.ai.
-  // When server-side keys are enabled, we use the Supabase Edge Function relay
-  // which handles everything directly - no intermediate proxy is used.
-  //
-  // The caller (ModelHandler.shouldUseServerSideKeys) pre-computes this decision
-  // to ensure consistency between URL routing and API key retrieval.
-  if (config.useServerSideKeys) {
-    const relayUrl = getServerSideKeyService().getRelayBaseUrl(config.provider);
-    config.logger?.debug(
-      `Using server-side keys relay for ${config.provider}: ${relayUrl}`,
-    );
-    return relayUrl;
-  }
-
-  // Below this point: standard routing (proxy.texra.ai, OpenRouter, or direct)
-  // These paths are only used when server-side keys are NOT enabled.
-
-  const useOpenRouter = config.useOpenRouter ?? shouldUseOpenRouter(config);
+/**
+ * The standard routing cascade used whenever neither a custom base URL nor
+ * server-side keys apply: improved-connection proxy (if enabled and the
+ * provider/route has a proxy path), then OpenRouter, then a per-provider
+ * dashboard endpoint, then provider defaults (including region toggles).
+ */
+function resolveDirectBaseUrl(config: {
+  provider: ModelProvider;
+  useOpenRouter: boolean;
+  logger?: ProxyLogger;
+}): string | null {
+  const { provider, useOpenRouter, logger } = config;
   const useImprovedConnection = getConfig<boolean>(
     'texra.model.useImprovedConnection',
     false,
@@ -161,17 +194,13 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
     const domain = normalizeUrl(customDomain || DEFAULT_PROXY_DOMAIN);
 
     if (!customDomain) {
-      config.logger?.debug(
-        `Using default proxy domain: ${DEFAULT_PROXY_DOMAIN}`,
-      );
+      logger?.debug(`Using default proxy domain: ${DEFAULT_PROXY_DOMAIN}`);
     }
 
     // OpenRouter uses 'openrouter' path; other providers use their configured paths
-    const path = useOpenRouter ? 'openrouter' : PROXY_PATHS[config.provider];
+    const path = useOpenRouter ? 'openrouter' : PROXY_PATHS[provider];
     if (path) {
-      config.logger?.debug(
-        `Using proxy for ${config.provider}: ${domain}/${path}`,
-      );
+      logger?.debug(`Using proxy for ${provider}: ${domain}/${path}`);
       return `https://${domain}/${path}`;
     }
   }
@@ -179,16 +208,14 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
   if (useOpenRouter) return OPENROUTER_BASE_URL;
 
   // Per-provider custom endpoint from dashboard settings (globalSM)
-  const customUrl = getProviderEndpoint(config.provider);
+  const customUrl = getProviderEndpoint(provider);
   if (customUrl) {
-    config.logger?.debug(
-      `Using custom base URL for ${config.provider}: ${customUrl}`,
-    );
+    logger?.debug(`Using custom base URL for ${provider}: ${customUrl}`);
     return `https://${normalizeUrl(customUrl)}`;
   }
 
   // Providers with dynamic region-based URLs
-  switch (config.provider) {
+  switch (provider) {
     case ModelProvider.DASHSCOPE: {
       const domain = getDashScopeUseChina()
         ? 'dashscope.aliyuncs.com'
@@ -218,6 +245,6 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
       return `https://${domain}${path}`;
     }
     default:
-      return BASE_URLS[config.provider];
+      return BASE_URLS[provider];
   }
 }

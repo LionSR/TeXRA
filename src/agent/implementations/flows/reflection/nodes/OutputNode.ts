@@ -8,6 +8,7 @@ import {
   hasCompileFailures,
   hasRoundOutputs,
   getStorageKey,
+  roundsToPersisted,
   setCompileFailures,
   type OutputDependencies,
 } from '@agent/output/outputState';
@@ -224,7 +225,7 @@ export class OutputNode<C = unknown> extends Node<
       };
     }
 
-    outputState.rounds[currentRound] = {
+    outputState.rounds.set(currentRound, {
       round: currentRound,
       rawOutput: null,
       outputs: [],
@@ -235,7 +236,7 @@ export class OutputNode<C = unknown> extends Node<
         singleOutputFile: null,
         sourceLocation: null,
       },
-    };
+    });
 
     return {
       summary,
@@ -319,7 +320,7 @@ export class OutputNode<C = unknown> extends Node<
     }
 
     // Project the canonical live collection into PersistedFlow's cloned state.
-    shared.roundOutputs = outputState.rounds;
+    shared.roundOutputs = roundsToPersisted(outputState);
     if (execRes.compileResult) {
       shared.lastCompileResult = execRes.compileResult;
       const compileFailureContext = shouldUseCompileFailureRepairContext(

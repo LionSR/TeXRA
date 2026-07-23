@@ -1,9 +1,18 @@
 import {
+  API_PROVIDERS,
   apiKeySecretName,
   invalidateApiKeyCache,
+  loadApiKeyStatusMap,
+  type ApiKeyStatus,
   type ApiProvider,
 } from '@model/apiProviders';
 import { platform } from '@platform/platform';
+
+export function loadProviderApiKeyStatuses(): Promise<
+  Record<ApiProvider, ApiKeyStatus>
+> {
+  return loadApiKeyStatusMap(platform().secrets, API_PROVIDERS);
+}
 
 const PLACEHOLDER_PATTERNS: readonly RegExp[] = [
   /^(sk-?)?(x{3,}|\*{3,}|\.{3,}|<.*>|your[- _]?(?:api[- _]?)?key)/i,

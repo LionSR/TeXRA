@@ -1,5 +1,5 @@
 // Third-party imports
-import { sync as globSync } from 'glob';
+import { globIterate } from 'glob';
 import { MODELS } from 'llm-zoo';
 
 // Internal imports
@@ -39,25 +39,23 @@ export async function runCleanSingle(
   const extensions = [...TEMP_EXTENSIONS, ...PACK_EXTENSIONS];
   logger.debug(CHANNEL, `Using extensions: ${extensions}`);
 
-  const filesToDelete = findFilesFromPatterns(
-    inputDir,
-    filePatterns,
-    extensions,
-  );
-
-  const onlyInputFileFound =
-    filesToDelete.length === 1 && filesToDelete[0] === inputFile;
-
-  if (onlyInputFileFound || filesToDelete.length === 0) {
-    logger.warn(CHANNEL, `No matching files found to clean for ${inputFile}`);
-    return { status: 'noFiles' };
-  }
-
   try {
-    logger.debug(CHANNEL, `Files to delete:\n${filesToDelete.join('\n')}`);
-    for (const filePath of filesToDelete) {
+    let foundFile = false;
+    for await (const filePath of findFilesFromPatterns(
+      inputDir,
+      filePatterns,
+      extensions,
+    )) {
+      logger.debug(CHANNEL, `Deleting file: ${filePath}`);
       await WorkspaceFS.delete(filePath);
+      foundFile = true;
     }
+
+    if (!foundFile) {
+      logger.warn(CHANNEL, `No matching files found to clean for ${inputFile}`);
+      return { status: 'noFiles' };
+    }
+
     logger.info(CHANNEL, `Cleanup complete for ${inputFile}`);
     return { status: 'success' };
   } catch (err) {
@@ -114,13 +112,11 @@ export async function runCleanBuild(): Promise<void> {
     [...EXCLUDED_DIRS].filter((dir) => dir !== 'build'),
   );
 
-  const buildDirs = globSync('**/build', {
+  for await (const dir of globIterate('**/build', {
     cwd: workspacePath,
     ignore: ignorePatterns,
     nodir: false,
-  });
-
-  for (const dir of buildDirs) {
+  })) {
     try {
       await WorkspaceFS.delete(dir, { recursive: true, useTrash: false });
       logger.debug(CHANNEL, `Removed build directory: ${dir}`);
@@ -150,13 +146,14 @@ export async function runCleanOutput(): Promise<void> {
   // Round-folder layouts like `r0/output.tex` are intentionally excluded:
   // without an active run context they are indistinguishable from user-owned
   // revision folders. Toolbar cleanup removes task-run storage directly.
-  const files = globSync(`**/*_{${modelsPattern}}*.{tex,pdf,xml}`, {
-    cwd: workspacePath,
-    ignore: ignorePatterns,
-    nodir: true,
-  });
-
-  for (const file of files) {
+  for await (const file of globIterate(
+    `**/*_{${modelsPattern}}*.{tex,pdf,xml}`,
+    {
+      cwd: workspacePath,
+      ignore: ignorePatterns,
+      nodir: true,
+    },
+  )) {
     await WorkspaceFS.delete(file);
   }
 

@@ -7,6 +7,7 @@ import {
 
 import type { ApiProvider } from '@model/apiProviders';
 import { resolveModelApiKeyProvider } from '@model/openRouterRouting';
+import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
 import { platform } from '@platform/platform';
 
 import type {
@@ -80,9 +81,7 @@ function runtimeConfig(
     fullName: info.id,
     shortName: info.id,
     provider: ModelProvider.COPILOT,
-    contextWindow: info.maxInputTokens,
-    inputPrice: 0,
-    outputPrice: 0,
+    ...zeroCostAccessOverrides(info.maxInputTokens),
     openRouterOnly: false,
     openrouterFullName: undefined,
     vscodeLMFullName: info.id,

@@ -1,6 +1,5 @@
 import prettyMilliseconds from 'pretty-ms';
 import pluralizeWord from 'pluralize';
-import safeStringify from 'safe-stable-stringify';
 import { serializeError } from 'serialize-error';
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, {
@@ -134,22 +133,6 @@ export function formatResultCount(
 /** UTC calendar date (`YYYY-MM-DD`) of a Date; defaults to now. */
 export function isoDateOnly(date: Date = new Date()): string {
   return date.toISOString().slice(0, 10);
-}
-
-export function objectToLogString(
-  obj: unknown,
-  maxLength: number = 1000,
-): string {
-  // `safe-stable-stringify` never throws on the inputs `JSON.stringify` chokes
-  // on: circular references become `"[Circular]"` and BigInt is handled, so a
-  // log line keeps its diagnostic value instead of collapsing to the useless
-  // `"[object Object]"` that the old `catch (_err) { return String(obj) }`
-  // produced. Returns `undefined` only for inputs with no JSON representation
-  // (e.g. a bare `undefined`), which we render as the string `"undefined"`.
-  const json = safeStringify(obj) ?? String(obj);
-  return json.length > maxLength
-    ? `${json.slice(0, maxLength)}... (${json.length} chars)`
-    : json;
 }
 
 /**

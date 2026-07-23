@@ -54,14 +54,14 @@ type SuccessfulConditionalResponse<T> = Extract<
   { status: 200 }
 >;
 
-export const DEFAULT_POLLING_BACKOFF_CONFIG = {
+export const DEFAULT_POLLING_BACKOFF_CONFIG = Object.freeze({
   backoffBaseMs: 60_000,
   backoffMaxMs: 3_600_000,
   maxFailureDurationMs: 24 * 3_600_000,
 } satisfies Pick<
   PollingSourceConfig,
   'backoffBaseMs' | 'backoffMaxMs' | 'maxFailureDurationMs'
->;
+>);
 
 interface DedupedResourceOptions<T, Id> {
   getId(item: T): Id;

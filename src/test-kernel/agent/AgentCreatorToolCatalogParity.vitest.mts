@@ -41,7 +41,7 @@ function parseCatalogGroups(markdown: string): Map<string, Set<string>> {
     // Bullets in the doc soft-wrap across lines (continuation lines are
     // indented, not re-prefixed with "- "); rejoin them before splitting
     // into logical bullet lines so wrapped tool names aren't dropped.
-    const body = section.slice(newlineIndex + 1).replace(/\n +(?=\S)/g, ' ');
+    const body = section.slice(newlineIndex + 1).replaceAll(/\n +(?=\S)/g, ' ');
     const tools = new Set<string>();
     for (const line of body.split('\n')) {
       if (!line.trimStart().startsWith('- ')) continue;
