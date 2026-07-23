@@ -76,8 +76,6 @@ All notable changes to this project will be documented in this file.
 - **Overleaf projects can be cloned from the terminal** — `texra clone`
   accepts an Overleaf or ShareLaTeX project URL or project ID, securely stores
   the Git token, and can create an optional destination directory.
-  accepts an Overleaf or ShareLaTeX project URL or project ID, stores the Git
-  token securely, and clones into an empty working directory.
 - **Context compaction is visible while it runs** — the terminal status bar
   shows a compacting indicator while conversation history is being summarized.
 - **Kimi Code subscription joins model access** — the launcher and `/api` now
