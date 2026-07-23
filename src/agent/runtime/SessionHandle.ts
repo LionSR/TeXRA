@@ -43,6 +43,7 @@ import {
   type HostInteractions,
 } from './HostInteractions';
 import { SessionEventHub } from './SessionEventHub';
+import { ModelRetryGate } from './ModelRetryGate';
 import {
   createSessionApprovals,
   type SessionApprovals,
@@ -91,6 +92,7 @@ export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
       | 'followUps'
       | 'flushers'
       | 'interactions'
+      | 'modelRetries'
       | 'workflowControls'
     >
   >;
@@ -117,6 +119,8 @@ export class SessionHandle {
   readonly interactions: SessionHostInteractions;
   /** Session-owned approval queues, pending registries, and bypass state. */
   readonly approvals: SessionApprovals;
+  /** Coordinates recovery probes for model routes shared by parallel runs. */
+  readonly modelRetries: ModelRetryGate;
   /**
    * Session-owned bridge from a workflow-script grandchild's execution id to
    * its run's engine skip/retry control. Populated by the workflow-script
@@ -162,6 +166,7 @@ export class SessionHandle {
     this.followUps = followUps;
     this.interactions = init.interactions ?? new SessionHostInteractions();
     this.approvals = approvals;
+    this.modelRetries = init.modelRetries ?? new ModelRetryGate();
     this.workflowControls =
       init.workflowControls ?? new WorkflowControlRegistry();
     // Every session owns exactly one trace-flusher map. There is no
@@ -402,6 +407,7 @@ export class SessionHandle {
     // Settle any approval still pending in this session (rejected) and drop
     // its bypass state before the interaction slot itself is torn down.
     this.approvals.rejectAndClearAll();
+    this.modelRetries.dispose();
     this.interactions.dispose();
     this.artifactFlushers.clear();
     this.resultListeners.clear();

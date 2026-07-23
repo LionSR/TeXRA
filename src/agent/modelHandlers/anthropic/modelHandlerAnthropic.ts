@@ -39,7 +39,6 @@ import {
   attachStreamDiagnostics,
   handleStreamingFailure,
   isUserAbort,
-  trackStreamConnect,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
@@ -69,6 +68,7 @@ import {
   estimateTokensFromText,
 } from '../contextManagementConstants';
 import { AnthropicStreamHandler } from '../support/AnthropicStreamHandler';
+import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';
 import { toAnthropicTools } from '../toolConversion';
 import {
   describeAttachments,
@@ -267,13 +267,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
       new Anthropic({
         apiKey: credential.apiKey,
         baseURL: credential.baseUrl,
+        fetch: this.longRunningModelFetch,
+        maxRetries: 0,
       }),
       credential.route,
+      credential.apiKey,
     );
   }
 
-  override isAutoRetryManagedByProvider(_error: Error): boolean {
-    return true;
+  override getRetryEndpoint(client: Anthropic): string {
+    return client.baseURL;
   }
 
   /**
@@ -351,8 +354,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       countTokensParams.betas = [...countTokenBetas];
     }
 
-    const responseTokenCount =
-      await client.beta.messages.countTokens(countTokensParams);
+    const responseTokenCount = await client.beta.messages.countTokens(
+      countTokensParams,
+      { maxRetries: AUXILIARY_MAX_RETRIES },
+    );
 
     this.logger.debug(
       `Token count of message: ${responseTokenCount.input_tokens}`,
@@ -429,7 +434,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       throw new AnthropicUserAbortError();
     }
 
-    const connect = trackStreamConnect(stream);
     const abortStream = (): void => stream.controller.abort();
     signal?.addEventListener('abort', abortStream, { once: true });
 
@@ -447,20 +451,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     try {
       streamHandler.attachToStream(stream);
+      // A clean close before message_stop rejects finalMessage() natively
+      // (BetaMessageStream only records a message on the message_stop event
+      // and #getFinalMessage throws when none was recorded), so no separate
+      // truncation check is needed here.
       const response = await stream.finalMessage();
-
-      // A relay can close cleanly before message_stop, leaving finalMessage()
-      // resolved with a truncated response rather than an SDK error.
-      const diagnostics = streamHandler.getDiagnostics();
-      if (!diagnostics.messageStopReceived) {
-        throw new Error(
-          `Stream ended without message_stop after ${diagnostics.elapsedSecs}s ` +
-            `(${diagnostics.eventsProcessed} events, ` +
-            `${diagnostics.thinkingChars} thinking chars, ` +
-            `${diagnostics.textChars} text chars). ` +
-            'Stream truncated, likely proxy idle timeout during extended thinking.',
-        );
-      }
 
       this.processThinkingBlock(response);
       return response;
@@ -469,7 +464,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // Anthropic finalizes unconditionally below, including on success.
         partialTail: () =>
           extractPartialTextTail(stream.currentMessage, PARTIAL_TEXT_TAIL_MAX),
-        retryEligible: (tail) => connect.isConnected() || tail.length > 0,
         decorateError: (error, partialText) =>
           this.decorateStreamError(
             error,
@@ -480,7 +474,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       });
     } finally {
       streamHandler.finalize();
-      connect.cleanup();
       signal?.removeEventListener('abort', abortStream);
     }
   }
@@ -1406,8 +1399,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const pageLimitExceeded: ToolFileAttachment[] = [];
 
     if (canUploadFiles && attachments.length > 0 && client) {
+      // This upload occurs while assembling the next turn, outside the model
+      // invocation gate. Restore the SDK's ordinary two retries for this
+      // auxiliary request; generation requests keep maxRetries: 0.
       const uploadResult = await uploadToolAttachments(
-        client,
+        client.withOptions({ maxRetries: AUXILIARY_MAX_RETRIES }),
         attachments,
         this.logger,
         this.uploadedPdfPageCounts,

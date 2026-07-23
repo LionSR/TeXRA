@@ -9,18 +9,21 @@ import { WebSocketError } from 'openai/resources/responses/internal-base';
 import type { AgentTrace } from '@agent/trace';
 import { OpenAIResponseWebSocketTransport } from '@agent/modelHandlers/openai/OpenAIResponseWebSocketTransport';
 import type { ResponseStreamProcessor } from '@agent/modelHandlers/openai/ResponseStreamProcessor';
+import { normalizeProviderError } from '@common/errors';
+import { detectSdkErrorMetadata } from '@common/errors/sdkErrorUtils';
 
 // Third-party type imports
 import type OpenAI from 'openai';
 
 const WS_OPEN = 1;
 
-const { createdSockets } = vi.hoisted(() => ({
+const { createdSockets, socketControl } = vi.hoisted(() => ({
   createdSockets: [] as InstanceType<typeof FakeResponsesWS>[],
+  socketControl: { nextReadyState: 1 },
 }));
 
 class FakeSocket extends EventEmitter {
-  readyState = WS_OPEN;
+  readyState = socketControl.nextReadyState;
   platformSocket = { terminate: vi.fn(), ping: vi.fn() };
   close = vi.fn();
 }
@@ -92,6 +95,21 @@ const fakeClient = {} as unknown as OpenAI;
 describe('OpenAIResponseWebSocketTransport idle connection errors', () => {
   beforeEach(() => {
     createdSockets.length = 0;
+    socketControl.nextReadyState = WS_OPEN;
+  });
+
+  it('tags a failed handshake as a connection failure', async () => {
+    socketControl.nextReadyState = 0;
+    const transport = createTransport();
+    const connection = internals(transport).getOrCreateWebSocket(fakeClient);
+    const ws = createdSockets[0]!;
+    const error = new Error('TLS handshake failed');
+
+    ws.socket.emit('error', error);
+
+    await expect(connection).rejects.toBe(error);
+    expect(detectSdkErrorMetadata(error)?.kind).toBe('connection');
+    expect(ws.close).toHaveBeenCalledOnce();
   });
 
   it('does not crash the process when the pooled connection errors with no request in flight', async () => {
@@ -149,5 +167,42 @@ describe('OpenAIResponseWebSocketTransport idle connection errors', () => {
     ws.emit('error', error);
 
     await expect(request).rejects.toBe(error);
+    expect(detectSdkErrorMetadata(error)?.kind).toBe('connection');
+  });
+
+  it('preserves structured provider errors while invalidating the socket', async () => {
+    // Classification and invalidation are independent: a structured API error
+    // keeps its own code (no connection kind, no route cooling), but the
+    // server may refuse further service on this socket without closing it, so
+    // the cached connection is dropped and the next execute() reconnects.
+    const transport = createTransport();
+    const ws = await internals(transport).getOrCreateWebSocket(fakeClient);
+    const request = internals(transport).executeViaWebSocket(ws, {});
+    const error = new WebSocketError('invalid request', {
+      type: 'error',
+      code: 'invalid_request_error',
+      message: 'invalid request',
+      param: null,
+      sequence_number: 1,
+    });
+
+    ws.emit('error', error);
+
+    await expect(request).rejects.toBe(error);
+    expect(detectSdkErrorMetadata(error)).toBeUndefined();
+    expect(normalizeProviderError(error).statusCode).toBe(400);
+    expect(internals(transport).wsConnection).toBeNull();
+  });
+
+  it('tags an unexpected in-flight socket close as a connection failure', async () => {
+    const transport = createTransport();
+    const ws = await internals(transport).getOrCreateWebSocket(fakeClient);
+    const request = internals(transport).executeViaWebSocket(ws, {});
+
+    ws.socket.emit('close', 1006, Buffer.from('idle timeout'));
+
+    const error = await request.catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(Error);
+    expect(detectSdkErrorMetadata(error)?.kind).toBe('connection');
   });
 });

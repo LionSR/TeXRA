@@ -79,7 +79,7 @@ const RAW_USAGE = {
 
 class CodexRouteProbe extends ModelHandlerCodex {
   tagClient(client: OpenAI, route: ModelCredentialRoute): OpenAI {
-    return this.rememberClientCredentialRoute(client, route);
+    return this.rememberClientCredentialRoute(client, route, 'test-credential');
   }
 }
 

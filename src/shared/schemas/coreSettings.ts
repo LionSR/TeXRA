@@ -89,7 +89,7 @@ export const DEFAULT_CORE_SETTINGS = {
     compactionThresholdPercent: 75,
     gpt5ReasoningSummary: false,
     retry: {
-      maxAttempts: 0,
+      maxAttempts: 2,
       backoffMs: 1000,
     },
   },
@@ -392,7 +392,7 @@ export const CoreSettingsShape = {
         .strictObject({
           maxAttempts: numberField(
             DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
-            'Flow-managed retry attempts (Google, OpenRouter 429/408, background transients). Anthropic/OpenAI/OpenAIResponse retries are provider-managed by their SDKs (default 2); this setting does not affect them.',
+            'Automatic retry attempts for transient model failures. Parallel runs share one recovery probe per affected model route.',
             { min: 0 },
           ),
           backoffMs: numberField(

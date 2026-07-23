@@ -19,6 +19,7 @@ import {
 } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
+import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import type {
   SessionEvent,
   SessionEventHub,
@@ -352,8 +353,8 @@ export function createRecordingHost(): {
 }
 
 /**
- * Minimal session stand-in exposing `interactions` plus fresh session-owned
- * approval state — enough for run-scoped code that resolves
+ * Minimal session stand-in exposing the session owners used by node tests.
+ * This is enough for run-scoped code that resolves
  * `currentSession().interactions` (plan approvals, proposals, retries) or
  * `currentSession().approvals` (bypass state, queues) to reach isolated
  * instances.
@@ -367,6 +368,7 @@ export function sessionWithInteractions(
   return {
     interactions: owner,
     approvals: createSessionApprovals(),
+    modelRetries: new ModelRetryGate(),
     status,
     transcripts: { ensureLoaded: async () => {} },
   } as unknown as SessionHandle;

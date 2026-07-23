@@ -13,11 +13,10 @@ import type {
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { normalizeProviderError } from '@common/errors';
 import {
-  isContextWindowError,
+  isProviderErrorAutoRetryable,
   isUserAbort,
 } from '@common/errors/sdkErrorUtils';
 import {
-  isCredentialExhausted,
   STREAM_PHASE,
   toRetryErrorInfo,
   type RetryErrorInfo,
@@ -29,8 +28,8 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 const BACKGROUND_MODE_MIN_RETRIES = 3;
 
-/** Returns maxRetries (1 initial + N auto-retries) and wait (seconds between retries). */
-function getNodeRetryConfig(): { maxRetries: number; wait: number } {
+/** Returns one initial attempt plus configured retries and their base backoff. */
+function getNodeRetryConfig(): { maxRetries: number; backoffMs: number } {
   const maxAutoAttempts = getConfig<number>(
     'texra.model.retry.maxAttempts',
     DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
@@ -42,7 +41,7 @@ function getNodeRetryConfig(): { maxRetries: number; wait: number } {
 
   return {
     maxRetries: 1 + Math.max(0, maxAutoAttempts),
-    wait: backoffMs / 1000,
+    backoffMs,
   };
 }
 
@@ -83,12 +82,13 @@ async function tryRefreshClient(
     | undefined,
   logger: AgentTrace,
   context: string,
+  signal?: AbortSignal,
 ): Promise<boolean> {
   if (!refreshClient) {
     return false;
   }
   try {
-    await refreshClient();
+    await refreshClient(undefined, signal);
     logger.debug(`Refreshed model client ${context}`);
     return true;
   } catch (refreshError) {
@@ -108,10 +108,12 @@ export abstract class RetryableInvocationNode<
   protected _hasAttemptedTokenRefresh = false;
   protected _persistent401Error: Error | null = null;
   protected _failureLogEmitted = false;
+  protected _retryBackoffMs: number;
 
   constructor() {
     const config = getNodeRetryConfig();
-    super(config.maxRetries, config.wait);
+    super(config.maxRetries, config.backoffMs / 1000);
+    this._retryBackoffMs = config.backoffMs;
   }
 
   protected abstract getOperationName(): string;
@@ -132,6 +134,7 @@ export abstract class RetryableInvocationNode<
   private async attemptRelay401Recovery<T>(
     originalError: unknown,
     operation: (signal: AbortSignal) => Promise<T>,
+    signal: AbortSignal,
   ): Promise<T> {
     const services = this.services;
     this._hasAttemptedTokenRefresh = true;
@@ -148,16 +151,13 @@ export abstract class RetryableInvocationNode<
       services.refreshClient,
       services.logger,
       'after token refresh',
+      signal,
     );
 
-    // Retry with a fresh AbortController
-    const retryController = new AbortController();
-    this.signal = retryController.signal;
-    services.setAbortController(retryController);
     services.logger.debug('Token refreshed, retrying immediately');
 
     try {
-      const result = await operation(retryController.signal);
+      const result = await operation(signal);
       // Success — reset flag so future expirations can trigger refresh again
       this._hasAttemptedTokenRefresh = false;
       return result;
@@ -185,9 +185,14 @@ export abstract class RetryableInvocationNode<
     }
 
     const services = this.services;
-    const controller = new AbortController();
-    this.signal = controller.signal;
-    services.setAbortController(controller);
+    let ownedController: AbortController | undefined;
+    let signal = this.signal;
+    if (!signal) {
+      ownedController = new AbortController();
+      signal = ownedController.signal;
+      this.signal = signal;
+      services.setAbortController(ownedController);
+    }
 
     // Proactive relay token refresh before the request. Only relay-route
     // clients present the Supabase session token, so only they consult the
@@ -208,25 +213,33 @@ export abstract class RetryableInvocationNode<
           services.refreshClient,
           services.logger,
           'proactive pre-invocation',
+          signal,
         );
       }
     }
 
     try {
-      return await operation(controller.signal);
+      return await operation(signal);
     } catch (err) {
-      // Reactive 401 recovery: refresh token and retry once
+      // Reactive 401 recovery: refresh token (single-flighted at the auth
+      // boundary) and retry once within this same node attempt. 401 is not
+      // auto-retryable, so without this the run would halt at the manual
+      // retry prompt on every token rotation.
       const formatted = normalizeProviderError(err);
       if (
-        formatted.isRelayError &&
+        (formatted.isRelayError ||
+          services.clientCredentialRoute === 'relay') &&
         formatted.statusCode === StatusCodes.UNAUTHORIZED &&
         !this._hasAttemptedTokenRefresh
       ) {
-        return this.attemptRelay401Recovery(err, operation);
+        return this.attemptRelay401Recovery(err, operation, signal);
       }
       throw err;
     } finally {
-      services.setAbortController(null);
+      if (ownedController) {
+        services.setAbortController(null);
+        this.signal = undefined;
+      }
     }
   }
 
@@ -240,14 +253,7 @@ export abstract class RetryableInvocationNode<
    *  errors nobody already recovered from are stopped here. `userRetryable`
    *  only gates the manual retry UI; auto-retry is a stricter subset. */
   shouldAutoRetry(error: Error): boolean {
-    if (isUserAbort(error)) return false;
-    if (isContextWindowError(error)) return false;
-
-    const formatted = normalizeProviderError(error);
-    if (isCredentialExhausted(formatted)) return false;
-    if (!formatted.userRetryable) return false;
-    const code = formatted.statusCode;
-    return code !== StatusCodes.UNAUTHORIZED && code !== StatusCodes.FORBIDDEN;
+    return isProviderErrorAutoRetryable(error);
   }
 
   protected isBackgroundModeActive(): boolean {
@@ -256,6 +262,7 @@ export abstract class RetryableInvocationNode<
 
   async _exec(prepRes: unknown): Promise<unknown> {
     this._failureLogEmitted = false;
+    this._userCancelled = false;
     const config = getNodeRetryConfig();
     let maxRetries = config.maxRetries;
 
@@ -264,11 +271,32 @@ export abstract class RetryableInvocationNode<
     }
 
     this.maxRetries = maxRetries;
-    this.wait = config.wait;
-    return super._exec(prepRes);
+    this._retryBackoffMs = config.backoffMs;
+    // This local delay is the fallback for retryable failures that do not
+    // implicate a shared route. For classified route failures it overlaps the
+    // gate's cooling interval, so the gate waits only for any remaining time.
+    this.wait = config.backoffMs / 1000;
+    const controller = new AbortController();
+    controller.signal.addEventListener(
+      'abort',
+      () => {
+        this._userCancelled = true;
+      },
+      { once: true },
+    );
+    this.signal = controller.signal;
+    this.services.setAbortController(controller);
+    try {
+      return await super._exec(prepRes);
+    } finally {
+      this.services.setAbortController(null);
+      this.signal = undefined;
+    }
   }
 
   async retryPrompt(_prepRes: unknown, error: Error): Promise<boolean> {
+    if (isUserAbort(error)) return false;
+
     const result = await this.handleManualRetryPrompt(error);
 
     if (result.userCancelled) {

@@ -176,13 +176,8 @@ class Node<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
       );
     }
     const effectiveMaxRetries = Math.max(1, this.maxRetries);
-    const MAX_MANUAL_RETRIES = 100;
 
-    for (
-      let manualRetryCount = 0;
-      manualRetryCount < MAX_MANUAL_RETRIES;
-      manualRetryCount++
-    ) {
+    for (;;) {
       // Track the last exec error so we can forward it to execFallback when
       // the abort signal fires during the inter-retry delay (p-retry would
       // otherwise rethrow signal.reason, discarding the original failure).
@@ -227,10 +222,6 @@ class Node<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
         return await this.execFallback(prepRes, e as Error);
       }
     }
-
-    throw new Error(
-      `Node exceeded maximum manual retry limit (${MAX_MANUAL_RETRIES})`,
-    );
   }
 }
 class Flow<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
