@@ -16,7 +16,6 @@ import {
 } from '@webview/frontend/mainViewActions';
 import { catalogHandlers } from '@webview/frontend/slices/catalogSlice';
 import {
-  fileSelectionOpen$,
   instruction$,
   launchTarget$,
   model$,
@@ -106,7 +105,6 @@ describe('main-view launch target', () => {
       // stashed and the interactive draft becomes active in the same save.
       expect(workflowInstruction$.get()).toBe('workflow draft');
       expect(instruction$.get()).toBe('interactive draft');
-      expect(fileSelectionOpen$.get()).toBe(false);
       expect(statusAnnouncement$.get()).toBe(
         'Team launcher selected. Interactive mode.',
       );
@@ -168,7 +166,6 @@ describe('main-view launch target', () => {
       // stashes the interactive draft and restores the workflow draft.
       expect(toolUseInstruction$.get()).toBe('interactive draft');
       expect(instruction$.get()).toBe('workflow draft');
-      expect(fileSelectionOpen$.get()).toBe(true);
       expect(statusAnnouncement$.get()).toBe(
         'Workflow uses a single workflow agent.',
       );
@@ -367,6 +364,17 @@ describe('main-view launch target', () => {
     it('sends no team identity for the agent launcher', () => {
       sessionType$.set('toolUse');
       launchTarget$.set('agent');
+      selectedTeamId$.set('physicist');
+
+      expect(buildExecuteMessage().session).toEqual({
+        launchTarget: 'agent',
+        teamId: undefined,
+      });
+    });
+
+    it('canonicalizes stale team state to an agent workflow launch', () => {
+      sessionType$.set('workflow');
+      launchTarget$.set('team');
       selectedTeamId$.set('physicist');
 
       expect(buildExecuteMessage().session).toEqual({

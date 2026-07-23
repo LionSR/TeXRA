@@ -177,13 +177,35 @@ describe('instruction-panel launcher', () => {
       ).toBe('true');
     });
 
-    it('shows the workflow agent picker in workflow sessions', async () => {
+    it('shows the workflow agent picker directly without the launch-target toggle', async () => {
       const element = await mountPanel(
         makeSession({ sessionType: 'workflow' }),
       );
 
+      expect(query(element, '#launchTargetToggle')).toBeNull();
       expect(query(element, '#workflowAgent')).toBeTruthy();
+      expect(query(element, '#agentSettingsButton')).toBeTruthy();
       expect(query(element, '#toolUseAgent')).toBeNull();
+      expect(query(element, '#teamPicker')).toBeNull();
+      expect(query(element, '#teamSettingsButton')).toBeNull();
+    });
+
+    it('ignores stale team state when rendering a workflow launcher', async () => {
+      const element = await mountPanel(
+        makeSession({ sessionType: 'workflow', launchTarget: 'team' }),
+      );
+
+      expect(query(element, '#launchTargetToggle')).toBeNull();
+      expect(query(element, '#workflowAgent')).toBeTruthy();
+      expect(query(element, '#teamPicker')).toBeNull();
+      expect(query(element, '#model')?.getAttribute('aria-label')).toBe(
+        'Model',
+      );
+      expect(
+        query(element, 'wa-callout.session-hint')?.getAttribute(
+          'data-hint-key',
+        ),
+      ).toBe('workflow');
     });
 
     it('intercepts the browse-all-agents sentinel: restores the current agent and opens the catalog instead of an agent-change', async () => {
@@ -270,6 +292,17 @@ describe('instruction-panel launcher', () => {
       expect(disabledOption?.getAttribute('aria-label')).toBe(
         'Reviewers, custom team',
       );
+    });
+
+    it('does not show instructional copy when the team picker receives focus', async () => {
+      const element = await mountPanel(TEAM_SESSION);
+      const events = recordEvents(element, ['focus-instruction']);
+
+      query<HTMLElement>(element, '#teamPicker')?.dispatchEvent(
+        new Event('focus'),
+      );
+
+      expect(events).toEqual([]);
     });
 
     it('dispatches team-change when a team is picked', async () => {

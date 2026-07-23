@@ -1,5 +1,5 @@
 // Node imports
-import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
@@ -157,6 +157,52 @@ describe('CLI Overleaf clone command', () => {
       cloned: true,
       destination: canonicalDestination,
     });
+  });
+
+  it('does not create a positional destination when the token is missing', async () => {
+    mocks.getSecret.mockResolvedValue(undefined);
+    const destination = path.join(workspacePath, 'missing-token');
+    const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(workspacePath);
+    try {
+      const result = await runCli([
+        'clone',
+        '0123456789abcdef01234567',
+        'missing-token',
+        '--no-input',
+      ]);
+      expect(result.exitCode).toBe(CliExitCode.Usage);
+    } finally {
+      cwdSpy.mockRestore();
+    }
+
+    await expect(access(destination)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(mocks.execa).not.toHaveBeenCalled();
+  });
+
+  it('does not create a positional destination when Git is unavailable', async () => {
+    mocks.executeCommandSync.mockReturnValue({
+      success: false,
+      exitCode: null,
+      stdout: '',
+      stderr: 'git not found',
+    });
+    const destination = path.join(workspacePath, 'missing-git');
+    const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(workspacePath);
+    try {
+      const result = await runCli([
+        'clone',
+        '0123456789abcdef01234567',
+        'missing-git',
+        '--no-input',
+      ]);
+      expect(result.exitCode).toBe(CliExitCode.AgentError);
+      expect(stderr).toContain('Git is not installed or is not on PATH.');
+    } finally {
+      cwdSpy.mockRestore();
+    }
+
+    await expect(access(destination)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(mocks.execa).not.toHaveBeenCalled();
   });
 
   it('rejects ambiguous positional and --cwd destinations', async () => {

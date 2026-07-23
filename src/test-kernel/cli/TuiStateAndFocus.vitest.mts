@@ -556,8 +556,6 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({
       bottomPanelRows: 0,
       sessionPanelRows: 0,
-      childListRows: 0,
-      detailPanelRows: 0,
       todosPlanRows: 0,
     });
     expect(
@@ -572,8 +570,6 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({
       bottomPanelRows: 0,
       sessionPanelRows: 0,
-      childListRows: 0,
-      detailPanelRows: 0,
       todosPlanRows: 0,
     });
   });
@@ -590,46 +586,6 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({
       bottomPanelRows: 3,
       sessionPanelRows: 3,
-      childListRows: 3,
-      detailPanelRows: 0,
-      todosPlanRows: 0,
-    });
-  });
-
-  it('charges expanded file details to the existing child-panel budget', () => {
-    expect(
-      allocateConversationBottomPanelRows({
-        maxRows: 10,
-        sessionCount: 2,
-        childListFocused: true,
-        detailContentRows: 4,
-        todosPlanContentRows: 0,
-        transcriptRows: 20,
-      }),
-    ).toEqual({
-      bottomPanelRows: 7,
-      sessionPanelRows: 7,
-      childListRows: 3,
-      detailPanelRows: 4,
-      todosPlanRows: 0,
-    });
-  });
-
-  it('keeps a lone unusable detail row with the child list', () => {
-    expect(
-      allocateConversationBottomPanelRows({
-        maxRows: 10,
-        sessionCount: 2,
-        childListFocused: true,
-        detailContentRows: 4,
-        todosPlanContentRows: 0,
-        transcriptRows: 3,
-      }),
-    ).toEqual({
-      bottomPanelRows: 3,
-      sessionPanelRows: 3,
-      childListRows: 3,
-      detailPanelRows: 0,
       todosPlanRows: 0,
     });
   });
@@ -677,8 +633,6 @@ describe('CLI TUI row allocation', () => {
     expect(allocation).toEqual({
       bottomPanelRows: 0,
       sessionPanelRows: 0,
-      childListRows: 0,
-      detailPanelRows: 0,
       todosPlanRows: 0,
     });
   });
@@ -695,8 +649,6 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({
       bottomPanelRows: 10,
       sessionPanelRows: 8,
-      childListRows: 8,
-      detailPanelRows: 0,
       todosPlanRows: 2,
     });
   });
@@ -713,8 +665,6 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({
       bottomPanelRows: 0,
       sessionPanelRows: 0,
-      childListRows: 0,
-      detailPanelRows: 0,
       todosPlanRows: 0,
     });
   });
@@ -1749,6 +1699,81 @@ describe('CLI transcript state', () => {
     expect(slice?.entries.map((entry) => entry.text)).toEqual([
       'Visible answer.',
     ]);
+  });
+
+  it('projects workflow tools while excluding thinking and raw model prose', () => {
+    patchStream(root, (slice) => ({
+      ...slice,
+      category: AgentCategory.Workflow,
+    }));
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
+    const thinking = logger.openStream(MESSAGE_TYPES.THINKING);
+    thinking.append('private workflow reasoning');
+    logger.info('raw workflow model response', {
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    });
+    logger.info('tool activity', {
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      data: {
+        toolName: 'bash',
+        input: { command: 'true' },
+        output: 'done',
+        status: 'completed',
+      },
+    });
+    patchStream(root, (slice) => ({
+      ...slice,
+      entries: [
+        {
+          id: 'synthetic-workflow-user',
+          role: 'user',
+          text: 'synthetic workflow prompt',
+          finalized: true,
+          synthetic: true,
+          syntheticKind: 'local',
+        },
+        {
+          id: 'synthetic-workflow-assistant',
+          role: 'assistant',
+          text: 'synthetic workflow response',
+          finalized: true,
+          synthetic: true,
+          syntheticKind: 'local',
+        },
+        {
+          id: 'synthetic-workflow-error',
+          role: 'error',
+          text: 'synthetic workflow error',
+          finalized: true,
+          synthetic: true,
+          syntheticKind: 'local',
+        },
+        {
+          id: 'synthetic-workflow-process',
+          role: 'process',
+          text: '',
+          finalized: true,
+          synthetic: true,
+          syntheticKind: 'process',
+          process: {
+            executionId: 'workflow-process',
+            title: 'latexmk',
+            isError: false,
+            tailLines: [],
+          },
+        },
+      ],
+    }));
+
+    syncStreamLog(root);
+
+    const slice = streams.get().get(root);
+    expect(slice?.entries).toHaveLength(1);
+    expect(slice?.entries[0]?.role).toBe('tool');
+    expect(JSON.stringify(slice)).not.toContain('private workflow reasoning');
+    expect(JSON.stringify(slice)).not.toContain('raw workflow model response');
+    expect(JSON.stringify(slice)).not.toContain('synthetic workflow');
+    expect(JSON.stringify(slice)).not.toContain('workflow-process');
   });
 
   it('does not project empty assistant responses into transcript rows', () => {

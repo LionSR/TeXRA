@@ -60,7 +60,6 @@ describe('CLI child list selection', () => {
     expect(state).toEqual({
       focused: true,
       selectedValue: processValue,
-      detailsVisible: false,
     });
   });
 
@@ -68,7 +67,6 @@ describe('CLI child list selection', () => {
     const selected: ChildListSelectionState = {
       focused: true,
       selectedValue: strategyValue,
-      detailsVisible: false,
     };
     const hidden = reconcileSelection(selected, [], main);
     const restored = reconcileSelection(
@@ -83,7 +81,7 @@ describe('CLI child list selection', () => {
 
   it('selects the owner when lifecycle completion changes the active stream', () => {
     const state = reduceChildListSelection(
-      { focused: true, selectedValue: strategyValue, detailsVisible: true },
+      { focused: true, selectedValue: strategyValue },
       {
         kind: 'syncActiveStream',
         streamId: main,
@@ -94,15 +92,13 @@ describe('CLI child list selection', () => {
     expect(state).toEqual({
       focused: true,
       selectedValue: mainValue,
-      detailsVisible: true,
     });
   });
 
-  it('preserves hidden details when active-stream sync keeps the same row', () => {
+  it('preserves identity when active-stream sync keeps the same row', () => {
     const hidden: ChildListSelectionState = {
       focused: true,
       selectedValue: mainValue,
-      detailsVisible: false,
     };
     const state = reduceChildListSelection(hidden, {
       kind: 'syncActiveStream',
@@ -115,7 +111,7 @@ describe('CLI child list selection', () => {
 
   it('clears a stale row when the active stream is not in the projected list', () => {
     const state = reduceChildListSelection(
-      { focused: true, selectedValue: strategyValue, detailsVisible: true },
+      { focused: true, selectedValue: strategyValue },
       {
         kind: 'syncActiveStream',
         streamId: main,
@@ -126,7 +122,6 @@ describe('CLI child list selection', () => {
     expect(state).toEqual({
       focused: true,
       selectedValue: undefined,
-      detailsVisible: false,
     });
   });
 
@@ -135,7 +130,6 @@ describe('CLI child list selection', () => {
       {
         focused: true,
         selectedValue: childProcessListValue('gone'),
-        detailsVisible: false,
       },
       [processValue, mainValue],
       main,
@@ -161,45 +155,33 @@ describe('CLI child list selection', () => {
     expect(state).toEqual({
       focused: true,
       selectedValue: processValue,
-      detailsVisible: false,
     });
   });
 
   it('returns input after a stream is focused', () => {
     const state = reduceChildListSelection(
-      { focused: true, selectedValue: processValue, detailsVisible: true },
+      { focused: true, selectedValue: processValue },
       { kind: 'focusStream', streamId: strategy },
     );
     expect(state).toEqual({
       focused: false,
       selectedValue: strategyValue,
-      detailsVisible: false,
     });
   });
 
-  it('shows stream files on focus and selection while preserving the toggle', () => {
+  it('changes only the highlighted row without opening a detail block', () => {
     let state = reduceChildListSelection(
-      { focused: false, selectedValue: mainValue, detailsVisible: false },
+      { focused: false, selectedValue: mainValue },
       { kind: 'focus' },
     );
-    expect(state.detailsVisible).toBe(true);
-
     state = reduceChildListSelection(state, {
       kind: 'highlight',
       value: strategyValue,
     });
+
     expect(state).toEqual({
       focused: true,
       selectedValue: strategyValue,
-      detailsVisible: true,
     });
-
-    state = reduceChildListSelection(state, { kind: 'toggleDetails' });
-    expect(state.detailsVisible).toBe(false);
-
-    state = reduceChildListSelection(state, { kind: 'blur' });
-    expect(reduceChildListSelection(state, { kind: 'toggleDetails' })).toBe(
-      state,
-    );
   });
 });

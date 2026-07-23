@@ -6,7 +6,7 @@ import {
   childStatusColor,
   pendingApprovalRowSuffix,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
-import { selectedSubagentDetailLines } from '@cli/chat/tui/panes/SubagentDetailPanel';
+import { workflowInputContextSummary } from '@cli/chat/tui/panes/ConversationPane';
 import {
   SubagentList,
   compactChildRowText,
@@ -64,98 +64,30 @@ function workflowAgentSlice(
 }
 
 describe('CLI child list display model', () => {
-  it('formats selected workflow progress and files outside the list row', () => {
-    const files = {
-      input: ['src/Main.lean', 'src/Lemma.lean'],
-      context: ['notes/proof.md'],
-      media: [],
-      output: [],
-    };
-    const detailSession: StreamView = {
-      id: 'devise' as StreamTabId,
-      label: 'devise',
-      active: false,
-      parentId: 'main' as StreamTabId,
-      slice: workflowAgentSlice('devise', {
-        status: STREAM_PHASE.RUNNING,
-        files,
-        outputFilesByRound: {
-          0: [
-            {
-              source: 'Main.lean',
-              location: {
-                kind: 'runStorage',
-                executionId: 'exec-abc',
-                relativePath: 'r1/Main.lean',
-                absolutePath: '/tmp/executions/abc/r1/Main.lean',
-              },
-              round: 0,
-              lineage: null,
-              diff: null,
-            },
-          ],
-          1: [
-            {
-              source: 'Main.lean',
-              location: {
-                kind: 'runStorage',
-                executionId: 'exec-abc',
-                relativePath: 'r2/Main.lean',
-                absolutePath: '/tmp/executions/abc/r2/Main.lean',
-              },
-              round: 1,
-              lineage: null,
-              diff: null,
-            },
-            {
-              source: 'Notes.lean',
-              location: {
-                kind: 'runStorage',
-                executionId: 'exec-abc',
-                relativePath: 'r2/Notes.lean',
-                absolutePath: '/tmp/executions/abc/r2/Notes.lean',
-              },
-              round: 1,
-              lineage: null,
-              diff: null,
-            },
-          ],
-        },
-        roundStage: { index: 1, total: 3 },
-        conversation: { toolCallCount: 2 },
-      }),
-    };
+  it('shows concise input and context metadata only in an active workflow view', () => {
+    const workflow = workflowAgentSlice('devise', {
+      files: {
+        input: ['src/Main.lean', 'src/Lemma.lean'],
+        context: ['notes/proof.md'],
+        media: [],
+        output: ['out/Main.lean'],
+      },
+    });
+    const toolUse = workflowAgentSlice('review', {
+      category: AgentCategory.ToolUse,
+      files: {
+        input: ['paper.tex'],
+        context: ['notes.md'],
+        media: [],
+        output: ['review.md'],
+      },
+    });
 
-    expect(selectedSubagentDetailLines(detailSession, 100)).toEqual([
-      'Selected workflow agent: devise',
-      'Progress: running · r2/3 · 2 tool calls',
-      'Input: src/Main.lean',
-      'Input: src/Lemma.lean',
-      'Context: notes/proof.md',
-      'Output r2: /tmp/executions/abc/r2/Main.lean',
-      'Output r2: /tmp/executions/abc/r2/Notes.lean',
-      'Output r1: /tmp/executions/abc/r1/Main.lean',
-    ]);
-    expect(selectedSubagentDetailLines(undefined, 100)).toEqual([]);
-    const configuredOutputSession: StreamView = {
-      ...detailSession,
-      slice: workflowAgentSlice('devise', {
-        files: {
-          ...files,
-          output: ['out/Main.lean', 'out/Notes.lean'],
-        },
-      }),
-    };
-    expect(
-      selectedSubagentDetailLines(configuredOutputSession, 100).filter((line) =>
-        line.startsWith('Output:'),
-      ),
-    ).toEqual(['Output: out/Main.lean', 'Output: out/Notes.lean']);
-    expect(
-      selectedSubagentDetailLines(detailSession, 20).every(
-        (line) => line.length <= 20,
-      ),
-    ).toBe(true);
+    expect(workflowInputContextSummary(workflow)).toBe(
+      'Input: 2 files · Context: 1 file',
+    );
+    expect(workflowInputContextSummary(toolUse)).toBeUndefined();
+    expect(workflowInputContextSummary(undefined)).toBeUndefined();
   });
 
   it('keeps status markers steady and status colors independent of focus', () => {

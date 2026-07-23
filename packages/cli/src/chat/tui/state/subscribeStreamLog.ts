@@ -9,6 +9,7 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import { appendCliApiSwitchHint } from '@cli/runtime/approvalAdapter';
 import { redactSecrets } from '@logger/redaction';
 import {
+  AgentCategory,
   ErrorLogDataSchema,
   GroupLogPayloadSchema,
   MESSAGE_TYPES,
@@ -545,12 +546,22 @@ export function syncStreamLog(
 
   patchStream(streamId, (slice) => {
     const existing = new Map(slice.entries.map((e) => [e.id, e]));
-    const syntheticEntries = slice.entries.filter((entry) => entry.synthetic);
+    const workflow = slice.category === AgentCategory.Workflow;
+    const syntheticEntries = slice.entries.filter(
+      (entry) =>
+        entry.synthetic &&
+        (!workflow || entry.role === 'tool' || entry.role === 'phase'),
+    );
     const streamFinal = isFinalTranscriptStatus(slice.status);
     const logCandidates: TranscriptCandidate[] = [];
     for (const entry of responses) {
       const rendered = renderLogEntry(entry, existing.get(entry.id));
       if (!rendered) continue;
+      // Workflow details are an operational feed, not a model transcript.
+      // In particular, never retain thinking, user prompts, or model prose.
+      if (workflow && rendered.role !== 'tool' && rendered.role !== 'phase') {
+        continue;
+      }
       logCandidates.push({ rendered, sortSeq: entry.seqNo, tieBreak: 0 });
     }
     // Synthetic (local/process) rows are positioned by `syntheticAfterSeq`

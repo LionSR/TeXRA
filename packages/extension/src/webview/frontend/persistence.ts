@@ -36,7 +36,6 @@ import { DEFAULT_MULTI_FILES, FILE_TYPE_TO_KEY } from './store';
 import {
   checkboxValues$,
   commit$,
-  fileSelectionOpen$,
   instruction$,
   latexdiffsVisible$,
   launchTarget$,
@@ -185,7 +184,6 @@ function applyState(state: MainViewPersistedState): void {
   sessionType$.set(state.sessionType);
   launchTarget$.set(state.launchTarget);
   selectedTeamId$.set(state.selectedTeamId);
-  fileSelectionOpen$.set(state.sessionType === SESSION_TYPES.WORKFLOW);
   workflowAgent$.set(state.workflowAgent);
   toolUseAgent$.set(state.toolUseAgent);
   model$.set(state.model);

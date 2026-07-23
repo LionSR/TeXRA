@@ -40,7 +40,6 @@ import {
   apiKeyBanner$,
   checkboxValues$,
   commit$,
-  fileSelectionOpen$,
   getModelOptionsForSession,
   instruction$,
   instructionPlaceholder$,
@@ -169,7 +168,6 @@ export function enterToolUseSession(): void {
   if (sessionType$.get() !== SESSION_TYPES.TOOL_USE) {
     swapModeInstruction(sessionType$.get(), SESSION_TYPES.TOOL_USE);
     sessionType$.set(SESSION_TYPES.TOOL_USE);
-    fileSelectionOpen$.set(false);
     updateMultiFiles('outputFiles', []);
     refreshModelSelectionForActiveSession();
   }
@@ -315,11 +313,6 @@ export function changeSessionType(value: string): void {
   swapModeInstruction(prev, parsed);
   sessionType$.set(parsed);
   refreshModelSelectionForActiveSession();
-  // Auto-open the Files <wa-details> when the user enters workflow mode,
-  // and auto-close when leaving. This is the one-shot behavior the bound
-  // `?open` template expression used to encode — but tracking it here
-  // means subsequent user collapses survive re-renders.
-  fileSelectionOpen$.set(parsed === SESSION_TYPES.WORKFLOW);
   refreshInstructionPlaceholder();
   if (parsed === SESSION_TYPES.TOOL_USE) {
     updateMultiFiles('outputFiles', []);
@@ -406,9 +399,11 @@ export function changeModel(value: string): void {
 // ---------------------------------------------------------------------------
 
 export function buildExecuteMessage(): MainViewExecuteMessage {
-  const launchTarget = launchTarget$.get();
+  const sessionType = sessionType$.get();
+  const launchTarget =
+    sessionType === SESSION_TYPES.WORKFLOW ? 'agent' : launchTarget$.get();
   return buildMainViewExecuteMessage({
-    sessionType: sessionType$.get(),
+    sessionType,
     workflowAgent: workflowAgent$.get(),
     // Team runs still send the current tool-use agent: the host resolves the
     // roster root from teamId, and `agent` stays required by validation.

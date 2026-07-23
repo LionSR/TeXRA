@@ -62,6 +62,7 @@ function buildOverleafClonePorts(
   workspacePath: string,
 ): OverleafCloneWorkflowPorts {
   const secrets = getCliSecrets();
+  let canonicalWorkspacePath = workspacePath;
   return {
     getStoredToken: (key) => secrets.get(key),
     deleteStoredToken: (key) => secrets.delete(key),
@@ -91,7 +92,14 @@ function buildOverleafClonePorts(
         `Git is not installed or is not on PATH. Install it from ${GIT_DOWNLOAD_URL}.`,
       );
     },
-    listWorkspaceEntries: (workspacePath) => readdir(workspacePath),
+    listWorkspaceEntries: async (workspacePath) => {
+      try {
+        return await readdir(workspacePath);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+        throw error;
+      }
+    },
     showWorkspaceUnreadable: (error) => {
       writeTextStderr(
         `Cannot read destination directory: ${toErrorMessage(error)}`,
@@ -104,8 +112,10 @@ function buildOverleafClonePorts(
     },
 
     runClone: async (remoteUrl, workspacePath) => {
+      await mkdir(workspacePath, { recursive: true });
+      canonicalWorkspacePath = await realpath(workspacePath);
       await execa('git', ['clone', remoteUrl, '.'], {
-        cwd: workspacePath,
+        cwd: canonicalWorkspacePath,
         env: { GIT_TERMINAL_PROMPT: '0', PATH: extendEnvPath() },
       });
     },
@@ -114,12 +124,12 @@ function buildOverleafClonePorts(
         cloned: true,
         provider: remote.isOverleaf ? 'overleaf' : 'sharelatex',
         host: remote.host,
-        destination: workspacePath,
+        destination: canonicalWorkspacePath,
       };
       emitCliResult(context, {
         json: result,
         ndjson: { kind: 'result', result: { command: 'clone', ...result } },
-        text: `${label} project cloned into ${workspacePath}.`,
+        text: `${label} project cloned into ${canonicalWorkspacePath}.`,
       });
     },
     showAuthFailure: async (failedRemote) => {
@@ -177,12 +187,9 @@ export const cloneCommand = withUsageSections(
           'Pass the clone destination either as the second argument or with --cwd, not both.',
         );
       }
-      let workspacePath = context.cwd;
-      if (ctx.args.destination) {
-        const destinationPath = resolve(context.cwd, ctx.args.destination);
-        await mkdir(destinationPath, { recursive: true });
-        workspacePath = await realpath(destinationPath);
-      }
+      const workspacePath = ctx.args.destination
+        ? resolve(context.cwd, ctx.args.destination)
+        : context.cwd;
 
       const outcome = await cloneOverleafProject(
         remote,

@@ -23,8 +23,8 @@ import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
  *   1. mount-time webview-storage restore (`restorePersistedState`), and
  *   2. backend-pushed history-rerun/reset restore (`handleRestoreState`),
  * including legacy single-`instruction` migration, transient output-file
- * reset, Files-panel state, and the save-reentrancy guard (exactly one
- * storage write per backend restore).
+ * reset, and the save-reentrancy guard (exactly one storage write per backend
+ * restore).
  *
  * They observe only refactor-stable surfaces — the `@provide`/`@state` context
  * values, host-bridge storage writes, and posted messages — so they must pass
@@ -159,13 +159,10 @@ describe('MainApp persistence and restore characterization', () => {
   // singleton before the HOST_BRIDGE_API_KEY mock above is wired up.
   let persistence: typeof import('@webview/frontend/persistence');
   let setInstruction: typeof import('@webview/frontend/mainViewActions').setInstruction;
-  let fileSelectionOpen: typeof import('@webview/frontend/mainViewState').fileSelectionOpen$;
 
   beforeAll(async () => {
     persistence = await import('@webview/frontend/persistence');
     ({ setInstruction } = await import('@webview/frontend/mainViewActions'));
-    ({ fileSelectionOpen$: fileSelectionOpen } =
-      await import('@webview/frontend/mainViewState'));
   });
 
   beforeEach(() => {
@@ -183,7 +180,6 @@ describe('MainApp persistence and restore characterization', () => {
     expect(session.workflowAgent).toBe('correct');
     expect(session.toolUseAgent).toBe('orchestrator');
     expect(session.model).toBe('seed-model');
-    expect(fileSelectionOpen.get()).toBe(true);
 
     // Legacy migration: active mode was workflow, so the single legacy
     // `instruction` becomes the workflow instruction and stays active.
@@ -227,6 +223,25 @@ describe('MainApp persistence and restore characterization', () => {
     expect(blob.editedFile).toBe('other_polish.tex');
   });
 
+  it('renders the Files heading and controls without a disclosure', async () => {
+    const element = await mountMainApp();
+
+    dispatchHostMessage({
+      command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
+      state: 'done',
+    });
+    await element.updateComplete;
+
+    const root = element.shadowRoot;
+    expect(root?.querySelector('.file-selection-heading')?.textContent).toBe(
+      'Files',
+    );
+    expect(root?.querySelector('wa-details.file-selection-details')).toBeNull();
+    expect(
+      root?.querySelectorAll('.file-selection file-select-group'),
+    ).toHaveLength(3);
+  });
+
   it('applies a backend-pushed restore with exactly one storage write and forced output reset', async () => {
     const element = await mountMainApp();
     posted.length = 0;
@@ -264,7 +279,6 @@ describe('MainApp persistence and restore characterization', () => {
     const { fileState, session } = contextsOf(element);
     expect(session.sessionType).toBe('toolUse');
     expect(session.instruction).toBe('restored tool-use instruction');
-    expect(fileSelectionOpen.get()).toBe(false);
     expect(fileState.multiFiles.outputFiles).toEqual([]);
     expect(fileState).not.toHaveProperty('outputFilesActive');
     expect(fileState.checkboxValues.autoExtractTikzFigure).toBe(true);
