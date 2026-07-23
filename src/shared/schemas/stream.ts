@@ -37,7 +37,7 @@ export type StreamStatus = z.infer<typeof StreamStatusSchema>;
  * - INITIALIZING is neither `active` nor `terminal`: a brief pre-start state
  *   that ticks elapsed time and blocks acquisition, but runs no model calls.
  */
-export const STREAM_STATUS_TRAITS = {
+const STREAM_STATUS_TRAITS = {
   [STREAM_STATUS.RUNNING]: {
     active: true,
     inFlight: true,

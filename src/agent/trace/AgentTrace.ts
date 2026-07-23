@@ -156,10 +156,6 @@ export interface AgentTrace {
   emit(event: AgentEvent): void;
   subscribe(subscriber: AgentTraceSubscriber): () => void;
   activeStageId(): string | undefined;
-  withStage<T>(
-    stageId: string | undefined,
-    fn: () => Promise<T> | T,
-  ): Promise<T>;
 
   // ─── Plain logging (sugar over emit) ────────────────────────────────
   debug(message: string, options?: LogOptions): void;

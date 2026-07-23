@@ -40,8 +40,6 @@ export const noopTrace: AgentTrace = {
   emit: NOOP,
   subscribe: () => NOOP,
   activeStageId: () => undefined,
-  withStage: <T>(_id: string | undefined, fn: () => Promise<T> | T) =>
-    Promise.resolve(fn()),
 
   debug: NOOP,
   info: NOOP,

@@ -6,14 +6,9 @@ import {
   EXECUTION_STATUS,
   RUN_OUTCOME,
   STREAM_PHASE,
-  STREAM_STATUS,
-  STREAM_STATUS_TRAITS,
-  StreamPhaseSchema,
   type ExecutionStatus,
   type RunOutcome,
   type StreamPhase,
-  type StreamStatus,
-  type StreamStatusTrait,
 } from '@shared/schemas/stream';
 
 // ============================================================================
@@ -94,14 +89,6 @@ export function legacyEndGroupStatusForOutcome(
   return groupEndStatusForOutcome(outcome) === 'error' ? 'error' : 'stopped';
 }
 
-export function terminalStreamStatusForOutcome(
-  outcome: RunOutcome,
-): StreamStatus {
-  return groupEndStatusForOutcome(outcome) === 'error'
-    ? STREAM_STATUS.ERROR
-    : STREAM_STATUS.STOPPED;
-}
-
 // ============================================================================
 // StreamPhase transition algebra (stage 0 vocabulary only)
 // ============================================================================
@@ -136,10 +123,6 @@ export function isActivePhase(phase: StreamPhase | undefined): boolean {
 
 export function isInFlightPhase(phase: StreamPhase | undefined): boolean {
   return phase === STREAM_PHASE.RUNNING || phase === STREAM_PHASE.WAITING;
-}
-
-function isTerminalPhase(phase: StreamPhase | undefined): boolean {
-  return phase === STREAM_PHASE.WAITING || isTerminalOutcomePhase(phase);
 }
 
 export function canAcquireStreamReservation(
@@ -192,55 +175,4 @@ export function canTransitionStreamPhase(
           to === STREAM_PHASE.CANCELLED)
       );
   }
-}
-
-// ============================================================================
-// Status trait predicates (derived from STREAM_STATUS_TRAITS)
-// ============================================================================
-//
-// Membership lives in the declarative trait table in `@shared/schemas/stream`
-// (`STREAM_STATUS_TRAITS`); these are thin readers over it. Do not declare
-// new status lists by hand — add a trait column instead.
-
-/** Shared trait lookup: a `StreamPhase` value parses straight to the phase
- *  predicate, otherwise falls back to the legacy `StreamStatus` trait table. */
-function hasStatusTrait(
-  status: string | undefined,
-  phasePredicate: (phase: StreamPhase | undefined) => boolean,
-  trait: StreamStatusTrait,
-): boolean {
-  const phase = StreamPhaseSchema.safeParse(status);
-  if (phase.success) return phasePredicate(phase.data);
-  return (
-    status !== undefined &&
-    Object.hasOwn(STREAM_STATUS_TRAITS, status) &&
-    STREAM_STATUS_TRAITS[status as StreamStatus][trait]
-  );
-}
-
-/** Check if a status indicates active execution (running or resuming). */
-export function isActiveStatus(status: string | undefined): boolean {
-  return hasStatusTrait(status, isActivePhase, 'active');
-}
-
-/**
- * Statuses during which an agent cycle may still be appending to the stream
- * and it must not be evicted from memory or acquired by a new run.
- */
-export function isInFlightStatus(status: string | undefined): boolean {
-  return hasStatusTrait(status, isInFlightPhase, 'inFlight');
-}
-
-/** Check if a status is terminal (execution ended). */
-export function isTerminalStatus(status: string | undefined): boolean {
-  return hasStatusTrait(status, isTerminalPhase, 'terminal');
-}
-
-/** Check if elapsed-time displays should keep advancing for this status. */
-export function isLiveElapsedStatus(status: string | undefined): boolean {
-  return hasStatusTrait(
-    status,
-    (phase) => phase === STREAM_PHASE.RUNNING,
-    'liveElapsed',
-  );
 }
