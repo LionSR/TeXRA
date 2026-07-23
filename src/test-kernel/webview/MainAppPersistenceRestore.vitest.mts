@@ -171,6 +171,22 @@ describe('MainApp persistence and restore characterization', () => {
     storageWrites.length = 0;
   });
 
+  it('normalizes stale workflow team state during mount-time restore', async () => {
+    seedWebviewState({
+      ...LEGACY_SEED,
+      launchTarget: 'team',
+      selectedTeamId: 'physicist',
+    });
+
+    const element = await mountMainApp();
+
+    expect(contextsOf(element).session).toMatchObject({
+      sessionType: 'workflow',
+      launchTarget: 'agent',
+      selectedTeamId: 'physicist',
+    });
+  });
+
   it('restores persisted state on mount through the canonical state applicator', async () => {
     const element = await mountMainApp();
     const { fileState, session } = contextsOf(element);
@@ -240,6 +256,32 @@ describe('MainApp persistence and restore characterization', () => {
     expect(
       root?.querySelectorAll('.file-selection file-select-group'),
     ).toHaveLength(3);
+  });
+
+  it('normalizes stale workflow team state during backend restore', async () => {
+    const element = await mountMainApp();
+    storageWrites.length = 0;
+
+    dispatchHostMessage({
+      command: COMMON_COMMANDS.STATE_RESTORE,
+      state: restoreState({
+        sessionType: 'workflow',
+        launchTarget: 'team',
+        selectedTeamId: 'physicist',
+      }),
+    });
+    await element.updateComplete;
+
+    expect(contextsOf(element).session).toMatchObject({
+      sessionType: 'workflow',
+      launchTarget: 'agent',
+      selectedTeamId: 'physicist',
+    });
+    expect(lastPersistedBlob()).toMatchObject({
+      sessionType: 'workflow',
+      launchTarget: 'agent',
+      selectedTeamId: 'physicist',
+    });
   });
 
   it('applies a backend-pushed restore with exactly one storage write and forced output reset', async () => {

@@ -182,7 +182,9 @@ export function handleRestoreState(
 /** Apply one parsed snapshot regardless of whether storage or the host sent it. */
 function applyState(state: MainViewPersistedState): void {
   sessionType$.set(state.sessionType);
-  launchTarget$.set(state.launchTarget);
+  launchTarget$.set(
+    state.sessionType === SESSION_TYPES.WORKFLOW ? 'agent' : state.launchTarget,
+  );
   selectedTeamId$.set(state.selectedTeamId);
   workflowAgent$.set(state.workflowAgent);
   toolUseAgent$.set(state.toolUseAgent);
