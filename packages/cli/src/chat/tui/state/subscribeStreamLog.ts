@@ -10,6 +10,7 @@ import { appendCliApiSwitchHint } from '@cli/runtime/approvalAdapter';
 import { redactSecrets } from '@logger/redaction';
 import {
   AgentCategory,
+  CompactionActivityDataSchema,
   ErrorLogDataSchema,
   GroupLogPayloadSchema,
   MESSAGE_TYPES,
@@ -145,6 +146,19 @@ function latestLogActivityIsThinking(
       entry.messageType === MESSAGE_TYPES.THINKING &&
       logEntryStreamIsRunning(entry)
     );
+  }
+  return false;
+}
+
+function latestCompactionActivityIsRunning(
+  entries: readonly StreamLogEntry[],
+): boolean {
+  for (const entry of entries.toReversed()) {
+    if (entry.messageType === MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY) {
+      const activity = CompactionActivityDataSchema.safeParse(entry.data);
+      if (activity.success) return activity.data.state === 'started';
+    }
+    if (LIVE_ACTIVITY_MESSAGE_TYPES.has(entry.messageType ?? '')) return false;
   }
   return false;
 }
@@ -572,6 +586,7 @@ export function syncStreamLog(
 
   const allEntries = log.getRange(0);
   const thinkingActive = latestLogActivityIsThinking(allEntries);
+  const compactingActive = latestCompactionActivityIsRunning(allEntries);
   const transcriptMessageTypes = transcriptMessageTypesForStream(streamId);
   const currentActiveStreamId = activeStreamId.get();
   const projectFullTranscript =
@@ -693,7 +708,8 @@ export function syncStreamLog(
           (entry, index) => entry === compactEntries[index],
         ) &&
         slice.description === description &&
-        slice.thinkingActive === thinkingActive
+        slice.thinkingActive === thinkingActive &&
+        slice.compactingActive === compactingActive
       ) {
         return slice;
       }
@@ -702,6 +718,7 @@ export function syncStreamLog(
         description,
         entries: compactEntries,
         thinkingActive,
+        compactingActive,
       };
     }
 
@@ -718,11 +735,18 @@ export function syncStreamLog(
     if (
       !changed &&
       slice.description === description &&
-      slice.thinkingActive === thinkingActive
+      slice.thinkingActive === thinkingActive &&
+      slice.compactingActive === compactingActive
     ) {
       return slice;
     }
-    return { ...slice, description, entries: next, thinkingActive };
+    return {
+      ...slice,
+      description,
+      entries: next,
+      thinkingActive,
+      compactingActive,
+    };
   });
 
   if (releaseAfterSync) store.requestEviction(streamId);

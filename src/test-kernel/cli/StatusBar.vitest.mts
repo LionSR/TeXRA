@@ -1275,9 +1275,26 @@ describe('CLI StatusBar display model', () => {
       PERSONAL_API_MODE_LABEL,
     ]);
 
+    const compacting = buildStatusBarDisplay({
+      ...runningInput,
+      compactingActive: true,
+      thinkingActive: true,
+    });
+    expect(compacting.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'running',
+      '1m 50s',
+      'compacting...',
+      PERSONAL_API_MODE_LABEL,
+    ]);
+
     // The same elapsed reading is suppressed once the turn is no longer running.
     const idle = buildStatusBarDisplay(
-      statusInput({ elapsedMs: 110_000, thinkingActive: true }),
+      statusInput({
+        compactingActive: true,
+        elapsedMs: 110_000,
+        thinkingActive: true,
+      }),
     );
 
     expect(idle.left.map(statusBarSegmentText)).toEqual([

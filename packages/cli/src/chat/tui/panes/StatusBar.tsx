@@ -171,6 +171,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     commandName: props.commandName,
     bypass: statusSlice?.bypass ?? NO_BYPASS,
     thinkingActive: statusSlice?.thinkingActive ?? false,
+    compactingActive: statusSlice?.compactingActive ?? false,
     queuedFollowUpMessages: statusSlice?.queuedFollowUpMessages ?? [],
     usage: statusSlice?.usage,
     roundStage: statusSlice?.roundStage,

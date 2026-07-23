@@ -3,7 +3,11 @@
  * Encapsulates the streaming event handling logic for improved testability and readability.
  */
 // Third-party imports
-import { logWebFetch, type AgentTrace } from '@agent/trace';
+import {
+  logCompactionActivity,
+  logWebFetch,
+  type AgentTrace,
+} from '@agent/trace';
 import {
   extractWebFetchResultFields,
   mapAnthropicWebSearchEntries,
@@ -100,6 +104,7 @@ interface StreamFactories {
  *   → Output #1 (text_0), WebSearch/WebFetch, Output #2 (text_3 + text_4 merged)
  */
 export class AnthropicStreamHandler {
+  private readonly compactionBlocks = new Set<number>();
   private readonly thinkingStreams = new Map<
     number,
     ReturnType<AgentTrace['openStream']>
@@ -181,6 +186,11 @@ export class AnthropicStreamHandler {
     }
     this.thinkingStreams.clear();
 
+    if (this.compactionBlocks.size > 0) {
+      this.compactionBlocks.clear();
+      logCompactionActivity(this.logger, 'finished');
+    }
+
     // Finalize output stream
     this.state.outputStream?.finalize();
     this.state.outputStream = null;
@@ -258,6 +268,10 @@ export class AnthropicStreamHandler {
         this.factories.createThinkingStream(),
       );
     } else if (blockType === 'compaction') {
+      if (this.compactionBlocks.size === 0) {
+        logCompactionActivity(this.logger, 'started');
+      }
+      this.compactionBlocks.add(blockIndex);
       this.logger.debug('Compaction block started in stream');
     } else if (blockType === 'text') {
       if (!isConsecutiveText) {
@@ -328,6 +342,11 @@ export class AnthropicStreamHandler {
     if (thinking) {
       thinking.finalize();
       this.thinkingStreams.delete(event.index);
+    }
+    if (this.compactionBlocks.delete(event.index)) {
+      if (this.compactionBlocks.size === 0) {
+        logCompactionActivity(this.logger, 'finished');
+      }
     }
     // Text streams: don't finalize here - wait for non-text block or end
   }
