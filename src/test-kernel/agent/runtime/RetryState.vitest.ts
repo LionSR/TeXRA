@@ -616,6 +616,32 @@ describe('RetryState', () => {
     });
   });
 
+  it('coordinates credential exhaustion across models on one wire route', async () => {
+    const first = await captureModelRetry(
+      'https://api.example/v1',
+      'api-key',
+      undefined,
+      'openai:model-a',
+    );
+    const exhausted = new Error('quota exhausted') as Error & {
+      error: unknown;
+      status: number;
+      headers: Record<string, string>;
+    };
+    exhausted.status = 429;
+    exhausted.headers = { 'retry-after': '3' };
+    exhausted.error = {
+      message: 'You exceeded your current quota.',
+      type: 'insufficient_quota',
+      code: 'insufficient_quota',
+    };
+
+    expect(first.classifyFailure(exhausted)).toEqual({
+      retryAfterMs: 3_000,
+    });
+    expect(first.classifyModelFailure(exhausted)).toBeUndefined();
+  });
+
   it('isolates rate-limit recovery by stable credential identity', async () => {
     const first = await captureModelRetry(
       'https://api.example/v1',

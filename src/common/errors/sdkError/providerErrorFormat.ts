@@ -460,12 +460,19 @@ function detectRouteStatusCode(
   return normalizeProviderError(error).statusCode;
 }
 
+function isModelScopedRateLimit(
+  error: Error,
+  chain: readonly unknown[],
+): boolean {
+  return (
+    detectRouteStatusCode(error, chain) === StatusCodes.TOO_MANY_REQUESTS &&
+    normalizeProviderError(error).exhaustionReason === undefined
+  );
+}
+
 /** Whether a failure is a model-scoped provider rate limit. */
 export function isModelRateLimitFailure(error: Error): boolean {
-  return (
-    detectRouteStatusCode(error, causeChain(error)) ===
-    StatusCodes.TOO_MANY_REQUESTS
-  );
+  return isModelScopedRateLimit(error, causeChain(error));
 }
 
 /** Classifies model-scoped rate limits for their own recovery gate. */
@@ -473,7 +480,7 @@ export function classifyModelRateLimitFailure(
   error: Error,
 ): { retryAfterMs?: number } | undefined {
   const chain = causeChain(error);
-  return detectRouteStatusCode(error, chain) === StatusCodes.TOO_MANY_REQUESTS
+  return isModelScopedRateLimit(error, chain)
     ? { retryAfterMs: detectRetryAfterMs(chain) }
     : undefined;
 }
@@ -481,7 +488,8 @@ export function classifyModelRateLimitFailure(
 /**
  * Classify a failure that carries evidence about a shared wire route
  * (provider + credential + endpoint): transport failures, 5xx/408 server
- * failures. Model-specific 429 rate limits use a separate recovery scope.
+ * failures. Credential-exhaustion 429s cool this shared route, while
+ * model-specific 429 rate limits use a separate recovery scope.
  * Retryable failures outside this set (e.g. 409 conflicts) stay node-local —
  * a conflict does not imply the route is unhealthy. Relay 401s are also
  * deliberately absent: token refresh is single-flighted at the auth boundary
@@ -531,7 +539,11 @@ export function classifyWireRouteFailure(
   // deeper in the chain. The full normalizer is the fallback for statuses only
   // inferable from provider bodies (e.g. relay).
   const statusCode = detectRouteStatusCode(error, chain);
+  const credentialRateLimit =
+    statusCode === StatusCodes.TOO_MANY_REQUESTS &&
+    normalizeProviderError(error).exhaustionReason !== undefined;
   if (
+    !credentialRateLimit &&
     statusCode !== StatusCodes.REQUEST_TIMEOUT &&
     (statusCode == null || statusCode < 500) &&
     !transportFailure
