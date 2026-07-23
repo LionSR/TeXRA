@@ -1701,7 +1701,7 @@ describe('CLI transcript state', () => {
     ]);
   });
 
-  it('projects workflow tools while excluding thinking and raw model prose', () => {
+  it('projects workflow tools and errors while excluding thinking and raw model prose', () => {
     patchStream(root, (slice) => ({
       ...slice,
       category: AgentCategory.Workflow,
@@ -1720,6 +1720,9 @@ describe('CLI transcript state', () => {
         output: 'done',
         status: 'completed',
       },
+    });
+    logger.error('workflow provider failed', {
+      messageType: MESSAGE_TYPES.ERROR,
     });
     patchStream(root, (slice) => ({
       ...slice,
@@ -1768,11 +1771,17 @@ describe('CLI transcript state', () => {
     syncStreamLog(root);
 
     const slice = streams.get().get(root);
-    expect(slice?.entries).toHaveLength(1);
-    expect(slice?.entries[0]?.role).toBe('tool');
+    expect(slice?.entries.map(({ role }) => role)).toEqual([
+      'tool',
+      'error',
+      'error',
+    ]);
+    expect(JSON.stringify(slice)).toContain('workflow provider failed');
+    expect(JSON.stringify(slice)).toContain('synthetic workflow error');
     expect(JSON.stringify(slice)).not.toContain('private workflow reasoning');
     expect(JSON.stringify(slice)).not.toContain('raw workflow model response');
-    expect(JSON.stringify(slice)).not.toContain('synthetic workflow');
+    expect(JSON.stringify(slice)).not.toContain('synthetic workflow prompt');
+    expect(JSON.stringify(slice)).not.toContain('synthetic workflow response');
     expect(JSON.stringify(slice)).not.toContain('workflow-process');
   });
 

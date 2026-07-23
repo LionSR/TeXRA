@@ -558,7 +558,8 @@ export function syncStreamLog(
         entry.synthetic &&
         (!workflowOperationalOnly ||
           entry.role === 'tool' ||
-          entry.role === 'phase'),
+          entry.role === 'phase' ||
+          entry.role === 'error'),
     );
     const streamFinal = isFinalTranscriptStatus(slice.status);
     const logCandidates: TranscriptCandidate[] = [];
@@ -571,7 +572,8 @@ export function syncStreamLog(
       if (
         workflowOperationalOnly &&
         rendered.role !== 'tool' &&
-        rendered.role !== 'phase'
+        rendered.role !== 'phase' &&
+        rendered.role !== 'error'
       ) {
         continue;
       }

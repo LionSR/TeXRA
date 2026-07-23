@@ -6,12 +6,19 @@ import {
   childStatusColor,
   pendingApprovalRowSuffix,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
-import { workflowInputContextSummary } from '@cli/chat/tui/panes/ConversationPane';
+import {
+  ConversationPane,
+  workflowInputContextSummary,
+} from '@cli/chat/tui/panes/ConversationPane';
 import {
   SubagentList,
   compactChildRowText,
 } from '@cli/chat/tui/panes/SubagentList';
-import type { StreamSlice } from '@cli/chat/tui/state/cliState';
+import {
+  activeStreamId,
+  streams as streamsSignal,
+  type StreamSlice,
+} from '@cli/chat/tui/state/cliState';
 import {
   streamTreeViews,
   type StreamView,
@@ -88,6 +95,53 @@ describe('CLI child list display model', () => {
     );
     expect(workflowInputContextSummary(toolUse)).toBeUndefined();
     expect(workflowInputContextSummary(undefined)).toBeUndefined();
+  });
+
+  it('prioritizes live workflow activity over metadata in a one-row viewport', async () => {
+    const { ink, React } = await loadInk();
+    const streamId = 'devise' as StreamTabId;
+    const slice = workflowAgentSlice(streamId, {
+      status: STREAM_PHASE.RUNNING,
+      files: {
+        input: ['paper.tex'],
+        context: ['notes.md'],
+        media: [],
+        output: [],
+      },
+      entries: [
+        {
+          id: 'live-tool',
+          role: 'tool',
+          text: '',
+          finalized: false,
+          toolUse: {
+            toolName: 'write_file',
+            errorText: '',
+            outputText: '',
+            userInstructionText: '',
+            input: { path: 'paper.tex' },
+            isError: false,
+            isUserFeedback: false,
+            headerSummary: 'Drafting paper.tex',
+            status: 'in_progress',
+          },
+        },
+      ],
+    });
+    activeStreamId.set(streamId);
+    streamsSignal.set(new Map([[streamId, slice]]));
+
+    try {
+      const output = ink.renderToString(
+        React.createElement(ConversationPane, { maxRows: 1, width: 80 }),
+        { columns: 80 },
+      );
+      expect(output).toContain('Drafting');
+      expect(output).not.toContain('Input:');
+    } finally {
+      activeStreamId.set(undefined);
+      streamsSignal.set(new Map());
+    }
   });
 
   it('keeps status markers steady and status colors independent of focus', () => {

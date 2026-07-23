@@ -136,7 +136,12 @@ export function ConversationPane(
 
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
   const workflowMetadata = workflowInputContextSummary(slice);
-  const metadataRows = workflowMetadata && maxRows > 0 ? 1 : 0;
+  const metadataRows =
+    workflowMetadata &&
+    maxRows > 0 &&
+    (displayEntries.length === 0 || maxRows > 1)
+      ? 1
+      : 0;
   const visibleEntries = selectTranscriptEntriesForViewport(
     displayEntries,
     Math.max(0, maxRows - metadataRows),
