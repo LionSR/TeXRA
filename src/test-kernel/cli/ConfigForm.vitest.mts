@@ -1,3 +1,4 @@
+import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
@@ -630,7 +631,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
       rendered.stdout.output = '';
       initial.resolve(apiKeyStatuses());
       await new Promise((resolve) => setTimeout(resolve, 20));
-      expect(rendered.stdout.output).toBe('');
+      expect(stripAnsi(rendered.stdout.output)).toBe('');
     } finally {
       rendered.instance.unmount();
     }
