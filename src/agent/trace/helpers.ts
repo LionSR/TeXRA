@@ -72,12 +72,17 @@ export function logCompactionActivity(
   trace: AgentTrace,
   state: CompactionActivityData['state'],
 ): void {
-  logProgressStatus(
-    trace,
+  trace.info(
     state === 'started'
       ? 'Compacting conversation context'
       : 'Conversation context compaction finished',
-    { activity: 'context_compaction', state } satisfies CompactionActivityData,
+    {
+      messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
+      data: {
+        activity: 'context_compaction',
+        state,
+      } satisfies CompactionActivityData,
+    },
   );
 }
 

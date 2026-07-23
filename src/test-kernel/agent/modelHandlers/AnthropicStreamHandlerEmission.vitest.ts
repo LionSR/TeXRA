@@ -116,7 +116,7 @@ describe('AnthropicStreamHandler compaction activity', () => {
     expect(logger.info).toHaveBeenLastCalledWith(
       'Compacting conversation context',
       expect.objectContaining({
-        messageType: 'progressStatus',
+        messageType: 'contextCompactionActivity',
         data: {
           activity: 'context_compaction',
           state: 'started',
@@ -129,7 +129,7 @@ describe('AnthropicStreamHandler compaction activity', () => {
     expect(logger.info).toHaveBeenLastCalledWith(
       'Conversation context compaction finished',
       expect.objectContaining({
-        messageType: 'progressStatus',
+        messageType: 'contextCompactionActivity',
         data: {
           activity: 'context_compaction',
           state: 'finished',

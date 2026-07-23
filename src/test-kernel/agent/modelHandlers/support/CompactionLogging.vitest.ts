@@ -84,23 +84,21 @@ describe('logCompactionActivity', () => {
       [
         'Compacting conversation context',
         {
-          messageType: 'progressStatus',
+          messageType: 'contextCompactionActivity',
           data: {
             activity: 'context_compaction',
             state: 'started',
           },
-          stageId: undefined,
         },
       ],
       [
         'Conversation context compaction finished',
         {
-          messageType: 'progressStatus',
+          messageType: 'contextCompactionActivity',
           data: {
             activity: 'context_compaction',
             state: 'finished',
           },
-          stageId: undefined,
         },
       ],
     ]);

@@ -153,13 +153,14 @@ function latestLogActivityIsThinking(
 function latestCompactionActivityIsRunning(
   entries: readonly StreamLogEntry[],
 ): boolean {
-  const entry = entries.findLast(
-    (candidate) =>
-      candidate.messageType === MESSAGE_TYPES.PROGRESS_STATUS &&
-      CompactionActivityDataSchema.safeParse(candidate.data).success,
-  );
-  if (!entry) return false;
-  return CompactionActivityDataSchema.parse(entry.data).state === 'started';
+  for (const entry of entries.toReversed()) {
+    if (entry.messageType === MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY) {
+      const activity = CompactionActivityDataSchema.safeParse(entry.data);
+      if (activity.success) return activity.data.state === 'started';
+    }
+    if (LIVE_ACTIVITY_MESSAGE_TYPES.has(entry.messageType ?? '')) return false;
+  }
+  return false;
 }
 
 /** Tool inputs are typed `unknown` (model-supplied JSON) and reach us

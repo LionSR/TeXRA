@@ -59,6 +59,7 @@ const NULLABLE_TYPES: Set<MessageType> = new Set([
   'modelResponse',
   'contextState',
   'contextManagement',
+  'contextCompactionActivity',
 ]);
 
 /** Create an error fallback template when formatting fails. */
@@ -144,6 +145,7 @@ const TEMPLATE_FORMATTERS: Record<string, TemplateFormatterFn | null> = {
 
   // Special cases
   contextState: () => null, // Displayed in footer
+  contextCompactionActivity: () => null, // Ephemeral CLI/TUI status signal
   userMessage: wrapWithErrorHandling(formatUserMessageTemplate, 'user message'),
   progressStatus: wrapWithErrorHandling(
     formatProgressStatusTemplate,

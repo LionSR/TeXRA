@@ -1952,6 +1952,21 @@ describe('CLI transcript state', () => {
     expect(slice?.entries).toEqual([]);
   });
 
+  it('clears an unmatched compaction start when later live activity arrives', () => {
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
+
+    logCompactionActivity(logger, 'started');
+    syncStreamLog(root);
+    expect(streams.get().get(root)?.compactingActive).toBe(true);
+
+    logger.info('A later turn started.', {
+      messageType: MESSAGE_TYPES.USER_MESSAGE,
+    });
+    syncStreamLog(root);
+
+    expect(streams.get().get(root)?.compactingActive).toBe(false);
+  });
+
   it('does not project empty assistant responses into transcript rows', () => {
     const logger = createRunTrace(root, defaultSession().transcripts).trace;
     logger.info('', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
