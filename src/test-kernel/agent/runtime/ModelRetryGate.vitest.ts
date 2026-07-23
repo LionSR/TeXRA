@@ -6,6 +6,9 @@ import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 
 const ROUTE = 'openai:subscription:gpt-5.6';
 const TRANSIENT = new Error('temporary connection failure');
+const UNAUTHORIZED = Object.assign(new Error('relay token expired'), {
+  status: 401,
+});
 
 function options(signal: AbortSignal, baseBackoffMs = 1000) {
   return {
@@ -218,6 +221,50 @@ describe('ModelRetryGate', () => {
     await vi.advanceTimersByTimeAsync(1);
     await next;
     expect(nextOperation).toHaveBeenCalledOnce();
+    gate.dispose();
+  });
+
+  it('keeps peers queued after an unclassified probe failure', async () => {
+    const gate = new ModelRetryGate();
+    await openGate(gate);
+
+    let rejectProbe = (_error: Error): void => undefined;
+    const probeResult = new Promise<void>((_resolve, reject) => {
+      rejectProbe = reject;
+    });
+    const failedProbe = gate.run(
+      ROUTE,
+      {
+        ...options(new AbortController().signal),
+        classifyFailure: (error: Error) =>
+          error === TRANSIENT ? {} : undefined,
+      },
+      () => probeResult,
+    );
+    const failedProbeResult = expect(failedProbe).rejects.toBe(UNAUTHORIZED);
+    const firstPeerOperation = vi.fn(async () => undefined);
+    const firstPeer = gate.run(
+      ROUTE,
+      options(new AbortController().signal),
+      firstPeerOperation,
+    );
+    const secondPeerOperation = vi.fn(async () => undefined);
+    const secondPeer = gate.run(
+      ROUTE,
+      options(new AbortController().signal),
+      secondPeerOperation,
+    );
+
+    await vi.advanceTimersByTimeAsync(1000);
+    rejectProbe(UNAUTHORIZED);
+    await failedProbeResult;
+    expect(firstPeerOperation).not.toHaveBeenCalled();
+    expect(secondPeerOperation).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.all([firstPeer, secondPeer]);
+    expect(firstPeerOperation).toHaveBeenCalledOnce();
+    expect(secondPeerOperation).toHaveBeenCalledOnce();
     gate.dispose();
   });
 

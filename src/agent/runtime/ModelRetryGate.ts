@@ -77,6 +77,12 @@ export class ModelRetryGate {
             options.baseBackoffMs,
             failure.retryAfterMs,
           );
+        } else if (permit.probe) {
+          // An unclassified failure does not prove that a recovering route is
+          // reachable. Keep the cohort closed and hand probe ownership to one
+          // waiter; shared credential failures can otherwise release every
+          // peer before their out-of-gate recovery finishes.
+          this.abandon(route, permit);
         } else {
           this.markReachable(route, permit);
         }
