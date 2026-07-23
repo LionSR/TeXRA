@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.39.8] - Unreleased
+## [0.39.8]
 
 ### Shared (all surfaces)
 
