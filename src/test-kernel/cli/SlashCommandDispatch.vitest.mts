@@ -443,17 +443,25 @@ describe('handleTuiSlashCommand', () => {
           'TeXRA: signed in',
         ],
       });
-    vi.spyOn(apiStatus, 'loadCliApiStatusLines').mockResolvedValue([
-      'api: Included TeXRA access',
-      'auth: signed in',
-      'tier: researcher',
-      'included usage this month: 25% used, 75% remaining',
-    ]);
+    vi.spyOn(apiStatus, 'loadCliApiStatus').mockResolvedValue({
+      lines: [
+        'api: included TeXRA access',
+        'auth: signed in · tier: researcher · included usage this month: 25% used, 75% remaining',
+      ],
+      detailLines: [
+        'tier: researcher',
+        'included usage this month: 25% used, 75% remaining',
+      ],
+    });
     const context = createContext(createSession());
 
     await handleTuiSlashCommand('/auth', context);
     const authStatusText = lastEntryText();
     expect(authStatusText).toContain('model access: ChatGPT subscription');
+    expect(authStatusText).toContain('tier: researcher');
+    expect(authStatusText).toContain(
+      'included usage this month: 25% used, 75% remaining',
+    );
 
     await handleTuiSlashCommand('/api status', context);
     const apiStatusText = lastEntryText();

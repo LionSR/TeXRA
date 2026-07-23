@@ -147,20 +147,48 @@ function orchestrationLinesRowCost(
   );
 }
 
+function compactOrchestrationStatusLines(
+  statusLines: readonly string[],
+): readonly string[] {
+  return statusLines.map((line) => {
+    if (!line.startsWith('auth: signed in')) return line;
+    const suffix = line.indexOf(' · ');
+    return suffix < 0 ? line : line.slice(0, suffix);
+  });
+}
+
 function orchestrationLauncherLayoutCandidates(
   statusLines: readonly string[],
   footerHints: readonly string[],
 ): OrchestrationLauncherLayoutCandidate[] {
+  const compactStatusLines = compactOrchestrationStatusLines(statusLines);
+  const hasCompactFallback = compactStatusLines.some(
+    (line, index) => line !== statusLines[index],
+  );
   const candidates: OrchestrationLauncherLayoutCandidate[] = [
     { statusLines, footerHints },
-    { statusLines, footerHints: [] },
   ];
+  if (hasCompactFallback) {
+    candidates.push({ statusLines: compactStatusLines, footerHints });
+  }
+  if (footerHints.length > 0) {
+    candidates.push({ statusLines, footerHints: [] });
+    if (hasCompactFallback) {
+      candidates.push({ statusLines: compactStatusLines, footerHints: [] });
+    }
+  }
 
   for (let count = statusLines.length - 1; count > 0; count -= 1) {
     candidates.push({
       statusLines: statusLines.slice(0, count),
       footerHints: [],
     });
+    if (hasCompactFallback) {
+      candidates.push({
+        statusLines: compactStatusLines.slice(0, count),
+        footerHints: [],
+      });
+    }
   }
   candidates.push({ statusLines: [], footerHints: [] });
   return candidates;

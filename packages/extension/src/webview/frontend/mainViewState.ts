@@ -119,21 +119,11 @@ export const checkboxValues$ = trackedSignal<CheckboxValues>(() => ({
 export const isGitRepo$ = trackedSignal(() => true);
 
 // ---------------------------------------------------------------------------
-// LaTeX-diffs / files-panel UI state
+// LaTeX-diffs UI state
 // ---------------------------------------------------------------------------
 
 export const latexdiffsVisible$ = trackedSignal(
   () => DEFAULT_STATE.latexdiffsVisible,
-);
-/**
- * Tracks whether the workflow Files <wa-details> is open. Initialized to
- * match the initial session type and updated imperatively from
- * wa-show/wa-hide so user toggles survive across re-renders. Without this,
- * binding `?open=${isWorkflow}` would force the section open on every render
- * pass, defeating user collapses.
- */
-export const fileSelectionOpen$ = trackedSignal(
-  () => DEFAULT_STATE.sessionType === SESSION_TYPES.WORKFLOW,
 );
 
 // ---------------------------------------------------------------------------

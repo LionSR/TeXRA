@@ -18,6 +18,10 @@ import type { ContextProvider } from '@lit/context';
 // evaluated only inside the hook below, after the jsdom globals are installed.
 let ContextProviderCtor: typeof ContextProvider;
 let mainViewSessionContext: typeof sessionContext;
+const sessionProviders = new WeakMap<
+  InstructionPanel,
+  { setValue(value: SessionContextValue): void }
+>();
 
 function teamOption(
   value: string,
@@ -92,8 +96,17 @@ async function mountPanel(
   element.showSessionHint = showSessionHint;
   wrapper.append(element);
   document.body.append(wrapper);
+  sessionProviders.set(element, provider);
   await element.updateComplete;
   return element;
+}
+
+async function updatePanelSession(
+  element: InstructionPanel,
+  session: SessionContextValue,
+): Promise<void> {
+  sessionProviders.get(element)?.setValue(session);
+  await element.updateComplete;
 }
 
 function query<T extends HTMLElement>(
@@ -177,13 +190,35 @@ describe('instruction-panel launcher', () => {
       ).toBe('true');
     });
 
-    it('shows the workflow agent picker in workflow sessions', async () => {
+    it('shows the workflow agent picker directly without the launch-target toggle', async () => {
       const element = await mountPanel(
         makeSession({ sessionType: 'workflow' }),
       );
 
+      expect(query(element, '#launchTargetToggle')).toBeNull();
       expect(query(element, '#workflowAgent')).toBeTruthy();
+      expect(query(element, '#agentSettingsButton')).toBeTruthy();
       expect(query(element, '#toolUseAgent')).toBeNull();
+      expect(query(element, '#teamPicker')).toBeNull();
+      expect(query(element, '#teamSettingsButton')).toBeNull();
+    });
+
+    it('ignores stale team state when rendering a workflow launcher', async () => {
+      const element = await mountPanel(
+        makeSession({ sessionType: 'workflow', launchTarget: 'team' }),
+      );
+
+      expect(query(element, '#launchTargetToggle')).toBeNull();
+      expect(query(element, '#workflowAgent')).toBeTruthy();
+      expect(query(element, '#teamPicker')).toBeNull();
+      expect(query(element, '#model')?.getAttribute('aria-label')).toBe(
+        'Model',
+      );
+      expect(
+        query(element, 'wa-callout.session-hint')?.getAttribute(
+          'data-hint-key',
+        ),
+      ).toBe('workflow');
     });
 
     it('intercepts the browse-all-agents sentinel: restores the current agent and opens the catalog instead of an agent-change', async () => {
@@ -223,6 +258,23 @@ describe('instruction-panel launcher', () => {
   });
 
   describe('team launcher', () => {
+    it('reconciles the hidden picker from Agent with no team to Team with a normalized selection', async () => {
+      const initialSession = makeSession();
+      const element = await mountPanel(initialSession);
+
+      await updatePanelSession(element, {
+        ...initialSession,
+        teamOptions: TEAM_SESSION.teamOptions,
+      });
+      await updatePanelSession(element, TEAM_SESSION);
+
+      const picker = query<HTMLElement>(element, '#teamPicker');
+      expect(
+        element.shadowRoot?.querySelectorAll('#teamPicker wa-option'),
+      ).toHaveLength(3);
+      expect((picker as unknown as { value: string }).value).toBe('physicist');
+    });
+
     it('renders the team picker with options and the manage-teams sentinel, hiding the agent picker', async () => {
       const element = await mountPanel(TEAM_SESSION);
 
@@ -270,6 +322,17 @@ describe('instruction-panel launcher', () => {
       expect(disabledOption?.getAttribute('aria-label')).toBe(
         'Reviewers, custom team',
       );
+    });
+
+    it('does not show instructional copy when the team picker receives focus', async () => {
+      const element = await mountPanel(TEAM_SESSION);
+      const events = recordEvents(element, ['focus-instruction']);
+
+      query<HTMLElement>(element, '#teamPicker')?.dispatchEvent(
+        new Event('focus'),
+      );
+
+      expect(events).toEqual([]);
     });
 
     it('dispatches team-change when a team is picked', async () => {

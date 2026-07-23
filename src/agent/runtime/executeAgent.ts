@@ -384,6 +384,7 @@ export async function executeAgent(
       executionId,
       runtimeHost,
       onBeforeActivation: options.onStreamResolved,
+      suppressViewSwitch: options.isSubagent,
       enforceCategory: options.enforceCategory,
       suppressErrorNotification: options.isSubagent,
       session: options.session,
@@ -529,6 +530,7 @@ export async function resumeToolUseFromResumeData(
         runtimeHost,
         streamTabIdOverride: resume.streamId,
         modelHandlerCompatibilityKey,
+        suppressViewSwitch: isSubagent,
         // resumeCommand surfaces its own warning toast on failure; skip the
         // bus-level error to avoid double-notifying.
         suppressErrorNotification: true,
