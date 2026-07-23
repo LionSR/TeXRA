@@ -11,21 +11,19 @@ All notable changes to this project will be documented in this file.
 - **The Mathematician team includes the critique workflow** — mathematical team
   runs can delegate a dedicated critical review directly.
 - **The orchestrator agent can run scripted multi-agent pipelines** — the
-  built-in Orchestrator agent now has access to Workflow Script, for
-  fan-out/pipeline/join runs whose structure is known up front. The Tools
-  dashboard (and CLI `/tools`) lists Workflow Script as a toggleable
-  integration, off by default for new installs; turning it off removes the
-  capability from every agent, even ones whose configuration enables it
-  explicitly.
+  built-in Orchestrator supports planned fan-out, pipeline, and join runs.
+  Workflow Script is an opt-in integration in the Tools dashboard and CLI
+  `/tools`; disabling it applies to every agent.
 
 #### Bug Fixes
 
 - **Brief network interruptions no longer stop model turns immediately** —
-  requests retry automatically when a transport failure escapes the provider
-  client.
-- **Parallel runs finish reliably after long pauses** — delayed storage work
-  no longer causes the application to exit while several agents are saving
-  their final results.
+  requests retry automatically when a provider connection drops unexpectedly.
+- **Expired OpenAI connections no longer crash long-running sessions** — when
+  a connection expires between turns, the next turn reconnects instead of
+  terminating TeXRA.
+- **Parallel runs finish reliably after long pauses** — several agents can save
+  their final results without TeXRA exiting early.
 - **PDF attachments work with ChatGPT subscriptions** — documents can be sent
   directly to supported models.
 - **Parent agents can inspect generated workflow files directly** — delegated
@@ -33,11 +31,29 @@ All notable changes to this project will be documented in this file.
 - **Nested orchestrators respect delegated-task auto-approval** — enabling
   automatic delegation on a parent now lets its suborchestrators continue
   delegating without additional permission prompts.
-- **Latexdiff artifacts with short abbreviated commit hashes are recognized
-  consistently** — a generated `basename-diffHASH.tex` file with a 4-5
-  character hash is now reliably treated as a diff artifact everywhere
-  (source-editing tools, cleanup/pack commands, follow-up routing) instead of
-  being misclassified as an editable source file in some code paths.
+- **Starting a subagent no longer changes the active view** — new and resumed
+  child runs stay in the background until selected.
+- **Personal-key and subscription sessions avoid unnecessary reconnects** —
+  model connections no longer rebuild repeatedly because an unrelated
+  included-access sign-in is nearing renewal.
+- **Latexdiff files with short commit hashes stay protected** — generated
+  comparisons with 4-5-character hashes are recognized correctly during
+  editing, cleanup, packaging, and follow-up runs.
+
+### Extension (VS Code) and Desktop
+
+#### New Features
+
+- **Preset teams can run from the main launcher** — interactive sessions can
+  switch between an individual agent and a team, choose a preset, and handle
+  unavailable members before launch.
+- **Codex runs show per-turn progress** — the progress view displays the thread
+  ID, live turn status, elapsed time, and failures.
+
+#### Bug Fixes
+
+- **Completed background tasks leave the session list** — finished shell tasks
+  are removed after their results are saved instead of leaving stale tabs.
 
 ### Extension (VS Code)
 
@@ -55,29 +71,32 @@ All notable changes to this project will be documented in this file.
 #### New Features
 
 - **Overleaf projects can be cloned from the terminal** — `texra clone`
-  accepts an Overleaf or ShareLaTeX project URL or project ID, stores the Git
-  token securely, and clones into an empty working directory.
+  accepts an Overleaf or ShareLaTeX project URL or project ID, securely stores
+  the Git token, and can create an optional destination directory.
 - **Kimi Code subscription joins model access** — the launcher and `/api` now
   offer Kimi Code alongside ChatGPT subscription, included TeXRA access, and
   personal API keys. Selecting it routes Kimi models through your Kimi Code
   membership while other models fall back to your saved keys.
-- **API keys can be set from `/config`** — a new "API keys" entry opens the
-  masked key-entry form for every provider, and a "Prefer Kimi Code" toggle
-  appears under "Models and providers".
+- **API keys and provider routing can be managed from `/config`** — masked key
+  status and secure entry are available for every provider, with Kimi Code,
+  provider region, and GLM Coding Plan preferences under "Models and providers".
 - **Nested subagents remain visible** — a focused subagent reports how many
   direct subagents it owns, including completed work that remains available in
   its child list.
-- **Selected subagents show their working files and live workflow progress** —
-  selecting a child opens a separate detail surface for input, context, media,
-  latest-round output paths, round progress, and tool-call counts while the
-  child list remains compact; press `i` to hide or restore the details.
+- **Focused workflow agents show concise live activity** — selecting a workflow
+  child shows input and context counts, phase changes, tool calls, and errors
+  without filling the conversation with raw model prose.
 
 #### Bug Fixes
 
 - **Model failures show their reason** — failed model requests now include a
   concise provider message and are no longer labeled as tool failures.
+- **Large multi-agent runs use substantially less memory** — inactive subagent
+  transcripts remain available without accumulating in the CLI.
 - **Escape stops only the focused agent** — other running agents continue, and
   navigation returns to the owning session after a subagent is stopped.
+- **Background shell rows no longer claim a model** — Bash sessions omit the
+  parent agent's model while agents actually named `bash` still show theirs.
 - **API-key retries use the current saved key** — retrying after a relay or
   subscription limit rechecks the selected provider key before switching. If
   no key is available, the CLI directs you to `/key`. If a replacement client
@@ -164,8 +183,6 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
-- **Large multi-agent runs use substantially less memory** — inactive
-  subagent transcripts remain available without accumulating in the CLI.
 - **Generated-file history reports inaccessible files** — unreadable artifacts
   now produce an error instead of appearing as empty files.
 - **ChatGPT limits no longer switch credentials silently** — the CLI shows the
