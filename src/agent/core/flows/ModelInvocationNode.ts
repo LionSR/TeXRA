@@ -16,7 +16,15 @@ import type {
   ModelCredentialSelection,
 } from '@agent/types/ModelHandlerContracts';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
-import { classifyWireRouteFailure } from '@common/errors/sdkErrorUtils';
+import {
+  classifyModelRateLimitFailure,
+  classifyRelayRequestLimitFailure,
+  classifyWireRouteFailure,
+  isModelRateLimitFailure,
+  isRelayProviderUnobservedFailure,
+  isRelayRequestGateReachableFailure,
+  isRelayRequestGateUnobservedFailure,
+} from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
 
 import { FlowTransition } from './FlowTransitions';
@@ -25,6 +33,8 @@ import {
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
+
+const RELAY_USER_REQUEST_GATE_ROUTE = 'relay:user-request-gate';
 
 export interface ModelInvocationConfig<TShared, TServices> {
   operationName: string;
@@ -119,7 +129,11 @@ export class ModelInvocationNode<
 
     return this.withAbortController(async (signal) => {
       const wireRoute = services.modelHandler.getWireRouteKey(services.client);
+      const modelRetryRoute = services.modelHandler.getModelRetryRouteKey(
+        services.client,
+      );
       const gate = useLaunchRunContext().runScope.session.modelRetries;
+      const usesRelay = services.clientCredentialRoute === 'relay';
       const invoke = async () => {
         const start = Date.now();
         const result = await services.modelHandler.createResponse({
@@ -148,10 +162,31 @@ export class ModelInvocationNode<
         {
           signal,
           baseBackoffMs: this._retryBackoffMs,
-          // One wire route owns transport, server-failure, and rate-limit
-          // cooling. This coordinates every call sharing a credential and
-          // endpoint without the lock cycles of nested recovery scopes.
+          // One wire route owns transport and server-failure cooling. A second
+          // ordered scope keeps model-specific limits from blocking healthy
+          // sibling models on the same credential and endpoint. Relay calls
+          // also share the server's cross-provider per-user request gate.
           classifyFailure: classifyWireRouteFailure,
+          isReachableFailure: isModelRateLimitFailure,
+          isUnobservedFailure: isRelayProviderUnobservedFailure,
+          additionalRoutes: [
+            {
+              key: modelRetryRoute,
+              classifyFailure: classifyModelRateLimitFailure,
+              isUnobservedFailure: isRelayProviderUnobservedFailure,
+            },
+          ],
+          trailingRoutes: usesRelay
+            ? [
+                {
+                  key: RELAY_USER_REQUEST_GATE_ROUTE,
+                  classifyFailure: classifyRelayRequestLimitFailure,
+                  isReachableFailure: isRelayRequestGateReachableFailure,
+                  isUnobservedFailure: isRelayRequestGateUnobservedFailure,
+                  releaseEarlierProbesBeforeWait: true,
+                },
+              ]
+            : undefined,
           onWait: (delayMs) =>
             services.logger.debug(
               `Waiting ${delayMs}ms for the model recovery probe.`,

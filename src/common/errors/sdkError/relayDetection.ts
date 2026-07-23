@@ -64,19 +64,84 @@ export function isRelayError(rawErrorBody: unknown): boolean {
   return isObject(nested) && '_relay' in nested;
 }
 
-/** True when the relay rejected the request due to the user's monthly
- *  spending limit being reached (supabase/functions/relay marks this with
- *  `limitReached: true` in the error body). */
-export function isRelayMonthlyLimitBody(rawErrorBody: unknown): boolean {
+function hasRelayBooleanFlag(rawErrorBody: unknown, field: string): boolean {
   if (!isObject(rawErrorBody)) return false;
-  if ((rawErrorBody as { limitReached?: unknown }).limitReached === true) {
+  if ((rawErrorBody as Record<string, unknown>)[field] === true) {
     return true;
   }
   const nested = (rawErrorBody as { error?: unknown }).error;
   return (
-    isObject(nested) &&
-    (nested as { limitReached?: unknown }).limitReached === true
+    isObject(nested) && (nested as Record<string, unknown>)[field] === true
   );
+}
+
+/** True when the relay rejected the request due to the user's monthly
+ *  spending limit being reached (supabase/functions/relay marks this with
+ *  `limitReached: true` in the error body). */
+export function isRelayMonthlyLimitBody(rawErrorBody: unknown): boolean {
+  return hasRelayBooleanFlag(rawErrorBody, 'limitReached');
+}
+
+/** True when the relay's per-user request or concurrency gate rejected a call. */
+export function isRelayRequestLimitBody(rawErrorBody: unknown): boolean {
+  return hasRelayBooleanFlag(rawErrorBody, 'requestLimitReached');
+}
+
+/** Admission mode reported by the relay request gate. */
+export function getRelayRequestLimitReason(
+  rawErrorBody: unknown,
+): 'concurrency' | 'rate' | undefined {
+  if (!isObject(rawErrorBody)) return undefined;
+  const candidates = [
+    rawErrorBody,
+    (rawErrorBody as { error?: unknown }).error,
+  ];
+  for (const candidate of candidates) {
+    if (!isObject(candidate)) continue;
+    const reason = candidate.reason;
+    if (reason === 'concurrency' || reason === 'rate') return reason;
+  }
+  return undefined;
+}
+
+/** Retry delay returned by the relay's per-user request gate. */
+export function getRelayRequestLimitRetryAfterMs(
+  rawErrorBody: unknown,
+): number | undefined {
+  if (!isObject(rawErrorBody)) return undefined;
+  const candidates = [
+    rawErrorBody,
+    (rawErrorBody as { error?: unknown }).error,
+  ];
+  for (const candidate of candidates) {
+    if (!isObject(candidate)) continue;
+    const seconds = candidate.retryAfterSeconds;
+    if (
+      typeof seconds === 'number' &&
+      Number.isFinite(seconds) &&
+      seconds >= 0
+    ) {
+      return seconds * 1000;
+    }
+  }
+  return undefined;
+}
+
+/** True only when a provider body explicitly identifies a model-scoped limit. */
+export function isModelScopedRateLimitBody(rawErrorBody: unknown): boolean {
+  if (!isObject(rawErrorBody)) return false;
+  const candidates = [
+    rawErrorBody,
+    (rawErrorBody as { error?: unknown }).error,
+  ];
+  return candidates.some((candidate) => {
+    if (!isObject(candidate)) return false;
+    const scope =
+      pickStringField(candidate, 'scope') ??
+      pickStringField(candidate, 'rate_limit_scope') ??
+      pickStringField(candidate, 'rateLimitScope');
+    return scope?.toLowerCase() === 'model';
+  });
 }
 
 export function isRelayMonthlyLimitMessage(

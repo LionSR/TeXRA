@@ -60,6 +60,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
         createResponse: vi.fn(async () => ({ response: null })),
         createUserFollowUpMessages,
         getWireRouteKey: () => 'openai:test-route',
+        getModelRetryRouteKey: () => 'openai:test-route:model',
         setOutputStreaming: vi.fn(),
       },
       session: {
@@ -212,6 +213,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
               ]
             : [],
         getWireRouteKey: () => 'openai:test-route',
+        getModelRetryRouteKey: () => 'openai:test-route:model',
         getStreamingConfig: () => false,
         isEndTurnStop: (stopReason: string) => stopReason === 'stop',
         processThinkingBlock: () => null,
@@ -399,6 +401,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
         }),
         extractToolUse: () => [],
         getWireRouteKey: () => 'openai:test-route',
+        getModelRetryRouteKey: () => 'openai:test-route:model',
         getStreamingConfig: () => false,
         isEndTurnStop: (stopReason: string) => stopReason === 'stop',
         processThinkingBlock: () => null,
