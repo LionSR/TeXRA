@@ -1209,6 +1209,49 @@ describe('ModelHandlerAnthropic message guards', () => {
     assert.deepEqual(activityStates, ['started', 'finished']);
   });
 
+  it('drops tracked PDF pages covered by the latest compaction block', () => {
+    const handler = createAnthropicHandler({ supportsNativePdf: true });
+    const target = handler as unknown as {
+      uploadedPdfPageCounts: Map<string, number>;
+      pruneTrackedPdfPages(messages: MessageParam[]): void;
+    };
+    target.uploadedPdfPageCounts.set('file_before_compaction', 50);
+    target.uploadedPdfPageCounts.set('file_after_compaction', 2);
+
+    target.pruneTrackedPdfPages([
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: { type: 'file', file_id: 'file_before_compaction' },
+          },
+        ] as unknown as ContentBlockParam[],
+      },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'compaction', content: '<summary>state</summary>' },
+          { type: 'text', text: 'Compacted.', citations: null },
+        ] as unknown as ContentBlockParam[],
+      },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: { type: 'file', file_id: 'file_after_compaction' },
+          },
+        ] as unknown as ContentBlockParam[],
+      },
+    ]);
+
+    assert.deepEqual(
+      [...target.uploadedPdfPageCounts.entries()],
+      [['file_after_compaction', 2]],
+    );
+  });
+
   it.each([
     {
       label: 'large',
