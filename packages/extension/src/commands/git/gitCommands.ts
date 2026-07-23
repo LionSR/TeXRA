@@ -9,7 +9,12 @@ import {
   cloneOverleafProject as runOverleafClone,
   type OverleafCloneWorkflowPorts,
 } from '@latex/overleafClone';
-import { parseLatexGitUrl, type OverleafRemote } from '@latex/overleafProject';
+import {
+  OVERLEAF_GIT_TOKEN_URL,
+  OVERLEAF_TOKEN_DOCS_URL,
+  parseLatexGitUrl,
+  type OverleafRemote,
+} from '@latex/overleafProject';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
@@ -24,10 +29,6 @@ import { extendEnvPath } from '@utils/system/platformPaths';
 import { isGitRepository } from '@utils/system/isGitRepository';
 
 const CHANNEL = 'gitCommands';
-
-const OVERLEAF_GIT_TOKEN_URL = 'https://www.overleaf.com/user/settings';
-const OVERLEAF_TOKEN_DOCS_URL =
-  'https://docs.overleaf.com/integrations-and-add-ons/git-integration-and-github-synchronization/git-integration/git-integration-authentication-tokens';
 
 export const gitCommands = {
   isGitRepository: 'texra.isGitRepository',

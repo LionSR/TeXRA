@@ -37,6 +37,7 @@ import {
   logoutCommand,
 } from './auth';
 import { chatCommand } from './chat';
+import { cloneCommand } from './clone';
 import { completionCommand } from './completion';
 import { configCommand } from './config';
 import { doctorCommand } from './doctor';
@@ -82,6 +83,7 @@ export const rootCommand = withUsageSections(
     subCommands: {
       orchestrate: orchestrationCommand,
       chat: chatCommand,
+      clone: cloneCommand,
       run: runWorkflowCommand,
       resume: resumeCommand,
       setup: setupCommand,
@@ -120,6 +122,10 @@ export const rootCommand = withUsageSections(
         ['texra auth chatgpt login', 'sign in with a ChatGPT subscription'],
         ['texra login', 'sign in with Researcher Access'],
         ['texra chat', 'start an interactive tool-use session'],
+        [
+          'texra clone <project> --cwd ./paper',
+          'clone an Overleaf or ShareLaTeX project',
+        ],
         ['texra run <agent> --input file.tex', 'run a workflow agent headless'],
         ['texra agents list', 'list the available agents'],
         ['texra config agents --all', 'show all agents in this workspace'],

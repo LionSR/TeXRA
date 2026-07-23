@@ -32,7 +32,8 @@ and push as usual.
   - **macOS:** `brew install git` (via [Homebrew](./installation.md#homebrew)), or run `xcode-select --install` to get git as part of the Xcode Command Line Tools.
   - **Windows:** Download the installer from [git-scm.com](https://git-scm.com/downloads), or install via `winget install --id Git.Git -e`.
   - **Linux (Ubuntu/Debian):** `sudo apt-get install git`.
-- TeXRA installed in VS Code ([Installation Guide](./installation.md)).
+- TeXRA installed as either the VS Code extension or the `texra` CLI
+  ([Installation Guide](./installation.md)).
 
 ## Workflow Steps
 
@@ -57,7 +58,23 @@ The whole loop is a round-trip: pull your project down from Overleaf, edit it lo
 
 > **Token storage:** Reset the cached token anytime via the VS Code command **Developer: Clear Secret Storage**.
 
-#### Option B: Manual terminal fallback
+#### Option B: Use the TeXRA CLI
+
+Create an empty destination directory, then pass either the Overleaf project
+URL or its 24-character project ID:
+
+```bash
+mkdir paper
+texra clone 0123456789abcdef01234567 --cwd ./paper
+```
+
+The CLI requests the Git token without displaying it and saves the token in
+TeXRA's local secret store. Later clones reuse the saved token. In scripts,
+`--no-input` disables the prompt; the command then requires a token saved by an
+earlier interactive invocation. Self-hosted ShareLaTeX project and Git URLs are
+accepted by the same command.
+
+#### Option C: Manual terminal fallback
 
 1.  **Overleaf:** Go to your project > **Menu** > **Git**. Copy the Git **clone URL** (`https://git.overleaf.com/YOUR_PROJECT_ID`).
     ![Overleaf Git Menu](/images/overleaf-git.png)

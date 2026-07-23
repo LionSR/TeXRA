@@ -44,39 +44,61 @@ export interface OverleafCloneWorkflowPorts {
   logCloneError(message: string): void;
 }
 
+type OverleafCloneOutcome =
+  | { status: 'success' }
+  | { status: 'cancelled' }
+  | { status: 'invalidToken' }
+  | { status: 'gitMissing' }
+  | { status: 'workspaceUnreadable' }
+  | { status: 'workspaceNotEmpty' }
+  | { status: 'authFailure' }
+  | { status: 'cloneFailed' };
+
+type TokenResolution =
+  | { status: 'ready'; credential: GitCredential }
+  | { status: 'cancelled' }
+  | { status: 'invalidToken' };
+
+type ClonePreconditionFailure =
+  | { status: 'gitMissing' }
+  | { status: 'workspaceUnreadable' }
+  | { status: 'workspaceNotEmpty' };
+
 async function resolveOverleafToken(
   remote: OverleafRemote,
   ports: OverleafCloneWorkflowPorts,
-): Promise<GitCredential | null> {
+): Promise<TokenResolution> {
   const spec = overleafTokenSpec(remote);
   const isValid = (t: string): boolean => spec.tokenValidator?.(t) ?? true;
 
   const stored = (await ports.getStoredToken(spec.tokenKey))?.trim() ?? '';
-  if (stored && isValid(stored)) return buildGitCredential(stored);
+  if (stored && isValid(stored)) {
+    return { status: 'ready', credential: buildGitCredential(stored) };
+  }
   if (stored) await ports.deleteStoredToken(spec.tokenKey);
 
   const input = await ports.promptToken(spec);
-  if (!input) return null;
+  if (!input) return { status: 'cancelled' };
 
   if (!isValid(input)) {
     const message = spec.tokenHint
       ? `Invalid token format. ${spec.tokenHint}`
       : 'Invalid token format.';
     await ports.showInvalidToken(spec, message);
-    return null;
+    return { status: 'invalidToken' };
   }
 
   await ports.storeToken(spec.tokenKey, input);
-  return buildGitCredential(input);
+  return { status: 'ready', credential: buildGitCredential(input) };
 }
 
 async function checkOverleafClonePreconditions(
   workspacePath: string,
   ports: OverleafCloneWorkflowPorts,
-): Promise<boolean> {
+): Promise<ClonePreconditionFailure | null> {
   if (!ports.isGitAvailable()) {
     await ports.showGitMissing();
-    return false;
+    return { status: 'gitMissing' };
   }
 
   let entries: Iterable<string>;
@@ -84,15 +106,15 @@ async function checkOverleafClonePreconditions(
     entries = await ports.listWorkspaceEntries(workspacePath);
   } catch (e) {
     ports.showWorkspaceUnreadable(e);
-    return false;
+    return { status: 'workspaceUnreadable' };
   }
 
   if ([...entries].some((name) => !IGNORED_CLONE_FILES.has(name))) {
     ports.showWorkspaceNotEmpty();
-    return false;
+    return { status: 'workspaceNotEmpty' };
   }
 
-  return true;
+  return null;
 }
 
 function isCloneAuthError(e: unknown): boolean {
@@ -112,28 +134,36 @@ export async function cloneOverleafProject(
   remote: OverleafRemote,
   workspacePath: string,
   ports: OverleafCloneWorkflowPorts,
-): Promise<void> {
-  const credential = await resolveOverleafToken(remote, ports);
-  if (!credential) return;
+): Promise<OverleafCloneOutcome> {
+  const token = await resolveOverleafToken(remote, ports);
+  if (token.status !== 'ready') return token;
 
-  const canClone = await checkOverleafClonePreconditions(workspacePath, ports);
-  if (!canClone) return;
+  const preconditionFailure = await checkOverleafClonePreconditions(
+    workspacePath,
+    ports,
+  );
+  if (preconditionFailure) return preconditionFailure;
 
-  const remoteUrl = buildAuthenticatedRemoteUrl(remote, credential);
+  const remoteUrl = buildAuthenticatedRemoteUrl(remote, token.credential);
   const label = remote.isOverleaf ? 'Overleaf' : 'ShareLaTeX';
 
   try {
     await ports.runClone(remoteUrl, workspacePath);
     ports.showCloneSucceeded(label);
+    return { status: 'success' };
   } catch (e) {
-    if (isCloneAuthError(e)) {
+    const authError = isCloneAuthError(e);
+    if (authError) {
       await ports.deleteStoredToken(overleafTokenSpec(remote).tokenKey);
       await ports.showAuthFailure(remote);
     } else {
       ports.showCloneFailed('Clone failed. Check credentials and connection.');
     }
     if (e instanceof Error) {
-      ports.logCloneError(redactSensitive(e.message, credential.sensitive));
+      ports.logCloneError(
+        redactSensitive(e.message, token.credential.sensitive),
+      );
     }
+    return { status: authError ? 'authFailure' : 'cloneFailed' };
   }
 }
