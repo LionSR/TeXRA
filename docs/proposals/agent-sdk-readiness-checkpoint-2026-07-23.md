@@ -20,7 +20,7 @@ ancestor of HEAD).
 the 07-22 checkpoint relied on to catch its own applied-then-reverted
 mistake). It therefore ran a **fresh, uninformed three-way fan-out audit**
 — three independent readers, briefed only with the repo's anti-abstraction
-rules and *not* with the standing adjudications — over (1) `agent/core` +
+rules and _not_ with the standing adjudications — over (1) `agent/core` +
 `agent/runtime` + `agent/implementations/flows` + `index`/`roster`, (2)
 `agent/modelHandlers` + `toolConversion` + `IModelHandler` + `ModelFactory`,
 and (3) `logger` + `platform` + the trace / `SessionEventHub` / `AppSignals`
@@ -57,7 +57,7 @@ matches a prior ruling or a tracked strategic item.
    `IToolUseSession`, `withModelClient`, and the `createResponseCycleFlow`/
    `createToolUseRoundFlow` factories were each examined and **excluded as
    justified** (real single-home logic, the sanctioned `Node.exec →
-   createFlow().run` shape, or a legitimate `core → implementations` port).
+createFlow().run` shape, or a legitimate `core → implementations` port).
    Matches the held rulings carried since `-07-18`/`-07-21`.
 
 2. **The real core/runtime SDK-readiness item is ambient/global coupling, not
@@ -93,8 +93,8 @@ matches a prior ruling or a tracked strategic item.
    doc-comments are a feature preventing re-litigation; do not collapse.
 
 5. **`IModelHandler` port width (~41 `Pick`ed members).** Re-derived; the
-   reader's own conclusion is that this is a *surface-shape observation, not a
-   delete* (auto-derived via `Pick`, so not a drift risk) and that a real SDK
+   reader's own conclusion is that this is a _surface-shape observation, not a
+   delete_ (auto-derived via `Pick`, so not a drift risk) and that a real SDK
    port would separate the ~10–12-member invocation contract from the
    node-specific message-shaping helpers. This is exactly the standing
    **reviewed-train / strategic** port-width item (the message-opacity /
@@ -124,8 +124,8 @@ matches a prior ruling or a tracked strategic item.
    (`ModelFactory.ts:399`, **1 caller**, `createModelHandlerForCompatibilityKey`).
    Both caller counts re-confirmed by direct grep this pass. These are the
    **only fan-out candidates not already written down by name** in a standing
-   doc. They are also the weakest possible finding: each carries *meaningful
-   logic* (a `globalState` read + `LEVEL_TO_EFFORT` map; real compatibility
+   doc. They are also the weakest possible finding: each carries _meaningful
+   logic_ (a `globalState` read + `LEVEL_TO_EFFORT` map; real compatibility
    branch logic), so they survive the letter of the factory rule and violate
    only the single-caller-extraction clause, with a near-zero net-LOC gain from
    inlining. **Recorded, not applied** — see the next section for why an
@@ -146,18 +146,19 @@ matches a prior ruling or a tracked strategic item.
 ## Subagent split points — unchanged
 
 Delegation is already a mature strategy-pattern subsystem (`startChildRunLoop`
-+ `ChildRunStrategy` + `executionRegistry` lineage + `detachSubagentsOnStop`),
-and `src/tools/claudeAgent.ts` already delegates to
-`@anthropic-ai/claude-agent-sdk` (async spin-off mirroring `codex` /
-`delegate_agent`, session resume via the SDK's `resume:` option). The
-fan-out's independent split candidates — the provider families (`openai/`,
-`google/`, `anthropic/` are cleanly separable, importing only the base +
-shared `support/`/`utils/`, never a sibling), model resolution, the execution
-registry/teardown cluster, persistence/resume, and index/roster (already behind
-injected `Deps` ports) — all match the ranked split points held since `-06-26`
-→ `-07-22`. The depth-cap prerequisite (derive a depth counter from lineage,
-then gate it) before exposing a recursive `delegateTo(...)` still stands. **No
-new split point, no reordering.**
+
+- `ChildRunStrategy` + `executionRegistry` lineage + `detachSubagentsOnStop`),
+  and `src/tools/claudeAgent.ts` already delegates to
+  `@anthropic-ai/claude-agent-sdk` (async spin-off mirroring `codex` /
+  `delegate_agent`, session resume via the SDK's `resume:` option). The
+  fan-out's independent split candidates — the provider families (`openai/`,
+  `google/`, `anthropic/` are cleanly separable, importing only the base +
+  shared `support/`/`utils/`, never a sibling), model resolution, the execution
+  registry/teardown cluster, persistence/resume, and index/roster (already behind
+  injected `Deps` ports) — all match the ranked split points held since `-06-26`
+  → `-07-22`. The depth-cap prerequisite (derive a depth counter from lineage,
+  then gate it) before exposing a recursive `delegateTo(...)` still stands. **No
+  new split point, no reordering.**
 
 ## No change lands (by design this pass)
 
@@ -170,10 +171,10 @@ specific to an unattended run:
   "easy," grep-justified cleanup (narrowing `MapToolRegistry`'s constructor
   away from its `Map` input) was applied, gated, and pushed — then **reverted
   in full** after an external Codex review caught both an incomplete caller
-  census *and* a silent-failure regression (`Object.entries(mapInstance)`
+  census _and_ a silent-failure regression (`Object.entries(mapInstance)`
   returning `[]`, so a `Map` input would build an empty registry). The lesson
   recorded there: verify before landing, and this class of change needs a
-  reviewer *outside* the pass's own fan-out.
+  reviewer _outside_ the pass's own fan-out.
 - This pass has **no such external reviewer** (unattended schedule). Landing a
   signature/shape change to the model-handler construction path with only my
   own fan-out's grep as evidence would repeat the precise setup that produced
@@ -216,7 +217,7 @@ Nothing this pass changes that sequencing.
   invariants as verified; treat the wider override tables as re-derived-but-not-
   re-audited.
 - The 10 of 11 `runtime`/`storage` files that `0dc0f8b`/#9035 touched and that
-  the `-07-22` pass flagged as *not opened* were **not** opened this pass
+  the `-07-22` pass flagged as _not opened_ were **not** opened this pass
   either — the acknowledged coverage gap from `-07-22` persists and a future
   pass should still read them explicitly.
 
