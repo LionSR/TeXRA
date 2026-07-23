@@ -7,6 +7,7 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
+import { coalesceAsync } from '@utils/core';
 import {
   getPreferKimiCode,
   getUseOpenRouter,
@@ -547,31 +548,17 @@ export async function computeModelOptionsData(
   }
 
   const cacheKey = getModelOptionsCacheKey(models, options);
-  const cached = resolvedModelOptions.get(cacheKey);
-  if (cached) return cached;
-
-  const pending = pendingModelOptions.get(cacheKey);
-  if (pending) return pending;
-
-  const request = computeModelOptionsDataUncached(
-    models,
-    buildDefaultModelOptionsAccess(options),
-    true,
+  return coalesceAsync<string, ModelOptionData[]>(
+    resolvedModelOptions,
+    pendingModelOptions,
+    cacheKey,
+    () =>
+      computeModelOptionsDataUncached(
+        models,
+        buildDefaultModelOptionsAccess(options),
+        true,
+      ),
   );
-  pendingModelOptions.set(cacheKey, request);
-
-  try {
-    const data = await request;
-    // Only populate cache if no invalidation occurred while we were awaiting.
-    if (pendingModelOptions.get(cacheKey) === request) {
-      resolvedModelOptions.set(cacheKey, data);
-    }
-    return data;
-  } finally {
-    if (pendingModelOptions.get(cacheKey) === request) {
-      pendingModelOptions.delete(cacheKey);
-    }
-  }
 }
 
 function getModelOptionsCacheKey(
