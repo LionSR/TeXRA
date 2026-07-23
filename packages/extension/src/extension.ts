@@ -40,7 +40,6 @@ import { SecretManager } from '@frontend/secretManager';
 import {
   copyDefaultAgents,
   configureLatexSettings,
-  initializeToolDefaults,
   migrateLatexConfigToStorage,
   registerAgentDirectoryRoots,
 } from '@frontend/setup';
@@ -100,7 +99,10 @@ import {
   SharedIssuePollingSource,
 } from '@tools/github';
 import { setSetupPlatform } from '@tools/setup';
-import { refreshToolAvailability } from '@tools/toolAvailability';
+import {
+  refreshToolAvailability,
+  seedDisabledToolDefaults,
+} from '@tools/toolAvailability';
 import { setOpenPdfOpener } from '@tools/OpenPdfTool';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
@@ -319,7 +321,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Seed first-install defaults (e.g. disabled tools) before anything writes
   // LAST_KNOWN_VERSION, so upgrading users are not affected.
-  await initializeToolDefaults();
+  await seedDisabledToolDefaults(GlobalStateKey.LAST_KNOWN_VERSION);
 
   // Onboarding-funnel backfill (PRD: agent-native onboarding): upgraders who
   // already have a credential or run history must never see the welcome card
