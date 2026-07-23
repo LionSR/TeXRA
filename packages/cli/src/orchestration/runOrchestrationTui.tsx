@@ -168,11 +168,14 @@ function orchestrationLauncherLayoutCandidates(
   const candidates: OrchestrationLauncherLayoutCandidate[] = [
     { statusLines, footerHints },
   ];
+  if (hasCompactFallback) {
+    candidates.push({ statusLines: compactStatusLines, footerHints });
+  }
   if (footerHints.length > 0) {
     candidates.push({ statusLines, footerHints: [] });
-  }
-  if (hasCompactFallback) {
-    candidates.push({ statusLines: compactStatusLines, footerHints: [] });
+    if (hasCompactFallback) {
+      candidates.push({ statusLines: compactStatusLines, footerHints: [] });
+    }
   }
 
   for (let count = statusLines.length - 1; count > 0; count -= 1) {
