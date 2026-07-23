@@ -110,6 +110,11 @@ export class ModelRetryGate {
             // to one waiter; shared credential failures can otherwise release
             // every peer before their out-of-gate recovery finishes.
             this.abandon(entry.key, entry.permit);
+          } else {
+            // A current healthy permit reached the operation boundary. Even
+            // when its error is local to that request, it proves that an older
+            // shared-route failure streak no longer describes this route.
+            this.markReachable(entry.key, entry.permit);
           }
         }
       }

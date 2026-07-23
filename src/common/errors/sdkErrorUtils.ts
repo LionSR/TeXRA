@@ -37,11 +37,13 @@ export {
 
 export {
   classifyModelRateLimitFailure,
+  classifyRelayRequestLimitFailure,
   classifyWireRouteFailure,
   formatProviderHttpError,
   normalizeProviderError,
   isProviderErrorAutoRetryable,
   isModelRateLimitFailure,
+  isRelayRequestLimitFailure,
   getSdkErrorMessage,
   buildErrorLogData,
   buildFailedRetryInfo,

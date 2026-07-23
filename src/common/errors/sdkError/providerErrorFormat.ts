@@ -36,6 +36,7 @@ import {
   safeGetReasonPhrase,
 } from './errorInspection';
 import {
+  getRelayRequestLimitRetryAfterMs,
   inferStatusCodeFromBody,
   isModelScopedRateLimitBody,
   isRelayError,
@@ -465,15 +466,13 @@ function detectRouteStatusCode(
 function detectRateLimitScope(
   error: Error,
   statusCode: number | undefined,
-): 'model' | 'wire' | undefined {
+): 'model' | 'relay-user' | 'wire' | undefined {
   if (statusCode !== StatusCodes.TOO_MANY_REQUESTS) return undefined;
   const formatted = normalizeProviderError(error);
-  if (
-    formatted.exhaustionReason !== undefined ||
-    isRelayRequestLimitBody(formatted.rawErrorBody)
-  ) {
-    return 'wire';
+  if (isRelayRequestLimitBody(formatted.rawErrorBody)) {
+    return 'relay-user';
   }
+  if (formatted.exhaustionReason !== undefined) return 'wire';
   return isModelScopedRateLimitBody(formatted.rawErrorBody) ? 'model' : 'wire';
 }
 
@@ -496,11 +495,42 @@ export function classifyModelRateLimitFailure(
     : undefined;
 }
 
+/** Whether the relay's per-user request gate rejected this call. */
+export function isRelayRequestLimitFailure(error: Error): boolean {
+  const chain = causeChain(error);
+  return (
+    detectRateLimitScope(error, detectRouteStatusCode(error, chain)) ===
+    'relay-user'
+  );
+}
+
+/** Classifies relay request limits for their cross-provider recovery gate. */
+export function classifyRelayRequestLimitFailure(
+  error: Error,
+): { retryAfterMs?: number } | undefined {
+  const chain = causeChain(error);
+  if (
+    detectRateLimitScope(error, detectRouteStatusCode(error, chain)) !==
+    'relay-user'
+  ) {
+    return undefined;
+  }
+  const formatted = normalizeProviderError(error);
+  const headerDelay = detectRetryAfterMs(chain);
+  const bodyDelay = getRelayRequestLimitRetryAfterMs(formatted.rawErrorBody);
+  const retryAfterMs =
+    headerDelay === undefined && bodyDelay === undefined
+      ? undefined
+      : Math.max(headerDelay ?? 0, bodyDelay ?? 0);
+  return { retryAfterMs };
+}
+
 /**
  * Classify a failure that carries evidence about a shared wire route
  * (provider + credential + endpoint): transport failures, 5xx/408 server
- * failures and rate limits without explicit model scope. Provider bodies that
- * explicitly identify a model-specific 429 use a separate recovery scope.
+ * failures and provider rate limits without explicit model scope. Provider
+ * bodies that identify a model-specific limit or the relay's per-user request
+ * gate use their own recovery scopes.
  * Retryable failures outside this set (e.g. 409 conflicts) stay node-local —
  * a conflict does not imply the route is unhealthy. Relay 401s are also
  * deliberately absent: token refresh is single-flighted at the auth boundary

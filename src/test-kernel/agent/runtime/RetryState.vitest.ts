@@ -206,10 +206,14 @@ function createModelInvocationNode(): ModelInvocationNode<BaseCycleFields> {
 interface CapturedModelRetry {
   readonly wireRoute: string;
   readonly modelRetryRoute: string;
+  readonly relayRetryRoute?: string;
   readonly classifyFailure: (
     error: Error,
   ) => { retryAfterMs?: number } | undefined;
   readonly classifyModelFailure: (
+    error: Error,
+  ) => { retryAfterMs?: number } | undefined;
+  readonly classifyRelayFailure?: (
     error: Error,
   ) => { retryAfterMs?: number } | undefined;
   readonly gateCalls: number;
@@ -271,11 +275,14 @@ async function captureModelRetry(
     if (!modelRoute) {
       throw new Error('Expected model-specific retry route');
     }
+    const relayRoute = modelOptions.additionalRoutes?.[1];
     return {
       wireRoute,
       modelRetryRoute: modelRoute.key,
+      relayRetryRoute: relayRoute?.key,
       classifyFailure: modelOptions.classifyFailure,
       classifyModelFailure: modelRoute.classifyFailure,
+      classifyRelayFailure: relayRoute?.classifyFailure,
       gateCalls: run.mock.calls.length,
     };
   } finally {
@@ -667,7 +674,7 @@ describe('RetryState', () => {
     expect(first.classifyModelFailure(exhausted)).toBeUndefined();
   });
 
-  it('coordinates relay request limits across models on one wire route', async () => {
+  it('coordinates relay request limits across providers for one user', async () => {
     const first = await captureModelRetry(
       'https://api.example/v1',
       'relay',
@@ -684,12 +691,22 @@ describe('RetryState', () => {
       type: 'relay_error',
       requestLimitReached: true,
       reason: 'rate',
+      retryAfterSeconds: 60,
     };
 
-    expect(first.classifyFailure(limited)).toEqual({
-      retryAfterMs: undefined,
-    });
+    const second = await captureModelRetry(
+      'https://other.example/v1',
+      'relay',
+      undefined,
+      'anthropic:model-b',
+    );
+
+    expect(first.classifyFailure(limited)).toBeUndefined();
     expect(first.classifyModelFailure(limited)).toBeUndefined();
+    expect(first.relayRetryRoute).toBe(second.relayRetryRoute);
+    expect(first.classifyRelayFailure?.(limited)).toEqual({
+      retryAfterMs: 60_000,
+    });
   });
 
   it('isolates rate-limit recovery by stable credential identity', async () => {

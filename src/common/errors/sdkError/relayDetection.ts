@@ -87,6 +87,29 @@ export function isRelayRequestLimitBody(rawErrorBody: unknown): boolean {
   return hasRelayBooleanFlag(rawErrorBody, 'requestLimitReached');
 }
 
+/** Retry delay returned by the relay's per-user request gate. */
+export function getRelayRequestLimitRetryAfterMs(
+  rawErrorBody: unknown,
+): number | undefined {
+  if (!isObject(rawErrorBody)) return undefined;
+  const candidates = [
+    rawErrorBody,
+    (rawErrorBody as { error?: unknown }).error,
+  ];
+  for (const candidate of candidates) {
+    if (!isObject(candidate)) continue;
+    const seconds = candidate.retryAfterSeconds;
+    if (
+      typeof seconds === 'number' &&
+      Number.isFinite(seconds) &&
+      seconds >= 0
+    ) {
+      return seconds * 1000;
+    }
+  }
+  return undefined;
+}
+
 /** True only when a provider body explicitly identifies a model-scoped limit. */
 export function isModelScopedRateLimitBody(rawErrorBody: unknown): boolean {
   if (!isObject(rawErrorBody)) return false;

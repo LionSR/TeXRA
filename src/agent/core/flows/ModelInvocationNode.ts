@@ -18,8 +18,10 @@ import type {
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import {
   classifyModelRateLimitFailure,
+  classifyRelayRequestLimitFailure,
   classifyWireRouteFailure,
   isModelRateLimitFailure,
+  isRelayRequestLimitFailure,
 } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
 
@@ -29,6 +31,8 @@ import {
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
+
+const RELAY_USER_REQUEST_GATE_ROUTE = 'relay:user-request-gate';
 
 export interface ModelInvocationConfig<TShared, TServices> {
   operationName: string;
@@ -127,6 +131,21 @@ export class ModelInvocationNode<
         services.client,
       );
       const gate = useLaunchRunContext().runScope.session.modelRetries;
+      const additionalRoutes = [
+        {
+          key: modelRetryRoute,
+          classifyFailure: classifyModelRateLimitFailure,
+        },
+      ];
+      if (services.clientCredentialRoute === 'relay') {
+        // Model retry gates live within one authenticated run session. The
+        // relay enforces this limit by user, independently of provider, model,
+        // and endpoint, so every relay call in the session shares this key.
+        additionalRoutes.push({
+          key: RELAY_USER_REQUEST_GATE_ROUTE,
+          classifyFailure: classifyRelayRequestLimitFailure,
+        });
+      }
       const invoke = async () => {
         const start = Date.now();
         const result = await services.modelHandler.createResponse({
@@ -157,15 +176,12 @@ export class ModelInvocationNode<
           baseBackoffMs: this._retryBackoffMs,
           // One wire route owns transport and server-failure cooling. A second
           // ordered scope keeps model-specific limits from blocking healthy
-          // sibling models on the same credential and endpoint.
+          // sibling models on the same credential and endpoint. Relay calls
+          // also share the server's cross-provider per-user request gate.
           classifyFailure: classifyWireRouteFailure,
-          isReachableFailure: isModelRateLimitFailure,
-          additionalRoutes: [
-            {
-              key: modelRetryRoute,
-              classifyFailure: classifyModelRateLimitFailure,
-            },
-          ],
+          isReachableFailure: (error) =>
+            isModelRateLimitFailure(error) || isRelayRequestLimitFailure(error),
+          additionalRoutes,
           onWait: (delayMs) =>
             services.logger.debug(
               `Waiting ${delayMs}ms for the model recovery probe.`,

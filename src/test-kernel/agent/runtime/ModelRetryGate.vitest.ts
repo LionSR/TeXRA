@@ -365,6 +365,39 @@ describe('ModelRetryGate', () => {
     gate.dispose();
   });
 
+  it('resets an old failure streak after a healthy unclassified failure', async () => {
+    const gate = new ModelRetryGate();
+    await openGate(gate);
+    const scopedOptions = {
+      ...options(new AbortController().signal),
+      classifyFailure: (error: Error) => (error === TRANSIENT ? {} : undefined),
+    };
+
+    const probe = gate.run(ROUTE, scopedOptions, async () => undefined);
+    const healthyFailure = gate.run(ROUTE, scopedOptions, async () => {
+      throw UNAUTHORIZED;
+    });
+    const healthyFailureResult =
+      expect(healthyFailure).rejects.toBe(UNAUTHORIZED);
+    await vi.advanceTimersByTimeAsync(1000);
+    await probe;
+    await healthyFailureResult;
+
+    await expect(
+      gate.run(ROUTE, scopedOptions, async () => {
+        throw TRANSIENT;
+      }),
+    ).rejects.toBe(TRANSIENT);
+    const recoveredOperation = vi.fn(async () => undefined);
+    const recovered = gate.run(ROUTE, scopedOptions, recoveredOperation);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(recoveredOperation).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await recovered;
+    expect(recoveredOperation).toHaveBeenCalledOnce();
+    gate.dispose();
+  });
+
   it('does not let a stale success erase a newer failed probe', async () => {
     const gate = new ModelRetryGate();
     let resolveStale = (): void => undefined;
