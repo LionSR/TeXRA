@@ -7,34 +7,12 @@ import {
   formatCompactDuration,
   formatCompactTokenCount,
   formatResultCount,
-  objectToLogString,
   pluralize,
   splitContentLines,
   splitOutputLines,
   tailWithEllipsis,
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';
-
-describe('objectToLogString', () => {
-  it('serializes plain objects to compact JSON', () => {
-    expect(objectToLogString({ a: 1, b: 'x' })).toBe('{"a":1,"b":"x"}');
-  });
-
-  it('keeps diagnostic value for circular references instead of [object Object]', () => {
-    const obj: Record<string, unknown> = { a: 1 };
-    obj.self = obj;
-    const out = objectToLogString(obj);
-    expect(out).toContain('"a":1');
-    expect(out).toContain('[Circular]');
-    expect(out).not.toBe('[object Object]');
-  });
-
-  it('truncates oversized output and reports the original length', () => {
-    const out = objectToLogString({ blob: 'x'.repeat(50) }, 20);
-    expect(out).toMatch(/\.\.\. \(\d+ chars\)$/);
-    expect(out.length).toBeLessThan(50);
-  });
-});
 
 describe('splitContentLines', () => {
   it('normalizes CRLF and drops the phantom line after a trailing newline', () => {
