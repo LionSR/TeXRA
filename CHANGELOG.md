@@ -23,6 +23,9 @@ All notable changes to this project will be documented in this file.
   directly to supported models.
 - **Parent agents can inspect generated workflow files directly** — delegated
   workflows make every output available for follow-up review.
+- **Nested orchestrators respect delegated-task auto-approval** — enabling
+  automatic delegation on a parent now lets its suborchestrators continue
+  delegating without additional permission prompts.
 - **Latexdiff artifacts with short abbreviated commit hashes are recognized
   consistently** — a generated `basename-diffHASH.tex` file with a 4-5
   character hash is now reliably treated as a diff artifact everywhere
