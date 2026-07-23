@@ -18,10 +18,12 @@ function makeActions(): TestActions {
   return { noop: vi.fn(), packed: vi.fn() };
 }
 
-const PackArgs = z.object({
-  inputFile: z.string().min(1),
-  agent: z.string().min(1),
-});
+const PackArgs = z.tuple([
+  z.object({
+    inputFile: z.string().min(1),
+    agent: z.string().min(1),
+  }),
+]);
 
 const packRegistry = {
   'test.pack': definedHandler<TestActions, z.infer<typeof PackArgs>>(
@@ -50,15 +52,18 @@ describe('shared command registry', () => {
   });
 
   it('reports unhandled ids without throwing', () => {
-    const onUnhandled = vi.fn();
+    const onFailure = vi.fn();
     const result = dispatchCommandFromRegistry(
       'test.missing',
       {} as Partial<Record<'test.missing', CommandHandler<TestActions>>>,
       makeActions(),
-      onUnhandled,
+      onFailure,
     );
     expect(result).toBe(false);
-    expect(onUnhandled).toHaveBeenCalledExactlyOnceWith('test.missing');
+    expect(onFailure).toHaveBeenCalledExactlyOnceWith({
+      kind: 'unhandled',
+      id: 'test.missing',
+    });
   });
 
   it('parses raw args through the typed handler schema', () => {
@@ -79,20 +84,26 @@ describe('shared command registry', () => {
     });
   });
 
-  it('reports schema-failed args as unhandled rather than crashing', () => {
+  it('reports schema-failed args distinctly from unhandled ids', () => {
     const actions = makeActions();
-    const onUnhandled = vi.fn();
+    const onFailure = vi.fn();
 
     expect(
       dispatchCommandFromRegistry(
         'test.pack',
         packRegistry,
         actions,
-        onUnhandled,
+        onFailure,
         { inputFile: '', agent: 'editor' },
       ),
     ).toBe(false);
     expect(actions.packed).not.toHaveBeenCalled();
-    expect(onUnhandled).toHaveBeenCalledExactlyOnceWith('test.pack');
+    expect(onFailure).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        kind: 'invalidArguments',
+        id: 'test.pack',
+        error: expect.any(z.ZodError),
+      }),
+    );
   });
 });

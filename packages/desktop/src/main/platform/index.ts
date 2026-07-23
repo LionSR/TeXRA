@@ -25,6 +25,7 @@ import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { configKeyVariants } from '@shared/config/configKeys';
+import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { StreamSnapshotStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -294,6 +295,11 @@ export async function initializeElectronPlatform(
     globalStateStore.get<string | undefined>(
       GlobalStateKey.LAST_KNOWN_VERSION,
     ) !== undefined;
+
+  // Seed first-install defaults (e.g. disabled tools) before anything writes
+  // LAST_KNOWN_VERSION, so upgrading users are not affected. Mirrors the
+  // extension's ordering (extension.ts) — same key, same seeding function.
+  await seedDisabledToolDefaults(GlobalStateKey.LAST_KNOWN_VERSION);
 
   const resourcesPath = resolveResourcesPath(mainDirname);
 

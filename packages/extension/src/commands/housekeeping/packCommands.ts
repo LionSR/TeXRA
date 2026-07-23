@@ -1,13 +1,8 @@
 // Third-party imports
 import * as vscode from 'vscode';
-import { z } from 'zod';
 
 // Local imports
-import { registerCommands } from '@commands/_shared/registerCommands';
-import {
-  parseWithErrorDisplay,
-  showLoggedMessage,
-} from '@frontend/ui/errorHandlingUtils';
+import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   runPack,
   runPackSingle,
@@ -17,10 +12,9 @@ import {
 import type { FileOpResult } from '@shared/schemas/opResults';
 import { WorkspaceFS } from '@utils/files';
 import {
-  FileOpParamsSchema,
-  fileOpConfigFields,
   mergeRunDirAndWorkspaceResult,
   type FileOpParams,
+  type PackConfig,
 } from './fileOpSchemas';
 import {
   emitClearMissingOutputs,
@@ -28,19 +22,6 @@ import {
 } from './streamEventUtils';
 
 const CHANNEL = 'packCommands';
-
-const PackConfigSchema = FileOpParamsSchema.extend({
-  // Pack permits an empty model in config; clean keeps it required.
-  model: z.string().prefault(''),
-  ...fileOpConfigFields,
-});
-
-const PackMultipleSchema = FileOpParamsSchema.extend({
-  inputFile: z.string().prefault(''),
-  inputFiles: z.array(z.string()).prefault([]),
-}).refine((d) => d.inputFile || d.inputFiles.length > 0, {
-  error: 'inputFile or inputFiles required',
-});
 
 function showPackResult(result: FileOpResult, inputFile: string): void {
   switch (result.status) {
@@ -76,15 +57,10 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
 }
 
 async function executePackOperation<T extends FileOpParams>(
-  schema: z.ZodType<T>,
-  input: unknown,
-  label: string,
+  data: T,
   runOperation: (data: T) => Promise<FileOpResult>,
   getClearOptions: (data: T) => ClearMissingOutputsOptions | null,
 ): Promise<void> {
-  const data = await parseWithErrorDisplay(CHANNEL, schema, input, label);
-  if (!data) return;
-
   const result = await runOperation(data);
   showPackResult(result, data.inputFile);
 
@@ -94,11 +70,9 @@ async function executePackOperation<T extends FileOpParams>(
   }
 }
 
-async function handlePack(config: unknown): Promise<void> {
+export async function handlePack(config: PackConfig): Promise<void> {
   return executePackOperation(
-    PackConfigSchema,
     config,
-    'config',
     async (data) => {
       const runWorkspacePack = (): Promise<FileOpResult> =>
         runPack(data.model, data.inputFile, data.agent, data.outputFiles);
@@ -137,15 +111,13 @@ async function handlePack(config: unknown): Promise<void> {
   );
 }
 
-async function handlePackSingle(
+export async function handlePackSingle(
   inputFile: string,
   agent: string,
   model: string,
 ): Promise<void> {
   return executePackOperation(
-    FileOpParamsSchema,
     { inputFile, agent, model },
-    'params',
     (data) => runPackSingle(data.model, data.inputFile, data.agent),
     (data) => ({
       streamConfig: {
@@ -158,16 +130,14 @@ async function handlePackSingle(
   );
 }
 
-async function handlePackMultiple(
+export async function handlePackMultiple(
   inputFile: string,
   agent: string,
   model: string,
   inputFiles: string[] = [],
 ): Promise<void> {
   return executePackOperation(
-    PackMultipleSchema,
     { inputFile, agent, model, inputFiles },
-    'params',
     (data) =>
       runPackMultiple(data.model, data.inputFile, data.agent, data.inputFiles),
     (data) => ({
@@ -179,12 +149,4 @@ async function handlePackMultiple(
       },
     }),
   );
-}
-
-export function registerPackCommands(context: vscode.ExtensionContext): void {
-  registerCommands(context, [
-    { id: 'texra.pack', handler: handlePack },
-    { id: 'texra.packSingle', handler: handlePackSingle },
-    { id: 'texra.packMultiple', handler: handlePackMultiple },
-  ]);
 }

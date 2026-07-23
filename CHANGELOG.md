@@ -10,6 +10,13 @@ All notable changes to this project will be documented in this file.
 
 - **The Mathematician team includes the critique workflow** — mathematical team
   runs can delegate a dedicated critical review directly.
+- **The orchestrator agent can run scripted multi-agent pipelines** — the
+  built-in Orchestrator agent now has access to Workflow Script, for
+  fan-out/pipeline/join runs whose structure is known up front. The Tools
+  dashboard (and CLI `/tools`) lists Workflow Script as a toggleable
+  integration, off by default for new installs; turning it off removes the
+  capability from every agent, even ones whose configuration enables it
+  explicitly.
 
 #### Bug Fixes
 
@@ -23,6 +30,9 @@ All notable changes to this project will be documented in this file.
   directly to supported models.
 - **Parent agents can inspect generated workflow files directly** — delegated
   workflows make every output available for follow-up review.
+- **Nested orchestrators respect delegated-task auto-approval** — enabling
+  automatic delegation on a parent now lets its suborchestrators continue
+  delegating without additional permission prompts.
 - **Latexdiff artifacts with short abbreviated commit hashes are recognized
   consistently** — a generated `basename-diffHASH.tex` file with a 4-5
   character hash is now reliably treated as a diff artifact everywhere
