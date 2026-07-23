@@ -66,7 +66,10 @@ import { handleParseXml as sysParseXml } from '@commands/system/xmlCommands';
 import { handleParseYaml as sysParseYaml } from '@commands/system/yamlCommands';
 import { handleTestTextEditor as sysTestTextEditor } from '@commands/system/textEditorCommands';
 import { SIDEBAR_VIEWS, getActiveSidebarView } from '@common/webview';
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
 import { runCleanBuild, runCleanOutput } from '@housekeeping';
@@ -199,7 +202,7 @@ export function createExtensionCommandActions(
  * have no stale `vscode.commands.registerCommand(...)` call elsewhere.
  * The remaining legacy `registerCommand` call sites all register ids NOT
  * tagged `extensionRegistry` in `commandCatalog` — they're legitimate VS
- * Code-only handlers (file ops, git, latex tools, pack/clean variants).
+ * Code-only handlers (git, file selection/opening, merge, and LaTeX tools).
  */
 
 /**
@@ -224,9 +227,16 @@ export function registerExtensionCommandRegistry(
           id,
           EXTENSION_COMMAND_HANDLERS,
           actions,
-          (unhandledId) => {
+          (failure) => {
+            if (failure.kind === 'invalidArguments') {
+              void showLoggedMessage(
+                'ExtensionCommandRegistry',
+                `Invalid arguments for command ${failure.id}: ${failure.error.message}`,
+              );
+              return;
+            }
             console.error(
-              `[extension] dispatch: unhandled command ${unhandledId}`,
+              `[extension] dispatch: unhandled command ${failure.id}`,
             );
           },
           ...rawArgs,

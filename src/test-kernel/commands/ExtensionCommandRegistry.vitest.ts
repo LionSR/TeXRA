@@ -388,6 +388,29 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
       );
     });
 
+    it('accepts packMultiple with only a nonempty inputFiles list', async () => {
+      const actions = makeActions();
+
+      const result = dispatchCommandFromRegistry(
+        'texra.packMultiple',
+        EXTENSION_COMMAND_HANDLERS,
+        actions,
+        undefined,
+        '',
+        'editor',
+        'gpt-5',
+        ['chapter.tex'],
+      );
+
+      await expect(Promise.resolve(result)).resolves.toBe(true);
+      expect(actions.packMultiple).toHaveBeenCalledExactlyOnceWith(
+        '',
+        'editor',
+        'gpt-5',
+        ['chapter.tex'],
+      );
+    });
+
     it('forwards compare and accept arguments without collapsing them', async () => {
       const actions = makeActions();
       const input = {
@@ -437,6 +460,41 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
         base,
         edited,
         copyMeta,
+      );
+    });
+
+    it('forwards accept arguments when copy metadata is omitted', async () => {
+      const actions = makeActions();
+      const input = {
+        kind: 'workspace' as const,
+        absolutePath: '/workspace/main.tex',
+        relativePath: 'main.tex',
+      };
+      const base = {
+        kind: 'external' as const,
+        absolutePath: '/tmp/base.tex',
+      };
+      const edited = {
+        kind: 'external' as const,
+        absolutePath: '/tmp/edited.tex',
+      };
+
+      const result = dispatchCommandFromRegistry(
+        'texra.acceptEdited',
+        EXTENSION_COMMAND_HANDLERS,
+        actions,
+        undefined,
+        input,
+        base,
+        edited,
+      );
+
+      await expect(Promise.resolve(result)).resolves.toBe(true);
+      expect(actions.acceptEdited).toHaveBeenCalledExactlyOnceWith(
+        input,
+        base,
+        edited,
+        undefined,
       );
     });
 

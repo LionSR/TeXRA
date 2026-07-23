@@ -19,13 +19,10 @@ import {
   siblingLocation,
 } from '@latex/acceptedFileTarget';
 import * as logger from '@logger/logUtils';
-import type { FileLocation } from '@shared/schemas';
+import type { AcceptCopyMeta, FileLocation } from '@shared/schemas';
 import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latex';
 import { legacyWorkflowOutputStem } from '@shared/constants/workflowOutput';
 import { FlexibleFS } from '@utils/files';
-
-/** Run agent/model/round used to build the legacy postfixed copy name. */
-type AcceptCopyMeta = { agent: string; model: string; round: number };
 
 const CHANNEL = 'CompareCommands';
 

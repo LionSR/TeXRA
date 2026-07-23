@@ -3,8 +3,10 @@ import { z } from 'zod';
 
 // Local imports
 import {
+  AcceptEditedCommandArgsSchema,
   CleanConfigSchema,
   CleanMultipleCommandArgsSchema,
+  CompareCommandArgsSchema,
   FileOpCommandArgsSchema,
   PackConfigSchema,
   PackMultipleCommandArgsSchema,
@@ -20,7 +22,7 @@ import {
 } from '@shared/commands/registry';
 import { AgentCategorySchema, type AgentCategory } from '@shared/schemas/agent';
 import { StreamTabIdSchema } from '@shared/schemas/identifiers';
-import { FileLocationSchema, type FileLocation } from '@shared/schemas/output';
+import type { AcceptCopyMeta, FileLocation } from '@shared/schemas/output';
 import {
   SETTINGS_TAB,
   type SettingsTab,
@@ -65,27 +67,6 @@ const ShowAgentsArgsSchema = z.tuple([AgentCategorySchema.optional()]);
  * of being rejected by the dispatcher as unhandled.
  */
 const ShowProgressViewArgsSchema = z.tuple([z.unknown().optional()]);
-
-const CompareCommandArgsSchema = z.tuple([
-  FileLocationSchema,
-  FileLocationSchema,
-  FileLocationSchema,
-]);
-
-const AcceptCopyMetaSchema = z.strictObject({
-  agent: z.string(),
-  model: z.string(),
-  round: z.int(),
-});
-
-type AcceptCopyMeta = z.infer<typeof AcceptCopyMetaSchema>;
-
-const AcceptEditedCommandArgsSchema = z.tuple([
-  FileLocationSchema,
-  FileLocationSchema,
-  FileLocationSchema,
-  AcceptCopyMetaSchema.optional(),
-]);
 
 /**
  * Catalog ids whose extension registration is driven by the shared

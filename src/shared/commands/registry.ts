@@ -80,6 +80,10 @@ export function awaitTrue(p: PromiseLike<unknown>): Promise<boolean> {
   return Promise.resolve(p).then(() => true);
 }
 
+export type CommandDispatchFailure<TId extends string> =
+  | { kind: 'unhandled'; id: TId }
+  | { kind: 'invalidArguments'; id: TId; error: z.ZodError };
+
 /**
  * Dispatch a command through its registered handler. Returns the
  * handler's result directly — sync handlers settle immediately;
@@ -91,12 +95,12 @@ export function dispatchCommandFromRegistry<TId extends string, TActions>(
   id: TId,
   registry: CommandHandlerMap<TId, TActions>,
   actions: TActions,
-  onUnhandled?: (id: TId) => void,
+  onFailure?: (failure: CommandDispatchFailure<TId>) => void,
   ...rawArgs: unknown[]
 ): boolean | Promise<boolean> {
   const handler = registry[id];
   if (!handler) {
-    onUnhandled?.(id);
+    onFailure?.({ kind: 'unhandled', id });
     return false;
   }
 
@@ -105,11 +109,11 @@ export function dispatchCommandFromRegistry<TId extends string, TActions>(
 
   // Typed handlers parse the positional argument list at the boundary so
   // handlers receive validated values. A schema parse failure surfaces as
-  // `false` (not handled) so callers can surface the issue to the user/log
-  // without the dispatcher swallowing it silently.
+  // `false` so callers can surface the invalid payload distinctly from a
+  // genuinely unhandled command id.
   const result = handler.argsSchema.safeParse(rawArgs);
   if (!result.success) {
-    onUnhandled?.(id);
+    onFailure?.({ kind: 'invalidArguments', id, error: result.error });
     return false;
   }
   return handler.run(actions, ...result.data);
