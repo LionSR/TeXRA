@@ -73,12 +73,12 @@ export class ModelRetryGate {
     operation: () => Promise<T>,
   ): Promise<T> {
     const policies: RoutePolicy[] = [
+      ...(options.additionalRoutes ?? []),
       {
         key: route,
         classifyFailure: options.classifyFailure,
         isReachableFailure: options.isReachableFailure,
       },
-      ...(options.additionalRoutes ?? []),
     ];
     const acquired = await this.acquireAll(policies, options);
     try {
@@ -118,10 +118,11 @@ export class ModelRetryGate {
   }
 
   /**
-   * Acquires every recovery scope in caller-defined order. A later wait can
-   * make an earlier permit stale, so validate the complete set before sending
-   * and retry acquisition rather than leaking one request through a newly
-   * cooling route.
+   * Acquires narrower additional scopes before the shared primary route. A
+   * model-specific probe may wait for its shared wire route without blocking
+   * healthy sibling models, while the reverse order could reserve the only
+   * wire probe for a model still in a long cooldown. A later wait can also make
+   * an earlier permit stale, so validate the complete set before sending.
    */
   private async acquireAll(
     routes: readonly RoutePolicy[],

@@ -178,6 +178,59 @@ describe('ModelRetryGate', () => {
     gate.dispose();
   });
 
+  it('does not reserve the wire probe while waiting for a model cooldown', async () => {
+    const gate = new ModelRetryGate();
+    const modelOptions = (modelRoute: string, modelRetryAfterMs?: number) => ({
+      signal: new AbortController().signal,
+      baseBackoffMs: 1000,
+      classifyFailure: (error: Error) => (error === TRANSIENT ? {} : undefined),
+      isReachableFailure: (error: Error) => error === RATE_LIMIT,
+      additionalRoutes: [
+        {
+          key: modelRoute,
+          classifyFailure: (error: Error) =>
+            error === RATE_LIMIT
+              ? { retryAfterMs: modelRetryAfterMs }
+              : undefined,
+        },
+      ],
+    });
+
+    await expect(
+      gate.run(ROUTE, modelOptions(MODEL_ROUTE, 10_000), async () => {
+        throw RATE_LIMIT;
+      }),
+    ).rejects.toBe(RATE_LIMIT);
+    await expect(
+      gate.run(ROUTE, modelOptions(OTHER_MODEL_ROUTE), async () => {
+        throw TRANSIENT;
+      }),
+    ).rejects.toBe(TRANSIENT);
+
+    const limitedOperation = vi.fn(async () => undefined);
+    const limited = gate.run(
+      ROUTE,
+      modelOptions(MODEL_ROUTE, 10_000),
+      limitedOperation,
+    );
+    const siblingOperation = vi.fn(async () => undefined);
+    const sibling = gate.run(
+      ROUTE,
+      modelOptions(OTHER_MODEL_ROUTE),
+      siblingOperation,
+    );
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await sibling;
+    expect(siblingOperation).toHaveBeenCalledOnce();
+    expect(limitedOperation).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(9000);
+    await limited;
+    expect(limitedOperation).toHaveBeenCalledOnce();
+    gate.dispose();
+  });
+
   it('ends the failure streak after a clean round-trip on the healthy route', async () => {
     const gate = new ModelRetryGate();
     await openGate(gate);
