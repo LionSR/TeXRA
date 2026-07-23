@@ -276,7 +276,7 @@ async function captureModelRetry(
     if (!modelRoute) {
       throw new Error('Expected model-specific retry route');
     }
-    const relayRoute = modelOptions.additionalRoutes?.[1];
+    const relayRoute = modelOptions.trailingRoutes?.[0];
     return {
       wireRoute,
       modelRetryRoute: modelRoute.key,

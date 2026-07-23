@@ -40,6 +40,7 @@ interface RunOptions {
   readonly classifyFailure: (error: Error) => RouteFailure | undefined;
   readonly isReachableFailure?: (error: Error) => boolean;
   readonly additionalRoutes?: readonly RoutePolicy[];
+  readonly trailingRoutes?: readonly RoutePolicy[];
   readonly onWait?: (delayMs: number) => void;
 }
 
@@ -79,6 +80,7 @@ export class ModelRetryGate {
         classifyFailure: options.classifyFailure,
         isReachableFailure: options.isReachableFailure,
       },
+      ...(options.trailingRoutes ?? []),
     ];
     const acquired = await this.acquireAll(policies, options);
     try {
@@ -123,11 +125,12 @@ export class ModelRetryGate {
   }
 
   /**
-   * Acquires narrower additional scopes before the shared primary route. A
-   * model-specific probe may wait for its shared wire route without blocking
-   * healthy sibling models, while the reverse order could reserve the only
-   * wire probe for a model still in a long cooldown. A later wait can also make
-   * an earlier permit stale, so validate the complete set before sending.
+   * Acquires narrower additional scopes before the primary route and broader
+   * trailing scopes after it. A model-specific probe may wait for its shared
+   * wire route without blocking healthy sibling models, while a provider wire
+   * probe may wait for the shared relay-user gate without reserving that
+   * broader probe. A later wait can also make an earlier permit stale, so
+   * validate the complete set before sending.
    */
   private async acquireAll(
     routes: readonly RoutePolicy[],

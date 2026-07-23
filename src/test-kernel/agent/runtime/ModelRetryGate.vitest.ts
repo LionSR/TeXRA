@@ -5,10 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 
 const ROUTE = 'openai:subscription:gpt-5.6';
+const OTHER_ROUTE = 'anthropic:relay:claude-opus';
 const MODEL_ROUTE = `${ROUTE}:model`;
 const OTHER_MODEL_ROUTE = 'openai:subscription:gpt-5.7:model';
+const RELAY_ROUTE = 'relay:user-request-gate';
 const TRANSIENT = new Error('temporary connection failure');
 const RATE_LIMIT = Object.assign(new Error('model rate limited'), {
+  status: 429,
+});
+const RELAY_LIMIT = Object.assign(new Error('relay request limited'), {
   status: 429,
 });
 const UNAUTHORIZED = Object.assign(new Error('relay token expired'), {
@@ -228,6 +233,66 @@ describe('ModelRetryGate', () => {
     await vi.advanceTimersByTimeAsync(9000);
     await limited;
     expect(limitedOperation).toHaveBeenCalledOnce();
+    gate.dispose();
+  });
+
+  it('does not reserve the relay probe while waiting for a wire cooldown', async () => {
+    const gate = new ModelRetryGate();
+    const wireOptions = {
+      signal: new AbortController().signal,
+      baseBackoffMs: 1000,
+      classifyFailure: (error: Error) =>
+        error === TRANSIENT ? { retryAfterMs: 10_000 } : undefined,
+    };
+    const relayPolicy = {
+      key: RELAY_ROUTE,
+      classifyFailure: (error: Error) =>
+        error === RELAY_LIMIT ? { retryAfterMs: 1000 } : undefined,
+    };
+
+    await expect(
+      gate.run(
+        RELAY_ROUTE,
+        {
+          signal: new AbortController().signal,
+          baseBackoffMs: 1000,
+          classifyFailure: relayPolicy.classifyFailure,
+        },
+        async () => {
+          throw RELAY_LIMIT;
+        },
+      ),
+    ).rejects.toBe(RELAY_LIMIT);
+    await expect(
+      gate.run(ROUTE, wireOptions, async () => {
+        throw TRANSIENT;
+      }),
+    ).rejects.toBe(TRANSIENT);
+
+    const blockedWireOperation = vi.fn(async () => undefined);
+    const blockedWire = gate.run(
+      ROUTE,
+      { ...wireOptions, trailingRoutes: [relayPolicy] },
+      blockedWireOperation,
+    );
+    const healthyWireOperation = vi.fn(async () => undefined);
+    const healthyWire = gate.run(
+      OTHER_ROUTE,
+      {
+        ...wireOptions,
+        trailingRoutes: [relayPolicy],
+      },
+      healthyWireOperation,
+    );
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await healthyWire;
+    expect(healthyWireOperation).toHaveBeenCalledOnce();
+    expect(blockedWireOperation).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(9000);
+    await blockedWire;
+    expect(blockedWireOperation).toHaveBeenCalledOnce();
     gate.dispose();
   });
 

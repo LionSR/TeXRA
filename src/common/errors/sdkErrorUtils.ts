@@ -43,6 +43,7 @@ export {
   normalizeProviderError,
   isProviderErrorAutoRetryable,
   isModelRateLimitFailure,
+  isRelayRequestGateReachableFailure,
   isRelayRequestLimitFailure,
   getSdkErrorMessage,
   buildErrorLogData,

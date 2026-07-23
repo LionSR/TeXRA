@@ -504,6 +504,16 @@ export function isRelayRequestLimitFailure(error: Error): boolean {
   );
 }
 
+/** Whether an upstream rate limit proves the relay request gate admitted the call. */
+export function isRelayRequestGateReachableFailure(error: Error): boolean {
+  const chain = causeChain(error);
+  const statusCode = detectRouteStatusCode(error, chain);
+  return (
+    statusCode === StatusCodes.TOO_MANY_REQUESTS &&
+    detectRateLimitScope(error, statusCode) !== 'relay-user'
+  );
+}
+
 /** Classifies relay request limits for their cross-provider recovery gate. */
 export function classifyRelayRequestLimitFailure(
   error: Error,

@@ -21,6 +21,7 @@ import {
   classifyRelayRequestLimitFailure,
   classifyWireRouteFailure,
   isModelRateLimitFailure,
+  isRelayRequestGateReachableFailure,
   isRelayRequestLimitFailure,
 } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
@@ -131,26 +132,7 @@ export class ModelInvocationNode<
         services.client,
       );
       const gate = useLaunchRunContext().runScope.session.modelRetries;
-      // The relay enforces its request limit by user, independently of
-      // provider, model, and endpoint. Retry gates live within one
-      // authenticated run session, so every relay call shares this key.
-      const additionalRoutes = [
-        {
-          key: modelRetryRoute,
-          classifyFailure: classifyModelRateLimitFailure,
-        },
-        ...(services.clientCredentialRoute === 'relay'
-          ? [
-              {
-                key: RELAY_USER_REQUEST_GATE_ROUTE,
-                classifyFailure: classifyRelayRequestLimitFailure,
-                // A provider model limit is returned only after the relay's
-                // per-user request gate admitted the call.
-                isReachableFailure: isModelRateLimitFailure,
-              },
-            ]
-          : []),
-      ];
+      const usesRelay = services.clientCredentialRoute === 'relay';
       const invoke = async () => {
         const start = Date.now();
         const result = await services.modelHandler.createResponse({
@@ -186,7 +168,21 @@ export class ModelInvocationNode<
           classifyFailure: classifyWireRouteFailure,
           isReachableFailure: (error) =>
             isModelRateLimitFailure(error) || isRelayRequestLimitFailure(error),
-          additionalRoutes,
+          additionalRoutes: [
+            {
+              key: modelRetryRoute,
+              classifyFailure: classifyModelRateLimitFailure,
+            },
+          ],
+          trailingRoutes: usesRelay
+            ? [
+                {
+                  key: RELAY_USER_REQUEST_GATE_ROUTE,
+                  classifyFailure: classifyRelayRequestLimitFailure,
+                  isReachableFailure: isRelayRequestGateReachableFailure,
+                },
+              ]
+            : undefined,
           onWait: (delayMs) =>
             services.logger.debug(
               `Waiting ${delayMs}ms for the model recovery probe.`,
