@@ -161,6 +161,8 @@ export interface StreamSlice {
    *  the current live activity. The CLI never renders the content directly;
    *  this only drives a lightweight liveness indicator. */
   readonly thinkingActive: boolean;
+  /** True while the runtime is summarizing prior conversation context. */
+  readonly compactingActive: boolean;
   readonly conversation: ConversationProgress | undefined;
   readonly roundStage?: RoundStage | undefined;
   readonly entries: readonly ConversationEntry[];
@@ -214,6 +216,7 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
     description: undefined,
     outputFilesByRound: undefined,
     thinkingActive: false,
+    compactingActive: false,
     usage: undefined,
     cumulativeUsage: undefined,
     conversation: undefined,

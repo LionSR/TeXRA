@@ -5,8 +5,9 @@ import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import { logCompactionActivity } from '@agent/trace';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   activeStreamId,
   closeInfoPane,
@@ -1931,6 +1932,24 @@ describe('CLI transcript state', () => {
       entries: [],
     });
     expect(JSON.stringify(slice)).not.toContain('raw dormant workflow prose');
+  });
+
+  it('tracks context compaction activity without adding transcript rows', () => {
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
+
+    logCompactionActivity(logger, 'started');
+    syncStreamLog(root);
+
+    let slice = streams.get().get(root);
+    expect(slice?.compactingActive).toBe(true);
+    expect(slice?.entries).toEqual([]);
+
+    logCompactionActivity(logger, 'finished');
+    syncStreamLog(root);
+
+    slice = streams.get().get(root);
+    expect(slice?.compactingActive).toBe(false);
+    expect(slice?.entries).toEqual([]);
   });
 
   it('does not project empty assistant responses into transcript rows', () => {

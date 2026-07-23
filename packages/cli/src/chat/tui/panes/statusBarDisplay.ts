@@ -85,6 +85,7 @@ export interface StatusBarDisplayInput {
   readonly commandName?: string;
   readonly bypass: BypassState;
   readonly thinkingActive?: boolean;
+  readonly compactingActive?: boolean;
   readonly queuedFollowUpMessages: readonly string[];
   readonly usage: TokenUsageStats | undefined;
   readonly roundStage: RoundStage | undefined;
@@ -250,6 +251,7 @@ const STATUS_BAR_COMPACT_PRIORITY = {
   rootActive: 65,
   elapsed: 70,
   thinking: 75,
+  compacting: 80,
 } as const;
 
 function queuedFollowUpsCountSegment(
@@ -891,7 +893,13 @@ export function buildStatusBarDisplay(
       });
     }
   }
-  if (input.thinkingActive === true && isActivePhase(input.status)) {
+  if (input.compactingActive === true && isActivePhase(input.status)) {
+    left.push({
+      text: 'compacting...',
+      color: COLOR_WARNING,
+      compactPriority: STATUS_BAR_COMPACT_PRIORITY.compacting,
+    });
+  } else if (input.thinkingActive === true && isActivePhase(input.status)) {
     left.push({
       text: 'thinking...',
       color: COLOR_WARNING,

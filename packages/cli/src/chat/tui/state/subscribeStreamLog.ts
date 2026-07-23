@@ -10,6 +10,7 @@ import { appendCliApiSwitchHint } from '@cli/runtime/approvalAdapter';
 import { redactSecrets } from '@logger/redaction';
 import {
   AgentCategory,
+  CompactionActivityDataSchema,
   ErrorLogDataSchema,
   GroupLogPayloadSchema,
   MESSAGE_TYPES,
@@ -147,6 +148,18 @@ function latestLogActivityIsThinking(
     );
   }
   return false;
+}
+
+function latestCompactionActivityIsRunning(
+  entries: readonly StreamLogEntry[],
+): boolean {
+  const entry = entries.findLast(
+    (candidate) =>
+      candidate.messageType === MESSAGE_TYPES.PROGRESS_STATUS &&
+      CompactionActivityDataSchema.safeParse(candidate.data).success,
+  );
+  if (!entry) return false;
+  return CompactionActivityDataSchema.parse(entry.data).state === 'started';
 }
 
 /** Tool inputs are typed `unknown` (model-supplied JSON) and reach us
@@ -572,6 +585,7 @@ export function syncStreamLog(
 
   const allEntries = log.getRange(0);
   const thinkingActive = latestLogActivityIsThinking(allEntries);
+  const compactingActive = latestCompactionActivityIsRunning(allEntries);
   const transcriptMessageTypes = transcriptMessageTypesForStream(streamId);
   const currentActiveStreamId = activeStreamId.get();
   const projectFullTranscript =
@@ -693,7 +707,8 @@ export function syncStreamLog(
           (entry, index) => entry === compactEntries[index],
         ) &&
         slice.description === description &&
-        slice.thinkingActive === thinkingActive
+        slice.thinkingActive === thinkingActive &&
+        slice.compactingActive === compactingActive
       ) {
         return slice;
       }
@@ -702,6 +717,7 @@ export function syncStreamLog(
         description,
         entries: compactEntries,
         thinkingActive,
+        compactingActive,
       };
     }
 
@@ -718,11 +734,18 @@ export function syncStreamLog(
     if (
       !changed &&
       slice.description === description &&
-      slice.thinkingActive === thinkingActive
+      slice.thinkingActive === thinkingActive &&
+      slice.compactingActive === compactingActive
     ) {
       return slice;
     }
-    return { ...slice, description, entries: next, thinkingActive };
+    return {
+      ...slice,
+      description,
+      entries: next,
+      thinkingActive,
+      compactingActive,
+    };
   });
 
   if (releaseAfterSync) store.requestEviction(streamId);

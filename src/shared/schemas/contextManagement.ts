@@ -65,6 +65,21 @@ export const ContextManagementDataSchema = z.preprocess(
 
 export type ContextManagementData = z.infer<typeof ContextManagementDataSchema>;
 
+/**
+ * Ephemeral lifecycle marker for a compaction operation. Completion statistics
+ * remain in {@link ContextManagementDataSchema}; this smaller payload exists so
+ * live clients can show that the potentially long-running summary request is
+ * still in progress.
+ */
+export const CompactionActivityDataSchema = z.object({
+  activity: z.literal('context_compaction'),
+  state: z.enum(['started', 'finished']),
+});
+
+export type CompactionActivityData = z.infer<
+  typeof CompactionActivityDataSchema
+>;
+
 export const ContextStateDataSchema = z.object({
   inputTokens: TokenCountSchema,
   contextWindow: PositiveTokenCountSchema,
