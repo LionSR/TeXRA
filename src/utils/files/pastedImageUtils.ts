@@ -3,9 +3,9 @@ import * as path from 'node:path';
 
 // Local imports
 import { THREE_DAYS_MS } from '@utils/config/constants';
-import { PASTED_DIR, isPastedImage } from './pastedImageName';
 
 // Local imports - filesystem
+import { PASTED_DIR, isPastedImage } from './pastedImageName';
 import { StorageFS } from './storageFS';
 
 /**
