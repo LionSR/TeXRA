@@ -161,6 +161,9 @@ export async function loadCliApiStatusLines(
     `api: ${formatCliModelAccessRouteInline(mode)}`,
     formatCliAuthStatusLine(profile),
   ];
+  const mergeIncludedUsageIntoAuth = (usage: string): void => {
+    lines[1] = `${lines[1]} · ${usage}`;
+  };
   const configuredPersonalKeyProviders =
     options.includeActionHint === true || profile.authenticated
       ? await personalKeyProviders()
@@ -189,19 +192,21 @@ export async function loadCliApiStatusLines(
       profile.credentialSource !== 'relayToken' ||
       (await getCliSessionAccessToken()) !== null;
     if (!canReadUsage) {
-      lines.push(
+      mergeIncludedUsageIntoAuth(
         'included usage: not available with a CI relay token (run `texra login` to view usage)',
       );
     } else {
       try {
         const usageTier = (await resolveCliUsageTier(profile)) ?? 'free';
-        lines.push(
+        mergeIncludedUsageIntoAuth(
           formatRelayUsageStatus(
             await fetchRelayUsageSummary({ tier: usageTier }),
           ),
         );
       } catch (error: unknown) {
-        lines.push(`included usage: unavailable (${toErrorMessage(error)})`);
+        mergeIncludedUsageIntoAuth(
+          `included usage: unavailable (${toErrorMessage(error)})`,
+        );
       }
     }
   }

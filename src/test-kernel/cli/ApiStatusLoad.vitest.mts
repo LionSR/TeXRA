@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  fetchRelayUsageSummary: vi.fn(),
   getCliApiMode: vi.fn(),
   getCliAuthProfile: vi.fn(),
+  getCliSessionAccessToken: vi.fn(),
   readCliModelAccessStatus: vi.fn(),
+  resolveCliUsageTier: vi.fn(),
   lookupApiKeyOrigin: vi.fn(),
   secrets: {},
 }));
@@ -19,6 +22,12 @@ vi.mock('@cli/runtime/apiAccessMode', async (importOriginal) => {
 
 vi.mock('@cli/runtime/supabaseAuth', () => ({
   getCliAuthProfile: mocks.getCliAuthProfile,
+  getCliSessionAccessToken: mocks.getCliSessionAccessToken,
+  resolveCliUsageTier: mocks.resolveCliUsageTier,
+}));
+
+vi.mock('@cli/runtime/relayUsage', () => ({
+  fetchRelayUsageSummary: mocks.fetchRelayUsageSummary,
 }));
 
 vi.mock('@cli/runtime/modelAccessSelection', () => ({
@@ -39,12 +48,17 @@ const { loadCliApiStatusLines, loadCliModelAccessOverview } =
 
 describe('loadCliApiStatusLines', () => {
   beforeEach(() => {
+    mocks.fetchRelayUsageSummary.mockReset();
     mocks.getCliApiMode.mockReset();
     mocks.getCliAuthProfile.mockReset();
+    mocks.getCliSessionAccessToken.mockReset();
     mocks.readCliModelAccessStatus.mockReset();
+    mocks.resolveCliUsageTier.mockReset();
     mocks.lookupApiKeyOrigin.mockReset();
     mocks.getCliApiMode.mockReturnValue('personal');
     mocks.getCliAuthProfile.mockResolvedValue({ authenticated: false });
+    mocks.getCliSessionAccessToken.mockResolvedValue('session-token');
+    mocks.resolveCliUsageTier.mockResolvedValue('free');
     mocks.readCliModelAccessStatus.mockResolvedValue({
       active: 'personal',
       chatGptSignedIn: false,
@@ -64,6 +78,22 @@ describe('loadCliApiStatusLines', () => {
       'actions: choose Model access below; `texra login` signs in to Researcher Access',
     ]);
     expect(mocks.getCliApiMode).not.toHaveBeenCalled();
+  });
+
+  it('merges tier and included usage into the auth line', async () => {
+    mocks.getCliAuthProfile.mockResolvedValue({
+      authenticated: true,
+      accountLabel: 'researcher@example.com',
+      tier: 'Ultra',
+      credentialSource: 'session',
+    });
+    mocks.resolveCliUsageTier.mockResolvedValue('Ultra');
+    mocks.fetchRelayUsageSummary.mockResolvedValue({ usagePercent: 100.3 });
+
+    await expect(loadCliApiStatusLines()).resolves.toEqual([
+      'api: personal API keys',
+      'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 100.3% used, 0% remaining',
+    ]);
   });
 
   it('reports both accounts, the effective route, and its API fallback', async () => {
