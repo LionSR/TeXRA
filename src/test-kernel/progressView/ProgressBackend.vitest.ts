@@ -11,6 +11,16 @@ import * as path from 'node:path';
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
+vi.mock('@tools/goal', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tools/goal')>();
+  return {
+    ...actual,
+    // ProgressBackend tests replace cleanup methods to exercise failures.
+    // The GoalStore suite separately tests the canonical frozen singleton.
+    GoalStore: { ...actual.GoalStore },
+  };
+});
+
 // Local imports
 import type { AgentEvent } from '@agent/trace';
 import {

@@ -12,7 +12,7 @@ import { BinaryResolver } from '@utils/system/binaryResolver';
  * Keep both the tool descriptions (ProbeEnvironmentTool / VerifySetupTool)
  * aligned with these lists — they appear verbatim in the LLM prompt.
  */
-export const CORE_LATEX_TOOLS = [
+export const CORE_LATEX_TOOLS = Object.freeze([
   'pdflatex',
   'latexmk',
   'latexindent',
@@ -20,9 +20,9 @@ export const CORE_LATEX_TOOLS = [
   'texcount',
   'perl',
   'gs',
-] as const;
+] as const);
 
-export const IMAGE_TOOLS = ['gm', 'magick'] as const;
+export const IMAGE_TOOLS = Object.freeze(['gm', 'magick'] as const);
 
 /**
  * Resolve a tool as installed by (1) the known-tool check which spawns

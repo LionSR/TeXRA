@@ -1,37 +1,44 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
-import { afterEach, describe, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, vi } from 'vitest';
 
 // Local imports
 import { ProbeEnvironmentTool } from '@tools/setup/ProbeEnvironmentTool';
 import { VerifySetupTool } from '@tools/setup/VerifySetupTool';
 import * as setupPlatformModule from '@tools/setup/platform';
-import { setSetupPlatform, setupSecrets } from '@tools/setup/platform';
+import { setSetupPlatform } from '@tools/setup/platform';
 
 // Local file imports
 import { createFakeSetupPlatform } from './fixtures';
 
-const ORIGINAL_PROVIDERS = setupSecrets.providers;
+const mocks = vi.hoisted(() => ({
+  apiKeyOrigin: vi.fn<() => Promise<'secret' | 'env' | 'none' | 'unknown'>>(),
+  anyUsableCredentialExists: vi.fn<() => Promise<boolean>>(),
+}));
+
+vi.mock('@tools/setup/platform', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tools/setup/platform')>();
+  return {
+    ...actual,
+    setupSecrets: {
+      ...actual.setupSecrets,
+      providers: ['deepseek'],
+      apiKeyOrigin: mocks.apiKeyOrigin,
+      anyUsableCredentialExists: mocks.anyUsableCredentialExists,
+    },
+  };
+});
 
 function installSetupPlatformWithSecrets(options: {
-  providers?: typeof setupSecrets.providers;
-  apiKeyOrigin?: typeof setupSecrets.apiKeyOrigin;
-  anyUsableCredentialExists?: typeof setupSecrets.anyUsableCredentialExists;
+  apiKeyOrigin?: () => Promise<'secret' | 'env' | 'none' | 'unknown'>;
+  anyUsableCredentialExists?: () => Promise<boolean>;
 }): void {
   setSetupPlatform(createFakeSetupPlatform());
-  if (options.providers) {
-    Object.defineProperty(setupSecrets, 'providers', {
-      configurable: true,
-      value: options.providers,
-    });
-  }
   if (options.apiKeyOrigin) {
-    vi.spyOn(setupSecrets, 'apiKeyOrigin').mockImplementation(
-      options.apiKeyOrigin,
-    );
+    mocks.apiKeyOrigin.mockImplementation(options.apiKeyOrigin);
   }
   if (options.anyUsableCredentialExists) {
-    vi.spyOn(setupSecrets, 'anyUsableCredentialExists').mockImplementation(
+    mocks.anyUsableCredentialExists.mockImplementation(
       options.anyUsableCredentialExists,
     );
   }
@@ -39,7 +46,7 @@ function installSetupPlatformWithSecrets(options: {
 
 function installChatGptOnlySetupPlatform(): void {
   setSetupPlatform(createFakeSetupPlatform());
-  vi.spyOn(setupSecrets, 'anyUsableCredentialExists').mockResolvedValue(true);
+  mocks.anyUsableCredentialExists.mockResolvedValue(true);
   vi.spyOn(
     setupPlatformModule,
     'getChatGptSubscriptionStatus',
@@ -60,30 +67,28 @@ async function assertAuthPrecedesCredentialProbe(
       };
     },
   );
-  vi.spyOn(setupSecrets, 'anyUsableCredentialExists').mockImplementation(
-    async () => {
-      calls.push('credential');
-      return false;
-    },
-  );
+  mocks.anyUsableCredentialExists.mockImplementation(async () => {
+    calls.push('credential');
+    return false;
+  });
 
   await run();
 
   assert.deepEqual(calls, ['auth', 'credential']);
 }
 
+beforeEach(() => {
+  mocks.apiKeyOrigin.mockReset().mockResolvedValue('none');
+  mocks.anyUsableCredentialExists.mockReset().mockResolvedValue(false);
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
-  Object.defineProperty(setupSecrets, 'providers', {
-    configurable: true,
-    value: ORIGINAL_PROVIDERS,
-  });
 });
 
 describe('setup credential reporting', () => {
   it('reports the active host and provider-key origin without secret values', async () => {
     installSetupPlatformWithSecrets({
-      providers: ['deepseek'],
       async apiKeyOrigin() {
         return 'env';
       },
@@ -121,7 +126,6 @@ describe('setup credential reporting', () => {
 
   it('keeps probing when one provider key origin is unavailable', async () => {
     installSetupPlatformWithSecrets({
-      providers: ['openai'],
       async apiKeyOrigin() {
         throw new Error('Keychain unavailable');
       },
