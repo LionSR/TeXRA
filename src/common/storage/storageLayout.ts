@@ -1,5 +1,5 @@
 /** Root collection names shared by storage providers and persisted stores. */
-export const WORKSPACE_STORAGE_LAYOUT = {
+export const WORKSPACE_STORAGE_LAYOUT = Object.freeze({
   memory: 'memories',
   runs: 'executions',
   executionLeases: 'executionLeases',
@@ -8,4 +8,4 @@ export const WORKSPACE_STORAGE_LAYOUT = {
   streamData: 'streamData',
   streamLogs: 'streamLogs',
   original: 'original',
-} as const;
+} as const);
