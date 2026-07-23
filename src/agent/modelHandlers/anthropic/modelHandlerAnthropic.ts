@@ -727,18 +727,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Phase 4: EXECUTE - Dispatch through the provider's two SDK paths.
-    // Non-streaming responses have no block-start event, so use the token
-    // count that configured the request to announce compaction before the
-    // potentially long SDK call. The response/failure boundary owns the
-    // matching finish marker.
+    // Non-streaming responses have no block-start event. Announce compaction
+    // when the measured count crosses the trigger, or whenever the active
+    // compaction edit cannot be measured (unsupported counting or file-backed
+    // input). The response/failure boundary owns the matching finish marker.
     const compactionEdit = options.context_management?.edits?.find(
       (edit) => edit.type === 'compact_20260112',
     );
     const nonStreamingCompactionExpected =
       !useStreaming &&
-      measuredInputTokens !== undefined &&
       compactionEdit?.trigger?.type === 'input_tokens' &&
-      measuredInputTokens >= compactionEdit.trigger.value;
+      (measuredInputTokens === undefined ||
+        measuredInputTokens >= compactionEdit.trigger.value);
 
     if (nonStreamingCompactionExpected) {
       logCompactionActivity(this.logger, 'started');
