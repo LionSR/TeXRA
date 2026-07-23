@@ -176,6 +176,33 @@ const INTERLEAVED_THINKING_BETA: AnthropicBeta =
 /** Anthropic's documented upper typical text-token estimate per PDF page. */
 const ANTHROPIC_PDF_TOKENS_PER_PAGE_ESTIMATE = 3_000;
 
+/** Counts live Files API references after the latest compaction boundary. */
+function collectFileReferenceCounts(
+  messages: MessageParam[],
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const message of messages) {
+    const contentBlocks = message.content;
+    if (!Array.isArray(contentBlocks)) continue;
+
+    if (
+      contentBlocks.some(
+        (block) => (block as { type?: unknown }).type === 'compaction',
+      )
+    ) {
+      counts.clear();
+    }
+    for (const block of extractDocumentBlocks(contentBlocks)) {
+      const source = block.source as
+        { type: string; file_id?: string } | undefined;
+      if (source?.type === 'file' && source.file_id) {
+        counts.set(source.file_id, (counts.get(source.file_id) ?? 0) + 1);
+      }
+    }
+  }
+  return counts;
+}
+
 export class ModelHandlerAnthropic extends ModelHandler<
   MessageParam,
   BetaUsage,
@@ -202,26 +229,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
    * compaction drops old messages.
    */
   private pruneTrackedFileMetadata(messages: MessageParam[]): void {
-    const liveFileIds = new Set<string>();
-    for (const message of messages) {
-      const contentBlocks = message.content;
-      if (!Array.isArray(contentBlocks)) continue;
-
-      if (
-        contentBlocks.some(
-          (block) => (block as { type?: unknown }).type === 'compaction',
-        )
-      ) {
-        liveFileIds.clear();
-      }
-      for (const block of extractDocumentBlocks(contentBlocks)) {
-        const source = block.source as
-          { type: string; file_id?: string } | undefined;
-        if (source?.type === 'file' && source.file_id) {
-          liveFileIds.add(source.file_id);
-        }
-      }
-    }
+    const liveFileIds = collectFileReferenceCounts(messages);
 
     for (const fileId of this.uploadedPdfPageCounts.keys()) {
       if (!liveFileIds.has(fileId)) {
@@ -245,21 +253,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
     client: Anthropic,
     messages: MessageParam[],
     signal?: AbortSignal,
+    stopAtTokens = Number.POSITIVE_INFINITY,
   ): Promise<number> {
-    const fileReferenceCounts = new Map<string, number>();
-    for (const message of messages) {
-      if (!Array.isArray(message.content)) continue;
-      for (const block of extractDocumentBlocks(message.content)) {
-        const source = block.source as
-          { type: string; file_id?: string } | undefined;
-        if (source?.type === 'file' && source.file_id) {
-          fileReferenceCounts.set(
-            source.file_id,
-            (fileReferenceCounts.get(source.file_id) ?? 0) + 1,
-          );
-        }
-      }
-    }
+    const fileReferenceCounts = collectFileReferenceCounts(messages);
 
     let total = 0;
     for (const [fileId, referenceCount] of fileReferenceCounts) {
@@ -269,6 +265,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         ANTHROPIC_PDF_TOKENS_PER_PAGE_ESTIMATE;
       if (pageEstimate > 0) {
         total += pageEstimate * referenceCount;
+        if (total >= stopAtTokens) break;
         continue;
       }
 
@@ -293,6 +290,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         }
       }
       total += (sizeEstimate ?? 0) * referenceCount;
+      if (total >= stopAtTokens) break;
     }
     return total;
   }
@@ -811,29 +809,37 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const compactionEdit = options.context_management?.edits?.find(
       (edit) => edit.type === 'compact_20260112',
     );
-    const fileReferenceTokens =
-      measuredInputTokens === undefined &&
-      !useStreaming &&
-      compactionEdit?.trigger?.type === 'input_tokens' &&
-      hasFileReference
-        ? await this.estimateFileReferenceTokens(client, messages, signal)
-        : 0;
-    const inputTokensForCompaction =
-      measuredInputTokens ??
-      fileReferenceTokens +
-        estimateTokensFromText(
-          JSON.stringify({
-            messages: options.messages,
-            system: options.system,
-            tools: options.tools,
-            thinking: options.thinking,
-            outputConfig: options.output_config,
-          }),
-        );
+    const compactionTrigger =
+      !useStreaming && compactionEdit?.trigger?.type === 'input_tokens'
+        ? compactionEdit.trigger.value
+        : undefined;
+    let inputTokensForCompaction = measuredInputTokens;
+    if (inputTokensForCompaction === undefined) {
+      const textTokens = estimateTokensFromText(
+        JSON.stringify({
+          messages: options.messages,
+          system: options.system,
+          tools: options.tools,
+          thinking: options.thinking,
+          outputConfig: options.output_config,
+        }),
+      );
+      const tokensUntilCompaction =
+        compactionTrigger === undefined ? 0 : compactionTrigger - textTokens;
+      const fileReferenceTokens =
+        hasFileReference && tokensUntilCompaction > 0
+          ? await this.estimateFileReferenceTokens(
+              client,
+              messages,
+              signal,
+              tokensUntilCompaction,
+            )
+          : 0;
+      inputTokensForCompaction = textTokens + fileReferenceTokens;
+    }
     const nonStreamingCompactionExpected =
-      !useStreaming &&
-      compactionEdit?.trigger?.type === 'input_tokens' &&
-      inputTokensForCompaction >= compactionEdit.trigger.value;
+      compactionTrigger !== undefined &&
+      inputTokensForCompaction >= compactionTrigger;
 
     if (nonStreamingCompactionExpected) {
       logCompactionActivity(this.logger, 'started');

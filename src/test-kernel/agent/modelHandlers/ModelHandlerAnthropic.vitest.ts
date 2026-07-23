@@ -1375,6 +1375,40 @@ describe('ModelHandlerAnthropic message guards', () => {
     },
   );
 
+  it('skips file metadata after text already crosses the trigger', async () => {
+    const handler = createAnthropicHandler({
+      supportsNativePdf: true,
+      supportsTokenCounting: false,
+      supportsReasoning: false,
+    });
+    handler.config.fullName = 'claude-opus-4-6';
+    handler.setAgentCategory(AgentCategory.ToolUse);
+    stubHandlerForTest(handler);
+    stubCompactionThresholdPercent(75);
+
+    const retrieveMetadata = vi.fn(async (_fileId: string) => ({
+      size_bytes: 800_000,
+    }));
+    const { client } = createCapturingAnthropicClient('claude-opus-4-6');
+    client.beta.files = { retrieveMetadata };
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'x'.repeat(620_000), citations: null },
+          {
+            type: 'document',
+            source: { type: 'file', file_id: 'file_unneeded' },
+          },
+        ] as unknown as ContentBlockParam[],
+      },
+    ];
+
+    await handler.createResponse({ client, messages, temperature: 0 });
+
+    assert.equal(retrieveMetadata.mock.calls.length, 0);
+  });
+
   it('includes Files API document size in the unmeasured fallback', async () => {
     const handler = createAnthropicHandler({
       supportsNativePdf: true,
@@ -1475,7 +1509,9 @@ describe('ModelHandlerAnthropic message guards', () => {
       ): Promise<number>;
     };
     target.uploadedPdfPageCounts.set('file_tracked', 1);
-    const retrieveMetadata = vi.fn(async () => ({ size_bytes: 800_000 }));
+    const retrieveMetadata = vi.fn(async (_fileId: string) => ({
+      size_bytes: 800_000,
+    }));
 
     const estimate = await target.estimateFileReferenceTokens(
       { beta: { files: { retrieveMetadata } } },
@@ -1518,6 +1554,89 @@ describe('ModelHandlerAnthropic message guards', () => {
 
     assert.equal(estimate, 400_000);
     assert.equal(retrieveMetadata.mock.calls.length, 1);
+  });
+
+  it('ignores file references before the latest compaction boundary', async () => {
+    const handler = createAnthropicHandler({ supportsNativePdf: true });
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: { type: 'file', file_id: 'file_compacted' },
+          },
+        ] as unknown as ContentBlockParam[],
+      },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'compaction', content: '<summary>state</summary>' },
+        ] as unknown as ContentBlockParam[],
+      },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: { type: 'file', file_id: 'file_live' },
+          },
+        ] as unknown as ContentBlockParam[],
+      },
+    ];
+    const target = handler as unknown as {
+      estimateFileReferenceTokens(
+        client: unknown,
+        messages: MessageParam[],
+      ): Promise<number>;
+    };
+    const retrieveMetadata = vi.fn(async (_fileId: string) => ({
+      size_bytes: 800_000,
+    }));
+
+    const estimate = await target.estimateFileReferenceTokens(
+      { beta: { files: { retrieveMetadata } } },
+      messages,
+    );
+
+    assert.equal(estimate, 200_000);
+    assert.equal(retrieveMetadata.mock.calls.length, 1);
+    assert.equal(retrieveMetadata.mock.calls[0]?.[0], 'file_live');
+  });
+
+  it('stops metadata lookups once file estimates cross the trigger', async () => {
+    const handler = createAnthropicHandler({ supportsNativePdf: true });
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: ['file_first', 'file_unneeded'].map((fileId) => ({
+          type: 'document',
+          source: { type: 'file', file_id: fileId },
+        })) as unknown as ContentBlockParam[],
+      },
+    ];
+    const target = handler as unknown as {
+      estimateFileReferenceTokens(
+        client: unknown,
+        messages: MessageParam[],
+        signal: AbortSignal | undefined,
+        stopAtTokens: number,
+      ): Promise<number>;
+    };
+    const retrieveMetadata = vi.fn(async (_fileId: string) => ({
+      size_bytes: 800_000,
+    }));
+
+    const estimate = await target.estimateFileReferenceTokens(
+      { beta: { files: { retrieveMetadata } } },
+      messages,
+      undefined,
+      100_000,
+    );
+
+    assert.equal(estimate, 200_000);
+    assert.equal(retrieveMetadata.mock.calls.length, 1);
+    assert.equal(retrieveMetadata.mock.calls[0]?.[0], 'file_first');
   });
 
   it('stops file metadata estimation immediately after cancellation', async () => {
