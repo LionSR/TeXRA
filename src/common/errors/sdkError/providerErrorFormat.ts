@@ -447,14 +447,47 @@ function detectRetryAfterMs(chain: readonly unknown[]): number | undefined {
   return undefined;
 }
 
+function detectRouteStatusCode(
+  error: Error,
+  chain: readonly unknown[],
+): number | undefined {
+  return (
+    findInCauseChain(error, (current) => {
+      const status = detectStatusCode(current);
+      return status !== undefined && status >= 100 && status <= 599
+        ? status
+        : undefined;
+    }) ?? normalizeProviderError(error).statusCode
+  );
+}
+
+/** Whether a failure is a model-scoped provider rate limit. */
+export function isModelRateLimitFailure(error: Error): boolean {
+  return (
+    detectRouteStatusCode(error, causeChain(error)) ===
+    StatusCodes.TOO_MANY_REQUESTS
+  );
+}
+
+/** Classifies model-scoped rate limits for their own recovery gate. */
+export function classifyModelRateLimitFailure(
+  error: Error,
+): { retryAfterMs?: number } | undefined {
+  const chain = causeChain(error);
+  return detectRouteStatusCode(error, chain) === StatusCodes.TOO_MANY_REQUESTS
+    ? { retryAfterMs: detectRetryAfterMs(chain) }
+    : undefined;
+}
+
 /**
  * Classify a failure that carries evidence about a shared wire route
  * (provider + credential + endpoint): transport failures, 5xx/408 server
- * failures, and 429 rate limits. Retryable failures outside this set (e.g.
- * 409 conflicts) stay node-local — a conflict does not imply the route is
- * unhealthy. Relay 401s are also deliberately absent: token refresh is
- * single-flighted at the auth boundary and repaired by each call's own
- * reactive recovery, so cooling the route would only serialize peers.
+ * failures. Model-specific 429 rate limits use a separate recovery scope.
+ * Retryable failures outside this set (e.g. 409 conflicts) stay node-local —
+ * a conflict does not imply the route is unhealthy. Relay 401s are also
+ * deliberately absent: token refresh is single-flighted at the auth boundary
+ * and repaired by each call's own reactive recovery, so cooling the route
+ * would only serialize peers.
  */
 export function classifyWireRouteFailure(
   error: Error,
@@ -496,17 +529,10 @@ export function classifyWireRouteFailure(
     });
   // Per-element field reads with an HTTP range guard, so a wrapper's non-HTTP
   // numeric `code` (an errno, a gRPC status) cannot shadow a real status
-  // deeper in the chain. The full normalizer runs once at the top as the
-  // fallback for statuses only inferable from provider bodies (e.g. relay).
-  const statusCode =
-    findInCauseChain(error, (current) => {
-      const status = detectStatusCode(current);
-      return status !== undefined && status >= 100 && status <= 599
-        ? status
-        : undefined;
-    }) ?? normalizeProviderError(error).statusCode;
+  // deeper in the chain. The full normalizer is the fallback for statuses only
+  // inferable from provider bodies (e.g. relay).
+  const statusCode = detectRouteStatusCode(error, chain);
   if (
-    statusCode !== StatusCodes.TOO_MANY_REQUESTS &&
     statusCode !== StatusCodes.REQUEST_TIMEOUT &&
     (statusCode == null || statusCode < 500) &&
     !transportFailure

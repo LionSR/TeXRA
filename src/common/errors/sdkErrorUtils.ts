@@ -36,10 +36,12 @@ export {
 } from './sdkError/errorPatterns';
 
 export {
+  classifyModelRateLimitFailure,
   classifyWireRouteFailure,
   formatProviderHttpError,
   normalizeProviderError,
   isProviderErrorAutoRetryable,
+  isModelRateLimitFailure,
   getSdkErrorMessage,
   buildErrorLogData,
   buildFailedRetryInfo,

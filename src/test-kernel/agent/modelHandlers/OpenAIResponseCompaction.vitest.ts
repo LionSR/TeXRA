@@ -169,6 +169,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const handler = createHandler();
     const requests: any[] = [];
     const compactRequests: any[] = [];
+    const compactOptions: any[] = [];
     const compactedMessages = [
       {
         type: 'message',
@@ -184,8 +185,9 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
           // this live pre-flight count.
           count: async () => ({ input_tokens: 800 }),
         },
-        compact: async (params: any) => {
+        compact: async (params: any, options: any) => {
           compactRequests.push(params);
+          compactOptions.push(options);
           return {
             output: compactedMessages,
             usage: { output_tokens: 100 },
@@ -201,6 +203,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     });
     const firstTurnMessages = createMessages(2);
     const secondTurnMessages = createMessages(3);
+    const controller = new AbortController();
 
     await handler.createResponse({
       client: client as any,
@@ -211,10 +214,12 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
       client: client as any,
       messages: secondTurnMessages,
       temperature: 0,
+      signal: controller.signal,
     });
 
     expect(compactRequests).toHaveLength(1);
     expect(client.withOptions).toHaveBeenCalledWith({ maxRetries: 2 });
+    expect(compactOptions[0]?.signal).toBe(controller.signal);
     expect(compactRequests[0].input).toEqual(secondTurnMessages);
     expect(requests).toHaveLength(2);
     expect(requests[1].previous_response_id).toBeUndefined();

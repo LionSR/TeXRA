@@ -28,11 +28,23 @@ interface RouteFailure {
   readonly retryAfterMs?: number;
 }
 
+interface RoutePolicy {
+  readonly key: string;
+  readonly classifyFailure: (error: Error) => RouteFailure | undefined;
+  readonly isReachableFailure?: (error: Error) => boolean;
+}
+
 interface RunOptions {
   readonly signal: AbortSignal;
   readonly baseBackoffMs: number;
   readonly classifyFailure: (error: Error) => RouteFailure | undefined;
+  readonly isReachableFailure?: (error: Error) => boolean;
+  readonly additionalRoutes?: readonly RoutePolicy[];
   readonly onWait?: (delayMs: number) => void;
+}
+
+interface AcquiredRoute extends RoutePolicy {
+  readonly permit: RetryPermit;
 }
 
 function abortReason(signal: AbortSignal): unknown {
@@ -60,35 +72,92 @@ export class ModelRetryGate {
     options: RunOptions,
     operation: () => Promise<T>,
   ): Promise<T> {
-    const permit = await this.acquire(route, options);
+    const policies: RoutePolicy[] = [
+      {
+        key: route,
+        classifyFailure: options.classifyFailure,
+        isReachableFailure: options.isReachableFailure,
+      },
+      ...(options.additionalRoutes ?? []),
+    ];
+    const acquired = await this.acquireAll(policies, options);
     try {
       const result = await operation();
-      this.markReachable(route, permit);
+      for (const entry of acquired) {
+        this.markReachable(entry.key, entry.permit);
+      }
       return result;
     } catch (error) {
       if (options.signal.aborted) {
-        this.abandon(route, permit);
+        for (const entry of acquired) {
+          this.abandon(entry.key, entry.permit);
+        }
       } else {
-        const failure = options.classifyFailure(error as Error);
-        if (failure) {
-          this.markRouteFailure(
-            route,
-            permit,
-            options.baseBackoffMs,
-            failure.retryAfterMs,
-          );
-        } else if (permit.probe) {
-          // An unclassified failure does not prove that a recovering route is
-          // reachable. Keep the cohort closed and hand probe ownership to one
-          // waiter; shared credential failures can otherwise release every
-          // peer before their out-of-gate recovery finishes.
-          this.abandon(route, permit);
-        } else {
-          this.markReachable(route, permit);
+        for (const entry of acquired) {
+          const failure = entry.classifyFailure(error as Error);
+          if (failure) {
+            this.markRouteFailure(
+              entry.key,
+              entry.permit,
+              options.baseBackoffMs,
+              failure.retryAfterMs,
+            );
+          } else if (entry.isReachableFailure?.(error as Error)) {
+            this.markReachable(entry.key, entry.permit);
+          } else if (entry.permit.probe) {
+            // An unclassified failure does not prove that a recovering route
+            // is reachable. Keep the cohort closed and hand probe ownership
+            // to one waiter; shared credential failures can otherwise release
+            // every peer before their out-of-gate recovery finishes.
+            this.abandon(entry.key, entry.permit);
+          }
         }
       }
       throw error;
     }
+  }
+
+  /**
+   * Acquires every recovery scope in caller-defined order. A later wait can
+   * make an earlier permit stale, so validate the complete set before sending
+   * and retry acquisition rather than leaking one request through a newly
+   * cooling route.
+   */
+  private async acquireAll(
+    routes: readonly RoutePolicy[],
+    options: Pick<RunOptions, 'signal' | 'onWait'>,
+  ): Promise<AcquiredRoute[]> {
+    while (true) {
+      const acquired: AcquiredRoute[] = [];
+      try {
+        for (const route of routes) {
+          acquired.push({
+            ...route,
+            permit: await this.acquire(route.key, options),
+          });
+        }
+      } catch (error) {
+        for (const entry of acquired) {
+          this.abandon(entry.key, entry.permit);
+        }
+        throw error;
+      }
+
+      if (
+        acquired.every((entry) => this.isCurrentPermit(entry.key, entry.permit))
+      ) {
+        return acquired;
+      }
+      for (const entry of acquired) {
+        this.abandon(entry.key, entry.permit);
+      }
+    }
+  }
+
+  private isCurrentPermit(route: string, permit: RetryPermit): boolean {
+    const state = this.routes.get(route);
+    if (!state || permit.version !== state.version) return false;
+    return permit.probe ? state.phase === 'probing' : state.phase === 'healthy';
   }
 
   dispose(): void {
@@ -191,7 +260,9 @@ export class ModelRetryGate {
       // whose released cohort may immediately re-fail (a rate window that fits
       // one probe rarely fits the herd). Resetting on probe success would cap
       // the shared backoff at its base forever in exactly that cycle.
-      state.failures = 0;
+      if (permit.version === state.version) {
+        state.failures = 0;
+      }
       return;
     }
     if (permit.version !== state.version) return;

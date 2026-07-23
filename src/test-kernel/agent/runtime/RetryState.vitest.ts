@@ -205,7 +205,11 @@ function createModelInvocationNode(): ModelInvocationNode<BaseCycleFields> {
 
 interface CapturedModelRetry {
   readonly wireRoute: string;
+  readonly modelRetryRoute: string;
   readonly classifyFailure: (
+    error: Error,
+  ) => { retryAfterMs?: number } | undefined;
+  readonly classifyModelFailure: (
     error: Error,
   ) => { retryAfterMs?: number } | undefined;
   readonly gateCalls: number;
@@ -238,6 +242,14 @@ async function captureModelRetry(
           endpoint,
           clientCredentialIdentity,
         ]),
+      getModelRetryRouteKey: () =>
+        JSON.stringify([
+          'openai',
+          credentialRoute,
+          endpoint,
+          clientCredentialIdentity,
+          model,
+        ]),
       isBackgroundModeActive: () => false,
       setOutputStreaming: () => {},
     },
@@ -255,9 +267,15 @@ async function captureModelRetry(
       node.exec({ shouldStop: false, messages: [] }),
     );
     const [wireRoute, modelOptions] = run.mock.calls[0]!;
+    const modelRoute = modelOptions.additionalRoutes?.[0];
+    if (!modelRoute) {
+      throw new Error('Expected model-specific retry route');
+    }
     return {
       wireRoute,
+      modelRetryRoute: modelRoute.key,
       classifyFailure: modelOptions.classifyFailure,
+      classifyModelFailure: modelRoute.classifyFailure,
       gateCalls: run.mock.calls.length,
     };
   } finally {
@@ -572,7 +590,7 @@ describe('RetryState', () => {
     expect(second.wireRoute).not.toBe(first.wireRoute);
   });
 
-  it('coordinates rate-limit recovery across one wire route', async () => {
+  it('coordinates rate-limit recovery per model on one wire route', async () => {
     const first = await captureModelRetry(
       'https://api.example/v1',
       'api-key',
@@ -591,7 +609,9 @@ describe('RetryState', () => {
     });
 
     expect(first.wireRoute).toBe(second.wireRoute);
-    expect(first.classifyFailure(rateLimit)).toEqual({
+    expect(first.modelRetryRoute).not.toBe(second.modelRetryRoute);
+    expect(first.classifyFailure(rateLimit)).toBeUndefined();
+    expect(first.classifyModelFailure(rateLimit)).toEqual({
       retryAfterMs: 3_000,
     });
   });

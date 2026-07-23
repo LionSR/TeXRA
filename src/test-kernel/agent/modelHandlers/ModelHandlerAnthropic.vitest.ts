@@ -901,17 +901,20 @@ describe('ModelHandlerAnthropic message guards', () => {
       },
     } as any;
     client.withOptions = vi.fn(() => client);
+    const controller = new AbortController();
 
     const response = await handler.createResponse({
       client,
       messages,
       temperature: 0,
+      signal: controller.signal,
     });
 
     assert.deepEqual(callOrder, ['countTokens', 'upload', 'create']);
     // Token counting retries ride per-request options, not a client clone.
     assert.deepEqual(client.withOptions.mock.calls, []);
     assert.equal(countTokensOptions[0]?.maxRetries, 2);
+    assert.equal(countTokensOptions[0]?.signal, controller.signal);
     assert.equal(response.response.stop_reason, 'end_turn');
   });
 

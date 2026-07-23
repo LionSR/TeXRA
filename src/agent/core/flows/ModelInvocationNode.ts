@@ -16,7 +16,11 @@ import type {
   ModelCredentialSelection,
 } from '@agent/types/ModelHandlerContracts';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
-import { classifyWireRouteFailure } from '@common/errors/sdkErrorUtils';
+import {
+  classifyModelRateLimitFailure,
+  classifyWireRouteFailure,
+  isModelRateLimitFailure,
+} from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
 
 import { FlowTransition } from './FlowTransitions';
@@ -119,6 +123,9 @@ export class ModelInvocationNode<
 
     return this.withAbortController(async (signal) => {
       const wireRoute = services.modelHandler.getWireRouteKey(services.client);
+      const modelRetryRoute = services.modelHandler.getModelRetryRouteKey(
+        services.client,
+      );
       const gate = useLaunchRunContext().runScope.session.modelRetries;
       const invoke = async () => {
         const start = Date.now();
@@ -148,10 +155,17 @@ export class ModelInvocationNode<
         {
           signal,
           baseBackoffMs: this._retryBackoffMs,
-          // One wire route owns transport, server-failure, and rate-limit
-          // cooling. This coordinates every call sharing a credential and
-          // endpoint without the lock cycles of nested recovery scopes.
+          // One wire route owns transport and server-failure cooling. A second
+          // ordered scope keeps model-specific limits from blocking healthy
+          // sibling models on the same credential and endpoint.
           classifyFailure: classifyWireRouteFailure,
+          isReachableFailure: isModelRateLimitFailure,
+          additionalRoutes: [
+            {
+              key: modelRetryRoute,
+              classifyFailure: classifyModelRateLimitFailure,
+            },
+          ],
           onWait: (delayMs) =>
             services.logger.debug(
               `Waiting ${delayMs}ms for the model recovery probe.`,

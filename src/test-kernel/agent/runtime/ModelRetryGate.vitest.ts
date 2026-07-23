@@ -5,7 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 
 const ROUTE = 'openai:subscription:gpt-5.6';
+const MODEL_ROUTE = `${ROUTE}:model`;
+const OTHER_MODEL_ROUTE = 'openai:subscription:gpt-5.7:model';
 const TRANSIENT = new Error('temporary connection failure');
+const RATE_LIMIT = Object.assign(new Error('model rate limited'), {
+  status: 429,
+});
 const UNAUTHORIZED = Object.assign(new Error('relay token expired'), {
   status: 401,
 });
@@ -131,6 +136,45 @@ describe('ModelRetryGate', () => {
     expect(finalOperation).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     await final;
+    gate.dispose();
+  });
+
+  it('keeps model rate limits off the shared wire route', async () => {
+    const gate = new ModelRetryGate();
+    const modelOptions = (modelRoute: string) => ({
+      signal: new AbortController().signal,
+      baseBackoffMs: 1000,
+      classifyFailure: () => undefined,
+      isReachableFailure: (error: Error) => error === RATE_LIMIT,
+      additionalRoutes: [
+        {
+          key: modelRoute,
+          classifyFailure: (error: Error) =>
+            error === RATE_LIMIT ? {} : undefined,
+        },
+      ],
+    });
+
+    await expect(
+      gate.run(ROUTE, modelOptions(MODEL_ROUTE), async () => {
+        throw RATE_LIMIT;
+      }),
+    ).rejects.toBe(RATE_LIMIT);
+
+    const limitedOperation = vi.fn(async () => undefined);
+    const limited = gate.run(
+      ROUTE,
+      modelOptions(MODEL_ROUTE),
+      limitedOperation,
+    );
+    const otherModelOperation = vi.fn(async () => undefined);
+    await gate.run(ROUTE, modelOptions(OTHER_MODEL_ROUTE), otherModelOperation);
+
+    expect(otherModelOperation).toHaveBeenCalledOnce();
+    expect(limitedOperation).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1000);
+    await limited;
+    expect(limitedOperation).toHaveBeenCalledOnce();
     gate.dispose();
   });
 
@@ -305,6 +349,48 @@ describe('ModelRetryGate', () => {
     await vi.advanceTimersByTimeAsync(1);
     await current;
     expect(currentProbe).toHaveBeenCalledOnce();
+    gate.dispose();
+  });
+
+  it('does not let a stale healthy success reset recovered backoff', async () => {
+    const gate = new ModelRetryGate();
+    let resolveStale = (): void => undefined;
+    const staleResult = new Promise<void>((resolve) => {
+      resolveStale = resolve;
+    });
+    const stale = gate.run(
+      ROUTE,
+      options(new AbortController().signal),
+      () => staleResult,
+    );
+    await openGate(gate);
+
+    const probe = gate.run(
+      ROUTE,
+      options(new AbortController().signal),
+      async () => undefined,
+    );
+    await vi.advanceTimersByTimeAsync(1000);
+    await probe;
+
+    resolveStale();
+    await stale;
+    await expect(
+      gate.run(ROUTE, options(new AbortController().signal), async () => {
+        throw TRANSIENT;
+      }),
+    ).rejects.toBe(TRANSIENT);
+
+    const nextOperation = vi.fn(async () => undefined);
+    const next = gate.run(
+      ROUTE,
+      options(new AbortController().signal),
+      nextOperation,
+    );
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(nextOperation).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await next;
     gate.dispose();
   });
 

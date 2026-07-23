@@ -44,6 +44,7 @@ export type IModelHandler<
   | 'capabilities'
   | 'getStreamingConfig'
   | 'getWireRouteKey'
+  | 'getModelRetryRouteKey'
   | 'setOutputStreaming'
   | 'isBackgroundModeActive'
   | 'supportsManualCompaction'
