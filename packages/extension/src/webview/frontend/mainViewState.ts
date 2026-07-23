@@ -24,7 +24,7 @@
  */
 
 // Local imports - shared signals and schemas
-import { Signal, signal } from '@shared/signals';
+import { Signal, createTrackedSignalRegistry } from '@shared/signals';
 import type {
   AgentConfigBannerState,
   AgentOptionData,
@@ -69,21 +69,8 @@ export type WebviewOnboardingFunnelState = OnboardingFunnelState | 'pending';
 // declared. See the file-header note on the reset mechanism.
 // ---------------------------------------------------------------------------
 
-const resetCallbacks: Array<() => void> = [];
-
-/**
- * Declares a writable signal and registers its reset callback in the same
- * expression. `initialValue` is a factory (not a bare value) so every reset
- * — like every fresh mount — constructs an independent value rather than
- * reusing one shared object reference, matching how the previous hand-written
- * resets spread mutable defaults (`{ ...DEFAULT_X }`) instead of assigning
- * the constant directly.
- */
-function trackedSignal<T>(initialValue: () => T): Signal.State<T> {
-  const s = signal(initialValue());
-  resetCallbacks.push(() => s.set(initialValue()));
-  return s;
-}
+const { trackedSignal, resetAll: resetTrackedSignals } =
+  createTrackedSignalRegistry();
 
 // ---------------------------------------------------------------------------
 // Session / agent / model / instruction state
@@ -160,9 +147,7 @@ export const workflowModelOptions$ = trackedSignal<
 export const toolUseModelOptions$ = trackedSignal<
   ModelOptionData[] | undefined
 >(() => undefined);
-export const workflowAgentOptions$ = trackedSignal<AgentOptionData[]>(
-  () => [],
-);
+export const workflowAgentOptions$ = trackedSignal<AgentOptionData[]>(() => []);
 export const toolUseAgentOptions$ = trackedSignal<AgentOptionData[]>(() => []);
 export const teamOptions$ = trackedSignal<TeamOptionData[]>(() => []);
 
@@ -187,11 +172,9 @@ export const statusAnnouncement$ = trackedSignal(() => '');
 export const apiKeyBanner$ = trackedSignal<ApiKeyBannerState>(() => ({
   visible: false,
 }));
-export const agentConfigBanner$ = trackedSignal<AgentConfigBannerState>(
-  () => ({
-    visible: false,
-  }),
-);
+export const agentConfigBanner$ = trackedSignal<AgentConfigBannerState>(() => ({
+  visible: false,
+}));
 export const dependencyBanner$ = trackedSignal<DependencyBannerState>(() => ({
   visible: false,
 }));
@@ -204,9 +187,8 @@ export const loginBannerVisible$ = trackedSignal(() => false);
 // Onboarding funnel (PRD: agent-native onboarding). The host owns the real
 // state; 'pending' only suppresses first-paint launcher/welcome flashes until
 // SET_ONBOARDING_FUNNEL arrives.
-export const onboardingFunnelState$ = trackedSignal<WebviewOnboardingFunnelState>(
-  () => 'pending',
-);
+export const onboardingFunnelState$ =
+  trackedSignal<WebviewOnboardingFunnelState>(() => 'pending');
 
 // ---------------------------------------------------------------------------
 // Host-pushed debug flag (mirrored from MainApp's @state field in willUpdate
@@ -286,11 +268,10 @@ export const sessionContext$ = new Signal.Computed((): SessionContextValue => ({
  * provide. Main-view state is singleton-scoped per the file header, so the
  * reset is a per-mount slate, not multi-instance coordination.
  *
- * Replays `resetCallbacks`, populated by `trackedSignal` at each signal's
- * declaration site above — see the file-header note on the reset mechanism.
+ * Replays the tracked-signal registry populated by `trackedSignal` at each
+ * signal's declaration site above — see the file-header note on the reset
+ * mechanism.
  */
 export function resetMainViewState(): void {
-  for (const reset of resetCallbacks) {
-    reset();
-  }
+  resetTrackedSignals();
 }

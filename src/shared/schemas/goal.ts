@@ -43,8 +43,7 @@ export function isGoalInFlight(
  * which is the authoritative source this type is derived from.
  */
 export type GoalState =
-  | { active: false }
-  | { active: true; status: GoalStatus; objective: string };
+  { active: false } | { active: true; status: GoalStatus; objective: string };
 
 /**
  * Single source of truth for the "status/objective are only meaningful while

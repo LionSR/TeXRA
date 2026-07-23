@@ -29,7 +29,7 @@
  * mean the signal isn't exported as reactive state at all.
  */
 
-import { Signal, signal } from '@shared/signals';
+import { createTrackedSignalRegistry } from '@shared/signals';
 import type {
   MemoryViewItem,
   HistoryItem,
@@ -77,21 +77,8 @@ const DEFAULT_CHATGPT_AUTH: ChatGptAuthStatus = {
 // declared. See the file-header note on the reset mechanism.
 // ---------------------------------------------------------------------------
 
-const resetCallbacks: Array<() => void> = [];
-
-/**
- * Declares a writable signal and registers its reset callback in the same
- * expression. `initialValue` is a factory (not a bare value) so every reset
- * — like every fresh mount — constructs an independent value rather than
- * reusing one shared object reference, matching how the previous hand-written
- * resets spread mutable defaults (`{ ...DEFAULT_X }`) instead of assigning
- * the constant directly.
- */
-function trackedSignal<T>(initialValue: () => T): Signal.State<T> {
-  const s = signal(initialValue());
-  resetCallbacks.push(() => s.set(initialValue()));
-  return s;
-}
+const { trackedSignal, resetAll: resetTrackedSignals } =
+  createTrackedSignalRegistry();
 
 // ---------------------------------------------------------------------------
 // Tab state
@@ -119,13 +106,9 @@ export const tier = trackedSignal(() => 'free');
 export const apiAccessMode = trackedSignal<'included' | 'personal'>(
   () => 'personal',
 );
-export const spendingStatus = trackedSignal<SpendingStatus | null>(
-  () => null,
-);
+export const spendingStatus = trackedSignal<SpendingStatus | null>(() => null);
 export const quotaAutoSwitched = trackedSignal(() => false);
-export const providerKeyStatuses = trackedSignal<ProviderKeyStatus[]>(
-  () => [],
-);
+export const providerKeyStatuses = trackedSignal<ProviderKeyStatus[]>(() => []);
 export const globalStreamingDefault = trackedSignal(() => true);
 export const providerKeyModal = trackedSignal<ProviderKeyModalTarget | null>(
   () => null,
@@ -170,9 +153,7 @@ export const detachSubagentsOnStop = trackedSignal(() => false);
 // Approval settings state
 // ---------------------------------------------------------------------------
 export const bashApprovalEnabled = trackedSignal(() => true);
-export const codexSandboxMode = trackedSignal<string>(
-  () => 'workspace-write',
-);
+export const codexSandboxMode = trackedSignal<string>(() => 'workspace-write');
 export const codexReasoningEffort = trackedSignal<string>(() => 'high');
 export const codexApprovalPolicy = trackedSignal<string>(() => 'never');
 export const claudeAgentModel = trackedSignal<ClaudeAgentModel>(
@@ -180,9 +161,7 @@ export const claudeAgentModel = trackedSignal<ClaudeAgentModel>(
 );
 export const claudeAgentPermissionMode =
   trackedSignal<ClaudeAgentPermissionMode>(() => 'acceptEdits');
-export const claudeAgentEffort = trackedSignal<ClaudeAgentEffort>(
-  () => 'high',
-);
+export const claudeAgentEffort = trackedSignal<ClaudeAgentEffort>(() => 'high');
 
 // ---------------------------------------------------------------------------
 // Tool dashboard state
@@ -247,7 +226,5 @@ export const unsupportedCommands = trackedSignal<ReadonlySet<string> | null>(
 // one monolithic object signal — see the file-header note.
 // ---------------------------------------------------------------------------
 export function resetSettingsState(): void {
-  for (const reset of resetCallbacks) {
-    reset();
-  }
+  resetTrackedSignals();
 }

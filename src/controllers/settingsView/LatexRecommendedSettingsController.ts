@@ -37,8 +37,7 @@ interface LatexRecommendedObjectSetting {
 }
 
 type LatexRecommendedSetting =
-  | LatexRecommendedScalarSetting
-  | LatexRecommendedObjectSetting;
+  LatexRecommendedScalarSetting | LatexRecommendedObjectSetting;
 
 /** Recommended LaTeX-related VS Code settings and their target values. */
 const LATEX_RECOMMENDED_SETTINGS: LatexRecommendedSetting[] = [
