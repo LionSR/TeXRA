@@ -65,10 +65,10 @@ recommended groups at the bottom are a good starting point.
   `log`, `parallel`, `pipeline`, and `concat`. `agent(prompt, { schema })`, where
   `schema` is a JSON Schema object, runs a tool-use agent (name one via
   `agentName`) that finishes by calling `submit_output`; the call resolves to an
-  envelope whose `.structured` is the validated object. It is intentionally
-  absent from the recommended orchestrator set. Also gated by the "Workflow
-  Script" switch in Settings → Tools, which disables the tool for every agent
-  regardless of its configured tool list.
+  envelope whose `.structured` is the validated object. Present in the
+  built-in `orchestrator` agent's tool list, but gated by the "Workflow
+  Script" switch in Settings → Tools (off by default for new installs), which
+  disables the tool for every agent regardless of its configured tool list.
 - `delegate_agent` — delegate to another tool-use agent. Pass `agent`,
   `model`, and `instruction` for a fresh run, or `execution_id` +
   `instruction` to resume a WAITING subagent.
@@ -109,7 +109,9 @@ zotero_export`
 
 **Orchestrator agent:**
 `bash, read_file, write_file, glob, grep, delegate_workflow,
-delegate_agent, executions, accept_run_files, todo_write`
+delegate_agent, executions, accept_run_files, todo_write`, optionally
+`delegate_workflow_script` for pipelines with a predetermined fan-out/join
+structure (off by default — see above).
 
 **Computation agent:**
 `bash, read_file, write_file, glob, grep, wolfram`

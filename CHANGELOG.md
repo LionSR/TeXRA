@@ -10,10 +10,13 @@ All notable changes to this project will be documented in this file.
 
 - **The Mathematician team includes the critique workflow** — mathematical team
   runs can delegate a dedicated critical review directly.
-- **A switch for the workflow script tool** — the Tools dashboard (and CLI
-  `/tools`) now lists "Workflow Script" as a toggleable integration. Turning
-  it off removes `delegate_workflow_script` from every agent's tool list,
-  even agents whose configuration names it explicitly.
+- **The orchestrator agent can use scripted multi-agent pipelines** — the
+  built-in `orchestrator` agent now carries `delegate_workflow_script` for
+  fan-out/pipeline/join runs with a structure known up front. The Tools
+  dashboard (and CLI `/tools`) lists "Workflow Script" as a toggleable
+  integration, off by default for new installs; turning it off removes
+  `delegate_workflow_script` from every agent's tool list, even agents whose
+  configuration names it explicitly.
 
 #### Bug Fixes
 
