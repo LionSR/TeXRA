@@ -114,10 +114,9 @@ export async function executeSubagent(
   const workingDirectory = childConfigPayload.workingDirectory ?? undefined;
 
   const inheritChildStreamApprovals = (resolvedStreamId: StreamTabId): void => {
-    // Live per-kind ancestry: bash and tool-edit each follow the parent's own
-    // bypass, so a bash-only parent (CLI AUTO-BASH without AUTO-APPROVE) still
-    // propagates only bash, and a YOLO toggle on the parent mid-run reaches
-    // already-launched children.
+    // Live per-kind ancestry: each approval follows the parent's corresponding
+    // bypass, so a partial grant propagates only that grant, while complete
+    // delegated-task approval also reaches nested orchestrators.
     configureDelegatedChildApprovals(
       resolvedStreamId,
       orchestratorStreamId,

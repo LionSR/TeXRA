@@ -262,19 +262,19 @@ describe('child subagent stream approval inheritance', () => {
     expect(isApprovalBypassedForStream(parent)).toBe(false);
   });
 
-  it('does not let delegation ancestry also grant super-YOLO proposal bypass', () => {
-    // Delegation links bash + tool-edit only. Proposal (super-YOLO) bypass is
-    // deliberately unlinked, so a child's own delegations still prompt unless
-    // granted on the child explicitly.
+  it('propagates delegated-task approval through nested orchestrators', () => {
     const { host } = createRecordingHost();
     const parent = 'stream:parent-super-yolo' as StreamTabId;
-    const child = 'stream:child-no-proposal' as StreamTabId;
+    const child = 'stream:child-orchestrator' as StreamTabId;
+    const grandchild = 'stream:grandchild-orchestrator' as StreamTabId;
     proposalApprovals().setBypass(parent, true, host);
 
     configureDelegatedChildApprovals(child, parent);
+    configureDelegatedChildApprovals(grandchild, child);
 
     expect(proposalApprovals().isBypassed(parent)).toBe(true);
-    expect(proposalApprovals().isBypassed(child)).toBe(false);
+    expect(proposalApprovals().isBypassed(child)).toBe(true);
+    expect(proposalApprovals().isBypassed(grandchild)).toBe(true);
   });
 
   it('keeps ancestry graphs independent per bypass kind', () => {
