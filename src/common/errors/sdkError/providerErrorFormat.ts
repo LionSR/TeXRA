@@ -466,7 +466,7 @@ function detectRouteStatusCode(
 function detectRateLimitScope(
   error: Error,
   statusCode: number | undefined,
-): 'model' | 'relay-user' | 'wire' | undefined {
+): 'model' | 'relay-limit' | 'relay-user' | 'wire' | undefined {
   if (statusCode !== StatusCodes.TOO_MANY_REQUESTS) return undefined;
   const formatted = normalizeProviderError(error);
   if (
@@ -475,6 +475,7 @@ function detectRateLimitScope(
   ) {
     return 'relay-user';
   }
+  if (formatted.exhaustionReason === 'relay-limit') return 'relay-limit';
   if (formatted.exhaustionReason !== undefined) return 'wire';
   return isModelScopedRateLimitBody(formatted.rawErrorBody) ? 'model' : 'wire';
 }
@@ -502,19 +503,27 @@ export function classifyModelRateLimitFailure(
 export function isRelayRequestGateReachableFailure(error: Error): boolean {
   const chain = causeChain(error);
   const statusCode = detectRouteStatusCode(error, chain);
+  const scope = detectRateLimitScope(error, statusCode);
   return (
     statusCode === StatusCodes.TOO_MANY_REQUESTS &&
-    detectRateLimitScope(error, statusCode) !== 'relay-user'
+    scope !== 'relay-limit' &&
+    scope !== 'relay-user'
   );
 }
 
-/** Whether the relay request gate rejected the call before reaching a provider. */
-export function isRelayRequestLimitFailure(error: Error): boolean {
+/** Whether a relay admission boundary rejected the call before the provider. */
+export function isRelayProviderUnobservedFailure(error: Error): boolean {
   const chain = causeChain(error);
-  return (
-    detectRateLimitScope(error, detectRouteStatusCode(error, chain)) ===
-    'relay-user'
+  const scope = detectRateLimitScope(
+    error,
+    detectRouteStatusCode(error, chain),
   );
+  return scope === 'relay-limit' || scope === 'relay-user';
+}
+
+/** Whether the relay rejected the call before its per-user request gate. */
+export function isRelayRequestGateUnobservedFailure(error: Error): boolean {
+  return normalizeProviderError(error).exhaustionReason === 'relay-limit';
 }
 
 /** Classifies relay request limits for their cross-provider recovery gate. */

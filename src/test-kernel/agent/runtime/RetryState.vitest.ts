@@ -216,7 +216,10 @@ interface CapturedModelRetry {
   readonly classifyRelayFailure?: (
     error: Error,
   ) => { retryAfterMs?: number } | undefined;
+  readonly isWireUnobservedFailure?: (error: Error) => boolean;
+  readonly isModelUnobservedFailure?: (error: Error) => boolean;
   readonly isRelayReachableFailure?: (error: Error) => boolean;
+  readonly isRelayUnobservedFailure?: (error: Error) => boolean;
   readonly gateCalls: number;
 }
 
@@ -284,7 +287,10 @@ async function captureModelRetry(
       classifyFailure: modelOptions.classifyFailure,
       classifyModelFailure: modelRoute.classifyFailure,
       classifyRelayFailure: relayRoute?.classifyFailure,
+      isWireUnobservedFailure: modelOptions.isUnobservedFailure,
+      isModelUnobservedFailure: modelRoute.isUnobservedFailure,
       isRelayReachableFailure: relayRoute?.isReachableFailure,
+      isRelayUnobservedFailure: relayRoute?.isUnobservedFailure,
       gateCalls: run.mock.calls.length,
     };
   } finally {
@@ -715,6 +721,8 @@ describe('RetryState', () => {
     expect(first.classifyRelayFailure?.(limited)).toEqual({
       retryAfterMs: 60_000,
     });
+    expect(first.isWireUnobservedFailure?.(limited)).toBe(true);
+    expect(first.isModelUnobservedFailure?.(limited)).toBe(true);
     expect(first.isRelayReachableFailure?.(modelLimited)).toBe(true);
 
     const compatibleLimited = new Error(
@@ -732,6 +740,35 @@ describe('RetryState', () => {
     expect(first.classifyFailure(compatibleLimited)).toEqual({});
     expect(first.classifyRelayFailure?.(compatibleLimited)).toBeUndefined();
     expect(first.isRelayReachableFailure?.(compatibleLimited)).toBe(true);
+  });
+
+  it('keeps relay monthly limits outside every recovery route', async () => {
+    const retry = await captureModelRetry(
+      'https://api.example/v1',
+      'relay',
+      undefined,
+      'openai:model-a',
+    );
+    const monthlyLimited = new Error(
+      'monthly spending limit reached',
+    ) as Error & {
+      error: unknown;
+      status: number;
+    };
+    monthlyLimited.status = 429;
+    monthlyLimited.error = {
+      _relay: '1',
+      type: 'relay_error',
+      limitReached: true,
+    };
+
+    expect(retry.classifyFailure(monthlyLimited)).toBeUndefined();
+    expect(retry.classifyModelFailure(monthlyLimited)).toBeUndefined();
+    expect(retry.classifyRelayFailure?.(monthlyLimited)).toBeUndefined();
+    expect(retry.isWireUnobservedFailure?.(monthlyLimited)).toBe(true);
+    expect(retry.isModelUnobservedFailure?.(monthlyLimited)).toBe(true);
+    expect(retry.isRelayReachableFailure?.(monthlyLimited)).toBe(false);
+    expect(retry.isRelayUnobservedFailure?.(monthlyLimited)).toBe(true);
   });
 
   it('isolates rate-limit recovery by stable credential identity', async () => {
