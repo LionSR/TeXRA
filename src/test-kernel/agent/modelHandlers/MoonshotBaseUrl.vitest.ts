@@ -10,11 +10,13 @@ import { installPlatform } from '@test/support/setupPlatform';
 function moonshotConfig(
   overrides: { customBaseUrl?: string } = {},
 ): Parameters<typeof resolveBaseUrl>[0] {
+  if (overrides.customBaseUrl) {
+    return { route: 'custom', url: overrides.customBaseUrl };
+  }
   return {
+    route: 'direct',
     provider: ModelProvider.MOONSHOT,
-    openRouterOnly: false,
-    useServerSideKeys: false,
-    ...overrides,
+    useOpenRouter: false,
   };
 }
 

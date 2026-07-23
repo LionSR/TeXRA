@@ -140,7 +140,8 @@ export function buildAgentFinalResult(
     // did not pass one, so a populated flow result carries `structured` without
     // every caller re-threading it.
     const structured =
-      source.structured ?? (result as { structured?: unknown }).structured;
+      source.structured ??
+      (result.category === 'toolUse' ? result.structured : undefined);
     if (result.category === 'workflow') {
       return AgentFinalResultSchema.parse({
         category: result.category,

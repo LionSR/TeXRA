@@ -1,32 +1,25 @@
+import { z } from 'zod';
+
 import {
+  AgentCategorySchema,
   DEFAULT_CONVERSATION_PROGRESS,
   DEFAULT_FINISHED_CHILD_COUNT,
   DEFAULT_STREAM_METADATA_STATUS,
-  type ActiveChildInfo,
-  type AgentCategory,
-  type ConversationProgress,
-  type RoundStage,
+  StreamMetadataSchema,
   type StreamMetadata,
-  type StreamLifecycleStatus,
-  type StreamSubstate,
 } from '@shared/schemas';
 
 /**
  * Host-neutral stream metadata builder used by the extension and desktop
- * progress backends before sending UPDATE_STREAMS payloads.
+ * progress backends before sending UPDATE_STREAMS payloads. Derived from
+ * `StreamMetadataSchema` (every field optional except `kind`) rather than
+ * hand-duplicated, so it can't drift from the wire schema.
  */
-export interface StreamMetadataInputs {
-  kind: AgentCategory;
-  status?: StreamLifecycleStatus;
-  substate?: StreamSubstate;
-  lastTimestamp?: number;
-  conversationProgress?: ConversationProgress;
-  roundStage?: RoundStage | null;
-  activeSubagents?: ActiveChildInfo[];
-  finishedSubagentCount?: number;
-  activeProcesses?: ActiveChildInfo[];
-  finishedProcessCount?: number;
-}
+const StreamMetadataInputsSchema = StreamMetadataSchema.partial().extend({
+  kind: AgentCategorySchema,
+});
+
+export type StreamMetadataInputs = z.infer<typeof StreamMetadataInputsSchema>;
 
 export function buildStreamMetadata(
   inputs: StreamMetadataInputs,
