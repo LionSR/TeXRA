@@ -47,6 +47,7 @@ function buildRound(supportsForcedToolChoice: boolean) {
     }),
     extractToolUse: () => [],
     getWireRouteKey: () => 'openai:test-route',
+    getModelRetryRouteKey: () => 'openai:test-route:model',
     getStreamingConfig: () => false,
     isEndTurnStop: () => true,
     processThinkingBlock: () => null,

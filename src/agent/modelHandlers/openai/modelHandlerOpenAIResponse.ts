@@ -873,7 +873,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     try {
       const compactedResponse: CompactedResponse = await client
         .withOptions({ maxRetries: AUXILIARY_MAX_RETRIES })
-        .responses.compact(compactParams);
+        .responses.compact(compactParams, { signal });
 
       // Note: SDK types CompactedResponse.output as ResponseOutputItem[], but the
       // compact endpoint returns ResponseInputItem[] suitable for re-submission.
@@ -935,6 +935,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       return compactedMessages;
     } catch (err) {
+      signal?.throwIfAborted();
       this.logger.warn(
         `Compaction failed, continuing with original messages: ${getSdkErrorMessage(err)}`,
         {

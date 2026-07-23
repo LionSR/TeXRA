@@ -901,18 +901,77 @@ describe('ModelHandlerAnthropic message guards', () => {
       },
     } as any;
     client.withOptions = vi.fn(() => client);
+    const controller = new AbortController();
 
     const response = await handler.createResponse({
       client,
       messages,
       temperature: 0,
+      signal: controller.signal,
     });
 
     assert.deepEqual(callOrder, ['countTokens', 'upload', 'create']);
     // Token counting retries ride per-request options, not a client clone.
     assert.deepEqual(client.withOptions.mock.calls, []);
     assert.equal(countTokensOptions[0]?.maxRetries, 2);
+    assert.equal(countTokensOptions[0]?.signal, controller.signal);
     assert.equal(response.response.stop_reason, 'end_turn');
+  });
+
+  it('does not upload a PDF after token counting is aborted', async () => {
+    const handler = createAnthropicHandler({
+      supportsNativePdf: true,
+      supportsTokenCounting: true,
+    });
+    stubHandlerForTest(handler);
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Document: sample.pdf', citations: null },
+          {
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: 'application/pdf',
+              data: 'ZHVtbXk=',
+            },
+            title: 'sample.pdf',
+          },
+        ],
+      },
+    ];
+    const controller = new AbortController();
+    const upload = vi.fn(async () => ({ id: 'file_uploaded' }));
+    const create = vi.fn(async () => {
+      throw new Error('should not create after abort');
+    });
+    const client = {
+      beta: {
+        files: { upload },
+        messages: {
+          countTokens: async () => {
+            controller.abort();
+            throw controller.signal.reason;
+          },
+          create,
+        },
+      },
+    } as any;
+    client.withOptions = vi.fn(() => client);
+
+    await assert.rejects(
+      handler.createResponse({
+        client,
+        messages,
+        temperature: 0,
+        signal: controller.signal,
+      }),
+      { name: 'AbortError' },
+    );
+    assert.equal(upload.mock.calls.length, 0);
+    assert.equal(create.mock.calls.length, 0);
   });
 
   it('does not warn about context overflow for models with native 1M context', async () => {

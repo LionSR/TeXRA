@@ -131,6 +131,7 @@ describe('ToolUseDispatchNode interruption', () => {
               ]
             : [],
         getWireRouteKey: () => 'openai:test-route',
+        getModelRetryRouteKey: () => 'openai:test-route:model',
         getStreamingConfig: () => false,
         isEndTurnStop: (stopReason: string) => stopReason === 'stop',
         processThinkingBlock: () => null,
@@ -306,6 +307,7 @@ describe('ToolUseDispatchNode interruption', () => {
               ]
             : [],
         getWireRouteKey: () => 'openai:test-route',
+        getModelRetryRouteKey: () => 'openai:test-route:model',
         getStreamingConfig: () => false,
         isEndTurnStop: (stopReason: string) => stopReason === 'stop',
         processThinkingBlock: () => null,
