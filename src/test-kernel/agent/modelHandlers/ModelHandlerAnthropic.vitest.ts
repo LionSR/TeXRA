@@ -1573,6 +1573,30 @@ describe('ModelHandlerAnthropic message guards', () => {
     assert.equal(download.mock.calls.length, 1);
   });
 
+  it('uses metadata without downloading a large resumed PDF', async () => {
+    const { target, messages } = createFileEstimateHarness('file_large_pdf');
+    const retrieveMetadata = vi.fn(async () => ({
+      mime_type: 'application/pdf',
+      size_bytes: 2 * 1024 * 1024,
+    }));
+    const download = vi.fn();
+    const client = { beta: { files: { retrieveMetadata, download } } };
+
+    const firstEstimate = await target.estimateFileReferenceTokens(
+      client,
+      messages,
+    );
+    const cachedEstimate = await target.estimateFileReferenceTokens(
+      client,
+      messages,
+    );
+
+    assert.equal(firstEstimate, 512 * 1024);
+    assert.equal(cachedEstimate, 512 * 1024);
+    assert.equal(retrieveMetadata.mock.calls.length, 1);
+    assert.equal(download.mock.calls.length, 0);
+  });
+
   it('prefers tracked PDF pages over compressed file size', async () => {
     const { target, messages } = createFileEstimateHarness(
       'file_tracked',

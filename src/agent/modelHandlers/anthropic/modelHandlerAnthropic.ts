@@ -179,6 +179,9 @@ const INTERLEAVED_THINKING_BETA: AnthropicBeta =
 /** Anthropic's documented upper typical text-token estimate per PDF page. */
 const ANTHROPIC_PDF_TOKENS_PER_PAGE_ESTIMATE = 3_000;
 
+/** Keeps resumed-PDF inspection bounded before the model request begins. */
+const MAX_PDF_PAGE_COUNT_DOWNLOAD_BYTES = 1024 * 1024;
+
 /** Counts live Files API references after the latest compaction boundary. */
 function collectFileReferenceCounts(
   messages: MessageParam[],
@@ -282,7 +285,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
             { signal, maxRetries: 0 },
           );
           metadataFallback = Math.ceil(metadata.size_bytes / 4);
-          if (metadata.mime_type === 'application/pdf') {
+          if (
+            metadata.mime_type === 'application/pdf' &&
+            metadata.size_bytes <= MAX_PDF_PAGE_COUNT_DOWNLOAD_BYTES
+          ) {
             const response = await client.beta.files.download(
               fileId,
               { betas: [FILES_API_BETA] },
@@ -305,7 +311,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
             }
           } else {
             // Match the shared no-tokenizer heuristic without materializing a
-            // string as large as the remote document.
+            // large remote document. Small PDFs are inspected to avoid using
+            // compressed bytes as a misleading page-count proxy.
             sizeEstimate = metadataFallback;
             this.fileTokenEstimates.set(fileId, sizeEstimate);
           }
