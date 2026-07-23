@@ -86,11 +86,12 @@ export const ModelOptionDataSchema = PickerOptionBaseSchema.extend({
    * Distinguishes a basic static-config projection (`buildBasicModelOptionsData`,
    * no availability fields populated) from a fully resolved row
    * (`buildModelOptionData`, availability/routing resolved against the active
-   * API mode). Added additively alongside the still-optional availability
-   * fields below — narrow with `if (row.kind === 'resolved')` rather than
-   * treating this as a replacement for those checks.
+   * API mode). Optional so existing construction sites (tests, fixtures)
+   * stay valid — narrow with `if (row.kind === 'resolved')` rather than
+   * treating this as a replacement for the still-optional availability
+   * fields below.
    */
-  kind: z.enum(['basic', 'resolved']),
+  kind: z.enum(['basic', 'resolved']).optional(),
   provider: z.string().optional(),
   context: z.string().optional(),
   cost: z.string().optional(),
