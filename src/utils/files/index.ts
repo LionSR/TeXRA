@@ -8,8 +8,13 @@ export * from './mimeUtils';
 export * from './taskRunStorage';
 export * from './flexibleFS';
 
-// Note: pastedImageUtils, rulesUtils, and varsUtils are NOT re-exported.
+// Note: pastedImageName, pastedImageUtils, rulesUtils, and varsUtils are NOT
+// re-exported.
 // Import directly from their source modules:
 //   import { loadTexraRules } from '@utils/files/rulesUtils';
 //   import { setVarFromFile } from '@utils/files/varsUtils';
-//   import { isPastedImage, ... } from '@utils/files/pastedImageUtils';
+//   import {
+//     generatePastedImageName,
+//     isPastedImage,
+//   } from '@utils/files/pastedImageName';
+//   import { savePastedImageBuffer } from '@utils/files/pastedImageUtils';

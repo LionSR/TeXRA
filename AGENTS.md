@@ -357,7 +357,10 @@ For good separation of concerns and platform independence, core business logic s
 
 - Use `getConfig`, `updateConfig`, and `watchConfig` from `@utils/config` to read and react to settings changes.
 - Interact with the filesystem through `@utils/files` helpers (`WorkspaceFS`, `RelativeFS`, `StorageFS`, `GlobalStorageFS`, `AbsoluteFS`). They resolve workspace paths, manage global storage, and expose cleanup helpers like `RelativeFS.cleanupOldFiles`.
-- Generate and resolve pasted-image paths with `@utils/files/pastedImageUtils` so temporary assets map correctly back to storage.
+- Generate and identify pasted-image filenames with
+  `@utils/files/pastedImageName`. Resolve, validate, and persist their paths
+  with `@utils/files/pastedImageUtils` so temporary assets map correctly back
+  to storage without pulling Node filesystem code into browser bundles.
 - Surface files and agent directories through the shared frontend utilities (`fileLister` in `packages/extension/src/frontend/files/fileLister.ts`, `agentDirectories` in `packages/extension/src/frontend/agents/AgentDirectoryManager.ts`) instead of duplicating discovery logic.
 
 **Logging and telemetry**
