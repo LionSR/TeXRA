@@ -119,9 +119,12 @@ export function workflowInputContextSummary(
   if (slice?.category !== AgentCategory.Workflow || !slice.files) {
     return undefined;
   }
+  const inputCount = slice.files.input.length;
+  const contextCount = slice.files.context.length;
+  if (inputCount === 0 && contextCount === 0) return undefined;
   return [
-    `Input: ${formatResultCount(slice.files.input.length, 'file')}`,
-    `Context: ${formatResultCount(slice.files.context.length, 'file')}`,
+    `Input: ${formatResultCount(inputCount, 'file')}`,
+    `Context: ${formatResultCount(contextCount, 'file')}`,
   ].join(' · ');
 }
 

@@ -89,11 +89,15 @@ describe('CLI child list display model', () => {
         output: ['review.md'],
       },
     });
+    const workflowWithoutInputs = workflowAgentSlice('empty', {
+      files: { input: [], context: [], media: [], output: [] },
+    });
 
     expect(workflowInputContextSummary(workflow)).toBe(
       'Input: 2 files · Context: 1 file',
     );
     expect(workflowInputContextSummary(toolUse)).toBeUndefined();
+    expect(workflowInputContextSummary(workflowWithoutInputs)).toBeUndefined();
     expect(workflowInputContextSummary(undefined)).toBeUndefined();
   });
 
