@@ -642,6 +642,31 @@ describe('RetryState', () => {
     expect(first.classifyModelFailure(exhausted)).toBeUndefined();
   });
 
+  it('coordinates relay request limits across models on one wire route', async () => {
+    const first = await captureModelRetry(
+      'https://api.example/v1',
+      'relay',
+      undefined,
+      'openai:model-a',
+    );
+    const limited = new Error('relay request rate limit reached') as Error & {
+      error: unknown;
+      status: number;
+    };
+    limited.status = 429;
+    limited.error = {
+      _relay: '1',
+      type: 'relay_error',
+      requestLimitReached: true,
+      reason: 'rate',
+    };
+
+    expect(first.classifyFailure(limited)).toEqual({
+      retryAfterMs: undefined,
+    });
+    expect(first.classifyModelFailure(limited)).toBeUndefined();
+  });
+
   it('isolates rate-limit recovery by stable credential identity', async () => {
     const first = await captureModelRetry(
       'https://api.example/v1',

@@ -64,19 +64,27 @@ export function isRelayError(rawErrorBody: unknown): boolean {
   return isObject(nested) && '_relay' in nested;
 }
 
-/** True when the relay rejected the request due to the user's monthly
- *  spending limit being reached (supabase/functions/relay marks this with
- *  `limitReached: true` in the error body). */
-export function isRelayMonthlyLimitBody(rawErrorBody: unknown): boolean {
+function hasRelayBooleanFlag(rawErrorBody: unknown, field: string): boolean {
   if (!isObject(rawErrorBody)) return false;
-  if ((rawErrorBody as { limitReached?: unknown }).limitReached === true) {
+  if ((rawErrorBody as Record<string, unknown>)[field] === true) {
     return true;
   }
   const nested = (rawErrorBody as { error?: unknown }).error;
   return (
-    isObject(nested) &&
-    (nested as { limitReached?: unknown }).limitReached === true
+    isObject(nested) && (nested as Record<string, unknown>)[field] === true
   );
+}
+
+/** True when the relay rejected the request due to the user's monthly
+ *  spending limit being reached (supabase/functions/relay marks this with
+ *  `limitReached: true` in the error body). */
+export function isRelayMonthlyLimitBody(rawErrorBody: unknown): boolean {
+  return hasRelayBooleanFlag(rawErrorBody, 'limitReached');
+}
+
+/** True when the relay's per-user request or concurrency gate rejected a call. */
+export function isRelayRequestLimitBody(rawErrorBody: unknown): boolean {
+  return hasRelayBooleanFlag(rawErrorBody, 'requestLimitReached');
 }
 
 export function isRelayMonthlyLimitMessage(

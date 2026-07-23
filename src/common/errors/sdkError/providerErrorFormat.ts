@@ -40,6 +40,7 @@ import {
   isRelayError,
   isRelayMonthlyLimitBody,
   isRelayMonthlyLimitMessage,
+  isRelayRequestLimitBody,
   isUpstreamCreditDepletedBody,
 } from './relayDetection';
 import {
@@ -460,19 +461,24 @@ function detectRouteStatusCode(
   return normalizeProviderError(error).statusCode;
 }
 
-function isModelScopedRateLimit(
+function detectRateLimitScope(
   error: Error,
-  chain: readonly unknown[],
-): boolean {
-  return (
-    detectRouteStatusCode(error, chain) === StatusCodes.TOO_MANY_REQUESTS &&
-    normalizeProviderError(error).exhaustionReason === undefined
-  );
+  statusCode: number | undefined,
+): 'model' | 'wire' | undefined {
+  if (statusCode !== StatusCodes.TOO_MANY_REQUESTS) return undefined;
+  const formatted = normalizeProviderError(error);
+  return formatted.exhaustionReason !== undefined ||
+    isRelayRequestLimitBody(formatted.rawErrorBody)
+    ? 'wire'
+    : 'model';
 }
 
 /** Whether a failure is a model-scoped provider rate limit. */
 export function isModelRateLimitFailure(error: Error): boolean {
-  return isModelScopedRateLimit(error, causeChain(error));
+  const chain = causeChain(error);
+  return (
+    detectRateLimitScope(error, detectRouteStatusCode(error, chain)) === 'model'
+  );
 }
 
 /** Classifies model-scoped rate limits for their own recovery gate. */
@@ -480,7 +486,8 @@ export function classifyModelRateLimitFailure(
   error: Error,
 ): { retryAfterMs?: number } | undefined {
   const chain = causeChain(error);
-  return isModelScopedRateLimit(error, chain)
+  return detectRateLimitScope(error, detectRouteStatusCode(error, chain)) ===
+    'model'
     ? { retryAfterMs: detectRetryAfterMs(chain) }
     : undefined;
 }
@@ -539,11 +546,9 @@ export function classifyWireRouteFailure(
   // deeper in the chain. The full normalizer is the fallback for statuses only
   // inferable from provider bodies (e.g. relay).
   const statusCode = detectRouteStatusCode(error, chain);
-  const credentialRateLimit =
-    statusCode === StatusCodes.TOO_MANY_REQUESTS &&
-    normalizeProviderError(error).exhaustionReason !== undefined;
+  const sharedRateLimit = detectRateLimitScope(error, statusCode) === 'wire';
   if (
-    !credentialRateLimit &&
+    !sharedRateLimit &&
     statusCode !== StatusCodes.REQUEST_TIMEOUT &&
     (statusCode == null || statusCode < 500) &&
     !transportFailure
