@@ -25,7 +25,7 @@ import {
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { filterNotNullish } from '@utils/core';
-import { generatePastedImageName } from '@utils/files/pastedImageUtils';
+import { generatePastedImageName } from '@utils/files/pastedImageName';
 import {
   archivedContext,
   followUpEventSinkContext,

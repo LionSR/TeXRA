@@ -7,7 +7,7 @@ import {
   getExtensionFromMimeType,
   readFileAsBase64,
 } from '@shared/utils/clipboardImages';
-import { generatePastedImageName } from '@utils/files/pastedImageUtils';
+import { generatePastedImageName } from '@utils/files/pastedImageName';
 
 export async function handleImagePaste(
   event: ClipboardEvent,
