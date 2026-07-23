@@ -12,6 +12,7 @@ import {
 import type { AgentTrace } from '@agent/trace';
 import {
   attachChannelSubscriber,
+  logCompactionActivity,
   logContextManagementEvent,
   TraceEmitter,
 } from '@agent/trace';
@@ -1330,6 +1331,7 @@ export abstract class ModelHandler<
       return { compactedMessages: messages, didCompact: false };
     }
 
+    logCompactionActivity(this.logger, 'started');
     try {
       const { summaryText, outputTokens } = await summarize(
         conversationMessages,
@@ -1366,6 +1368,8 @@ export abstract class ModelHandler<
         { data: err },
       );
       return { compactedMessages: messages, didCompact: false };
+    } finally {
+      logCompactionActivity(this.logger, 'finished');
     }
   }
 

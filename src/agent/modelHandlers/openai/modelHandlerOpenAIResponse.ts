@@ -6,7 +6,11 @@ import OpenAI, { OpenAIError } from 'openai';
 import { addOutputText } from 'openai/lib/ResponsesParser';
 
 // Local imports
-import { logContextManagementEvent, logProgressStatus } from '@agent/trace';
+import {
+  logCompactionActivity,
+  logContextManagementEvent,
+  logProgressStatus,
+} from '@agent/trace';
 import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -865,6 +869,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // We're sending the full message history in `input`, so passing
     // previous_response_id would cause double-counting and exceed context window.
 
+    logCompactionActivity(this.logger, 'started');
     try {
       const compactedResponse: CompactedResponse =
         await client.responses.compact(compactParams);
@@ -936,6 +941,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       );
       this.compactionResult = undefined;
       return messages;
+    } finally {
+      logCompactionActivity(this.logger, 'finished');
     }
   }
 
