@@ -19,6 +19,20 @@ import {
   showImportOptions as sysShowImportOptions,
 } from '@commands/system';
 import {
+  handleClean as fileHandleClean,
+  handleCleanMultiple as fileHandleCleanMultiple,
+  handleCleanSingle as fileHandleCleanSingle,
+} from '@commands/housekeeping/cleanCommands';
+import {
+  handlePack as fileHandlePack,
+  handlePackMultiple as fileHandlePackMultiple,
+  handlePackSingle as fileHandlePackSingle,
+} from '@commands/housekeeping/packCommands';
+import {
+  handleAcceptEdited as latexHandleAcceptEdited,
+  handleCompare as latexHandleCompare,
+} from '@commands/latex/compareCommands';
+import {
   setApiKey as apiSetApiKey,
   removeApiKey as apiRemoveApiKey,
 } from '@commands/api/apiKeyCommands';
@@ -54,7 +68,10 @@ import { handleParseXml as sysParseXml } from '@commands/system/xmlCommands';
 import { handleParseYaml as sysParseYaml } from '@commands/system/yamlCommands';
 import { handleTestTextEditor as sysTestTextEditor } from '@commands/system/textEditorCommands';
 import { SIDEBAR_VIEWS, getActiveSidebarView } from '@common/webview';
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
 import { runCleanBuild, runCleanOutput } from '@housekeeping';
@@ -103,6 +120,14 @@ export function createExtensionCommandActions(
     },
     cleanBuild: runCleanBuild,
     cleanOutput: runCleanOutput,
+    pack: fileHandlePack,
+    packSingle: fileHandlePackSingle,
+    packMultiple: fileHandlePackMultiple,
+    clean: fileHandleClean,
+    cleanSingle: fileHandleCleanSingle,
+    cleanMultiple: fileHandleCleanMultiple,
+    compare: latexHandleCompare,
+    acceptEdited: latexHandleAcceptEdited,
     indentTeX: handleIndentTeX,
     signIn: authSignIn,
     async signInChatGpt() {
@@ -179,7 +204,7 @@ export function createExtensionCommandActions(
  * have no stale `vscode.commands.registerCommand(...)` call elsewhere.
  * The remaining legacy `registerCommand` call sites all register ids NOT
  * tagged `extensionRegistry` in `commandCatalog` — they're legitimate VS
- * Code-only handlers (file ops, git, latex tools, pack/clean variants).
+ * Code-only handlers (git, file selection/opening, merge, and LaTeX tools).
  */
 
 /**
@@ -199,17 +224,24 @@ export function registerExtensionCommandRegistry(
     keyof typeof EXTENSION_COMMAND_HANDLERS
   >) {
     context.subscriptions.push(
-      vscode.commands.registerCommand(id, (rawArg?: unknown) =>
+      vscode.commands.registerCommand(id, (...rawArgs: unknown[]) =>
         dispatchCommandFromRegistry(
           id,
           EXTENSION_COMMAND_HANDLERS,
           actions,
-          (unhandledId) => {
+          (failure) => {
+            if (failure.kind === 'invalidArguments') {
+              void showLoggedMessage(
+                'ExtensionCommandRegistry',
+                `Invalid arguments for command ${failure.id}: ${failure.error.message}`,
+              );
+              return;
+            }
             console.error(
-              `[extension] dispatch: unhandled command ${unhandledId}`,
+              `[extension] dispatch: unhandled command ${failure.id}`,
             );
           },
-          rawArg,
+          ...rawArgs,
         ),
       ),
     );
