@@ -1471,7 +1471,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       messages,
     );
 
-    assert.equal(estimate, 2_000);
+    assert.equal(estimate, 3_000);
     assert.equal(retrieveMetadata.mock.calls.length, 0);
   });
 

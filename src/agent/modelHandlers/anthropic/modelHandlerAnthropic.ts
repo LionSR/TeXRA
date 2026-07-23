@@ -258,14 +258,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
     }
 
-    const tokensPerPdfPage = Math.ceil(
-      this.getEffectiveContextWindow() / this.getMaxPdfPages(),
-    );
     let total = 0;
     for (const fileId of fileIds) {
       signal?.throwIfAborted();
       const pageEstimate =
-        (this.uploadedPdfPageCounts.get(fileId) ?? 0) * tokensPerPdfPage;
+        (this.uploadedPdfPageCounts.get(fileId) ?? 0) *
+        ANTHROPIC_PDF_TOKENS_PER_PAGE_ESTIMATE;
       if (pageEstimate > 0) {
         total += pageEstimate;
         continue;
