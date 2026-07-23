@@ -15,6 +15,7 @@ import { LRUCache } from 'lru-cache';
 
 import type { WorktreeInfo } from '@shared/schemas';
 
+import { coalesceAsync } from '@utils/core';
 import { executeCommand } from '@utils/system/execUtils';
 
 const GIT_TIMEOUT_MS = 5_000;
@@ -51,17 +52,12 @@ export function peekWorktreeInfo(
 export async function resolveWorktreeInfo(
   workingDirectory: string,
 ): Promise<WorktreeInfo> {
-  const cached = cache.get(workingDirectory);
-  if (cached) return cached;
-
-  const pending = inflight.get(workingDirectory);
-  if (pending) return pending;
-
-  const probe = probeWorktree(workingDirectory).finally(() => {
-    inflight.delete(workingDirectory);
-  });
-  inflight.set(workingDirectory, probe);
-  return probe;
+  return coalesceAsync<string, WorktreeInfo>(
+    cache,
+    inflight,
+    workingDirectory,
+    () => probeWorktree(workingDirectory),
+  );
 }
 
 async function probeWorktree(workingDirectory: string): Promise<WorktreeInfo> {
@@ -70,13 +66,7 @@ async function probeWorktree(workingDirectory: string): Promise<WorktreeInfo> {
     readDirty(workingDirectory),
   ]);
 
-  const value: WorktreeInfo = {
-    workingDirectory,
-    branch,
-    dirty,
-  };
-  cache.set(workingDirectory, value);
-  return value;
+  return { workingDirectory, branch, dirty };
 }
 
 async function readBranch(cwd: string): Promise<string | undefined> {

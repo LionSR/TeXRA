@@ -5,6 +5,7 @@ import * as assert from 'node:assert';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  coalesceAsync,
   createFlushableDebounce,
   delay,
   ensureArray,
@@ -236,6 +237,68 @@ describe('KeyedMutex', () => {
     await expect(
       mutex.runExclusive('shared', async () => 'recovered'),
     ).resolves.toBe('recovered');
+  });
+});
+
+describe('coalesceAsync', () => {
+  it('shares one in-flight computation across concurrent callers', async () => {
+    const resolved = new Map<string, string>();
+    const pending = new Map<string, Promise<string>>();
+    let computeCount = 0;
+    let releaseCompute!: () => void;
+    const blocked = new Promise<void>((resolve) => {
+      releaseCompute = resolve;
+    });
+    const compute = async () => {
+      computeCount++;
+      await blocked;
+      return 'value';
+    };
+
+    const first = coalesceAsync(resolved, pending, 'key', compute);
+    const second = coalesceAsync(resolved, pending, 'key', compute);
+    releaseCompute();
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      'value',
+      'value',
+    ]);
+    expect(computeCount).toBe(1);
+  });
+
+  it('serves subsequent calls from the resolved cache without recomputing', async () => {
+    const resolved = new Map<string, string>();
+    const pending = new Map<string, Promise<string>>();
+    let computeCount = 0;
+    const compute = async () => {
+      computeCount++;
+      return 'value';
+    };
+
+    await coalesceAsync(resolved, pending, 'key', compute);
+    await coalesceAsync(resolved, pending, 'key', compute);
+
+    expect(computeCount).toBe(1);
+  });
+
+  it('does not cache a result if the pending entry was invalidated mid-flight', async () => {
+    const resolved = new Map<string, string>();
+    const pending = new Map<string, Promise<string>>();
+    let releaseCompute!: () => void;
+    const blocked = new Promise<void>((resolve) => {
+      releaseCompute = resolve;
+    });
+    const compute = async () => {
+      await blocked;
+      return 'stale-value';
+    };
+
+    const request = coalesceAsync(resolved, pending, 'key', compute);
+    pending.clear(); // simulate an external invalidation racing the in-flight compute
+    releaseCompute();
+    await request;
+
+    expect(resolved.get('key')).toBeUndefined();
   });
 });
 
