@@ -601,7 +601,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const documentAnalysis = analyzeDocumentSources(messages);
     let hasFileReference = documentAnalysis.hasFileSource;
 
-    // Prune tracked PDF page counts for file IDs no longer in messages
+    // Prune tracked file metadata for file IDs no longer in messages
     // (e.g. after server-side compaction drops old messages)
     if (
       this.uploadedPdfPageCounts.size > 0 ||
