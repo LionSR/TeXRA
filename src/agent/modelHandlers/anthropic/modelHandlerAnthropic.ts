@@ -173,6 +173,9 @@ const isBetaTextBlock = (
 const INTERLEAVED_THINKING_BETA: AnthropicBeta =
   'interleaved-thinking-2025-05-14';
 
+/** Anthropic's documented upper typical text-token estimate per PDF page. */
+const ANTHROPIC_PDF_TOKENS_PER_PAGE_ESTIMATE = 3_000;
+
 export class ModelHandlerAnthropic extends ModelHandler<
   MessageParam,
   BetaUsage,
@@ -722,9 +725,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Phase 4: EXECUTE - Dispatch through the provider's two SDK paths.
     // Non-streaming responses have no block-start event. Use the native count
-    // when available and the existing text heuristic otherwise; treating an
-    // unavailable count as either zero or definitely over threshold would miss
-    // large requests or label every small request as compaction.
+    // when available and otherwise combine the existing text heuristic with
+    // tracked PDF pages. Treating an unavailable count as either zero or
+    // definitely over threshold would miss large requests or label every small
+    // request as compaction.
     const compactionEdit = options.context_management?.edits?.find(
       (edit) => edit.type === 'compact_20260112',
     );
@@ -738,7 +742,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
           thinking: options.thinking,
           outputConfig: options.output_config,
         }),
-      );
+      ) +
+        this.getTrackedPdfPageCount() * ANTHROPIC_PDF_TOKENS_PER_PAGE_ESTIMATE;
     const nonStreamingCompactionExpected =
       !useStreaming &&
       compactionEdit?.trigger?.type === 'input_tokens' &&
