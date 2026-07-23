@@ -238,6 +238,39 @@ function createCapturingAnthropicClient(model: string): {
   return { client, messageOptions };
 }
 
+interface AnthropicFileEstimateTarget {
+  uploadedPdfPageCounts: Map<string, number>;
+  estimateFileReferenceTokens(
+    client: unknown,
+    messages: MessageParam[],
+    signal?: AbortSignal,
+    stopAtTokens?: number,
+  ): Promise<number>;
+}
+
+function fileReferenceMessages(...fileIds: string[]): MessageParam[] {
+  return [
+    {
+      role: 'user',
+      content: fileIds.map((fileId) => ({
+        type: 'document',
+        source: { type: 'file', file_id: fileId },
+      })) as unknown as ContentBlockParam[],
+    },
+  ];
+}
+
+function createFileEstimateHarness(...fileIds: string[]): {
+  target: AnthropicFileEstimateTarget;
+  messages: MessageParam[];
+} {
+  const handler = createAnthropicHandler({ supportsNativePdf: true });
+  return {
+    target: handler as unknown as AnthropicFileEstimateTarget,
+    messages: fileReferenceMessages(...fileIds),
+  };
+}
+
 class PdfStubAnthropicHandler extends ModelHandlerAnthropic {
   private mediaContent: ContentBlockParam[] = [];
 
@@ -1486,24 +1519,7 @@ describe('ModelHandlerAnthropic message guards', () => {
   });
 
   it('recovers PDF page estimates for resumed file references', async () => {
-    const handler = createAnthropicHandler({ supportsNativePdf: true });
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'document',
-            source: { type: 'file', file_id: 'file_resumed_pdf' },
-          },
-        ] as unknown as ContentBlockParam[],
-      },
-    ];
-    const target = handler as unknown as {
-      estimateFileReferenceTokens(
-        client: unknown,
-        messages: MessageParam[],
-      ): Promise<number>;
-    };
+    const { target, messages } = createFileEstimateHarness('file_resumed_pdf');
     const pdf = await PDFDocument.create();
     pdf.addPage();
     const pdfBytes = Uint8Array.from(await pdf.save());
@@ -1532,24 +1548,7 @@ describe('ModelHandlerAnthropic message guards', () => {
   });
 
   it('caches a size fallback when a resumed PDF cannot be parsed', async () => {
-    const handler = createAnthropicHandler({ supportsNativePdf: true });
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'document',
-            source: { type: 'file', file_id: 'file_invalid_pdf' },
-          },
-        ] as unknown as ContentBlockParam[],
-      },
-    ];
-    const target = handler as unknown as {
-      estimateFileReferenceTokens(
-        client: unknown,
-        messages: MessageParam[],
-      ): Promise<number>;
-    };
+    const { target, messages } = createFileEstimateHarness('file_invalid_pdf');
     const retrieveMetadata = vi.fn(async () => ({
       mime_type: 'application/pdf',
       size_bytes: 800_000,
@@ -1575,29 +1574,10 @@ describe('ModelHandlerAnthropic message guards', () => {
   });
 
   it('prefers tracked PDF pages over compressed file size', async () => {
-    const handler = createAnthropicHandler({ supportsNativePdf: true });
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'document',
-            source: { type: 'file', file_id: 'file_tracked' },
-          },
-          {
-            type: 'document',
-            source: { type: 'file', file_id: 'file_tracked' },
-          },
-        ] as unknown as ContentBlockParam[],
-      },
-    ];
-    const target = handler as unknown as {
-      uploadedPdfPageCounts: Map<string, number>;
-      estimateFileReferenceTokens(
-        client: unknown,
-        messages: MessageParam[],
-      ): Promise<number>;
-    };
+    const { target, messages } = createFileEstimateHarness(
+      'file_tracked',
+      'file_tracked',
+    );
     target.uploadedPdfPageCounts.set('file_tracked', 1);
     const retrieveMetadata = vi.fn(async (_fileId: string) => ({
       size_bytes: 800_000,
@@ -1613,28 +1593,10 @@ describe('ModelHandlerAnthropic message guards', () => {
   });
 
   it('counts repeated file references while caching their metadata', async () => {
-    const handler = createAnthropicHandler({ supportsNativePdf: true });
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'document',
-            source: { type: 'file', file_id: 'file_repeated' },
-          },
-          {
-            type: 'document',
-            source: { type: 'file', file_id: 'file_repeated' },
-          },
-        ] as unknown as ContentBlockParam[],
-      },
-    ];
-    const target = handler as unknown as {
-      estimateFileReferenceTokens(
-        client: unknown,
-        messages: MessageParam[],
-      ): Promise<number>;
-    };
+    const { target, messages } = createFileEstimateHarness(
+      'file_repeated',
+      'file_repeated',
+    );
     const retrieveMetadata = vi.fn(async () => ({ size_bytes: 800_000 }));
 
     const estimate = await target.estimateFileReferenceTokens(
@@ -1647,7 +1609,7 @@ describe('ModelHandlerAnthropic message guards', () => {
   });
 
   it('ignores file references before the latest compaction boundary', async () => {
-    const handler = createAnthropicHandler({ supportsNativePdf: true });
+    const { target } = createFileEstimateHarness();
     const messages: MessageParam[] = [
       {
         role: 'user',
@@ -1674,12 +1636,6 @@ describe('ModelHandlerAnthropic message guards', () => {
         ] as unknown as ContentBlockParam[],
       },
     ];
-    const target = handler as unknown as {
-      estimateFileReferenceTokens(
-        client: unknown,
-        messages: MessageParam[],
-      ): Promise<number>;
-    };
     const retrieveMetadata = vi.fn(async (_fileId: string) => ({
       size_bytes: 800_000,
     }));
@@ -1695,24 +1651,10 @@ describe('ModelHandlerAnthropic message guards', () => {
   });
 
   it('stops metadata lookups once file estimates cross the trigger', async () => {
-    const handler = createAnthropicHandler({ supportsNativePdf: true });
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: ['file_first', 'file_unneeded'].map((fileId) => ({
-          type: 'document',
-          source: { type: 'file', file_id: fileId },
-        })) as unknown as ContentBlockParam[],
-      },
-    ];
-    const target = handler as unknown as {
-      estimateFileReferenceTokens(
-        client: unknown,
-        messages: MessageParam[],
-        signal: AbortSignal | undefined,
-        stopAtTokens: number,
-      ): Promise<number>;
-    };
+    const { target, messages } = createFileEstimateHarness(
+      'file_first',
+      'file_unneeded',
+    );
     const retrieveMetadata = vi.fn(async (_fileId: string) => ({
       size_bytes: 800_000,
     }));
@@ -1730,23 +1672,7 @@ describe('ModelHandlerAnthropic message guards', () => {
   });
 
   it('stops file metadata estimation immediately after cancellation', async () => {
-    const handler = createAnthropicHandler({ supportsNativePdf: true });
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: ['first', 'second'].map((fileId) => ({
-          type: 'document',
-          source: { type: 'file', file_id: fileId },
-        })) as unknown as ContentBlockParam[],
-      },
-    ];
-    const target = handler as unknown as {
-      estimateFileReferenceTokens(
-        client: unknown,
-        messages: MessageParam[],
-        signal: AbortSignal,
-      ): Promise<number>;
-    };
+    const { target, messages } = createFileEstimateHarness('first', 'second');
     const controller = new AbortController();
     const reason = new DOMException('cancelled', 'AbortError');
     const retrieveMetadata = vi.fn(async () => {
