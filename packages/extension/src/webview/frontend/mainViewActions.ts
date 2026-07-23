@@ -328,11 +328,17 @@ export function changeSessionType(value: string): void {
  */
 export function changeLaunchTarget(value: LaunchTarget): void {
   if (value === launchTarget$.get()) return;
-  launchTarget$.set(value);
   if (value === 'team') {
+    const resolution = reconcileTeamSelection();
+    if (resolution.status === 'unavailable') {
+      announce('No runnable teams available. Agent launcher selected.');
+      return;
+    }
+    launchTarget$.set('team');
     enterToolUseSession();
     announce('Team launcher selected. Interactive mode.');
   } else {
+    launchTarget$.set('agent');
     refreshInstructionPlaceholder();
     saveState();
     announce('Agent launcher selected.');
@@ -345,26 +351,37 @@ export function changeTeam(value: string): void {
 }
 
 /**
- * Validate the restored team selection once the host has pushed the resolved
- * options. Called only from the SET_TEAM_OPTIONS handler — an initially empty
- * async list is not proof that a restored team vanished.
- *
- * Only a team that is absent from the options (deleted) triggers the
- * fallback. A present-but-disabled team keeps its selection: the disable may
- * be transient (e.g. remote catalog reload flapping), and the picker already
- * renders the option disabled with its reason — no silent rewrite, no
- * persistence change.
+ * Reconcile a team ID against the latest catalog without persistence or
+ * announcements, so callers control when the reconciled state is saved and
+ * announced. Only absence from a non-empty snapshot proves
+ * deletion: every successful catalog contains the built-in presets, so empty
+ * represents an incomplete or transient snapshot. Present-but-disabled teams
+ * remain selected because their availability may recover.
  */
+type TeamSelectionResolution =
+  | { status: 'unchanged' }
+  | { status: 'fallback'; label: string }
+  | { status: 'unavailable' };
+
+function reconcileTeamSelection(): TeamSelectionResolution {
+  const options = teamOptions$.get();
+  if (options.length === 0) return { status: 'unchanged' };
+  const current = options.find((opt) => opt.value === selectedTeamId$.get());
+  if (current) return { status: 'unchanged' };
+  const fallback = options.find((opt) => !opt.disabled);
+  if (!fallback) return { status: 'unavailable' };
+  selectedTeamId$.set(fallback.value);
+  return { status: 'fallback', label: fallback.label };
+}
+
+/** Validate and persist an active restored Team after a host catalog push. */
 export function validateTeamSelection(): void {
   if (launchTarget$.get() !== 'team') return;
-  const options = teamOptions$.get();
-  const current = options.find((opt) => opt.value === selectedTeamId$.get());
-  if (current) return;
-  const fallback = options.find((opt) => !opt.disabled);
-  if (fallback) {
-    selectedTeamId$.set(fallback.value);
+  const resolution = reconcileTeamSelection();
+  if (resolution.status === 'unchanged') return;
+  if (resolution.status === 'fallback') {
     announce(
-      `Selected team is no longer available. Switched to "${fallback.label}".`,
+      `Selected team is no longer available. Switched to "${resolution.label}".`,
     );
   } else {
     launchTarget$.set('agent');

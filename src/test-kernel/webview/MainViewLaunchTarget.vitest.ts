@@ -58,6 +58,13 @@ function teamOption(
   };
 }
 
+function setTeamOptions(optionsData: TeamOptionData[]): void {
+  catalogHandlers[MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS]({
+    command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
+    optionsData,
+  });
+}
+
 /** Flush the microtask queue so `announce`'s clear-then-set lands. */
 async function flushAnnouncements(): Promise<void> {
   await Promise.resolve();
@@ -122,6 +129,70 @@ describe('main-view launch target', () => {
       expect(launchTarget$.get()).toBe('team');
       expect(sessionType$.get()).toBe('toolUse');
       expect(instruction$.get()).toBe('interactive draft');
+    });
+
+    it('selects the first enabled team when entering Team after the catalog arrived on Agent', async () => {
+      sessionType$.set('toolUse');
+      setTeamOptions([
+        teamOption('broken', { disabled: true }),
+        teamOption('physicist'),
+        teamOption('lean-project'),
+      ]);
+
+      expect(launchTarget$.get()).toBe('agent');
+      expect(selectedTeamId$.get()).toBe('');
+
+      changeLaunchTarget('team');
+      await flushAnnouncements();
+
+      expect(launchTarget$.get()).toBe('team');
+      expect(selectedTeamId$.get()).toBe('physicist');
+      expect(statusAnnouncement$.get()).toBe(
+        'Team launcher selected. Interactive mode.',
+      );
+      expect(mocks.saveState).toHaveBeenCalledOnce();
+    });
+
+    it('replaces a stale team when entering Team after the catalog arrived', () => {
+      sessionType$.set('toolUse');
+      selectedTeamId$.set('deleted-team');
+      setTeamOptions([teamOption('physicist'), teamOption('lean-project')]);
+
+      changeLaunchTarget('team');
+
+      expect(launchTarget$.get()).toBe('team');
+      expect(selectedTeamId$.get()).toBe('physicist');
+      expect(mocks.saveState).toHaveBeenCalledOnce();
+    });
+
+    it('preserves a selected disabled team when entering Team', () => {
+      sessionType$.set('toolUse');
+      selectedTeamId$.set('broken');
+      setTeamOptions([
+        teamOption('broken', { disabled: true }),
+        teamOption('physicist'),
+      ]);
+
+      changeLaunchTarget('team');
+
+      expect(launchTarget$.get()).toBe('team');
+      expect(selectedTeamId$.get()).toBe('broken');
+      expect(mocks.saveState).toHaveBeenCalledOnce();
+    });
+
+    it('rejects Team when a non-empty catalog has no runnable fallback', async () => {
+      sessionType$.set('toolUse');
+      setTeamOptions([teamOption('broken', { disabled: true })]);
+
+      changeLaunchTarget('team');
+      await flushAnnouncements();
+
+      expect(launchTarget$.get()).toBe('agent');
+      expect(selectedTeamId$.get()).toBe('');
+      expect(statusAnnouncement$.get()).toBe(
+        'No runnable teams available. Agent launcher selected.',
+      );
+      expect(mocks.saveState).not.toHaveBeenCalled();
     });
 
     it('leaves the session interactive when switching Team back to Agent', async () => {
@@ -289,13 +360,6 @@ describe('main-view launch target', () => {
   });
 
   describe('SET_TEAM_OPTIONS handler', () => {
-    function setTeamOptions(optionsData: TeamOptionData[]): void {
-      catalogHandlers[MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS]({
-        command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
-        optionsData,
-      });
-    }
-
     it('stores the pushed options and revalidates the restored selection', async () => {
       launchTarget$.set('team');
       selectedTeamId$.set('deleted-team');
@@ -327,17 +391,21 @@ describe('main-view launch target', () => {
       expect(selectedTeamId$.get()).toBe('physicist');
     });
 
-    it('drops to the agent launcher when the push contains no runnable teams', async () => {
+    it('does not abandon a restored team on a transient empty push before options arrive', () => {
       launchTarget$.set('team');
-      selectedTeamId$.set('deleted-team');
+      selectedTeamId$.set('physicist');
 
       setTeamOptions([]);
-      await flushAnnouncements();
 
-      expect(launchTarget$.get()).toBe('agent');
-      expect(statusAnnouncement$.get()).toBe(
-        'No runnable teams available. Agent launcher selected.',
-      );
+      expect(launchTarget$.get()).toBe('team');
+      expect(selectedTeamId$.get()).toBe('physicist');
+      expect(mocks.saveState).not.toHaveBeenCalled();
+
+      setTeamOptions([teamOption('physicist'), teamOption('lean-project')]);
+
+      expect(launchTarget$.get()).toBe('team');
+      expect(selectedTeamId$.get()).toBe('physicist');
+      expect(mocks.saveState).not.toHaveBeenCalled();
     });
   });
 

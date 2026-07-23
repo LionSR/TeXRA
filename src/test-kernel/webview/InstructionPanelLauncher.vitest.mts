@@ -18,6 +18,10 @@ import type { ContextProvider } from '@lit/context';
 // evaluated only inside the hook below, after the jsdom globals are installed.
 let ContextProviderCtor: typeof ContextProvider;
 let mainViewSessionContext: typeof sessionContext;
+const sessionProviders = new WeakMap<
+  InstructionPanel,
+  { setValue(value: SessionContextValue): void }
+>();
 
 function teamOption(
   value: string,
@@ -92,8 +96,17 @@ async function mountPanel(
   element.showSessionHint = showSessionHint;
   wrapper.append(element);
   document.body.append(wrapper);
+  sessionProviders.set(element, provider);
   await element.updateComplete;
   return element;
+}
+
+async function updatePanelSession(
+  element: InstructionPanel,
+  session: SessionContextValue,
+): Promise<void> {
+  sessionProviders.get(element)?.setValue(session);
+  await element.updateComplete;
 }
 
 function query<T extends HTMLElement>(
@@ -245,6 +258,23 @@ describe('instruction-panel launcher', () => {
   });
 
   describe('team launcher', () => {
+    it('reconciles the hidden picker from Agent with no team to Team with a normalized selection', async () => {
+      const initialSession = makeSession();
+      const element = await mountPanel(initialSession);
+
+      await updatePanelSession(element, {
+        ...initialSession,
+        teamOptions: TEAM_SESSION.teamOptions,
+      });
+      await updatePanelSession(element, TEAM_SESSION);
+
+      const picker = query<HTMLElement>(element, '#teamPicker');
+      expect(
+        element.shadowRoot?.querySelectorAll('#teamPicker wa-option'),
+      ).toHaveLength(3);
+      expect((picker as unknown as { value: string }).value).toBe('physicist');
+    });
+
     it('renders the team picker with options and the manage-teams sentinel, hiding the agent picker', async () => {
       const element = await mountPanel(TEAM_SESSION);
 
