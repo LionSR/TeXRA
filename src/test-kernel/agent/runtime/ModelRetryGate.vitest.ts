@@ -296,7 +296,7 @@ describe('ModelRetryGate', () => {
     gate.dispose();
   });
 
-  it('releases an earlier recovery probe while waiting for admission', async () => {
+  it('hands an earlier recovery probe to its cohort while waiting for admission', async () => {
     const gate = new ModelRetryGate();
     const wireOptions = {
       signal: new AbortController().signal,
@@ -336,14 +336,26 @@ describe('ModelRetryGate', () => {
       { ...wireOptions, trailingRoutes: [relayPolicy] },
       admittedOperation,
     );
+    let resolveWireProbe = (): void => undefined;
+    const wireProbeResult = new Promise<void>((resolve) => {
+      resolveWireProbe = resolve;
+    });
+    const wireProbeOperation = vi.fn(() => wireProbeResult);
+    const wireProbe = gate.run(ROUTE, wireOptions, wireProbeOperation);
+    const wireSiblingOperation = vi.fn(async () => undefined);
+    const wireSibling = gate.run(ROUTE, wireOptions, wireSiblingOperation);
+
     await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(1);
     expect(admittedOperation).not.toHaveBeenCalled();
+    expect(wireProbeOperation).toHaveBeenCalledOnce();
+    expect(wireSiblingOperation).not.toHaveBeenCalled();
 
-    const siblingOperation = vi.fn(async () => undefined);
-    await gate.run(ROUTE, wireOptions, siblingOperation);
-    expect(siblingOperation).toHaveBeenCalledOnce();
+    resolveWireProbe();
+    await Promise.all([wireProbe, wireSibling]);
+    expect(wireSiblingOperation).toHaveBeenCalledOnce();
 
-    await vi.advanceTimersByTimeAsync(9000);
+    await vi.advanceTimersByTimeAsync(8999);
     await admitted;
     expect(admittedOperation).toHaveBeenCalledOnce();
     gate.dispose();

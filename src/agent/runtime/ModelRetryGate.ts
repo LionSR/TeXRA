@@ -149,28 +149,32 @@ export class ModelRetryGate {
     routes: readonly RoutePolicy[],
     options: Pick<RunOptions, 'signal' | 'onWait'>,
   ): Promise<AcquiredRoute[]> {
-    while (true) {
+    acquireRoutes: while (true) {
       const acquired: AcquiredRoute[] = [];
       try {
         for (const route of routes) {
+          const state = this.routes.get(route.key);
+          if (
+            route.releaseProbeBeforeOperation &&
+            state &&
+            state.phase !== 'healthy'
+          ) {
+            // Wait for an admission route without retaining narrower recovery
+            // probes. Hand those probes to their own queued cohorts, then
+            // restart from one current set of route states.
+            for (const entry of acquired) {
+              this.abandon(entry.key, entry.permit);
+            }
+            acquired.length = 0;
+            const permit = await this.acquire(route.key, options);
+            if (permit.probe) {
+              this.releaseProbe(route.key, permit);
+            }
+            continue acquireRoutes;
+          }
           acquired.push({
             ...route,
-            permit: await this.acquire(
-              route.key,
-              options,
-              route.releaseProbeBeforeOperation
-                ? () => {
-                    for (const entry of acquired) {
-                      if (entry.permit.probe) {
-                        entry.permit = this.releaseProbe(
-                          entry.key,
-                          entry.permit,
-                        );
-                      }
-                    }
-                  }
-                : undefined,
-            ),
+            permit: await this.acquire(route.key, options),
           });
         }
       } catch (error) {
@@ -215,7 +219,6 @@ export class ModelRetryGate {
   private acquire(
     route: string,
     options: Pick<RunOptions, 'signal' | 'onWait'>,
-    onBeforeWait?: () => void,
   ): Promise<RetryPermit> {
     if (this.disposed) {
       return Promise.reject(
@@ -244,7 +247,6 @@ export class ModelRetryGate {
       return Promise.reject(abortReason(options.signal));
     }
 
-    onBeforeWait?.();
     const delayMs = Math.max(0, state.retryAt - Date.now());
     options.onWait?.(delayMs);
     return new Promise<RetryPermit>((resolve, reject) => {
