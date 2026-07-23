@@ -15,8 +15,8 @@ import {
 import type { StreamTabId } from '@shared/schemas';
 
 /**
- * Link a freshly resolved child subagent stream to its parent for bash and
- * tool-edit bypass resolution.
+ * Link a freshly resolved child subagent stream to its parent for approval
+ * bypass resolution.
  *
  * A child delegated by a parent that auto-runs bash or auto-approves edits
  * should do the same — and should keep following the parent when either
@@ -26,10 +26,9 @@ import type { StreamTabId } from '@shared/schemas';
  * bypass kind, so the CLI's distinct AUTO-BASH / AUTO-APPROVE grants are
  * respected: a parent with AUTO-BASH but edits still gated propagates only
  * bash, and fresh streams default to gated either way. Delegation-proposal
- * (super-YOLO) bypass is deliberately NOT linked — a child's own delegations
- * still prompt unless granted on the child explicitly (and
- * `setDelegatedWorkApprovalBypasses` pins the child's own explicit entries,
- * so that grant survives the parent later re-gating).
+ * bypass is linked as well, so complete delegated-task approval remains
+ * effective when an orchestrator delegates to another orchestrator. A child
+ * may still override any inherited approval explicitly.
  */
 export type DelegatedChildApprovalPolicy = 'inherit' | 'auto-approved';
 
@@ -40,10 +39,7 @@ export function configureDelegatedChildApprovals(
   session: SessionHandle = currentSession(),
 ): void {
   if (parentStreamId) {
-    session.approvals.registerStreamParent(childStreamId, parentStreamId, [
-      'bash',
-      'toolEdit',
-    ]);
+    session.approvals.registerStreamParent(childStreamId, parentStreamId);
   }
   if (policy === 'auto-approved') {
     session.approvals.toolEdit.bypass.setBypass(
