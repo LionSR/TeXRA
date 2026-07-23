@@ -6,6 +6,7 @@ import {
   isPreferCodexSubscription,
 } from '@auth/codex';
 import { getServerSideKeyService } from '@auth/serverKeys';
+import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
 import { platform } from '@platform/platform';
 import type { UsageRoute } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
@@ -132,10 +133,10 @@ export function resolveProviderCapabilities({
 
   return {
     authMode: 'chatgpt-subscription',
-    contextWindow: Math.min(tokenLimits.contextWindow, model.contextWindow),
+    ...zeroCostAccessOverrides(
+      Math.min(tokenLimits.contextWindow, model.contextWindow),
+    ),
     inputTokenLimit: Math.min(tokenLimits.inputTokenLimit, model.contextWindow),
-    inputPrice: 0,
-    outputPrice: 0,
     usageRoute: 'chatgpt-subscription',
     openAIResponses: {
       backgroundMode: 'disabled',

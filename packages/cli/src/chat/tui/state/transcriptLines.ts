@@ -36,14 +36,42 @@ export function createTranscriptPrintRequest({
 
 // Wrapped-line cache keyed by the immutable entry object. Entries are
 // replaced (never mutated in place) when their content changes, so hits are
-// always current. Each entry can be rendered at several widths in the same
-// frame (terminal transcript, static row budget, task-detail panel), so keep
-// the width dimension inside the entry cache instead of letting callers thrash
-// a single slot.
+// always current, and the outer WeakMap needs no manual eviction: once an
+// entry is replaced/discarded, its cache slot (and everything nested under
+// it) becomes unreachable and is reclaimed with it. Each entry can be
+// rendered at several widths in the same frame (terminal transcript, static
+// row budget, task-detail panel), and occasionally under more than one
+// execution-labels snapshot (labels are a `computed()` signal that only
+// produces a new Map when the child-stream roster actually changes), so both
+// axes are folded into one composite key inside a flat `Map` nested one
+// level under the entry — GC-tied on the primary (entry) axis without the
+// extra WeakMap level for labels. `labelsToken` gives each distinct labels
+// object a small stable numeric id (itself WeakMap-backed, so retired labels
+// objects don't pin memory) to keep that composite key cheap to build.
 const EMPTY_EXECUTION_LABELS: ExecutionLabels = new Map();
+let nextLabelsToken = 0;
+const labelsTokens = new WeakMap<ExecutionLabels, number>();
+
+function labelsToken(executionLabels: ExecutionLabels): number {
+  const existing = labelsTokens.get(executionLabels);
+  if (existing !== undefined) return existing;
+  const token = nextLabelsToken++;
+  labelsTokens.set(executionLabels, token);
+  return token;
+}
+
+// Cap each entry's composite-key slots so a long session with many terminal
+// resizes / labels-roster changes can't grow an entry's inner Map forever —
+// only the outer WeakMap's entry-level eviction is free (GC-tied); the
+// `${token}:${cols}` keys inside it are strong references the entry itself
+// won't drop on its own. In practice only the current width and the current
+// labels snapshot are re-rendered at once, so a small cap costs no realistic
+// hit rate.
+const MAX_LINES_PER_ENTRY = 4;
+
 const entryLinesCache = new WeakMap<
   ConversationEntry,
-  WeakMap<ExecutionLabels, Map<number, readonly string[]>>
+  Map<string, readonly string[]>
 >();
 
 function transcriptEntryLines(
@@ -51,20 +79,19 @@ function transcriptEntryLines(
   cols: number,
   executionLabels: ExecutionLabels,
 ): readonly string[] {
-  const cachedByLabels = entryLinesCache.get(entry);
-  const cachedByCols = cachedByLabels?.get(executionLabels);
-  const cached = cachedByCols?.get(cols);
+  const key = `${labelsToken(executionLabels)}:${cols}`;
+  const cachedByEntry = entryLinesCache.get(entry);
+  const cached = cachedByEntry?.get(key);
   if (cached) return cached;
   const lines = computeTranscriptEntryLines(entry, cols, executionLabels);
-  if (cachedByCols) {
-    cachedByCols.set(cols, lines);
-  } else if (cachedByLabels) {
-    cachedByLabels.set(executionLabels, new Map([[cols, lines]]));
+  if (cachedByEntry) {
+    if (cachedByEntry.size >= MAX_LINES_PER_ENTRY) {
+      const oldestKey = cachedByEntry.keys().next().value;
+      if (oldestKey !== undefined) cachedByEntry.delete(oldestKey);
+    }
+    cachedByEntry.set(key, lines);
   } else {
-    entryLinesCache.set(
-      entry,
-      new WeakMap([[executionLabels, new Map([[cols, lines]])]]),
-    );
+    entryLinesCache.set(entry, new Map([[key, lines]]));
   }
   return lines;
 }

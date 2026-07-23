@@ -5,6 +5,7 @@ import {
   createOutputState,
   setActiveRun,
   getOutputFilesByRound,
+  roundsFromPersisted,
 } from '@agent/output/outputState';
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { LatexDiffManager } from '@agent/output/LatexDiffManager';
@@ -233,7 +234,7 @@ export async function runReflectionFlow<C = unknown>(
     }
 
     // Hydrate the canonical live collection from the persisted round snapshot.
-    outputState.rounds = shared.roundOutputs;
+    outputState.rounds = roundsFromPersisted(shared.roundOutputs);
 
     const prepContextNode = new PrepareContextNode<C>();
     const texCountNode = new TeXCountNode<C>();

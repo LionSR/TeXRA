@@ -64,7 +64,7 @@ describe('buildStreamTabInfo', () => {
     const info = buildStreamTabInfo({
       streamId: 'search@deepseek#exec',
       metadata: {
-        agent: 'search',
+        run: { kind: 'agent', agent: 'search', model: '', instruction: '' },
         agentCategory: AgentCategory.ToolUse,
         isRemote: true,
         creationTimestamp: 1,

@@ -49,7 +49,7 @@ export function buildStreamInfo(
   const category = matchesFilter(metadata.agentCategory, filter);
   if (category === null) return null;
 
-  const workingDirectory = metadata.workingDirectory;
+  const workingDirectory = metadata.run?.workingDirectory;
   let worktreeInfo;
   if (workingDirectory) {
     worktreeInfo = peekWorktreeInfo(workingDirectory);

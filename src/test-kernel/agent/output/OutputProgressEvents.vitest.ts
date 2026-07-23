@@ -211,7 +211,9 @@ describe('output progress events', () => {
           payload: { location: openedLocation, preserveFocus: true },
         },
       ]);
-      expect(shared.roundOutputs).toBe(outputState.rounds);
+      // Round 0 was never populated in this fixture; the projection must
+      // keep round 1's data at index 1 rather than compacting it to index 0.
+      expect(shared.roundOutputs[0]).toBeUndefined();
       expect(shared.roundOutputs[1]?.outputs).toEqual([restoredFileInfo]);
     } finally {
       projected.dispose();
