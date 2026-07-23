@@ -574,9 +574,7 @@ export class InstructionPanel extends LitElement {
             @click=${this.handleExecute}
           >
             ${waIcon('play', { slot: 'start' })}
-            <span class="execute-button__label">
-              ${session.launchTarget === 'team' ? 'Run team' : 'Run'}
-            </span>
+            <span class="execute-button__label"> Run </span>
           </wa-button>
           <wa-tooltip for="executeButton">
             Execute (${this.executeShortcutLabel})

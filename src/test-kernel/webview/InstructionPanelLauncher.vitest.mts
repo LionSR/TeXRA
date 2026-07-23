@@ -306,7 +306,7 @@ describe('instruction-panel launcher', () => {
       expect(events).toEqual([{ type: 'team-settings', detail: null }]);
     });
 
-    it('labels the execute button "Run team" and the model picker "Lead model"', async () => {
+    it('labels the execute button "Run" and the model picker "Lead model"', async () => {
       const element = await mountPanel(TEAM_SESSION);
 
       expect(
@@ -314,7 +314,7 @@ describe('instruction-panel launcher', () => {
           element,
           '.execute-button__label',
         )?.textContent?.trim(),
-      ).toBe('Run team');
+      ).toBe('Run');
       expect(query(element, '#model')?.getAttribute('aria-label')).toBe(
         'Lead model',
       );
