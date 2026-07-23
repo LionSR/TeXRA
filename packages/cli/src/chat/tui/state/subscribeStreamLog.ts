@@ -75,6 +75,41 @@ function isFullLogChildStream(streamId: StreamTabId): boolean {
   );
 }
 
+function safeWorkflowOperationalSummary(text: string): string | undefined {
+  const sanitized = redactSecrets(safeTerminalText(text));
+  return sanitized.trim() ? truncateSummary(sanitized, 120) : undefined;
+}
+
+function workflowOperationalDescription(
+  entries: readonly ConversationEntry[],
+): string | undefined {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (!entry) continue;
+    if (entry.role === 'tool') {
+      const description =
+        safeWorkflowOperationalSummary(entry.toolUse.headerSummary) ??
+        safeWorkflowOperationalSummary(entry.toolUse.toolName);
+      if (description) return description;
+      continue;
+    }
+    if (entry.role === 'phase') {
+      const description = safeWorkflowOperationalSummary(entry.phaseLabel);
+      if (description) return description;
+      continue;
+    }
+    if (
+      entry.role === 'error' ||
+      (entry.role === 'assistant' &&
+        entry.messageType === MESSAGE_TYPES.DEFAULT)
+    ) {
+      const description = safeWorkflowOperationalSummary(entry.text);
+      if (description) return description;
+    }
+  }
+  return undefined;
+}
+
 function transcriptMessageTypesForStream(streamId: StreamTabId): Set<string> {
   // Detached child runs surface their full log output (phase group rows and
   // plain log lines, both `DEFAULT`) when focused, unlike the root/subagent
@@ -538,9 +573,6 @@ export function syncStreamLog(
   const allEntries = log.getRange(0);
   const thinkingActive = latestLogActivityIsThinking(allEntries);
   const transcriptMessageTypes = transcriptMessageTypesForStream(streamId);
-  const responses = allEntries.filter((entry: StreamLogEntry) =>
-    transcriptMessageTypes.has(entry.messageType ?? ''),
-  );
   const currentActiveStreamId = activeStreamId.get();
   const projectFullTranscript =
     options.forceFull === true ||
@@ -563,12 +595,35 @@ export function syncStreamLog(
     );
     const streamFinal = isFinalTranscriptStatus(slice.status);
     const logCandidates: TranscriptCandidate[] = [];
-    for (const entry of responses) {
+    const workflowDescriptionCandidates: TranscriptCandidate[] = [];
+    for (const entry of allEntries) {
+      const messageType = entry.messageType ?? '';
+      const transcriptCandidate = transcriptMessageTypes.has(messageType);
+      if (
+        !transcriptCandidate &&
+        (!workflowOperationalOnly || messageType !== MESSAGE_TYPES.DEFAULT)
+      ) {
+        continue;
+      }
       const rendered = renderLogEntry(entry, existing.get(entry.id));
       if (!rendered) continue;
+      if (workflowOperationalOnly) {
+        workflowDescriptionCandidates.push({
+          rendered,
+          sortSeq: entry.seqNo,
+          tieBreak: 0,
+        });
+      }
       // Workflow-agent details are an operational feed, not a model
       // transcript. Detached workflow-script runs intentionally keep their
-      // full child log, including Running/Finished and error rows.
+      // full child log, including Running/Finished and error rows. A phase
+      // uses the DEFAULT message type, but remains an operational row.
+      if (
+        !transcriptCandidate &&
+        !(workflowOperationalOnly && rendered.role === 'phase')
+      ) {
+        continue;
+      }
       if (
         workflowOperationalOnly &&
         rendered.role !== 'tool' &&
@@ -586,11 +641,15 @@ export function syncStreamLog(
       syntheticEntries.length === 0 ? logCandidates : [...logCandidates];
 
     for (const [index, entry] of syntheticEntries.entries()) {
-      candidates.push({
+      const candidate = {
         rendered: entry,
         sortSeq: entry.syntheticAfterSeq ?? Number.POSITIVE_INFINITY,
         tieBreak: index + 1,
-      });
+      };
+      candidates.push(candidate);
+      if (workflowOperationalOnly) {
+        workflowDescriptionCandidates.push(candidate);
+      }
     }
 
     const ordered = sortTranscriptCandidatesIfNeeded(candidates).map(
@@ -605,17 +664,22 @@ export function syncStreamLog(
     );
     const latestInstruction =
       latestUserIndex >= 0 ? next[latestUserIndex]?.text : undefined;
-    const description =
-      next.findLast(
-        (entry, index) =>
-          index > latestUserIndex &&
-          entry.role === 'assistant' &&
-          entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE &&
-          entry.finalized &&
-          entry.text.trim(),
-      )?.text ??
-      latestInstruction ??
-      slice.description;
+    const description = workflowOperationalOnly
+      ? (workflowOperationalDescription(
+          sortTranscriptCandidatesIfNeeded(workflowDescriptionCandidates).map(
+            (candidate) => candidate.rendered,
+          ),
+        ) ?? slice.description)
+      : (next.findLast(
+          (entry, index) =>
+            index > latestUserIndex &&
+            entry.role === 'assistant' &&
+            entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE &&
+            entry.finalized &&
+            entry.text.trim(),
+        )?.text ??
+        latestInstruction ??
+        slice.description);
     releaseAfterSync =
       !projectFullTranscript &&
       slice.status !== undefined &&

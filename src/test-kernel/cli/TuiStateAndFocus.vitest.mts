@@ -1783,6 +1783,154 @@ describe('CLI transcript state', () => {
     expect(JSON.stringify(slice)).not.toContain('synthetic workflow prompt');
     expect(JSON.stringify(slice)).not.toContain('synthetic workflow response');
     expect(JSON.stringify(slice)).not.toContain('workflow-process');
+    expect(slice?.description).toBe('synthetic workflow error');
+  });
+
+  it('derives workflow descriptions from operational rows without exposing prose', () => {
+    patchStream(child1, (slice) => ({
+      ...slice,
+      category: AgentCategory.Workflow,
+    }));
+    const logger = createRunTrace(child1, defaultSession().transcripts).trace;
+    const secret = 'sk-workflow-summary-1234567890abcdef';
+    const ansiSplitSecret = `${secret.slice(0, 12)}\u001b[31m${secret.slice(12)}\u001b[0m`;
+    logger.info('workflow prompt', {
+      messageType: MESSAGE_TYPES.USER_MESSAGE,
+    });
+    logger.info(
+      `Preparing \u001b[32mproof\u001b[0m audit\u0007 API_KEY=${ansiSplitSecret}`,
+      { messageType: MESSAGE_TYPES.DEFAULT },
+    );
+    logger.info('raw workflow model response', {
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    });
+
+    syncStreamLog(child1);
+
+    let slice = streams.get().get(child1);
+    expect(slice?.description).toBe('Preparing proof audit API_KEY=[redacted]');
+    expect(slice?.description).not.toContain(secret);
+    expect(slice?.description).not.toContain('\u001b');
+    expect(slice?.description).not.toContain('\u0007');
+    expect(slice?.entries).toEqual([]);
+
+    logger.info('tool activity', {
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      data: {
+        toolName: 'bash',
+        input: { command: 'true' },
+        output: 'done',
+        summary: `Checking with Bearer ${ansiSplitSecret}\u0085`,
+        status: 'completed',
+      },
+    });
+    syncStreamLog(child1);
+    const toolDescription = streams.get().get(child1)?.description;
+    expect(toolDescription).toBe('Checking with Bearer [redacted]');
+    expect(toolDescription).not.toContain(secret);
+    expect(toolDescription).not.toContain('\u001b');
+    expect(toolDescription).not.toContain('\u0085');
+
+    logger.info('tool activity', {
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      data: {
+        toolName: 'read_file',
+        input: { path: 'proof.tex' },
+        output: 'done',
+        summary: '\u001b[31m\u001b[0m\u0007',
+        status: 'completed',
+      },
+    });
+    syncStreamLog(child1);
+    expect(streams.get().get(child1)?.description).toBe('read_file');
+
+    logger.openStage('Review lemmas', {
+      id: 'review-phase',
+      kind: 'phase',
+      index: 1,
+      total: 2,
+    });
+    syncStreamLog(child1);
+    expect(streams.get().get(child1)?.description).toBe('Review lemmas');
+
+    logger.error('Proof audit failed', {
+      messageType: MESSAGE_TYPES.ERROR,
+    });
+    syncStreamLog(child1);
+
+    slice = streams.get().get(child1);
+    expect(slice?.description).toBe('Proof audit failed');
+    expect(slice?.entries.map(({ role }) => role)).toEqual([
+      'tool',
+      'tool',
+      'phase',
+      'error',
+    ]);
+    expect(JSON.stringify(slice)).not.toContain('workflow prompt');
+    expect(JSON.stringify(slice)).not.toContain('Preparing proof audit');
+    expect(JSON.stringify(slice)).not.toContain('raw workflow model response');
+  });
+
+  it('updates dormant workflow descriptions while keeping entries compact', () => {
+    activeStreamId.set(root);
+    patchStream(child1, (slice) => ({
+      ...slice,
+      category: AgentCategory.Workflow,
+    }));
+    const logger = createRunTrace(child1, defaultSession().transcripts).trace;
+    logger.info('raw dormant workflow prose', {
+      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    });
+    logger.info('Preparing dormant audit', {
+      messageType: MESSAGE_TYPES.DEFAULT,
+    });
+
+    syncStreamLog(child1);
+
+    expect(streams.get().get(child1)).toMatchObject({
+      description: 'Preparing dormant audit',
+      entries: [],
+    });
+
+    logger.info('tool activity', {
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      data: {
+        toolName: 'grep',
+        input: { pattern: 'lemma' },
+        output: 'done',
+        summary: 'Scanning proof obligations',
+        status: 'completed',
+      },
+    });
+    syncStreamLog(child1);
+
+    expect(streams.get().get(child1)).toMatchObject({
+      description: 'Scanning proof obligations',
+      entries: [],
+    });
+
+    logger.openStage('Checking dormant lemmas', {
+      id: 'dormant-review-phase',
+      kind: 'phase',
+    });
+    syncStreamLog(child1);
+
+    expect(streams.get().get(child1)).toMatchObject({
+      description: 'Checking dormant lemmas',
+      entries: [],
+    });
+
+    logger.error('Dormant audit failed', {
+      messageType: MESSAGE_TYPES.ERROR,
+    });
+    syncStreamLog(child1);
+
+    const slice = streams.get().get(child1);
+    expect(slice).toMatchObject({
+      description: 'Dormant audit failed',
+      entries: [],
+    });
+    expect(JSON.stringify(slice)).not.toContain('raw dormant workflow prose');
   });
 
   it('does not project empty assistant responses into transcript rows', () => {
