@@ -716,6 +716,15 @@ export abstract class ModelHandler<
     ]);
   }
 
+  /**
+   * Stable recovery key for limits that apply to one model on a wire route.
+   * Transport health deliberately stays on getWireRouteKey so an outage still
+   * coordinates every model sharing the credential and endpoint.
+   */
+  getModelRetryRouteKey(client: C): string {
+    return JSON.stringify([this.getWireRouteKey(client), this.config.fullName]);
+  }
+
   /** Route currently executing, excluding the last completed attempt. */
   protected get activeCredentialRoute(): ModelCredentialRoute | undefined {
     return this.activeAttemptCredentialRoute;

@@ -21,6 +21,7 @@ function responseServices({
     modelHandler: {
       config: { provider: 'openai', fullName: 'test-model' },
       getWireRouteKey: () => 'openai:test-route',
+      getModelRetryRouteKey: () => 'openai:test-route:model',
       capabilities: { supportsFunctionCalling },
     },
     setting: {
@@ -120,6 +121,7 @@ describe('response cycle tool visibility', () => {
         config: { provider: 'openai', fullName: 'test-model' },
         createResponse,
         getWireRouteKey: () => 'openai:test-route',
+        getModelRetryRouteKey: () => 'openai:test-route:model',
         isBackgroundModeActive: () => false,
         setOutputStreaming: vi.fn(),
       },

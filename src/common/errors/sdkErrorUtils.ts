@@ -36,10 +36,16 @@ export {
 } from './sdkError/errorPatterns';
 
 export {
+  classifyModelRateLimitFailure,
+  classifyRelayRequestLimitFailure,
   classifyWireRouteFailure,
   formatProviderHttpError,
   normalizeProviderError,
   isProviderErrorAutoRetryable,
+  isModelRateLimitFailure,
+  isRelayProviderUnobservedFailure,
+  isRelayRequestGateReachableFailure,
+  isRelayRequestGateUnobservedFailure,
   getSdkErrorMessage,
   buildErrorLogData,
   buildFailedRetryInfo,
