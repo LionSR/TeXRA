@@ -18,10 +18,12 @@ function makeActions(): TestActions {
   return { noop: vi.fn(), packed: vi.fn() };
 }
 
-const PackArgs = z.object({
-  inputFile: z.string().min(1),
-  agent: z.string().min(1),
-});
+const PackArgs = z.tuple([
+  z.object({
+    inputFile: z.string().min(1),
+    agent: z.string().min(1),
+  }),
+]);
 
 const packRegistry = {
   'test.pack': definedHandler<TestActions, z.infer<typeof PackArgs>>(

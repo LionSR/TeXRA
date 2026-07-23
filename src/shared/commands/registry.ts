@@ -16,22 +16,28 @@ import type { z } from 'zod';
  * or `await` and return `true`.
  *
  * No-arg commands keep the legacy callable shape for backward
- * compatibility (the existing 10 view-routing handlers and the desktop
- * registry are all no-arg). Parameterized commands declare a Zod schema
- * for their arguments via `definedHandler` — the dispatcher parses the
- * raw arg at the boundary and only calls `run` once parsing succeeds,
- * keeping handlers free of parsing boilerplate.
+ * compatibility (the existing view-routing handlers and the desktop
+ * registry are all no-arg). Parameterized commands declare a Zod tuple
+ * schema for their positional arguments via `definedHandler` — the
+ * dispatcher parses the raw argument list at the boundary and only calls
+ * `run` once parsing succeeds, keeping handlers free of parsing boilerplate.
  *
  * The legacy shape is preserved as a callable so existing entries like
  * `(actions) => actions.showSettings()` still type-check; the new shape
  * is an object with `run` + `argsSchema`.
  */
-export type CommandHandler<TActions, TArgs = unknown> =
+export type CommandHandler<
+  TActions,
+  TArgs extends readonly unknown[] = readonly unknown[],
+> =
   | ((actions: TActions) => boolean | Promise<boolean>)
   | TypedCommandHandler<TActions, TArgs>;
 
-export interface TypedCommandHandler<TActions, TArgs> {
-  run: (actions: TActions, args: TArgs) => boolean | Promise<boolean>;
+export interface TypedCommandHandler<
+  TActions,
+  TArgs extends readonly unknown[],
+> {
+  run: (actions: TActions, ...args: TArgs) => boolean | Promise<boolean>;
   argsSchema: z.ZodType<TArgs>;
 }
 
@@ -55,9 +61,9 @@ type CommandHandlerMap<TId extends string, TActions> = Partial<
  * for the args parameter. Without this helper, TypeScript can't widen the
  * inline object literal back into the union return type.
  */
-export function definedHandler<TActions, TArgs>(
+export function definedHandler<TActions, TArgs extends readonly unknown[]>(
   argsSchema: z.ZodType<TArgs>,
-  run: (actions: TActions, args: TArgs) => boolean | Promise<boolean>,
+  run: (actions: TActions, ...args: TArgs) => boolean | Promise<boolean>,
 ): TypedCommandHandler<TActions, TArgs> {
   return { run, argsSchema };
 }
@@ -86,7 +92,7 @@ export function dispatchCommandFromRegistry<TId extends string, TActions>(
   registry: CommandHandlerMap<TId, TActions>,
   actions: TActions,
   onUnhandled?: (id: TId) => void,
-  rawArgs?: unknown,
+  ...rawArgs: unknown[]
 ): boolean | Promise<boolean> {
   const handler = registry[id];
   if (!handler) {
@@ -97,14 +103,14 @@ export function dispatchCommandFromRegistry<TId extends string, TActions>(
   // Legacy no-arg handlers stay callable directly.
   if (typeof handler === 'function') return handler(actions);
 
-  // Typed handlers parse the raw arg at the boundary so handlers receive
-  // a validated shape. A schema parse failure surfaces as `false` (not
-  // handled) so callers can surface the issue to the user/log without the
-  // dispatcher swallowing it silently.
+  // Typed handlers parse the positional argument list at the boundary so
+  // handlers receive validated values. A schema parse failure surfaces as
+  // `false` (not handled) so callers can surface the issue to the user/log
+  // without the dispatcher swallowing it silently.
   const result = handler.argsSchema.safeParse(rawArgs);
   if (!result.success) {
     onUnhandled?.(id);
     return false;
   }
-  return handler.run(actions, result.data);
+  return handler.run(actions, ...result.data);
 }

@@ -1,3 +1,11 @@
 // Barrel export for housekeeping commands
-export { registerCleanCommands } from './cleanCommands';
-export { registerPackCommands } from './packCommands';
+export {
+  handleClean,
+  handleCleanMultiple,
+  handleCleanSingle,
+} from './cleanCommands';
+export {
+  handlePack,
+  handlePackMultiple,
+  handlePackSingle,
+} from './packCommands';

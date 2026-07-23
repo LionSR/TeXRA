@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { registerCommands } from '@commands/_shared/registerCommands';
 import { appSignals } from '@eventBus/AppSignals';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import {
@@ -77,16 +76,7 @@ async function validateFilesExist(
   return true;
 }
 
-export function registerCompareCommands(
-  context: vscode.ExtensionContext,
-): void {
-  registerCommands(context, [
-    { id: 'texra.compare', handler: handleCompare },
-    { id: 'texra.acceptEdited', handler: handleAcceptEdited },
-  ]);
-}
-
-async function handleCompare(
+export async function handleCompare(
   inputLocation: FileLocation,
   baseLocation: FileLocation,
   editedLocation: FileLocation,
@@ -212,7 +202,7 @@ async function pickReplaceOrCopyTarget(
   return pick?.target;
 }
 
-async function handleAcceptEdited(
+export async function handleAcceptEdited(
   inputLocation: FileLocation,
   baseLocation: FileLocation,
   editedLocation: FileLocation,

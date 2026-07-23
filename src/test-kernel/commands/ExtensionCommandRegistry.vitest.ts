@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports
 import {
   EXTENSION_COMMAND_HANDLERS,
-  EXTENSION_HIDDEN_ALIASES,
+  EXTENSION_INTERNAL_COMMAND_IDS,
   EXTENSION_REGISTRY_CATALOG_COMMAND_IDS,
   type ExtensionCommandActions,
 } from '@commands/extensionCommandHandlers';
@@ -28,6 +28,14 @@ function makeActions(): ExtensionCommandActions {
     openWorkbenchSettings: vi.fn().mockReturnValue(Promise.resolve()),
     cleanBuild: vi.fn().mockResolvedValue(undefined),
     cleanOutput: vi.fn().mockResolvedValue(undefined),
+    pack: vi.fn().mockResolvedValue(undefined),
+    packSingle: vi.fn().mockResolvedValue(undefined),
+    packMultiple: vi.fn().mockResolvedValue(undefined),
+    clean: vi.fn().mockResolvedValue(undefined),
+    cleanSingle: vi.fn().mockResolvedValue(undefined),
+    cleanMultiple: vi.fn().mockResolvedValue(undefined),
+    compare: vi.fn().mockResolvedValue(undefined),
+    acceptEdited: vi.fn().mockResolvedValue(true),
     indentTeX: vi.fn().mockResolvedValue(undefined),
     signIn: vi.fn().mockResolvedValue(false),
     signInChatGpt: vi.fn().mockResolvedValue(false),
@@ -75,7 +83,7 @@ describe('extension command registry — catalog-driven registration', () => {
     const registered = Object.keys(EXTENSION_COMMAND_HANDLERS).sort();
     const expected = [
       ...EXTENSION_REGISTRY_CATALOG_COMMAND_IDS,
-      ...EXTENSION_HIDDEN_ALIASES,
+      ...EXTENSION_INTERNAL_COMMAND_IDS,
     ].sort();
     expect(registered).toEqual(expected);
   });
@@ -96,8 +104,8 @@ describe('extension command registry — catalog-driven registration', () => {
     }
   });
 
-  it.each(EXTENSION_HIDDEN_ALIASES)(
-    'hidden alias %s is absent from the public catalog',
+  it.each(EXTENSION_INTERNAL_COMMAND_IDS)(
+    'internal command %s is absent from the public catalog',
     (id) => {
       expect(commandCatalog.some((entry) => (entry.id as string) === id)).toBe(
         false,
@@ -268,6 +276,186 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
       ),
     ).toBe(false);
     expect(actions.compactResponse).not.toHaveBeenCalled();
+  });
+
+  describe('typed file-operation arguments (#9090)', () => {
+    it('normalizes and forwards pack/clean config objects', async () => {
+      const actions = makeActions();
+      const config = {
+        inputFile: 'main.tex',
+        agent: 'editor',
+        model: 'gpt-5',
+      };
+
+      const packResult = dispatchCommandFromRegistry(
+        'texra.pack',
+        EXTENSION_COMMAND_HANDLERS,
+        actions,
+        undefined,
+        config,
+      );
+      const cleanResult = dispatchCommandFromRegistry(
+        'texra.clean',
+        EXTENSION_COMMAND_HANDLERS,
+        actions,
+        undefined,
+        config,
+      );
+
+      await expect(Promise.resolve(packResult)).resolves.toBe(true);
+      await expect(Promise.resolve(cleanResult)).resolves.toBe(true);
+      expect(actions.pack).toHaveBeenCalledExactlyOnceWith({
+        ...config,
+        outputFiles: [],
+      });
+      expect(actions.clean).toHaveBeenCalledExactlyOnceWith({
+        ...config,
+        outputFiles: [],
+      });
+    });
+
+    it('forwards positional single-file pack/clean arguments', async () => {
+      const actions = makeActions();
+
+      const packResult = dispatchCommandFromRegistry(
+        'texra.packSingle',
+        EXTENSION_COMMAND_HANDLERS,
+        actions,
+        undefined,
+        'main.tex',
+        'editor',
+        'gpt-5',
+      );
+      const cleanResult = dispatchCommandFromRegistry(
+        'texra.cleanSingle',
+        EXTENSION_COMMAND_HANDLERS,
+        actions,
+        undefined,
+        'main.tex',
+        'editor',
+        'gpt-5',
+      );
+
+      await expect(Promise.resolve(packResult)).resolves.toBe(true);
+      await expect(Promise.resolve(cleanResult)).resolves.toBe(true);
+      expect(actions.packSingle).toHaveBeenCalledExactlyOnceWith(
+        'main.tex',
+        'editor',
+        'gpt-5',
+      );
+      expect(actions.cleanSingle).toHaveBeenCalledExactlyOnceWith(
+        'main.tex',
+        'editor',
+        'gpt-5',
+      );
+    });
+
+    it('defaults omitted multi-file lists before dispatch', async () => {
+      const actions = makeActions();
+
+      const packResult = dispatchCommandFromRegistry(
+        'texra.packMultiple',
+        EXTENSION_COMMAND_HANDLERS,
+        actions,
+        undefined,
+        'main.tex',
+        'editor',
+        'gpt-5',
+      );
+      const cleanResult = dispatchCommandFromRegistry(
+        'texra.cleanMultiple',
+        EXTENSION_COMMAND_HANDLERS,
+        actions,
+        undefined,
+        'main.tex',
+        'editor',
+        'gpt-5',
+      );
+
+      await expect(Promise.resolve(packResult)).resolves.toBe(true);
+      await expect(Promise.resolve(cleanResult)).resolves.toBe(true);
+      expect(actions.packMultiple).toHaveBeenCalledExactlyOnceWith(
+        'main.tex',
+        'editor',
+        'gpt-5',
+        [],
+      );
+      expect(actions.cleanMultiple).toHaveBeenCalledExactlyOnceWith(
+        'main.tex',
+        'editor',
+        'gpt-5',
+        [],
+      );
+    });
+
+    it('forwards compare and accept arguments without collapsing them', async () => {
+      const actions = makeActions();
+      const input = {
+        kind: 'workspace' as const,
+        absolutePath: '/workspace/main.tex',
+        relativePath: 'main.tex',
+      };
+      const base = {
+        kind: 'external' as const,
+        absolutePath: '/tmp/base.tex',
+      };
+      const edited = {
+        kind: 'external' as const,
+        absolutePath: '/tmp/edited.tex',
+      };
+      const copyMeta = { agent: 'editor', model: 'gpt-5', round: 2 };
+
+      const compareResult = dispatchCommandFromRegistry(
+        'texra.compare',
+        EXTENSION_COMMAND_HANDLERS,
+        actions,
+        undefined,
+        input,
+        base,
+        edited,
+      );
+      const acceptResult = dispatchCommandFromRegistry(
+        'texra.acceptEdited',
+        EXTENSION_COMMAND_HANDLERS,
+        actions,
+        undefined,
+        input,
+        base,
+        edited,
+        copyMeta,
+      );
+
+      await expect(Promise.resolve(compareResult)).resolves.toBe(true);
+      await expect(Promise.resolve(acceptResult)).resolves.toBe(true);
+      expect(actions.compare).toHaveBeenCalledExactlyOnceWith(
+        input,
+        base,
+        edited,
+      );
+      expect(actions.acceptEdited).toHaveBeenCalledExactlyOnceWith(
+        input,
+        base,
+        edited,
+        copyMeta,
+      );
+    });
+
+    it('rejects malformed positional arguments before calling actions', () => {
+      const actions = makeActions();
+
+      expect(
+        dispatchCommandFromRegistry(
+          'texra.packSingle',
+          EXTENSION_COMMAND_HANDLERS,
+          actions,
+          undefined,
+          '',
+          'editor',
+          'gpt-5',
+        ),
+      ).toBe(false);
+      expect(actions.packSingle).not.toHaveBeenCalled();
+    });
   });
 
   // Batch 4 (#3781) typed-arg coverage.

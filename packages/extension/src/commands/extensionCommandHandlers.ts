@@ -2,6 +2,15 @@
 import { z } from 'zod';
 
 // Local imports
+import {
+  CleanConfigSchema,
+  CleanMultipleCommandArgsSchema,
+  FileOpCommandArgsSchema,
+  PackConfigSchema,
+  PackMultipleCommandArgsSchema,
+  type CleanConfig,
+  type PackConfig,
+} from '@commands/housekeeping/fileOpSchemas';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { commandCatalog } from '@shared/commands/catalog';
 import {
@@ -11,6 +20,7 @@ import {
 } from '@shared/commands/registry';
 import { AgentCategorySchema, type AgentCategory } from '@shared/schemas/agent';
 import { StreamTabIdSchema } from '@shared/schemas/identifiers';
+import { FileLocationSchema, type FileLocation } from '@shared/schemas/output';
 import {
   SETTINGS_TAB,
   type SettingsTab,
@@ -26,25 +36,25 @@ import {
  */
 
 /**
- * Optional `ApiProvider` argument for `texra.setApiKey`. The schema accepts
- * `undefined` so the registry's `safeParse` succeeds when the command is
+ * Optional `ApiProvider` argument for `texra.setApiKey`. The tuple accepts
+ * no element so the registry's `safeParse` succeeds when the command is
  * invoked from the palette without arguments — the action then prompts the
  * user via `showQuickPick`.
  */
-const SetApiKeyArgSchema = z.enum(API_PROVIDERS).optional();
+const SetApiKeyArgsSchema = z.tuple([z.enum(API_PROVIDERS).optional()]);
 
 /**
  * Optional `AgentCategory` argument for `texra.createAgentWithAI`. The
  * registry parses raw `unknown` and the action defaults to `workflow`
  * when undefined (preserving the legacy `category ?? 'workflow'` shape).
  */
-const CreateAgentWithAIArgSchema = AgentCategorySchema.optional();
+const CreateAgentWithAIArgsSchema = z.tuple([AgentCategorySchema.optional()]);
 
 /**
  * Optional `AgentCategory` argument for `texra.showAgents`, selecting which
  * agent-category sub-tab opens under Settings > Agents.
  */
-const ShowAgentsArgSchema = AgentCategorySchema.optional();
+const ShowAgentsArgsSchema = z.tuple([AgentCategorySchema.optional()]);
 
 /**
  * Optional `{ inPlace }` argument for `texra.showProgressView`. The
@@ -54,7 +64,28 @@ const ShowAgentsArgSchema = AgentCategorySchema.optional();
  * still open the progress view (just without the in-place flag) instead
  * of being rejected by the dispatcher as unhandled.
  */
-const ShowProgressViewArgSchema = z.unknown();
+const ShowProgressViewArgsSchema = z.tuple([z.unknown().optional()]);
+
+const CompareCommandArgsSchema = z.tuple([
+  FileLocationSchema,
+  FileLocationSchema,
+  FileLocationSchema,
+]);
+
+const AcceptCopyMetaSchema = z.strictObject({
+  agent: z.string(),
+  model: z.string(),
+  round: z.int(),
+});
+
+type AcceptCopyMeta = z.infer<typeof AcceptCopyMetaSchema>;
+
+const AcceptEditedCommandArgsSchema = z.tuple([
+  FileLocationSchema,
+  FileLocationSchema,
+  FileLocationSchema,
+  AcceptCopyMetaSchema.optional(),
+]);
 
 /**
  * Catalog ids whose extension registration is driven by the shared
@@ -75,18 +106,25 @@ export type ExtensionRegistryCatalogCommandId =
   ExtensionRegistryCatalogEntry['id'];
 
 /**
- * Compatibility ids intentionally absent from the shared catalog — they
- * don't appear in the command palette or `package.json` contributions —
- * but must keep resolving for existing callers (e.g. stored keybindings,
- * webview postMessage payloads).
+ * Internal and compatibility ids intentionally absent from the shared
+ * catalog — they don't appear in the command palette or `package.json`
+ * contributions — but must keep resolving for extension callers.
  */
-export const EXTENSION_HIDDEN_ALIASES = ['texra.showSettingsView'] as const;
+export const EXTENSION_INTERNAL_COMMAND_IDS = [
+  'texra.showSettingsView',
+  'texra.packSingle',
+  'texra.packMultiple',
+  'texra.cleanSingle',
+  'texra.cleanMultiple',
+  'texra.compare',
+  'texra.acceptEdited',
+] as const;
 
-type HiddenExtensionRegistryCommandId =
-  (typeof EXTENSION_HIDDEN_ALIASES)[number];
+type InternalExtensionRegistryCommandId =
+  (typeof EXTENSION_INTERNAL_COMMAND_IDS)[number];
 
 export type ExtensionRegistryCommandId =
-  ExtensionRegistryCatalogCommandId | HiddenExtensionRegistryCommandId;
+  ExtensionRegistryCatalogCommandId | InternalExtensionRegistryCommandId;
 
 /**
  * Runtime mirror of `ExtensionRegistryCatalogCommandId`, used by tests to
@@ -115,6 +153,33 @@ export interface ExtensionCommandActions {
   openWorkbenchSettings(): Thenable<unknown>;
   cleanBuild(): Promise<void>;
   cleanOutput(): Promise<void>;
+  pack(config: PackConfig): Promise<void>;
+  packSingle(inputFile: string, agent: string, model: string): Promise<void>;
+  packMultiple(
+    inputFile: string,
+    agent: string,
+    model: string,
+    inputFiles: string[],
+  ): Promise<void>;
+  clean(config: CleanConfig): Promise<void>;
+  cleanSingle(inputFile: string, agent: string, model: string): Promise<void>;
+  cleanMultiple(
+    inputFile: string,
+    agent: string,
+    model: string,
+    inputFiles: string[],
+  ): Promise<void>;
+  compare(
+    inputLocation: FileLocation,
+    baseLocation: FileLocation,
+    editedLocation: FileLocation,
+  ): Promise<void>;
+  acceptEdited(
+    inputLocation: FileLocation,
+    baseLocation: FileLocation,
+    editedLocation: FileLocation,
+    copyMeta?: AcceptCopyMeta,
+  ): Promise<boolean>;
   indentTeX(): Promise<void>;
   signIn(): Promise<boolean>;
   signInChatGpt(): Promise<boolean>;
@@ -184,6 +249,62 @@ export const EXTENSION_COMMAND_HANDLERS = {
   'texra.mainView.reset': (actions) => awaitTrue(actions.resetMainView()),
   'texra.cleanOutput': (actions) => awaitTrue(actions.cleanOutput()),
   'texra.cleanBuild': (actions) => awaitTrue(actions.cleanBuild()),
+  'texra.pack': definedHandler(
+    z.tuple([PackConfigSchema]),
+    (actions: ExtensionCommandActions, config) =>
+      awaitTrue(actions.pack(config)),
+  ),
+  'texra.packSingle': definedHandler(
+    FileOpCommandArgsSchema,
+    (actions: ExtensionCommandActions, inputFile, agent, model) =>
+      awaitTrue(actions.packSingle(inputFile, agent, model)),
+  ),
+  'texra.packMultiple': definedHandler(
+    PackMultipleCommandArgsSchema,
+    (actions: ExtensionCommandActions, inputFile, agent, model, inputFiles) =>
+      awaitTrue(actions.packMultiple(inputFile, agent, model, inputFiles)),
+  ),
+  'texra.clean': definedHandler(
+    z.tuple([CleanConfigSchema]),
+    (actions: ExtensionCommandActions, config) =>
+      awaitTrue(actions.clean(config)),
+  ),
+  'texra.cleanSingle': definedHandler(
+    FileOpCommandArgsSchema,
+    (actions: ExtensionCommandActions, inputFile, agent, model) =>
+      awaitTrue(actions.cleanSingle(inputFile, agent, model)),
+  ),
+  'texra.cleanMultiple': definedHandler(
+    CleanMultipleCommandArgsSchema,
+    (actions: ExtensionCommandActions, inputFile, agent, model, inputFiles) =>
+      awaitTrue(actions.cleanMultiple(inputFile, agent, model, inputFiles)),
+  ),
+  'texra.compare': definedHandler(
+    CompareCommandArgsSchema,
+    (
+      actions: ExtensionCommandActions,
+      inputLocation,
+      baseLocation,
+      editedLocation,
+    ) =>
+      awaitTrue(actions.compare(inputLocation, baseLocation, editedLocation)),
+  ),
+  'texra.acceptEdited': definedHandler(
+    AcceptEditedCommandArgsSchema,
+    (
+      actions: ExtensionCommandActions,
+      inputLocation,
+      baseLocation,
+      editedLocation,
+      copyMeta?: AcceptCopyMeta,
+    ) =>
+      actions.acceptEdited(
+        inputLocation,
+        baseLocation,
+        editedLocation,
+        copyMeta,
+      ),
+  ),
   'texra.indentTeX': (actions) => awaitTrue(actions.indentTeX()),
   'texra.auth.signIn': (actions) => awaitTrue(actions.signIn()),
   'texra.auth.chatgpt.signIn': (actions) => awaitTrue(actions.signInChatGpt()),
@@ -204,19 +325,19 @@ export const EXTENSION_COMMAND_HANDLERS = {
   'texra.openProgressViewInTab': (actions) =>
     awaitTrue(actions.openProgressViewInTab()),
   'texra.openDoc': definedHandler(
-    z.string(),
+    z.tuple([z.string()]),
     (actions: ExtensionCommandActions, page) =>
       awaitTrue(actions.openDoc(page)),
   ),
   'texra.stopAgent': definedHandler(
-    StreamTabIdSchema,
+    z.tuple([StreamTabIdSchema]),
     (actions: ExtensionCommandActions, streamId) => {
       actions.stopAgent(streamId);
       return true;
     },
   ),
   'texra.compactResponse': definedHandler(
-    StreamTabIdSchema,
+    z.tuple([StreamTabIdSchema]),
     (actions: ExtensionCommandActions, streamId) =>
       awaitTrue(actions.compactResponse(streamId)),
   ),
@@ -252,8 +373,8 @@ export const EXTENSION_COMMAND_HANDLERS = {
     awaitTrue(actions.showImportOptions()),
   'texra.toggleView': (actions) => awaitTrue(actions.toggleView()),
   'texra.showProgressView': definedHandler(
-    ShowProgressViewArgSchema,
-    (actions: ExtensionCommandActions, parsed) => {
+    ShowProgressViewArgsSchema,
+    (actions: ExtensionCommandActions, parsed?: unknown) => {
       const inPlace =
         typeof parsed === 'object' &&
         parsed !== null &&
@@ -262,30 +383,29 @@ export const EXTENSION_COMMAND_HANDLERS = {
     },
   ),
   'texra.setApiKey': definedHandler(
-    SetApiKeyArgSchema,
-    (actions: ExtensionCommandActions, provider) =>
+    SetApiKeyArgsSchema,
+    (actions: ExtensionCommandActions, provider?: ApiProvider) =>
       awaitTrue(actions.setApiKey(provider)),
   ),
   'texra.createAgentWithAI': definedHandler(
-    CreateAgentWithAIArgSchema,
-    (actions: ExtensionCommandActions, category) =>
+    CreateAgentWithAIArgsSchema,
+    (actions: ExtensionCommandActions, category?: AgentCategory) =>
       awaitTrue(actions.createAgentWithAI(category ?? 'workflow')),
   ),
   'texra.execute': definedHandler(
-    z.unknown(),
-    (actions: ExtensionCommandActions, input) =>
+    z.tuple([z.unknown().optional()]),
+    (actions: ExtensionCommandActions, input?: unknown) =>
       awaitTrue(actions.execute(input)),
   ),
   'texra.showAgents': definedHandler(
-    ShowAgentsArgSchema,
-    (actions: ExtensionCommandActions, subTab) =>
+    ShowAgentsArgsSchema,
+    (actions: ExtensionCommandActions, subTab?: AgentCategory) =>
       awaitTrue(actions.showSettings(SETTINGS_TAB.AGENTS, subTab)),
   ),
 } as const satisfies Record<
   ExtensionRegistryCommandId,
-  // The typed handlers (`openDoc`, `stopAgent`, `compactResponse`, …) carry
-  // their own argument shapes via `definedHandler`. Matching the registry
-  // map's per-entry TArgs widening (`any`) keeps inference per entry
-  // without unifying every entry on `unknown`.
+  // Typed handlers carry their own argument tuples via `definedHandler`.
+  // Matching the registry map's per-entry TArgs widening (`any`) keeps
+  // inference per entry without unifying every entry on `unknown`.
   CommandHandler<ExtensionCommandActions, any>
 >;

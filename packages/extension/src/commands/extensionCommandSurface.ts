@@ -9,7 +9,19 @@ import {
   handleCreateAgentWithAI as agentHandleCreateAgentWithAI,
   runExecuteCommand as agentRunExecuteCommand,
 } from '@commands/agent';
-import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex';
+import {
+  handleClean as fileHandleClean,
+  handleCleanMultiple as fileHandleCleanMultiple,
+  handleCleanSingle as fileHandleCleanSingle,
+  handlePack as fileHandlePack,
+  handlePackMultiple as fileHandlePackMultiple,
+  handlePackSingle as fileHandlePackSingle,
+} from '@commands/housekeeping';
+import {
+  downloadArXivSource as latexDownloadArXivSource,
+  handleAcceptEdited as latexHandleAcceptEdited,
+  handleCompare as latexHandleCompare,
+} from '@commands/latex';
 import { launchSetupAssistant } from '@commands/setup';
 import {
   createSampleProject as sysCreateSampleProject,
@@ -103,6 +115,14 @@ export function createExtensionCommandActions(
     },
     cleanBuild: runCleanBuild,
     cleanOutput: runCleanOutput,
+    pack: fileHandlePack,
+    packSingle: fileHandlePackSingle,
+    packMultiple: fileHandlePackMultiple,
+    clean: fileHandleClean,
+    cleanSingle: fileHandleCleanSingle,
+    cleanMultiple: fileHandleCleanMultiple,
+    compare: latexHandleCompare,
+    acceptEdited: latexHandleAcceptEdited,
     indentTeX: handleIndentTeX,
     signIn: authSignIn,
     async signInChatGpt() {
@@ -199,7 +219,7 @@ export function registerExtensionCommandRegistry(
     keyof typeof EXTENSION_COMMAND_HANDLERS
   >) {
     context.subscriptions.push(
-      vscode.commands.registerCommand(id, (rawArg?: unknown) =>
+      vscode.commands.registerCommand(id, (...rawArgs: unknown[]) =>
         dispatchCommandFromRegistry(
           id,
           EXTENSION_COMMAND_HANDLERS,
@@ -209,7 +229,7 @@ export function registerExtensionCommandRegistry(
               `[extension] dispatch: unhandled command ${unhandledId}`,
             );
           },
-          rawArg,
+          ...rawArgs,
         ),
       ),
     );
