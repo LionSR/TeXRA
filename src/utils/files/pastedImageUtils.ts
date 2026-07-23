@@ -2,25 +2,17 @@
 import * as path from 'node:path';
 
 // Local imports
-import { generateShortId } from '@utils/core';
 import { THREE_DAYS_MS } from '@utils/config/constants';
+
+// Local imports - filesystem
+import { PASTED_DIR, isPastedImage } from './pastedImageName';
 import { StorageFS } from './storageFS';
 
-export const PASTED_DIR = 'pasted';
-
-const PASTED_PREFIX = 'pasted_';
-
-/** Generate a pasted-image filename: `pasted_<timestamp>_<rand>.<ext>`. */
-export function generatePastedImageName(ext: string): string {
-  return `${PASTED_PREFIX}${Date.now()}_${generateShortId(6)}.${ext}`;
-}
-
-/**
- * Check if a filename is a pasted image
- */
-export function isPastedImage(filename: string): boolean {
-  return filename.startsWith(PASTED_PREFIX);
-}
+export {
+  PASTED_DIR,
+  generatePastedImageName,
+  isPastedImage,
+} from './pastedImageName';
 
 /**
  * Get the full filesystem path for a pasted image
