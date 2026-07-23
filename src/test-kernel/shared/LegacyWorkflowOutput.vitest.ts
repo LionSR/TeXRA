@@ -1,5 +1,5 @@
 // Node imports
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
@@ -7,10 +7,12 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
+import { runCleanSingle } from '@housekeeping/clean';
 import {
   findFilesFromPatterns,
   resolveHousekeepingTargets,
 } from '@housekeeping/utils';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import {
   getAgentFirstNameChunk,
   legacyWorkflowOutputRoundRegex,
@@ -27,10 +29,13 @@ describe('filename-era workflow output grammar', () => {
     workspacePath = await mkdtemp(
       path.join(tmpdir(), 'texra-legacy-workflow-output-'),
     );
-    await installPlatform({
-      config: { 'texra.agent.rounds': 2 },
-      workspacePath,
-    });
+    await installPlatform(
+      {
+        config: { 'texra.agent.rounds': 2 },
+        workspacePath,
+      },
+      { fs: nodeFilesystem },
+    );
   });
 
   afterEach(async () => {
@@ -111,15 +116,34 @@ describe('filename-era workflow output grammar', () => {
       throw new Error('Expected valid housekeeping targets');
     }
 
-    const found = findFilesFromPatterns(
+    const found = new Set<string>();
+    for await (const file of findFilesFromPatterns(
       targets.inputDir,
       targets.filePatterns,
       ['.tex'],
-    );
-    expect(found).toHaveLength(matching.length);
-    expect(found).toEqual(expect.arrayContaining(matching));
+    )) {
+      found.add(file);
+    }
+    expect(found.size).toBe(matching.length);
+    expect([...found]).toEqual(expect.arrayContaining(matching));
     for (const relativePath of nonMatching) {
       expect(found).not.toContain(relativePath);
     }
+  });
+
+  it('deletes a file matched by overlapping legacy patterns only once', async () => {
+    const inputPath = path.join(workspacePath, 'paper.tex');
+    const relativePath = 'paper_polish_r0_full_gpt-45.tex';
+    const absolutePath = path.join(workspacePath, relativePath);
+    await writeFile(inputPath, 'source');
+    await writeFile(absolutePath, 'fixture');
+
+    await expect(
+      runCleanSingle('gpt-4.5', 'paper.tex', 'custom:polish_long'),
+    ).resolves.toEqual({ status: 'success' });
+    await expect(access(absolutePath)).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    await expect(access(inputPath)).resolves.toBeUndefined();
   });
 });

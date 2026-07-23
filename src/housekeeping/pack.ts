@@ -50,11 +50,14 @@ export async function runPackSingle(
   // Pack also matches the input document itself (it is copied, not moved).
   const filePatterns = [...targets.filePatterns, baseName];
 
-  const allFiles = findFilesFromPatterns(
+  const allFiles = new Set<string>();
+  for await (const file of findFilesFromPatterns(
     inputDir,
     filePatterns,
     PACK_EXTENSIONS,
-  );
+  )) {
+    allFiles.add(file);
+  }
 
   const movedFiles: string[] = [];
   const copiedFiles: string[] = [];
@@ -241,14 +244,13 @@ async function cleanupTempFiles(
   movedFiles: string[],
   copiedFiles: string[],
 ): Promise<void> {
-  const tempFiles = findFilesFromPatterns(
+  const skip = new Set([...movedFiles, ...copiedFiles]);
+
+  for await (const file of findFilesFromPatterns(
     inputDir,
     filePatterns,
     TEMP_EXTENSIONS,
-  );
-  const skip = new Set([...movedFiles, ...copiedFiles]);
-
-  for (const file of tempFiles) {
+  )) {
     if (!skip.has(file)) {
       await WorkspaceFS.delete(file);
     }
