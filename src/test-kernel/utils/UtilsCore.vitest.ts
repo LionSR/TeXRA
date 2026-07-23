@@ -300,6 +300,30 @@ describe('coalesceAsync', () => {
 
     expect(resolved.get('key')).toBeUndefined();
   });
+
+  it('propagates a rejection and clears the pending entry without caching', async () => {
+    const resolved = new Map<string, string>();
+    const pending = new Map<string, Promise<string>>();
+    const failure = new Error('compute failed');
+    const compute = async () => {
+      throw failure;
+    };
+
+    await expect(coalesceAsync(resolved, pending, 'key', compute)).rejects.toBe(
+      failure,
+    );
+
+    expect(pending.has('key')).toBe(false);
+    expect(resolved.has('key')).toBe(false);
+
+    // A subsequent call must recompute rather than replay the failed promise.
+    let recomputeCount = 0;
+    await coalesceAsync(resolved, pending, 'key', async () => {
+      recomputeCount++;
+      return 'recovered';
+    });
+    expect(recomputeCount).toBe(1);
+  });
 });
 
 describe('deriveExecutionId', () => {
