@@ -235,6 +235,7 @@ describe('SessionHandle', () => {
       expect(fresh.transcripts).not.toBe(defaultSession().transcripts);
       expect(fresh.followUps).not.toBe(defaultSession().followUps);
       expect(fresh.approvals).not.toBe(defaultSession().approvals);
+      expect(fresh.modelRetries).not.toBe(defaultSession().modelRetries);
       expect(fresh.workflowControls).not.toBe(
         defaultSession().workflowControls,
       );

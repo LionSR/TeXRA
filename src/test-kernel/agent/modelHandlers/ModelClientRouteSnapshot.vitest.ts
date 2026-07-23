@@ -27,8 +27,19 @@ function handler(
 }
 
 class CredentialRouteProbe extends ModelHandlerGoogleGenAI {
-  tag(client: GoogleGenAI, route: ModelCredentialRoute): void {
-    this.rememberClientCredentialRoute(client, route);
+  // Pin the endpoint so the key assertions exercise identity semantics
+  // without dragging base-URL resolution (server-side key service) into a
+  // unit test.
+  override getRetryEndpoint(): string {
+    return 'https://google.test/v1';
+  }
+
+  tag(
+    client: GoogleGenAI,
+    route: ModelCredentialRoute,
+    credentialSecret: string,
+  ): void {
+    this.rememberClientCredentialRoute(client, route, credentialSecret);
   }
 }
 
@@ -123,16 +134,40 @@ describe('model client route publication', () => {
     expect(services.clientCredentialRoute).toBe('api-key');
   });
 
-  it('returns the captured route for a tagged client and undefined for a foreign one', () => {
+  it('publishes stable wire-route keys without retaining the secret', () => {
     const probe = new CredentialRouteProbe(
       buildTestModelConfig({ provider: ModelProvider.GOOGLE }),
     );
-    const tagged = {} as GoogleGenAI;
-    probe.tag(tagged, 'relay');
+    const first = {} as GoogleGenAI;
+    const sameCredential = {} as GoogleGenAI;
+    const replacement = {} as GoogleGenAI;
+    const relayBeforeRefresh = {} as GoogleGenAI;
+    const relayAfterRefresh = {} as GoogleGenAI;
+    probe.tag(first, 'api-key', 'secret-a');
+    probe.tag(sameCredential, 'api-key', 'secret-a');
+    probe.tag(replacement, 'api-key', 'secret-b');
+    probe.tag(relayBeforeRefresh, 'relay', 'relay-token');
+    probe.tag(relayAfterRefresh, 'relay', 'rotated-relay-token');
 
-    expect(probe.getCredentialRouteForClient(tagged)).toBe('relay');
+    expect(probe.getCredentialRouteForClient(first)).toBe('api-key');
+    // Same credential ⇒ same wire route; a replaced key splits the route.
+    expect(probe.getWireRouteKey(first)).toBe(
+      probe.getWireRouteKey(sameCredential),
+    );
+    expect(probe.getWireRouteKey(first)).not.toBe(
+      probe.getWireRouteKey(replacement),
+    );
+    expect(probe.getWireRouteKey(first)).not.toContain('secret-a');
+    // Relay identity is the route itself, so ordinary token rotation does not
+    // split recovery coordination.
+    expect(probe.getWireRouteKey(relayAfterRefresh)).toBe(
+      probe.getWireRouteKey(relayBeforeRefresh),
+    );
     expect(
       probe.getCredentialRouteForClient({} as GoogleGenAI),
     ).toBeUndefined();
+    expect(probe.getWireRouteKey({} as GoogleGenAI)).toContain(
+      'unknown-credential',
+    );
   });
 });

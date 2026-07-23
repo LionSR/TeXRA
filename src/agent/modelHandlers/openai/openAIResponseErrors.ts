@@ -1,6 +1,5 @@
 // Local imports
 import {
-  attachFlowAutoRetryRequired,
   isRetryableStatusCode,
   normalizeProviderError,
 } from '@common/errors/sdkErrorUtils';
@@ -83,7 +82,6 @@ export function createOpenAIBackgroundPollingError(
   if (causeError.requestId) {
     pollingError.request_id = causeError.requestId;
   }
-  attachFlowAutoRetryRequired(pollingError);
   return pollingError;
 }
 
@@ -103,6 +101,5 @@ export function createOpenAIBackgroundTerminalError(
   if (response.error) {
     wrapped.error = response.error;
   }
-  attachFlowAutoRetryRequired(wrapped);
   return wrapped;
 }

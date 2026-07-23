@@ -1,9 +1,5 @@
 // Third-party imports
-import { OpenRouter } from '@openrouter/sdk';
-import {
-  ConnectionError as OpenRouterConnectionError,
-  RequestTimeoutError as OpenRouterRequestTimeoutError,
-} from '@openrouter/sdk/models/errors';
+import { HTTPClient, OpenRouter } from '@openrouter/sdk';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 // Local imports
@@ -22,7 +18,6 @@ import type {
   OpenRouterToolCall,
 } from '@agent/types/ModelHandlerContracts';
 import {
-  detectStatusCode,
   handleStreamingFailure,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
@@ -38,7 +33,9 @@ import { extractMimeSubtype } from '@utils/text/stringUtils';
 
 // Local file imports
 import { toDataUrl } from '../support/dataUrl';
+import { auxiliaryRetry } from '../support/auxiliaryRetry';
 import { getDeclaredMaxReasoningEffort } from '../support/reasoningEffort';
+import { OPENROUTER_BASE_URL } from '../support/ProxyConfigResolver';
 import {
   resolveMoonshotRequestParameters,
   type MoonshotRequestParameters,
@@ -147,42 +144,22 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       apiKey: credential.apiKey,
       appTitle: 'TeXRA.ai',
       ...(credential.baseUrl ? { serverURL: credential.baseUrl } : {}),
-      // @openrouter/sdk@0.13.31 chatSend.js:46-58 defaults retryConfig to a
-      // 3_600_000ms (1h) maxElapsedTime backoff, so a transient 5XX can hang
-      // inside a single "attempt" for up to an hour before TeXRA's flow-level
-      // retry ever sees it (#7643). Bound it here instead: same backoff shape,
-      // maxElapsedTime capped to 30s (~5 attempts of transient-blip
-      // resilience), then the failure surfaces through the flow's visible
-      // retry/failure path. Ownership of 5XX retries is unchanged — see
-      // isAutoRetryManagedByProvider below.
-      retryConfig: {
-        strategy: 'backoff',
-        backoff: {
-          initialInterval: 500,
-          maxInterval: 8_000,
-          exponent: 1.5,
-          maxElapsedTime: 30_000,
-        },
-        retryConnectionErrors: true,
-      },
+      httpClient: new HTTPClient({ fetcher: this.longRunningModelFetch }),
+      // TeXRA's session gate owns retry timing and admission.
+      retryConfig: { strategy: 'none' },
     });
-    return this.rememberClientCredentialRoute(client, credential.route);
+    return this.rememberClientCredentialRoute(
+      client,
+      credential.route,
+      credential.apiKey,
+    );
   }
 
-  override isAutoRetryManagedByProvider(error: Error): boolean {
-    if (
-      error instanceof OpenRouterConnectionError ||
-      error instanceof OpenRouterRequestTimeoutError
-    ) {
-      return true;
-    }
-
-    const statusCode = detectStatusCode(error);
-    // @openrouter/sdk v0.13.31 defaults chatSend retryCodes to ["5XX"]; the
-    // SDK's retry window is now bounded to 30s (see getClient() above), but
-    // ownership is unchanged — 5XX HTTP responses remain provider-managed here,
-    // and 429/408 HTTP responses remain owned by TeXRA's flow retry.
-    return statusCode !== undefined && statusCode >= 500;
+  override getRetryEndpoint(client: OpenRouter): string {
+    // ClientSDK declares `_baseURL` as typed public and the SDK's own funcs/
+    // modules consume it, making it the supported access path despite the
+    // underscore prefix.
+    return client._baseURL?.href ?? OPENROUTER_BASE_URL;
   }
 
   // ---------------------------------------------------------------------------
@@ -268,7 +245,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       const aggregator = new OpenRouterStreamAggregator();
       let thinking: StreamHandle | undefined;
       let output: StreamHandle | undefined;
-      let streamConnected = false;
 
       try {
         const stream = await client.chat.send(
@@ -280,7 +256,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
             'OpenRouter returned a non-streaming response for a streaming request',
           );
         }
-        streamConnected = true;
         // Opened after the SDK request-retry boundary returns; the deferred
         // starts fire (if ever) at the first reasoning/content delta.
         thinking = this.createThinkingStream();
@@ -323,7 +298,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           // can show the tail (parity with the other streaming providers).
           partialTail: () =>
             takeTail(aggregator.partialContent, PARTIAL_TEXT_TAIL_MAX),
-          retryEligible: (tail) => streamConnected || tail.length > 0,
         });
       }
     }
@@ -412,9 +386,9 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
             ? { reasoning: { effort: 'low' } }
             : {}),
         };
-        const summaryResponse = await client.chat.send(
-          { chatRequest: summaryRequest },
-          { signal },
+        const summaryResponse = await auxiliaryRetry(
+          () => client.chat.send({ chatRequest: summaryRequest }, { signal }),
+          signal,
         );
         if (isOpenRouterChatStream(summaryResponse)) {
           throw new Error(
