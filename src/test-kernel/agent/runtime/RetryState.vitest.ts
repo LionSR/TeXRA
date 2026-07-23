@@ -720,6 +720,7 @@ describe('RetryState', () => {
     expect(first.relayRetryRoute).toBe(second.relayRetryRoute);
     expect(first.classifyRelayFailure?.(limited)).toEqual({
       retryAfterMs: 60_000,
+      releaseProbeBeforeOperation: true,
     });
     expect(first.isWireUnobservedFailure?.(limited)).toBe(true);
     expect(first.isModelUnobservedFailure?.(limited)).toBe(true);
@@ -740,6 +741,25 @@ describe('RetryState', () => {
     expect(first.classifyFailure(compatibleLimited)).toEqual({});
     expect(first.classifyRelayFailure?.(compatibleLimited)).toBeUndefined();
     expect(first.isRelayReachableFailure?.(compatibleLimited)).toBe(true);
+
+    const concurrencyLimited = new Error(
+      'relay concurrency limit reached',
+    ) as Error & {
+      error: unknown;
+      status: number;
+    };
+    concurrencyLimited.status = 429;
+    concurrencyLimited.error = {
+      _relay: '1',
+      type: 'relay_error',
+      requestLimitReached: true,
+      reason: 'concurrency',
+      retryAfterSeconds: 5,
+    };
+
+    expect(first.classifyRelayFailure?.(concurrencyLimited)).toEqual({
+      retryAfterMs: 5_000,
+    });
   });
 
   it('keeps relay monthly limits outside every recovery route', async () => {

@@ -14,6 +14,7 @@ interface RouteState {
   version: number;
   phase: RoutePhase;
   failures: number;
+  releaseProbeBeforeOperation: boolean;
   retryAt: number;
   timer: ReturnType<typeof setTimeout> | undefined;
   readonly waiters: WaitingAttempt[];
@@ -26,6 +27,7 @@ interface RetryPermit {
 
 interface RouteFailure {
   readonly retryAfterMs?: number;
+  readonly releaseProbeBeforeOperation?: boolean;
 }
 
 interface RoutePolicy {
@@ -33,7 +35,7 @@ interface RoutePolicy {
   readonly classifyFailure: (error: Error) => RouteFailure | undefined;
   readonly isReachableFailure?: (error: Error) => boolean;
   readonly isUnobservedFailure?: (error: Error) => boolean;
-  readonly releaseProbeBeforeOperation?: boolean;
+  readonly releaseEarlierProbesBeforeWait?: boolean;
 }
 
 interface RunOptions {
@@ -87,11 +89,6 @@ export class ModelRetryGate {
       ...(options.trailingRoutes ?? []),
     ];
     const acquired = await this.acquireAll(policies, options);
-    for (const entry of acquired) {
-      if (entry.releaseProbeBeforeOperation && entry.permit.probe) {
-        entry.permit = this.releaseProbe(entry.key, entry.permit);
-      }
-    }
     try {
       const result = await operation();
       for (const entry of acquired) {
@@ -111,7 +108,7 @@ export class ModelRetryGate {
               entry.key,
               entry.permit,
               options.baseBackoffMs,
-              failure.retryAfterMs,
+              failure,
             );
           } else if (entry.isReachableFailure?.(error as Error)) {
             this.markReachable(entry.key, entry.permit);
@@ -152,10 +149,10 @@ export class ModelRetryGate {
     acquireRoutes: while (true) {
       const acquired: AcquiredRoute[] = [];
       try {
-        for (const route of routes) {
+        for (const [routeIndex, route] of routes.entries()) {
           const state = this.routes.get(route.key);
           if (
-            route.releaseProbeBeforeOperation &&
+            route.releaseEarlierProbesBeforeWait &&
             state &&
             state.phase !== 'healthy'
           ) {
@@ -167,8 +164,37 @@ export class ModelRetryGate {
             }
             acquired.length = 0;
             const permit = await this.acquire(route.key, options);
-            if (permit.probe) {
+            const currentState = this.routes.get(route.key);
+            if (permit.probe && currentState?.releaseProbeBeforeOperation) {
               this.releaseProbe(route.key, permit);
+              continue acquireRoutes;
+            }
+
+            // A concurrency probe stays closed until its operation observes a
+            // free slot. Reacquire narrower scopes only when all are healthy;
+            // otherwise hand off this probe and recover those scopes first.
+            const narrower: AcquiredRoute[] = [];
+            for (const earlier of routes.slice(0, routeIndex)) {
+              const earlierPermit = this.acquireHealthy(earlier.key);
+              if (!earlierPermit) {
+                for (const entry of narrower) {
+                  this.abandon(entry.key, entry.permit);
+                }
+                this.abandon(route.key, permit);
+                continue acquireRoutes;
+              }
+              narrower.push({ ...earlier, permit: earlierPermit });
+            }
+            acquired.push(...narrower, { ...route, permit });
+            if (
+              acquired.every((entry) =>
+                this.isCurrentPermit(entry.key, entry.permit),
+              )
+            ) {
+              return acquired;
+            }
+            for (const entry of acquired) {
+              this.abandon(entry.key, entry.permit);
             }
             continue acquireRoutes;
           }
@@ -226,22 +252,9 @@ export class ModelRetryGate {
       );
     }
 
-    const state = this.routes.get(route);
-    if (!state || state.phase === 'healthy') {
-      const healthyState = state ?? {
-        version: 0,
-        phase: 'healthy' as const,
-        failures: 0,
-        retryAt: 0,
-        timer: undefined,
-        waiters: [],
-      };
-      this.routes.set(route, healthyState);
-      return Promise.resolve({
-        version: healthyState.version,
-        probe: false,
-      });
-    }
+    const healthyPermit = this.acquireHealthy(route);
+    if (healthyPermit) return Promise.resolve(healthyPermit);
+    const state = this.routes.get(route)!;
 
     if (options.signal.aborted) {
       return Promise.reject(abortReason(options.signal));
@@ -270,11 +283,30 @@ export class ModelRetryGate {
     });
   }
 
+  private acquireHealthy(route: string): RetryPermit | undefined {
+    const state = this.routes.get(route);
+    if (state && state.phase !== 'healthy') return undefined;
+    const healthyState = state ?? {
+      version: 0,
+      phase: 'healthy' as const,
+      failures: 0,
+      releaseProbeBeforeOperation: false,
+      retryAt: 0,
+      timer: undefined,
+      waiters: [],
+    };
+    this.routes.set(route, healthyState);
+    return {
+      version: healthyState.version,
+      probe: false,
+    };
+  }
+
   private markRouteFailure(
     route: string,
     permit: RetryPermit,
     baseBackoffMs: number,
-    retryAfterMs?: number,
+    failure: RouteFailure,
   ): void {
     const state = this.routes.get(route);
     if (!state || permit.version !== state.version) return;
@@ -283,11 +315,13 @@ export class ModelRetryGate {
     state.version += 1;
     state.phase = 'cooling';
     state.failures += 1;
+    state.releaseProbeBeforeOperation =
+      failure.releaseProbeBeforeOperation ?? false;
     state.retryAt =
       Date.now() +
       Math.max(
         this.backoffMs(baseBackoffMs, state.failures),
-        retryAfterMs ?? 0,
+        failure.retryAfterMs ?? 0,
       );
     this.scheduleProbe(state);
   }
@@ -303,6 +337,7 @@ export class ModelRetryGate {
       // the shared backoff at its base forever in exactly that cycle.
       if (permit.version === state.version) {
         state.failures = 0;
+        state.releaseProbeBeforeOperation = false;
       }
       return;
     }
@@ -311,6 +346,7 @@ export class ModelRetryGate {
 
     state.version += 1;
     state.phase = 'healthy';
+    state.releaseProbeBeforeOperation = false;
     state.retryAt = 0;
     if (state.timer) clearTimeout(state.timer);
     state.timer = undefined;

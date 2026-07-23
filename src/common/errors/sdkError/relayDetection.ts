@@ -87,6 +87,23 @@ export function isRelayRequestLimitBody(rawErrorBody: unknown): boolean {
   return hasRelayBooleanFlag(rawErrorBody, 'requestLimitReached');
 }
 
+/** Admission mode reported by the relay request gate. */
+export function getRelayRequestLimitReason(
+  rawErrorBody: unknown,
+): 'concurrency' | 'rate' | undefined {
+  if (!isObject(rawErrorBody)) return undefined;
+  const candidates = [
+    rawErrorBody,
+    (rawErrorBody as { error?: unknown }).error,
+  ];
+  for (const candidate of candidates) {
+    if (!isObject(candidate)) continue;
+    const reason = candidate.reason;
+    if (reason === 'concurrency' || reason === 'rate') return reason;
+  }
+  return undefined;
+}
+
 /** Retry delay returned by the relay's per-user request gate. */
 export function getRelayRequestLimitRetryAfterMs(
   rawErrorBody: unknown,

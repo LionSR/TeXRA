@@ -36,6 +36,7 @@ import {
   safeGetReasonPhrase,
 } from './errorInspection';
 import {
+  getRelayRequestLimitReason,
   getRelayRequestLimitRetryAfterMs,
   inferStatusCodeFromBody,
   isModelScopedRateLimitBody,
@@ -527,9 +528,12 @@ export function isRelayRequestGateUnobservedFailure(error: Error): boolean {
 }
 
 /** Classifies relay request limits for their cross-provider recovery gate. */
-export function classifyRelayRequestLimitFailure(
-  error: Error,
-): { retryAfterMs?: number } | undefined {
+export function classifyRelayRequestLimitFailure(error: Error):
+  | {
+      retryAfterMs?: number;
+      releaseProbeBeforeOperation?: boolean;
+    }
+  | undefined {
   const chain = causeChain(error);
   if (
     detectRateLimitScope(error, detectRouteStatusCode(error, chain)) !==
@@ -544,7 +548,12 @@ export function classifyRelayRequestLimitFailure(
     headerDelay === undefined && bodyDelay === undefined
       ? undefined
       : Math.max(headerDelay ?? 0, bodyDelay ?? 0);
-  return { retryAfterMs };
+  return {
+    retryAfterMs,
+    ...(getRelayRequestLimitReason(formatted.rawErrorBody) === 'rate'
+      ? { releaseProbeBeforeOperation: true }
+      : {}),
+  };
 }
 
 /**

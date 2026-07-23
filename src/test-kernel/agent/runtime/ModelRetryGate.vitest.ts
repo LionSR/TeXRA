@@ -307,8 +307,10 @@ describe('ModelRetryGate', () => {
     const relayPolicy = {
       key: RELAY_ROUTE,
       classifyFailure: (error: Error) =>
-        error === RELAY_LIMIT ? { retryAfterMs: 10_000 } : undefined,
-      releaseProbeBeforeOperation: true,
+        error === RELAY_LIMIT
+          ? { retryAfterMs: 10_000, releaseProbeBeforeOperation: true }
+          : undefined,
+      releaseEarlierProbesBeforeWait: true,
     };
 
     await expect(
@@ -366,8 +368,10 @@ describe('ModelRetryGate', () => {
     const relayPolicy = {
       key: RELAY_ROUTE,
       classifyFailure: (error: Error) =>
-        error === RELAY_LIMIT ? { retryAfterMs: 1000 } : undefined,
-      releaseProbeBeforeOperation: true,
+        error === RELAY_LIMIT
+          ? { retryAfterMs: 1000, releaseProbeBeforeOperation: true }
+          : undefined,
+      releaseEarlierProbesBeforeWait: true,
     };
 
     await expect(
@@ -420,13 +424,75 @@ describe('ModelRetryGate', () => {
     gate.dispose();
   });
 
+  it('keeps a concurrency-admission cohort behind its probe', async () => {
+    const gate = new ModelRetryGate();
+    const relayPolicy = {
+      key: RELAY_ROUTE,
+      classifyFailure: (error: Error) =>
+        error === RELAY_LIMIT ? { retryAfterMs: 1000 } : undefined,
+      releaseEarlierProbesBeforeWait: true,
+    };
+
+    await expect(
+      gate.run(
+        RELAY_ROUTE,
+        {
+          signal: new AbortController().signal,
+          baseBackoffMs: 1000,
+          classifyFailure: relayPolicy.classifyFailure,
+        },
+        async () => {
+          throw RELAY_LIMIT;
+        },
+      ),
+    ).rejects.toBe(RELAY_LIMIT);
+
+    let resolveProbe = (): void => undefined;
+    const probeResult = new Promise<void>((resolve) => {
+      resolveProbe = resolve;
+    });
+    const probeOperation = vi.fn(() => probeResult);
+    const siblingOperation = vi.fn(async () => undefined);
+    const probe = gate.run(
+      ROUTE,
+      {
+        signal: new AbortController().signal,
+        baseBackoffMs: 1000,
+        classifyFailure: () => undefined,
+        trailingRoutes: [relayPolicy],
+      },
+      probeOperation,
+    );
+    const sibling = gate.run(
+      OTHER_ROUTE,
+      {
+        signal: new AbortController().signal,
+        baseBackoffMs: 1000,
+        classifyFailure: () => undefined,
+        trailingRoutes: [relayPolicy],
+      },
+      siblingOperation,
+    );
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(probeOperation).toHaveBeenCalledOnce();
+    expect(siblingOperation).not.toHaveBeenCalled();
+
+    resolveProbe();
+    await Promise.all([probe, sibling]);
+    expect(siblingOperation).toHaveBeenCalledOnce();
+    gate.dispose();
+  });
+
   it('closes a request-admission route again after a rejected probe', async () => {
     const gate = new ModelRetryGate();
     const relayPolicy = {
       key: RELAY_ROUTE,
       classifyFailure: (error: Error) =>
-        error === RELAY_LIMIT ? {} : undefined,
-      releaseProbeBeforeOperation: true,
+        error === RELAY_LIMIT
+          ? { releaseProbeBeforeOperation: true }
+          : undefined,
+      releaseEarlierProbesBeforeWait: true,
     };
 
     await expect(

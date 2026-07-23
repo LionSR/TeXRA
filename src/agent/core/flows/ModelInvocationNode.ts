@@ -183,7 +183,7 @@ export class ModelInvocationNode<
                   classifyFailure: classifyRelayRequestLimitFailure,
                   isReachableFailure: isRelayRequestGateReachableFailure,
                   isUnobservedFailure: isRelayRequestGateUnobservedFailure,
-                  releaseProbeBeforeOperation: true,
+                  releaseEarlierProbesBeforeWait: true,
                 },
               ]
             : undefined,
