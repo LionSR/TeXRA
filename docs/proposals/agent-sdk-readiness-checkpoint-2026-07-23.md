@@ -38,17 +38,25 @@ re-reached the standing conclusion — the same reconvergence every pass since
 onto an already-adjudicated trap (ruling held), an already-tracked
 reviewed-train / strategic item, or a candidate already recorded in a prior
 checkpoint.** The fan-out surfaced **zero genuinely-new actionable debt.** The
-one item that is not already written down by name is a pair of low-value
-single-caller factory decorators in `ModelFactory` (item ⑧ below), and the
-07-22 applied-then-reverted lesson argues specifically against inlining them
-in an unattended pass.
+one item not previously flagged as an abstraction-cleanup candidate in a
+standing checkpoint or the audit is a pair of low-value single-caller factory
+decorators in `ModelFactory` (item ⑧ below); a full-doc grep _does_ find both
+identifiers in `google-interactions-api-impl-spec.md`, but only as
+implementation detail, never as a cleanup candidate. The 07-22
+applied-then-reverted lesson argues specifically against inlining them in an
+unattended pass.
 
-## Fan-out findings mapped to standing adjudications — all held
+## Fan-out findings mapped to standing adjudications — all held or non-actionable
 
-Nothing below is new debt; each was independently re-derived this pass and
-matches a prior ruling or a tracked strategic item.
+Each numbered item is tagged **[Keep]**, **[strategic]**, or **[new]** (there
+are no **[trap]** items in this section — traps are cataloged separately).
+Nothing below is new _debt_: every item either matches a prior ruling
+(**[Keep]**) or a tracked strategic/gated item (**[strategic]**); the lone
+**[new]** item (⑧) is a newly-named but non-actionable observation, recorded
+and deliberately not applied.
 
-1. **core/runtime has essentially no removable pass-through wrappers.** The
+1. **[Keep] core/runtime has essentially no removable pass-through wrappers.**
+   The
    agent-core reader confirmed the CLAUDE.md pattern is actually followed —
    `ResponseCycleNode.exec()` calls `createResponseCycleFlow<C>()` and runs it
    inline (`reflection/nodes/ResponseCycleNode.ts:104-118`); there is no
@@ -61,8 +69,8 @@ matches a prior ruling or a tracked strategic item.
    `core → implementations` port). Matches the held rulings carried since
    `-07-18`/`-07-21`.
 
-2. **The real core/runtime SDK-readiness item is ambient/global coupling, not
-   excess layers.** `core/flows` reads the process-wide `RunContext`
+2. **[strategic] The real core/runtime SDK-readiness item is ambient/global
+   coupling, not excess layers.** `core/flows` reads the process-wide `RunContext`
    AsyncLocalStorage from inside flow primitives (`ResponseCycleFlow.ts:220`,
    `CommonCycleTypes.ts:109,127`, `RetryState.ts:304` via
    `useLaunchRunContext()`), and `core` carries sanctioned lateral/backward
@@ -75,15 +83,15 @@ matches a prior ruling or a tracked strategic item.
    NS-1 ("no public surface") strategic item, gated behind Steps 1–3 — not
    cleanup.
 
-3. **`RunAgentOptions` / `RunToolUseFlowInput` leak lease + resume plumbing
-   into would-be-public signatures** (`runAgent.ts:11,44,46,49`;
+3. **[strategic] `RunAgentOptions` / `RunToolUseFlowInput` leak lease + resume
+   plumbing into would-be-public signatures** (`runAgent.ts:11,44,46,49`;
    `runToolUseFlow.ts:73-107`). This is the same "shrink the public options
    type" observation the north-star records as Step-2/Step-3 packaging work
    (hide lease lifecycle behind `SessionHandle`; four-lifetime-tier host
    obligation, never a flat options bag). Strategic/gated. **No new action.**
 
-4. **`ModelHandler.ts` (~1,938 LOC) is a real shared base, not a god-object;
-   `ModelFactory` is a justified factory, not a pass-through.** The
+4. **[Keep] `ModelHandler.ts` (~1,938 LOC) is a real shared base, not a
+   god-object; `ModelFactory` is a justified factory, not a pass-through.** The
    model-handler reader verified per-provider override counts before flagging
    anything (`createResponseImpl` 7 overrides, `sdkErrorTagger` 6,
    `extractResponse`/`normalizeUsage`/`extractToolUse` 6–7 each, the six
@@ -93,7 +101,7 @@ matches a prior ruling or a tracked strategic item.
    `#7101`-triage **reviewed-train** ruling: the ~40-line justification
    doc-comments are a feature preventing re-litigation; do not collapse.
 
-5. **`IModelHandler` port width (~41 `Pick`ed members).** Re-derived; the
+5. **[strategic] `IModelHandler` port width (~41 `Pick`ed members).** Re-derived; the
    reader's own conclusion is that this is a _surface-shape observation, not a
    delete_ (auto-derived via `Pick`, so not a drift risk) and that a real SDK
    port would separate the ~10–12-member invocation contract from the
@@ -103,14 +111,15 @@ matches a prior ruling or a tracked strategic item.
    `IModelHandler = Pick<ModelHandler>` re-confirmed at
    `src/agent/types/IModelHandler.ts:41`.
 
-6. **`AnthropicStreamHandler` (463 LOC) sits in `support/` but is
+6. **[Keep] `AnthropicStreamHandler` (463 LOC) sits in `support/` but is
    Anthropic-only (1 importer).** Re-surfaced by the model-handler reader as a
    placement nit (class-construction extraction, so exempt from the
    single-caller ban; belongs in `anthropic/`). **Already recorded** in the
    `-07-12`, `-07-18`, and `-07-21` checkpoints. Ruling held; not re-flagged as
    new. Low priority, not unattended-critical.
 
-7. **Trace `AgentEvent` union imports TeXRA-specific payloads directly**
+7. **[strategic] Trace `AgentEvent` union imports TeXRA-specific payloads
+   directly**
    (`trace/events.ts:11-30`: `UpdateCompileFailuresPayload`,
    `GoalPausedPayload`, `UpdateMissingOutputsPayload`, …) while the file's own
    doc points app-specific events at a `domain` escape hatch. This is **not a
@@ -119,20 +128,23 @@ matches a prior ruling or a tracked strategic item.
    specifies migrating TeXRA payloads to `{type:'domain', key, data}` "to keep
    the SDK union clean," one domain at a time. Tracked; not re-opened here.
 
-8. **Two single-caller factory decorators in `ModelFactory`** —
+8. **[new] Two single-caller factory decorators in `ModelFactory`** —
    `withReasoningOverride` (`ModelFactory.ts:155`, **1 caller**,
    `finalizeModelHandler`) and `withCompatibilityRoutingMode`
    (`ModelFactory.ts:399`, **1 caller**, `createModelHandlerForCompatibilityKey`).
    Both caller counts re-confirmed by direct grep this pass. These are the
-   **only fan-out candidates not already written down by name** in a standing
-   doc. They are also the weakest possible finding: each carries _meaningful
+   **only fan-out candidates no standing checkpoint or the audit flags as an
+   abstraction-cleanup candidate** — a full-doc grep does surface both names in
+   `google-interactions-api-impl-spec.md`, but only as implementation detail.
+   They are also the weakest possible finding: each carries _meaningful
    logic_ (a `globalState` read + `LEVEL_TO_EFFORT` map; real compatibility
    branch logic), so they survive the letter of the factory rule and violate
    only the single-caller-extraction clause, with a near-zero net-LOC gain from
    inlining. **Recorded, not applied** — see the next section for why an
    unattended pass is the wrong place to land this.
 
-9. **Logger, `output`/`storage`/`remote`/`export`/`goal`, boundary hygiene.**
+9. **[Keep] Logger, `output`/`storage`/`remote`/`export`/`goal`, boundary
+   hygiene.**
    Logger re-confirmed a thin, justified sink (host-injectable channel factory,
    secret redaction, dedup) — matches the `-07-18`/`-07-21` "withdrawn as a
    cleanup candidate" ruling; the `createChannelWriter` single-caller seam and
