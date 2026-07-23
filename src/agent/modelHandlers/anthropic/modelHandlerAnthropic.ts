@@ -366,7 +366,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     const responseTokenCount = await client.beta.messages.countTokens(
       countTokensParams,
-      { maxRetries: AUXILIARY_MAX_RETRIES },
+      { signal: options?.signal, maxRetries: AUXILIARY_MAX_RETRIES },
     );
 
     this.logger.debug(
@@ -681,6 +681,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
             outputConfig: options.output_config ?? undefined,
             contextManagement: options.context_management ?? undefined,
             betas: options.betas,
+            signal,
           });
           measuredInputTokens = inputTokens;
           return inputTokens;
@@ -713,6 +714,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
         },
       });
     }
+
+    signal?.throwIfAborted();
 
     if (documentAnalysis.hasBase64Pdf) {
       const uploadResult = await replaceDocumentDataWithUploads(

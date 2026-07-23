@@ -36,10 +36,14 @@ import {
   safeGetReasonPhrase,
 } from './errorInspection';
 import {
+  getRelayRequestLimitReason,
+  getRelayRequestLimitRetryAfterMs,
   inferStatusCodeFromBody,
+  isModelScopedRateLimitBody,
   isRelayError,
   isRelayMonthlyLimitBody,
   isRelayMonthlyLimitMessage,
+  isRelayRequestLimitBody,
   isUpstreamCreditDepletedBody,
 } from './relayDetection';
 import {
@@ -447,14 +451,122 @@ function detectRetryAfterMs(chain: readonly unknown[]): number | undefined {
   return undefined;
 }
 
+function detectRouteStatusCode(
+  error: Error,
+  chain: readonly unknown[],
+): number | undefined {
+  for (const current of chain) {
+    const status = detectStatusCode(current);
+    if (status !== undefined && status >= 100 && status <= 599) {
+      return status;
+    }
+  }
+  return normalizeProviderError(error).statusCode;
+}
+
+function detectRateLimitScope(
+  error: Error,
+  statusCode: number | undefined,
+): 'model' | 'relay-limit' | 'relay-user' | 'wire' | undefined {
+  if (statusCode !== StatusCodes.TOO_MANY_REQUESTS) return undefined;
+  const formatted = normalizeProviderError(error);
+  if (
+    formatted.isRelayError &&
+    isRelayRequestLimitBody(formatted.rawErrorBody)
+  ) {
+    return 'relay-user';
+  }
+  if (formatted.exhaustionReason === 'relay-limit') return 'relay-limit';
+  if (formatted.exhaustionReason !== undefined) return 'wire';
+  return isModelScopedRateLimitBody(formatted.rawErrorBody) ? 'model' : 'wire';
+}
+
+/** Whether a failure is a model-scoped provider rate limit. */
+export function isModelRateLimitFailure(error: Error): boolean {
+  const chain = causeChain(error);
+  return (
+    detectRateLimitScope(error, detectRouteStatusCode(error, chain)) === 'model'
+  );
+}
+
+/** Classifies model-scoped rate limits for their own recovery gate. */
+export function classifyModelRateLimitFailure(
+  error: Error,
+): { retryAfterMs?: number } | undefined {
+  const chain = causeChain(error);
+  return detectRateLimitScope(error, detectRouteStatusCode(error, chain)) ===
+    'model'
+    ? { retryAfterMs: detectRetryAfterMs(chain) }
+    : undefined;
+}
+
+/** Whether an upstream rate limit proves the relay request gate admitted the call. */
+export function isRelayRequestGateReachableFailure(error: Error): boolean {
+  const chain = causeChain(error);
+  const statusCode = detectRouteStatusCode(error, chain);
+  const scope = detectRateLimitScope(error, statusCode);
+  return (
+    statusCode === StatusCodes.TOO_MANY_REQUESTS &&
+    scope !== 'relay-limit' &&
+    scope !== 'relay-user'
+  );
+}
+
+/** Whether a relay admission boundary rejected the call before the provider. */
+export function isRelayProviderUnobservedFailure(error: Error): boolean {
+  const chain = causeChain(error);
+  const scope = detectRateLimitScope(
+    error,
+    detectRouteStatusCode(error, chain),
+  );
+  return scope === 'relay-limit' || scope === 'relay-user';
+}
+
+/** Whether the relay rejected the call before its per-user request gate. */
+export function isRelayRequestGateUnobservedFailure(error: Error): boolean {
+  return normalizeProviderError(error).exhaustionReason === 'relay-limit';
+}
+
+/** Classifies relay request limits for their cross-provider recovery gate. */
+export function classifyRelayRequestLimitFailure(error: Error):
+  | {
+      retryAfterMs?: number;
+      releaseProbeBeforeOperation?: boolean;
+    }
+  | undefined {
+  const chain = causeChain(error);
+  if (
+    detectRateLimitScope(error, detectRouteStatusCode(error, chain)) !==
+    'relay-user'
+  ) {
+    return undefined;
+  }
+  const formatted = normalizeProviderError(error);
+  const headerDelay = detectRetryAfterMs(chain);
+  const bodyDelay = getRelayRequestLimitRetryAfterMs(formatted.rawErrorBody);
+  const retryAfterMs =
+    headerDelay === undefined && bodyDelay === undefined
+      ? undefined
+      : Math.max(headerDelay ?? 0, bodyDelay ?? 0);
+  return {
+    retryAfterMs,
+    ...(getRelayRequestLimitReason(formatted.rawErrorBody) === 'rate'
+      ? { releaseProbeBeforeOperation: true }
+      : {}),
+  };
+}
+
 /**
  * Classify a failure that carries evidence about a shared wire route
  * (provider + credential + endpoint): transport failures, 5xx/408 server
- * failures, and 429 rate limits. Retryable failures outside this set (e.g.
- * 409 conflicts) stay node-local — a conflict does not imply the route is
- * unhealthy. Relay 401s are also deliberately absent: token refresh is
- * single-flighted at the auth boundary and repaired by each call's own
- * reactive recovery, so cooling the route would only serialize peers.
+ * failures and provider rate limits without explicit model scope. Provider
+ * bodies that identify a model-specific limit or the relay's per-user request
+ * gate use their own recovery scopes.
+ * Retryable failures outside this set (e.g. 409 conflicts) stay node-local —
+ * a conflict does not imply the route is unhealthy. Relay 401s are also
+ * deliberately absent: token refresh is single-flighted at the auth boundary
+ * and repaired by each call's own reactive recovery, so cooling the route
+ * would only serialize peers.
  */
 export function classifyWireRouteFailure(
   error: Error,
@@ -496,17 +608,12 @@ export function classifyWireRouteFailure(
     });
   // Per-element field reads with an HTTP range guard, so a wrapper's non-HTTP
   // numeric `code` (an errno, a gRPC status) cannot shadow a real status
-  // deeper in the chain. The full normalizer runs once at the top as the
-  // fallback for statuses only inferable from provider bodies (e.g. relay).
-  const statusCode =
-    findInCauseChain(error, (current) => {
-      const status = detectStatusCode(current);
-      return status !== undefined && status >= 100 && status <= 599
-        ? status
-        : undefined;
-    }) ?? normalizeProviderError(error).statusCode;
+  // deeper in the chain. The full normalizer is the fallback for statuses only
+  // inferable from provider bodies (e.g. relay).
+  const statusCode = detectRouteStatusCode(error, chain);
+  const sharedRateLimit = detectRateLimitScope(error, statusCode) === 'wire';
   if (
-    statusCode !== StatusCodes.TOO_MANY_REQUESTS &&
+    !sharedRateLimit &&
     statusCode !== StatusCodes.REQUEST_TIMEOUT &&
     (statusCode == null || statusCode < 500) &&
     !transportFailure

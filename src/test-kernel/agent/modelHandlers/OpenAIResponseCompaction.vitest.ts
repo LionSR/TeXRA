@@ -169,6 +169,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const handler = createHandler();
     const requests: any[] = [];
     const compactRequests: any[] = [];
+    const compactOptions: any[] = [];
     const compactedMessages = [
       {
         type: 'message',
@@ -184,8 +185,9 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
           // this live pre-flight count.
           count: async () => ({ input_tokens: 800 }),
         },
-        compact: async (params: any) => {
+        compact: async (params: any, options: any) => {
           compactRequests.push(params);
+          compactOptions.push(options);
           return {
             output: compactedMessages,
             usage: { output_tokens: 100 },
@@ -201,6 +203,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     });
     const firstTurnMessages = createMessages(2);
     const secondTurnMessages = createMessages(3);
+    const controller = new AbortController();
 
     await handler.createResponse({
       client: client as any,
@@ -211,15 +214,54 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
       client: client as any,
       messages: secondTurnMessages,
       temperature: 0,
+      signal: controller.signal,
     });
 
     expect(compactRequests).toHaveLength(1);
     expect(client.withOptions).toHaveBeenCalledWith({ maxRetries: 2 });
+    expect(compactOptions[0]?.signal).toBe(controller.signal);
     expect(compactRequests[0].input).toEqual(secondTurnMessages);
     expect(requests).toHaveLength(2);
     expect(requests[1].previous_response_id).toBeUndefined();
     expect(requests[1].input).toEqual(compactedMessages);
     expect(result.updatedMessages).toEqual(compactedMessages);
+  });
+
+  it('stops the turn when Responses compaction is aborted', async () => {
+    const handler = createHandler();
+    const requests: any[] = [];
+    const controller = new AbortController();
+    const client = withSdkOptions({
+      responses: {
+        inputTokens: {
+          count: async () => ({ input_tokens: 800 }),
+        },
+        compact: async () => {
+          controller.abort();
+          throw controller.signal.reason;
+        },
+        create: async (params: any) => {
+          requests.push(params);
+          return createResponse('resp-before-threshold', 800);
+        },
+      },
+    });
+
+    await handler.createResponse({
+      client: client as any,
+      messages: createMessages(2),
+      temperature: 0,
+    });
+    await expect(
+      handler.createResponse({
+        client: client as any,
+        messages: createMessages(3),
+        temperature: 0,
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+
+    expect(requests).toHaveLength(1);
   });
 
   it('reuses a successful compaction across a same-turn retry instead of re-compacting (chain-anchor/payload commit race)', async () => {

@@ -205,9 +205,21 @@ function createModelInvocationNode(): ModelInvocationNode<BaseCycleFields> {
 
 interface CapturedModelRetry {
   readonly wireRoute: string;
+  readonly modelRetryRoute: string;
+  readonly relayRetryRoute?: string;
   readonly classifyFailure: (
     error: Error,
   ) => { retryAfterMs?: number } | undefined;
+  readonly classifyModelFailure: (
+    error: Error,
+  ) => { retryAfterMs?: number } | undefined;
+  readonly classifyRelayFailure?: (
+    error: Error,
+  ) => { retryAfterMs?: number } | undefined;
+  readonly isWireUnobservedFailure?: (error: Error) => boolean;
+  readonly isModelUnobservedFailure?: (error: Error) => boolean;
+  readonly isRelayReachableFailure?: (error: Error) => boolean;
+  readonly isRelayUnobservedFailure?: (error: Error) => boolean;
   readonly gateCalls: number;
 }
 
@@ -238,6 +250,14 @@ async function captureModelRetry(
           endpoint,
           clientCredentialIdentity,
         ]),
+      getModelRetryRouteKey: () =>
+        JSON.stringify([
+          'openai',
+          credentialRoute,
+          endpoint,
+          clientCredentialIdentity,
+          model,
+        ]),
       isBackgroundModeActive: () => false,
       setOutputStreaming: () => {},
     },
@@ -255,9 +275,22 @@ async function captureModelRetry(
       node.exec({ shouldStop: false, messages: [] }),
     );
     const [wireRoute, modelOptions] = run.mock.calls[0]!;
+    const modelRoute = modelOptions.additionalRoutes?.[0];
+    if (!modelRoute) {
+      throw new Error('Expected model-specific retry route');
+    }
+    const relayRoute = modelOptions.trailingRoutes?.[0];
     return {
       wireRoute,
+      modelRetryRoute: modelRoute.key,
+      relayRetryRoute: relayRoute?.key,
       classifyFailure: modelOptions.classifyFailure,
+      classifyModelFailure: modelRoute.classifyFailure,
+      classifyRelayFailure: relayRoute?.classifyFailure,
+      isWireUnobservedFailure: modelOptions.isUnobservedFailure,
+      isModelUnobservedFailure: modelRoute.isUnobservedFailure,
+      isRelayReachableFailure: relayRoute?.isReachableFailure,
+      isRelayUnobservedFailure: relayRoute?.isUnobservedFailure,
       gateCalls: run.mock.calls.length,
     };
   } finally {
@@ -572,7 +605,7 @@ describe('RetryState', () => {
     expect(second.wireRoute).not.toBe(first.wireRoute);
   });
 
-  it('coordinates rate-limit recovery across one wire route', async () => {
+  it('coordinates unscoped rate-limit recovery on one wire route', async () => {
     const first = await captureModelRetry(
       'https://api.example/v1',
       'api-key',
@@ -591,9 +624,171 @@ describe('RetryState', () => {
     });
 
     expect(first.wireRoute).toBe(second.wireRoute);
+    expect(first.modelRetryRoute).not.toBe(second.modelRetryRoute);
     expect(first.classifyFailure(rateLimit)).toEqual({
       retryAfterMs: 3_000,
     });
+    expect(first.classifyModelFailure(rateLimit)).toBeUndefined();
+  });
+
+  it('coordinates explicitly model-scoped rate limits per model', async () => {
+    const first = await captureModelRetry(
+      'https://api.example/v1',
+      'api-key',
+      undefined,
+      'openai:model-a',
+    );
+    const rateLimit = new Error('model rate limited') as Error & {
+      error: unknown;
+      status: number;
+      headers: Record<string, string>;
+    };
+    rateLimit.status = 429;
+    rateLimit.headers = { 'retry-after': '3' };
+    rateLimit.error = {
+      type: 'rate_limit_error',
+      scope: 'model',
+    };
+
+    expect(first.classifyFailure(rateLimit)).toBeUndefined();
+    expect(first.classifyModelFailure(rateLimit)).toEqual({
+      retryAfterMs: 3_000,
+    });
+  });
+
+  it('coordinates credential exhaustion across models on one wire route', async () => {
+    const first = await captureModelRetry(
+      'https://api.example/v1',
+      'api-key',
+      undefined,
+      'openai:model-a',
+    );
+    const exhausted = new Error('quota exhausted') as Error & {
+      error: unknown;
+      status: number;
+      headers: Record<string, string>;
+    };
+    exhausted.status = 429;
+    exhausted.headers = { 'retry-after': '3' };
+    exhausted.error = {
+      message: 'You exceeded your current quota.',
+      type: 'insufficient_quota',
+      code: 'insufficient_quota',
+    };
+
+    expect(first.classifyFailure(exhausted)).toEqual({
+      retryAfterMs: 3_000,
+    });
+    expect(first.classifyModelFailure(exhausted)).toBeUndefined();
+  });
+
+  it('coordinates relay request limits across providers for one user', async () => {
+    const first = await captureModelRetry(
+      'https://api.example/v1',
+      'relay',
+      undefined,
+      'openai:model-a',
+    );
+    const limited = new Error('relay request rate limit reached') as Error & {
+      error: unknown;
+      status: number;
+    };
+    limited.status = 429;
+    limited.error = {
+      _relay: '1',
+      type: 'relay_error',
+      requestLimitReached: true,
+      reason: 'rate',
+      retryAfterSeconds: 60,
+    };
+
+    const second = await captureModelRetry(
+      'https://other.example/v1',
+      'relay',
+      undefined,
+      'anthropic:model-b',
+    );
+    const modelLimited = new Error('provider model rate limit') as Error & {
+      error: unknown;
+      status: number;
+    };
+    modelLimited.status = 429;
+    modelLimited.error = { type: 'rate_limit_error', scope: 'model' };
+
+    expect(first.classifyFailure(limited)).toBeUndefined();
+    expect(first.classifyModelFailure(limited)).toBeUndefined();
+    expect(first.relayRetryRoute).toBe(second.relayRetryRoute);
+    expect(first.classifyRelayFailure?.(limited)).toEqual({
+      retryAfterMs: 60_000,
+      releaseProbeBeforeOperation: true,
+    });
+    expect(first.isWireUnobservedFailure?.(limited)).toBe(true);
+    expect(first.isModelUnobservedFailure?.(limited)).toBe(true);
+    expect(first.isRelayReachableFailure?.(modelLimited)).toBe(true);
+
+    const compatibleLimited = new Error(
+      'compatible endpoint request limit',
+    ) as Error & {
+      error: unknown;
+      status: number;
+    };
+    compatibleLimited.status = 429;
+    compatibleLimited.error = {
+      requestLimitReached: true,
+      retryAfterSeconds: 60,
+    };
+
+    expect(first.classifyFailure(compatibleLimited)).toEqual({});
+    expect(first.classifyRelayFailure?.(compatibleLimited)).toBeUndefined();
+    expect(first.isRelayReachableFailure?.(compatibleLimited)).toBe(true);
+
+    const concurrencyLimited = new Error(
+      'relay concurrency limit reached',
+    ) as Error & {
+      error: unknown;
+      status: number;
+    };
+    concurrencyLimited.status = 429;
+    concurrencyLimited.error = {
+      _relay: '1',
+      type: 'relay_error',
+      requestLimitReached: true,
+      reason: 'concurrency',
+      retryAfterSeconds: 5,
+    };
+
+    expect(first.classifyRelayFailure?.(concurrencyLimited)).toEqual({
+      retryAfterMs: 5_000,
+    });
+  });
+
+  it('keeps relay monthly limits outside every recovery route', async () => {
+    const retry = await captureModelRetry(
+      'https://api.example/v1',
+      'relay',
+      undefined,
+      'openai:model-a',
+    );
+    const monthlyLimited = new Error(
+      'monthly spending limit reached',
+    ) as Error & {
+      error: unknown;
+      status: number;
+    };
+    monthlyLimited.status = 429;
+    monthlyLimited.error = {
+      _relay: '1',
+      type: 'relay_error',
+      limitReached: true,
+    };
+
+    expect(retry.classifyFailure(monthlyLimited)).toBeUndefined();
+    expect(retry.classifyModelFailure(monthlyLimited)).toBeUndefined();
+    expect(retry.classifyRelayFailure?.(monthlyLimited)).toBeUndefined();
+    expect(retry.isWireUnobservedFailure?.(monthlyLimited)).toBe(true);
+    expect(retry.isModelUnobservedFailure?.(monthlyLimited)).toBe(true);
+    expect(retry.isRelayReachableFailure?.(monthlyLimited)).toBe(false);
+    expect(retry.isRelayUnobservedFailure?.(monthlyLimited)).toBe(true);
   });
 
   it('isolates rate-limit recovery by stable credential identity', async () => {
