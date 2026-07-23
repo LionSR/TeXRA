@@ -10,6 +10,13 @@ All notable changes to this project will be documented in this file.
 
 - **The Mathematician team includes the critique workflow** — mathematical team
   runs can delegate a dedicated critical review directly.
+- **The orchestrator agent can run scripted multi-agent pipelines** — the
+  built-in Orchestrator agent now has access to Workflow Script, for
+  fan-out/pipeline/join runs whose structure is known up front. The Tools
+  dashboard (and CLI `/tools`) lists Workflow Script as a toggleable
+  integration, off by default for new installs; turning it off removes the
+  capability from every agent, even ones whose configuration enables it
+  explicitly.
 
 #### Bug Fixes
 

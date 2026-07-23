@@ -28,6 +28,7 @@ import {
 } from '@platform/defaults/nodeStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
+import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { setSetupPlatform } from '@tools/setup/platform';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -291,6 +292,16 @@ export async function initCliPlatform(
         },
       }),
     );
+
+    // Seed first-install defaults (e.g. disabled tools) before anything
+    // writes CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION (the bundled-agent sync
+    // below), so upgrading users are not affected. Mirrors the
+    // extension/desktop ordering — same seeding function, CLI's own version
+    // key since the CLI tracks its bundled-agent version independently.
+    await seedDisabledToolDefaults(
+      GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
+    );
+
     if (context.installSignalHandlers !== false) {
       installCliShutdownSignalHandlers(lifecycle);
     }

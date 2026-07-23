@@ -14,6 +14,9 @@
 
 // Local imports
 import { appSignals } from '@eventBus/AppSignals';
+import * as logger from '@logger/logUtils';
+import { tryGlobalState } from '@platform/platform';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RegisteredToolName } from '@tools/registry';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
 import { getDisabledToolIds } from '@utils/config/constants';
@@ -55,6 +58,40 @@ export function getDisabledToolNames(): ReadonlySet<string> {
     for (const toolName of def.tools) disabled.add(toolName);
   }
   return disabled;
+}
+
+/**
+ * Seed the disabled-tool list for first-time users only, on any host.
+ *
+ * Every tool group flagged `toggleable: true` in EXTERNAL_TOOL_DEFS is
+ * treated as opt-in and seeded as disabled on a fresh install. Callers must
+ * invoke this after `initPlatform()` and before anything writes
+ * `versionStateKey` (each host's bundled-agent-directory sync) — the combined
+ * absence of that key and DISABLED_TOOLS is how a genuinely fresh install is
+ * told apart from an existing, upgrading user who simply never toggled a
+ * tool; re-seeding the latter would silently disable tools they already had
+ * enabled. `versionStateKey` differs per host (e.g. `LAST_KNOWN_VERSION` for
+ * the extension/desktop, `CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION` for the
+ * CLI) because each tracks its own bundled-agent version independently.
+ */
+export async function seedDisabledToolDefaults(
+  versionStateKey: string,
+): Promise<void> {
+  const state = tryGlobalState();
+  if (!state) return;
+
+  const lastKnownVersion = state.get<string>(versionStateKey);
+  const disabledTools = state.get<string[]>(GlobalStateKey.DISABLED_TOOLS);
+  if (lastKnownVersion !== undefined || disabledTools !== undefined) return;
+
+  const defaults = EXTERNAL_TOOL_DEFS.filter((def) => def.toggleable).map(
+    (def) => def.id,
+  );
+  await state.update(GlobalStateKey.DISABLED_TOOLS, defaults);
+  logger.info(
+    'toolAvailability',
+    `First install — default-disabled toggleable tools: ${defaults.join(', ')}`,
+  );
 }
 
 /**

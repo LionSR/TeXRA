@@ -24,7 +24,6 @@ import {
   LATEX_WORKSHOP_EXT_ID,
   type LatexConfigField,
 } from '@shared/constants/latex';
-import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
 import { updateConfig } from '@utils/config';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
@@ -35,35 +34,6 @@ import { extendEnvPath } from '@utils/system/platformPaths';
  * Increment this when changing which settings are auto-configured.
  */
 const LATEX_CONFIG_VERSION = 2;
-
-/**
- * Seed the disabled-tool list for first-time users only.
- *
- * Every tool group flagged `toggleable: true` in EXTERNAL_TOOL_DEFS is
- * treated as opt-in and seeded as disabled on a fresh install. Runs before
- * `copyDefaultAgents` (which writes `LAST_KNOWN_VERSION`); the combined
- * absence of that key and `DISABLED_TOOLS` is how we detect a new install
- * — existing upgrading users keep their list.
- */
-export async function initializeToolDefaults(): Promise<void> {
-  const lastKnownVersion = globalSM.get<string>(
-    GlobalStateKey.LAST_KNOWN_VERSION,
-  );
-  const disabledTools = globalSM.get<string[]>(GlobalStateKey.DISABLED_TOOLS);
-
-  if (lastKnownVersion !== undefined || disabledTools !== undefined) {
-    return;
-  }
-
-  const defaults = EXTERNAL_TOOL_DEFS.filter((def) => def.toggleable).map(
-    (def) => def.id,
-  );
-  await globalSM.update(GlobalStateKey.DISABLED_TOOLS, defaults);
-  logger.info(
-    'extension',
-    `First install — default-disabled toggleable tools: ${defaults.join(', ')}`,
-  );
-}
 
 /**
  * Reconciles bundled agents in global storage:
