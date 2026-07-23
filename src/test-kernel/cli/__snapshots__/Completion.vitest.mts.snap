@@ -186,7 +186,7 @@ exports[`CLI shell completion > generates fish completion 1`] = `
 "# fish completion for texra
 complete -c texra -n '__fish_use_subcommand' -a 'orchestrate' -d 'Interactive launcher (runs by default on bare \`texra\` in a TTY): pick a chat, resume, or team preset'
 complete -c texra -n '__fish_use_subcommand' -a 'chat' -d 'Interactive tool-use chat session'
-complete -c texra -n '__fish_use_subcommand' -a 'clone' -d 'Clone an Overleaf or ShareLaTeX project into --cwd'
+complete -c texra -n '__fish_use_subcommand' -a 'clone' -d 'Clone an Overleaf or ShareLaTeX project into a destination directory'
 complete -c texra -n '__fish_use_subcommand' -a 'run' -d 'Run a workflow agent'
 complete -c texra -n '__fish_use_subcommand' -a 'resume' -d 'Continue (resume) a stored tool-use session'
 complete -c texra -n '__fish_use_subcommand' -a 'setup' -d 'Guided setup with the setup agent: environment, agent roster, and your first task (sign-in, ChatGPT, or API key first)'

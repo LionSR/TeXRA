@@ -121,6 +121,62 @@ describe('CLI Overleaf clone command', () => {
     expect(`${stdout}${stderr}`).not.toContain('olp_secret');
   });
 
+  it('creates and clones into a relative positional destination', async () => {
+    const destination = path.join(workspacePath, 'resobabce');
+    const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(workspacePath);
+    const result = await (async () => {
+      try {
+        return await runCli([
+          'clone',
+          'https://git@git.overleaf.com/0123456789abcdef01234567',
+          'resobabce',
+          '--output-format',
+          'json',
+          '--no-input',
+        ]);
+      } finally {
+        cwdSpy.mockRestore();
+      }
+    })();
+    const canonicalDestination = await realpath(destination);
+
+    expect(result.exitCode).toBe(CliExitCode.Success);
+    expect(mocks.execa).toHaveBeenCalledWith(
+      'git',
+      [
+        'clone',
+        'https://git:olp_secret@git.overleaf.com/0123456789abcdef01234567',
+        '.',
+      ],
+      {
+        cwd: canonicalDestination,
+        env: { GIT_TERMINAL_PROMPT: '0', PATH: extendEnvPath() },
+      },
+    );
+    expect(JSON.parse(stdout)).toMatchObject({
+      cloned: true,
+      destination: canonicalDestination,
+    });
+  });
+
+  it('rejects ambiguous positional and --cwd destinations', async () => {
+    const result = await runCli([
+      'clone',
+      '0123456789abcdef01234567',
+      path.join(workspacePath, 'positional'),
+      '--cwd',
+      workspacePath,
+      '--no-input',
+    ]);
+
+    expect(result.exitCode).toBe(CliExitCode.Usage);
+    expect(stderr).toContain(
+      'either as the second argument or with --cwd, not both',
+    );
+    expect(mocks.getSecret).not.toHaveBeenCalled();
+    expect(mocks.execa).not.toHaveBeenCalled();
+  });
+
   it('does not prompt for a missing token in headless mode', async () => {
     mocks.getSecret.mockResolvedValue(undefined);
 
@@ -134,6 +190,8 @@ describe('CLI Overleaf clone command', () => {
 
     expect(result.exitCode).toBe(CliExitCode.Usage);
     expect(stderr).toContain('No saved Overleaf Git Token is available.');
+    expect(stderr).toContain('https://www.overleaf.com/user/settings');
+    expect(stderr).toContain('git-integration-authentication-tokens');
     expect(mocks.execa).not.toHaveBeenCalled();
   });
 
@@ -151,6 +209,8 @@ describe('CLI Overleaf clone command', () => {
 
     expect(result.exitCode).toBe(CliExitCode.Usage);
     expect(stderr).toContain('No saved Overleaf Git Token is available.');
+    expect(stderr).toContain('https://www.overleaf.com/user/settings');
+    expect(stderr).toContain('git-integration-authentication-tokens');
     expect(mocks.execa).not.toHaveBeenCalled();
   });
 
@@ -170,6 +230,7 @@ describe('CLI Overleaf clone command', () => {
 
   it('refuses to clone into a nonempty destination', async () => {
     await writeFile(path.join(workspacePath, 'paper.tex'), 'source');
+    const canonicalWorkspacePath = await realpath(workspacePath);
 
     const result = await runCli([
       'clone',
@@ -180,7 +241,8 @@ describe('CLI Overleaf clone command', () => {
     ]);
 
     expect(result.exitCode).toBe(CliExitCode.AgentError);
-    expect(stderr).toContain('destination directory must be empty');
+    expect(stderr).toContain(`destination directory ${canonicalWorkspacePath}`);
+    expect(stderr).toContain('texra clone 0123456789abcdef01234567 ./paper');
     expect(mocks.execa).not.toHaveBeenCalled();
   });
 
