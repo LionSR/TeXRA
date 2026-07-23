@@ -38,12 +38,20 @@ export function isGoalInFlight(
 
 /**
  * Canonical goal-state shape: status/objective only exist while a goal is
- * active. Mirrors `ProgressStreamControls`'s goal member
- * (`src/controllers/progressView/backend/events/ProgressFactApplier.ts`),
- * which is the authoritative source this type is derived from.
+ * active. This is the one definition of that union — `outbound.ts`'s
+ * SYNC_STREAM_CONTENT wire schema imports `GoalStateSchema` directly rather
+ * than re-declaring the same discriminated union under a different name, so
+ * there's exactly one place the shape can drift.
  */
-export type GoalState =
-  { active: false } | { active: true; status: GoalStatus; objective: string };
+export const GoalStateSchema = z.discriminatedUnion('active', [
+  z.strictObject({ active: z.literal(false) }),
+  z.strictObject({
+    active: z.literal(true),
+    status: GoalStatusSchema,
+    objective: z.string(),
+  }),
+]);
+export type GoalState = z.infer<typeof GoalStateSchema>;
 
 /**
  * Single source of truth for the "status/objective are only meaningful while

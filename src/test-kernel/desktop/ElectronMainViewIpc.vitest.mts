@@ -565,12 +565,11 @@ describe('desktop main-view IPC', () => {
       },
     }));
     vi.doMock('@model/computeModelOptions', () => ({
-      // `label` and `kind` are required by `ModelOptionDataSchema`
-      // (PickerOptionBaseSchema plus the basic/resolved discriminant) —
+      // `label` is required by `ModelOptionDataSchema` (PickerOptionBaseSchema) —
       // `postToRenderer` now runs the SET_MODEL_OPTIONS payload through it
       // (dev/test only), so the stub must match the real shape.
       computeModelOptionsData: vi.fn(async () => [
-        { kind: 'resolved', value: 'fresh-model', label: 'Fresh Model' },
+        { value: 'fresh-model', label: 'Fresh Model' },
       ]),
     }));
     const { ELECTRON_WEBVIEW_PUSH_CHANNEL, installDesktopMainViewIpc } =

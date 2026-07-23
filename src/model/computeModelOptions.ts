@@ -459,7 +459,7 @@ async function buildModelOptionData(
 ): Promise<ModelOptionData> {
   const rawConfig = getRuntimeModelConfig(model);
   if (!rawConfig) {
-    return { kind: 'resolved', value: model, label: model };
+    return { value: model, label: model };
   }
   // Mirror ModelFactory: a dual-backend Kimi model routed to the coding
   // endpoint runs with the synthesized runtime config, so the row reflects it.
@@ -487,7 +487,6 @@ async function buildModelOptionData(
     }
   }
   return {
-    kind: 'resolved',
     ...buildBaseModelOption(model, optionConfig, config),
     ...(routeLabel ? { routeLabel } : {}),
     availability: availability.kind,

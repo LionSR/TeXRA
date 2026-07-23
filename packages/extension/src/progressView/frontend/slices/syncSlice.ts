@@ -47,9 +47,9 @@ export const syncHandlers = {
       }));
     } else {
       const { workPlan, controls } = data;
-      // `controls.goal` is already the canonical GoalState-shaped union on
-      // the wire (GoalSyncSchema mirrors GoalState's discriminant/fields
-      // exactly) — no need to round-trip it through deriveGoalState.
+      // `controls.goal` is already GoalState (the wire schema imports
+      // GoalStateSchema directly from `@shared/schemas/goal`) — no need to
+      // round-trip it through deriveGoalState.
       const goal = controls.goal;
       updateToolUseState(data.stream, (prev) => ({
         ...prev,
