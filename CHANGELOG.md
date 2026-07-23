@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.39.8]
+## [0.39.8] - 2026-07-24
 
 ### Shared (all surfaces)
 
