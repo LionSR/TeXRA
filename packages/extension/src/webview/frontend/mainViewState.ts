@@ -12,6 +12,15 @@
  * Singleton scope: only one Main view per webview/page. If we ever need
  * multiple independent main-view instances on the same page, this file must
  * be promoted to a per-instance store.
+ *
+ * Reset mechanism: every writable signal below is declared through
+ * `trackedSignal()` instead of the bare `signal()` import. `trackedSignal`
+ * records the signal's own default-value factory in `resetCallbacks` at the
+ * point of declaration, so `resetMainViewState()` can replay that single list
+ * instead of a hand-written, independently-ordered sequence of `.set()`
+ * calls. There is only one place that knows each signal's default — the
+ * `trackedSignal(() => ...)` call site — so a new signal can't be added
+ * without also being wired into the reset.
  */
 
 // Local imports - shared signals and schemas
@@ -56,40 +65,79 @@ export type { FileStateContextValue, SessionContextValue };
 export type WebviewOnboardingFunnelState = OnboardingFunnelState | 'pending';
 
 // ---------------------------------------------------------------------------
+// Reset registry — populated by `trackedSignal` as each signal below is
+// declared. See the file-header note on the reset mechanism.
+// ---------------------------------------------------------------------------
+
+const resetCallbacks: Array<() => void> = [];
+
+/**
+ * Declares a writable signal and registers its reset callback in the same
+ * expression. `initialValue` is a factory (not a bare value) so every reset
+ * — like every fresh mount — constructs an independent value rather than
+ * reusing one shared object reference, matching how the previous hand-written
+ * resets spread mutable defaults (`{ ...DEFAULT_X }`) instead of assigning
+ * the constant directly.
+ */
+function trackedSignal<T>(initialValue: () => T): Signal.State<T> {
+  const s = signal(initialValue());
+  resetCallbacks.push(() => s.set(initialValue()));
+  return s;
+}
+
+// ---------------------------------------------------------------------------
 // Session / agent / model / instruction state
 // ---------------------------------------------------------------------------
 
-export const sessionType$ = signal<SessionType>(DEFAULT_STATE.sessionType);
-export const launchTarget$ = signal<LaunchTarget>(DEFAULT_STATE.launchTarget);
-export const selectedTeamId$ = signal(DEFAULT_STATE.selectedTeamId);
-export const workflowAgent$ = signal(DEFAULT_STATE.workflowAgent);
-export const toolUseAgent$ = signal(DEFAULT_STATE.toolUseAgent);
-export const model$ = signal(DEFAULT_STATE.model);
-export const commit$ = signal(DEFAULT_STATE.commit);
-export const instruction$ = signal(DEFAULT_STATE.instruction);
-export const workflowInstruction$ = signal(DEFAULT_STATE.workflowInstruction);
-export const toolUseInstruction$ = signal(DEFAULT_STATE.toolUseInstruction);
-export const instructionPlaceholder$ = signal(
-  ONBOARDING_PLACEHOLDERS[DEFAULT_STATE.sessionType][0],
+export const sessionType$ = trackedSignal<SessionType>(
+  () => DEFAULT_STATE.sessionType,
+);
+export const launchTarget$ = trackedSignal<LaunchTarget>(
+  () => DEFAULT_STATE.launchTarget,
+);
+export const selectedTeamId$ = trackedSignal(
+  () => DEFAULT_STATE.selectedTeamId,
+);
+export const workflowAgent$ = trackedSignal(() => DEFAULT_STATE.workflowAgent);
+export const toolUseAgent$ = trackedSignal(() => DEFAULT_STATE.toolUseAgent);
+export const model$ = trackedSignal(() => DEFAULT_STATE.model);
+export const commit$ = trackedSignal(() => DEFAULT_STATE.commit);
+export const instruction$ = trackedSignal(() => DEFAULT_STATE.instruction);
+export const workflowInstruction$ = trackedSignal(
+  () => DEFAULT_STATE.workflowInstruction,
+);
+export const toolUseInstruction$ = trackedSignal(
+  () => DEFAULT_STATE.toolUseInstruction,
+);
+export const instructionPlaceholder$ = trackedSignal(
+  () => ONBOARDING_PLACEHOLDERS[DEFAULT_STATE.sessionType][0],
 );
 
 // ---------------------------------------------------------------------------
 // Document / file state
 // ---------------------------------------------------------------------------
 
-export const singleFiles$ = signal<SingleFiles>({ ...DEFAULT_SINGLE_FILES });
-export const fileOptions$ = signal<FileOptions>({ ...DEFAULT_FILE_OPTIONS });
-export const multiFiles$ = signal<MultiFiles>({ ...DEFAULT_MULTI_FILES });
-export const checkboxValues$ = signal<CheckboxValues>({
+export const singleFiles$ = trackedSignal<SingleFiles>(() => ({
+  ...DEFAULT_SINGLE_FILES,
+}));
+export const fileOptions$ = trackedSignal<FileOptions>(() => ({
+  ...DEFAULT_FILE_OPTIONS,
+}));
+export const multiFiles$ = trackedSignal<MultiFiles>(() => ({
+  ...DEFAULT_MULTI_FILES,
+}));
+export const checkboxValues$ = trackedSignal<CheckboxValues>(() => ({
   ...DEFAULT_CHECKBOX_VALUES,
-});
-export const isGitRepo$ = signal(true);
+}));
+export const isGitRepo$ = trackedSignal(() => true);
 
 // ---------------------------------------------------------------------------
 // LaTeX-diffs / files-panel UI state
 // ---------------------------------------------------------------------------
 
-export const latexdiffsVisible$ = signal(DEFAULT_STATE.latexdiffsVisible);
+export const latexdiffsVisible$ = trackedSignal(
+  () => DEFAULT_STATE.latexdiffsVisible,
+);
 /**
  * Tracks whether the workflow Files <wa-details> is open. Initialized to
  * match the initial session type and updated imperatively from
@@ -97,68 +145,75 @@ export const latexdiffsVisible$ = signal(DEFAULT_STATE.latexdiffsVisible);
  * binding `?open=${isWorkflow}` would force the section open on every render
  * pass, defeating user collapses.
  */
-export const fileSelectionOpen$ = signal(
-  DEFAULT_STATE.sessionType === SESSION_TYPES.WORKFLOW,
+export const fileSelectionOpen$ = trackedSignal(
+  () => DEFAULT_STATE.sessionType === SESSION_TYPES.WORKFLOW,
 );
 
 // ---------------------------------------------------------------------------
 // Model / agent catalog data
 // ---------------------------------------------------------------------------
 
-export const modelOptions$ = signal<ModelOptionData[]>([]);
-export const workflowModelOptions$ = signal<ModelOptionData[] | undefined>(
-  undefined,
+export const modelOptions$ = trackedSignal<ModelOptionData[]>(() => []);
+export const workflowModelOptions$ = trackedSignal<
+  ModelOptionData[] | undefined
+>(() => undefined);
+export const toolUseModelOptions$ = trackedSignal<
+  ModelOptionData[] | undefined
+>(() => undefined);
+export const workflowAgentOptions$ = trackedSignal<AgentOptionData[]>(
+  () => [],
 );
-export const toolUseModelOptions$ = signal<ModelOptionData[] | undefined>(
-  undefined,
-);
-export const workflowAgentOptions$ = signal<AgentOptionData[]>([]);
-export const toolUseAgentOptions$ = signal<AgentOptionData[]>([]);
-export const teamOptions$ = signal<TeamOptionData[]>([]);
+export const toolUseAgentOptions$ = trackedSignal<AgentOptionData[]>(() => []);
+export const teamOptions$ = trackedSignal<TeamOptionData[]>(() => []);
 
 // ---------------------------------------------------------------------------
 // Chat / voice state
 // ---------------------------------------------------------------------------
 
-export const isRecording$ = signal(false);
-export const isPolishing$ = signal(false);
+export const isRecording$ = trackedSignal(() => false);
+export const isPolishing$ = trackedSignal(() => false);
 
 /**
  * Last status line pushed to the InstructionPanel's visually-hidden aria-live
  * region (screen-reader announcements for launcher/target fallbacks). Not
  * persisted; cleared on remount.
  */
-export const statusAnnouncement$ = signal('');
+export const statusAnnouncement$ = trackedSignal(() => '');
 
 // ---------------------------------------------------------------------------
 // Banners / onboarding state
 // ---------------------------------------------------------------------------
 
-export const apiKeyBanner$ = signal<ApiKeyBannerState>({ visible: false });
-export const agentConfigBanner$ = signal<AgentConfigBannerState>({
+export const apiKeyBanner$ = trackedSignal<ApiKeyBannerState>(() => ({
   visible: false,
-});
-export const dependencyBanner$ = signal<DependencyBannerState>({
+}));
+export const agentConfigBanner$ = trackedSignal<AgentConfigBannerState>(
+  () => ({
+    visible: false,
+  }),
+);
+export const dependencyBanner$ = trackedSignal<DependencyBannerState>(() => ({
   visible: false,
-});
-export const gettingStartedVisible$ = signal(false);
+}));
+export const gettingStartedVisible$ = trackedSignal(() => false);
 // Session-only: the host re-sends SHOW_GETTING_STARTED_BANNER on file
 // refreshes, so dismissal is tracked separately and never persisted.
-export const gettingStartedDismissed$ = signal(false);
-export const sessionHintDismissed$ = signal(true);
-export const loginBannerVisible$ = signal(false);
+export const gettingStartedDismissed$ = trackedSignal(() => false);
+export const sessionHintDismissed$ = trackedSignal(() => true);
+export const loginBannerVisible$ = trackedSignal(() => false);
 // Onboarding funnel (PRD: agent-native onboarding). The host owns the real
 // state; 'pending' only suppresses first-paint launcher/welcome flashes until
 // SET_ONBOARDING_FUNNEL arrives.
-export const onboardingFunnelState$ =
-  signal<WebviewOnboardingFunnelState>('pending');
+export const onboardingFunnelState$ = trackedSignal<WebviewOnboardingFunnelState>(
+  () => 'pending',
+);
 
 // ---------------------------------------------------------------------------
 // Host-pushed debug flag (mirrored from MainApp's @state field in willUpdate
 // so the module-scope sessionContext$ derivation can observe it).
 // ---------------------------------------------------------------------------
 
-export const debugMode$ = signal(false);
+export const debugMode$ = trackedSignal(() => false);
 
 // ---------------------------------------------------------------------------
 // Derived read helpers
@@ -230,44 +285,12 @@ export const sessionContext$ = new Signal.Computed((): SessionContextValue => ({
  * mount starts from the same slate a fresh per-instance field set used to
  * provide. Main-view state is singleton-scoped per the file header, so the
  * reset is a per-mount slate, not multi-instance coordination.
+ *
+ * Replays `resetCallbacks`, populated by `trackedSignal` at each signal's
+ * declaration site above — see the file-header note on the reset mechanism.
  */
 export function resetMainViewState(): void {
-  sessionType$.set(DEFAULT_STATE.sessionType);
-  launchTarget$.set(DEFAULT_STATE.launchTarget);
-  selectedTeamId$.set(DEFAULT_STATE.selectedTeamId);
-  workflowAgent$.set(DEFAULT_STATE.workflowAgent);
-  toolUseAgent$.set(DEFAULT_STATE.toolUseAgent);
-  model$.set(DEFAULT_STATE.model);
-  commit$.set(DEFAULT_STATE.commit);
-  instruction$.set(DEFAULT_STATE.instruction);
-  workflowInstruction$.set(DEFAULT_STATE.workflowInstruction);
-  toolUseInstruction$.set(DEFAULT_STATE.toolUseInstruction);
-  instructionPlaceholder$.set(
-    ONBOARDING_PLACEHOLDERS[DEFAULT_STATE.sessionType][0],
-  );
-  singleFiles$.set({ ...DEFAULT_SINGLE_FILES });
-  fileOptions$.set({ ...DEFAULT_FILE_OPTIONS });
-  multiFiles$.set({ ...DEFAULT_MULTI_FILES });
-  checkboxValues$.set({ ...DEFAULT_CHECKBOX_VALUES });
-  isGitRepo$.set(true);
-  latexdiffsVisible$.set(DEFAULT_STATE.latexdiffsVisible);
-  fileSelectionOpen$.set(DEFAULT_STATE.sessionType === SESSION_TYPES.WORKFLOW);
-  modelOptions$.set([]);
-  workflowModelOptions$.set(undefined);
-  toolUseModelOptions$.set(undefined);
-  workflowAgentOptions$.set([]);
-  toolUseAgentOptions$.set([]);
-  teamOptions$.set([]);
-  isRecording$.set(false);
-  isPolishing$.set(false);
-  statusAnnouncement$.set('');
-  apiKeyBanner$.set({ visible: false });
-  agentConfigBanner$.set({ visible: false });
-  dependencyBanner$.set({ visible: false });
-  gettingStartedVisible$.set(false);
-  gettingStartedDismissed$.set(false);
-  sessionHintDismissed$.set(true);
-  loginBannerVisible$.set(false);
-  onboardingFunnelState$.set('pending');
-  debugMode$.set(false);
+  for (const reset of resetCallbacks) {
+    reset();
+  }
 }

@@ -39,37 +39,74 @@ import type { ExportNode, UserPart } from './schemas';
 // Input schemas (implementation detail — not exported publicly)
 // ============================================================
 
-/**
- * Loose schema for API content blocks — accepts many optional fields.
- * Covers Anthropic, OpenAI Chat Completions, and OpenAI Response API formats.
- */
-const ContentBlockSchema = z.looseObject({
+/** One entry inside a `web_search_tool_result` block's `content` array. */
+const WebSearchResultItemSchema = z.object({
   type: z.string(),
-  text: z.string().optional(),
-  thinking: z.string().optional(),
-  name: z.string().optional(),
-  id: z.string().optional(),
-  input: z.unknown().optional(),
-  content: z.unknown().optional(),
-  source: z
-    .looseObject({ type: z.string(), media_type: z.string().optional() })
-    .optional(),
-  query: z.string().optional(),
-  search_results: z
-    .array(
-      z.looseObject({
-        title: z.string().optional(),
-        url: z.string().optional(),
-      }),
-    )
-    .optional(),
-  url: z.string().optional(),
   title: z.string().optional(),
-  page_content: z.string().optional(),
-  // OpenAI Response API fields
-  arguments: z.string().optional(),
-  output: z.string().optional(),
+  url: z.string().optional(),
 });
+
+/**
+ * Discriminated union of API content blocks across the four provider shapes
+ * this module normalizes (Anthropic, OpenAI Chat Completions, OpenAI
+ * Response API, Google GenAI — the latter via {@link googlePartToBlocks},
+ * which translates Google's field-based `Part` into these type-based
+ * blocks). Each variant declares only the fields that provider actually
+ * populates for that block kind, so the six consuming functions below can
+ * switch/narrow on `type` instead of re-deriving validity with ad hoc
+ * optional-field checks.
+ */
+const ContentBlockSchema = z.discriminatedUnion('type', [
+  // Plain text. Anthropic and Google GenAI use 'text'; OpenAI Response API
+  // splits it into 'input_text' (user) and 'output_text' (assistant).
+  z.object({ type: z.literal('text'), text: z.string().optional() }),
+  z.object({ type: z.literal('input_text'), text: z.string().optional() }),
+  z.object({ type: z.literal('output_text'), text: z.string().optional() }),
+
+  // Anthropic extended-thinking / Google GenAI thought blocks.
+  z.object({ type: z.literal('thinking'), thinking: z.string().optional() }),
+  z.object({ type: z.literal('redacted_thinking') }),
+
+  // Tool call / tool result — shared by Anthropic, Google GenAI, and the
+  // VS Code language-model bridge (see normalizeContentBlock).
+  z.object({
+    type: z.literal('tool_use'),
+    name: z.string().optional(),
+    input: z.unknown().optional(),
+  }),
+  z.object({
+    type: z.literal('tool_result'),
+    content: z.unknown().optional(),
+  }),
+
+  // Attachment markers: Anthropic ('image'/'document'), OpenAI Response API
+  // ('input_image'/'input_file'), OpenAI Chat Completions ('image_url'/
+  // 'file'). None of these carry fields this module reads — only `type`
+  // decides which attachment kind to render.
+  z.object({ type: z.literal('image') }),
+  z.object({ type: z.literal('input_image') }),
+  z.object({ type: z.literal('image_url') }),
+  z.object({ type: z.literal('document') }),
+  z.object({ type: z.literal('input_file') }),
+  z.object({ type: z.literal('file') }),
+
+  // Anthropic server-side tool blocks (the provider executes these, not a
+  // local tool handler).
+  z.object({
+    type: z.literal(ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.serverToolUse),
+    name: z.string().optional(),
+    input: z.unknown().optional(),
+  }),
+  z.object({
+    type: z.literal(ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.webSearchToolResult),
+    content: z.array(WebSearchResultItemSchema).optional(),
+  }),
+  // `extractWebFetchResultFields` reads its fields off the raw block itself
+  // (it accepts `unknown`), so this variant only needs the discriminant.
+  z.object({
+    type: z.literal(ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.webFetchToolResult),
+  }),
+]);
 type ContentBlock = z.infer<typeof ContentBlockSchema>;
 
 const ConversationMessageSchema = z.looseObject({
@@ -174,7 +211,9 @@ function googlePartToBlocks(part: Part): ContentBlock[] {
   const blob = part.inlineData ?? part.fileData;
   if (blob && typeof blob === 'object') {
     const { mimeType } = blob as { mimeType?: string };
-    return [{ type: mimeType?.startsWith('image/') ? 'image' : 'document' }];
+    return mimeType?.startsWith('image/')
+      ? [{ type: 'image' }]
+      : [{ type: 'document' }];
   }
   return [];
 }
@@ -182,37 +221,42 @@ function googlePartToBlocks(part: Part): ContentBlock[] {
 function blocksToUserParts(blocks: ContentBlock[]): UserPart[] {
   const parts: UserPart[] = [];
   for (const b of blocks) {
-    // Anthropic: 'text', OpenAI Response API: 'input_text'
-    if ((b.type === 'text' || b.type === 'input_text') && b.text) {
-      parts.push({ type: 'text', text: b.text });
-    } else if (
-      b.type === 'image' ||
-      b.type === 'input_image' ||
-      b.type === 'image_url'
-    ) {
-      parts.push({ type: 'attachment', attachmentType: 'image' });
-    } else if (
-      b.type === 'document' ||
-      b.type === 'input_file' ||
-      b.type === 'file'
-    ) {
-      parts.push({ type: 'attachment', attachmentType: 'document' });
+    switch (b.type) {
+      // Anthropic: 'text', OpenAI Response API: 'input_text'
+      case 'text':
+      case 'input_text':
+        if (b.text) parts.push({ type: 'text', text: b.text });
+        break;
+      case 'image':
+      case 'input_image':
+      case 'image_url':
+        parts.push({ type: 'attachment', attachmentType: 'image' });
+        break;
+      case 'document':
+      case 'input_file':
+      case 'file':
+        parts.push({ type: 'attachment', attachmentType: 'document' });
+        break;
+      default:
+        break;
     }
   }
   return parts;
 }
 
 function extractToolResultText(block: ContentBlock): string | undefined {
-  if (block.type === 'tool_result') {
-    return typeof block.content === 'string'
-      ? block.content
-      : prettyJson(block.content);
+  switch (block.type) {
+    case 'tool_result':
+      return typeof block.content === 'string'
+        ? block.content
+        : prettyJson(block.content);
+    // Anthropic: 'text', OpenAI Response API: 'input_text'
+    case 'text':
+    case 'input_text':
+      return block.text || undefined;
+    default:
+      return undefined;
   }
-  // Anthropic: 'text', OpenAI Response API: 'input_text'
-  if ((block.type === 'text' || block.type === 'input_text') && block.text) {
-    return block.text;
-  }
-  return undefined;
 }
 
 function assistantBlockToNode(block: ContentBlock): ExportNode | null {
@@ -262,7 +306,7 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
 
     case ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.webSearchToolResult: {
       if (!Array.isArray(block.content)) return null;
-      const results = (block.content as ContentBlock[])
+      const results = block.content
         .filter((e) => e.type === 'web_search_result' && e.url)
         .map((e) => ({ title: e.title ?? e.url!, url: e.url! }));
       return results.length ? { kind: 'web-search-results', results } : null;

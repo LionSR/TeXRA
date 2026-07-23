@@ -17,9 +17,19 @@
  * Singleton scope: only one Settings view per webview/page. If we ever need
  * multiple independent settings instances on the same page, this file must be
  * promoted to a per-instance store.
+ *
+ * Reset mechanism: every writable signal below is declared through
+ * `trackedSignal()` instead of the bare `signal()` import. `trackedSignal`
+ * records the signal's own default-value factory in `resetCallbacks` at the
+ * point of declaration, so `resetSettingsState()` can replay that single list
+ * instead of a hand-written, independently-ordered sequence of `.set()`
+ * calls. There is only one place that knows each signal's default — the
+ * `trackedSignal(() => ...)` call site — so a new signal can't be added
+ * without also being wired into the reset; forgetting the wrapper here would
+ * mean the signal isn't exported as reactive state at all.
  */
 
-import { signal } from '@shared/signals';
+import { Signal, signal } from '@shared/signals';
 import type {
   MemoryViewItem,
   HistoryItem,
@@ -63,115 +73,158 @@ const DEFAULT_CHATGPT_AUTH: ChatGptAuthStatus = {
 };
 
 // ---------------------------------------------------------------------------
+// Reset registry — populated by `trackedSignal` as each signal below is
+// declared. See the file-header note on the reset mechanism.
+// ---------------------------------------------------------------------------
+
+const resetCallbacks: Array<() => void> = [];
+
+/**
+ * Declares a writable signal and registers its reset callback in the same
+ * expression. `initialValue` is a factory (not a bare value) so every reset
+ * — like every fresh mount — constructs an independent value rather than
+ * reusing one shared object reference, matching how the previous hand-written
+ * resets spread mutable defaults (`{ ...DEFAULT_X }`) instead of assigning
+ * the constant directly.
+ */
+function trackedSignal<T>(initialValue: () => T): Signal.State<T> {
+  const s = signal(initialValue());
+  resetCallbacks.push(() => s.set(initialValue()));
+  return s;
+}
+
+// ---------------------------------------------------------------------------
 // Tab state
 // ---------------------------------------------------------------------------
-export const selectedTabIndex = signal(0);
+export const selectedTabIndex = trackedSignal(() => 0);
 
 // ---------------------------------------------------------------------------
 // Memory state
 // ---------------------------------------------------------------------------
-export const memoryItems = signal<MemoryViewItem[]>([]);
-export const memoryEnabled = signal(false);
-export const memoryToggleDisabled = signal(true);
+export const memoryItems = trackedSignal<MemoryViewItem[]>(() => []);
+export const memoryEnabled = trackedSignal(() => false);
+export const memoryToggleDisabled = trackedSignal(() => true);
 
 // ---------------------------------------------------------------------------
 // History state
 // ---------------------------------------------------------------------------
-export const historyItems = signal<HistoryItem[]>([]);
+export const historyItems = trackedSignal<HistoryItem[]>(() => []);
 
 // ---------------------------------------------------------------------------
 // Profile state
 // ---------------------------------------------------------------------------
-export const authenticated = signal(false);
-export const userEmail = signal('');
-export const tier = signal('free');
-export const apiAccessMode = signal<'included' | 'personal'>('personal');
-export const spendingStatus = signal<SpendingStatus | null>(null);
-export const quotaAutoSwitched = signal(false);
-export const providerKeyStatuses = signal<ProviderKeyStatus[]>([]);
-export const globalStreamingDefault = signal(true);
-export const providerKeyModal = signal<ProviderKeyModalTarget | null>(null);
+export const authenticated = trackedSignal(() => false);
+export const userEmail = trackedSignal(() => '');
+export const tier = trackedSignal(() => 'free');
+export const apiAccessMode = trackedSignal<'included' | 'personal'>(
+  () => 'personal',
+);
+export const spendingStatus = trackedSignal<SpendingStatus | null>(
+  () => null,
+);
+export const quotaAutoSwitched = trackedSignal(() => false);
+export const providerKeyStatuses = trackedSignal<ProviderKeyStatus[]>(
+  () => [],
+);
+export const globalStreamingDefault = trackedSignal(() => true);
+export const providerKeyModal = trackedSignal<ProviderKeyModalTarget | null>(
+  () => null,
+);
 
 // ---------------------------------------------------------------------------
 // Model selection state
 // ---------------------------------------------------------------------------
-export const modelSelectionItems = signal<ModelSelectionItem[]>([]);
-export const helperModel = signal(DEFAULT_HELPER_MODEL);
-export const preferShortModelNames = signal(false);
+export const modelSelectionItems = trackedSignal<ModelSelectionItem[]>(
+  () => [],
+);
+export const helperModel = trackedSignal(() => DEFAULT_HELPER_MODEL);
+export const preferShortModelNames = trackedSignal(() => false);
 
 // ---------------------------------------------------------------------------
 // Agent selection state
 // ---------------------------------------------------------------------------
-export const workflowAgents = signal<AgentSelectionItem[]>([]);
-export const toolUseAgents = signal<AgentSelectionItem[]>([]);
-export const customAgentDir = signal('');
-export const customAgentDirIsDefault = signal(true);
-export const agentSubTab = signal<AgentCategory | undefined>(undefined);
+export const workflowAgents = trackedSignal<AgentSelectionItem[]>(() => []);
+export const toolUseAgents = trackedSignal<AgentSelectionItem[]>(() => []);
+export const customAgentDir = trackedSignal(() => '');
+export const customAgentDirIsDefault = trackedSignal(() => true);
+export const agentSubTab = trackedSignal<AgentCategory | undefined>(
+  () => undefined,
+);
 
 // ---------------------------------------------------------------------------
 // Agent teams state
 // ---------------------------------------------------------------------------
-export const customPresets = signal<AgentModePreset[]>([]);
-export const orchestratorAgents = signal<string[]>([]);
+export const customPresets = trackedSignal<AgentModePreset[]>(() => []);
+export const orchestratorAgents = trackedSignal<string[]>(() => []);
 
 // ---------------------------------------------------------------------------
 // Multi-agent coordination state
 // ---------------------------------------------------------------------------
-export const reliabilitySettings = signal<NumberVscodeSetting[]>([]);
-export const allowOrchestratorKill = signal(true);
-export const detachSubagentsOnStop = signal(false);
+export const reliabilitySettings = trackedSignal<NumberVscodeSetting[]>(
+  () => [],
+);
+export const allowOrchestratorKill = trackedSignal(() => true);
+export const detachSubagentsOnStop = trackedSignal(() => false);
 
 // ---------------------------------------------------------------------------
 // Approval settings state
 // ---------------------------------------------------------------------------
-export const bashApprovalEnabled = signal(true);
-export const codexSandboxMode = signal<string>('workspace-write');
-export const codexReasoningEffort = signal<string>('high');
-export const codexApprovalPolicy = signal<string>('never');
-export const claudeAgentModel = signal<ClaudeAgentModel>(
-  CLAUDE_AGENT_DEFAULT_MODEL,
+export const bashApprovalEnabled = trackedSignal(() => true);
+export const codexSandboxMode = trackedSignal<string>(
+  () => 'workspace-write',
+);
+export const codexReasoningEffort = trackedSignal<string>(() => 'high');
+export const codexApprovalPolicy = trackedSignal<string>(() => 'never');
+export const claudeAgentModel = trackedSignal<ClaudeAgentModel>(
+  () => CLAUDE_AGENT_DEFAULT_MODEL,
 );
 export const claudeAgentPermissionMode =
-  signal<ClaudeAgentPermissionMode>('acceptEdits');
-export const claudeAgentEffort = signal<ClaudeAgentEffort>('high');
+  trackedSignal<ClaudeAgentPermissionMode>(() => 'acceptEdits');
+export const claudeAgentEffort = trackedSignal<ClaudeAgentEffort>(
+  () => 'high',
+);
 
 // ---------------------------------------------------------------------------
 // Tool dashboard state
 // ---------------------------------------------------------------------------
-export const toolDashboardItems = signal<ToolDashboardItem[]>([]);
-export const toolDashboardLoaded = signal(false);
+export const toolDashboardItems = trackedSignal<ToolDashboardItem[]>(() => []);
+export const toolDashboardLoaded = trackedSignal(() => false);
 
 // ---------------------------------------------------------------------------
 // Git author settings state
 // ---------------------------------------------------------------------------
-export const gitMarkCommits = signal(DEFAULT_GIT_MARK_COMMITS);
-export const gitAuthorName = signal(DEFAULT_GIT_AUTHOR_NAME);
-export const gitAuthorEmail = signal(DEFAULT_GIT_AUTHOR_EMAIL);
-export const gitWorktreeSupport = signal(false);
-export const gitSettingsLoaded = signal(false);
-export const githubTokenStatus = signal<'secret' | 'env' | 'none'>('none');
-export const chatgptAuth = signal<ChatGptAuthStatus>({
+export const gitMarkCommits = trackedSignal(() => DEFAULT_GIT_MARK_COMMITS);
+export const gitAuthorName = trackedSignal(() => DEFAULT_GIT_AUTHOR_NAME);
+export const gitAuthorEmail = trackedSignal(() => DEFAULT_GIT_AUTHOR_EMAIL);
+export const gitWorktreeSupport = trackedSignal(() => false);
+export const gitSettingsLoaded = trackedSignal(() => false);
+export const githubTokenStatus = trackedSignal<'secret' | 'env' | 'none'>(
+  () => 'none',
+);
+export const chatgptAuth = trackedSignal<ChatGptAuthStatus>(() => ({
   ...DEFAULT_CHATGPT_AUTH,
-});
-export const desktopCrashReportingEnabled = signal(false);
-export const desktopCrashReportingConfigured = signal(false);
-export const prSubscriptions = signal<readonly PRSubscriptionEntry[]>([]);
+}));
+export const desktopCrashReportingEnabled = trackedSignal(() => false);
+export const desktopCrashReportingConfigured = trackedSignal(() => false);
+export const prSubscriptions = trackedSignal<readonly PRSubscriptionEntry[]>(
+  () => [],
+);
 
 // ---------------------------------------------------------------------------
 // LaTeX settings state
 // ---------------------------------------------------------------------------
-export const latexSettingsStatus = signal({
+export const latexSettingsStatus = trackedSignal(() => ({
   ...DEFAULT_LATEX_SETTINGS_STATUS,
-});
-export const latexSettingsLoaded = signal(false);
-export const latexConfigValues = signal<LatexConfigValues>({});
-export const latexConfigValuesLoaded = signal(false);
-export const inlineCriticismEnabled = signal(false);
+}));
+export const latexSettingsLoaded = trackedSignal(() => false);
+export const latexConfigValues = trackedSignal<LatexConfigValues>(() => ({}));
+export const latexConfigValuesLoaded = trackedSignal(() => false);
+export const inlineCriticismEnabled = trackedSignal(() => false);
 
 // ---------------------------------------------------------------------------
 // Goal settings state
 // ---------------------------------------------------------------------------
-export const goalItems = signal<readonly Goal[]>([]);
+export const goalItems = trackedSignal<readonly Goal[]>(() => []);
 
 // ---------------------------------------------------------------------------
 // Derived capability view: commands the active host's inbound registry
@@ -182,77 +235,19 @@ export const goalItems = signal<readonly Goal[]>([]);
 // "not yet known" as unsupported so a control never flashes visible then
 // hidden once the real capability set lands.
 // ---------------------------------------------------------------------------
-export const unsupportedCommands = signal<ReadonlySet<string> | null>(null);
+export const unsupportedCommands = trackedSignal<ReadonlySet<string> | null>(
+  () => null,
+);
 
 // ---------------------------------------------------------------------------
 // Reset — module-level state is shared across remounts in the same JS context
-// (tests, hot reload). Mirrors `resetProgressState()` in progressState.ts.
+// (tests, hot reload). Mirrors `resetProgressState()` in progressState.ts in
+// intent (replay the one source of truth on remount); the mechanism differs
+// because these signals stay individually exported rather than living behind
+// one monolithic object signal — see the file-header note.
 // ---------------------------------------------------------------------------
 export function resetSettingsState(): void {
-  selectedTabIndex.set(0);
-
-  memoryItems.set([]);
-  memoryEnabled.set(false);
-  memoryToggleDisabled.set(true);
-
-  historyItems.set([]);
-
-  authenticated.set(false);
-  userEmail.set('');
-  tier.set('free');
-  apiAccessMode.set('personal');
-  spendingStatus.set(null);
-  quotaAutoSwitched.set(false);
-  providerKeyStatuses.set([]);
-  globalStreamingDefault.set(true);
-  providerKeyModal.set(null);
-
-  modelSelectionItems.set([]);
-  helperModel.set(DEFAULT_HELPER_MODEL);
-  preferShortModelNames.set(false);
-
-  workflowAgents.set([]);
-  toolUseAgents.set([]);
-  customAgentDir.set('');
-  customAgentDirIsDefault.set(true);
-  agentSubTab.set(undefined);
-
-  customPresets.set([]);
-  orchestratorAgents.set([]);
-
-  reliabilitySettings.set([]);
-  allowOrchestratorKill.set(true);
-  detachSubagentsOnStop.set(false);
-
-  bashApprovalEnabled.set(true);
-  codexSandboxMode.set('workspace-write');
-  codexReasoningEffort.set('high');
-  codexApprovalPolicy.set('never');
-  claudeAgentModel.set(CLAUDE_AGENT_DEFAULT_MODEL);
-  claudeAgentPermissionMode.set('acceptEdits');
-  claudeAgentEffort.set('high');
-
-  toolDashboardItems.set([]);
-  toolDashboardLoaded.set(false);
-
-  gitMarkCommits.set(DEFAULT_GIT_MARK_COMMITS);
-  gitAuthorName.set(DEFAULT_GIT_AUTHOR_NAME);
-  gitAuthorEmail.set(DEFAULT_GIT_AUTHOR_EMAIL);
-  gitWorktreeSupport.set(false);
-  gitSettingsLoaded.set(false);
-  githubTokenStatus.set('none');
-  chatgptAuth.set({ ...DEFAULT_CHATGPT_AUTH });
-  desktopCrashReportingEnabled.set(false);
-  desktopCrashReportingConfigured.set(false);
-  prSubscriptions.set([]);
-
-  latexSettingsStatus.set({ ...DEFAULT_LATEX_SETTINGS_STATUS });
-  latexSettingsLoaded.set(false);
-  latexConfigValues.set({});
-  latexConfigValuesLoaded.set(false);
-  inlineCriticismEnabled.set(false);
-
-  goalItems.set([]);
-
-  unsupportedCommands.set(null);
+  for (const reset of resetCallbacks) {
+    reset();
+  }
 }

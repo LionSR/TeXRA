@@ -195,12 +195,17 @@ function buildModelHint(config: ModelConfig): string {
   return base;
 }
 
-/** Project a model config to the base option fields shared across views. */
+/**
+ * Project a model config to the base option fields shared across views.
+ * Shared by both the basic and resolved producers, so it deliberately leaves
+ * `kind` out — the caller stamps `'basic'` or `'resolved'` depending on
+ * whether availability has also been resolved.
+ */
 export function buildBaseModelOption(
   model: string,
   config: ModelConfig,
   hintConfig: ModelConfig = config,
-): ModelOptionData {
+): Omit<ModelOptionData, 'kind'> {
   return {
     value: model,
     label: config.label,
@@ -217,7 +222,7 @@ export function buildBasicModelOptionsData(
 ): ModelOptionData[] {
   return visibleModels.map((model) => {
     const config = getRuntimeModelConfig(model);
-    if (!config) return { value: model, label: model };
-    return buildBaseModelOption(model, config);
+    if (!config) return { kind: 'basic', value: model, label: model };
+    return { kind: 'basic', ...buildBaseModelOption(model, config) };
   });
 }
