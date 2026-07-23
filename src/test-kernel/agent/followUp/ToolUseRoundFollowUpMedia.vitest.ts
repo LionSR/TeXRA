@@ -59,7 +59,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
         config: { provider: 'openai', fullName: 'test-model' },
         createResponse: vi.fn(async () => ({ response: null })),
         createUserFollowUpMessages,
-        getRetryEndpoint: () => 'https://api.openai.com/v1',
+        getWireRouteKey: () => 'openai:test-route',
         setOutputStreaming: vi.fn(),
       },
       session: {
@@ -211,7 +211,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
                 },
               ]
             : [],
-        getRetryEndpoint: () => 'https://api.openai.com/v1',
+        getWireRouteKey: () => 'openai:test-route',
         getStreamingConfig: () => false,
         isEndTurnStop: (stopReason: string) => stopReason === 'stop',
         processThinkingBlock: () => null,
@@ -398,7 +398,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
           webSearchResults: [],
         }),
         extractToolUse: () => [],
-        getRetryEndpoint: () => 'https://api.openai.com/v1',
+        getWireRouteKey: () => 'openai:test-route',
         getStreamingConfig: () => false,
         isEndTurnStop: (stopReason: string) => stopReason === 'stop',
         processThinkingBlock: () => null,

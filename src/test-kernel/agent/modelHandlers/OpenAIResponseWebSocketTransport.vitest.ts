@@ -170,7 +170,11 @@ describe('OpenAIResponseWebSocketTransport idle connection errors', () => {
     expect(detectSdkErrorMetadata(error)?.kind).toBe('connection');
   });
 
-  it('preserves structured provider errors without cooling the connection', async () => {
+  it('preserves structured provider errors while invalidating the socket', async () => {
+    // Classification and invalidation are independent: a structured API error
+    // keeps its own code (no connection kind, no route cooling), but the
+    // server may refuse further service on this socket without closing it, so
+    // the cached connection is dropped and the next execute() reconnects.
     const transport = createTransport();
     const ws = await internals(transport).getOrCreateWebSocket(fakeClient);
     const request = internals(transport).executeViaWebSocket(ws, {});
@@ -187,7 +191,7 @@ describe('OpenAIResponseWebSocketTransport idle connection errors', () => {
     await expect(request).rejects.toBe(error);
     expect(detectSdkErrorMetadata(error)).toBeUndefined();
     expect(normalizeProviderError(error).statusCode).toBe(400);
-    expect(internals(transport).wsConnection).toBe(ws);
+    expect(internals(transport).wsConnection).toBeNull();
   });
 
   it('tags an unexpected in-flight socket close as a connection failure', async () => {

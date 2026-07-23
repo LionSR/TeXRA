@@ -27,6 +27,13 @@ function handler(
 }
 
 class CredentialRouteProbe extends ModelHandlerGoogleGenAI {
+  // Pin the endpoint so the key assertions exercise identity semantics
+  // without dragging base-URL resolution (server-side key service) into a
+  // unit test.
+  override getRetryEndpoint(): string {
+    return 'https://google.test/v1';
+  }
+
   tag(
     client: GoogleGenAI,
     route: ModelCredentialRoute,

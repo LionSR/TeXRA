@@ -46,7 +46,7 @@ function buildRound(supportsForcedToolChoice: boolean) {
       webSearchResults: [],
     }),
     extractToolUse: () => [],
-    getRetryEndpoint: () => 'https://api.openai.com/v1',
+    getWireRouteKey: () => 'openai:test-route',
     getStreamingConfig: () => false,
     isEndTurnStop: () => true,
     processThinkingBlock: () => null,

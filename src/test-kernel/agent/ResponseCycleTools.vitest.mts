@@ -20,7 +20,7 @@ function responseServices({
     toolRegistry: getDefaultToolRegistry(),
     modelHandler: {
       config: { provider: 'openai', fullName: 'test-model' },
-      getRetryEndpoint: () => 'https://api.openai.com/v1',
+      getWireRouteKey: () => 'openai:test-route',
       capabilities: { supportsFunctionCalling },
     },
     setting: {
@@ -119,7 +119,7 @@ describe('response cycle tool visibility', () => {
       modelHandler: {
         config: { provider: 'openai', fullName: 'test-model' },
         createResponse,
-        getRetryEndpoint: () => 'https://api.openai.com/v1',
+        getWireRouteKey: () => 'openai:test-route',
         isBackgroundModeActive: () => false,
         setOutputStreaming: vi.fn(),
       },

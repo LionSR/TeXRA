@@ -29,11 +29,13 @@ const XAI_TEST_CONFIG = Object.freeze({
 
 function createClientStub() {
   const createCalls: any[] = [];
+  const createOptions: any[] = [];
   const client = {
     chat: {
       completions: {
-        create: async (params: any) => {
+        create: async (params: any, options?: any) => {
           createCalls.push(params);
+          createOptions.push(options);
           return {
             id: `completion-${createCalls.length}`,
             choices: [
@@ -59,6 +61,7 @@ function createClientStub() {
   const withOptions = vi.fn(() => client);
   return {
     createCalls,
+    createOptions,
     client: Object.assign(client, { withOptions }),
     withOptions,
   };
@@ -113,7 +116,8 @@ describe('OpenAI-compatible provider request params', () => {
       (handler as any).getStreamingConfig = () => false;
       (handler as any).estimateTokenCount = async () => 100;
 
-      const { client, createCalls, withOptions } = createClientStub();
+      const { client, createCalls, createOptions, withOptions } =
+        createClientStub();
       await handler.createResponse({
         client: client as any,
         messages: [
@@ -125,7 +129,9 @@ describe('OpenAI-compatible provider request params', () => {
       });
 
       assert.equal(createCalls.length, 2);
-      assert.deepEqual(withOptions.mock.calls, [[{ maxRetries: 2 }]]);
+      // Compaction retries ride per-request options, not a client clone.
+      assert.deepEqual(withOptions.mock.calls, []);
+      assert.equal(createOptions[0]?.maxRetries, 2);
       assert.equal(createCalls[0].temperature, 1);
       assert.equal(createCalls[0].thinking, undefined);
     },

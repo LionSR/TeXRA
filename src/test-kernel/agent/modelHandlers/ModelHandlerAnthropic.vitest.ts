@@ -869,6 +869,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     ];
 
     const callOrder: string[] = [];
+    const countTokensOptions: any[] = [];
 
     const client = {
       beta: {
@@ -879,8 +880,9 @@ describe('ModelHandlerAnthropic message guards', () => {
           },
         },
         messages: {
-          countTokens: async () => {
+          countTokens: async (_params: unknown, options?: any) => {
             callOrder.push('countTokens');
+            countTokensOptions.push(options);
             return { input_tokens: 5 } as any;
           },
           create: async () => {
@@ -907,7 +909,9 @@ describe('ModelHandlerAnthropic message guards', () => {
     });
 
     assert.deepEqual(callOrder, ['countTokens', 'upload', 'create']);
-    assert.deepEqual(client.withOptions.mock.calls, [[{ maxRetries: 2 }]]);
+    // Token counting retries ride per-request options, not a client clone.
+    assert.deepEqual(client.withOptions.mock.calls, []);
+    assert.equal(countTokensOptions[0]?.maxRetries, 2);
     assert.equal(response.response.stop_reason, 'end_turn');
   });
 
