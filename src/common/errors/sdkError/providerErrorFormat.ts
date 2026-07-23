@@ -498,15 +498,6 @@ export function classifyModelRateLimitFailure(
     : undefined;
 }
 
-/** Whether the relay's per-user request gate rejected this call. */
-export function isRelayRequestLimitFailure(error: Error): boolean {
-  const chain = causeChain(error);
-  return (
-    detectRateLimitScope(error, detectRouteStatusCode(error, chain)) ===
-    'relay-user'
-  );
-}
-
 /** Whether an upstream rate limit proves the relay request gate admitted the call. */
 export function isRelayRequestGateReachableFailure(error: Error): boolean {
   const chain = causeChain(error);

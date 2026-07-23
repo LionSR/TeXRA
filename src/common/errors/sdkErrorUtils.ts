@@ -44,7 +44,6 @@ export {
   isProviderErrorAutoRetryable,
   isModelRateLimitFailure,
   isRelayRequestGateReachableFailure,
-  isRelayRequestLimitFailure,
   getSdkErrorMessage,
   buildErrorLogData,
   buildFailedRetryInfo,

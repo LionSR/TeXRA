@@ -227,6 +227,43 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     expect(result.updatedMessages).toEqual(compactedMessages);
   });
 
+  it('stops the turn when Responses compaction is aborted', async () => {
+    const handler = createHandler();
+    const requests: any[] = [];
+    const controller = new AbortController();
+    const client = withSdkOptions({
+      responses: {
+        inputTokens: {
+          count: async () => ({ input_tokens: 800 }),
+        },
+        compact: async () => {
+          controller.abort();
+          throw controller.signal.reason;
+        },
+        create: async (params: any) => {
+          requests.push(params);
+          return createResponse('resp-before-threshold', 800);
+        },
+      },
+    });
+
+    await handler.createResponse({
+      client: client as any,
+      messages: createMessages(2),
+      temperature: 0,
+    });
+    await expect(
+      handler.createResponse({
+        client: client as any,
+        messages: createMessages(3),
+        temperature: 0,
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+
+    expect(requests).toHaveLength(1);
+  });
+
   it('reuses a successful compaction across a same-turn retry instead of re-compacting (chain-anchor/payload commit race)', async () => {
     // PocketFlow's Node._exec retries a failed exec() with the identical
     // prepRes, so a same-turn retry resends the exact same `messages` array
