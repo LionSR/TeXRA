@@ -1,4 +1,5 @@
 // Node imports
+import { Buffer } from 'node:buffer';
 import { basename } from 'node:path';
 
 // Third-party imports
@@ -74,6 +75,7 @@ import {
   describeAttachments,
   formatAttachmentSummaryFromNotes,
   formatToolResultAsText,
+  wipeBuffer,
 } from '../utils/toolAttachmentUtils';
 import { tagAnthropicSdkError } from './anthropicSdkError';
 import {
@@ -91,6 +93,7 @@ import {
   enforceCacheControlLimit,
 } from './anthropicContextManagement';
 import {
+  countPdfPagesFromBuffer,
   extractDocumentBlocks,
   analyzeDocumentSources,
   replaceDocumentDataWithUploads,
@@ -277,10 +280,30 @@ export class ModelHandlerAnthropic extends ModelHandler<
             { betas: [FILES_API_BETA] },
             { signal, maxRetries: 0 },
           );
-          // Match the shared no-tokenizer heuristic without materializing a
-          // string as large as the remote document.
-          sizeEstimate = Math.ceil(metadata.size_bytes / 4);
-          this.fileTokenEstimates.set(fileId, sizeEstimate);
+          if (metadata.mime_type === 'application/pdf') {
+            const response = await client.beta.files.download(
+              fileId,
+              { betas: [FILES_API_BETA] },
+              { signal, maxRetries: 0 },
+            );
+            const buffer = Buffer.from(await response.arrayBuffer());
+            try {
+              signal?.throwIfAborted();
+              const pageCount = await countPdfPagesFromBuffer(buffer);
+              if (pageCount > 0) {
+                this.uploadedPdfPageCounts.set(fileId, pageCount);
+                sizeEstimate =
+                  pageCount * ANTHROPIC_PDF_TOKENS_PER_PAGE_ESTIMATE;
+              }
+            } finally {
+              wipeBuffer(buffer);
+            }
+          } else {
+            // Match the shared no-tokenizer heuristic without materializing a
+            // string as large as the remote document.
+            sizeEstimate = Math.ceil(metadata.size_bytes / 4);
+            this.fileTokenEstimates.set(fileId, sizeEstimate);
+          }
         } catch (error) {
           signal?.throwIfAborted();
           this.logger.debug(

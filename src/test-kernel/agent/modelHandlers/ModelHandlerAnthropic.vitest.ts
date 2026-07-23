@@ -6,6 +6,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { APIUserAbortError as AnthropicUserAbortError } from '@anthropic-ai/sdk';
+import { PDFDocument } from '@cantoo/pdf-lib';
 import { afterEach, describe, it, vi } from 'vitest';
 import {
   type ModelCapabilities,
@@ -1482,6 +1483,52 @@ describe('ModelHandlerAnthropic message guards', () => {
     await handler.createResponse({ client, messages, temperature: 0 });
 
     assert.deepEqual(activityStates, ['started', 'finished']);
+  });
+
+  it('recovers PDF page estimates for resumed file references', async () => {
+    const handler = createAnthropicHandler({ supportsNativePdf: true });
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: { type: 'file', file_id: 'file_resumed_pdf' },
+          },
+        ] as unknown as ContentBlockParam[],
+      },
+    ];
+    const target = handler as unknown as {
+      estimateFileReferenceTokens(
+        client: unknown,
+        messages: MessageParam[],
+      ): Promise<number>;
+    };
+    const pdf = await PDFDocument.create();
+    pdf.addPage();
+    const pdfBytes = Uint8Array.from(await pdf.save());
+    const retrieveMetadata = vi.fn(async () => ({
+      mime_type: 'application/pdf',
+      size_bytes: 800_000,
+    }));
+    const download = vi.fn(async () => ({
+      arrayBuffer: async () => pdfBytes.buffer,
+    }));
+    const client = { beta: { files: { retrieveMetadata, download } } };
+
+    const firstEstimate = await target.estimateFileReferenceTokens(
+      client,
+      messages,
+    );
+    const cachedEstimate = await target.estimateFileReferenceTokens(
+      client,
+      messages,
+    );
+
+    assert.equal(firstEstimate, 3_000);
+    assert.equal(cachedEstimate, 3_000);
+    assert.equal(retrieveMetadata.mock.calls.length, 1);
+    assert.equal(download.mock.calls.length, 1);
   });
 
   it('prefers tracked PDF pages over compressed file size', async () => {
