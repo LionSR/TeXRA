@@ -1443,6 +1443,74 @@ describe('ModelHandlerAnthropic message guards', () => {
     assert.deepEqual(activityStates, ['started', 'finished']);
   });
 
+  it('prefers tracked PDF pages over compressed file size', async () => {
+    const handler = createAnthropicHandler({ supportsNativePdf: true });
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: { type: 'file', file_id: 'file_tracked' },
+          },
+        ] as unknown as ContentBlockParam[],
+      },
+    ];
+    const target = handler as unknown as {
+      uploadedPdfPageCounts: Map<string, number>;
+      estimateFileReferenceTokens(
+        client: unknown,
+        messages: MessageParam[],
+      ): Promise<number>;
+    };
+    target.uploadedPdfPageCounts.set('file_tracked', 1);
+    const retrieveMetadata = vi.fn(async () => ({ size_bytes: 800_000 }));
+
+    const estimate = await target.estimateFileReferenceTokens(
+      { beta: { files: { retrieveMetadata } } },
+      messages,
+    );
+
+    assert.equal(estimate, 2_000);
+    assert.equal(retrieveMetadata.mock.calls.length, 0);
+  });
+
+  it('stops file metadata estimation immediately after cancellation', async () => {
+    const handler = createAnthropicHandler({ supportsNativePdf: true });
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: ['first', 'second'].map((fileId) => ({
+          type: 'document',
+          source: { type: 'file', file_id: fileId },
+        })) as unknown as ContentBlockParam[],
+      },
+    ];
+    const target = handler as unknown as {
+      estimateFileReferenceTokens(
+        client: unknown,
+        messages: MessageParam[],
+        signal: AbortSignal,
+      ): Promise<number>;
+    };
+    const controller = new AbortController();
+    const reason = new DOMException('cancelled', 'AbortError');
+    const retrieveMetadata = vi.fn(async () => {
+      controller.abort(reason);
+      throw reason;
+    });
+
+    await assert.rejects(
+      target.estimateFileReferenceTokens(
+        { beta: { files: { retrieveMetadata } } },
+        messages,
+        controller.signal,
+      ),
+      reason,
+    );
+    assert.equal(retrieveMetadata.mock.calls.length, 1);
+  });
+
   it('does not add native compaction context edit for non-Opus models', async () => {
     const handler = createAnthropicHandler({
       supportsTokenCounting: false,

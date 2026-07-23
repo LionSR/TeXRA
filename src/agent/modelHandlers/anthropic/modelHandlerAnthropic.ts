@@ -197,9 +197,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   /**
-   * Removes entries from uploadedPdfPageCounts whose file IDs are no longer
-   * referenced in the current messages. This keeps the tracked total accurate
-   * after server-side compaction drops old messages.
+   * Removes page counts and token estimates for file IDs no longer referenced
+   * in the current messages. This keeps both caches accurate after server-side
+   * compaction drops old messages.
    */
   private pruneTrackedFileMetadata(messages: MessageParam[]): void {
     const liveFileIds = new Set<string>();
@@ -263,6 +263,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
     );
     let total = 0;
     for (const fileId of fileIds) {
+      signal?.throwIfAborted();
+      const pageEstimate =
+        (this.uploadedPdfPageCounts.get(fileId) ?? 0) * tokensPerPdfPage;
+      if (pageEstimate > 0) {
+        total += pageEstimate;
+        continue;
+      }
+
       let sizeEstimate = this.fileTokenEstimates.get(fileId);
       if (sizeEstimate === undefined) {
         try {
@@ -276,15 +284,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
           sizeEstimate = Math.ceil(metadata.size_bytes / 4);
           this.fileTokenEstimates.set(fileId, sizeEstimate);
         } catch (error) {
+          signal?.throwIfAborted();
           this.logger.debug(
             'Unable to estimate Anthropic file-reference tokens.',
-            { data: error },
+            { data: { fileId, error } },
           );
         }
       }
-      const pageEstimate =
-        (this.uploadedPdfPageCounts.get(fileId) ?? 0) * tokensPerPdfPage;
-      total += Math.max(sizeEstimate ?? 0, pageEstimate);
+      total += sizeEstimate ?? 0;
     }
     return total;
   }
