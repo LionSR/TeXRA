@@ -38,9 +38,9 @@ import {
  */
 
 /**
- * Optional `ApiProvider` argument for `texra.setApiKey`. The tuple accepts
- * no element so the registry's `safeParse` succeeds when the command is
- * invoked from the palette without arguments — the action then prompts the
+ * Optional `ApiProvider` argument for `texra.setApiKey`. The tuple's single
+ * element is optional, so the registry's `safeParse` succeeds when the command
+ * is invoked from the palette without arguments — the action then prompts the
  * user via `showQuickPick`.
  */
 const SetApiKeyArgsSchema = z.tuple([z.enum(API_PROVIDERS).optional()]);
@@ -104,6 +104,8 @@ export const EXTENSION_INTERNAL_COMMAND_IDS = [
 type InternalExtensionRegistryCommandId =
   (typeof EXTENSION_INTERNAL_COMMAND_IDS)[number];
 
+type OptionalFileLocation = FileLocation | null | undefined;
+
 export type ExtensionRegistryCommandId =
   ExtensionRegistryCatalogCommandId | InternalExtensionRegistryCommandId;
 
@@ -151,13 +153,13 @@ export interface ExtensionCommandActions {
     inputFiles: string[],
   ): Promise<void>;
   compare(
-    inputLocation: FileLocation,
-    baseLocation: FileLocation,
+    inputLocation: OptionalFileLocation,
+    baseLocation: OptionalFileLocation,
     editedLocation: FileLocation,
   ): Promise<void>;
   acceptEdited(
-    inputLocation: FileLocation,
-    baseLocation: FileLocation,
+    inputLocation: OptionalFileLocation,
+    baseLocation: OptionalFileLocation,
     editedLocation: FileLocation,
     copyMeta?: AcceptCopyMeta,
   ): Promise<boolean>;

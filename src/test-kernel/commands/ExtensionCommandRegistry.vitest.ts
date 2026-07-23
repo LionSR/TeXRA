@@ -498,6 +498,52 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
       );
     });
 
+    it('preserves the input-location fallback when base is omitted', async () => {
+      const actions = makeActions();
+      const input = {
+        kind: 'workspace' as const,
+        absolutePath: '/workspace/main.tex',
+        relativePath: 'main.tex',
+      };
+      const edited = {
+        kind: 'external' as const,
+        absolutePath: '/tmp/edited.tex',
+      };
+
+      const compareResult = dispatchCommandFromRegistry(
+        'texra.compare',
+        EXTENSION_COMMAND_HANDLERS,
+        actions,
+        undefined,
+        input,
+        undefined,
+        edited,
+      );
+      const acceptResult = dispatchCommandFromRegistry(
+        'texra.acceptEdited',
+        EXTENSION_COMMAND_HANDLERS,
+        actions,
+        undefined,
+        input,
+        undefined,
+        edited,
+      );
+
+      await expect(Promise.resolve(compareResult)).resolves.toBe(true);
+      await expect(Promise.resolve(acceptResult)).resolves.toBe(true);
+      expect(actions.compare).toHaveBeenCalledExactlyOnceWith(
+        input,
+        undefined,
+        edited,
+      );
+      expect(actions.acceptEdited).toHaveBeenCalledExactlyOnceWith(
+        input,
+        undefined,
+        edited,
+        undefined,
+      );
+    });
+
     it('rejects malformed positional arguments before calling actions', () => {
       const actions = makeActions();
 

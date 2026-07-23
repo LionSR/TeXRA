@@ -77,19 +77,31 @@ export const CleanMultipleCommandArgsSchema = z.tuple([
 ]);
 
 /** Positional arguments for opening a comparison between two files. */
-export const CompareCommandArgsSchema = z.tuple([
-  FileLocationSchema,
-  FileLocationSchema,
-  FileLocationSchema,
-]);
+export const CompareCommandArgsSchema = z
+  .tuple([
+    FileLocationSchema.nullish(),
+    FileLocationSchema.nullish(),
+    FileLocationSchema,
+  ])
+  .refine(
+    ([inputLocation, baseLocation]) =>
+      inputLocation != null || baseLocation != null,
+    { error: 'inputLocation or baseLocation required' },
+  );
 
 /** Positional arguments for accepting an edited file. */
-export const AcceptEditedCommandArgsSchema = z.tuple([
-  FileLocationSchema,
-  FileLocationSchema,
-  FileLocationSchema,
-  AcceptCopyMetaSchema.optional(),
-]);
+export const AcceptEditedCommandArgsSchema = z
+  .tuple([
+    FileLocationSchema.nullish(),
+    FileLocationSchema.nullish(),
+    FileLocationSchema,
+    AcceptCopyMetaSchema.optional(),
+  ])
+  .refine(
+    ([inputLocation, baseLocation]) =>
+      inputLocation != null || baseLocation != null,
+    { error: 'inputLocation or baseLocation required' },
+  );
 
 /**
  * Merges the runDir and workspace legs of an executionId-driven pack/clean

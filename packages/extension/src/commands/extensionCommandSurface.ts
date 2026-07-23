@@ -9,19 +9,7 @@ import {
   handleCreateAgentWithAI as agentHandleCreateAgentWithAI,
   runExecuteCommand as agentRunExecuteCommand,
 } from '@commands/agent';
-import {
-  handleClean as fileHandleClean,
-  handleCleanMultiple as fileHandleCleanMultiple,
-  handleCleanSingle as fileHandleCleanSingle,
-  handlePack as fileHandlePack,
-  handlePackMultiple as fileHandlePackMultiple,
-  handlePackSingle as fileHandlePackSingle,
-} from '@commands/housekeeping';
-import {
-  downloadArXivSource as latexDownloadArXivSource,
-  handleAcceptEdited as latexHandleAcceptEdited,
-  handleCompare as latexHandleCompare,
-} from '@commands/latex';
+import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex';
 import { launchSetupAssistant } from '@commands/setup';
 import {
   createSampleProject as sysCreateSampleProject,
@@ -30,6 +18,20 @@ import {
   handleLoadSpecificAgent as sysHandleLoadSpecificAgent,
   showImportOptions as sysShowImportOptions,
 } from '@commands/system';
+import {
+  handleClean as fileHandleClean,
+  handleCleanMultiple as fileHandleCleanMultiple,
+  handleCleanSingle as fileHandleCleanSingle,
+} from '@commands/housekeeping/cleanCommands';
+import {
+  handlePack as fileHandlePack,
+  handlePackMultiple as fileHandlePackMultiple,
+  handlePackSingle as fileHandlePackSingle,
+} from '@commands/housekeeping/packCommands';
+import {
+  handleAcceptEdited as latexHandleAcceptEdited,
+  handleCompare as latexHandleCompare,
+} from '@commands/latex/compareCommands';
 import {
   setApiKey as apiSetApiKey,
   removeApiKey as apiRemoveApiKey,

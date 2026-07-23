@@ -27,8 +27,8 @@ import { FlexibleFS } from '@utils/files';
 const CHANNEL = 'CompareCommands';
 
 function validateFileLocations(
-  inputLocation: FileLocation,
-  baseLocation: FileLocation,
+  inputLocation: FileLocation | null | undefined,
+  baseLocation: FileLocation | null | undefined,
   editedLocation: FileLocation,
   errorMessage: string,
 ): FileLocation | null {
@@ -74,8 +74,8 @@ async function validateFilesExist(
 }
 
 export async function handleCompare(
-  inputLocation: FileLocation,
-  baseLocation: FileLocation,
+  inputLocation: FileLocation | null | undefined,
+  baseLocation: FileLocation | null | undefined,
   editedLocation: FileLocation,
 ): Promise<void> {
   try {
@@ -200,8 +200,8 @@ async function pickReplaceOrCopyTarget(
 }
 
 export async function handleAcceptEdited(
-  inputLocation: FileLocation,
-  baseLocation: FileLocation,
+  inputLocation: FileLocation | null | undefined,
+  baseLocation: FileLocation | null | undefined,
   editedLocation: FileLocation,
   copyMeta?: AcceptCopyMeta,
 ): Promise<boolean> {
