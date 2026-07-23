@@ -149,21 +149,26 @@ async function personalKeyProviders(): Promise<string[]> {
   return API_PROVIDERS.filter((_, index) => origins[index] !== 'none');
 }
 
-export async function loadCliApiStatusLines(
-  options: {
-    readonly apiMode?: CliApiMode;
-    readonly includeActionHint?: boolean;
-  } = {},
-): Promise<string[]> {
+export interface CliApiStatus {
+  /** Compact lines used by the launcher. */
+  readonly lines: readonly string[];
+  /** API account facts appended to the detailed account overview. */
+  readonly detailLines: readonly string[];
+}
+
+export interface LoadCliApiStatusOptions {
+  readonly apiMode?: CliApiMode;
+  readonly includeActionHint?: boolean;
+}
+
+export async function loadCliApiStatus(
+  options: LoadCliApiStatusOptions = {},
+): Promise<CliApiStatus> {
   const mode = options.apiMode ?? getCliApiMode();
   const profile = await getCliAuthProfile();
-  const lines = [
-    `api: ${formatCliModelAccessRouteInline(mode)}`,
-    formatCliAuthStatusLine(profile),
-  ];
-  const mergeIncludedUsageIntoAuth = (usage: string): void => {
-    lines[1] = `${lines[1]} · ${usage}`;
-  };
+  const supplementalLines: string[] = [];
+  const detailLines: string[] = [];
+  let authLine = formatCliAuthStatusLine(profile);
   const configuredPersonalKeyProviders =
     options.includeActionHint === true || profile.authenticated
       ? await personalKeyProviders()
@@ -178,12 +183,13 @@ export async function loadCliApiStatusLines(
       true,
       configuredPersonalKeyProviders,
     );
-    if (shadowWarning) lines.push(shadowWarning);
+    if (shadowWarning) supplementalLines.push(shadowWarning);
   }
 
-  if (profile.note) lines.push(profile.note);
-
+  if (profile.note) supplementalLines.push(profile.note);
+  detailLines.push(...supplementalLines);
   if (profile.authenticated && profile.tier) {
+    detailLines.push(`tier: ${profile.tier}`);
     // Usage reads usage_logs via PostgREST with a session token; a
     // relay-scoped CI token cannot read it. Explain the limitation (same as
     // `texra auth usage`) instead of surfacing a generic fetch error — but a
@@ -191,26 +197,37 @@ export async function loadCliApiStatusLines(
     const canReadUsage =
       profile.credentialSource !== 'relayToken' ||
       (await getCliSessionAccessToken()) !== null;
+    let usage: string;
     if (!canReadUsage) {
-      mergeIncludedUsageIntoAuth(
-        'included usage: not available with a CI relay token (run `texra login` to view usage)',
-      );
+      usage =
+        'included usage: not available with a CI relay token (run `texra login` to view usage)';
     } else {
       try {
         const usageTier = (await resolveCliUsageTier(profile)) ?? 'free';
-        mergeIncludedUsageIntoAuth(
-          formatRelayUsageStatus(
-            await fetchRelayUsageSummary({ tier: usageTier }),
-          ),
+        usage = formatRelayUsageStatus(
+          await fetchRelayUsageSummary({ tier: usageTier }),
         );
       } catch (error: unknown) {
-        mergeIncludedUsageIntoAuth(
-          `included usage: unavailable (${toErrorMessage(error)})`,
-        );
+        usage = `included usage: unavailable (${toErrorMessage(error)})`;
       }
     }
+    detailLines.push(usage);
+    authLine = `${authLine} · ${usage}`;
   }
 
-  if (actionHint) lines.push(actionHint);
-  return lines;
+  return {
+    lines: [
+      `api: ${formatCliModelAccessRouteInline(mode)}`,
+      authLine,
+      ...supplementalLines,
+      ...(actionHint ? [actionHint] : []),
+    ],
+    detailLines,
+  };
+}
+
+export async function loadCliApiStatusLines(
+  options: LoadCliApiStatusOptions = {},
+): Promise<string[]> {
+  return [...(await loadCliApiStatus(options)).lines];
 }
