@@ -1,4 +1,9 @@
-export const MATH_MARKUP_OPTIONS = ['off', 'whole', 'coarse', 'fine'] as const;
+export const MATH_MARKUP_OPTIONS = Object.freeze([
+  'off',
+  'whole',
+  'coarse',
+  'fine',
+] as const);
 
 export type MathMarkupOption = (typeof MATH_MARKUP_OPTIONS)[number];
 

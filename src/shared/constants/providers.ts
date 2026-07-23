@@ -447,7 +447,7 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
  * Provider IDs where users can configure direct API keys — the single source
  * for direct key-provider enumeration.
  */
-export const API_KEY_PROVIDER_IDS = [
+export const API_KEY_PROVIDER_IDS = Object.freeze([
   'openai',
   'anthropic',
   'openRouter',
@@ -460,7 +460,7 @@ export const API_KEY_PROVIDER_IDS = [
   'minimax',
   'glm',
   'meta',
-] as const;
+] as const);
 
 // ============================================================================
 // Model pricing hints

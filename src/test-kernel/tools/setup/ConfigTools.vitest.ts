@@ -3,7 +3,29 @@ import { strict as assert } from 'node:assert';
 import { afterEach, describe, it, vi } from 'vitest';
 
 import { ReadConfigTool, UpdateConfigTool } from '@tools/setup/ConfigTools';
-import { texraScopedConfig } from '@tools/setup/platform';
+
+const mocks = vi.hoisted(() => ({
+  get: vi.fn<(key: string) => unknown>(),
+  update:
+    vi.fn<
+      (
+        key: string,
+        value: unknown,
+        target: 'user' | 'workspace',
+      ) => Promise<void>
+    >(),
+}));
+
+vi.mock('@tools/setup/platform', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tools/setup/platform')>();
+  return {
+    ...actual,
+    texraScopedConfig: {
+      get: mocks.get,
+      update: mocks.update,
+    },
+  };
+});
 
 interface UpdateRecord {
   key: string;
@@ -17,18 +39,17 @@ function createPlatform(initial: Record<string, unknown> = {}): {
 } {
   const store: Record<string, unknown> = { ...initial };
   const updates: UpdateRecord[] = [];
-  vi.spyOn(texraScopedConfig, 'get').mockImplementation((key) => store[key]);
-  vi.spyOn(texraScopedConfig, 'update').mockImplementation(
-    async (key, value, target) => {
-      updates.push({ key, value, target });
-      store[key] = value;
-    },
-  );
+  mocks.get.mockImplementation((key) => store[key]);
+  mocks.update.mockImplementation(async (key, value, target) => {
+    updates.push({ key, value, target });
+    store[key] = value;
+  });
   return { store, updates };
 }
 
 afterEach(() => {
-  vi.restoreAllMocks();
+  mocks.get.mockReset();
+  mocks.update.mockReset();
 });
 
 describe('ConfigTools — read_config', () => {
