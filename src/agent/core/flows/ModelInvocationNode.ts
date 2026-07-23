@@ -22,7 +22,6 @@ import {
   classifyWireRouteFailure,
   isModelRateLimitFailure,
   isRelayRequestGateReachableFailure,
-  isRelayRequestLimitFailure,
 } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
 
@@ -166,8 +165,7 @@ export class ModelInvocationNode<
           // sibling models on the same credential and endpoint. Relay calls
           // also share the server's cross-provider per-user request gate.
           classifyFailure: classifyWireRouteFailure,
-          isReachableFailure: (error) =>
-            isModelRateLimitFailure(error) || isRelayRequestLimitFailure(error),
+          isReachableFailure: isModelRateLimitFailure,
           additionalRoutes: [
             {
               key: modelRetryRoute,
@@ -180,6 +178,7 @@ export class ModelInvocationNode<
                   key: RELAY_USER_REQUEST_GATE_ROUTE,
                   classifyFailure: classifyRelayRequestLimitFailure,
                   isReachableFailure: isRelayRequestGateReachableFailure,
+                  releaseProbeBeforeOperation: true,
                 },
               ]
             : undefined,

@@ -469,7 +469,10 @@ function detectRateLimitScope(
 ): 'model' | 'relay-user' | 'wire' | undefined {
   if (statusCode !== StatusCodes.TOO_MANY_REQUESTS) return undefined;
   const formatted = normalizeProviderError(error);
-  if (isRelayRequestLimitBody(formatted.rawErrorBody)) {
+  if (
+    formatted.isRelayError &&
+    isRelayRequestLimitBody(formatted.rawErrorBody)
+  ) {
     return 'relay-user';
   }
   if (formatted.exhaustionReason !== undefined) return 'wire';

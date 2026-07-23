@@ -32,6 +32,7 @@ interface RoutePolicy {
   readonly key: string;
   readonly classifyFailure: (error: Error) => RouteFailure | undefined;
   readonly isReachableFailure?: (error: Error) => boolean;
+  readonly releaseProbeBeforeOperation?: boolean;
 }
 
 interface RunOptions {
@@ -45,7 +46,7 @@ interface RunOptions {
 }
 
 interface AcquiredRoute extends RoutePolicy {
-  readonly permit: RetryPermit;
+  permit: RetryPermit;
 }
 
 function abortReason(signal: AbortSignal): unknown {
@@ -83,6 +84,11 @@ export class ModelRetryGate {
       ...(options.trailingRoutes ?? []),
     ];
     const acquired = await this.acquireAll(policies, options);
+    for (const entry of acquired) {
+      if (entry.releaseProbeBeforeOperation && entry.permit.probe) {
+        entry.permit = this.releaseProbe(entry.key, entry.permit);
+      }
+    }
     try {
       const result = await operation();
       for (const entry of acquired) {
@@ -290,6 +296,21 @@ export class ModelRetryGate {
         probe: false,
       });
     }
+  }
+
+  /**
+   * Opens a request-admission route as soon as its server-provided cooldown
+   * admits the recovery attempt. Unlike a transport route, it must not hold
+   * the queued cohort until a potentially long-lived model response finishes.
+   * Return a current healthy permit so an immediate rejection can close the
+   * route again.
+   */
+  private releaseProbe(route: string, permit: RetryPermit): RetryPermit {
+    this.markReachable(route, permit);
+    const state = this.routes.get(route);
+    return state?.phase === 'healthy'
+      ? { version: state.version, probe: false }
+      : permit;
   }
 
   private abandon(route: string, permit: RetryPermit): void {

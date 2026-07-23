@@ -716,6 +716,22 @@ describe('RetryState', () => {
       retryAfterMs: 60_000,
     });
     expect(first.isRelayReachableFailure?.(modelLimited)).toBe(true);
+
+    const compatibleLimited = new Error(
+      'compatible endpoint request limit',
+    ) as Error & {
+      error: unknown;
+      status: number;
+    };
+    compatibleLimited.status = 429;
+    compatibleLimited.error = {
+      requestLimitReached: true,
+      retryAfterSeconds: 60,
+    };
+
+    expect(first.classifyFailure(compatibleLimited)).toEqual({});
+    expect(first.classifyRelayFailure?.(compatibleLimited)).toBeUndefined();
+    expect(first.isRelayReachableFailure?.(compatibleLimited)).toBe(true);
   });
 
   it('isolates rate-limit recovery by stable credential identity', async () => {

@@ -705,6 +705,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
       });
     }
 
+    signal?.throwIfAborted();
+
     if (documentAnalysis.hasBase64Pdf) {
       const uploadResult = await replaceDocumentDataWithUploads(
         client,
