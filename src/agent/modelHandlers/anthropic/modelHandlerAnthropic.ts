@@ -205,6 +205,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
       const contentBlocks = message.content;
       if (!Array.isArray(contentBlocks)) continue;
 
+      if (
+        contentBlocks.some(
+          (block) => (block as { type?: unknown }).type === 'compaction',
+        )
+      ) {
+        liveFileIds.clear();
+      }
       for (const block of extractDocumentBlocks(contentBlocks)) {
         const source = block.source as
           { type: string; file_id?: string } | undefined;
