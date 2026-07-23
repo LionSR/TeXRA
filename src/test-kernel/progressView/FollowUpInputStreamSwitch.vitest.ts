@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   readFileAsBase64: vi.fn(),
 }));
 
-vi.mock('@utils/files/pastedImageUtils', () => ({
+vi.mock('@utils/files/pastedImageName', () => ({
   generatePastedImageName: mocks.generatePastedImageName,
 }));
 

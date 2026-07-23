@@ -11,10 +11,8 @@ import {
   ToolConfigSchema,
 } from '@shared/schemas/toolConfig';
 import { filterNotNull } from '@utils/core';
-import {
-  getPastedImageFullPath,
-  isPastedImage,
-} from '@utils/files/pastedImageUtils';
+import { isPastedImage } from '@utils/files/pastedImageName';
+import { getPastedImageFullPath } from '@utils/files/pastedImageUtils';
 
 export type MainViewExecutionPreparationResult =
   | { valid: true; request: ValidatedExecutionRequest }
