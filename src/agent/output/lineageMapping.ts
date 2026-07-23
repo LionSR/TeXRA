@@ -101,9 +101,9 @@ export function traceFileLineage(
   baseFiles: FileLocation[],
   currRound: number,
 ): RoundFileMapping {
-  const currentOutputs = state.rounds[currRound]?.outputs ?? [];
+  const currentOutputs = state.rounds.get(currRound)?.outputs ?? [];
   const prevOutputs =
-    currRound > 0 ? (state.rounds[currRound - 1]?.outputs ?? []) : [];
+    currRound > 0 ? (state.rounds.get(currRound - 1)?.outputs ?? []) : [];
 
   const baseEntries = buildBaseEntries(baseFiles);
   const currentLocations = currentOutputs.map((entry) => entry.location);

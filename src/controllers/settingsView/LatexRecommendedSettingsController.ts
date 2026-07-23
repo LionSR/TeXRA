@@ -15,20 +15,41 @@ export interface LatexRecommendedSettingsControllerDeps {
   config: LatexRecommendedSettingsConfig;
 }
 
-/** Recommended LaTeX-related VS Code settings and their target values. */
-const LATEX_RECOMMENDED_SETTINGS: {
+/** A recommended setting whose target value is a single scalar. */
+interface LatexRecommendedScalarSetting {
+  kind: 'scalar';
   key: string;
-  value: unknown;
+  value: string;
+  field: LatexRecommendedSettingField;
+}
+
+/**
+ * A recommended setting whose target value is an object merged key-by-key
+ * into whatever the user already has set (rather than overwritten wholesale).
+ */
+interface LatexRecommendedObjectSetting {
+  kind: 'object';
+  key: string;
+  value: Record<string, unknown>;
   field: LatexRecommendedSettingField;
   /** Object keys from older TeXRA versions to migrate when writing. */
   legacyKeys?: string[];
-}[] = [
+}
+
+type LatexRecommendedSetting =
+  | LatexRecommendedScalarSetting
+  | LatexRecommendedObjectSetting;
+
+/** Recommended LaTeX-related VS Code settings and their target values. */
+const LATEX_RECOMMENDED_SETTINGS: LatexRecommendedSetting[] = [
   {
+    kind: 'scalar',
     key: 'latex-workshop.latex.outDir',
     value: '%DIR%/build/',
     field: 'outDir',
   },
   {
+    kind: 'object',
     key: 'explorer.autoRevealExclude',
     value: { '**/build/': true },
     field: 'autoRevealExclude',
@@ -43,9 +64,9 @@ export class LatexRecommendedSettingsController {
     field?: LatexRecommendedSettingField;
     reset: boolean;
   }): LatexRecommendedSettingUpdate[] {
-    return this.getTargets(input.field).map(({ key, value, legacyKeys }) => ({
-      key,
-      value: this.resolveUpdateValue(key, value, legacyKeys, input.reset),
+    return this.getTargets(input.field).map((setting) => ({
+      key: setting.key,
+      value: this.resolveUpdateValue(setting, input.reset),
     }));
   }
 
@@ -57,57 +78,54 @@ export class LatexRecommendedSettingsController {
     if (!this.deps.config.isExplicitlySet(setting.key)) return false;
 
     const current = this.deps.config.getConfig(setting.key);
-    if (typeof setting.value === 'object' && setting.value !== null) {
-      if (typeof current !== 'object' || current === null) return false;
-      const currentObject = current as Record<string, unknown>;
-      const recommended = setting.value as Record<string, unknown>;
-      return (
-        Object.entries(recommended).every(
-          ([key, value]) => currentObject[key] === value,
-        ) ||
-        (setting.legacyKeys?.some((key) => currentObject[key] !== undefined) ??
-          false)
-      );
+    if (setting.kind === 'scalar') {
+      return current === setting.value;
     }
-    return current === setting.value;
+
+    if (typeof current !== 'object' || current === null) return false;
+    const currentObject = current as Record<string, unknown>;
+    return (
+      Object.entries(setting.value).every(
+        ([key, value]) => currentObject[key] === value,
+      ) ||
+      (setting.legacyKeys?.some((key) => currentObject[key] !== undefined) ??
+        false)
+    );
   }
 
   private getTargets(
     field?: LatexRecommendedSettingField,
-  ): typeof LATEX_RECOMMENDED_SETTINGS {
+  ): LatexRecommendedSetting[] {
     return field
       ? LATEX_RECOMMENDED_SETTINGS.filter((setting) => setting.field === field)
       : LATEX_RECOMMENDED_SETTINGS;
   }
 
   private resolveUpdateValue(
-    key: string,
-    recommendedValue: unknown,
-    legacyKeys: string[] | undefined,
+    setting: LatexRecommendedSetting,
     reset: boolean,
   ): unknown {
-    if (typeof recommendedValue !== 'object' || recommendedValue === null) {
-      return reset ? undefined : recommendedValue;
+    if (setting.kind === 'scalar') {
+      return reset ? undefined : setting.value;
     }
 
-    const recommended = recommendedValue as Record<string, unknown>;
-    const globalValue = this.deps.config.getGlobalValue(key);
+    const globalValue = this.deps.config.getGlobalValue(setting.key);
     const remaining =
       typeof globalValue === 'object' && globalValue !== null
         ? { ...(globalValue as Record<string, unknown>) }
         : {};
 
-    for (const legacyKey of legacyKeys ?? []) {
+    for (const legacyKey of setting.legacyKeys ?? []) {
       delete remaining[legacyKey];
     }
 
     if (reset) {
-      for (const recommendedKey of Object.keys(recommended)) {
+      for (const recommendedKey of Object.keys(setting.value)) {
         delete remaining[recommendedKey];
       }
       return Object.keys(remaining).length > 0 ? remaining : undefined;
     }
 
-    return { ...remaining, ...recommended };
+    return { ...remaining, ...setting.value };
   }
 }
