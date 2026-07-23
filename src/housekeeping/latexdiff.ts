@@ -45,24 +45,33 @@ export async function runPackLatexdiffvc(
   const inputDir = path.dirname(inputFile);
   const filePatterns = [`${baseName}-diff${commitHash}`];
 
-  const mainFiles = findFilesFromPatterns(inputDir, filePatterns, [
+  const mainFiles = new Set<string>();
+  for await (const file of findFilesFromPatterns(inputDir, filePatterns, [
     '.tex',
     '.pdf',
-  ]);
-  const tempFiles = findFilesFromPatterns(
+  ])) {
+    mainFiles.add(file);
+  }
+
+  const tempFiles = new Set<string>();
+  for await (const file of findFilesFromPatterns(
     inputDir,
     filePatterns,
     TEMP_EXTENSIONS,
-  );
+  )) {
+    tempFiles.add(file);
+  }
 
-  if (mainFiles.length === 0 && tempFiles.length === 0) {
+  if (mainFiles.size === 0 && tempFiles.size === 0) {
     logger.warn(CHANNEL, 'No LaTeX diff files found to process');
     return { status: 'no-files', inputFile };
   }
 
   if (clean) {
-    for (const file of [...mainFiles, ...tempFiles]) {
-      await WorkspaceFS.delete(file);
+    for (const files of [mainFiles, tempFiles]) {
+      for (const file of files) {
+        await WorkspaceFS.delete(file);
+      }
     }
     logger.info(CHANNEL, 'Cleanup complete.');
     return { status: 'cleaned', inputFile };
