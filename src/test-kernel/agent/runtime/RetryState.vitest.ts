@@ -216,6 +216,7 @@ interface CapturedModelRetry {
   readonly classifyRelayFailure?: (
     error: Error,
   ) => { retryAfterMs?: number } | undefined;
+  readonly isRelayReachableFailure?: (error: Error) => boolean;
   readonly gateCalls: number;
 }
 
@@ -283,6 +284,7 @@ async function captureModelRetry(
       classifyFailure: modelOptions.classifyFailure,
       classifyModelFailure: modelRoute.classifyFailure,
       classifyRelayFailure: relayRoute?.classifyFailure,
+      isRelayReachableFailure: relayRoute?.isReachableFailure,
       gateCalls: run.mock.calls.length,
     };
   } finally {
@@ -700,6 +702,12 @@ describe('RetryState', () => {
       undefined,
       'anthropic:model-b',
     );
+    const modelLimited = new Error('provider model rate limit') as Error & {
+      error: unknown;
+      status: number;
+    };
+    modelLimited.status = 429;
+    modelLimited.error = { type: 'rate_limit_error', scope: 'model' };
 
     expect(first.classifyFailure(limited)).toBeUndefined();
     expect(first.classifyModelFailure(limited)).toBeUndefined();
@@ -707,6 +715,7 @@ describe('RetryState', () => {
     expect(first.classifyRelayFailure?.(limited)).toEqual({
       retryAfterMs: 60_000,
     });
+    expect(first.isRelayReachableFailure?.(modelLimited)).toBe(true);
   });
 
   it('isolates rate-limit recovery by stable credential identity', async () => {

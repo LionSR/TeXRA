@@ -131,21 +131,26 @@ export class ModelInvocationNode<
         services.client,
       );
       const gate = useLaunchRunContext().runScope.session.modelRetries;
+      // The relay enforces its request limit by user, independently of
+      // provider, model, and endpoint. Retry gates live within one
+      // authenticated run session, so every relay call shares this key.
       const additionalRoutes = [
         {
           key: modelRetryRoute,
           classifyFailure: classifyModelRateLimitFailure,
         },
+        ...(services.clientCredentialRoute === 'relay'
+          ? [
+              {
+                key: RELAY_USER_REQUEST_GATE_ROUTE,
+                classifyFailure: classifyRelayRequestLimitFailure,
+                // A provider model limit is returned only after the relay's
+                // per-user request gate admitted the call.
+                isReachableFailure: isModelRateLimitFailure,
+              },
+            ]
+          : []),
       ];
-      if (services.clientCredentialRoute === 'relay') {
-        // Model retry gates live within one authenticated run session. The
-        // relay enforces this limit by user, independently of provider, model,
-        // and endpoint, so every relay call in the session shares this key.
-        additionalRoutes.push({
-          key: RELAY_USER_REQUEST_GATE_ROUTE,
-          classifyFailure: classifyRelayRequestLimitFailure,
-        });
-      }
       const invoke = async () => {
         const start = Date.now();
         const result = await services.modelHandler.createResponse({
