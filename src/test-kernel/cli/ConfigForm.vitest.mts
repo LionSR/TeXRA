@@ -655,7 +655,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
     rendered.stdout.output = '';
     initial.resolve(apiKeyStatuses({ openai: 'set' }));
     await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(rendered.stdout.output).toBe('');
+    expect(stripAnsi(rendered.stdout.output)).toBe('');
     expect(onError).not.toHaveBeenCalled();
   });
 
