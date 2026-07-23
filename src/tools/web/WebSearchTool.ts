@@ -44,34 +44,34 @@ export type WebSearchInput = z.infer<typeof WebSearchInputSchema>;
  * `src/tools/zotero/bbtClient.ts` (`BbtCollectionChainSchema`).
  */
 interface DuckDuckGoResult {
-  Text?: string;
-  FirstURL?: string;
-  Topics?: DuckDuckGoResult[];
+  Text?: string | null;
+  FirstURL?: string | null;
+  Topics?: DuckDuckGoResult[] | null;
 }
 
 const DuckDuckGoResultSchema: z.ZodType<DuckDuckGoResult> = z.lazy(() =>
   z.looseObject({
-    Text: z.string().optional(),
-    FirstURL: z.string().optional(),
-    Topics: z.array(DuckDuckGoResultSchema).optional(),
+    Text: z.string().nullish(),
+    FirstURL: z.string().nullish(),
+    Topics: z.array(DuckDuckGoResultSchema).nullish(),
   }),
 );
 
 const DuckDuckGoInfoboxContentItemSchema = z.looseObject({
-  label: z.string().optional(),
-  value: z.string().optional(),
+  label: z.string().nullish(),
+  value: z.string().nullish(),
 });
 
 const DuckDuckGoResponseSchema = z.looseObject({
-  Abstract: z.string().optional(),
-  AbstractText: z.string().optional(),
-  AbstractURL: z.string().optional(),
-  AbstractSource: z.string().optional(),
-  Heading: z.string().optional(),
-  RelatedTopics: z.array(DuckDuckGoResultSchema).optional(),
+  Abstract: z.string().nullish(),
+  AbstractText: z.string().nullish(),
+  AbstractURL: z.string().nullish(),
+  AbstractSource: z.string().nullish(),
+  Heading: z.string().nullish(),
+  RelatedTopics: z.array(DuckDuckGoResultSchema).nullish(),
   Infobox: z
     .looseObject({
-      content: z.array(DuckDuckGoInfoboxContentItemSchema).optional(),
+      content: z.array(DuckDuckGoInfoboxContentItemSchema).nullish(),
     })
     .nullish(),
 });

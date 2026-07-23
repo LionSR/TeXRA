@@ -6,8 +6,6 @@ import {
   type ProgressViewOutboundHandlerRegistry,
   type StreamContentRenderPayload,
 } from '@shared/schemas';
-import { deriveGoalState } from '@shared/schemas/goal';
-
 // Local imports
 import {
   updateParentStreamId,
@@ -49,13 +47,10 @@ export const syncHandlers = {
       }));
     } else {
       const { workPlan, controls } = data;
-      const goal = deriveGoalState({
-        goalActive: controls.goal.active,
-        goalStatus: controls.goal.active ? controls.goal.status : undefined,
-        goalObjective: controls.goal.active
-          ? controls.goal.objective
-          : undefined,
-      });
+      // `controls.goal` is already the canonical GoalState-shaped union on
+      // the wire (GoalSyncSchema mirrors GoalState's discriminant/fields
+      // exactly) — no need to round-trip it through deriveGoalState.
+      const goal = controls.goal;
       updateToolUseState(data.stream, (prev) => ({
         ...prev,
         ...activeStateFields(data),

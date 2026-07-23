@@ -102,8 +102,12 @@ const ContentBlockSchema = z.discriminatedUnion('type', [
     content: z.array(WebSearchResultItemSchema).optional(),
   }),
   // `extractWebFetchResultFields` reads its fields off the raw block itself
-  // (it accepts `unknown`), so this variant only needs the discriminant.
-  z.object({
+  // (it accepts `unknown`), not off this schema's inferred type, so this
+  // variant only declares the discriminant. `looseObject` (not `object`)
+  // documents that undeclared fields are intentionally read elsewhere —
+  // and keeps that true if runtime `.parse()` is ever added to this schema
+  // (currently it isn't; see the module-level type-derivation-only note).
+  z.looseObject({
     type: z.literal(ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.webFetchToolResult),
   }),
 ]);
