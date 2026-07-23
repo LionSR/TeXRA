@@ -18,7 +18,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { isFileNotFoundError } from '@common/errors';
-import { generatePastedImageName } from '@utils/files/pastedImageUtils';
+import { generatePastedImageName } from '@utils/files/pastedImageName';
 import { savePastedImageBuffer } from '@utils/files/pastedImageUtils';
 
 const execFileAsync = promisify(execFile);

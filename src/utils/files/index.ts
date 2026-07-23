@@ -13,5 +13,8 @@ export * from './flexibleFS';
 // Import directly from their source modules:
 //   import { loadTexraRules } from '@utils/files/rulesUtils';
 //   import { setVarFromFile } from '@utils/files/varsUtils';
-//   import { generatePastedImageName } from '@utils/files/pastedImageName';
-//   import { isPastedImage, ... } from '@utils/files/pastedImageUtils';
+//   import {
+//     generatePastedImageName,
+//     isPastedImage,
+//   } from '@utils/files/pastedImageName';
+//   import { savePastedImageBuffer } from '@utils/files/pastedImageUtils';
