@@ -32,6 +32,7 @@ interface RoutePolicy {
   readonly key: string;
   readonly classifyFailure: (error: Error) => RouteFailure | undefined;
   readonly isReachableFailure?: (error: Error) => boolean;
+  readonly isUnobservedFailure?: (error: Error) => boolean;
   readonly releaseProbeBeforeOperation?: boolean;
 }
 
@@ -40,6 +41,7 @@ interface RunOptions {
   readonly baseBackoffMs: number;
   readonly classifyFailure: (error: Error) => RouteFailure | undefined;
   readonly isReachableFailure?: (error: Error) => boolean;
+  readonly isUnobservedFailure?: (error: Error) => boolean;
   readonly additionalRoutes?: readonly RoutePolicy[];
   readonly trailingRoutes?: readonly RoutePolicy[];
   readonly onWait?: (delayMs: number) => void;
@@ -80,6 +82,7 @@ export class ModelRetryGate {
         key: route,
         classifyFailure: options.classifyFailure,
         isReachableFailure: options.isReachableFailure,
+        isUnobservedFailure: options.isUnobservedFailure,
       },
       ...(options.trailingRoutes ?? []),
     ];
@@ -112,6 +115,10 @@ export class ModelRetryGate {
             );
           } else if (entry.isReachableFailure?.(error as Error)) {
             this.markReachable(entry.key, entry.permit);
+          } else if (entry.isUnobservedFailure?.(error as Error)) {
+            // An earlier admission boundary rejected the request, so this
+            // route was never observed. Preserve its recovery state.
+            this.abandon(entry.key, entry.permit);
           } else if (entry.permit.probe) {
             // An unclassified failure does not prove that a recovering route
             // is reachable. Keep the cohort closed and hand probe ownership
@@ -148,7 +155,22 @@ export class ModelRetryGate {
         for (const route of routes) {
           acquired.push({
             ...route,
-            permit: await this.acquire(route.key, options),
+            permit: await this.acquire(
+              route.key,
+              options,
+              route.releaseProbeBeforeOperation
+                ? () => {
+                    for (const entry of acquired) {
+                      if (entry.permit.probe) {
+                        entry.permit = this.releaseProbe(
+                          entry.key,
+                          entry.permit,
+                        );
+                      }
+                    }
+                  }
+                : undefined,
+            ),
           });
         }
       } catch (error) {
@@ -193,6 +215,7 @@ export class ModelRetryGate {
   private acquire(
     route: string,
     options: Pick<RunOptions, 'signal' | 'onWait'>,
+    onBeforeWait?: () => void,
   ): Promise<RetryPermit> {
     if (this.disposed) {
       return Promise.reject(
@@ -221,6 +244,7 @@ export class ModelRetryGate {
       return Promise.reject(abortReason(options.signal));
     }
 
+    onBeforeWait?.();
     const delayMs = Math.max(0, state.retryAt - Date.now());
     options.onWait?.(delayMs);
     return new Promise<RetryPermit>((resolve, reject) => {

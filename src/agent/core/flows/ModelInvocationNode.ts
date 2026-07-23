@@ -21,6 +21,7 @@ import {
   classifyRelayRequestLimitFailure,
   classifyWireRouteFailure,
   isModelRateLimitFailure,
+  isRelayRequestLimitFailure,
   isRelayRequestGateReachableFailure,
 } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
@@ -166,10 +167,12 @@ export class ModelInvocationNode<
           // also share the server's cross-provider per-user request gate.
           classifyFailure: classifyWireRouteFailure,
           isReachableFailure: isModelRateLimitFailure,
+          isUnobservedFailure: isRelayRequestLimitFailure,
           additionalRoutes: [
             {
               key: modelRetryRoute,
               classifyFailure: classifyModelRateLimitFailure,
+              isUnobservedFailure: isRelayRequestLimitFailure,
             },
           ],
           trailingRoutes: usesRelay

@@ -508,6 +508,15 @@ export function isRelayRequestGateReachableFailure(error: Error): boolean {
   );
 }
 
+/** Whether the relay request gate rejected the call before reaching a provider. */
+export function isRelayRequestLimitFailure(error: Error): boolean {
+  const chain = causeChain(error);
+  return (
+    detectRateLimitScope(error, detectRouteStatusCode(error, chain)) ===
+    'relay-user'
+  );
+}
+
 /** Classifies relay request limits for their cross-provider recovery gate. */
 export function classifyRelayRequestLimitFailure(
   error: Error,
