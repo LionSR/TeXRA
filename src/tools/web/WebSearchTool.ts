@@ -1,5 +1,6 @@
 // Third-party imports
 import ky, { HTTPError } from 'ky';
+import { AbortError } from 'p-retry';
 import { z } from 'zod';
 
 // Internal imports
@@ -32,23 +33,50 @@ const WebSearchInputSchema = z.strictObject({
 
 export type WebSearchInput = z.infer<typeof WebSearchInputSchema>;
 
+// ============================================================================
+// Response schemas (DuckDuckGo is an external network boundary — validate it)
+// ============================================================================
+
+/**
+ * `RelatedTopics` entries are self-referential (a topic group nests further
+ * `Topics`), so the interface is kept and the recursive schema is annotated
+ * against it (z.lazy) — matching the house pattern in
+ * `src/tools/zotero/bbtClient.ts` (`BbtCollectionChainSchema`).
+ */
 interface DuckDuckGoResult {
-  Text?: string;
-  FirstURL?: string;
-  Topics?: DuckDuckGoResult[];
+  Text?: string | null;
+  FirstURL?: string | null;
+  Topics?: DuckDuckGoResult[] | null;
 }
 
-interface DuckDuckGoResponse {
-  Abstract?: string;
-  AbstractText?: string;
-  AbstractURL?: string;
-  AbstractSource?: string;
-  Heading?: string;
-  RelatedTopics?: DuckDuckGoResult[];
-  Infobox?: {
-    content?: Array<{ label?: string; value?: string }>;
-  };
-}
+const DuckDuckGoResultSchema: z.ZodType<DuckDuckGoResult> = z.lazy(() =>
+  z.looseObject({
+    Text: z.string().nullish(),
+    FirstURL: z.string().nullish(),
+    Topics: z.array(DuckDuckGoResultSchema).nullish(),
+  }),
+);
+
+const DuckDuckGoInfoboxContentItemSchema = z.looseObject({
+  label: z.string().nullish(),
+  value: z.string().nullish(),
+});
+
+const DuckDuckGoResponseSchema = z.looseObject({
+  Abstract: z.string().nullish(),
+  AbstractText: z.string().nullish(),
+  AbstractURL: z.string().nullish(),
+  AbstractSource: z.string().nullish(),
+  Heading: z.string().nullish(),
+  RelatedTopics: z.array(DuckDuckGoResultSchema).nullish(),
+  Infobox: z
+    .looseObject({
+      content: z.array(DuckDuckGoInfoboxContentItemSchema).nullish(),
+    })
+    .nullish(),
+});
+
+type DuckDuckGoResponse = z.infer<typeof DuckDuckGoResponseSchema>;
 
 export class WebSearchTool extends defineTool({
   name: 'web_search',
@@ -80,7 +108,19 @@ export class WebSearchTool extends defineTool({
             signal: joinAbortSignal(DDG_TIMEOUT_MS, cancelSignal),
             retry: 0,
           });
-          return (await response.json()) as DuckDuckGoResponse;
+          const raw = await response.json();
+          // Validate the body at the boundary. A malformed shape is not
+          // transient, so abort retries and let the outer catch below
+          // surface it as a tool error.
+          const parsed = DuckDuckGoResponseSchema.safeParse(raw);
+          if (!parsed.success) {
+            throw new AbortError(
+              new Error(
+                `Unexpected DuckDuckGo response shape: ${z.prettifyError(parsed.error)}`,
+              ),
+            );
+          }
+          return parsed.data;
         },
         { retries: DDG_RETRIES, minTimeout: 500, cancelSignal },
       );
@@ -121,20 +161,17 @@ export class WebSearchTool extends defineTool({
     function extractTopics(topics: DuckDuckGoResult[], limit: number): void {
       for (const item of topics) {
         if (results.length >= limit) break;
-        if (
-          typeof item.Text === 'string' &&
-          typeof item.FirstURL === 'string'
-        ) {
+        if (item.Text && item.FirstURL) {
           results.push(`${item.Text} (${item.FirstURL})`);
         }
         // Handle nested topic groups
-        if (Array.isArray(item.Topics)) {
+        if (item.Topics) {
           extractTopics(item.Topics, limit);
         }
       }
     }
 
-    if (Array.isArray(data.RelatedTopics)) {
+    if (data.RelatedTopics) {
       extractTopics(data.RelatedTopics, max_results);
     }
 

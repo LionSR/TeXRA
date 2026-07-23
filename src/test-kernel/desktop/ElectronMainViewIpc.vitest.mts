@@ -565,8 +565,8 @@ describe('desktop main-view IPC', () => {
       },
     }));
     vi.doMock('@model/computeModelOptions', () => ({
-      // `label` is required by `ModelOptionDataSchema` (PickerOptionBaseSchema)
-      // — `postToRenderer` now runs the SET_MODEL_OPTIONS payload through it
+      // `label` is required by `ModelOptionDataSchema` (PickerOptionBaseSchema) —
+      // `postToRenderer` now runs the SET_MODEL_OPTIONS payload through it
       // (dev/test only), so the stub must match the real shape.
       computeModelOptionsData: vi.fn(async () => [
         { value: 'fresh-model', label: 'Fresh Model' },
