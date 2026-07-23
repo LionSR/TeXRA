@@ -222,7 +222,6 @@ export class ModelHandlerVscodeLm extends ModelHandler<
     const output = this.createOutputStream();
     const text: string[] = [];
     const toolCalls: LanguageModelToolCallPart[] = [];
-    let streamObserved = false;
 
     try {
       for await (const part of options.client.sendRequest(
@@ -234,7 +233,6 @@ export class ModelHandlerVscodeLm extends ModelHandler<
         },
         signal,
       )) {
-        streamObserved = true;
         if (part.kind === 'text') {
           text.push(part.text);
           output.append(part.text);
@@ -268,7 +266,6 @@ export class ModelHandlerVscodeLm extends ModelHandler<
       return handleStreamingFailure(error, {
         finalizeOnError: () => output.finalize(),
         partialTail: () => takeTail(text.join(''), PARTIAL_TEXT_TAIL_MAX),
-        retryEligible: (tail) => streamObserved || tail.length > 0,
       });
     }
   }

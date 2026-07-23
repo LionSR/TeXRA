@@ -1,4 +1,5 @@
 // Node imports
+import { createHash } from 'node:crypto';
 import { dirname } from 'node:path';
 
 // Third-party imports
@@ -7,6 +8,13 @@ import {
   type ModelCapabilities,
   ReasoningEffort,
 } from 'llm-zoo';
+import {
+  fetch as undiciFetch,
+  getGlobalDispatcher,
+  type Dispatcher,
+  type RequestInfo as UndiciRequestInfo,
+  type RequestInit as UndiciRequestInit,
+} from 'undici';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
@@ -113,6 +121,73 @@ import {
 } from './support/ProxyConfigResolver';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 
+const MODEL_STREAM_INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+
+async function normalizeModelRequest(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<[UndiciRequestInfo, UndiciRequestInit]> {
+  if (!(input instanceof Request)) {
+    return [input as UndiciRequestInfo, init as UndiciRequestInit];
+  }
+
+  // OpenRouter supplies Node's native Request, while package Undici expects
+  // its own branded Request. Rebuild it from interoperable primitives here.
+  const request = new Request(input, init);
+  const body = request.body === null ? undefined : await request.arrayBuffer();
+  return [
+    request.url,
+    {
+      method: request.method,
+      headers: Object.fromEntries(request.headers.entries()),
+      redirect: request.redirect,
+      signal: request.signal,
+      ...(body === undefined ? {} : { body }),
+    },
+  ];
+}
+
+const withLongStreamTimeouts =
+  (dispatch: Dispatcher['dispatch']): Dispatcher['dispatch'] =>
+  (options, handler) =>
+    dispatch(
+      {
+        ...options,
+        bodyTimeout: MODEL_STREAM_INACTIVITY_TIMEOUT_MS,
+        headersTimeout: 10 * 60 * 1000,
+      },
+      handler,
+    );
+
+/** Composes the host's current dispatcher (proxy policy stays host-owned) with
+ *  the long-stream timeouts. Composed per call so a runtime proxy change is
+ *  honored by the next request. */
+function composeLongRunningDispatcher(): Dispatcher {
+  return getGlobalDispatcher().compose(withLongStreamTimeouts);
+}
+
+/**
+ * Fetch transport with long-stream timeouts and the host's current proxy
+ * policy.
+ *
+ * Deliberately package-undici fetch, not the SDKs' `fetchOptions.dispatcher`
+ * seam over native fetch: pairing this package's fetch with this package's
+ * composed dispatcher keeps the dispatch-handler interface version-locked,
+ * where native fetch would couple our dispatcher to whatever undici the host
+ * Node embeds. That same choice is why {@link normalizeModelRequest} exists —
+ * package-undici fetch rejects native `Request` instances (OpenRouter's
+ * HTTPClient passes one), so it is rebuilt from interoperable primitives.
+ */
+const longRunningModelFetch: typeof fetch = async (input, init) => {
+  const [requestInput, requestInit] = await normalizeModelRequest(input, init);
+  // Undici implements the Web Fetch response contract at runtime, but its
+  // package-local types are not assignable to the DOM library's Response.
+  return undiciFetch(requestInput, {
+    ...requestInit,
+    dispatcher: composeLongRunningDispatcher(),
+  }) as unknown as Promise<Response>;
+};
+
 /**
  * Generic SDK error tagging wrapper used by the base model handler.
  *
@@ -200,9 +275,9 @@ export abstract class ModelHandler<
   Resp = unknown,
   Media = unknown,
 > {
-  private readonly clientCredentialRoutes = new WeakMap<
+  private readonly clientWireIdentities = new WeakMap<
     object,
-    ModelCredentialRoute
+    { route: ModelCredentialRoute; credentialIdentity: string }
   >();
   private activeAttemptCredentialRoute: ModelCredentialRoute | undefined;
   private lastAttemptCredentialRoute: ModelCredentialRoute | undefined;
@@ -282,6 +357,22 @@ export abstract class ModelHandler<
       getCapabilities: () => this.capabilities,
       isOpenAIProvider: () => this.config.provider === ModelProvider.OPENAI,
     });
+  }
+
+  /** Fetch implementation with explicit long-stream inactivity timeouts. */
+  protected get longRunningModelFetch(): typeof fetch {
+    return longRunningModelFetch;
+  }
+
+  /**
+   * The long-stream dispatcher alone, for SDKs that hardwire native fetch and
+   * only accept per-request `RequestInit` extras (Google Interactions). The
+   * compose wrapper only merges timeout fields into dispatch options, so it
+   * stays interface-transparent even when native fetch's embedded undici
+   * differs from the package version.
+   */
+  protected longRunningModelDispatcher(): Dispatcher {
+    return composeLongRunningDispatcher();
   }
 
   public setLogger(logger: AgentTrace): void {
@@ -582,16 +673,47 @@ export abstract class ModelHandler<
   protected rememberClientCredentialRoute<Candidate extends object>(
     client: Candidate,
     route: ModelCredentialRoute,
+    credentialSecret: string,
   ): Candidate {
-    this.clientCredentialRoutes.set(client, route);
+    // Relay and subscription routes have stable route identities so ordinary
+    // token rotation does not split recovery coordination; direct credentials
+    // use a non-secret fingerprint so distinct keys stay distinct routes.
+    const credentialIdentity =
+      route === 'relay' || route === 'chatgpt-subscription'
+        ? route
+        : createHash('sha256')
+            .update(route)
+            .update('\0')
+            .update(credentialSecret)
+            .digest('base64url');
+    this.clientWireIdentities.set(client, { route, credentialIdentity });
     return client;
   }
 
   /** Route of the credential a client built by this handler captured, if known. */
   getCredentialRouteForClient(client: C): ModelCredentialRoute | undefined {
     return typeof client === 'object' && client !== null
-      ? this.clientCredentialRoutes.get(client)
+      ? this.clientWireIdentities.get(client)?.route
       : undefined;
+  }
+
+  /**
+   * Stable key for the wire route this client's requests share: provider,
+   * credential route, endpoint, and a non-secret credential identity. Owned
+   * here so the retry gate's key format has a single owner; the flow layer
+   * treats it as opaque.
+   */
+  getWireRouteKey(client: C): string {
+    const wireIdentity =
+      typeof client === 'object' && client !== null
+        ? this.clientWireIdentities.get(client)
+        : undefined;
+    return JSON.stringify([
+      this.config.provider,
+      wireIdentity?.route ?? 'configured',
+      this.getRetryEndpoint(client),
+      wireIdentity?.credentialIdentity ?? 'unknown-credential',
+    ]);
   }
 
   /** Route currently executing, excluding the last completed attempt. */
@@ -636,6 +758,11 @@ export abstract class ModelHandler<
     );
   }
 
+  /** Stable endpoint identity used to coordinate retries for one client. */
+  public getRetryEndpoint(_client: C): string {
+    return this.getBaseUrl() ?? `${this.config.provider}:default`;
+  }
+
   /** Log the resolved credential route and final wire request config. */
   protected logOpenAICompatibleClientConfig(
     baseURL: string,
@@ -674,7 +801,7 @@ export abstract class ModelHandler<
   // runtime combinators over profile data (`shouldUseServerSideKeys`,
   // `getEffectiveReasoningEffort`) and genuinely per-provider behavior that
   // stays an overridable method/getter (`supportsManualCompaction`,
-  // `isAutoRetryManagedByProvider`, `isBackgroundModeActive`, etc.).
+  // `isBackgroundModeActive`, etc.).
 
   /**
    * Whether parallel tool calls in a single turn must be batched into one
@@ -777,32 +904,39 @@ export abstract class ModelHandler<
   }
 
   /**
-   * Whether the provider SDK already retries this error internally, so the
-   * flow-level auto-retry loop should stand down. Override in subclasses that
-   * delegate retries to the provider; the default is no provider-managed retry.
-   *
-   * Not foldable into a single predicate (#7101 triage): Anthropic, OpenAI,
-   * and OpenAIResponse each override to an unconditional `true` — a
-   * provider-wide fact about that SDK's own retry wrapper, not data on
-   * `capabilities`/`config`. `ModelHandlerOpenRouterNative`'s override is
-   * qualitatively different, not just a different boolean: it inspects the
-   * concrete `_error` instance (`OpenRouterConnectionError`/
-   * `OpenRouterRequestTimeoutError`, or an HTTP status code ≥500) rather than
-   * returning a constant, since the OpenRouter SDK's own retry coverage
-   * depends on the failure kind. Each override encodes what that provider's
-   * SDK actually does internally; nothing here is provider-identity data
-   * that a `config` read could reproduce.
-   */
-  isAutoRetryManagedByProvider(_error: Error): boolean {
-    return false;
-  }
-
-  /**
    * Flag to force compaction on the next API call, set by {@link requestCompaction}.
    * Read by the per-provider compaction paths and cleared once compaction is
    * attempted. Inert for handlers that don't run compaction.
    */
   protected compactionRequested = false;
+
+  /**
+   * A successful client-side compaction whose generation request has not yet
+   * succeeded. The outer model node may repeat the same input after a
+   * transport failure; retaining the compacted payload prevents another paid
+   * summarization call. A successful generation commits the payload to the
+   * flow and clears this pending value.
+   *
+   * Reuse is guarded by a content fingerprint, not just array identity: after
+   * a failed turn the root tool-use flow appends the user's follow-up onto
+   * the SAME messages array (a push, or — for Google Interactions — an
+   * in-place merge into the last step), and replaying the stale pre-follow-up
+   * payload would silently drop that message from the request and, via the
+   * flow's in-place commit, from the conversation history.
+   */
+  private pendingClientCompaction?: {
+    sourceMessages: M[];
+    sourceFingerprint: string;
+    result: ClientCompactionResult<M>;
+  };
+
+  /** Cheap mutation detector for a messages array reused across attempts:
+   *  follow-ups either push (length changes) or merge into the last message
+   *  in place (its serialized size changes). */
+  protected messagesTailFingerprint(messages: M[]): string {
+    const last = messages.at(-1);
+    return `${messages.length}:${last === undefined ? 0 : JSON.stringify(last).length}`;
+  }
 
   /** Request compaction on the next API call. */
   requestCompaction(): void {
@@ -1070,7 +1204,7 @@ export abstract class ModelHandler<
   ): Promise<CreateResponseResult<Resp, M>> {
     let credentialRoute: ModelCredentialRoute | undefined;
     if (typeof options.client === 'object' && options.client !== null) {
-      credentialRoute = this.clientCredentialRoutes.get(options.client);
+      credentialRoute = this.clientWireIdentities.get(options.client)?.route;
     }
     return this.withCreateResponseGuard(() => {
       this.activeAttemptCredentialRoute = credentialRoute;
@@ -1080,6 +1214,12 @@ export abstract class ModelHandler<
       ).finally(() => {
         this.activeAttemptCredentialRoute = undefined;
       });
+    }).then((result) => {
+      // The caller can now commit result.updatedMessages. Retaining the
+      // pending payload beyond this point could reuse it for a later turn if
+      // the caller mutates the same message array in place.
+      this.pendingClientCompaction = undefined;
+      return result;
     });
   }
 
@@ -1249,6 +1389,15 @@ export abstract class ModelHandler<
     inputTokens: number,
     compact: () => Promise<ClientCompactionResult<M>>,
   ): Promise<ClientCompactionResult<M>> {
+    if (
+      this.pendingClientCompaction?.sourceMessages === messages &&
+      this.pendingClientCompaction.sourceFingerprint ===
+        this.messagesTailFingerprint(messages)
+    ) {
+      return this.pendingClientCompaction.result;
+    }
+    this.pendingClientCompaction = undefined;
+
     if (!this.shouldCompactByInputTokens(inputTokens)) {
       return { compactedMessages: messages, didCompact: false };
     }
@@ -1280,7 +1429,15 @@ export abstract class ModelHandler<
       },
     );
 
-    return compact();
+    const result = await compact();
+    if (result.didCompact) {
+      this.pendingClientCompaction = {
+        sourceMessages: messages,
+        sourceFingerprint: this.messagesTailFingerprint(messages),
+        result,
+      };
+    }
+    return result;
   }
 
   /**

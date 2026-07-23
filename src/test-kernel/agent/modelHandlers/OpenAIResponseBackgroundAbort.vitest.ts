@@ -8,10 +8,7 @@ import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller';
-import {
-  isUserAbort,
-  requiresFlowAutoRetry,
-} from '@common/errors/sdkErrorUtils';
+import { isUserAbort } from '@common/errors/sdkErrorUtils';
 
 // Third-party imports
 import type OpenAI from 'openai';
@@ -119,10 +116,9 @@ describe('OpenAI Responses background abort handling', () => {
     // No status code → likely still alive server-side → keep the ID so the
     // outer retry resumes the same response.
     expect(target.pendingResponseId).toBe('resp_pending_transient');
-    expect(requiresFlowAutoRetry(transient)).toBe(true);
   });
 
-  it('marks background polling timeouts for flow-level retry', async () => {
+  it('surfaces background polling timeouts', async () => {
     const handler = createHandler();
     const target = internals(handler);
     target.backgroundPoller = new BackgroundPoller({
@@ -146,6 +142,5 @@ describe('OpenAI Responses background abort handling', () => {
       .catch((err: unknown) => err);
 
     expect(thrown).toBeInstanceOf(Error);
-    expect(requiresFlowAutoRetry(thrown)).toBe(true);
   });
 });

@@ -13,8 +13,10 @@ import type {
 import type {
   FinalTool,
   ModelCredentialRoute,
+  ModelCredentialSelection,
 } from '@agent/types/ModelHandlerContracts';
-import { requiresFlowAutoRetry } from '@common/errors/sdkErrorUtils';
+import { useLaunchRunContext } from '@agent/runtime/RunContext';
+import { classifyWireRouteFailure } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
 
 import { FlowTransition } from './FlowTransitions';
@@ -67,7 +69,10 @@ type InvocationServices = Pick<
   Pick<BaseFlowContextInit, 'setAbortController'> & {
     readonly client: unknown;
     readonly clientCredentialRoute?: ModelCredentialRoute;
-    readonly refreshClient?: () => Promise<void>;
+    readonly refreshClient?: (
+      selection?: ModelCredentialSelection,
+      signal?: AbortSignal,
+    ) => Promise<void>;
   };
 
 export class ModelInvocationNode<
@@ -93,26 +98,6 @@ export class ModelInvocationNode<
     );
   }
 
-  override shouldAutoRetry(error: Error): boolean {
-    if (!super.shouldAutoRetry(error)) return false;
-
-    if (requiresFlowAutoRetry(error)) {
-      this.services.logger.debug(
-        'Using flow-level auto-retry; the failure is outside the provider-managed retry boundary.',
-      );
-      return true;
-    }
-
-    if (this.services.modelHandler.isAutoRetryManagedByProvider(error)) {
-      this.services.logger.debug(
-        'Skipping flow-level auto-retry; the model handler uses provider-managed auto-retry.',
-      );
-      return false;
-    }
-
-    return true;
-  }
-
   async prep(shared: TShared): Promise<BaseInvocationPrepResult> {
     return {
       shouldStop: shared.shouldStop,
@@ -132,28 +117,48 @@ export class ModelInvocationNode<
     const services = this.services;
     services.modelHandler.setOutputStreaming(this._config.streaming);
 
-    const start = Date.now();
-
     return this.withAbortController(async (signal) => {
-      const result = await services.modelHandler.createResponse({
-        client: services.client,
-        messages: prepRes.messages,
-        temperature: services.setting.temperature,
-        systemPrompt: prepRes.systemPrompt,
-        endTag: this._config.getEndTag?.(services),
-        signal,
-        tools: this._config.getTools
-          ? this._config.getTools(services)
-          : services.setting.tools,
-        finalTool: prepRes.finalTool,
-      });
+      const wireRoute = services.modelHandler.getWireRouteKey(services.client);
+      const gate = useLaunchRunContext().runScope.session.modelRetries;
+      const invoke = async () => {
+        const start = Date.now();
+        const result = await services.modelHandler.createResponse({
+          client: services.client,
+          messages: prepRes.messages,
+          temperature: services.setting.temperature,
+          systemPrompt: prepRes.systemPrompt,
+          endTag: this._config.getEndTag?.(services),
+          signal,
+          tools: this._config.getTools
+            ? this._config.getTools(services)
+            : services.setting.tools,
+          finalTool: prepRes.finalTool,
+        });
 
-      return {
-        kind: 'success',
-        response: result.response,
-        responseTimeMs: Date.now() - start,
-        updatedMessages: result.updatedMessages,
+        return {
+          kind: 'success' as const,
+          response: result.response,
+          responseTimeMs: Date.now() - start,
+          updatedMessages: result.updatedMessages,
+        };
       };
+
+      return gate.run(
+        wireRoute,
+        {
+          signal,
+          baseBackoffMs: this._retryBackoffMs,
+          // One wire route owns transport, server-failure, and rate-limit
+          // cooling. This coordinates every call sharing a credential and
+          // endpoint without the lock cycles of nested recovery scopes.
+          classifyFailure: classifyWireRouteFailure,
+          onWait: (delayMs) =>
+            services.logger.debug(
+              `Waiting ${delayMs}ms for the model recovery probe.`,
+            ),
+        },
+        invoke,
+      );
     });
   }
 
