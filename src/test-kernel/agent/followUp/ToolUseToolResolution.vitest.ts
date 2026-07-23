@@ -4,6 +4,8 @@ import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import type { ToolDefinition } from '@model';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+import { installPlatform } from '@test/support/setupPlatform';
 import { DiagnosticsTool } from '@tools/DiagnosticsTool';
 import {
   DIAGNOSTICS_ADD_RUNTIME_CAPABILITY,
@@ -153,6 +155,27 @@ describe('tool-use tool resolution', () => {
     });
 
     expect(tools).toEqual([]);
+  });
+
+  it('drops the workflow script tool when its dashboard switch is disabled', async () => {
+    await installPlatform({
+      globalState: { [GlobalStateKey.DISABLED_TOOLS]: ['workflow-script'] },
+    });
+    try {
+      const registry = getDefaultToolRegistry();
+
+      const { tools } = await resolveAgentTools({
+        tools: toolDefs(['bash', 'delegate_workflow_script']),
+        registry,
+        logger,
+        toolInjections,
+        approvalPromptsUnavailable: false,
+      });
+
+      expect(tools.map((tool) => tool.name)).toEqual(['bash']);
+    } finally {
+      await installPlatform();
+    }
   });
 
   it('filters injected approval-gated tools when approval prompts are unavailable', async () => {

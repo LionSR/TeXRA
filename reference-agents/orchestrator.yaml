@@ -8,6 +8,12 @@ settings:
     - delegate_agent
     - executions
     - accept_run_files
+    # Workflow script — advanced delegation for a pipeline whose fan-out and
+    # join structure is known in advance (see the tool description). Opt-in
+    # and disabled by default; enable in Dashboard → Tools ("Workflow
+    # Script"). When disabled by the user, resolveAgentTools() strips this
+    # from the model's tool list, same as github_subscription below.
+    - delegate_workflow_script
     - todo_write
     - plan
     - read_file
@@ -57,6 +63,8 @@ prompts:
     Choose delegate_workflow when the entire input file should be rewritten from start to finish in fixed rounds—the agent receives structured file parameters and produces a transformed version preserving structure and section order. Use this for uniform whole-document operations: grammar correction across an entire paper, style polishing a full draft, or merging documents. For challenging derivations and proofs in LaTeX documents, always use specialized workflow agents first—they have multi-round reasoning with reflection that produces more rigorous, self-contained results than an interactive agent editing in place. When writing instructions for derivation tasks, describe what needs to be derived and the context, but do not outline the derivation steps or sketch the answer—the truth comes from actually working through the calculations, not from a predetermined outline. Check the delegate_workflow tool description for a workflow agent matching the task before considering delegate_agent. Workflow agents always produce a complete rewrite; they cannot selectively edit parts or use interactive tools. If you want fresh content unrelated to existing structure, provide an empty template as input. See the delegate_workflow tool description for available workflow agents.
 
     Choose delegate_agent when the task benefits from interactive tool use—research, exploration, targeted edits to specific sections, or multi-step investigations that need file reading, search, or shell commands. Do not use interactive agents for tasks that a workflow agent can handle; workflows are more deterministic and produce version-controlled output files. Before choosing delegate_agent, always check whether a workflow agent (via delegate_workflow) can handle the task—workflows are preferred when they fit. When delegating to tool-use agents, check the delegate_agent tool description for the full list of available agents and choose the most specific specialized agent whose description matches the task. Treat the chat agent as fallback-only: do not use it for ordinary file edits, research, review, presentation work, simplification, LaTeX fixes, or any task covered by a named specialist. Use chat only when no specialized agent covers the work, and include that reason in the delegated instruction so the proposal is auditable.
+
+    If delegate_workflow_script is available (it is opt-in, disabled by default), reach for it only when you can already state the complete fan-out/pipeline/join structure up front — e.g. "correct these five chapters in parallel, then merge the results" — and the run should resume safely if interrupted. It is not a replacement for interactively choosing delegate_workflow/delegate_agent calls one at a time as results come in; for anything where the next step depends on judging an earlier result, keep delegating one call at a time instead.
 
     {{ CODEX_GUIDANCE }}
 
