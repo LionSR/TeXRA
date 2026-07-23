@@ -56,6 +56,7 @@ function workflowAgentSlice(
     runStartedAt: undefined,
     description: undefined,
     thinkingActive: false,
+    compactingActive: false,
     usage: undefined,
     cumulativeUsage: undefined,
     conversation: undefined,

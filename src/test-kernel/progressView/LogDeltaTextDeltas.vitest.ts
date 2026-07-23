@@ -123,6 +123,48 @@ describe('LOG_DELTA text deltas', () => {
     expect(finalized && isStreamingTextLogMessage(finalized)).toBe(false);
   });
 
+  it('drops compaction activity before progress-log indexing', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const state = createInitialState();
+    state.activeStreamId = streamId;
+    state.streamStates.set(streamId, createStreamState(AgentCategory.Workflow));
+    const getState = seedState(state);
+    const activityEntry = (
+      id: string,
+      activityState: 'started' | 'finished',
+    ): StreamLogEntry => ({
+      seqNo: activityState === 'started' ? 1 : 3,
+      id,
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 100,
+      messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
+      text: `compaction ${activityState}`,
+      data: {
+        activity: 'context_compaction',
+        state: activityState,
+      },
+    });
+
+    dispatch(logHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+      streamId,
+      entries: [
+        activityEntry('compaction-start', 'started'),
+        modelResponseEntry('visible', 'completed'),
+        activityEntry('compaction-finish', 'finished'),
+      ],
+      updates: [],
+      textDeltas: [],
+    });
+
+    const streamLogs = getState().streamLogs.get(streamId);
+    expect(streamLogs?.logs.map(({ id }) => id)).toEqual(['model-response']);
+    expect([...(streamLogs?.logIndex.keys() ?? [])]).toEqual([
+      'model-response',
+    ]);
+  });
+
   it('keeps valid group-start fields when status is unrecognized', () => {
     const streamId = 'stream-a' as StreamTabId;
     const state = createInitialState();
