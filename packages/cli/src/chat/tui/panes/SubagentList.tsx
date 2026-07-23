@@ -272,7 +272,6 @@ export interface SubagentListProps {
   readonly onOpenProcessDetail?: (executionId: string) => void;
   readonly onSelectionChange?: (value: ChildListValue) => void;
   readonly onPrintStream?: (streamId: StreamTabId) => void;
-  readonly onToggleDetails?: () => void;
   /** Pending approval kinds per stream id (see `pendingApprovalSummaries`,
    *  root bucket already folded onto the root stream id by the caller). */
   readonly pendingApprovals?: ReadonlyMap<
@@ -380,10 +379,6 @@ export function SubagentList(
       if (key.ctrl || key.meta) return;
       const streamId = childListStreamId(props.selectedValue);
       const pressed = input.toLowerCase();
-      if (pressed === 'i' && streamId) {
-        props.onToggleDetails?.();
-        return;
-      }
       if (pressed === 'v' && streamId) {
         props.onPrintStream?.(streamId);
         return;

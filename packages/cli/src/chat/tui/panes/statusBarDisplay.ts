@@ -603,10 +603,6 @@ function childListBindingsText(
     selectionKind === 'stream'
       ? keyHintText({ key: 'v', action: 'full output' })
       : undefined;
-  const fileInfoBinding =
-    selectionKind === 'stream'
-      ? keyHintText({ key: 'i', action: 'details' })
-      : undefined;
   const killBinding = selectionKillable
     ? keyHintText({ key: 'k', action: 'kill' })
     : undefined;
@@ -621,7 +617,6 @@ function childListBindingsText(
       keyHintText({ key: 'Up/Down', action: 'select' }),
       enterBinding,
       fullOutputBinding,
-      fileInfoBinding,
       killBinding,
       skipBinding,
       retryBinding,
