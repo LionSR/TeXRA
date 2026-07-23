@@ -1368,6 +1368,81 @@ describe('ModelHandlerAnthropic message guards', () => {
     },
   );
 
+  it('includes Files API document size in the unmeasured fallback', async () => {
+    const handler = createAnthropicHandler({
+      supportsNativePdf: true,
+      supportsTokenCounting: true,
+      supportsReasoning: false,
+    });
+    handler.config.fullName = 'claude-opus-4-6';
+    handler.setAgentCategory(AgentCategory.ToolUse);
+
+    const activityStates: string[] = [];
+    stubHandlerForTest(handler, {
+      info: (_message: string, options?: { data?: unknown }) => {
+        const data = options?.data as
+          { activity?: unknown; state?: unknown } | undefined;
+        if (
+          data?.activity === 'context_compaction' &&
+          typeof data.state === 'string'
+        ) {
+          activityStates.push(data.state);
+        }
+      },
+    });
+    stubCompactionThresholdPercent(75);
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Review this document.', citations: null },
+          {
+            type: 'document',
+            source: { type: 'file', file_id: 'file_large' },
+            title: 'large.pdf',
+          },
+        ] as unknown as ContentBlockParam[],
+      },
+    ];
+    const client = {
+      beta: {
+        files: {
+          retrieveMetadata: async (
+            fileId: string,
+            _params: unknown,
+            options: { maxRetries?: number },
+          ) => {
+            assert.equal(fileId, 'file_large');
+            assert.equal(options.maxRetries, 0);
+            return { size_bytes: 800_000 };
+          },
+        },
+        messages: {
+          countTokens: async () => {
+            throw new Error('file-source requests must not use countTokens');
+          },
+          create: async () => {
+            assert.deepEqual(activityStates, ['started']);
+            return {
+              id: 'msg',
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-opus-4-6',
+              content: [{ type: 'text', text: 'ok' }],
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 20_000, output_tokens: 1 },
+            };
+          },
+        },
+      },
+    } as any;
+
+    await handler.createResponse({ client, messages, temperature: 0 });
+
+    assert.deepEqual(activityStates, ['started', 'finished']);
+  });
+
   it('does not add native compaction context edit for non-Opus models', async () => {
     const handler = createAnthropicHandler({
       supportsTokenCounting: false,
