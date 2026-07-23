@@ -24,6 +24,7 @@ import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import type { FileOperationMessage } from '@shared/schemas/mainView/inbound';
+import { pathToLocation } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'ExecutionHandlers';
@@ -168,9 +169,9 @@ export function handleFileOperation(message: FileOperationMessage): void {
     case MAIN_VIEW_COMMANDS.ACCEPT_EDITED:
       void vscode.commands.executeCommand(
         `texra.${message.command}`,
-        undefined,
-        message.baseFile,
-        message.editedFile,
+        pathToLocation(message.baseFile),
+        pathToLocation(message.baseFile),
+        pathToLocation(message.editedFile),
       );
       return;
   }

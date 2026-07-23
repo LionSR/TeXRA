@@ -6,14 +6,7 @@ import {
   registerFileSelectionCommands,
   registerOpenFileCommands,
 } from '@commands/files';
-import {
-  registerLatexdiffCommands,
-  registerCompareCommands,
-} from '@commands/latex';
-import {
-  registerPackCommands,
-  registerCleanCommands,
-} from '@commands/housekeeping';
+import { registerLatexdiffCommands } from '@commands/latex';
 import {
   registerMergeCommands,
   registerFollowUpCommand,
@@ -37,12 +30,9 @@ export function registerCommands(context: vscode.ExtensionContext) {
   registerLatexdiffCommands(context);
   registerGitCommands(context);
   registerAgentReviewCommands(context);
-  registerPackCommands(context);
-  registerCleanCommands(context);
   registerMergeCommands(context);
   registerStateRestoreCommand(context);
   const settingsViewProvider = new SettingsViewProvider(context);
-  registerCompareCommands(context);
   registerFollowUpCommand(context);
   registerResumeAgentCommand(context);
   registerOpenFileCommands(context);
@@ -58,18 +48,16 @@ export function registerCommands(context: vscode.ExtensionContext) {
   // showLinterMessages, countLinterMessages, extractFigurePaths), the
   // typed-arg handlers for openDoc/stopAgent/compactResponse, and the
   // batch-4 (#3781) follow-ups (removeApiKey, showImportOptions,
-  // toggleView, showProgressView, setApiKey, createAgentWithAI, execute)
+  // toggleView, showProgressView, setApiKey, createAgentWithAI, execute),
+  // and the typed pack/clean/compare file-operation families
   // — all alongside the original settings/main-view routes via the same
   // dispatch path as the desktop registry. See
   // `extensionCommandSurface.ts` for the handler map.
   //
   // FOLLOW_UP (#3781): the remaining per-command registrations carry
-  // VS Code-specific arguments (TextEditor, Range, Uri, FileLocation,
-  // pack/clean configs, agent execution payloads). Migrating those needs
-  // either: (a) the `definedHandler` typed-args path in
-  // `@shared/commands/registry` plus per-command Zod arg schemas, or
-  // (b) staying on per-command registration where the handler captures
-  // VS Code state directly (e.g. `vscode.window.activeTextEditor`).
+  // VS Code-specific arguments (TextEditor, Range, Uri, agent execution
+  // payloads). Commands whose handlers capture VS Code state directly
+  // (e.g. `vscode.window.activeTextEditor`) stay on per-command registration.
   // Host-exclusive commands like `texra.showGitSettings` follow the same
   // `Exclude<>` pattern desktop already uses.
   registerExtensionCommandRegistry(

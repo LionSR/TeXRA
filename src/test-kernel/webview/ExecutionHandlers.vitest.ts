@@ -1,0 +1,82 @@
+// Third-party imports
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Local imports
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+
+const mocks = vi.hoisted(() => ({
+  executeCommand: vi.fn(),
+  pathToLocation: vi.fn((absolutePath: string) => ({
+    kind: 'external' as const,
+    absolutePath,
+  })),
+}));
+
+vi.mock('vscode', () => ({
+  commands: { executeCommand: mocks.executeCommand },
+  window: {
+    showErrorMessage: vi.fn(),
+    showInformationMessage: vi.fn(),
+    showWarningMessage: vi.fn(),
+  },
+}));
+
+vi.mock('@commands/auth', () => ({
+  AUTH_COMMANDS: { SIGN_IN: 'texra.auth.signIn' },
+}));
+vi.mock('@common/teams/TeamPlan', () => ({
+  formatPartialTeamLaunchMessage: vi.fn(),
+  formatTeamLaunchBlockedMessage: vi.fn(),
+  formatTeamUnavailableMessage: vi.fn(),
+  formatUnavailableTeamMembersMessage: vi.fn(),
+  formatUnknownTeamMessage: vi.fn(),
+  resolveTeamLaunch: vi.fn(),
+  TEAM_LAUNCH_CANCEL_LABEL: 'Cancel',
+  TEAM_LAUNCH_CONTINUE_LABEL: 'Continue',
+  TEAM_LAUNCH_SIGN_IN_LABEL: 'Sign in',
+  TEAM_SELECTION_REQUIRED_MESSAGE: 'Select a team',
+}));
+vi.mock('@controllers/mainView/teamCatalogPorts', () => ({
+  createTeamCatalogPorts: vi.fn(),
+}));
+vi.mock('@controllers/mainView/MainViewExecutionController', () => ({
+  prepareMainViewExecutionRequest: vi.fn(),
+  prepareMainViewTeamExecutionRequest: vi.fn(),
+}));
+vi.mock('@frontend/ui/errorHandlingUtils', () => ({
+  logErrorMessage: vi.fn(),
+}));
+vi.mock('@logger/logUtils', () => ({ info: vi.fn() }));
+vi.mock('@utils/files', () => ({ pathToLocation: mocks.pathToLocation }));
+
+const { handleFileOperation } =
+  await import('@webview/managers/executionHandlers');
+
+describe('MainView execution handlers', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it.each([
+    MAIN_VIEW_COMMANDS.COMPARE,
+    MAIN_VIEW_COMMANDS.ACCEPT_EDITED,
+  ] as const)('converts %s paths to canonical file locations', (command) => {
+    handleFileOperation({
+      command,
+      baseFile: '/workspace/main.tex',
+      editedFile: '/tmp/edited.tex',
+    });
+
+    expect(mocks.pathToLocation.mock.calls).toEqual([
+      ['/workspace/main.tex'],
+      ['/workspace/main.tex'],
+      ['/tmp/edited.tex'],
+    ]);
+    expect(mocks.executeCommand).toHaveBeenCalledExactlyOnceWith(
+      `texra.${command}`,
+      { kind: 'external', absolutePath: '/workspace/main.tex' },
+      { kind: 'external', absolutePath: '/workspace/main.tex' },
+      { kind: 'external', absolutePath: '/tmp/edited.tex' },
+    );
+  });
+});

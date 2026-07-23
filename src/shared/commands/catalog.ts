@@ -237,6 +237,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.pack',
+    extensionRegistry: true,
     title: 'Pack Output into History Folder',
     shortTitle: 'Pack Output',
     category: 'TeXRA',
@@ -244,6 +245,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.clean',
+    extensionRegistry: true,
     title: 'Clean Agent Output Files',
     shortTitle: 'Clean Output',
     category: 'TeXRA',

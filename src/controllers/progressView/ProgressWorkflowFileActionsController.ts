@@ -4,20 +4,13 @@ import path from 'node:path';
 // Local imports
 import * as logger from '@logger/logUtils';
 import type {
+  AcceptCopyMeta,
   OutputFileInfo,
   RoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
 import { ensureRunDir, findRunDir, getRunDir } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-
-/** Agent + model for the run that produced a file, used to build the
- *  legacy `<base>_<agent>_r<round>_<model>` postfix when accepting a copy. */
-export interface AcceptCopyMeta {
-  agent: string;
-  model: string;
-  round: number;
-}
 
 interface ProgressWorkflowFileActionsState {
   getActiveStream(): StreamTabId | '';
