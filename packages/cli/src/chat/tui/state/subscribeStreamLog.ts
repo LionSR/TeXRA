@@ -69,15 +69,19 @@ const LIVE_ACTIVITY_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.USER_MESSAGE,
 ]);
 
+function isFullLogChildStream(streamId: StreamTabId): boolean {
+  return /^(bash@tool|claude@agent-sdk|codex@codex-sdk|workflow-script)#/.test(
+    streamId,
+  );
+}
+
 function transcriptMessageTypesForStream(streamId: StreamTabId): Set<string> {
   // Detached child runs surface their full log output (phase group rows and
   // plain log lines, both `DEFAULT`) when focused, unlike the root/subagent
   // transcript which shows only model/tool/user/error rows. A workflow-script
   // run is one such child: its phases and per-agent Running/Finished lines
   // project onto its own stream trace and must render in its focused viewport.
-  return /^(bash@tool|claude@agent-sdk|codex@codex-sdk|workflow-script)#/.test(
-    streamId,
-  )
+  return isFullLogChildStream(streamId)
     ? CHILD_STREAM_LOG_MESSAGE_TYPES
     : TRANSCRIPT_MESSAGE_TYPES;
 }
@@ -546,20 +550,29 @@ export function syncStreamLog(
 
   patchStream(streamId, (slice) => {
     const existing = new Map(slice.entries.map((e) => [e.id, e]));
-    const workflow = slice.category === AgentCategory.Workflow;
+    const workflowOperationalOnly =
+      slice.category === AgentCategory.Workflow &&
+      !isFullLogChildStream(streamId);
     const syntheticEntries = slice.entries.filter(
       (entry) =>
         entry.synthetic &&
-        (!workflow || entry.role === 'tool' || entry.role === 'phase'),
+        (!workflowOperationalOnly ||
+          entry.role === 'tool' ||
+          entry.role === 'phase'),
     );
     const streamFinal = isFinalTranscriptStatus(slice.status);
     const logCandidates: TranscriptCandidate[] = [];
     for (const entry of responses) {
       const rendered = renderLogEntry(entry, existing.get(entry.id));
       if (!rendered) continue;
-      // Workflow details are an operational feed, not a model transcript.
-      // In particular, never retain thinking, user prompts, or model prose.
-      if (workflow && rendered.role !== 'tool' && rendered.role !== 'phase') {
+      // Workflow-agent details are an operational feed, not a model
+      // transcript. Detached workflow-script runs intentionally keep their
+      // full child log, including Running/Finished and error rows.
+      if (
+        workflowOperationalOnly &&
+        rendered.role !== 'tool' &&
+        rendered.role !== 'phase'
+      ) {
         continue;
       }
       logCandidates.push({ rendered, sortSeq: entry.seqNo, tieBreak: 0 });
