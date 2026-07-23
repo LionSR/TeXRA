@@ -193,7 +193,7 @@ export function subscribeGoalStateChanges(
   );
 }
 
-export const GoalStore = {
+export const GoalStore = Object.freeze({
   /**
    * Get the goal for a stream, or null when none exists.
    *
@@ -348,4 +348,4 @@ export const GoalStore = {
     );
     await GoalStore.forgetMany(streamIds, session);
   },
-};
+});

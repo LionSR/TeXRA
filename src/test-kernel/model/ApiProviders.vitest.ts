@@ -14,7 +14,24 @@ import {
 } from '@model/apiProviders';
 import type { PlatformSecrets } from '@platform/secrets';
 import { UnsetApiKeyTool } from '@tools/setup/UnsetApiKeyTool';
-import { setSetupPlatform, setupSecrets } from '@tools/setup/platform';
+import { setSetupPlatform } from '@tools/setup/platform';
+
+const setupSecretsMocks = vi.hoisted(() => ({
+  deleteApiKey: vi.fn<(provider: ApiProvider) => Promise<void>>(),
+  hasUsableApiKey: vi.fn<(provider: ApiProvider) => Promise<boolean>>(),
+  storedApiKeyExists: vi.fn<(provider: ApiProvider) => Promise<boolean>>(),
+}));
+
+vi.mock('@tools/setup/platform', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tools/setup/platform')>();
+  return {
+    ...actual,
+    setupSecrets: {
+      ...actual.setupSecrets,
+      ...setupSecretsMocks,
+    },
+  };
+});
 
 function createSecrets(
   initial: Record<string, string> = {},
@@ -64,18 +81,16 @@ function setupApiKeyToolPlatform(
   store: Map<string, string>,
   envProviders: ReadonlySet<ApiProvider> = new Set(),
 ): void {
-  vi.spyOn(setupSecrets, 'deleteApiKey').mockImplementation(
-    async (provider) => {
-      store.delete(apiKeySecretName(provider));
-    },
-  );
-  vi.spyOn(setupSecrets, 'hasUsableApiKey').mockImplementation(
+  setupSecretsMocks.deleteApiKey.mockImplementation(async (provider) => {
+    store.delete(apiKeySecretName(provider));
+  });
+  setupSecretsMocks.hasUsableApiKey.mockImplementation(
     async (provider) =>
       (store.get(apiKeySecretName(provider))?.trim().length ?? 0) > 0 ||
       envProviders.has(provider),
   );
-  vi.spyOn(setupSecrets, 'storedApiKeyExists').mockImplementation(
-    async (provider) => store.has(apiKeySecretName(provider)),
+  setupSecretsMocks.storedApiKeyExists.mockImplementation(async (provider) =>
+    store.has(apiKeySecretName(provider)),
   );
   setSetupPlatform({
     host: 'cli',
@@ -89,6 +104,9 @@ function setupApiKeyToolPlatform(
 describe('API provider key caches', () => {
   beforeEach(() => {
     invalidateApiKeyCache();
+    setupSecretsMocks.deleteApiKey.mockReset();
+    setupSecretsMocks.hasUsableApiKey.mockReset();
+    setupSecretsMocks.storedApiKeyExists.mockReset();
   });
 
   afterEach(() => {

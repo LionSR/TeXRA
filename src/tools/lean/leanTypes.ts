@@ -13,11 +13,14 @@ import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting'
 export const LEAN4_EXTENSION_ID = 'leanprover.lean4';
 
 /** Per-file commands surfaced by `lean_file`. */
-export const LEAN_FILE_COMMANDS = ['restart', 'refresh_dependencies'] as const;
+export const LEAN_FILE_COMMANDS = Object.freeze([
+  'restart',
+  'refresh_dependencies',
+] as const);
 export type LeanFileCommand = (typeof LEAN_FILE_COMMANDS)[number];
 
 /** Project-scope commands surfaced by `lean_project`. */
-export const LEAN_PROJECT_COMMANDS = [
+export const LEAN_PROJECT_COMMANDS = Object.freeze([
   // Server commands
   'restart_server',
   'stop_server',
@@ -31,14 +34,14 @@ export const LEAN_PROJECT_COMMANDS = [
   'install_deps',
   'update_elan',
   'select_toolchain',
-] as const;
+] as const);
 export type LeanProjectCommand = (typeof LEAN_PROJECT_COMMANDS)[number];
 
 /** Human-readable label for each server mode (used in the dashboard surface). */
-export const LEAN_SERVER_MODE_LABELS = {
+export const LEAN_SERVER_MODE_LABELS = Object.freeze({
   'vscode-extension': LEAN4_EXTENSION_ID,
   'direct-lsp': 'direct LSP',
-} as const;
+} as const);
 
 // LSP contracts
 

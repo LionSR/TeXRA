@@ -2,25 +2,33 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { afterEach, describe, it, vi } from 'vitest';
+import { beforeEach, describe, it, vi } from 'vitest';
 
 // Local imports
 import { apiKeySecretName } from '@model/apiProviders';
 import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 import { ListApiKeysTool } from '@tools/setup/ListApiKeysTool';
-import { setupSecrets } from '@tools/setup/platform';
 
-const FAKE_PROVIDERS = ['anthropic', 'openai'] as const;
-const ORIGINAL_PROVIDERS = setupSecrets.providers;
+const mocks = vi.hoisted(() => ({
+  listStoredKeys: vi.fn<() => Promise<readonly string[]>>(),
+}));
+
+vi.mock('@tools/setup/platform', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tools/setup/platform')>();
+  return {
+    ...actual,
+    setupSecrets: {
+      ...actual.setupSecrets,
+      providers: ['anthropic', 'openai'],
+      listStoredKeys: mocks.listStoredKeys,
+    },
+  };
+});
 
 function installPlatform(
   listStoredKeys: () => Promise<readonly string[]>,
 ): void {
-  Object.defineProperty(setupSecrets, 'providers', {
-    configurable: true,
-    value: FAKE_PROVIDERS,
-  });
-  vi.spyOn(setupSecrets, 'listStoredKeys').mockImplementation(listStoredKeys);
+  mocks.listStoredKeys.mockImplementation(listStoredKeys);
 }
 
 function installPlatformWithKeys(keys: readonly string[]): void {
@@ -29,12 +37,8 @@ function installPlatformWithKeys(keys: readonly string[]): void {
 
 const tool = new ListApiKeysTool();
 
-afterEach(() => {
-  vi.restoreAllMocks();
-  Object.defineProperty(setupSecrets, 'providers', {
-    configurable: true,
-    value: ORIGINAL_PROVIDERS,
-  });
+beforeEach(() => {
+  mocks.listStoredKeys.mockReset();
 });
 
 describe('list_api_keys tool', () => {
