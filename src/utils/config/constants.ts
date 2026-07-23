@@ -21,7 +21,8 @@ export const DEBOUNCE_OPTIONS_MS = 300; // Dropdown options refresh
 // Tool groups marked `toggleable: true` in EXTERNAL_TOOL_DEFS are treated
 // as opt-in: they're disabled for new users on first install, and the Tools
 // dashboard shows a toggle so the user can turn them on. Seeding happens in
-// `initializeToolDefaults()`; existing profiles are never re-seeded.
+// `seedDisabledToolDefaults()` during host startup; existing profiles are
+// never re-seeded.
 
 /** Determine whether tool-use session persistence is enabled. */
 export function getToolUsePersistenceEnabled(): boolean {
