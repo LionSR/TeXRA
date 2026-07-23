@@ -1531,6 +1531,49 @@ describe('ModelHandlerAnthropic message guards', () => {
     assert.equal(download.mock.calls.length, 1);
   });
 
+  it('caches a size fallback when a resumed PDF cannot be parsed', async () => {
+    const handler = createAnthropicHandler({ supportsNativePdf: true });
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: { type: 'file', file_id: 'file_invalid_pdf' },
+          },
+        ] as unknown as ContentBlockParam[],
+      },
+    ];
+    const target = handler as unknown as {
+      estimateFileReferenceTokens(
+        client: unknown,
+        messages: MessageParam[],
+      ): Promise<number>;
+    };
+    const retrieveMetadata = vi.fn(async () => ({
+      mime_type: 'application/pdf',
+      size_bytes: 800_000,
+    }));
+    const download = vi.fn(async () => ({
+      arrayBuffer: async () => new TextEncoder().encode('not a PDF').buffer,
+    }));
+    const client = { beta: { files: { retrieveMetadata, download } } };
+
+    const firstEstimate = await target.estimateFileReferenceTokens(
+      client,
+      messages,
+    );
+    const cachedEstimate = await target.estimateFileReferenceTokens(
+      client,
+      messages,
+    );
+
+    assert.equal(firstEstimate, 200_000);
+    assert.equal(cachedEstimate, 200_000);
+    assert.equal(retrieveMetadata.mock.calls.length, 1);
+    assert.equal(download.mock.calls.length, 1);
+  });
+
   it('prefers tracked PDF pages over compressed file size', async () => {
     const handler = createAnthropicHandler({ supportsNativePdf: true });
     const messages: MessageParam[] = [

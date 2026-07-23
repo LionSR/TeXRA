@@ -274,12 +274,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
       let sizeEstimate = this.fileTokenEstimates.get(fileId);
       if (sizeEstimate === undefined) {
+        let metadataFallback: number | undefined;
         try {
           const metadata = await client.beta.files.retrieveMetadata(
             fileId,
             { betas: [FILES_API_BETA] },
             { signal, maxRetries: 0 },
           );
+          metadataFallback = Math.ceil(metadata.size_bytes / 4);
           if (metadata.mime_type === 'application/pdf') {
             const response = await client.beta.files.download(
               fileId,
@@ -294,6 +296,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
                 this.uploadedPdfPageCounts.set(fileId, pageCount);
                 sizeEstimate =
                   pageCount * ANTHROPIC_PDF_TOKENS_PER_PAGE_ESTIMATE;
+              } else {
+                sizeEstimate = metadataFallback;
+                this.fileTokenEstimates.set(fileId, sizeEstimate);
               }
             } finally {
               wipeBuffer(buffer);
@@ -301,11 +306,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
           } else {
             // Match the shared no-tokenizer heuristic without materializing a
             // string as large as the remote document.
-            sizeEstimate = Math.ceil(metadata.size_bytes / 4);
+            sizeEstimate = metadataFallback;
             this.fileTokenEstimates.set(fileId, sizeEstimate);
           }
         } catch (error) {
           signal?.throwIfAborted();
+          if (metadataFallback !== undefined) {
+            // A PDF that cannot be downloaded or parsed must still contribute
+            // a stable fallback without repeating the failed body request.
+            sizeEstimate = metadataFallback;
+            this.fileTokenEstimates.set(fileId, sizeEstimate);
+          }
           this.logger.debug(
             'Unable to estimate Anthropic file-reference tokens.',
             { data: { fileId, error } },
