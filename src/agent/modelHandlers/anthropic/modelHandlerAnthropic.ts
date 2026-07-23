@@ -276,7 +276,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         try {
           const metadata = await client.beta.files.retrieveMetadata(
             fileId,
-            undefined,
+            { betas: [FILES_API_BETA] },
             { signal, maxRetries: 0 },
           );
           // Match the shared no-tokenizer heuristic without materializing a
