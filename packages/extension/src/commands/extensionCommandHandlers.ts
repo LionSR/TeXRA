@@ -41,6 +41,12 @@ const SetApiKeyArgSchema = z.enum(API_PROVIDERS).optional();
 const CreateAgentWithAIArgSchema = AgentCategorySchema.optional();
 
 /**
+ * Optional `AgentCategory` argument for `texra.showAgents`, selecting which
+ * agent-category sub-tab opens under Settings > Agents.
+ */
+const ShowAgentsArgSchema = AgentCategorySchema.optional();
+
+/**
  * Optional `{ inPlace }` argument for `texra.showProgressView`. The
  * legacy registration accepted any argument shape and only honoured the
  * `inPlace` boolean — `z.unknown()` here preserves that best-effort
@@ -84,9 +90,8 @@ export type ExtensionRegistryCommandId =
 
 /**
  * Runtime mirror of `ExtensionRegistryCatalogCommandId`, used by tests to
- * assert `EXTENSION_COMMAND_HANDLERS` / `EXTENSION_PARAMETERIZED_HANDLERS`
- * register every catalog entry tagged `extensionRegistry: true` (and flag
- * strays that no longer belong).
+ * assert `EXTENSION_COMMAND_HANDLERS` registers every catalog entry tagged
+ * `extensionRegistry: true` (and flag strays that no longer belong).
  */
 export const EXTENSION_REGISTRY_CATALOG_COMMAND_IDS: readonly ExtensionRegistryCatalogCommandId[] =
   commandCatalog
@@ -271,28 +276,16 @@ export const EXTENSION_COMMAND_HANDLERS = {
     (actions: ExtensionCommandActions, input) =>
       awaitTrue(actions.execute(input)),
   ),
+  'texra.showAgents': definedHandler(
+    ShowAgentsArgSchema,
+    (actions: ExtensionCommandActions, subTab) =>
+      awaitTrue(actions.showSettings(SETTINGS_TAB.AGENTS, subTab)),
+  ),
 } as const satisfies Record<
-  Exclude<ExtensionRegistryCommandId, 'texra.showAgents'>,
-  // The typed handlers (`openDoc`, `stopAgent`, `compactResponse`) carry
+  ExtensionRegistryCommandId,
+  // The typed handlers (`openDoc`, `stopAgent`, `compactResponse`, …) carry
   // their own argument shapes via `definedHandler`. Matching the registry
   // map's per-entry TArgs widening (`any`) keeps inference per entry
   // without unifying every entry on `unknown`.
   CommandHandler<ExtensionCommandActions, any>
->;
-
-// `texra.showAgents` accepts an optional `AgentCategory` argument from
-// `executeCommand` callers, so it can't share the no-arg `CommandHandler`
-// signature. It's still routed through the same actions interface — the
-// only difference is that the VS Code registration forwards the argument.
-//
-// FOLLOW_UP: This bespoke parameterized map can be replaced with the
-// `definedHandler` typed-args helper in `@shared/commands/registry` once
-// the surrounding parameterized commands (pack/clean/compare/etc.) are
-// migrated through that path. Keeping it as-is for now to minimize churn.
-export const EXTENSION_PARAMETERIZED_HANDLERS = {
-  'texra.showAgents': (actions, subTab?: AgentCategory) =>
-    actions.showSettings(SETTINGS_TAB.AGENTS, subTab),
-} satisfies Record<
-  Extract<ExtensionRegistryCommandId, 'texra.showAgents'>,
-  (actions: ExtensionCommandActions, arg?: AgentCategory) => Promise<void>
 >;

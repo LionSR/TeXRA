@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   EXTENSION_COMMAND_HANDLERS,
   EXTENSION_HIDDEN_ALIASES,
-  EXTENSION_PARAMETERIZED_HANDLERS,
   EXTENSION_REGISTRY_CATALOG_COMMAND_IDS,
   type ExtensionCommandActions,
 } from '@commands/extensionCommandHandlers';
@@ -73,10 +72,7 @@ function makeActions(): ExtensionCommandActions {
 
 describe('extension command registry — catalog-driven registration', () => {
   it('registers exactly the catalog ids tagged extensionRegistry, plus hidden aliases', () => {
-    const registered = [
-      ...Object.keys(EXTENSION_COMMAND_HANDLERS),
-      ...Object.keys(EXTENSION_PARAMETERIZED_HANDLERS),
-    ].sort();
+    const registered = Object.keys(EXTENSION_COMMAND_HANDLERS).sort();
     const expected = [
       ...EXTENSION_REGISTRY_CATALOG_COMMAND_IDS,
       ...EXTENSION_HIDDEN_ALIASES,
@@ -94,10 +90,7 @@ describe('extension command registry — catalog-driven registration', () => {
         .filter((entry) => entry.extensionRegistry === true)
         .map((entry) => entry.id),
     );
-    const registeredIds = new Set([
-      ...Object.keys(EXTENSION_COMMAND_HANDLERS),
-      ...Object.keys(EXTENSION_PARAMETERIZED_HANDLERS),
-    ]);
+    const registeredIds = new Set(Object.keys(EXTENSION_COMMAND_HANDLERS));
     for (const id of taggedIds) {
       expect(registeredIds.has(id)).toBe(true);
     }
@@ -179,15 +172,33 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     );
   });
 
-  it('texra.showAgents (parameterized) passes the agents sub-tab', async () => {
+  it('texra.showAgents forwards parsed agent-category sub-tab', async () => {
     const actions = makeActions();
-    await EXTENSION_PARAMETERIZED_HANDLERS['texra.showAgents'](
+    const result = dispatchCommandFromRegistry(
+      'texra.showAgents',
+      EXTENSION_COMMAND_HANDLERS,
       actions,
+      undefined,
       'toolUse',
     );
+    await expect(Promise.resolve(result)).resolves.toBe(true);
     expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith(
       SETTINGS_TAB.AGENTS,
       'toolUse',
+    );
+  });
+
+  it('texra.showAgents with no arg opens the agents tab without a sub-tab', async () => {
+    const actions = makeActions();
+    const result = dispatchCommandFromRegistry(
+      'texra.showAgents',
+      EXTENSION_COMMAND_HANDLERS,
+      actions,
+    );
+    await expect(Promise.resolve(result)).resolves.toBe(true);
+    expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith(
+      SETTINGS_TAB.AGENTS,
+      undefined,
     );
   });
 
