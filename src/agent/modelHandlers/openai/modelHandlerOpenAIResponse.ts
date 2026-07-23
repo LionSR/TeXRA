@@ -39,8 +39,6 @@ import {
   isContextWindowError,
   isPreviousResponseIdError,
   handleStreamingFailure,
-  trackStreamConnect,
-  type StreamConnectTracker,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
@@ -63,6 +61,7 @@ import { getConfig } from '@utils/config/configUtils';
 // Local file imports
 import { computeUtilizationPercent } from '../support/contextUtilization';
 import { logCompactionEvent } from '../support/compactionLogging';
+import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';
 import { toDataUrl } from '../support/dataUrl';
 import { shouldUseOpenRouter } from '../support/ProxyConfigResolver';
 import {
@@ -748,6 +747,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     compactedMessages: ResponseInputItem[];
     tokensAfter: number;
     sourceMessages: ResponseInputItem[];
+    sourceFingerprint: string;
   };
 
   /**
@@ -871,8 +871,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     logCompactionActivity(this.logger, 'started');
     try {
-      const compactedResponse: CompactedResponse =
-        await client.responses.compact(compactParams);
+      const compactedResponse: CompactedResponse = await client
+        .withOptions({ maxRetries: AUXILIARY_MAX_RETRIES })
+        .responses.compact(compactParams);
 
       // Note: SDK types CompactedResponse.output as ResponseOutputItem[], but the
       // compact endpoint returns ResponseInputItem[] suitable for re-submission.
@@ -929,6 +930,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         compactedMessages,
         tokensAfter,
         sourceMessages: messages,
+        sourceFingerprint: this.messagesTailFingerprint(messages),
       };
 
       return compactedMessages;
@@ -995,26 +997,28 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       messages,
       tokensBefore,
       async (conversationMessages, compactionSystemPrompt) => {
-        const stream = await client.responses.stream(
-          {
-            model: this.config.fullName,
-            instructions: compactionSystemPrompt,
-            input: [
-              ...conversationMessages,
-              {
-                type: 'message',
-                role: 'user',
-                content: [createInputText(COMPACTION_USER_PROMPT)],
-              },
-            ],
-            max_output_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
-            store: this.storesResponsesServerSide,
-            ...(this.capabilities.supportsReasoning && {
-              reasoning: { effort: 'low' },
-            }),
-          },
-          { signal },
-        );
+        const stream = await client
+          .withOptions({ maxRetries: AUXILIARY_MAX_RETRIES })
+          .responses.stream(
+            {
+              model: this.config.fullName,
+              instructions: compactionSystemPrompt,
+              input: [
+                ...conversationMessages,
+                {
+                  type: 'message',
+                  role: 'user',
+                  content: [createInputText(COMPACTION_USER_PROMPT)],
+                },
+              ],
+              max_output_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+              store: this.storesResponsesServerSide,
+              ...(this.capabilities.supportsReasoning && {
+                reasoning: { effort: 'low' },
+              }),
+            },
+            { signal },
+          );
 
         // The ChatGPT-subscription (Codex) backend strips `max_output_tokens`
         // at the wire (it answers `400 Unsupported parameter: max_output_tokens`
@@ -1089,6 +1093,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // then rejects.
       tokensAfter: this.estimateResentInputTokens(compactedMessages),
       sourceMessages: messages,
+      sourceFingerprint: this.messagesTailFingerprint(messages),
     };
     return compactedMessages;
   }
@@ -1160,9 +1165,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const client = new OpenAI({
       apiKey: credential.apiKey,
       baseURL: credential.baseUrl,
+      fetch: this.longRunningModelFetch,
+      maxRetries: 0,
     });
     this.logOpenAICompatibleClientConfig(client.baseURL, credential.route);
-    return this.rememberClientCredentialRoute(client, credential.route);
+    return this.rememberClientCredentialRoute(
+      client,
+      credential.route,
+      credential.apiKey,
+    );
   }
 
   /** Returns OpenAI client with configured API key. */
@@ -1172,8 +1183,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return this.createOpenAIClient(selection);
   }
 
-  override isAutoRetryManagedByProvider(_error: Error): boolean {
-    return true;
+  override getRetryEndpoint(client: OpenAI): string {
+    return client.baseURL;
   }
 
   /** Reset conversation bookkeeping when starting a new session. */
@@ -1394,10 +1405,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }),
     };
 
-    const tokenCount = await client.responses.inputTokens.count(
-      countParams,
-      options?.signal ? { signal: options.signal } : undefined,
-    );
+    const tokenCount = await client
+      .withOptions({ maxRetries: AUXILIARY_MAX_RETRIES })
+      .responses.inputTokens.count(
+        countParams,
+        options?.signal ? { signal: options.signal } : undefined,
+      );
 
     this.logger.debug(`Token count of message: ${tokenCount.input_tokens}`);
     return tokenCount.input_tokens;
@@ -1569,7 +1582,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // applyCompactionState() clearing compactionResult on every successful
     // call; this line only ever matters while a compaction from a still-in-
     // flight (unsuccessful) attempt is pending.
-    if (this.compactionResult?.sourceMessages !== messages) {
+    if (
+      this.compactionResult !== undefined &&
+      (this.compactionResult.sourceMessages !== messages ||
+        this.compactionResult.sourceFingerprint !==
+          this.messagesTailFingerprint(messages))
+    ) {
+      // Reference or content changed — a follow-up appended after a failed
+      // turn mutates the SAME array in place, so identity alone would replay
+      // a stale pre-follow-up payload and silently drop the user's message.
       this.compactionResult = undefined;
     }
 
@@ -1611,7 +1632,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     let compactedThisCall = false;
     // Store compacted messages for return value (captured when compaction succeeds)
     let compactedMessages: ResponseInputItem[] | undefined;
-    if (this.compactionResult?.sourceMessages === messages) {
+    if (
+      this.compactionResult?.sourceMessages === messages &&
+      this.compactionResult.sourceFingerprint ===
+        this.messagesTailFingerprint(messages)
+    ) {
       // Same-turn retry of an input that already compacted successfully on a
       // prior attempt (see the cache check above): reuse it instead of
       // hitting the compact endpoint again. Re-running compaction here would
@@ -2079,8 +2104,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Hoisted so the catch can finalize the progress streams on a mid-stream
     // failure (otherwise the progress view hangs in a loading state).
     let processor: ResponseStreamProcessor | undefined;
-    let streamEventObserved = false;
-    let connect: StreamConnectTracker | undefined;
     // Captured from `response.created` so a stream event outside the SDK's
     // typed union (see isUnhandledStreamEventError) can fall back to polling
     // by id instead of failing an otherwise-healthy turn.
@@ -2090,7 +2113,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const streamParams: ResponseStreamParams = { ...rest, stream: true };
       const retrieveParams = responseRetrieveParamsFor(params);
       const stream = await client.responses.stream(streamParams, { signal });
-      connect = trackStreamConnect(stream);
 
       // Processor handles interleaved thinking and web search
       // GPT can: think → web_search → think more → web_search → text
@@ -2139,7 +2161,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       let response: Response | undefined;
       try {
         for await (const event of stream) {
-          streamEventObserved = true;
           if (event.type === 'response.created') {
             responseId = event.response.id;
           }
@@ -2204,13 +2225,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // the retry UI receives the same structured error shape downstream.
         partialTail: () =>
           streamedText ? takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX) : '',
-        retryEligible: () =>
-          (connect?.isConnected() ?? false) ||
-          streamEventObserved ||
-          streamedText.length > 0,
       });
-    } finally {
-      connect?.cleanup();
     }
   }
 
@@ -2698,10 +2713,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     let uploadedAttachments: UploadedOpenAIResponseAttachment[] = [];
     if (canUploadFiles && attachments.length > 0 && client) {
-      uploadedAttachments = await uploadToolAttachments(client, attachments, {
-        openRouterRouting: this.isOpenRouterRoutingEnabled(),
-        logger: this.logger,
-      });
+      // This upload occurs while assembling the next turn, outside the model
+      // invocation gate. Restore the SDK's ordinary two retries for this
+      // auxiliary request; generation requests keep maxRetries: 0.
+      uploadedAttachments = await uploadToolAttachments(
+        client.withOptions({ maxRetries: AUXILIARY_MAX_RETRIES }),
+        attachments,
+        {
+          openRouterRouting: this.isOpenRouterRoutingEnabled(),
+          logger: this.logger,
+        },
+      );
       if (finalResult.status === 'executed' && uploadedAttachments.length > 0) {
         finalResult.files = uploadedAttachments.map(
           ({ attachment, fileId }) => ({

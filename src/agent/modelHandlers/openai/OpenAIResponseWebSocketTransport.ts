@@ -13,8 +13,8 @@ import { WebSocketError } from 'openai/resources/responses/internal-base';
 
 import type { AgentTrace } from '@agent/trace';
 import {
-  attachFlowAutoRetryRequired,
   attachPartialText,
+  attachSdkErrorMetadata,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
@@ -160,7 +160,10 @@ export class OpenAIResponseWebSocketTransport {
       const onError = (err: Error): void => {
         cleanup();
         closeQuietly(ws);
-        attachFlowAutoRetryRequired(err);
+        attachSdkErrorMetadata(err, {
+          provider: 'openai',
+          kind: 'connection',
+        });
         reject(err);
       };
       const onAbort = (): void => {
@@ -296,7 +299,6 @@ export class OpenAIResponseWebSocketTransport {
         if (streamedText) {
           attachPartialText(err, takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX));
         }
-        attachFlowAutoRetryRequired(err);
         reject(err);
       };
 
@@ -346,10 +348,19 @@ export class OpenAIResponseWebSocketTransport {
         if (settled) return;
         settled = true;
         cleanup();
-        // Invalidate the connection on error events (e.g., websocket_connection_limit_reached).
-        // The server may close the socket after sending the error, but the close event
-        // fires after this handler and would be a no-op (settled=true).
+        // The SDK emits both provider error events and socket failures through
+        // this channel. Structured provider errors must retain their own code
+        // (only an error without an API event is evidence that the route
+        // broke), but the connection is invalidated either way: the server may
+        // refuse further service on this socket after a structured error
+        // (e.g. websocket_connection_limit_reached) without closing it.
         this.closeWebSocket();
+        if (!error.error) {
+          attachSdkErrorMetadata(error, {
+            provider: 'openai',
+            kind: 'connection',
+          });
+        }
         rejectWithPartial(error);
       };
 
@@ -359,11 +370,14 @@ export class OpenAIResponseWebSocketTransport {
         settled = true;
         cleanup();
         this.closeWebSocket();
-        rejectWithPartial(
-          new Error(
-            `WebSocket closed unexpectedly (code: ${code}, reason: ${reason.toString()})`,
-          ),
+        const error = new Error(
+          `WebSocket closed unexpectedly (code: ${code}, reason: ${reason.toString()})`,
         );
+        attachSdkErrorMetadata(error, {
+          provider: 'openai',
+          kind: 'connection',
+        });
+        rejectWithPartial(error);
       };
 
       const cleanup = (): void => {

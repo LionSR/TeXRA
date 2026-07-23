@@ -7,6 +7,7 @@
  */
 
 import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import { auxiliaryRetry } from '@agent/modelHandlers/support/auxiliaryRetry';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import { getModelUnavailableReason } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
@@ -79,11 +80,15 @@ export async function runHelperModelCompletion(
     undefined,
     systemPrompt,
   );
-  const result = await kit.handler.createResponse({
-    client: kit.client,
-    messages,
-    temperature,
-    systemPrompt,
-  });
+  // Helper calls execute outside ModelInvocationNode, so they need their own
+  // bounded retry policy now that generation clients disable SDK retries.
+  const result = await auxiliaryRetry(() =>
+    kit.handler.createResponse({
+      client: kit.client,
+      messages,
+      temperature,
+      systemPrompt,
+    }),
+  );
   return kit.handler.extractResponse(result.response, '').text;
 }

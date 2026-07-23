@@ -23,6 +23,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
+import type { AnthropicToolCall } from '@agent/types/ModelHandlerContracts';
 import {
   enforceCacheControlLimit,
   logContextManagementFromResponse,
@@ -113,6 +114,45 @@ function getCacheMarker(block?: ContentBlockParam | ContentBlock): unknown {
 
   return (block as { cache_control?: unknown }).cache_control;
 }
+
+describe('ModelHandlerAnthropic auxiliary requests', () => {
+  it('restores SDK retries for tool-result uploads outside the model gate', async () => {
+    const handler = createAnthropicHandler();
+    handler.setLogger({ ...noopTrace });
+    const upload = vi.fn(async () => ({ id: 'file-1' }));
+    const uploadClient = { beta: { files: { upload } } };
+    const withOptions = vi.fn(() => uploadClient);
+    const call: AnthropicToolCall = {
+      provider: 'anthropic',
+      callId: 'call-1',
+      name: 'read_file',
+      input: {},
+      raw: {
+        id: 'call-1',
+        type: 'tool_use',
+        caller: { type: 'direct' },
+        name: 'read_file',
+        input: {},
+      },
+    };
+
+    await handler.createToolUseFollowUpMessages(
+      { withOptions } as never,
+      call,
+      { status: 'executed', output: 'done' },
+      [
+        {
+          path: 'chart.png',
+          mimeType: 'image/png',
+          bytes: new Uint8Array([1, 2, 3]),
+        },
+      ],
+    );
+
+    assert.deepEqual(withOptions.mock.calls, [[{ maxRetries: 2 }]]);
+    assert.equal(upload.mock.calls.length, 1);
+  });
+});
 
 describe('ModelHandlerAnthropic forced tool choice', () => {
   it('maps finalTool to a named Anthropic tool choice', async () => {
@@ -577,7 +617,6 @@ describe('ModelHandlerAnthropic message guards', () => {
         },
       },
     } as any;
-
     const response = await handler.createResponse({
       client,
       messages,
@@ -830,6 +869,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     ];
 
     const callOrder: string[] = [];
+    const countTokensOptions: any[] = [];
 
     const client = {
       beta: {
@@ -840,8 +880,9 @@ describe('ModelHandlerAnthropic message guards', () => {
           },
         },
         messages: {
-          countTokens: async () => {
+          countTokens: async (_params: unknown, options?: any) => {
             callOrder.push('countTokens');
+            countTokensOptions.push(options);
             return { input_tokens: 5 } as any;
           },
           create: async () => {
@@ -859,6 +900,7 @@ describe('ModelHandlerAnthropic message guards', () => {
         },
       },
     } as any;
+    client.withOptions = vi.fn(() => client);
 
     const response = await handler.createResponse({
       client,
@@ -867,6 +909,9 @@ describe('ModelHandlerAnthropic message guards', () => {
     });
 
     assert.deepEqual(callOrder, ['countTokens', 'upload', 'create']);
+    // Token counting retries ride per-request options, not a client clone.
+    assert.deepEqual(client.withOptions.mock.calls, []);
+    assert.equal(countTokensOptions[0]?.maxRetries, 2);
     assert.equal(response.response.stop_reason, 'end_turn');
   });
 

@@ -134,14 +134,14 @@ function detectProviderFromClassNames(
   return match;
 }
 
-type HeaderBag =
+export type HeaderBag =
   | {
       get?: (key: string) => string | null;
     }
   | Record<string, unknown>;
 type HeaderDetectedProvider = 'anthropic';
 
-function getHeaderValue(
+export function getHeaderValue(
   headers: HeaderBag | undefined,
   name: string,
 ): string | undefined {

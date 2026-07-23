@@ -181,8 +181,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       setCached: (cache) => {
         this.googleClient = cache;
       },
-      rememberRoute: (client, route) =>
-        this.rememberClientCredentialRoute(client, route),
+      rememberRoute: (client, route, credentialSecret) =>
+        this.rememberClientCredentialRoute(client, route, credentialSecret),
     });
   }
 
@@ -192,6 +192,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     this.googleClient = null;
     return this.getClient(selection);
   }
+
   /**
    * Gemini carries thought signatures across parallel function calls, which must
    * be preserved by batching the results into a single follow-up message.
@@ -512,11 +513,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         // buffer above.
         partialTail: () =>
           aggregatedText ? takeTail(aggregatedText, PARTIAL_TEXT_TAIL_MAX) : '',
-        // Google's SDK never reaches the SDK-retry boundary here, so this
-        // catch does not opt into flow-level auto-retry — always false,
-        // unlike every other provider's `connected || tail` formula. It only
-        // lifts any accumulated tail onto the error for the retry UI.
-        retryEligible: () => false,
         decorateError: (err) => {
           // Error logging follows "log at the boundary" principle - Node's
           // retryPrompt or execFallback will log the error once. We only add
