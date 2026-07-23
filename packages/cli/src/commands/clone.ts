@@ -1,5 +1,6 @@
 // Node imports
-import { readdir } from 'node:fs/promises';
+import { mkdir, readdir, realpath } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
 
@@ -58,18 +59,24 @@ async function promptSecret(question: string): Promise<string> {
 function buildOverleafClonePorts(
   context: CliContext,
   remote: OverleafRemote,
+  workspacePath: string,
 ): OverleafCloneWorkflowPorts {
   const secrets = getCliSecrets();
+  let canonicalWorkspacePath = workspacePath;
   return {
     getStoredToken: (key) => secrets.get(key),
     deleteStoredToken: (key) => secrets.delete(key),
     storeToken: (key, token) => secrets.set(key, token),
     promptToken: async (spec) => {
+      const tokenGuidance = remote.isOverleaf
+        ? `${spec.tokenHint ?? ''} Create or copy a token at ${OVERLEAF_GIT_TOKEN_URL}. Instructions: ${OVERLEAF_TOKEN_DOCS_URL}`.trim()
+        : spec.tokenHint;
       if (context.mode !== 'interactive' || context.outputFormat !== 'text') {
         throw new CliUsageError(
-          `No saved ${spec.tokenTitle} is available. Run this command in an interactive terminal to enter and save one.`,
+          `No saved ${spec.tokenTitle} is available. ${tokenGuidance ? `${tokenGuidance} ` : ''}Run this command in an interactive terminal to enter and save one.`,
         );
       }
+      if (tokenGuidance) writeTextStderr(tokenGuidance);
       const token = (await promptSecret(`${spec.tokenTitle}: `)).trim();
       return token || null;
     },
@@ -85,7 +92,14 @@ function buildOverleafClonePorts(
         `Git is not installed or is not on PATH. Install it from ${GIT_DOWNLOAD_URL}.`,
       );
     },
-    listWorkspaceEntries: (workspacePath) => readdir(workspacePath),
+    listWorkspaceEntries: async (workspacePath) => {
+      try {
+        return await readdir(workspacePath);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+        throw error;
+      }
+    },
     showWorkspaceUnreadable: (error) => {
       writeTextStderr(
         `Cannot read destination directory: ${toErrorMessage(error)}`,
@@ -93,13 +107,15 @@ function buildOverleafClonePorts(
     },
     showWorkspaceNotEmpty: () => {
       writeTextStderr(
-        'The destination directory must be empty before cloning an Overleaf project.',
+        `The destination directory ${workspacePath} is not empty. Create or choose an empty directory, then pass it as the second argument; for example: texra clone 0123456789abcdef01234567 ./paper`,
       );
     },
 
     runClone: async (remoteUrl, workspacePath) => {
+      await mkdir(workspacePath, { recursive: true });
+      canonicalWorkspacePath = await realpath(workspacePath);
       await execa('git', ['clone', remoteUrl, '.'], {
-        cwd: workspacePath,
+        cwd: canonicalWorkspacePath,
         env: { GIT_TERMINAL_PROMPT: '0', PATH: extendEnvPath() },
       });
     },
@@ -108,12 +124,12 @@ function buildOverleafClonePorts(
         cloned: true,
         provider: remote.isOverleaf ? 'overleaf' : 'sharelatex',
         host: remote.host,
-        destination: context.cwd,
+        destination: canonicalWorkspacePath,
       };
       emitCliResult(context, {
         json: result,
         ndjson: { kind: 'result', result: { command: 'clone', ...result } },
-        text: `${label} project cloned into ${context.cwd}.`,
+        text: `${label} project cloned into ${canonicalWorkspacePath}.`,
       });
     },
     showAuthFailure: async (failedRemote) => {
@@ -137,7 +153,8 @@ export const cloneCommand = withUsageSections(
   defineCliCommand({
     meta: {
       name: 'clone',
-      description: 'Clone an Overleaf or ShareLaTeX project into --cwd',
+      description:
+        'Clone an Overleaf or ShareLaTeX project into a destination directory',
     },
     args: {
       ...GLOBAL_ARGS,
@@ -151,6 +168,11 @@ export const cloneCommand = withUsageSections(
         required: true,
         description: 'Project URL, git URL, or 24-character project ID',
       },
+      destination: {
+        type: 'positional',
+        required: false,
+        description: 'Directory to create or clone into (defaults to --cwd)',
+      },
     },
     run: async (context, ctx) => {
       const remote = parseLatexGitUrl(ctx.args.project);
@@ -160,10 +182,19 @@ export const cloneCommand = withUsageSections(
         );
       }
 
+      if (ctx.args.destination && ctx.args.cwd) {
+        throw new CliUsageError(
+          'Pass the clone destination either as the second argument or with --cwd, not both.',
+        );
+      }
+      const workspacePath = ctx.args.destination
+        ? resolve(context.cwd, ctx.args.destination)
+        : context.cwd;
+
       const outcome = await cloneOverleafProject(
         remote,
-        context.cwd,
-        buildOverleafClonePorts(context, remote),
+        workspacePath,
+        buildOverleafClonePorts(context, remote, workspacePath),
       );
       switch (outcome.status) {
         case 'success':
@@ -187,8 +218,8 @@ export const cloneCommand = withUsageSections(
       title: 'EXAMPLES',
       rows: [
         [
-          'texra clone 0123456789abcdef01234567 --cwd ./paper',
-          'clone an Overleaf project into an empty directory',
+          'texra clone 0123456789abcdef01234567 ./paper',
+          'create a directory and clone an Overleaf project into it',
         ],
         [
           'texra clone https://sharelatex.example.edu/project/0123456789abcdef01234567',

@@ -148,7 +148,6 @@ export function allocateConversationBottomPanelRows({
   processCount = 0,
   sessionCount,
   childListFocused,
-  detailContentRows = 0,
   todosPlanContentRows,
   transcriptRows,
 }: {
@@ -156,20 +155,17 @@ export function allocateConversationBottomPanelRows({
   readonly processCount?: number;
   readonly sessionCount: number;
   readonly childListFocused: boolean;
-  readonly detailContentRows?: number;
   readonly todosPlanContentRows: number;
   readonly transcriptRows: number;
 }): {
   readonly bottomPanelRows: number;
   readonly sessionPanelRows: number;
-  readonly childListRows: number;
-  readonly detailPanelRows: number;
   readonly todosPlanRows: number;
 } {
   const childListRowCount = sessionCount + processCount;
   // The persistent child list owns one blank separator row above its Select.
   const sessionPanelContentRows =
-    childListRowCount > 0 ? childListRowCount + detailContentRows + 1 : 0;
+    childListRowCount > 0 ? childListRowCount + 1 : 0;
   // The todos/plan panel likewise owns a separator row above its checklist.
   const todosPanelContentRows =
     todosPlanContentRows > 0 ? todosPlanContentRows + 1 : 0;
@@ -195,8 +191,6 @@ export function allocateConversationBottomPanelRows({
     return {
       bottomPanelRows: 0,
       sessionPanelRows: 0,
-      childListRows: 0,
-      detailPanelRows: 0,
       todosPlanRows: 0,
     };
   }
@@ -233,21 +227,9 @@ export function allocateConversationBottomPanelRows({
       todosPlanRows = 0;
     }
   }
-  const detailPanelCapacity = Math.max(
-    0,
-    finalSessionPanelRows - minimumSessionRows,
-  );
-  // A detail surface needs both its separator and at least one content row.
-  // Leave a lone spare row with the child list instead of reserving dead space.
-  const detailPanelRows =
-    detailPanelCapacity >= 2
-      ? Math.min(detailContentRows, detailPanelCapacity)
-      : 0;
   return {
     bottomPanelRows: finalBottomPanelRows,
     sessionPanelRows: finalSessionPanelRows,
-    childListRows: finalSessionPanelRows - detailPanelRows,
-    detailPanelRows,
     todosPlanRows,
   };
 }

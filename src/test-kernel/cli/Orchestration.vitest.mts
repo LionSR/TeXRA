@@ -261,6 +261,78 @@ describe('CLI orchestration items', () => {
     });
   });
 
+  it('keeps compact signed-in auth after the API mode on short launchers', () => {
+    const statusLines = [
+      'api: included TeXRA access',
+      'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 25% used, 75% remaining',
+    ];
+
+    const layout = orchestrationLauncherLayout({
+      rows: 14,
+      columns: 80,
+      itemCount: 7,
+      headerLines: ORCHESTRATION_TEST_HEADER_LINES,
+      statusLines,
+      footerHints: [],
+    });
+
+    expect(layout).toEqual({
+      statusLines: [
+        'api: included TeXRA access',
+        'auth: signed in as researcher@example.com',
+      ],
+      footerHints: [],
+      maxVisibleItems: 4,
+      showOverflow: true,
+    });
+  });
+
+  it('keeps footer hints when compact auth creates enough room', () => {
+    const statusLines = [
+      'api: included TeXRA access',
+      'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 25% used, 75% remaining',
+    ];
+    const footerHints = ['Team settings are available from the launcher.'];
+
+    const layout = orchestrationLauncherLayout({
+      rows: 16,
+      columns: 80,
+      itemCount: 7,
+      headerLines: ORCHESTRATION_TEST_HEADER_LINES,
+      statusLines,
+      footerHints,
+    });
+
+    expect(layout.statusLines).toEqual([
+      'api: included TeXRA access',
+      'auth: signed in as researcher@example.com',
+    ]);
+    expect(layout.footerHints).toEqual(footerHints);
+    expect(layout.maxVisibleItems).toBe(4);
+  });
+
+  it('uses the compact auth fallback when the launcher is narrow', () => {
+    const statusLines = [
+      'api: personal API keys',
+      'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 25% used, 75% remaining',
+    ];
+
+    const layout = orchestrationLauncherLayout({
+      rows: 16,
+      columns: 40,
+      itemCount: 7,
+      headerLines: ORCHESTRATION_TEST_HEADER_LINES,
+      statusLines,
+      footerHints: [],
+    });
+
+    expect(layout.statusLines).toEqual([
+      'api: personal API keys',
+      'auth: signed in as researcher@example.com',
+    ]);
+    expect(layout.maxVisibleItems).toBe(4);
+  });
+
   it('keeps visible choices instead of overflow-only output on tiny row budgets', () => {
     const layout = orchestrationLauncherLayout({
       rows: 7,

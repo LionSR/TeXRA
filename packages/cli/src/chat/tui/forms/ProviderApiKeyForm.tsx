@@ -15,7 +15,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { ApiKeyEntryForm } from './ApiKeyEntryForm';
 import { ListForm } from './_shared/ListForm';
 
-export type ProviderApiKeyStatuses = Partial<
+type ProviderApiKeyStatuses = Partial<
   Readonly<Record<ApiProvider, ApiKeyStatus>>
 >;
 
@@ -25,7 +25,7 @@ export interface ProviderApiKeyStatusView {
   readonly error: boolean;
 }
 
-export function providerApiKeyStatusLabel(
+function providerApiKeyStatusLabel(
   status: ApiKeyStatus | undefined,
   view: ProviderApiKeyStatusView,
 ): string {

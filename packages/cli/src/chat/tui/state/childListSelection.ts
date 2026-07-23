@@ -30,9 +30,6 @@ export function childListProcessId(
 export interface ChildListSelectionState {
   readonly focused: boolean;
   readonly selectedValue: ChildListValue | undefined;
-  /** Stream details open automatically on selection and remain
-   *  user-toggleable while the child list owns the keyboard. */
-  readonly detailsVisible: boolean;
 }
 
 type ChildListSelectionAction =
@@ -40,7 +37,6 @@ type ChildListSelectionAction =
   | { readonly kind: 'focus'; readonly value?: ChildListValue }
   | { readonly kind: 'focusStream'; readonly streamId: StreamTabId }
   | { readonly kind: 'highlight'; readonly value: ChildListValue }
-  | { readonly kind: 'toggleDetails' }
   | {
       readonly kind: 'syncActiveStream';
       readonly streamId: StreamTabId;
@@ -55,7 +51,6 @@ type ChildListSelectionAction =
 export const INITIAL_CHILD_LIST_SELECTION: ChildListSelectionState = {
   focused: false,
   selectedValue: undefined,
-  detailsVisible: false,
 };
 
 function resolveChildSelectionValue(
@@ -79,33 +74,21 @@ export function reduceChildListSelection(
 ): ChildListSelectionState {
   switch (action.kind) {
     case 'blur':
-      return { ...state, focused: false, detailsVisible: false };
-    case 'focus': {
-      const selectedValue = state.selectedValue ?? action.value;
+      return { ...state, focused: false };
+    case 'focus':
       return {
         focused: true,
-        selectedValue,
-        detailsVisible: childListStreamId(selectedValue) !== undefined,
+        selectedValue: state.selectedValue ?? action.value,
       };
-    }
     case 'focusStream':
       return {
         focused: false,
         selectedValue: childStreamListValue(action.streamId),
-        detailsVisible: false,
       };
     case 'highlight':
       return action.value === state.selectedValue
         ? state
-        : {
-            ...state,
-            selectedValue: action.value,
-            detailsVisible: childListStreamId(action.value) !== undefined,
-          };
-    case 'toggleDetails':
-      return state.focused
-        ? { ...state, detailsVisible: !state.detailsVisible }
-        : state;
+        : { ...state, selectedValue: action.value };
     case 'syncActiveStream': {
       const activeValue = resolveChildSelectionValue(
         action.values,
@@ -114,12 +97,7 @@ export function reduceChildListSelection(
       );
       return activeValue === state.selectedValue
         ? state
-        : {
-            ...state,
-            selectedValue: activeValue,
-            detailsVisible:
-              state.focused && childListStreamId(activeValue) !== undefined,
-          };
+        : { ...state, selectedValue: activeValue };
     }
     case 'reconcile': {
       if (action.values.length === 0) return state;
@@ -130,12 +108,7 @@ export function reduceChildListSelection(
       );
       return selectedValue === state.selectedValue
         ? state
-        : {
-            ...state,
-            selectedValue,
-            detailsVisible:
-              state.focused && childListStreamId(selectedValue) !== undefined,
-          };
+        : { ...state, selectedValue };
     }
   }
 }

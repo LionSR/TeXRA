@@ -1,0 +1,191 @@
+// Third-party imports
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({
+  acquireResumedExecutionLease: vi.fn(),
+  buildVars: vi.fn(),
+  completeOwnedExecutionLease: vi.fn(),
+  createHandler: vi.fn(),
+  createTrace: vi.fn(),
+  hasPersistedParent: vi.fn(),
+  load: vi.fn(),
+  releaseOwnedExecutionLeaseAfterFailure: vi.fn(),
+  resolve: vi.fn(),
+}));
+
+vi.mock('@agent/index', () => ({
+  isRemoteAgent: () => false,
+  resolveAgentForLaunch: mocks.resolve,
+}));
+vi.mock('@agent/runtime/agentLoad', () => ({
+  loadAgentSettingAndPrompts: mocks.load,
+}));
+vi.mock('@agent/runtime/ModelFactory', () => ({
+  createModelHandler: mocks.createHandler,
+  createModelHandlerForCompatibilityKey: mocks.createHandler,
+}));
+vi.mock('@transcript', async (importActual) => ({
+  ...(await importActual<typeof import('@transcript')>()),
+  createRunTrace: mocks.createTrace,
+}));
+vi.mock('@agent/utils/userVars', () => ({ buildUserVars: mocks.buildVars }));
+vi.mock('@agent/storage/executionLifecycle', () => ({
+  hasPersistedParent: mocks.hasPersistedParent,
+}));
+vi.mock('@agent/storage/executionLease', () => ({
+  abandonOwnedExecutionLease: vi.fn(),
+  acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
+  captureOwnedExecutionLease:
+    (_executionId: ExecutionId) => (operation: () => unknown) =>
+      operation(),
+  completeOwnedExecutionLease: mocks.completeOwnedExecutionLease,
+  releaseOwnedExecutionLeaseAfterFailure:
+    mocks.releaseOwnedExecutionLeaseAfterFailure,
+}));
+
+// Local imports
+import { noopTrace } from '@agent/trace';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import {
+  executeAgent,
+  resumeToolUseFromResumeData,
+} from '@agent/runtime/executeAgent';
+import type {
+  ExecutionId,
+  SetActiveStreamPayload,
+  StreamTabId,
+} from '@shared/schemas';
+
+// Test support imports
+import { createTestSession } from '@test/support/sessionTestUtils';
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
+
+// Local file imports
+import {
+  createRecordingHost,
+  recordSessionEvents,
+  sessionFactPayloads,
+} from '../progressTestUtils';
+
+const LAUNCH_FAILURE = new Error('stop after stream activation');
+const MODEL_HANDLER_KEY = 'ModelHandlerOpenAIResponse' as const;
+
+const config = AgentConfigSchema.parse({
+  agent: 'chat',
+  model: 'gpt55',
+  agentCategory: AgentCategory.ToolUse,
+});
+
+async function captureActivation(
+  run: (
+    session: ReturnType<typeof createTestSession>,
+    runtimeHost: AgentRuntimeHost,
+  ) => Promise<unknown>,
+): Promise<SetActiveStreamPayload> {
+  const session = createTestSession();
+  const recordedSession = recordSessionEvents(session.events);
+  const runtimeHost = createRecordingHost().host;
+  const trace = { ...noopTrace, subscribe: vi.fn(() => vi.fn()) };
+  trace.openStage = vi.fn(() => noopTrace.openStage('Run'));
+  const handler = {
+    capabilities: { supportsVision: false, supportsNativeAudio: false },
+    config: { provider: 'openai' },
+    setAgentCategory: vi.fn(),
+    setLogger: vi.fn(),
+    dispose: vi.fn(),
+  };
+
+  mocks.resolve.mockReturnValueOnce({ definitionPath: '/agents/chat.yaml' });
+  mocks.load.mockResolvedValueOnce([
+    { agentCategory: AgentCategory.ToolUse },
+    {},
+  ]);
+  mocks.createHandler.mockResolvedValueOnce(handler);
+  mocks.createTrace.mockReturnValueOnce({ trace, dispose: vi.fn() });
+  mocks.buildVars.mockRejectedValueOnce(LAUNCH_FAILURE);
+
+  try {
+    await expect(run(session, runtimeHost)).rejects.toBe(LAUNCH_FAILURE);
+    const payloads = sessionFactPayloads(
+      recordedSession.events,
+      'setActiveStream',
+    );
+    expect(payloads).toHaveLength(1);
+    return payloads[0] as SetActiveStreamPayload;
+  } finally {
+    recordedSession.detach();
+    session.dispose();
+  }
+}
+
+function expectActivation(
+  payload: SetActiveStreamPayload,
+  suppressViewSwitch: boolean,
+): void {
+  expect(payload).toMatchObject({
+    agentCategory: AgentCategory.ToolUse,
+    isRemote: false,
+  });
+  if (suppressViewSwitch) {
+    expect(payload).toHaveProperty('suppressViewSwitch', true);
+  } else {
+    expect(payload).not.toHaveProperty('suppressViewSwitch');
+  }
+}
+
+describe('native agent launch activation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.acquireResumedExecutionLease.mockResolvedValue('existing');
+    mocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
+      async (_executionId: ExecutionId, error: unknown) => error,
+    );
+    mocks.completeOwnedExecutionLease.mockResolvedValue(undefined);
+  });
+
+  it.each([
+    { label: 'child', isSubagent: true, suppressViewSwitch: true },
+    { label: 'root', isSubagent: undefined, suppressViewSwitch: false },
+  ])(
+    'emits the expected activation payload for a fresh $label launch',
+    async ({ isSubagent, suppressViewSwitch }) => {
+      const payload = await captureActivation((session, runtimeHost) =>
+        executeAgent(config, 'fresh-launch' as ExecutionId, {
+          runtimeHost,
+          session,
+          isSubagent,
+          modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
+        }),
+      );
+
+      expectActivation(payload, suppressViewSwitch);
+    },
+  );
+
+  it.each([
+    { label: 'child', isSubagent: true, suppressViewSwitch: true },
+    { label: 'root', isSubagent: false, suppressViewSwitch: false },
+  ])(
+    'emits the expected activation payload for a resumed $label launch',
+    async ({ isSubagent, suppressViewSwitch }) => {
+      const executionId = 'resumed-launch' as ExecutionId;
+      const streamId = 'resumed-stream' as StreamTabId;
+      mocks.hasPersistedParent.mockResolvedValueOnce(isSubagent);
+      const resume = createToolUseResumeData({
+        executionId,
+        streamId,
+        agentConfig: config,
+        shared: { modelHandlerCompatibilityKey: MODEL_HANDLER_KEY },
+      });
+
+      const payload = await captureActivation((session, runtimeHost) =>
+        resumeToolUseFromResumeData(resume, runtimeHost, { session }),
+      );
+
+      expectActivation(payload, suppressViewSwitch);
+      expect(payload.streamId).toBe(streamId);
+    },
+  );
+});

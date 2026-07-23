@@ -92,6 +92,8 @@ export interface AgentLaunchInput {
   taskType?: string;
   /** Fires after streamId is assigned but before setActiveStream is emitted. */
   onBeforeActivation?: (streamId: StreamTabId) => void;
+  /** Register the stream without switching the UI away from its current tab. */
+  suppressViewSwitch?: boolean;
   /** When true, reject if an explicit category doesn't match the YAML-defined category. */
   enforceCategory?: boolean;
   /** Skip the `requestShowError` toast -- for callers that show their own UI. */
@@ -329,6 +331,7 @@ async function assembleAgentLaunchContext(
         streamId,
         agentCategory: setting.agentCategory,
         isRemote: isRemoteAgent(fullConfig.agent),
+        ...(input.suppressViewSwitch ? { suppressViewSwitch: true } : {}),
       },
     },
   });
