@@ -6,7 +6,6 @@ import {
   type ProgressViewOutboundHandlerRegistry,
   type StreamContentRenderPayload,
 } from '@shared/schemas';
-
 // Local imports
 import {
   updateParentStreamId,
@@ -48,6 +47,10 @@ export const syncHandlers = {
       }));
     } else {
       const { workPlan, controls } = data;
+      // `controls.goal` is already GoalState (the wire schema imports
+      // GoalStateSchema directly from `@shared/schemas/goal`) — no need to
+      // round-trip it through deriveGoalState.
+      const goal = controls.goal;
       updateToolUseState(data.stream, (prev) => ({
         ...prev,
         ...activeStateFields(data),
@@ -58,11 +61,9 @@ export const syncHandlers = {
         queuedFollowUps: workPlan.queuedFollowUps,
         toolEditBypass: controls.toolEditBypass,
         superYoloBypass: controls.superYoloBypass,
-        goalActive: controls.goal.active,
-        goalStatus: controls.goal.active ? controls.goal.status : undefined,
-        goalObjective: controls.goal.active
-          ? controls.goal.objective
-          : undefined,
+        goalActive: goal.active,
+        goalStatus: goal.active ? goal.status : undefined,
+        goalObjective: goal.active ? goal.objective : undefined,
       }));
     }
 

@@ -20,6 +20,8 @@
 
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
+import { zeroCostAccessOverrides } from './subscriptionAccessOverrides';
+
 /** OpenAI-compatible base URL for the Kimi Code coding endpoint. */
 export const KIMI_CODE_BASE_URL = 'https://api.kimi.com/coding/v1';
 
@@ -134,11 +136,8 @@ export function kimiCodeRuntimeConfig(config: ModelConfig): ModelConfig {
     fullName: wireId,
     shortName: wireId,
     baseUrl: KIMI_CODE_BASE_URL,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: Math.min(
-      KIMI_CODE_SUBSCRIPTION_CONTEXT_WINDOW,
-      config.contextWindow,
+    ...zeroCostAccessOverrides(
+      Math.min(KIMI_CODE_SUBSCRIPTION_CONTEXT_WINDOW, config.contextWindow),
     ),
   };
 }

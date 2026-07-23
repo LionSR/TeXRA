@@ -27,6 +27,7 @@ import { isGpt5ModelName } from '@model/modelNames';
 import {
   isOpenRouterRoutingUnsupported,
   shouldRouteModelThroughOpenRouter,
+  type ResolvedModelConfig,
 } from '@model/openRouterRouting';
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
@@ -50,9 +51,6 @@ type ModelHandlerConstructor = new (
 ) => ModelHandler<ProviderMessage>;
 
 type ProviderHandlerLoader = () => Promise<ModelHandlerConstructor>;
-type CompatibilityRoutedModelConfig = ModelConfig & {
-  readonly forceDirectProvider?: boolean;
-};
 
 interface ProviderHandlerRoute {
   readonly load: ProviderHandlerLoader | null;
@@ -404,7 +402,7 @@ function withCompatibilityRoutingMode(
     return { ...config, openRouterOnly: true };
   }
 
-  const routed: CompatibilityRoutedModelConfig = {
+  const routed: ResolvedModelConfig = {
     ...config,
     openRouterOnly: false,
     forceDirectProvider: true,
