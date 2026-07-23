@@ -14,6 +14,7 @@ import {
   SubagentList,
   compactChildRowText,
 } from '@cli/chat/tui/panes/SubagentList';
+import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
 import {
   activeStreamId,
   streams as streamsSignal,
@@ -147,6 +148,93 @@ describe('CLI child list display model', () => {
       streamsSignal.set(new Map());
     }
   });
+
+  it.each([
+    {
+      activityLabel: 'live tool activity',
+      activity: {
+        id: 'live-tool',
+        role: 'tool' as const,
+        text: '',
+        finalized: false,
+        toolUse: {
+          toolName: 'write_file',
+          errorText: '',
+          outputText: '',
+          userInstructionText: '',
+          input: { path: 'paper.tex' },
+          isError: false,
+          isUserFeedback: false,
+          headerSummary: 'Drafting',
+          status: 'in_progress' as const,
+        },
+      },
+      expectedActivity: 'Draf',
+    },
+    {
+      activityLabel: 'failed tool activity',
+      activity: {
+        id: 'live-error',
+        role: 'tool' as const,
+        text: '',
+        finalized: false,
+        toolUse: {
+          toolName: 'write_file',
+          errorText: 'Failed',
+          outputText: '',
+          userInstructionText: '',
+          input: { path: 'paper.tex' },
+          isError: true,
+          isUserFeedback: false,
+          headerSummary: 'Failed',
+          status: 'failed' as const,
+        },
+      },
+      expectedActivity: 'Failed',
+    },
+  ])(
+    'keeps $activityLabel visible below one-row long-file metadata at narrow widths',
+    async ({ activity, expectedActivity }) => {
+      const { ink, React } = await loadInk();
+      const streamId = 'devise' as StreamTabId;
+      const slice = workflowAgentSlice(streamId, {
+        status: STREAM_PHASE.RUNNING,
+        files: {
+          input: ['inputs/a-very-long-workflow-input-filename.tex'],
+          context: Array.from(
+            { length: 12 },
+            (_, index) => `context/a-very-long-context-filename-${index}.md`,
+          ),
+          media: [],
+          output: [],
+        },
+        entries: [activity],
+      });
+      activeStreamId.set(streamId);
+      streamsSignal.set(new Map([[streamId, slice]]));
+
+      try {
+        const output: string = ink.renderToString(
+          React.createElement(ConversationPane, {
+            availableWidth: 18,
+            maxRows: 2,
+            width: 20,
+          }),
+          { columns: 18 },
+        );
+        const outputLines = output.split('\n');
+        expect(outputLines).toHaveLength(2);
+        expect(outputLines[0]).toBe('Input: 1 file · C…');
+        expect(outputLines.every((line) => textDisplayWidth(line) <= 18)).toBe(
+          true,
+        );
+        expect(output).toContain(expectedActivity);
+      } finally {
+        activeStreamId.set(undefined);
+        streamsSignal.set(new Map());
+      }
+    },
+  );
 
   it('keeps status markers steady and status colors independent of focus', () => {
     expect(CHILD_STATUS_MARKER).toBe('● ');

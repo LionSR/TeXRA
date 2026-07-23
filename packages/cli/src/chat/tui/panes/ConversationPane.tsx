@@ -31,7 +31,10 @@ const DEFAULT_TRANSCRIPT_ROWS = 24;
 const MIN_PENDING_ROWS = 1;
 
 export interface ConversationPaneProps {
+  /** Transcript measurement width, which callers may clamp to layout minimums. */
   readonly width?: number;
+  /** Physical parent width; metadata must not render beyond this boundary. */
+  readonly availableWidth?: number;
   readonly maxRows?: number;
   readonly colorEnabled?: boolean;
   readonly subagentExecutionLabels?: ExecutionLabels;
@@ -138,6 +141,10 @@ export function ConversationPane(
   const displayEntries = splitTranscriptEntries(entries, slice?.status).pending;
 
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
+  const metadataWidth =
+    props.availableWidth !== undefined && props.width !== undefined
+      ? Math.min(props.availableWidth, props.width)
+      : (props.availableWidth ?? props.width);
   const workflowMetadata = workflowInputContextSummary(slice);
   const metadataRows =
     workflowMetadata &&
@@ -162,7 +169,13 @@ export function ConversationPane(
   // stealing rows reserved for the footer chrome.
   return (
     <Box flexDirection="column" height={visibleRows} overflowY="hidden">
-      {metadataRows > 0 ? <Text dimColor>{workflowMetadata}</Text> : null}
+      {metadataRows > 0 ? (
+        <Box height={1} width={metadataWidth} overflowY="hidden">
+          <Text dimColor wrap="truncate-end">
+            {workflowMetadata}
+          </Text>
+        </Box>
+      ) : null}
       {visibleEntries.entries.map((entry) =>
         renderConversationPaneEntry({
           colorEnabled: props.colorEnabled,
