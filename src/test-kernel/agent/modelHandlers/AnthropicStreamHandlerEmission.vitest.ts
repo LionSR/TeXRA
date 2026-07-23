@@ -102,3 +102,39 @@ describe('AnthropicStreamHandler server-tool-result emission guard', () => {
     expect(logger.domain).not.toHaveBeenCalled();
   });
 });
+
+describe('AnthropicStreamHandler compaction activity', () => {
+  it('marks a native compaction block active until it stops', () => {
+    const { logger, emit } = createHandlerHarness(true);
+
+    emit({
+      type: 'content_block_start',
+      index: 0,
+      content_block: { type: 'compaction', content: '' },
+    });
+
+    expect(logger.info).toHaveBeenLastCalledWith(
+      'Compacting conversation context',
+      expect.objectContaining({
+        messageType: 'contextCompactionActivity',
+        data: {
+          activity: 'context_compaction',
+          state: 'started',
+        },
+      }),
+    );
+
+    emit({ type: 'content_block_stop', index: 0 });
+
+    expect(logger.info).toHaveBeenLastCalledWith(
+      'Conversation context compaction finished',
+      expect.objectContaining({
+        messageType: 'contextCompactionActivity',
+        data: {
+          activity: 'context_compaction',
+          state: 'finished',
+        },
+      }),
+    );
+  });
+});

@@ -15,6 +15,7 @@
 import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
 import {
   MESSAGE_TYPES,
+  type CompactionActivityData,
   type ContextManagementData,
   type ConversationProgress,
   type ErrorContext,
@@ -64,6 +65,25 @@ export function logProgressStatus(
     data,
     stageId,
   });
+}
+
+/** Mark the beginning or end of a context-compaction operation. */
+export function logCompactionActivity(
+  trace: AgentTrace,
+  state: CompactionActivityData['state'],
+): void {
+  trace.info(
+    state === 'started'
+      ? 'Compacting conversation context'
+      : 'Conversation context compaction finished',
+    {
+      messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
+      data: {
+        activity: 'context_compaction',
+        state,
+      } satisfies CompactionActivityData,
+    },
+  );
 }
 
 /**

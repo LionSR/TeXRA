@@ -2,22 +2,21 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import {
-  ConnectionError as OpenRouterConnectionError,
-  RequestTimeoutError as OpenRouterRequestTimeoutError,
-} from '@openrouter/sdk/models/errors';
-import { describe, it, afterEach, vi } from 'vitest';
+import { HTTPClient, type OpenRouter } from '@openrouter/sdk';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import type { ResolvedClientCredential } from '@agent/types/ModelHandlerContracts';
-
-// Modules to stub via vi.spyOn
 import * as serverKeysModule from '@auth/serverKeys';
+import { AgentCategory } from '@shared/schemas/agent';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import * as providerConfigModule from '@utils/config/providerConfig';
+
+// Type imports
+import type { ChatMessages } from '@openrouter/sdk/models';
 
 const OPENROUTER_TEST_CONFIG = Object.freeze({
   name: 'gpt-5.5',
@@ -37,12 +36,6 @@ function stubServerSideKeyService(): void {
     getRelayBaseUrl: (provider: string) =>
       `https://relay.example.com/functions/v1/relay/${provider}/v1`,
   } as unknown as ReturnType<typeof serverKeysModule.getServerSideKeyService>);
-}
-
-function statusError(statusCode: number): Error {
-  return Object.assign(new Error(`OpenRouter HTTP ${statusCode}`), {
-    statusCode,
-  });
 }
 
 describe('ModelHandlerOpenRouterNative routing precedence', () => {
@@ -362,38 +355,19 @@ describe('ModelHandlerOpenRouterNative reasoning-level override', () => {
   });
 });
 
-describe('ModelHandlerOpenRouterNative retry ownership', () => {
-  it('matches the OpenRouter SDK retry boundary', () => {
-    const handler = new ModelHandlerOpenRouterNative(
-      buildTestModelConfig(OPENROUTER_TEST_CONFIG),
-    );
-
-    assert.equal(handler.isAutoRetryManagedByProvider(statusError(500)), true);
-    assert.equal(handler.isAutoRetryManagedByProvider(statusError(529)), true);
-    assert.equal(handler.isAutoRetryManagedByProvider(statusError(429)), false);
-    assert.equal(handler.isAutoRetryManagedByProvider(statusError(408)), false);
-    assert.equal(
-      handler.isAutoRetryManagedByProvider(
-        new OpenRouterConnectionError('connection failed'),
-      ),
-      true,
-    );
-    assert.equal(
-      handler.isAutoRetryManagedByProvider(
-        new OpenRouterRequestTimeoutError('request timed out'),
-      ),
-      true,
-    );
-  });
-});
-
-describe('ModelHandlerOpenRouterNative getClient retryConfig', () => {
-  it('bounds the SDK retry window instead of the 1h default (#7643)', async () => {
+describe('ModelHandlerOpenRouterNative getClient retry policy', () => {
+  it('uses the long-running transport, disables SDK retries, and records the endpoint', async () => {
+    const endpoint = 'https://openrouter.example/v1';
+    const transportFetch = vi.fn<typeof fetch>();
     class TestableHandler extends ModelHandlerOpenRouterNative {
+      protected override get longRunningModelFetch(): typeof fetch {
+        return transportFetch;
+      }
+
       protected override async resolveClientCredential(): Promise<ResolvedClientCredential> {
         return {
           apiKey: 'test-api-key',
-          baseUrl: null,
+          baseUrl: endpoint,
           route: 'openrouter',
         };
       }
@@ -413,15 +387,229 @@ describe('ModelHandlerOpenRouterNative getClient retryConfig', () => {
     const options = (client as unknown as { _options: Record<string, unknown> })
       ._options;
 
-    assert.deepEqual(options.retryConfig, {
-      strategy: 'backoff',
-      backoff: {
-        initialInterval: 500,
-        maxInterval: 8_000,
-        exponent: 1.5,
-        maxElapsedTime: 30_000,
-      },
-      retryConnectionErrors: true,
+    assert.deepEqual(options.retryConfig, { strategy: 'none' });
+    // ClientSDK normalizes its public _baseURL with a trailing slash.
+    assert.equal(handler.getRetryEndpoint(client), `${endpoint}/`);
+
+    transportFetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const request = new Request(`${endpoint}/models`);
+    const response = await (options.httpClient as HTTPClient).request(request);
+    assert.equal(response.status, 204);
+    assert.equal(transportFetch.mock.calls.length, 1);
+    assert.equal(transportFetch.mock.calls[0]?.[0], request);
+  });
+});
+
+describe('ModelHandlerOpenRouterNative compaction retries', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('retries a transient auxiliary compaction request twice', async () => {
+    vi.useFakeTimers();
+    const handler = new ModelHandlerOpenRouterNative(
+      buildTestModelConfig(OPENROUTER_TEST_CONFIG),
+    );
+    const target = handler as unknown as {
+      runClientCompaction: (
+        messages: unknown[],
+        inputTokens: number,
+        summarize: (
+          messages: ChatMessages[],
+          systemPrompt: string,
+        ) => Promise<unknown>,
+      ) => Promise<{ compactedMessages: ChatMessages[]; didCompact: boolean }>;
+      compactConversation: (
+        client: OpenRouter,
+        messages: ChatMessages[],
+      ) => Promise<{ compactedMessages: ChatMessages[]; didCompact: boolean }>;
+    };
+    target.runClientCompaction = async (_messages, _inputTokens, summarize) => {
+      await summarize([], 'Summarize the conversation.');
+      return { compactedMessages: [], didCompact: true };
+    };
+    const transient = Object.assign(new Error('provider unavailable'), {
+      status: 503,
     });
+    const send = vi
+      .fn()
+      .mockRejectedValueOnce(transient)
+      .mockRejectedValueOnce(transient)
+      .mockResolvedValueOnce({
+        choices: [{ message: { content: 'summary' } }],
+        usage: { completionTokens: 1 },
+      });
+
+    const result = target.compactConversation(
+      { chat: { send } } as unknown as OpenRouter,
+      [],
+    );
+    await vi.runAllTimersAsync();
+
+    await expect(result).resolves.toEqual({
+      compactedMessages: [],
+      didCompact: true,
+    });
+    assert.equal(send.mock.calls.length, 3);
+  });
+
+  it('does not retry a compaction credential failure', async () => {
+    const handler = new ModelHandlerOpenRouterNative(
+      buildTestModelConfig(OPENROUTER_TEST_CONFIG),
+    );
+    const target = handler as unknown as {
+      runClientCompaction: (
+        messages: unknown[],
+        inputTokens: number,
+        summarize: (
+          messages: ChatMessages[],
+          systemPrompt: string,
+        ) => Promise<unknown>,
+      ) => Promise<{ compactedMessages: ChatMessages[]; didCompact: boolean }>;
+      compactConversation: (
+        client: OpenRouter,
+        messages: ChatMessages[],
+      ) => Promise<{ compactedMessages: ChatMessages[]; didCompact: boolean }>;
+    };
+    target.runClientCompaction = async (_messages, _inputTokens, summarize) => {
+      await summarize([], 'Summarize the conversation.');
+      return { compactedMessages: [], didCompact: true };
+    };
+    const credentialFailure = Object.assign(new Error('invalid credential'), {
+      status: 401,
+    });
+    const send = vi.fn().mockRejectedValue(credentialFailure);
+
+    await expect(
+      target.compactConversation(
+        { chat: { send } } as unknown as OpenRouter,
+        [],
+      ),
+    ).rejects.toBe(credentialFailure);
+    expect(send).toHaveBeenCalledOnce();
+  });
+
+  it('reuses successful compaction until generation succeeds', async () => {
+    class TestableHandler extends ModelHandlerOpenRouterNative {
+      compactForTest(
+        messages: ChatMessages[],
+        compact: () => Promise<{
+          compactedMessages: ChatMessages[];
+          didCompact: boolean;
+        }>,
+      ) {
+        return this.maybeCompactByInputTokens(messages, 1, compact);
+      }
+    }
+
+    const handler = new TestableHandler(
+      buildTestModelConfig(OPENROUTER_TEST_CONFIG),
+    );
+    handler.setAgentCategory(AgentCategory.ToolUse);
+    vi.spyOn(handler, 'getStreamingConfig').mockReturnValue(false);
+
+    const messages: ChatMessages[] = [
+      { role: 'user', content: 'original conversation' },
+    ];
+    const compactedMessages: ChatMessages[] = [
+      { role: 'user', content: 'compacted conversation' },
+    ];
+    const compact = vi.fn(async () => ({
+      compactedMessages,
+      didCompact: true,
+    }));
+
+    handler.requestCompaction();
+    await handler.compactForTest(messages, compact);
+
+    const transient = Object.assign(new Error('provider unavailable'), {
+      status: 503,
+    });
+    const send = vi
+      .fn()
+      .mockRejectedValueOnce(transient)
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: { role: 'assistant', content: 'ok' },
+            finishReason: 'stop',
+          },
+        ],
+        usage: { promptTokens: 1, completionTokens: 1 },
+      });
+    const client = { chat: { send } } as unknown as OpenRouter;
+    const options = { client, messages, temperature: 0 };
+
+    await expect(handler.createResponse(options)).rejects.toBe(transient);
+    await expect(handler.createResponse(options)).resolves.toMatchObject({
+      updatedMessages: compactedMessages,
+    });
+
+    expect(compact).toHaveBeenCalledOnce();
+    expect(send).toHaveBeenCalledTimes(2);
+    for (const [request] of send.mock.calls) {
+      expect(request.chatRequest.messages).toBe(compactedMessages);
+    }
+
+    const nextCompact = vi.fn(async () => ({
+      compactedMessages,
+      didCompact: true,
+    }));
+    handler.requestCompaction();
+    await handler.compactForTest(messages, nextCompact);
+    expect(nextCompact).toHaveBeenCalledOnce();
+  });
+
+  it('drops a pending compaction when a follow-up mutates the same array', async () => {
+    // Regression: after a failed turn the root tool-use flow appends the
+    // user's follow-up IN PLACE onto the same messages array. Reference
+    // identity alone would replay the stale pre-follow-up payload and
+    // silently drop the follow-up from the request and — via the flow's
+    // in-place commit — from the conversation history.
+    class TestableHandler extends ModelHandlerOpenRouterNative {
+      compactForTest(
+        messages: ChatMessages[],
+        compact: () => Promise<{
+          compactedMessages: ChatMessages[];
+          didCompact: boolean;
+        }>,
+      ) {
+        return this.maybeCompactByInputTokens(messages, 1, compact);
+      }
+    }
+
+    const handler = new TestableHandler(
+      buildTestModelConfig(OPENROUTER_TEST_CONFIG),
+    );
+    handler.setAgentCategory(AgentCategory.ToolUse);
+    vi.spyOn(handler, 'getStreamingConfig').mockReturnValue(false);
+    const messages: ChatMessages[] = [
+      { role: 'user', content: 'original conversation' },
+    ];
+    const compact = vi.fn(async () => ({
+      compactedMessages: [
+        { role: 'user' as const, content: 'compacted conversation' },
+      ],
+      didCompact: true,
+    }));
+
+    handler.requestCompaction();
+    await handler.compactForTest(messages, compact);
+    expect(compact).toHaveBeenCalledOnce();
+
+    // Push-style follow-up (OpenAI/OpenRouter shape): length changes.
+    messages.push({ role: 'user', content: 'follow-up after failure' });
+    handler.requestCompaction();
+    await handler.compactForTest(messages, compact);
+    expect(compact).toHaveBeenCalledTimes(2);
+
+    // Merge-style follow-up (Google Interactions shape): same length, the
+    // last message mutates in place.
+    const last = messages.at(-1) as { role: 'user'; content: string };
+    last.content += ' with merged continuation';
+    handler.requestCompaction();
+    await handler.compactForTest(messages, compact);
+    expect(compact).toHaveBeenCalledTimes(3);
   });
 });

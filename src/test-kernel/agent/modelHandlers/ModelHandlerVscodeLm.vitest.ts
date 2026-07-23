@@ -20,7 +20,6 @@ import {
   detectPartialText,
   isUserAbort,
   normalizeProviderError,
-  requiresFlowAutoRetry,
 } from '@common/errors/sdkErrorUtils';
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
@@ -453,7 +452,6 @@ describe('ModelHandlerVscodeLm streaming and tools', () => {
 
     await response.catch((error: unknown) => {
       expect(detectPartialText(error)).toBe('partial answer');
-      expect(requiresFlowAutoRetry(error)).toBe(true);
     });
   });
 

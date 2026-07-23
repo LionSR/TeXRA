@@ -279,6 +279,12 @@ interface PendingStep {
  * function-calling sequence, so this is safe; a fuller fix would need the base
  * contract to return `Step[]` (out of scope).
  */
+/** Per-call options threaded to every Speakeasy Interactions request. */
+type InteractionsRequestOptions = {
+  maxRetries: number;
+  fetchOptions: RequestInit;
+};
+
 export class ModelHandlerGoogleInteractions extends ModelHandler<
   Step,
   Usage | null,
@@ -546,8 +552,8 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       setCached: (cache) => {
         this.googleClient = cache;
       },
-      rememberRoute: (client, route) =>
-        this.rememberClientCredentialRoute(client, route),
+      rememberRoute: (client, route, credentialSecret) =>
+        this.rememberClientCredentialRoute(client, route, credentialSecret),
     });
   }
 
@@ -1506,9 +1512,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       ...(interactionsTools && { tools: interactionsTools }),
       generation_config: generationConfig,
     };
-    // Abort is wired via fetchOptions.signal (GoogleGenAIRequestOptions has no
-    // top-level abortSignal field).
-    const requestOptions = signal ? { fetchOptions: { signal } } : undefined;
+    const requestOptions = this.interactionsRequestOptions(signal);
 
     try {
       if (useBackground) {
@@ -1609,6 +1613,32 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   // Generic (rather than annotating `commonParams` with the public
   // `CreateModelInteractionParamsNonStreaming` alias) so the caller's actual
   // request-shape fields (`model`/`input`/`store`/…) survive into
+  /**
+   * Per-call options for the Speakeasy Interactions client.
+   *
+   * `maxRetries: 0` keeps the node loop the single retry owner: the generated
+   * client defaults to its own 4-retry backoff, which `httpOptions`-level
+   * retry settings do not govern. Abort is wired via `fetchOptions.signal`
+   * (GoogleGenAIRequestOptions has no top-level abortSignal field). The
+   * dispatcher threads the shared 30-minute stream-inactivity budget through
+   * the SDK's typed fetchOptions seam — `dispatcher` is undici's non-standard
+   * RequestInit extension honored by Node's fetch but absent from the DOM lib
+   * types this repo compiles against, hence the cast. Verified against
+   * @google/genai 2.12.0 (fetchOptions spreads into the Request init and
+   * survives the SDK's clone/rewrap); re-verify the seam on SDK bumps.
+   */
+  private interactionsRequestOptions(
+    signal?: AbortSignal,
+  ): InteractionsRequestOptions {
+    return {
+      maxRetries: 0,
+      fetchOptions: {
+        ...(signal ? { signal } : {}),
+        dispatcher: this.longRunningModelDispatcher(),
+      } as RequestInit,
+    };
+  }
+
   // `submitParams` below — see the comment on the sibling non-streaming
   // `create()` call in `createResponseImpl` for why the public alias by
   // itself would make TS pick `create()`'s most general overload.
@@ -1619,7 +1649,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     commonParams: P,
     totalStepCount: number,
     stateful: boolean,
-    requestOptions: { fetchOptions: { signal: AbortSignal } } | undefined,
+    requestOptions: InteractionsRequestOptions,
     signal: AbortSignal | undefined,
   ): Promise<CreateResponseResult<GoogleGenAIInteraction, Step>> {
     // Background REQUIRES server-side state — defense-in-depth assertion of the
@@ -1678,7 +1708,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   private async pollBackgroundInteraction(
     client: GoogleGenAI,
     initial: GoogleGenAIInteraction,
-    requestOptions: { fetchOptions: { signal: AbortSignal } } | undefined,
+    requestOptions: InteractionsRequestOptions,
     signal: AbortSignal | undefined,
   ): Promise<GoogleGenAIInteraction> {
     const interactionId = initial.id;
@@ -1697,7 +1727,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       const polled = await this.backgroundPoller.poll({
         initialResponse: initial,
         retrieve: async (id, sig) => {
-          const opts = sig ? { fetchOptions: { signal: sig } } : requestOptions;
+          const opts = sig
+            ? this.interactionsRequestOptions(sig)
+            : requestOptions;
           try {
             return await client.interactions.get(
               id,
@@ -1780,7 +1812,11 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     try {
       // SMOKE-TEST: confirm cancel(id) transitions an in_progress interaction to
       // `cancelled` and a subsequent get reflects it (verify on a real-key run).
-      await client.interactions.cancel(interactionId);
+      await client.interactions.cancel(
+        interactionId,
+        undefined,
+        this.interactionsRequestOptions(),
+      );
       this.logger.debug(`Cancelled background interaction ${interactionId}.`);
     } catch (err) {
       this.logger.warn(

@@ -127,6 +127,19 @@ describe('OpenAI-compatible client diagnostics', () => {
     vi.restoreAllMocks();
   });
 
+  it('leaves automatic retries to the session retry gate', async () => {
+    const config = buildTestModelConfig(KIMI_DIAGNOSTICS_CONFIG);
+    const transports: unknown[] = [];
+
+    for (const handler of createHandlers(config, false)) {
+      const client = await handler.getClient();
+      expect(client.maxRetries).toBe(0);
+      transports.push((client as unknown as { fetch: unknown }).fetch);
+      handler.dispose();
+    }
+    expect(transports[0]).toBe(transports[1]);
+  });
+
   it('reports the Moonshot credential owner and request model', async () => {
     const messages = await clientDiagnostics(
       buildTestModelConfig(KIMI_DIAGNOSTICS_CONFIG),

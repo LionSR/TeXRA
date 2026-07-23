@@ -45,6 +45,7 @@ export const MESSAGE_TYPES = {
   MODEL_RESPONSE: 'modelResponse',
   USER_MESSAGE: 'userMessage',
   PROGRESS_STATUS: 'progressStatus',
+  CONTEXT_COMPACTION_ACTIVITY: 'contextCompactionActivity',
   ERROR: 'error',
   INTERNAL: 'internal',
   CONTEXT_MANAGEMENT: 'contextManagement',

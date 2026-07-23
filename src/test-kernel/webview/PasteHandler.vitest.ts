@@ -14,7 +14,7 @@ vi.mock('@shared/hostBridge', () => ({
   postMessage: mocks.postMessage,
 }));
 
-vi.mock('@utils/files/pastedImageUtils', () => ({
+vi.mock('@utils/files/pastedImageName', () => ({
   generatePastedImageName: mocks.generatePastedImageName,
 }));
 

@@ -23,6 +23,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
+import type { AnthropicToolCall } from '@agent/types/ModelHandlerContracts';
 import {
   enforceCacheControlLimit,
   logContextManagementFromResponse,
@@ -113,6 +114,45 @@ function getCacheMarker(block?: ContentBlockParam | ContentBlock): unknown {
 
   return (block as { cache_control?: unknown }).cache_control;
 }
+
+describe('ModelHandlerAnthropic auxiliary requests', () => {
+  it('restores SDK retries for tool-result uploads outside the model gate', async () => {
+    const handler = createAnthropicHandler();
+    handler.setLogger({ ...noopTrace });
+    const upload = vi.fn(async () => ({ id: 'file-1' }));
+    const uploadClient = { beta: { files: { upload } } };
+    const withOptions = vi.fn(() => uploadClient);
+    const call: AnthropicToolCall = {
+      provider: 'anthropic',
+      callId: 'call-1',
+      name: 'read_file',
+      input: {},
+      raw: {
+        id: 'call-1',
+        type: 'tool_use',
+        caller: { type: 'direct' },
+        name: 'read_file',
+        input: {},
+      },
+    };
+
+    await handler.createToolUseFollowUpMessages(
+      { withOptions } as never,
+      call,
+      { status: 'executed', output: 'done' },
+      [
+        {
+          path: 'chart.png',
+          mimeType: 'image/png',
+          bytes: new Uint8Array([1, 2, 3]),
+        },
+      ],
+    );
+
+    assert.deepEqual(withOptions.mock.calls, [[{ maxRetries: 2 }]]);
+    assert.equal(upload.mock.calls.length, 1);
+  });
+});
 
 describe('ModelHandlerAnthropic forced tool choice', () => {
   it('maps finalTool to a named Anthropic tool choice', async () => {
@@ -577,7 +617,6 @@ describe('ModelHandlerAnthropic message guards', () => {
         },
       },
     } as any;
-
     const response = await handler.createResponse({
       client,
       messages,
@@ -830,6 +869,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     ];
 
     const callOrder: string[] = [];
+    const countTokensOptions: any[] = [];
 
     const client = {
       beta: {
@@ -840,8 +880,9 @@ describe('ModelHandlerAnthropic message guards', () => {
           },
         },
         messages: {
-          countTokens: async () => {
+          countTokens: async (_params: unknown, options?: any) => {
             callOrder.push('countTokens');
+            countTokensOptions.push(options);
             return { input_tokens: 5 } as any;
           },
           create: async () => {
@@ -859,6 +900,7 @@ describe('ModelHandlerAnthropic message guards', () => {
         },
       },
     } as any;
+    client.withOptions = vi.fn(() => client);
 
     const response = await handler.createResponse({
       client,
@@ -867,6 +909,9 @@ describe('ModelHandlerAnthropic message guards', () => {
     });
 
     assert.deepEqual(callOrder, ['countTokens', 'upload', 'create']);
+    // Token counting retries ride per-request options, not a client clone.
+    assert.deepEqual(client.withOptions.mock.calls, []);
+    assert.equal(countTokensOptions[0]?.maxRetries, 2);
     assert.equal(response.response.stop_reason, 'end_turn');
   });
 
@@ -1104,6 +1149,151 @@ describe('ModelHandlerAnthropic message guards', () => {
       'manual compaction should honor Anthropic minimum trigger tokens',
     );
   });
+
+  it('announces expected compaction after the measured count crosses the trigger', async () => {
+    const handler = createAnthropicHandler({
+      supportsTokenCounting: true,
+      supportsReasoning: false,
+    });
+    handler.config.fullName = 'claude-opus-4-6';
+    handler.setAgentCategory(AgentCategory.ToolUse);
+
+    const activityStates: string[] = [];
+    stubHandlerForTest(handler, {
+      info: (_message: string, options?: { data?: unknown }) => {
+        const data = options?.data as
+          { activity?: unknown; state?: unknown } | undefined;
+        if (
+          data?.activity === 'context_compaction' &&
+          typeof data.state === 'string'
+        ) {
+          activityStates.push(data.state);
+        }
+      },
+    });
+    stubCompactionThresholdPercent(75);
+
+    const client = {
+      beta: {
+        messages: {
+          countTokens: async () => ({ input_tokens: 160_000 }),
+          create: async () => {
+            assert.deepEqual(
+              activityStates,
+              ['started'],
+              'start marker should precede the non-streaming SDK request',
+            );
+            return {
+              id: 'msg',
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-opus-4-6',
+              content: [
+                { type: 'compaction', content: '<summary>state</summary>' },
+                { type: 'text', text: 'ok' },
+              ],
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 20_000, output_tokens: 1 },
+            };
+          },
+        },
+      },
+    } as any;
+
+    await handler.createResponse({
+      client,
+      messages: helloMessages(),
+      temperature: 0,
+    });
+
+    assert.deepEqual(activityStates, ['started', 'finished']);
+  });
+
+  it.each([
+    {
+      label: 'large',
+      messages: [
+        {
+          role: 'user' as const,
+          content: [
+            {
+              type: 'text' as const,
+              text: 'x'.repeat(620_000),
+              citations: null,
+            },
+          ],
+        },
+      ],
+      expectedAtRequest: ['started'],
+      expectedFinal: ['started', 'finished'],
+    },
+    {
+      label: 'small',
+      messages: helloMessages(),
+      expectedAtRequest: [],
+      expectedFinal: [],
+    },
+  ])(
+    'uses a fallback estimate for a $label unmeasured non-streaming request',
+    async ({ messages, expectedAtRequest, expectedFinal }) => {
+      const handler = createAnthropicHandler({
+        supportsTokenCounting: false,
+        supportsReasoning: false,
+      });
+      handler.config.fullName = 'claude-opus-4-6';
+      handler.setAgentCategory(AgentCategory.ToolUse);
+
+      const activityStates: string[] = [];
+      stubHandlerForTest(handler, {
+        info: (_message: string, options?: { data?: unknown }) => {
+          const data = options?.data as
+            { activity?: unknown; state?: unknown } | undefined;
+          if (
+            data?.activity === 'context_compaction' &&
+            typeof data.state === 'string'
+          ) {
+            activityStates.push(data.state);
+          }
+        },
+      });
+      stubCompactionThresholdPercent(75);
+
+      const client = {
+        beta: {
+          messages: {
+            countTokens: async () => ({ input_tokens: 160_000 }),
+            create: async () => {
+              assert.deepEqual(
+                activityStates,
+                expectedAtRequest,
+                'fallback estimate should decide before the SDK request',
+              );
+              return {
+                id: 'msg',
+                type: 'message',
+                role: 'assistant',
+                model: 'claude-opus-4-6',
+                content: [
+                  { type: 'compaction', content: '<summary>state</summary>' },
+                  { type: 'text', text: 'ok' },
+                ],
+                stop_reason: 'end_turn',
+                usage: { input_tokens: 20_000, output_tokens: 1 },
+              };
+            },
+          },
+        },
+      } as any;
+
+      await handler.createResponse({
+        client,
+        messages,
+        temperature: 0,
+      });
+
+      assert.deepEqual(activityStates, expectedFinal);
+    },
+  );
 
   it('does not add native compaction context edit for non-Opus models', async () => {
     const handler = createAnthropicHandler({

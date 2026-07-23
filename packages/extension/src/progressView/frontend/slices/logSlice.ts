@@ -147,6 +147,12 @@ function applyEntry(
   streamLogs: StreamLogs,
   streamState: StreamState,
 ): { logChanged: boolean; stateChanged: boolean } {
+  // This is a live CLI/TUI signal, not progress history. Drop it before
+  // indexing so invisible lifecycle markers cannot consume timeline windows.
+  if (entry.messageType === MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY) {
+    return { logChanged: false, stateChanged: false };
+  }
+
   let stateChanged = updateTaskGroups(
     streamState,
     streamLogs.taskGroupIndex,

@@ -28,11 +28,15 @@ export function findInCauseChain<T>(
   err: unknown,
   extract: (node: unknown) => T | undefined,
 ): T | undefined {
+  // Ad-hoc wrapping can produce circular causes (err.cause === err); guard so
+  // a lookup in an error path cannot itself hang the process.
+  const seen = new Set<unknown>();
   for (
     let current: unknown = err;
-    current != null && typeof current === 'object';
+    current != null && typeof current === 'object' && !seen.has(current);
     current = (current as { cause?: unknown }).cause
   ) {
+    seen.add(current);
     const result = extract(current);
     if (result !== undefined) return result;
   }

@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { describe, it } from 'vitest';
+import { describe, it, vi } from 'vitest';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 import { OpenAIError } from 'openai';
 
@@ -18,7 +18,10 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
-import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
+import type {
+  ModelCredentialRoute,
+  OpenAIResponseToolCall,
+} from '@agent/types/ModelHandlerContracts';
 import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller';
 import {
   attachContextWindowError,
@@ -91,7 +94,7 @@ class StatelessResponseHandler extends ModelHandlerOpenAIResponse {
 
 class ResponseRouteProbe extends ModelHandlerOpenAIResponse {
   tagClient(client: OpenAI, route: ModelCredentialRoute): OpenAI {
-    return this.rememberClientCredentialRoute(client, route);
+    return this.rememberClientCredentialRoute(client, route, 'test-credential');
   }
 
   usesOpenRouter(): boolean {
@@ -128,6 +131,50 @@ function createResponse(id: string, usage?: { input_tokens: number }) {
     usage,
   };
 }
+
+function withSdkOptions<T extends { responses: object }>(client: T) {
+  return Object.assign(client, {
+    withOptions: vi.fn(() => client),
+  });
+}
+
+describe('ModelHandlerOpenAIResponse auxiliary requests', () => {
+  it('restores SDK retries for tool-result uploads outside the model gate', async () => {
+    const handler = createHandler({ openRouterOnly: false });
+    const create = vi.fn(async () => ({ id: 'file-1' }));
+    const uploadClient = { files: { create } };
+    const withOptions = vi.fn(() => uploadClient);
+    const client = { withOptions } as unknown as OpenAI;
+    const call: OpenAIResponseToolCall = {
+      provider: 'openai-response',
+      callId: 'call-1',
+      name: 'read_file',
+      input: {},
+      raw: {
+        type: 'function_call',
+        call_id: 'call-1',
+        name: 'read_file',
+        arguments: '{}',
+      } as OpenAIResponseToolCall['raw'],
+    };
+
+    await handler.createToolUseFollowUpMessages(
+      client,
+      call,
+      { status: 'executed', output: 'done' },
+      [
+        {
+          path: 'chart.png',
+          mimeType: 'image/png',
+          bytes: new Uint8Array([1, 2, 3]),
+        },
+      ],
+    );
+
+    assert.deepEqual(withOptions.mock.calls, [[{ maxRetries: 2 }]]);
+    assert.equal(create.mock.calls.length, 1);
+  });
+});
 
 function createMessages(count: number): ResponseInputItem[] {
   return Array.from({ length: count }, (_, index) => ({
@@ -821,7 +868,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     let streamCalls = 0;
     let tokenCountCalls = 0;
     const retrieveCalls: Array<{ id: string; params: unknown }> = [];
-    const client = {
+    const client = withSdkOptions({
       responses: {
         inputTokens: {
           count: async () => {
@@ -856,7 +903,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
           });
         },
       },
-    };
+    });
 
     await assert.rejects(
       handler.createResponse({
@@ -876,6 +923,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.equal(result.response.id, 'resp-retrieve-retry');
     assert.equal(streamCalls, 1);
     assert.equal(tokenCountCalls, 1);
+    assert.deepEqual(client.withOptions.mock.calls, [[{ maxRetries: 2 }]]);
     assert.deepEqual(retrieveCalls, [
       {
         id: 'resp-retrieve-retry',
@@ -987,7 +1035,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     });
     const requests: any[] = [];
     let tokenCountCalls = 0;
-    const client = {
+    const client = withSdkOptions({
       responses: {
         inputTokens: {
           count: async () => {
@@ -1011,7 +1059,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
           return createResponse('resp-rebuilt', { input_tokens: 100500 });
         },
       },
-    };
+    });
     const firstTurnMessages = createMessages(2);
     const rebuiltMessages = createMessages(3);
 
@@ -1051,7 +1099,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     const compactCalls: ResponseInputItem[][] = [];
     const requests: any[] = [];
     let tokenCountCalls = 0;
-    const client = {
+    const client = withSdkOptions({
       responses: {
         inputTokens: {
           count: async () => {
@@ -1069,7 +1117,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
           });
         },
       },
-    };
+    });
     (
       handler as unknown as { compactConversation: unknown }
     ).compactConversation = async (
@@ -1114,7 +1162,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     const compactCalls: ResponseInputItem[][] = [];
     const requests: any[] = [];
     let tokenCountCalls = 0;
-    const client = {
+    const client = withSdkOptions({
       responses: {
         inputTokens: {
           count: async () => {
@@ -1132,7 +1180,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
           });
         },
       },
-    };
+    });
     (
       handler as unknown as {
         compactConversation: unknown;
@@ -1191,7 +1239,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     const compactCalls: ResponseInputItem[][] = [];
     const requests: any[] = [];
     let tokenCountCalls = 0;
-    const client = {
+    const client = withSdkOptions({
       responses: {
         inputTokens: {
           count: async () => {
@@ -1206,7 +1254,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
           });
         },
       },
-    };
+    });
     (
       handler as unknown as { compactConversation: unknown }
     ).compactConversation = async (
@@ -1251,7 +1299,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     const compactCalls: ResponseInputItem[][] = [];
     const requests: any[] = [];
     let tokenCountCalls = 0;
-    const client = {
+    const client = withSdkOptions({
       responses: {
         inputTokens: {
           count: async () => {
@@ -1274,7 +1322,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
           });
         },
       },
-    };
+    });
     (
       handler as unknown as { compactConversation: unknown }
     ).compactConversation = async (

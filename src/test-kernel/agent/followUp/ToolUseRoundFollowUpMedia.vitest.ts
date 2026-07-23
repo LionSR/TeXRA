@@ -56,8 +56,10 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       modelHandler: {
         addMediaToUserMessage,
         capabilities: { supportsVision: true },
+        config: { provider: 'openai', fullName: 'test-model' },
         createResponse: vi.fn(async () => ({ response: null })),
         createUserFollowUpMessages,
+        getWireRouteKey: () => 'openai:test-route',
         setOutputStreaming: vi.fn(),
       },
       session: {
@@ -178,6 +180,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       modelHandler: {
         addMediaToUserMessage: vi.fn(async () => []),
         capabilities: { supportsVision: true },
+        config: { provider: 'openai', fullName: 'test-model' },
         createAssistantMessageFromResponse: vi.fn(
           (_response: unknown, text: string) =>
             ({ type: 'message', role: 'assistant', content: text }) as never,
@@ -208,6 +211,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
                 },
               ]
             : [],
+        getWireRouteKey: () => 'openai:test-route',
         getStreamingConfig: () => false,
         isEndTurnStop: (stopReason: string) => stopReason === 'stop',
         processThinkingBlock: () => null,
@@ -376,6 +380,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
       modelHandler: {
         addMediaToUserMessage: vi.fn(async () => []),
         capabilities: { supportsVision: true },
+        config: { provider: 'openai', fullName: 'test-model' },
         createAssistantMessageFromResponse: vi.fn(
           (_response: unknown, text: string) =>
             ({ type: 'message', role: 'assistant', content: text }) as never,
@@ -393,6 +398,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
           webSearchResults: [],
         }),
         extractToolUse: () => [],
+        getWireRouteKey: () => 'openai:test-route',
         getStreamingConfig: () => false,
         isEndTurnStop: (stopReason: string) => stopReason === 'stop',
         processThinkingBlock: () => null,

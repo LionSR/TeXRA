@@ -9,10 +9,8 @@ import { StorageFS } from '@utils/files';
 import { THREE_DAYS_MS } from '@utils/config';
 import { filterNotNull } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  PASTED_DIR,
-  savePastedImageBase64,
-} from '@utils/files/pastedImageUtils';
+import { PASTED_DIR } from '@utils/files/pastedImageName';
+import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
 import { BaseWebviewManager } from './BaseWebviewManager';
 
 const CHANNEL = 'InstructionManager';
