@@ -4,7 +4,9 @@ import { CliConfigForm } from '../chat/tui/forms/CliConfigForm';
 import { tuiOutputStreamForColor } from '../chat/tui/render/noColorOutput';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
 
-function ConfigApp(props: { readonly onError?: (error: unknown) => void }) {
+export function ConfigApp(props: {
+  readonly onError?: (error: unknown) => void;
+}) {
   const { exit } = useApp();
   const { rows } = useWindowSize();
   return (

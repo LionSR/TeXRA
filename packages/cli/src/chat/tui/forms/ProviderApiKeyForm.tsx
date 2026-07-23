@@ -3,7 +3,11 @@ import { Text } from 'ink';
 import { useState } from 'react';
 
 // Local imports
-import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
+import {
+  API_PROVIDERS,
+  type ApiKeyStatus,
+  type ApiProvider,
+} from '@model/apiProviders';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -11,8 +15,62 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { ApiKeyEntryForm } from './ApiKeyEntryForm';
 import { ListForm } from './_shared/ListForm';
 
+export type ProviderApiKeyStatuses = Partial<
+  Readonly<Record<ApiProvider, ApiKeyStatus>>
+>;
+
+export interface ProviderApiKeyStatusView {
+  readonly statuses?: ProviderApiKeyStatuses;
+  readonly loading: boolean;
+  readonly error: boolean;
+}
+
+export function providerApiKeyStatusLabel(
+  status: ApiKeyStatus | undefined,
+  view: ProviderApiKeyStatusView,
+): string {
+  if (status === 'set') return 'Key set';
+  if (status === 'env') return 'Env';
+  if (status === 'not-set') return 'Not set';
+  if (view.error) return 'Status unavailable';
+  return view.loading ? 'Checking status' : 'Status unavailable';
+}
+
+export function buildProviderApiKeyItems(view: ProviderApiKeyStatusView) {
+  return API_PROVIDERS.map((provider) => ({
+    value: provider,
+    label: PROVIDER_DISPLAY_NAMES[provider] ?? provider,
+    description: providerApiKeyStatusLabel(view.statuses?.[provider], view),
+  }));
+}
+
+function configuredProviderApiKeySummary(
+  statuses: ProviderApiKeyStatuses,
+): string {
+  const configured = API_PROVIDERS.filter((provider) => {
+    const status = statuses[provider];
+    return status === 'set' || status === 'env';
+  }).map((provider) => PROVIDER_DISPLAY_NAMES[provider] ?? provider);
+  return configured.length > 0
+    ? `Configured: ${configured.join(', ')}`
+    : 'No personal provider keys set';
+}
+
+export function formatProviderApiKeySummary(
+  view: ProviderApiKeyStatusView,
+): string {
+  if (!view.statuses) {
+    if (view.error) return 'Status unavailable';
+    return view.loading ? 'Checking configured keys' : 'Status unavailable';
+  }
+  const summary = configuredProviderApiKeySummary(view.statuses);
+  if (view.error) return `${summary} · status unavailable`;
+  return view.loading ? `${summary} · refreshing` : summary;
+}
+
 export interface ProviderApiKeyFormProps {
   readonly availableRows?: number;
+  readonly statusView?: ProviderApiKeyStatusView;
   readonly onSave: (
     provider: ApiProvider,
     key: string,
@@ -34,10 +92,14 @@ export function ProviderApiKeyForm(
       <ListForm
         title="Add provider API key"
         availableRows={props.availableRows}
-        items={API_PROVIDERS.map((candidate) => ({
-          value: candidate,
-          label: PROVIDER_DISPLAY_NAMES[candidate] ?? candidate,
-        }))}
+        items={
+          props.statusView
+            ? buildProviderApiKeyItems(props.statusView)
+            : API_PROVIDERS.map((provider) => ({
+                value: provider,
+                label: PROVIDER_DISPLAY_NAMES[provider] ?? provider,
+              }))
+        }
         description={
           <Text dimColor>Choose the service that issued the key.</Text>
         }

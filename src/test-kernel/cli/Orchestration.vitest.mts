@@ -394,10 +394,15 @@ describe('CLI orchestration items', () => {
       'Settings',
       'Help',
     ]);
-    expect(buildCliAccountItems(account).map((item) => item.value)).toEqual([
-      { kind: 'account', provider: 'chatgpt', operation: 'sign-in' },
-      { kind: 'account', provider: 'texra', operation: 'switch' },
-      { kind: 'account', provider: 'texra', operation: 'sign-out' },
+    expect(buildCliAccountItems(account)).toEqual([
+      expect.objectContaining({
+        value: { kind: 'account', provider: 'chatgpt', operation: 'sign-in' },
+      }),
+      expect.objectContaining({
+        label: 'Log out of TeXRA',
+        description: '',
+        value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
+      }),
     ]);
   });
 
@@ -407,9 +412,15 @@ describe('CLI orchestration items', () => {
       chatGptSignedIn: false,
     };
 
-    expect(buildCliAccountItems(account).map((item) => item.value)).toEqual([
-      { kind: 'account', provider: 'chatgpt', operation: 'sign-in' },
-      { kind: 'account', provider: 'texra', operation: 'sign-in' },
+    expect(buildCliAccountItems(account)).toEqual([
+      expect.objectContaining({
+        value: { kind: 'account', provider: 'chatgpt', operation: 'sign-in' },
+      }),
+      expect.objectContaining({
+        label: 'Log in to TeXRA',
+        description: '',
+        value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
+      }),
     ]);
     expect(
       buildCliModelAccessItems({
@@ -428,13 +439,14 @@ describe('CLI orchestration items', () => {
     });
 
     expect(items[1]).toMatchObject({
-      label: 'TeXRA relay token',
+      label: 'Log out of TeXRA',
+      value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
       disabled: true,
       description: 'Managed by the TEXRA_RELAY_TOKEN environment variable',
     });
   });
 
-  it('groups resumable executions into one launcher row before agent selection', () => {
+  it('places Team before Resume and Agent when all three are available', () => {
     const history = [
       historyEntry('aaaaaaaaaaaa', {
         agent: 'review',
@@ -446,7 +458,7 @@ describe('CLI orchestration items', () => {
       }),
     ];
     const items = buildCliOrchestrationItems({
-      presetPlans: [],
+      presetPlans: [readyPresetPlan()],
       history,
       toolUseAgents: [
         toolUseAgent('assistant'),
@@ -457,12 +469,13 @@ describe('CLI orchestration items', () => {
 
     expect(items.map((item) => item.label)).toEqual([
       'New chat',
+      'Team',
       'Resume',
       'Agent',
       'Settings',
       'Help',
     ]);
-    expect(items[1]?.description).toBe('2 resumable sessions');
+    expect(items[2]?.description).toBe('2 resumable sessions');
     expect(buildCliResumeItems(history).map((item) => item.label)).toEqual([
       'aaaaaaaaaaaa',
       'bbbbbbbbbbbb',
