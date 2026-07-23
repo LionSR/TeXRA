@@ -14,7 +14,7 @@ import {
  * finalized entry — never fall back to the plain `log-line` template, which
  * is visually indistinguishable from an unrelated info log.
  */
-describe('thinking block renders as a banner while streaming', () => {
+describe('progress view live activity rendering', () => {
   let dom: JSDOM;
 
   beforeAll(() => {
@@ -62,6 +62,30 @@ describe('thinking block renders as a banner while streaming', () => {
     expect(
       container.querySelector('.banner-content--streaming'),
     ).not.toBeNull();
+  });
+
+  it('does not render ephemeral context-compaction activity', async () => {
+    const { formatLogEntry } =
+      await import('@progressView/frontend/formatters');
+    const { render } = await import('lit');
+
+    const message: LogMessageData = {
+      id: 'compaction-1',
+      text: 'Compacting conversation context',
+      level: LOG_LEVELS.INFO,
+      timestamp: 100,
+      messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
+      data: {
+        activity: 'context_compaction',
+        state: 'started',
+      },
+    };
+
+    const container = document.createElement('div');
+    render(formatLogEntry(message), container);
+
+    expect(container.textContent).toBe('');
+    expect(container.childElementCount).toBe(0);
   });
 
   it('preserves newlines in raw text while streaming', async () => {

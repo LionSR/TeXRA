@@ -9,6 +9,7 @@ import {
 } from '@anthropic-ai/sdk';
 
 // Local imports
+import { logCompactionActivity } from '@agent/trace';
 import {
   type AgentSetting,
   hasEndTag,
@@ -65,6 +66,7 @@ import {
 import {
   getAnthropicMaxPdfPages,
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+  estimateTokensFromText,
 } from '../contextManagementConstants';
 import { AnthropicStreamHandler } from '../support/AnthropicStreamHandler';
 import { toAnthropicTools } from '../toolConversion';
@@ -726,9 +728,43 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Phase 4: EXECUTE - Dispatch through the provider's two SDK paths.
-    const response = useStreaming
-      ? await this.executeStreamingResponse(client, options, signal)
-      : await client.beta.messages.create(options, { signal });
+    // Non-streaming responses have no block-start event. Use the native count
+    // when available and the existing text heuristic otherwise; treating an
+    // unavailable count as either zero or definitely over threshold would miss
+    // large requests or label every small request as compaction.
+    const compactionEdit = options.context_management?.edits?.find(
+      (edit) => edit.type === 'compact_20260112',
+    );
+    const inputTokensForCompaction =
+      measuredInputTokens ??
+      estimateTokensFromText(
+        JSON.stringify({
+          messages: options.messages,
+          system: options.system,
+          tools: options.tools,
+          thinking: options.thinking,
+          outputConfig: options.output_config,
+        }),
+      );
+    const nonStreamingCompactionExpected =
+      !useStreaming &&
+      compactionEdit?.trigger?.type === 'input_tokens' &&
+      inputTokensForCompaction >= compactionEdit.trigger.value;
+
+    if (nonStreamingCompactionExpected) {
+      logCompactionActivity(this.logger, 'started');
+    }
+
+    let response: BetaMessage;
+    try {
+      response = useStreaming
+        ? await this.executeStreamingResponse(client, options, signal)
+        : await client.beta.messages.create(options, { signal });
+    } finally {
+      if (nonStreamingCompactionExpected) {
+        logCompactionActivity(this.logger, 'finished');
+      }
+    }
 
     // Log server-side compaction events when present in response content.
     logContextManagementFromResponse(

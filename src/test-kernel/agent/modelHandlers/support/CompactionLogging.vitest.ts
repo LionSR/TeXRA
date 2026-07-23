@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import type { AgentTrace } from '@agent/trace';
+import { logCompactionActivity, type AgentTrace } from '@agent/trace';
 import { logCompactionEvent } from '@agent/modelHandlers/support/compactionLogging';
 
 function captureTrace(): {
@@ -69,5 +69,38 @@ describe('logCompactionEvent', () => {
       utilizationAfter: 6,
       details: 'OpenAI Responses API compaction: 4 items',
     });
+  });
+});
+
+describe('logCompactionActivity', () => {
+  it('emits typed start and finish progress markers', () => {
+    const info = vi.fn();
+    const trace = { info } as unknown as AgentTrace;
+
+    logCompactionActivity(trace, 'started');
+    logCompactionActivity(trace, 'finished');
+
+    expect(info.mock.calls).toEqual([
+      [
+        'Compacting conversation context',
+        {
+          messageType: 'contextCompactionActivity',
+          data: {
+            activity: 'context_compaction',
+            state: 'started',
+          },
+        },
+      ],
+      [
+        'Conversation context compaction finished',
+        {
+          messageType: 'contextCompactionActivity',
+          data: {
+            activity: 'context_compaction',
+            state: 'finished',
+          },
+        },
+      ],
+    ]);
   });
 });
