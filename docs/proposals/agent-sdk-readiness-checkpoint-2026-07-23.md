@@ -92,14 +92,20 @@ and deliberately not applied.
 
 4. **[Keep] `ModelHandler.ts` (~1,938 LOC) is a real shared base, not a
    god-object; `ModelFactory` is a justified factory, not a pass-through.** The
-   model-handler reader verified per-provider override counts before flagging
-   anything (`createResponseImpl` 7 overrides, `sdkErrorTagger` 6,
-   `extractResponse`/`normalizeUsage`/`extractToolUse` 6–7 each, the six
-   provider-trait predicates real per-handler) and confirmed
-   `createModelHandler` has 3 production callers plus real routing precedence
-   (`modelHandlerCompatibilityKey`) and async credential overrides. Matches the
-   `#7101`-triage **reviewed-train** ruling: the ~40-line justification
-   doc-comments are a feature preventing re-litigation; do not collapse.
+   model-handler reader confirmed each abstract/template method carries
+   genuine overrides across the provider families (`createResponseImpl`,
+   `sdkErrorTagger`, `extractResponse`, `normalizeUsage`, `extractToolUse`,
+   plus the provider-trait predicates) rather than single-override template
+   ceremony. Specific per-method override integers are **omitted
+   deliberately** — the fan-out's counts were not re-run to forensic scope, and
+   a spot-check this pass found `sdkErrorTagger` overridden in all seven
+   non-base handlers (7, correcting the fan-out's noted 6), which is exactly
+   why the soft counts are dropped rather than carried into the record.
+   `createModelHandler` was confirmed to have 3 production callers plus real
+   routing precedence (`modelHandlerCompatibilityKey`) and async credential
+   overrides. Matches the `#7101`-triage **reviewed-train** ruling: the
+   ~40-line justification doc-comments are a feature preventing re-litigation;
+   do not collapse.
 
 5. **[strategic] `IModelHandler` port width (~41 `Pick`ed members).** Re-derived; the
    reader's own conclusion is that this is a _surface-shape observation, not a
