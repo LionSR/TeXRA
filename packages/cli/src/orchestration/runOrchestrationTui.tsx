@@ -290,7 +290,7 @@ export function OrchestrationApp(
   } else if (teamOpen) {
     headerLines = ['Team', 'Choose a team for this session.'];
   } else if (accountOpen) {
-    headerLines = ['Account', 'Sign in, change account, or sign out.'];
+    headerLines = ['Account', 'Log in or log out.'];
   } else if (pending) {
     headerLines = [
       `${modelStepTitle} · ${formatCliModelAccessRoute(props.apiMode)}`,

@@ -22,8 +22,7 @@ import { collapseWhitespace } from '@utils/text/stringUtils';
 import { ModelAccessForm } from '../forms/ModelAccessForm';
 import { AgentListForm } from '../forms/AgentListForm';
 import { ApprovalPolicyForm } from '../forms/ApprovalPolicyForm';
-import { ConfigForm } from '../forms/ConfigForm';
-import { createCliConfigFormProps } from '../forms/CliConfigForm';
+import { CliConfigForm } from '../forms/CliConfigForm';
 import { LoginForm, type LoginFormValue } from '../forms/LoginForm';
 import { LogoutForm } from '../forms/LogoutForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
@@ -695,29 +694,23 @@ export function registerBuiltinSlashCommands(options?: {
     const ConfigFormAdapter = (props: SlashFormProps): React.JSX.Element => {
       const stores = getConfigStores();
       return (
-        <ConfigForm
-          {...createCliConfigFormProps({
-            stores,
-            availableRows: props.availableRows,
-            openExternalForm: (formName) =>
-              openCliSlashCommandForm(formName, ''),
-            onClose: () => props.onDone(undefined),
-            onError: async (error) => {
-              props.onPersist?.();
-              await options?.onError?.(error);
-            },
-            onApiModePersonal: async () => {
-              // A key save only needs the mode switch when leaving included
-              // access — already-personal sessions (including an active Kimi
-              // Code route) must not be treated as an explicit "Personal API
-              // keys" picker choice, which would clear the Kimi preference.
-              if (sessionMeta.get().apiMode === 'personal') return;
-              await onModelAccessSelect(
-                'personal',
-                transcriptSlashCommandOutput,
-              );
-            },
-          })}
+        <CliConfigForm
+          stores={stores}
+          availableRows={props.availableRows}
+          openExternalForm={(formName) => openCliSlashCommandForm(formName, '')}
+          onClose={() => props.onDone(undefined)}
+          onError={async (error) => {
+            props.onPersist?.();
+            await options?.onError?.(error);
+          }}
+          onApiModePersonal={async () => {
+            // A key save only needs the mode switch when leaving included
+            // access — already-personal sessions (including an active Kimi
+            // Code route) must not be treated as an explicit "Personal API
+            // keys" picker choice, which would clear the Kimi preference.
+            if (sessionMeta.get().apiMode === 'personal') return;
+            await onModelAccessSelect('personal', transcriptSlashCommandOutput);
+          }}
         />
       );
     };

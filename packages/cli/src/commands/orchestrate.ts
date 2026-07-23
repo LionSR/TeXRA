@@ -354,12 +354,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
             await signOutCliSupabase();
             writeTextStdout('Signed out of TeXRA.');
           } else {
-            await runLoginCommand(
-              launchContext,
-              loginInitFromArgs({
-                selectAccount: action.operation === 'switch',
-              }),
-            );
+            await runLoginCommand(launchContext, loginInitFromArgs({}));
           }
           invalidateModelOptionsCache();
         } catch (error: unknown) {

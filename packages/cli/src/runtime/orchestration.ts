@@ -88,7 +88,7 @@ export interface BuildCliOrchestrationItemsInput {
 }
 
 type CliAccountProvider = 'chatgpt' | 'texra';
-type CliAccountOperation = 'sign-in' | 'switch' | 'sign-out';
+type CliAccountOperation = 'sign-in' | 'sign-out';
 
 export interface CliAccountStatus {
   readonly texraSignedIn: boolean;
@@ -153,6 +153,17 @@ export function buildCliOrchestrationItems(
     },
   ];
 
+  if (input.presetPlans.length > 0) {
+    const launchBlocked = input.presetLaunchBlockReason === 'delegation-denied';
+    items.push({
+      value: { kind: 'browse-teams' },
+      label: 'Team',
+      description: launchBlocked
+        ? TEAM_DELEGATION_DENIED_DESCRIPTION
+        : 'Choose a team',
+      disabled: launchBlocked,
+    });
+  }
   const resumeItems = buildCliResumeItems(userStartedHistory);
   if (resumeItems.length > 0) {
     items.push({
@@ -166,17 +177,6 @@ export function buildCliOrchestrationItems(
       value: { kind: 'browse-agents' },
       label: 'Agent',
       description: 'Choose one agent',
-    });
-  }
-  if (input.presetPlans.length > 0) {
-    const launchBlocked = input.presetLaunchBlockReason === 'delegation-denied';
-    items.push({
-      value: { kind: 'browse-teams' },
-      label: 'Team',
-      description: launchBlocked
-        ? TEAM_DELEGATION_DENIED_DESCRIPTION
-        : 'Choose a team',
-      disabled: launchBlocked,
     });
   }
   if (input.modelAccess) {
@@ -247,32 +247,20 @@ export function buildCliAccountItems(
   }
 
   if (status.texraSignedIn) {
-    if (status.texraCredentialSource === 'relayToken') {
-      items.push({
-        value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
-        label: 'TeXRA relay token',
-        description: 'Managed by the TEXRA_RELAY_TOKEN environment variable',
-        disabled: true,
-      });
-    } else {
-      items.push(
-        {
-          value: { kind: 'account', provider: 'texra', operation: 'switch' },
-          label: 'Change TeXRA account',
-          description: status.texraAccountLabel ?? 'Researcher Access',
-        },
-        {
-          value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
-          label: 'Sign out of TeXRA',
-          description: status.texraAccountLabel ?? 'Researcher Access',
-        },
-      );
-    }
+    items.push({
+      value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
+      label: 'Log out of TeXRA',
+      description:
+        status.texraCredentialSource === 'relayToken'
+          ? 'Managed by the TEXRA_RELAY_TOKEN environment variable'
+          : '',
+      disabled: status.texraCredentialSource === 'relayToken',
+    });
   } else {
     items.push({
       value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
-      label: 'Sign in to TeXRA',
-      description: 'Use included Researcher Access',
+      label: 'Log in to TeXRA',
+      description: '',
     });
   }
   return items;
