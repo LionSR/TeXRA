@@ -66,6 +66,7 @@ import {
 import {
   getAnthropicMaxPdfPages,
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
+  estimateTokensFromText,
 } from '../contextManagementConstants';
 import { AnthropicStreamHandler } from '../support/AnthropicStreamHandler';
 import { toAnthropicTools } from '../toolConversion';
@@ -727,18 +728,28 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Phase 4: EXECUTE - Dispatch through the provider's two SDK paths.
-    // Non-streaming responses have no block-start event. Announce compaction
-    // when the measured count crosses the trigger, or whenever the active
-    // compaction edit cannot be measured (unsupported counting or file-backed
-    // input). The response/failure boundary owns the matching finish marker.
+    // Non-streaming responses have no block-start event. Use the native count
+    // when available and the existing text heuristic otherwise; treating an
+    // unavailable count as either zero or definitely over threshold would miss
+    // large requests or label every small request as compaction.
     const compactionEdit = options.context_management?.edits?.find(
       (edit) => edit.type === 'compact_20260112',
     );
+    const inputTokensForCompaction =
+      measuredInputTokens ??
+      estimateTokensFromText(
+        JSON.stringify({
+          messages: options.messages,
+          system: options.system,
+          tools: options.tools,
+          thinking: options.thinking,
+          outputConfig: options.output_config,
+        }),
+      );
     const nonStreamingCompactionExpected =
       !useStreaming &&
       compactionEdit?.trigger?.type === 'input_tokens' &&
-      (measuredInputTokens === undefined ||
-        measuredInputTokens >= compactionEdit.trigger.value);
+      inputTokensForCompaction >= compactionEdit.trigger.value;
 
     if (nonStreamingCompactionExpected) {
       logCompactionActivity(this.logger, 'started');

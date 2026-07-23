@@ -1105,20 +1105,94 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
+  it('announces expected compaction after the measured count crosses the trigger', async () => {
+    const handler = createAnthropicHandler({
+      supportsTokenCounting: true,
+      supportsReasoning: false,
+    });
+    handler.config.fullName = 'claude-opus-4-6';
+    handler.setAgentCategory(AgentCategory.ToolUse);
+
+    const activityStates: string[] = [];
+    stubHandlerForTest(handler, {
+      info: (_message: string, options?: { data?: unknown }) => {
+        const data = options?.data as
+          { activity?: unknown; state?: unknown } | undefined;
+        if (
+          data?.activity === 'context_compaction' &&
+          typeof data.state === 'string'
+        ) {
+          activityStates.push(data.state);
+        }
+      },
+    });
+    stubCompactionThresholdPercent(75);
+
+    const client = {
+      beta: {
+        messages: {
+          countTokens: async () => ({ input_tokens: 160_000 }),
+          create: async () => {
+            assert.deepEqual(
+              activityStates,
+              ['started'],
+              'start marker should precede the non-streaming SDK request',
+            );
+            return {
+              id: 'msg',
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-opus-4-6',
+              content: [
+                { type: 'compaction', content: '<summary>state</summary>' },
+                { type: 'text', text: 'ok' },
+              ],
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 20_000, output_tokens: 1 },
+            };
+          },
+        },
+      },
+    } as any;
+
+    await handler.createResponse({
+      client,
+      messages: helloMessages(),
+      temperature: 0,
+    });
+
+    assert.deepEqual(activityStates, ['started', 'finished']);
+  });
+
   it.each([
     {
-      label: 'after the measured token count crosses the trigger',
-      supportsTokenCounting: true,
+      label: 'large',
+      messages: [
+        {
+          role: 'user' as const,
+          content: [
+            {
+              type: 'text' as const,
+              text: 'x'.repeat(620_000),
+              citations: null,
+            },
+          ],
+        },
+      ],
+      expectedAtRequest: ['started'],
+      expectedFinal: ['started', 'finished'],
     },
     {
-      label: 'when token counting is unavailable',
-      supportsTokenCounting: false,
+      label: 'small',
+      messages: helloMessages(),
+      expectedAtRequest: [],
+      expectedFinal: [],
     },
   ])(
-    'announces expected compaction around non-streaming requests $label',
-    async ({ supportsTokenCounting }) => {
+    'uses a fallback estimate for a $label unmeasured non-streaming request',
+    async ({ messages, expectedAtRequest, expectedFinal }) => {
       const handler = createAnthropicHandler({
-        supportsTokenCounting,
+        supportsTokenCounting: false,
         supportsReasoning: false,
       });
       handler.config.fullName = 'claude-opus-4-6';
@@ -1146,8 +1220,8 @@ describe('ModelHandlerAnthropic message guards', () => {
             create: async () => {
               assert.deepEqual(
                 activityStates,
-                ['started'],
-                'start marker should precede the non-streaming SDK request',
+                expectedAtRequest,
+                'fallback estimate should decide before the SDK request',
               );
               return {
                 id: 'msg',
@@ -1168,11 +1242,11 @@ describe('ModelHandlerAnthropic message guards', () => {
 
       await handler.createResponse({
         client,
-        messages: helloMessages(),
+        messages,
         temperature: 0,
       });
 
-      assert.deepEqual(activityStates, ['started', 'finished']);
+      assert.deepEqual(activityStates, expectedFinal);
     },
   );
 
