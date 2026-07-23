@@ -590,7 +590,7 @@ describe('RetryState', () => {
     expect(second.wireRoute).not.toBe(first.wireRoute);
   });
 
-  it('coordinates rate-limit recovery per model on one wire route', async () => {
+  it('coordinates unscoped rate-limit recovery on one wire route', async () => {
     const first = await captureModelRetry(
       'https://api.example/v1',
       'api-key',
@@ -610,6 +610,31 @@ describe('RetryState', () => {
 
     expect(first.wireRoute).toBe(second.wireRoute);
     expect(first.modelRetryRoute).not.toBe(second.modelRetryRoute);
+    expect(first.classifyFailure(rateLimit)).toEqual({
+      retryAfterMs: 3_000,
+    });
+    expect(first.classifyModelFailure(rateLimit)).toBeUndefined();
+  });
+
+  it('coordinates explicitly model-scoped rate limits per model', async () => {
+    const first = await captureModelRetry(
+      'https://api.example/v1',
+      'api-key',
+      undefined,
+      'openai:model-a',
+    );
+    const rateLimit = new Error('model rate limited') as Error & {
+      error: unknown;
+      status: number;
+      headers: Record<string, string>;
+    };
+    rateLimit.status = 429;
+    rateLimit.headers = { 'retry-after': '3' };
+    rateLimit.error = {
+      type: 'rate_limit_error',
+      scope: 'model',
+    };
+
     expect(first.classifyFailure(rateLimit)).toBeUndefined();
     expect(first.classifyModelFailure(rateLimit)).toEqual({
       retryAfterMs: 3_000,

@@ -87,6 +87,23 @@ export function isRelayRequestLimitBody(rawErrorBody: unknown): boolean {
   return hasRelayBooleanFlag(rawErrorBody, 'requestLimitReached');
 }
 
+/** True only when a provider body explicitly identifies a model-scoped limit. */
+export function isModelScopedRateLimitBody(rawErrorBody: unknown): boolean {
+  if (!isObject(rawErrorBody)) return false;
+  const candidates = [
+    rawErrorBody,
+    (rawErrorBody as { error?: unknown }).error,
+  ];
+  return candidates.some((candidate) => {
+    if (!isObject(candidate)) return false;
+    const scope =
+      pickStringField(candidate, 'scope') ??
+      pickStringField(candidate, 'rate_limit_scope') ??
+      pickStringField(candidate, 'rateLimitScope');
+    return scope?.toLowerCase() === 'model';
+  });
+}
+
 export function isRelayMonthlyLimitMessage(
   message: string | undefined,
 ): boolean {

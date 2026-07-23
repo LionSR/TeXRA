@@ -37,6 +37,7 @@ import {
 } from './errorInspection';
 import {
   inferStatusCodeFromBody,
+  isModelScopedRateLimitBody,
   isRelayError,
   isRelayMonthlyLimitBody,
   isRelayMonthlyLimitMessage,
@@ -467,10 +468,13 @@ function detectRateLimitScope(
 ): 'model' | 'wire' | undefined {
   if (statusCode !== StatusCodes.TOO_MANY_REQUESTS) return undefined;
   const formatted = normalizeProviderError(error);
-  return formatted.exhaustionReason !== undefined ||
+  if (
+    formatted.exhaustionReason !== undefined ||
     isRelayRequestLimitBody(formatted.rawErrorBody)
-    ? 'wire'
-    : 'model';
+  ) {
+    return 'wire';
+  }
+  return isModelScopedRateLimitBody(formatted.rawErrorBody) ? 'model' : 'wire';
 }
 
 /** Whether a failure is a model-scoped provider rate limit. */
@@ -495,8 +499,8 @@ export function classifyModelRateLimitFailure(
 /**
  * Classify a failure that carries evidence about a shared wire route
  * (provider + credential + endpoint): transport failures, 5xx/408 server
- * failures. Credential-exhaustion 429s cool this shared route, while
- * model-specific 429 rate limits use a separate recovery scope.
+ * failures and rate limits without explicit model scope. Provider bodies that
+ * explicitly identify a model-specific 429 use a separate recovery scope.
  * Retryable failures outside this set (e.g. 409 conflicts) stay node-local —
  * a conflict does not imply the route is unhealthy. Relay 401s are also
  * deliberately absent: token refresh is single-flighted at the auth boundary
