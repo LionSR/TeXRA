@@ -26,13 +26,18 @@ export function formatRelayUsageStatus(summary: RelayUsageSummary): string {
 }
 
 export function formatCliAuthStatusLine(
-  profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel'>,
+  profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel'> & {
+    readonly tier?: string;
+  },
 ): string {
-  return formatAccountStatusLine(
+  const account = formatAccountStatusLine(
     'auth',
     profile.authenticated,
     profile.accountLabel,
   );
+  return profile.authenticated && profile.tier
+    ? `${account} · tier: ${profile.tier}`
+    : account;
 }
 
 function formatAccountStatusLine(
@@ -175,7 +180,6 @@ export async function loadCliApiStatusLines(
 
   if (profile.note) lines.push(profile.note);
 
-  if (profile.tier) lines.push(`tier: ${profile.tier}`);
   if (profile.authenticated && profile.tier) {
     // Usage reads usage_logs via PostgREST with a session token; a
     // relay-scoped CI token cannot read it. Explain the limitation (same as

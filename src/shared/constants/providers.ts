@@ -297,7 +297,7 @@ export const USE_OPENROUTER_PROVIDER_SETTING = {
 // named export here is a VS Code config-tree setting the extension owns alone.
 export const DASHSCOPE_USE_CHINA_PROVIDER_SETTING = {
   key: GlobalStateKey.DASHSCOPE_USE_CHINA,
-  label: 'China Region (Bailian)',
+  label: 'Qwen China Region (Bailian)',
   description:
     'Use the China region endpoint (dashscope.aliyuncs.com) instead of international (dashscope-intl.aliyuncs.com). Display name switches to "Bailian".',
   globalStateKey: GlobalStateKey.DASHSCOPE_USE_CHINA,
@@ -305,7 +305,7 @@ export const DASHSCOPE_USE_CHINA_PROVIDER_SETTING = {
 
 export const MINIMAX_USE_CHINA_PROVIDER_SETTING = {
   key: GlobalStateKey.MINIMAX_USE_CHINA,
-  label: 'China Region',
+  label: 'MiniMax China Region',
   description:
     'Use the China region endpoint (api.minimaxi.com) instead of international (api.minimax.io). API keys are region-specific — you must obtain a key from the matching region.',
   warning:
@@ -317,7 +317,7 @@ export const MINIMAX_USE_CHINA_PROVIDER_SETTING = {
 
 export const MOONSHOT_USE_CHINA_PROVIDER_SETTING = {
   key: GlobalStateKey.MOONSHOT_USE_CHINA,
-  label: 'China Region',
+  label: 'Kimi/Moonshot China Region',
   description:
     'Use the China endpoint (api.moonshot.cn) instead of international (api.moonshot.ai). Enabled by default. Keys are platform-specific — get international keys at platform.moonshot.ai.',
   defaultValue: true,
@@ -330,7 +330,7 @@ export const MOONSHOT_USE_CHINA_PROVIDER_SETTING = {
 
 export const GLM_USE_CHINA_PROVIDER_SETTING = {
   key: GlobalStateKey.GLM_USE_CHINA,
-  label: 'China Region',
+  label: 'GLM China Region',
   description:
     'Use the China region endpoint (open.bigmodel.cn) instead of international (api.z.ai). Enabled by default. API keys work with either endpoint.',
   defaultValue: true,
@@ -341,7 +341,7 @@ export const GLM_USE_CHINA_PROVIDER_SETTING = {
 
 export const GLM_CODING_PLAN_PROVIDER_SETTING = {
   key: GlobalStateKey.GLM_CODING_PLAN,
-  label: 'Coding Plan',
+  label: 'GLM Coding Plan',
   description:
     'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
   warningUrl: 'https://z.ai/subscribe',
