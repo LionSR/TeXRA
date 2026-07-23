@@ -56,9 +56,10 @@ matches a prior ruling or a tracked strategic item.
    `runAgent` vs `executeAgent`, `AgentFlowResult` vs `AgentFinalResult`,
    `IToolUseSession`, `withModelClient`, and the `createResponseCycleFlow`/
    `createToolUseRoundFlow` factories were each examined and **excluded as
-   justified** (real single-home logic, the sanctioned `Node.exec →
-createFlow().run` shape, or a legitimate `core → implementations` port).
-   Matches the held rulings carried since `-07-18`/`-07-21`.
+   justified** (real single-home logic, the sanctioned
+   `Node.exec → createFlow().run` shape, or a legitimate
+   `core → implementations` port). Matches the held rulings carried since
+   `-07-18`/`-07-21`.
 
 2. **The real core/runtime SDK-readiness item is ambient/global coupling, not
    excess layers.** `core/flows` reads the process-wide `RunContext`
@@ -145,20 +146,19 @@ createFlow().run` shape, or a legitimate `core → implementations` port).
 
 ## Subagent split points — unchanged
 
-Delegation is already a mature strategy-pattern subsystem (`startChildRunLoop`
-
-- `ChildRunStrategy` + `executionRegistry` lineage + `detachSubagentsOnStop`),
-  and `src/tools/claudeAgent.ts` already delegates to
-  `@anthropic-ai/claude-agent-sdk` (async spin-off mirroring `codex` /
-  `delegate_agent`, session resume via the SDK's `resume:` option). The
-  fan-out's independent split candidates — the provider families (`openai/`,
-  `google/`, `anthropic/` are cleanly separable, importing only the base +
-  shared `support/`/`utils/`, never a sibling), model resolution, the execution
-  registry/teardown cluster, persistence/resume, and index/roster (already behind
-  injected `Deps` ports) — all match the ranked split points held since `-06-26`
-  → `-07-22`. The depth-cap prerequisite (derive a depth counter from lineage,
-  then gate it) before exposing a recursive `delegateTo(...)` still stands. **No
-  new split point, no reordering.**
+Delegation is already a mature strategy-pattern subsystem
+(`startChildRunLoop` + `ChildRunStrategy` + `executionRegistry` lineage +
+`detachSubagentsOnStop`), and `src/tools/claudeAgent.ts` already delegates
+to `@anthropic-ai/claude-agent-sdk` (async spin-off mirroring `codex` /
+`delegate_agent`, session resume via the SDK's `resume:` option). The
+fan-out's independent split candidates — the provider families (`openai/`,
+`google/`, `anthropic/` are cleanly separable, importing only the base +
+shared `support/`/`utils/`, never a sibling), model resolution, the
+execution registry/teardown cluster, persistence/resume, and index/roster
+(already behind injected `Deps` ports) — all match the ranked split points
+held since `-06-26` → `-07-22`. The depth-cap prerequisite (derive a depth
+counter from lineage, then gate it) before exposing a recursive
+`delegateTo(...)` still stands. **No new split point, no reordering.**
 
 ## No change lands (by design this pass)
 
