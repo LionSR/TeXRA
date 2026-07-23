@@ -451,14 +451,13 @@ function detectRouteStatusCode(
   error: Error,
   chain: readonly unknown[],
 ): number | undefined {
-  return (
-    findInCauseChain(error, (current) => {
-      const status = detectStatusCode(current);
-      return status !== undefined && status >= 100 && status <= 599
-        ? status
-        : undefined;
-    }) ?? normalizeProviderError(error).statusCode
-  );
+  for (const current of chain) {
+    const status = detectStatusCode(current);
+    if (status !== undefined && status >= 100 && status <= 599) {
+      return status;
+    }
+  }
+  return normalizeProviderError(error).statusCode;
 }
 
 /** Whether a failure is a model-scoped provider rate limit. */
