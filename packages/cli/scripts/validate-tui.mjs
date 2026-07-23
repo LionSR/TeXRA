@@ -351,7 +351,7 @@ const SCENARIOS = [
     frame: 'scrollback',
     env: { HARNESS_ORCHESTRATION: '1' },
     bootExpect: 'Team — Choose a team',
-    keys: ['3'],
+    keys: ['2'],
     exitKeys: [ESC, ESC],
     expectExit: true,
     expect: [
@@ -389,7 +389,7 @@ const SCENARIOS = [
       HARNESS_VISIBLE_TOOL_USE_AGENTS: 'assistant||review',
     },
     bootExpect: 'Agent — Choose one agent',
-    keys: ['2'],
+    keys: ['3'],
     exitKeys: [ESC, ESC],
     expectExit: true,
     expect: [
@@ -410,7 +410,7 @@ const SCENARIOS = [
       HARNESS_DELEGATED_ORCHESTRATION_HISTORY: '1',
     },
     bootExpect: 'Resume — 1 resumable session',
-    keys: ['4'],
+    keys: ['2'],
     exitKeys: [ESC, ESC],
     expectExit: true,
     expect: [
@@ -435,7 +435,7 @@ const SCENARIOS = [
       HARNESS_DELEGATED_ORCHESTRATION_HISTORY: '1',
     },
     bootExpect: 'Resume — 1 resumable session',
-    keys: ['2'],
+    keys: ['3'],
     exitKeys: [ESC, ESC],
     expectExit: true,
     expect: [
@@ -454,7 +454,7 @@ const SCENARIOS = [
     cols: 80,
     env: { HARNESS_ORCHESTRATION: '1' },
     bootExpect: 'New chat',
-    keys: ['3'],
+    keys: ['2'],
     exitKeys: [ESC, ESC],
     expectExit: true,
     frame: 'viewport',

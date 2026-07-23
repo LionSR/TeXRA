@@ -6,12 +6,20 @@ import {
   childStatusColor,
   pendingApprovalRowSuffix,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
-import { selectedSubagentDetailLines } from '@cli/chat/tui/panes/SubagentDetailPanel';
+import {
+  ConversationPane,
+  workflowInputContextSummary,
+} from '@cli/chat/tui/panes/ConversationPane';
 import {
   SubagentList,
   compactChildRowText,
 } from '@cli/chat/tui/panes/SubagentList';
-import type { StreamSlice } from '@cli/chat/tui/state/cliState';
+import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
+import {
+  activeStreamId,
+  streams as streamsSignal,
+  type StreamSlice,
+} from '@cli/chat/tui/state/cliState';
 import {
   streamTreeViews,
   type StreamView,
@@ -64,99 +72,169 @@ function workflowAgentSlice(
 }
 
 describe('CLI child list display model', () => {
-  it('formats selected workflow progress and files outside the list row', () => {
-    const files = {
-      input: ['src/Main.lean', 'src/Lemma.lean'],
-      context: ['notes/proof.md'],
-      media: [],
-      output: [],
-    };
-    const detailSession: StreamView = {
-      id: 'devise' as StreamTabId,
-      label: 'devise',
-      active: false,
-      parentId: 'main' as StreamTabId,
-      slice: workflowAgentSlice('devise', {
-        status: STREAM_PHASE.RUNNING,
-        files,
-        outputFilesByRound: {
-          0: [
-            {
-              source: 'Main.lean',
-              location: {
-                kind: 'runStorage',
-                executionId: 'exec-abc',
-                relativePath: 'r1/Main.lean',
-                absolutePath: '/tmp/executions/abc/r1/Main.lean',
-              },
-              round: 0,
-              lineage: null,
-              diff: null,
-            },
-          ],
-          1: [
-            {
-              source: 'Main.lean',
-              location: {
-                kind: 'runStorage',
-                executionId: 'exec-abc',
-                relativePath: 'r2/Main.lean',
-                absolutePath: '/tmp/executions/abc/r2/Main.lean',
-              },
-              round: 1,
-              lineage: null,
-              diff: null,
-            },
-            {
-              source: 'Notes.lean',
-              location: {
-                kind: 'runStorage',
-                executionId: 'exec-abc',
-                relativePath: 'r2/Notes.lean',
-                absolutePath: '/tmp/executions/abc/r2/Notes.lean',
-              },
-              round: 1,
-              lineage: null,
-              diff: null,
-            },
-          ],
-        },
-        roundStage: { index: 1, total: 3 },
-        conversation: { toolCallCount: 2 },
-      }),
-    };
+  it('shows concise input and context metadata only in an active workflow view', () => {
+    const workflow = workflowAgentSlice('devise', {
+      files: {
+        input: ['src/Main.lean', 'src/Lemma.lean'],
+        context: ['notes/proof.md'],
+        media: [],
+        output: ['out/Main.lean'],
+      },
+    });
+    const toolUse = workflowAgentSlice('review', {
+      category: AgentCategory.ToolUse,
+      files: {
+        input: ['paper.tex'],
+        context: ['notes.md'],
+        media: [],
+        output: ['review.md'],
+      },
+    });
+    const workflowWithoutInputs = workflowAgentSlice('empty', {
+      files: { input: [], context: [], media: [], output: [] },
+    });
 
-    expect(selectedSubagentDetailLines(detailSession, 100)).toEqual([
-      'Selected workflow agent: devise',
-      'Progress: running · r2/3 · 2 tool calls',
-      'Input: src/Main.lean',
-      'Input: src/Lemma.lean',
-      'Context: notes/proof.md',
-      'Output r2: /tmp/executions/abc/r2/Main.lean',
-      'Output r2: /tmp/executions/abc/r2/Notes.lean',
-      'Output r1: /tmp/executions/abc/r1/Main.lean',
-    ]);
-    expect(selectedSubagentDetailLines(undefined, 100)).toEqual([]);
-    const configuredOutputSession: StreamView = {
-      ...detailSession,
-      slice: workflowAgentSlice('devise', {
-        files: {
-          ...files,
-          output: ['out/Main.lean', 'out/Notes.lean'],
-        },
-      }),
-    };
-    expect(
-      selectedSubagentDetailLines(configuredOutputSession, 100).filter((line) =>
-        line.startsWith('Output:'),
-      ),
-    ).toEqual(['Output: out/Main.lean', 'Output: out/Notes.lean']);
-    expect(
-      selectedSubagentDetailLines(detailSession, 20).every(
-        (line) => line.length <= 20,
-      ),
-    ).toBe(true);
+    expect(workflowInputContextSummary(workflow)).toBe(
+      'Input: 2 files · Context: 1 file',
+    );
+    expect(workflowInputContextSummary(toolUse)).toBeUndefined();
+    expect(workflowInputContextSummary(workflowWithoutInputs)).toBeUndefined();
+    expect(workflowInputContextSummary(undefined)).toBeUndefined();
   });
+
+  it('prioritizes live workflow activity over metadata in a one-row viewport', async () => {
+    const { ink, React } = await loadInk();
+    const streamId = 'devise' as StreamTabId;
+    const slice = workflowAgentSlice(streamId, {
+      status: STREAM_PHASE.RUNNING,
+      files: {
+        input: ['paper.tex'],
+        context: ['notes.md'],
+        media: [],
+        output: [],
+      },
+      entries: [
+        {
+          id: 'live-tool',
+          role: 'tool',
+          text: '',
+          finalized: false,
+          toolUse: {
+            toolName: 'write_file',
+            errorText: '',
+            outputText: '',
+            userInstructionText: '',
+            input: { path: 'paper.tex' },
+            isError: false,
+            isUserFeedback: false,
+            headerSummary: 'Drafting paper.tex',
+            status: 'in_progress',
+          },
+        },
+      ],
+    });
+    activeStreamId.set(streamId);
+    streamsSignal.set(new Map([[streamId, slice]]));
+
+    try {
+      const output = ink.renderToString(
+        React.createElement(ConversationPane, { maxRows: 1, width: 80 }),
+        { columns: 80 },
+      );
+      expect(output).toContain('Drafting');
+      expect(output).not.toContain('Input:');
+    } finally {
+      activeStreamId.set(undefined);
+      streamsSignal.set(new Map());
+    }
+  });
+
+  it.each([
+    {
+      activityLabel: 'live tool activity',
+      activity: {
+        id: 'live-tool',
+        role: 'tool' as const,
+        text: '',
+        finalized: false,
+        toolUse: {
+          toolName: 'write_file',
+          errorText: '',
+          outputText: '',
+          userInstructionText: '',
+          input: { path: 'paper.tex' },
+          isError: false,
+          isUserFeedback: false,
+          headerSummary: 'Drafting',
+          status: 'in_progress' as const,
+        },
+      },
+      expectedActivity: 'Draf',
+    },
+    {
+      activityLabel: 'failed tool activity',
+      activity: {
+        id: 'live-error',
+        role: 'tool' as const,
+        text: '',
+        finalized: false,
+        toolUse: {
+          toolName: 'write_file',
+          errorText: 'Failed',
+          outputText: '',
+          userInstructionText: '',
+          input: { path: 'paper.tex' },
+          isError: true,
+          isUserFeedback: false,
+          headerSummary: 'Failed',
+          status: 'failed' as const,
+        },
+      },
+      expectedActivity: 'Failed',
+    },
+  ])(
+    'keeps $activityLabel visible below one-row long-file metadata at narrow widths',
+    async ({ activity, expectedActivity }) => {
+      const { ink, React } = await loadInk();
+      const streamId = 'devise' as StreamTabId;
+      const slice = workflowAgentSlice(streamId, {
+        status: STREAM_PHASE.RUNNING,
+        files: {
+          input: ['inputs/a-very-long-workflow-input-filename.tex'],
+          context: Array.from(
+            { length: 12 },
+            (_, index) => `context/a-very-long-context-filename-${index}.md`,
+          ),
+          media: [],
+          output: [],
+        },
+        entries: [activity],
+      });
+      activeStreamId.set(streamId);
+      streamsSignal.set(new Map([[streamId, slice]]));
+
+      try {
+        const output: string = ink.renderToString(
+          React.createElement(ConversationPane, {
+            availableWidth: 18,
+            maxRows: 2,
+            width: 20,
+          }),
+          { columns: 18 },
+        );
+        const outputLines = output.split('\n');
+        expect(outputLines).toHaveLength(2);
+        expect(outputLines[0]).toBe('Input: 1 file · C…');
+        expect(outputLines.every((line) => textDisplayWidth(line) <= 18)).toBe(
+          true,
+        );
+        expect(output).toContain(expectedActivity);
+      } finally {
+        activeStreamId.set(undefined);
+        streamsSignal.set(new Map());
+      }
+    },
+  );
 
   it('keeps status markers steady and status colors independent of focus', () => {
     expect(CHILD_STATUS_MARKER).toBe('● ');
