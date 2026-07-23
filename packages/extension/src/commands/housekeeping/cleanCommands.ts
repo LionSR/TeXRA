@@ -2,11 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { registerCommands } from '@commands/_shared/registerCommands';
-import {
-  parseWithErrorDisplay,
-  showLoggedMessage,
-} from '@frontend/ui/errorHandlingUtils';
+import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   runCleanSingle,
   runCleanMultiple,
@@ -15,15 +11,12 @@ import {
 import * as logger from '@logger/logUtils';
 import type { FileOpResult } from '@shared/schemas/opResults';
 import {
-  FileOpParamsSchema,
-  fileOpConfigFields,
   mergeRunDirAndWorkspaceResult,
+  type CleanConfig,
 } from './fileOpSchemas';
 import { emitClearMissingOutputs } from './streamEventUtils';
 
 const CHANNEL = 'cleanCommands';
-
-const CleanConfigSchema = FileOpParamsSchema.extend(fileOpConfigFields);
 
 function showCleanResult(result: FileOpResult, inputFile: string): void {
   switch (result.status) {
@@ -46,18 +39,6 @@ function showCleanResult(result: FileOpResult, inputFile: string): void {
   }
 }
 
-export function registerCleanCommands(context: vscode.ExtensionContext): void {
-  // `texra.cleanOutput` and `texra.cleanBuild` are registered through
-  // `extensionCommandSurface` so the dispatch path matches the desktop
-  // registry (see #3771). The remaining clean commands take typed
-  // arguments and stay on per-command registration for now.
-  registerCommands(context, [
-    { id: 'texra.clean', handler: handleClean },
-    { id: 'texra.cleanSingle', handler: handleCleanSingle },
-    { id: 'texra.cleanMultiple', handler: handleCleanMultiple },
-  ]);
-}
-
 // Shared backing for the single- and multiple-file clean commands. Mirrors
 // `runWorkspaceClean` in `handleClean`: an empty `outputFiles` list cleans the
 // input alone, a non-empty list also sweeps the extra files.
@@ -65,73 +46,45 @@ async function runCleanCommand(
   inputFile: string,
   agent: string,
   model: string,
-  label: string,
   outputFiles: string[],
 ): Promise<void> {
-  const data = await parseWithErrorDisplay(
-    CHANNEL,
-    FileOpParamsSchema,
-    { inputFile, agent, model },
-    label,
-  );
-  if (!data) return;
-
   if (outputFiles.length > 0) {
     logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
   }
 
   const result =
     outputFiles.length > 0
-      ? await runCleanMultiple(
-          data.model,
-          data.inputFile,
-          data.agent,
-          outputFiles,
-        )
-      : await runCleanSingle(data.model, data.inputFile, data.agent);
-  showCleanResult(result, data.inputFile);
+      ? await runCleanMultiple(model, inputFile, agent, outputFiles)
+      : await runCleanSingle(model, inputFile, agent);
+  showCleanResult(result, inputFile);
   emitClearMissingOutputs({
     streamConfig: {
-      agent: data.agent,
-      model: data.model,
-      inputFile: data.inputFile,
+      agent,
+      model,
+      inputFile,
       outputFiles,
     },
   });
 }
 
-async function handleCleanSingle(
+export async function handleCleanSingle(
   inputFile: string,
   agent: string,
   model: string,
 ): Promise<void> {
-  await runCleanCommand(inputFile, agent, model, 'cleanSingle params', []);
+  await runCleanCommand(inputFile, agent, model, []);
 }
 
-async function handleCleanMultiple(
+export async function handleCleanMultiple(
   inputFile: string,
   agent: string,
   model: string,
   inputFiles: string[] = [],
 ): Promise<void> {
-  await runCleanCommand(
-    inputFile,
-    agent,
-    model,
-    'cleanMultiple params',
-    inputFiles,
-  );
+  await runCleanCommand(inputFile, agent, model, inputFiles);
 }
 
-async function handleClean(config: unknown): Promise<void> {
-  const data = await parseWithErrorDisplay(
-    CHANNEL,
-    CleanConfigSchema,
-    config,
-    'config',
-  );
-  if (!data) return;
-
+export async function handleClean(config: CleanConfig): Promise<void> {
   const {
     agent,
     model,
@@ -140,11 +93,11 @@ async function handleClean(config: unknown): Promise<void> {
     streamId,
     executionId,
     skipProgressViewClear,
-  } = data;
+  } = config;
 
   logger.debug(
     CHANNEL,
-    `Clean command called with config: ${JSON.stringify(data)}`,
+    `Clean command called with config: ${JSON.stringify(config)}`,
   );
 
   // Toolbar-driven invocations pass an executionId: delete the run's runDir

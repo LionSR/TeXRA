@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { registerCommands } from '@commands/_shared/registerCommands';
 import { appSignals } from '@eventBus/AppSignals';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import {
@@ -20,19 +19,16 @@ import {
   siblingLocation,
 } from '@latex/acceptedFileTarget';
 import * as logger from '@logger/logUtils';
-import type { FileLocation } from '@shared/schemas';
+import type { AcceptCopyMeta, FileLocation } from '@shared/schemas';
 import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latex';
 import { legacyWorkflowOutputStem } from '@shared/constants/workflowOutput';
 import { FlexibleFS } from '@utils/files';
 
-/** Run agent/model/round used to build the legacy postfixed copy name. */
-type AcceptCopyMeta = { agent: string; model: string; round: number };
-
 const CHANNEL = 'CompareCommands';
 
 function validateFileLocations(
-  inputLocation: FileLocation,
-  baseLocation: FileLocation,
+  inputLocation: FileLocation | null | undefined,
+  baseLocation: FileLocation | null | undefined,
   editedLocation: FileLocation,
   errorMessage: string,
 ): FileLocation | null {
@@ -77,18 +73,9 @@ async function validateFilesExist(
   return true;
 }
 
-export function registerCompareCommands(
-  context: vscode.ExtensionContext,
-): void {
-  registerCommands(context, [
-    { id: 'texra.compare', handler: handleCompare },
-    { id: 'texra.acceptEdited', handler: handleAcceptEdited },
-  ]);
-}
-
-async function handleCompare(
-  inputLocation: FileLocation,
-  baseLocation: FileLocation,
+export async function handleCompare(
+  inputLocation: FileLocation | null | undefined,
+  baseLocation: FileLocation | null | undefined,
   editedLocation: FileLocation,
 ): Promise<void> {
   try {
@@ -212,9 +199,9 @@ async function pickReplaceOrCopyTarget(
   return pick?.target;
 }
 
-async function handleAcceptEdited(
-  inputLocation: FileLocation,
-  baseLocation: FileLocation,
+export async function handleAcceptEdited(
+  inputLocation: FileLocation | null | undefined,
+  baseLocation: FileLocation | null | undefined,
   editedLocation: FileLocation,
   copyMeta?: AcceptCopyMeta,
 ): Promise<boolean> {

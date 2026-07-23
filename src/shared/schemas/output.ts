@@ -43,6 +43,15 @@ export type ExternalFileLocation = z.infer<typeof ExternalFileLocationSchema>;
 export type FileLocation = z.infer<typeof FileLocationSchema>;
 export type AgentFileLocation = z.infer<typeof AgentFileLocationSchema>;
 
+/** Run identity used when accepting an edited file as a postfixed copy. */
+export const AcceptCopyMetaSchema = z.strictObject({
+  agent: z.string(),
+  model: z.string(),
+  round: RoundNumberSchema,
+});
+
+export type AcceptCopyMeta = z.infer<typeof AcceptCopyMetaSchema>;
+
 const OutputFileSchema = z.strictObject({
   source: z.string(),
   location: FileLocationSchema,
