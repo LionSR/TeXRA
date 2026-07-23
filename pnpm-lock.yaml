@@ -5,12 +5,8 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  ink@7.1.0:
-    hash: db8f5740efe4e780f6517316175dfed1e68d62e76e533c06bf0b8f5e94b48aa6
-    path: patches/ink@7.1.0.patch
-  openai@6.46.0:
-    hash: 0cb4ad59ef11c717ee7f75293ca497ccc244033387f62d1b4b93b6d4aadb949e
-    path: patches/openai@6.46.0.patch
+  ink@7.1.0: db8f5740efe4e780f6517316175dfed1e68d62e76e533c06bf0b8f5e94b48aa6
+  openai@6.46.0: 0cb4ad59ef11c717ee7f75293ca497ccc244033387f62d1b4b93b6d4aadb949e
 
 importers:
 
