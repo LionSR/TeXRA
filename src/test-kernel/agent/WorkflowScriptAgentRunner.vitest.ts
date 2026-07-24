@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   resolveChildRunOutput: vi.fn(),
   runStorageLocationFromAnyAbsolutePath: vi.fn(),
   assertWorkflowFilesExist: vi.fn(),
+  rejectOversizedBibAttachments: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
 }));
 
@@ -61,6 +62,10 @@ vi.mock('@utils/files/taskRunStorage', () => ({
 
 vi.mock('@tools/delegation/workflowFileValidation', () => ({
   assertWorkflowFilesExist: mocks.assertWorkflowFilesExist,
+}));
+
+vi.mock('@tools/delegation/inputFields', () => ({
+  rejectOversizedBibAttachments: mocks.rejectOversizedBibAttachments,
 }));
 
 const parentExecutionId = 'aaaaaa111111' as ExecutionId;
@@ -149,6 +154,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     }));
     mocks.selectAvailableDelegationModel.mockResolvedValue('child-model');
     mocks.assertWorkflowFilesExist.mockResolvedValue(undefined);
+    mocks.rejectOversizedBibAttachments.mockResolvedValue(null);
     mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue(undefined);
     mocks.executeStableSubagentInBand.mockImplementation(async (options) => {
       mocks.preparedOptions.push(await options.prepare());
@@ -157,7 +163,11 @@ describe('createWorkflowScriptAgentRunner', () => {
   });
 
   it('uses delegation policy and executes a direct in-band child', async () => {
-    const call = invocation({ inputFiles: ['paper.tex'] });
+    const call = invocation({
+      inputFiles: ['paper.tex'],
+      contextFiles: ['notes.tex'],
+      mediaFiles: ['figure.pdf'],
+    });
     const runner = defaultRunner();
 
     await expect(runner(call)).resolves.toBe(result);
@@ -171,6 +181,15 @@ describe('createWorkflowScriptAgentRunner', () => {
     );
     expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
       { label: 'Input file', files: ['paper.tex'] },
+    ]);
+    expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
+      { label: 'Context file', files: ['notes.tex'] },
+    ]);
+    expect(mocks.rejectOversizedBibAttachments).toHaveBeenCalledWith([
+      'notes.tex',
+    ]);
+    expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
+      { label: 'Media file', files: ['figure.pdf'] },
     ]);
     expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
       parentModel: 'parent-model',
@@ -199,6 +218,8 @@ describe('createWorkflowScriptAgentRunner', () => {
           model: 'child-model',
           instruction: 'Draft the section.',
           inputFiles: ['paper.tex'],
+          contextFiles: ['notes.tex'],
+          mediaFiles: ['figure.pdf'],
           workingDirectory: '/workspace',
           delegationAgentScope: {
             workflowAgentKeys: ['builtInWorkflow:correct'],
@@ -278,6 +299,36 @@ describe('createWorkflowScriptAgentRunner', () => {
     ).rejects.toMatchObject({
       name: 'WorkflowRunAbortError',
       message: expect.stringContaining(placeholder),
+    });
+    expect(mocks.preparedOptions).toHaveLength(0);
+  });
+
+  it('makes oversized bibliography context run-fatal before launch', async () => {
+    const message =
+      'large.bib is over the 100 KiB limit. Extract the needed entries first.';
+    mocks.rejectOversizedBibAttachments.mockResolvedValue({
+      status: 'error',
+      summary: 'Rejected oversized BibTeX attachment',
+      error: message,
+      diagnostics: {
+        type: 'oversized_bib_attachment',
+        path: 'large.bib',
+        sizeBytes: 102_401,
+        limitBytes: 102_400,
+      },
+    });
+    const runner = defaultRunner();
+
+    await expect(
+      runner(
+        invocation({
+          inputFiles: ['draft.tex'],
+          contextFiles: ['large.bib'],
+        }),
+      ),
+    ).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message,
     });
     expect(mocks.preparedOptions).toHaveLength(0);
   });
@@ -547,6 +598,10 @@ describe('createWorkflowScriptAgentRunner', () => {
         }),
       }),
     );
+    expect(
+      (mocks.preparedOptions[0] as { configPayload: object }).configPayload,
+    ).not.toHaveProperty('inputFiles');
+    expect(mocks.assertWorkflowFilesExist).not.toHaveBeenCalled();
   });
 
   it('exempts a schema call from the workflow empty-files guard', async () => {
@@ -575,24 +630,6 @@ describe('createWorkflowScriptAgentRunner', () => {
         configPayload: expect.objectContaining({ agentCategory: 'toolUse' }),
       }),
     );
-  });
-
-  it('aborts a schema call that omits agentName', async () => {
-    const schema = { type: 'object', additionalProperties: false };
-    const runner = defaultRunner();
-
-    // The workflow default 'correct' is a document editor with no tool-use
-    // counterpart, so a schema call must name a tool-use agent explicitly
-    // rather than silently reuse the workflow default under the tool-use
-    // category.
-    await expect(runner(invocation({ schema }))).rejects.toMatchObject({
-      name: 'WorkflowRunAbortError',
-      message: expect.stringMatching(
-        /must name a tool-use agent via agentName/,
-      ),
-    });
-    expect(mocks.preparedOptions).toHaveLength(0);
-    expect(mocks.requireVisibleAgent).not.toHaveBeenCalled();
   });
 
   it('leaves onChildActive untouched when a recovered attempt runs no live work', async () => {

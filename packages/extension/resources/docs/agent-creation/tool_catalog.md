@@ -60,12 +60,16 @@ recommended groups at the bottom are a good starting point.
   asynchronously via the follow-up queue.
 - `delegate_workflow_script` — advanced opt-in tool for a durable sequence of
   workflow-agent calls with predetermined branching and fan-out. Pass a default
-  `agent`, the complete `script`, and optional JSON `args`. The script begins
-  with `export const meta = { name, description }` and can use `agent`, `phase`,
-  `log`, `parallel`, `pipeline`, and `concat`. `agent(prompt, { schema })`, where
-  `schema` is a JSON Schema object, runs a tool-use agent (name one via
-  `agentName`) that finishes by calling `submit_output`; the call resolves to an
-  envelope whose `.structured` is the validated object. Present in the
+  `agent`, the complete `script`, and optional JSON `args` and role-separated
+  `files`. The selected workspace files are fixed for the run and available
+  through the immutable `files.inputFiles`, `files.contextFiles`, and
+  `files.mediaFiles` arrays. The script begins with
+  `export const meta = { name, description }` and can use `agent`, `phase`,
+  `log`, `parallel`, `pipeline`, and `concat`. Workflow-agent calls accept the
+  same three file roles. `agent(prompt, { agentName, schema })` instead runs a
+  named tool-use agent with no file options; it finishes by calling
+  `submit_output`, and the call resolves to an envelope whose `.structured` is
+  the validated object. Present in the
   built-in `orchestrator` agent's tool list, but gated by the "Workflow
   Script" switch in Settings → Tools (off by default for new installs), which
   disables the tool for every agent regardless of its configured tool list.

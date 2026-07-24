@@ -39,6 +39,10 @@ return concat(sections, { separator: '\n\n' });
 - `concat(parts, {separator}?)` — zero-token fan-in for text parts;
   drops `null`/`undefined` (failed stages) and empty strings.
 - `log(msg)` / `phase(title)` / `args` — progress + parameterization.
+- `files` — immutable, role-separated workspace files bound to the run:
+  `files.inputFiles` are editable, while `files.contextFiles` and
+  `files.mediaFiles` are read-only. Scripts choose the appropriate subset for
+  each workflow-agent call.
 
 ## Boundaries (deliberate for the prototype)
 

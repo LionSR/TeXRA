@@ -27,6 +27,8 @@ export interface SandboxHostBridge {
   syncFns: Record<string, (args: unknown[]) => string | undefined>;
   /** JSON payload for the `args` global; undefined installs `args` as undefined. */
   argsJson: string | undefined;
+  /** JSON payload for the immutable, role-separated `files` global. */
+  filesJson: string;
   /** Trusted realm-side orchestration primitives installed before the body. */
   realmPreludes?: string[];
 }
@@ -207,6 +209,9 @@ const BRIDGE_PRELUDE = `
     });
   }
   define('args', config.argsJson === undefined ? undefined : parseJson(config.argsJson));
+  const files = parseJson(config.filesJson);
+  Object.values(files).forEach(Object.freeze);
+  define('files', Object.freeze(files));
 
   let delivered = false;
   return function (value, isError) {
@@ -540,6 +545,7 @@ function installHostBridge(
       asyncNames: Object.keys(bridge.asyncFns),
       syncNames: Object.keys(bridge.syncFns),
       argsJson: bridge.argsJson,
+      filesJson: bridge.filesJson,
     }),
   );
   setGlobal(context, '__wfBridgeConfig', config);

@@ -2,6 +2,10 @@ import { createHash } from 'node:crypto';
 
 import stableStringify from 'fast-json-stable-stringify';
 import PQueue from 'p-queue';
+import {
+  WorkflowScriptFilesSchema,
+  type WorkflowScriptFiles,
+} from '@shared/schemas/workflowScriptFiles';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { isNonEmptyString } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -307,7 +311,14 @@ export async function runWorkflowScript(
         'agent(prompt, options?) requires a non-empty string prompt.',
       );
     }
-    const callOptions = normalizeAgentOptions(rawOptions, currentPhase);
+    let callOptions: WorkflowAgentCallOptions;
+    try {
+      callOptions = normalizeAgentOptions(rawOptions, currentPhase);
+    } catch (error) {
+      throw rememberFatalRunError(
+        new WorkflowRunAbortError(toErrorMessage(error), { cause: error }),
+      );
+    }
     const phaseContext = phaseContextFor(callOptions.phase);
     const index = callCounter;
     callCounter += 1;
@@ -506,6 +517,8 @@ export async function runWorkflowScript(
   }
 
   const argsJson = serializeBridgeValue(options.args, 'Workflow args');
+  const files = WorkflowScriptFilesSchema.parse(options.files ?? {});
+  const filesJson = stableStringify(files);
   const abortFromParent = () => runAbort.abort(options.signal?.reason);
   options.signal?.addEventListener('abort', abortFromParent, { once: true });
   if (options.signal?.aborted) abortFromParent();
@@ -547,6 +560,7 @@ export async function runWorkflowScript(
           },
         },
         argsJson,
+        filesJson,
         realmPreludes: [ORCHESTRATION_PRELUDE],
       },
       {
@@ -639,7 +653,12 @@ function normalizeAgentOptions(
   // cheap defensive copy that also keeps this function safe if it is ever
   // called with a value that did not come through the bridge.
   const source = structuredClone(raw ?? {}) as Record<string, unknown>;
-  const options: WorkflowAgentCallOptions = {};
+  const common: {
+    id?: string;
+    label?: string;
+    phase?: string;
+    agentName?: string;
+  } = {};
   for (const field of ['id', 'label', 'phase', 'agentName'] as const) {
     const value = source[field];
     if (value === undefined) continue;
@@ -647,22 +666,25 @@ function normalizeAgentOptions(
       const requirement = field === 'id' ? 'a non-empty string' : 'a string';
       throw new Error(`agent() option "${field}" must be ${requirement}.`);
     }
-    options[field] = field === 'id' ? value.trim() : value;
+    common[field] = field === 'id' ? value.trim() : value;
   }
+  common.phase ??= currentPhase;
+
+  let schema: Record<string, unknown> | undefined;
   if (Object.hasOwn(source, 'schema')) {
-    const schema = source.schema;
+    const rawSchema = source.schema;
     if (
-      schema === null ||
-      typeof schema !== 'object' ||
-      Array.isArray(schema)
+      rawSchema === null ||
+      typeof rawSchema !== 'object' ||
+      Array.isArray(rawSchema)
     ) {
       throw new Error(
         'agent() option "schema" must be a plain JSON Schema object.',
       );
     }
     try {
-      options.schema = normalizeStructuredOutputSchema(
-        schema as Record<string, unknown>,
+      schema = normalizeStructuredOutputSchema(
+        rawSchema as Record<string, unknown>,
       ).jsonSchema;
     } catch (error) {
       throw new Error(
@@ -670,17 +692,52 @@ function normalizeAgentOptions(
       );
     }
   }
-  if (source.inputFiles !== undefined) {
-    if (
-      !Array.isArray(source.inputFiles) ||
-      source.inputFiles.some((file) => !isNonEmptyString(file))
-    ) {
+
+  const requestedFiles = {
+    ...(source.inputFiles !== undefined && {
+      inputFiles: source.inputFiles,
+    }),
+    ...(source.contextFiles !== undefined && {
+      contextFiles: source.contextFiles,
+    }),
+    ...(source.mediaFiles !== undefined && {
+      mediaFiles: source.mediaFiles,
+    }),
+  };
+  let files: WorkflowScriptFiles;
+  try {
+    files = WorkflowScriptFilesSchema.parse(requestedFiles);
+  } catch (error) {
+    throw new Error(
+      `agent() options "inputFiles", "contextFiles", and "mediaFiles" must be arrays of non-empty strings: ${toErrorMessage(error)}`,
+    );
+  }
+  const hasFileOptions = Object.keys(requestedFiles).length > 0;
+
+  if (schema !== undefined) {
+    if (hasFileOptions) {
       throw new Error(
-        'agent() option "inputFiles" must be an array of non-empty strings.',
+        'agent() structured-output calls cannot use file options; inputFiles, contextFiles, and mediaFiles belong to workflow-agent calls.',
       );
     }
-    options.inputFiles = [...(source.inputFiles as string[])];
+    if (common.agentName === undefined) {
+      throw new Error(
+        'agent() structured-output calls must name a tool-use agent with "agentName".',
+      );
+    }
+    return {
+      ...common,
+      agentName: common.agentName,
+      schema,
+    };
   }
-  options.phase ??= currentPhase;
-  return options;
+
+  return {
+    ...common,
+    ...(source.inputFiles !== undefined && { inputFiles: files.inputFiles }),
+    ...(source.contextFiles !== undefined && {
+      contextFiles: files.contextFiles,
+    }),
+    ...(source.mediaFiles !== undefined && { mediaFiles: files.mediaFiles }),
+  };
 }
