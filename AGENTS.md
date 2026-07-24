@@ -66,7 +66,7 @@ The extension host is bundled with esbuild and the webviews with Vite (`compile:
 - Document functions with concise comments. Use JSDoc style for public APIs.
 - Keep functions small and focused; extract helpers or modules when logic becomes complex.
 - Keep the directory structure aligned among different webviews (webview, progressView, settingsView). Use the same folder names for modules of the same type and functionality but in different webviews.
-- Place view-specific, extension-only manager classes under each view's `managers` folder (e.g. `ProgressStreamLifecycleHost.ts` in `packages/extension/src/progressView/managers/`). Host-neutral view backend logic (e.g. `WebviewUpdater.ts`) instead lives under `src/controllers/<view>/backend/`, per the `controllers/` host-neutral-orchestration rule.
+- Place view-specific, extension-only manager classes under that view's `managers` folder (e.g. `FileManager.ts` in `packages/extension/src/webview/managers/`). Host-neutral view backend logic instead lives under `src/controllers/<view>/backend/` (e.g. `src/controllers/progressView/backend/WebviewUpdater.ts`), per the `controllers/` host-neutral-orchestration rule.
 
 ### Naming conventions
 
@@ -338,7 +338,7 @@ Aim for code that looks like it was designed correctly from the start:
 
 For good separation of concerns and platform independence, core business logic should stay free of host-specific imports. This improves testability and keeps the door open for future reuse outside VS Code.
 
-1. **Never import `vscode` in VS Code-free zones.** See CLAUDE.md "Separation of Concerns: VS Code Coupling" for the full list. The key ones: `src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/controllers/`, `src/shared/`. Do not add new `@agent/*` imports under `src/shared/`; host-neutral orchestration belongs under `src/controllers/`.
+1. **Never import `vscode` in VS Code-free zones.** See CLAUDE.md "Separation of concerns: VS Code coupling" for the full list. The key ones: `src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/controllers/`, `src/shared/`. Do not add new `@agent/*` imports under `src/shared/`; host-neutral orchestration belongs under `src/controllers/`.
 
 2. **Use platform-agnostic helpers instead of VS Code types:**
    - `isFile(type)` / `isDirectory(type)` from `@utils/files/fsEntryType` — not `vscode.FileType.File` / `vscode.FileType.Directory`
@@ -423,9 +423,9 @@ See `docs/pocketflow/` for full framework documentation.
 
 ### Webview Consistency Patterns
 
-- **Base Classes**: All webviews (webview, progressView, settingsView) extend `BaseViewContentProvider` and `BaseViewMessageHandler` from `src/common/webview/` for consistent error handling, logging, and cleanup.
+- **Base Classes**: All webviews (webview, progressView, settingsView) extend `BaseViewContentProvider` and `BaseViewMessageHandler` from `packages/extension/src/common/webview/` for consistent error handling, logging, and cleanup.
 - **Naming Convention**: Follow `[Domain]View[Component]` pattern (e.g., `MainViewContentProvider`, `SettingsViewMessageHandler`, `ProgressViewContentProvider`)
-- **Command Constants**: Define commands in `src/shared/ipc/commonCommands.ts` (plus per-view `*ViewCommands.ts` files under `src/shared/ipc/`) — use constants, not string literals
+- **Command Constants**: Define commands in `src/shared/ipc.ts` — `COMMON_COMMANDS` plus the per-view groups (`MAIN_VIEW_COMMANDS`, etc.) in that same file — use constants, not string literals
 - **Message Handlers**: Delegate to domain-specific manager classes (FileManager, SettingsManager, etc.) for separation of concerns
 - **Client-Side State**: Add empty handlers with `/* State saved client-side */` comment for checkbox/toggle operations
 - **Resource Access**: Include all common module paths in `localResourceRoots` to prevent 401 errors
@@ -559,5 +559,8 @@ These rules were earned from a 2026-07 whole-repo simplification campaign, not d
 
 ## Branching
 
-- Work directly on the main branch in this environment; avoid creating extra branches.
+- Changes land on `main` through pull requests; use a feature branch per change.
 - Ensure the working tree is clean before creating a pull request.
+- `.github/PULL_REQUEST_TEMPLATE.md` requires `## Net elements (R6)` and
+  `## Consumer counts (R8)` sections on any `refactor:` / `simplify:` /
+  `consolidate` / `dedupe` / `extract` PR — see the review checklist § 14.
