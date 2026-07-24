@@ -28,6 +28,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
+import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { clearAllStreamStatusesForTest } from '@test/helpers/streamStatusTestUtils';
 import { loadInk } from '@test/support/inkTestHarness.mts';
 import { createRunTrace } from '@transcript';
@@ -339,6 +340,191 @@ describe('CLI workflow-script child-stream transcript', () => {
       const output = await renderStaticTranscript();
       expect(output).toContain('Skipped: Audit later');
       expect(output).not.toContain('Planned: Audit later');
+    } finally {
+      runTrace.dispose();
+    }
+  });
+
+  it('keeps mixed cancelled settlement order identical live and cold', async () => {
+    const runTrace = createRunTrace(STREAM_ID, defaultSession().transcripts);
+    try {
+      const phase = runTrace.trace.openStage('Cancellation audit', {
+        id: 'cancel-phase',
+        kind: 'phase',
+      });
+      appendLocalAssistantTranscript(
+        'Local cancellation checkpoint',
+        STREAM_ID,
+      );
+      syncStreamLog(STREAM_ID);
+      const entryIds = (
+        items: ReturnType<typeof appendStaticTranscriptItems>,
+      ): string[] =>
+        items
+          .filter((item) => item.kind === 'entry')
+          .map((item) => item.entry.id);
+      let liveItems = appendStaticTranscriptItems({
+        currentItems: [],
+        meta: SESSION_META,
+        scrollbackStreamId: STREAM_ID,
+        streams: streams.get(),
+      });
+      expect(entryIds(liveItems)).toEqual([
+        'cancel-phase',
+        expect.stringMatching(/^local:/),
+      ]);
+      const beforeStatusOutput = await renderStaticTranscript();
+      expect(beforeStatusOutput).toContain('◆ Cancellation audit');
+      expect(beforeStatusOutput).toContain('Local cancellation checkpoint');
+
+      const response = runTrace.trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE, {
+        stageId: phase.id,
+      });
+      response.append('Partial cancellation answer');
+      runTrace.trace.toolStart({
+        logId: 'cancel-tool',
+        toolName: 'read',
+        input: { path: 'paper.tex' },
+      });
+      runTrace.trace.emit({
+        type: 'workflow.task',
+        logId: 'cancel-plan',
+        stageId: phase.id,
+        task: {
+          id: 'cancel-plan',
+          label: 'Audit after cancellation',
+          phase: 'Cancellation audit',
+          status: 'planned',
+        },
+      });
+
+      runTrace.trace.emit({
+        type: 'status',
+        streamId: STREAM_ID,
+        phase: STREAM_PHASE.CANCELLED,
+        cause: STREAM_TRANSITION_CAUSE.USER_STOP,
+      });
+      patchStream(STREAM_ID, (slice) => ({
+        ...slice,
+        status: STREAM_PHASE.CANCELLED,
+      }));
+      projectStreamTranscript(STREAM_ID, { finalize: true });
+
+      liveItems = appendStaticTranscriptItems({
+        currentItems: liveItems,
+        meta: SESSION_META,
+        scrollbackStreamId: STREAM_ID,
+        streams: streams.get(),
+      });
+      expect(entryIds(liveItems)).toEqual([
+        'cancel-phase',
+        expect.stringMatching(/^local:/),
+        response.id,
+        'cancel-tool',
+      ]);
+      const afterStatusOutput = await renderStaticTranscript();
+      expect(afterStatusOutput).toContain('Partial cancellation answer');
+      expect(afterStatusOutput).toContain(
+        'The stream ended before this tool completed.',
+      );
+      expect(afterStatusOutput).not.toContain(
+        'Skipped: Audit after cancellation',
+      );
+
+      const syntheticEntry = streams
+        .get()
+        .get(STREAM_ID)
+        ?.entries.find((entry) => entry.synthetic);
+      expect(syntheticEntry).toBeDefined();
+      expect(
+        defaultSession()
+          .transcripts.get(STREAM_ID)
+          ?.getRange(0)
+          .find((entry) => entry.id === response.id),
+      ).toMatchObject({
+        settlementSeqNo: 2,
+        text: 'Partial cancellation answer',
+      });
+      expect(
+        defaultSession()
+          .transcripts.get(STREAM_ID)
+          ?.getRange(0)
+          .find((entry) => entry.id === 'cancel-tool'),
+      ).toMatchObject({
+        settlementSeqNo: 3,
+        data: {
+          status: 'failed',
+          error: 'The stream ended before this tool completed.',
+        },
+      });
+      expect(
+        defaultSession()
+          .transcripts.get(STREAM_ID)
+          ?.getRange(0)
+          .find((entry) => entry.id === 'cancel-plan'),
+      ).not.toHaveProperty('settlementSeqNo');
+
+      runTrace.trace.emit({
+        type: 'workflow.task',
+        logId: 'cancel-plan',
+        stageId: phase.id,
+        task: {
+          id: 'cancel-plan',
+          label: 'Audit after cancellation',
+          phase: 'Cancellation audit',
+          status: 'skipped',
+          reason: 'not-reached',
+        },
+      });
+      phase.end('cancelled');
+      syncStreamLog(STREAM_ID);
+
+      liveItems = appendStaticTranscriptItems({
+        currentItems: liveItems,
+        meta: SESSION_META,
+        scrollbackStreamId: STREAM_ID,
+        streams: streams.get(),
+      });
+      expect(entryIds(liveItems)).toEqual([
+        'cancel-phase',
+        expect.stringMatching(/^local:/),
+        response.id,
+        'cancel-tool',
+        'cancel-plan',
+      ]);
+      const liveOutput = await renderStaticTranscript();
+      expect(liveOutput).toContain('Skipped: Audit after cancellation');
+
+      resetCliState();
+      patchStream(STREAM_ID, (slice) => ({
+        ...slice,
+        model: 'deepseekT',
+        status: STREAM_PHASE.CANCELLED,
+        entries: syntheticEntry ? [syntheticEntry] : [],
+      }));
+      syncStreamLog(STREAM_ID, { forceFull: true });
+      const coldItems = appendStaticTranscriptItems({
+        currentItems: [],
+        meta: SESSION_META,
+        scrollbackStreamId: STREAM_ID,
+        streams: streams.get(),
+      });
+
+      expect(entryIds(coldItems)).toEqual(entryIds(liveItems));
+      const coldOutput = await renderStaticTranscript();
+      expect(coldOutput).toBe(liveOutput);
+      expect(coldOutput.indexOf('◆ Cancellation audit')).toBeLessThan(
+        coldOutput.indexOf('Local cancellation checkpoint'),
+      );
+      expect(coldOutput.indexOf('Local cancellation checkpoint')).toBeLessThan(
+        coldOutput.indexOf('Partial cancellation answer'),
+      );
+      expect(coldOutput.indexOf('Partial cancellation answer')).toBeLessThan(
+        coldOutput.indexOf('The stream ended before this tool completed.'),
+      );
+      expect(
+        coldOutput.indexOf('The stream ended before this tool completed.'),
+      ).toBeLessThan(coldOutput.indexOf('Skipped: Audit after cancellation'));
     } finally {
       runTrace.dispose();
     }
