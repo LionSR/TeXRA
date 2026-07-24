@@ -278,6 +278,16 @@ describe('createWorkflowScriptAgentRunner', () => {
     });
   });
 
+  it('preserves delegation failures when no model is declared', async () => {
+    const selectionError = new Error('No delegation models are available.');
+    mocks.selectAvailableDelegationModel.mockRejectedValueOnce(selectionError);
+    const runner = defaultRunner();
+
+    await expect(
+      runner(invocation({ inputFiles: ['paper.tex'] })),
+    ).rejects.toBe(selectionError);
+  });
+
   it('honors an explicit agent and binds verified run outputs', async () => {
     const firstRequested =
       '/storage/executions/bbbbbb222222/r1/introduction.tex';
