@@ -5,7 +5,7 @@
 // separately-mutated collections — with different authority and lifetime
 // rules exposed only through the pure selectors below.
 //
-// See docs/proposals/cli-child-stream-state-consolidation.md for the
+// See docs/proposals/2026-07-10-cli-child-stream-state-consolidation.md for the
 // accepted design, the load-bearing event-ordering census, and the
 // transition/selector semantics this module implements. `activeProcesses`
 // is explicitly out of scope: a process has no `childStreamId` and no

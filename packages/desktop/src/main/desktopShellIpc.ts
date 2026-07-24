@@ -38,7 +38,7 @@ export interface DesktopShellActionFactoryOptions {
   signIn(): Promise<void>;
   /**
    * Async git log host — closes audit item A from
-   * `docs/dev/standalone-trajectory-audit.md` (trajectory #16). The shell
+   * `docs/dev/audits/2026-05-08-standalone-trajectory-audit.md` (trajectory #16). The shell
    * forwards its recent-commit result to the renderer. The host converts
    * expected git failures into an empty result with its best-effort
    * `isGitRepo` value.

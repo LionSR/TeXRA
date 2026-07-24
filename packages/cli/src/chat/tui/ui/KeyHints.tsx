@@ -1,6 +1,6 @@
 // Shared footer-strip for every modal / form / palette / approval card.
 //
-// Per docs/prds/cli-tui-ink/10-architecture.md § Intuitiveness conventions:
+// Per docs/prds/cli-tui-ink/2026-05-14-10-architecture.md § Intuitiveness conventions:
 // each row carries scope-specific keys first, navigation in the middle, and
 // `Enter confirm · Esc cancel` last. Ad-hoc footer text is a review-blocker.
 

@@ -2,7 +2,7 @@
 //
 // Renders each item with the shared POINTER glyph on the focused row and the
 // TICK glyph on the currently-active value (see ./glyphs) per
-// docs/prds/cli-tui-ink/10-architecture.md § Intuitiveness conventions.
+// docs/prds/cli-tui-ink/2026-05-14-10-architecture.md § Intuitiveness conventions.
 //
 // `↑/↓` walks the rows, Enter calls `onSelect`, Esc calls `onCancel`. Items
 // receive a single-key shortcut prefix so the row can be jumped to directly:

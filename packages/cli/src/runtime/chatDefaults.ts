@@ -185,7 +185,7 @@ export interface ResolveChatDefaultsInit {
 }
 
 /**
- * Four-tier lookup per `docs/prds/cli-tui-ink/10-architecture.md#entrypoint-default`:
+ * Four-tier lookup per `docs/prds/cli-tui-ink/2026-05-14-10-architecture.md#entrypoint-default`:
  * workspace `.texra/config.json` → user `<global-storage>/config.json` →
  * last single-agent toolUse execution's model → built-in. Per-field
  * independence: a workspace that only sets `agent` still falls through to

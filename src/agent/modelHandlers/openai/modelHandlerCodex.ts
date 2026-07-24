@@ -4,7 +4,7 @@
  * A thin variant of the OpenAI Responses handler that authenticates with the
  * user's ChatGPT OAuth session instead of an API key and targets the
  * (unofficial) Codex backend. EXPERIMENTAL — see
- * docs/proposals/chatgpt-subscription-codex-auth.md.
+ * docs/proposals/2026-06-21-chatgpt-subscription-codex-auth.md.
  *
  * Handler-local differences from the base Responses handler:
  *  1. credential — the OAuth access token is passed as the SDK `apiKey` (the

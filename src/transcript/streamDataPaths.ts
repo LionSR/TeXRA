@@ -14,7 +14,7 @@
  * `LEGACY_INSTRUCTIONS`/`LEGACY_RUN_INSTRUCTIONS` are read-only archival keys:
  * tabs created before the one-run-per-tab refactor (#3061, 2026-04-19) may
  * still have one of these on disk, and there is no retention policy or GC for
- * `streamData/` (see `docs/proposals/session-scoped-runtime-architecture.md`),
+ * `streamData/` (see `docs/proposals/2026-07-03-session-scoped-runtime-architecture.md`),
  * so they stay supported until a dated retirement checkpoint retires them
  * alongside the other #3061-era shims tracked in `#6981`.
  */

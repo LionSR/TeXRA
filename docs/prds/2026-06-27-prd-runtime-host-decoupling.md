@@ -2261,9 +2261,9 @@ has not found the correct boundary yet.
 
 This PRD complements, rather than replaces:
 
-- `docs/proposals/session-handle-7d-design.md`
-- `docs/proposals/dependency-injection-cleanup.md`
-- `docs/prds/2026-06-14-dual-systems-consolidation-2026-06.md`
+- `docs/proposals/2026-06-10-session-handle-7d-design.md`
+- `docs/proposals/2026-06-07-dependency-injection-cleanup.md`
+- `docs/prds/2026-06-14-dual-systems-consolidation.md`
 - `docs/prds/2026-05-06-prd-runcontext-refactor.md`
 - `docs/prds/2026-05-04-prd-cli-app.md`
 - `docs/prds/2026-05-02-prd-electron-app.md`

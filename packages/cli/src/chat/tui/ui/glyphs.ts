@@ -3,7 +3,7 @@
 // these single-column glyphs directly. They are intentionally plain, stable
 // codepoints — NOT the `figures` package, whose `pointer`/`tick` resolve to
 // `❯`/`✔` and would change the established look — picked per
-// docs/prds/cli-tui-ink/10-architecture.md § Intuitiveness conventions.
+// docs/prds/cli-tui-ink/2026-05-14-10-architecture.md § Intuitiveness conventions.
 //
 // Centralized here so every list/select/prompt uses the same marker instead of
 // re-declaring the literal in each component.

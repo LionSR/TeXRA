@@ -3489,7 +3489,7 @@ describe('session tree order', () => {
 });
 
 // Ordered event-transition matrix for the child-stream relationship map
-// (docs/proposals/cli-child-stream-state-consolidation.md, "Race-regression
+// (docs/proposals/2026-07-10-cli-child-stream-state-consolidation.md, "Race-regression
 // plan" / "Ordered unit matrix"). Each scenario drives the real transition
 // functions the production event handlers call
 // (subscribeRuntimeHost.applyActiveSubagents -> applySubagentRoster,

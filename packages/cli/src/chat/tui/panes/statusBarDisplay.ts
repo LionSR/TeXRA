@@ -464,7 +464,7 @@ function fitStatusBarLeftSegments(
 
 // Bindings use the shared KeyHints vocabulary (`key action` joined with
 // KEY_HINT_SEPARATOR) so the status bar and modal footers read as one system
-// (docs/prds/cli-tui-ink/10-architecture.md § Intuitiveness conventions).
+// (docs/prds/cli-tui-ink/2026-05-14-10-architecture.md § Intuitiveness conventions).
 function statusBarBindingRow(
   bindings: readonly (string | false | undefined)[],
 ): string {

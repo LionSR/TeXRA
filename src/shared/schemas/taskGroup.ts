@@ -45,7 +45,7 @@ export type TaskGroup = z.infer<typeof TaskGroupSchema>;
  * 'error') a pre-cutover exported trace file's raw entries still carry —
  * the standalone trace-viewer's `replayTrace()` forwards `trace.entries`
  * verbatim into this same `LOG_DELTA` pipeline, a permanent second boundary
- * (docs/proposals/session-scoped-runtime-architecture.md §8.3). Now that
+ * (docs/proposals/2026-07-03-session-scoped-runtime-architecture.md §8.3). Now that
  * `TaskGroupStatus` is itself retyped to the native vocabulary, `RunOutcome`
  * is a strict subset of it and needs no separate union member; only the
  * still-disjoint legacy `EndGroupStatus` vocabulary does. `logSlice.ts`'s
