@@ -420,6 +420,10 @@ export class ModelRetryGate {
   }
 
   private backoffMs(baseBackoffMs: number, failures: number): number {
-    return jitteredExponentialBackoffMs(baseBackoffMs, failures, MAX_BACKOFF_MS);
+    return jitteredExponentialBackoffMs(
+      baseBackoffMs,
+      failures,
+      MAX_BACKOFF_MS,
+    );
   }
 }
