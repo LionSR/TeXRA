@@ -54,11 +54,13 @@ export function resolveCliModelAccessRoute({
     switch (usageRoute) {
       case 'chatgpt-subscription':
         return 'chatgpt';
+      case 'kimi-code-subscription':
+        return 'kimi-code';
       case 'relay':
         return 'included';
       case 'api-key':
-        // Kimi Code usage records as a plain `api-key`; a completed request's
-        // route cannot change, so never relabel it from live preferences.
+        // A completed request's route cannot change, so never relabel ordinary
+        // API-key usage from live preferences.
         return 'personal';
       default:
         return usageRoute satisfies never;

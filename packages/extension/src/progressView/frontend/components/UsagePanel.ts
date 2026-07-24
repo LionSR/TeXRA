@@ -30,6 +30,7 @@ const COMPACTION_THRESHOLD = 75;
 type UsageRouteBadge = {
   label: string;
   title: string;
+  subscription: boolean;
 };
 
 /** Solid fill color based on context utilization. */
@@ -47,16 +48,25 @@ function usageRouteBadge(
       return {
         label: 'ChatGPT',
         title: 'No charge; covered by your ChatGPT subscription',
+        subscription: true,
+      };
+    case 'kimi-code-subscription':
+      return {
+        label: 'Kimi Code',
+        title: 'No charge; covered by your Kimi Code subscription',
+        subscription: true,
       };
     case 'relay':
       return {
         label: 'relay',
         title: 'Routed through the TeXRA relay',
+        subscription: false,
       };
     case 'api-key':
       return {
         label: 'your key',
         title: 'Billed through your configured API key',
+        subscription: false,
       };
     default:
       return undefined;
@@ -66,7 +76,7 @@ function usageRouteBadge(
 function usageCostLabel(cost: number, route: UsageRoute | undefined): string {
   const badge = usageRouteBadge(route);
   if (!badge) return formatCostUsd(cost);
-  if (route === 'chatgpt-subscription' && cost === 0) {
+  if (badge.subscription && cost === 0) {
     return `Free via ${badge.label}`;
   }
   return `${formatCostUsd(cost)} via ${badge.label}`;
@@ -290,7 +300,7 @@ export class UsagePanel extends LitElement {
     const badge = usageRouteBadge(route);
     if (!badge) return html`${formatCostUsd(cost)}`;
 
-    if (route === 'chatgpt-subscription' && cost === 0) {
+    if (badge.subscription && cost === 0) {
       return html`<span
         class="run-summary__route run-summary__route--free"
         title=${badge.title}

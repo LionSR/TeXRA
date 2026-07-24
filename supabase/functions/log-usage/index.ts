@@ -3,7 +3,7 @@
  *
  * Receives batched usage entries from the TeXRA extension and stores them
  * via service-role RPCs, which aggregate per-stream so the tables grow by run
- * rather than by round. ChatGPT-subscription usage is kept in a separate table
+ * rather than by round. Subscription-backed usage is kept in a separate table
  * from paid relay/API-key usage.
  *
  * Authentication: JWT token in Authorization header (Bearer {jwt}), or a
@@ -33,7 +33,11 @@ import { bearerToken } from '../_shared/auth.ts';
 import { handleCors } from '../_shared/cors.ts';
 import { resolveRelayCredential } from '../_shared/relayCiToken.ts';
 import { createEdgeClient, jsonResponse } from '../_shared/responses.ts';
-import { UsageBatchSchema, type UsageLogEntry } from './usageValidation.ts';
+import {
+  subscriptionSourceForUsage,
+  UsageBatchSchema,
+  type UsageLogEntry,
+} from './usageValidation.ts';
 
 // =============================================================================
 // Constants
@@ -46,14 +50,14 @@ const UsageDestinations = {
     table: 'usage_logs',
     rpc: 'usage_logs_upsert',
     accepts: (entry: UsageLogEntry) =>
-      entry.usageRoute !== 'chatgpt-subscription',
+      subscriptionSourceForUsage(entry) === undefined,
     toRows: toDbRows,
   },
   subscription: {
     table: 'subscription_usage_logs',
     rpc: 'subscription_usage_logs_upsert',
     accepts: (entry: UsageLogEntry) =>
-      entry.usageRoute === 'chatgpt-subscription',
+      subscriptionSourceForUsage(entry) !== undefined,
     toRows: (
       userId: string,
       batchId: string,
@@ -61,7 +65,7 @@ const UsageDestinations = {
     ) =>
       toDbRows(userId, batchId, entries).map((row, index) => ({
         ...row,
-        source: entries[index].subscriptionSource ?? 'chatgpt',
+        source: subscriptionSourceForUsage(entries[index]) ?? 'chatgpt',
       })),
   },
 } as const;
