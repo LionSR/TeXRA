@@ -13,6 +13,10 @@ import {
   markOwnedExecutionLeaseUndurable,
   onOwnedExecutionLeaseLost,
 } from '@agent/storage/executionLease';
+import {
+  TOOL_RESULT_TRUNCATION_HEAD_CHARS,
+  TOOL_RESULT_TRUNCATION_TAIL_CHARS,
+} from '@agent/modelHandlers/contextManagementConstants';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   getCurrentToolContexts,
@@ -74,6 +78,8 @@ const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
 const BACKGROUND_OUTPUT_HEAD_CHARS = 1_000;
 /** Max chars logged to the child stream tab to prevent unbounded memory growth. */
 const BACKGROUND_LOG_CAP_CHARS = 200_000;
+const FOREGROUND_OUTPUT_HEAD_CHARS = TOOL_RESULT_TRUNCATION_HEAD_CHARS;
+const FOREGROUND_OUTPUT_TAIL_CHARS = TOOL_RESULT_TRUNCATION_TAIL_CHARS;
 const SHELL_BACKGROUNDING_PATTERN =
   /(?:^|[\s;])nohup\b[^\n;]*(?<![>&])&(?![>&])/;
 const SHELL_BACKGROUNDING_MESSAGE =
@@ -84,6 +90,47 @@ function backgroundBashTerminalStatus(success: boolean) {
   return projectRunOutcome(
     deriveRunOutcome({ failed: !success, cancelled: false }),
   ).executionStatus;
+}
+
+interface BoundedOutputCapture {
+  append(chunk: string): void;
+  text(streamName: 'stdout' | 'stderr'): string | null;
+}
+
+function createBoundedOutputCapture(
+  headChars: number,
+  tailChars: number,
+): BoundedOutputCapture {
+  let head = '';
+  let tail = '';
+  let totalChars = 0;
+
+  return {
+    append(chunk: string): void {
+      totalChars += chunk.length;
+      head = appendHead(head, chunk, headChars);
+      tail = appendTail(tail, chunk, tailChars);
+    },
+    text(streamName: 'stdout' | 'stderr'): string | null {
+      if (totalChars <= tail.length) return tail.trim() || null;
+
+      const elidedChars = Math.max(0, totalChars - head.length - tail.length);
+      const overlapChars = Math.max(0, head.length + tail.length - totalChars);
+      const nonOverlappingTail =
+        overlapChars > 0
+          ? appendTail('', tail, tail.length - overlapChars)
+          : tail;
+      const retained =
+        elidedChars > 0
+          ? `${head}
+
+[... ${elidedChars.toLocaleString()} characters elided from ${streamName} ...]
+
+${nonOverlappingTail}`
+          : head + nonOverlappingTail;
+      return retained.trim() || null;
+    },
+  };
 }
 
 const BashInputSchema = z.strictObject({
@@ -203,22 +250,40 @@ export class BashTool extends defineTool({
     ctx: ToolCallContext | undefined,
     cwd?: string,
   ): Promise<ToolResult> {
+    const stdout = createBoundedOutputCapture(
+      FOREGROUND_OUTPUT_HEAD_CHARS,
+      FOREGROUND_OUTPUT_TAIL_CHARS,
+    );
+    const stderr = createBoundedOutputCapture(
+      FOREGROUND_OUTPUT_HEAD_CHARS,
+      FOREGROUND_OUTPUT_TAIL_CHARS,
+    );
     const startedAt = Date.now();
     const result = await executeCommand(command, {
       cwd,
-      truncate: true,
+      buffer: false,
       timeout: timeoutMs,
-      onStdout: ctx?.hooks?.onToolOutput,
-      onStderr: ctx?.hooks?.onToolOutput,
+      onStdout: (chunk) => {
+        stdout.append(chunk);
+        ctx?.hooks?.onToolOutput?.(chunk);
+      },
+      onStderr: (chunk) => {
+        stderr.append(chunk);
+        ctx?.hooks?.onToolOutput?.(chunk);
+      },
       signal: ctx?.signal,
     });
+    // Spawn/cancellation diagnostics can come from executeCommand itself
+    // rather than either subprocess stream, so retain those as a fallback.
+    const retainedStdout = stdout.text('stdout') ?? result.stdout;
+    const retainedStderr = stderr.text('stderr') ?? result.stderr;
 
     if (result.timedOut) {
       const parts: string[] = [
         `Foreground command timed out after ${timeoutMs / 1000}s.`,
       ];
-      if (result.stdout) parts.push(`<stdout>${result.stdout}</stdout>`);
-      if (result.stderr) parts.push(`<stderr>${result.stderr}</stderr>`);
+      if (retainedStdout) parts.push(`<stdout>${retainedStdout}</stdout>`);
+      if (retainedStderr) parts.push(`<stderr>${retainedStderr}</stderr>`);
       parts.push(
         `To fix, either:\n` +
           `- Increase the timeout parameter up to 600s (600000ms): { "timeout": 600000 }\n` +
@@ -235,12 +300,12 @@ export class BashTool extends defineTool({
       return {
         status: 'executed',
         summary: `Executed: ${preview} (exit 0, ${duration})`,
-        output: result.stdout ?? '',
+        output: retainedStdout ?? '',
       };
     }
     // Many CLI tools (including latexmk) write errors to stdout, not stderr
     const errorOutput =
-      [result.stderr, result.stdout].filter(Boolean).join('\n') ||
+      [retainedStderr, retainedStdout].filter(Boolean).join('\n') ||
       'No error output available';
     throw new ToolError(`Command failed (${duration}): ${errorOutput}`);
   }

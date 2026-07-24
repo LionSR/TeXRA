@@ -282,6 +282,70 @@ describe('BashTool', () => {
     assert.equal(receivedSignal.aborted, false);
   });
 
+  it('incrementally retains bounded head and tail stdout across Unicode chunk boundaries', async () => {
+    const headMarker = 'HEAD🙂';
+    const tailMarker = 'TAIL🙂';
+    const emoji = '🙂';
+
+    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+      async (_command, options = {}) => {
+        assert.equal(options.buffer, false);
+        options.onStdout?.(`HEAD${emoji[0]}`);
+        options.onStdout?.(`${emoji[1]}\n`);
+        options.onStdout?.('x'.repeat(100_000));
+        options.onStdout?.(`\n${tailMarker}\n`);
+        return {
+          success: true,
+          stdout: null,
+          stderr: null,
+          timedOut: false,
+          exitCode: 0,
+        };
+      },
+    );
+
+    const result = await new BashTool().call({ command: 'large-output' });
+    assert.equal(result.status, 'executed');
+    const output = String(result.output);
+    assert.ok(output.startsWith(headMarker));
+    assert.ok(output.endsWith(tailMarker));
+    assert.match(output, /characters elided from stdout/);
+    assert.ok(!output.includes('x'.repeat(60_000)));
+    assert.ok(!output.includes('\ufffd'));
+    assert.ok(output.length < 55_000);
+  });
+
+  it('keeps bounded stderr and stdout separate and ordered on large failures', async () => {
+    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+      async (_command, options = {}) => {
+        options.onStdout?.('STDOUT_HEAD\n');
+        options.onStdout?.('o'.repeat(100_000));
+        options.onStdout?.('\nSTDOUT_TAIL');
+        options.onStderr?.('STDERR_HEAD\n');
+        options.onStderr?.('e'.repeat(100_000));
+        options.onStderr?.('\nSTDERR_TAIL');
+        return {
+          success: false,
+          stdout: null,
+          stderr: null,
+          timedOut: false,
+          exitCode: 9,
+        };
+      },
+    );
+
+    const result = await new BashTool().call({ command: 'large-failure' });
+    assert.equal(result.status, 'error');
+    const error = result.error ?? '';
+    assert.ok(error.includes('STDERR_HEAD'));
+    assert.ok(error.includes('STDERR_TAIL'));
+    assert.ok(error.includes('characters elided from stderr'));
+    assert.ok(error.includes('STDOUT_HEAD'));
+    assert.ok(error.includes('STDOUT_TAIL'));
+    assert.ok(error.includes('characters elided from stdout'));
+    assert.ok(error.indexOf('STDERR_HEAD') < error.indexOf('STDOUT_HEAD'));
+  });
+
   it('keeps result status out of visible tool log output', async () => {
     const runTrace = createRunTrace(
       'ToolStatusLogTest' as StreamTabId,

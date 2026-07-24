@@ -67,6 +67,10 @@ const GrepInputSchema = z.strictObject({
 export type GrepInput = z.infer<typeof GrepInputSchema>;
 
 const CHANNEL = 'GrepTool';
+// Pagination and total counts require draining all of ripgrep's output. Keep
+// execa 10's current per-stream ceiling explicit instead of coupling this
+// failure boundary to a dependency default or killing rg after one page.
+const GREP_MAX_BUFFER_BYTES = 100_000_000;
 
 export function buildArguments(
   input: GrepInput,
@@ -140,6 +144,7 @@ export class GrepTool extends defineTool({
       cwd: root,
       channel: CHANNEL,
       truncate: false,
+      maxBuffer: GREP_MAX_BUFFER_BYTES,
       // Cancellation for the owning agent run — parallel batches must be
       // able to terminate large-repo rg subprocesses on interrupt.
       signal: getCurrentToolCallContext()?.signal,

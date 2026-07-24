@@ -1,5 +1,6 @@
 // Third-party imports
 import * as path from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
 
 import {
   execa,
@@ -180,6 +181,8 @@ export async function executeCommand(
     onPid?: (pid: number) => void;
     /** Set to false to skip buffering stdout/stderr in memory (use with onStdout/onStderr). */
     buffer?: boolean;
+    /** Maximum bytes execa may buffer per output stream before terminating the process. */
+    maxBuffer?: number;
     stdout?: ExecOutput;
     stderr?: ExecOutput;
     /** Abort signal used to terminate the subprocess and any shell children. */
@@ -209,15 +212,17 @@ export async function executeCommand(
     }
 
     const env = commandEnv(workspacePath, options.env);
+    const encoding = normalizeEncoding(options.encoding);
 
     const execaOptions: Options = {
       cwd: workspacePath,
       env,
-      encoding: normalizeEncoding(options.encoding),
+      encoding,
       timeout: options.timeout,
       reject: false,
       input: options.stdin,
       buffer: options.buffer,
+      maxBuffer: options.maxBuffer,
       stdout: options.stdout,
       stderr: options.stderr,
     };
@@ -351,13 +356,25 @@ export async function executeCommand(
 
     // Subscribe to stdout/stderr streams for live output if callbacks provided
     if (options.onStdout && subprocess.stdout) {
+      const decoder = new StringDecoder(encoding);
       subprocess.stdout.on('data', (chunk: Buffer | string) => {
-        options.onStdout!(String(chunk));
+        const text = typeof chunk === 'string' ? chunk : decoder.write(chunk);
+        if (text) options.onStdout!(text);
+      });
+      subprocess.stdout.on('end', () => {
+        const text = decoder.end();
+        if (text) options.onStdout!(text);
       });
     }
     if (options.onStderr && subprocess.stderr) {
+      const decoder = new StringDecoder(encoding);
       subprocess.stderr.on('data', (chunk: Buffer | string) => {
-        options.onStderr!(String(chunk));
+        const text = typeof chunk === 'string' ? chunk : decoder.write(chunk);
+        if (text) options.onStderr!(text);
+      });
+      subprocess.stderr.on('end', () => {
+        const text = decoder.end();
+        if (text) options.onStderr!(text);
       });
     }
 

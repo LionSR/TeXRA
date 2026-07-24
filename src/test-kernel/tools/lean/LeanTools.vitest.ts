@@ -185,6 +185,54 @@ describe('runLakeCommand mutex', () => {
     rmSync(workspaceB, { recursive: true, force: true });
   });
 
+  it('keeps the current 4 MiB tail cap and truncation marker', async () => {
+    const result = await runLakeCommand({
+      workspaceRoot: workspaceA,
+      lakeCommand: NODE,
+      args: [
+        '-e',
+        `process.stdout.write('HEAD_MARKER' + 'x'.repeat(${4 * 1024 * 1024 + 100}) + 'TAIL_MARKER')`,
+      ],
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.startsWith('…[output truncated]…\n')).toBe(true);
+    expect(result.stdout).not.toContain('HEAD_MARKER');
+    expect(result.stdout.endsWith('TAIL_MARKER')).toBe(true);
+    expect(result.stdout.length).toBe(
+      4 * 1024 * 1024 + '…[output truncated]…\n'.length,
+    );
+  });
+
+  it('preserves non-zero exit diagnostics', async () => {
+    const result = await runLakeCommand({
+      workspaceRoot: workspaceA,
+      lakeCommand: NODE,
+      args: [
+        '-e',
+        `process.stdout.write('build context'); process.stderr.write('compile failed'); process.exit(7)`,
+      ],
+    });
+
+    expect(result).toEqual({
+      exitCode: 7,
+      stdout: 'build context',
+      stderr: 'compile failed',
+    });
+  });
+
+  it('preserves timeout diagnostics', async () => {
+    const result = await runLakeCommand({
+      workspaceRoot: workspaceA,
+      lakeCommand: NODE,
+      args: ['-e', 'setTimeout(() => {}, 60_000)'],
+      timeoutMs: 20,
+    });
+
+    expect(result.exitCode).toBe(-1);
+    expect(result.stderr).toContain('timed out after 20 milliseconds');
+  });
+
   it('serializes calls against the same workspace when `serialize: true`', async () => {
     const startedAt = performance.now();
     const [first, second] = await Promise.all([

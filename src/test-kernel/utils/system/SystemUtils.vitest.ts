@@ -55,6 +55,9 @@ describe('executeCommand', () => {
     expectTypeOf<ExecuteCommandOptions['encoding']>().toEqualTypeOf<
       'utf8' | 'utf-8' | 'utf16le' | undefined
     >();
+    expectTypeOf<ExecuteCommandOptions['maxBuffer']>().toEqualTypeOf<
+      number | undefined
+    >();
     expectTypeOf<ExecuteCommandOptions['stdout']>().toEqualTypeOf<
       'pipe' | 'ignore' | 'inherit' | 'overlapped' | undefined
     >();
@@ -91,6 +94,28 @@ describe('executeCommand', () => {
     assert.ok(result.success);
     assert.strictEqual(result.stdout, 'fallback');
     assert.strictEqual(result.stderr, null);
+  });
+
+  it('decodes streamed Unicode split across byte chunks', async () => {
+    let streamed = '';
+    const result = await executeCommand(
+      [
+        process.execPath,
+        '-e',
+        `process.stdout.write(Buffer.from([0xf0, 0x9f])); ` +
+          `setTimeout(() => process.stdout.write(Buffer.from([0x99, 0x82])), 20);`,
+      ],
+      {
+        buffer: false,
+        onStdout: (chunk) => {
+          streamed += chunk;
+        },
+      },
+    );
+
+    assert.equal(result.success, true);
+    assert.equal(result.stdout, null);
+    assert.equal(streamed, '🙂');
   });
 
   it('aborts shell command process groups including children', async () => {
