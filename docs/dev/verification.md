@@ -1,13 +1,16 @@
 # Manual Verification Matrix
 
 Use this checklist after touching shared frontend code (`src/shared/`,
-`src/common/webview/`, `packages/extension/src/{webview,progressView,settingsView}/frontend/`,
+`packages/extension/src/common/webview/`,
+`packages/extension/src/{webview,progressView,settingsView}/frontend/`,
 `packages/desktop/src/renderer/`) to confirm each major surface still mounts
 in both hosts.
 
 The Playwright suite under `packages/desktop/tests/e2e/` covers the desktop
-shell automatically; there is no equivalent for the VS Code webview because
-Mocha would need the VS Code test environment. The matrix below describes
+shell automatically. There is no equivalent for the VS Code webview: Vitest
+runs VS Code-coupled modules against the `vscode` stub
+(`src/test-kernel/support/vscode-mock.ts`), which exercises the logic but
+never mounts a webview in a real extension host. The matrix below describes
 what to check by hand for the extension.
 
 ## Quick automated pass

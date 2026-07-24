@@ -1,10 +1,12 @@
 # TeXRA Review Checklist
 
-Targeted greps + concrete fixes. Pair with the design rules in `CLAUDE.md` (Schemas, Abstraction discipline, UI anti-patterns, Separation of Concerns) and their full patterns in `AGENTS.md` (Zod v4 Schema Patterns, Flattening abstraction layers, Discouraged factory patterns, UI anti-patterns) — don't restate those; consult them when the diff lands in their territory.
+Targeted greps + concrete fixes. Pair with the design rules in `CLAUDE.md` ("Separation of concerns: VS Code coupling", "Schemas (Zod v4)", "Design guardrails") and their full patterns in `AGENTS.md` (Zod v4 Schema Patterns, Flattening abstraction layers, Discouraged factory patterns, UI anti-patterns) — don't restate those; consult them when the diff lands in their territory.
+
+For a diff under `packages/cli/`, also load the **texra-cli** skill: the TUI has rendering invariants (Static scrollback ownership, live-region scope, resize repaint, headless parity) that no generic pass will catch.
 
 ## 1. Platform decoupling (highest-signal)
 
-The full zone list lives in `CLAUDE.md` → "Separation of Concerns: VS Code Coupling". Run these greps on the diff:
+The full zone list lives in `CLAUDE.md` → "Separation of concerns: VS Code coupling". Run these greps on the diff:
 
 - **`grep -nE "from ['\"]vscode['\"]"`** in `src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/controllers/`, `src/shared/`, `src/replacement/`, `src/eventBus/`, or any webview `frontend/`. Any hit is a finding.
 - **New `from '@agent/*'` imports in `src/shared/`** → finding. `src/shared/` is for wire contracts and UI-shared message types; host-neutral orchestration belongs under `src/controllers/`.
@@ -32,9 +34,9 @@ Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as 
 - **Mutable services**: anything passed to `flow.setServices()` that gets reassigned mid-run belongs in the shared store, not services.
 - **Lifecycle leak**: agent init/finalize logic appearing inside flows or nodes. Agents own lifecycle; flows execute; nodes throw and let `agent.run()` catch.
 - **`prep` / `exec` / `post` boundaries**: state mutations belong in `post`, not `exec`. Retries via `maxRetries` / `retryDelay` getters, not ad-hoc loops.
-- **Plain `console.log` or untagged `logger.info` in agent flows** → wrap with `AgentLogger` (`@logger`, exported from `src/logger/index.ts`) for grouped, tool-use-aware channels.
+- **Plain `console.log` or untagged `logger.info` in agent flows** → use `AgentTrace` (`@agent/trace`) for grouped, tool-use-aware channels; route non-agent logging through `@logger/logUtils`.
 - **Log payloads built by string interpolation** (file lists, missing outputs, latexdiff results, usage stats) → pass via the structured `data` argument so the progress view can render them.
-- **Commands invoking flow factories directly** → must launch via `executeAgent` (`src/agent/runtime/executeAgent.ts`) so session filters and resume actions stay coherent.
+- **Commands invoking flow factories directly** → must launch via `runAgent` (`src/agent/runtime/runAgent.ts`) so the run gets an `executionId`, is registered in storage, and session filters and resume actions stay coherent. `executeAgent` is correct only when the caller already owns the `executionId` (subagent dispatch, resume paths); a resume goes through `resumeToolUseFromResumeData`.
 
 ## 4. Configuration, storage, files
 
@@ -50,14 +52,14 @@ Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as 
 - **`Date.now()` or synthetic IDs inside render functions** → move ID/timestamp creation to the producer.
 - **Lit components mutating shared state** → dispatch events; let the manager handle (`StreamTabs`, `LogList`, `OutputFilesManager`, `WebviewUpdater`, `UsageStatsManager`).
 - **Direct DOM manipulation alongside Lit components** → extend the existing component instead.
-- **Webview providers/handlers not extending `BaseViewContentProvider` / `BaseViewMessageHandler`** (`src/common/webview/`).
-- **String literals for webview commands** → constants in `src/common/webview/commands.ts`.
+- **Webview providers/handlers not extending `BaseViewContentProvider` / `BaseViewMessageHandler`** (`packages/extension/src/common/webview/`).
+- **String literals for webview commands** → constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`, `MAIN_VIEW_COMMANDS`, …).
 - **New shared module path referenced without updating `localResourceRoots`** → 401 at runtime.
 - **The same action exposed from two UI surfaces** → one home per action. Flag an `*Events.<name>(` creator dispatched from 2+ components, the same config/state/message key edited in 2+ tabs or views, or multiple UI controls wired to the same command/effect. Secondary surfaces show **read-only status**, not a second control. Legit: global default vs per-item override; a command plus a single UI button for one stable action. See `AGENTS.md` → "UI anti-patterns" (Duplicate UI controls).
 
 ## 6. Error handling and logging
 
-- **Ad-hoc `vscode.window.showErrorMessage`** → `logErrorMessage` / `showLoggedErrorMessage` / `showLoggedMessageWithDocs` from `@common/errors/errorHandlingUtils`.
+- **Ad-hoc `vscode.window.showErrorMessage`** → `logErrorMessage` / `showLoggedErrorMessage` / `showLoggedMessageWithDocs` from `packages/extension/src/frontend/ui/errorHandlingUtils.ts`.
 - **Swallowed errors** (`catch {}` / `catch (_) {}`) without a comment explaining why.
 - **`instanceof Error`** narrowing where the standard helpers above apply.
 
@@ -69,8 +71,7 @@ Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as 
 
 ## 8. Build, lint, dead code
 
-- **`npm test` invocations** added anywhere (scripts, CI, docs) → must not exist; downloads VS Code test env.
-- **Type-sensitive changes without mention of `npm run typecheck` / `compile:safe`** → `compile:fast`/`package:fast`/`build:fast` skip type checks.
+- **Type-sensitive changes without mention of `npm run typecheck` / `compile:safe`** → `compile:fast`/`package:fast`/`build:fast` skip type checks entirely (esbuild/Vite only strip types).
 - **Long relative imports** (`../../../../`) where a path alias exists.
 - **Re-export shims** for renamed/removed code, "// removed" comments, `_unused` placeholder vars — delete cleanly per `AGENTS.md` "Flattening abstraction layers".
 - **Dead exports** (declared, no consumer): `npm run check:dead-code-ratchet` fails on any new one; for a single symbol, `rg "exportedSymbol" src packages`.
