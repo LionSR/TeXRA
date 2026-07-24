@@ -7,7 +7,7 @@ nav_order: 6
 
 # (Advanced) Multi-Agents
 
-Multiple [Agents](./flow.md) can work together by handling subtasks and communicating the progress.
+Multiple [Agents](./agent.md) can work together by handling subtasks and communicating the progress.
 Communication between agents is typically implemented using message queues in shared storage.
 
 > Most of time, you don't need Multi-Agents. Start with a simple solution first.
