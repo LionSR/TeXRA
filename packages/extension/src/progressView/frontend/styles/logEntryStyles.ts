@@ -116,9 +116,12 @@ export const logEntryStyles = css`
     content: 'Phase: ';
   }
 
-  .workflow-task-error {
-    color: var(--color-error);
+  .workflow-task-detail {
     overflow-wrap: anywhere;
+  }
+
+  .workflow-task-detail--error {
+    color: var(--color-error);
   }
 
   .workflow-task-status {

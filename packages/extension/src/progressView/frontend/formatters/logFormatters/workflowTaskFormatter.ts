@@ -48,10 +48,21 @@ function terminalMetadata(
     : nothing;
 }
 
-function taskDetail(task: WorkflowTaskProgress): string | undefined {
-  if (task.status === 'failed') return task.error;
+type WorkflowTaskDetail =
+  | { readonly kind: 'error'; readonly text: string }
+  | { readonly kind: 'note'; readonly text: string };
+
+function taskDetail(
+  task: WorkflowTaskProgress,
+): WorkflowTaskDetail | undefined {
+  if (task.status === 'failed') {
+    return { kind: 'error', text: task.error };
+  }
   if (task.status === 'skipped' && task.reason === 'not-reached') {
-    return 'The workflow ended before this task was reached.';
+    return {
+      kind: 'note',
+      text: 'The workflow ended before this task was reached.',
+    };
   }
   return undefined;
 }
@@ -82,7 +93,10 @@ export function formatWorkflowTaskTemplate(
         </span>
         ${
           detail
-            ? html`<span class="workflow-task-error">${detail}</span>`
+            ? html`<span
+                class=${`workflow-task-detail workflow-task-detail--${detail.kind}`}
+                >${detail.text}</span
+              >`
             : nothing
         }
       </span>

@@ -458,11 +458,21 @@ export async function runWorkflowScript(
     if (liveCallCounter > maxAgentCalls) {
       // Abort first so in-flight sibling agents stop consuming quota — the
       // backstop must cancel the fan-out, not just fail this one call.
-      throw rememberFatalRunError(
+      const fatal = rememberFatalRunError(
         new WorkflowRunAbortError(
           `Workflow exceeded the ${maxAgentCalls} live agent-call cap (runaway-loop backstop; journal replays are free).`,
         ),
       );
+      emit({
+        type: 'agent:end',
+        progressId,
+        index,
+        label,
+        ...phaseContext,
+        outcome: 'failed',
+        error: fatal.message,
+      });
+      throw fatal;
     }
 
     // Host-side wall clock (the sandbox's Date.now ban is guest-only): timing

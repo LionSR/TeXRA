@@ -162,6 +162,38 @@ return await agent('Run one', { id: 'used' })`,
     });
   });
 
+  it('marks a planned task failed when the live-call cap refuses it', async () => {
+    const { trace, events } = recordingTrace();
+    await expect(
+      runPersistedWorkflowScriptWithProgress(trace, {
+        store: getExecutionStore(executionId),
+        checkpointId: 'planned-call-cap',
+        script: `export const meta = {
+  name: 'planned-call-cap',
+  description: 'distinguishes refused work from work not reached',
+  phases: [{ title: 'Audit' }],
+  tasks: [
+    { id: 'first', label: 'First audit', phase: 'Audit' },
+    { id: 'refused', label: 'Refused audit', phase: 'Audit' },
+  ],
+}
+await agent('Run first', { id: 'first' })
+return await agent('Run refused', { id: 'refused' })`,
+        maxAgentCalls: 1,
+        runAgent: async () => 'done',
+      }),
+    ).rejects.toThrow(/agent-call cap/);
+
+    expect(workflowTaskEvent(events, 'Refused audit', 'failed')).toMatchObject({
+      task: {
+        error: expect.stringContaining('agent-call cap'),
+      },
+    });
+    expect(
+      workflowTaskEvent(events, 'Refused audit', 'skipped'),
+    ).toBeUndefined();
+  });
+
   it.each([
     [
       'sequential',

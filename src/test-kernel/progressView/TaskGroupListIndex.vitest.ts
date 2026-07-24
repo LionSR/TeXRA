@@ -482,6 +482,21 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
           totalCostUsd: 0.01,
         },
       },
+      {
+        id: 'agent-c',
+        text: 'deferred',
+        timestamp: 5,
+        level: LOG_LEVELS.INFO,
+        groupId: 'phase-review',
+        messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+        data: {
+          id: 'deferred',
+          label: 'Deferred check',
+          phase: 'Review',
+          status: 'skipped',
+          reason: 'not-reached',
+        },
+      },
     ];
 
     const list = await renderList([run, phase], messages);
@@ -507,6 +522,14 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
     expect(content?.textContent).toContain('Check argument');
     expect(content?.textContent).toContain('timed out');
     expect(content?.querySelector('.workflow-task--failed')).not.toBeNull();
+    const skipped = content?.querySelector('.workflow-task--skipped');
+    expect(skipped?.textContent).toContain(
+      'The workflow ended before this task was reached.',
+    );
+    expect(
+      skipped?.querySelector('.workflow-task-detail--note'),
+    ).not.toBeNull();
+    expect(skipped?.querySelector('.workflow-task-detail--error')).toBeNull();
   });
 
   it('omits the (i/n) suffix when a phase group carries no counts', async () => {
