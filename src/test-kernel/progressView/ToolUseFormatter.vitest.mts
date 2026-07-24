@@ -65,6 +65,11 @@ return { papers, question: args.question };`;
             paperIds: ['2401.00001', '2401.00002'],
             question: 'Which assumptions differ?',
           },
+          files: {
+            inputFiles: ['paper.tex'],
+            contextFiles: ['references.bib'],
+            mediaFiles: ['figure.pdf'],
+          },
         },
         output: {
           status: 'executed',
@@ -92,13 +97,19 @@ return { papers, question: args.question };`;
 
     expect(details?.open).toBe(true);
     expect(container.querySelector('wa-icon[name="list-tree"]')).not.toBeNull();
-    expect(labels).toEqual(['Agent:', 'Script:', 'Args:', 'Result:']);
+    expect(labels).toEqual(['Agent:', 'Script:', 'Args:', 'Files:', 'Result:']);
     expect(container.textContent).toContain('research');
     expect(scriptBlock?.querySelector('code')?.textContent).toBe(script);
     expect(scriptBlock?.textContent).toContain('JavaScript');
     expect(argsBlock?.querySelector('code')?.textContent).toContain(
       '"question": "Which assumptions differ?"',
     );
+    expect(container.textContent).toContain('paper.tex');
+    expect(container.textContent).toContain('references.bib');
+    expect(container.textContent).toContain('figure.pdf');
+    expect(container.textContent).toContain('(Input)');
+    expect(container.textContent).toContain('(Context)');
+    expect(container.textContent).toContain('(Media)');
     expect(container.textContent).toContain('"compared":2');
     expect(container.textContent).not.toContain('journal');
     expect(container.querySelector('.proposal-banner-setup')).toBeNull();

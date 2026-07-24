@@ -259,7 +259,7 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
 
   private renderProposalFileList(
     label: string,
-    files: string[],
+    files: readonly string[],
     clickable: boolean,
   ): TemplateResult | typeof nothing {
     if (files.length === 0) return nothing;

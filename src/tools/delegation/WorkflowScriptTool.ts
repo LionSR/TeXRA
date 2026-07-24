@@ -11,6 +11,7 @@ import {
 import {
   deriveWorkflowScriptCheckpointId,
   parseWorkflowScript,
+  readWorkflowScriptCheckpoint,
 } from '@agent/workflowScript';
 import { captureOwnedExecutionLease } from '@agent/storage/executionLease';
 import {
@@ -20,6 +21,7 @@ import {
 import { startChildRunLoop } from '@agent/runtime/childRunLoop';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
@@ -32,6 +34,8 @@ import { deriveExecutionId } from '@utils/core/idHash';
 // Local file imports
 import { createWorkflowScriptAgentRunner } from './workflowScriptAgentRunner';
 import { createWorkflowScriptStrategy } from './workflowScriptStrategy';
+import { rejectOversizedBibAttachments } from './inputFields';
+import { assertWorkflowFilesExist } from './workflowFileValidation';
 
 const WorkflowScriptToolInputSchema = z.strictObject({
   agent: z
@@ -48,6 +52,9 @@ const WorkflowScriptToolInputSchema = z.strictObject({
     .json()
     .nullish()
     .describe('JSON arguments exposed to the script as the global args value.'),
+  files: WorkflowScriptFilesSchema.nullish().describe(
+    'Workspace files bound to the workflow run by role and exposed to the script as the immutable global files object.',
+  ),
 });
 
 type WorkflowScriptToolInput = z.infer<typeof WorkflowScriptToolInputSchema>;
@@ -66,19 +73,22 @@ export class WorkflowScriptTool extends defineTool({
   slow: true,
   description: `Run a deterministic JavaScript workflow that coordinates workflow agents. Workflow agents edit or produce FILES: each agent() call resolves to a result envelope { category: 'workflow', outcome, outputs, diffs, compileFailures, cost } listing the files it produced, never prose. Use this when the complete fan-out, pipeline, and join structure is known in advance and should resume safely after interruption.
 
-Script rules: start with export const meta = { name, description }; no imports or require (only the injected primitives exist: agent, phase, log, parallel, pipeline, concat, and the args global). agent(), parallel(), and pipeline() return Promises: ALWAYS await them. agent(prompt, options) options: inputFiles (REQUIRED for file-editing agents; workspace paths, or a previous call's output paths to chain stages), agentName (another visible workflow agent; defaults to this tool's agent field), id (distinguish otherwise-identical calls), label, phase. A failed call inside parallel()/pipeline() resolves to null; filter with .filter(Boolean).
+Script rules: start with export const meta = { name, description }; no imports or require (only the injected primitives exist: agent, phase, log, parallel, pipeline, concat, args, and files). The tool's files field binds workspace files to the whole run as files.inputFiles (editable), files.contextFiles (read-only documents), and files.mediaFiles (read-only visual or audio inputs). agent(), parallel(), and pipeline() return Promises: ALWAYS await them. A workflow agent() call may use inputFiles, contextFiles, and mediaFiles; inputFiles is REQUIRED unless the agent declares default outputs. Paths may name workspace files, launch files, or a previous call's outputs. It may also use agentName (another visible workflow agent; defaults to this tool's agent field), id, label, and phase. A failed call inside parallel()/pipeline() resolves to null; filter with .filter(Boolean).
 
-Structured output: agent(prompt, { schema }) where schema is a JSON Schema object runs a tool-use agent (name one via agentName; the default agent field is a file editor with no tool-use counterpart) that finishes by calling submit_output with a value matching schema. The call resolves to an envelope whose .structured is the validated object rather than edited files.
+Structured output: agent(prompt, { agentName, schema }) runs a tool-use agent that finishes by calling submit_output with a value matching the JSON Schema. Structured calls do not accept file options and must name the tool-use agent explicitly. The call resolves to an envelope whose .structured is the validated object rather than edited files.
 
 Async: this tool returns immediately with an execution ID and runs the workflow as its own detached execution. The script's return value plus the run log (phases, log() lines, per-call outcomes with cost) are delivered back as a follow-up message when the run completes. Check intermediate progress with the executions tool (path=/executions/<id>, action=wait).
 
 Example:
 export const meta = { name: 'fix-drafts', description: 'Fix typos in two drafts', timeoutMs: 1800000 }
 phase('Fix')
-const results = await parallel([
-  () => agent('Fix spelling errors only.', { inputFiles: ['draft1.tex'] }),
-  () => agent('Fix spelling errors only.', { inputFiles: ['draft2.tex'] }),
-])
+const results = await parallel(files.inputFiles.map((file) => () =>
+  agent('Fix spelling errors only.', {
+    inputFiles: [file],
+    contextFiles: files.contextFiles,
+    mediaFiles: files.mediaFiles,
+  })
+))
 const correctedFiles = results
   .filter(Boolean)
   .flatMap((result) => result.outputs.map((output) => output.absolutePath))
@@ -108,6 +118,23 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       defaultAgent: input.agent,
       parentExecutionId: runScope.executionId,
     });
+    const store = getExecutionStore(runScope.executionId);
+    const priorCheckpoint =
+      input.files == null
+        ? await readWorkflowScriptCheckpoint(store, checkpointId)
+        : null;
+    const files = WorkflowScriptFilesSchema.parse(
+      input.files ?? priorCheckpoint?.files ?? {},
+    );
+    await assertWorkflowFilesExist([
+      { label: 'Workflow input file', files: files.inputFiles },
+      { label: 'Workflow context file', files: files.contextFiles },
+      { label: 'Workflow media file', files: files.mediaFiles },
+    ]);
+    const oversizedBibRejection = await rejectOversizedBibAttachments(
+      files.contextFiles,
+    );
+    if (oversizedBibRejection) return oversizedBibRejection;
 
     // The run executionId is deterministic from the checkpoint identity, NOT a
     // fresh random id: a relaunch with the same meta.name regenerates the same
@@ -115,7 +142,6 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     // anchor and resume still replays completed calls (#8712). The journal
     // itself stays on the orchestrator store, where the checkpoint lives.
     const runExecutionId = deriveExecutionId({ checkpointId });
-    const store = getExecutionStore(runScope.executionId);
 
     // Captured now, while the launching tool call's ALS frame is live, so the
     // detached run can still roll its cost into the parent after this call
@@ -131,6 +157,9 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       agentCategory: AgentCategory.Workflow,
       model: parent.model ?? DEFAULT_AGENT_MODEL,
       instruction: `Workflow script '${meta.name}'`,
+      inputFiles: [...files.inputFiles],
+      contextFiles: [...files.contextFiles],
+      mediaFiles: [...files.mediaFiles],
       ...(runScope.workingDirectory !== undefined && {
         workingDirectory: runScope.workingDirectory,
       }),
@@ -210,6 +239,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
             checkpointId,
             script: input.script,
             args: input.args,
+            files,
             name: meta.name,
             workflowControls: runScope.session.workflowControls,
             createRunAgent: (hooks) =>

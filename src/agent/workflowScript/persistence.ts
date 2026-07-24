@@ -3,6 +3,10 @@ import { z } from 'zod';
 
 // Local imports - storage
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
+import {
+  WorkflowScriptFilesSchema,
+  type WorkflowScriptFiles,
+} from '@shared/schemas/workflowScriptFiles';
 import { KeyedMutex } from '@utils/core';
 
 // Local imports - workflow script
@@ -34,6 +38,7 @@ const WorkflowScriptCheckpointSchema = z
     schemaVersion: z.literal(WORKFLOW_SCRIPT_CHECKPOINT_SCHEMA_VERSION),
     script: z.string().min(1),
     args: PersistedJsonValueSchema,
+    files: WorkflowScriptFilesSchema.prefault({}),
     journal: z.array(PersistedWorkflowJournalEntrySchema),
   })
   .superRefine(({ journal }, context) => {
@@ -61,6 +66,7 @@ type PersistedWorkflowJournalEntry = z.infer<
 export interface WorkflowScriptCheckpoint {
   readonly script: string;
   readonly args: unknown;
+  readonly files: WorkflowScriptFiles;
   readonly journal: WorkflowJournalEntry[];
 }
 
@@ -153,6 +159,7 @@ export async function readWorkflowScriptCheckpoint(
   return {
     script: checkpoint.script,
     args: decodeJsonValue(checkpoint.args),
+    files: checkpoint.files,
     journal: orderedJournal(checkpoint.journal.map(decodeJournalEntry)),
   };
 }
@@ -170,6 +177,7 @@ export async function writeWorkflowScriptCheckpoint(
       schemaVersion: WORKFLOW_SCRIPT_CHECKPOINT_SCHEMA_VERSION,
       script: checkpoint.script,
       args: encodeJsonValue(checkpoint.args),
+      files: checkpoint.files,
       journal: orderedJournal(checkpoint.journal).map(encodeJournalEntry),
     });
   } catch (error) {
@@ -204,6 +212,7 @@ async function runPersistedWorkflowScriptLocked(
     checkpointId: _checkpointId,
     script: requestedScript,
     args: requestedArgs,
+    files: requestedFiles,
     ...runOptions
   } = options;
   const prior = await readWorkflowScriptCheckpoint(store, checkpointId);
@@ -234,6 +243,10 @@ async function runPersistedWorkflowScriptLocked(
     Object.hasOwn(options, 'args') || prior === null
       ? decodeJsonValue(encodedRequestedArgs)
       : prior.args;
+  const files =
+    Object.hasOwn(options, 'files') || prior === null
+      ? WorkflowScriptFilesSchema.parse(requestedFiles ?? {})
+      : prior.files;
 
   const journalByIndex = new Map(
     (prior?.journal ?? []).map((entry) => [entry.index, entry]),
@@ -241,6 +254,7 @@ async function runPersistedWorkflowScriptLocked(
   await writeWorkflowScriptCheckpoint(store, checkpointId, {
     script,
     args,
+    files,
     journal: orderedJournal(journalByIndex.values()),
   });
 
@@ -254,6 +268,7 @@ async function runPersistedWorkflowScriptLocked(
       writeWorkflowScriptCheckpoint(store, checkpointId, {
         script,
         args,
+        files,
         journal: snapshot,
       }),
     );
@@ -265,6 +280,7 @@ async function runPersistedWorkflowScriptLocked(
       ...runOptions,
       script,
       args,
+      files,
       journal: prior?.journal,
       onJournalEntry: persistEntry,
     });
@@ -273,6 +289,7 @@ async function runPersistedWorkflowScriptLocked(
     await writeWorkflowScriptCheckpoint(store, checkpointId, {
       script,
       args,
+      files,
       journal: result.journal,
     });
     return result;
