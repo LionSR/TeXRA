@@ -282,6 +282,142 @@ describe('BashTool', () => {
     assert.equal(receivedSignal.aborted, false);
   });
 
+  it.each([
+    { name: '50,000 characters', text: 'a'.repeat(50_000) },
+    { name: '50,001 characters', text: 'b'.repeat(50_001) },
+    { name: '52,000 characters', text: 'c'.repeat(52_000) },
+    { name: 'exactly 54,000 characters', text: 'd'.repeat(54_000) },
+  ])('reconstructs $name exactly without a marker', async ({ text }) => {
+    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+      async (_command, options = {}) => {
+        options.onStdout?.(text.slice(0, 777));
+        options.onStdout?.(text.slice(777));
+        return {
+          success: true,
+          stdout: null,
+          stderr: null,
+          timedOut: false,
+          exitCode: 0,
+        };
+      },
+    );
+
+    const result = await new BashTool().call({ command: 'boundary-output' });
+    assert.equal(result.output, text);
+    assert.ok(!String(result.output).includes('characters elided'));
+  });
+
+  it('marks exactly one character elided at 54,001 normalized characters', async () => {
+    const text = 'h'.repeat(4_000) + 'X' + 't'.repeat(50_000);
+    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+      async (_command, options = {}) => {
+        options.onStdout?.(text);
+        return {
+          success: true,
+          stdout: null,
+          stderr: null,
+          timedOut: false,
+          exitCode: 0,
+        };
+      },
+    );
+
+    const result = await new BashTool().call({ command: 'one-elided' });
+    assert.equal(
+      result.output,
+      `${'h'.repeat(4_000)}\n\n[... 1 characters elided from stdout ...]\n\n${'t'.repeat(50_000)}`,
+    );
+  });
+
+  it.each([
+    {
+      name: 'leading and trailing whitespace',
+      chunks: [' \t\n'.repeat(40_000), '  body', '  ', '\r\n'.repeat(40_000)],
+      expected: 'body',
+    },
+    {
+      name: 'all whitespace',
+      chunks: [' \t\n'.repeat(40_000), '\r\n'.repeat(40_000)],
+      expected: '',
+    },
+    {
+      name: 'internal whitespace',
+      chunks: ['  alpha', ' '.repeat(20_000), 'omega  '],
+      expected: `alpha${' '.repeat(20_000)}omega`,
+    },
+  ])('matches full-stream trim for $name', async ({ chunks, expected }) => {
+    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+      async (_command, options = {}) => {
+        for (const chunk of chunks) options.onStdout?.(chunk);
+        return {
+          success: true,
+          stdout: null,
+          stderr: null,
+          timedOut: false,
+          exitCode: 0,
+        };
+      },
+    );
+
+    const result = await new BashTool().call({ command: 'whitespace-output' });
+    assert.equal(result.output, expected);
+  });
+
+  it('counts only normalized internal whitespace as elided', async () => {
+    const internalWhitespace = ' '.repeat(60_000);
+    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+      async (_command, options = {}) => {
+        options.onStdout?.(`  A${internalWhitespace}`);
+        options.onStdout?.(`B${' '.repeat(100_000)}`);
+        return {
+          success: true,
+          stdout: null,
+          stderr: null,
+          timedOut: false,
+          exitCode: 0,
+        };
+      },
+    );
+
+    const result = await new BashTool().call({ command: 'whitespace-gap' });
+    const output = String(result.output);
+    assert.match(
+      output,
+      /\[\.\.\. 6,002 characters elided from stdout \.\.\.\]/,
+    );
+    assert.ok(output.startsWith(`A${' '.repeat(3_999)}`));
+    assert.ok(output.endsWith(`${' '.repeat(49_999)}B`));
+  });
+
+  it.each([
+    {
+      name: 'head boundary',
+      text: `${'a'.repeat(3_999)}🙂${'b'.repeat(60_000)}`,
+    },
+    {
+      name: 'tail boundary',
+      text: `${'a'.repeat(4_001)}🙂${'b'.repeat(50_000)}`,
+    },
+  ])('does not split surrogate pairs at the $name', async ({ text }) => {
+    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+      async (_command, options = {}) => {
+        options.onStdout?.(text);
+        return {
+          success: true,
+          stdout: null,
+          stderr: null,
+          timedOut: false,
+          exitCode: 0,
+        };
+      },
+    );
+
+    const result = await new BashTool().call({ command: 'unicode-boundary' });
+    const output = String(result.output);
+    assert.ok(!/[\ud800-\udbff](?![\udc00-\udfff])/.test(output));
+    assert.ok(!/(?<![\ud800-\udbff])[\udc00-\udfff]/.test(output));
+  });
+
   it('incrementally retains bounded head and tail stdout across Unicode chunk boundaries', async () => {
     const headMarker = 'HEAD🙂';
     const tailMarker = 'TAIL🙂';
@@ -434,13 +570,18 @@ describe('BashTool', () => {
       'x'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH) +
       'TAIL_ERROR_DETAIL '.repeat(5000);
 
-    vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
-      success: false,
-      stdout: null,
-      stderr: hugeStderr,
-      timedOut: false,
-      exitCode: 1,
-    });
+    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+      async (_command, options = {}) => {
+        options.onStderr?.(hugeStderr);
+        return {
+          success: false,
+          stdout: null,
+          stderr: null,
+          timedOut: false,
+          exitCode: 1,
+        };
+      },
+    );
 
     const result = await new BashTool().call({ command: 'latexmk -pdf p.tex' });
     assert.equal(result.status, 'error');
@@ -771,6 +912,39 @@ describe('BashTool', () => {
       vi.mocked(execUtils.executeCommand).mock.calls[0]?.[0],
       'test -f proof.tex',
     );
+  });
+
+  it('keeps bounded streamed stdout and stderr in timeout feedback', async () => {
+    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+      async (_command, options = {}) => {
+        options.onStdout?.(`STDOUT_HEAD${'o'.repeat(100_000)}STDOUT_TAIL`);
+        options.onStderr?.(`STDERR_HEAD${'e'.repeat(100_000)}STDERR_TAIL`);
+        return {
+          success: false,
+          stdout: null,
+          stderr: null,
+          timedOut: true,
+          exitCode: 1,
+        };
+      },
+    );
+
+    const result = await new BashTool().call({
+      command: 'slow-command',
+      timeout: 1_000,
+    });
+    assert.equal(result.status, 'error');
+    const error = result.error ?? '';
+    assert.ok(error.startsWith('Foreground command timed out after 1s.'));
+    assert.match(
+      error,
+      /<stdout>STDOUT_HEAD[\s\S]*characters elided from stdout[\s\S]*STDOUT_TAIL<\/stdout>/,
+    );
+    assert.match(
+      error,
+      /<stderr>STDERR_HEAD[\s\S]*characters elided from stderr[\s\S]*STDERR_TAIL<\/stderr>/,
+    );
+    assert.ok(error.includes('run_in_background: true'));
   });
 
   it('finalizes deferred progress card when foreground bash is aborted', async () => {

@@ -118,6 +118,46 @@ describe('executeCommand', () => {
     assert.equal(streamed, '🙂');
   });
 
+  it('flushes pending multibyte stdout and stderr exactly once on stream close', async () => {
+    let streamedStdout = '';
+    let streamedStderr = '';
+    const result = await executeCommand(
+      [
+        process.execPath,
+        '-e',
+        `const fs = require('node:fs'); ` +
+          `fs.writeSync(1, Buffer.from([0xf0, 0x9f])); ` +
+          `fs.writeSync(2, Buffer.from([0xe2, 0x82])); ` +
+          `process.stdout.destroy(); process.stderr.destroy();`,
+      ],
+      {
+        buffer: false,
+        onStdout: (chunk) => {
+          streamedStdout += chunk;
+        },
+        onStderr: (chunk) => {
+          streamedStderr += chunk;
+        },
+      },
+    );
+
+    assert.equal(result.success, true);
+    assert.equal(streamedStdout, '\ufffd');
+    assert.equal(streamedStderr, '\ufffd');
+  });
+
+  it('reports maxBuffer overflow as an error instead of partial success', async () => {
+    const result = await executeCommand(
+      [process.execPath, '-e', `process.stdout.write('x'.repeat(10_000))`],
+      { maxBuffer: 64 },
+    );
+
+    assert.equal(result.success, false);
+    assert.equal(result.exitCode, 2);
+    assert.ok(result.stdout && result.stdout.length > 0);
+    assert.match(result.stderr ?? '', /maxBuffer exceeded/i);
+  });
+
   it('aborts shell command process groups including children', async () => {
     if (process.platform === 'win32') return;
 

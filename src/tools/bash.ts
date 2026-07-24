@@ -104,15 +104,60 @@ function createBoundedOutputCapture(
   let head = '';
   let tail = '';
   let totalChars = 0;
+  let hasNonWhitespace = false;
+  let pendingWhitespaceHead = '';
+  let pendingWhitespaceTail = '';
+  let pendingWhitespaceChars = 0;
+
+  const appendText = (text: string): void => {
+    totalChars += text.length;
+    head = appendHead(head, text, headChars);
+    tail = appendTail(tail, text, tailChars);
+  };
+
+  const appendPendingWhitespace = (text: string): void => {
+    if (!text) return;
+    pendingWhitespaceChars += text.length;
+    pendingWhitespaceHead = appendHead(pendingWhitespaceHead, text, headChars);
+    pendingWhitespaceTail = appendTail(pendingWhitespaceTail, text, tailChars);
+  };
+
+  const commitPendingWhitespace = (): void => {
+    if (pendingWhitespaceChars === 0) return;
+
+    totalChars += pendingWhitespaceChars;
+    head = appendHead(head, pendingWhitespaceHead, headChars);
+    tail =
+      pendingWhitespaceChars >= tailChars
+        ? pendingWhitespaceTail
+        : appendTail(tail, pendingWhitespaceTail, tailChars);
+    pendingWhitespaceHead = '';
+    pendingWhitespaceTail = '';
+    pendingWhitespaceChars = 0;
+  };
 
   return {
     append(chunk: string): void {
-      totalChars += chunk.length;
-      head = appendHead(head, chunk, headChars);
-      tail = appendTail(tail, chunk, tailChars);
+      let text = chunk;
+      if (!hasNonWhitespace) {
+        text = text.trimStart();
+        if (!text) return;
+        hasNonWhitespace = true;
+      }
+
+      const withoutTrailingWhitespace = text.trimEnd();
+      if (!withoutTrailingWhitespace) {
+        appendPendingWhitespace(text);
+        return;
+      }
+
+      commitPendingWhitespace();
+      appendText(withoutTrailingWhitespace);
+      appendPendingWhitespace(text.slice(withoutTrailingWhitespace.length));
     },
     text(streamName: 'stdout' | 'stderr'): string | null {
-      if (totalChars <= tail.length) return tail.trim() || null;
+      if (!hasNonWhitespace) return null;
+      if (totalChars <= tail.length) return tail || null;
 
       const elidedChars = Math.max(0, totalChars - head.length - tail.length);
       const overlapChars = Math.max(0, head.length + tail.length - totalChars);
@@ -120,15 +165,9 @@ function createBoundedOutputCapture(
         overlapChars > 0
           ? appendTail('', tail, tail.length - overlapChars)
           : tail;
-      const retained =
-        elidedChars > 0
-          ? `${head}
-
-[... ${elidedChars.toLocaleString()} characters elided from ${streamName} ...]
-
-${nonOverlappingTail}`
-          : head + nonOverlappingTail;
-      return retained.trim() || null;
+      return elidedChars > 0
+        ? `${head}\n\n[... ${elidedChars.toLocaleString()} characters elided from ${streamName} ...]\n\n${nonOverlappingTail}`
+        : head + nonOverlappingTail;
     },
   };
 }

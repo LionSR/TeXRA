@@ -43,6 +43,28 @@ function normalizeEncoding(encoding: ExecEncoding = 'utf8'): ExecaTextEncoding {
   return encoding === 'utf-8' ? 'utf8' : encoding;
 }
 
+function subscribeDecodedOutput(
+  stream: NodeJS.ReadableStream,
+  encoding: ExecaTextEncoding,
+  onOutput: (chunk: string) => void,
+): void {
+  const decoder = new StringDecoder(encoding);
+  let finalized = false;
+  const finalize = (): void => {
+    if (finalized) return;
+    finalized = true;
+    const text = decoder.end();
+    if (text) onOutput(text);
+  };
+
+  stream.on('data', (chunk: Buffer | string) => {
+    const text = typeof chunk === 'string' ? chunk : decoder.write(chunk);
+    if (text) onOutput(text);
+  });
+  stream.once('end', finalize);
+  stream.once('close', finalize);
+}
+
 function commandEnv(
   workspacePath: string,
   envOverrides?: Record<string, string>,
@@ -356,26 +378,10 @@ export async function executeCommand(
 
     // Subscribe to stdout/stderr streams for live output if callbacks provided
     if (options.onStdout && subprocess.stdout) {
-      const decoder = new StringDecoder(encoding);
-      subprocess.stdout.on('data', (chunk: Buffer | string) => {
-        const text = typeof chunk === 'string' ? chunk : decoder.write(chunk);
-        if (text) options.onStdout!(text);
-      });
-      subprocess.stdout.on('end', () => {
-        const text = decoder.end();
-        if (text) options.onStdout!(text);
-      });
+      subscribeDecodedOutput(subprocess.stdout, encoding, options.onStdout);
     }
     if (options.onStderr && subprocess.stderr) {
-      const decoder = new StringDecoder(encoding);
-      subprocess.stderr.on('data', (chunk: Buffer | string) => {
-        const text = typeof chunk === 'string' ? chunk : decoder.write(chunk);
-        if (text) options.onStderr!(text);
-      });
-      subprocess.stderr.on('end', () => {
-        const text = decoder.end();
-        if (text) options.onStderr!(text);
-      });
+      subscribeDecodedOutput(subprocess.stderr, encoding, options.onStderr);
     }
 
     const result = await subprocess;
@@ -385,10 +391,15 @@ export async function executeCommand(
     // `shellAborted` covers the hand-rolled shell-form path; `isCanceled`
     // covers the array-form path, aborted natively via execa's `cancelSignal`.
     const aborted = shellAborted || (result.isCanceled ?? false);
-    const exitCode = result.exitCode ?? (aborted ? 130 : 1);
+    const maxBufferExceeded = result.isMaxBuffer ?? false;
+    const exitCode = maxBufferExceeded
+      ? 2
+      : (result.exitCode ?? (aborted ? 130 : 1));
     const timedOut = (result.timedOut ?? false) || shellTimedOut;
     const normalizedStderr =
-      aborted && !stderr ? 'Command aborted by user' : stderr;
+      aborted && !stderr
+        ? 'Command aborted by user'
+        : stderr || (result.failed ? (result.shortMessage ?? '') : '');
 
     if (!options.quiet) {
       logCommandStderr(logChannel, normalizedStderr, options.truncate);

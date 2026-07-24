@@ -87,12 +87,16 @@ async function executeLake(
     windowsHide: true,
     stdin: 'ignore',
   });
+  const stdout = result.stdout ?? '';
   const stderr = result.stderr ?? '';
   const stderrOrMessage =
-    stderr || result.stdout ? stderr : (result.shortMessage ?? '');
+    stderr || (result.failed || !stdout ? (result.shortMessage ?? '') : '');
   return {
-    exitCode: result.exitCode ?? -1,
-    stdout: capOutput(result.stdout ?? ''),
+    exitCode:
+      result.failed && (!result.exitCode || result.isMaxBuffer)
+        ? -1
+        : (result.exitCode ?? -1),
+    stdout: capOutput(stdout),
     stderr: capOutput(stderrOrMessage),
   };
 }
