@@ -71,6 +71,14 @@ describe('CLI tool display lines', () => {
     );
   });
 
+  it('previews a codex call by its prompt, not raw JSON, matching the progress view', () => {
+    const entry = toolUse('codex', { prompt: 'Summarize this proof.' });
+
+    expect(toolUseDisplayLines(entry)).toEqual([
+      '● codex (Summarize this proof.)',
+    ]);
+  });
+
   it('registers edit patch rendering before the universal fallback', () => {
     const entry = toolUse('Edit', {
       path: 'paper.tex',
@@ -127,7 +135,7 @@ describe('CLI tool display lines', () => {
     ).toEqual(['● executions (wait: reviewer, leanSolver)']);
   });
 
-  it('keeps the existing executions path for a background process', () => {
+  it('shows the action and path for a background process, matching the progress view', () => {
     const entry = toolUse('executions', {
       action: 'view',
       path: '/executions/process-1',
@@ -137,7 +145,7 @@ describe('CLI tool display lines', () => {
       toolUseDisplayLines(entry, {
         executionLabels: new Map([['sub-1', 'reviewer']]),
       }),
-    ).toEqual(['● executions (/executions/process-1)']);
+    ).toEqual(['● executions (view /executions/process-1)']);
   });
 
   it('keeps the resource path when labeling an executions target', () => {
