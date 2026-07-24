@@ -868,7 +868,7 @@ export abstract class ModelHandler<
   /**
    * Whether this handler supports manual (user-requested) context compaction.
    * Each override computes this differently — Anthropic combines llm-zoo
-   * model-family eligibility with tool-use mode, OpenAI-family handlers gate
+   * model-family eligibility with workflow/tool-use mode, OpenAI-family handlers gate
    * on tool-use mode alone, OpenAIResponse reads the ChatGPT-subscription
    * profile with an OpenRouter-routing fallback, and GoogleInteractions is
    * unconditionally true — so no single capability-profile read replaces the
@@ -1657,6 +1657,7 @@ export abstract class ModelHandler<
     bestConnector: string,
     newResponse: string,
     workspaceState: AgentWorkspaceState,
+    _responseObject?: Resp,
   ): void {
     const text = bestConnector + newResponse;
 

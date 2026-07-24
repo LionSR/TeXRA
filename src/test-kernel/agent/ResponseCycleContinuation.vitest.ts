@@ -8,6 +8,7 @@ import {
 } from '@agent/core/flows/ResponseCycleFlow';
 import type { ResponseCycleServices } from '@agent/core/flows/CycleServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { ANTHROPIC_STOP } from '@agent/types/StopReasonTypes';
 import type { AgentFileLocation } from '@shared/schemas';
 
 const outputLocation: AgentFileLocation = {
@@ -40,7 +41,7 @@ function getContinuationNode() {
   return continuationNode;
 }
 
-function createServices(interrupted = false) {
+function createServices(interrupted = false, supportsManualCompaction = false) {
   const round = { continuationCount: 0 };
   const checkInterruption = vi.fn(() => interrupted);
   const checkStopConditions = vi.fn(() => ({
@@ -48,6 +49,7 @@ function createServices(interrupted = false) {
     shouldStop: false,
   }));
   const shouldContinue = vi.fn(() => false);
+  const requestCompaction = vi.fn();
   const addContinueMessage = vi.fn();
   const services = {
     checkInterruption,
@@ -56,10 +58,12 @@ function createServices(interrupted = false) {
     setting: {},
     config: {},
     workspace: {},
-    logger: { info: vi.fn() },
+    logger: { info: vi.fn(), warn: vi.fn() },
     modelHandler: {
+      supportsManualCompaction,
       checkStopConditions,
       shouldContinue,
+      requestCompaction,
       addContinueMessage,
     },
   } as unknown as ResponseCycleServices<unknown>;
@@ -70,6 +74,7 @@ function createServices(interrupted = false) {
     checkInterruption,
     checkStopConditions,
     shouldContinue,
+    requestCompaction,
     addContinueMessage,
   };
 }
@@ -133,6 +138,63 @@ describe('response cycle continuation phases', () => {
     expect(harness.round.continuationCount).toBe(1);
     expect(harness.addContinueMessage).toHaveBeenCalledOnce();
     expect(action).toBe(FlowTransition.CONTINUE);
+  });
+
+  it('forces compaction before retrying an Anthropic context-window overflow', async () => {
+    const shared = createShared({
+      stopReason: ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED,
+      processedResponse: 'partial response',
+    });
+    const harness = createServices(false, true);
+    const node = getContinuationNode().setServices(harness.services);
+
+    const prepResult = await node.prep(shared);
+    const execResult = await node.exec(prepResult);
+    const action = await node.post(shared, prepResult, execResult);
+
+    expect(harness.requestCompaction).toHaveBeenCalledOnce();
+    expect(harness.round.continuationCount).toBe(1);
+    expect(harness.addContinueMessage).toHaveBeenCalledOnce();
+    expect(action).toBe(FlowTransition.CONTINUE);
+  });
+
+  it('stops instead of retrying a context-window overflow without compaction support', async () => {
+    const shared = createShared({
+      stopReason: ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED,
+      processedResponse: 'partial response',
+    });
+    const harness = createServices();
+    const node = getContinuationNode().setServices(harness.services);
+
+    const prepResult = await node.prep(shared);
+    const execResult = await node.exec(prepResult);
+    const action = await node.post(shared, prepResult, execResult);
+
+    expect(harness.requestCompaction).not.toHaveBeenCalled();
+    expect(harness.round.continuationCount).toBe(0);
+    expect(harness.addContinueMessage).not.toHaveBeenCalled();
+    expect(harness.services.logger.warn).toHaveBeenCalledOnce();
+    expect(action).toBe(FlowTransition.COMPLETE);
+  });
+
+  it('stops when forced compaction did not clear the context overflow', async () => {
+    const shared = createShared({
+      stopReason: ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED,
+      processedResponse: 'partial response',
+      contextWindowRecoveryAttempted: true,
+    });
+    const harness = createServices(false, true);
+    const node = getContinuationNode().setServices(harness.services);
+
+    const prepResult = await node.prep(shared);
+    const execResult = await node.exec(prepResult);
+    const action = await node.post(shared, prepResult, execResult);
+
+    expect(harness.requestCompaction).not.toHaveBeenCalled();
+    expect(harness.round.continuationCount).toBe(0);
+    expect(harness.addContinueMessage).not.toHaveBeenCalled();
+    expect(harness.services.logger.warn).toHaveBeenCalledOnce();
+    expect(action).toBe(FlowTransition.COMPLETE);
   });
 
   it('turns a ready response into a completed stop when interrupted', async () => {

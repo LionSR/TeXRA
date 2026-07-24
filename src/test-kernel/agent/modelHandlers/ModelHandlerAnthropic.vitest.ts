@@ -25,6 +25,7 @@ import {
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
 import type { AnthropicToolCall } from '@agent/types/ModelHandlerContracts';
+import { ANTHROPIC_STOP } from '@agent/types/StopReasonTypes';
 import {
   enforceCacheControlLimit,
   logContextManagementFromResponse,
@@ -115,6 +116,22 @@ function getCacheMarker(block?: ContentBlockParam | ContentBlock): unknown {
 
   return (block as { cache_control?: unknown }).cache_control;
 }
+
+describe('ModelHandlerAnthropic.shouldContinue', () => {
+  it('does not treat context-window recovery as an ordinary continuation', () => {
+    const handler = createAnthropicHandler();
+    handler.setLogger({ ...noopTrace });
+
+    assert.equal(
+      handler.shouldContinue(
+        ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED,
+        'partial response',
+        {} as AgentSetting,
+      ),
+      false,
+    );
+  });
+});
 
 describe('ModelHandlerAnthropic auxiliary requests', () => {
   it('restores SDK retries for tool-result uploads outside the model gate', async () => {
@@ -1205,6 +1222,168 @@ describe('ModelHandlerAnthropic message guards', () => {
       'max',
       "max reasoning effort should map to the top 'max' tier on Opus 4.8",
     );
+  });
+
+  it('round-trips forced compaction state into the next workflow invocation', async () => {
+    const handler = createAnthropicHandler({
+      supportsAssistantPrefill: false,
+      supportsTokenCounting: false,
+      supportsReasoning: false,
+    });
+    handler.config.fullName = 'claude-opus-4-6';
+    handler.setAgentCategory(AgentCategory.Workflow);
+    stubHandlerForTest(handler);
+    stubCompactionThresholdPercent(0);
+
+    const messages = helloMessages();
+    const messageOptions: any[] = [];
+    const responses = [
+      {
+        content: [{ type: 'text', text: 'partial' }],
+        stop_reason: ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED,
+      },
+      {
+        content: [
+          { type: 'compaction', content: '<summary>state</summary>' },
+          { type: 'text', text: 'after compaction' },
+        ],
+        stop_reason: ANTHROPIC_STOP.MAX_TOKENS,
+      },
+      {
+        content: [{ type: 'text', text: 'finished' }],
+        stop_reason: ANTHROPIC_STOP.END_TURN,
+      },
+    ];
+    const client = {
+      beta: {
+        messages: {
+          create: async (options: any) => {
+            messageOptions.push(options);
+            const response = responses.shift();
+            assert.ok(response);
+            return {
+              id: `msg-${messageOptions.length}`,
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-opus-4-6',
+              usage: { input_tokens: 100_000, output_tokens: 10 },
+              ...response,
+            };
+          },
+        },
+      },
+    } as any;
+    const workspace = AgentWorkspaceState.create();
+    const setting = AgentSettingSchema.parse({
+      agentCategory: AgentCategory.Workflow,
+    });
+
+    const first = await handler.createResponse({
+      client,
+      messages,
+      temperature: 0,
+    });
+    const firstText = handler.extractResponse(first.response, '').text;
+    workspace.assembly.lastResponse = firstText;
+    workspace.assembly.accumulatedOutput = firstText;
+    handler.updateMessageContent(
+      messages,
+      '',
+      firstText,
+      workspace,
+      first.response,
+    );
+    handler.requestCompaction();
+    handler.addContinueMessage(messages, workspace, setting);
+
+    const second = await handler.createResponse({
+      client,
+      messages,
+      temperature: 0,
+    });
+    const secondText = handler.extractResponse(second.response, '').text;
+    workspace.assembly.lastResponse = secondText;
+    workspace.assembly.accumulatedOutput += secondText;
+    handler.updateMessageContent(
+      messages,
+      '',
+      secondText,
+      workspace,
+      second.response,
+    );
+    handler.addContinueMessage(messages, workspace, setting);
+
+    await handler.createResponse({ client, messages, temperature: 0 });
+
+    assert.equal(messageOptions[0].context_management, undefined);
+    const forcedEdits = messageOptions[1].context_management?.edits ?? [];
+    assert.equal(forcedEdits[0]?.type, 'compact_20260112');
+    assert.equal(forcedEdits[0]?.trigger?.value, 50_000);
+
+    const nextMessages = messageOptions[2].messages as MessageParam[];
+    assert.equal(nextMessages.length, 2);
+    assert.equal(nextMessages[0].role, 'assistant');
+    const assistantContent = nextMessages[0].content as any[];
+    assert.deepEqual(
+      assistantContent.map((block) => block.type),
+      ['compaction', 'text'],
+    );
+    assert.equal(assistantContent[0].content, '<summary>state</summary>');
+    assert.equal(assistantContent[1].text, 'after compaction');
+    assert.equal(
+      assistantContent.filter(
+        (block) => block.type === 'text' && block.text === 'after compaction',
+      ).length,
+      1,
+    );
+    assert.equal(nextMessages[1].role, 'user');
+    assert.match(
+      (nextMessages[1].content as Array<{ text?: string }>)[0]?.text ?? '',
+      /continue responding exactly from where you left/i,
+    );
+    assert.equal(JSON.stringify(nextMessages).includes('partial'), false);
+  });
+
+  it('keeps the prior transcript when Anthropic reports a null compaction block', () => {
+    const handler = createAnthropicHandler({
+      supportsAssistantPrefill: false,
+    });
+    handler.setLogger({ ...noopTrace });
+    const priorMessage: MessageParam = {
+      role: 'user',
+      content: [{ type: 'text', text: 'original request' }],
+    };
+    const messages = [priorMessage];
+    const workspace = AgentWorkspaceState.create();
+    workspace.assembly.accumulatedOutput = 'generated text';
+    const response = {
+      content: [
+        { type: 'compaction', content: null },
+        { type: 'text', text: 'generated text' },
+      ],
+    } as unknown as Parameters<
+      ModelHandlerAnthropic['updateMessageContent']
+    >[4];
+
+    handler.updateMessageContent(
+      messages,
+      '',
+      'generated text',
+      workspace,
+      response,
+    );
+
+    assert.equal(messages[0], priorMessage);
+    assert.equal(messages.length, 2);
+    assert.equal(JSON.stringify(messages).includes('original request'), true);
+  });
+
+  it('does not advertise forced compaction for unsupported Anthropic models', () => {
+    const handler = createAnthropicHandler();
+    handler.config.fullName = 'claude-sonnet-4-5';
+    handler.setAgentCategory(AgentCategory.Workflow);
+
+    assert.equal(handler.supportsManualCompaction, false);
   });
 
   it('uses the Anthropic minimum trigger for manual compaction requests', async () => {
