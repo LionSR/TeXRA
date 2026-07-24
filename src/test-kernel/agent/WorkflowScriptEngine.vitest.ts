@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   parseWorkflowScript,
   runWorkflowScript,
+  WORKFLOW_JOURNAL_KEY_FORMAT,
   WORKFLOW_SKIPPED_RESULT,
   WorkflowScriptParseError,
   type WorkflowAgentInvocation,
@@ -1724,7 +1725,12 @@ return 'incorrect success'`,
     expect(run.result).toBe('attempt-2');
     // Journaled exactly once, with the new attempt's result (no double-journal).
     expect(run.journal).toEqual([
-      { index: 0, key: expect.any(String), result: 'attempt-2' },
+      {
+        index: 0,
+        key: expect.any(String),
+        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+        result: 'attempt-2',
+      },
     ]);
   });
 

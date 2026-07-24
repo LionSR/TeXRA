@@ -13,6 +13,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { parseWorkflowScript } from './parseScript';
 import { runScriptInSandbox } from './sandbox';
 import {
+  WORKFLOW_JOURNAL_KEY_FORMAT,
   WORKFLOW_SKIPPED_RESULT,
   type WorkflowAgentCallOptions,
   type WorkflowJournalEntry,
@@ -26,16 +27,23 @@ import {
 } from './types';
 
 /**
- * Stable execution identity for one agent() call. Display-only labels and
- * phases are deliberately excluded, so editing a declarative task plan does
- * not invalidate otherwise identical completed work. A prior journal entry at
- * the same call index with a matching key replays its cached result. sha256
+ * Stable execution identity for one agent() call. Current keys exclude
+ * display-only labels and phases, so editing a declarative task plan does not
+ * invalidate otherwise identical completed work. The legacy format is retained
+ * only to verify and migrate version-1 journal entries. A prior entry at the
+ * same call index with a matching key replays its cached result. sha256
  * (truncated) makes a collision that replays the wrong result impractical.
  */
-function journalKey(prompt: string, options: WorkflowAgentCallOptions): string {
+function journalKey(
+  prompt: string,
+  options: WorkflowAgentCallOptions,
+  keyFormat: WorkflowJournalEntry['keyFormat'],
+): string {
   const executionOptions: WorkflowAgentCallOptions = { ...options };
-  delete executionOptions.label;
-  delete executionOptions.phase;
+  if (keyFormat === WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2) {
+    delete executionOptions.label;
+    delete executionOptions.phase;
+  }
   return createHash('sha256')
     .update(stableStringify({ options: executionOptions, prompt }))
     .digest('hex')
@@ -368,7 +376,11 @@ export async function runWorkflowScript(
       plannedTask?.label ??
       callOptions.label ??
       prompt.slice(0, LABEL_EXCERPT_LENGTH).replaceAll(/\s+/g, ' ').trim();
-    const key = journalKey(prompt, callOptions);
+    const key = journalKey(
+      prompt,
+      callOptions,
+      WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+    );
     const progressId = plannedTask?.id ?? `call-${index}`;
     if (plannedTask) {
       if (issuedPlannedTaskIds.has(progressId)) {
@@ -416,12 +428,21 @@ export async function runWorkflowScript(
     };
 
     const prior = priorEntries.get(index);
-    if (prior && prior.key === key) {
+    const priorKey =
+      prior === undefined
+        ? undefined
+        : journalKey(prompt, callOptions, prior.keyFormat);
+    if (prior && prior.key === priorKey) {
       const { payload, normalizedResult } = journalValue(
         prior.result,
         'Cached agent() result',
       );
-      journal.set(index, { ...prior, result: normalizedResult });
+      journal.set(index, {
+        ...prior,
+        key,
+        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+        result: normalizedResult,
+      });
       emit({
         type: 'agent:end',
         progressId,
@@ -559,7 +580,12 @@ export async function runWorkflowScript(
         'agent() result',
       );
       await recordJournalEntry(
-        { index, key, result: normalizedResult },
+        {
+          index,
+          key,
+          keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+          result: normalizedResult,
+        },
         progressId,
         label,
         phaseContext,

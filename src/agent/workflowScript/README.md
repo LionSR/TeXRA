@@ -95,7 +95,11 @@ return await parallel(
   never repeated. The parent records the complete attempt sequence, so deleting
   an earlier child cannot hide a later completed result. A parent execution has
   one active runtime owner; the execution KV store is durable state, not a
-  cross-process lock.
+  cross-process lock. Version-1 journal keys are tagged when loaded and migrate
+  to presentation-independent keys after a verified replay. Because the old
+  format retained only an opaque hash, changing a task label or phase during
+  the same upgrade cannot be proven equivalent and conservatively reruns that
+  call.
 - **Cost ownership**: child costs remain in the persisted typed results. The
   future tool surface must aggregate the final journal at its tool-result
   boundary, rather than mutating parent totals during child launch; this keeps

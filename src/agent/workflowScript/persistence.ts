@@ -13,13 +13,15 @@ import { KeyedMutex } from '@utils/core';
 import { workflowScriptCheckpointKvKey } from './checkpointKey';
 import { parseWorkflowScript } from './parseScript';
 import { runWorkflowScript } from './runWorkflowScript';
-import type {
-  WorkflowJournalEntry,
-  WorkflowScriptRunOptions,
-  WorkflowScriptRunResult,
+import {
+  WORKFLOW_JOURNAL_KEY_FORMAT,
+  WorkflowJournalKeyFormatSchema,
+  type WorkflowJournalEntry,
+  type WorkflowScriptRunOptions,
+  type WorkflowScriptRunResult,
 } from './types';
 
-const WORKFLOW_SCRIPT_CHECKPOINT_SCHEMA_VERSION = 1;
+const WORKFLOW_SCRIPT_CHECKPOINT_SCHEMA_VERSION = 2;
 const JsonValueSchema = z.json();
 
 const PersistedJsonValueSchema = z.discriminatedUnion('kind', [
@@ -27,20 +29,49 @@ const PersistedJsonValueSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('json'), value: JsonValueSchema }),
 ]);
 
-const PersistedWorkflowJournalEntrySchema = z.strictObject({
+const LegacyWorkflowJournalEntrySchema = z.strictObject({
   index: z.int().nonnegative(),
   key: z.string().regex(/^[a-f0-9]{16}$/),
   result: PersistedJsonValueSchema,
 });
 
-const WorkflowScriptCheckpointSchema = z
+const PersistedWorkflowJournalEntrySchema =
+  LegacyWorkflowJournalEntrySchema.extend({
+    keyFormat: WorkflowJournalKeyFormatSchema,
+  });
+
+const WorkflowScriptCheckpointV2Schema = z.strictObject({
+  schemaVersion: z.literal(WORKFLOW_SCRIPT_CHECKPOINT_SCHEMA_VERSION),
+  script: z.string().min(1),
+  args: PersistedJsonValueSchema,
+  files: WorkflowScriptFilesSchema.prefault({}),
+  journal: z.array(PersistedWorkflowJournalEntrySchema),
+});
+
+const WorkflowScriptCheckpointV1Schema = z
   .strictObject({
-    schemaVersion: z.literal(WORKFLOW_SCRIPT_CHECKPOINT_SCHEMA_VERSION),
+    schemaVersion: z.literal(1),
     script: z.string().min(1),
     args: PersistedJsonValueSchema,
     files: WorkflowScriptFilesSchema.prefault({}),
-    journal: z.array(PersistedWorkflowJournalEntrySchema),
+    journal: z.array(LegacyWorkflowJournalEntrySchema),
   })
+  .transform(
+    ({
+      journal,
+      ...checkpoint
+    }): z.infer<typeof WorkflowScriptCheckpointV2Schema> => ({
+      ...checkpoint,
+      schemaVersion: WORKFLOW_SCRIPT_CHECKPOINT_SCHEMA_VERSION,
+      journal: journal.map((entry) => ({
+        ...entry,
+        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.LEGACY_V1,
+      })),
+    }),
+  );
+
+const WorkflowScriptCheckpointSchema = z
+  .union([WorkflowScriptCheckpointV2Schema, WorkflowScriptCheckpointV1Schema])
   .superRefine(({ journal }, context) => {
     const indices = new Set<number>();
     for (const entry of journal) {
@@ -119,6 +150,7 @@ function encodeJournalEntry(
   return {
     index: entry.index,
     key: entry.key,
+    keyFormat: entry.keyFormat,
     result: encodeJsonValue(entry.result),
   };
 }
@@ -129,6 +161,7 @@ function decodeJournalEntry(
   return {
     index: entry.index,
     key: entry.key,
+    keyFormat: entry.keyFormat,
     result: decodeJsonValue(entry.result),
   };
 }
