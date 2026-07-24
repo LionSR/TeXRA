@@ -17,7 +17,7 @@
 // Dependency-free (bare Node) so it runs without installing anything.
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -76,13 +76,22 @@ const PATH_PREFIXES = [
 // Generated or installed at build time, so absent in a clean checkout.
 const BUILD_OUTPUT = /(^|\/)(dist|out|releases|node_modules)(\/|$)/;
 
-/** Collect .md files under a directory, recursively. */
+/**
+ * Collect .md files under a directory, recursively.
+ *
+ * Keys stay POSIX-separated regardless of host OS: they are compared against
+ * the forward-slash literals in ARCHIVAL_DIRS and printed in failure output.
+ * Building them with `join()` would yield backslashes on Windows, silently
+ * defeating the archival carve-out there while Linux CI stayed green. Only the
+ * absolute path handed to the filesystem goes through `join()`, which accepts
+ * forward slashes on every platform.
+ */
 function markdownFilesIn(dir) {
   const abs = join(repoRoot, dir);
   if (!existsSync(abs)) return [];
   const found = [];
   for (const entry of readdirSync(abs, { withFileTypes: true })) {
-    const rel = join(dir, entry.name);
+    const rel = `${dir}/${entry.name}`;
     if (entry.isDirectory()) {
       if (ARCHIVAL_DIRS.includes(rel)) continue;
       found.push(...markdownFilesIn(rel));
@@ -221,6 +230,9 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
+// `targets` are already repo-relative POSIX keys; re-deriving them against the
+// process cwd would both depend on where the hook was invoked from and
+// reintroduce backslashes on Windows.
 console.log(
-  `Guidance references OK — checked ${targets.length} file(s): ${targets.map((t) => relative('.', t)).join(', ')}`,
+  `Guidance references OK — checked ${targets.length} file(s): ${targets.join(', ')}`,
 );
