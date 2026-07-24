@@ -490,9 +490,23 @@ describe('CLI orchestration items', () => {
     expect(items[1]).toEqual({
       label: 'Model access',
       description:
-        'Kimi Code · fallback: Personal API keys (provider API key configured)',
+        'Kimi Code · fallback: Personal API keys (Provider API key configured)',
       value: { kind: 'configure-model-access' },
     });
+
+    const includedItems = buildCliOrchestrationItems({
+      presetPlans: [],
+      history: [],
+      toolUseAgents: [],
+      modelAccess: modelAccessStatus({
+        apiMode: 'included',
+        texraSignedIn: true,
+        kimiCode: { keySet: true, preferred: true },
+      }),
+    });
+    expect(includedItems[1]?.description).toBe(
+      'Kimi Code · fallback: Included TeXRA access (TeXRA account)',
+    );
   });
 
   it('offers account management as one startup row with provider actions', () => {

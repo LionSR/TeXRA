@@ -5,10 +5,9 @@
  * ChatGPT, Codex-eligible OpenAI models route through the subscription instead
  * of the user's API key.
  */
+import type { ConfigTarget } from '@platform/interfaces';
 import { tryPlatform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-
-import type { ConfigTarget } from '@platform/interfaces';
 import {
   CODEX_PREFER_SUBSCRIPTION_KEY,
   CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY,
@@ -69,7 +68,7 @@ export async function setPreferCodexSubscription(
   enabled: boolean,
 ): Promise<CodexSubscriptionPreferenceUpdate> {
   const update = await writeCodexFlag(CODEX_PREFER_SUBSCRIPTION_KEY, enabled);
-  if (update.effective) {
+  if (enabled && update.effective) {
     await tryPlatform()?.globalState.update(
       GlobalStateKey.USE_OPENROUTER,
       false,

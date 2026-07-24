@@ -35,7 +35,7 @@ vi.mock('@cli/runtime/modelAccessSelection', () => ({
 }));
 
 vi.mock('@model/apiProviders', () => ({
-  API_PROVIDERS: ['deepseek'],
+  PERSONAL_API_KEY_PROVIDERS: ['deepseek'],
   lookupApiKeyOrigin: mocks.lookupApiKeyOrigin,
 }));
 

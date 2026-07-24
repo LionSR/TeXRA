@@ -462,6 +462,15 @@ export const API_KEY_PROVIDER_IDS = Object.freeze([
   'meta',
 ] as const);
 
+/**
+ * Provider credentials that constitute the personal API-key fallback.
+ * Kimi Code is omitted because its console key authenticates a subscription
+ * route that is selected independently of the API fallback.
+ */
+export const PERSONAL_API_KEY_PROVIDER_IDS = Object.freeze(
+  API_KEY_PROVIDER_IDS.filter((provider) => provider !== 'kimiCode'),
+);
+
 // ============================================================================
 // Model pricing hints
 // ============================================================================

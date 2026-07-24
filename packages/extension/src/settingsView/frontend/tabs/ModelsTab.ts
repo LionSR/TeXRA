@@ -7,6 +7,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import { PERSONAL_API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Web Awesome icon bundle (side-effect import)
@@ -40,6 +41,10 @@ import '../components/profile/ProviderKeyList';
 import '../components/profile/ModelSelectionList';
 import '../components/profile/ReliabilitySettingsSection';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
+
+const PERSONAL_API_KEY_PROVIDER_SET = new Set<string>(
+  PERSONAL_API_KEY_PROVIDER_IDS,
+);
 
 @customElement('models-tab')
 export class ModelsTab extends LitElement {
@@ -217,7 +222,8 @@ export class ModelsTab extends LitElement {
 
   override render(): TemplateResult {
     const personalApiKeySet = this.providerKeyStatuses.some(
-      ({ status }) => status !== 'not-set',
+      ({ provider, status }) =>
+        PERSONAL_API_KEY_PROVIDER_SET.has(provider) && status !== 'not-set',
     );
     const apiAccessSection = html`<api-access-section
       .mode=${this.apiAccessMode}

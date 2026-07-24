@@ -100,4 +100,17 @@ describe('Codex subscription preference', () => {
       effectiveValue: false,
     });
   });
+
+  it('preserves OpenRouter when a more specific setting defeats disabling', async () => {
+    const config = new FolderOverrideConfigProvider(true);
+    await installPlatform({}, { config });
+    await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, true);
+
+    const update = await setPreferCodexSubscription(false);
+
+    expect(update).toEqual({ effective: true, target: 'global' });
+    expect(
+      platform().globalState.get(GlobalStateKey.USE_OPENROUTER, false),
+    ).toBe(true);
+  });
 });

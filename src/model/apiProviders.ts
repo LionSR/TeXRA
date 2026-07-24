@@ -7,10 +7,14 @@
 import { LRUCache } from 'lru-cache';
 
 import type { PlatformSecrets } from '@platform/secrets';
-import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
+import {
+  API_KEY_PROVIDER_IDS,
+  PERSONAL_API_KEY_PROVIDER_IDS,
+} from '@shared/constants/providers';
 import { isNonEmptyString } from '@utils/core';
 
 export const API_PROVIDERS = API_KEY_PROVIDER_IDS;
+export const PERSONAL_API_KEY_PROVIDERS = PERSONAL_API_KEY_PROVIDER_IDS;
 
 export type ApiProvider = (typeof API_PROVIDERS)[number];
 

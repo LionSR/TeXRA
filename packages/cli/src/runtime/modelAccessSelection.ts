@@ -4,7 +4,7 @@ import {
   isPreferCodexSubscription,
   setPreferCodexSubscription,
 } from '@auth/codex';
-import { API_PROVIDERS, apiKeyExists } from '@model/apiProviders';
+import { PERSONAL_API_KEY_PROVIDERS, apiKeyExists } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
 import { ModelAccessStatusSchema } from '@shared/schemas/modelAccess';
@@ -52,7 +52,7 @@ export async function readCliModelAccessStatus(
     getChatGptAuthStatus(),
     apiKeyExists(platform().secrets, 'kimiCode'),
     Promise.all(
-      API_PROVIDERS.map((provider) =>
+      PERSONAL_API_KEY_PROVIDERS.map((provider) =>
         apiKeyExists(platform().secrets, provider),
       ),
     ),
@@ -87,11 +87,7 @@ export async function selectCliModelAccessRoute(
     readonly signal?: AbortSignal;
   },
 ): Promise<CliModelAccessSelectionResult> {
-  if (route === 'included') {
-    return selectCliApiModelAccessRoute(route);
-  }
-
-  if (route === 'personal') {
+  if (route === 'included' || route === 'personal') {
     return selectCliApiModelAccessRoute(route);
   }
 

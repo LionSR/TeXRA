@@ -11,7 +11,7 @@ import type {
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import * as serverKeysModule from '@auth/serverKeys';
-import { KIMI_CODE_BASE_URL } from '@model/kimiCodeSubscriptionRouting';
+import { KIMI_CODE_BASE_URL } from '@model/kimiCodeConstants';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 const MOONSHOT_BASE_URL = 'https://api.moonshot.ai/v1';

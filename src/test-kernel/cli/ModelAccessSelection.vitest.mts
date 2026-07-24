@@ -45,7 +45,7 @@ vi.mock('@auth/codex', () => ({
 }));
 
 vi.mock('@model/apiProviders', () => ({
-  API_PROVIDERS: ['kimiCode', 'openai'],
+  PERSONAL_API_KEY_PROVIDERS: ['openai'],
   apiKeyExists: mocks.apiKeyExists,
 }));
 
@@ -256,7 +256,9 @@ describe('CLI model access routes', () => {
   });
 
   it('reports Kimi Code independently of the API fallback', async () => {
-    mocks.apiKeyExists.mockResolvedValue(true);
+    mocks.apiKeyExists.mockImplementation(
+      async (_secrets: unknown, provider: string) => provider === 'kimiCode',
+    );
     mocks.getPreferKimiCode.mockReturnValue(true);
 
     await expect(readCliModelAccessStatus('personal')).resolves.toEqual({
@@ -269,7 +271,7 @@ describe('CLI model access routes', () => {
         subscriptionToolUseOnly: false,
       },
       kimiCode: { keySet: true, preferred: true },
-      personalApiKeySet: true,
+      personalApiKeySet: false,
     });
 
     // Included access remains the fallback beneath the Kimi preference.

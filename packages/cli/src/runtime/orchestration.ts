@@ -1,6 +1,7 @@
 import type { AgentEntry } from '@agent/index';
 import type { ExecutionId } from '@shared/schemas';
 import { agentKeyOf } from '@shared/schemas/agent';
+import { describeApiAccessModeStatus } from '@shared/schemas/modelAccess';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import {
@@ -32,7 +33,6 @@ import {
   type CliModelAccessStatus,
 } from './modelAccessRoute';
 import type { CliApiMode } from './apiAccessMode';
-import { describeApiAccessModeStatus } from '@shared/schemas/modelAccess';
 
 export type CliOrchestrationAction =
   | { readonly kind: 'chat'; readonly agent?: string; readonly model?: string }
@@ -312,11 +312,9 @@ function modelAccessItem(status: CliModelAccessStatus): CliOrchestrationItem {
   ].filter((value): value is string => value !== undefined);
   const fallback = formatCliModelAccessRoute(status.apiMode);
   const fallbackStatus = describeApiAccessModeStatus(status.apiMode, status);
-  const inlineFallbackStatus =
-    fallbackStatus.charAt(0).toLowerCase() + fallbackStatus.slice(1);
   const description =
     subscriptions.length > 0
-      ? `${subscriptions.join(' + ')} · fallback: ${fallback} (${inlineFallbackStatus})`
+      ? `${subscriptions.join(' + ')} · fallback: ${fallback} (${fallbackStatus})`
       : `${fallback} · ${fallbackStatus}`;
   return {
     value: { kind: 'configure-model-access' },

@@ -1,7 +1,7 @@
 import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it } from 'vitest';
 
-import { KIMI_CODE_BASE_URL } from '@model/kimiCodeSubscriptionRouting';
+import { KIMI_CODE_BASE_URL } from '@model/kimiCodeConstants';
 import { resolveUsageRoute } from '@model/usageRoute';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 

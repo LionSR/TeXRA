@@ -23,8 +23,6 @@ import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { KIMI_CODE_BASE_URL } from './kimiCodeConstants';
 import { zeroCostAccessOverrides } from './subscriptionAccessOverrides';
 
-export { KIMI_CODE_BASE_URL } from './kimiCodeConstants';
-
 /**
  * Open-platform `fullName` → coding-endpoint wire ID. Exclusive plan aliases
  * already use their wire ID as `fullName` and pass through unchanged.

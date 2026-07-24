@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
 // Local imports
+import { KIMI_CODE_BASE_URL } from '@model/kimiCodeConstants';
 import {
-  KIMI_CODE_BASE_URL,
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,
   kimiCodeRuntimeConfig,
