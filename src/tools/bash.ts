@@ -278,6 +278,7 @@ export class BashTool extends defineTool({
         childStream = createChildStream(executionId, parentStreamId, {
           streamPrefix: 'bash@tool',
           streamCategory: AgentCategory.ToolUse,
+          runKind: 'process',
           agentName: 'bash',
           description: command,
           config: syntheticConfig,

@@ -312,6 +312,7 @@ function toStreamPaletteEntry(stream: StreamTabInfo): CommandPaletteEntry {
     meta:
       stream.description ||
       stream.agent ||
+      (stream.kind === 'workflowScript' ? stream.workflowName : undefined) ||
       (stream.kind === 'agent' ? stream.modelLabel : undefined) ||
       'Stream',
     category: 'Streams',

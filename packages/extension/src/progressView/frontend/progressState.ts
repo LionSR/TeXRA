@@ -267,7 +267,11 @@ const activeIsToolUse$ = new Signal.Computed(() => {
 const subagentExecutionLabels$ = new Signal.Computed((): ExecutionLabels => {
   const labels = new Map<string, string>();
   for (const child of streamById$.get().values()) {
-    if (child.kind !== 'agent' || !child.parentStreamId || !child.executionId) {
+    if (
+      child.kind === 'process' ||
+      !child.parentStreamId ||
+      !child.executionId
+    ) {
       continue;
     }
     const label = child.label.trim();
