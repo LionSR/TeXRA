@@ -4,16 +4,18 @@ import { toJSONSchema, type ZodType } from 'zod';
 // Type imports
 import type { ToolDefinition } from '@model';
 
+// Local imports - shared
+import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
+
 // Local file imports
 import { BaseTool } from './base';
 
 /** Convert a tool's Zod input schema into the JSON Schema `parameters` every `ToolDefinition` carries. */
 export function toToolParameters(schema: ZodType): Record<string, unknown> {
-  return toJSONSchema(schema, {
-    target: 'draft-2020-12',
-    unrepresentable: 'any',
-    io: 'input',
-  }) as Record<string, unknown>;
+  return toJSONSchema(schema, TOOL_JSON_SCHEMA_OPTIONS) as Record<
+    string,
+    unknown
+  >;
 }
 
 /**
