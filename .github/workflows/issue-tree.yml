@@ -40,7 +40,7 @@ jobs:
           model-tier: sonnet
           allowed-bots: 'github-actions[bot]'
           allowed_tools_preset: issue-tree
-          allowed_tools_preset_map_file: .github/allowed-tools.json
+          allowed_tools_preset_map_file: .github/automation/allowed-tools.json
           claude-prompt-file: .github/prompts/issue-tree-prompt.md
           claude-prompt-context: |
             Repository: ${{ github.repository }}
