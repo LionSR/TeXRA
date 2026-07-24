@@ -28,12 +28,14 @@ import {
   type DeleteExecutionOptions,
   type DeleteExecutionResult,
 } from '@agent/storage';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   type RunFactEventName,
   type RunFactPayloads,
 } from '@agent/runtime/runFactEvents';
 import type { TaskState } from '@agent/core/state/TaskState';
+import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
 import {
   ProgressBackend,
@@ -2293,19 +2295,20 @@ describe('ProgressBackend', () => {
         streamId: stream,
         event: { type: 'run.start', descriptor },
       });
-      emitRunConfig(target, stream, executionId, {
-        agentConfig: {
-          agent: 'generic',
-          model: 'gpt-5.6-sol',
-          agentCategory: AgentCategory.Workflow,
-          instruction:
-            "Workflow script 'repo-cleanup-readonly-pilot-2026-07-24'",
-          inputFiles: [],
-          contextFiles: [],
-          mediaFiles: [],
-          outputFiles: [],
-        },
-      } as TaskState);
+      emitRunConfig(
+        target,
+        stream,
+        executionId,
+        agentConfigToTaskState(
+          AgentConfigSchema.parse({
+            agent: 'generic',
+            model: 'gpt-5.6-sol',
+            agentCategory: AgentCategory.Workflow,
+            instruction:
+              "Workflow script 'repo-cleanup-readonly-pilot-2026-07-24'",
+          }),
+        ),
+      );
 
       await vi.waitFor(() =>
         expect(backend.state.getStreamMetadata(stream).run).toEqual({
