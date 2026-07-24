@@ -8,10 +8,7 @@ import {
   type RunToolUseFlowResult,
 } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
-import {
-  runReflectionFlow,
-  type RunReflectionFlowResult,
-} from '@agent/implementations/flows/reflection/runReflectionFlow';
+import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import { inferAndLogPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RoundFinalizedCallback } from '@agent/core/flows/BaseFlowServices';
@@ -70,24 +67,6 @@ import type { ToolUseResumeData } from './SessionResumeRetrieval';
 
 const CHANNEL = 'executeAgent';
 const logger = createChannelTrace(CHANNEL);
-
-/** Build a workflow AgentFlowResult from a reflection flow run. */
-function buildWorkflowFlowResult(
-  result: RunReflectionFlowResult,
-  executionId: ExecutionId,
-  streamId: StreamTabId,
-  memoryMisses: AgentFlowResult['memoryMisses'],
-): AgentFlowResult {
-  return {
-    category: 'workflow',
-    outcome: result.outcome,
-    outputs: roundOutputsToOutputSummaries(result.roundOutputs),
-    compileFailures: roundOutputsToCompileFailureSummaries(result.roundOutputs),
-    executionId,
-    streamId,
-    ...buildOptionalFlowResultFields(memoryMisses, result.totalCostUsd),
-  };
-}
 
 /** Build a tool-use AgentFlowResult from a tool-use flow run. */
 function buildToolUseFlowResult(
@@ -253,12 +232,18 @@ async function runReflectionAgent(
   } finally {
     detachInterruptHandler();
   }
-  return buildWorkflowFlowResult(
-    result,
-    runExecutionId,
-    runStreamId,
-    ctx.attachedMemoryMisses,
-  );
+  return {
+    category: 'workflow',
+    outcome: result.outcome,
+    outputs: roundOutputsToOutputSummaries(result.roundOutputs),
+    compileFailures: roundOutputsToCompileFailureSummaries(result.roundOutputs),
+    executionId: runExecutionId,
+    streamId: runStreamId,
+    ...buildOptionalFlowResultFields(
+      ctx.attachedMemoryMisses,
+      result.totalCostUsd,
+    ),
+  };
 }
 
 /** Toast payload shown when the progress view cannot be opened. */

@@ -1,4 +1,4 @@
-import type { PromptBuilder } from '@agent/prompt';
+import type { PromptBuilder } from '@agent/prompt/PromptBuilder';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import type { OutputState } from '@agent/output/outputState';

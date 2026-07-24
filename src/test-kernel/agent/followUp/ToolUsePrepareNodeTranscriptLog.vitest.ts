@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { buildInitialToolUsePrompts } from '@agent/prompt';
+import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentPromptSchema } from '@agent/core/definition/AgentDataclass';
 import { ToolUsePrepareNode } from '@agent/implementations/flows/tooluse/nodes/ToolUsePrepareNode';
