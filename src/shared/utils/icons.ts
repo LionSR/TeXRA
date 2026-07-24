@@ -90,6 +90,9 @@ export const AGENT_DECORATORS = {
     workflow: { icon: 'symbol-method', label: 'Workflow' },
     toolUse: { icon: 'tools', label: 'Tool Use' },
   },
+  streamKinds: {
+    workflowScript: { icon: 'list-tree', label: 'Workflow Script' },
+  },
 } as const;
 
 type AgentCategory = keyof typeof AGENT_DECORATORS.agentCategories;

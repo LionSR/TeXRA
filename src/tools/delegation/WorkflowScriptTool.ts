@@ -208,6 +208,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
           {
             streamPrefix: STREAM_PREFIX,
             streamCategory: AgentCategory.Workflow,
+            runKind: 'workflowScript',
             agentName: meta.name,
             description: meta.description,
             config: runConfig,

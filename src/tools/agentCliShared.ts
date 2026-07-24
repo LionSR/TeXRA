@@ -191,6 +191,7 @@ export async function launchAgentCliSession(
       childStream = createChildStream(executionId, params.parentStreamId, {
         streamPrefix: params.streamPrefix,
         streamCategory: AgentCategory.ToolUse,
+        runKind: 'agent',
         agentName: params.agentName,
         description: params.description,
         config: params.config,

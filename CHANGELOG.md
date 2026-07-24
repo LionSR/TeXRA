@@ -63,6 +63,9 @@ All notable changes to this project will be documented in this file.
 
 - **Completed background tasks leave the session list** — finished shell tasks
   are removed after their results are saved instead of leaving stale tabs.
+- **Workflow-script sessions show their own identity** — scripted orchestration
+  runs display the script name and type instead of appearing as the default
+  worker agent.
 
 ### Extension (VS Code)
 
