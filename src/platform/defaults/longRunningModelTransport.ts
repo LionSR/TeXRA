@@ -27,6 +27,7 @@ function isGoogleClassicStreamingRequest(input: RequestInfo | URL): boolean {
   try {
     return new URL(url).pathname.endsWith(':streamGenerateContent');
   } catch {
+    // Malformed input cannot identify a Google streaming endpoint.
     return false;
   }
 }
