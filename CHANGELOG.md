@@ -17,6 +17,9 @@ All notable changes to this project will be documented in this file.
 - **Workflow scripts can start from selected files** — launch files are
   separated into editable inputs, read-only context, and media, then exposed
   to the script as immutable launch context for its workflow-agent calls.
+- **Workflow scripts can route each task to a suitable model** — individual
+  calls may select an available model, allowing routine work to use a cheaper
+  model while difficult steps retain a stronger one.
 
 #### Bug Fixes
 
