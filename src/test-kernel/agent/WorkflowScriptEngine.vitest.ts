@@ -854,6 +854,56 @@ return null`,
     });
   });
 
+  it('normalizes executable phase titles to the declared metadata title', async () => {
+    const invocations: WorkflowAgentInvocation[] = [];
+    const events: WorkflowScriptEvent[] = [];
+    await runWorkflowScript({
+      script: `export const meta = {
+  name: 'trimmed-phase',
+  description: 'normalizes phase titles',
+  phases: [{ title: '  Work  ' }],
+}
+const early = agent('early', { label: 'Early', phase: '  Work  ' })
+phase('  Work  ')
+await early
+return await agent('active', { label: 'Active' })`,
+      runAgent: (invocation) => {
+        invocations.push(invocation);
+        return echoRunner(invocation);
+      },
+      onEvent: (event) => events.push(event),
+    });
+
+    expect(invocations.map((invocation) => invocation.options.phase)).toEqual([
+      'Work',
+      'Work',
+    ]);
+    expect(events).toContainEqual({
+      type: 'phase',
+      title: 'Work',
+      index: 0,
+      total: 1,
+    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'agent:start',
+        label: 'Early',
+        phase: 'Work',
+        phaseIndex: 0,
+        phaseTotal: 1,
+      }),
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'agent:start',
+        label: 'Active',
+        phase: 'Work',
+        phaseIndex: 0,
+        phaseTotal: 1,
+      }),
+    );
+  });
+
   it('rejects invalid primitive usage with clear errors', async () => {
     await expect(
       runWorkflowScript({
@@ -897,6 +947,18 @@ return null`,
         runAgent: echoRunner,
       }),
     ).rejects.toThrow(/option "model" must be a non-empty string/);
+    await expect(
+      runWorkflowScript({
+        script: `${META}phase('   ')\nreturn null`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/Workflow phase title must not be blank/);
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await agent('work', { phase: '   ' })`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/option "phase" must be a non-empty string/);
   });
 
   it('separates workflow file options from structured tool-use calls', async () => {

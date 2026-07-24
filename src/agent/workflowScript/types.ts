@@ -6,8 +6,18 @@ import {
 } from '@shared/schemas';
 import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
 
+const WorkflowScriptPhaseTitleSchema = z
+  .string()
+  .trim()
+  .min(1, 'Workflow phase title must not be blank.');
+
+/** Normalize every executable phase-title input to the metadata schema form. */
+export function normalizeWorkflowScriptPhaseTitle(title: string): string {
+  return WorkflowScriptPhaseTitleSchema.parse(title);
+}
+
 const WorkflowScriptPhaseSchema = z.object({
-  title: z.string().trim().min(1),
+  title: WorkflowScriptPhaseTitleSchema,
   detail: z.string().optional(),
 });
 

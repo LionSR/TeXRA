@@ -15,6 +15,7 @@ import { runScriptInSandbox } from './sandbox';
 import {
   WORKFLOW_JOURNAL_KEY_FORMAT,
   WORKFLOW_SKIPPED_RESULT,
+  normalizeWorkflowScriptPhaseTitle,
   type WorkflowAgentCallOptions,
   type WorkflowJournalEntry,
   type WorkflowScriptControl,
@@ -644,7 +645,7 @@ export async function runWorkflowScript(
             return undefined;
           },
           phase: (args) => {
-            currentPhase = String(args[0]);
+            currentPhase = normalizeWorkflowScriptPhaseTitle(String(args[0]));
             const { phaseIndex, phaseTotal } = phaseContextFor(currentPhase);
             emit({
               type: 'phase',
@@ -758,12 +759,17 @@ function normalizeAgentOptions(raw: unknown): WorkflowAgentCallOptions {
   for (const field of ['id', 'label', 'phase', 'agentName', 'model'] as const) {
     const value = source[field];
     if (value === undefined) continue;
-    const requiresContent = field === 'id' || field === 'model';
+    const requiresContent =
+      field === 'id' || field === 'model' || field === 'phase';
     if (typeof value !== 'string' || (requiresContent && !value.trim())) {
       const requirement = requiresContent ? 'a non-empty string' : 'a string';
       throw new Error(`agent() option "${field}" must be ${requirement}.`);
     }
-    common[field] = requiresContent ? value.trim() : value;
+    const normalized = requiresContent ? value.trim() : value;
+    common[field] =
+      field === 'phase'
+        ? normalizeWorkflowScriptPhaseTitle(normalized)
+        : normalized;
   }
   let schema: Record<string, unknown> | undefined;
   if (Object.hasOwn(source, 'schema')) {

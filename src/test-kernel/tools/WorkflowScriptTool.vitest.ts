@@ -142,6 +142,32 @@ describe('WorkflowScriptTool', () => {
     expect(DELEGATION_TOOL_CATEGORY.delegate_workflow_script).toBeUndefined();
   });
 
+  it('declares the task-plan contract at the model-facing boundary', () => {
+    const description = new WorkflowScriptTool().definition.description;
+
+    expect(description).toContain(
+      'declare meta.tasks as { id, label, phase? } records',
+    );
+    expect(description).toContain(
+      'progress shows the pending plan before execution',
+    );
+    expect(description).toContain(
+      'A task phase must name a title in meta.phases',
+    );
+    expect(description).toContain(
+      'Every agent() call must then reference one declared task with { id }',
+    );
+    expect(description).toContain(
+      'its label and phase come only from meta.tasks and must not be repeated in the call',
+    );
+    expect(description).toContain(
+      'A call without meta.tasks may also use id, label, and phase',
+    );
+    expect(description).toContain(
+      'Omit meta.tasks when the call set is data-dependent',
+    );
+  });
+
   it('rejects invalid JSON arguments at the schema boundary', async () => {
     const result = await new WorkflowScriptTool().call({
       agent: 'correct',

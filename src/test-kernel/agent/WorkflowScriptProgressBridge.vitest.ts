@@ -318,6 +318,54 @@ return await early`;
     );
   });
 
+  it('projects trimmed runtime and declared task phases onto one stage', async () => {
+    const { trace, events } = recordingTrace();
+    const script = `export const meta = {
+  name: 'trimmed-declared-task-phase',
+  description: 'keeps task and runtime phase identity canonical',
+  phases: [{ title: '  Review  ' }],
+  tasks: [{
+    id: 'review-task',
+    label: '  Review argument  ',
+    phase: '  Review  ',
+  }],
+}
+phase('  Review  ')
+return await agent('Review the argument', { id: 'review-task' })`;
+
+    await runPersistedWorkflowScriptWithProgress(trace, {
+      store: getExecutionStore(executionId),
+      checkpointId: 'trimmed-declared-task-phase',
+      script,
+      runAgent: async () => 'done',
+    });
+
+    const phaseStarts = events.filter(
+      (event) => event.type === 'stage.start' && event.kind === 'phase',
+    );
+    expect(phaseStarts).toEqual([
+      expect.objectContaining({
+        label: 'Review',
+        index: 0,
+        total: 1,
+      }),
+    ]);
+    const planned = workflowTaskEvent(events, 'Review argument', 'planned');
+    for (const status of ['planned', 'running', 'completed'] as const) {
+      expect(
+        workflowTaskEvent(events, 'Review argument', status),
+      ).toMatchObject({
+        logId: planned?.logId,
+        task: {
+          id: 'review-task',
+          label: 'Review argument',
+          phase: 'Review',
+          status,
+        },
+      });
+    }
+  });
+
   it('renders the running total on live finish lines only', async () => {
     const store = getExecutionStore(executionId);
     const script = `${meta}
