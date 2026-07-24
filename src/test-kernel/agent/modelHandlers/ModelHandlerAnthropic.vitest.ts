@@ -1422,6 +1422,55 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
+  it('preserves forced compaction across a transient request retry', async () => {
+    const handler = createAnthropicHandler({
+      supportsTokenCounting: false,
+      supportsReasoning: false,
+    });
+    handler.config.fullName = 'claude-opus-4-6';
+    handler.setAgentCategory(AgentCategory.Workflow);
+    handler.requestCompaction();
+    stubHandlerForTest(handler);
+    stubCompactionThresholdPercent(0);
+
+    const messageOptions: any[] = [];
+    const create = vi.fn(async (options: any) => {
+      messageOptions.push(options);
+      if (messageOptions.length === 1) {
+        throw new Error('transient failure');
+      }
+      return {
+        id: 'msg',
+        type: 'message',
+        role: 'assistant',
+        model: 'claude-opus-4-6',
+        content: [{ type: 'text', text: 'ok' }],
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 1, output_tokens: 1 },
+      };
+    });
+    const client = { beta: { messages: { create } } } as any;
+    const request = {
+      client,
+      messages: helloMessages(),
+      temperature: 0,
+    };
+
+    await assert.rejects(handler.createResponse(request), /transient failure/);
+    await handler.createResponse(request);
+    await handler.createResponse(request);
+
+    const firstEdits = messageOptions[0].context_management?.edits ?? [];
+    const retryEdits = messageOptions[1].context_management?.edits ?? [];
+    assert.equal(firstEdits[0]?.type, 'compact_20260112');
+    assert.equal(retryEdits[0]?.type, 'compact_20260112');
+    assert.equal(
+      messageOptions[2].context_management,
+      undefined,
+      'forced compaction should clear after a successful response',
+    );
+  });
+
   it('announces expected compaction after the measured count crosses the trigger', async () => {
     const handler = createAnthropicHandler({
       supportsTokenCounting: true,

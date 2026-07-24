@@ -774,10 +774,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       isCompactionEligibleModel(this.config.fullName),
       this.compactionRequested,
     );
-    if (compactionConsumed) {
-      this.compactionRequested = false;
-    }
-
     // Phase 2: COUNT - Estimate input tokens using built params
     // Phase 3: VALIDATE - Adjust max_tokens if needed
     if (this.supportsTokenCounting && documentAnalysis.hasFileSource) {
@@ -902,6 +898,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       if (nonStreamingCompactionExpected) {
         logCompactionActivity(this.logger, 'finished');
       }
+    }
+
+    if (compactionConsumed) {
+      this.compactionRequested = false;
     }
 
     // Log server-side compaction events when present in response content.
@@ -1044,11 +1044,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return this.createAssistantMessage(text);
     }
 
-    const content = buildAnthropicAssistantContent(
-      responseObject,
-      { supportsPromptCaching: this.capabilities.supportsPromptCaching },
-      this.logger,
-    );
+    const content = this.extractAssistantContent(responseObject);
     return content.length > 0
       ? { role: 'assistant', content: content as ContentBlockParam[] }
       : this.createAssistantMessage(text);
