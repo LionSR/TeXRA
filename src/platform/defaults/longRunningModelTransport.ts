@@ -109,10 +109,16 @@ export function installLongRunningModelFetch(): void {
   const hostFetch = globalThis.fetch as RoutingFetch;
   if (hostFetch[ROUTING_FETCH_MARKER] === true) return;
 
-  const routingFetch: RoutingFetch = (input, init) =>
-    isGoogleClassicStreamingRequest(input)
-      ? longRunningModelFetch(input, init)
-      : hostFetch(input, init);
+  const routingFetch: RoutingFetch = function (
+    this: unknown,
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ): Promise<Response> {
+    if (isGoogleClassicStreamingRequest(input)) {
+      return longRunningModelFetch(input, init);
+    }
+    return Reflect.apply(hostFetch, this, [input, init]);
+  };
   Object.defineProperty(routingFetch, ROUTING_FETCH_MARKER, { value: true });
   globalThis.fetch = routingFetch;
 }

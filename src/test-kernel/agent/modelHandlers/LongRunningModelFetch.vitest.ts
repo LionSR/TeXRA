@@ -127,20 +127,29 @@ describe('long-running model transport', () => {
     );
   });
 
-  it('delegates unrelated requests without changing their inputs or response', async () => {
+  it('delegates unrelated requests without changing their receiver, inputs, or response', async () => {
     const response = new Response('delegated');
-    const priorFetch = vi.fn().mockResolvedValueOnce(response);
+    const observedReceivers: unknown[] = [];
+    const priorFetch = vi.fn(function (this: unknown) {
+      observedReceivers.push(this);
+      return Promise.resolve(response);
+    });
     globalThis.fetch = priorFetch as typeof fetch;
+    const receiver = { owner: 'host-fetch' };
     const request = new Request('https://example.test/upload');
     const form = new FormData();
     form.append('file', new Blob(['contents']), 'paper.tex');
     const init: RequestInit = { method: 'POST', body: form };
 
     installLongRunningModelFetch();
-    const result = await globalThis.fetch(request, init);
+    const result = await Reflect.apply(globalThis.fetch, receiver, [
+      request,
+      init,
+    ]);
 
     expect(priorFetch).toHaveBeenCalledOnce();
     expect(priorFetch).toHaveBeenCalledWith(request, init);
+    expect(observedReceivers).toEqual([receiver]);
     expect(result).toBe(response);
     expect(transportMocks.undiciFetch).not.toHaveBeenCalled();
   });
