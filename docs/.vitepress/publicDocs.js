@@ -34,8 +34,6 @@ export const srcExclude = [
   'README.md',
   'guide/desktop.md',
   'guide/desktop-migration.md',
-  'blog/**',
-  'marketing/**',
   'design/**',
   'dev/**',
   'architecture/**',
@@ -45,6 +43,5 @@ export const srcExclude = [
   'reference/**',
   'skills/**',
   'supabase/**',
-  'toolCalls/**',
   'node_modules/**',
 ];
