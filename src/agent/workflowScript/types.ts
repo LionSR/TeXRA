@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+import {
+  WorkflowTaskIdentitySchema,
+  type WorkflowTaskIdentity,
+} from '@shared/schemas';
 import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
 
 const WorkflowScriptPhaseSchema = z.object({
@@ -7,16 +11,7 @@ const WorkflowScriptPhaseSchema = z.object({
   detail: z.string().optional(),
 });
 
-const WorkflowScriptTaskSchema = z.strictObject({
-  /** Stable identity referenced by agent(..., { id }). */
-  id: z.string().trim().min(1),
-  /** Human-readable task name shown on progress surfaces. */
-  label: z.string().trim().min(1),
-  /** Optional declared phase; must name one of meta.phases when present. */
-  phase: z.string().trim().min(1).optional(),
-});
-
-export type WorkflowScriptTask = z.infer<typeof WorkflowScriptTaskSchema>;
+export type WorkflowScriptTask = WorkflowTaskIdentity;
 
 /**
  * The `export const meta = {...}` block every workflow script must begin
@@ -34,7 +29,7 @@ export const WorkflowScriptMetaSchema = z
      * task by id; label and phase live here rather than being duplicated in
      * executable code.
      */
-    tasks: z.array(WorkflowScriptTaskSchema).optional(),
+    tasks: z.array(WorkflowTaskIdentitySchema).optional(),
     /** Whole-run wall clock, bounded; an explicit run option still wins. */
     timeoutMs: z
       .int()
