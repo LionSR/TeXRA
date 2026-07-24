@@ -263,6 +263,9 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.selectAvailableDelegationModel.mockRejectedValueOnce(
       new Error('Model "missing-model" is not currently available.'),
     );
+    mocks.assertWorkflowFilesExist.mockRejectedValue(
+      new Error('Input file "paper.tex" does not exist.'),
+    );
     const runner = defaultRunner();
 
     await expect(
@@ -276,6 +279,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       name: 'WorkflowRunAbortError',
       message: expect.stringContaining('missing-model'),
     });
+    expect(mocks.assertWorkflowFilesExist).not.toHaveBeenCalled();
   });
 
   it('preserves delegation failures when no model is declared', async () => {

@@ -187,31 +187,30 @@ export function createWorkflowScriptAgentRunner(
               invocation.options.agentName ?? defaultAgentName,
               runScope.delegationAgentScope ?? undefined,
             );
-            const [model, inputFiles, contextFiles, mediaFiles] =
-              await Promise.all([
-                selectWorkflowScriptModel({
-                  ...(invocation.options.model !== undefined && {
-                    requestedModel: invocation.options.model,
-                  }),
-                  parentModel: parent.model,
-                  agentCategory: AgentCategory.Workflow,
-                }),
-                resolveInvocationFileList(
-                  run.executionId,
-                  'Input file',
-                  invocation.options.inputFiles ?? [],
-                ),
-                resolveInvocationFileList(
-                  run.executionId,
-                  'Context file',
-                  invocation.options.contextFiles ?? [],
-                ),
-                resolveInvocationFileList(
-                  run.executionId,
-                  'Media file',
-                  invocation.options.mediaFiles ?? [],
-                ),
-              ]);
+            const model = await selectWorkflowScriptModel({
+              ...(invocation.options.model !== undefined && {
+                requestedModel: invocation.options.model,
+              }),
+              parentModel: parent.model,
+              agentCategory: AgentCategory.Workflow,
+            });
+            const [inputFiles, contextFiles, mediaFiles] = await Promise.all([
+              resolveInvocationFileList(
+                run.executionId,
+                'Input file',
+                invocation.options.inputFiles ?? [],
+              ),
+              resolveInvocationFileList(
+                run.executionId,
+                'Context file',
+                invocation.options.contextFiles ?? [],
+              ),
+              resolveInvocationFileList(
+                run.executionId,
+                'Media file',
+                invocation.options.mediaFiles ?? [],
+              ),
+            ]);
             const oversizedBibRejection =
               await rejectOversizedBibAttachments(contextFiles);
             if (oversizedBibRejection) {

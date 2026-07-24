@@ -28,7 +28,8 @@ return concat(sections, { separator: '\n\n' });
   typed result, or `null` on failure (filter with `.filter(Boolean)`).
   Set `opts.model` to an available model short name when a call needs a
   different cost or capability profile; otherwise ordinary delegation policy
-  chooses the model.
+  chooses the model. An explicitly selected model that is unavailable aborts
+  the workflow rather than resolving that call to `null`.
   `agent(prompt, { schema })`, where `schema` is a JSON Schema object, runs a
   tool-use agent (name one via `agentName`) that finishes by calling
   `submit_output`; the call resolves to an envelope whose `.structured` is the
