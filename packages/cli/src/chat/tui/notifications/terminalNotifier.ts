@@ -1,5 +1,5 @@
 // Terminal notification dispatcher per
-// docs/prds/cli-tui-ink/10-architecture.md (Terminal notifications).
+// docs/prds/cli-tui-ink/2026-05-14-10-architecture.md (Terminal notifications).
 //
 // Phase 1 ships `agentFinished` + `approvalNeeded`; progress (OSC 9;4) lands
 // in Phase 4 when long-running activity surfaces.
@@ -10,7 +10,7 @@
 // Terminal in particular gain nothing from OSC 9 / 99 and may even garble).
 //
 // Multiplexer-aware DCS wrapping for tmux/screen is deferred per
-// docs/prds/cli-tui-ink/30-reference.md#16-risks (R9).
+// docs/prds/cli-tui-ink/2026-05-14-30-reference.md#16-risks (R9).
 
 import { writeRawStdout } from '@cli/runtime/logSinks';
 import { terminalCapabilities } from '../state/terminalCapabilities';

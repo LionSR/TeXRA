@@ -186,7 +186,7 @@ export type StreamPhase = z.infer<typeof StreamPhaseSchema>;
  * populated from `GROUP_START`/`GROUP_END` transcript rows — #7993 step 3).
  * No `WAITING`: task groups have no waiting concept, only running and the
  * three terminal `RunOutcome` values (§8.2's group-end mapping table,
- * docs/proposals/session-scoped-runtime-architecture.md). Previously a
+ * docs/proposals/2026-07-03-session-scoped-runtime-architecture.md). Previously a
  * 4-value subset of the legacy `StreamStatus` (`running`/`error`/`stopped`/
  * `ready`); retyped to the native vocabulary in lockstep with its readers
  * (`logSlice.ts`, `TaskGroupList.ts`) so the completed/cancelled distinction

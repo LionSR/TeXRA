@@ -4,7 +4,7 @@ Deterministic, script-driven multi-agent orchestration: the orchestrator LLM
 writes a small JS script **once**, and this engine executes its control flow
 (loops, fan-out, joins, reduction) as plain code — zero model round-trips
 between steps. Design rationale and the full findings that motivated it:
-`docs/proposals/workflow-script-engine.md`.
+`docs/proposals/2026-07-05-workflow-script-engine.md`.
 
 ## Shape
 

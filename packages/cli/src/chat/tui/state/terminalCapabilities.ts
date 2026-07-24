@@ -8,7 +8,7 @@
 // terminals that fail to answer DA1 at all, so startup never blocks.
 //
 // Pattern adapted from Claude Code's `src/ink/terminal-querier.ts` per
-// docs/prds/cli-tui-ink/10-architecture.md (Terminal capability discovery).
+// docs/prds/cli-tui-ink/2026-05-14-10-architecture.md (Terminal capability discovery).
 //
 // This module is the source of truth for the `terminalCapabilities` signal
 // consumed by the notifier (capability-gating OSC 9 / 99 / BEL) and future

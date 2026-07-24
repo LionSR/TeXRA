@@ -132,7 +132,7 @@ export class MessageIndex {
     // e.g. a cross-trace id the stream never recorded). Re-rooting orphans here
     // makes them degrade gracefully (rendered un-nested at the timeline top)
     // instead of vanishing silently along with their whole subtree and messages.
-    // See docs/proposals/progress-grouping-refactor.md (R2).
+    // See docs/proposals/2026-05-30-progress-grouping-refactor.md (R2).
     // Stable sort preserves original order for equal timestamps.
     this.tree = groups
       .filter((g) => !g.parentGroupId || !groupMap.has(g.parentGroupId))
