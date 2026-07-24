@@ -13,6 +13,30 @@ describe('runLakeCommand output failures', () => {
     mocks.execa.mockReset();
   });
 
+  it('keeps stderr empty for ordinary nonzero exits with stdout only', async () => {
+    mocks.execa.mockResolvedValue({
+      failed: true,
+      isMaxBuffer: false,
+      timedOut: false,
+      exitCode: 7,
+      stdout: 'build failed in target A',
+      stderr: '',
+      shortMessage: 'Command failed with exit code 7',
+    });
+
+    const result = await runLakeCommand({
+      workspaceRoot: '/workspace',
+      lakeCommand: 'lake',
+      args: ['build'],
+    });
+
+    expect(result).toEqual({
+      exitCode: 7,
+      stdout: 'build failed in target A',
+      stderr: '',
+    });
+  });
+
   it('does not report maxBuffer overflow with partial stdout as success', async () => {
     mocks.execa.mockResolvedValue({
       failed: true,

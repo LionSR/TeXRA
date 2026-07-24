@@ -96,6 +96,20 @@ describe('executeCommand', () => {
     assert.strictEqual(result.stderr, null);
   });
 
+  it('keeps stderr empty for ordinary nonzero exits with stdout only', async () => {
+    const result = await executeCommand([
+      process.execPath,
+      '-e',
+      `process.stdout.write('failure details'); process.exit(7)`,
+    ]);
+
+    assert.equal(result.success, false);
+    assert.equal(result.exitCode, 7);
+    assert.equal(result.stdout, 'failure details');
+    assert.equal(result.stderr, null);
+    assert.equal(result.outputLimitExceeded, undefined);
+  });
+
   it('decodes streamed Unicode split across byte chunks', async () => {
     let streamed = '';
     const result = await executeCommand(
@@ -154,6 +168,7 @@ describe('executeCommand', () => {
 
     assert.equal(result.success, false);
     assert.equal(result.exitCode, 2);
+    assert.equal(result.outputLimitExceeded, true);
     assert.ok(result.stdout && result.stdout.length > 0);
     assert.match(result.stderr ?? '', /maxBuffer exceeded/i);
   });

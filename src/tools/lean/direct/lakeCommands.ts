@@ -15,10 +15,10 @@ import { Mutex } from 'async-mutex';
 const LAKE_RUN_TIMEOUT_MS = 10 * 60 * 1000;
 const LAKE_MAX_OUTPUT_CHARS = 4 * 1024 * 1024;
 // Keep execa 10's current per-stream failure ceiling explicit. capOutput()
-// preserves successful chatty builds by retaining their last 4 MiB, while
-// this higher byte cap prevents a dependency-default change from silently
+// preserves successful chatty builds by retaining their last 4,194,304 characters, while
+// this higher character cap prevents a dependency-default change from silently
 // changing when a command is terminated for excessive output.
-const LAKE_PROCESS_MAX_BUFFER_BYTES = 100_000_000;
+const LAKE_PROCESS_MAX_BUFFER_CHARS = 100_000_000;
 
 // Keys are resolved workspace roots — a small bounded set per process lifetime,
 // so we don't bother evicting entries after release.
@@ -83,14 +83,19 @@ async function executeLake(
     cwd: options.workspaceRoot,
     timeout: options.timeoutMs ?? LAKE_RUN_TIMEOUT_MS,
     reject: false,
-    maxBuffer: LAKE_PROCESS_MAX_BUFFER_BYTES,
+    maxBuffer: LAKE_PROCESS_MAX_BUFFER_CHARS,
     windowsHide: true,
     stdin: 'ignore',
   });
   const stdout = result.stdout ?? '';
   const stderr = result.stderr ?? '';
+  const shouldUseShortMessage =
+    result.isMaxBuffer ||
+    result.exitCode === undefined ||
+    result.timedOut ||
+    !stdout;
   const stderrOrMessage =
-    stderr || (result.failed || !stdout ? (result.shortMessage ?? '') : '');
+    stderr || (shouldUseShortMessage ? (result.shortMessage ?? '') : '');
   return {
     exitCode:
       result.failed && (!result.exitCode || result.isMaxBuffer)

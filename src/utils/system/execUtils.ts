@@ -82,25 +82,29 @@ function resultFromProcessOutput(
   stdout: string | null | undefined,
   stderr: string | null | undefined,
   exitCode: number,
-  timedOut = false,
+  flags: { timedOut?: boolean; outputLimitExceeded?: boolean } = {},
 ): ExecResult {
+  const timedOut = flags.timedOut ?? false;
   return {
-    success: exitCode === 0 && !timedOut,
+    success: exitCode === 0 && !timedOut && !flags.outputLimitExceeded,
     stdout: normalizeOutput(stdout),
     stderr: normalizeOutput(stderr),
     timedOut,
     exitCode,
+    ...(flags.outputLimitExceeded ? { outputLimitExceeded: true } : {}),
   };
 }
 
 function resultFromExecutionError(err: unknown): ExecResult {
   if (err instanceof ExecaError) {
+    const outputLimitExceeded = err.isMaxBuffer ?? false;
     return {
       success: false,
       stdout: normalizeOutput(`${err.stdout ?? ''}`),
       stderr: normalizeOutput(`${err.stderr || toErrorMessage(err)}`),
       timedOut: err.timedOut ?? false,
-      exitCode: err.exitCode ?? 127,
+      exitCode: outputLimitExceeded ? 2 : (err.exitCode ?? 127),
+      ...(outputLimitExceeded ? { outputLimitExceeded: true } : {}),
     };
   }
 
@@ -203,7 +207,7 @@ export async function executeCommand(
     onPid?: (pid: number) => void;
     /** Set to false to skip buffering stdout/stderr in memory (use with onStdout/onStderr). */
     buffer?: boolean;
-    /** Maximum bytes execa may buffer per output stream before terminating the process. */
+    /** Maximum decoded characters execa may retain per output stream before terminating the process. */
     maxBuffer?: number;
     stdout?: ExecOutput;
     stderr?: ExecOutput;
@@ -220,12 +224,7 @@ export async function executeCommand(
 
   try {
     if (options.signal?.aborted) {
-      return resultFromProcessOutput(
-        null,
-        'Command aborted by user',
-        130,
-        false,
-      );
+      return resultFromProcessOutput(null, 'Command aborted by user', 130);
     }
 
     const workspacePath = options.cwd ?? WorkspaceFS.getPath();
@@ -396,21 +395,21 @@ export async function executeCommand(
       ? 2
       : (result.exitCode ?? (aborted ? 130 : 1));
     const timedOut = (result.timedOut ?? false) || shellTimedOut;
+    const shouldUseShortMessage =
+      maxBufferExceeded || result.exitCode === undefined || timedOut;
     const normalizedStderr =
       aborted && !stderr
         ? 'Command aborted by user'
-        : stderr || (result.failed ? (result.shortMessage ?? '') : '');
+        : stderr || (shouldUseShortMessage ? (result.shortMessage ?? '') : '');
 
     if (!options.quiet) {
       logCommandStderr(logChannel, normalizedStderr, options.truncate);
     }
 
-    return resultFromProcessOutput(
-      stdout,
-      normalizedStderr,
-      exitCode,
+    return resultFromProcessOutput(stdout, normalizedStderr, exitCode, {
       timedOut,
-    );
+      outputLimitExceeded: maxBufferExceeded,
+    });
   } catch (err) {
     if (!options.quiet) {
       logger.error(
@@ -473,7 +472,7 @@ export function executeCommandSync(
       logCommandStderr(logChannel, stderr, options.truncate);
     }
 
-    return resultFromProcessOutput(stdout, stderr, exitCode, timedOut);
+    return resultFromProcessOutput(stdout, stderr, exitCode, { timedOut });
   } catch (err) {
     if (!options.quiet) {
       logger.error(

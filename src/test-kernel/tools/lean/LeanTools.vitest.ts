@@ -185,7 +185,7 @@ describe('runLakeCommand mutex', () => {
     rmSync(workspaceB, { recursive: true, force: true });
   });
 
-  it('keeps the current 4 MiB tail cap and truncation marker', async () => {
+  it('keeps the current 4,194,304-character tail cap and truncation marker', async () => {
     const result = await runLakeCommand({
       workspaceRoot: workspaceA,
       lakeCommand: NODE,

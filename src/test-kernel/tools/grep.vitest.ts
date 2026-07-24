@@ -78,6 +78,32 @@ describe('GrepTool execution', () => {
     expect(executeSpy.mock.calls[0]?.[1]?.maxBuffer).toBe(100_000_000);
   });
 
+  it('reports output-limit overflow without paginating partial matches', async () => {
+    vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
+      success: false,
+      stdout: 'partial-match-one\npartial-match-two',
+      stderr: 'maxBuffer exceeded',
+      timedOut: false,
+      exitCode: 2,
+      outputLimitExceeded: true,
+    });
+
+    const result = await new GrepTool().call({
+      pattern: 'item',
+      output_mode: 'content',
+      offset: 1,
+      head_limit: 1,
+    });
+
+    expect(result.status).toBe('error');
+    expect(result.error).toContain('retained-output ceiling');
+    expect(result.error).toContain('Narrow the search path or pattern');
+    expect(result.error).toContain('glob/type filters');
+    expect(result.error).toContain('Pagination with offset/head_limit');
+    expect(result.error).not.toContain('Regex error');
+    expect(result.error).not.toContain('partial-match');
+  });
+
   it('preserves ripgrep error classification', async () => {
     vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
       success: false,

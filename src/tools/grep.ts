@@ -70,7 +70,7 @@ const CHANNEL = 'GrepTool';
 // Pagination and total counts require draining all of ripgrep's output. Keep
 // execa 10's current per-stream ceiling explicit instead of coupling this
 // failure boundary to a dependency default or killing rg after one page.
-const GREP_MAX_BUFFER_BYTES = 100_000_000;
+const GREP_MAX_BUFFER_CHARS = 100_000_000;
 
 export function buildArguments(
   input: GrepInput,
@@ -144,11 +144,19 @@ export class GrepTool extends defineTool({
       cwd: root,
       channel: CHANNEL,
       truncate: false,
-      maxBuffer: GREP_MAX_BUFFER_BYTES,
+      maxBuffer: GREP_MAX_BUFFER_CHARS,
       // Cancellation for the owning agent run — parallel batches must be
       // able to terminate large-repo rg subprocesses on interrupt.
       signal: getCurrentToolCallContext()?.signal,
     });
+
+    if (result.outputLimitExceeded) {
+      throw new ToolError(
+        `Search output exceeded the ${GREP_MAX_BUFFER_CHARS.toLocaleString()}-character retained-output ceiling.\n` +
+          `Narrow the search path or pattern, or use glob/type filters. ` +
+          `Pagination with offset/head_limit does not avoid draining the total ripgrep output.`,
+      );
+    }
 
     // ripgrep exit codes: 0 = matches found, 1 = no matches, 2+ = error
     const exitCode = result.exitCode ?? (result.success ? 0 : 1);
