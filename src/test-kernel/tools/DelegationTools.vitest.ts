@@ -84,10 +84,7 @@ describe('DelegationTools', () => {
   it('rejects context .bib files larger than 100KB', async () => {
     WorkspaceFS.stat = async () => stat(100 * 1024 + 1);
 
-    const result = await rejectOversizedBibAttachments({
-      ...BASE_INPUT,
-      contextFiles: ['references.bib'],
-    });
+    const result = await rejectOversizedBibAttachments(['references.bib']);
 
     assert.strictEqual(result?.status, 'error');
     assert.strictEqual(result?.summary, 'Rejected oversized BibTeX attachment');
@@ -106,10 +103,10 @@ describe('DelegationTools', () => {
   it('rejects context .bib files in the multi-list larger than 100KB', async () => {
     WorkspaceFS.stat = async () => stat(150 * 1024);
 
-    const result = await rejectOversizedBibAttachments({
-      ...BASE_INPUT,
-      contextFiles: ['paper.tex', 'bibliography/main.bib'],
-    });
+    const result = await rejectOversizedBibAttachments([
+      'paper.tex',
+      'bibliography/main.bib',
+    ]);
 
     assert.strictEqual(result?.status, 'error');
     assert.deepStrictEqual(result?.diagnostics, {
@@ -123,10 +120,7 @@ describe('DelegationTools', () => {
   it('allows .bib files at the 100KB limit', async () => {
     WorkspaceFS.stat = async () => stat(100 * 1024);
 
-    const result = await rejectOversizedBibAttachments({
-      ...BASE_INPUT,
-      contextFiles: ['library.bib'],
-    });
+    const result = await rejectOversizedBibAttachments(['library.bib']);
 
     assert.strictEqual(result, null);
   });
@@ -138,10 +132,10 @@ describe('DelegationTools', () => {
       return stat(500 * 1024);
     };
 
-    const result = await rejectOversizedBibAttachments({
-      ...BASE_INPUT,
-      contextFiles: ['paper.tex', 'preamble.tex'],
-    });
+    const result = await rejectOversizedBibAttachments([
+      'paper.tex',
+      'preamble.tex',
+    ]);
 
     assert.strictEqual(result, null);
     assert.strictEqual(statCalled, false);

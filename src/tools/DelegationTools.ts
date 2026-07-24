@@ -143,7 +143,9 @@ Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instructi
       { label: 'Media file', files: input.mediaFiles },
     ]);
 
-    const oversizedBibRejection = await rejectOversizedBibAttachments(input);
+    const oversizedBibRejection = await rejectOversizedBibAttachments(
+      input.contextFiles,
+    );
     if (oversizedBibRejection) return oversizedBibRejection;
 
     // Extraction flags map to toolConfig, flowing through the proposal UI and

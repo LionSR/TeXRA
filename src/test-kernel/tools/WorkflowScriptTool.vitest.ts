@@ -3,18 +3,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setupPlatform } from '@test/support/setupPlatform';
 import { TraceEmitter } from '@agent/trace';
-import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript';
-import { ExecutionLeaseActiveError } from '@agent/storage';
+import {
+  deriveWorkflowScriptCheckpointId,
+  writeWorkflowScriptCheckpoint,
+} from '@agent/workflowScript';
+import { ExecutionLeaseActiveError, getExecutionStore } from '@agent/storage';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import { withRunContext } from '@agent/runtime/RunContext';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
 import {
   DELEGATION_AVAILABILITY_CATEGORY,
   DELEGATION_TOOL_CATEGORY,
   DELEGATION_TOOLS,
 } from '@shared/constants/delegationTools';
 import { deriveExecutionId } from '@utils/core/idHash';
+import { WorkspaceFS } from '@utils/files';
 
 setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 
@@ -91,7 +96,7 @@ function runExecutionIdFor(name: string): ExecutionId {
   return deriveExecutionId({ checkpointId: checkpointIdFor(name) });
 }
 
-async function callTool(overrideScript?: string) {
+async function callTool(overrideScript?: string, files?: WorkflowScriptFiles) {
   return withRunContext(parentContext(), () =>
     withToolFileInteractionContext(
       {
@@ -104,13 +109,18 @@ async function callTool(overrideScript?: string) {
         new WorkflowScriptTool().call({
           agent: 'correct',
           script: overrideScript ?? script,
+          ...(files ? { files } : {}),
         }),
     ),
   );
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
+  await WorkspaceFS.ensureDir('.');
+  await WorkspaceFS.write('paper.tex', '\\documentclass{article}');
+  await WorkspaceFS.write('references.bib', '@book{example}');
+  await WorkspaceFS.write('figure.pdf', 'pdf');
   mocks.registerExecution.mockResolvedValue(undefined);
   mocks.createChildStream.mockImplementation((runId: ExecutionId): unknown => ({
     childStreamId: `workflow-script#${runId}` as StreamTabId,
@@ -208,6 +218,83 @@ describe('WorkflowScriptTool', () => {
     });
     expect(result.output).toContain(`Execution ID: ${runExecutionId}`);
     expect(result.output).toContain('same meta.name');
+  });
+
+  it('validates and persists files bound to the workflow run', async () => {
+    const files = {
+      inputFiles: ['paper.tex'],
+      contextFiles: ['references.bib'],
+      mediaFiles: ['figure.pdf'],
+    } as const satisfies WorkflowScriptFiles;
+    const result = await callTool(undefined, files);
+
+    expect(result.status).toBe('executed');
+    expect(mocks.registerExecution).toHaveBeenCalledWith(
+      runExecutionIdFor('tool-test'),
+      expect.objectContaining({
+        inputFiles: ['paper.tex'],
+        contextFiles: ['references.bib'],
+        mediaFiles: ['figure.pdf'],
+      }),
+      'tool-test',
+      executionId,
+    );
+  });
+
+  it('rejects an oversized bibliography bound as workflow context', async () => {
+    await WorkspaceFS.write('large.bib', 'x'.repeat(100 * 1024 + 1));
+
+    const result = await callTool(undefined, {
+      inputFiles: ['paper.tex'],
+      contextFiles: ['large.bib'],
+      mediaFiles: [],
+    });
+
+    expect(result).toMatchObject({
+      status: 'error',
+      summary: 'Rejected oversized BibTeX attachment',
+      diagnostics: {
+        type: 'oversized_bib_attachment',
+        path: 'large.bib',
+        sizeBytes: 100 * 1024 + 1,
+        limitBytes: 100 * 1024,
+      },
+    });
+    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+  });
+
+  it('registers checkpoint files when a resume omits files', async () => {
+    const resumeScript = script.replace("name: 'tool-test'", "name: 'resume'");
+    const files = {
+      inputFiles: ['paper.tex'],
+      contextFiles: ['references.bib'],
+      mediaFiles: ['figure.pdf'],
+    } as const satisfies WorkflowScriptFiles;
+    await writeWorkflowScriptCheckpoint(
+      getExecutionStore(executionId),
+      checkpointIdFor('resume'),
+      {
+        script: resumeScript,
+        args: undefined,
+        files,
+        journal: [],
+      },
+    );
+
+    const result = await callTool(resumeScript);
+
+    expect(result.status).toBe('executed');
+    expect(mocks.registerExecution).toHaveBeenCalledWith(
+      runExecutionIdFor('resume'),
+      expect.objectContaining({
+        inputFiles: ['paper.tex'],
+        contextFiles: ['references.bib'],
+        mediaFiles: ['figure.pdf'],
+      }),
+      'resume',
+      executionId,
+    );
   });
 
   it('regenerates the same run id across relaunches of one meta.name', async () => {

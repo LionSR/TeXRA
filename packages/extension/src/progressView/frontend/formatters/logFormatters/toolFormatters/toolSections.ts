@@ -40,7 +40,11 @@ import {
   CodexMcpToolOutputSchema,
   type CodexMcpToolOutput,
 } from '@shared/schemas/codex';
-import { getProposalFileGroups } from '@shared/schemas/proposalFields';
+import {
+  getProposalFileGroups,
+  type ProposalFileGroup,
+} from '@shared/schemas/proposalFields';
+import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
 import type { EditInput } from '@tools/EditTool';
 import type { TextEditorInput } from '@tools/TextEditorTool';
@@ -69,6 +73,20 @@ export type ToolSectionContext = {
   parsedOutput: unknown;
   outputText: string;
 };
+
+function buildFileGroupsSection(
+  fileGroups: readonly ProposalFileGroup[],
+): TemplateResult | undefined {
+  if (fileGroups.length === 0) return undefined;
+  // prettier-ignore
+  const fileItems = html`${fileGroups.flatMap((group) => group.files.map((file) => html`<li class="detail-item"><wa-icon library=${TEXRA_ICON_LIBRARY} name="file" aria-hidden="true"></wa-icon> <span class="${group.clickable ? 'file-link clickable-link' : 'file-label'}" data-file=${ifDefined(group.clickable ? file : undefined)} role=${ifDefined(group.clickable ? 'button' : undefined)} tabindex=${ifDefined(group.clickable ? '0' : undefined)}>${file}</span> <span class="file-source">(${group.label})</span></li>`))}`;
+  return buildToolUseSection(
+    'Files:',
+    html`<ul class="detail-list">
+      ${fileItems}
+    </ul>`,
+  );
+}
 
 function buildEditDiffInputSections(ctx: ToolSectionContext): TemplateResult[] {
   const { input, filePath, parsedOutput } = ctx;
@@ -312,12 +330,8 @@ function buildDelegationSections(ctx: ToolSectionContext): TemplateResult[] {
   }
 
   const fileGroups = getProposalFileGroups(delegateInput);
-  if (fileGroups.length > 0) {
-    // prettier-ignore
-    const fileItems = html`${fileGroups.flatMap((g) => g.files.map((f) => html`<li class="detail-item"><wa-icon library=${TEXRA_ICON_LIBRARY} name="file" aria-hidden="true"></wa-icon> <span class="${g.clickable ? 'file-link clickable-link' : 'file-label'}" data-file=${ifDefined(g.clickable ? f : undefined)} role=${ifDefined(g.clickable ? 'button' : undefined)} tabindex=${ifDefined(g.clickable ? '0' : undefined)}>${f}</span> <span class="file-source">(${g.label})</span></li>`))}`;
-    // prettier-ignore
-    sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
-  }
+  const filesSection = buildFileGroupsSection(fileGroups);
+  if (filesSection !== undefined) sections.push(filesSection);
   return sections;
 }
 
@@ -357,6 +371,12 @@ function buildWorkflowScriptSections(
       }),
     );
   }
+
+  const files = WorkflowScriptFilesSchema.safeParse(input.files);
+  const filesSection = files.success
+    ? buildFileGroupsSection(getProposalFileGroups(files.data))
+    : undefined;
+  if (filesSection !== undefined) sections.push(filesSection);
 
   const rawResult = isObject(parsedOutput) ? parsedOutput.output : parsedOutput;
   const { text: resultText, language: resultLanguage } =
