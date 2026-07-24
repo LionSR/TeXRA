@@ -198,6 +198,16 @@ return await agent('Inspect src', { id: 'core' })`,
         runAgent: echoRunner,
       }),
     ).rejects.toThrow(/do not duplicate them in agent\(\) options/);
+
+    await expect(
+      runWorkflowScript({
+        script: `${plannedMeta}return await parallel([
+  () => agent('first use', { id: 'known' }),
+  () => agent('second use', { id: 'known' }),
+])`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/may be issued only once per run/i);
   });
 
   it('runs a script end-to-end with agent calls and args', async () => {
@@ -302,6 +312,19 @@ return await parallel([
       'second',
     ]);
 
+    const reusedIdInvocations: WorkflowAgentInvocation[] = [];
+    await runWorkflowScript({
+      script: `${META}return await parallel([
+  () => agent('first prompt', { id: 'shared-id' }),
+  () => agent('second prompt', { id: 'shared-id' }),
+])`,
+      runAgent: (invocation) => {
+        reusedIdInvocations.push(invocation);
+        return echoRunner(invocation);
+      },
+    });
+    expect(reusedIdInvocations).toHaveLength(2);
+
     await expect(
       runWorkflowScript({
         script: `${META}return await parallel([
@@ -317,10 +340,10 @@ return await parallel([
         script: `${META}return await parallel([
   () => agent('same', { id: 'same-id' }),
   () => agent('same', { id: ' same-id ' }),
-])`,
+        ])`,
         runAgent: echoRunner,
       }),
-    ).rejects.toThrow(/may be issued only once per run/i);
+    ).rejects.toThrow(/require distinct non-empty "id" options/i);
   });
 
   it('passes typed workflow outputs into the next stage input files', async () => {

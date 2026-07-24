@@ -90,7 +90,7 @@ function renderConversationPaneEntry({
         />
       );
     }
-    if (entry.role === 'error') {
+    if (entry.role === 'error' || entry.role === 'workflowTask') {
       return (
         <BoundedTranscriptEntry
           colorEnabled={colorEnabled}

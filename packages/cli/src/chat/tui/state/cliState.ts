@@ -23,6 +23,7 @@ import {
   type StreamTabId,
   type TodoItem,
   type TokenUsageStats,
+  type WorkflowTaskProgress,
 } from '@shared/schemas';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { isActivePhase } from '@shared/streams/streamStatus';
@@ -72,6 +73,11 @@ interface ConversationEntryBase {
  */
 export type ConversationEntry =
   | (ConversationEntryBase & { readonly role: 'assistant' | 'error' | 'user' })
+  | (ConversationEntryBase & {
+      readonly role: 'workflowTask';
+      /** Parsed task state retained for semantic settlement and styling. */
+      readonly task: WorkflowTaskProgress;
+    })
   | (ConversationEntryBase & {
       readonly role: 'phase';
       /** Phase title displayed in the group-header divider row. */

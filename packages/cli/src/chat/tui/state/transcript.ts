@@ -132,7 +132,7 @@ export function clearLocalTranscript(): void {
 }
 
 /** Finalizes any entries that defer finalization to end-of-stream
- *  (assistant text and tool rows). Tool rows are included so that a
+ *  (assistant text, tool rows, and workflow tasks). Tool rows are included so that a
  *  fast-completing tool doesn't jump ahead of still-streaming assistant
  *  text in `<Static>` scrollback — see the deferral comment in
  *  `subscribeStreamLog.renderLogEntry`. */
@@ -143,7 +143,13 @@ export function finalizeAssistantTranscriptEntries(
     let changed = false;
     const entries = slice.entries.map((entry) => {
       if (entry.finalized) return entry;
-      if (entry.role !== 'assistant' && entry.role !== 'tool') return entry;
+      if (
+        entry.role !== 'assistant' &&
+        entry.role !== 'tool' &&
+        entry.role !== 'workflowTask'
+      ) {
+        return entry;
+      }
       changed = true;
       return { ...entry, finalized: true };
     });
