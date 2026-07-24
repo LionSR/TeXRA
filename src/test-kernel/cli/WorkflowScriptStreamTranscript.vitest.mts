@@ -20,6 +20,7 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
+import { projectStreamTranscript } from '@cli/chat/tui/state/transcriptProjection';
 import {
   MESSAGE_TYPES,
   STREAM_PHASE,
@@ -152,6 +153,192 @@ describe('CLI workflow-script child-stream transcript', () => {
           .filter((item) => item.kind === 'entry')
           .map((item) => item.entry.text),
       ).toEqual(['Finished: Audit core · deepseekT']);
+    } finally {
+      runTrace.dispose();
+    }
+  });
+
+  it('keeps a running task replaceable when cancellation precedes bridge cleanup', async () => {
+    const runTrace = createRunTrace(STREAM_ID, defaultSession().transcripts);
+    try {
+      runTrace.trace.emit({
+        type: 'workflow.task',
+        logId: 'cancelled-running-task',
+        task: {
+          id: 'cancelled-running',
+          label: 'Audit cancellation',
+          status: 'running',
+        },
+      });
+      patchStream(STREAM_ID, (slice) => ({
+        ...slice,
+        status: STREAM_PHASE.CANCELLED,
+      }));
+
+      // This exercises both terminal-status finalization entry points:
+      // syncStreamLog's settled-prefix promotion and the explicit
+      // end-of-stream projection used by the controller.
+      projectStreamTranscript(STREAM_ID, { finalize: true });
+
+      expect(streams.get().get(STREAM_ID)?.entries.at(0)).toMatchObject({
+        finalized: false,
+        text: 'Running: Audit cancellation',
+        task: { status: 'running' },
+      });
+      let staticItems = appendStaticTranscriptItems({
+        currentItems: [],
+        meta: SESSION_META,
+        scrollbackStreamId: STREAM_ID,
+        streams: streams.get(),
+      });
+      expect(staticItems.filter((item) => item.kind === 'entry')).toEqual([]);
+
+      runTrace.trace.emit({
+        type: 'workflow.task',
+        logId: 'cancelled-running-task',
+        task: {
+          id: 'cancelled-running',
+          label: 'Audit cancellation',
+          status: 'failed',
+          error: 'The workflow ended before this task completed.',
+        },
+      });
+      syncStreamLog(STREAM_ID);
+
+      const settledEntries = streams.get().get(STREAM_ID)?.entries ?? [];
+      expect(settledEntries).toHaveLength(1);
+      expect(settledEntries).toMatchObject([
+        {
+          id: 'cancelled-running-task',
+          finalized: true,
+          task: {
+            id: 'cancelled-running',
+            status: 'failed',
+          },
+        },
+      ]);
+      staticItems = appendStaticTranscriptItems({
+        currentItems: staticItems,
+        meta: SESSION_META,
+        scrollbackStreamId: STREAM_ID,
+        streams: streams.get(),
+      });
+      projectStreamTranscript(STREAM_ID, { finalize: true });
+      syncStreamLog(STREAM_ID);
+      staticItems = appendStaticTranscriptItems({
+        currentItems: staticItems,
+        meta: SESSION_META,
+        scrollbackStreamId: STREAM_ID,
+        streams: streams.get(),
+      });
+      expect(
+        staticItems
+          .filter((item) => item.kind === 'entry')
+          .map((item) => item.entry.text),
+      ).toEqual([
+        'Failed: Audit cancellation — The workflow ended before this task completed.',
+      ]);
+      expect(
+        staticItems
+          .filter((item) => item.kind === 'entry')
+          .map((item) => item.entry.id),
+      ).toEqual(['cancelled-running-task']);
+      const output = await renderStaticTranscript();
+      expect(output).toContain('Failed: Audit cancellation');
+      expect(output).not.toContain('Running: Audit cancellation');
+    } finally {
+      runTrace.dispose();
+    }
+  });
+
+  it('keeps a cold-rebuilt planned task replaceable until not-reached cleanup settles it', async () => {
+    const runTrace = createRunTrace(STREAM_ID, defaultSession().transcripts);
+    try {
+      runTrace.trace.emit({
+        type: 'workflow.task',
+        logId: 'cancelled-planned-task',
+        task: {
+          id: 'cancelled-planned',
+          label: 'Audit later',
+          status: 'planned',
+        },
+      });
+
+      // Rebuild CLI state from the durable log after cancellation, before the
+      // bridge has projected its not-reached terminal update.
+      resetCliState();
+      patchStream(STREAM_ID, (slice) => ({
+        ...slice,
+        model: 'deepseekT',
+        status: STREAM_PHASE.CANCELLED,
+      }));
+      projectStreamTranscript(STREAM_ID, { finalize: true });
+
+      expect(streams.get().get(STREAM_ID)?.entries.at(0)).toMatchObject({
+        finalized: false,
+        text: 'Planned: Audit later',
+        task: { status: 'planned' },
+      });
+      let staticItems = appendStaticTranscriptItems({
+        currentItems: [],
+        meta: SESSION_META,
+        scrollbackStreamId: STREAM_ID,
+        streams: streams.get(),
+      });
+      expect(staticItems.filter((item) => item.kind === 'entry')).toEqual([]);
+
+      runTrace.trace.emit({
+        type: 'workflow.task',
+        logId: 'cancelled-planned-task',
+        task: {
+          id: 'cancelled-planned',
+          label: 'Audit later',
+          status: 'skipped',
+          reason: 'not-reached',
+        },
+      });
+      syncStreamLog(STREAM_ID, { forceFull: true });
+
+      const settledEntries = streams.get().get(STREAM_ID)?.entries ?? [];
+      expect(settledEntries).toHaveLength(1);
+      expect(settledEntries).toMatchObject([
+        {
+          id: 'cancelled-planned-task',
+          finalized: true,
+          task: {
+            id: 'cancelled-planned',
+            status: 'skipped',
+            reason: 'not-reached',
+          },
+        },
+      ]);
+      staticItems = appendStaticTranscriptItems({
+        currentItems: staticItems,
+        meta: SESSION_META,
+        scrollbackStreamId: STREAM_ID,
+        streams: streams.get(),
+      });
+      projectStreamTranscript(STREAM_ID, { finalize: true });
+      syncStreamLog(STREAM_ID, { forceFull: true });
+      staticItems = appendStaticTranscriptItems({
+        currentItems: staticItems,
+        meta: SESSION_META,
+        scrollbackStreamId: STREAM_ID,
+        streams: streams.get(),
+      });
+      expect(
+        staticItems
+          .filter((item) => item.kind === 'entry')
+          .map((item) => item.entry.text),
+      ).toEqual(['Skipped: Audit later']);
+      expect(
+        staticItems
+          .filter((item) => item.kind === 'entry')
+          .map((item) => item.entry.id),
+      ).toEqual(['cancelled-planned-task']);
+      const output = await renderStaticTranscript();
+      expect(output).toContain('Skipped: Audit later');
+      expect(output).not.toContain('Planned: Audit later');
     } finally {
       runTrace.dispose();
     }

@@ -482,8 +482,9 @@ function isSettledEntry(
 // viewport would clip the round's earlier content). Only a contiguous
 // prefix is promoted: `<Static>` is append-only, so an entry must not
 // finalize while any earlier entry is still pending, or insertion order
-// would reverse. When the stream reaches a final status every remaining
-// entry settles, including the trailing live block.
+// would reverse. A final stream status settles trailing assistant/tool rows,
+// but not a workflow task: bridge cleanup may still replace its
+// planned/running state after cancellation.
 export function finalizeSettledPrefix(
   entries: readonly ConversationEntry[],
   streamFinal: boolean,
@@ -493,7 +494,12 @@ export function finalizeSettledPrefix(
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index];
     if (!entry || entry.finalized) continue;
-    if (!streamFinal && (sealed || !isSettledEntry(entry, index, entries))) {
+    const settled = isSettledEntry(entry, index, entries);
+    if (
+      sealed ||
+      (entry.role === 'workflowTask' && !settled) ||
+      (!streamFinal && !settled)
+    ) {
       sealed = true;
       continue;
     }

@@ -1,6 +1,7 @@
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   STREAM_PHASE,
+  isTerminalWorkflowTaskProgress,
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
@@ -134,18 +135,29 @@ export function clearLocalTranscript(): void {
   removeStream(CLI_LOCAL_STREAM_ID);
 }
 
-/** Finalizes any entries that defer finalization to end-of-stream
- *  (assistant text, tool rows, and workflow tasks). Tool rows are included so that a
- *  fast-completing tool doesn't jump ahead of still-streaming assistant
- *  text in `<Static>` scrollback — see the deferral comment in
- *  `subscribeStreamLog.renderLogEntry`. */
+/** Finalizes entries whose content is immutable at the end of a stream.
+ *
+ * Assistant and tool rows stop changing at that boundary. Workflow tasks are
+ * different: bridge cleanup may settle them after the stream status changes,
+ * so a nonterminal task remains live and blocks every later row from entering
+ * append-only `<Static>` scrollback until its terminal update arrives.
+ */
 export function finalizeAssistantTranscriptEntries(
   streamId: StreamTabId,
 ): void {
   patchStream(streamId, (slice) => {
     let changed = false;
+    let blockedByWorkflowTask = false;
     const entries = slice.entries.map((entry) => {
       if (entry.finalized) return entry;
+      if (
+        entry.role === 'workflowTask' &&
+        !isTerminalWorkflowTaskProgress(entry.task)
+      ) {
+        blockedByWorkflowTask = true;
+        return entry;
+      }
+      if (blockedByWorkflowTask) return entry;
       if (
         entry.role !== 'assistant' &&
         entry.role !== 'tool' &&
