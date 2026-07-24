@@ -17,6 +17,7 @@ import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
+import { markOwnedExecutionLeaseUndurable } from '@agent/storage/executionLease';
 import {
   STREAM_PHASE,
   type ExecutionId,
@@ -318,6 +319,26 @@ describe('headless delegation', () => {
     expect(result.output).toContain('<response>');
     expect(result.output).toContain('The proof is correct.');
     expect(mocks.writeReport).toHaveBeenCalledWith(result.output);
+  });
+
+  it('marks the execution lease undurable when the in-band delivery report write fails', async () => {
+    mocks.writeReport.mockRejectedValueOnce(new Error('disk full'));
+
+    const result = await withRunContext(
+      parentRunContext({ stopAfterCycle: true }),
+      () => callDelegateReview(),
+    );
+
+    // The delivery XML still returns synchronously — a persistence hiccup on
+    // the best-effort path never fails a call whose result already returned
+    // inline (see PersistenceMode's `best-effort-delivery`, unchanged by this
+    // fix). What is lost is the durable report copy, which is why the lease
+    // must be marked undurable — mirroring `childRunLoop.ts`'s twin marks.
+    expect(result.status).toBe('executed');
+    expect(result.summary).toBe("Completed 'review'");
+    const executionId = mocks.registerExecution.mock.calls[0]?.[0];
+    expect(executionId).toEqual(expect.any(String));
+    expect(markOwnedExecutionLeaseUndurable).toHaveBeenCalledWith(executionId);
   });
 
   it('returns and persists the typed final result for in-band consumers', async () => {
@@ -1112,7 +1133,7 @@ describe('headless delegation', () => {
     const host = runtimeHost();
 
     // Async delegation is now driven by the child-run loop over
-    // NativeToolUseStrategy: `executeAgent` (mocked here) is the loop's
+    // nativeSubagentStrategy: `executeAgent` (mocked here) is the loop's
     // `launch` turn, and a returned WAITING result is the loop's one
     // delivery site's input — there is no more onBeforeWaiting callback.
     mocks.executeAgent.mockImplementationOnce(

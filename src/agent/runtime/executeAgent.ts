@@ -325,10 +325,14 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   /**
    * Allow the promise to resolve with the non-terminal WAITING result. Only
    * a fresh launch of a persistent native subagent (`isSubagent` without
-   * `stopAfterCycle`) can produce one, so only such drivers opt in. Resume
-   * paths have no equivalent flag: whether a resumed run is a subagent comes
-   * from persisted lineage, so `resumeToolUseFromResumeData` always admits
-   * WAITING and callers narrow with `isWaitingFlowResult`.
+   * `stopAfterCycle`) can produce one, so `nativeSubagentStrategy` is the
+   * only caller that opts in — unconditionally, for both agent categories,
+   * since a workflow-category flow can never produce a WAITING result and
+   * the flag is simply inert there (`isWaitingFlowResult` requires
+   * `category === 'toolUse'`). Resume paths have no equivalent flag: whether
+   * a resumed run is a subagent comes from persisted lineage, so
+   * `resumeToolUseFromResumeData` always admits WAITING and callers narrow
+   * with `isWaitingFlowResult`.
    */
   allowWaitingResult?: boolean;
   /** Resume using this persisted provider-message format instead of today's default route. */

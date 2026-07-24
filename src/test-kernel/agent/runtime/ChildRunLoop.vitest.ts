@@ -5,7 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 // These exercise the loop's own mechanics (queue acquire/drain, one
 // run-handle interrupt target for the child's whole lifetime, per-turn delivery, terminal
 // finalize) against a minimal fake strategy — the same contract every real
-// strategy (codex, claude, native tool-use, native workflow) implements.
+// strategy (codex, claude, native subagent, workflow-script) implements.
 // Identical assertions apply regardless of which strategy is plugged in,
 // since delivery/interrupt/terminal choreography all live in the loop.
 

@@ -1,6 +1,7 @@
 // One driver for every child-run type (agent-CLI codex/claude sessions, native
-// tool-use subagents, native workflow subagents). Each turn source supplies an
-// AgentCliSessionStrategy-shaped ChildRunStrategy; this loop owns the parts
+// subagents of either category, workflow-script runs). Each turn source
+// supplies an AgentCliSessionStrategy-shaped ChildRunStrategy; this loop owns
+// the parts
 // that were previously duplicated per driver: follow-up queue acquire/drain,
 // one run-handle interrupt target for the child's whole lifetime, per-turn
 // delivery choreography (format → persist report → optional manifest → deliver
@@ -100,8 +101,11 @@ export interface ChildRunStrategy<TTurn> {
   /**
    * Produce the next turn's outcome from the queued follow-up batch. Throws
    * on hard failure. Omitted by strategies whose first (and only) turn is
-   * always terminal (native workflow) — the loop never calls `runTurn` in
-   * that case, since it only continues past a non-terminal turn.
+   * always terminal (workflow-script) — the loop never calls `runTurn` in
+   * that case, since it only continues past a non-terminal turn. The native
+   * subagent strategy declares `runTurn` unconditionally, even for a
+   * workflow-category child — it is simply unreachable there, since
+   * `isTerminal` is always true on that child's first turn.
    */
   runTurn?(
     followUps: readonly FollowUpQueueBatchItem[],
@@ -131,8 +135,9 @@ export interface ChildRunStrategy<TTurn> {
   publishUsage?(turn: TTurn): void;
 
   /**
-   * Format the success delivery XML. Native workflow strategies compute this
-   * asynchronously (diff files are written to the run directory first).
+   * Format the success delivery XML. A native workflow-category subagent
+   * computes this asynchronously (diff files are written to the run
+   * directory first).
    */
   formatDelivery(turn: TTurn, wallTimeMs: number): string | Promise<string>;
 
@@ -641,7 +646,7 @@ export function startChildRunLoop<TTurn>(
 
         const isTerminal = turn != null && strategy.isTerminal(turn);
         if (isTerminal || !strategy.runTurn) {
-          // A strategy without `runTurn` (native workflow) declares every
+          // A strategy without `runTurn` (workflow-script) declares every
           // turn terminal via `isTerminal`; reaching here with one still
           // undeclared-terminal is a strategy bug, not a run outcome — stop
           // rather than call an absent `runTurn`.
