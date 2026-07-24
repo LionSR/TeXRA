@@ -14,6 +14,7 @@ import {
   executionsSubagentSummary,
   type ExecutionLabels,
 } from '@shared/tools/executionsDisplay';
+import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import { isObject } from '@utils/core';
 import {
@@ -103,8 +104,9 @@ function elisionMarker(hiddenCount: number): string {
   return `… +${hiddenCount} lines (ctrl + t to print full output)`;
 }
 
-// Tool inputs vary in shape; show whichever of these "primary" fields
-// exists first. Order matters: earlier keys win.
+// Generic fallback for tools without a curated preview field in
+// `deriveToolInputPreview` (@shared/tools/toolInputPreview): show whichever
+// of these fields exists first. Order matters: earlier keys win.
 const PRIMARY_INPUT_KEYS = [
   'command',
   'code',
@@ -172,9 +174,14 @@ function displayToolName(toolName: string): string {
   return displayMcpToolName(toolName) ?? lastSegmentToolName(toolName);
 }
 
-function previewInput(input: unknown): string {
+function previewInput(toolName: string, input: unknown): string {
   if (typeof input === 'string') return input;
   if (input === undefined || input === null) return '';
+  const namedPreview = deriveToolInputPreview(
+    lastSegmentToolName(toolName).toLowerCase(),
+    input,
+  );
+  if (namedPreview) return namedPreview;
   if (isObject(input)) {
     for (const key of PRIMARY_INPUT_KEYS) {
       const value = input[key];
@@ -246,9 +253,10 @@ function toolHeaderPreview(
 ): string {
   if (maxPreview <= 0) return '';
   const headerSummary = summaryOverride ?? toolUse.headerSummary;
+  const inputPreview = previewInput(toolUse.toolName, toolUse.input);
   const sourceText = preferInputPreview
-    ? previewInput(toolUse.input) || headerSummary || ''
-    : headerSummary || previewInput(toolUse.input) || '';
+    ? inputPreview || headerSummary || ''
+    : headerSummary || inputPreview || '';
   return sourceText ? truncateSummaryToWidth(sourceText, maxPreview) : '';
 }
 
