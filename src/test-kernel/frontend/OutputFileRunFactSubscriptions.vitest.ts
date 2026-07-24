@@ -212,6 +212,9 @@ describe('output-file run fact frontend subscriptions', () => {
     ).toMatchObject({ badge: 'T', tooltip: 'Modified by TeXRA' });
 
     disposeContext(context);
+    expect(
+      provider.provideFileDecoration(vscode.Uri.file(writtenPath)),
+    ).toBeUndefined();
   });
 
   it('refreshes inline criticism only for live run facts while enabled', async () => {

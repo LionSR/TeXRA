@@ -44,6 +44,7 @@ class TeXRAFileDecorationProvider implements vscode.FileDecorationProvider {
   }
 
   dispose(): void {
+    this.touched.clear();
     this._onDidChange.dispose();
   }
 }
