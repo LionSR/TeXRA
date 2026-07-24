@@ -36,12 +36,16 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   // stream ID (format "agentName@timestamp") so an early render — e.g. a
   // just-created bash child stream — still classifies correctly. Once `run`
   // is set, its `kind` is authoritative: no more guessing from the name.
-  const rawAgentName = run?.agent ?? streamId.split('@')[0];
-  const agentName = getCleanAgentName(rawAgentName);
-  const resolvedAgent = run?.agent ?? agentName;
+  const rawIdentityName =
+    run?.kind === 'workflowScript'
+      ? run.workflowName
+      : (run?.agent ?? streamId.split('@')[0]);
+  const identityName = getCleanAgentName(rawIdentityName);
+  const resolvedAgent =
+    run?.kind === 'workflowScript' ? undefined : (run?.agent ?? identityName);
   const isProcessStream = run
     ? run.kind === 'process'
-    : isProcessAgent(rawAgentName);
+    : isProcessAgent(rawIdentityName);
 
   const inputFile = (run?.kind === 'agent' ? run.inputFile : undefined) ?? '';
 
@@ -50,8 +54,8 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   // a single canonical input file, so we just show the agent name.
   const label =
     category !== AgentCategory.ToolUse && inputFile
-      ? `${agentName}: ${path.basename(inputFile)}`
-      : agentName;
+      ? `${identityName}: ${path.basename(inputFile)}`
+      : identityName;
 
   // Surface the full untruncated command for process streams (description
   // is capped for tab/tooltip rendering).
@@ -61,7 +65,7 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   // Canonical host-known status takes precedence because setActiveStream can
   // identify a remote run before its agent is present in the registry.
   const isRemote =
-    metadata.isRemote ?? (rawAgentName ? isRemoteAgent(rawAgentName) : false);
+    metadata.isRemote ?? (resolvedAgent ? isRemoteAgent(resolvedAgent) : false);
 
   // Worktree context comes from one of two sources, in order:
   //   1. An explicit hint passed in by the caller (already resolved branch /
@@ -77,7 +81,7 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   const base = {
     name: streamId,
     label,
-    agent: resolvedAgent,
+    ...(resolvedAgent ? { agent: resolvedAgent } : {}),
     agentCategory: category,
     isRemote,
     inputFile,
@@ -90,6 +94,13 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
 
   if (isProcessStream) {
     return { ...base, kind: 'process', command };
+  }
+  if (run?.kind === 'workflowScript') {
+    return {
+      ...base,
+      kind: 'workflowScript',
+      workflowName: run.workflowName,
+    };
   }
 
   // Process agents (e.g. bash) carry a synthetic AgentConfig whose `model`

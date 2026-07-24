@@ -8,7 +8,10 @@ import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import type { Platform } from '@platform/platform';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
-import { RUN_DESCRIPTOR_SCHEMA_VERSION } from '@shared/schemas';
+import {
+  RUN_DESCRIPTOR_SCHEMA_VERSION,
+  buildRunDescriptor,
+} from '@shared/schemas';
 import type {
   CompileFailure,
   ExecutionId,
@@ -193,6 +196,20 @@ describe('StreamSnapshotStore', () => {
       scope: 'run',
       streamId: STREAM,
       event: {
+        type: 'run.start',
+        descriptor: buildRunDescriptor({
+          streamId: STREAM,
+          executionId,
+          agent: 'session-label',
+          category: AgentCategory.ToolUse,
+          kind: 'agent',
+        }),
+      },
+    });
+    events.emit({
+      scope: 'run',
+      streamId: STREAM,
+      event: {
         type: 'run.config',
         streamId: STREAM,
         executionId,
@@ -312,8 +329,9 @@ describe('StreamSnapshotStore', () => {
     expect(reader.getRunDescriptor(STREAM)).toMatchObject({
       streamId: STREAM,
       executionId,
-      agent: 'session-search',
+      agent: 'session-label',
       category: AgentCategory.ToolUse,
+      kind: 'agent',
     });
 
     const goalPausedOnly = await new StreamSnapshotStore().read(OTHER_STREAM);

@@ -38,7 +38,11 @@ import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import './WorktreeChip';
 import { formatRelativeTime } from '@shared/utils/string';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
-import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
+import {
+  TEXRA_ICON_LIBRARY,
+  type TeXRAIconName,
+  waIcon,
+} from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { layoutStyles } from '../styles/logStyles';
@@ -114,7 +118,10 @@ export class StreamTab extends LitElement {
   /** Whether the child list is expanded. */
   @property({ type: Boolean, reflect: true }) expanded = false;
 
-  private _agentDecorator = getAgentCategoryDecorator('toolUse');
+  private _streamDecorator: {
+    readonly icon: TeXRAIconName;
+    readonly label: string;
+  } = getAgentCategoryDecorator('toolUse');
   private _tooltip = '';
 
   protected override willUpdate(changed: PropertyValues): void {
@@ -126,7 +133,10 @@ export class StreamTab extends LitElement {
     )
       return;
     if (changed.has('info')) {
-      this._agentDecorator = getAgentCategoryDecorator(this.info.agentCategory);
+      this._streamDecorator =
+        this.info.kind === 'workflowScript'
+          ? AGENT_DECORATORS.streamKinds.workflowScript
+          : getAgentCategoryDecorator(this.info.agentCategory);
     }
     const status = this.status || DEFAULT_STREAM_METADATA_STATUS;
     const statusLabel =
@@ -142,7 +152,7 @@ export class StreamTab extends LitElement {
     const status = this.status || DEFAULT_STREAM_METADATA_STATUS;
     const statusKey = streamStatusDisplayKey(status, this.substate) ?? status;
     const tooltip = this._tooltip;
-    const agentDecorator = this._agentDecorator;
+    const streamDecorator = this._streamDecorator;
     const hasChildren = this.childCount > 0 && !this.compact;
     const childStreamLabel = formatResultCount(this.childCount, 'child stream');
 
@@ -247,10 +257,14 @@ export class StreamTab extends LitElement {
                     >
                     <wa-icon
                       library=${TEXRA_ICON_LIBRARY}
-                      name=${agentDecorator.icon}
-                      class="agent-category"
+                      name=${streamDecorator.icon}
+                      class="stream-kind"
                       aria-hidden="true"
-                      title=${`Category: ${agentDecorator.label}`}
+                      title=${
+                        stream.kind === 'workflowScript'
+                          ? streamDecorator.label
+                          : `Category: ${streamDecorator.label}`
+                      }
                     ></wa-icon>
                     ${when(
                       stream.isRemote,

@@ -43,6 +43,7 @@ import * as logger from '@logger/logUtils';
 import {
   AgentCategory,
   type ActiveChildInfo,
+  buildRunDescriptor,
   type CompileFailure,
   type InquiryThreadUpdatedEvent,
   LOG_LEVELS,
@@ -2212,9 +2213,9 @@ describe('ProgressBackend', () => {
     try {
       backend.state.streamLogs.ensureStream(stream);
       // Provisional patches only ever carry agentCategory/isRemote in
-      // production (see ProgressFactApplier.handleSetActiveStream) — agent/
-      // inputFile/model come exclusively from the RunConfig-derived `run`
-      // union, set atomically by applySnapshotMetadata.
+      // production (see ProgressFactApplier.handleSetActiveStream). Identity
+      // comes from the immutable descriptor; input/model details come from
+      // RunConfig and are assembled atomically by applySnapshotMetadata.
       backend.state.updateStreamMetadata(stream, {
         agentCategory: AgentCategory.Workflow,
         isRemote: true,
@@ -2266,6 +2267,59 @@ describe('ProgressBackend', () => {
         action: 'render',
         kind: AgentCategory.ToolUse,
       });
+    } finally {
+      backend.dispose();
+    }
+  });
+
+  it('models a workflow-script container separately from its default worker agent', () => {
+    const { backend } = createRecordingBackend();
+    const stream = 'workflow-script#f10a11' as StreamTabId;
+    const executionId = 'f10a11' as ExecutionId;
+
+    try {
+      backend.state.streamLogs.ensureStream(stream);
+      backend.state.snapshots.setRunDescriptor(
+        buildRunDescriptor({
+          streamId: stream,
+          executionId,
+          agent: 'repo-cleanup-readonly-pilot-2026-07-24',
+          category: AgentCategory.Workflow,
+          kind: 'workflowScript',
+        }),
+      );
+      backend.state.setStreamTaskState(
+        stream,
+        {
+          agentConfig: {
+            agent: 'generic',
+            model: 'gpt-5.6-sol',
+            agentCategory: AgentCategory.Workflow,
+            instruction:
+              "Workflow script 'repo-cleanup-readonly-pilot-2026-07-24'",
+          },
+        } as TaskState,
+        executionId,
+      );
+
+      expect(backend.state.getStreamMetadata(stream).run).toEqual({
+        kind: 'workflowScript',
+        workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+        instruction: "Workflow script 'repo-cleanup-readonly-pilot-2026-07-24'",
+      });
+      const workflowInfos = buildStreamInfos(backend.state, 'workflow');
+      expect(workflowInfos).toContainEqual(
+        expect.objectContaining({
+          name: stream,
+          label: 'repo-cleanup-readonly-pilot-2026-07-24',
+          kind: 'workflowScript',
+          workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+          agentCategory: AgentCategory.Workflow,
+        }),
+      );
+      const workflowScript = workflowInfos.find((info) => info.name === stream);
+      expect(workflowScript).not.toHaveProperty('agent');
+      expect(workflowScript).not.toHaveProperty('model');
     } finally {
       backend.dispose();
     }
