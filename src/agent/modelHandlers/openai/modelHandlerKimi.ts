@@ -5,6 +5,10 @@ import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { TokenCountOptions } from '@agent/types/ModelHandlerContracts';
 import type { ToolDefinition } from '@model';
+import {
+  isKimiSubscriptionEligible,
+  KIMI_CODE_BASE_URL,
+} from '@model/kimiCodeSubscriptionRouting';
 import { hasManagedDirectRoute } from '@model/openRouterRouting';
 import { resolveMoonshotRequestParameters } from '../support/moonshotRequestParameters';
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
@@ -70,6 +74,16 @@ const KIMI_TOKEN_ESTIMATE_RETRIES = 2;
 export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
   protected override get usageProvider(): NormalizedUsage['provider'] {
     return 'moonshot';
+  }
+
+  /** Classify successful coding-endpoint requests as subscription usage. */
+  override getLastCredentialUsageRoute(): NormalizedUsage['usageRoute'] {
+    const route = super.getLastCredentialUsageRoute();
+    return route === 'api-key' &&
+      isKimiSubscriptionEligible(this.config) &&
+      this.config.baseUrl === KIMI_CODE_BASE_URL
+      ? 'kimi-code-subscription'
+      : route;
   }
 
   // Kimi K2.5 supports vision with standard OpenAI-style image_url format;

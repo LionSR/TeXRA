@@ -10,7 +10,12 @@ function optional<T extends z.ZodType>(schema: T) {
 const optionalString = optional(z.string());
 const optionalNonnegativeInt = optional(z.int().nonnegative());
 const optionalBoolean = optional(z.boolean());
-const UsageRouteSchema = z.enum(['chatgpt-subscription', 'relay', 'api-key']);
+const UsageRouteSchema = z.enum([
+  'chatgpt-subscription',
+  'kimi-code-subscription',
+  'relay',
+  'api-key',
+]);
 
 const UsageLogEntryInputSchema = z.object({
   timestamp: z.iso.datetime(),
@@ -54,3 +59,17 @@ export const UsageBatchSchema = z.object({
 });
 
 export type UsageLogEntry = z.infer<typeof UsageLogEntrySchema>;
+
+/** Return the subscription product for subscription-backed usage. */
+export function subscriptionSourceForUsage(
+  entry: Pick<UsageLogEntry, 'usageRoute' | 'subscriptionSource'>,
+): string | undefined {
+  switch (entry.usageRoute) {
+    case 'chatgpt-subscription':
+      return entry.subscriptionSource ?? 'chatgpt';
+    case 'kimi-code-subscription':
+      return entry.subscriptionSource ?? 'kimi';
+    default:
+      return undefined;
+  }
+}

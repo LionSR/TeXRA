@@ -21,6 +21,7 @@ export const UsageProviderSchema = z.enum([
 
 export const UsageRouteSchema = z.enum([
   'chatgpt-subscription',
+  'kimi-code-subscription',
   'relay',
   'api-key',
 ]);

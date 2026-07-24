@@ -11,6 +11,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerGLM } from '@agent/modelHandlers/openai/modelHandlerGLM';
 import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
 import { ModelHandlerXAI } from '@agent/modelHandlers/openai/modelHandlerXAI';
+import { KIMI_CODE_BASE_URL } from '@model/kimiCodeSubscriptionRouting';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 const NO_VISION_CAPABILITIES = Object.freeze({ supportsVision: false });
@@ -67,7 +68,43 @@ function createClientStub() {
   };
 }
 
+class KimiUsageRouteProbe extends ModelHandlerKimi {
+  tagApiKeyClient<Candidate extends object>(client: Candidate): Candidate {
+    return this.rememberClientCredentialRoute(
+      client,
+      'api-key',
+      'test-kimi-code-key',
+    );
+  }
+}
+
 describe('OpenAI-compatible provider request params', () => {
+  it('records coding-endpoint Kimi requests as subscription usage', async () => {
+    const handler = new KimiUsageRouteProbe(
+      buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
+        name: 'kimi27codeT',
+        fullName: 'kimi-for-coding',
+        kimiSubscription: true,
+        baseUrl: KIMI_CODE_BASE_URL,
+      }),
+    );
+    handler.setLogger({ ...noopTrace });
+    (handler as any).getStreamingConfig = () => false;
+    (handler as any).estimateTokenCount = async () => 100;
+
+    const { client } = createClientStub();
+    await handler.createResponse({
+      client: handler.tagApiKeyClient(client) as any,
+      messages: [{ role: 'user', content: 'think' }],
+      temperature: 0,
+    });
+
+    assert.equal(
+      handler.getLastCredentialUsageRoute(),
+      'kimi-code-subscription',
+    );
+  });
+
   it.each(['kimi-k2.7-code', 'kimi-for-coding', 'kimi-for-coding-highspeed'])(
     'keeps Kimi K2.7 Code alias %s on required defaults',
     async (fullName) => {

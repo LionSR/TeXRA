@@ -59,6 +59,18 @@ describe('usage-panel route badges', () => {
     expect(usageAriaLabel(element)).toContain('Free via ChatGPT');
   });
 
+  it('shows Kimi Code subscription usage as free', async () => {
+    const element = await mountUsagePanel(
+      usage({
+        cost: 0,
+        usageRoute: 'kimi-code-subscription',
+      }),
+    );
+
+    expect(panelText(element)).toContain('Free · Kimi Code');
+    expect(usageAriaLabel(element)).toContain('Free via Kimi Code');
+  });
+
   it.each([
     {
       route: 'relay' as UsageRoute,
