@@ -50,8 +50,7 @@ function assertNoForbiddenTarballEntries(entries) {
       relative.startsWith('dist/resources/walkthroughs/') ||
       relative.startsWith('dist/resources/examples/') ||
       relative.startsWith('dist/resources/logo-') ||
-      // Reference agents are not part of the public CLI.
-      relative.startsWith('dist/resources/reference-agents/') ||
+      // The chat-export template is extension-only.
       relative === 'dist/resources/templates/chatExport.tex'
     );
   });

@@ -26,7 +26,6 @@ tsconfig.json
 venv/**
 docs/**
 prototypes/**
-reference-agents/**
 test/**
 test-loader.mjs
 AGENTS.md

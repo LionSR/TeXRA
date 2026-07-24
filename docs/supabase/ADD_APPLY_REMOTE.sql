@@ -2,10 +2,10 @@
 --
 -- Prerequisites:
 -- 1. Upload the YAML files to Supabase Storage:
---    - Copy from: reference-agents/apply.yaml
+--    - Copy from: prompts/agents/remote/apply.yaml
 --    - Upload to: Storage > agent-configs > researcher/apply.yaml
 --
---    - Copy from: reference-agents/apply_multiple.yaml
+--    - Copy from: prompts/agents/remote/apply_multiple.yaml
 --    - Upload to: Storage > agent-configs > researcher/apply_multiple.yaml
 --
 -- Then run this SQL in Supabase SQL Editor:

@@ -3,10 +3,10 @@
 --
 -- Prerequisites:
 -- 1. Upload YAMLs to Supabase Storage under agent-configs/tool-use-lean/:
---    - leanSearch.yaml       (from reference-agents/Lean4/leanSearch.yaml)
---    - leanSimplifier.yaml   (from reference-agents/Lean4/leanSimplifier.yaml)
---    - leanBlueprint.yaml    (from reference-agents/Lean4/leanBlueprint.yaml)
---    - leanOrchestrator.yaml (from reference-agents/Lean4/leanOrchestrator.yaml)
+--    - leanSearch.yaml       (from prompts/agents/remote/Lean4/leanSearch.yaml)
+--    - leanSimplifier.yaml   (from prompts/agents/remote/Lean4/leanSimplifier.yaml)
+--    - leanBlueprint.yaml    (from prompts/agents/remote/Lean4/leanBlueprint.yaml)
+--    - leanOrchestrator.yaml (from prompts/agents/remote/Lean4/leanOrchestrator.yaml)
 --
 -- Then run this SQL in Supabase SQL Editor.
 

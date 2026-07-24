@@ -1644,7 +1644,7 @@ current workspace; it does not override an active workspace selection.
 
 | Concern                                                    | File                                                                                                                                                             |
 | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agentRole` field on agent YAMLs                           | `resources/agents/*.yaml`, `resources/tool_use_agents/*.yaml`, `reference-agents/**/*.yaml`                                                                      |
+| `agentRole` field on agent YAMLs                           | `resources/agents/*.yaml`, `resources/tool_use_agents/*.yaml`, `prompts/agents/remote/**/*.yaml`                                                                 |
 | `agentRole` derivation + `AgentEntry.ref()`                | `src/agent/index/agentRegistry.ts`                                                                                                                               |
 | Team schema, built-in records, migration                   | `src/shared/schemas/agentPresets.ts`                                                                                                                             |
 | Custom team CRUD handlers                                  | `packages/extension/src/settingsView/handlers/agentHandlers.ts`                                                                                                  |

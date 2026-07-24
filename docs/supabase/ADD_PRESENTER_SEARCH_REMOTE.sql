@@ -3,13 +3,13 @@
 --
 -- Prerequisites:
 -- 1. Upload the YAML files to Supabase Storage:
---    - Copy from: reference-agents/presenter.yaml
+--    - Copy from: prompts/agents/remote/presenter.yaml
 --    - Upload to: Storage > agent-configs > tool_use/presenter.yaml
 --
---    - Copy from: reference-agents/search.yaml
+--    - Copy from: prompts/agents/remote/search.yaml
 --    - Upload to: Storage > agent-configs > tool_use/search.yaml
 --
---    - Copy from: reference-agents/simplifier.yaml
+--    - Copy from: prompts/agents/remote/simplifier.yaml
 --    - Upload to: Storage > agent-configs > tool_use/simplifier.yaml
 --
 -- Then run this SQL in Supabase SQL Editor:
