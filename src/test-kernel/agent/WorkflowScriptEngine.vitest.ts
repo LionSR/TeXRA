@@ -32,6 +32,41 @@ describe('parseWorkflowScript', () => {
     expect(body).not.toContain('export ');
   });
 
+  it('validates the declarative task plan as part of workflow metadata', () => {
+    const { meta } = parseWorkflowScript(`export const meta = {
+  name: 'planned',
+  description: 'declares progress before execution',
+  phases: [{ title: 'Audit' }],
+  tasks: [{ id: 'core', label: 'Audit core', phase: 'Audit' }],
+}
+return null`);
+    expect(meta.tasks).toEqual([
+      { id: 'core', label: 'Audit core', phase: 'Audit' },
+    ]);
+
+    expect(() =>
+      parseWorkflowScript(`export const meta = {
+  name: 'duplicate',
+  description: 'invalid duplicate ids',
+  tasks: [
+    { id: 'same', label: 'First' },
+    { id: 'same', label: 'Second' },
+  ],
+}
+return null`),
+    ).toThrow(/Duplicate task id "same"/);
+
+    expect(() =>
+      parseWorkflowScript(`export const meta = {
+  name: 'unknown-phase',
+  description: 'invalid phase reference',
+  phases: [{ title: 'Known' }],
+  tasks: [{ id: 'task', label: 'Task', phase: 'Unknown' }],
+}
+return null`),
+    ).toThrow(/not declared in meta\.phases/);
+  });
+
   it('rejects scripts without a leading meta export', () => {
     expect(() => parseWorkflowScript(`return 1`)).toThrow(
       WorkflowScriptParseError,
@@ -101,6 +136,70 @@ describe('parseWorkflowScript', () => {
 });
 
 describe('runWorkflowScript', () => {
+  it('uses meta.tasks as the single source for task labels and phases', async () => {
+    const events: WorkflowScriptEvent[] = [];
+    const runner = vi.fn(echoRunner);
+    await runWorkflowScript({
+      script: `export const meta = {
+  name: 'planned-run',
+  description: 'runs a declared plan',
+  phases: [{ title: 'Audit' }],
+  tasks: [{ id: 'core', label: 'Audit core', phase: 'Audit' }],
+}
+return await agent('Inspect src', { id: 'core' })`,
+      runAgent: runner,
+      onEvent: (event) => events.push(event),
+    });
+
+    expect(events[0]).toEqual({
+      type: 'plan',
+      tasks: [{ id: 'core', label: 'Audit core', phase: 'Audit' }],
+    });
+    expect(runner.mock.calls[0][0].options).toMatchObject({
+      id: 'core',
+      label: 'Audit core',
+      phase: 'Audit',
+    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'agent:start',
+        taskId: 'core',
+        label: 'Audit core',
+        phase: 'Audit',
+      }),
+    );
+  });
+
+  it('rejects calls outside a declared plan and duplicated presentation data', async () => {
+    const plannedMeta = `export const meta = {
+  name: 'strict-plan',
+  description: 'requires task references',
+  tasks: [{ id: 'known', label: 'Known task' }],
+}
+`;
+    await expect(
+      runWorkflowScript({
+        script: `${plannedMeta}return await agent('missing id')`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/must reference a task from meta\.tasks/);
+    await expect(
+      runWorkflowScript({
+        script: `${plannedMeta}return await agent('unknown', { id: 'other' })`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/undeclared task id "other"/);
+    await expect(
+      runWorkflowScript({
+        script: `${plannedMeta}return await agent('duplicate', {
+  id: 'known',
+  label: 'Duplicated label',
+})`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/do not duplicate them in agent\(\) options/);
+  });
+
   it('runs a script end-to-end with agent calls and args', async () => {
     const run = await runWorkflowScript({
       script: `${META}
@@ -221,7 +320,7 @@ return await parallel([
 ])`,
         runAgent: echoRunner,
       }),
-    ).rejects.toThrow(/require distinct non-empty "id" options/i);
+    ).rejects.toThrow(/may be issued only once per run/i);
   });
 
   it('passes typed workflow outputs into the next stage input files', async () => {
@@ -309,7 +408,7 @@ return await parallel([
         order.push(`checkpoint:${entry.index}`);
       },
       onEvent: (event) => {
-        if (event.type === 'agent:end' && !event.error) {
+        if (event.type === 'agent:end' && event.outcome !== 'failed') {
           order.push(`end:${event.index}`);
         }
       },
@@ -502,10 +601,11 @@ return b`,
     expect(events).toEqual([
       {
         type: 'agent:end',
+        taskId: 'call-0',
         index: 0,
         label: 'cached',
         phase: undefined,
-        cached: true,
+        outcome: 'failed',
         error: expect.stringMatching(/must be JSON-serializable/i),
       },
     ]);
@@ -593,6 +693,7 @@ return null`,
     });
     expect(events).toContainEqual({
       type: 'agent:start',
+      taskId: 'call-0',
       index: 0,
       label: 'labelled',
       phase: 'Work',
@@ -1114,16 +1215,18 @@ while (true) {}`,
     expect(events).toEqual([
       {
         type: 'agent:start',
+        taskId: 'call-0',
         index: 0,
         label: 'function-result',
         phase: undefined,
       },
       {
         type: 'agent:end',
+        taskId: 'call-0',
         index: 0,
         label: 'function-result',
         phase: undefined,
-        cached: false,
+        outcome: 'failed',
         error: expect.stringMatching(/must be JSON-serializable/i),
       },
     ]);
@@ -1362,11 +1465,11 @@ return 'incorrect success'`,
     expect(run.journal.map((entry) => entry.index).toSorted()).toEqual([0, 2]);
     expect(events).toContainEqual({
       type: 'agent:end',
+      taskId: 'b',
       index: 1,
       label: 'b',
       phase: undefined,
-      cached: false,
-      skipped: true,
+      outcome: 'skipped',
     });
   });
 

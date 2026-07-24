@@ -250,6 +250,58 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
   });
 });
 
+describe('attachTranscriptRecorder workflow task state', () => {
+  it('updates one typed task entry from planned to completed', () => {
+    const trace = new TraceEmitter();
+    const store = StreamLogStore.ephemeral('test');
+    const streamId = 'stream:workflow-task' as StreamTabId;
+    store.ensureStream(streamId);
+    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+
+    trace.emit({
+      type: 'workflow.task',
+      logId: 'task-card',
+      task: {
+        id: 'audit-core',
+        label: 'Audit core',
+        phase: 'Audit',
+        status: 'planned',
+      },
+    });
+    trace.emit({
+      type: 'workflow.task',
+      logId: 'task-card',
+      stageId: 'phase-audit',
+      task: {
+        id: 'audit-core',
+        label: 'Audit core',
+        phase: 'Audit',
+        status: 'completed',
+        model: 'gpt56',
+        durationMs: 12_000,
+        totalCostUsd: 0.03,
+      },
+    });
+
+    const entries = store.get(streamId)?.getRange(0) ?? [];
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      id: 'task-card',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: 'info',
+      groupId: 'phase-audit',
+      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+      text: 'Audit core',
+      data: {
+        status: 'completed',
+        model: 'gpt56',
+        durationMs: 12_000,
+        totalCostUsd: 0.03,
+      },
+    });
+  });
+});
+
 describe('attachTranscriptRecorder timer failure boundary', () => {
   it('latches a delayed write failure instead of throwing from the timer', () => {
     vi.useFakeTimers();

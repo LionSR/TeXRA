@@ -52,6 +52,9 @@ All notable changes to this project will be documented in this file.
   unavailable members before launch.
 - **Codex runs show per-turn progress** — the progress view displays the thread
   ID, live turn status, elapsed time, and failures.
+- **Workflow scripts can show their complete task plan** — declared tasks
+  appear before execution and update in place as they run, finish, fail, or
+  are skipped.
 
 #### Bug Fixes
 

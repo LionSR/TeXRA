@@ -13,17 +13,25 @@ export const meta = {
   name: 'draft-chapter',
   description: 'Draft sections in parallel, then merge',
   phases: [{ title: 'Draft' }, { title: 'Merge' }],
+  tasks: [
+    { id: 'introduction', label: 'Draft introduction', phase: 'Draft' },
+    { id: 'results', label: 'Draft results', phase: 'Draft' },
+  ],
 };
 phase('Draft');
-const sections = await parallel(
-  args.sections.map(
-    (s) => () => agent(`Draft the "${s}" section.`, { label: `draft:${s}` }),
-  ),
-);
+const sections = await parallel([
+  () => agent('Draft the introduction.', { id: 'introduction' }),
+  () => agent('Draft the results.', { id: 'results' }),
+]);
 phase('Merge');
 return concat(sections, { separator: '\n\n' });
 ```
 
+- `meta.tasks` — optional declarative task plan. When present, each
+  `agent()` call must reference exactly one task with `{ id }`; its display
+  label and phase come only from the plan. Progress surfaces can therefore
+  show pending work before execution and update one task record in place.
+  Scripts whose call set is data-dependent may omit the plan.
 - `agent(prompt, opts?)` — one subagent run; resolves to the host runner's
   typed result, or `null` on failure (filter with `.filter(Boolean)`).
   `agent(prompt, { schema })`, where `schema` is a JSON Schema object, runs a

@@ -1,5 +1,5 @@
 // A detached delegate_workflow_script run owns a child stream. Its phases and
-// per-agent log lines render through the focused-child viewport, while the
+// typed task records render through the focused-child viewport, while the
 // workflow-specific header identifies the kind of child execution.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -65,16 +65,55 @@ afterEach(() => {
 });
 
 describe('CLI workflow-script child-stream transcript', () => {
-  it('renders phases and per-agent log lines from the run stream trace', async () => {
+  it('updates one visible task record from planned to completed', async () => {
     const runTrace = createRunTrace(STREAM_ID, defaultSession().transcripts);
     try {
+      runTrace.trace.emit({
+        type: 'workflow.task',
+        logId: 'introduction-task',
+        task: {
+          id: 'introduction',
+          label: 'Draft introduction',
+          phase: 'Draft sections',
+          status: 'planned',
+        },
+      });
+      syncStreamLog(STREAM_ID);
+      expect(
+        streams
+          .get()
+          .get(STREAM_ID)
+          ?.entries.find((entry) => entry.id === 'introduction-task')?.text,
+      ).toBe('Planned: Draft introduction');
+
       const phase = runTrace.trace.openStage('Draft sections', {
         id: 'draft-phase',
         kind: 'phase',
       });
-      runTrace.trace.info('Running: introduction', { stageId: phase.id });
-      runTrace.trace.info('Finished: introduction ($0.002 total)', {
+      runTrace.trace.emit({
+        type: 'workflow.task',
+        logId: 'introduction-task',
         stageId: phase.id,
+        task: {
+          id: 'introduction',
+          label: 'Draft introduction',
+          phase: 'Draft sections',
+          status: 'running',
+        },
+      });
+      runTrace.trace.emit({
+        type: 'workflow.task',
+        logId: 'introduction-task',
+        stageId: phase.id,
+        task: {
+          id: 'introduction',
+          label: 'Draft introduction',
+          phase: 'Draft sections',
+          status: 'completed',
+          model: 'deepseekT',
+          durationMs: 12_000,
+          totalCostUsd: 0.002,
+        },
       });
       phase.end('completed');
 
@@ -82,11 +121,14 @@ describe('CLI workflow-script child-stream transcript', () => {
 
       const entries = streams.get().get(STREAM_ID)?.entries ?? [];
       const texts = entries.map((entry) => entry.text);
-      // The phase group row surfaces its label; the agent lines surface as
-      // their own generic assistant rows — the parity bar for a focused run.
+      // The phase group row and the task's current state both surface.
       expect(texts).toContain('Draft sections');
-      expect(texts).toContain('Running: introduction');
-      expect(texts).toContain('Finished: introduction ($0.002 total)');
+      expect(texts).toContain(
+        'Finished: Draft introduction · deepseekT · 12s · $0.002 total',
+      );
+      expect(
+        entries.filter((entry) => entry.id === 'introduction-task'),
+      ).toHaveLength(1);
 
       // The phase group is a distinct `role: 'phase'` header, not a plain
       // assistant row, so the CLI can render it as a divider between phases.
@@ -146,8 +188,8 @@ describe('CLI workflow-script child-stream transcript', () => {
       const output = await renderStaticTranscript();
       // The phase header renders with its distinct diamond divider glyph.
       expect(output).toContain('◆ Draft sections');
-      expect(output).toContain('Running: introduction');
-      expect(output).toContain('Finished: introduction ($0.002 total)');
+      expect(output).toContain('Finished: Draft introduction');
+      expect(output).toContain('deepseekT · 12s · $0.002 total');
     } finally {
       runTrace.dispose();
     }

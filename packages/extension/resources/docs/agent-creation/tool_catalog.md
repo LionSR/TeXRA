@@ -65,7 +65,10 @@ recommended groups at the bottom are a good starting point.
   `log`, `parallel`, `pipeline`, and `concat`. `agent(prompt, { schema })`, where
   `schema` is a JSON Schema object, runs a tool-use agent (name one via
   `agentName`) that finishes by calling `submit_output`; the call resolves to an
-  envelope whose `.structured` is the validated object. Present in the
+  envelope whose `.structured` is the validated object. The optional
+  `meta.tasks` plan declares task ids, labels, and phases so progress views can
+  show pending work before any model call starts; calls then reference those
+  records with `agent(prompt, { id })`. Present in the
   built-in `orchestrator` agent's tool list, but gated by the "Workflow
   Script" switch in Settings → Tools (off by default for new installs), which
   disables the tool for every agent regardless of its configured tool list.
