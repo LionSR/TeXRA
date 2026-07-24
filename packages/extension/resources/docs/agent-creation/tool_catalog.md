@@ -66,8 +66,10 @@ recommended groups at the bottom are a good starting point.
   `files.mediaFiles` arrays. The script begins with
   `export const meta = { name, description }` and can use `agent`, `phase`,
   `log`, `parallel`, `pipeline`, and `concat`. Workflow-agent calls accept the
-  same three file roles. `agent(prompt, { agentName, schema })` instead runs a
-  named tool-use agent with no file options; it finishes by calling
+  same three file roles. Any call may declare an available model short name
+  with `model`; omitted models follow ordinary delegation policy.
+  `agent(prompt, { agentName, model, schema })` instead runs a named tool-use
+  agent with no file options; it finishes by calling
   `submit_output`, and the call resolves to an envelope whose `.structured` is
   the validated object. Present in the
   built-in `orchestrator` agent's tool list, but gated by the "Workflow

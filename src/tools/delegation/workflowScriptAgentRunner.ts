@@ -66,6 +66,19 @@ async function resolveInvocationFileList(
   return resolved;
 }
 
+async function selectWorkflowScriptModel(
+  input: Parameters<typeof selectAvailableDelegationModel>[0],
+): Promise<string> {
+  try {
+    return await selectAvailableDelegationModel(input);
+  } catch (error) {
+    throw new WorkflowRunAbortError(
+      formatError('Workflow model could not be selected', error),
+      { cause: error },
+    );
+  }
+}
+
 /**
  * Identity of the detached workflow-run that owns this script's `agent()`
  * grandchildren. Re-rooting them here (instead of the orchestrator) gives a
@@ -147,7 +160,10 @@ export function createWorkflowScriptAgentRunner(
               invocation.options.agentName,
               runScope.delegationAgentScope ?? undefined,
             );
-            const model = await selectAvailableDelegationModel({
+            const model = await selectWorkflowScriptModel({
+              ...(invocation.options.model !== undefined && {
+                requestedModel: invocation.options.model,
+              }),
               parentModel: parent.model,
               agentCategory: AgentCategory.ToolUse,
             });
@@ -168,7 +184,10 @@ export function createWorkflowScriptAgentRunner(
             );
             const [model, inputFiles, contextFiles, mediaFiles] =
               await Promise.all([
-                selectAvailableDelegationModel({
+                selectWorkflowScriptModel({
+                  ...(invocation.options.model !== undefined && {
+                    requestedModel: invocation.options.model,
+                  }),
                   parentModel: parent.model,
                   agentCategory: AgentCategory.Workflow,
                 }),

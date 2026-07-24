@@ -658,15 +658,17 @@ function normalizeAgentOptions(
     label?: string;
     phase?: string;
     agentName?: string;
+    model?: string;
   } = {};
-  for (const field of ['id', 'label', 'phase', 'agentName'] as const) {
+  for (const field of ['id', 'label', 'phase', 'agentName', 'model'] as const) {
     const value = source[field];
     if (value === undefined) continue;
-    if (typeof value !== 'string' || (field === 'id' && !value.trim())) {
-      const requirement = field === 'id' ? 'a non-empty string' : 'a string';
+    const requiresContent = field === 'id' || field === 'model';
+    if (typeof value !== 'string' || (requiresContent && !value.trim())) {
+      const requirement = requiresContent ? 'a non-empty string' : 'a string';
       throw new Error(`agent() option "${field}" must be ${requirement}.`);
     }
-    common[field] = field === 'id' ? value.trim() : value;
+    common[field] = requiresContent ? value.trim() : value;
   }
   common.phase ??= currentPhase;
 

@@ -184,6 +184,27 @@ return { structured: withSchema.structured, plain }`,
     expect(keys[0]).not.toBe(keys[1]);
   });
 
+  it('normalizes per-call models and includes them in journal identity', async () => {
+    const invocations: WorkflowAgentInvocation[] = [];
+    const run = await runWorkflowScript({
+      script: `${META}
+const routine = await agent('draft', { model: 'economy-model' })
+const difficult = await agent('draft', { model: 'strong-model' })
+return [routine, difficult]`,
+      runAgent: (invocation) => {
+        invocations.push(invocation);
+        return Promise.resolve(`result:${invocation.options.model}`);
+      },
+    });
+
+    expect(run.result).toEqual(['result:economy-model', 'result:strong-model']);
+    expect(invocations.map(({ options }) => options.model)).toEqual([
+      'economy-model',
+      'strong-model',
+    ]);
+    expect(invocations[0]?.key).not.toBe(invocations[1]?.key);
+  });
+
   it('rejects a non-object schema option', async () => {
     await expect(
       runWorkflowScript({
@@ -658,6 +679,12 @@ return null`,
         runAgent: echoRunner,
       }),
     ).rejects.toThrow(/inputFiles.*arrays of non-empty strings/);
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await agent('x', { model: '  ' })`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/option "model" must be a non-empty string/);
   });
 
   it('separates workflow file options from structured tool-use calls', async () => {

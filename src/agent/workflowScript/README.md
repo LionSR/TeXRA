@@ -26,6 +26,9 @@ return concat(sections, { separator: '\n\n' });
 
 - `agent(prompt, opts?)` — one subagent run; resolves to the host runner's
   typed result, or `null` on failure (filter with `.filter(Boolean)`).
+  Set `opts.model` to an available model short name when a call needs a
+  different cost or capability profile; otherwise ordinary delegation policy
+  chooses the model.
   `agent(prompt, { schema })`, where `schema` is a JSON Schema object, runs a
   tool-use agent (name one via `agentName`) that finishes by calling
   `submit_output`; the call resolves to an envelope whose `.structured` is the
