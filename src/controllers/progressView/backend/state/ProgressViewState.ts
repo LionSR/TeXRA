@@ -52,10 +52,10 @@ const LEGACY_INSTRUCTION_BACKFILL_CONCURRENCY = 8;
  * every field below are always populated together from that one `AgentConfig`
  * — they can't drift independently of each other the way top-level
  * `ProgressStreamMetadata` fields (set by separate calls at separate times)
- * can. `kind` mirrors the process/agent distinction `buildStreamTabInfo`
- * renders differently: a "process" stream runs a raw OS tool (e.g. the
- * `bash` tool) and carries no meaningful model; an "agent" stream is an
- * LLM-driven run and may carry `inputFile`/`model`.
+ * can. `kind` mirrors the three owners `buildStreamTabInfo` renders
+ * differently: a `process` runs a raw OS tool, an `agent` is LLM-driven, and
+ * a `workflowScript` is a deterministic orchestration container whose worker
+ * agents run in child streams.
  */
 type ProgressStreamRunDetails =
   | {
@@ -69,6 +69,12 @@ type ProgressStreamRunDetails =
       agent: string;
       inputFile?: string;
       model: string;
+      instruction: string;
+      workingDirectory?: string;
+    }
+  | {
+      kind: 'workflowScript';
+      workflowName: string;
       instruction: string;
       workingDirectory?: string;
     };
@@ -271,23 +277,37 @@ export class ProgressViewState {
   ): void {
     const config = this.snapshots.getRunConfig(stream);
     if (config) {
-      metadata.agentCategory = config.agentCategory;
+      const descriptor = this.snapshots.getRunDescriptor(stream);
+      const identityName = descriptor?.agent ?? config.agent;
+      const runKind =
+        descriptor?.kind ??
+        (isProcessAgent(config.agent) ? 'process' : 'agent');
+      metadata.agentCategory = descriptor?.category ?? config.agentCategory;
       const workingDirectory = config.workingDirectory ?? undefined;
-      metadata.run = isProcessAgent(config.agent)
-        ? {
-            kind: 'process',
-            agent: config.agent,
-            instruction: config.instruction,
-            workingDirectory,
-          }
-        : {
-            kind: 'agent',
-            agent: config.agent,
-            inputFile: config.inputFiles?.at(0),
-            model: config.model,
-            instruction: config.instruction,
-            workingDirectory,
-          };
+      if (runKind === 'workflowScript') {
+        metadata.run = {
+          kind: 'workflowScript',
+          workflowName: identityName,
+          instruction: config.instruction,
+          workingDirectory,
+        };
+      } else if (runKind === 'process') {
+        metadata.run = {
+          kind: 'process',
+          agent: identityName,
+          instruction: config.instruction,
+          workingDirectory,
+        };
+      } else {
+        metadata.run = {
+          kind: 'agent',
+          agent: identityName,
+          inputFile: config.inputFiles?.at(0),
+          model: config.model,
+          instruction: config.instruction,
+          workingDirectory,
+        };
+      }
     }
 
     metadata.executionId =

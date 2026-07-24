@@ -382,6 +382,7 @@ export const RUN_FACT_EVENT_TYPES = Object.freeze([
   'updateMissingOutputs',
   'updateCompileFailures',
   'goalPaused',
+  'run.start',
   'run.config',
   'usage',
   'status',

@@ -54,4 +54,30 @@ describe('stream-tab expand chevron', () => {
     expect(expandButton?.getAttribute('data-action')).toBe('toggle-children');
     expect(expandButton?.hasAttribute('aria-expanded')).toBe(true);
   });
+
+  it('renders workflow scripts as orchestration streams without a model', async () => {
+    const tabs = document.createElement('stream-tabs') as StreamTabs;
+    tabs.streams = [
+      {
+        kind: 'workflowScript',
+        name: 'workflow-script#abc123',
+        label: 'repo-cleanup-readonly-pilot-2026-07-24',
+        workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+        agentCategory: AgentCategory.Workflow,
+        creationTimestamp: 1,
+      },
+    ];
+    document.body.append(tabs);
+    await tabs.updateComplete;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const tab = tabs.shadowRoot?.querySelector('stream-tab');
+    const model = tab?.shadowRoot?.querySelector('.model');
+    const kindIcon = tab?.shadowRoot?.querySelector('.stream-kind') as
+      (Element & { name?: string }) | null;
+
+    expect(model?.textContent?.trim()).toBe('');
+    expect(kindIcon?.name).toBe('list-tree');
+    expect(kindIcon?.getAttribute('title')).toBe('Workflow Script');
+  });
 });

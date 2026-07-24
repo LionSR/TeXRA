@@ -279,6 +279,7 @@ function emitRunStart(ctx: AgentLaunchContext): void {
     executionId,
     agent: ctx.config.agent,
     category: ctx.setting.agentCategory,
+    kind: 'agent',
   });
   ctx.logger.emit({ type: 'run.start', descriptor });
   ctx.logger.emit({

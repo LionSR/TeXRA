@@ -66,6 +66,7 @@ function startCodexChild(
     runtimeHost: host,
     streamPrefix: 'codex',
     streamCategory: AgentCategory.ToolUse,
+    runKind: 'agent',
     agentName: 'codex',
     description,
     config,
@@ -145,6 +146,7 @@ describe('child stream progress events', () => {
           runtimeHost: host,
           streamPrefix: 'bash',
           streamCategory: AgentCategory.ToolUse,
+          runKind: 'process',
           agentName: 'test-agent',
           description: 'Run a background bash command',
           config,
@@ -173,6 +175,7 @@ describe('child stream progress events', () => {
         runtimeHost: active.host,
         streamPrefix: 'bash',
         streamCategory: AgentCategory.ToolUse,
+        runKind: 'process',
         agentName: 'test-agent',
         description: 'Run a background bash command',
         config,
@@ -257,6 +260,7 @@ describe('child stream progress events', () => {
         runtimeHost: active.host,
         streamPrefix: 'workflow-script',
         streamCategory: AgentCategory.Workflow,
+        runKind: 'workflowScript',
         agentName: 'draft-sections',
         description: 'Run a named child task',
         config,
@@ -276,6 +280,7 @@ describe('child stream progress events', () => {
         runtimeHost: active.host,
         streamPrefix: 'workflow-script',
         streamCategory: AgentCategory.Workflow,
+        runKind: 'workflowScript',
         agentName: 'draft-sections',
         description: 'Resume the named child task',
         config,
@@ -310,6 +315,55 @@ describe('child stream progress events', () => {
     }
   });
 
+  it('emits workflow-script identity independently of its worker config', async () => {
+    const active = createRecordingHost();
+    const recorded = recordSessionEvents(defaultSession().events);
+    const workerConfig = {
+      ...config,
+      agent: 'generic',
+      agentCategory: AgentCategory.Workflow,
+    };
+
+    try {
+      const childStream = createChildStream(
+        workflowRelaunchExecutionId,
+        parentStreamId,
+        {
+          runtimeHost: active.host,
+          streamPrefix: 'workflow-script',
+          streamCategory: AgentCategory.Workflow,
+          runKind: 'workflowScript',
+          agentName: 'repo-cleanup-readonly-pilot-2026-07-24',
+          description: 'Audit the repository without editing',
+          config: workerConfig,
+          toolName: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+        },
+      );
+
+      expect(runEventsOfType(recorded.events, 'run.start')).toContainEqual(
+        expect.objectContaining({
+          descriptor: expect.objectContaining({
+            agent: 'repo-cleanup-readonly-pilot-2026-07-24',
+            category: AgentCategory.Workflow,
+            kind: 'workflowScript',
+          }),
+        }),
+      );
+      expect(
+        defaultSession().executions.getAgentHandleByStream(
+          workflowRelaunchChildStreamId,
+        ),
+      ).toMatchObject({
+        agentName: 'repo-cleanup-readonly-pilot-2026-07-24',
+        category: AgentCategory.Workflow,
+      });
+
+      await childStream.finalize();
+    } finally {
+      recorded.detach();
+    }
+  });
+
   it('publishes child stream activation through the session fact hub', async () => {
     const active = createRecordingHost();
     const facts: unknown[] = [];
@@ -324,6 +378,7 @@ describe('child stream progress events', () => {
         runtimeHost: active.host,
         streamPrefix: 'bash',
         streamCategory: AgentCategory.ToolUse,
+        runKind: 'process',
         agentName: 'test-agent',
         description: 'Run a background bash command',
         config,
@@ -368,6 +423,7 @@ describe('child stream progress events', () => {
           runtimeHost: active.host,
           streamPrefix: 'bash',
           streamCategory: AgentCategory.ToolUse,
+          runKind: 'process',
           agentName: 'test-agent',
           description: 'Run a background bash command',
           config,
@@ -399,6 +455,7 @@ describe('child stream progress events', () => {
         runtimeHost: active.host,
         streamPrefix: 'bash',
         streamCategory: AgentCategory.ToolUse,
+        runKind: 'process',
         agentName: 'test-agent',
         description: 'Run a background bash command',
         config,
