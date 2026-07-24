@@ -528,7 +528,8 @@ return await parallel([
     await expect(
       runWorkflowScript({
         script: `${META}agent('abandoned', { phase: 'Work' }); return 'guest success'`,
-        runAgent: async () => {
+        runAgent: async (invocation) => {
+          invocation.reportModel?.('checkpoint-model');
           await delay(5);
           return 'completed child';
         },
@@ -545,7 +546,12 @@ return await parallel([
       phaseIndex: 0,
       phaseTotal: 1,
       error: expect.stringContaining('checkpoint offline'),
+      model: 'checkpoint-model',
+      durationMs: expect.any(Number),
     });
+    expect(events.filter((event) => event.type === 'agent:end')).toHaveLength(
+      1,
+    );
   });
 
   it('does not let a guest error mask a late checkpoint failure', async () => {
@@ -1426,7 +1432,10 @@ while (true) {}`,
     await expect(
       runWorkflowScript({
         script: `${META}return await agent('function-result')`,
-        runAgent: async () => () => undefined,
+        runAgent: async (invocation) => {
+          invocation.reportModel?.('serialization-model');
+          return () => undefined;
+        },
         onEvent: (event) => events.push(event),
       }),
     ).rejects.toThrow(/agent\(\) result must be JSON-serializable/i);
@@ -1446,6 +1455,8 @@ while (true) {}`,
         phase: undefined,
         outcome: 'failed',
         error: expect.stringMatching(/must be JSON-serializable/i),
+        model: 'serialization-model',
+        durationMs: expect.any(Number),
       },
     ]);
   });
@@ -1577,7 +1588,9 @@ return 'done'`,
   });
 
   it('stops the workflow when a runner surfaces the run abort', async () => {
-    const runner = () => {
+    const events: WorkflowScriptEvent[] = [];
+    const runner = (invocation: WorkflowAgentInvocation) => {
+      invocation.reportModel?.('abort-model');
       const abortError = new Error('runner observed abort');
       abortError.name = 'WorkflowRunAbortError';
       return Promise.reject(abortError);
@@ -1587,8 +1600,23 @@ return 'done'`,
         script: `${META}
 return await parallel([() => agent('x')])`,
         runAgent: runner,
+        onEvent: (event) => events.push(event),
       }),
     ).rejects.toThrow(/runner observed abort/);
+    expect(events).toContainEqual({
+      type: 'agent:end',
+      progressId: 'call-0',
+      index: 0,
+      label: 'x',
+      phase: undefined,
+      outcome: 'failed',
+      error: 'runner observed abort',
+      model: 'abort-model',
+      durationMs: expect.any(Number),
+    });
+    expect(events.filter((event) => event.type === 'agent:end')).toHaveLength(
+      1,
+    );
   });
 
   it('does not let script code suppress a fatal runner abort', async () => {
@@ -1649,6 +1677,7 @@ return 'incorrect success'`,
     const runner = (invocation: WorkflowAgentInvocation) =>
       new Promise<string>((resolve, reject) => {
         started.add(invocation.index);
+        invocation.reportModel?.('skip-model');
         release.set(invocation.index, () =>
           resolve(`done:${invocation.index}`),
         );
@@ -1693,6 +1722,9 @@ return 'incorrect success'`,
       label: 'b',
       phase: undefined,
       outcome: 'skipped',
+      reason: 'user',
+      model: 'skip-model',
+      durationMs: expect.any(Number),
     });
   });
 
@@ -1761,16 +1793,16 @@ return 'incorrect success'`,
   it('charges every retry attempt against the live-call cap', async () => {
     let control!: WorkflowScriptControl;
     const events: WorkflowScriptEvent[] = [];
-    const runner = vi.fn(
-      (invocation: WorkflowAgentInvocation) =>
-        new Promise<never>((_resolve, reject) => {
-          invocation.signal.addEventListener(
-            'abort',
-            () => reject(new Error('aborted')),
-            { once: true },
-          );
-        }),
-    );
+    const runner = vi.fn((invocation: WorkflowAgentInvocation) => {
+      invocation.reportModel?.('retry-model');
+      return new Promise<never>((_resolve, reject) => {
+        invocation.signal.addEventListener(
+          'abort',
+          () => reject(new Error('aborted')),
+          { once: true },
+        );
+      });
+    });
     const run = runWorkflowScript({
       script: `${META}return await agent('retry until refused')`,
       runAgent: runner,
@@ -1795,7 +1827,12 @@ return 'incorrect success'`,
         index: 0,
         outcome: 'failed',
         error: expect.stringContaining('agent-call cap'),
+        model: 'retry-model',
+        durationMs: expect.any(Number),
       }),
+    );
+    expect(events.filter((event) => event.type === 'agent:end')).toHaveLength(
+      1,
     );
   });
 

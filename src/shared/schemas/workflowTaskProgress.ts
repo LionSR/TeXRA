@@ -31,6 +31,18 @@ const WorkflowTaskTerminalMetadataSchema = z.strictObject({
  * The status discriminant prevents terminal-only metadata from appearing on a
  * task that has not started.
  */
+const WorkflowTaskSkippedProgressSchema = z.discriminatedUnion('reason', [
+  WorkflowTaskIdentitySchema.extend({
+    status: z.literal('skipped'),
+    reason: z.literal('not-reached'),
+  }),
+  WorkflowTaskIdentitySchema.extend({
+    status: z.literal('skipped'),
+    reason: z.literal('user'),
+    ...WorkflowTaskTerminalMetadataSchema.shape,
+  }),
+]);
+
 export const WorkflowTaskProgressSchema = z.discriminatedUnion('status', [
   WorkflowTaskIdentitySchema.extend({
     status: z.literal('planned'),
@@ -45,10 +57,7 @@ export const WorkflowTaskProgressSchema = z.discriminatedUnion('status', [
   WorkflowTaskIdentitySchema.extend({
     status: z.literal('cached'),
   }),
-  WorkflowTaskIdentitySchema.extend({
-    status: z.literal('skipped'),
-    reason: z.enum(['not-reached', 'user']),
-  }),
+  WorkflowTaskSkippedProgressSchema,
   WorkflowTaskIdentitySchema.extend({
     status: z.literal('failed'),
     error: z.string().min(1),

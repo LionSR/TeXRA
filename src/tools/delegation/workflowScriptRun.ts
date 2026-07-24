@@ -14,8 +14,8 @@ import {
   type RunOutcome,
   type WorkflowTaskProgress,
 } from '@shared/schemas';
+import { formatWorkflowTaskMetadataParts } from '@shared/copy/workflowTask';
 import { assertNever, generateShortId } from '@utils/core';
-import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 type WorkflowScriptRunWithProgressOptions = Omit<
   PersistedWorkflowScriptRunOptions,
@@ -160,6 +160,28 @@ export async function runPersistedWorkflowScriptWithProgress(
     trace.info(message, { stageId });
     onActivity?.(message);
   };
+  const recordTerminalActivity = (
+    task: Extract<
+      WorkflowTaskProgress,
+      { readonly status: 'completed' | 'failed' | 'skipped' }
+    >,
+  ): void => {
+    const metadata = formatWorkflowTaskMetadataParts(task);
+    const suffix = metadata.length > 0 ? ` · ${metadata.join(' · ')}` : '';
+    switch (task.status) {
+      case 'completed':
+        onActivity?.(`Finished: ${task.label}${suffix}`);
+        break;
+      case 'failed':
+        onActivity?.(`Failed: ${task.label}${suffix} - ${task.error}`);
+        break;
+      case 'skipped':
+        onActivity?.(`Skipped: ${task.label}${suffix}`);
+        break;
+      default:
+        assertNever(task, 'Unhandled terminal workflow task activity');
+    }
+  };
   const emitTask = (
     task: WorkflowTaskProgress,
     stageId: string | undefined,
@@ -248,14 +270,13 @@ export async function runPersistedWorkflowScriptWithProgress(
         // Cached replays spend nothing, so their lines stay cost-free; live
         // onCost settles before agent:end, so the total here is current.
         const spent =
-          event.outcome === 'completed' || event.outcome === 'failed'
+          event.outcome === 'completed' ||
+          event.outcome === 'failed' ||
+          event.outcome === 'skipped'
             ? getLiveCostUsd?.()
             : undefined;
-        const total =
-          spent === undefined ? '' : ` (${formatCostUsd(spent)} total)`;
-        // Live calls carry the resolved child model plus host-measured wall
-        // time; the duration rides alongside the model so it never appears as
-        // a bare orphan. Cached replays report neither, so the suffix is empty.
+        // Live terminal events carry all attempt metadata known by the engine.
+        // Cached replays report none because they perform no live attempt.
         switch (event.outcome) {
           case 'failed': {
             markPhaseFailed(phaseTitle, event.phaseIndex, event.phaseTotal);
@@ -272,15 +293,7 @@ export async function runPersistedWorkflowScriptWithProgress(
               ...(spent !== undefined ? { totalCostUsd: spent } : {}),
             };
             emitTask(task, stageId);
-            const duration =
-              event.durationMs === undefined
-                ? ''
-                : ` · ${formatCompactDuration(event.durationMs)}`;
-            const metaSuffix =
-              event.model === undefined ? '' : ` · ${event.model}${duration}`;
-            onActivity?.(
-              `Failed: ${event.label}${metaSuffix} - ${event.error}${total}`,
-            );
+            recordTerminalActivity(task);
             break;
           }
           case 'cached':
@@ -295,36 +308,35 @@ export async function runPersistedWorkflowScriptWithProgress(
             );
             onActivity?.(`Using saved result: ${event.label}`);
             break;
-          case 'skipped':
-            emitTask(
-              {
-                id: event.progressId,
-                label: event.label,
-                ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
-                status: 'skipped',
-                reason: 'user',
-              },
-              stageId,
-            );
-            onActivity?.(`Skipped: ${event.label}`);
+          case 'skipped': {
+            const task: WorkflowTaskProgress = {
+              id: event.progressId,
+              label: event.label,
+              ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
+              status: 'skipped',
+              reason: event.reason,
+              ...(event.model !== undefined ? { model: event.model } : {}),
+              ...(event.durationMs !== undefined
+                ? { durationMs: event.durationMs }
+                : {}),
+              ...(spent !== undefined ? { totalCostUsd: spent } : {}),
+            };
+            emitTask(task, stageId);
+            recordTerminalActivity(task);
             break;
+          }
           case 'completed': {
-            emitTask(
-              {
-                id: event.progressId,
-                label: event.label,
-                ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
-                status: 'completed',
-                ...(event.model !== undefined ? { model: event.model } : {}),
-                durationMs: event.durationMs,
-                ...(spent !== undefined ? { totalCostUsd: spent } : {}),
-              },
-              stageId,
-            );
-            const duration = ` · ${formatCompactDuration(event.durationMs)}`;
-            const metaSuffix =
-              event.model === undefined ? '' : ` · ${event.model}${duration}`;
-            onActivity?.(`Finished: ${event.label}${metaSuffix}${total}`);
+            const task: WorkflowTaskProgress = {
+              id: event.progressId,
+              label: event.label,
+              ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
+              status: 'completed',
+              ...(event.model !== undefined ? { model: event.model } : {}),
+              durationMs: event.durationMs,
+              ...(spent !== undefined ? { totalCostUsd: spent } : {}),
+            };
+            emitTask(task, stageId);
+            recordTerminalActivity(task);
             break;
           }
           default:
@@ -350,24 +362,25 @@ export async function runPersistedWorkflowScriptWithProgress(
       status,
     } of projectedTasks.values()) {
       if (status === 'planned') {
-        emitTask(
-          {
-            ...task,
-            status: 'skipped',
-            reason: 'not-reached',
-          },
-          stageId,
-        );
+        const skippedTask: WorkflowTaskProgress = {
+          ...task,
+          status: 'skipped',
+          reason: 'not-reached',
+        };
+        emitTask(skippedTask, stageId);
+        recordTerminalActivity(skippedTask);
       } else if (status === 'running') {
         markPhaseFailed(task.phase);
-        emitTask(
-          {
-            ...task,
-            status: 'failed',
-            error: 'The workflow ended before this task completed.',
-          },
-          stageId,
-        );
+        const error = 'The workflow ended before this task completed.';
+        const totalCostUsd = getLiveCostUsd?.();
+        const failedTask: WorkflowTaskProgress = {
+          ...task,
+          status: 'failed',
+          error,
+          ...(totalCostUsd !== undefined ? { totalCostUsd } : {}),
+        };
+        emitTask(failedTask, stageId);
+        recordTerminalActivity(failedTask);
       }
     }
     for (const phase of phases.values()) {

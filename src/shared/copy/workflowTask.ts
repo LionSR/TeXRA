@@ -7,7 +7,13 @@ import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 export function formatWorkflowTaskMetadataParts(
   task: WorkflowTaskProgress,
 ): string[] {
-  if (task.status !== 'completed' && task.status !== 'failed') return [];
+  if (
+    task.status !== 'completed' &&
+    task.status !== 'failed' &&
+    (task.status !== 'skipped' || task.reason === 'not-reached')
+  ) {
+    return [];
+  }
   return [
     task.model,
     task.durationMs === undefined

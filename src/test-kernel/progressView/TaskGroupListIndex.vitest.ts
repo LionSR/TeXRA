@@ -497,6 +497,24 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
           reason: 'not-reached',
         },
       },
+      {
+        id: 'agent-d',
+        text: 'stopped',
+        timestamp: 6,
+        level: LOG_LEVELS.INFO,
+        groupId: 'phase-review',
+        messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+        data: {
+          id: 'stopped',
+          label: 'Stopped review',
+          phase: 'Review',
+          status: 'skipped',
+          reason: 'user',
+          model: 'kimi-k2',
+          durationMs: 2_000,
+          totalCostUsd: 0.02,
+        },
+      },
     ];
 
     const list = await renderList([run, phase], messages);
@@ -522,14 +540,21 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
     expect(content?.textContent).toContain('Check argument');
     expect(content?.textContent).toContain('timed out');
     expect(content?.querySelector('.workflow-task--failed')).not.toBeNull();
-    const skipped = content?.querySelector('.workflow-task--skipped');
-    expect(skipped?.textContent).toContain(
+    const notReached = content?.querySelector('[data-log-id="agent-c"]');
+    expect(notReached?.textContent).toContain(
       'The workflow ended before this task was reached.',
     );
     expect(
-      skipped?.querySelector('.workflow-task-detail--note'),
+      notReached?.querySelector('.workflow-task-detail--note'),
     ).not.toBeNull();
-    expect(skipped?.querySelector('.workflow-task-detail--error')).toBeNull();
+    expect(
+      notReached?.querySelector('.workflow-task-detail--error'),
+    ).toBeNull();
+    expect(notReached?.querySelector('.workflow-task-meta')).toBeNull();
+    const userSkipped = content?.querySelector('[data-log-id="agent-d"]');
+    expect(userSkipped?.textContent).toContain('Stopped review');
+    expect(userSkipped?.textContent).toContain('kimi-k2 · 2s · $0.020 total');
+    expect(userSkipped?.querySelector('.workflow-task-detail')).toBeNull();
   });
 
   it('omits the (i/n) suffix when a phase group carries no counts', async () => {

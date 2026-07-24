@@ -41,7 +41,6 @@ function statusIcon(task: WorkflowTaskProgress): TemplateResult {
 function terminalMetadata(
   task: WorkflowTaskProgress,
 ): TemplateResult | typeof nothing {
-  if (task.status !== 'completed' && task.status !== 'failed') return nothing;
   const parts = formatWorkflowTaskMetadataParts(task);
   return parts.length > 0
     ? html`<span class="workflow-task-meta">${parts.join(' · ')}</span>`

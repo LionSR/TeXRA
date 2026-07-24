@@ -57,6 +57,15 @@ const MAX_FANOUT = 512;
 const DRAIN_GRACE_MS = 5_000;
 const LABEL_EXCERPT_LENGTH = 48;
 
+type WorkflowScriptFailedEvent = Extract<
+  WorkflowScriptEvent,
+  { type: 'agent:end'; outcome: 'failed' }
+>;
+type WorkflowScriptFailureAttemptMetadata = Pick<
+  WorkflowScriptFailedEvent,
+  'durationMs' | 'model'
+>;
+
 /**
  * Fan-out primitives, defined INSIDE the sandbox realm (trusted prelude,
  * compiled by the host, run before the script body). They must not live
@@ -293,9 +302,6 @@ export async function runWorkflowScript(
 
   const recordJournalEntry = async (
     entry: WorkflowJournalEntry,
-    progressId: WorkflowScriptProgressId,
-    label: string,
-    phaseContext: WorkflowScriptPhaseContext,
   ): Promise<void> => {
     journal.set(entry.index, entry);
     try {
@@ -303,15 +309,6 @@ export async function runWorkflowScript(
     } catch (error) {
       const message = `Failed to persist workflow journal entry ${entry.index}: ${toErrorMessage(error)}`;
       const fatal = rememberFatalRunError(new WorkflowRunAbortError(message));
-      emit({
-        type: 'agent:end',
-        progressId,
-        index: entry.index,
-        label,
-        ...phaseContext,
-        outcome: 'failed',
-        error: message,
-      });
       throw fatal;
     }
   };
@@ -403,6 +400,23 @@ export async function runWorkflowScript(
     }
     issuedCallKeys.add(key);
 
+    const emitFailedEnd = (
+      error: unknown,
+      metadata: WorkflowScriptFailureAttemptMetadata = {},
+    ): void => {
+      const event: WorkflowScriptFailedEvent = {
+        type: 'agent:end',
+        progressId,
+        index,
+        label,
+        ...phaseContext,
+        outcome: 'failed',
+        error: toErrorMessage(error),
+        ...metadata,
+      };
+      emit(event);
+    };
+
     // Serialize (and round-trip deserialize) a result value for the journal,
     // emitting the matching `agent:end` failure event if it isn't
     // bridge-safe. Shared by the cached-replay and live-call paths below,
@@ -410,20 +424,13 @@ export async function runWorkflowScript(
     const journalValue = (
       value: unknown,
       valueLabel: string,
+      metadata?: WorkflowScriptFailureAttemptMetadata,
     ): { payload: string | undefined; normalizedResult: unknown } => {
       try {
         const payload = serializeBridgeValue(value, valueLabel);
         return { payload, normalizedResult: deserializeBridgeValue(payload) };
       } catch (error) {
-        emit({
-          type: 'agent:end',
-          progressId,
-          index,
-          label,
-          ...phaseContext,
-          outcome: 'failed',
-          error: toErrorMessage(error),
-        });
+        emitFailedEnd(error, metadata);
         throw error;
       }
     };
@@ -463,6 +470,10 @@ export async function runWorkflowScript(
     const startedAt = Date.now();
     let resolvedModel: string | undefined;
     let startEmitted = false;
+    const attemptMetadata = (): WorkflowScriptFailureAttemptMetadata => ({
+      ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
+      durationMs: Date.now() - startedAt,
+    });
     // Attempt loop: retry() re-enters with a fresh AbortController and a fresh
     // runAgent call for this same index/key; skip() and normal settlement exit.
     // Every physical model attempt is charged against liveCallCounter; the
@@ -478,15 +489,7 @@ export async function runWorkflowScript(
             `Workflow exceeded the ${maxAgentCalls} live agent-call cap (runaway-loop backstop; journal replays are free).`,
           ),
         );
-        emit({
-          type: 'agent:end',
-          progressId,
-          index,
-          label,
-          ...phaseContext,
-          outcome: 'failed',
-          error: fatal.message,
-        });
+        emitFailedEnd(fatal, startEmitted ? attemptMetadata() : undefined);
         throw fatal;
       }
       const callController = new AbortController();
@@ -557,6 +560,9 @@ export async function runWorkflowScript(
           label,
           ...phaseContext,
           outcome: 'skipped',
+          reason: 'user',
+          ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
+          durationMs: Date.now() - startedAt,
         });
         // First-class SKIPPED value, not journaled — a resume re-runs it.
         return JSON.stringify(WORKFLOW_SKIPPED_RESULT);
@@ -566,21 +572,13 @@ export async function runWorkflowScript(
         // A runner may surface the run abort (its signal cascades from
         // runAbort); that must stop the workflow, not degrade into a null.
         if (isWorkflowAbort(attemptError.error)) {
-          throw rememberFatalRunError(attemptError.error);
+          const fatal = rememberFatalRunError(attemptError.error);
+          emitFailedEnd(fatal, attemptMetadata());
+          throw fatal;
         }
         // A failed agent resolves to null (callers filter with .filter(Boolean))
         // and is deliberately NOT journaled, so a resume retries it.
-        emit({
-          type: 'agent:end',
-          progressId,
-          index,
-          label,
-          ...phaseContext,
-          outcome: 'failed',
-          error: toErrorMessage(attemptError.error),
-          ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
-          durationMs: Date.now() - startedAt,
-        });
+        emitFailedEnd(attemptError.error, attemptMetadata());
         return 'null';
       }
 
@@ -589,18 +587,19 @@ export async function runWorkflowScript(
       const { payload, normalizedResult } = journalValue(
         result,
         'agent() result',
+        attemptMetadata(),
       );
-      await recordJournalEntry(
-        {
+      try {
+        await recordJournalEntry({
           index,
           key,
           keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
           result: normalizedResult,
-        },
-        progressId,
-        label,
-        phaseContext,
-      );
+        });
+      } catch (error) {
+        emitFailedEnd(error, attemptMetadata());
+        throw error;
+      }
       emit({
         type: 'agent:end',
         progressId,

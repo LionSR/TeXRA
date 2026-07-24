@@ -241,6 +241,11 @@ export type WorkflowScriptEvent =
   | (WorkflowScriptAgentEventBase & {
       type: 'agent:end';
       outcome: 'skipped';
+      reason: 'user';
+      /** Child model resolved before the user stopped the attempt, if known. */
+      model?: string;
+      /** Host-measured wall time before the user stopped the attempt. */
+      durationMs: number;
     });
 
 /**

@@ -5,6 +5,7 @@ import { TraceEmitter, type AgentEvent } from '@agent/trace';
 import {
   WorkflowRunAbortError,
   type WorkflowAgentInvocation,
+  type WorkflowScriptControl,
 } from '@agent/workflowScript';
 import {
   RUN_OUTCOME,
@@ -134,6 +135,7 @@ return await agent('Inspect', { id: 'inspect' })`,
 
   it('marks declared tasks not reached by the script as skipped', async () => {
     const { trace, events } = recordingTrace();
+    const activities: string[] = [];
     await runPersistedWorkflowScriptWithProgress(trace, {
       store: getExecutionStore(executionId),
       checkpointId: 'not-reached-plan',
@@ -149,6 +151,7 @@ return await agent('Inspect', { id: 'inspect' })`,
 phase('Research')
 return await agent('Run one', { id: 'used' })`,
       runAgent: async () => 'done',
+      onActivity: (line) => activities.push(line),
     });
 
     const unusedPlanned = workflowTaskEvent(events, 'Unused task', 'planned');
@@ -160,6 +163,7 @@ return await agent('Run one', { id: 'used' })`,
         reason: 'not-reached',
       },
     });
+    expect(activities).toContain('Skipped: Unused task');
   });
 
   it('marks a planned task failed when the live-call cap refuses it', async () => {
@@ -360,6 +364,7 @@ return await agent('Second')`;
 
   it('enriches live finish lines with the reported model and duration', async () => {
     const { trace, events } = recordingTrace();
+    const activities: string[] = [];
     let liveCostUsd = 0;
     await runPersistedWorkflowScriptWithProgress(trace, {
       store: getExecutionStore(executionId),
@@ -372,6 +377,7 @@ return await agent('Draft')`,
         return 'done';
       },
       getLiveCostUsd: () => liveCostUsd,
+      onActivity: (line) => activities.push(line),
     });
 
     expect(workflowTaskEvent(events, 'Draft', 'completed')?.task).toMatchObject(
@@ -380,6 +386,62 @@ return await agent('Draft')`,
         durationMs: expect.any(Number),
         totalCostUsd: 0.02,
       },
+    );
+    expect(activities).toContainEqual(
+      expect.stringMatching(
+        /^Finished: Draft · deepseekT · .+ · \$0\.020 total$/,
+      ),
+    );
+  });
+
+  it('preserves live metadata when the user skips a running task', async () => {
+    const { trace, events } = recordingTrace();
+    const activities: string[] = [];
+    let control!: WorkflowScriptControl;
+    let markStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const run = runPersistedWorkflowScriptWithProgress(trace, {
+      store: getExecutionStore(executionId),
+      checkpointId: 'late-user-skip',
+      script: `${meta}
+return await agent('Late skip')`,
+      runAgent: async (invocation: WorkflowAgentInvocation) => {
+        invocation.reportModel?.('kimiK2');
+        markStarted?.();
+        return await new Promise<never>((_resolve, reject) => {
+          invocation.signal.addEventListener(
+            'abort',
+            () => reject(new Error('skipped')),
+            { once: true },
+          );
+        });
+      },
+      onControl: (handle) => {
+        control = handle;
+      },
+      getLiveCostUsd: () => 0.04,
+      onActivity: (line) => activities.push(line),
+    });
+
+    await started;
+    control.skip(0);
+    await run;
+
+    expect(
+      workflowTaskEvent(events, 'Late skip', 'skipped')?.task,
+    ).toMatchObject({
+      reason: 'user',
+      model: 'kimiK2',
+      durationMs: expect.any(Number),
+      totalCostUsd: 0.04,
+    });
+    expect(activities).toContain('Running: Late skip');
+    expect(activities).toContainEqual(
+      expect.stringMatching(
+        /^Skipped: Late skip · kimiK2 · .+ · \$0\.040 total$/,
+      ),
     );
   });
 
@@ -464,17 +526,21 @@ return await pending`,
     expect(completion).not.toMatchObject({ stageId: stageId(events, 'Later') });
   });
 
-  it('closes a started phase when the runner aborts without an end event', async () => {
+  it('preserves the exact cause when a runner aborts a started phase', async () => {
     const { trace, events } = recordingTrace();
+    const activities: string[] = [];
     await expect(
       runPersistedWorkflowScriptWithProgress(trace, {
         store: getExecutionStore(executionId),
         checkpointId: 'runner-abort',
         script: `${meta}
 return await agent('Abort', { phase: 'Execution' })`,
-        runAgent: async () => {
+        runAgent: async (invocation: WorkflowAgentInvocation) => {
+          invocation.reportModel?.('abort-model');
           throw new WorkflowRunAbortError('fatal runner error');
         },
+        getLiveCostUsd: () => 0.06,
+        onActivity: (line) => activities.push(line),
       }),
     ).rejects.toThrow('fatal runner error');
 
@@ -482,7 +548,10 @@ return await agent('Abort', { phase: 'Execution' })`,
     expect(workflowTaskEvent(events, 'Abort', 'failed')).toMatchObject({
       stageId: phaseId,
       task: {
-        error: 'The workflow ended before this task completed.',
+        error: 'fatal runner error',
+        model: 'abort-model',
+        durationMs: expect.any(Number),
+        totalCostUsd: 0.06,
       },
     });
     expect(events).toContainEqual({
@@ -490,12 +559,18 @@ return await agent('Abort', { phase: 'Execution' })`,
       id: phaseId,
       status: RUN_OUTCOME.FAILED,
     });
+    expect(activities).toContainEqual(
+      expect.stringMatching(
+        /^Failed: Abort · abort-model · .+ · \$0\.060 total - fatal runner error$/,
+      ),
+    );
   });
 
   it('marks a phase failed when an abandoned call outlives cleanup', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
       const { trace, events } = recordingTrace();
+      const activities: string[] = [];
       let markStarted: (() => void) | undefined;
       const started = new Promise<void>((resolve) => {
         markStarted = resolve;
@@ -510,6 +585,8 @@ return 'guest success'`,
           markStarted?.();
           return await new Promise<never>(() => undefined);
         },
+        getLiveCostUsd: () => 0.03,
+        onActivity: (line) => activities.push(line),
       });
 
       await started;
@@ -521,6 +598,7 @@ return 'guest success'`,
         stageId: phaseId,
         task: {
           error: 'The workflow ended before this task completed.',
+          totalCostUsd: 0.03,
         },
       });
       expect(events).toContainEqual({
@@ -528,6 +606,10 @@ return 'guest success'`,
         id: phaseId,
         status: RUN_OUTCOME.FAILED,
       });
+      expect(activities).toContain('Running: Orphaned');
+      expect(activities).toContain(
+        'Failed: Orphaned · $0.030 total - The workflow ended before this task completed.',
+      );
     } finally {
       vi.useRealTimers();
     }
