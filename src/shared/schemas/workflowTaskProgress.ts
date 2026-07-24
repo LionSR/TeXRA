@@ -1,10 +1,24 @@
 import { z } from 'zod';
 
-const WorkflowTaskIdentitySchema = z.strictObject({
-  id: z.string().trim().min(1),
-  label: z.string().trim().min(1),
-  phase: z.string().trim().min(1).optional(),
+export const WorkflowTaskIdentitySchema = z.strictObject({
+  id: z
+    .string()
+    .trim()
+    .min(1)
+    .describe('Stable task identity referenced by workflow agent calls.'),
+  label: z
+    .string()
+    .trim()
+    .min(1)
+    .describe('Human-readable task name shown on progress surfaces.'),
+  phase: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe('Optional declared workflow phase containing the task.'),
 });
+export type WorkflowTaskIdentity = z.infer<typeof WorkflowTaskIdentitySchema>;
 
 const WorkflowTaskTerminalMetadataSchema = z.strictObject({
   model: z.string().min(1).optional(),

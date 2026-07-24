@@ -8,9 +8,9 @@ import {
   type LogMessageData,
   type WorkflowTaskProgress,
 } from '@shared/schemas';
+import { formatWorkflowTaskMetadataParts } from '@shared/copy/workflowTask';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';
-import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 function statusIcon(task: WorkflowTaskProgress): TemplateResult {
   if (task.status === 'running') {
@@ -42,15 +42,7 @@ function terminalMetadata(
   task: WorkflowTaskProgress,
 ): TemplateResult | typeof nothing {
   if (task.status !== 'completed' && task.status !== 'failed') return nothing;
-  const parts = [
-    task.model,
-    task.durationMs === undefined
-      ? undefined
-      : formatCompactDuration(task.durationMs),
-    task.totalCostUsd === undefined
-      ? undefined
-      : `${formatCostUsd(task.totalCostUsd)} total`,
-  ].filter((part): part is string => part !== undefined);
+  const parts = formatWorkflowTaskMetadataParts(task);
   return parts.length > 0
     ? html`<span class="workflow-task-meta">${parts.join(' · ')}</span>`
     : nothing;

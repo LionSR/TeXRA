@@ -176,6 +176,12 @@ export async function runPersistedWorkflowScriptWithProgress(
       stageId,
     });
   };
+  const finalStageIdFor = (
+    task: Pick<WorkflowTaskProgress, 'phase'>,
+  ): string | undefined =>
+    task.phase === undefined
+      ? parentStageId
+      : (phases.get(task.phase)?.handle.id ?? parentStageId);
 
   const project = (event: WorkflowScriptEvent): void => {
     if (closed) return;
@@ -335,7 +341,7 @@ export async function runPersistedWorkflowScriptWithProgress(
             status: 'skipped',
             reason: 'not-reached',
           },
-          parentStageId,
+          finalStageIdFor(task),
         );
       } else if (status === 'running') {
         emitTask(
@@ -344,7 +350,7 @@ export async function runPersistedWorkflowScriptWithProgress(
             status: 'failed',
             error: 'The workflow ended before this task completed.',
           },
-          task.phase ? phases.get(task.phase)?.handle.id : parentStageId,
+          finalStageIdFor(task),
         );
       }
     }

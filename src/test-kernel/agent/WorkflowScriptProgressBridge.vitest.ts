@@ -130,17 +130,21 @@ return await agent('Inspect', { id: 'inspect' })`,
       script: `export const meta = {
   name: 'conditional-plan',
   description: 'declares all possible work',
+  phases: [{ title: 'Research' }],
   tasks: [
-    { id: 'used', label: 'Used task' },
-    { id: 'unused', label: 'Unused task' },
+    { id: 'used', label: 'Used task', phase: 'Research' },
+    { id: 'unused', label: 'Unused task', phase: 'Research' },
   ],
 }
+phase('Research')
 return await agent('Run one', { id: 'used' })`,
       runAgent: async () => 'done',
     });
 
+    const researchStageId = stageId(events, 'Research');
     expect(workflowTaskEvent(events, 'Used task', 'completed')).toBeDefined();
     expect(workflowTaskEvent(events, 'Unused task', 'skipped')).toMatchObject({
+      stageId: researchStageId,
       task: {
         reason: 'not-reached',
       },

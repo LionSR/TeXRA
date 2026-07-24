@@ -27,14 +27,11 @@ import {
   summarizeFollowupMessage,
 } from '@shared/subagentFollowup';
 import { normalizeToolUseData } from '@shared/toolUse';
+import { formatWorkflowTaskMetadataParts } from '@shared/copy/workflowTask';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  formatCompactDuration,
-  formatCostUsd,
-  truncateSummary,
-} from '@utils/text/stringUtils';
+import { truncateSummary } from '@utils/text/stringUtils';
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
 import {
   isRenderableTranscriptEntry,
@@ -354,18 +351,7 @@ function renderLogEntry(
     const parsed = WorkflowTaskProgressSchema.safeParse(entry.data);
     if (!parsed.success) return null;
     const task = parsed.data;
-    const metadata =
-      task.status === 'completed' || task.status === 'failed'
-        ? [
-            task.model,
-            task.durationMs === undefined
-              ? undefined
-              : formatCompactDuration(task.durationMs),
-            task.totalCostUsd === undefined
-              ? undefined
-              : `${formatCostUsd(task.totalCostUsd)} total`,
-          ].filter((part): part is string => part !== undefined)
-        : [];
+    const metadata = formatWorkflowTaskMetadataParts(task);
     const suffix = metadata.length > 0 ? ` · ${metadata.join(' · ')}` : '';
     const error = task.status === 'failed' ? ` — ${task.error}` : '';
     const text = `${WORKFLOW_TASK_STATUS_LABEL[task.status]}: ${task.label}${suffix}${error}`;
