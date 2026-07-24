@@ -121,7 +121,7 @@ The opt-in `delegate_workflow_script` tool composes the production in-band
 subagent runner, durable checkpoint store, task-run file hand-off, progress
 projection, parent cancellation, and completed-journal cost settlement. It
 ships in the built-in `orchestrator` agent's tool list
-(`reference-agents/orchestrator.yaml`); explicitly naming the tool in an
+(`prompts/agents/remote/orchestrator.yaml`); explicitly naming the tool in an
 agent's configuration is one half of the consent boundary for automated
 workflow fan-out. The other half is global: the "Workflow Script" toggle in
 the Tools dashboard (`src/tools/externalToolDefs.ts`, id `workflow-script`)
