@@ -10,6 +10,10 @@ const ANSI_ERASE_LINE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[\\d*K`, 'g');
 
 const MAX_TAIL = 65536;
 
+/** Number of recent processed lines retained by terminal renderers. */
+export const TERMINAL_SCROLLBACK_LINES = 4_000;
+const TRUNCATION_MARKER = `[truncated to last ${TERMINAL_SCROLLBACK_LINES} lines]\n`;
+
 /** Strip ANSI codes and simulate \r overwrite within each newline-delimited line. */
 export function processTerminalText(text: string): string {
   // Strip any real null bytes so \x00 is unambiguous as our internal sentinel.
@@ -54,8 +58,10 @@ export function processTerminalText(text: string): string {
 export class TerminalBuffer {
   /** Raw partial-line buffer: unprocessed bytes after the last '\n', capped at 64 KiB */
   private rawTail = '';
-  /** Processed complete lines for terminal mode (up to and including the last '\n') */
+  /** Recent processed complete lines (up to and including the last '\n'). */
   private committedLines = '';
+  private committedLineCount = 0;
+  private historyTruncated = false;
 
   /** Text node currently attached to the committed <pre>. */
   private committedTextNode: Text | null = null;
@@ -79,6 +85,8 @@ export class TerminalBuffer {
   rebuild(fullText: string): void {
     this.rawTail = '';
     this.committedLines = '';
+    this.committedLineCount = 0;
+    this.historyTruncated = false;
     this.needsReset = true;
     this.append(fullText);
   }
@@ -88,8 +96,11 @@ export class TerminalBuffer {
     const combined = this.rawTail + newRaw;
     const lastNl = combined.lastIndexOf('\n');
     if (lastNl >= 0) {
-      this.committedLines += processTerminalText(combined.slice(0, lastNl + 1));
+      const processed = processTerminalText(combined.slice(0, lastNl + 1));
+      this.committedLines += processed;
+      this.committedLineCount += this.countLines(processed);
       this.rawTail = combined.slice(lastNl + 1);
+      this.trimCommittedLines();
     } else {
       // No newline: keep raw bytes so split ANSI sequences and cross-chunk \r
       // overwrites are handled correctly at render time. Cap unconditionally:
@@ -100,6 +111,33 @@ export class TerminalBuffer {
           ? combined.slice(combined.length - MAX_TAIL)
           : combined;
     }
+  }
+
+  /** Keep only recent complete lines, matching the terminal renderer's scrollback. */
+  private trimCommittedLines(): void {
+    const linesToDrop = this.committedLineCount - TERMINAL_SCROLLBACK_LINES;
+    if (linesToDrop <= 0) return;
+
+    let retainedStart = this.historyTruncated ? TRUNCATION_MARKER.length : 0;
+    for (let dropped = 0; dropped < linesToDrop; dropped += 1) {
+      retainedStart = this.committedLines.indexOf('\n', retainedStart) + 1;
+    }
+
+    this.committedLines =
+      TRUNCATION_MARKER + this.committedLines.slice(retainedStart);
+    this.committedLineCount = TERMINAL_SCROLLBACK_LINES;
+    this.historyTruncated = true;
+    // The retained text now has a different prefix, so incremental DOM append
+    // is invalid even when the replacement happens to be longer.
+    this.needsReset = true;
+  }
+
+  private countLines(text: string): number {
+    let count = 0;
+    for (const char of text) {
+      if (char === '\n') count += 1;
+    }
+    return count;
   }
 
   /** Imperatively sync committedLines into the supplied <pre> element. */

@@ -6,6 +6,9 @@ import { Terminal } from '@xterm/xterm';
 import xtermStyles from '@xterm/xterm/css/xterm.css?inline';
 import { clamp } from '@utils/core';
 
+// Local imports - terminal policy
+import { TERMINAL_SCROLLBACK_LINES } from './terminalBuffer';
+
 const DEFAULT_THEME = {
   background: '#1e1e1e',
   foreground: '#cccccc',
@@ -31,8 +34,6 @@ const ANSI_COLOR_MAP = [
   ['brightCyan', '--texra-terminal-ansiBrightCyan'],
   ['brightWhite', '--texra-terminal-ansiBrightWhite'],
 ] as const;
-
-const MIN_SCROLLBACK = 4_000;
 
 /** Maximum visible rows before terminal scrolls internally. */
 const MAX_VISIBLE_ROWS = 20;
@@ -142,7 +143,7 @@ export class TerminalOutput extends LitElement {
     this.terminal = new Terminal({
       disableStdin: true,
       convertEol: true,
-      scrollback: MIN_SCROLLBACK,
+      scrollback: TERMINAL_SCROLLBACK_LINES,
       fontFamily,
       fontSize: 12,
       theme,
@@ -246,7 +247,7 @@ export class TerminalOutput extends LitElement {
           this.renderedRowCount,
           updatePlan,
         );
-        const scrollback = Math.max(MIN_SCROLLBACK, rowCount);
+        const scrollback = Math.max(TERMINAL_SCROLLBACK_LINES, rowCount);
         if (terminal.options.scrollback !== scrollback) {
           terminal.options = {
             ...terminal.options,

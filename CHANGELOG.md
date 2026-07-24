@@ -78,6 +78,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Long terminal streams keep recent output without unbounded memory use** —
+  terminal-mode logs retain the latest 4,000 complete lines and clearly mark
+  when earlier scrollback has been removed.
 - **Completed background tasks leave the session list** — finished shell tasks
   are removed after their results are saved instead of leaving stale tabs.
 - **Workflow-script sessions show their own identity** — scripted orchestration
