@@ -311,7 +311,14 @@ export async function runWorkflowScript(
         'agent(prompt, options?) requires a non-empty string prompt.',
       );
     }
-    const callOptions = normalizeAgentOptions(rawOptions, currentPhase);
+    let callOptions: WorkflowAgentCallOptions;
+    try {
+      callOptions = normalizeAgentOptions(rawOptions, currentPhase);
+    } catch (error) {
+      throw rememberFatalRunError(
+        new WorkflowRunAbortError(toErrorMessage(error), { cause: error }),
+      );
+    }
     const phaseContext = phaseContextFor(callOptions.phase);
     const index = callCounter;
     callCounter += 1;

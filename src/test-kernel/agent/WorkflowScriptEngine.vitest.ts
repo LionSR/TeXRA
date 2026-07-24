@@ -681,6 +681,38 @@ return null`,
     ).rejects.toThrow(/must name a tool-use agent/);
   });
 
+  it('does not let fan-out swallow invalid structured-call declarations', async () => {
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await parallel([
+  () => agent('x', { schema: { type: 'object' } }),
+])`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: expect.stringContaining('must name a tool-use agent'),
+    });
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await pipeline(
+  [1],
+  () => agent('x', {
+    agentName: 'assistant',
+    schema: { type: 'object' },
+    inputFiles: ['paper.tex'],
+  }),
+)`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: expect.stringContaining(
+        'structured-output calls cannot use file options',
+      ),
+    });
+  });
+
   it('accepts a schema option and drops the obsolete outputSchema option', async () => {
     const seen: WorkflowAgentInvocation[] = [];
     const runner = vi.fn((invocation: WorkflowAgentInvocation) => {
