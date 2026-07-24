@@ -163,9 +163,7 @@ export const WORKFLOW_JOURNAL_KEY_FORMAT = {
 export const WorkflowJournalKeyFormatSchema = z.enum(
   WORKFLOW_JOURNAL_KEY_FORMAT,
 );
-export type WorkflowJournalKeyFormat = z.infer<
-  typeof WorkflowJournalKeyFormatSchema
->;
+type WorkflowJournalKeyFormat = z.infer<typeof WorkflowJournalKeyFormatSchema>;
 
 /** One completed agent() call, cached for resume. */
 export interface WorkflowJournalEntry {
