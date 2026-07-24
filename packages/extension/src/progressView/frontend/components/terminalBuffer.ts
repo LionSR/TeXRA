@@ -10,9 +10,10 @@ const ANSI_ERASE_LINE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[\\d*K`, 'g');
 
 const MAX_TAIL = 65536;
 
-/** Number of recent processed lines retained by terminal renderers. */
-export const TERMINAL_SCROLLBACK_LINES = 4_000;
-const TRUNCATION_MARKER = `[truncated to last ${TERMINAL_SCROLLBACK_LINES} lines]\n`;
+/** Maximum number of recent complete lines retained by TerminalBuffer. */
+export const TERMINAL_BUFFER_MAX_LINES = 4_000;
+const TERMINAL_BUFFER_RETAIN_LINES = 3_600;
+const TRUNCATION_MARKER = '[... earlier terminal output truncated ...]\n';
 
 /** Strip ANSI codes and simulate \r overwrite within each newline-delimited line. */
 export function processTerminalText(text: string): string {
@@ -99,24 +100,21 @@ export class TerminalBuffer {
       const processed = processTerminalText(combined.slice(0, lastNl + 1));
       this.committedLines += processed;
       this.committedLineCount += this.countLines(processed);
-      this.rawTail = combined.slice(lastNl + 1);
+      this.rawTail = this.capRawTail(combined.slice(lastNl + 1));
       this.trimCommittedLines();
     } else {
       // No newline: keep raw bytes so split ANSI sequences and cross-chunk \r
       // overwrites are handled correctly at render time. Cap unconditionally:
       // if the tail ends with \r (potential CRLF split) the cap still preserves
       // that trailing \r, so the next arriving \n is correctly joined into \r\n.
-      this.rawTail =
-        combined.length > MAX_TAIL
-          ? combined.slice(combined.length - MAX_TAIL)
-          : combined;
+      this.rawTail = this.capRawTail(combined);
     }
   }
 
-  /** Keep only recent complete lines, matching the terminal renderer's scrollback. */
+  /** Compact to a lower watermark so prefix replacement is amortized. */
   private trimCommittedLines(): void {
-    const linesToDrop = this.committedLineCount - TERMINAL_SCROLLBACK_LINES;
-    if (linesToDrop <= 0) return;
+    if (this.committedLineCount <= TERMINAL_BUFFER_MAX_LINES) return;
+    const linesToDrop = this.committedLineCount - TERMINAL_BUFFER_RETAIN_LINES;
 
     let retainedStart = this.historyTruncated ? TRUNCATION_MARKER.length : 0;
     for (let dropped = 0; dropped < linesToDrop; dropped += 1) {
@@ -125,11 +123,15 @@ export class TerminalBuffer {
 
     this.committedLines =
       TRUNCATION_MARKER + this.committedLines.slice(retainedStart);
-    this.committedLineCount = TERMINAL_SCROLLBACK_LINES;
+    this.committedLineCount = TERMINAL_BUFFER_RETAIN_LINES;
     this.historyTruncated = true;
     // The retained text now has a different prefix, so incremental DOM append
     // is invalid even when the replacement happens to be longer.
     this.needsReset = true;
+  }
+
+  private capRawTail(text: string): string {
+    return text.length > MAX_TAIL ? text.slice(text.length - MAX_TAIL) : text;
   }
 
   private countLines(text: string): number {

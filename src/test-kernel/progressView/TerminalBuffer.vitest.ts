@@ -1,5 +1,11 @@
 // Third-party imports
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+
+// Local imports - component under test
+import {
+  TERMINAL_BUFFER_MAX_LINES,
+  TerminalBuffer,
+} from '@progressView/frontend/components/terminalBuffer';
 
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
@@ -8,17 +14,10 @@ useLitComponentTestDom(
   () => import('@progressView/frontend/components/terminalBuffer'),
 );
 
-const EXPECTED_SCROLLBACK_LINES = 4_000;
-const TRUNCATION_MARKER = `[truncated to last ${EXPECTED_SCROLLBACK_LINES} lines]\n`;
+const TRUNCATION_MARKER = '[... earlier terminal output truncated ...]\n';
+const RETAINED_AFTER_COMPACTION = 3_600;
 
-let TerminalBuffer: typeof import('@progressView/frontend/components/terminalBuffer').TerminalBuffer;
-
-beforeAll(async () => {
-  ({ TerminalBuffer } =
-    await import('@progressView/frontend/components/terminalBuffer'));
-});
-
-function renderedText(buffer: InstanceType<typeof TerminalBuffer>): string {
+function renderedText(buffer: TerminalBuffer): string {
   const pre = document.createElement('pre');
   buffer.sync(pre);
   return pre.textContent ?? '';
@@ -31,66 +30,115 @@ function numberedLines(start: number, count: number): string {
   ).join('');
 }
 
+function retainedLines(text: string): string[] {
+  const content = text.startsWith(TRUNCATION_MARKER)
+    ? text.slice(TRUNCATION_MARKER.length)
+    : text;
+  return content.endsWith('\n') ? content.slice(0, -1).split('\n') : [content];
+}
+
 describe('TerminalBuffer', () => {
-  it('preserves committed output below the scrollback limit', () => {
+  it('preserves committed output below the complete-line limit', () => {
     const buffer = new TerminalBuffer();
+    buffer.append(numberedLines(0, TERMINAL_BUFFER_MAX_LINES - 1));
 
-    buffer.append('first\nsecond\npartial');
-
-    expect(renderedText(buffer)).toBe('first\nsecond\n');
-    expect(buffer.tail).toBe('partial');
+    const text = renderedText(buffer);
+    expect(text.startsWith(TRUNCATION_MARKER)).toBe(false);
+    expect(retainedLines(text)).toHaveLength(TERMINAL_BUFFER_MAX_LINES - 1);
+    expect(retainedLines(text)[0]).toBe('line 0');
   });
 
-  it('evicts the oldest processed lines predictably above the limit', () => {
+  it('preserves committed output exactly at the complete-line limit', () => {
+    const buffer = new TerminalBuffer();
+    buffer.append(numberedLines(0, TERMINAL_BUFFER_MAX_LINES));
+
+    const text = renderedText(buffer);
+    expect(text.startsWith(TRUNCATION_MARKER)).toBe(false);
+    expect(retainedLines(text)).toHaveLength(TERMINAL_BUFFER_MAX_LINES);
+    expect(retainedLines(text).at(-1)).toBe(
+      `line ${TERMINAL_BUFFER_MAX_LINES - 1}`,
+    );
+  });
+
+  it('compacts to the lower watermark immediately above the limit', () => {
+    const buffer = new TerminalBuffer();
+    buffer.append(numberedLines(0, TERMINAL_BUFFER_MAX_LINES + 1));
+
+    const text = renderedText(buffer);
+    const lines = retainedLines(text);
+    expect(text.startsWith(TRUNCATION_MARKER)).toBe(true);
+    expect(lines).toHaveLength(RETAINED_AFTER_COMPACTION);
+    expect(lines[0]).toBe(
+      `line ${TERMINAL_BUFFER_MAX_LINES + 1 - RETAINED_AFTER_COMPACTION}`,
+    );
+    expect(lines.at(-1)).toBe(`line ${TERMINAL_BUFFER_MAX_LINES}`);
+  });
+
+  it('keeps only the lower-watermark suffix when one chunk is far over the limit', () => {
+    const buffer = new TerminalBuffer();
+    const totalLines = TERMINAL_BUFFER_MAX_LINES + 2_000;
+    buffer.append(numberedLines(0, totalLines));
+
+    const lines = retainedLines(renderedText(buffer));
+    expect(lines).toHaveLength(RETAINED_AFTER_COMPACTION);
+    expect(lines[0]).toBe(`line ${totalLines - RETAINED_AFTER_COMPACTION}`);
+    expect(lines.at(-1)).toBe(`line ${totalLines - 1}`);
+  });
+
+  it('amortizes compaction across repeated line-at-a-time appends', () => {
     const buffer = new TerminalBuffer();
     const pre = document.createElement('pre');
-    buffer.append(numberedLines(0, EXPECTED_SCROLLBACK_LINES));
+    buffer.append(numberedLines(0, TERMINAL_BUFFER_MAX_LINES + 1));
     buffer.sync(pre);
+    const nodeAfterFirstCompaction = pre.firstChild;
 
-    buffer.append(numberedLines(EXPECTED_SCROLLBACK_LINES, 2));
+    for (
+      let line = TERMINAL_BUFFER_MAX_LINES + 1;
+      line <= TERMINAL_BUFFER_MAX_LINES + 400;
+      line += 1
+    ) {
+      buffer.append(`line ${line}\n`);
+      buffer.sync(pre);
+      expect(pre.firstChild).toBe(nodeAfterFirstCompaction);
+    }
+
+    expect(retainedLines(pre.textContent ?? '')[0]).toBe('line 401');
+
+    buffer.append(`line ${TERMINAL_BUFFER_MAX_LINES + 401}\n`);
     buffer.sync(pre);
-
-    const text = pre.textContent ?? '';
-    expect(text.startsWith(TRUNCATION_MARKER)).toBe(true);
-    expect(text).not.toContain('line 0\n');
-    expect(text).not.toContain('line 1\n');
-    expect(text).toContain('line 2\n');
-    expect(text.endsWith(`line ${EXPECTED_SCROLLBACK_LINES + 1}\n`)).toBe(true);
+    expect(pre.firstChild).not.toBe(nodeAfterFirstCompaction);
+    expect(retainedLines(pre.textContent ?? '')[0]).toBe('line 802');
   });
 
-  it('preserves CR overwrite and split ANSI handling when trimming', () => {
+  it('preserves CR overwrite and split ANSI handling across compaction', () => {
     const buffer = new TerminalBuffer();
-    buffer.append(numberedLines(0, EXPECTED_SCROLLBACK_LINES - 1));
+    buffer.append(numberedLines(0, TERMINAL_BUFFER_MAX_LINES));
     buffer.append('\x1b[3');
     buffer.append('1mprogress 10%\x1b[0m\rprogress');
-    buffer.append(' done\nlast\n');
+    buffer.append(' done\n');
 
     const text = renderedText(buffer);
     expect(text.startsWith(TRUNCATION_MARKER)).toBe(true);
-    expect(text).not.toContain('line 0\n');
-    expect(text).toContain('progress done\nlast\n');
+    expect(retainedLines(text)[0]).toBe('line 401');
+    expect(text.endsWith('progress done\n')).toBe(true);
     expect(text).not.toContain('\x1b');
   });
 
-  it('keeps retained committed state bounded after repeated appends', () => {
+  it('caps an oversized partial tail that follows complete lines', () => {
     const buffer = new TerminalBuffer();
+    const oversizedTail = `discard${'x'.repeat(70_000)}`;
 
-    for (let batch = 0; batch < 20; batch += 1) {
-      buffer.append(numberedLines(batch * 500, 500));
-    }
+    buffer.append(`complete\n${oversizedTail}`);
 
-    const text = renderedText(buffer);
-    const retainedLines = text.slice(TRUNCATION_MARKER.length).split('\n');
-    expect(text.startsWith(TRUNCATION_MARKER)).toBe(true);
-    expect(retainedLines).toHaveLength(EXPECTED_SCROLLBACK_LINES + 1);
-    expect(retainedLines[0]).toBe('line 6000');
-    expect(retainedLines.at(-2)).toBe('line 9999');
+    expect(renderedText(buffer)).toBe('complete\n');
+    expect(buffer.tail).toHaveLength(65_536);
+    expect(buffer.tail).toBe('x'.repeat(65_536));
   });
 
-  it('rebuild replaces truncated history and resets the DOM text', () => {
+  it('rebuild replaces truncated history and resets line and tail state', () => {
     const buffer = new TerminalBuffer();
     const pre = document.createElement('pre');
-    buffer.append(numberedLines(0, EXPECTED_SCROLLBACK_LINES + 1));
+    buffer.append(numberedLines(0, TERMINAL_BUFFER_MAX_LINES + 1));
     buffer.sync(pre);
     expect(pre.textContent?.startsWith(TRUNCATION_MARKER)).toBe(true);
 
