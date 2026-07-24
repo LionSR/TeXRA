@@ -71,12 +71,12 @@ describe('AgentSettingSchema', () => {
     expect(warningCount).toBe(1);
   });
 
-  it('regression #7497: shipped reference-agents YAML no longer carries documentTag/endTag', () => {
-    // The retired keys used to be copy-pasted into every reference agent, so
+  it('regression #7497: public remote agent YAML no longer carries documentTag/endTag', () => {
+    // The retired keys used to be copy-pasted into every remote agent, so
     // parsing the bundle at startup fired the deprecation console.warn 4-8x
     // on every launch. Assert both the absence of the keys and the silent
     // parse, so a re-added key fails loudly here instead of in users' stderr.
-    const dir = resolve(REPO_ROOT, 'reference-agents');
+    const dir = resolve(REPO_ROOT, 'prompts/agents/remote');
     const files = readdirSync(dir).filter((name) => name.endsWith('.yaml'));
     expect(files.length).toBeGreaterThan(0);
 

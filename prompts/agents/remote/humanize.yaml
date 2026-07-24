@@ -81,7 +81,7 @@ prompts:
         \item Phrases: ``remarkable capabilities'', ``unprecedented opportunities'', ``transformative force/paradigm'', ``promising directions for future work''
         \item Generality claims: ``broadly applicable'', ``general-purpose'', ``applicable to a wide range of'', ``works across diverse settings'' (when no concrete range is given)
     \end{itemize}
-    Replacements (Barbara's calibration):
+    Replacements:
     \begin{itemize}
         \item ``crucial for identifying'' $\to$ ``determines''
         \item ``a much more favorable prefactor'' $\to$ ``a small prefactor''
