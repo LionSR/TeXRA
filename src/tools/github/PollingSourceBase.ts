@@ -18,6 +18,7 @@ import { createChannelTrace } from '@agent/trace';
 import { appSignals } from '@eventBus/AppSignals';
 
 import type { Disposable } from '@platform/interfaces';
+import { jitteredExponentialBackoffMs } from '@utils/core';
 import {
   createBoundedIdSet,
   type BoundedIdSet,
@@ -384,14 +385,13 @@ export abstract class PollingSourceBase<
       return;
     }
     state.consecutiveFailures += 1;
-    const backoffMs = Math.min(
-      this.config.backoffBaseMs * 2 ** (state.consecutiveFailures - 1),
+    // Jittered +/-20% so a network outage doesn't stampede every subscription
+    // back at exactly the same moment.
+    const actualDelayMs = jitteredExponentialBackoffMs(
+      this.config.backoffBaseMs,
+      state.consecutiveFailures,
       this.config.backoffMaxMs,
     );
-    // Jitter +/-20% so a network outage doesn't stampede every subscription
-    // back at exactly the same moment.
-    const jitter = 0.8 + Math.random() * 0.4;
-    const actualDelayMs = Math.round(backoffMs * jitter);
     state.skipPollUntilMs = now + actualDelayMs;
     if (now - state.lastSuccessAt >= this.config.maxFailureDurationMs) {
       this.logger.warn(

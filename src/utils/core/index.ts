@@ -338,6 +338,26 @@ export function roundTo(value: number, decimals: number): number {
   return Number(value.toFixed(decimals));
 }
 
+/**
+ * Compute a jittered exponential backoff delay: `baseMs * 2^(failures-1)`,
+ * capped at `maxMs`, then randomized by `+/-jitterFraction` and capped again
+ * so jitter can never push the result past `maxMs`. Shared by every retry/
+ * backoff loop in the codebase so the jitter formula only exists once.
+ */
+export function jitteredExponentialBackoffMs(
+  baseMs: number,
+  failures: number,
+  maxMs: number,
+  jitterFraction = 0.2,
+): number {
+  const exponential = Math.min(
+    maxMs,
+    Math.max(0, baseMs) * 2 ** Math.max(0, failures - 1),
+  );
+  const jitter = 1 - jitterFraction + Math.random() * 2 * jitterFraction;
+  return Math.min(maxMs, Math.round(exponential * jitter));
+}
+
 // ---------------------------------------------------------------------------
 // urlCore
 // ---------------------------------------------------------------------------
