@@ -1,6 +1,6 @@
 import { getExecutionStore } from '@agent/storage';
 import type { StageHandle } from '@agent/trace';
-import { PromptBuilder } from '@agent/prompt';
+import { PromptBuilder } from '@agent/prompt/PromptBuilder';
 import {
   createOutputState,
   setActiveRun,
