@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// CI gate: forbid an unclassified root-level doc from reaching the public site.
+// CI gate: enforce the public docs boundary and internal-doc naming rules.
 //
 // VitePress publishes every root-level *.md (and content directory) to texra.ai
 // unless it is listed in `srcExclude`. The deploy workflow has an allowlist that
@@ -12,7 +12,7 @@
 // import) so it runs without installing the docs sub-project.
 
 import { readdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   publicRootDocs,
@@ -21,6 +21,10 @@ import {
 } from '../.vitepress/publicDocs.js';
 
 const docsDir = join(dirname(fileURLToPath(import.meta.url)), '..');
+const TIMESTAMP_PREFIX = /^\d{4}-\d{2}-\d{2}-/;
+const TRAILING_DATE_SUFFIX = /-20\d{2}(?:-\d{2}(?:-\d{2})?)?\.md$/;
+const TIMESTAMPED_DIRS = ['dev/audits', 'prds', 'proposals'];
+const INTERNAL_DOC_MARKER = /(?:^|[-_])(audit|prd|proposal)(?:[-_.]|$)/i;
 
 // Build/system entries that are never publishable content and need no
 // classification (VitePress internals, static-asset dir, deps, this script's
@@ -37,6 +41,20 @@ const publicDirs = new Set(publicRootDirs);
 // Root-level entries named directly in srcExclude, with any `/**` glob suffix
 // stripped so a directory matches its `name/**` exclusion.
 const excluded = new Set(srcExclude.map((e) => e.replace(/\/\*\*$/, '')));
+const missingInternalExclusions = TIMESTAMPED_DIRS.map((dir) =>
+  dir.split('/').at(0),
+)
+  .filter((dir, index, dirs) => dirs.indexOf(dir) === index)
+  .filter((dir) => !excluded.has(dir));
+
+if (missingInternalExclusions.length > 0) {
+  const ghError = process.env.GITHUB_ACTIONS === 'true' ? '::error::' : '';
+  console.error(`${ghError}Internal docs directories missing from srcExclude:`);
+  for (const dir of missingInternalExclusions) {
+    console.error(`${ghError}  docs/${dir}/**`);
+  }
+  process.exit(1);
+}
 
 const entries = readdirSync(docsDir, { withFileTypes: true });
 const unclassified = [];
@@ -74,7 +92,52 @@ if (unclassified.length > 0) {
   process.exit(1);
 }
 
+function markdownFilesUnder(dir) {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const file = join(dir, entry.name);
+    if (entry.isDirectory()) return markdownFilesUnder(file);
+    return entry.isFile() && entry.name.endsWith('.md') ? [file] : [];
+  });
+}
+
+const untimestamped = TIMESTAMPED_DIRS.flatMap((dir) =>
+  markdownFilesUnder(join(docsDir, dir)),
+)
+  .filter((file) => basename(file) !== 'README.md')
+  .filter((file) => !TIMESTAMP_PREFIX.test(basename(file)));
+
+const duplicateDateSuffixes = TIMESTAMPED_DIRS.flatMap((dir) =>
+  markdownFilesUnder(join(docsDir, dir)),
+).filter((file) => TRAILING_DATE_SUFFIX.test(basename(file)));
+
+const misplacedInternalDocs = markdownFilesUnder(docsDir)
+  .filter((file) => INTERNAL_DOC_MARKER.test(basename(file)))
+  .filter((file) => !TIMESTAMP_PREFIX.test(basename(file)));
+
+const invalidInternalDocs = [
+  ...new Set([
+    ...untimestamped,
+    ...duplicateDateSuffixes,
+    ...misplacedInternalDocs,
+  ]),
+].toSorted();
+
+if (invalidInternalDocs.length > 0) {
+  const ghError = process.env.GITHUB_ACTIONS === 'true' ? '::error::' : '';
+  console.error(
+    `${ghError}Audit, PRD, and proposal Markdown files require a YYYY-MM-DD- prefix:`,
+  );
+  for (const file of invalidInternalDocs) {
+    console.error(`${ghError}  docs/${relative(docsDir, file)}`);
+  }
+  console.error(
+    `${ghError}Use one YYYY-MM-DD- prefix; README.md index files are the only exception.`,
+  );
+  process.exit(1);
+}
+
 console.log(
   `docs boundary OK: every root-level entry is classified ` +
-    `(${publicDocs.size} public docs, ${publicDirs.size} public dirs).`,
+    `(${publicDocs.size} public docs, ${publicDirs.size} public dirs); ` +
+    `${TIMESTAMPED_DIRS.length} internal doc areas are excluded and timestamped.`,
 );

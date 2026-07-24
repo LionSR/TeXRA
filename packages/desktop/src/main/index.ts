@@ -1116,7 +1116,7 @@ function createWindow(options: {
     }
   })();
   // Real desktop git host — closes audit item A from
-  // `docs/dev/standalone-trajectory-audit.md` (trajectory #16). Spawns
+  // `docs/dev/audits/2026-05-08-standalone-trajectory-audit.md` (trajectory #16). Spawns
   // `git log` under the active workspace to populate the launcher banner's
   // recent-commits picker. The host is stateless and re-probes per request,
   // so workspace switches don't need cache invalidation.

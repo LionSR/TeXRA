@@ -17,7 +17,7 @@ A "no issues found" review on this repo is almost always wrong. CLAUDE.md and AG
 
 1. **Read [references/review-checklist.md](references/review-checklist.md).** Pick the categories that match the diff — don't grind through all of them.
 2. **Identify the change surface.** Run `git diff` (or `git diff main...HEAD`) and group changed files by zone: VS Code-free zones (`agent/`, `model/`, `latex/`, `tools/`, `controllers/`, `shared/`, `replacement/`, `eventBus/`, webview frontends) vs. VS Code-allowed zones (`extension.ts`, `commands/`, `frontend/`, `common/webview/`, `common/state/`, `auth/`, `platform/`).
-3. **Check the event-channel rule.** New run-scoped facts must extend `AgentEvent` or `ProgressEventPayloads`-via-`runtimeHost` — flag any new `bus.emit` from a VS Code-free zone and any new subscribe surface (existing `src/tools` emit sites are grandfathered until SDK Step 7d; see `docs/proposals/error-pipeline-and-ownership.md`).
+3. **Check the event-channel rule.** New run-scoped facts must extend `AgentEvent` or `ProgressEventPayloads`-via-`runtimeHost` — flag any new `bus.emit` from a VS Code-free zone and any new subscribe surface (existing `src/tools` emit sites are grandfathered until SDK Step 7d; see `docs/proposals/2026-06-10-error-pipeline-and-ownership.md`).
 4. **Verify, don't speculate.** Open every file before flagging. If you can't verify, mark it as a question, not a finding.
 5. **Order by severity.** Correctness/security → platform-decoupling → API-contract → maintainability. Cite `path:line` for every finding.
 6. **Skip the noise.** Don't comment on whitespace, missing JSDoc on private helpers, or anything CLAUDE.md says not to comment on.

@@ -39,7 +39,7 @@ Add server-side compaction to `ModelHandlerAnthropic` using Anthropic's native `
 
 ## 2. API Overview
 
-From `docs/prds/2026-02-05-claude-documentation-compactization-2026-02.md`:
+From `docs/prds/2026-02-05-claude-documentation-compactization.md`:
 
 ### How it works
 

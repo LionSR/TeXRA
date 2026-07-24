@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Phase 0 React Compiler smoke per
-// docs/prds/cli-tui-ink/20-implementation.md#phase-0:
+// docs/prds/cli-tui-ink/2026-05-14-20-implementation.md#phase-0:
 //
 //   "Validate output by smoke-running a hello-world <App> and confirming
 //    `react/compiler-runtime` is the only added import."

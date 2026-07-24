@@ -78,7 +78,7 @@ try {
     legalComments: 'none',
     // The React Compiler runs as a Babel pre-pass scoped to .tsx files under
     // packages/cli/src/chat/tui/. Confirmed addition is only
-    // `react/compiler-runtime`; see docs/prds/cli-tui-ink/20-implementation.md
+    // `react/compiler-runtime`; see docs/prds/cli-tui-ink/2026-05-14-20-implementation.md
     // (Phase 0). Risk R12.
     plugins: [reactCompilerPlugin()],
     // JSX needs to be transformed for ink (which uses React's JSX runtime).
