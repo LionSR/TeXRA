@@ -22,7 +22,7 @@ Git repository.
 - `design/` contains UI and product design material.
 - `pocketflow/` documents the workflow framework.
 - `proposals/` and `prds/` contain plans and product requirements.
-- `reference/` and `toolCalls/` contain technical reference material.
+- `reference/` contains technical reference material.
 - `skills/` contains skill documentation.
 
 ## Hosted-service material
