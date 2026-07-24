@@ -38,7 +38,7 @@ Run all of these from a workstation logged into the production Supabase project.
 
    Should report "up to date." If it fails, run `npm run sync:remote-agents` (no flag) and commit before continuing.
 
-3. **Build and validate the new extension locally**. Run an end-to-end test of `apply` on a 2-file input pointing at the production Supabase project (the new YAMLs are already deployed locally via `reference-agents/`). Confirm the prompt rendering is correct, all 9 unified agents work.
+3. **Build and validate the new extension locally**. Run an end-to-end test of `apply` on a 2-file input pointing at the production Supabase project (the new YAMLs are already deployed locally via `prompts/agents/remote/`). Confirm the prompt rendering is correct, all 9 unified agents work.
 
 4. **Verify the currently-shipped client tolerates `documentTag: documents`**. The DELETE in step 2 is irreversible without a snapshot restore, and the shipped client's behavior under the new YAML is the only thing that can break it. Confirm `documentTag` is parsed at runtime, not pinned to `latex_documents`:
 
@@ -65,7 +65,7 @@ The sync script does **not** upload Storage objects — only metadata rows. Uplo
 # From the repo root (with supabase CLI authenticated):
 for agent in apply criticize devise elevate enhance generic humanize logic notation verifyFix; do
   folder=$(jq -r ".agents[\"$agent\"].folder" docs/supabase/remote-agents.config.json)
-  supabase storage cp "reference-agents/${agent}.yaml" "ss:///remote-agents/${folder}/${agent}.yaml" --project-ref <PROJECT-REF>
+  supabase storage cp "prompts/agents/remote/${agent}.yaml" "ss:///remote-agents/${folder}/${agent}.yaml" --project-ref <PROJECT-REF>
 done
 ```
 
@@ -80,7 +80,7 @@ This is safe to do **before** the SQL runs because:
 
 ### Step 2 — Apply the SQL
 
-Run `docs/supabase/SYNC_REFERENCE_AGENTS.sql` against the production project. Either:
+Run `docs/supabase/SYNC_REMOTE_AGENTS.sql` against the production project. Either:
 
 - Paste it into the Supabase Studio SQL editor and execute, OR
 - Use `mcp__supabase__execute_sql` chunk-by-chunk (each statement is independent so this works fine).
