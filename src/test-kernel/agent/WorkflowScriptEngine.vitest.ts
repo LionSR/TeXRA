@@ -116,6 +116,32 @@ return [a, b]`,
     expect(run.meta.name).toBe('test-flow');
   });
 
+  it('exposes launch files as immutable script context', async () => {
+    const run = await runWorkflowScript({
+      script: `${META}
+return {
+  files,
+  frozen: Object.isFrozen(files) &&
+    Object.values(files).every(Object.isFrozen),
+}`,
+      files: {
+        inputFiles: ['paper.tex'],
+        contextFiles: ['references.bib'],
+        mediaFiles: ['figure.pdf'],
+      },
+      runAgent: echoRunner,
+    });
+
+    expect(run.result).toEqual({
+      files: {
+        inputFiles: ['paper.tex'],
+        contextFiles: ['references.bib'],
+        mediaFiles: ['figure.pdf'],
+      },
+      frozen: true,
+    });
+  });
+
   it('passes a structured result from agent({ schema }) to the script and keys the journal by schema', async () => {
     const schema = {
       type: 'object',
@@ -126,7 +152,7 @@ return [a, b]`,
     const keys: string[] = [];
     const run = await runWorkflowScript({
       script: `${META}
-const withSchema = await agent('draft', { schema: args.schema })
+const withSchema = await agent('draft', { agentName: 'assistant', schema: args.schema })
 const plain = await agent('draft')
 return { structured: withSchema.structured, plain }`,
       args: { schema },
@@ -631,7 +657,66 @@ return null`,
         script: `${META}return await agent('x', { inputFiles: [''] })`,
         runAgent: echoRunner,
       }),
-    ).rejects.toThrow(/inputFiles.*array of non-empty strings/);
+    ).rejects.toThrow(/inputFiles.*arrays of non-empty strings/);
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await agent('x', { inputFiles: ['   '] })`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/inputFiles.*arrays of non-empty strings/);
+  });
+
+  it('separates workflow file options from structured tool-use calls', async () => {
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await agent('x', {
+  agentName: 'assistant',
+  schema: { type: 'object' },
+  contextFiles: ['notes.tex'],
+})`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/structured-output calls cannot use file options/);
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await agent('x', {
+  schema: { type: 'object' },
+})`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/must name a tool-use agent/);
+  });
+
+  it('does not let fan-out swallow invalid structured-call declarations', async () => {
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await parallel([
+  () => agent('x', { schema: { type: 'object' } }),
+])`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: expect.stringContaining('must name a tool-use agent'),
+    });
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await pipeline(
+  [1],
+  () => agent('x', {
+    agentName: 'assistant',
+    schema: { type: 'object' },
+    inputFiles: ['paper.tex'],
+  }),
+)`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: expect.stringContaining(
+        'structured-output calls cannot use file options',
+      ),
+    });
   });
 
   it('accepts a schema option and drops the obsolete outputSchema option', async () => {
@@ -642,7 +727,7 @@ return null`,
     });
     await runWorkflowScript({
       script: `${META}
-await agent('a', { schema: { type: 'object' } })
+await agent('a', { agentName: 'assistant', schema: { type: 'object' } })
 return await agent('b', { outputSchema: { type: 'object' } })`,
       runAgent: runner,
     });
@@ -832,7 +917,12 @@ Promise.resolve().then(() => {
   Promise.resolve().then(() => { while (true) {} })
 })
 return 'delivered'`,
-      { asyncFns: {}, syncFns: {}, argsJson: undefined },
+      {
+        asyncFns: {},
+        syncFns: {},
+        argsJson: undefined,
+        filesJson: '{"inputFiles":[],"contextFiles":[],"mediaFiles":[]}',
+      },
       {
         filename: 'delivered-before-deadline.workflow.js',
         timeoutMs: 40,
@@ -1068,6 +1158,7 @@ while (true) {}`,
           asyncFns: { agent: () => hostResult },
           syncFns: {},
           argsJson: undefined,
+          filesJson: '{"inputFiles":[],"contextFiles":[],"mediaFiles":[]}',
         },
         {
           filename: 'late-host-promise.workflow.js',
@@ -1096,6 +1187,7 @@ while (true) {}`,
           asyncFns: { agent: async () => '{' },
           syncFns: {},
           argsJson: undefined,
+          filesJson: '{"inputFiles":[],"contextFiles":[],"mediaFiles":[]}',
         },
         { filename: 'malformed-host-result.workflow.js', timeoutMs: 1_000 },
       ),
@@ -1143,7 +1235,12 @@ while (true) {}`,
     await expect(
       runScriptInSandbox(
         `return args`,
-        { asyncFns: {}, syncFns: {}, argsJson: '{' },
+        {
+          asyncFns: {},
+          syncFns: {},
+          argsJson: '{',
+          filesJson: '{"inputFiles":[],"contextFiles":[],"mediaFiles":[]}',
+        },
         { filename: 'malformed-args.workflow.js', timeoutMs: 1_000 },
       ),
     ).rejects.toThrow(/expecting property name|JSON|unexpected end/i);

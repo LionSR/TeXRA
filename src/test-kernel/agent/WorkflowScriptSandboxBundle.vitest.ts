@@ -75,7 +75,12 @@ import { runScriptInSandbox } from ${JSON.stringify(sandboxPath)};
 async function main() {
   const result = await runScriptInSandbox(
     'return 42',
-    { asyncFns: {}, syncFns: {}, argsJson: undefined },
+    {
+      asyncFns: {},
+      syncFns: {},
+      argsJson: undefined,
+      filesJson: '{"inputFiles":[],"contextFiles":[],"mediaFiles":[]}',
+    },
     { filename: 'bundle-smoke.workflow.js', timeoutMs: 1_000 },
   );
   console.log(result);

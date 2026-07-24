@@ -19,14 +19,16 @@ import {
   executeStableSubagentInBand,
   SubagentDurabilityError,
 } from './inBandSubagentExecution';
+import { rejectOversizedBibAttachments } from './inputFields';
 import {
   requireVisibleAgent,
   selectAvailableDelegationModel,
 } from './proposalFlow';
 import { assertWorkflowFilesExist } from './workflowFileValidation';
 
-async function resolveInvocationInputFiles(
+async function resolveInvocationFileList(
   parentExecutionId: LaunchRunContext['runScope']['executionId'],
+  label: string,
   files: readonly string[],
 ): Promise<string[]> {
   const references = files.map((file) => ({
@@ -36,9 +38,7 @@ async function resolveInvocationInputFiles(
   const workspaceFiles = references
     .filter((reference) => !reference.runStorage)
     .map((reference) => reference.file);
-  await assertWorkflowFilesExist([
-    { label: 'Input file', files: workspaceFiles },
-  ]);
+  await assertWorkflowFilesExist([{ label, files: workspaceFiles }]);
   const resolved = await Promise.all(
     references.map(async ({ file, runStorage }) => {
       if (!runStorage) return file;
@@ -48,7 +48,7 @@ async function resolveInvocationInputFiles(
       } catch (error) {
         throw new WorkflowRunAbortError(
           formatError(
-            `Workflow run-storage input could not be resolved: ${file}`,
+            `Workflow ${label} could not be resolved: ${file}`,
             error,
           ),
           { cause: error },
@@ -56,8 +56,8 @@ async function resolveInvocationInputFiles(
       }
       if (!output) {
         throw new WorkflowRunAbortError(
-          `Workflow run-storage input could not be resolved: ${file}; ` +
-            'pass options.inputFiles with files that still exist.',
+          `Workflow ${label} could not be resolved: ${file}; ` +
+            'pass a matching workflow file option whose files still exist.',
         );
       }
       return output.absolutePath;
@@ -129,81 +129,8 @@ export function createWorkflowScriptAgentRunner(
           hooks?.onChildActive?.(executionId, invocation, true);
         },
         prepare: async () => {
-          // A `schema` option routes the call to a tool-use agent that
-          // finishes by submitting a validated structured value; otherwise it
-          // is an ordinary workflow-edit agent. The category parameterizes
-          // agent resolution, model selection, and the launched config.
-          const schema = invocation.options.schema;
-          const category =
-            schema !== undefined
-              ? AgentCategory.ToolUse
-              : AgentCategory.Workflow;
-          // A schema call runs a tool-use agent, so it must name one: the
-          // workflow default (this tool's `agent` field) is a document editor
-          // with no same-named tool-use counterpart, and resolving it under the
-          // tool-use category would fail with a confusing "Unknown toolUse
-          // agent". Fail loudly here instead of silently substituting an
-          // unrelated general agent.
-          if (
-            schema !== undefined &&
-            invocation.options.agentName === undefined
-          ) {
-            throw new WorkflowRunAbortError(
-              `Structured-output agent() calls must name a tool-use agent via ` +
-                `agentName: the workflow default '${defaultAgentName}' is a ` +
-                `document editor with no tool-use counterpart.`,
-            );
-          }
-          const requestedAgent =
-            invocation.options.agentName ?? defaultAgentName;
-          const agent = requireVisibleAgent(
-            category,
-            requestedAgent,
-            runScope.delegationAgentScope ?? undefined,
-          );
-          const [model, inputFiles] = await Promise.all([
-            selectAvailableDelegationModel({
-              parentModel: parent.model,
-              agentCategory: category,
-            }),
-            resolveInvocationInputFiles(
-              run.executionId,
-              invocation.options.inputFiles ?? [],
-            ),
-          ]);
-          // Surface the resolved child model so the engine can attach it to
-          // this call's `agent:end` progress event.
-          invocation.reportModel?.(model);
-          // Run-storage references can disappear during recovery. Validate
-          // the resolved inputs, not merely the paths supplied by the script,
-          // so a stale reference cannot launch a useless empty-envelope run.
-          // Run-fatal, not a per-call failure: a plain error would resolve
-          // this agent() to null inside parallel()/pipeline(), silently
-          // filtering away the very misuse this guard exists to surface.
-          // A schema call runs a tool-use agent whose result is the submitted
-          // value, not edited files, so this workflow-edit guard is exempt.
-          if (
-            schema === undefined &&
-            inputFiles.length === 0 &&
-            (agent.defaultOutputFiles ?? []).length === 0
-          ) {
-            throw new WorkflowRunAbortError(
-              `Workflow agent '${agent.name}' edits files: pass options.inputFiles ` +
-                `with files that still exist (its result carries output files and ` +
-                `diffs, not response text).`,
-            );
-          }
-          const categoryFields =
-            schema !== undefined
-              ? { agentCategory: AgentCategory.ToolUse, outputSchema: schema }
-              : { agentCategory: AgentCategory.Workflow };
-          const configPayload: AgentConfigPayload = {
-            agent: agent.name,
-            agentSource: agent.source,
-            model,
+          const sharedConfigFields = {
             instruction: invocation.prompt,
-            inputFiles,
-            ...categoryFields,
             ...(runScope.workingDirectory !== undefined && {
               workingDirectory: runScope.workingDirectory,
             }),
@@ -211,9 +138,96 @@ export function createWorkflowScriptAgentRunner(
               delegationAgentScope: runScope.delegationAgentScope,
             }),
           };
+          let configPayload: AgentConfigPayload;
+          let agentName: string;
+
+          if (invocation.options.schema !== undefined) {
+            const agent = requireVisibleAgent(
+              AgentCategory.ToolUse,
+              invocation.options.agentName,
+              runScope.delegationAgentScope ?? undefined,
+            );
+            const model = await selectAvailableDelegationModel({
+              parentModel: parent.model,
+              agentCategory: AgentCategory.ToolUse,
+            });
+            agentName = agent.name;
+            configPayload = {
+              ...sharedConfigFields,
+              agent: agent.name,
+              agentSource: agent.source,
+              model,
+              agentCategory: AgentCategory.ToolUse,
+              outputSchema: invocation.options.schema,
+            };
+          } else {
+            const agent = requireVisibleAgent(
+              AgentCategory.Workflow,
+              invocation.options.agentName ?? defaultAgentName,
+              runScope.delegationAgentScope ?? undefined,
+            );
+            const [model, inputFiles, contextFiles, mediaFiles] =
+              await Promise.all([
+                selectAvailableDelegationModel({
+                  parentModel: parent.model,
+                  agentCategory: AgentCategory.Workflow,
+                }),
+                resolveInvocationFileList(
+                  run.executionId,
+                  'Input file',
+                  invocation.options.inputFiles ?? [],
+                ),
+                resolveInvocationFileList(
+                  run.executionId,
+                  'Context file',
+                  invocation.options.contextFiles ?? [],
+                ),
+                resolveInvocationFileList(
+                  run.executionId,
+                  'Media file',
+                  invocation.options.mediaFiles ?? [],
+                ),
+              ]);
+            const oversizedBibRejection =
+              await rejectOversizedBibAttachments(contextFiles);
+            if (oversizedBibRejection) {
+              throw new WorkflowRunAbortError(oversizedBibRejection.error);
+            }
+            // Run-storage references can disappear during recovery. Validate
+            // the resolved inputs, not merely the paths supplied by the script,
+            // so a stale reference cannot launch a useless empty-envelope run.
+            // Run-fatal, not a per-call failure: a plain error would resolve
+            // this agent() to null inside parallel()/pipeline(), silently
+            // filtering away the very misuse this guard exists to surface.
+            if (
+              inputFiles.length === 0 &&
+              (agent.defaultOutputFiles ?? []).length === 0
+            ) {
+              throw new WorkflowRunAbortError(
+                `Workflow agent '${agent.name}' edits files: pass options.inputFiles ` +
+                  `with files that still exist (its result carries output files and ` +
+                  `diffs, not response text).`,
+              );
+            }
+            agentName = agent.name;
+            configPayload = {
+              ...sharedConfigFields,
+              agent: agent.name,
+              agentSource: agent.source,
+              model,
+              inputFiles,
+              contextFiles,
+              mediaFiles,
+              agentCategory: AgentCategory.Workflow,
+            };
+          }
+
+          // Surface the resolved child model so the engine can attach it to
+          // this call's `agent:end` progress event.
+          invocation.reportModel?.(configPayload.model);
           return {
             configPayload,
-            agentName: agent.name,
+            agentName,
             parentExecutionId: run.executionId,
             parentStreamId: run.streamId,
             runtimeHost: runScope.runtimeHost,
