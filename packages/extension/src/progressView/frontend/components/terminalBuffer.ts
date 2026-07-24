@@ -10,6 +10,11 @@ const ANSI_ERASE_LINE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[\\d*K`, 'g');
 
 const MAX_TAIL = 65536;
 
+/** Maximum number of recent complete lines retained by TerminalBuffer. */
+export const TERMINAL_BUFFER_MAX_LINES = 4_000;
+const TERMINAL_BUFFER_RETAIN_LINES = 3_600;
+const TRUNCATION_MARKER = '[... earlier terminal output truncated ...]\n';
+
 /** Strip ANSI codes and simulate \r overwrite within each newline-delimited line. */
 export function processTerminalText(text: string): string {
   // Strip any real null bytes so \x00 is unambiguous as our internal sentinel.
@@ -54,8 +59,10 @@ export function processTerminalText(text: string): string {
 export class TerminalBuffer {
   /** Raw partial-line buffer: unprocessed bytes after the last '\n', capped at 64 KiB */
   private rawTail = '';
-  /** Processed complete lines for terminal mode (up to and including the last '\n') */
+  /** Recent processed complete lines (up to and including the last '\n'). */
   private committedLines = '';
+  private committedLineCount = 0;
+  private historyTruncated = false;
 
   /** Text node currently attached to the committed <pre>. */
   private committedTextNode: Text | null = null;
@@ -79,6 +86,8 @@ export class TerminalBuffer {
   rebuild(fullText: string): void {
     this.rawTail = '';
     this.committedLines = '';
+    this.committedLineCount = 0;
+    this.historyTruncated = false;
     this.needsReset = true;
     this.append(fullText);
   }
@@ -88,18 +97,49 @@ export class TerminalBuffer {
     const combined = this.rawTail + newRaw;
     const lastNl = combined.lastIndexOf('\n');
     if (lastNl >= 0) {
-      this.committedLines += processTerminalText(combined.slice(0, lastNl + 1));
-      this.rawTail = combined.slice(lastNl + 1);
+      const processed = processTerminalText(combined.slice(0, lastNl + 1));
+      this.committedLines += processed;
+      this.committedLineCount += this.countLines(processed);
+      this.rawTail = this.capRawTail(combined.slice(lastNl + 1));
+      this.trimCommittedLines();
     } else {
       // No newline: keep raw bytes so split ANSI sequences and cross-chunk \r
       // overwrites are handled correctly at render time. Cap unconditionally:
       // if the tail ends with \r (potential CRLF split) the cap still preserves
       // that trailing \r, so the next arriving \n is correctly joined into \r\n.
-      this.rawTail =
-        combined.length > MAX_TAIL
-          ? combined.slice(combined.length - MAX_TAIL)
-          : combined;
+      this.rawTail = this.capRawTail(combined);
     }
+  }
+
+  /** Compact to a lower watermark so prefix replacement is amortized. */
+  private trimCommittedLines(): void {
+    if (this.committedLineCount <= TERMINAL_BUFFER_MAX_LINES) return;
+    const linesToDrop = this.committedLineCount - TERMINAL_BUFFER_RETAIN_LINES;
+
+    let retainedStart = this.historyTruncated ? TRUNCATION_MARKER.length : 0;
+    for (let dropped = 0; dropped < linesToDrop; dropped += 1) {
+      retainedStart = this.committedLines.indexOf('\n', retainedStart) + 1;
+    }
+
+    this.committedLines =
+      TRUNCATION_MARKER + this.committedLines.slice(retainedStart);
+    this.committedLineCount = TERMINAL_BUFFER_RETAIN_LINES;
+    this.historyTruncated = true;
+    // The retained text now has a different prefix, so incremental DOM append
+    // is invalid even when the replacement happens to be longer.
+    this.needsReset = true;
+  }
+
+  private capRawTail(text: string): string {
+    return text.length > MAX_TAIL ? text.slice(text.length - MAX_TAIL) : text;
+  }
+
+  private countLines(text: string): number {
+    let count = 0;
+    for (const char of text) {
+      if (char === '\n') count += 1;
+    }
+    return count;
   }
 
   /** Imperatively sync committedLines into the supplied <pre> element. */
