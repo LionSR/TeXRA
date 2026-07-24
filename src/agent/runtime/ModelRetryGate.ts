@@ -1,5 +1,6 @@
+import { jitteredExponentialBackoffMs } from '@utils/core';
+
 const MAX_BACKOFF_MS = 5 * 60 * 1000;
-const JITTER_FRACTION = 0.2;
 
 type RoutePhase = 'healthy' | 'cooling' | 'probing';
 
@@ -419,11 +420,6 @@ export class ModelRetryGate {
   }
 
   private backoffMs(baseBackoffMs: number, failures: number): number {
-    const exponential = Math.min(
-      MAX_BACKOFF_MS,
-      Math.max(0, baseBackoffMs) * 2 ** Math.max(0, failures - 1),
-    );
-    const jitter = 1 - JITTER_FRACTION + Math.random() * 2 * JITTER_FRACTION;
-    return Math.min(MAX_BACKOFF_MS, Math.round(exponential * jitter));
+    return jitteredExponentialBackoffMs(baseBackoffMs, failures, MAX_BACKOFF_MS);
   }
 }
