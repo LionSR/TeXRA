@@ -10,6 +10,7 @@ import type {
 } from '@progressView/frontend/components/messageIndex';
 import {
   LOG_LEVELS,
+  MESSAGE_TYPES,
   STREAM_PHASE,
   type LogMessageData,
   type TaskGroup,
@@ -427,12 +428,10 @@ describe('task-group-list status icon (#7993 step 3)', () => {
 
 // #8722 Phase 2b: a focused delegate_workflow_script run projects its phases
 // as `kind: 'phase'` groups with per-agent Running/Finished/Failed lines
-// beneath. This locks the extension progress view at parity with the CLI's
-// phase/per-agent rendering (#8739): the phase renders as a group header with
-// its label plus the one-based `(i/n)` position, the enriched per-agent lines
-// render under it, and a `Failed:` line keeps error-level styling.
+// beneath. The phase header and task cards are both derived from typed state;
+// the renderer does not parse status prefixes from prose.
 describe('task-group-list workflow-script phase rendering (#8722)', () => {
-  it('renders a phase group with its (i/n) header and per-agent lines beneath', async () => {
+  it('renders a phase group with its (i/n) header and task cards beneath', async () => {
     const run: TaskGroup = {
       id: 'run',
       name: 'Run: workflow',
@@ -452,17 +451,36 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
     const messages: LogMessageData[] = [
       {
         id: 'agent-a',
-        text: 'Finished: reviewer · claude-opus-4 · 12.3s ($0.04)',
+        text: 'reviewer',
         timestamp: 3,
         level: LOG_LEVELS.INFO,
         groupId: 'phase-review',
+        messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+        data: {
+          id: 'reviewer',
+          label: 'Review manuscript',
+          phase: 'Review',
+          status: 'completed',
+          model: 'claude-opus-4',
+          durationMs: 12_300,
+          totalCostUsd: 0.04,
+        },
       },
       {
         id: 'agent-b',
-        text: 'Failed: critic - timed out ($0.01 total)',
+        text: 'critic',
         timestamp: 4,
         level: LOG_LEVELS.ERROR,
         groupId: 'phase-review',
+        messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+        data: {
+          id: 'critic',
+          label: 'Check argument',
+          phase: 'Review',
+          status: 'failed',
+          error: 'timed out',
+          totalCostUsd: 0.01,
+        },
       },
     ];
 
@@ -477,16 +495,18 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
       ?.textContent?.trim();
     expect(title).toBe('Review (2/3)');
 
-    // The enriched per-agent lines render under the phase group, and the
-    // Failed line keeps error-level styling.
+    // Each task is one structured card with its status and terminal metadata.
     const content = list.shadowRoot?.querySelector(
       `#${GROUP_DOM_IDS.CONTENT_PREFIX}phase-review`,
     );
+    expect(content?.textContent).toContain('Review manuscript');
+    expect(content?.textContent).toContain('Finished');
     expect(content?.textContent).toContain(
-      'Finished: reviewer · claude-opus-4 · 12.3s ($0.04)',
+      'claude-opus-4 · 12s · $0.040 total',
     );
-    expect(content?.textContent).toContain('Failed: critic - timed out');
-    expect(content?.querySelector('.message-error')).not.toBeNull();
+    expect(content?.textContent).toContain('Check argument');
+    expect(content?.textContent).toContain('timed out');
+    expect(content?.querySelector('.workflow-task--failed')).not.toBeNull();
   });
 
   it('omits the (i/n) suffix when a phase group carries no counts', async () => {

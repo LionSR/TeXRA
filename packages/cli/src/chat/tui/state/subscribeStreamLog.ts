@@ -16,6 +16,8 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   TOOL_USE_STATUS,
+  WORKFLOW_TASK_STATUS_LABEL,
+  WorkflowTaskProgressSchema,
   type NormalizedToolUse,
   type StreamLogEntry,
   type StreamTabId,
@@ -28,7 +30,11 @@ import { normalizeToolUseData } from '@shared/toolUse';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { truncateSummary } from '@utils/text/stringUtils';
+import {
+  formatCompactDuration,
+  formatCostUsd,
+  truncateSummary,
+} from '@utils/text/stringUtils';
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
 import {
   isRenderableTranscriptEntry,
@@ -60,6 +66,7 @@ const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
 const CHILD_STREAM_LOG_MESSAGE_TYPES = new Set<string>([
   ...TRANSCRIPT_MESSAGE_TYPES,
   MESSAGE_TYPES.DEFAULT,
+  MESSAGE_TYPES.WORKFLOW_TASK,
 ]);
 
 const LIVE_ACTIVITY_MESSAGE_TYPES = new Set<string>([
@@ -102,7 +109,8 @@ function workflowOperationalDescription(
     if (
       entry.role === 'error' ||
       (entry.role === 'assistant' &&
-        entry.messageType === MESSAGE_TYPES.DEFAULT)
+        (entry.messageType === MESSAGE_TYPES.DEFAULT ||
+          entry.messageType === MESSAGE_TYPES.WORKFLOW_TASK))
     ) {
       const description = safeWorkflowOperationalSummary(entry.text);
       if (description) return description;
@@ -340,6 +348,36 @@ function renderLogEntry(
     }
     toolUseSourceCache.set(next, entry.data);
     return next;
+  }
+
+  if (entry.messageType === MESSAGE_TYPES.WORKFLOW_TASK) {
+    const parsed = WorkflowTaskProgressSchema.safeParse(entry.data);
+    if (!parsed.success) return null;
+    const task = parsed.data;
+    const metadata =
+      task.status === 'completed' || task.status === 'failed'
+        ? [
+            task.model,
+            task.durationMs === undefined
+              ? undefined
+              : formatCompactDuration(task.durationMs),
+            task.totalCostUsd === undefined
+              ? undefined
+              : `${formatCostUsd(task.totalCostUsd)} total`,
+          ].filter((part): part is string => part !== undefined)
+        : [];
+    const suffix = metadata.length > 0 ? ` · ${metadata.join(' · ')}` : '';
+    const error = task.status === 'failed' ? ` — ${task.error}` : '';
+    const text = `${WORKFLOW_TASK_STATUS_LABEL[task.status]}: ${task.label}${suffix}${error}`;
+    const next: ConversationEntry = {
+      id: entry.id,
+      role: task.status === 'failed' ? 'error' : 'assistant',
+      text,
+      messageType: entry.messageType,
+      finalized:
+        task.status === 'planned' || task.status === 'running' ? false : true,
+    };
+    return prev && entriesEqual(prev, next) ? prev : next;
   }
 
   // Phase group headers finalize the moment they appear (like user/error

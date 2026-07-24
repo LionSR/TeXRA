@@ -21,6 +21,7 @@ import {
   type WorkflowScriptPhaseContext,
   type WorkflowScriptRunOptions,
   type WorkflowScriptRunResult,
+  type WorkflowScriptTask,
 } from './types';
 
 /**
@@ -230,6 +231,9 @@ export async function runWorkflowScript(
   let callCounter = 0;
   const issuedCallKeys = new Set<string>();
   const plannedPhases = meta.phases ?? [];
+  const plannedTasks = meta.tasks ?? [];
+  const plannedTasksById = new Map(plannedTasks.map((task) => [task.id, task]));
+  const issuedTaskIds = new Set<string>();
   let currentPhase: string | undefined;
   let fatalRunError: WorkflowRunAbortError | undefined;
 
@@ -262,6 +266,9 @@ export async function runWorkflowScript(
     retry: (index) => requestControl(index, 'retry'),
   };
   onControl?.(control);
+  if (plannedTasks.length > 0) {
+    emit({ type: 'plan', tasks: plannedTasks });
+  }
 
   const rememberFatalRunError = (error: unknown): WorkflowRunAbortError => {
     fatalRunError ??=
@@ -274,6 +281,7 @@ export async function runWorkflowScript(
 
   const recordJournalEntry = async (
     entry: WorkflowJournalEntry,
+    taskId: string,
     label: string,
     phaseContext: WorkflowScriptPhaseContext,
   ): Promise<void> => {
@@ -285,10 +293,11 @@ export async function runWorkflowScript(
       const fatal = rememberFatalRunError(new WorkflowRunAbortError(message));
       emit({
         type: 'agent:end',
+        taskId,
         index: entry.index,
         label,
         ...phaseContext,
-        cached: false,
+        outcome: 'failed',
         error: message,
       });
       throw fatal;
@@ -313,20 +322,60 @@ export async function runWorkflowScript(
     }
     let callOptions: WorkflowAgentCallOptions;
     try {
-      callOptions = normalizeAgentOptions(rawOptions, currentPhase);
+      callOptions = normalizeAgentOptions(rawOptions);
     } catch (error) {
       throw rememberFatalRunError(
         new WorkflowRunAbortError(toErrorMessage(error), { cause: error }),
       );
     }
-    const phaseContext = phaseContextFor(callOptions.phase);
     const index = callCounter;
     callCounter += 1;
 
+    let plannedTask: WorkflowScriptTask | undefined;
+    if (plannedTasks.length > 0) {
+      if (!callOptions.id) {
+        throw rememberFatalRunError(
+          new WorkflowRunAbortError(
+            'Every agent() call must reference a task from meta.tasks with a non-empty "id" option.',
+          ),
+        );
+      }
+      plannedTask = plannedTasksById.get(callOptions.id);
+      if (!plannedTask) {
+        throw rememberFatalRunError(
+          new WorkflowRunAbortError(
+            `agent() references undeclared task id "${callOptions.id}".`,
+          ),
+        );
+      }
+      if (callOptions.label !== undefined || callOptions.phase !== undefined) {
+        throw rememberFatalRunError(
+          new WorkflowRunAbortError(
+            `Task "${callOptions.id}" declares its label and phase in meta.tasks; do not duplicate them in agent() options.`,
+          ),
+        );
+      }
+      callOptions.label = plannedTask.label;
+      callOptions.phase = plannedTask.phase;
+    } else {
+      callOptions.phase ??= currentPhase;
+    }
+
     const label =
+      plannedTask?.label ??
       callOptions.label ??
       prompt.slice(0, LABEL_EXCERPT_LENGTH).replaceAll(/\s+/g, ' ').trim();
     const key = journalKey(prompt, callOptions);
+    const taskId = plannedTask?.id ?? callOptions.id ?? `call-${index}`;
+    if (issuedTaskIds.has(taskId)) {
+      throw rememberFatalRunError(
+        new WorkflowRunAbortError(
+          `Workflow task "${taskId}" may be issued only once per run.`,
+        ),
+      );
+    }
+    issuedTaskIds.add(taskId);
+    const phaseContext = phaseContextFor(callOptions.phase);
     if (issuedCallKeys.has(key)) {
       throw rememberFatalRunError(
         new WorkflowRunAbortError(
@@ -339,11 +388,10 @@ export async function runWorkflowScript(
     // Serialize (and round-trip deserialize) a result value for the journal,
     // emitting the matching `agent:end` failure event if it isn't
     // bridge-safe. Shared by the cached-replay and live-call paths below,
-    // which differ only in the source value, its label, and `cached`.
+    // which differ only in the source value.
     const journalValue = (
       value: unknown,
       valueLabel: string,
-      cached: boolean,
     ): { payload: string | undefined; normalizedResult: unknown } => {
       try {
         const payload = serializeBridgeValue(value, valueLabel);
@@ -351,10 +399,11 @@ export async function runWorkflowScript(
       } catch (error) {
         emit({
           type: 'agent:end',
+          taskId,
           index,
           label,
           ...phaseContext,
-          cached,
+          outcome: 'failed',
           error: toErrorMessage(error),
         });
         throw error;
@@ -366,15 +415,15 @@ export async function runWorkflowScript(
       const { payload, normalizedResult } = journalValue(
         prior.result,
         'Cached agent() result',
-        true,
       );
       journal.set(index, { ...prior, result: normalizedResult });
       emit({
         type: 'agent:end',
+        taskId,
         index,
         label,
         ...phaseContext,
-        cached: true,
+        outcome: 'cached',
       });
       return payload;
     }
@@ -412,7 +461,13 @@ export async function runWorkflowScript(
       callControllers.set(index, callController);
       if (!startEmitted) {
         startEmitted = true;
-        emit({ type: 'agent:start', index, label, ...phaseContext });
+        emit({
+          type: 'agent:start',
+          taskId,
+          index,
+          label,
+          ...phaseContext,
+        });
       }
 
       let result: unknown;
@@ -460,11 +515,11 @@ export async function runWorkflowScript(
       if (action === 'skip') {
         emit({
           type: 'agent:end',
+          taskId,
           index,
           label,
           ...phaseContext,
-          cached: false,
-          skipped: true,
+          outcome: 'skipped',
         });
         // First-class SKIPPED value, not journaled — a resume re-runs it.
         return JSON.stringify(WORKFLOW_SKIPPED_RESULT);
@@ -480,10 +535,11 @@ export async function runWorkflowScript(
         // and is deliberately NOT journaled, so a resume retries it.
         emit({
           type: 'agent:end',
+          taskId,
           index,
           label,
           ...phaseContext,
-          cached: false,
+          outcome: 'failed',
           error: toErrorMessage(attemptError.error),
           ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
           durationMs: Date.now() - startedAt,
@@ -496,19 +552,20 @@ export async function runWorkflowScript(
       const { payload, normalizedResult } = journalValue(
         result,
         'agent() result',
-        false,
       );
       await recordJournalEntry(
         { index, key, result: normalizedResult },
+        taskId,
         label,
         phaseContext,
       );
       emit({
         type: 'agent:end',
+        taskId,
         index,
         label,
         ...phaseContext,
-        cached: false,
+        outcome: 'completed',
         ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
         durationMs: Date.now() - startedAt,
       });
@@ -638,10 +695,7 @@ function deserializeBridgeValue(payload: string | undefined): unknown {
   return payload === undefined ? undefined : JSON.parse(payload);
 }
 
-function normalizeAgentOptions(
-  raw: unknown,
-  currentPhase: string | undefined,
-): WorkflowAgentCallOptions {
+function normalizeAgentOptions(raw: unknown): WorkflowAgentCallOptions {
   if (
     (raw !== undefined && raw !== null && typeof raw !== 'object') ||
     Array.isArray(raw)
@@ -670,8 +724,6 @@ function normalizeAgentOptions(
     }
     common[field] = requiresContent ? value.trim() : value;
   }
-  common.phase ??= currentPhase;
-
   let schema: Record<string, unknown> | undefined;
   if (Object.hasOwn(source, 'schema')) {
     const rawSchema = source.schema;
@@ -733,7 +785,6 @@ function normalizeAgentOptions(
       schema,
     };
   }
-
   return {
     ...common,
     ...(source.inputFiles !== undefined && { inputFiles: files.inputFiles }),

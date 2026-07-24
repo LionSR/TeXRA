@@ -50,6 +50,7 @@ export const MESSAGE_TYPES = {
   INTERNAL: 'internal',
   CONTEXT_MANAGEMENT: 'contextManagement',
   CONTEXT_STATE: 'contextState',
+  WORKFLOW_TASK: 'workflowTask',
   DEFAULT: 'default',
 } as const;
 

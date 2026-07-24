@@ -38,20 +38,21 @@ export const meta = {
   name: 'draft-chapter',
   description: 'Draft sections in parallel, then merge with shared notation',
   phases: [{ title: 'Draft' }, { title: 'Merge' }],
+  tasks: [
+    { id: 'introduction', label: 'Draft introduction', phase: 'Draft' },
+    { id: 'results', label: 'Draft results', phase: 'Draft' },
+    { id: 'merge', label: 'Merge sections', phase: 'Merge' },
+  ],
 };
 phase('Draft');
-const drafts = await parallel(
-  args.sections.map(
-    (s) => () =>
-      agent(`Draft the "${s.title}" section.`, {
-        label: `draft:${s.title}`,
-        inputFiles: s.notes,
-      }),
-  ),
-);
+const drafts = await parallel([
+  () => agent('Draft the introduction.', { id: 'introduction' }),
+  () => agent('Draft the results.', { id: 'results' }),
+]);
 phase('Merge');
 const valid = drafts.filter(Boolean);
 return await agent('Merge these drafts, unify notation.', {
+  id: 'merge',
   agentName: 'merge',
   inputFiles: valid.flatMap((d) =>
     d.category === 'workflow' ? d.outputs.map((o) => o.absolutePath) : d.files,
@@ -61,6 +62,10 @@ return await agent('Merge these drafts, unify notation.', {
 
 ### Primitives
 
+- `meta.tasks` → an optional declarative plan of `{ id, label, phase? }`
+  records. When present, every `agent()` call references one record by `id`;
+  progress surfaces show the entire plan before execution and update each
+  record in place. Data-dependent workflows may omit it.
 - `agent(prompt, opts?)` → one subagent run; returns the typed result
   (`null` on failure). Options: `id`, `label`, `phase`, `agentName`,
   `inputFiles`. Otherwise-identical calls require distinct `id` values so

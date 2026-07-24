@@ -29,6 +29,7 @@ import {
   type LogLevel,
   type MessageType,
   type ToolUseLog,
+  type WorkflowTaskProgress,
 } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
 
@@ -120,6 +121,7 @@ export function attachTranscriptRecorder(
   // rely on that distinction to tell a root run's terminal status apart from
   // a round's (see toStreamLifecycleStatus in packages/trace-viewer).
   const stageKinds = new Map<string, 'run' | 'round' | 'phase' | 'session'>();
+  const workflowTaskEntries = new Set<string>();
   // Id of the current model invocation's MODEL_RESPONSE stream entry, so a
   // subsequent `response.finalized` event (#7086) can upsert that entry's text
   // instead of appending a duplicate row. Set on `stream.start` for a
@@ -312,6 +314,31 @@ export function attachTranscriptRecorder(
               status: event.status,
             } as ToolUseLog,
           });
+          return;
+        }
+
+        case 'workflow.task': {
+          const level: LogLevel =
+            event.task.status === 'failed' ? 'error' : 'info';
+          const entry = {
+            level,
+            groupId: event.stageId,
+            messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+            text: event.task.label,
+            data: event.task satisfies WorkflowTaskProgress,
+          };
+          if (workflowTaskEntries.has(event.logId)) {
+            writer.update(event.logId, entry);
+          } else {
+            workflowTaskEntries.add(event.logId);
+            writer.append({
+              id: event.logId,
+              type: STREAM_LOG_ENTRY_TYPES.LOG,
+              timestamp: Date.now(),
+              ...entry,
+              verbose: isDebugModeEnabled(),
+            });
+          }
           return;
         }
 

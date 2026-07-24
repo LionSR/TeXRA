@@ -45,6 +45,105 @@ export const logEntryStyles = css`
     font-style: italic;
   }
 
+  .workflow-task {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+    gap: var(--wa-space-2xs);
+    margin: var(--wa-space-3xs) 0;
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
+    border: var(--border-thin) solid var(--wa-color-surface-border);
+    border-left: 3px solid var(--color-text-secondary);
+    border-radius: var(--border-radius);
+    background: var(--wa-color-surface-default);
+    content-visibility: auto;
+    contain-intrinsic-size: auto 42px;
+  }
+
+  .workflow-task--running {
+    border-left-color: var(--wa-color-focus);
+    background: var(--wa-color-neutral-fill-quiet);
+  }
+
+  .workflow-task--completed,
+  .workflow-task--cached {
+    border-left-color: var(--color-success);
+  }
+
+  .workflow-task--failed {
+    border-left-color: var(--color-error);
+    background: var(--wa-color-danger-fill-quiet);
+  }
+
+  .workflow-task--skipped {
+    opacity: var(--opacity-subtle);
+  }
+
+  .workflow-task-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.2em;
+    height: 1.2em;
+    margin-top: 0.1em;
+  }
+
+  .workflow-task-icon :is(wa-icon, wa-spinner) {
+    font-size: 1em;
+  }
+
+  .workflow-task-body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: calc(var(--wa-space-3xs) / 2);
+  }
+
+  .workflow-task-title {
+    overflow-wrap: anywhere;
+    font-weight: var(--wa-font-weight-semibold);
+  }
+
+  .workflow-task-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--wa-space-xs);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+  }
+
+  .workflow-task-phase::before {
+    content: 'Phase: ';
+  }
+
+  .workflow-task-error {
+    color: var(--color-error);
+    overflow-wrap: anywhere;
+  }
+
+  .workflow-task-status {
+    align-self: center;
+    padding: calc(var(--wa-space-3xs) / 2) var(--wa-space-2xs);
+    border-radius: 999px;
+    background: var(--wa-color-neutral-fill-quiet);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+  }
+
+  .workflow-task--running .workflow-task-status {
+    color: var(--wa-color-focus);
+  }
+
+  .workflow-task--completed .workflow-task-status,
+  .workflow-task--cached .workflow-task-status {
+    color: var(--color-success);
+  }
+
+  .workflow-task--failed .workflow-task-status {
+    color: var(--color-error);
+  }
+
   .log-reveal-row {
     display: flex;
     justify-content: center;

@@ -3,27 +3,77 @@ import { z } from 'zod';
 import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
 
 const WorkflowScriptPhaseSchema = z.object({
-  title: z.string().min(1),
+  title: z.string().trim().min(1),
   detail: z.string().optional(),
 });
+
+const WorkflowScriptTaskSchema = z.strictObject({
+  /** Stable identity referenced by agent(..., { id }). */
+  id: z.string().trim().min(1),
+  /** Human-readable task name shown on progress surfaces. */
+  label: z.string().trim().min(1),
+  /** Optional declared phase; must name one of meta.phases when present. */
+  phase: z.string().trim().min(1).optional(),
+});
+
+export type WorkflowScriptTask = z.infer<typeof WorkflowScriptTaskSchema>;
 
 /**
  * The `export const meta = {...}` block every workflow script must begin
  * with. Must be a pure object literal — parsed and validated before the
  * script body ever runs.
  */
-export const WorkflowScriptMetaSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().min(1),
-  whenToUse: z.string().optional(),
-  phases: z.array(WorkflowScriptPhaseSchema).optional(),
-  /** Whole-run wall clock, bounded; an explicit run option still wins. */
-  timeoutMs: z
-    .int()
-    .min(1_000)
-    .max(60 * 60 * 1000)
-    .optional(),
-});
+export const WorkflowScriptMetaSchema = z
+  .object({
+    name: z.string().min(1),
+    description: z.string().min(1),
+    whenToUse: z.string().optional(),
+    phases: z.array(WorkflowScriptPhaseSchema).optional(),
+    /**
+     * Declarative task plan. When present, every agent() call references one
+     * task by id; label and phase live here rather than being duplicated in
+     * executable code.
+     */
+    tasks: z.array(WorkflowScriptTaskSchema).optional(),
+    /** Whole-run wall clock, bounded; an explicit run option still wins. */
+    timeoutMs: z
+      .int()
+      .min(1_000)
+      .max(60 * 60 * 1000)
+      .optional(),
+  })
+  .superRefine((meta, context) => {
+    const phaseTitles = new Set<string>();
+    for (const [index, phase] of (meta.phases ?? []).entries()) {
+      if (phaseTitles.has(phase.title)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['phases', index, 'title'],
+          message: `Duplicate phase title "${phase.title}".`,
+        });
+      }
+      phaseTitles.add(phase.title);
+    }
+
+    const taskIds = new Set<string>();
+    for (const [index, task] of (meta.tasks ?? []).entries()) {
+      if (taskIds.has(task.id)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['tasks', index, 'id'],
+          message: `Duplicate task id "${task.id}".`,
+        });
+      }
+      taskIds.add(task.id);
+      if (task.phase !== undefined && !phaseTitles.has(task.phase)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['tasks', index, 'phase'],
+          message: `Task phase "${task.phase}" is not declared in meta.phases.`,
+        });
+      }
+    }
+  });
 
 export type WorkflowScriptMeta = z.infer<typeof WorkflowScriptMetaSchema>;
 
@@ -122,7 +172,18 @@ export interface WorkflowScriptPhaseContext {
   phaseTotal?: number;
 }
 
+interface WorkflowScriptAgentEventBase extends WorkflowScriptPhaseContext {
+  /** Declarative task id, or a run-local id for an undeclared dynamic call. */
+  taskId: string;
+  index: number;
+  label: string;
+}
+
 export type WorkflowScriptEvent =
+  | {
+      type: 'plan';
+      tasks: readonly WorkflowScriptTask[];
+    }
   | {
       type: 'phase';
       title: string;
@@ -132,23 +193,33 @@ export type WorkflowScriptEvent =
       total?: number;
     }
   | { type: 'log'; message: string }
-  | (WorkflowScriptPhaseContext & {
+  | (WorkflowScriptAgentEventBase & {
       type: 'agent:start';
-      index: number;
-      label: string;
     })
-  | (WorkflowScriptPhaseContext & {
+  | (WorkflowScriptAgentEventBase & {
       type: 'agent:end';
-      index: number;
-      label: string;
-      cached: boolean;
-      error?: string;
+      outcome: 'cached';
+    })
+  | (WorkflowScriptAgentEventBase & {
+      type: 'agent:end';
+      outcome: 'completed';
       /** Child model resolved by the runner (live calls only). */
       model?: string;
       /** Host-measured wall time of the agent() call (live calls only). */
+      durationMs: number;
+    })
+  | (WorkflowScriptAgentEventBase & {
+      type: 'agent:end';
+      outcome: 'failed';
+      error: string;
+      /** Child model resolved by the runner, when resolution succeeded. */
+      model?: string;
+      /** Host-measured wall time, when an agent attempt began. */
       durationMs?: number;
-      /** Deliberately skipped via control.skip(index); not journaled. */
-      skipped?: boolean;
+    })
+  | (WorkflowScriptAgentEventBase & {
+      type: 'agent:end';
+      outcome: 'skipped';
     });
 
 /**
