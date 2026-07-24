@@ -13,17 +13,44 @@ export const meta = {
   name: 'draft-chapter',
   description: 'Draft sections in parallel, then merge',
   phases: [{ title: 'Draft' }, { title: 'Merge' }],
+  tasks: [
+    { id: 'introduction', label: 'Draft introduction', phase: 'Draft' },
+    { id: 'results', label: 'Draft results', phase: 'Draft' },
+  ],
 };
 phase('Draft');
-const sections = await parallel(
-  args.sections.map(
-    (s) => () => agent(`Draft the "${s}" section.`, { label: `draft:${s}` }),
-  ),
-);
+const sections = await parallel([
+  () => agent('Draft the introduction.', { id: 'introduction' }),
+  () => agent('Draft the results.', { id: 'results' }),
+]);
 phase('Merge');
 return concat(sections, { separator: '\n\n' });
 ```
 
+When the task set comes from runtime arguments, the script omits `meta.tasks`
+and creates one call per input:
+
+```js
+export const meta = {
+  name: 'audit-sections',
+  description: 'Audit every requested section in parallel',
+};
+return await parallel(
+  args.sections.map(
+    (section, index) => () =>
+      agent(`Audit ${section}.`, {
+        id: `section-${index}`,
+        label: `Audit ${section}`,
+      }),
+  ),
+);
+```
+
+- `meta.tasks` — optional declarative task plan. When present, each
+  `agent()` call must reference exactly one task with `{ id }`; its display
+  label and phase come only from the plan. Progress surfaces can therefore
+  show pending work before execution and update one task record in place.
+  Scripts whose call set is data-dependent may omit the plan.
 - `agent(prompt, opts?)` — one subagent run; resolves to the host runner's
   typed result, or `null` on failure (filter with `.filter(Boolean)`).
   Set `opts.model` to an available model short name when a call needs a
@@ -68,7 +95,11 @@ return concat(sections, { separator: '\n\n' });
   never repeated. The parent records the complete attempt sequence, so deleting
   an earlier child cannot hide a later completed result. A parent execution has
   one active runtime owner; the execution KV store is durable state, not a
-  cross-process lock.
+  cross-process lock. Version-1 journal keys are tagged when loaded and migrate
+  to presentation-independent keys after a verified replay. Because the old
+  format retained only an opaque hash, changing a task label or phase during
+  the same upgrade cannot be proven equivalent and conservatively reruns that
+  call.
 - **Cost ownership**: child costs remain in the persisted typed results. The
   future tool surface must aggregate the final journal at its tool-result
   boundary, rather than mutating parent totals during child launch; this keeps
@@ -100,15 +131,17 @@ return concat(sections, { separator: '\n\n' });
   throw inside scripts, installed non-writable so scripts cannot restore
   them (`new Date(timestamp)` stays usable). Resume relies on replaying the
   same call sequence: each `agent()` call is journaled by (call index,
-  prompt/options hash), and a rerun with a prior journal replays matching
-  calls from cache, re-running only edited or new calls. Failed and cancelled
-  calls are not journaled, so resume retries them. Caveat: `agent()` calls made from
-  `pipeline()` stages beyond the first get indices in completion order,
-  which varies run-to-run — the per-index key check keeps replay safe, but
-  multi-stage pipelines see lower journal cache-hit rates. Durable child
-  identity instead uses the prompt/options hash, so a shifted journal index
-  does not repeat completed model work. Otherwise-identical calls must provide
-  distinct `id` options; ambiguous duplicates fail before launch.
+  prompt/execution-options hash), and a rerun with a prior journal replays
+  matching calls from cache, re-running only edited or new calls. Display
+  labels and phases do not participate in this identity. Failed and cancelled
+  calls are not journaled, so resume retries them. Caveat: `agent()` calls
+  made from `pipeline()` stages beyond the first get indices in completion
+  order, which varies run-to-run — the per-index key check keeps replay safe,
+  but multi-stage pipelines see lower journal cache-hit rates. Durable child
+  identity instead uses the prompt/execution-options hash, so a shifted
+  journal index does not repeat completed model work. Otherwise-identical
+  calls must provide distinct `id` options; ambiguous duplicates fail before
+  launch.
 - **Budgets**: one concurrency semaphore (default 4) across all `agent()`
   calls, a live-call cap (default 200; journal replays are free), a fan-out cap per
   `parallel()`/`pipeline()` call, and a wall-clock timeout. The cap and

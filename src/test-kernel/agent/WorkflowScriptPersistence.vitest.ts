@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   readWorkflowScriptCheckpoint,
   runPersistedWorkflowScript,
+  WORKFLOW_JOURNAL_KEY_FORMAT,
   WorkflowScriptPersistenceError,
   writeWorkflowScriptCheckpoint,
 } from '@agent/workflowScript';
@@ -20,10 +21,37 @@ const script = `export const meta = {
 const first = await agent('first')
 const second = await agent('second')
 return [first, second]`;
+const legacyPresentationScript = `export const meta = {
+  name: 'legacy-presentation',
+  description: 'tests migration of presentation-sensitive journal keys',
+}
+phase('Research')
+return await agent('Inspect', { label: 'Inspect source' })`;
+const LEGACY_PRESENTATION_KEY = '748e06fd1e0824b5';
 
 setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 
 beforeEach(() => clearStoreCache());
+
+async function writeLegacyPresentationCheckpoint(
+  checkpointId: string,
+): Promise<void> {
+  await getExecutionStore(executionId).write(
+    workflowScriptCheckpointKvKey(checkpointId),
+    {
+      schemaVersion: 1,
+      script: legacyPresentationScript,
+      args: { kind: 'undefined' },
+      journal: [
+        {
+          index: 0,
+          key: LEGACY_PRESENTATION_KEY,
+          result: { kind: 'json', value: 'saved result' },
+        },
+      ],
+    },
+  );
+}
 
 describe('workflow-script persistence', () => {
   it('replays a completed journal after restart without new agent calls', async () => {
@@ -95,7 +123,14 @@ describe('workflow-script persistence', () => {
         script,
         args: undefined,
         files: { inputFiles: [], contextFiles: [], mediaFiles: [] },
-        journal: [{ index: 0, key: '0000000000000000', result: () => 1 }],
+        journal: [
+          {
+            index: 0,
+            key: '0000000000000000',
+            keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+            result: () => 1,
+          },
+        ],
       }),
     ).rejects.toBeInstanceOf(WorkflowScriptPersistenceError);
   });
@@ -114,6 +149,61 @@ describe('workflow-script persistence', () => {
     ).resolves.toMatchObject({
       files: { inputFiles: [], contextFiles: [], mediaFiles: [] },
     });
+  });
+
+  it('migrates a v1 presentation-sensitive key after cached replay', async () => {
+    await writeLegacyPresentationCheckpoint('legacy-key');
+    const runner = vi.fn(() => Promise.reject(new Error('must not run')));
+
+    const resumed = await runPersistedWorkflowScript({
+      store: getExecutionStore(executionId),
+      checkpointId: 'legacy-key',
+      runAgent: runner,
+    });
+
+    expect(resumed.result).toBe('saved result');
+    expect(runner).not.toHaveBeenCalled();
+    expect(resumed.journal).toMatchObject([
+      {
+        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+      },
+    ]);
+    expect(resumed.journal[0]?.key).not.toBe(LEGACY_PRESENTATION_KEY);
+    await expect(
+      getExecutionStore(executionId).read(
+        workflowScriptCheckpointKvKey('legacy-key'),
+      ),
+    ).resolves.toMatchObject({
+      schemaVersion: 2,
+      journal: [
+        {
+          keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+        },
+      ],
+    });
+  });
+
+  it('reruns safely when a v1 checkpoint and presentation change together', async () => {
+    await writeLegacyPresentationCheckpoint('legacy-presentation-drift');
+    const runner = vi.fn(async () => 'fresh result');
+    const revisedScript = legacyPresentationScript
+      .replaceAll('Research', 'Review')
+      .replaceAll('Inspect source', 'Review source');
+
+    const resumed = await runPersistedWorkflowScript({
+      store: getExecutionStore(executionId),
+      checkpointId: 'legacy-presentation-drift',
+      script: revisedScript,
+      runAgent: runner,
+    });
+
+    expect(resumed.result).toBe('fresh result');
+    expect(runner).toHaveBeenCalledOnce();
+    expect(resumed.journal).toMatchObject([
+      {
+        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+      },
+    ]);
   });
 
   it('accepts script drift: unchanged calls replay, changed calls re-run', async () => {

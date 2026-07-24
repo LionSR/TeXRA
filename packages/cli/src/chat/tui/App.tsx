@@ -44,7 +44,7 @@ import { InfoPane } from './panes/InfoPane';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
-import { isStaticTranscriptEntryAt } from './panes/transcriptEntries';
+import { orderedStaticTranscriptEntries } from './panes/transcriptEntries';
 import {
   currentApproval,
   pendingApprovalSummaries,
@@ -118,9 +118,8 @@ type ProcessChildInfo = Extract<ActiveChildInfo, { kind: 'process' }>;
 const NO_TRANSCRIPT_PRINTS: readonly TranscriptPrintRequest[] = [];
 
 function lastStaticEntryId(slice: StreamSlice | undefined): string | undefined {
-  return slice?.entries.findLast((entry, index, entries) =>
-    isStaticTranscriptEntryAt(entries, index, slice.status),
-  )?.id;
+  if (!slice) return undefined;
+  return orderedStaticTranscriptEntries(slice.entries, slice.status).at(-1)?.id;
 }
 
 // Jump-to-waiting: surface the newly focused stream's pending approval right
