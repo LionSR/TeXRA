@@ -17,6 +17,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Kimi Code usage is recorded as subscription usage** — membership-backed
+  requests now appear with the other subscription usage instead of personal
+  API-key usage.
 - **Parallel agents resume reliably after model connection failures** —
   concurrent runs recover without overwhelming the provider, while unattended
   approved retries continue until success or cancellation.
