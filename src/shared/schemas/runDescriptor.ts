@@ -5,7 +5,7 @@ import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
 
 export const RUN_DESCRIPTOR_SCHEMA_VERSION = 1;
 
-export const RunKindSchema = z.enum(['agent', 'process', 'workflowScript']);
+const RunKindSchema = z.enum(['agent', 'process', 'workflowScript']);
 export type RunKind = z.infer<typeof RunKindSchema>;
 
 const RunConfigReferenceSchema = z.strictObject({

@@ -2272,41 +2272,49 @@ describe('ProgressBackend', () => {
     }
   });
 
-  it('models a workflow-script container separately from its default worker agent', () => {
-    const { backend } = createRecordingBackend();
+  it('models a workflow-script container from the extension event subscription', async () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, session } = target;
+    const subscription = backend.setupEventListeners();
     const stream = 'workflow-script#f10a11' as StreamTabId;
     const executionId = 'f10a11' as ExecutionId;
+    const descriptor = buildRunDescriptor({
+      streamId: stream,
+      executionId,
+      agent: 'repo-cleanup-readonly-pilot-2026-07-24',
+      category: AgentCategory.Workflow,
+      kind: 'workflowScript',
+    });
 
     try {
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.snapshots.setRunDescriptor(
-        buildRunDescriptor({
-          streamId: stream,
-          executionId,
-          agent: 'repo-cleanup-readonly-pilot-2026-07-24',
-          category: AgentCategory.Workflow,
+      session.events.emit({
+        scope: 'run',
+        streamId: stream,
+        event: { type: 'run.start', descriptor },
+      });
+      emitRunConfig(target, stream, executionId, {
+        agentConfig: {
+          agent: 'generic',
+          model: 'gpt-5.6-sol',
+          agentCategory: AgentCategory.Workflow,
+          instruction:
+            "Workflow script 'repo-cleanup-readonly-pilot-2026-07-24'",
+          inputFiles: [],
+          contextFiles: [],
+          mediaFiles: [],
+          outputFiles: [],
+        },
+      } as TaskState);
+
+      await vi.waitFor(() =>
+        expect(backend.state.getStreamMetadata(stream).run).toEqual({
           kind: 'workflowScript',
+          workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+          instruction:
+            "Workflow script 'repo-cleanup-readonly-pilot-2026-07-24'",
         }),
       );
-      backend.state.setStreamTaskState(
-        stream,
-        {
-          agentConfig: {
-            agent: 'generic',
-            model: 'gpt-5.6-sol',
-            agentCategory: AgentCategory.Workflow,
-            instruction:
-              "Workflow script 'repo-cleanup-readonly-pilot-2026-07-24'",
-          },
-        } as TaskState,
-        executionId,
-      );
-
-      expect(backend.state.getStreamMetadata(stream).run).toEqual({
-        kind: 'workflowScript',
-        workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
-        instruction: "Workflow script 'repo-cleanup-readonly-pilot-2026-07-24'",
-      });
       const workflowInfos = buildStreamInfos(backend.state, 'workflow');
       expect(workflowInfos).toContainEqual(
         expect.objectContaining({
@@ -2321,7 +2329,9 @@ describe('ProgressBackend', () => {
       expect(workflowScript).not.toHaveProperty('agent');
       expect(workflowScript).not.toHaveProperty('model');
     } finally {
+      subscription.dispose();
       backend.dispose();
+      session.dispose();
     }
   });
 
