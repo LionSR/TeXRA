@@ -34,6 +34,9 @@ const THREAD_CONTEXT_OPEN = 'texraInlineCommentOpen';
 const THREAD_CONTEXT_RESOLVED = 'texraInlineCommentResolved';
 
 let controller: vscode.CommentController | undefined;
+// Threads intentionally share the controller's lifetime. VS Code exposes no
+// event for a thread being closed or deleted, and resolved threads remain
+// user-visible, reopenable, and readable by the agent. `disable` owns cleanup.
 const threads = new Map<string, vscode.CommentThread>();
 let sequence = 0;
 
