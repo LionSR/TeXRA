@@ -263,6 +263,15 @@ export async function runPersistedWorkflowScriptWithProgress(
             : undefined;
         // Live terminal events carry all attempt metadata known by the engine.
         // Cached replays report none because they perform no live attempt.
+        const terminalMetadata = (
+          source: { readonly model?: string; readonly durationMs?: number },
+        ) => ({
+          ...(source.model !== undefined ? { model: source.model } : {}),
+          ...(source.durationMs !== undefined
+            ? { durationMs: source.durationMs }
+            : {}),
+          ...(spent !== undefined ? { totalCostUsd: spent } : {}),
+        });
         switch (event.outcome) {
           case 'failed': {
             markPhaseFailed(phaseTitle, event.phaseIndex, event.phaseTotal);
@@ -272,11 +281,7 @@ export async function runPersistedWorkflowScriptWithProgress(
               ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
               status: 'failed',
               error: event.error,
-              ...(event.model !== undefined ? { model: event.model } : {}),
-              ...(event.durationMs !== undefined
-                ? { durationMs: event.durationMs }
-                : {}),
-              ...(spent !== undefined ? { totalCostUsd: spent } : {}),
+              ...terminalMetadata(event),
             };
             emitTask(task, stageId);
             recordTerminalActivity(task);
@@ -301,11 +306,7 @@ export async function runPersistedWorkflowScriptWithProgress(
               ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
               status: 'skipped',
               reason: event.reason,
-              ...(event.model !== undefined ? { model: event.model } : {}),
-              ...(event.durationMs !== undefined
-                ? { durationMs: event.durationMs }
-                : {}),
-              ...(spent !== undefined ? { totalCostUsd: spent } : {}),
+              ...terminalMetadata(event),
             };
             emitTask(task, stageId);
             recordTerminalActivity(task);
@@ -317,9 +318,7 @@ export async function runPersistedWorkflowScriptWithProgress(
               label: event.label,
               ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
               status: 'completed',
-              ...(event.model !== undefined ? { model: event.model } : {}),
-              durationMs: event.durationMs,
-              ...(spent !== undefined ? { totalCostUsd: spent } : {}),
+              ...terminalMetadata(event),
             };
             emitTask(task, stageId);
             recordTerminalActivity(task);
