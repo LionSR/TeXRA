@@ -609,7 +609,7 @@ return await agent('Abort', { phase: 'Execution' })`,
     });
     expect(activities).toContainEqual(
       expect.stringMatching(
-        /^Failed: Abort · abort-model · .+ · \$0\.060 total - fatal runner error$/,
+        /^Failed: Abort · abort-model · .+ · \$0\.060 total — fatal runner error$/,
       ),
     );
   });
@@ -656,7 +656,7 @@ return 'guest success'`,
       });
       expect(activities).toContain('Running: Orphaned');
       expect(activities).toContain(
-        'Failed: Orphaned · $0.030 total - The workflow ended before this task completed.',
+        'Failed: Orphaned · $0.030 total — The workflow ended before this task completed.',
       );
     } finally {
       vi.useRealTimers();

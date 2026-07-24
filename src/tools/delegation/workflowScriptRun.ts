@@ -14,7 +14,7 @@ import {
   type RunOutcome,
   type WorkflowTaskProgress,
 } from '@shared/schemas';
-import { formatWorkflowTaskMetadataParts } from '@shared/copy/workflowTask';
+import { formatWorkflowTaskLine } from '@shared/copy/workflowTask';
 import { assertNever, generateShortId } from '@utils/core';
 
 type WorkflowScriptRunWithProgressOptions = Omit<
@@ -166,21 +166,7 @@ export async function runPersistedWorkflowScriptWithProgress(
       { readonly status: 'completed' | 'failed' | 'skipped' }
     >,
   ): void => {
-    const metadata = formatWorkflowTaskMetadataParts(task);
-    const suffix = metadata.length > 0 ? ` · ${metadata.join(' · ')}` : '';
-    switch (task.status) {
-      case 'completed':
-        onActivity?.(`Finished: ${task.label}${suffix}`);
-        break;
-      case 'failed':
-        onActivity?.(`Failed: ${task.label}${suffix} - ${task.error}`);
-        break;
-      case 'skipped':
-        onActivity?.(`Skipped: ${task.label}${suffix}`);
-        break;
-      default:
-        assertNever(task, 'Unhandled terminal workflow task activity');
-    }
+    onActivity?.(formatWorkflowTaskLine(task));
   };
   const emitTask = (
     task: WorkflowTaskProgress,

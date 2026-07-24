@@ -16,7 +16,6 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   TOOL_USE_STATUS,
-  WORKFLOW_TASK_STATUS_LABEL,
   WorkflowTaskProgressSchema,
   isTerminalWorkflowTaskProgress,
   type NormalizedToolUse,
@@ -28,7 +27,7 @@ import {
   summarizeFollowupMessage,
 } from '@shared/subagentFollowup';
 import { normalizeToolUseData } from '@shared/toolUse';
-import { formatWorkflowTaskMetadataParts } from '@shared/copy/workflowTask';
+import { formatWorkflowTaskLine } from '@shared/copy/workflowTask';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -362,15 +361,11 @@ function renderLogEntry(
     const parsed = WorkflowTaskProgressSchema.safeParse(entry.data);
     if (!parsed.success) return null;
     const task = parsed.data;
-    const metadata = formatWorkflowTaskMetadataParts(task);
-    const suffix = metadata.length > 0 ? ` · ${metadata.join(' · ')}` : '';
-    const error = task.status === 'failed' ? ` — ${task.error}` : '';
-    const text = `${WORKFLOW_TASK_STATUS_LABEL[task.status]}: ${task.label}${suffix}${error}`;
     const next: ConversationEntry = {
       id: entry.id,
       sourceSeqNo: entry.seqNo,
       role: 'workflowTask',
-      text,
+      text: formatWorkflowTaskLine(task),
       messageType: entry.messageType,
       finalized:
         entry.settlementSeqNo !== undefined || (prev?.finalized ?? false),
