@@ -620,7 +620,8 @@ describe('CLI StatusBar display model', () => {
 
   it('shows the route that produced usage instead of a stale access preference', () => {
     const accessLabel = (
-      usageRoute: 'chatgpt-subscription' | 'relay' | 'api-key',
+      usageRoute:
+        'chatgpt-subscription' | 'kimi-code-subscription' | 'relay' | 'api-key',
     ): string[] =>
       buildStatusBarDisplay(
         statusInput({
@@ -639,6 +640,7 @@ describe('CLI StatusBar display model', () => {
       ).left.map(statusBarSegmentText);
 
     expect(accessLabel('chatgpt-subscription')).toContain('subscription');
+    expect(accessLabel('kimi-code-subscription')).toContain('kimi-code');
     expect(accessLabel('relay')).toContain('included');
     expect(accessLabel('relay')).not.toContain('subscription');
     expect(accessLabel('api-key')).toContain('personal');
