@@ -33,7 +33,10 @@ const TOOL_PREVIEW_INPUT_KEY: Readonly<Record<string, string>> = {
   codex: 'prompt',
 };
 
-/** Derive a one-line preview of `input` for the named tool. Returns `''`
+/** Derive a one-line preview of `input` for the named tool. `toolName` must
+ *  already be normalized (lowercased, provider prefix stripped, e.g.
+ *  `claude:Bash` -> `bash`) — callers own that normalization since it's
+ *  host-specific (see `lastSegmentToolName` in the CLI TUI). Returns `''`
  *  when the tool isn't one of the ones with a known preview field — callers
  *  fall back to their own host-specific default (a generic key search, or
  *  nothing at all). */
