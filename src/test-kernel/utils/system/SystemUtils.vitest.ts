@@ -55,6 +55,9 @@ describe('executeCommand', () => {
     expectTypeOf<ExecuteCommandOptions['encoding']>().toEqualTypeOf<
       'utf8' | 'utf-8' | 'utf16le' | undefined
     >();
+    expectTypeOf<ExecuteCommandOptions['maxBuffer']>().toEqualTypeOf<
+      number | undefined
+    >();
     expectTypeOf<ExecuteCommandOptions['stdout']>().toEqualTypeOf<
       'pipe' | 'ignore' | 'inherit' | 'overlapped' | undefined
     >();
@@ -91,6 +94,107 @@ describe('executeCommand', () => {
     assert.ok(result.success);
     assert.strictEqual(result.stdout, 'fallback');
     assert.strictEqual(result.stderr, null);
+  });
+
+  it('keeps stderr empty for ordinary nonzero exits with stdout only', async () => {
+    const result = await executeCommand([
+      process.execPath,
+      '-e',
+      `process.stdout.write('failure details'); process.exit(7)`,
+    ]);
+
+    assert.equal(result.success, false);
+    assert.equal(result.exitCode, 7);
+    assert.equal(result.stdout, 'failure details');
+    assert.equal(result.stderr, null);
+    assert.equal(result.outputLimitExceeded, undefined);
+  });
+
+  it('decodes streamed Unicode split across byte chunks', async () => {
+    let streamed = '';
+    const result = await executeCommand(
+      [
+        process.execPath,
+        '-e',
+        `process.stdout.write(Buffer.from([0xf0, 0x9f])); ` +
+          `setTimeout(() => process.stdout.write(Buffer.from([0x99, 0x82])), 20);`,
+      ],
+      {
+        buffer: false,
+        onStdout: (chunk) => {
+          streamed += chunk;
+        },
+      },
+    );
+
+    assert.equal(result.success, true);
+    assert.equal(result.stdout, null);
+    assert.equal(streamed, '🙂');
+  });
+
+  it('flushes pending multibyte stdout and stderr exactly once on stream close', async () => {
+    let streamedStdout = '';
+    let streamedStderr = '';
+    const result = await executeCommand(
+      [
+        process.execPath,
+        '-e',
+        `const fs = require('node:fs'); ` +
+          `fs.writeSync(1, Buffer.from([0xf0, 0x9f])); ` +
+          `fs.writeSync(2, Buffer.from([0xe2, 0x82])); ` +
+          `process.stdout.destroy(); process.stderr.destroy();`,
+      ],
+      {
+        buffer: false,
+        onStdout: (chunk) => {
+          streamedStdout += chunk;
+        },
+        onStderr: (chunk) => {
+          streamedStderr += chunk;
+        },
+      },
+    );
+
+    assert.equal(result.success, true);
+    assert.equal(streamedStdout, '\ufffd');
+    assert.equal(streamedStderr, '\ufffd');
+  });
+
+  it('disables maxBuffer enforcement when buffering is disabled', async () => {
+    const outputChars = 10_000;
+    let streamedChars = 0;
+    const result = await executeCommand(
+      [
+        process.execPath,
+        '-e',
+        `process.stdout.write('x'.repeat(${outputChars}))`,
+      ],
+      {
+        buffer: false,
+        maxBuffer: 64,
+        onStdout: (chunk) => {
+          streamedChars += chunk.length;
+        },
+      },
+    );
+
+    assert.equal(result.success, true);
+    assert.equal(result.stdout, null);
+    assert.equal(streamedChars, outputChars);
+    assert.equal(result.outputLimitExceeded, undefined);
+  });
+
+  it('reports maxBuffer overflow as an error instead of partial success', async () => {
+    const result = await executeCommand(
+      [process.execPath, '-e', `process.stdout.write('x'.repeat(10_000))`],
+      { maxBuffer: 64 },
+    );
+
+    assert.equal(result.success, false);
+    assert.equal(result.exitCode, 2);
+    assert.equal(result.outputLimitExceeded, true);
+    assert.ok(result.stdout && result.stdout.length > 0);
+    assert.match(result.stderr ?? '', /maxBuffer exceeded/i);
   });
 
   it('aborts shell command process groups including children', async () => {
