@@ -220,8 +220,8 @@ async function runPersistedWorkflowScriptLocked(
   // evolve the script between attempts (a model retrying after a timeout
   // rarely reproduces its source byte-for-byte). Adopt the requested script
   // and args, keep the journal: an entry replays only on a matching call
-  // index and prompt/options hash, so drifted calls re-execute while
-  // unchanged ones stay free.
+  // index and prompt/execution-options hash, so drifted calls re-execute
+  // while presentation-only edits and unchanged calls stay free.
   const script = requestedScript ?? prior?.script;
   if (script === undefined) {
     throw new WorkflowScriptPersistenceError(

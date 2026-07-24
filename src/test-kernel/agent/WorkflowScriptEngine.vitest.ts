@@ -652,6 +652,47 @@ return b`,
     );
   });
 
+  it('keeps resume identity stable when planned presentation changes', async () => {
+    const first = await runWorkflowScript({
+      script: `export const meta = {
+  name: 'planned-resume',
+  description: 'first presentation',
+  phases: [{ title: 'Draft' }],
+  tasks: [{ id: 'inspect', label: 'Inspect draft', phase: 'Draft' }],
+}
+return await agent('Inspect src', { id: 'inspect' })`,
+      runAgent: echoRunner,
+    });
+    const cachedRunner = vi.fn(echoRunner);
+    const events: WorkflowScriptEvent[] = [];
+
+    const resumed = await runWorkflowScript({
+      script: `export const meta = {
+  name: 'planned-resume',
+  description: 'revised presentation',
+  phases: [{ title: 'Audit' }],
+  tasks: [{ id: 'inspect', label: 'Audit implementation', phase: 'Audit' }],
+}
+return await agent('Inspect src', { id: 'inspect' })`,
+      runAgent: cachedRunner,
+      journal: first.journal,
+      onEvent: (event) => events.push(event),
+    });
+
+    expect(resumed.result).toBe(first.result);
+    expect(cachedRunner).not.toHaveBeenCalled();
+    expect(events).toContainEqual({
+      type: 'agent:end',
+      taskId: 'inspect',
+      index: 0,
+      label: 'Audit implementation',
+      phase: 'Audit',
+      phaseIndex: 0,
+      phaseTotal: 1,
+      outcome: 'cached',
+    });
+  });
+
   it('ends a cached call with an error when its journal value is invalid', async () => {
     const script = `${META}return await agent('cached')`;
     const first = await runWorkflowScript({ script, runAgent: echoRunner });

@@ -108,15 +108,17 @@ return concat(sections, { separator: '\n\n' });
   throw inside scripts, installed non-writable so scripts cannot restore
   them (`new Date(timestamp)` stays usable). Resume relies on replaying the
   same call sequence: each `agent()` call is journaled by (call index,
-  prompt/options hash), and a rerun with a prior journal replays matching
-  calls from cache, re-running only edited or new calls. Failed and cancelled
-  calls are not journaled, so resume retries them. Caveat: `agent()` calls made from
-  `pipeline()` stages beyond the first get indices in completion order,
-  which varies run-to-run — the per-index key check keeps replay safe, but
-  multi-stage pipelines see lower journal cache-hit rates. Durable child
-  identity instead uses the prompt/options hash, so a shifted journal index
-  does not repeat completed model work. Otherwise-identical calls must provide
-  distinct `id` options; ambiguous duplicates fail before launch.
+  prompt/execution-options hash), and a rerun with a prior journal replays
+  matching calls from cache, re-running only edited or new calls. Display
+  labels and phases do not participate in this identity. Failed and cancelled
+  calls are not journaled, so resume retries them. Caveat: `agent()` calls
+  made from `pipeline()` stages beyond the first get indices in completion
+  order, which varies run-to-run — the per-index key check keeps replay safe,
+  but multi-stage pipelines see lower journal cache-hit rates. Durable child
+  identity instead uses the prompt/execution-options hash, so a shifted
+  journal index does not repeat completed model work. Otherwise-identical
+  calls must provide distinct `id` options; ambiguous duplicates fail before
+  launch.
 - **Budgets**: one concurrency semaphore (default 4) across all `agent()`
   calls, a live-call cap (default 200; journal replays are free), a fan-out cap per
   `parallel()`/`pipeline()` call, and a wall-clock timeout. The cap and

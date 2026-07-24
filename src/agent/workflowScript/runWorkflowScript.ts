@@ -25,16 +25,18 @@ import {
 } from './types';
 
 /**
- * Stable identity for one agent() call: same prompt + options → same key,
- * regardless of object key insertion order. Used for resume: a prior
- * journal entry at the same call index with a matching key replays its
- * cached result instead of re-running the agent. sha256 (truncated) so a
- * key collision — which would replay the wrong cached result — is not a
- * practical concern.
+ * Stable execution identity for one agent() call. Display-only labels and
+ * phases are deliberately excluded, so editing a declarative task plan does
+ * not invalidate otherwise identical completed work. A prior journal entry at
+ * the same call index with a matching key replays its cached result. sha256
+ * (truncated) makes a collision that replays the wrong result impractical.
  */
 function journalKey(prompt: string, options: WorkflowAgentCallOptions): string {
+  const executionOptions: WorkflowAgentCallOptions = { ...options };
+  delete executionOptions.label;
+  delete executionOptions.phase;
   return createHash('sha256')
-    .update(stableStringify({ options, prompt }))
+    .update(stableStringify({ options: executionOptions, prompt }))
     .digest('hex')
     .slice(0, 16);
 }
@@ -193,7 +195,7 @@ function isWorkflowAbort(error: unknown): boolean {
  * agents. The script's control flow (loops, fan-out, joins, reduction) runs
  * as plain code with zero model round-trips between steps; every agent()
  * call is bounded by one shared p-queue concurrency limit and journaled for
- * resume (same call index + same prompt/options → cached result).
+ * resume (same call index + same prompt/execution options → cached result).
  *
  * On wall-clock timeout the sandbox preempts guest execution, fires the run's
  * AbortSignal (passed to every runAgent invocation), and refuses new calls.
@@ -381,7 +383,7 @@ export async function runWorkflowScript(
     if (issuedCallKeys.has(key)) {
       throw rememberFatalRunError(
         new WorkflowRunAbortError(
-          'Repeated agent() calls with the same prompt and options require distinct non-empty "id" options for restart-safe identity.',
+          'Repeated agent() calls with the same prompt and execution options require distinct non-empty "id" options for restart-safe identity.',
         ),
       );
     }

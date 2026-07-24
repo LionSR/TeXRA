@@ -123,7 +123,7 @@ export type WorkflowAgentCallOptions =
 export interface WorkflowAgentInvocation {
   /** 0-based call sequence number; also the journal key position. */
   index: number;
-  /** Stable hash of the prompt and normalized call options. */
+  /** Stable hash of the prompt and normalized execution-affecting options. */
   key: string;
   prompt: string;
   options: WorkflowAgentCallOptions;
@@ -154,7 +154,10 @@ export type WorkflowAgentRunner = (
 /** One completed agent() call, cached for resume. */
 export interface WorkflowJournalEntry {
   index: number;
-  /** Stable hash of (prompt, options); mismatch forces a live re-run. */
+  /**
+   * Stable hash of the prompt and execution-affecting options; display labels
+   * and phases are excluded. A mismatch forces a live re-run.
+   */
   key: string;
   result: unknown;
 }
