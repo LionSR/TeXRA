@@ -26,16 +26,18 @@ export const WorkflowSpecificFieldsSchema = FileFieldsSchema.extend({
   toolConfig: ToolConfigSchema,
 });
 
-const ProposalFileFieldsSchema = FileFieldsSchema.extend({
-  memories: z.array(z.string()),
-});
-
 /** File fields shape used by all three rendering sites (toolFormatters, RequestPanels, PermissionCard). */
-type FileFields = Partial<z.infer<typeof ProposalFileFieldsSchema>>;
+interface FileFields {
+  readonly inputFiles?: readonly string[];
+  readonly contextFiles?: readonly string[];
+  readonly mediaFiles?: readonly string[];
+  readonly outputFiles?: readonly string[];
+  readonly memories?: readonly string[];
+}
 
 export interface ProposalFileGroup {
   label: string;
-  files: string[];
+  files: readonly string[];
   /** When false, files are virtual paths that should not be opened via workspace file commands. */
   clickable: boolean;
 }

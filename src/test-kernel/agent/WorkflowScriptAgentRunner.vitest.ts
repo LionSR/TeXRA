@@ -157,7 +157,11 @@ describe('createWorkflowScriptAgentRunner', () => {
   });
 
   it('uses delegation policy and executes a direct in-band child', async () => {
-    const call = invocation({ inputFiles: ['paper.tex'] });
+    const call = invocation({
+      inputFiles: ['paper.tex'],
+      contextFiles: ['notes.tex'],
+      mediaFiles: ['figure.pdf'],
+    });
     const runner = defaultRunner();
 
     await expect(runner(call)).resolves.toBe(result);
@@ -171,6 +175,12 @@ describe('createWorkflowScriptAgentRunner', () => {
     );
     expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
       { label: 'Input file', files: ['paper.tex'] },
+    ]);
+    expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
+      { label: 'Context file', files: ['notes.tex'] },
+    ]);
+    expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
+      { label: 'Media file', files: ['figure.pdf'] },
     ]);
     expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
       parentModel: 'parent-model',
@@ -199,6 +209,8 @@ describe('createWorkflowScriptAgentRunner', () => {
           model: 'child-model',
           instruction: 'Draft the section.',
           inputFiles: ['paper.tex'],
+          contextFiles: ['notes.tex'],
+          mediaFiles: ['figure.pdf'],
           workingDirectory: '/workspace',
           delegationAgentScope: {
             workflowAgentKeys: ['builtInWorkflow:correct'],
@@ -547,6 +559,10 @@ describe('createWorkflowScriptAgentRunner', () => {
         }),
       }),
     );
+    expect(
+      (mocks.preparedOptions[0] as { configPayload: object }).configPayload,
+    ).not.toHaveProperty('inputFiles');
+    expect(mocks.assertWorkflowFilesExist).not.toHaveBeenCalled();
   });
 
   it('exempts a schema call from the workflow empty-files guard', async () => {
@@ -575,24 +591,6 @@ describe('createWorkflowScriptAgentRunner', () => {
         configPayload: expect.objectContaining({ agentCategory: 'toolUse' }),
       }),
     );
-  });
-
-  it('aborts a schema call that omits agentName', async () => {
-    const schema = { type: 'object', additionalProperties: false };
-    const runner = defaultRunner();
-
-    // The workflow default 'correct' is a document editor with no tool-use
-    // counterpart, so a schema call must name a tool-use agent explicitly
-    // rather than silently reuse the workflow default under the tool-use
-    // category.
-    await expect(runner(invocation({ schema }))).rejects.toMatchObject({
-      name: 'WorkflowRunAbortError',
-      message: expect.stringMatching(
-        /must name a tool-use agent via agentName/,
-      ),
-    });
-    expect(mocks.preparedOptions).toHaveLength(0);
-    expect(mocks.requireVisibleAgent).not.toHaveBeenCalled();
   });
 
   it('leaves onChildActive untouched when a recovered attempt runs no live work', async () => {

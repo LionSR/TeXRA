@@ -9,12 +9,14 @@ import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteract
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import { withRunContext } from '@agent/runtime/RunContext';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
 import {
   DELEGATION_AVAILABILITY_CATEGORY,
   DELEGATION_TOOL_CATEGORY,
   DELEGATION_TOOLS,
 } from '@shared/constants/delegationTools';
 import { deriveExecutionId } from '@utils/core/idHash';
+import { WorkspaceFS } from '@utils/files';
 
 setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 
@@ -91,7 +93,7 @@ function runExecutionIdFor(name: string): ExecutionId {
   return deriveExecutionId({ checkpointId: checkpointIdFor(name) });
 }
 
-async function callTool(overrideScript?: string) {
+async function callTool(overrideScript?: string, files?: WorkflowScriptFiles) {
   return withRunContext(parentContext(), () =>
     withToolFileInteractionContext(
       {
@@ -104,13 +106,18 @@ async function callTool(overrideScript?: string) {
         new WorkflowScriptTool().call({
           agent: 'correct',
           script: overrideScript ?? script,
+          ...(files ? { files } : {}),
         }),
     ),
   );
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
+  await WorkspaceFS.ensureDir('.');
+  await WorkspaceFS.write('paper.tex', '\\documentclass{article}');
+  await WorkspaceFS.write('references.bib', '@book{example}');
+  await WorkspaceFS.write('figure.pdf', 'pdf');
   mocks.registerExecution.mockResolvedValue(undefined);
   mocks.createChildStream.mockImplementation((runId: ExecutionId): unknown => ({
     childStreamId: `workflow-script#${runId}` as StreamTabId,
@@ -208,6 +215,27 @@ describe('WorkflowScriptTool', () => {
     });
     expect(result.output).toContain(`Execution ID: ${runExecutionId}`);
     expect(result.output).toContain('same meta.name');
+  });
+
+  it('validates and persists files bound to the workflow run', async () => {
+    const files = {
+      inputFiles: ['paper.tex'],
+      contextFiles: ['references.bib'],
+      mediaFiles: ['figure.pdf'],
+    } as const satisfies WorkflowScriptFiles;
+    const result = await callTool(undefined, files);
+
+    expect(result.status).toBe('executed');
+    expect(mocks.registerExecution).toHaveBeenCalledWith(
+      runExecutionIdFor('tool-test'),
+      expect.objectContaining({
+        inputFiles: ['paper.tex'],
+        contextFiles: ['references.bib'],
+        mediaFiles: ['figure.pdf'],
+      }),
+      'tool-test',
+      executionId,
+    );
   });
 
   it('regenerates the same run id across relaunches of one meta.name', async () => {

@@ -27,6 +27,7 @@ import type {
 import type { ExecutionId } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
+import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
 import {
   formatChildRunDelivery,
   formatChildRunError,
@@ -88,6 +89,8 @@ export interface WorkflowScriptStrategyParams {
   readonly script: string;
   /** JSON arguments; `null`/`undefined` retains the checkpoint's arguments. */
   readonly args: unknown;
+  /** Role-separated files exposed as immutable workflow launch context. */
+  readonly files?: WorkflowScriptFiles;
   /** Durable identity (`meta.name`) — used in the resume hint on failure. */
   readonly name: string;
   /**
@@ -167,6 +170,9 @@ export function createWorkflowScriptStrategy(
           checkpointId: params.checkpointId,
           script: params.script,
           ...(params.args != null && { args: params.args }),
+          ...(params.files !== undefined && {
+            files: params.files,
+          }),
           signal: abortController.signal,
           runAgent,
           getLiveCostUsd: () => liveCostUsd,

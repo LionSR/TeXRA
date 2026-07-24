@@ -94,9 +94,26 @@ describe('workflow-script persistence', () => {
       writeWorkflowScriptCheckpoint(store, 'invalid-write', {
         script,
         args: undefined,
+        files: { inputFiles: [], contextFiles: [], mediaFiles: [] },
         journal: [{ index: 0, key: '0000000000000000', result: () => 1 }],
       }),
     ).rejects.toBeInstanceOf(WorkflowScriptPersistenceError);
+  });
+
+  it('normalizes checkpoints created before launch files were persisted', async () => {
+    const store = getExecutionStore(executionId);
+    await store.write(workflowScriptCheckpointKvKey('legacy-files'), {
+      schemaVersion: 1,
+      script,
+      args: { kind: 'undefined' },
+      journal: [],
+    });
+
+    await expect(
+      readWorkflowScriptCheckpoint(store, 'legacy-files'),
+    ).resolves.toMatchObject({
+      files: { inputFiles: [], contextFiles: [], mediaFiles: [] },
+    });
   });
 
   it('accepts script drift: unchanged calls replay, changed calls re-run', async () => {
@@ -165,6 +182,7 @@ return await agent('none')`;
     await writeWorkflowScriptCheckpoint(store, ' call-with-space ', {
       script,
       args: undefined,
+      files: { inputFiles: [], contextFiles: [], mediaFiles: [] },
       journal: [],
     });
 
@@ -187,6 +205,7 @@ return await agent('none')`;
     await writeWorkflowScriptCheckpoint(store, checkpointId, {
       script,
       args: undefined,
+      files: { inputFiles: [], contextFiles: [], mediaFiles: [] },
       journal: [],
     });
     await expect(
@@ -226,6 +245,47 @@ return await agent(args.topic)`;
     await expect(
       readWorkflowScriptCheckpoint(store, 'args-restart'),
     ).resolves.toMatchObject({ args: { topic: 'geometry' } });
+  });
+
+  it('persists launch files and restores them when a restart omits them', async () => {
+    const store = getExecutionStore(executionId);
+    const inputScript = `export const meta = {
+  name: 'inputs-restart',
+  description: 'restores persisted launch files',
+}
+return files`;
+    await runPersistedWorkflowScript({
+      store,
+      checkpointId: 'inputs-restart',
+      script: inputScript,
+      files: {
+        inputFiles: ['paper.tex'],
+        contextFiles: ['notes.tex'],
+        mediaFiles: ['figure.pdf'],
+      },
+      runAgent: vi.fn(),
+    });
+
+    const restarted = await runPersistedWorkflowScript({
+      store,
+      checkpointId: 'inputs-restart',
+      runAgent: vi.fn(),
+    });
+
+    expect(restarted.result).toEqual({
+      inputFiles: ['paper.tex'],
+      contextFiles: ['notes.tex'],
+      mediaFiles: ['figure.pdf'],
+    });
+    await expect(
+      readWorkflowScriptCheckpoint(store, 'inputs-restart'),
+    ).resolves.toMatchObject({
+      files: {
+        inputFiles: ['paper.tex'],
+        contextFiles: ['notes.tex'],
+        mediaFiles: ['figure.pdf'],
+      },
+    });
   });
 
   it('adopts new arguments on resume and keeps the journal', async () => {

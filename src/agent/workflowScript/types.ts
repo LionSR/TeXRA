@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
+
 const WorkflowScriptPhaseSchema = z.object({
   title: z.string().min(1),
   detail: z.string().optional(),
@@ -25,26 +27,51 @@ export const WorkflowScriptMetaSchema = z.object({
 
 export type WorkflowScriptMeta = z.infer<typeof WorkflowScriptMetaSchema>;
 
-/** Options accepted by the script-facing `agent()` primitive. */
-export interface WorkflowAgentCallOptions {
+interface WorkflowAgentCallBaseOptions {
   /** Stable identity when otherwise-identical calls occur more than once. */
   id?: string;
   /** Display label for progress UIs; defaults to a prompt excerpt. */
   label?: string;
   /** Progress group; defaults to the `phase()` active at call time. */
   phase?: string;
+}
+
+interface WorkflowAgentFileOptions {
+  /** Workspace or run-storage files the workflow agent may rewrite. */
+  inputFiles?: WorkflowScriptFiles['inputFiles'];
+  /** Read-only supporting documents for the workflow agent. */
+  contextFiles?: WorkflowScriptFiles['contextFiles'];
+  /** Read-only visual or audio inputs for the workflow agent. */
+  mediaFiles?: WorkflowScriptFiles['mediaFiles'];
+}
+
+/** A script call to a file-editing workflow agent. */
+export interface WorkflowEditAgentCallOptions
+  extends WorkflowAgentCallBaseOptions, WorkflowAgentFileOptions {
   /** Named TeXRA agent to run; defaults to the host runner's choice. */
   agentName?: string;
-  /** Workspace or run-storage files bound as the child's input files. */
-  inputFiles?: string[];
+  schema?: never;
+}
+
+/** A script call to a tool-use agent that returns a structured value. */
+export interface WorkflowStructuredAgentCallOptions extends WorkflowAgentCallBaseOptions {
+  /** Structured calls must name a tool-use agent explicitly. */
+  agentName: string;
+  inputFiles?: never;
+  contextFiles?: never;
+  mediaFiles?: never;
   /**
    * Plain JSON Schema object describing the structured result the call must
    * produce. Its presence routes the call to a tool-use agent that finishes by
    * submitting a validated value, surfaced on the result's `.structured`.
    * Participates in the journal key, so resume stays correct.
    */
-  schema?: Record<string, unknown>;
+  schema: Record<string, unknown>;
 }
+
+/** Options accepted by the script-facing `agent()` primitive. */
+export type WorkflowAgentCallOptions =
+  WorkflowEditAgentCallOptions | WorkflowStructuredAgentCallOptions;
 
 export interface WorkflowAgentInvocation {
   /** 0-based call sequence number; also the journal key position. */
@@ -155,6 +182,8 @@ export interface WorkflowScriptRunOptions {
   script: string;
   /** Exposed verbatim to the script as the global `args`. */
   args?: unknown;
+  /** Exposed to the script as the immutable global `files` object. */
+  files?: WorkflowScriptFiles;
   runAgent: WorkflowAgentRunner;
   /** Parent cancellation signal; aborts guest execution and active agents. */
   signal?: AbortSignal;

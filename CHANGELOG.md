@@ -14,6 +14,9 @@ All notable changes to this project will be documented in this file.
   built-in Orchestrator supports planned fan-out, pipeline, and join runs.
   Workflow Script is an opt-in integration in the Tools dashboard and CLI
   `/tools`; disabling it applies to every agent.
+- **Workflow scripts can start from selected files** — launch files are
+  separated into editable inputs, read-only context, and media, then exposed
+  to the script as immutable launch context for its workflow-agent calls.
 
 #### Bug Fixes
 
