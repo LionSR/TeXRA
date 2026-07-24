@@ -58,43 +58,66 @@ interface ConversationEntryBase {
   readonly pendingEmbeddedSubagentFollowup?: boolean;
   /** True once the stream transitions to `WAITING`/`COMPLETED`. */
   readonly finalized: boolean;
-  /** Entry was synthesized by the CLI and is not present in StreamLogStore. */
-  readonly synthetic?: boolean;
-  /** Why the CLI synthesized this entry. */
-  readonly syntheticKind?: 'local' | 'process';
-  /** StreamLog head at the moment a synthetic entry was appended. */
-  readonly syntheticAfterSeq?: number;
 }
+
+type ConversationEntryOrigin =
+  | {
+      /** Source-backed row persisted by StreamLogStore. */
+      readonly synthetic?: false;
+      /** Durable StreamLog position, including legacy rows without settlement order. */
+      readonly sourceSeqNo?: number;
+      /** Source-owned order in which this immutable row became printable. */
+      readonly settlementSeqNo?: number;
+      readonly syntheticKind?: never;
+      readonly syntheticAfterSeq?: never;
+      readonly syntheticAfterSettlementSeqNo?: never;
+    }
+  | {
+      /** CLI-owned row that is not present in StreamLogStore. */
+      readonly synthetic: true;
+      readonly sourceSeqNo?: never;
+      readonly settlementSeqNo?: never;
+      /** Why the CLI synthesized this entry. */
+      readonly syntheticKind: 'local' | 'process';
+      /** StreamLog head at the moment this row was appended. */
+      readonly syntheticAfterSeq: number;
+      /** Durable settlement cursor when this row became printable. */
+      readonly syntheticAfterSettlementSeqNo: number;
+    };
 
 /**
  * Discriminated on `role` so `toolUse`/`process` are required exactly for
  * the rows that need them, instead of independently-optional fields every
  * consumer has to null-check regardless of role.
  */
-export type ConversationEntry =
-  | (ConversationEntryBase & { readonly role: 'assistant' | 'error' | 'user' })
-  | (ConversationEntryBase & {
-      readonly role: 'workflowTask';
-      /** Parsed task state retained for semantic settlement and styling. */
-      readonly task: WorkflowTaskProgress;
-    })
-  | (ConversationEntryBase & {
-      readonly role: 'phase';
-      /** Phase title displayed in the group-header divider row. */
-      readonly phaseLabel: string;
-      /** 0-based phase order within the run, when the emitter provides it. */
-      readonly phaseIndex?: number;
-      /** Total phase count for the run, when the emitter provides it. */
-      readonly phaseTotal?: number;
-    })
-  | (ConversationEntryBase & {
-      readonly role: 'tool';
-      readonly toolUse: NormalizedToolUse;
-    })
-  | (ConversationEntryBase & {
-      readonly role: 'process';
-      readonly process: CompletedProcessTranscript;
-    });
+export type ConversationEntry = ConversationEntryOrigin &
+  (
+    | (ConversationEntryBase & {
+        readonly role: 'assistant' | 'error' | 'user';
+      })
+    | (ConversationEntryBase & {
+        readonly role: 'workflowTask';
+        /** Parsed task state retained for semantic settlement and styling. */
+        readonly task: WorkflowTaskProgress;
+      })
+    | (ConversationEntryBase & {
+        readonly role: 'phase';
+        /** Phase title displayed in the group-header divider row. */
+        readonly phaseLabel: string;
+        /** 0-based phase order within the run, when the emitter provides it. */
+        readonly phaseIndex?: number;
+        /** Total phase count for the run, when the emitter provides it. */
+        readonly phaseTotal?: number;
+      })
+    | (ConversationEntryBase & {
+        readonly role: 'tool';
+        readonly toolUse: NormalizedToolUse;
+      })
+    | (ConversationEntryBase & {
+        readonly role: 'process';
+        readonly process: CompletedProcessTranscript;
+      })
+  );
 
 export interface CompletedProcessTranscript {
   readonly executionId: string;

@@ -18,6 +18,7 @@ import {
   TOOL_USE_STATUS,
   WORKFLOW_TASK_STATUS_LABEL,
   WorkflowTaskProgressSchema,
+  isTerminalWorkflowTaskProgress,
   type NormalizedToolUse,
   type StreamLogEntry,
   type StreamTabId,
@@ -218,10 +219,12 @@ function entriesEqual(
   if (
     prev.role !== next.role ||
     prev.text !== next.text ||
+    prev.sourceSeqNo !== next.sourceSeqNo ||
     prev.messageType !== next.messageType ||
     prev.pendingEmbeddedSubagentFollowup !==
       next.pendingEmbeddedSubagentFollowup ||
-    prev.finalized !== next.finalized
+    prev.finalized !== next.finalized ||
+    prev.settlementSeqNo !== next.settlementSeqNo
   ) {
     return false;
   }
@@ -331,10 +334,15 @@ function renderLogEntry(
     // tick can't roll an already-promoted entry back to false.
     const next: ConversationEntry = {
       id: entry.id,
+      sourceSeqNo: entry.seqNo,
       role: 'tool',
       text: '',
       ...(entry.messageType ? { messageType: entry.messageType } : {}),
-      finalized: prev?.finalized ?? false,
+      finalized:
+        entry.settlementSeqNo !== undefined || (prev?.finalized ?? false),
+      ...(entry.settlementSeqNo !== undefined
+        ? { settlementSeqNo: entry.settlementSeqNo }
+        : {}),
       toolUse,
     };
     if (prev && entriesEqual(prev, next)) {
@@ -360,19 +368,24 @@ function renderLogEntry(
     const text = `${WORKFLOW_TASK_STATUS_LABEL[task.status]}: ${task.label}${suffix}${error}`;
     const next: ConversationEntry = {
       id: entry.id,
+      sourceSeqNo: entry.seqNo,
       role: 'workflowTask',
       text,
       messageType: entry.messageType,
-      finalized: prev?.finalized ?? false,
+      finalized:
+        entry.settlementSeqNo !== undefined || (prev?.finalized ?? false),
+      ...(entry.settlementSeqNo !== undefined
+        ? { settlementSeqNo: entry.settlementSeqNo }
+        : {}),
       task,
     };
     return prev && entriesEqual(prev, next) ? prev : next;
   }
 
-  // Phase group headers finalize the moment they appear (like user/error
-  // rows): the label never changes, and a later stage.end only upserts the
-  // group's `data`, keeping the same id. Detect before the generic text path
-  // so the row renders as a distinct divider instead of plain assistant prose.
+  // A phase header is immutable at GROUP_START and therefore printable
+  // immediately. Its source-owned settlement order keeps cold reconstruction
+  // identical to the live append-only transcript even when planned task rows
+  // were recorded earlier.
   const phaseData = phaseGroupData(entry);
   if (phaseData) {
     const phaseLabel = entry.text ?? '';
@@ -384,10 +397,14 @@ function renderLogEntry(
     const phaseTotal = phaseData.total ?? prevPhase?.phaseTotal;
     const next: ConversationEntry = {
       id: entry.id,
+      sourceSeqNo: entry.seqNo,
       role: 'phase',
       text: phaseLabel,
       ...(entry.messageType ? { messageType: entry.messageType } : {}),
       finalized: true,
+      ...(entry.settlementSeqNo !== undefined
+        ? { settlementSeqNo: entry.settlementSeqNo }
+        : {}),
       phaseLabel,
       ...(phaseIndex !== undefined ? { phaseIndex } : {}),
       ...(phaseTotal !== undefined ? { phaseTotal } : {}),
@@ -404,12 +421,19 @@ function renderLogEntry(
   // moves on to a later entry; inherit the prior flag here so a re-sync
   // can't de-finalize an already-promoted block. User/error rows can't
   // change after they appear, so they finalize immediately.
-  const finalized = role === 'assistant' ? (prev?.finalized ?? false) : true;
+  const finalized =
+    entry.settlementSeqNo !== undefined ||
+    role !== 'assistant' ||
+    (prev?.finalized ?? false);
   const next: ConversationEntry = {
     id: entry.id,
+    sourceSeqNo: entry.seqNo,
     role,
     text: renderedText,
     ...(entry.messageType ? { messageType: entry.messageType } : {}),
+    ...(entry.settlementSeqNo !== undefined
+      ? { settlementSeqNo: entry.settlementSeqNo }
+      : {}),
     ...(assistantTranscript !== undefined &&
     hasIncompleteEmbeddedSubagentFollowup(assistantTranscript)
       ? { pendingEmbeddedSubagentFollowup: true }
@@ -444,7 +468,7 @@ function isSettledEntry(
         entry.toolUse.status === TOOL_USE_STATUS.FAILED
       );
     case 'workflowTask':
-      return entry.task.status !== 'planned' && entry.task.status !== 'running';
+      return isTerminalWorkflowTaskProgress(entry.task);
     case 'assistant':
       return (
         !entry.pendingEmbeddedSubagentFollowup && index < entries.length - 1

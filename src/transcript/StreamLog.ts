@@ -1,14 +1,20 @@
 import {
+  MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   STREAMING_TEXT_MESSAGE_TYPES,
+  WorkflowTaskProgressSchema,
+  isTerminalWorkflowTaskProgress,
   type StreamLogEntry,
   type StreamLogTextDelta,
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
 
-export type StreamLogAppendInput = Omit<StreamLogEntry, 'seqNo'>;
+export type StreamLogAppendInput = Omit<
+  StreamLogEntry,
+  'seqNo' | 'settlementSeqNo'
+>;
 export type StreamLogUpdatePatch = Partial<
-  Omit<StreamLogEntry, 'id' | 'seqNo'>
+  Omit<StreamLogEntry, 'id' | 'seqNo' | 'settlementSeqNo'>
 >;
 
 export interface StreamLogPreservedRawEntry {
@@ -38,6 +44,17 @@ export function isRunningStreamingTextEntry(entry: StreamLogEntry): boolean {
   return data.status === 'running';
 }
 
+export function isNonterminalWorkflowTaskEntry(entry: StreamLogEntry): boolean {
+  if (
+    entry.type !== STREAM_LOG_ENTRY_TYPES.LOG ||
+    entry.messageType !== MESSAGE_TYPES.WORKFLOW_TASK
+  ) {
+    return false;
+  }
+  const task = WorkflowTaskProgressSchema.safeParse(entry.data);
+  return task.success && !isTerminalWorkflowTaskProgress(task.data);
+}
+
 export class StreamLog {
   private entries: StreamLogEntry[] = [];
   private readonly preservedRawEntries: StreamLogPreservedRawEntry[] = [];
@@ -45,8 +62,10 @@ export class StreamLog {
   private readonly indexById = new Map<string, number>();
   private readonly dirtyUpdates = new Set<string>();
   private readonly dirtyTextDeltas = new Map<string, StreamLogTextDelta>();
+  private settlementSeqCounter = 0;
   private runningGroupCount = 0;
   private runningStreamingTextCount = 0;
+  private nonterminalWorkflowTaskCount = 0;
 
   constructor(
     entries: readonly StreamLogEntry[] = [],
@@ -67,6 +86,10 @@ export class StreamLog {
       return entry.seqNo === seqNo ? entry : { ...entry, seqNo };
     });
     this.seqCounter = this.entries.length;
+    this.settlementSeqCounter = Math.max(
+      this.entries.length,
+      ...this.entries.map((entry) => entry.settlementSeqNo ?? 0),
+    );
 
     for (const [i, entry] of this.entries.entries()) {
       this.indexById.set(entry.id, i);
@@ -75,6 +98,9 @@ export class StreamLog {
       }
       if (isRunningStreamingTextEntry(entry)) {
         this.runningStreamingTextCount += 1;
+      }
+      if (isNonterminalWorkflowTaskEntry(entry)) {
+        this.nonterminalWorkflowTaskCount += 1;
       }
     }
   }
@@ -85,6 +111,11 @@ export class StreamLog {
 
   get size(): number {
     return this.entries.length;
+  }
+
+  /** Latest durable append-only transcript order allocated by this stream. */
+  get settlementHead(): number {
+    return this.settlementSeqCounter;
   }
 
   get firstTimestamp(): number | undefined {
@@ -104,12 +135,29 @@ export class StreamLog {
     return this.runningStreamingTextCount > 0;
   }
 
+  get hasNonterminalWorkflowTask(): boolean {
+    return this.nonterminalWorkflowTaskCount > 0;
+  }
+
   append(entry: StreamLogAppendInput): StreamLogEntry {
+    return this.appendWithSettlement(entry, false);
+  }
+
+  appendSettled(entry: StreamLogAppendInput): StreamLogEntry {
+    return this.appendWithSettlement(entry, true);
+  }
+
+  private appendWithSettlement(
+    entry: StreamLogAppendInput,
+    settled: boolean,
+  ): StreamLogEntry {
     const fullEntry: StreamLogEntry = {
       ...entry,
       seqNo: this.seqCounter + 1,
+      ...(settled ? { settlementSeqNo: this.settlementSeqCounter + 1 } : {}),
     };
     this.seqCounter = fullEntry.seqNo;
+    if (settled) this.settlementSeqCounter += 1;
     this.indexById.set(fullEntry.id, this.entries.length);
     this.entries.push(fullEntry);
     if (isRunningGroupEntry(fullEntry)) {
@@ -118,15 +166,35 @@ export class StreamLog {
     if (isRunningStreamingTextEntry(fullEntry)) {
       this.runningStreamingTextCount += 1;
     }
+    if (isNonterminalWorkflowTaskEntry(fullEntry)) {
+      this.nonterminalWorkflowTaskCount += 1;
+    }
     return fullEntry;
   }
 
   update(id: string, patch: StreamLogUpdatePatch): StreamLogEntry | undefined {
+    return this.updateWithSettlement(id, patch, false);
+  }
+
+  settle(id: string, patch: StreamLogUpdatePatch): StreamLogEntry | undefined {
+    return this.updateWithSettlement(id, patch, true);
+  }
+
+  private updateWithSettlement(
+    id: string,
+    patch: StreamLogUpdatePatch,
+    settle: boolean,
+  ): StreamLogEntry | undefined {
     const index = this.indexById.get(id);
     if (index === undefined) return undefined;
 
     const current = this.entries[index];
+    const settlementSeqNo =
+      settle && current.settlementSeqNo === undefined
+        ? this.settlementSeqCounter + 1
+        : current.settlementSeqNo;
     if (
+      settlementSeqNo === current.settlementSeqNo &&
       Object.entries(patch).every(([key, value]) =>
         Object.is(current[key as keyof StreamLogUpdatePatch], value),
       )
@@ -142,7 +210,11 @@ export class StreamLog {
       ...patch,
       id: current.id,
       seqNo: current.seqNo,
+      ...(settlementSeqNo !== undefined ? { settlementSeqNo } : {}),
     };
+    if (settlementSeqNo !== current.settlementSeqNo) {
+      this.settlementSeqCounter += 1;
+    }
 
     const wasRunningGroup = isRunningGroupEntry(current);
     const isNowRunningGroup = isRunningGroupEntry(updated);
@@ -158,6 +230,15 @@ export class StreamLog {
       this.runningStreamingTextCount -= 1;
     } else if (!wasRunningStreamingText && isNowRunningStreamingText) {
       this.runningStreamingTextCount += 1;
+    }
+
+    const wasNonterminalWorkflowTask = isNonterminalWorkflowTaskEntry(current);
+    const isNowNonterminalWorkflowTask =
+      isNonterminalWorkflowTaskEntry(updated);
+    if (wasNonterminalWorkflowTask && !isNowNonterminalWorkflowTask) {
+      this.nonterminalWorkflowTaskCount -= 1;
+    } else if (!wasNonterminalWorkflowTask && isNowNonterminalWorkflowTask) {
+      this.nonterminalWorkflowTaskCount += 1;
     }
 
     this.entries[index] = updated;

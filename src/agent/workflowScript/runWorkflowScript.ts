@@ -242,6 +242,7 @@ export async function runWorkflowScript(
   let callCounter = 0;
   const issuedCallKeys = new Set<string>();
   const plannedPhases = meta.phases ?? [];
+  const hasTaskPlan = meta.tasks !== undefined;
   const plannedTasks = meta.tasks ?? [];
   const plannedTasksById = new Map(plannedTasks.map((task) => [task.id, task]));
   const issuedPlannedTaskIds = new Set<string>();
@@ -277,7 +278,7 @@ export async function runWorkflowScript(
     retry: (index) => requestControl(index, 'retry'),
   };
   onControl?.(control);
-  if (plannedTasks.length > 0) {
+  if (hasTaskPlan) {
     emit({ type: 'plan', tasks: plannedTasks });
   }
 
@@ -343,7 +344,7 @@ export async function runWorkflowScript(
     callCounter += 1;
 
     let plannedTask: WorkflowScriptTask | undefined;
-    if (plannedTasks.length > 0) {
+    if (hasTaskPlan) {
       if (!callOptions.id) {
         throw rememberFatalRunError(
           new WorkflowRunAbortError(
@@ -454,27 +455,6 @@ export async function runWorkflowScript(
       return payload;
     }
 
-    liveCallCounter += 1;
-    if (liveCallCounter > maxAgentCalls) {
-      // Abort first so in-flight sibling agents stop consuming quota — the
-      // backstop must cancel the fan-out, not just fail this one call.
-      const fatal = rememberFatalRunError(
-        new WorkflowRunAbortError(
-          `Workflow exceeded the ${maxAgentCalls} live agent-call cap (runaway-loop backstop; journal replays are free).`,
-        ),
-      );
-      emit({
-        type: 'agent:end',
-        progressId,
-        index,
-        label,
-        ...phaseContext,
-        outcome: 'failed',
-        error: fatal.message,
-      });
-      throw fatal;
-    }
-
     // Host-side wall clock (the sandbox's Date.now ban is guest-only): timing
     // and the reported model are progress-only, never journaled, so they can't
     // affect resume identity or determinism. Declared once outside the attempt
@@ -485,9 +465,30 @@ export async function runWorkflowScript(
     let startEmitted = false;
     // Attempt loop: retry() re-enters with a fresh AbortController and a fresh
     // runAgent call for this same index/key; skip() and normal settlement exit.
-    // liveCallCounter and issuedCallKeys are index-scoped (charged once above),
-    // so a retry re-runs the model without re-charging the cap or the journal.
+    // Every physical model attempt is charged against liveCallCounter; the
+    // logical call key and eventual journal entry remain index-scoped.
     for (;;) {
+      liveCallCounter += 1;
+      if (liveCallCounter > maxAgentCalls) {
+        // Abort first so in-flight siblings stop consuming quota. Retried
+        // attempts consume the same cap as first attempts; cached calls never
+        // enter this loop.
+        const fatal = rememberFatalRunError(
+          new WorkflowRunAbortError(
+            `Workflow exceeded the ${maxAgentCalls} live agent-call cap (runaway-loop backstop; journal replays are free).`,
+          ),
+        );
+        emit({
+          type: 'agent:end',
+          progressId,
+          index,
+          label,
+          ...phaseContext,
+          outcome: 'failed',
+          error: fatal.message,
+        });
+        throw fatal;
+      }
       const callController = new AbortController();
       // Link this call to the run: any run-level abort cascades to it, so a
       // runner watching invocation.signal still stops on timeout/cap.

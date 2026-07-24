@@ -91,6 +91,12 @@ export type FileListEntry = z.infer<typeof FileListEntrySchema>;
 
 export const StreamLogEntrySchema = z.strictObject({
   seqNo: z.int().positive(),
+  /**
+   * Monotone order in which immutable transcript rows became printable.
+   * Unlike seqNo, this is assigned when an existing row settles, so cold
+   * reconstruction preserves the same append-only chronology as a live UI.
+   */
+  settlementSeqNo: z.int().positive().optional(),
   id: z.string().min(1),
   type: StreamLogEntryTypeSchema,
   level: LogLevelSchema,

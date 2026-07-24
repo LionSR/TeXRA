@@ -89,6 +89,52 @@ describe('StreamLog', () => {
     expect(log.drainDirtyUpdates()).toEqual([]);
   });
 
+  it('assigns one durable settlement order when rows become printable', () => {
+    const log = new StreamLog();
+    const header = log.appendSettled({
+      id: 'phase',
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1,
+      text: 'Audit',
+    });
+    log.append({
+      id: 'task',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 2,
+      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+      text: 'Audit core',
+      data: {
+        id: 'core',
+        label: 'Audit core',
+        status: 'running',
+      },
+    });
+
+    const completed = log.settle('task', {
+      data: {
+        id: 'core',
+        label: 'Audit core',
+        status: 'completed',
+      },
+    });
+    const revised = log.settle('task', { text: 'Audit core complete' });
+    const restored = new StreamLog(log.getRange(0));
+    const later = restored.appendSettled({
+      id: 'summary',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 3,
+      text: 'Done',
+    });
+
+    expect(header.settlementSeqNo).toBe(1);
+    expect(completed?.settlementSeqNo).toBe(2);
+    expect(revised?.settlementSeqNo).toBe(2);
+    expect(later.settlementSeqNo).toBe(3);
+  });
+
   it('tracks text appends separately from whole-entry updates', () => {
     const log = logWithMessage();
 

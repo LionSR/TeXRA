@@ -57,6 +57,26 @@ export const WorkflowTaskProgressSchema = z.discriminatedUnion('status', [
 ]);
 
 export type WorkflowTaskProgress = z.infer<typeof WorkflowTaskProgressSchema>;
+export type WorkflowTaskTerminalProgress = Exclude<
+  WorkflowTaskProgress,
+  { readonly status: 'planned' | 'running' }
+>;
+
+/** One lifecycle predicate shared by persistence and transcript projections. */
+export function isTerminalWorkflowTaskProgress(
+  task: WorkflowTaskProgress,
+): task is WorkflowTaskTerminalProgress {
+  switch (task.status) {
+    case 'planned':
+    case 'running':
+      return false;
+    case 'completed':
+    case 'cached':
+    case 'skipped':
+    case 'failed':
+      return true;
+  }
+}
 
 export const WORKFLOW_TASK_STATUS_LABEL = {
   planned: 'Planned',

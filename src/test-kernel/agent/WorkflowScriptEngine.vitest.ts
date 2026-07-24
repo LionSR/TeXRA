@@ -211,6 +211,30 @@ return await agent('Inspect src', { id: 'core' })`,
     ).rejects.toThrow(/may be issued only once per run/i);
   });
 
+  it('treats an explicitly empty task plan as closed', async () => {
+    const emptyPlan = `export const meta = {
+  name: 'empty-plan',
+  description: 'declares that no agent work is planned',
+  tasks: [],
+}
+`;
+    await expect(
+      runWorkflowScript({
+        script: `${emptyPlan}return await agent('undeclared')`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/Every agent\(\) call must reference a task/);
+
+    const events: WorkflowScriptEvent[] = [];
+    const result = await runWorkflowScript({
+      script: `${emptyPlan}return 'done'`,
+      runAgent: echoRunner,
+      onEvent: (event) => events.push(event),
+    });
+    expect(result.result).toBe('done');
+    expect(events).toContainEqual({ type: 'plan', tasks: [] });
+  });
+
   it('runs a script end-to-end with agent calls and args', async () => {
     const run = await runWorkflowScript({
       script: `${META}
@@ -1732,6 +1756,47 @@ return 'incorrect success'`,
         result: 'attempt-2',
       },
     ]);
+  });
+
+  it('charges every retry attempt against the live-call cap', async () => {
+    let control!: WorkflowScriptControl;
+    const events: WorkflowScriptEvent[] = [];
+    const runner = vi.fn(
+      (invocation: WorkflowAgentInvocation) =>
+        new Promise<never>((_resolve, reject) => {
+          invocation.signal.addEventListener(
+            'abort',
+            () => reject(new Error('aborted')),
+            { once: true },
+          );
+        }),
+    );
+    const run = runWorkflowScript({
+      script: `${META}return await agent('retry until refused')`,
+      runAgent: runner,
+      maxAgentCalls: 2,
+      onControl: (handle) => {
+        control = handle;
+      },
+      onEvent: (event) => events.push(event),
+    });
+
+    await vi.waitFor(() => expect(runner).toHaveBeenCalledTimes(1));
+    control.retry(0);
+    await vi.waitFor(() => expect(runner).toHaveBeenCalledTimes(2));
+    control.retry(0);
+
+    await expect(run).rejects.toThrow(/agent-call cap/);
+    expect(runner).toHaveBeenCalledTimes(2);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'agent:end',
+        progressId: 'call-0',
+        index: 0,
+        outcome: 'failed',
+        error: expect.stringContaining('agent-call cap'),
+      }),
+    );
   });
 
   it('a whole-run abort cascades to every in-flight per-call controller', async () => {

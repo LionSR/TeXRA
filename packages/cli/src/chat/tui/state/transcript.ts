@@ -65,6 +65,8 @@ function appendLocalTranscriptEntry(
   if (!activeStreamId.get()) activeStreamId.set(streamId);
   const syntheticAfterSeq =
     defaultSession().transcripts.get(streamId)?.head ?? 0;
+  const syntheticAfterSettlementSeqNo =
+    defaultSession().transcripts.get(streamId)?.settlementHead ?? 0;
 
   patchStream(streamId, (slice) => {
     const entry: ConversationEntry = {
@@ -75,6 +77,7 @@ function appendLocalTranscriptEntry(
       synthetic: true,
       syntheticKind: 'local',
       syntheticAfterSeq,
+      syntheticAfterSettlementSeqNo,
     };
     return { ...slice, entries: [...slice.entries, entry] };
   });

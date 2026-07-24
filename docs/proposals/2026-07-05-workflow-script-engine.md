@@ -86,9 +86,12 @@ return await parallel(
   progress surfaces show the entire plan before execution and update each
   record in place. Data-dependent workflows may omit it.
 - `agent(prompt, opts?)` → one subagent run; returns the typed result
-  (`null` on failure). Options: `id`, `label`, `phase`, `agentName`,
-  `inputFiles`. Otherwise-identical calls require distinct `id` values so
-  restart recovery does not depend on scheduling order.
+  (`null` on failure). Common options are `id`, `label`, `phase`, `agentName`,
+  and `model`. File-editing calls accept editable `inputFiles` plus read-only
+  `contextFiles` and `mediaFiles`. Structured calls instead provide a JSON
+  `schema` and a tool-use `agentName`. Otherwise-identical calls require
+  distinct `id` values so restart recovery does not depend on scheduling
+  order.
 - `parallel(thunks)` → concurrent barrier; failed thunks resolve to `null`.
 - `pipeline(items, ...stages)` → per-item stage chains with **no barrier**
   between stages (wall-clock = slowest single-item chain, not
@@ -114,9 +117,10 @@ an academic-writing product whose unit of work is a document, not a diff.
 - **No nested `workflow()`** — one flat script per delegation. If a workflow
   needs a sub-workflow, that is the orchestrator's decision to make with a
   second delegation, visible in the execution tree.
-- **No per-call model/effort/agentType overrides** — an `agent()` call names
-  a TeXRA agent (`agentName`), and the agent's YAML owns model policy. One
-  source of truth; scripts stay declarative about _what_, not _how_.
+- **No per-call effort or raw agent-type overrides** — an `agent()` call names
+  a TeXRA agent (`agentName`) and may select an available model short name.
+  Agent definitions still own their ordinary policy; the explicit model field
+  is the declarative exception for assigning lower-cost or specialized work.
 - **No worktree isolation** — TeXRA runs are already execution-scoped in run
   storage (`executions/{id}/`), with lineage instead of git.
 - **`pipeline()` is on probation** — if v1 usage shows document pipelines are

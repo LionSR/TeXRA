@@ -9,6 +9,7 @@ import {
   PersistedStreamLogEntrySchema,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
+  WorkflowTaskProgressSchema,
   type RunOutcome,
   type StreamLogEntry,
   type StreamTabId,
@@ -21,6 +22,7 @@ import { formatResultCount } from '@utils/text/stringUtils';
 import {
   isRunningGroupEntry,
   isRunningStreamingTextEntry,
+  isNonterminalWorkflowTaskEntry,
   StreamLog,
   type StreamLogAppendInput,
   type StreamLogPreservedRawEntry,
@@ -40,6 +42,7 @@ const StreamLogSummarySchema = z.object({
   lastTimestamp: z.number().finite().optional().catch(undefined),
   hasRunningGroup: z.boolean().optional().catch(undefined),
   hasRunningStreamingText: z.boolean().optional().catch(undefined),
+  hasNonterminalWorkflowTask: z.boolean().optional().catch(undefined),
 });
 type StreamLogSummary = z.infer<typeof StreamLogSummarySchema>;
 
@@ -61,7 +64,9 @@ type StreamLogStoreMode =
 export interface TranscriptWriter {
   readonly streamId: StreamTabId;
   append(entry: StreamLogAppendInput): StreamLogEntry;
+  appendSettled(entry: StreamLogAppendInput): StreamLogEntry;
   update(id: string, patch: StreamLogUpdatePatch): StreamLogEntry | undefined;
+  settle(id: string, patch: StreamLogUpdatePatch): StreamLogEntry | undefined;
   appendText(id: string, text: string): StreamLogEntry | undefined;
   close(): void;
 }
@@ -77,6 +82,9 @@ function summaryOf(logInstance: StreamLog): StreamLogSummary {
     lastTimestamp: logInstance.lastTimestamp,
     hasRunningGroup: logInstance.hasRunningGroup,
     hasRunningStreamingText: logInstance.hasRunningStreamingText,
+    ...(logInstance.hasNonterminalWorkflowTask
+      ? { hasNonterminalWorkflowTask: true }
+      : {}),
   };
 }
 
@@ -133,7 +141,8 @@ function normalizeGroupStatusEntry(entry: StreamLogEntry): StreamLogEntry {
 function hasSomethingRunning(summary: StreamLogSummary | undefined): boolean {
   return (
     summary?.hasRunningGroup === true ||
-    summary?.hasRunningStreamingText === true
+    summary?.hasRunningStreamingText === true ||
+    summary?.hasNonterminalWorkflowTask === true
   );
 }
 
@@ -404,9 +413,17 @@ export class StreamLogStore {
         assertOwned();
         return this.append(streamId, entry);
       },
+      appendSettled: (entry) => {
+        assertOwned();
+        return this.appendSettled(streamId, entry);
+      },
       update: (id, patch) => {
         assertOwned();
         return this.update(streamId, id, patch);
+      },
+      settle: (id, patch) => {
+        assertOwned();
+        return this.settle(streamId, id, patch);
       },
       appendText: (id, text) => {
         assertOwned();
@@ -518,6 +535,21 @@ export class StreamLogStore {
   }
 
   append(streamId: StreamTabId, entry: StreamLogAppendInput): StreamLogEntry {
+    return this.appendEntry(streamId, entry, false);
+  }
+
+  appendSettled(
+    streamId: StreamTabId,
+    entry: StreamLogAppendInput,
+  ): StreamLogEntry {
+    return this.appendEntry(streamId, entry, true);
+  }
+
+  private appendEntry(
+    streamId: StreamTabId,
+    entry: StreamLogAppendInput,
+    settled: boolean,
+  ): StreamLogEntry {
     this.assertWritableStream(streamId);
     if (
       this.mode.kind === 'persistent' &&
@@ -530,7 +562,9 @@ export class StreamLogStore {
       );
     }
     const logInstance = this.getOrCreate(streamId);
-    const appended = logInstance.append(entry);
+    const appended = settled
+      ? logInstance.appendSettled(entry)
+      : logInstance.append(entry);
     this.commitChange(streamId, logInstance);
     void this.save();
     return appended;
@@ -546,6 +580,23 @@ export class StreamLogStore {
     if (!logInstance) return undefined;
 
     const updated = logInstance.update(id, patch);
+    if (!updated) return undefined;
+
+    this.commitChange(streamId, logInstance);
+    void this.save();
+    return updated;
+  }
+
+  settle(
+    streamId: StreamTabId,
+    id: string,
+    patch: StreamLogUpdatePatch,
+  ): StreamLogEntry | undefined {
+    this.assertWritableStream(streamId);
+    const logInstance = this.logs.get(streamId);
+    if (!logInstance) return undefined;
+
+    const updated = logInstance.settle(id, patch);
     if (!updated) return undefined;
 
     this.commitChange(streamId, logInstance);
@@ -712,10 +763,11 @@ export class StreamLogStore {
       for (const entry of logInstance.getRange(0, logInstance.head)) {
         if (isRunningGroupEntry(entry)) {
           const existingData = isObject(entry.data) ? entry.data : {};
-          updatedAny ||= !!logInstance.update(entry.id, {
+          const updated = logInstance.settle(entry.id, {
             type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
             data: { ...existingData, status, endTime: now },
           });
+          if (updated) updatedAny = true;
           continue;
         }
 
@@ -725,9 +777,33 @@ export class StreamLogStore {
         // stuck rendering as an in-progress entry forever (#7276).
         if (isRunningStreamingTextEntry(entry)) {
           const existingData = isObject(entry.data) ? entry.data : {};
-          updatedAny ||= !!logInstance.update(entry.id, {
+          const updated = logInstance.settle(entry.id, {
             data: { ...existingData, status: 'completed' },
           });
+          if (updated) updatedAny = true;
+          continue;
+        }
+
+        if (isNonterminalWorkflowTaskEntry(entry)) {
+          const task = WorkflowTaskProgressSchema.parse(entry.data);
+          const recoveredTask =
+            task.status === 'planned'
+              ? {
+                  ...task,
+                  status: 'skipped' as const,
+                  reason: 'not-reached' as const,
+                }
+              : {
+                  ...task,
+                  status: 'failed' as const,
+                  error:
+                    'The previous host stopped before this task completed.',
+                };
+          const updated = logInstance.settle(entry.id, {
+            level: task.status === 'planned' ? 'info' : 'error',
+            data: recoveredTask,
+          });
+          if (updated) updatedAny = true;
           continue;
         }
       }
@@ -864,6 +940,11 @@ export class StreamLogStore {
       existing.lastTimestamp = logInstance.lastTimestamp;
       existing.hasRunningGroup = logInstance.hasRunningGroup;
       existing.hasRunningStreamingText = logInstance.hasRunningStreamingText;
+      if (logInstance.hasNonterminalWorkflowTask) {
+        existing.hasNonterminalWorkflowTask = true;
+      } else {
+        delete existing.hasNonterminalWorkflowTask;
+      }
     } else {
       this.summaries.set(streamId, summaryOf(logInstance));
     }
@@ -997,6 +1078,9 @@ export class StreamLogStore {
       lastTimestamp: entries.at(-1)?.timestamp,
       hasRunningGroup: entries.some(isRunningGroupEntry),
       hasRunningStreamingText: entries.some(isRunningStreamingTextEntry),
+      ...(entries.some(isNonterminalWorkflowTaskEntry)
+        ? { hasNonterminalWorkflowTask: true }
+        : {}),
     };
   }
 

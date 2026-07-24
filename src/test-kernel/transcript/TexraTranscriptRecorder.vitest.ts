@@ -125,6 +125,34 @@ describe('attachTranscriptRecorder stage kind (issue #7267)', () => {
     expect(runEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
     expect(isObject(runEntry?.data) && runEntry.data.kind).toBe('run');
   });
+
+  it('preserves phase position metadata on the terminal row', () => {
+    const trace = new TraceEmitter();
+    const store = StreamLogStore.ephemeral('test');
+    const streamId = 'stream:phase-position-preserved' as StreamTabId;
+    store.ensureStream(streamId);
+    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+
+    const phase = trace.openStage('Review', {
+      kind: 'phase',
+      index: 1,
+      total: 3,
+    });
+    phase.end();
+
+    const entry = store
+      .get(streamId)
+      ?.getRange(0)
+      .find((candidate) => candidate.id === phase.id);
+    expect(entry).toMatchObject({
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+      data: {
+        kind: 'phase',
+        index: 1,
+        total: 3,
+      },
+    });
+  });
 });
 
 describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {

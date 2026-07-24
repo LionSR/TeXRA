@@ -1735,6 +1735,8 @@ describe('CLI transcript state', () => {
           finalized: true,
           synthetic: true,
           syntheticKind: 'local',
+          syntheticAfterSeq: 4,
+          syntheticAfterSettlementSeqNo: 3,
         },
         {
           id: 'synthetic-workflow-assistant',
@@ -1743,6 +1745,8 @@ describe('CLI transcript state', () => {
           finalized: true,
           synthetic: true,
           syntheticKind: 'local',
+          syntheticAfterSeq: 4,
+          syntheticAfterSettlementSeqNo: 3,
         },
         {
           id: 'synthetic-workflow-error',
@@ -1751,6 +1755,8 @@ describe('CLI transcript state', () => {
           finalized: true,
           synthetic: true,
           syntheticKind: 'local',
+          syntheticAfterSeq: 4,
+          syntheticAfterSettlementSeqNo: 3,
         },
         {
           id: 'synthetic-workflow-process',
@@ -1759,6 +1765,8 @@ describe('CLI transcript state', () => {
           finalized: true,
           synthetic: true,
           syntheticKind: 'process',
+          syntheticAfterSeq: 4,
+          syntheticAfterSettlementSeqNo: 3,
           process: {
             executionId: 'workflow-process',
             title: 'latexmk',
@@ -2364,6 +2372,7 @@ describe('CLI transcript state', () => {
           synthetic: true,
           syntheticKind: 'local',
           syntheticAfterSeq: 1,
+          syntheticAfterSettlementSeqNo: 0,
         },
       ],
       STREAM_PHASE.RUNNING,

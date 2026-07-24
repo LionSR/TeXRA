@@ -106,6 +106,29 @@ function runningStreamingTextEntry(
   };
 }
 
+function runningWorkflowTaskEntry(
+  streamId: string,
+  seqNo: number,
+  timestamp: number,
+  status: 'planned' | 'running' = 'running',
+): StreamLogEntry {
+  return {
+    seqNo,
+    id: `${streamId}-workflow-task-${seqNo}`,
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    level: LOG_LEVELS.INFO,
+    timestamp,
+    messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+    text: status === 'planned' ? 'Audit extension' : 'Audit core',
+    data: {
+      id: status === 'planned' ? 'audit-extension' : 'audit-core',
+      label: status === 'planned' ? 'Audit extension' : 'Audit core',
+      phase: 'Audit',
+      status,
+    },
+  };
+}
+
 function fileStat(mtime: number): FileStat {
   return {
     type: FileType.File,
@@ -936,6 +959,57 @@ describe('StreamLogStore load', () => {
     ).toEqual({
       firstTimestamp: 100,
       lastTimestamp: 100,
+      hasRunningGroup: false,
+      hasRunningStreamingText: false,
+    });
+  });
+
+  it('settles every orphaned nonterminal workflow task during cold recovery', async () => {
+    const storage = mockStorage({
+      logs: {
+        workflow: [
+          runningWorkflowTaskEntry('workflow', 1, 100),
+          runningWorkflowTaskEntry('workflow', 2, 101, 'planned'),
+        ],
+      },
+      summaries: {
+        workflow: {
+          firstTimestamp: 100,
+          lastTimestamp: 101,
+          hasNonterminalWorkflowTask: true,
+        },
+      },
+    });
+    const store = await StreamLogStore.open();
+
+    const affected = await store.endRunningGroupsForStreams(['workflow'], 300);
+    await store.flush();
+    const entries = store.get('workflow')?.getRange(0) ?? [];
+
+    expect(affected).toEqual(['workflow']);
+    expect(entries.at(0)).toMatchObject({
+      level: LOG_LEVELS.ERROR,
+      settlementSeqNo: 3,
+      data: {
+        id: 'audit-core',
+        status: 'failed',
+        error: 'The previous host stopped before this task completed.',
+      },
+    });
+    expect(entries.at(1)).toMatchObject({
+      level: LOG_LEVELS.INFO,
+      settlementSeqNo: 4,
+      data: {
+        id: 'audit-extension',
+        status: 'skipped',
+        reason: 'not-reached',
+      },
+    });
+    expect(
+      storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'workflow')),
+    ).toEqual({
+      firstTimestamp: 100,
+      lastTimestamp: 101,
       hasRunningGroup: false,
       hasRunningStreamingText: false,
     });

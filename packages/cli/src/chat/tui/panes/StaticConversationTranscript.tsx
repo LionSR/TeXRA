@@ -344,9 +344,33 @@ export function appendStaticTranscriptItems({
     ? streams.get(scrollbackStreamId)
     : undefined;
   const entries = slice?.entries ?? [];
-  const staticEntries = entries.filter((entry, index) =>
-    isStaticTranscriptEntryAt(entries, index, slice?.status),
-  );
+  const orderedStaticEntries = entries
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ index }) =>
+      isStaticTranscriptEntryAt(entries, index, slice?.status),
+    )
+    .toSorted((left, right) => {
+      const leftSynthetic =
+        left.entry.syntheticAfterSettlementSeqNo !== undefined;
+      const rightSynthetic =
+        right.entry.syntheticAfterSettlementSeqNo !== undefined;
+      const leftSeq =
+        left.entry.settlementSeqNo ??
+        left.entry.syntheticAfterSettlementSeqNo ??
+        left.entry.sourceSeqNo ??
+        left.index + 1;
+      const rightSeq =
+        right.entry.settlementSeqNo ??
+        right.entry.syntheticAfterSettlementSeqNo ??
+        right.entry.sourceSeqNo ??
+        right.index + 1;
+      return (
+        leftSeq - rightSeq ||
+        Number(leftSynthetic) - Number(rightSynthetic) ||
+        left.index - right.index
+      );
+    })
+    .map(({ entry }) => entry);
   const unseenRequests = printRequests.filter(
     (request) => !seen.has(request.id),
   );
@@ -369,7 +393,7 @@ export function appendStaticTranscriptItems({
     if (anchored) anchored.push(request);
     else requestsByUnseenAnchor.set(request.afterEntryId, [request]);
   }
-  for (const entry of staticEntries) {
+  for (const entry of orderedStaticEntries) {
     if (!seen.has(entry.id)) {
       appendItem({ id: entry.id, kind: 'entry', entry });
     }

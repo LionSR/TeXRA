@@ -38,7 +38,14 @@ async function resolveInvocationFileList(
   const workspaceFiles = references
     .filter((reference) => !reference.runStorage)
     .map((reference) => reference.file);
-  await assertWorkflowFilesExist([{ label, files: workspaceFiles }]);
+  try {
+    await assertWorkflowFilesExist([{ label, files: workspaceFiles }]);
+  } catch (error) {
+    throw new WorkflowRunAbortError(
+      formatError(`Workflow ${label} files could not be resolved`, error),
+      { cause: error },
+    );
+  }
   const resolved = await Promise.all(
     references.map(async ({ file, runStorage }) => {
       if (!runStorage) return file;
