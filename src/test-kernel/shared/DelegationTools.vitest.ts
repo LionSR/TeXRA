@@ -1,5 +1,7 @@
+// Third-party imports
 import { expect, expectTypeOf, it } from 'vitest';
 
+// Local imports - delegation tool contracts
 import {
   DELEGATION_TOOLS,
   type CanonicalDelegationToolName,
