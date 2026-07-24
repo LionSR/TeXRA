@@ -1,5 +1,10 @@
 # Workflow script async execution: detach the run from the orchestrator turn
 
+> **Historical snapshot (not authoritative).** This file preserves the
+> local-before-pull state of the proposal. Refer to the
+> [canonical proposal](./2026-07-17-workflow-script-async-execution.md) for
+> the current, authoritative version.
+
 Status: audit + proposal → scoped to issues #8712 (core), #8713 (CLI cleanup)
 Date: 2026-07-17
 Prereqs shipped: durable named checkpoints (#8666/#8651), CLI progress projection (#8672), teachable contract + run log (#8681)
