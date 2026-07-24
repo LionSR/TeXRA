@@ -19,7 +19,7 @@ Compaction extends the effective context length for long-running conversations a
 - Task-oriented prompts that require a lot of follow-up work (often tool use) that may exceed the 200K context window
 
 <Note>
-Compaction is currently in beta. Include the [beta header](/docs/en/api/beta-headers) `compact-2026-01-12` in your API requests to use this feature.
+Compaction is currently in beta. Include the [beta header](https://platform.claude.com/docs/en/api/beta-headers) `compact-2026-01-12` in your API requests to use this feature.
 </Note>
 
 ## Supported models
@@ -39,7 +39,7 @@ When compaction is enabled, Claude automatically summarizes your conversation wh
 
 On subsequent requests, append the response to your messages. The API automatically drops all message blocks prior to the `compaction` block, continuing the conversation from the summary.
 
-![Compaction flow diagram](/docs/images/compaction-flow.svg)
+![Compaction flow diagram](https://platform.claude.com/docs/images/compaction-flow.svg)
 
 ## Basic usage
 

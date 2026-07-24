@@ -34,7 +34,7 @@ A **function call output** or **tool call output** refers to the response a tool
 
 - The model has access to a `get_weather` **tool** that takes `location` as an argument.
 - In response to a prompt like "what's the weather in Paris?" the model returns a **tool call** that contains a `location` argument with a value of `Paris`
-- The **tool call output** might return a JSON object (e.g., `{"temperature": "25", "unit": "C"}`, indicating a current temperature of 25 degrees), [Image contents](/docs/guides/images), or [File contents](/docs/guides/pdf-files).
+- The **tool call output** might return a JSON object (e.g., `{"temperature": "25", "unit": "C"}`, indicating a current temperature of 25 degrees), [Image contents](https://platform.openai.com/docs/guides/images), or [File contents](https://platform.openai.com/docs/guides/pdf-files).
 
 We then send all of the tool definition, the original prompt, the model's tool call, and the tool call output back to the model to finally receive a text response like:
 
@@ -46,7 +46,7 @@ Functions versus tools
 
 - A function is a specific kind of tool, defined by a JSON schema. A function definition allows the model to pass data to your application, where your code can access data or take actions suggested by the model.
 - In addition to function tools, there are custom tools (described in this guide) that work with free text inputs and outputs.
-- There are also [built-in tools](/docs/guides/tools) that are part of the OpenAI platform. These tools enable the model to [search the web](/docs/guides/tools-web-search), [execute code](/docs/guides/tools-code-interpreter), access the functionality of an [MCP server](/docs/guides/tools-remote-mcp), and more.
+- There are also [built-in tools](https://platform.openai.com/docs/guides/tools) that are part of the OpenAI platform. These tools enable the model to [search the web](https://platform.openai.com/docs/guides/tools-web-search), [execute code](https://platform.openai.com/docs/guides/tools-code-interpreter), access the functionality of an [MCP server](https://platform.openai.com/docs/guides/tools-remote-mcp), and more.
 
 ### The tool calling flow
 
@@ -259,7 +259,7 @@ Because the `parameters` are defined by a [JSON schema](https://json-schema.org/
 1.  **Write clear and detailed function names, parameter descriptions, and instructions.**
     - **Explicitly describe the purpose of the function and each parameter** (and its format), and what the output represents.
     - **Use the system prompt to describe when (and when not) to use each function.** Generally, tell the model _exactly_ what to do.
-    - **Include examples and edge cases**, especially to rectify any recurring failures. (**Note:** Adding examples may hurt performance for [reasoning models](/docs/guides/reasoning).)
+    - **Include examples and edge cases**, especially to rectify any recurring failures. (**Note:** Adding examples may hurt performance for [reasoning models](https://platform.openai.com/docs/guides/reasoning).)
 
 2.  **Apply software engineering best practices.**
     - **Make the functions obvious and intuitive**. ([principle of least surprise](https://en.wikipedia.org/wiki/Principle_of_least_astonishment))
@@ -275,14 +275,14 @@ Because the `parameters` are defined by a [JSON schema](https://json-schema.org/
     - **Aim for fewer than 20 functions** at any one time, though this is just a soft suggestion.
 
 5.  **Leverage OpenAI resources.**
-    - **Generate and iterate on function schemas** in the [Playground](/playground).
+    - **Generate and iterate on function schemas** in the [Playground](https://platform.openai.com/playground).
     - **Consider [fine-tuning](https://platform.openai.com/docs/guides/fine-tuning) to increase function calling accuracy** for large numbers of functions or difficult tasks. ([cookbook](https://cookbook.openai.com/examples/fine_tuning_for_function_calling))
 
 ### Token Usage
 
 Under the hood, functions are injected into the system message in a syntax the model has been trained on. This means functions count against the model's context limit and are billed as input tokens. If you run into token limits, we suggest limiting the number of functions or the length of the descriptions you provide for function parameters.
 
-It is also possible to use [fine-tuning](/docs/guides/fine-tuning#fine-tuning-examples) to reduce the number of tokens used if you have many functions defined in your tools specification.
+It is also possible to use [fine-tuning](https://platform.openai.com/docs/guides/fine-tuning#fine-tuning-examples) to reduce the number of tokens used if you have many functions defined in your tools specification.
 
 ## Handling function calls
 
@@ -424,7 +424,7 @@ By default the model will determine when and how many tools to use. You can forc
 
 **When to use allowed_tools**
 
-You might want to configure an `allowed_tools` list in case you want to make only a subset of tools available across model requests, but not modify the list of tools you pass in, so you can maximize savings from [prompt caching](/docs/guides/prompt-caching).
+You might want to configure an `allowed_tools` list in case you want to make only a subset of tools available across model requests, but not modify the list of tools you pass in, so you can maximize savings from [prompt caching](https://platform.openai.com/docs/guides/prompt-caching).
 
 ```json
 "tool_choice": {
@@ -442,11 +442,11 @@ You can also set `tool_choice` to `"none"` to imitate the behavior of passing no
 
 ### Parallel function calling
 
-Parallel function calling is not possible when using [built-in tools](/docs/guides/tools).
+Parallel function calling is not possible when using [built-in tools](https://platform.openai.com/docs/guides/tools).
 
 The model may choose to call multiple functions in a single turn. You can prevent this by setting `parallel_tool_calls` to `false`, which ensures exactly zero or one tool is called.
 
-**Note:** Currently, if you are using a fine tuned model and the model calls multiple functions in one turn then [strict mode](/docs/guides/function-calling/parallel-function-calling#strict-mode) will be disabled for those calls.
+**Note:** Currently, if you are using a fine tuned model and the model calls multiple functions in one turn then [strict mode](https://platform.openai.com/docs/guides/function-calling#strict-mode) will be disabled for those calls.
 
 **Note for `gpt-4.1-nano-2025-04-14`:** This snapshot of `gpt-4.1-nano` can sometimes include multiple tools calls for the same tool if parallel tool calls are enabled. It is recommended to disable this feature when using this nano snapshot.
 
@@ -454,7 +454,7 @@ The model may choose to call multiple functions in a single turn. You can preven
 
 Setting `strict` to `true` will ensure function calls reliably adhere to the function schema, instead of being best effort. We recommend always enabling strict mode.
 
-Under the hood, strict mode works by leveraging our [structured outputs](/docs/guides/structured-outputs) feature and therefore introduces a couple requirements:
+Under the hood, strict mode works by leveraging our [structured outputs](https://platform.openai.com/docs/guides/structured-outputs) feature and therefore introduces a couple requirements:
 
 1.  `additionalProperties` must be set to `false` for each object in the `parameters`.
 2.  All fields in `properties` must be marked as `required`.
@@ -513,16 +513,16 @@ Strict mode disabled
 }
 ```
 
-All schemas generated in the [playground](/playground) have strict mode enabled.
+All schemas generated in the [playground](https://platform.openai.com/playground) have strict mode enabled.
 
 While we recommend you enable strict mode, it has a few limitations:
 
-1.  Some features of JSON schema are not supported. (See [supported schemas](/docs/guides/structured-outputs?context=with_parse#supported-schemas).)
+1.  Some features of JSON schema are not supported. (See [supported schemas](https://platform.openai.com/docs/guides/structured-outputs?context=with_parse#supported-schemas).)
 
 Specifically for fine tuned models:
 
 1.  Schemas undergo additional processing on the first request (and are then cached). If your schemas vary from request to request, this may result in higher latencies.
-2.  Schemas are cached for performance, and are not eligible for [zero data retention](/docs/models#how-we-use-your-data).
+2.  Schemas are cached for performance, and are not eligible for [zero data retention](https://platform.openai.com/docs/models#how-we-use-your-data).
 
 ## Streaming
 
