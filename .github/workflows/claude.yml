@@ -83,7 +83,7 @@ jobs:
           allowed-bots: 'claude[bot],cursor[bot],cursor,copilot-pull-request-reviewer[bot]'
           branch-name-template: '{{prefix}}{{entityType}}-{{entityNumber}}-{{description}}'
           allowed_tools_preset: claude-interactive
-          allowed_tools_preset_map_file: .trusted-actions/.github/allowed-tools.json
+          allowed_tools_preset_map_file: .trusted-actions/.github/automation/allowed-tools.json
           additional-permissions: |
             actions: read
           system-prompt-file: .trusted-actions/.github/prompts/claude-code-system-prompt.md
