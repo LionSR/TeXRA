@@ -1,5 +1,6 @@
 // Third-party imports
 import * as path from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
 
 import {
   execa,
@@ -42,6 +43,28 @@ function normalizeEncoding(encoding: ExecEncoding = 'utf8'): ExecaTextEncoding {
   return encoding === 'utf-8' ? 'utf8' : encoding;
 }
 
+function subscribeDecodedOutput(
+  stream: NodeJS.ReadableStream,
+  encoding: ExecaTextEncoding,
+  onOutput: (chunk: string) => void,
+): void {
+  const decoder = new StringDecoder(encoding);
+  let finalized = false;
+  const finalize = (): void => {
+    if (finalized) return;
+    finalized = true;
+    const text = decoder.end();
+    if (text) onOutput(text);
+  };
+
+  stream.on('data', (chunk: Buffer | string) => {
+    const text = typeof chunk === 'string' ? chunk : decoder.write(chunk);
+    if (text) onOutput(text);
+  });
+  stream.once('end', finalize);
+  stream.once('close', finalize);
+}
+
 function commandEnv(
   workspacePath: string,
   envOverrides?: Record<string, string>,
@@ -59,25 +82,29 @@ function resultFromProcessOutput(
   stdout: string | null | undefined,
   stderr: string | null | undefined,
   exitCode: number,
-  timedOut = false,
+  flags: { timedOut?: boolean; outputLimitExceeded?: boolean } = {},
 ): ExecResult {
+  const timedOut = flags.timedOut ?? false;
   return {
-    success: exitCode === 0 && !timedOut,
+    success: exitCode === 0 && !timedOut && !flags.outputLimitExceeded,
     stdout: normalizeOutput(stdout),
     stderr: normalizeOutput(stderr),
     timedOut,
     exitCode,
+    ...(flags.outputLimitExceeded ? { outputLimitExceeded: true } : {}),
   };
 }
 
 function resultFromExecutionError(err: unknown): ExecResult {
   if (err instanceof ExecaError) {
+    const outputLimitExceeded = err.isMaxBuffer ?? false;
     return {
       success: false,
       stdout: normalizeOutput(`${err.stdout ?? ''}`),
       stderr: normalizeOutput(`${err.stderr || toErrorMessage(err)}`),
       timedOut: err.timedOut ?? false,
-      exitCode: err.exitCode ?? 127,
+      exitCode: outputLimitExceeded ? 2 : (err.exitCode ?? 127),
+      ...(outputLimitExceeded ? { outputLimitExceeded: true } : {}),
     };
   }
 
@@ -180,6 +207,8 @@ export async function executeCommand(
     onPid?: (pid: number) => void;
     /** Set to false to skip buffering stdout/stderr in memory (use with onStdout/onStderr). */
     buffer?: boolean;
+    /** Maximum decoded characters execa may retain per output stream before terminating the process. */
+    maxBuffer?: number;
     stdout?: ExecOutput;
     stderr?: ExecOutput;
     /** Abort signal used to terminate the subprocess and any shell children. */
@@ -195,12 +224,7 @@ export async function executeCommand(
 
   try {
     if (options.signal?.aborted) {
-      return resultFromProcessOutput(
-        null,
-        'Command aborted by user',
-        130,
-        false,
-      );
+      return resultFromProcessOutput(null, 'Command aborted by user', 130);
     }
 
     const workspacePath = options.cwd ?? WorkspaceFS.getPath();
@@ -209,15 +233,17 @@ export async function executeCommand(
     }
 
     const env = commandEnv(workspacePath, options.env);
+    const encoding = normalizeEncoding(options.encoding);
 
     const execaOptions: Options = {
       cwd: workspacePath,
       env,
-      encoding: normalizeEncoding(options.encoding),
+      encoding,
       timeout: options.timeout,
       reject: false,
       input: options.stdin,
       buffer: options.buffer,
+      maxBuffer: options.maxBuffer,
       stdout: options.stdout,
       stderr: options.stderr,
     };
@@ -351,14 +377,10 @@ export async function executeCommand(
 
     // Subscribe to stdout/stderr streams for live output if callbacks provided
     if (options.onStdout && subprocess.stdout) {
-      subprocess.stdout.on('data', (chunk: Buffer | string) => {
-        options.onStdout!(String(chunk));
-      });
+      subscribeDecodedOutput(subprocess.stdout, encoding, options.onStdout);
     }
     if (options.onStderr && subprocess.stderr) {
-      subprocess.stderr.on('data', (chunk: Buffer | string) => {
-        options.onStderr!(String(chunk));
-      });
+      subscribeDecodedOutput(subprocess.stderr, encoding, options.onStderr);
     }
 
     const result = await subprocess;
@@ -368,21 +390,26 @@ export async function executeCommand(
     // `shellAborted` covers the hand-rolled shell-form path; `isCanceled`
     // covers the array-form path, aborted natively via execa's `cancelSignal`.
     const aborted = shellAborted || (result.isCanceled ?? false);
-    const exitCode = result.exitCode ?? (aborted ? 130 : 1);
+    const maxBufferExceeded = result.isMaxBuffer ?? false;
+    const exitCode = maxBufferExceeded
+      ? 2
+      : (result.exitCode ?? (aborted ? 130 : 1));
     const timedOut = (result.timedOut ?? false) || shellTimedOut;
+    const shouldUseShortMessage =
+      maxBufferExceeded || result.exitCode === undefined || timedOut;
     const normalizedStderr =
-      aborted && !stderr ? 'Command aborted by user' : stderr;
+      aborted && !stderr
+        ? 'Command aborted by user'
+        : stderr || (shouldUseShortMessage ? (result.shortMessage ?? '') : '');
 
     if (!options.quiet) {
       logCommandStderr(logChannel, normalizedStderr, options.truncate);
     }
 
-    return resultFromProcessOutput(
-      stdout,
-      normalizedStderr,
-      exitCode,
+    return resultFromProcessOutput(stdout, normalizedStderr, exitCode, {
       timedOut,
-    );
+      outputLimitExceeded: maxBufferExceeded,
+    });
   } catch (err) {
     if (!options.quiet) {
       logger.error(
@@ -445,7 +472,7 @@ export function executeCommandSync(
       logCommandStderr(logChannel, stderr, options.truncate);
     }
 
-    return resultFromProcessOutput(stdout, stderr, exitCode, timedOut);
+    return resultFromProcessOutput(stdout, stderr, exitCode, { timedOut });
   } catch (err) {
     if (!options.quiet) {
       logger.error(

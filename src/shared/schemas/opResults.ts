@@ -15,6 +15,8 @@ const ExecResultSchema = z.strictObject({
   timedOut: z.boolean().optional(),
   /** Exit code from the command (undefined if not available) */
   exitCode: z.int().optional(),
+  /** True when subprocess output exceeded the configured retained-output limit. */
+  outputLimitExceeded: z.boolean().optional(),
 });
 
 export type ExecResult = z.infer<typeof ExecResultSchema>;
