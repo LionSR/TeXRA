@@ -14,7 +14,7 @@
 // Built on <TermWindow>; .mockup-scoped and token-only. Static strings.
 const rows = [
   { id: 'fable5', label: 'Claude Fable 5', status: 'included access' },
-  { id: 'opus48T', label: 'Opus 4.8 (Thinking)', status: 'included access' },
+  { id: 'opus5T', label: 'Opus 5 (Thinking)', status: 'included access' },
   {
     id: 'sonnet46T',
     label: 'Sonnet 4.6 (Thinking)',

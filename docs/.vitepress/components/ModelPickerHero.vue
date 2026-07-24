@@ -7,8 +7,8 @@
 import StatusPill from './StatusPill.vue';
 
 const items = [
-  { id: 'opus48T', thinking: true },
-  { id: 'opus48', thinking: false },
+  { id: 'opus5T', thinking: true },
+  { id: 'opus5', thinking: false },
   {
     id: 'sonnet46T',
     thinking: true,
