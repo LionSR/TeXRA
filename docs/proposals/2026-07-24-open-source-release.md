@@ -89,6 +89,17 @@ part of the public security contract.
 User-facing workflow templates are also product source and remain available
 through TeXRA documentation or the CLI.
 
+## Developer documentation sources
+
+Do not vendor copies of provider API and tool-call documentation. These copies
+become stale independently of TeXRA and obscure which provider revision the
+implementation targets.
+
+Future developer-facing provider guidance should use a Dev Docs MCP source and
+link to the provider's canonical documentation. Any generated snapshot must
+record its source URL, provider revision when available, and retrieval date; it
+must not become another hand-maintained reference tree in this repository.
+
 ## Hosted relay boundary
 
 The community client must run with personal provider credentials, supported
