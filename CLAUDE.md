@@ -44,7 +44,7 @@ Things the tree won't tell you:
   run or session progress; those live in `@agent/trace` and `SessionEventHub`
   (`src/agent/runtime/`).
 - **`src/common/webview/` does not exist.** Webview base classes are in
-  `packages/extension/src/common/webview/`.
+  `packages/extension/src/common/webview/`. <!-- guidance-refs-ignore -->
 - **No convenience barrels.** A barrel exists only for a documented public
   surface. Import the file that defines the symbol — this includes model
   handlers (`src/agent/modelHandlers/`, see that directory's `README.md`).
@@ -126,8 +126,8 @@ assigns an `executionId`, registers the run, and opens workflow output. Use the
 lower-level `executeAgent` only when you already own the `executionId` (subagent
 dispatch, resume paths). Resume a persisted tool-use session via
 `resumeToolUseFromResumeData`, not `runAgent`. PocketFlow conventions and the
-services/shared-store split: AGENTS.md "PocketFlow architecture" and
-`docs/pocketflow/`.
+services/shared-store split: AGENTS.md "Patterns across the codebase"
+(PocketFlow architecture) and `docs/pocketflow/`.
 
 ## Design guardrails
 

@@ -18,3 +18,15 @@ repos:
         language: system
         files: ^docs/
         pass_filenames: false
+      # Agent-facing guidance (CLAUDE.md, AGENTS.md, .claude/skills/**,
+      # docs/dev/**) cites repo paths that nothing compiles, so they rot
+      # silently when code moves — and a confidently wrong path misleads more
+      # than a missing one. This gate fails the commit when a cited path no
+      # longer resolves. Runs when either the guidance or the tree it cites
+      # changes, since a rename on the code side is what breaks the prose.
+      - id: guidance-refs
+        name: guidance file references resolve
+        entry: node scripts/check-guidance-refs.mjs
+        language: system
+        files: ^(CLAUDE\.md|AGENTS\.md|\.claude/skills/|docs/dev/|src/|packages/|scripts/)
+        pass_filenames: false

@@ -66,7 +66,7 @@ The extension host is bundled with esbuild and the webviews with Vite (`compile:
 - Document functions with concise comments. Use JSDoc style for public APIs.
 - Keep functions small and focused; extract helpers or modules when logic becomes complex.
 - Keep the directory structure aligned among different webviews (webview, progressView, settingsView). Use the same folder names for modules of the same type and functionality but in different webviews.
-- Place view-specific, extension-only manager classes under each view's `managers` folder (e.g. `ProgressStreamLifecycleHost.ts` in `packages/extension/src/progressView/managers/`). Host-neutral view backend logic (e.g. `WebviewUpdater.ts`) instead lives under `src/controllers/<view>/backend/`, per the `controllers/` host-neutral-orchestration rule.
+- Place view-specific, extension-only manager classes under that view's `managers` folder (e.g. `FileManager.ts` in `packages/extension/src/webview/managers/`). Host-neutral view backend logic instead lives under `src/controllers/<view>/backend/` (e.g. `src/controllers/progressView/backend/WebviewUpdater.ts`), per the `controllers/` host-neutral-orchestration rule.
 
 ### Naming conventions
 
