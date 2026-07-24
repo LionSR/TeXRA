@@ -105,9 +105,9 @@ function workflowOperationalDescription(
     }
     if (
       entry.role === 'error' ||
+      entry.role === 'workflowTask' ||
       (entry.role === 'assistant' &&
-        (entry.messageType === MESSAGE_TYPES.DEFAULT ||
-          entry.messageType === MESSAGE_TYPES.WORKFLOW_TASK))
+        entry.messageType === MESSAGE_TYPES.DEFAULT)
     ) {
       const description = safeWorkflowOperationalSummary(entry.text);
       if (description) return description;
@@ -236,6 +236,9 @@ function entriesEqual(
       prev.phaseIndex === next.phaseIndex && prev.phaseTotal === next.phaseTotal
     );
   }
+  if (prev.role === 'workflowTask' && next.role === 'workflowTask') {
+    return isDeepStrictEqual(prev.task, next.task);
+  }
   return true;
 }
 
@@ -357,11 +360,11 @@ function renderLogEntry(
     const text = `${WORKFLOW_TASK_STATUS_LABEL[task.status]}: ${task.label}${suffix}${error}`;
     const next: ConversationEntry = {
       id: entry.id,
-      role: task.status === 'failed' ? 'error' : 'assistant',
+      role: 'workflowTask',
       text,
       messageType: entry.messageType,
-      finalized:
-        task.status === 'planned' || task.status === 'running' ? false : true,
+      finalized: prev?.finalized ?? false,
+      task,
     };
     return prev && entriesEqual(prev, next) ? prev : next;
   }
@@ -420,6 +423,7 @@ function renderLogEntry(
 // An entry is "settled" once its content can no longer change, so it is
 // safe to print once into `<Static>` scrollback:
 //   - user / error / process: fixed the moment they appear.
+//   - workflow task: fixed once its typed state reaches a terminal status.
 //   - assistant: frozen once the model emits a later entry (more text or a
 //     tool call). The trailing block may still be streaming.
 //   - tool: frozen once its result lands (status COMPLETED).
@@ -439,6 +443,8 @@ function isSettledEntry(
         entry.toolUse.status === TOOL_USE_STATUS.COMPLETED ||
         entry.toolUse.status === TOOL_USE_STATUS.FAILED
       );
+    case 'workflowTask':
+      return entry.task.status !== 'planned' && entry.task.status !== 'running';
     case 'assistant':
       return (
         !entry.pendingEmbeddedSubagentFollowup && index < entries.length - 1

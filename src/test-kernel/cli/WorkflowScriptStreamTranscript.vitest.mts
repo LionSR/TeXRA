@@ -65,6 +65,91 @@ afterEach(() => {
 });
 
 describe('CLI workflow-script child-stream transcript', () => {
+  it('keeps planned task rows live until their terminal state is printable', () => {
+    const runTrace = createRunTrace(STREAM_ID, defaultSession().transcripts);
+    try {
+      for (const [id, label] of [
+        ['core', 'Audit core'],
+        ['extension', 'Audit extension'],
+      ] as const) {
+        runTrace.trace.emit({
+          type: 'workflow.task',
+          logId: `${id}-task`,
+          task: { id, label, status: 'planned' },
+        });
+      }
+      syncStreamLog(STREAM_ID);
+
+      const plannedEntries = streams.get().get(STREAM_ID)?.entries ?? [];
+      expect(plannedEntries).toMatchObject([
+        {
+          id: 'core-task',
+          role: 'workflowTask',
+          finalized: false,
+          task: { id: 'core', status: 'planned' },
+        },
+        {
+          id: 'extension-task',
+          role: 'workflowTask',
+          finalized: false,
+          task: { id: 'extension', status: 'planned' },
+        },
+      ]);
+
+      const plannedItems = appendStaticTranscriptItems({
+        currentItems: [],
+        meta: SESSION_META,
+        scrollbackStreamId: STREAM_ID,
+        streams: streams.get(),
+      });
+      expect(plannedItems.filter((item) => item.kind === 'entry')).toHaveLength(
+        0,
+      );
+
+      runTrace.trace.emit({
+        type: 'workflow.task',
+        logId: 'core-task',
+        task: {
+          id: 'core',
+          label: 'Audit core',
+          status: 'completed',
+          model: 'deepseekT',
+        },
+      });
+      syncStreamLog(STREAM_ID);
+
+      const updatedEntries = streams.get().get(STREAM_ID)?.entries ?? [];
+      expect(updatedEntries).toMatchObject([
+        {
+          id: 'core-task',
+          finalized: true,
+          task: { status: 'completed' },
+          text: 'Finished: Audit core · deepseekT',
+        },
+        {
+          id: 'extension-task',
+          finalized: false,
+          task: { status: 'planned' },
+          text: 'Planned: Audit extension',
+        },
+      ]);
+
+      const updatedItems = appendStaticTranscriptItems({
+        currentItems: plannedItems,
+        meta: SESSION_META,
+        scrollbackStreamId: STREAM_ID,
+        streams: streams.get(),
+      });
+      expect(
+        updatedItems
+          .filter((item) => item.kind === 'entry')
+          .map((item) => item.entry.text),
+      ).toEqual(['Finished: Audit core · deepseekT']);
+    } finally {
+      runTrace.dispose();
+    }
+  });
+
   it('updates one visible task record from planned to completed', async () => {
     const runTrace = createRunTrace(STREAM_ID, defaultSession().transcripts);
     try {

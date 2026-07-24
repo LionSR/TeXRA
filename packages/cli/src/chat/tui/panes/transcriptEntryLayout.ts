@@ -77,6 +77,13 @@ const ROLE_GEOMETRY = {
     marginBottomRows: USER_ENTRY_MARGIN_BOTTOM_ROWS,
     marginTopRows: USER_ENTRY_MARGIN_TOP_ROWS,
   },
+  workflowTask: {
+    firstPrefix: '',
+    continuationPrefix: '',
+    inset: 0,
+    marginBottomRows: 0,
+    marginTopRows: 0,
+  },
 } as const satisfies Record<TranscriptEntryRole, RoleGeometry>;
 
 export interface TranscriptEntryLayout extends RoleGeometry {

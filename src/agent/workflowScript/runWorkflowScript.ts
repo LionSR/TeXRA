@@ -233,7 +233,7 @@ export async function runWorkflowScript(
   const plannedPhases = meta.phases ?? [];
   const plannedTasks = meta.tasks ?? [];
   const plannedTasksById = new Map(plannedTasks.map((task) => [task.id, task]));
-  const issuedTaskIds = new Set<string>();
+  const issuedPlannedTaskIds = new Set<string>();
   let currentPhase: string | undefined;
   let fatalRunError: WorkflowRunAbortError | undefined;
 
@@ -367,14 +367,16 @@ export async function runWorkflowScript(
       prompt.slice(0, LABEL_EXCERPT_LENGTH).replaceAll(/\s+/g, ' ').trim();
     const key = journalKey(prompt, callOptions);
     const taskId = plannedTask?.id ?? callOptions.id ?? `call-${index}`;
-    if (issuedTaskIds.has(taskId)) {
-      throw rememberFatalRunError(
-        new WorkflowRunAbortError(
-          `Workflow task "${taskId}" may be issued only once per run.`,
-        ),
-      );
+    if (plannedTask) {
+      if (issuedPlannedTaskIds.has(taskId)) {
+        throw rememberFatalRunError(
+          new WorkflowRunAbortError(
+            `Workflow task "${taskId}" may be issued only once per run.`,
+          ),
+        );
+      }
+      issuedPlannedTaskIds.add(taskId);
     }
-    issuedTaskIds.add(taskId);
     const phaseContext = phaseContextFor(callOptions.phase);
     if (issuedCallKeys.has(key)) {
       throw rememberFatalRunError(
