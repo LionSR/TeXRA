@@ -12,6 +12,7 @@ import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/workspacePath.js';
 import { initPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
+import { installLongRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import {
@@ -104,6 +105,10 @@ export async function initializeElectronPlatform(
   mainDirname: string,
   agentResume: AgentResumePort,
 ): Promise<ElectronPlatformInitResult> {
+  // Google classic generateContent hardwires global fetch. Desktop owns this
+  // process, unlike the shared VS Code extension host, so replacement is safe.
+  installLongRunningModelFetch();
+
   // The default handler's console.error is mirrored into the desktop app log,
   // so shutdown-handler failures land at error severity like the other hosts.
   const lifecycle = createLifecycleHost();

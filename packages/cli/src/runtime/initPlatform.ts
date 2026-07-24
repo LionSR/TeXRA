@@ -13,6 +13,7 @@ import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { initPlatform, platform, tryPlatform } from '@platform/platform';
 import type { LifecycleHost } from '@platform/interfaces';
+import { installLongRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import {
@@ -240,6 +241,10 @@ export async function initCliPlatform(
   );
 
   if (!tryPlatform()) {
+    // Google classic generateContent hardwires global fetch. The standalone
+    // CLI can safely give it the same long-stream transport as other SDKs.
+    installLongRunningModelFetch();
+
     const configStore = await JsonStore.open(
       workspaceTexraConfigPath(cliWorkspaceCwd),
     );

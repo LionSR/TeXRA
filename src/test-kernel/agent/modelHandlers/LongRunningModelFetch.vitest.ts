@@ -1,5 +1,4 @@
 // Third-party imports
-import { ModelProvider } from 'llm-zoo';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const transportMocks = vi.hoisted(() => ({
@@ -17,32 +16,19 @@ vi.mock('undici', async (importOriginal) => {
 });
 
 // Local imports
-import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import {
+  installLongRunningModelFetch,
+  longRunningModelFetch,
+} from '@platform/defaults/longRunningModelTransport';
 
 // Type imports
 import type { Dispatcher } from 'undici';
 
-class TestableModelHandler extends ModelHandlerOpenAI {
-  modelFetch(): typeof fetch {
-    return this.longRunningModelFetch;
-  }
-}
+const nativeFetch = globalThis.fetch;
 
-function modelFetch(): typeof fetch {
-  return new TestableModelHandler(
-    buildTestModelConfig({
-      name: 'transport-test',
-      label: 'Transport Test',
-      fullName: 'transport-test',
-      shortName: 'transport-test',
-      provider: ModelProvider.OPENAI,
-    }),
-  ).modelFetch();
-}
-
-describe('longRunningModelFetch', () => {
+describe('long-running model transport', () => {
   afterEach(() => {
+    globalThis.fetch = nativeFetch;
     vi.clearAllMocks();
   });
 
@@ -72,7 +58,7 @@ describe('longRunningModelFetch', () => {
       body: JSON.stringify({ prompt: 'hello' }),
     });
 
-    await expect(modelFetch()(request)).resolves.toBe(response);
+    await expect(longRunningModelFetch(request)).resolves.toBe(response);
 
     const [input, init] = transportMocks.undiciFetch.mock.calls[0] ?? [];
     expect(input).toBe('https://openrouter.example/v1/chat');
@@ -95,5 +81,11 @@ describe('longRunningModelFetch', () => {
       }),
       expect.anything(),
     );
+  });
+
+  it('installs the timeout-aware fetch for SDKs without an injection seam', () => {
+    installLongRunningModelFetch();
+
+    expect(globalThis.fetch).toBe(longRunningModelFetch);
   });
 });

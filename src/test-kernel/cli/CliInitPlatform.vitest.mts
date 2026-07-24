@@ -88,6 +88,7 @@ const mocks = vi.hoisted(() => ({
   },
   getCliSecrets: vi.fn(() => ({ kind: 'cli-secrets' })),
   invalidateModelOptionsCache: vi.fn(),
+  installLongRunningModelFetch: vi.fn(),
   tryPlatform: vi.fn(),
   // Collects callbacks registered via the (mocked) lifecycle host's onShutdown
   // so a test can run them and assert the usage-log dispose was wired.
@@ -96,6 +97,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@agent/index/platformAgentDirectories', () => ({
   createPlatformAgentDirectories: mocks.createPlatformAgentDirectories,
+}));
+
+vi.mock('@platform/defaults/longRunningModelTransport', () => ({
+  installLongRunningModelFetch: mocks.installLongRunningModelFetch,
 }));
 
 vi.mock('@auth/serverKeys', () => ({
@@ -238,6 +243,7 @@ describe('CLI platform init', () => {
       }),
     );
 
+    expect(mocks.installLongRunningModelFetch).toHaveBeenCalledOnce();
     expect(mocks.getCliSecrets).toHaveBeenCalledWith('/tmp/texra-storage-root');
     expect(mocks.createNodePlatform).toHaveBeenCalledOnce();
     expect(mocks.initNodeAgentRuntime).toHaveBeenCalledOnce();
