@@ -38,20 +38,21 @@ export const meta = {
   name: 'draft-chapter',
   description: 'Draft sections in parallel, then merge with shared notation',
   phases: [{ title: 'Draft' }, { title: 'Merge' }],
+  tasks: [
+    { id: 'introduction', label: 'Draft introduction', phase: 'Draft' },
+    { id: 'results', label: 'Draft results', phase: 'Draft' },
+    { id: 'merge', label: 'Merge sections', phase: 'Merge' },
+  ],
 };
 phase('Draft');
-const drafts = await parallel(
-  args.sections.map(
-    (s) => () =>
-      agent(`Draft the "${s.title}" section.`, {
-        label: `draft:${s.title}`,
-        inputFiles: s.notes,
-      }),
-  ),
-);
+const drafts = await parallel([
+  () => agent('Draft the introduction.', { id: 'introduction' }),
+  () => agent('Draft the results.', { id: 'results' }),
+]);
 phase('Merge');
 const valid = drafts.filter(Boolean);
 return await agent('Merge these drafts, unify notation.', {
+  id: 'merge',
   agentName: 'merge',
   inputFiles: valid.flatMap((d) =>
     d.category === 'workflow' ? d.outputs.map((o) => o.absolutePath) : d.files,
@@ -59,12 +60,38 @@ return await agent('Merge these drafts, unify notation.', {
 });
 ```
 
+When the task set comes from runtime arguments, the script omits `meta.tasks`
+and creates one call per input:
+
+```js
+export const meta = {
+  name: 'audit-sections',
+  description: 'Audit every requested section in parallel',
+};
+return await parallel(
+  args.sections.map(
+    (section, index) => () =>
+      agent(`Audit ${section}.`, {
+        id: `section-${index}`,
+        label: `Audit ${section}`,
+      }),
+  ),
+);
+```
+
 ### Primitives
 
+- `meta.tasks` → an optional declarative plan of `{ id, label, phase? }`
+  records. When present, every `agent()` call references one record by `id`;
+  progress surfaces show the entire plan before execution and update each
+  record in place. Data-dependent workflows may omit it.
 - `agent(prompt, opts?)` → one subagent run; returns the typed result
-  (`null` on failure). Options: `id`, `label`, `phase`, `agentName`,
-  `inputFiles`. Otherwise-identical calls require distinct `id` values so
-  restart recovery does not depend on scheduling order.
+  (`null` on failure). Common options are `id`, `label`, `phase`, `agentName`,
+  and `model`. File-editing calls accept editable `inputFiles` plus read-only
+  `contextFiles` and `mediaFiles`. Structured calls instead provide a JSON
+  `schema` and a tool-use `agentName`. Otherwise-identical calls require
+  distinct `id` values so restart recovery does not depend on scheduling
+  order.
 - `parallel(thunks)` → concurrent barrier; failed thunks resolve to `null`.
 - `pipeline(items, ...stages)` → per-item stage chains with **no barrier**
   between stages (wall-clock = slowest single-item chain, not
@@ -90,9 +117,10 @@ an academic-writing product whose unit of work is a document, not a diff.
 - **No nested `workflow()`** — one flat script per delegation. If a workflow
   needs a sub-workflow, that is the orchestrator's decision to make with a
   second delegation, visible in the execution tree.
-- **No per-call model/effort/agentType overrides** — an `agent()` call names
-  a TeXRA agent (`agentName`), and the agent's YAML owns model policy. One
-  source of truth; scripts stay declarative about _what_, not _how_.
+- **No per-call effort or raw agent-type overrides** — an `agent()` call names
+  a TeXRA agent (`agentName`) and may select an available model short name.
+  Agent definitions still own their ordinary policy; the explicit model field
+  is the declarative exception for assigning lower-cost or specialized work.
 - **No worktree isolation** — TeXRA runs are already execution-scoped in run
   storage (`executions/{id}/`), with lineage instead of git.
 - **`pipeline()` is on probation** — if v1 usage shows document pipelines are
@@ -196,10 +224,12 @@ copy, no LLM involvement. Rounds that emitted nothing leave symlinks
 
 ### 6. Resume via call journal
 
-Every completed `agent()` call is journaled by (call index, hash of
-prompt+options). Re-running with a prior journal replays matching calls from
-cache and re-runs only edited or new calls; failed and cancelled calls are not
-journaled, so resume retries them. This extends the existing `persistedFlow` checkpoint
+Every completed `agent()` call is journaled by its call index and a hash of
+the prompt plus execution-affecting options. Display labels and phases are
+excluded, so revising a declarative task plan does not repeat completed model
+work. Re-running with a prior journal replays matching calls from cache and
+re-runs only edited or new calls; failed and cancelled calls are not journaled,
+so resume retries them. This extends the existing `persistedFlow` checkpoint
 pattern and is why scripts must be deterministic — `Date.now()` and
 `Math.random()` throw inside the sandbox (pass timestamps via `args`).
 Journals persist in the execution KV store alongside the script text.

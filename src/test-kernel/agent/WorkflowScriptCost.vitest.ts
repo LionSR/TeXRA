@@ -4,6 +4,7 @@ import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import {
   readWorkflowScriptCheckpoint,
   runPersistedWorkflowScript,
+  WORKFLOW_JOURNAL_KEY_FORMAT,
   type WorkflowJournalEntry,
 } from '@agent/workflowScript';
 import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
@@ -29,7 +30,12 @@ function entry(
   result: unknown,
   entryKey = key,
 ): WorkflowJournalEntry {
-  return { index, key: entryKey, result };
+  return {
+    index,
+    key: entryKey,
+    keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+    result,
+  };
 }
 
 function workflowResult(cost: number): unknown {

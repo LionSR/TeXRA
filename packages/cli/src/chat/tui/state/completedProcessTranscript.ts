@@ -74,6 +74,8 @@ function buildCompletedProcessEntry(params: {
     syntheticKind: 'process',
     syntheticAfterSeq:
       defaultSession().transcripts.get(params.streamId)?.head ?? 0,
+    syntheticAfterSettlementSeqNo:
+      defaultSession().transcripts.get(params.streamId)?.settlementHead ?? 0,
   };
 }
 

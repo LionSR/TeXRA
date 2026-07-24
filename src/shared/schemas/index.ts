@@ -20,6 +20,7 @@ export * from './stream';
 export * from './roundIndexed';
 export * from './output';
 export * from './progressEvents';
+export * from './workflowTaskProgress';
 
 // Layer 3: Depends on layer 2
 export * from './log';
