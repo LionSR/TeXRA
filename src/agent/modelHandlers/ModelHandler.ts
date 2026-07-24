@@ -868,7 +868,7 @@ export abstract class ModelHandler<
   /**
    * Whether this handler supports manual (user-requested) context compaction.
    * Each override computes this differently — Anthropic combines llm-zoo
-   * model-family eligibility with tool-use mode, OpenAI-family handlers gate
+   * model-family eligibility with workflow/tool-use mode, OpenAI-family handlers gate
    * on tool-use mode alone, OpenAIResponse reads the ChatGPT-subscription
    * profile with an OpenRouter-routing fallback, and GoogleInteractions is
    * unconditionally true — so no single capability-profile read replaces the
@@ -918,6 +918,7 @@ export abstract class ModelHandler<
    * attempted. Inert for handlers that don't run compaction.
    */
   protected compactionRequested = false;
+  private compactionRequestId = 0;
 
   /**
    * A successful client-side compaction whose generation request has not yet
@@ -947,9 +948,24 @@ export abstract class ModelHandler<
     return `${messages.length}:${last === undefined ? 0 : JSON.stringify(last).length}`;
   }
 
-  /** Request compaction on the next API call. */
-  requestCompaction(): void {
+  /** Request compaction on the next API call and return its ownership token. */
+  requestCompaction(): number {
     this.compactionRequested = true;
+    this.compactionRequestId += 1;
+    return this.compactionRequestId;
+  }
+
+  /** Snapshot the ownership token for the currently pending request. */
+  protected getPendingCompactionRequestId(): number | undefined {
+    return this.compactionRequested ? this.compactionRequestId : undefined;
+  }
+
+  /** Clear a pending compaction request only while the caller still owns it. */
+  clearCompactionRequest(requestId: number): void {
+    if (requestId !== this.compactionRequestId) {
+      return;
+    }
+    this.compactionRequested = false;
   }
 
   /**
@@ -1657,6 +1673,7 @@ export abstract class ModelHandler<
     bestConnector: string,
     newResponse: string,
     workspaceState: AgentWorkspaceState,
+    _responseObject?: Resp,
   ): void {
     const text = bestConnector + newResponse;
 

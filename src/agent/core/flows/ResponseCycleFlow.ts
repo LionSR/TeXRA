@@ -15,6 +15,7 @@ import {
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import {
+  ANTHROPIC_STOP,
   isTokenLimitStopReason,
   type ProviderStopReason,
 } from '@agent/types/StopReasonTypes';
@@ -84,6 +85,10 @@ interface CycleTransientFields {
   systemPrompt?: string;
   /** Raw response from model (type unknown, not serialized) */
   responseObject?: unknown;
+  /** Whether this cycle already retried once with forced context compaction. */
+  contextWindowRecoveryAttempted?: boolean;
+  /** Ownership token for clearing this cycle's pending compaction request. */
+  contextWindowRecoveryRequestId?: number;
 }
 
 /**
@@ -206,6 +211,7 @@ type ContinuationNodeResult = SkippableNodeResult<{
   shouldStop: boolean;
   shouldContinue: boolean;
   reachedTokenLimit: boolean;
+  contextWindowExceeded: boolean;
 }>;
 
 export function responseCycleToolsForModel<C>(
@@ -366,8 +372,13 @@ class ResponseProcessNode<C> extends BaseNode<
     shared.stopReason = result.stopReason;
 
     if (!result.hasResponse) {
-      shared.processedResponse = undefined;
       shared.endTurn = false;
+      if (result.stopReason === ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED) {
+        shared.processedResponse = '';
+        return FlowTransition.DEFAULT;
+      }
+
+      shared.processedResponse = undefined;
       shared.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
@@ -419,6 +430,7 @@ class ResponseProcessNode<C> extends BaseNode<
       connector,
       result.processedResponse,
       workspace,
+      shared.responseObject,
     );
 
     if (result.useStreaming) {
@@ -476,7 +488,11 @@ class ResponseContinuationNode<C> extends BaseNode<
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ContinuationPrepResult> {
-    if (shared.shouldStop || !shared.stopReason || !shared.processedResponse) {
+    if (
+      shared.shouldStop ||
+      !shared.stopReason ||
+      shared.processedResponse === undefined
+    ) {
       return { kind: 'skipped' };
     }
 
@@ -506,6 +522,7 @@ class ResponseContinuationNode<C> extends BaseNode<
           shouldStop: true,
           shouldContinue: false,
           reachedTokenLimit: false,
+          contextWindowExceeded: false,
         },
       };
     }
@@ -525,6 +542,8 @@ class ResponseContinuationNode<C> extends BaseNode<
       setting,
     );
     const reachedTokenLimit = isTokenLimitStopReason(stopReason);
+    const contextWindowExceeded =
+      stopReason === ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED;
 
     return {
       kind: 'success',
@@ -533,6 +552,7 @@ class ResponseContinuationNode<C> extends BaseNode<
         shouldStop,
         shouldContinue,
         reachedTokenLimit,
+        contextWindowExceeded,
       },
     };
   }
@@ -551,12 +571,39 @@ class ResponseContinuationNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    const { shouldEndTurn, shouldStop, shouldContinue, reachedTokenLimit } =
-      execRes.value;
+    const {
+      shouldEndTurn,
+      shouldStop,
+      shouldContinue,
+      reachedTokenLimit,
+      contextWindowExceeded,
+    } = execRes.value;
     shared.endTurn = shouldEndTurn;
     shared.shouldStop = shouldStop;
 
-    if (shouldStop || !(shouldContinue || reachedTokenLimit)) {
+    if (shouldStop) {
+      return FlowTransition.COMPLETE;
+    }
+
+    if (contextWindowExceeded) {
+      if (shared.contextWindowRecoveryAttempted) {
+        logger.warn(
+          'Model context window still exceeded after forced compaction; stopping to avoid a futile retry.',
+        );
+        shared.shouldStop = true;
+        return FlowTransition.COMPLETE;
+      }
+      if (!modelHandler.supportsManualCompaction) {
+        logger.warn(
+          'Model context window exceeded, but compaction is unavailable; stopping to avoid a futile retry.',
+        );
+        shared.shouldStop = true;
+        return FlowTransition.COMPLETE;
+      }
+
+      shared.contextWindowRecoveryAttempted = true;
+      shared.contextWindowRecoveryRequestId = modelHandler.requestCompaction();
+    } else if (!(shouldContinue || reachedTokenLimit)) {
       return FlowTransition.COMPLETE;
     }
 
@@ -565,7 +612,11 @@ class ResponseContinuationNode<C> extends BaseNode<
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
 
-    if (reachedTokenLimit) {
+    if (contextWindowExceeded) {
+      logger.info('Retrying after forcing model context compaction', {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      });
+    } else if (reachedTokenLimit) {
       logger.info('Continuing after hitting the model token limit', {
         messageType: MESSAGE_TYPES.PROGRESS_STATUS,
       });
