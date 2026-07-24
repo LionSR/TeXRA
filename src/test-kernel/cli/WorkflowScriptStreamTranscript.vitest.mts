@@ -11,7 +11,10 @@ import {
   StaticConversationTranscript,
   appendStaticTranscriptItems,
 } from '@cli/chat/tui/panes/StaticConversationTranscript';
-import { splitTranscriptEntries } from '@cli/chat/tui/panes/transcriptEntries';
+import {
+  orderedStaticTranscriptEntries,
+  splitTranscriptEntries,
+} from '@cli/chat/tui/panes/transcriptEntries';
 import {
   patchStream,
   resetCliState,
@@ -20,6 +23,7 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
+import { createTranscriptPrintRequest } from '@cli/chat/tui/state/transcriptLines';
 import { projectStreamTranscript } from '@cli/chat/tui/state/transcriptProjection';
 import {
   MESSAGE_TYPES,
@@ -530,7 +534,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     }
   });
 
-  it('keeps declared-plan phase-task chronology identical live and cold', async () => {
+  it('keeps declared-plan phase-task and print chronology identical live and cold', async () => {
     const runTrace = createRunTrace(STREAM_ID, defaultSession().transcripts);
     try {
       for (const [id, label] of [
@@ -634,9 +638,36 @@ describe('CLI workflow-script child-stream transcript', () => {
         streams: streams.get(),
       });
 
+      const settledSlice = streams.get().get(STREAM_ID);
+      expect(
+        settledSlice?.entries.findLast((entry) => entry.finalized)?.id,
+      ).toBe('audit-phase');
+      const printAnchor = settledSlice
+        ? orderedStaticTranscriptEntries(
+            settledSlice.entries,
+            settledSlice.status,
+          ).at(-1)?.id
+        : undefined;
+      expect(printAnchor).toBe('core-task');
+      const printRequest = createTranscriptPrintRequest({
+        afterEntryId: printAnchor,
+        id: 'printed-transcript:declared-plan',
+        ownerKey: 'root',
+        slice: settledSlice,
+        title: 'repository audit',
+      });
+      incrementalItems = appendStaticTranscriptItems({
+        currentItems: incrementalItems,
+        meta: SESSION_META,
+        printRequests: [printRequest],
+        scrollbackStreamId: STREAM_ID,
+        streams: streams.get(),
+      });
+
       const coldItems = appendStaticTranscriptItems({
         currentItems: [],
         meta: SESSION_META,
+        printRequests: [printRequest],
         scrollbackStreamId: STREAM_ID,
         streams: streams.get(),
       });
@@ -651,6 +682,14 @@ describe('CLI workflow-script child-stream transcript', () => {
       expect(incrementalEntryIds.at(-2)).toBe('audit-phase');
       expect(incrementalEntryIds.at(-1)).toBe('core-task');
       expect(entryIds(coldItems)).toEqual(entryIds(incrementalItems));
+      expect(incrementalItems.map((item) => item.id).slice(-3)).toEqual([
+        'audit-phase',
+        'core-task',
+        'printed-transcript:declared-plan',
+      ]);
+      expect(coldItems.map((item) => item.id)).toEqual(
+        incrementalItems.map((item) => item.id),
+      );
       const coldOutput = await renderStaticTranscript();
       expect(coldOutput.indexOf('Preparing repository audit')).toBeLessThan(
         coldOutput.indexOf('Local audit checkpoint'),
