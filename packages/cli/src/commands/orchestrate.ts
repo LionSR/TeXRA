@@ -6,6 +6,11 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
 import { getFirstRunDone } from '@shared/state/onboardingState';
+import {
+  AGENT_SKILLS_CONFIG_KEY,
+  AGENT_SKILLS_ENABLED_DEFAULT,
+} from '@shared/schemas/agentSkills';
+import { getConfig, updateConfig } from '@utils/config';
 
 import { firstRunSetupAgentOverride } from '../onboarding/setupContinuation';
 import { CliExitCode } from '../runtime/exitCodes';
@@ -174,8 +179,9 @@ async function runOrchestration(context: CliContext): Promise<number> {
       texraSignedIn: authProfile.authenticated,
       texraAccountLabel: authProfile.accountLabel,
       texraCredentialSource: authProfile.credentialSource,
-      chatGptSignedIn: modelAccess.chatGptSignedIn,
-      chatGptAccountLabel: modelAccess.chatGptAccountLabel,
+      chatGptSignedIn: modelAccess.chatGpt.signedIn,
+      chatGptAccountLabel:
+        modelAccess.chatGpt.email ?? modelAccess.chatGpt.accountId ?? undefined,
     };
     const launcherModelAccess = {
       ...modelAccess,
@@ -188,6 +194,10 @@ async function runOrchestration(context: CliContext): Promise<number> {
       includeMultiAgentLoginHint: !presetPlanSet.remoteAgentLoadAttempted,
       modelAccess: launcherModelAccess,
       account: accountStatus,
+      agentSkillsEnabled: getConfig<boolean>(
+        AGENT_SKILLS_CONFIG_KEY,
+        AGENT_SKILLS_ENABLED_DEFAULT,
+      ),
       presetLaunchBlockReason:
         launchContext.approvalPolicy === 'never'
           ? 'delegation-denied'
@@ -331,6 +341,17 @@ async function runOrchestration(context: CliContext): Promise<number> {
           colorEnabled: context.stdoutColorEnabled,
           onError: writeErrorStderr,
         });
+        continue launcher;
+      }
+      case 'set-agent-skills': {
+        try {
+          await updateConfig(AGENT_SKILLS_CONFIG_KEY, action.enabled);
+          writeTextStdout(
+            action.enabled ? 'Agent skills enabled.' : 'Agent skills disabled.',
+          );
+        } catch (error: unknown) {
+          writeErrorStderr(error);
+        }
         continue launcher;
       }
       case 'account': {

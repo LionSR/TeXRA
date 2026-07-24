@@ -1,17 +1,18 @@
-import type { UsageRoute } from '@shared/schemas';
+import type {
+  ModelAccessRoute,
+  ModelAccessStatus,
+  UsageRoute,
+} from '@shared/schemas';
+import {
+  describeApiAccessModeStatus,
+  MODEL_ACCESS_PREFERENCE_LABELS,
+  MODEL_ACCESS_ROUTE_LABELS,
+} from '@shared/schemas/modelAccess';
 
 import { parseCliApiMode, type CliApiMode } from './apiAccessMode';
 
-export type CliModelAccessRoute =
-  'chatgpt' | 'kimi-code' | 'included' | 'personal';
-
-export interface CliModelAccessStatus {
-  readonly active: CliModelAccessRoute;
-  readonly chatGptSignedIn: boolean;
-  readonly chatGptAccountLabel?: string;
-  readonly kimiCodeKeySet?: boolean;
-  readonly texraSignedIn?: boolean;
-}
+export type CliModelAccessRoute = ModelAccessRoute;
+export type CliModelAccessStatus = ModelAccessStatus;
 
 interface CliModelAccessItem {
   readonly value: CliModelAccessRoute;
@@ -54,6 +55,8 @@ export function resolveCliModelAccessRoute({
     switch (usageRoute) {
       case 'chatgpt-subscription':
         return 'chatgpt';
+      case 'kimi-code-subscription':
+        return 'kimi-code';
       case 'relay':
         return 'included';
       case 'api-key':
@@ -65,9 +68,7 @@ export function resolveCliModelAccessRoute({
     }
   }
   if (subscriptionActive) return 'chatgpt';
-  // The Kimi Code route only describes personal access — under included
-  // access the relay owns eligible models.
-  if (kimiCodeActive === true && apiMode === 'personal') return 'kimi-code';
+  if (kimiCodeActive === true) return 'kimi-code';
   return apiMode;
 }
 
@@ -77,18 +78,7 @@ export function shortCliModelAccessRoute(route: CliModelAccessRoute): string {
 }
 
 export function formatCliModelAccessRoute(route: CliModelAccessRoute): string {
-  switch (route) {
-    case 'chatgpt':
-      return 'ChatGPT subscription';
-    case 'kimi-code':
-      return 'Kimi Code subscription';
-    case 'included':
-      return 'Included TeXRA access';
-    case 'personal':
-      return 'Personal API keys';
-    default:
-      return route satisfies never;
-  }
+  return MODEL_ACCESS_ROUTE_LABELS[route];
 }
 
 /** Sentence-fragment form derived from the canonical access label. */
@@ -107,18 +97,20 @@ export function buildCliModelAccessItems(
   status: CliModelAccessStatus,
 ): CliModelAccessItem[] {
   let chatGptDescription: string;
-  if (status.active === 'chatgpt') {
-    chatGptDescription = `On · ${status.chatGptAccountLabel ?? 'your account'}`;
-  } else if (status.chatGptSignedIn) {
-    chatGptDescription = `Off · ${status.chatGptAccountLabel ?? 'your account'}`;
+  const chatGptAccount =
+    status.chatGpt.email ?? status.chatGpt.accountId ?? 'your account';
+  if (status.chatGpt.preferSubscription && status.chatGpt.signedIn) {
+    chatGptDescription = `On · ${chatGptAccount}`;
+  } else if (status.chatGpt.signedIn) {
+    chatGptDescription = `Off · ${chatGptAccount}`;
   } else {
     chatGptDescription = 'Sign in with ChatGPT Plus/Pro/Team';
   }
 
   let kimiCodeDescription: string;
-  if (status.kimiCodeKeySet !== true) {
+  if (status.kimiCode.keySet !== true) {
     kimiCodeDescription = 'Add a key with /key (kimi.com/code/console)';
-  } else if (status.active === 'kimi-code') {
+  } else if (status.kimiCode.preferred) {
     kimiCodeDescription = 'On · key configured';
   } else {
     kimiCodeDescription = 'Off · key configured';
@@ -127,26 +119,23 @@ export function buildCliModelAccessItems(
   return [
     {
       value: 'chatgpt',
-      label: 'Prefer ChatGPT subscription',
+      label: MODEL_ACCESS_PREFERENCE_LABELS.chatgpt,
       description: chatGptDescription,
     },
     {
       value: 'kimi-code',
-      label: 'Prefer Kimi Code subscription',
+      label: MODEL_ACCESS_PREFERENCE_LABELS['kimi-code'],
       description: kimiCodeDescription,
     },
     {
       value: 'included',
       label: formatCliModelAccessRoute('included'),
-      description:
-        status.texraSignedIn === false
-          ? 'Sign in through Account to use included models'
-          : 'Use your TeXRA account',
+      description: describeApiAccessModeStatus('included', status),
     },
     {
       value: 'personal',
       label: formatCliModelAccessRoute('personal'),
-      description: 'Use keys configured on this computer',
+      description: describeApiAccessModeStatus('personal', status),
     },
   ];
 }

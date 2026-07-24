@@ -54,8 +54,19 @@ export function ModelAccessForm(
     status?.state === 'loaded'
       ? status.overview.access
       : {
-          active: props.apiMode,
-          chatGptSignedIn: false,
+          apiMode: props.apiMode,
+          chatGpt: {
+            signedIn: false,
+            email: null,
+            accountId: null,
+            preferSubscription: false,
+            subscriptionToolUseOnly: false,
+          },
+          kimiCode: {
+            keySet: false,
+            preferred: false,
+          },
+          personalApiKeySet: false,
           texraSignedIn: false,
         },
   );
@@ -70,10 +81,13 @@ export function ModelAccessForm(
       items={items}
       compactVisibleItems={items.length}
       activeValue={
-        status?.state === 'loaded' ? status.overview.access.active : undefined
+        status?.state === 'loaded' ? status.overview.access.apiMode : undefined
       }
       description={
-        <Text dimColor>Choose how model calls are authenticated.</Text>
+        <Text dimColor>
+          Subscription preferences are independent; fallback access applies to
+          other models.
+        </Text>
       }
       detail={
         <Box marginTop={1} flexDirection="column">

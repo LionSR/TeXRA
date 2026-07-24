@@ -22,6 +22,10 @@ import {
   setBashApprovalEnabled,
   setWorkspaceAgentSetting,
 } from '@shared/settingsView/handlers/approvalHandlers';
+import {
+  buildAgentSkillsSettingsMessage,
+  setAgentSkillsEnabled,
+} from '@shared/settingsView/handlers/agentSkillsHandlers';
 import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { GoalStore } from '@tools/goal';
@@ -175,6 +179,10 @@ export function createDesktopSettingsIpc(
     );
   }
 
+  function postAgentSkillsSettings(): void {
+    options.postToRenderer(buildAgentSkillsSettingsMessage(options.config));
+  }
+
   /**
    * Deliberate divergence from the extension: no `subscribeGoalStateChanges`
    * push hook here. The initial post below, the webview-ready re-post, and
@@ -205,6 +213,7 @@ export function createDesktopSettingsIpc(
     const modelSelectionDataPosted = postModelSelectionData();
     postSuperYoloEnabled();
     postApprovalSettings();
+    postAgentSkillsSettings();
     await Promise.all([
       goalListPosted,
       memoryEnabledPosted,
@@ -384,6 +393,12 @@ export function createDesktopSettingsIpc(
     chatGpt: options.credentialSettingsController.chatGptActions,
     approval: {
       setBashApprovalEnabled: (enabled) => updateBashApprovalEnabled(enabled),
+    },
+    agentSkills: {
+      setEnabled: async (enabled) => {
+        await setAgentSkillsEnabled(options.config, enabled);
+        postAgentSkillsSettings();
+      },
     },
     stateSettings: {
       update: (key, value) => updateStateSetting(key, value),

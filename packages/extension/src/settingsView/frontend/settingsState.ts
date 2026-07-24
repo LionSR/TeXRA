@@ -50,6 +50,7 @@ import {
   type ChatGptAuthStatus,
   DEFAULT_LATEX_SETTINGS_STATUS,
 } from '@shared/schemas/settingsViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/modelAccess';
 import {
   DEFAULT_GIT_AUTHOR_NAME,
   DEFAULT_GIT_AUTHOR_EMAIL,
@@ -103,9 +104,7 @@ export const historyItems = trackedSignal<HistoryItem[]>(() => []);
 export const authenticated = trackedSignal(() => false);
 export const userEmail = trackedSignal(() => '');
 export const tier = trackedSignal(() => 'free');
-export const apiAccessMode = trackedSignal<'included' | 'personal'>(
-  () => 'personal',
-);
+export const apiAccessMode = trackedSignal<ApiAccessMode>(() => 'personal');
 export const spendingStatus = trackedSignal<SpendingStatus | null>(() => null);
 export const quotaAutoSwitched = trackedSignal(() => false);
 export const providerKeyStatuses = trackedSignal<ProviderKeyStatus[]>(() => []);
@@ -153,6 +152,7 @@ export const detachSubagentsOnStop = trackedSignal(() => false);
 // Approval settings state
 // ---------------------------------------------------------------------------
 export const bashApprovalEnabled = trackedSignal(() => true);
+export const agentSkillsEnabled = trackedSignal(() => true);
 export const codexSandboxMode = trackedSignal<string>(() => 'workspace-write');
 export const codexReasoningEffort = trackedSignal<string>(() => 'high');
 export const codexApprovalPolicy = trackedSignal<string>(() => 'never');

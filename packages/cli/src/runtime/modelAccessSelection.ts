@@ -1,15 +1,16 @@
 import {
+  getChatGptAuthStatus,
   getCodexStatus,
   isPreferCodexSubscription,
   setPreferCodexSubscription,
 } from '@auth/codex';
-import { apiKeyExists } from '@model/apiProviders';
+import { API_PROVIDERS, apiKeyExists } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
+import { ModelAccessStatusSchema } from '@shared/schemas/modelAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   getPreferKimiCode,
-  getUseOpenRouter,
   setPreferKimiCode,
 } from '@utils/config/providerConfig';
 
@@ -47,43 +48,34 @@ export function contextForCliModelAccess(
 export async function readCliModelAccessStatus(
   apiMode: CliApiMode,
 ): Promise<CliModelAccessStatus> {
-  const [chatGpt, kimiCodeKeySet] = await Promise.all([
-    getCodexStatus(),
+  const [chatGpt, kimiCodeKeySet, personalApiKeyStates] = await Promise.all([
+    getChatGptAuthStatus(),
     apiKeyExists(platform().secrets, 'kimiCode'),
+    Promise.all(
+      API_PROVIDERS.map((provider) =>
+        apiKeyExists(platform().secrets, provider),
+      ),
+    ),
   ]);
-  const chatGptActive = chatGpt.signedIn && isPreferCodexSubscription();
-  // The Kimi Code route is a personal-key route: it only describes the active
-  // access while the API fallback mode is personal, the prefer switch is on,
-  // and dispatch can actually honor it (OpenRouter off — dual-backend models
-  // refuse the coding endpoint while it is on).
-  const kimiCodeActive =
-    !chatGptActive &&
-    apiMode === 'personal' &&
-    getPreferKimiCode() &&
-    !getUseOpenRouter() &&
-    kimiCodeKeySet;
-  let active: CliModelAccessStatus['active'] = apiMode;
-  if (chatGptActive) active = 'chatgpt';
-  else if (kimiCodeActive) active = 'kimi-code';
-  return {
-    active,
-    chatGptSignedIn: chatGpt.signedIn,
-    chatGptAccountLabel: chatGpt.email ?? chatGpt.accountId,
-    kimiCodeKeySet,
-  };
+  return ModelAccessStatusSchema.parse({
+    apiMode,
+    chatGpt,
+    kimiCode: {
+      keySet: kimiCodeKeySet,
+      preferred: getPreferKimiCode(),
+    },
+    personalApiKeySet: personalApiKeyStates.some(Boolean),
+  });
 }
 
-/** Select an API-backed route and stop preferring ChatGPT subscription use. */
+/** Select the fallback used outside preferred subscription model families. */
 export async function selectCliApiModelAccessRoute(
   route: CliApiMode,
 ): Promise<CliModelAccessSelectionResult> {
-  const update = await setPreferCodexSubscription(false);
   await setCliApiMode(route);
   return {
     apiMode: route,
-    message: update.effective
-      ? `Model access remains on ChatGPT subscription because a more specific setting overrides ${update.target} config.`
-      : `Model access: ${formatCliModelAccessRoute(route)}.`,
+    message: `API fallback: ${formatCliModelAccessRoute(route)}.`,
   };
 }
 
@@ -100,14 +92,18 @@ export async function selectCliModelAccessRoute(
   }
 
   if (route === 'personal') {
-    // An explicit "personal keys" picker choice leaves the Kimi Code route;
-    // saving a key never clears the switch (see applyCliProviderApiKey), and
-    // the prefer toggle stays available under /config → Models and providers.
-    await setPreferKimiCode(false);
     return selectCliApiModelAccessRoute(route);
   }
 
   if (route === 'kimi-code') {
+    if (getPreferKimiCode()) {
+      await setPreferKimiCode(false);
+      invalidateModelOptionsCache();
+      return {
+        apiMode: effectiveCliApiMode(context),
+        message: 'Kimi Code subscription preference: Off.',
+      };
+    }
     // The Kimi Code API key is the subscription credential — there is no
     // separate sign-in flow.
     if (!(await apiKeyExists(platform().secrets, 'kimiCode'))) {
@@ -117,22 +113,29 @@ export async function selectCliModelAccessRoute(
           'No Kimi Code API key configured — add one with /key or /config → API keys (get one at https://www.kimi.com/code/console).',
       };
     }
-    const update = await setPreferCodexSubscription(false);
     await setPreferKimiCode(true);
     // Dual-backend Kimi routing requires the OpenRouter toggle off.
     await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
-    // Non-Moonshot models fall back to the other personal keys.
-    await setCliApiMode('personal');
     invalidateModelOptionsCache();
+    const apiMode = effectiveCliApiMode(context);
     return {
-      apiMode: 'personal',
-      message: update.effective
-        ? `Prefer Kimi Code subscription enabled for Kimi models, but a more specific setting keeps ChatGPT subscription preferred (${update.target} config).`
-        : 'Prefer Kimi Code subscription enabled for Kimi models · fallback: personal API keys.',
+      apiMode,
+      message: `Kimi Code subscription preference: On for Kimi models · fallback: ${formatCliModelAccessRoute(apiMode)}.`,
     };
   }
 
   const status = await getCodexStatus();
+  if (status.signedIn && isPreferCodexSubscription()) {
+    const update = await setPreferCodexSubscription(false);
+    invalidateModelOptionsCache();
+    return {
+      apiMode: effectiveCliApiMode(context),
+      message: update.effective
+        ? `ChatGPT subscription remains preferred because a more specific setting overrides ${update.target} config.`
+        : 'ChatGPT subscription preference: Off.',
+    };
+  }
+
   let accountLabel = status.email ?? status.accountId ?? 'your account';
   if (!status.signedIn) {
     const init = { device: false, noBrowser: false };
@@ -147,12 +150,11 @@ export async function selectCliModelAccessRoute(
   }
 
   const update = await setPreferCodexSubscription(true);
-  await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
   invalidateModelOptionsCache();
   return {
     apiMode: effectiveCliApiMode(context),
     message: update.effective
-      ? `Prefer ChatGPT subscription enabled for Codex models (${accountLabel}).`
+      ? `ChatGPT subscription preference: On for Codex models (${accountLabel}).`
       : 'ChatGPT sign-in succeeded, but a more specific setting keeps subscription access disabled.',
   };
 }

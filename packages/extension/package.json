@@ -834,7 +834,7 @@
           "texra.skills.enabled": {
             "type": "boolean",
             "default": true,
-            "description": "Discover imported skills and expose them to tool-use agent prompts",
+            "description": "Discover TeXRA and imported skills and expose them to agent prompts",
             "scope": "resource"
           }
         }

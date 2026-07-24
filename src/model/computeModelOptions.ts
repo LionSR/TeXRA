@@ -6,6 +6,7 @@ import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
+import { MODEL_ACCESS_ROUTE_LABELS } from '@shared/schemas/modelAccess';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { coalesceAsync } from '@utils/core';
 import {
@@ -114,7 +115,7 @@ const AVAILABILITY_STATUS_FIELDS: Record<
     requiresKey: false,
   },
   'subscription-access': {
-    label: 'ChatGPT subscription',
+    label: MODEL_ACCESS_ROUTE_LABELS.chatgpt,
     available: true,
     requiresKey: false,
   },
@@ -216,9 +217,6 @@ function effectiveKimiCodeConfig(
     ctx.useOpenRouter,
     ctx.kimiCodeKeySet,
     ctx.preferKimiCode,
-    // The relay only owns the model when included access can actually serve
-    // it — mirrors ModelFactory's dispatch facts.
-    ctx.useIncludedAccess && ctx.hasServerAccess,
   );
   if (route === 'kimiCode' && !isKimiCodeExclusiveModel(config)) {
     return kimiCodeRuntimeConfig(config);
@@ -284,6 +282,23 @@ async function resolveModelAvailability(
         providerCapabilities: subscriptionCapabilities,
       };
     }
+  }
+
+  // Kimi Code is subscription access authenticated by its console key, not
+  // ordinary pay-per-token provider-key access. `effectiveKimiCodeConfig`
+  // pins both exclusive and preferred dual-backend models to this endpoint.
+  if (
+    resolveKimiCodeRoute(
+      config,
+      ctx.useOpenRouter,
+      ctx.kimiCodeKeySet,
+      ctx.preferKimiCode,
+    ) === 'kimiCode'
+  ) {
+    return {
+      ...availabilityStatus('subscription-access'),
+      label: MODEL_ACCESS_ROUTE_LABELS['kimi-code'],
+    };
   }
 
   // OpenRouter routing is intentionally outside included access; a configured

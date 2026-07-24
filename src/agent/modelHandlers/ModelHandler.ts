@@ -80,6 +80,7 @@ import {
 } from '@model/openRouterRouting';
 import { isGpt5ModelName } from '@model/modelNames';
 import { getApiKey, type ApiProvider } from '@model/apiProviders';
+import { resolveUsageRoute } from '@model/usageRoute';
 import { platform } from '@platform/platform';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import { MESSAGE_TYPES } from '@shared/schemas';
@@ -584,7 +585,7 @@ export abstract class ModelHandler<
     if (canRouteThroughRelay && serverSideKeyService?.wasQuotaAutoSwitched()) {
       throw new Error(
         `Model "${this.config.name}" cannot use the TeXRA relay because your monthly relay quota is exhausted. ` +
-          'Switch to "Use My Own Keys" via the TeXRA Profile panel, or wait for the next quota period.',
+          'The "Personal API keys" setting in the TeXRA Models panel provides direct access; otherwise, access resumes with the next quota period.',
       );
     }
 
@@ -732,17 +733,7 @@ export abstract class ModelHandler<
 
   /** Route tag for usage recorded after a successful attempt. */
   getLastCredentialUsageRoute(): NormalizedUsage['usageRoute'] {
-    switch (this.lastAttemptCredentialRoute) {
-      case 'chatgpt-subscription':
-        return 'chatgpt-subscription';
-      case 'relay':
-        return 'relay';
-      case 'api-key':
-      case 'openrouter':
-        return 'api-key';
-      default:
-        return undefined;
-    }
+    return resolveUsageRoute(this.config, this.lastAttemptCredentialRoute);
   }
 
   /** Resolve the key from the same atomic route used by client construction. */

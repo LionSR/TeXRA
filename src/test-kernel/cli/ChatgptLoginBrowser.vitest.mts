@@ -47,11 +47,12 @@ describe('signInCliChatGpt browser choice', () => {
     );
 
     expect(progress).toHaveLength(1);
-    expect(progress[0]).toContain('https://auth.openai.com/authorize?x=1');
-    expect(progress[0]).toContain('different browser');
+    expect(progress[0]).toBe(
+      'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=1',
+    );
   });
 
-  it('prints only the URL when the browser fails to launch', async () => {
+  it('prints the URL before reporting a failed browser launch', async () => {
     mocks.tryOpenBrowser.mockResolvedValue(false);
     mocks.loginWithLoopback.mockImplementation(async ({ openBrowser }) => {
       await openBrowser('https://auth.openai.com/authorize?x=2');
@@ -65,7 +66,8 @@ describe('signInCliChatGpt browser choice', () => {
     );
 
     expect(progress).toEqual([
-      'Open this URL to sign in with ChatGPT:\nhttps://auth.openai.com/authorize?x=2',
+      'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=2',
+      'Browser launch unavailable. ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=2',
     ]);
   });
 
@@ -83,7 +85,7 @@ describe('signInCliChatGpt browser choice', () => {
 
     expect(mocks.tryOpenBrowser).not.toHaveBeenCalled();
     expect(progress).toEqual([
-      'Open this URL to sign in with ChatGPT:\nhttps://auth.openai.com/authorize?x=3',
+      'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=3',
     ]);
   });
 

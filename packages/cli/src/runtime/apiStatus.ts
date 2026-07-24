@@ -63,15 +63,25 @@ export async function loadCliModelAccessOverview(
     readCliModelAccessStatus(apiMode),
     getCliAuthProfile(),
   ]);
+  const preferredSubscriptions = [
+    access.chatGpt.preferSubscription && access.chatGpt.signedIn
+      ? 'ChatGPT'
+      : undefined,
+    access.kimiCode.preferred && access.kimiCode.keySet
+      ? 'Kimi Code'
+      : undefined,
+  ].filter((value): value is string => value !== undefined);
   const lines = [
-    `model access: ${formatCliModelAccessRoute(access.active)}`,
+    preferredSubscriptions.length > 0
+      ? `subscription preferences: ${preferredSubscriptions.join(' + ')}`
+      : `model access: ${formatCliModelAccessRoute(apiMode)}`,
     formatAccountStatusLine(
       'ChatGPT',
-      access.chatGptSignedIn,
-      access.chatGptAccountLabel,
+      access.chatGpt.signedIn,
+      access.chatGpt.email ?? access.chatGpt.accountId ?? undefined,
     ),
     `Kimi Code: ${
-      access.kimiCodeKeySet === true
+      access.kimiCode.keySet === true
         ? 'key configured'
         : 'no key (add with /key)'
     }`,
@@ -81,7 +91,7 @@ export async function loadCliModelAccessOverview(
       profile.accountLabel,
     ),
   ];
-  if (access.active === 'chatgpt' || access.active === 'kimi-code') {
+  if (preferredSubscriptions.length > 0) {
     lines.push(`API fallback: ${formatCliModelAccessRoute(apiMode)}`);
   }
   if (profile.note) lines.push(profile.note);

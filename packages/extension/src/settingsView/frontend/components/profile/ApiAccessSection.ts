@@ -16,7 +16,12 @@ import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
 
 // Local imports - shared copy
 import { PROMO_NOTICE_LONG } from '@shared/copy/promoNotice';
-import { API_ACCESS_MODE_OPTIONS } from '@shared/schemas/settingsViewMessages';
+import {
+  API_ACCESS_MODE_OPTIONS,
+  ApiAccessModeSchema,
+  describeApiAccessModeStatus,
+  type ApiAccessMode,
+} from '@shared/schemas/modelAccess';
 
 // Local imports - profile view styles
 import { apiAccessSectionStyles } from './ApiAccessSection.styles';
@@ -27,13 +32,17 @@ import type WaRadioGroup from '@awesome.me/webawesome/dist/components/radio-grou
 export class ApiAccessSection extends LitElement {
   static override styles = [designTokens, apiAccessSectionStyles];
 
-  @property({ attribute: false }) mode: 'included' | 'personal' = 'personal';
+  @property({ attribute: false }) mode: ApiAccessMode = 'personal';
+  @property({ type: Boolean }) texraSignedIn = false;
+  @property({ type: Boolean }) personalApiKeySet = false;
 
   private handleModeChange(event: Event): void {
     const target = event.currentTarget as WaRadioGroup | null;
-    const mode = target?.value === 'included' ? 'included' : 'personal';
-    if (mode !== this.mode) {
-      postMessage(SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE, { mode });
+    const result = ApiAccessModeSchema.safeParse(target?.value);
+    if (result.success && result.data !== this.mode) {
+      postMessage(SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE, {
+        mode: result.data,
+      });
     }
   }
 
@@ -49,9 +58,19 @@ export class ApiAccessSection extends LitElement {
         >
           ${API_ACCESS_MODE_OPTIONS.map(
             (option) => html`
-              <wa-radio class="api-access-option" value=${option.value}>
+              <wa-radio
+                class="api-access-option"
+                value=${option.value}
+                ?disabled=${option.value === 'included' && !this.texraSignedIn}
+              >
                 <span class="option-content">
                   <span class="option-title">${option.label}</span>
+                  <span class="option-status">
+                    ${describeApiAccessModeStatus(option.value, {
+                      texraSignedIn: this.texraSignedIn,
+                      personalApiKeySet: this.personalApiKeySet,
+                    })}
+                  </span>
                   <span class="option-description">
                     ${option.description}
                   </span>

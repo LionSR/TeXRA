@@ -1,12 +1,12 @@
 import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type {
-  ApiAccessMode,
   NumberVscodeSetting,
   ProviderKeyStatus,
   ProviderVscodeSetting,
   UpdateProfileMessage,
 } from '@shared/schemas/profileViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/modelAccess';
 import type { ProviderVscodeSettingDef } from '@shared/constants/providers';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { buildProfileMessage } from './ProfileMessageBuilder';
@@ -196,6 +196,15 @@ export class SettingsProfileController {
         providerSetting.globalStateKey,
         input.value,
       );
+      if (
+        providerSetting.globalStateKey === GlobalStateKey.KIMI_CODE_PREFER &&
+        input.value === true
+      ) {
+        await this.deps.globalState.update(
+          GlobalStateKey.USE_OPENROUTER,
+          false,
+        );
+      }
     } else {
       await this.deps.updateConfig(input.key, input.value);
     }

@@ -344,6 +344,8 @@ export const SETTINGS_VIEW_CMD = {
   UPDATE_STATE_SETTING: 'updateStateSetting',
   // Approval settings commands
   SET_BASH_APPROVAL_ENABLED: 'setBashApprovalEnabled',
+  // Agent prompt context
+  SET_AGENT_SKILLS_ENABLED: 'setAgentSkillsEnabled',
   // Tool dashboard commands
   OPEN_TOOL_INSTALL_URL: 'openToolInstallUrl',
   INSTALL_TOOL_EXTENSION: 'installToolExtension',
@@ -401,6 +403,7 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_SUPER_YOLO_ENABLED: 'updateSuperYoloEnabled',
   UPDATE_AGENT_MODE_PRESETS: 'updateAgentModePresets',
   UPDATE_APPROVAL_SETTINGS: 'updateApprovalSettings',
+  UPDATE_AGENT_SKILLS_SETTINGS: 'updateAgentSkillsSettings',
   UPDATE_TOOL_DASHBOARD: 'updateToolDashboard',
   UPDATE_GIT_AUTHOR_SETTINGS: 'updateGitAuthorSettings',
   UPDATE_LATEX_SETTINGS_STATUS: 'updateLatexSettingsStatus',

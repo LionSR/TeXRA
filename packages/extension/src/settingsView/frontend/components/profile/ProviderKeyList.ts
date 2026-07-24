@@ -26,6 +26,7 @@ import type {
   ProviderKeyStatus,
   ProviderVscodeSetting,
 } from '@shared/schemas/settingsViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/modelAccess';
 import { createEvent } from '@shared/utils/events';
 import { providerKeyListStyles } from './ProviderKeyList.styles';
 import { resolveProviderKeyRows } from './providerKeyRows';
@@ -42,8 +43,7 @@ export class ProviderKeyList extends LitElement {
   ];
 
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
-  @property({ attribute: false }) apiAccessMode: 'included' | 'personal' =
-    'personal';
+  @property({ attribute: false }) apiAccessMode: ApiAccessMode = 'personal';
   @property({ attribute: false }) globalStreamingDefault = true;
 
   @state() private expandedProvider: string | null = null;

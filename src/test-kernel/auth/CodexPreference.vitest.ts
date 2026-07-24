@@ -14,6 +14,7 @@ import type {
   ConfigTarget,
   Disposable,
 } from '@platform/interfaces';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
 
 class FolderOverrideConfigProvider implements ConfigProvider {
@@ -74,6 +75,9 @@ describe('Codex subscription preference', () => {
 
     expect(update).toEqual({ effective: true, target: 'workspace' });
     expect(isPreferCodexSubscription()).toBe(true);
+    expect(
+      platform().globalState.get(GlobalStateKey.USE_OPENROUTER, true),
+    ).toBe(false);
     expect(
       platform().config.inspect(CODEX_PREFER_SUBSCRIPTION_KEY),
     ).toMatchObject({

@@ -571,8 +571,7 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'api',
-    description:
-      'Choose ChatGPT, Kimi Code, included TeXRA, or personal model access',
+    description: 'Subscription preferences and fallback model access',
     category: 'configuration',
     echo: 'ifPersists',
     argHandler: applyCliModelAccessSelection,
@@ -704,10 +703,8 @@ export function registerBuiltinSlashCommands(options?: {
             await options?.onError?.(error);
           }}
           onApiModePersonal={async () => {
-            // A key save only needs the mode switch when leaving included
-            // access — already-personal sessions (including an active Kimi
-            // Code route) must not be treated as an explicit "Personal API
-            // keys" picker choice, which would clear the Kimi preference.
+            // A key save only needs the fallback switch when leaving included
+            // access. Subscription preferences remain independent.
             if (sessionMeta.get().apiMode === 'personal') return;
             await onModelAccessSelect('personal', transcriptSlashCommandOutput);
           }}

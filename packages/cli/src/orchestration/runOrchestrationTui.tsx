@@ -297,7 +297,7 @@ export function OrchestrationApp(
     ? buildCliModelAccessItems(props.modelAccess)
     : [];
   const activeModelAccess: CliModelAccessRoute | undefined =
-    props.modelAccess?.active;
+    props.modelAccess?.apiMode;
   const isPendingTeam = pending?.kind === 'preset';
   // Model-step header text, shared between the wrapped-row measurement in
   // `headerLines` and the styled render in the `pending` branch below.
@@ -309,7 +309,7 @@ export function OrchestrationApp(
   if (modelAccessOpen) {
     headerLines = [
       'Model access',
-      'Choose how TeXRA should authenticate model calls.',
+      'Subscription preferences are independent; fallback access applies to other models.',
     ];
   } else if (resumeOpen) {
     headerLines = ['Resume', 'Choose a previous session to continue.'];
@@ -423,7 +423,10 @@ export function OrchestrationApp(
         <Text bold color="cyan">
           Model access
         </Text>
-        <Text dimColor>Choose how TeXRA should authenticate model calls.</Text>
+        <Text dimColor>
+          Subscription preferences are independent; fallback access applies to
+          other models.
+        </Text>
         <Box marginTop={1}>
           <Select
             key="orchestration-model-access-picker"

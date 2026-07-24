@@ -351,9 +351,9 @@ export const GLM_CODING_PLAN_PROVIDER_SETTING = {
 
 export const KIMI_CODE_PREFER_PROVIDER_SETTING = {
   key: GlobalStateKey.KIMI_CODE_PREFER,
-  label: 'Prefer Kimi Code',
+  label: 'Kimi Code subscription preference',
   description:
-    'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
+    'Dual-backend Kimi models (K3) use the Kimi Code endpoint when this preference and a Kimi Code key are present. Coding-only Kimi models always use the key. Otherwise, K3 uses the Moonshot open platform.',
   defaultValue: false,
   globalStateKey: GlobalStateKey.KIMI_CODE_PREFER,
 } satisfies ProviderVscodeSettingDef;

@@ -31,7 +31,6 @@ export { type MemoryViewItem, type MemoryPreview } from './memoryViewMessages';
 export { type HistoryItem } from './historyViewMessages';
 
 export {
-  API_ACCESS_MODE_OPTIONS,
   type ProviderKeyStatus,
   type ProviderVscodeSetting,
   type NumberVscodeSetting,

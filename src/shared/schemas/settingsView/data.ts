@@ -26,7 +26,12 @@ import {
   AgentSourceSchema,
 } from '../agent';
 import { AgentModePresetSchema } from '../agentPresets';
+import { AgentSkillsEnabledSchema } from '../agentSkills';
 import { ModelAvailabilityFieldsSchema } from '../mainView';
+import {
+  ChatGptSubscriptionStatusSchema,
+  type ChatGptSubscriptionStatus,
+} from '../modelAccess';
 import {
   NumberVscodeSettingSchema,
   UpdateProfileMessageSchema,
@@ -328,6 +333,15 @@ export type UpdateApprovalSettingsMessage = z.infer<
   typeof UpdateApprovalSettingsMessageSchema
 >;
 
+/** Outbound: backend → frontend agent skill-catalog setting. */
+const UpdateAgentSkillsSettingsMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS),
+  enabled: AgentSkillsEnabledSchema,
+});
+export type UpdateAgentSkillsSettingsMessage = z.infer<
+  typeof UpdateAgentSkillsSettingsMessageSchema
+>;
+
 // ============================================================
 // Git author settings data schema
 // ============================================================
@@ -352,18 +366,11 @@ const UpdateGitHubTokenStatusMessageSchema = z.object({
 });
 
 /** Outbound: backend → frontend ChatGPT-subscription sign-in status. */
-const ChatGptAuthStatusSchema = z.object({
-  signedIn: z.boolean(),
-  email: z.string().nullish(),
-  accountId: z.string().nullish(),
-  preferSubscription: z.boolean(),
-  subscriptionToolUseOnly: z.boolean(),
-});
-export type ChatGptAuthStatus = z.infer<typeof ChatGptAuthStatusSchema>;
+export type ChatGptAuthStatus = ChatGptSubscriptionStatus;
 
 const UpdateChatGptAuthStatusMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS),
-  status: ChatGptAuthStatusSchema,
+  status: ChatGptSubscriptionStatusSchema,
 });
 export type UpdateChatGptAuthStatusMessage = z.infer<
   typeof UpdateChatGptAuthStatusMessageSchema
@@ -529,6 +536,7 @@ const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   UpdateSuperYoloEnabledMessageSchema,
   UpdateAgentModePresetsMessageSchema,
   UpdateApprovalSettingsMessageSchema,
+  UpdateAgentSkillsSettingsMessageSchema,
   UpdateToolDashboardMessageSchema,
   UpdateGitAuthorSettingsMessageSchema,
   UpdateGitHubTokenStatusMessageSchema,

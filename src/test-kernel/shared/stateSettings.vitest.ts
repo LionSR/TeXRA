@@ -23,10 +23,8 @@ import {
   type SettingStore,
   type StateSettingEntry,
 } from '@shared/schemas/stateSettings';
-import {
-  API_ACCESS_MODE_OPTIONS,
-  REASONING_LEVEL_OPTIONS,
-} from '@shared/schemas/settingsViewMessages';
+import { REASONING_LEVEL_OPTIONS } from '@shared/schemas/settingsViewMessages';
+import { API_ACCESS_MODE_OPTIONS } from '@shared/schemas/modelAccess';
 import { PROVIDER_ENDPOINT_STATE_ENTRIES } from '@shared/constants/providers';
 import {
   readSetting,
@@ -345,8 +343,8 @@ describe('state settings catalog', () => {
         (option) => `${option.value} — ${option.label} — ${option.description}`,
       ),
       [
-        'included — Use Included Access — Works automatically. No setup needed. Does not apply to OpenRouter — those models always use your OpenRouter key. Bring your own provider API keys to use more of your own quota and avoid relay caps.',
-        'personal — Use My Own Keys — Provide your own API keys from OpenAI, Anthropic, etc. This uses your provider account directly for higher limits and models outside Included Access.',
+        'included — Included TeXRA access — TeXRA supplies access automatically. OpenRouter models remain on the configured OpenRouter key. Personal provider keys offer separate quota and avoid relay caps.',
+        'personal — Personal API keys — Configured OpenAI, Anthropic, and other provider keys use the corresponding provider account directly, including models outside Included TeXRA access.',
       ],
     );
   });

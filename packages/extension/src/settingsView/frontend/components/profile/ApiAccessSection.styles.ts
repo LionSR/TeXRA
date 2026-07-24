@@ -86,6 +86,11 @@ export const apiAccessSectionStyles: CSSResult = css`
     color: var(--wa-color-text-normal);
   }
 
+  .option-status {
+    color: var(--wa-color-text-normal);
+    font-size: var(--font-size-sm);
+  }
+
   .option-description {
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);

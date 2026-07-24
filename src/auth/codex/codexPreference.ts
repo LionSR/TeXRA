@@ -6,6 +6,7 @@
  * of the user's API key.
  */
 import { tryPlatform } from '@platform/platform';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import type { ConfigTarget } from '@platform/interfaces';
 import {
@@ -67,5 +68,12 @@ export async function setCodexSubscriptionToolUseOnly(
 export async function setPreferCodexSubscription(
   enabled: boolean,
 ): Promise<CodexSubscriptionPreferenceUpdate> {
-  return writeCodexFlag(CODEX_PREFER_SUBSCRIPTION_KEY, enabled);
+  const update = await writeCodexFlag(CODEX_PREFER_SUBSCRIPTION_KEY, enabled);
+  if (update.effective) {
+    await tryPlatform()?.globalState.update(
+      GlobalStateKey.USE_OPENROUTER,
+      false,
+    );
+  }
+  return update;
 }

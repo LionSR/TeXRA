@@ -90,7 +90,7 @@ export function formatCodexAuthUnavailableMessage(
   error: CodexAuthError,
 ): string {
   const action = error.needsReauth
-    ? 'Sign in with ChatGPT again, or turn off "Prefer ChatGPT subscription".'
-    : 'Try again in a moment, or turn off "Prefer ChatGPT subscription".';
+    ? 'A new ChatGPT sign-in or the "ChatGPT subscription preference" switch restores a valid route.'
+    : 'The route may recover shortly; the "ChatGPT subscription preference" switch controls whether TeXRA continues using it.';
   return `ChatGPT subscription unavailable: ${error.message} ${action}`;
 }

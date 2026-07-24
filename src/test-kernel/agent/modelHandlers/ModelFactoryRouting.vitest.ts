@@ -406,7 +406,7 @@ describe('OpenAI model handler routing', () => {
     await expect(createModelHandler(codexEligibleConfig)).rejects.toMatchObject(
       {
         name: 'AgentError',
-        message: expect.stringContaining('Try again in a moment'),
+        message: expect.stringContaining('route may recover shortly'),
         cause: { kind: 'transient' },
       },
     );
@@ -960,13 +960,9 @@ describe('Kimi Code reroute under included access', () => {
     }
   }
 
-  it('does not reroute dual-backend Kimi models while the relay serves requests', async () => {
-    // The rerouted config pins the coding baseUrl, which outranks the relay
-    // URL in resolveBaseUrl while the credential layer resolves a relay
-    // token — under serving included access the config must stay untouched.
+  it('prefers Kimi Code while included access is the fallback', async () => {
     const config = await createKimiHandler({ includedAccess: true });
-    expect(config.baseUrl).toBeUndefined();
-    expect(config.fullName).toBe(dualBackendKimi.fullName);
+    expect(config.baseUrl).toBe('https://api.kimi.com/coding/v1');
   });
 
   it('reroutes to the coding endpoint when the relay cannot serve', async () => {

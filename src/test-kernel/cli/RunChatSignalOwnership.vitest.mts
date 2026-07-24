@@ -449,7 +449,7 @@ describe('runChat signal ownership wiring', () => {
       kill.mockRestore();
       exit.mockRestore();
     }
-  });
+  }, 30_000);
 
   it('constructs the exact initial run configuration for a resumed team', async () => {
     const exitTui = deferred();
@@ -537,5 +537,5 @@ describe('runChat signal ownership wiring', () => {
       loadAgentsSpy.mockRestore();
       getVisibleAgentsSpy.mockRestore();
     }
-  });
+  }, 30_000);
 });

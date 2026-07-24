@@ -79,6 +79,10 @@ import {
   setBashApprovalEnabled as setBashApprovalEnabledShared,
   setWorkspaceAgentSetting,
 } from '@shared/settingsView/handlers/approvalHandlers';
+import {
+  buildAgentSkillsSettingsMessage,
+  setAgentSkillsEnabled,
+} from '@shared/settingsView/handlers/agentSkillsHandlers';
 import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
 import {
   PROVIDER_DISPLAY_NAMES,
@@ -551,6 +555,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         setBashApprovalEnabled: (enabled) =>
           this.handleSetApprovalEnabled(enabled),
       },
+      agentSkills: {
+        setEnabled: (enabled) => this.handleSetAgentSkillsEnabled(enabled),
+      },
       stateSettings: {
         update: (key, value) => this.updateStateSetting(key, value),
       },
@@ -689,6 +696,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.chatgptHandlers.sendChatGptAuthStatus(webview),
       this.githubHandlers.sendPRSubscriptions(webview),
       this.sendApprovalSettings(webview),
+      this.sendAgentSkillsSettings(webview),
       this.latexHandlers.sendLatexSettingsStatus(webview),
       this.latexHandlers.sendLatexConfigValues(webview),
       this.sendInlineCriticismEnabled(webview),
@@ -820,6 +828,21 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         globalState: globalSM,
         config: platform().config,
       }),
+    );
+  }
+
+  private async sendAgentSkillsSettings(
+    webview: vscode.Webview,
+  ): Promise<void> {
+    await webview.postMessage(
+      buildAgentSkillsSettingsMessage(platform().config),
+    );
+  }
+
+  private async handleSetAgentSkillsEnabled(enabled: boolean): Promise<void> {
+    await setAgentSkillsEnabled(platform().config, enabled);
+    await this.withActiveWebview((webview) =>
+      this.sendAgentSkillsSettings(webview),
     );
   }
 

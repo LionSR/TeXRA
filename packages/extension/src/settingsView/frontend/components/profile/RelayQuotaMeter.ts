@@ -29,7 +29,7 @@ function quotaNote(
 ): string | null {
   if (state === 'exhausted') {
     return autoSwitched
-      ? "Monthly relay quota reached — switched you to your own API keys. Toggle 'Use Included Access' back on to retry the relay."
+      ? 'Monthly relay quota reached — the fallback is now Personal API keys. Included TeXRA access becomes available again with renewed quota.'
       : 'Monthly relay quota reached. Switch to your own API keys to keep going.';
   }
   if (state === 'warning') {

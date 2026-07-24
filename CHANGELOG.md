@@ -14,6 +14,9 @@ All notable changes to this project will be documented in this file.
   built-in Orchestrator supports planned fan-out, pipeline, and join runs.
   Workflow Script is an opt-in integration in the Tools dashboard and CLI
   `/tools`; disabling it applies to every agent.
+- **Agent skill catalogs can be disabled per workspace** — the CLI launcher
+  and the extension and desktop Tools settings control whether TeXRA and
+  imported skills are supplied to agents.
 
 #### Bug Fixes
 
@@ -85,9 +88,9 @@ All notable changes to this project will be documented in this file.
 - **Context compaction is visible while it runs** — the terminal status bar
   shows a compacting indicator while conversation history is being summarized.
 - **Kimi Code subscription joins model access** — the launcher and `/api` now
-  offer Kimi Code alongside ChatGPT subscription, included TeXRA access, and
-  personal API keys. Selecting it routes Kimi models through your Kimi Code
-  membership while other models fall back to your saved keys.
+  expose ChatGPT and Kimi Code as independent preferences, with included TeXRA
+  access or personal API keys as the fallback for other models. Kimi models
+  routed through the membership are labelled as Kimi Code subscription access.
 - **API keys and provider routing can be managed from `/config`** — masked key
   status and secure entry are available for every provider, with Kimi Code,
   provider region, and GLM Coding Plan preferences under "Models and providers".
@@ -99,6 +102,12 @@ All notable changes to this project will be documented in this file.
   without filling the conversation with raw model prose.
 
 #### Bug Fixes
+
+- **ChatGPT browser sign-in always exposes its URL** — the terminal displays a
+  copyable sign-in link before attempting to open the browser.
+- **Kimi Code sessions keep their subscription label** — live and completed
+  terminal status no longer describes Kimi Code usage as personal API-key
+  access.
 
 - **Model failures show their reason** — failed model requests now include a
   concise provider message and are no longer labeled as tool failures.

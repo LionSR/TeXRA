@@ -1,9 +1,14 @@
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
+import {
+  ApiAccessModeSchema,
+  type ApiAccessMode,
+} from '@shared/schemas/modelAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-export type CliApiMode = 'included' | 'personal';
+/** @deprecated Import the host-neutral `ApiAccessMode` type instead. */
+export type CliApiMode = ApiAccessMode;
 
 // Two canonical names per mode: the descriptive `included`/`personal` (used in
 // labels and config) plus the common shorthand `relay`/`byok` (accepted as
@@ -41,9 +46,10 @@ export function shortCliApiMode(mode: CliApiMode): string {
 
 export function parseCliApiMode(input: string): CliApiMode | undefined {
   const normalized = input.trim().toLowerCase();
-  return Object.hasOwn(CLI_API_MODE_BY_INPUT, normalized)
-    ? CLI_API_MODE_BY_INPUT[normalized as CliApiModeInput]
-    : undefined;
+  if (!Object.hasOwn(CLI_API_MODE_BY_INPUT, normalized)) return undefined;
+  return ApiAccessModeSchema.parse(
+    CLI_API_MODE_BY_INPUT[normalized as CliApiModeInput],
+  );
 }
 
 export async function enableCliIncludedModelAccess(): Promise<void> {

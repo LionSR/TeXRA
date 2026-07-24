@@ -3,6 +3,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import { usesServerSideKeysRoute } from '@agent/modelHandlers/support/ProxyConfigResolver';
+import { resolveUsageRoute } from '@model/usageRoute';
 import type {
   ExtendedTokenUsageStats,
   StorageKey,
@@ -70,6 +71,7 @@ export interface UsageMonitorModelInfo {
     | 'name'
     | 'fullName'
     | 'inputPrice'
+    | 'baseUrl'
     | 'openRouterOnly'
     | 'requiresResponsesAPI'
   >;
@@ -235,7 +237,10 @@ export class UsageMonitor {
 
   private currentUsageRoute(): UsageRoute | undefined {
     try {
-      return this.usesRelayRoute() ? 'relay' : 'api-key';
+      return resolveUsageRoute(
+        this.modelInfo.config,
+        this.usesRelayRoute() ? 'relay' : 'api-key',
+      );
     } catch (error) {
       this.context.logger.debug('Usage route relay check failed', {
         data: error,

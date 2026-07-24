@@ -177,8 +177,8 @@ describe('SettingsProfileController', () => {
     expect(invalidations.count).toBe(1);
   });
 
-  it('recomputes model options when Prefer Kimi Code is toggled', async () => {
-    const state = createState();
+  it('activates Kimi Code routing consistently with the CLI', async () => {
+    const state = createState({ [GlobalStateKey.USE_OPENROUTER]: true });
     const { controller, invalidations } = createController({ state });
 
     const updated = await controller.setProviderVscodeSetting({
@@ -192,6 +192,7 @@ describe('SettingsProfileController', () => {
       affectsModelAvailability: true,
     });
     expect(state.get(GlobalStateKey.KIMI_CODE_PREFER, false)).toBe(true);
+    expect(state.get(GlobalStateKey.USE_OPENROUTER, true)).toBe(false);
     expect(invalidations.count).toBe(1);
   });
 

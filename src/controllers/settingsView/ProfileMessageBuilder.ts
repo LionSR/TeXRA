@@ -23,11 +23,11 @@ import { FREE_TIER, ULTRA_TIER, MAX_TIER } from '@auth/config';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { PROFILE_VIEW_COMMANDS } from '@shared/ipc';
 import type {
-  ApiAccessMode,
   ProviderKeyStatus,
   RemoteAgent,
   UpdateProfileMessage,
 } from '@shared/schemas/profileViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/modelAccess';
 import { getGlobalStreaming } from '@utils/config/providerConfig';
 
 export interface BuildProfileMessageDeps {

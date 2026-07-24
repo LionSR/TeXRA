@@ -8,6 +8,7 @@
  */
 import * as logger from '@logger/logUtils';
 import { tryPlatform } from '@platform/platform';
+import type { ChatGptSubscriptionStatus } from '@shared/schemas/modelAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CODEX_SESSION_SECRET_KEY } from './codexConstants';
@@ -126,12 +127,7 @@ export async function isCodexSessionRoutable(): Promise<boolean> {
  * desktop hosts post the identical payload (the wire shape is validated by
  * `ChatGptAuthStatusSchema` at each host's boundary).
  */
-export async function getChatGptAuthStatus(): Promise<
-  CodexSessionStatus & {
-    preferSubscription: boolean;
-    subscriptionToolUseOnly: boolean;
-  }
-> {
+export async function getChatGptAuthStatus(): Promise<ChatGptSubscriptionStatus> {
   return {
     ...(await getCodexStatus()),
     preferSubscription: isPreferCodexSubscription(),

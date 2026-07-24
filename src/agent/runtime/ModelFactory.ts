@@ -534,13 +534,11 @@ async function createModelHandlerForResolvedCompatibilityKey(
   // backend model id, base URL, and credential change. Exclusive plan aliases
   // already carry the pinned coding baseUrl (the registry-fact predicates route
   // their key and endpoint automatically), so they keep `config` untouched.
-  // Dual-backend `kimi3` is rerouted only while the "Prefer Kimi Code" switch
-  // is on, a key is stored, and the relay is not actually serving requests —
-  // under included (relay) access the relay owns eligible models, and the
-  // rerouted config's pinned coding `baseUrl` would outrank the relay URL
-  // while the credential layer still resolves a relay token (see
-  // resolveClientCredential). The reroute swaps in a synthesized runtime
-  // config that the normal ModelHandlerKimi switch below then builds.
+  // Dual-backend `kimi3` is rerouted while the "Prefer Kimi Code" switch is
+  // on and a key is stored. This subscription preference takes precedence
+  // over the included/personal fallback. The synthesized config is a managed
+  // direct route, so credential resolution pairs its Kimi Code key with its
+  // pinned endpoint and does not consider the relay.
   //
   // On the resume path `useOpenRouter` is derived from the compatibility key
   // (false unless it's `ModelHandlerOpenRouterNative`), not the live global
@@ -555,20 +553,12 @@ async function createModelHandlerForResolvedCompatibilityKey(
     compatibilityKey === 'ModelHandlerKimi' &&
     isKimiSubscriptionEligible(config)
   ) {
-    const serverSideKeyService = getServerSideKeyService();
-    // The relay only owns the model when included access is on AND the account
-    // can actually use it — a signed-out user with the default-on toggle must
-    // still reach their Kimi Code key, matching picker availability.
-    const includedAccess = serverSideKeyService.getUseIncludedModelAccess()
-      ? await serverSideKeyService.canUseServerSideKeys()
-      : false;
     const keySet = await apiKeyExists(platform().secrets, 'kimiCode');
     const route = resolveKimiCodeRoute(
       config,
       useOpenRouter,
       keySet,
       getPreferKimiCode(),
-      includedAccess,
     );
     if (route === 'kimiCode' && !isKimiCodeExclusiveModel(config)) {
       config = kimiCodeRuntimeConfig(config);

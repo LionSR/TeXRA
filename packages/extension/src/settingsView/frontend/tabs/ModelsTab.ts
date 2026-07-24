@@ -22,6 +22,11 @@ import type {
   NumberVscodeSetting,
   ProviderKeyStatus,
 } from '@shared/schemas/settingsViewMessages';
+import {
+  MODEL_ACCESS_PREFERENCE_LABELS,
+  MODEL_ACCESS_ROUTE_LABELS,
+  type ApiAccessMode,
+} from '@shared/schemas/modelAccess';
 import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 import { CHATGPT_TOOL_USE_ONLY_DESCRIPTION } from '@shared/schemas/coreSettings';
 
@@ -96,8 +101,7 @@ export class ModelsTab extends LitElement {
   ];
 
   @property({ attribute: false }) authenticated = false;
-  @property({ attribute: false }) apiAccessMode: 'included' | 'personal' =
-    'personal';
+  @property({ attribute: false }) apiAccessMode: ApiAccessMode = 'personal';
   @property({ attribute: false }) spendingStatus: SpendingStatus | null = null;
   @property({ type: Boolean }) quotaAutoSwitched = false;
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
@@ -154,8 +158,8 @@ export class ModelsTab extends LitElement {
     );
     const description =
       this.apiAccessMode === 'included'
-        ? 'Use included access, ChatGPT subscription for Codex models, or personal provider API keys.'
-        : 'Use ChatGPT subscription for Codex models, or configure personal API keys for OpenAI, Anthropic, Google, and other providers.';
+        ? 'Available routes include TeXRA access, ChatGPT subscription for Codex models, and personal provider API keys.'
+        : 'Available routes include ChatGPT subscription for Codex models and configured OpenAI, Anthropic, Google, or other provider keys.';
 
     const accessJump = this.authenticated
       ? html`<wa-button
@@ -212,11 +216,14 @@ export class ModelsTab extends LitElement {
   }
 
   override render(): TemplateResult {
-    const apiAccessSection = this.authenticated
-      ? html`<api-access-section
-          .mode=${this.apiAccessMode}
-        ></api-access-section>`
-      : nothing;
+    const personalApiKeySet = this.providerKeyStatuses.some(
+      ({ status }) => status !== 'not-set',
+    );
+    const apiAccessSection = html`<api-access-section
+      .mode=${this.apiAccessMode}
+      .texraSignedIn=${this.authenticated}
+      .personalApiKeySet=${personalApiKeySet}
+    ></api-access-section>`;
 
     const quotaMeter =
       this.authenticated && this.spendingStatus
@@ -263,12 +270,14 @@ export class ModelsTab extends LitElement {
     return html`
       <section id="chatgpt-subscription" class="keyless-source">
         <div class="keyless-source__header">
-          <span class="keyless-source__title">ChatGPT subscription</span>
+          <span class="keyless-source__title"
+            >${MODEL_ACCESS_ROUTE_LABELS.chatgpt}</span
+          >
           <wa-tag variant="neutral" size="small">experimental</wa-tag>
         </div>
         <p class="keyless-source__hint">
-          Use OpenAI models through your ChatGPT Plus, Pro, or Team
-          subscription. No OpenAI API key is needed.
+          OpenAI models can run through a ChatGPT Plus, Pro, or Team
+          subscription. This route does not require an OpenAI API key.
         </p>
         <p class="keyless-source__limit">
           ${waIcon('circle-info')}
@@ -282,7 +291,7 @@ export class ModelsTab extends LitElement {
             ?checked=${preferSubscription}
             @change=${this.handlePreferSubscriptionChange}
           >
-            Prefer ChatGPT subscription
+            ${MODEL_ACCESS_PREFERENCE_LABELS.chatgpt}
           </wa-switch>
         </div>
         <div class="keyless-source__setting">

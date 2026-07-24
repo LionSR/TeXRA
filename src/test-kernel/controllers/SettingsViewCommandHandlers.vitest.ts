@@ -104,6 +104,9 @@ function createActions(): SettingsViewCommandActions {
     approval: {
       setBashApprovalEnabled: action(),
     },
+    agentSkills: {
+      setEnabled: action(),
+    },
     stateSettings: {
       update: action(),
     },
@@ -208,6 +211,12 @@ describe('createSettingsViewCommandHandlers', () => {
       toolId: 'latex',
       kind: 'install',
     });
+
+    assertSupported(registry.setAgentSkillsEnabled)({
+      command: SETTINGS_VIEW_COMMANDS.SET_AGENT_SKILLS_ENABLED,
+      enabled: false,
+    });
+    expect(actions.agentSkills.setEnabled).toHaveBeenCalledWith(false);
 
     assertSupported(registry.requestModelAccess)({
       command: SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,

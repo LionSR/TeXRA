@@ -13,6 +13,7 @@ import {
 } from '@shared/utils/dispatcher';
 
 import { AgentCategorySchema, AgentSourceSchema } from '../agent';
+import { AgentSkillsEnabledSchema } from '../agentSkills';
 import { StreamTabIdSchema } from '../identifiers';
 import { commandOnly } from '../messageFactories';
 import { WebviewReadyMessageSchema } from '../commonViewMessages';
@@ -335,6 +336,11 @@ const SetBashApprovalEnabledMessageSchema = enabledFlag(
   CMD.SET_BASH_APPROVAL_ENABLED,
 );
 
+const SetAgentSkillsEnabledMessageSchema = z.object({
+  command: z.literal(CMD.SET_AGENT_SKILLS_ENABLED),
+  enabled: AgentSkillsEnabledSchema,
+});
+
 // Generic catalog-driven state-setting write. One flat branch (single outer
 // discriminator on `command`, per the SET_LATEX_CONFIG_VALUE precedent above)
 // carrying the canonical `STATE_SETTINGS` key and a loose value. Per-value
@@ -451,6 +457,8 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     OpenPRSubscriptionStreamMessageSchema,
     // Approval settings messages
     SetBashApprovalEnabledMessageSchema,
+    // Agent prompt context
+    SetAgentSkillsEnabledMessageSchema,
     // Generic catalog-driven state-setting write (git-author + agent controls)
     UpdateStateSettingMessageSchema,
     // Agent team messages

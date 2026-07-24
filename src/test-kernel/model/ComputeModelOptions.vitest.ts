@@ -161,7 +161,8 @@ describe('computeModelOptionsData relay quota state', () => {
 
     expect(model).toMatchObject({
       provider: 'kimiCode',
-      availability: 'provider-key',
+      availability: 'subscription-access',
+      availabilityLabel: 'Kimi Code subscription',
       disabled: false,
     });
   });
@@ -535,7 +536,8 @@ describe('computeModelOptionsData Kimi Code routing (dual-backend kimi3)', () =>
     expect(model).toMatchObject({
       provider: 'kimiCode',
       routeLabel: 'Via Kimi Code',
-      availability: 'provider-key',
+      availability: 'subscription-access',
+      availabilityLabel: 'Kimi Code subscription',
       disabled: false,
       cost: '$0.000/$0.000',
       context: '262K',

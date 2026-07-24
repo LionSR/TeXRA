@@ -73,7 +73,18 @@ function createSession(): TuiSession {
 
 function mockModelAccessOverview(): void {
   vi.spyOn(apiStatus, 'loadCliModelAccessOverview').mockResolvedValue({
-    access: { active: 'personal', chatGptSignedIn: false },
+    access: {
+      apiMode: 'personal',
+      chatGpt: {
+        signedIn: false,
+        email: null,
+        accountId: null,
+        preferSubscription: false,
+        subscriptionToolUseOnly: false,
+      },
+      kimiCode: { keySet: false, preferred: false },
+      personalApiKeySet: false,
+    },
     lines: ['model access: Personal API keys'],
   });
 }
@@ -433,8 +444,16 @@ describe('handleTuiSlashCommand', () => {
       .spyOn(apiStatus, 'loadCliModelAccessOverview')
       .mockResolvedValue({
         access: {
-          active: 'chatgpt',
-          chatGptSignedIn: true,
+          apiMode: 'personal',
+          chatGpt: {
+            signedIn: true,
+            email: null,
+            accountId: null,
+            preferSubscription: true,
+            subscriptionToolUseOnly: false,
+          },
+          kimiCode: { keySet: false, preferred: false },
+          personalApiKeySet: false,
           texraSignedIn: true,
         },
         lines: [

@@ -34,7 +34,7 @@ import {
   PROVIDER_URLS,
 } from '@shared/constants/providers';
 import { AgentCategory } from '@shared/schemas/agent';
-import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
+import type { ApiAccessMode } from '@shared/schemas/modelAccess';
 import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { unsupported } from '@shared/utils/dispatcher';

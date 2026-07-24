@@ -30,7 +30,36 @@ import {
   type CliMultiAgentPreset,
   type CliMultiAgentPresetRunPlan,
 } from '@cli/runtime/multiAgentPresets';
-import type { ExecutionId } from '@shared/schemas';
+import type { ExecutionId, ModelAccessStatus } from '@shared/schemas';
+
+function modelAccessStatus(
+  overrides: {
+    apiMode?: ModelAccessStatus['apiMode'];
+    chatGpt?: Partial<ModelAccessStatus['chatGpt']>;
+    kimiCode?: Partial<ModelAccessStatus['kimiCode']>;
+    personalApiKeySet?: boolean;
+    texraSignedIn?: boolean;
+  } = {},
+): ModelAccessStatus {
+  return {
+    apiMode: overrides.apiMode ?? 'personal',
+    chatGpt: {
+      signedIn: false,
+      email: null,
+      accountId: null,
+      preferSubscription: false,
+      subscriptionToolUseOnly: false,
+      ...overrides.chatGpt,
+    },
+    kimiCode: {
+      keySet: false,
+      preferred: false,
+      ...overrides.kimiCode,
+    },
+    personalApiKeySet: overrides.personalApiKeySet ?? false,
+    texraSignedIn: overrides.texraSignedIn,
+  };
+}
 
 function historyEntry(
   id: string,
@@ -369,11 +398,10 @@ describe('CLI orchestration items', () => {
   });
 
   it('keeps model access directly below new chat and presents every access route', () => {
-    const status = {
-      active: 'included' as const,
-      chatGptSignedIn: true,
-      chatGptAccountLabel: 'researcher@example.com',
-    };
+    const status = modelAccessStatus({
+      apiMode: 'included',
+      chatGpt: { signedIn: true, email: 'researcher@example.com' },
+    });
     const items = buildCliOrchestrationItems({
       presetPlans: [],
       history: [],
@@ -383,66 +411,86 @@ describe('CLI orchestration items', () => {
 
     expect(items[1]).toEqual({
       label: 'Model access',
-      description: 'Included TeXRA access',
+      description: 'Included TeXRA access · TeXRA account',
       value: { kind: 'configure-model-access' },
     });
     expect(buildCliModelAccessItems(status)).toEqual([
       {
         value: 'chatgpt',
-        label: 'Prefer ChatGPT subscription',
+        label: 'ChatGPT subscription preference',
         description: 'Off · researcher@example.com',
       },
       {
         value: 'kimi-code',
-        label: 'Prefer Kimi Code subscription',
+        label: 'Kimi Code subscription preference',
         description: 'Add a key with /key (kimi.com/code/console)',
       },
       {
         value: 'included',
         label: 'Included TeXRA access',
-        description: 'Use your TeXRA account',
+        description: 'TeXRA account',
       },
       {
         value: 'personal',
         label: 'Personal API keys',
-        description: 'Use keys configured on this computer',
+        description: 'No provider API keys configured',
       },
     ]);
   });
 
+  it('presents agent skills as an independent launcher switch', () => {
+    const items = buildCliOrchestrationItems({
+      presetPlans: [],
+      history: [],
+      toolUseAgents: [],
+      agentSkillsEnabled: true,
+    });
+
+    expect(items.find((item) => item.label === 'Agent skills')).toEqual({
+      label: 'Agent skills',
+      description: 'On · TeXRA and imported skills available to agents',
+      value: { kind: 'set-agent-skills', enabled: false },
+    });
+  });
+
   it('describes the Kimi Code route by key state and activity', () => {
     expect(
-      buildCliModelAccessItems({
-        active: 'personal',
-        chatGptSignedIn: false,
-        kimiCodeKeySet: true,
-      })[1],
+      buildCliModelAccessItems(
+        modelAccessStatus({
+          apiMode: 'personal',
+          kimiCode: { keySet: true },
+          personalApiKeySet: true,
+        }),
+      )[1],
     ).toEqual({
       value: 'kimi-code',
-      label: 'Prefer Kimi Code subscription',
+      label: 'Kimi Code subscription preference',
       description: 'Off · key configured',
     });
     expect(
-      buildCliModelAccessItems({
-        active: 'kimi-code',
-        chatGptSignedIn: false,
-        kimiCodeKeySet: true,
-      })[1].description,
+      buildCliModelAccessItems(
+        modelAccessStatus({
+          apiMode: 'personal',
+          kimiCode: { keySet: true, preferred: true },
+          personalApiKeySet: true,
+        }),
+      )[1].description,
     ).toBe('On · key configured');
 
     const items = buildCliOrchestrationItems({
       presetPlans: [],
       history: [],
       toolUseAgents: [],
-      modelAccess: {
-        active: 'kimi-code',
-        chatGptSignedIn: false,
-        kimiCodeKeySet: true,
-      },
+      modelAccess: modelAccessStatus({
+        apiMode: 'personal',
+        kimiCode: { keySet: true, preferred: true },
+        personalApiKeySet: true,
+      }),
     });
     expect(items[1]).toEqual({
       label: 'Model access',
-      description: 'Kimi Code subscription · key configured',
+      description:
+        'Kimi Code · fallback: Personal API keys (provider API key configured)',
       value: { kind: 'configure-model-access' },
     });
   });
@@ -495,12 +543,13 @@ describe('CLI orchestration items', () => {
       }),
     ]);
     expect(
-      buildCliModelAccessItems({
-        active: 'personal',
-        chatGptSignedIn: false,
-        texraSignedIn: false,
-      }).find((item) => item.value === 'included')?.description,
-    ).toBe('Sign in through Account to use included models');
+      buildCliModelAccessItems(
+        modelAccessStatus({
+          apiMode: 'personal',
+          texraSignedIn: false,
+        }),
+      ).find((item) => item.value === 'included')?.description,
+    ).toBe('TeXRA account sign-in required');
   });
 
   it('does not offer to sign out an environment-managed relay token', () => {

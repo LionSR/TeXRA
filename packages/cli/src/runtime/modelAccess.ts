@@ -274,6 +274,9 @@ export function formatModelStatusForCliMode(
   model: CliModelAccess,
   apiMode: CliApiMode,
 ): string {
+  if (model.model.availability === 'subscription-access') {
+    return model.status;
+  }
   if (apiMode === 'personal') return `api: ${model.status}`;
 
   const availability = model.model.availability;

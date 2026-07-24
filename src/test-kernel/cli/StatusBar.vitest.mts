@@ -16,7 +16,12 @@ import {
   streamAccessTarget,
   type StreamSlice,
 } from '@cli/chat/tui/state/cliState';
-import { AgentCategory, STREAM_PHASE, STREAM_SUBSTATE } from '@shared/schemas';
+import {
+  AgentCategory,
+  STREAM_PHASE,
+  STREAM_SUBSTATE,
+  type UsageRoute,
+} from '@shared/schemas';
 
 const PERSONAL_API_MODE_LABEL = shortCliApiMode('personal');
 
@@ -619,9 +624,7 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('shows the route that produced usage instead of a stale access preference', () => {
-    const accessLabel = (
-      usageRoute: 'chatgpt-subscription' | 'relay' | 'api-key',
-    ): string[] =>
+    const accessLabel = (usageRoute: UsageRoute): string[] =>
       buildStatusBarDisplay(
         statusInput({
           modelAccess: resolveCliModelAccessRoute({
@@ -643,6 +646,8 @@ describe('CLI StatusBar display model', () => {
     expect(accessLabel('relay')).not.toContain('subscription');
     expect(accessLabel('api-key')).toContain('personal');
     expect(accessLabel('api-key')).not.toContain('subscription');
+    expect(accessLabel('kimi-code-subscription')).toContain('kimi-code');
+    expect(accessLabel('kimi-code-subscription')).not.toContain('personal');
   });
 
   it('keeps critical controls visible in narrow subagent sessions', () => {

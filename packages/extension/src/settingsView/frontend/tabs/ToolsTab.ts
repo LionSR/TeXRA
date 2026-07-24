@@ -196,6 +196,7 @@ export class ToolsTab extends LitElement {
   @property({ attribute: false }) items: ToolDashboardItem[] = [];
   @property({ type: Boolean }) loaded = false;
   @property({ type: Boolean }) bashApprovalEnabled = true;
+  @property({ type: Boolean }) agentSkillsEnabled = true;
   @property({ attribute: false }) showDesktopCrashReporting = false;
   @property({ attribute: false }) desktopCrashReportingEnabled = false;
   @property({ attribute: false }) desktopCrashReportingConfigured = false;
@@ -211,6 +212,10 @@ export class ToolsTab extends LitElement {
 
   private handleBashApprovalToggle = (e: Event): void => {
     this.postToggle(SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED, e);
+  };
+
+  private handleAgentSkillsToggle = (e: Event): void => {
+    this.postToggle(SETTINGS_VIEW_COMMANDS.SET_AGENT_SKILLS_ENABLED, e);
   };
 
   private handleDesktopCrashReportingToggle = (e: Event): void => {
@@ -237,6 +242,23 @@ export class ToolsTab extends LitElement {
             @change=${this.handleBashApprovalToggle}
           >
             Require approval for shell commands &amp; agent sessions
+          </wa-switch>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderAgentSkillsSettings(): TemplateResult {
+    return html`
+      <div class="category-section">
+        <div class="category-header">${waIcon('robot')} Agent Skills</div>
+
+        <div class="setting-block">
+          <wa-switch
+            ?checked=${this.agentSkillsEnabled}
+            @change=${this.handleAgentSkillsToggle}
+          >
+            TeXRA and imported skills available to agents
           </wa-switch>
         </div>
       </div>
@@ -397,7 +419,8 @@ export class ToolsTab extends LitElement {
           </div>
         </div>
 
-        ${this.renderApprovalSettings()} ${this.renderDesktopCrashReporting()}
+        ${this.renderAgentSkillsSettings()} ${this.renderApprovalSettings()}
+        ${this.renderDesktopCrashReporting()}
         ${CATEGORY_ORDER.filter((cat) => groups.has(cat)).map((cat) =>
           this.renderCategory(cat, groups.get(cat)!),
         )}

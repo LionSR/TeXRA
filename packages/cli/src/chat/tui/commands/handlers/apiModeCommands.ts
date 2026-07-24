@@ -93,7 +93,7 @@ export async function applyCliProviderApiKey(
     return collapseWhitespace(
       [
         message,
-        "Tip: the Kimi for Coding models use your subscription automatically; to route Kimi K3 through it too, enable 'Prefer Kimi Code' in /config.",
+        "Tip: the Kimi for Coding models use the subscription automatically. The 'Kimi Code subscription preference' setting routes Kimi K3 through it as well.",
       ]
         .filter(Boolean)
         .join(' · '),

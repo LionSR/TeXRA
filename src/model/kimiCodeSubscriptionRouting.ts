@@ -20,10 +20,10 @@
 
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
+import { KIMI_CODE_BASE_URL } from './kimiCodeConstants';
 import { zeroCostAccessOverrides } from './subscriptionAccessOverrides';
 
-/** OpenAI-compatible base URL for the Kimi Code coding endpoint. */
-export const KIMI_CODE_BASE_URL = 'https://api.kimi.com/coding/v1';
+export { KIMI_CODE_BASE_URL } from './kimiCodeConstants';
 
 /**
  * Open-platform `fullName` → coding-endpoint wire ID. Exclusive plan aliases
@@ -87,25 +87,21 @@ export function isKimiCodeExclusiveModel(
  *  - not eligible → `null`
  *  - exclusive → `'kimiCode'` when a key is set, else `null` (no other backend)
  *  - dual-backend → `'kimiCode'` only when the OpenRouter toggle is off, the
- *    relay is not serving the request (included access off or unavailable),
- *    the "Prefer Kimi Code" switch is on, and a key is set; otherwise `null`
- *    (falls back to the Moonshot open platform or the relay). The relay guard
- *    keeps credential resolution coherent: a rerouted config pins the coding
- *    `baseUrl`, which outranks the relay URL in `resolveBaseUrl` and would
- *    send the relay token to the wrong host.
+ *    "Prefer Kimi Code" switch is on, and a key is set; otherwise `null`
+ *    (falls back to the ordinary API-access route). A preferred subscription
+ *    is resolved before that fallback, just as ChatGPT subscription access is.
  */
 export function resolveKimiCodeRoute(
   config: KimiSubscriptionModelFields,
   useOpenRouter: boolean,
   keySet: boolean,
   preferKimiCode: boolean,
-  includedAccess: boolean,
 ): 'kimiCode' | null {
   if (!isKimiSubscriptionEligible(config)) return null;
   if (isKimiCodeExclusiveModel(config)) {
     return keySet ? 'kimiCode' : null;
   }
-  if (useOpenRouter || includedAccess || !preferKimiCode || !keySet) {
+  if (useOpenRouter || !preferKimiCode || !keySet) {
     return null;
   }
   return 'kimiCode';

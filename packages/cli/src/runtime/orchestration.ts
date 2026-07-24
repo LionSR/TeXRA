@@ -32,6 +32,7 @@ import {
   type CliModelAccessStatus,
 } from './modelAccessRoute';
 import type { CliApiMode } from './apiAccessMode';
+import { describeApiAccessModeStatus } from '@shared/schemas/modelAccess';
 
 export type CliOrchestrationAction =
   | { readonly kind: 'chat'; readonly agent?: string; readonly model?: string }
@@ -54,6 +55,7 @@ export type CliOrchestrationAction =
       readonly operation: CliAccountOperation;
     }
   | { readonly kind: 'configure-model-access' }
+  | { readonly kind: 'set-agent-skills'; readonly enabled: boolean }
   | {
       readonly kind: 'set-model-access';
       readonly access: CliModelAccessRoute;
@@ -85,6 +87,7 @@ export interface BuildCliOrchestrationItemsInput {
   readonly modelAccess?: CliModelAccessStatus;
   readonly account?: CliAccountStatus;
   readonly presetLaunchBlockReason?: CliPresetLaunchBlockReason;
+  readonly agentSkillsEnabled?: boolean;
 }
 
 type CliAccountProvider = 'chatgpt' | 'texra';
@@ -189,6 +192,18 @@ export function buildCliOrchestrationItems(
       description: accountSummary(input.account),
     });
   }
+  if (input.agentSkillsEnabled !== undefined) {
+    items.push({
+      value: {
+        kind: 'set-agent-skills',
+        enabled: !input.agentSkillsEnabled,
+      },
+      label: 'Agent skills',
+      description: input.agentSkillsEnabled
+        ? 'On · TeXRA and imported skills available to agents'
+        : 'Off · no skills supplied to agents',
+    });
+  }
   items.push({
     value: { kind: 'configure-settings' },
     label: 'Settings',
@@ -287,14 +302,22 @@ export function buildCliAgentItems(
 }
 
 function modelAccessItem(status: CliModelAccessStatus): CliOrchestrationItem {
-  let description: string;
-  if (status.active === 'chatgpt' && status.chatGptAccountLabel) {
-    description = `ChatGPT subscription · ${status.chatGptAccountLabel}`;
-  } else if (status.active === 'kimi-code') {
-    description = 'Kimi Code subscription · key configured';
-  } else {
-    description = formatCliModelAccessRoute(status.active);
-  }
+  const subscriptions = [
+    status.chatGpt.preferSubscription && status.chatGpt.signedIn
+      ? 'ChatGPT'
+      : undefined,
+    status.kimiCode.preferred && status.kimiCode.keySet
+      ? 'Kimi Code'
+      : undefined,
+  ].filter((value): value is string => value !== undefined);
+  const fallback = formatCliModelAccessRoute(status.apiMode);
+  const fallbackStatus = describeApiAccessModeStatus(status.apiMode, status);
+  const inlineFallbackStatus =
+    fallbackStatus.charAt(0).toLowerCase() + fallbackStatus.slice(1);
+  const description =
+    subscriptions.length > 0
+      ? `${subscriptions.join(' + ')} · fallback: ${fallback} (${inlineFallbackStatus})`
+      : `${fallback} · ${fallbackStatus}`;
   return {
     value: { kind: 'configure-model-access' },
     label: 'Model access',
