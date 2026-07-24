@@ -59,9 +59,9 @@ describe('SETUP_MODEL_BY_PROVIDER', () => {
     assert.equal(MODEL_CONFIGS[resolved]?.provider, 'xai');
   });
 
-  it('keeps the preferred pick when it is still live (anthropic/opus48T)', () => {
-    assert.equal(MODEL_CONFIGS.opus48T?.retired ?? false, false);
-    assert.equal(SETUP_MODEL_BY_PROVIDER.anthropic, 'opus48T');
+  it('keeps the preferred pick when it is still live (anthropic/opus5T)', () => {
+    assert.equal(MODEL_CONFIGS.opus5T?.retired ?? false, false);
+    assert.equal(SETUP_MODEL_BY_PROVIDER.anthropic, 'opus5T');
   });
 
   it('keeps CHATGPT_SETUP_MODEL Codex-eligible', () => {

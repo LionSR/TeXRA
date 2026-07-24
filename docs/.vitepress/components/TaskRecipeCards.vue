@@ -23,7 +23,7 @@ const recipes = [
     title: 'Paper to slides',
     agent: 'paper2slide',
     model: 'sonnet46T',
-    alts: 'opus48T, gpt55',
+    alts: 'opus5T, gpt55',
     instruction:
       'Convert this paper into presentation slides using the beamer template. Create approximately 12–15 slides highlighting the key points, methodology, and results.',
   },

@@ -83,35 +83,35 @@ describe('default model list', () => {
 describe('resolveDefaultModels', () => {
   it('drops a preferred pick the live registry marks retired', () => {
     expect(MODEL_CONFIGS.grok4?.retired).toBe(true);
-    const resolved = resolveDefaultModels(['opus48T', 'grok4']);
-    expect(resolved).toEqual(['opus48T']);
+    const resolved = resolveDefaultModels(['opus5T', 'grok4']);
+    expect(resolved).toEqual(['opus5T']);
   });
 
   it('drops a preferred pick the live registry marks deprecated', () => {
     expect(MODEL_CONFIGS.gpt54?.deprecated).toBe(true);
-    const resolved = resolveDefaultModels(['opus48T', 'gpt54']);
-    expect(resolved).toEqual(['opus48T']);
+    const resolved = resolveDefaultModels(['opus5T', 'gpt54']);
+    expect(resolved).toEqual(['opus5T']);
   });
 
   it('keeps every preferred pick when none are retired or deprecated', () => {
-    const preferred = ['opus48T', 'gemini31p'];
+    const preferred = ['opus5T', 'gemini31p'];
     expect(resolveDefaultModels(preferred)).toEqual(preferred);
   });
 });
 
 describe('computeModelListVersion', () => {
   it('changes when the resolved default set changes', () => {
-    const before = computeModelListVersion(['opus48T', 'gemini31p']);
-    const afterAdd = computeModelListVersion(['opus48T', 'gemini31p', 'gpt55']);
-    const afterRemove = computeModelListVersion(['opus48T']);
+    const before = computeModelListVersion(['opus5T', 'gemini31p']);
+    const afterAdd = computeModelListVersion(['opus5T', 'gemini31p', 'gpt55']);
+    const afterRemove = computeModelListVersion(['opus5T']);
 
     expect(afterAdd).not.toBe(before);
     expect(afterRemove).not.toBe(before);
   });
 
   it('is order-independent (only set membership drives reconciliation)', () => {
-    expect(computeModelListVersion(['opus48T', 'gemini31p'])).toBe(
-      computeModelListVersion(['gemini31p', 'opus48T']),
+    expect(computeModelListVersion(['opus5T', 'gemini31p'])).toBe(
+      computeModelListVersion(['gemini31p', 'opus5T']),
     );
   });
 

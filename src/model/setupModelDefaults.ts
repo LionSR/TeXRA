@@ -20,7 +20,7 @@ import { isCodexSubscriptionEligible } from './providerCapabilities';
  * model without needing this table hand-updated on every retirement.
  */
 const PREFERRED_SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
-  anthropic: 'opus48T',
+  anthropic: 'opus5T',
   openai: 'gpt55',
   google: 'gemini31p',
   deepseek: 'deepseekproT',

@@ -163,8 +163,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.20.0
-        version: 1.20.0(zod@4.4.3)
+        specifier: ^1.21.0
+        version: 1.21.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -655,8 +655,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.20.0
-        version: 1.20.0(zod@4.4.3)
+        specifier: ^1.21.0
+        version: 1.21.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -4648,8 +4648,8 @@ packages:
   lit@3.3.3:
     resolution: {integrity: sha512-fycuvZg/hkpozL00lm1pEJH5nN/lr9ZXd6mJI2HSN4+Bzc+LDNdEApJ6HFbPkdFNHLvOplIIuJvxkS4XUxqirw==}
 
-  llm-zoo@1.20.0:
-    resolution: {integrity: sha512-zvcDvvSEX+mfnhOlMXWTVW1DkF8EtA+ahAkXdjwht4Jx0Mu5VCGy3Dyvwuzq/GEdzZ3KftF0Msv+xaExq+Ae0w==}
+  llm-zoo@1.21.0:
+    resolution: {integrity: sha512-u3pAvA57ETwQ2tahkmlqO8HENZIVDTqIw8QY70PKmbn3k+sNd1P6oNPzRa6VeuZezRuF1zGF5k3sJ8aJeMhkuA==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       zod: ^4.0.0
@@ -10527,7 +10527,7 @@ snapshots:
       lit-element: 4.2.2
       lit-html: 3.3.2
 
-  llm-zoo@1.20.0(zod@4.4.3):
+  llm-zoo@1.21.0(zod@4.4.3):
     optionalDependencies:
       zod: 4.4.3
 

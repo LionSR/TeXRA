@@ -2017,7 +2017,7 @@
     "identifiers-arxiv": "^0.1.1",
     "katex": "^0.18.1",
     "lit": "^3.3.3",
-    "llm-zoo": "^1.20.0",
+    "llm-zoo": "^1.21.0",
     "lru-cache": "^11.5.2",
     "mark.js": "^8.11.1",
     "markdown-it": "^14.3.0",

@@ -46,7 +46,7 @@ export const PREFERRED_DEFAULT_MODELS: readonly string[] = [
   'gemini35f',
   'gemini31p',
   'sonnet46T',
-  'opus48T',
+  'opus5T',
   'fable5',
   'gpt56',
   'gpt56-',
