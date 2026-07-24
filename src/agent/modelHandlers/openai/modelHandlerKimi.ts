@@ -5,10 +5,7 @@ import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { TokenCountOptions } from '@agent/types/ModelHandlerContracts';
 import type { ToolDefinition } from '@model';
-import {
-  isKimiSubscriptionEligible,
-  KIMI_CODE_BASE_URL,
-} from '@model/kimiCodeSubscriptionRouting';
+import { isKimiCodeExclusiveModel } from '@model/kimiCodeSubscriptionRouting';
 import { hasManagedDirectRoute } from '@model/openRouterRouting';
 import { resolveMoonshotRequestParameters } from '../support/moonshotRequestParameters';
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
@@ -79,9 +76,7 @@ export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
   /** Classify successful coding-endpoint requests as subscription usage. */
   override getLastCredentialUsageRoute(): NormalizedUsage['usageRoute'] {
     const route = super.getLastCredentialUsageRoute();
-    return route === 'api-key' &&
-      isKimiSubscriptionEligible(this.config) &&
-      this.config.baseUrl === KIMI_CODE_BASE_URL
+    return route === 'api-key' && isKimiCodeExclusiveModel(this.config)
       ? 'kimi-code-subscription'
       : route;
   }
