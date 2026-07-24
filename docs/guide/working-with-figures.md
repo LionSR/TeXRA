@@ -174,7 +174,7 @@ Retrieves BibTeX records for every citation key found in the document.
 
 When you provide media files, they're handed to the model according to its capabilities:
 
-- **Vision models** (GPT-5.5, Claude Opus 4.8 / Sonnet 4.6, Gemini 3.1 Pro, …): images are encoded and attached to the prompt.
+- **Vision models** (GPT-5.5, Claude Opus 5 / Sonnet 4.6, Gemini 3.1 Pro, …): images are encoded and attached to the prompt.
 - **Audio models**: audio files are uploaded for transcription.
 - **Non-multimodal models**: only filenames are passed as context.
 
