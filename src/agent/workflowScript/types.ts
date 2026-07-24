@@ -73,7 +73,10 @@ export const WorkflowScriptMetaSchema = z
 export type WorkflowScriptMeta = z.infer<typeof WorkflowScriptMetaSchema>;
 
 interface WorkflowAgentCallBaseOptions {
-  /** Stable identity when otherwise-identical calls occur more than once. */
+  /**
+   * Journal disambiguator when otherwise-identical calls occur more than
+   * once. This does not identify the call's run-local progress record.
+   */
   id?: string;
   /** Display label for progress UIs; defaults to a prompt excerpt. */
   label?: string;
@@ -170,9 +173,15 @@ export interface WorkflowScriptPhaseContext {
   phaseTotal?: number;
 }
 
+/** Identity used only to correlate one changing progress record in a run. */
+export type WorkflowScriptProgressId = WorkflowTaskIdentity['id'];
+
 interface WorkflowScriptAgentEventBase extends WorkflowScriptPhaseContext {
-  /** Declarative task id, or a run-local id for an undeclared dynamic call. */
-  taskId: string;
+  /**
+   * Declarative task id, or a unique run-local id for an undeclared dynamic
+   * call. Distinct from the optional journal disambiguator on agent options.
+   */
+  progressId: WorkflowScriptProgressId;
   index: number;
   label: string;
 }

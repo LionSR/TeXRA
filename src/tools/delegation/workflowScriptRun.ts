@@ -5,6 +5,7 @@ import {
   type PersistedWorkflowScriptRunOptions,
   type WorkflowJournalEntry,
   type WorkflowScriptEvent,
+  type WorkflowScriptProgressId,
   type WorkflowScriptRunResult,
 } from '@agent/workflowScript';
 import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
@@ -112,11 +113,14 @@ export async function runPersistedWorkflowScriptWithProgress(
   const { getLiveCostUsd, onActivity, ...runOptions } = options;
   const parentStageId = trace.activeStageId();
   const phases = new Map<string, PhaseStage>();
-  const callPhases = new Map<string, string | undefined>();
-  const taskLogIds = new Map<string, string>();
-  const taskStates = new Map<string, WorkflowTaskProgress['status']>();
+  const callPhases = new Map<WorkflowScriptProgressId, string | undefined>();
+  const taskLogIds = new Map<WorkflowScriptProgressId, string>();
+  const taskStates = new Map<
+    WorkflowScriptProgressId,
+    WorkflowTaskProgress['status']
+  >();
   const taskDefinitions = new Map<
-    string,
+    WorkflowScriptProgressId,
     Pick<WorkflowTaskProgress, 'id' | 'label' | 'phase'>
   >();
   let currentPhase: string | undefined;
@@ -201,7 +205,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         break;
       case 'agent:start': {
         const phaseTitle = event.phase ?? currentPhase;
-        callPhases.set(event.taskId, phaseTitle);
+        callPhases.set(event.progressId, phaseTitle);
         const stageId = stageIdFor(
           phaseTitle,
           event.phaseIndex,
@@ -209,7 +213,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         );
         emitTask(
           {
-            id: event.taskId,
+            id: event.progressId,
             label: event.label,
             ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
             status: 'running',
@@ -222,10 +226,10 @@ export async function runPersistedWorkflowScriptWithProgress(
       case 'agent:end': {
         // A recorded undefined means the live call started outside any phase;
         // only cached end-only events may use the phase active at replay time.
-        const phaseTitle = callPhases.has(event.taskId)
-          ? callPhases.get(event.taskId)
+        const phaseTitle = callPhases.has(event.progressId)
+          ? callPhases.get(event.progressId)
           : (event.phase ?? currentPhase);
-        callPhases.delete(event.taskId);
+        callPhases.delete(event.progressId);
         const stageId = stageIdFor(
           phaseTitle,
           event.phaseIndex,
@@ -249,7 +253,7 @@ export async function runPersistedWorkflowScriptWithProgress(
                 true;
             }
             const task: WorkflowTaskProgress = {
-              id: event.taskId,
+              id: event.progressId,
               label: event.label,
               ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
               status: 'failed',
@@ -275,7 +279,7 @@ export async function runPersistedWorkflowScriptWithProgress(
           case 'cached':
             emitTask(
               {
-                id: event.taskId,
+                id: event.progressId,
                 label: event.label,
                 ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
                 status: 'cached',
@@ -287,7 +291,7 @@ export async function runPersistedWorkflowScriptWithProgress(
           case 'skipped':
             emitTask(
               {
-                id: event.taskId,
+                id: event.progressId,
                 label: event.label,
                 ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
                 status: 'skipped',
@@ -300,7 +304,7 @@ export async function runPersistedWorkflowScriptWithProgress(
           case 'completed': {
             emitTask(
               {
-                id: event.taskId,
+                id: event.progressId,
                 label: event.label,
                 ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
                 status: 'completed',
@@ -331,8 +335,8 @@ export async function runPersistedWorkflowScriptWithProgress(
     return result;
   } finally {
     closed = true;
-    for (const [taskId, status] of taskStates) {
-      const task = taskDefinitions.get(taskId);
+    for (const [progressId, status] of taskStates) {
+      const task = taskDefinitions.get(progressId);
       if (!task) continue;
       if (status === 'planned') {
         emitTask(

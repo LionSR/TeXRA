@@ -19,6 +19,7 @@ import {
   type WorkflowScriptControl,
   type WorkflowScriptEvent,
   type WorkflowScriptPhaseContext,
+  type WorkflowScriptProgressId,
   type WorkflowScriptRunOptions,
   type WorkflowScriptRunResult,
   type WorkflowScriptTask,
@@ -283,7 +284,7 @@ export async function runWorkflowScript(
 
   const recordJournalEntry = async (
     entry: WorkflowJournalEntry,
-    taskId: string,
+    progressId: WorkflowScriptProgressId,
     label: string,
     phaseContext: WorkflowScriptPhaseContext,
   ): Promise<void> => {
@@ -295,7 +296,7 @@ export async function runWorkflowScript(
       const fatal = rememberFatalRunError(new WorkflowRunAbortError(message));
       emit({
         type: 'agent:end',
-        taskId,
+        progressId,
         index: entry.index,
         label,
         ...phaseContext,
@@ -368,16 +369,16 @@ export async function runWorkflowScript(
       callOptions.label ??
       prompt.slice(0, LABEL_EXCERPT_LENGTH).replaceAll(/\s+/g, ' ').trim();
     const key = journalKey(prompt, callOptions);
-    const taskId = plannedTask?.id ?? callOptions.id ?? `call-${index}`;
+    const progressId = plannedTask?.id ?? `call-${index}`;
     if (plannedTask) {
-      if (issuedPlannedTaskIds.has(taskId)) {
+      if (issuedPlannedTaskIds.has(progressId)) {
         throw rememberFatalRunError(
           new WorkflowRunAbortError(
-            `Workflow task "${taskId}" may be issued only once per run.`,
+            `Workflow task "${progressId}" may be issued only once per run.`,
           ),
         );
       }
-      issuedPlannedTaskIds.add(taskId);
+      issuedPlannedTaskIds.add(progressId);
     }
     const phaseContext = phaseContextFor(callOptions.phase);
     if (issuedCallKeys.has(key)) {
@@ -403,7 +404,7 @@ export async function runWorkflowScript(
       } catch (error) {
         emit({
           type: 'agent:end',
-          taskId,
+          progressId,
           index,
           label,
           ...phaseContext,
@@ -423,7 +424,7 @@ export async function runWorkflowScript(
       journal.set(index, { ...prior, result: normalizedResult });
       emit({
         type: 'agent:end',
-        taskId,
+        progressId,
         index,
         label,
         ...phaseContext,
@@ -467,7 +468,7 @@ export async function runWorkflowScript(
         startEmitted = true;
         emit({
           type: 'agent:start',
-          taskId,
+          progressId,
           index,
           label,
           ...phaseContext,
@@ -519,7 +520,7 @@ export async function runWorkflowScript(
       if (action === 'skip') {
         emit({
           type: 'agent:end',
-          taskId,
+          progressId,
           index,
           label,
           ...phaseContext,
@@ -539,7 +540,7 @@ export async function runWorkflowScript(
         // and is deliberately NOT journaled, so a resume retries it.
         emit({
           type: 'agent:end',
-          taskId,
+          progressId,
           index,
           label,
           ...phaseContext,
@@ -559,13 +560,13 @@ export async function runWorkflowScript(
       );
       await recordJournalEntry(
         { index, key, result: normalizedResult },
-        taskId,
+        progressId,
         label,
         phaseContext,
       );
       emit({
         type: 'agent:end',
-        taskId,
+        progressId,
         index,
         label,
         ...phaseContext,

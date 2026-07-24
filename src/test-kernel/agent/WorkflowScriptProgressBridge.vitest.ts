@@ -6,7 +6,11 @@ import {
   WorkflowRunAbortError,
   type WorkflowAgentInvocation,
 } from '@agent/workflowScript';
-import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  type ExecutionId,
+  type WorkflowTaskProgress,
+} from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { runPersistedWorkflowScriptWithProgress } from '@tools/delegation/workflowScriptRun';
 
@@ -40,7 +44,7 @@ function stageId(events: readonly AgentEvent[], label: string): string {
 function workflowTaskEvent(
   events: readonly AgentEvent[],
   label: string,
-  status: string,
+  status: WorkflowTaskProgress['status'],
 ): Extract<AgentEvent, { type: 'workflow.task' }> | undefined {
   return events.find(
     (event): event is Extract<AgentEvent, { type: 'workflow.task' }> =>
@@ -150,6 +154,68 @@ return await agent('Run one', { id: 'used' })`,
       },
     });
   });
+
+  it.each([
+    [
+      'sequential',
+      `await agent('First prompt', {
+  id: 'shared-journal-id',
+  label: 'First task',
+  phase: 'Review',
+})
+return await agent('Second prompt', {
+  id: 'shared-journal-id',
+  label: 'Second task',
+  phase: 'Write',
+})`,
+    ],
+    [
+      'parallel',
+      `return await parallel([
+  () => agent('First prompt', {
+    id: 'shared-journal-id',
+    label: 'First task',
+    phase: 'Review',
+  }),
+  () => agent('Second prompt', {
+    id: 'shared-journal-id',
+    label: 'Second task',
+    phase: 'Write',
+  }),
+])`,
+    ],
+  ] as const)(
+    'keeps %s calls with one journal id as separate progress records',
+    async (mode, body) => {
+      const { trace, events } = recordingTrace();
+      await runPersistedWorkflowScriptWithProgress(trace, {
+        store: getExecutionStore(executionId),
+        checkpointId: `reused-journal-id-${mode}`,
+        script: `${meta}
+${body}`,
+        runAgent: async () => 'done',
+      });
+
+      const firstRunning = workflowTaskEvent(events, 'First task', 'running');
+      const firstCompleted = workflowTaskEvent(
+        events,
+        'First task',
+        'completed',
+      );
+      const secondRunning = workflowTaskEvent(events, 'Second task', 'running');
+      const secondCompleted = workflowTaskEvent(
+        events,
+        'Second task',
+        'completed',
+      );
+
+      expect(firstRunning?.task.id).toBe('call-0');
+      expect(firstCompleted?.logId).toBe(firstRunning?.logId);
+      expect(secondRunning?.task.id).toBe('call-1');
+      expect(secondCompleted?.logId).toBe(secondRunning?.logId);
+      expect(firstRunning?.logId).not.toBe(secondRunning?.logId);
+    },
+  );
 
   it('projects a cached completion without synthesizing a start event', async () => {
     const store = getExecutionStore(executionId);

@@ -163,7 +163,7 @@ return await agent('Inspect src', { id: 'core' })`,
     expect(events).toContainEqual(
       expect.objectContaining({
         type: 'agent:start',
-        taskId: 'core',
+        progressId: 'core',
         label: 'Audit core',
         phase: 'Audit',
       }),
@@ -360,6 +360,7 @@ return await parallel([
     ]);
 
     const reusedIdInvocations: WorkflowAgentInvocation[] = [];
+    const reusedIdEvents: WorkflowScriptEvent[] = [];
     await runWorkflowScript({
       script: `${META}return await parallel([
   () => agent('first prompt', { id: 'shared-id' }),
@@ -369,8 +370,17 @@ return await parallel([
         reusedIdInvocations.push(invocation);
         return echoRunner(invocation);
       },
+      onEvent: (event) => reusedIdEvents.push(event),
     });
     expect(reusedIdInvocations).toHaveLength(2);
+    expect(
+      reusedIdInvocations.map((invocation) => invocation.options.id),
+    ).toEqual(['shared-id', 'shared-id']);
+    expect(
+      reusedIdEvents
+        .filter((event) => event.type === 'agent:start')
+        .map((event) => event.progressId),
+    ).toEqual(['call-0', 'call-1']);
 
     await expect(
       runWorkflowScript({
@@ -683,7 +693,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
     expect(cachedRunner).not.toHaveBeenCalled();
     expect(events).toContainEqual({
       type: 'agent:end',
-      taskId: 'inspect',
+      progressId: 'inspect',
       index: 0,
       label: 'Audit implementation',
       phase: 'Audit',
@@ -712,7 +722,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
     expect(events).toEqual([
       {
         type: 'agent:end',
-        taskId: 'call-0',
+        progressId: 'call-0',
         index: 0,
         label: 'cached',
         phase: undefined,
@@ -804,7 +814,7 @@ return null`,
     });
     expect(events).toContainEqual({
       type: 'agent:start',
-      taskId: 'call-0',
+      progressId: 'call-0',
       index: 0,
       label: 'labelled',
       phase: 'Work',
@@ -1398,14 +1408,14 @@ while (true) {}`,
     expect(events).toEqual([
       {
         type: 'agent:start',
-        taskId: 'call-0',
+        progressId: 'call-0',
         index: 0,
         label: 'function-result',
         phase: undefined,
       },
       {
         type: 'agent:end',
-        taskId: 'call-0',
+        progressId: 'call-0',
         index: 0,
         label: 'function-result',
         phase: undefined,
@@ -1653,7 +1663,7 @@ return 'incorrect success'`,
     expect(run.journal.map((entry) => entry.index).toSorted()).toEqual([0, 2]);
     expect(events).toContainEqual({
       type: 'agent:end',
-      taskId: 'b',
+      progressId: 'call-1',
       index: 1,
       label: 'b',
       phase: undefined,
