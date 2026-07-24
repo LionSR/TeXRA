@@ -840,6 +840,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleSetAgentSkillsEnabled(enabled: boolean): Promise<void> {
+    if (!vscode.workspace.workspaceFolders?.length) {
+      void showLoggedInfoMessage(
+        this.channel,
+        'Agent skills are a per-workspace setting. Open a workspace folder before changing them.',
+      );
+      await this.withActiveWebview((webview) =>
+        this.sendAgentSkillsSettings(webview),
+      );
+      return;
+    }
     await setAgentSkillsEnabled(platform().config, enabled);
     await this.withActiveWebview((webview) =>
       this.sendAgentSkillsSettings(webview),
