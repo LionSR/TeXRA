@@ -147,19 +147,12 @@ export interface StatusEvent extends StageStamp {
 }
 
 /** Session-owned child/process activity for a parent run stream. */
-type ChildActivityEvent =
-  | (StageStamp & {
-      readonly type: 'child.activity';
-      readonly kind: 'subagents';
-      readonly parentStreamId: StreamTabId;
-      readonly items: readonly ActiveChildInfo[];
-    })
-  | (StageStamp & {
-      readonly type: 'child.activity';
-      readonly kind: 'processes';
-      readonly parentStreamId: StreamTabId;
-      readonly items: readonly ActiveChildInfo[];
-    });
+interface ChildActivityEvent extends StageStamp {
+  readonly type: 'child.activity';
+  readonly kind: 'subagents' | 'processes';
+  readonly parentStreamId: StreamTabId;
+  readonly items: readonly ActiveChildInfo[];
+}
 
 /** Incremental output from a child process owned by a parent run stream. */
 interface ProcessOutputEvent extends StageStamp {
