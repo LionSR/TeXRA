@@ -15,7 +15,7 @@ import { askCliQuestion } from '../logSinks';
 // The headless adapter only ever sets accepted + userMessage, but reusing the
 // host-neutral shape (which also carries optional userQuestionAnswers) keeps a
 // single source of truth for the decision vocabulary across hosts. See
-// docs/proposals/tui-extension-sharing.md (Rung 1).
+// docs/proposals/2026-05-31-tui-extension-sharing.md (Rung 1).
 export type ApprovalDecision = SharedApprovalDecision;
 
 export const CLI_PERSONAL_API_RETRY_HINT =

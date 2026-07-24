@@ -213,7 +213,7 @@ export function roundOutputsToCompileFailureSummaries(
 
 // ============================================================================
 // Unified output protocol tag names
-// (`docs/proposals/unified-output-protocol.md`)
+// (`docs/proposals/2026-04-30-unified-output-protocol.md`)
 // ============================================================================
 //
 // Every bundled and custom agent converged on one output container —

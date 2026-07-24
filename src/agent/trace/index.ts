@@ -8,7 +8,7 @@
  * TeXRA-specific helpers (`logError`/`latexDiff`/`statistics`/etc.) are
  * plain functions over this interface in `helpers.ts` / `toolUseHelpers.ts`.
  *
- * See `docs/proposals/agent-trace-sdk-surface.md` for the design.
+ * See `docs/proposals/2026-05-22-agent-trace-sdk-surface.md` for the design.
  */
 export type {
   AgentEvent,

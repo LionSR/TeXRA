@@ -239,7 +239,7 @@ mouse-scroll for finalized history, so don't reinvent them.
   blank flash is ever observed; prefer a `/dev/tty` fallback over refusing the
   TUI when stdin is piped but a real terminal is present, and handle EPIPE
   globally. Full rationale and citations:
-  `docs/proposals/ink-practices-from-claude-code.md`.
+  `docs/proposals/2026-07-03-ink-practices-from-claude-code.md`.
 
 ### CLI design (clig.dev)
 
@@ -309,7 +309,7 @@ For good separation of concerns, testability, and platform independence, core bu
 - Reach host services through `platform()` from `@platform/platform` (config, state, log, fs, workspace, storage, secrets) — never import `vscode` in agnostic zones.
 - Add typed `Platform` ports (like `toolAvailability.isVscodeExtensionInstalled`) for platform-specific capabilities needed in agnostic code
 - Helper substitutions for `vscode` types (`isFile`/`isDirectory`, `isFileNotFoundError`, numeric file types) and the push-UI-to-the-caller rule: AGENTS.md "Platform decoupling rules"
-- New run-scoped facts extend `AgentEvent` (trace), and session-scoped facts extend `SessionFact` — never a new `bus.emit` from a VS Code-free zone, and never a new subscribe surface. (Ruled in `docs/proposals/error-pipeline-and-ownership.md`. The direct `bus.emit` sites in `src/tools` that this rule once grandfathered have since been migrated to session-owned event-hub emission — see `SessionHandle.events` / `SessionEventHub` in `src/agent/runtime/` — so the exception no longer applies; a new direct `bus.emit` from a VS Code-free zone is a rule violation, not a grandfathered pattern.) This rule targets run/session-scoped facts specifically — it does not apply to `appSignals.emit(...)` calls against the separate, documented `AppSignals` cross-cutting bus (`src/eventBus/AppSignals.ts`: auth, subscriptions, tool availability, workspace-file writes), which remain legitimate from VS Code-free zones within their documented scope.
+- New run-scoped facts extend `AgentEvent` (trace), and session-scoped facts extend `SessionFact` — never a new `bus.emit` from a VS Code-free zone, and never a new subscribe surface. (Ruled in `docs/proposals/2026-06-10-error-pipeline-and-ownership.md`. The direct `bus.emit` sites in `src/tools` that this rule once grandfathered have since been migrated to session-owned event-hub emission — see `SessionHandle.events` / `SessionEventHub` in `src/agent/runtime/` — so the exception no longer applies; a new direct `bus.emit` from a VS Code-free zone is a rule violation, not a grandfathered pattern.) This rule targets run/session-scoped facts specifically — it does not apply to `appSignals.emit(...)` calls against the separate, documented `AppSignals` cross-cutting bus (`src/eventBus/AppSignals.ts`: auth, subscriptions, tool availability, workspace-file writes), which remain legitimate from VS Code-free zones within their documented scope.
 
 ### Path Aliases
 

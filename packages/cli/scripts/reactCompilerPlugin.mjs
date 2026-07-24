@@ -1,7 +1,7 @@
 // React Compiler Babel pre-pass for esbuild.
 //
 // Scope: `packages/cli/src/chat/tui/**/*.tsx` only, per
-// docs/prds/cli-tui-ink/20-implementation.md (Phase 0). Limiting the pre-pass
+// docs/prds/cli-tui-ink/2026-05-14-20-implementation.md (Phase 0). Limiting the pre-pass
 // keeps risk R12 (toolchain bloat) bounded — the rest of the CLI is built by
 // esbuild alone.
 //

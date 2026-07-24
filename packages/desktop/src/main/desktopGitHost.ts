@@ -1,6 +1,6 @@
 /**
  * Desktop git host — closes audit item A from
- * `docs/dev/standalone-trajectory-audit.md` (trajectory #16).
+ * `docs/dev/audits/2026-05-08-standalone-trajectory-audit.md` (trajectory #16).
  *
  * The VS Code extension surfaces "recent commits" via `texra.getRecentCommits`,
  * which shells out to `git log` with the shared `COMMIT_LABEL_FORMAT` and

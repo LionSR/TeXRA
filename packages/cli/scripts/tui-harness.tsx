@@ -258,7 +258,7 @@ const RETARGET_FOCUSED_ESCAPE =
   process.env.HARNESS_RETARGET_FOCUSED_ESCAPE === '1';
 // Opt-in fixture for the PTY ordering tests (issue #7972, follow-up from
 // #7967 / the "PTY ordering tests" section of
-// docs/proposals/cli-child-stream-state-consolidation.md): drives one child
+// docs/proposals/2026-07-10-cli-child-stream-state-consolidation.md): drives one child
 // stream through the real event-subscription path
 // (attachTuiRunFactSubscription + subscribeStreamStatus, exactly as
 // runChatTui.tsx/chatSessionController.ts wire a real run — see
@@ -1143,7 +1143,7 @@ if (SHOW_SUBAGENT_FOLLOWUPS) {
 // map mutators (`applySubagentRoster`/`setParentStream`) directly — a
 // regression in `attachTuiRunFactSubscription` or `subscribeStreamStatus`
 // wiring must be able to fail these scenarios, matching the "PTY ordering
-// tests" section of docs/proposals/cli-child-stream-state-consolidation.md.
+// tests" section of docs/proposals/2026-07-10-cli-child-stream-state-consolidation.md.
 // No `startedAt` is set on the roster row, so `childElapsed` returns the
 // static `elapsed` string instead of a live-ticking duration
 // (packages/cli/src/chat/tui/state/childControls.ts); `setActiveStream`

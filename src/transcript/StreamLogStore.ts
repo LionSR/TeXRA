@@ -83,7 +83,7 @@ function summaryOf(logInstance: StreamLog): StreamLogSummary {
 /**
  * The ONE app-side read boundary for legacy `GROUP_START`/`GROUP_END`
  * `data.status` wire values (see
- * docs/proposals/session-scoped-runtime-architecture.md §8.3). Every live
+ * docs/proposals/2026-07-03-session-scoped-runtime-architecture.md §8.3). Every live
  * producer now writes canonical `StreamPhase`/`RunOutcome` values directly
  * through `append()` (§8.2), so this only backfills rows that were already
  * persisted to disk before the cutover — `'running'` (row 1) is

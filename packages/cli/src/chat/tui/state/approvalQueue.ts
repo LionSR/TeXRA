@@ -1,4 +1,4 @@
-// Typed approval pipeline per docs/prds/cli-tui-ink/10-architecture.md §9.
+// Typed approval pipeline per docs/prds/cli-tui-ink/2026-05-14-10-architecture.md §9.
 //
 // One explicit FIFO owns every pending approval or human-input prompt. The
 // head is projected onto `currentApproval`; settling or removing it promotes
@@ -48,7 +48,7 @@ export type ApprovalPayload =
  * The TUI decision = the host-neutral {@link SharedApprovalDecision}
  * (accepted / userMessage / userQuestionAnswers) plus the CLI-only session
  * bypass + credential mode applied before accepting. See
- * docs/proposals/tui-extension-sharing.md (Rung 1).
+ * docs/proposals/2026-05-31-tui-extension-sharing.md (Rung 1).
  */
 export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
   /** Session bypass to activate before accepting this approval. */

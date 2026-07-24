@@ -66,7 +66,7 @@ export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;
 // key). Current code never writes it; `StreamSnapshotStore.readLegacyInstruction`
 // reads it once at load() so those tabs can backfill their original user
 // message into the stream log. Retire alongside the other #3061-era shims
-// tracked in `docs/proposals/architecture-checkpoints-2026.md` / `#6981`.
+// tracked in `docs/proposals/2026-07-05-architecture-checkpoints.md` / `#6981`.
 // ============================================================================
 
 const LegacyInstructionEntrySchema = z.looseObject({

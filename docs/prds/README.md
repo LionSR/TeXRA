@@ -25,11 +25,11 @@ that archived source branch, not `main`.
 | Document                                                                                                                                 | Created    | Updated    |
 | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------- |
 | [PRD: Non-blocking `inquiry` — Async Q&A with the User](./2026-05-15-prd-external-inquiry-async.md)                                      | 2026-05-15 | 2026-06-20 |
-| [PRD: Largest Dual-Systems Consolidation Audit (2026-06)](./2026-06-14-dual-systems-consolidation-2026-06.md)                            | 2026-06-14 | 2026-06-14 |
+| [PRD: Largest Dual-Systems Consolidation Audit (2026-06)](./2026-06-14-dual-systems-consolidation.md)                                    | 2026-06-14 | 2026-06-14 |
 | [PRD: Team-First Launcher and Onboarding](./2026-04-30-launcher-and-onboarding.md)                                                       | 2026-04-30 | 2026-06-13 |
-| [00 · Overview](./cli-tui-ink/00-overview.md)                                                                                            | 2026-05-14 | 2026-06-13 |
-| [10 · Architecture](./cli-tui-ink/10-architecture.md)                                                                                    | 2026-05-14 | 2026-06-13 |
-| [20 · Implementation](./cli-tui-ink/20-implementation.md)                                                                                | 2026-05-14 | 2026-06-13 |
+| [00 · Overview](./cli-tui-ink/2026-05-14-00-overview.md)                                                                                 | 2026-05-14 | 2026-06-13 |
+| [10 · Architecture](./cli-tui-ink/2026-05-14-10-architecture.md)                                                                         | 2026-05-14 | 2026-06-13 |
+| [20 · Implementation](./cli-tui-ink/2026-05-14-20-implementation.md)                                                                     | 2026-05-14 | 2026-06-13 |
 | [PRD: TeXRA Electron App](./2026-05-02-prd-electron-app.md)                                                                              | 2026-05-02 | 2026-06-11 |
 | [PRD: Agent-Native Onboarding — One Funnel, Three Surfaces](./2026-06-11-agent-native-onboarding.md)                                     | 2026-06-11 | 2026-06-11 |
 | [PRD: Goal — Autonomous Continuation Mode](./2026-05-14-prd-goal.md)                                                                     | 2026-05-14 | 2026-06-09 |
@@ -38,22 +38,22 @@ that archived source branch, not `main`.
 | [PRD: TeXRA CLI](./2026-05-04-prd-cli-app.md)                                                                                            | 2026-05-04 | 2026-06-07 |
 | [PRD: RunContext + ambient-state retirement](./2026-05-06-prd-runcontext-refactor.md)                                                    | 2026-05-06 | 2026-06-07 |
 | [PRD: TeXRA CLI Distribution (Homebrew + native binary)](./2026-06-07-prd-cli-distribution.md)                                           | 2026-06-07 | 2026-06-07 |
-| [25 · Attachments And File Mentions](./cli-tui-ink/25-attachments-and-mentions.md)                                                       | 2026-05-21 | 2026-05-21 |
+| [25 · Attachments And File Mentions](./cli-tui-ink/2026-05-21-25-attachments-and-mentions.md)                                            | 2026-05-21 | 2026-05-21 |
 | [PRD: TeXRA CLI Ink-based TUI](./cli-tui-ink/README.md)                                                                                  | 2026-05-14 | 2026-05-21 |
-| [30 · Reference](./cli-tui-ink/30-reference.md)                                                                                          | 2026-05-14 | 2026-05-20 |
+| [30 · Reference](./cli-tui-ink/2026-05-14-30-reference.md)                                                                               | 2026-05-14 | 2026-05-20 |
 | [PRD: Logger Surface Cleanup](./2026-05-17-logger-surface-cleanup.md)                                                                    | 2026-05-17 | 2026-05-17 |
 | [Mockups](./cli-tui-ink/mockups/README.md)                                                                                               | 2026-05-14 | 2026-05-15 |
-| [00 · Idle](./cli-tui-ink/mockups/00-idle.md)                                                                                            | 2026-05-14 | 2026-05-15 |
-| [01 · Streaming with tool use](./cli-tui-ink/mockups/01-streaming.md)                                                                    | 2026-05-14 | 2026-05-15 |
-| [02 · Multi-agent](./cli-tui-ink/mockups/02-multi-agent.md)                                                                              | 2026-05-14 | 2026-05-15 |
-| [03 · Bash approval modal](./cli-tui-ink/mockups/03-approval-bash.md)                                                                    | 2026-05-14 | 2026-05-15 |
-| [04 · Edit approval with diff](./cli-tui-ink/mockups/04-approval-edit.md)                                                                | 2026-05-14 | 2026-05-15 |
-| [05 · Transcript search overlay](./cli-tui-ink/mockups/05-transcript-search.md)                                                          | 2026-05-14 | 2026-05-15 |
-| [06 · Command palette](./cli-tui-ink/mockups/06-command-palette.md)                                                                      | 2026-05-14 | 2026-05-15 |
-| [07 · Streaming-text mode (stdout piped)](./cli-tui-ink/mockups/07-streaming-text.md)                                                    | 2026-05-14 | 2026-05-15 |
-| [08 · Tool-card variants](./cli-tui-ink/mockups/08-tool-variants.md)                                                                     | 2026-05-14 | 2026-05-15 |
-| [09 · Slash command as structured form](./cli-tui-ink/mockups/09-slash-form.md)                                                          | 2026-05-15 | 2026-05-15 |
-| [10 · Session resume](./cli-tui-ink/mockups/10-session-resume.md)                                                                        | 2026-05-15 | 2026-05-15 |
+| [00 · Idle](./cli-tui-ink/mockups/2026-05-14-00-idle.md)                                                                                 | 2026-05-14 | 2026-05-15 |
+| [01 · Streaming with tool use](./cli-tui-ink/mockups/2026-05-14-01-streaming.md)                                                         | 2026-05-14 | 2026-05-15 |
+| [02 · Multi-agent](./cli-tui-ink/mockups/2026-05-14-02-multi-agent.md)                                                                   | 2026-05-14 | 2026-05-15 |
+| [03 · Bash approval modal](./cli-tui-ink/mockups/2026-05-14-03-approval-bash.md)                                                         | 2026-05-14 | 2026-05-15 |
+| [04 · Edit approval with diff](./cli-tui-ink/mockups/2026-05-14-04-approval-edit.md)                                                     | 2026-05-14 | 2026-05-15 |
+| [05 · Transcript search overlay](./cli-tui-ink/mockups/2026-05-14-05-transcript-search.md)                                               | 2026-05-14 | 2026-05-15 |
+| [06 · Command palette](./cli-tui-ink/mockups/2026-05-14-06-command-palette.md)                                                           | 2026-05-14 | 2026-05-15 |
+| [07 · Streaming-text mode (stdout piped)](./cli-tui-ink/mockups/2026-05-14-07-streaming-text.md)                                         | 2026-05-14 | 2026-05-15 |
+| [08 · Tool-card variants](./cli-tui-ink/mockups/2026-05-14-08-tool-variants.md)                                                          | 2026-05-14 | 2026-05-15 |
+| [09 · Slash command as structured form](./cli-tui-ink/mockups/2026-05-15-09-slash-form.md)                                               | 2026-05-15 | 2026-05-15 |
+| [10 · Session resume](./cli-tui-ink/mockups/2026-05-15-10-session-resume.md)                                                             | 2026-05-15 | 2026-05-15 |
 | [2026-05-10-prd-cli-runcontext-logger-orchestration.manifest.json](./2026-05-10-prd-cli-runcontext-logger-orchestration.manifest.json)   | 2026-05-10 | 2026-05-12 |
 | [PRD: CLI, RunContext, and Logger v2 orchestration](./2026-05-10-prd-cli-runcontext-logger-orchestration.md)                             | 2026-05-10 | 2026-05-11 |
 | [PRD: Logger v2 — structured records, host sinks, decoupled progress schema](./2026-05-06-prd-logger-v2.md)                              | 2026-05-06 | 2026-05-10 |
@@ -85,13 +85,13 @@ that archived source branch, not `main`.
 | [UI Regressions from Lit Migration](./2026-01-26-ui-regressions-lit-migration.md)                                                        | 2026-01-26 | 2026-02-10 |
 | [PRD: UI Regression Audit - All Views](./2026-01-27-prd-ui-regression-audit.md)                                                          | 2026-01-27 | 2026-02-10 |
 | [PRD: UI & Logic Regression Audit - Round 2](./2026-01-29-prd-ui-regression-audit-round2.md)                                             | 2026-01-29 | 2026-02-10 |
-| [PRD: Code Review Fixes - January 2026](./2026-01-30-code-review-fixes-2026-01.md)                                                       | 2026-01-30 | 2026-02-10 |
+| [PRD: Code Review Fixes - January 2026](./2026-01-30-code-review-fixes.md)                                                               | 2026-01-30 | 2026-02-10 |
 | [PRD: Feature Logic Consolidation](./2026-01-30-dual-logic-features.md)                                                                  | 2026-01-30 | 2026-02-10 |
 | [PRD: UI & Logic Regression Audit - Round 3 (Consolidated)](./2026-01-30-prd-ui-regression-audit-round3.md)                              | 2026-01-30 | 2026-02-10 |
-| [PRD: Dual-Logic Consolidation (2026-02)](./2026-01-31-dual-logic-audit-2026-02.md)                                                      | 2026-01-31 | 2026-02-10 |
+| [PRD: Dual-Logic Consolidation (2026-02)](./2026-01-31-dual-logic-audit.md)                                                              | 2026-01-31 | 2026-02-10 |
 | [PRD: Token Counting & Context Management Audit](./2026-01-31-token-counting-audit.md)                                                   | 2026-01-31 | 2026-02-10 |
 | [PRD: Context Window Compactization](./2026-02-02-prd-context-compactization.md)                                                         | 2026-02-02 | 2026-02-10 |
 | [PRD: Split createResponse into Phased Architecture](./2026-02-02-prd-token-counting-refactor.md)                                        | 2026-02-02 | 2026-02-10 |
-| [Compaction](./2026-02-05-claude-documentation-compactization-2026-02.md)                                                                | 2026-02-05 | 2026-02-10 |
+| [Compaction](./2026-02-05-claude-documentation-compactization.md)                                                                        | 2026-02-05 | 2026-02-10 |
 | [Plan: Server-Side Compaction via `compact_20260112` API](./2026-02-05-plan-claude-server-compactization.md)                             | 2026-02-05 | 2026-02-10 |
 | [PRD: Model Selection in Settings View](./2026-02-06-model-selection.md)                                                                 | 2026-02-06 | 2026-02-10 |
