@@ -85,7 +85,7 @@
           <span class="step-n">3</span>
         </div>
         <div class="select">
-          <span class="s-val">opus48T</span>
+          <span class="s-val">opus5T</span>
           <wa-icon
             class="s-caret"
             library="texra"

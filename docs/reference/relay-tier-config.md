@@ -200,8 +200,8 @@ Available to Ultra tier subscribers only (includes all lower tier models).
 
 | Model Name | Full Name                  | Provider  | Pricing (in/out per 1M) |
 | ---------- | -------------------------- | --------- | ----------------------- |
-| `opus48`   | claude-opus-4-8            | Anthropic | $5.00/$25.00            |
-| `opus48T`  | claude-opus-4-8 (Thinking) | Anthropic | $5.00/$25.00            |
+| `opus5`    | claude-opus-5              | Anthropic | $5.00/$25.00            |
+| `opus5T`   | claude-opus-5 (Thinking)   | Anthropic | $5.00/$25.00            |
 | `gpt55`    | gpt-5.5-2026-04-23         | OpenAI    | $5.00/$30.00            |
 | `gpt55pro` | gpt-5.5-pro-2026-04-23     | OpenAI    | $30.00/$180.00          |
 
