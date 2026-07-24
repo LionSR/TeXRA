@@ -33,9 +33,7 @@ describe('deriveToolInputPreview', () => {
   });
 
   it('returns an empty string for unmapped tools', () => {
-    expect(deriveToolInputPreview('read_file', { path: 'paper.tex' })).toBe(
-      '',
-    );
+    expect(deriveToolInputPreview('read_file', { path: 'paper.tex' })).toBe('');
   });
 
   it('returns an empty string for non-object input', () => {
