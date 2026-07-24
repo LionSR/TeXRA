@@ -1,9 +1,9 @@
 export const meta = {
   name: 'debt-audit',
   description:
-    'Area debt audit: scout (optional), map seams read-only, open ideation, dedup, adversarially verify net gain',
+    'General structural debt audit: scout, map seams, inspect declarative and SSOT opportunities, remove shallow indirection, dedup, and adversarially verify net gain',
   whenToUse:
-    'Recurring rotation over codebase areas (tracker #8787). Minimal call: {area, charter} — the engine scouts and decomposes itself. Pass seams/lenses only to direct it. Proven on the 2026-07-18 runtime-coupling audit (tracker #8758: 12/12 issues shipped).',
+    'Use for recurring or one-off audits of any TeXRA area. Minimal call: {area, charter}; the engine scouts and decomposes the area itself. Pass seams or lenses only when the audit needs a narrower focus.',
   phases: [
     { title: 'Scout', detail: 'self-decompose the area (skipped when caller passes seams)' },
     { title: 'Map', detail: 'one read-only mapper per seam' },
@@ -34,10 +34,8 @@ if (!A.area) {
   throw new Error('debt-audit requires args {area, ...}')
 }
 
-const ROOT = '/Users/siruilu/Local/AI-Projects/coauthor'
-
 const GROUND_RULES = `
-Repo: ${ROOT} (TeXRA monorepo: VS Code extension + Electron desktop + Ink CLI over one shared core).
+Repository: the current TeXRA working tree (VS Code extension + Electron desktop + Ink CLI over one shared core). Resolve every path from the repository root; never assume a user name or absolute checkout path.
 STRICTLY READ-ONLY: never edit files, never run git-mutating commands (no stash/checkout/commit), never run installs/builds/tests. Greps, wc, git log/show/diff (read-only) are fine. The repo is live; other sessions may commit. Use HEAD as-is.
 Include .mts/.cts in every glob and grep (--include="*.ts" --include="*.tsx" --include="*.mts" --include="*.cts"); test-kernel uses .vitest.mts and it is invisible to plain *.ts globs.
 Cite evidence as file:line. Count with grep -c / wc -l rather than estimating. Your final structured output is data for a downstream program, not prose for a human.`
@@ -56,7 +54,15 @@ const MEASURED = A.measured ? '\nNumbers measured by the caller at HEAD:\n' + A.
 const MAP_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['seamSummary', 'components', 'dualSystems', 'passThroughs', 'candidates'],
+  required: [
+    'seamSummary',
+    'components',
+    'dualSystems',
+    'declarativeOpportunities',
+    'singleSourceConflicts',
+    'passThroughs',
+    'candidates',
+  ],
   properties: {
     seamSummary: {
       type: 'string',
@@ -94,10 +100,69 @@ const MAP_SCHEMA = {
         },
       },
     },
+    declarativeOpportunities: {
+      type: 'array',
+      maxItems: 12,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['location', 'currentShape', 'proposedShape', 'safetyEvidence'],
+        properties: {
+          location: { type: 'string', description: 'file:line and symbol' },
+          currentShape: {
+            type: 'string',
+            description:
+              'switch/if ladder, repeated blocks, parallel registration, or hardcoded sequence',
+          },
+          proposedShape: {
+            type: 'string',
+            description: 'the lookup table, schema-derived type, or iterable data structure',
+          },
+          safetyEvidence: {
+            type: 'string',
+            description:
+              'tests and behavior argument covering ordering, defaults, short-circuiting, and exhaustiveness',
+          },
+        },
+      },
+    },
+    singleSourceConflicts: {
+      type: 'array',
+      maxItems: 12,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['knowledge', 'locations', 'canonicalOwner', 'semanticCaveat'],
+        properties: {
+          knowledge: {
+            type: 'string',
+            description: 'the duplicated constant, type, schema, registry, or derivation',
+          },
+          locations: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'every repo-wide occurrence, cited as file:line',
+          },
+          canonicalOwner: {
+            type: 'string',
+            description: 'where the knowledge should live and how consumers should reference it',
+          },
+          semanticCaveat: {
+            type: 'string',
+            description:
+              'why the occurrences are truly identical, or what prevents safe consolidation',
+          },
+        },
+      },
+    },
     passThroughs: {
       type: 'array',
       maxItems: 20,
-      items: { type: 'string', description: 'symbol + file:line of a wrapper/shim/alias that only forwards' },
+      items: {
+        type: 'string',
+        description:
+          'symbol + file:line, forwarded target, every caller, and whether an interface, port, or test seam makes the indirection load-bearing',
+      },
     },
     candidates: {
       type: 'array',
@@ -174,7 +239,14 @@ ${MEASURED}
 YOUR SEAM: ${s.key}
 ${s.brief}
 
-The brief is a starting point, not a fence: follow the debt where it actually leads, and report load-bearing findings outside the brief (in notes or as candidates) rather than dropping them. Read the real code, not just names; grep for consumers before calling anything dead or single-caller (remember .mts). If the seam is already clean, say so plainly — a false debt claim poisons the downstream synthesis, and "healthy" is a valuable verdict. For candidates, only propose deletions where named symbols cease to exist, and estimate netLoC including the cost of whatever replaces them.`
+The brief is a starting point, not a fence: follow the debt where it actually leads, and report load-bearing findings outside the brief rather than dropping them. Read the real code, not just names; grep for consumers before calling anything dead or single-caller (remember .mts).
+
+Also inspect the seam for:
+- DECLARATIVE opportunities: value-mapping switch/if ladders, repeated near-identical blocks, hardcoded ordered sequences, and parallel registrations that can become one typed data table. Reject conversions that obscure distinct side effects, weaken discriminated-union exhaustiveness, or change evaluation order, short-circuiting, defaults, or fallthrough.
+- SINGLE SOURCE OF TRUTH conflicts: duplicated constants, unions, schemas versus hand-written interfaces, registries, magic values, and derivation logic. Search the whole repo for every occurrence and distinguish genuinely shared knowledge from concepts that merely look similar.
+- PASS-THROUGHS: methods, functions, one-call factories, and re-export facades that only forward. Count every caller and recommend keeping any interface contract, host port, test seam, or semantic boundary that earns the indirection.
+
+If the seam is already clean, say so plainly — a false debt claim poisons downstream synthesis, and "healthy" is a valuable verdict. For candidates, only propose deletions where named symbols cease to exist, and estimate netLoC including the cost of whatever replaces them.`
 }
 
 phase('Map')
@@ -225,17 +297,33 @@ const IDEAS_SCHEMA = {
   },
 }
 
-// Ideation runs open by default: parallel architects over the same maps, differentiated only by an
-// anti-herding nudge, with dedup downstream. Callers who want directed angles can pass lenses.
+const GENERAL_LENSES = [
+  {
+    key: 'ownership-and-dual-systems',
+    brief:
+      'Find competing owners, parallel implementations, compatibility arms, lifecycle splits, and components whose responsibilities belong in a deeper existing module. Prefer a change that deletes one system over a new facade that coordinates both.',
+  },
+  {
+    key: 'declarative-and-ssot',
+    brief:
+      'Find behavior that is really data: value-mapping branches, repeated registrations, duplicated constants or unions, schema/interface drift, and parallel structures encoding the same domain knowledge. Verify every repo-wide occurrence. Reject table rewrites when branches have distinct effects, ordering, narrowing, or short-circuit semantics.',
+  },
+  {
+    key: 'pass-through-elimination',
+    brief:
+      'Find methods, functions, one-call factories, wrappers, and re-export facades that only forward. Count every caller and name the exact target. Keep deliberate interfaces, host ports, PocketFlow hooks, test seams, and semantic boundaries; collapse only indirection that adds no contract or behavior.',
+  },
+  {
+    key: 'open-structural-simplification',
+    brief:
+      'Look beyond the named smells for the deepest evidence-backed simplification the other lenses may miss. Prefer fewer concepts and clearer ownership, and reject renames or relocations presented as deletions.',
+  },
+]
+
+// Callers may replace the general lenses for a deliberately narrow audit.
 const IDEATORS = Array.isArray(A.lenses) && A.lenses.length > 0
   ? A.lenses
-  : Array.from({ length: 4 }, (_, i) => ({
-      key: 'open-' + (i + 1),
-      brief:
-        'You are ideation agent ' +
-        (i + 1) +
-        ' of 4. The other three see the same maps; note the obvious candidates briefly, then push past them to what the others are likely to miss — the deepest structural simplifications you can defend with evidence, whatever their shape.',
-    }))
+  : GENERAL_LENSES
 
 phase('Ideas')
 const mapDigest = JSON.stringify(maps)
@@ -349,6 +437,8 @@ const seamSummaries = maps.map((m) => ({
   seam: m.seam,
   seamSummary: m.seamSummary,
   dualSystems: m.dualSystems,
+  declarativeOpportunities: m.declarativeOpportunities,
+  singleSourceConflicts: m.singleSourceConflicts,
   passThroughs: m.passThroughs,
 }))
 return { area: A.area, seamSummaries, shortlist: short.shortlist, verdicts }
