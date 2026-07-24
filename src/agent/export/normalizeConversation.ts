@@ -21,6 +21,7 @@ import {
   isFunctionCallOutputItem,
 } from '@agent/modelHandlers/openai/openAIResponseContent';
 import { isResponseFunctionToolCallItem } from '@agent/modelHandlers/openai/responseStreamEvents';
+import { CONVERSATION_BLOCK_TYPES } from '@agent/types/ConversationBlockTypes';
 import {
   ANTHROPIC_SERVER_TOOL_BLOCK_TYPES,
   extractWebFetchResultFields,
@@ -64,18 +65,21 @@ const ContentBlockSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('output_text'), text: z.string().optional() }),
 
   // Anthropic extended-thinking / Google GenAI thought blocks.
-  z.object({ type: z.literal('thinking'), thinking: z.string().optional() }),
-  z.object({ type: z.literal('redacted_thinking') }),
+  z.object({
+    type: z.literal(CONVERSATION_BLOCK_TYPES.thinking),
+    thinking: z.string().optional(),
+  }),
+  z.object({ type: z.literal(CONVERSATION_BLOCK_TYPES.redactedThinking) }),
 
   // Tool call / tool result — shared by Anthropic, Google GenAI, and the
   // VS Code language-model bridge (see normalizeContentBlock).
   z.object({
-    type: z.literal('tool_use'),
+    type: z.literal(CONVERSATION_BLOCK_TYPES.toolUse),
     name: z.string().optional(),
     input: z.unknown().optional(),
   }),
   z.object({
-    type: z.literal('tool_result'),
+    type: z.literal(CONVERSATION_BLOCK_TYPES.toolResult),
     content: z.unknown().optional(),
   }),
 
@@ -83,12 +87,12 @@ const ContentBlockSchema = z.discriminatedUnion('type', [
   // ('input_image'/'input_file'), OpenAI Chat Completions ('image_url'/
   // 'file'). None of these carry fields this module reads — only `type`
   // decides which attachment kind to render.
-  z.object({ type: z.literal('image') }),
-  z.object({ type: z.literal('input_image') }),
-  z.object({ type: z.literal('image_url') }),
-  z.object({ type: z.literal('document') }),
-  z.object({ type: z.literal('input_file') }),
-  z.object({ type: z.literal('file') }),
+  z.object({ type: z.literal(CONVERSATION_BLOCK_TYPES.image) }),
+  z.object({ type: z.literal(CONVERSATION_BLOCK_TYPES.inputImage) }),
+  z.object({ type: z.literal(CONVERSATION_BLOCK_TYPES.imageUrl) }),
+  z.object({ type: z.literal(CONVERSATION_BLOCK_TYPES.document) }),
+  z.object({ type: z.literal(CONVERSATION_BLOCK_TYPES.inputFile) }),
+  z.object({ type: z.literal(CONVERSATION_BLOCK_TYPES.file) }),
 
   // Anthropic server-side tool blocks (the provider executes these, not a
   // local tool handler).
@@ -231,14 +235,14 @@ function blocksToUserParts(blocks: ContentBlock[]): UserPart[] {
       case 'input_text':
         if (b.text) parts.push({ type: 'text', text: b.text });
         break;
-      case 'image':
-      case 'input_image':
-      case 'image_url':
+      case CONVERSATION_BLOCK_TYPES.image:
+      case CONVERSATION_BLOCK_TYPES.inputImage:
+      case CONVERSATION_BLOCK_TYPES.imageUrl:
         parts.push({ type: 'attachment', attachmentType: 'image' });
         break;
-      case 'document':
-      case 'input_file':
-      case 'file':
+      case CONVERSATION_BLOCK_TYPES.document:
+      case CONVERSATION_BLOCK_TYPES.inputFile:
+      case CONVERSATION_BLOCK_TYPES.file:
         parts.push({ type: 'attachment', attachmentType: 'document' });
         break;
       default:
@@ -250,7 +254,7 @@ function blocksToUserParts(blocks: ContentBlock[]): UserPart[] {
 
 function extractToolResultText(block: ContentBlock): string | undefined {
   switch (block.type) {
-    case 'tool_result':
+    case CONVERSATION_BLOCK_TYPES.toolResult:
       return typeof block.content === 'string'
         ? block.content
         : prettyJson(block.content);
@@ -263,10 +267,16 @@ function extractToolResultText(block: ContentBlock): string | undefined {
   }
 }
 
+// Non-text tags are shared with the `formatConversationBlock` switch in
+// `@agent/storage/conversationFormat` via `CONVERSATION_BLOCK_TYPES`
+// (`@agent/types/ConversationBlockTypes`) and `ANTHROPIC_SERVER_TOOL_BLOCK_TYPES`
+// (`@agent/types/ServerToolTypes`) — both switches must recognize the same
+// tags, just into different output shapes (a structured `ExportNode` here
+// vs. a truncated marker string there).
 function assistantBlockToNode(block: ContentBlock): ExportNode | null {
   switch (block.type) {
-    case 'thinking':
-    case 'redacted_thinking':
+    case CONVERSATION_BLOCK_TYPES.thinking:
+    case CONVERSATION_BLOCK_TYPES.redactedThinking:
       return null;
 
     // Anthropic: 'text', OpenAI Response API: 'output_text'
@@ -276,14 +286,14 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
         ? { kind: 'assistant-text', text: block.text }
         : null;
 
-    case 'tool_use':
+    case CONVERSATION_BLOCK_TYPES.toolUse:
       return {
         kind: 'tool-call',
         name: block.name ?? 'unknown',
         input: prettyJson(block.input ?? {}),
       };
 
-    case 'tool_result':
+    case CONVERSATION_BLOCK_TYPES.toolResult:
       return {
         kind: 'tool-result',
         text:
@@ -293,11 +303,7 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
       };
 
     // Anthropic server-side tool blocks (the provider executes these, not a
-    // local tool handler). Shares the `ANTHROPIC_SERVER_TOOL_BLOCK_TYPES`
-    // vocabulary with the `formatConversationBlock` switch in
-    // `@agent/storage/conversationFormat` — both classify the same three
-    // live Anthropic block types, just into different output shapes (a
-    // structured `ExportNode` here vs. a truncated marker string there).
+    // local tool handler).
     case ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.serverToolUse:
       if (block.name === 'web_search') {
         const query =

@@ -22,6 +22,7 @@
  * truncation for the CLI). Provider-native message and content recognition is
  * shared here.
  */
+import { CONVERSATION_BLOCK_TYPES } from '@agent/types/ConversationBlockTypes';
 import {
   ANTHROPIC_SERVER_TOOL_BLOCK_TYPES,
   extractWebFetchResultFields,
@@ -85,7 +86,8 @@ function hasProviderReasoningBlock(content: unknown): boolean {
 function isProviderReasoningBlock(block: unknown): boolean {
   return (
     isObject(block) &&
-    (block.type === 'thinking' || block.type === 'redacted_thinking')
+    (block.type === CONVERSATION_BLOCK_TYPES.thinking ||
+      block.type === CONVERSATION_BLOCK_TYPES.redactedThinking)
   );
 }
 
@@ -263,21 +265,29 @@ function formatConversationBlock(
     );
   }
 
+  // Non-text tags are shared with the `assistantBlockToNode` switch in
+  // `@agent/export/normalizeConversation` via `CONVERSATION_BLOCK_TYPES`
+  // (`@agent/types/ConversationBlockTypes`) and `ANTHROPIC_SERVER_TOOL_BLOCK_TYPES`
+  // (`@agent/types/ServerToolTypes`) — both switches must recognize the same
+  // tags, just into different output shapes (a truncated marker string here
+  // vs. a structured `ExportNode` there). `text`/`input_text`/`output_text`
+  // are the exception: they're caught by the duck-typed `block.text` check
+  // above, not by an explicit case here.
   switch (block.type) {
     case 'text':
       // A recognized text block whose `text` failed the duck-type check
       // above (missing/non-string) — render empty, not its JSON form.
       return truncate(asText(block.text), options.textLimit, marker);
-    case 'image':
-    case 'image_url':
-    case 'input_image':
+    case CONVERSATION_BLOCK_TYPES.image:
+    case CONVERSATION_BLOCK_TYPES.imageUrl:
+    case CONVERSATION_BLOCK_TYPES.inputImage:
       return '[image attachment]';
-    case 'document':
-    case 'file':
-    case 'input_file':
+    case CONVERSATION_BLOCK_TYPES.document:
+    case CONVERSATION_BLOCK_TYPES.file:
+    case CONVERSATION_BLOCK_TYPES.inputFile:
       return '[document attachment]';
-    case 'thinking':
-    case 'redacted_thinking':
+    case CONVERSATION_BLOCK_TYPES.thinking:
+    case CONVERSATION_BLOCK_TYPES.redactedThinking:
       return options.hideProviderReasoning
         ? ''
         : truncate(
@@ -285,20 +295,16 @@ function formatConversationBlock(
             options.toolBlockLimit,
             marker,
           );
-    case 'tool_use':
+    case CONVERSATION_BLOCK_TYPES.toolUse:
       return formatToolUseMarker(
         asText(block.name) || 'unknown',
         block.input,
         options,
       );
-    case 'tool_result':
+    case CONVERSATION_BLOCK_TYPES.toolResult:
       return formatToolResultMarker(block.content, options);
     // Anthropic server-side tool blocks (the provider executes these, not a
-    // local tool handler). Shares the `ANTHROPIC_SERVER_TOOL_BLOCK_TYPES`
-    // vocabulary with the `assistantBlockToNode` switch in
-    // `@agent/export/normalizeConversation` — both classify the same three
-    // live Anthropic block types, just into different output shapes (a
-    // truncated marker string here vs. a structured `ExportNode` there).
+    // local tool handler).
     case ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.serverToolUse:
       return formatToolUseMarker(
         asText(block.name) || 'unknown',
