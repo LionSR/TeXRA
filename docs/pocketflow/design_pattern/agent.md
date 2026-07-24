@@ -48,7 +48,7 @@ parameters: <parameters>
 
 The core of building **high-performance** and **reliable** agents boils down to:
 
-1. **Context Management:** Provide _relevant, minimal context._ For example, rather than including an entire chat history, retrieve the most relevant via [RAG](./rag.md).
+1. **Context Management:** Provide _relevant, minimal context._ For example, rather than including an entire chat history, retrieve the most relevant via retrieval-augmented generation (RAG).
 
 2. **Action Space:** Provide _a well-structured and unambiguous_ set of actions—avoiding overlap like separate `read_databases` or `read_csvs`.
 

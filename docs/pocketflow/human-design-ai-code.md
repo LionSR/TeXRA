@@ -30,7 +30,7 @@ Agentic Coding should be a collaboration between Human System Design and Agent I
    - **Balance complexity vs. impact**: Aim to deliver the highest value features with minimal complexity early.
 
 2. **Flow Design**: Outline at a high level, describe how your AI system orchestrates nodes.
-   - Identify applicable design patterns (e.g., [Map Reduce](./design_pattern/mapreduce.md), [Agent](./design_pattern/agent.md), [RAG](./design_pattern/rag.md)).
+   - Identify applicable design patterns (e.g., [Map Reduce](./design_pattern/mapreduce.md), [Agent](./design_pattern/agent.md), RAG).
      - For each node in the flow, start with a high-level one-line description of what it does.
      - If using **Map Reduce**, specify how to map (what to split) and how to reduce (how to combine).
      - If using **Agent**, specify what are the inputs (context) and what are the possible actions.

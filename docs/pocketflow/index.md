@@ -9,7 +9,7 @@ nav_order: 1
 A [100-line](https://github.com/The-Pocket/PocketFlow-Typescript/blob/main/src/index.ts) minimalist LLM framework for _Agents, Task Decomposition, RAG, etc_.
 
 - **Lightweight**: Just the core graph abstraction in 100 lines. ZERO dependencies, and vendor lock-in.
-- **Expressive**: Everything you love from larger frameworks—([Multi-](./design_pattern/multi_agent.html))[Agents](./design_pattern/agent.html), [Workflow](./design_pattern/workflow.html), [RAG](./design_pattern/rag.html), and more.
+- **Expressive**: Everything you love from larger frameworks—([Multi-](./design_pattern/multi_agent.html))[Agents](./design_pattern/agent.html), [Workflow](./design_pattern/workflow.html), RAG, and more.
 - **Agentic-Coding**: Intuitive enough for AI agents to help humans build complex LLM applications.
 
 <div align="center">
@@ -36,7 +36,7 @@ From there, it’s easy to implement popular design patterns:
 
 - [Agent](./design_pattern/agent.md) autonomously makes decisions.
 - [Workflow](./design_pattern/workflow.md) chains multiple tasks into pipelines.
-- [RAG](./design_pattern/rag.md) integrates data retrieval with generation.
+- RAG integrates data retrieval with generation.
 - [Map Reduce](./design_pattern/mapreduce.md) splits data tasks into Map and Reduce steps.
 - [Structured Output](./design_pattern/structure.md) formats outputs consistently.
 - [(Advanced) Multi-Agents](./design_pattern/multi_agent.md) coordinate multiple agents.
@@ -65,4 +65,4 @@ We **do not** provide built-in utilities. Instead, we offer _examples_—please 
 
 ## Ready to build your Apps?
 
-Check out [Agentic Coding Guidance](./guide.md), the fastest way to develop LLM projects with PocketFlow.js!
+Check out [Agentic Coding Guidance](./human-design-ai-code.md), the fastest way to develop LLM projects with PocketFlow.js!
