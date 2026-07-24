@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   resolveChildRunOutput: vi.fn(),
   runStorageLocationFromAnyAbsolutePath: vi.fn(),
   assertWorkflowFilesExist: vi.fn(),
+  rejectOversizedBibAttachments: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
 }));
 
@@ -61,6 +62,10 @@ vi.mock('@utils/files/taskRunStorage', () => ({
 
 vi.mock('@tools/delegation/workflowFileValidation', () => ({
   assertWorkflowFilesExist: mocks.assertWorkflowFilesExist,
+}));
+
+vi.mock('@tools/delegation/inputFields', () => ({
+  rejectOversizedBibAttachments: mocks.rejectOversizedBibAttachments,
 }));
 
 const parentExecutionId = 'aaaaaa111111' as ExecutionId;
@@ -149,6 +154,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     }));
     mocks.selectAvailableDelegationModel.mockResolvedValue('child-model');
     mocks.assertWorkflowFilesExist.mockResolvedValue(undefined);
+    mocks.rejectOversizedBibAttachments.mockResolvedValue(null);
     mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue(undefined);
     mocks.executeStableSubagentInBand.mockImplementation(async (options) => {
       mocks.preparedOptions.push(await options.prepare());
@@ -178,6 +184,9 @@ describe('createWorkflowScriptAgentRunner', () => {
     ]);
     expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
       { label: 'Context file', files: ['notes.tex'] },
+    ]);
+    expect(mocks.rejectOversizedBibAttachments).toHaveBeenCalledWith([
+      'notes.tex',
     ]);
     expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
       { label: 'Media file', files: ['figure.pdf'] },
@@ -290,6 +299,36 @@ describe('createWorkflowScriptAgentRunner', () => {
     ).rejects.toMatchObject({
       name: 'WorkflowRunAbortError',
       message: expect.stringContaining(placeholder),
+    });
+    expect(mocks.preparedOptions).toHaveLength(0);
+  });
+
+  it('makes oversized bibliography context run-fatal before launch', async () => {
+    const message =
+      'large.bib is over the 100 KiB limit. Extract the needed entries first.';
+    mocks.rejectOversizedBibAttachments.mockResolvedValue({
+      status: 'error',
+      summary: 'Rejected oversized BibTeX attachment',
+      error: message,
+      diagnostics: {
+        type: 'oversized_bib_attachment',
+        path: 'large.bib',
+        sizeBytes: 102_401,
+        limitBytes: 102_400,
+      },
+    });
+    const runner = defaultRunner();
+
+    await expect(
+      runner(
+        invocation({
+          inputFiles: ['draft.tex'],
+          contextFiles: ['large.bib'],
+        }),
+      ),
+    ).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message,
     });
     expect(mocks.preparedOptions).toHaveLength(0);
   });

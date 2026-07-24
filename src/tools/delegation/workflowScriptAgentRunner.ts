@@ -19,6 +19,7 @@ import {
   executeStableSubagentInBand,
   SubagentDurabilityError,
 } from './inBandSubagentExecution';
+import { rejectOversizedBibAttachments } from './inputFields';
 import {
   requireVisibleAgent,
   selectAvailableDelegationModel,
@@ -187,6 +188,11 @@ export function createWorkflowScriptAgentRunner(
                   invocation.options.mediaFiles ?? [],
                 ),
               ]);
+            const oversizedBibRejection =
+              await rejectOversizedBibAttachments(contextFiles);
+            if (oversizedBibRejection) {
+              throw new WorkflowRunAbortError(oversizedBibRejection.error);
+            }
             // Run-storage references can disappear during recovery. Validate
             // the resolved inputs, not merely the paths supplied by the script,
             // so a stale reference cannot launch a useless empty-envelope run.

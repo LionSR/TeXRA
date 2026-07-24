@@ -34,6 +34,7 @@ import { deriveExecutionId } from '@utils/core/idHash';
 // Local file imports
 import { createWorkflowScriptAgentRunner } from './workflowScriptAgentRunner';
 import { createWorkflowScriptStrategy } from './workflowScriptStrategy';
+import { rejectOversizedBibAttachments } from './inputFields';
 import { assertWorkflowFilesExist } from './workflowFileValidation';
 
 const WorkflowScriptToolInputSchema = z.strictObject({
@@ -130,6 +131,10 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       { label: 'Workflow context file', files: files.contextFiles },
       { label: 'Workflow media file', files: files.mediaFiles },
     ]);
+    const oversizedBibRejection = await rejectOversizedBibAttachments(
+      files.contextFiles,
+    );
+    if (oversizedBibRejection) return oversizedBibRejection;
 
     // The run executionId is deterministic from the checkpoint identity, NOT a
     // fresh random id: a relaunch with the same meta.name regenerates the same

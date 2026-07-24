@@ -241,6 +241,29 @@ describe('WorkflowScriptTool', () => {
     );
   });
 
+  it('rejects an oversized bibliography bound as workflow context', async () => {
+    await WorkspaceFS.write('large.bib', 'x'.repeat(100 * 1024 + 1));
+
+    const result = await callTool(undefined, {
+      inputFiles: ['paper.tex'],
+      contextFiles: ['large.bib'],
+      mediaFiles: [],
+    });
+
+    expect(result).toMatchObject({
+      status: 'error',
+      summary: 'Rejected oversized BibTeX attachment',
+      diagnostics: {
+        type: 'oversized_bib_attachment',
+        path: 'large.bib',
+        sizeBytes: 100 * 1024 + 1,
+        limitBytes: 100 * 1024,
+      },
+    });
+    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+  });
+
   it('registers checkpoint files when a resume omits files', async () => {
     const resumeScript = script.replace("name: 'tool-test'", "name: 'resume'");
     const files = {
