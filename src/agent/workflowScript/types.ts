@@ -34,6 +34,8 @@ interface WorkflowAgentCallBaseOptions {
   label?: string;
   /** Progress group; defaults to the `phase()` active at call time. */
   phase?: string;
+  /** Available model short name for this call; otherwise follows delegation policy. */
+  model?: string;
 }
 
 interface WorkflowAgentFileOptions {
