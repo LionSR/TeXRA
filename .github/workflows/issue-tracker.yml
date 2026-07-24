@@ -141,7 +141,7 @@ jobs:
           model-tier: sonnet
           allowed-bots: 'dependabot[bot],github-actions[bot],Copilot,claude[bot],cursor[bot]'
           allowed_tools_preset: issue-tracker
-          allowed_tools_preset_map_file: .trusted-actions/.github/allowed-tools.json
+          allowed_tools_preset_map_file: .trusted-actions/.github/automation/allowed-tools.json
           claude-prompt-file: .trusted-actions/.github/prompts/issue-tracker-prompt.md
           claude-prompt-context: |
             Event: ${{ github.event_name }} / ${{ github.event.action }}
