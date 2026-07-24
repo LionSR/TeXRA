@@ -13,6 +13,14 @@ All notable changes to this project will be documented in this file.
   as the default Anthropic model. Opus 5 keeps the full 1M context window and
   adaptive thinking.
 
+### Extension (VS Code) and Desktop
+
+#### Bug Fixes
+
+- **Long terminal-mode logs keep bounded recent scrollback** — the progress
+  view retains at most 4,000 complete lines and marks when earlier lines have
+  been removed.
+
 ## [0.39.8] - 2026-07-24
 
 ### Shared (all surfaces)
