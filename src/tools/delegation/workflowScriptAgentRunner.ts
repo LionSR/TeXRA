@@ -72,6 +72,11 @@ async function selectWorkflowScriptModel(
   try {
     return await selectAvailableDelegationModel(input);
   } catch (error) {
+    // A declared model is workflow configuration, so its rejection must not
+    // disappear as a nullable call inside parallel()/pipeline(). When the
+    // script omits the field, preserve the established delegation failure
+    // semantics; per-call model routing must not broaden that behavior.
+    if (input.requestedModel == null) throw error;
     throw new WorkflowRunAbortError(
       formatError('Workflow model could not be selected', error),
       { cause: error },
