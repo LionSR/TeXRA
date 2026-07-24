@@ -173,6 +173,11 @@ const isBetaTextBlock = (
 ): block is Extract<BetaContentBlock, { type: 'text' }> =>
   block.type === 'text';
 
+const hasSuccessfulBetaCompactionBlock = (message: BetaMessage): boolean =>
+  message.content.some(
+    (block) => block.type === 'compaction' && block.content !== null,
+  );
+
 const INTERLEAVED_THINKING_BETA: AnthropicBeta =
   'interleaved-thinking-2025-05-14';
 
@@ -342,15 +347,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   /**
-   * Client-side compaction is available for tool-use sessions on models whose
-   * llm-zoo family is compaction-eligible. `isCompactionEligibleModel` is a
-   * `startsWith`-style model-family gate in `anthropicThinking.ts`; moving it
-   * to an llm-zoo capability flag is #7080's scope, not this predicate's own
-   * #7101 triage.
+   * Manual compaction is available for workflow and tool-use sessions on
+   * models whose llm-zoo family is compaction-eligible. Automatic compaction
+   * remains tool-use-only in `setupContextManagement`.
    */
   override get supportsManualCompaction(): boolean {
     return (
-      isCompactionEligibleModel(this.config.fullName) && this.isToolUseMode()
+      isCompactionEligibleModel(this.config.fullName) &&
+      (this.isWorkflowMode() || this.isToolUseMode())
     );
   }
 
@@ -760,6 +764,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       'texra.model.compactionThresholdPercent',
       DEFAULT_COMPACTION_THRESHOLD_PERCENT,
     );
+    const pendingCompactionRequestId = this.getPendingCompactionRequestId();
     const compactionConsumed = setupContextManagement(
       {
         options,
@@ -770,10 +775,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       isCompactionEligibleModel(this.config.fullName),
       this.compactionRequested,
     );
-    if (compactionConsumed) {
-      this.compactionRequested = false;
-    }
-
     // Phase 2: COUNT - Estimate input tokens using built params
     // Phase 3: VALIDATE - Adjust max_tokens if needed
     if (this.supportsTokenCounting && documentAnalysis.hasFileSource) {
@@ -898,6 +899,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       if (nonStreamingCompactionExpected) {
         logCompactionActivity(this.logger, 'finished');
       }
+    }
+
+    if (compactionConsumed && pendingCompactionRequestId !== undefined) {
+      this.clearCompactionRequest(pendingCompactionRequestId);
     }
 
     // Log server-side compaction events when present in response content.
@@ -1030,6 +1035,44 @@ export class ModelHandlerAnthropic extends ModelHandler<
       role: 'assistant',
       content: [{ type: 'text', text, citations: null }],
     };
+  }
+
+  override createAssistantMessageFromResponse(
+    responseObject: BetaMessage,
+    text: string,
+  ): MessageParam {
+    if (!hasSuccessfulBetaCompactionBlock(responseObject)) {
+      return this.createAssistantMessage(text);
+    }
+
+    const content = this.extractAssistantContent(responseObject);
+    return content.length > 0
+      ? { role: 'assistant', content: content as ContentBlockParam[] }
+      : this.createAssistantMessage(text);
+  }
+
+  override updateMessageContent(
+    messages: MessageParam[],
+    bestConnector: string,
+    newResponse: string,
+    workspaceState: AgentWorkspaceState,
+    responseObject?: BetaMessage,
+  ): void {
+    if (responseObject && hasSuccessfulBetaCompactionBlock(responseObject)) {
+      messages.length = 0;
+      messages.push(
+        this.createAssistantMessageFromResponse(responseObject, newResponse),
+      );
+      return;
+    }
+
+    super.updateMessageContent(
+      messages,
+      bestConnector,
+      newResponse,
+      workspaceState,
+      responseObject,
+    );
   }
 
   override extractAssistantText(message: MessageParam): string | undefined {
@@ -1334,7 +1377,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return false;
     }
 
-    // Continue if we hit max tokens OR stop sequence without an end tag
+    // Context-window overflow needs the response cycle's bounded compaction
+    // recovery, not an ordinary continuation prompt.
     const shouldContinue =
       (stopReason === ANTHROPIC_STOP.MAX_TOKENS ||
         stopReason === ANTHROPIC_STOP.STOP_SEQUENCE) &&
