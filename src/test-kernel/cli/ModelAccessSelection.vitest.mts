@@ -130,8 +130,8 @@ describe('CLI model access routes', () => {
   });
 
   it('never relabels recorded api-key usage from live preferences', () => {
-    // A completed request's route cannot change — `api-key` usage stays
-    // personal even while the Kimi Code route is currently active.
+    // A completed request's route cannot change — ordinary `api-key` usage
+    // stays personal even while the Kimi Code route is currently active.
     expect(
       resolveCliModelAccessRoute({
         apiMode: 'personal',
@@ -140,6 +140,16 @@ describe('CLI model access routes', () => {
         usageRoute: 'api-key',
       }),
     ).toBe('personal');
+  });
+
+  it('recognizes observed Kimi Code subscription usage', () => {
+    expect(
+      resolveCliModelAccessRoute({
+        apiMode: 'personal',
+        subscriptionActive: false,
+        usageRoute: 'kimi-code-subscription',
+      }),
+    ).toBe('kimi-code');
   });
 
   it('describes a prospective Kimi Code route only for personal access', () => {

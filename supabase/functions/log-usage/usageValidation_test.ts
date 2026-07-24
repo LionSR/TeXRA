@@ -1,6 +1,10 @@
 import { deepStrictEqual, equal } from 'node:assert/strict';
 
-import { UsageBatchSchema, UsageLogEntrySchema } from './usageValidation.ts';
+import {
+  subscriptionSourceForUsage,
+  UsageBatchSchema,
+  UsageLogEntrySchema,
+} from './usageValidation.ts';
 
 const VALID_BATCH_ID = 'a584b784-a4f1-4d44-a99f-36767d31e79d';
 
@@ -34,6 +38,29 @@ Deno.test(
     equal(parsed.usageRoute, 'chatgpt-subscription');
   },
 );
+
+Deno.test(
+  'classifies Kimi Code usage under the Kimi subscription source',
+  () => {
+    const parsed = UsageLogEntrySchema.parse({
+      ...usageEntry(),
+      model: 'k3',
+      provider: 'moonshot',
+      usageRoute: 'kimi-code-subscription',
+    });
+
+    equal(subscriptionSourceForUsage(parsed), 'kimi');
+  },
+);
+
+Deno.test('keeps paid usage outside subscription sources', () => {
+  const parsed = UsageLogEntrySchema.parse({
+    ...usageEntry(),
+    usageRoute: 'api-key',
+  });
+
+  equal(subscriptionSourceForUsage(parsed), undefined);
+});
 
 Deno.test('accepts a nonempty batch of valid entries', () => {
   const parsed = UsageBatchSchema.parse({
