@@ -13,6 +13,12 @@ All notable changes to this project will be documented in this file.
   as the default Anthropic model. Opus 5 keeps the full 1M context window and
   adaptive thinking.
 
+#### Bug Fixes
+
+- **Large foreground shell commands use bounded memory** — command results
+  retain useful diagnostics from the beginning and end without buffering the
+  complete output in memory.
+
 ### Extension (VS Code) and Desktop
 
 #### Bug Fixes
