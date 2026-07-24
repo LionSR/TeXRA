@@ -955,9 +955,14 @@ export abstract class ModelHandler<
     return this.compactionRequestId;
   }
 
-  /** Cancel a pending compaction request when its owning flow is abandoned. */
-  clearCompactionRequest(requestId?: number): void {
-    if (requestId !== undefined && requestId !== this.compactionRequestId) {
+  /** Snapshot the ownership token for the currently pending request. */
+  protected getPendingCompactionRequestId(): number | undefined {
+    return this.compactionRequested ? this.compactionRequestId : undefined;
+  }
+
+  /** Clear a pending compaction request only while the caller still owns it. */
+  clearCompactionRequest(requestId: number): void {
+    if (requestId !== this.compactionRequestId) {
       return;
     }
     this.compactionRequested = false;

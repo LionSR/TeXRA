@@ -764,6 +764,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       'texra.model.compactionThresholdPercent',
       DEFAULT_COMPACTION_THRESHOLD_PERCENT,
     );
+    const pendingCompactionRequestId = this.getPendingCompactionRequestId();
     const compactionConsumed = setupContextManagement(
       {
         options,
@@ -900,8 +901,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
     }
 
-    if (compactionConsumed) {
-      this.compactionRequested = false;
+    if (compactionConsumed && pendingCompactionRequestId !== undefined) {
+      this.clearCompactionRequest(pendingCompactionRequestId);
     }
 
     // Log server-side compaction events when present in response content.

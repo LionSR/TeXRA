@@ -152,7 +152,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
         ...buildFailedRetryInfo(error),
       };
     } finally {
-      if (cycleShared.contextWindowRecoveryAttempted) {
+      if (cycleShared.contextWindowRecoveryRequestId !== undefined) {
         modelHandler.clearCompactionRequest(
           cycleShared.contextWindowRecoveryRequestId,
         );

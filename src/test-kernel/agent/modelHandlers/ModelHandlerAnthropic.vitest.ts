@@ -1471,6 +1471,63 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
+  it('preserves a newer compaction request when an older request succeeds', async () => {
+    const handler = createAnthropicHandler({
+      supportsTokenCounting: false,
+      supportsReasoning: false,
+    });
+    handler.config.fullName = 'claude-opus-4-6';
+    handler.setAgentCategory(AgentCategory.Workflow);
+    stubHandlerForTest(handler);
+    stubCompactionThresholdPercent(0);
+
+    const messageOptions: any[] = [];
+    let resolveFirstResponse: ((response: any) => void) | undefined;
+    let markFirstRequestStarted: (() => void) | undefined;
+    const firstRequestStarted = new Promise<void>((resolve) => {
+      markFirstRequestStarted = resolve;
+    });
+    const firstResponse = new Promise<any>((resolve) => {
+      resolveFirstResponse = resolve;
+    });
+    const successfulResponse = {
+      id: 'msg',
+      type: 'message',
+      role: 'assistant',
+      model: 'claude-opus-4-6',
+      content: [{ type: 'text', text: 'ok' }],
+      stop_reason: 'end_turn',
+      usage: { input_tokens: 1, output_tokens: 1 },
+    };
+    const create = vi.fn(async (options: any) => {
+      messageOptions.push(options);
+      if (messageOptions.length === 1) {
+        markFirstRequestStarted?.();
+        return firstResponse;
+      }
+      return successfulResponse;
+    });
+    const client = { beta: { messages: { create } } } as any;
+    const request = {
+      client,
+      messages: helloMessages(),
+      temperature: 0,
+    };
+
+    handler.requestCompaction();
+    const inFlight = handler.createResponse(request);
+    await firstRequestStarted;
+    handler.requestCompaction();
+    resolveFirstResponse?.(successfulResponse);
+    await inFlight;
+    await handler.createResponse(request);
+
+    const firstEdits = messageOptions[0].context_management?.edits ?? [];
+    const nextEdits = messageOptions[1].context_management?.edits ?? [];
+    assert.equal(firstEdits[0]?.type, 'compact_20260112');
+    assert.equal(nextEdits[0]?.type, 'compact_20260112');
+  });
+
   it('does not leak an abandoned forced compaction into a later call', async () => {
     const handler = createAnthropicHandler({
       supportsTokenCounting: false,
