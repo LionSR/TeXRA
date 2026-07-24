@@ -27,6 +27,25 @@ phase('Merge');
 return concat(sections, { separator: '\n\n' });
 ```
 
+When the task set comes from runtime arguments, the script omits `meta.tasks`
+and creates one call per input:
+
+```js
+export const meta = {
+  name: 'audit-sections',
+  description: 'Audit every requested section in parallel',
+};
+return await parallel(
+  args.sections.map(
+    (section, index) => () =>
+      agent(`Audit ${section}.`, {
+        id: `section-${index}`,
+        label: `Audit ${section}`,
+      }),
+  ),
+);
+```
+
 - `meta.tasks` — optional declarative task plan. When present, each
   `agent()` call must reference exactly one task with `{ id }`; its display
   label and phase come only from the plan. Progress surfaces can therefore

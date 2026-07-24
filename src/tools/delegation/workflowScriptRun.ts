@@ -14,7 +14,7 @@ import {
   type RunOutcome,
   type WorkflowTaskProgress,
 } from '@shared/schemas';
-import { generateShortId } from '@utils/core';
+import { assertNever, generateShortId } from '@utils/core';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 type WorkflowScriptRunWithProgressOptions = Omit<
@@ -320,6 +320,8 @@ export async function runPersistedWorkflowScriptWithProgress(
             onActivity?.(`Finished: ${event.label}${metaSuffix}${total}`);
             break;
           }
+          default:
+            return assertNever(event, 'Unhandled agent:end outcome');
         }
         break;
       }

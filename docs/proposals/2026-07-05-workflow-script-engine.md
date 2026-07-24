@@ -60,6 +60,25 @@ return await agent('Merge these drafts, unify notation.', {
 });
 ```
 
+When the task set comes from runtime arguments, the script omits `meta.tasks`
+and creates one call per input:
+
+```js
+export const meta = {
+  name: 'audit-sections',
+  description: 'Audit every requested section in parallel',
+};
+return await parallel(
+  args.sections.map(
+    (section, index) => () =>
+      agent(`Audit ${section}.`, {
+        id: `section-${index}`,
+        label: `Audit ${section}`,
+      }),
+  ),
+);
+```
+
 ### Primitives
 
 - `meta.tasks` → an optional declarative plan of `{ id, label, phase? }`
