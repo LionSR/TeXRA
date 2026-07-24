@@ -230,6 +230,68 @@ describe('createWorkflowScriptAgentRunner', () => {
     );
   });
 
+  it('passes each declarative model override to delegation policy', async () => {
+    const runner = defaultRunner();
+
+    await runner(
+      invocation({
+        model: 'economy-model',
+        inputFiles: ['paper.tex'],
+      }),
+    );
+    await runner(
+      invocation({
+        agentName: 'assistant',
+        model: 'strong-model',
+        schema: { type: 'object' },
+      }),
+    );
+
+    expect(mocks.selectAvailableDelegationModel).toHaveBeenNthCalledWith(1, {
+      requestedModel: 'economy-model',
+      parentModel: 'parent-model',
+      agentCategory: 'workflow',
+    });
+    expect(mocks.selectAvailableDelegationModel).toHaveBeenNthCalledWith(2, {
+      requestedModel: 'strong-model',
+      parentModel: 'parent-model',
+      agentCategory: 'toolUse',
+    });
+  });
+
+  it('fails the workflow when a declared model is unavailable', async () => {
+    mocks.selectAvailableDelegationModel.mockRejectedValueOnce(
+      new Error('Model "missing-model" is not currently available.'),
+    );
+    mocks.assertWorkflowFilesExist.mockRejectedValue(
+      new Error('Input file "paper.tex" does not exist.'),
+    );
+    const runner = defaultRunner();
+
+    await expect(
+      runner(
+        invocation({
+          model: 'missing-model',
+          inputFiles: ['paper.tex'],
+        }),
+      ),
+    ).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: expect.stringContaining('missing-model'),
+    });
+    expect(mocks.assertWorkflowFilesExist).not.toHaveBeenCalled();
+  });
+
+  it('preserves delegation failures when no model is declared', async () => {
+    const selectionError = new Error('No delegation models are available.');
+    mocks.selectAvailableDelegationModel.mockRejectedValueOnce(selectionError);
+    const runner = defaultRunner();
+
+    await expect(
+      runner(invocation({ inputFiles: ['paper.tex'] })),
+    ).rejects.toBe(selectionError);
+  });
+
   it('honors an explicit agent and binds verified run outputs', async () => {
     const firstRequested =
       '/storage/executions/bbbbbb222222/r1/introduction.tex';

@@ -66,6 +66,24 @@ async function resolveInvocationFileList(
   return resolved;
 }
 
+async function selectWorkflowScriptModel(
+  input: Parameters<typeof selectAvailableDelegationModel>[0],
+): Promise<string> {
+  try {
+    return await selectAvailableDelegationModel(input);
+  } catch (error) {
+    // A declared model is workflow configuration, so its rejection must not
+    // disappear as a nullable call inside parallel()/pipeline(). When the
+    // script omits the field, preserve the established delegation failure
+    // semantics; per-call model routing must not broaden that behavior.
+    if (input.requestedModel == null) throw error;
+    throw new WorkflowRunAbortError(
+      formatError('Workflow model could not be selected', error),
+      { cause: error },
+    );
+  }
+}
+
 /**
  * Identity of the detached workflow-run that owns this script's `agent()`
  * grandchildren. Re-rooting them here (instead of the orchestrator) gives a
@@ -147,7 +165,10 @@ export function createWorkflowScriptAgentRunner(
               invocation.options.agentName,
               runScope.delegationAgentScope ?? undefined,
             );
-            const model = await selectAvailableDelegationModel({
+            const model = await selectWorkflowScriptModel({
+              ...(invocation.options.model !== undefined && {
+                requestedModel: invocation.options.model,
+              }),
               parentModel: parent.model,
               agentCategory: AgentCategory.ToolUse,
             });
@@ -166,28 +187,30 @@ export function createWorkflowScriptAgentRunner(
               invocation.options.agentName ?? defaultAgentName,
               runScope.delegationAgentScope ?? undefined,
             );
-            const [model, inputFiles, contextFiles, mediaFiles] =
-              await Promise.all([
-                selectAvailableDelegationModel({
-                  parentModel: parent.model,
-                  agentCategory: AgentCategory.Workflow,
-                }),
-                resolveInvocationFileList(
-                  run.executionId,
-                  'Input file',
-                  invocation.options.inputFiles ?? [],
-                ),
-                resolveInvocationFileList(
-                  run.executionId,
-                  'Context file',
-                  invocation.options.contextFiles ?? [],
-                ),
-                resolveInvocationFileList(
-                  run.executionId,
-                  'Media file',
-                  invocation.options.mediaFiles ?? [],
-                ),
-              ]);
+            const model = await selectWorkflowScriptModel({
+              ...(invocation.options.model !== undefined && {
+                requestedModel: invocation.options.model,
+              }),
+              parentModel: parent.model,
+              agentCategory: AgentCategory.Workflow,
+            });
+            const [inputFiles, contextFiles, mediaFiles] = await Promise.all([
+              resolveInvocationFileList(
+                run.executionId,
+                'Input file',
+                invocation.options.inputFiles ?? [],
+              ),
+              resolveInvocationFileList(
+                run.executionId,
+                'Context file',
+                invocation.options.contextFiles ?? [],
+              ),
+              resolveInvocationFileList(
+                run.executionId,
+                'Media file',
+                invocation.options.mediaFiles ?? [],
+              ),
+            ]);
             const oversizedBibRejection =
               await rejectOversizedBibAttachments(contextFiles);
             if (oversizedBibRejection) {
