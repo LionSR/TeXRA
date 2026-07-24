@@ -3,8 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setupPlatform } from '@test/support/setupPlatform';
 import { TraceEmitter } from '@agent/trace';
-import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript';
-import { ExecutionLeaseActiveError } from '@agent/storage';
+import {
+  deriveWorkflowScriptCheckpointId,
+  writeWorkflowScriptCheckpoint,
+} from '@agent/workflowScript';
+import { ExecutionLeaseActiveError, getExecutionStore } from '@agent/storage';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import { withRunContext } from '@agent/runtime/RunContext';
@@ -234,6 +237,39 @@ describe('WorkflowScriptTool', () => {
         mediaFiles: ['figure.pdf'],
       }),
       'tool-test',
+      executionId,
+    );
+  });
+
+  it('registers checkpoint files when a resume omits files', async () => {
+    const resumeScript = script.replace("name: 'tool-test'", "name: 'resume'");
+    const files = {
+      inputFiles: ['paper.tex'],
+      contextFiles: ['references.bib'],
+      mediaFiles: ['figure.pdf'],
+    } as const satisfies WorkflowScriptFiles;
+    await writeWorkflowScriptCheckpoint(
+      getExecutionStore(executionId),
+      checkpointIdFor('resume'),
+      {
+        script: resumeScript,
+        args: undefined,
+        files,
+        journal: [],
+      },
+    );
+
+    const result = await callTool(resumeScript);
+
+    expect(result.status).toBe('executed');
+    expect(mocks.registerExecution).toHaveBeenCalledWith(
+      runExecutionIdFor('resume'),
+      expect.objectContaining({
+        inputFiles: ['paper.tex'],
+        contextFiles: ['references.bib'],
+        mediaFiles: ['figure.pdf'],
+      }),
+      'resume',
       executionId,
     );
   });

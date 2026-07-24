@@ -46,7 +46,7 @@ interface WorkflowAgentFileOptions {
 }
 
 /** A script call to a file-editing workflow agent. */
-export interface WorkflowEditAgentCallOptions
+interface WorkflowEditAgentCallOptions
   extends WorkflowAgentCallBaseOptions, WorkflowAgentFileOptions {
   /** Named TeXRA agent to run; defaults to the host runner's choice. */
   agentName?: string;
@@ -54,7 +54,7 @@ export interface WorkflowEditAgentCallOptions
 }
 
 /** A script call to a tool-use agent that returns a structured value. */
-export interface WorkflowStructuredAgentCallOptions extends WorkflowAgentCallBaseOptions {
+interface WorkflowStructuredAgentCallOptions extends WorkflowAgentCallBaseOptions {
   /** Structured calls must name a tool-use agent explicitly. */
   agentName: string;
   inputFiles?: never;

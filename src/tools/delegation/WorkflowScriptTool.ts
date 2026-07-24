@@ -11,6 +11,7 @@ import {
 import {
   deriveWorkflowScriptCheckpointId,
   parseWorkflowScript,
+  readWorkflowScriptCheckpoint,
 } from '@agent/workflowScript';
 import { captureOwnedExecutionLease } from '@agent/storage/executionLease';
 import {
@@ -111,17 +112,24 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     // is the durable identity; per-entry prompt/options hashes in the journal
     // keep replays honest when the script evolves.
     const { meta } = parseWorkflowScript(input.script);
-    const files = WorkflowScriptFilesSchema.parse(input.files ?? {});
-    await assertWorkflowFilesExist([
-      { label: 'Workflow input file', files: files.inputFiles },
-      { label: 'Workflow context file', files: files.contextFiles },
-      { label: 'Workflow media file', files: files.mediaFiles },
-    ]);
     const checkpointId = deriveWorkflowScriptCheckpointId({
       name: meta.name,
       defaultAgent: input.agent,
       parentExecutionId: runScope.executionId,
     });
+    const store = getExecutionStore(runScope.executionId);
+    const priorCheckpoint =
+      input.files == null
+        ? await readWorkflowScriptCheckpoint(store, checkpointId)
+        : null;
+    const files = WorkflowScriptFilesSchema.parse(
+      input.files ?? priorCheckpoint?.files ?? {},
+    );
+    await assertWorkflowFilesExist([
+      { label: 'Workflow input file', files: files.inputFiles },
+      { label: 'Workflow context file', files: files.contextFiles },
+      { label: 'Workflow media file', files: files.mediaFiles },
+    ]);
 
     // The run executionId is deterministic from the checkpoint identity, NOT a
     // fresh random id: a relaunch with the same meta.name regenerates the same
@@ -129,7 +137,6 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     // anchor and resume still replays completed calls (#8712). The journal
     // itself stays on the orchestrator store, where the checkpoint lives.
     const runExecutionId = deriveExecutionId({ checkpointId });
-    const store = getExecutionStore(runScope.executionId);
 
     // Captured now, while the launching tool call's ALS frame is live, so the
     // detached run can still roll its cost into the parent after this call
@@ -227,7 +234,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
             checkpointId,
             script: input.script,
             args: input.args,
-            ...(input.files != null && { files }),
+            files,
             name: meta.name,
             workflowControls: runScope.session.workflowControls,
             createRunAgent: (hooks) =>
