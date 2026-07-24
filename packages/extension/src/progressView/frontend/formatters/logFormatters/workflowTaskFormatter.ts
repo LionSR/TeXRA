@@ -8,7 +8,10 @@ import {
   type LogMessageData,
   type WorkflowTaskProgress,
 } from '@shared/schemas';
-import { formatWorkflowTaskMetadataParts } from '@shared/copy/workflowTask';
+import {
+  formatWorkflowTaskMetadataParts,
+  workflowTaskDetail,
+} from '@shared/copy/workflowTask';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';
 
@@ -47,31 +50,12 @@ function terminalMetadata(
     : nothing;
 }
 
-type WorkflowTaskDetail =
-  | { readonly kind: 'error'; readonly text: string }
-  | { readonly kind: 'note'; readonly text: string };
-
-function taskDetail(
-  task: WorkflowTaskProgress,
-): WorkflowTaskDetail | undefined {
-  if (task.status === 'failed') {
-    return { kind: 'error', text: task.error };
-  }
-  if (task.status === 'skipped' && task.reason === 'not-reached') {
-    return {
-      kind: 'note',
-      text: 'The workflow ended before this task was reached.',
-    };
-  }
-  return undefined;
-}
-
 /** Render one workflow task as a status card updated in place by log id. */
 export function formatWorkflowTaskTemplate(
   message: LogMessageData,
 ): TemplateResult {
   const task = WorkflowTaskProgressSchema.parse(message.data);
-  const detail = taskDetail(task);
+  const detail = workflowTaskDetail(task);
 
   return html`
     <div

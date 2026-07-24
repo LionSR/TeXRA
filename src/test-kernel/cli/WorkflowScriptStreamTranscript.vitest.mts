@@ -335,14 +335,18 @@ describe('CLI workflow-script child-stream transcript', () => {
         staticItems
           .filter((item) => item.kind === 'entry')
           .map((item) => item.entry.text),
-      ).toEqual(['Skipped: Audit later']);
+      ).toEqual([
+        'Skipped: Audit later — The workflow ended before this task was reached.',
+      ]);
       expect(
         staticItems
           .filter((item) => item.kind === 'entry')
           .map((item) => item.entry.id),
       ).toEqual(['cancelled-planned-task']);
       const output = await renderStaticTranscript();
-      expect(output).toContain('Skipped: Audit later');
+      // The skipped marker distinguishes the row from a finished or failed one.
+      expect(output).toContain('⊘ Skipped: Audit later');
+      expect(output).toContain('The workflow ended before this task was');
       expect(output).not.toContain('Planned: Audit later');
     } finally {
       runTrace.dispose();
@@ -1092,9 +1096,10 @@ describe('CLI workflow-script child-stream transcript', () => {
       });
 
       const output = await renderStaticTranscript();
-      // The phase header renders with its distinct diamond divider glyph.
+      // The phase header renders with its distinct diamond divider glyph, and
+      // the task row carries its own per-status marker.
       expect(output).toContain('◆ Draft sections');
-      expect(output).toContain('Finished: Draft introduction');
+      expect(output).toContain('☑ Finished: Draft introduction');
       expect(output).toContain('deepseekT · 12s · $0.002 total');
     } finally {
       runTrace.dispose();
