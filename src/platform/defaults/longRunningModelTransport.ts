@@ -9,6 +9,27 @@ import {
 
 const MODEL_STREAM_INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 const MODEL_RESPONSE_HEADERS_TIMEOUT_MS = 10 * 60 * 1000;
+const ROUTING_FETCH_MARKER = Symbol('texra.longRunningModelFetchRouter');
+type RoutingFetch = typeof fetch & { [ROUTING_FETCH_MARKER]?: true };
+
+function isGoogleClassicStreamingRequest(input: RequestInfo | URL): boolean {
+  let url: string;
+  if (typeof input === 'string') {
+    url = input;
+  } else if (input instanceof URL) {
+    url = input.href;
+  } else if (input instanceof Request) {
+    url = input.url;
+  } else {
+    return false;
+  }
+
+  try {
+    return new URL(url).pathname.endsWith(':streamGenerateContent');
+  } catch {
+    return false;
+  }
+}
 
 async function normalizeModelRequest(
   input: RequestInfo | URL,
@@ -76,13 +97,22 @@ export const longRunningModelFetch: typeof fetch = async (input, init) => {
 };
 
 /**
- * Give SDKs that hardwire global fetch the model-stream timeout budget.
+ * Route Google classic streaming generation through the model transport.
  *
  * Only standalone hosts may call this. In particular, the VS Code extension
- * must not replace fetch for every extension sharing its host process. Google
+ * must not wrap fetch for every extension sharing its host process. Google
  * classic `generateContent` has no fetch injection seam, so CLI and desktop
- * install the same transport used directly by the other model SDKs.
+ * intercept only its `:streamGenerateContent` action and preserve the host's
+ * fetch implementation for every unrelated request.
  */
 export function installLongRunningModelFetch(): void {
-  globalThis.fetch = longRunningModelFetch;
+  const hostFetch = globalThis.fetch as RoutingFetch;
+  if (hostFetch[ROUTING_FETCH_MARKER] === true) return;
+
+  const routingFetch: RoutingFetch = (input, init) =>
+    isGoogleClassicStreamingRequest(input)
+      ? longRunningModelFetch(input, init)
+      : hostFetch(input, init);
+  Object.defineProperty(routingFetch, ROUTING_FETCH_MARKER, { value: true });
+  globalThis.fetch = routingFetch;
 }
