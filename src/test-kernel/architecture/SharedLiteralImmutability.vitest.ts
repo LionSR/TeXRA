@@ -7,6 +7,7 @@ import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS } from '@latex/latexdiff/diffCommandExecutor';
 import { MATH_MARKUP_OPTIONS } from '@latex/latexdiff/mathMarkup';
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
+import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
 import { ARXIV_CONSTANTS, CROSSREF_CONSTANTS } from '@tools/citation/constants';
 import { DEFAULT_POLLING_BACKOFF_CONFIG } from '@tools/github/PollingSourceBase';
 import { GoalStore } from '@tools/goal/goalStore';
@@ -47,6 +48,7 @@ const SHARED_LITERALS = [
   ],
   ['MATH_MARKUP_OPTIONS', MATH_MARKUP_OPTIONS],
   ['API_KEY_PROVIDER_IDS', API_KEY_PROVIDER_IDS],
+  ['TOOL_JSON_SCHEMA_OPTIONS', TOOL_JSON_SCHEMA_OPTIONS],
 ] as const;
 
 describe('shared literal exports', () => {
