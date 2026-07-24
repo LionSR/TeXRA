@@ -152,6 +152,11 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: '22'
+          # This job installs nothing, so there is no package-manager cache to
+          # warm. Leaving the default on makes setup-node detect pnpm-lock.yaml
+          # and shell out to `pnpm` for its cache dir, which fails here because
+          # pnpm is deliberately not set up.
+          package-manager-cache: false
 
       - name: Check guidance file references resolve
         run: node scripts/check-guidance-refs.mjs
