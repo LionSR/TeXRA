@@ -28,9 +28,8 @@ Git repository.
 ## Hosted-service material
 
 - `supabase/` currently holds TeXRA Cloud database and deployment material.
-- `marketing/` and `blog/` are non-product working material.
 
-These directories are excluded from the public website, not from the Git
+This directory is excluded from the public website, not from the Git
 repository. Supabase material remains here until an approved private
 destination has been created, copied, hash-verified, access-checked, and tested
 with a restore or deployment dry run. Only a later, separate change may remove
