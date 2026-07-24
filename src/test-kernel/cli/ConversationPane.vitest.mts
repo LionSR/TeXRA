@@ -1375,8 +1375,8 @@ describe('CLI conversation transcript splitting', () => {
     );
 
     expect(lines).toEqual([
-      '● executions (/executions/3a780a389327/report)',
-      '● executions (/executions/3a780a389327/conversation)',
+      '● executions (view /executions/3a780a389327/report)',
+      '● executions (view /executions/3a780a389327/conversation)',
     ]);
   });
 
@@ -1391,7 +1391,7 @@ describe('CLI conversation transcript splitting', () => {
     );
 
     expect(lines).toEqual([
-      '● executions (/executions/3a780a389327/report)',
+      '● executions (view /executions/3a780a389327/report)',
       '',
       'Read the report.',
       '',

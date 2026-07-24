@@ -26,8 +26,8 @@ import {
 } from '@shared/constants/delegationTools';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { toolDisplayKind } from '@shared/tools/toolKind';
+import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import {
-  EXECUTIONS_DEFAULT_ACTION,
   executionsSubagentSummary,
   type ExecutionLabels,
 } from '@shared/tools/executionsDisplay';
@@ -111,21 +111,12 @@ export function formatToolUseTemplate(
     headerSummary = labeledExecutionSummary;
   }
   if (!headerSummary) {
-    if (toolName === 'executions' && isObject(input)) {
+    const inputPreview = deriveToolInputPreview(toolName, input);
+    if (inputPreview) {
       headerSummary =
-        `${input.action ?? EXECUTIONS_DEFAULT_ACTION} ${input.path ?? ''}`.trim();
-    } else if (
-      toolName === 'codex' &&
-      isObject(input) &&
-      typeof input.prompt === 'string'
-    ) {
-      headerSummary = truncateSummary(input.prompt, 60);
-    } else if (
-      toolName === 'bash' &&
-      isObject(input) &&
-      typeof input.command === 'string'
-    ) {
-      headerSummary = truncateSummary(input.command, 60);
+        toolName === 'executions'
+          ? inputPreview
+          : truncateSummary(inputPreview, 60);
     }
   }
   headerSummary = truncateHeaderSummary(headerSummary, 120);
