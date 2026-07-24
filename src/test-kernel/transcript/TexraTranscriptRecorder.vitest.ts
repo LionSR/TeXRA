@@ -6,8 +6,10 @@ import {
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
+  TOOL_USE_STATUS,
   type StreamTabId,
 } from '@shared/schemas';
+import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 import { isObject } from '@utils/core';
@@ -124,6 +126,34 @@ describe('attachTranscriptRecorder stage kind (issue #7267)', () => {
 
     expect(runEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
     expect(isObject(runEntry?.data) && runEntry.data.kind).toBe('run');
+  });
+
+  it('preserves phase position metadata on the terminal row', () => {
+    const trace = new TraceEmitter();
+    const store = StreamLogStore.ephemeral('test');
+    const streamId = 'stream:phase-position-preserved' as StreamTabId;
+    store.ensureStream(streamId);
+    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+
+    const phase = trace.openStage('Review', {
+      kind: 'phase',
+      index: 1,
+      total: 3,
+    });
+    phase.end();
+
+    const entry = store
+      .get(streamId)
+      ?.getRange(0)
+      .find((candidate) => candidate.id === phase.id);
+    expect(entry).toMatchObject({
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+      data: {
+        kind: 'phase',
+        index: 1,
+        total: 3,
+      },
+    });
   });
 });
 
@@ -247,6 +277,277 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
 
     const entries = store.get(streamId)?.getRange(0) ?? [];
     expect(entries).toHaveLength(0);
+  });
+});
+
+describe('attachTranscriptRecorder workflow task state', () => {
+  it('assigns source settlement order before terminal status projection', () => {
+    const trace = new TraceEmitter();
+    const store = StreamLogStore.ephemeral('test');
+    const streamId = 'stream:terminal-settlement' as StreamTabId;
+    store.ensureStream(streamId);
+    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+
+    const phase = trace.openStage('Audit', { kind: 'phase' });
+    const response = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    response.append('Partial answer');
+    trace.toolStart({
+      logId: 'tool:pending',
+      toolName: 'read',
+      input: { path: 'paper.tex' },
+    });
+    trace.emit({
+      type: 'workflow.task',
+      logId: 'task:planned',
+      task: {
+        id: 'planned',
+        label: 'Audit later',
+        status: 'planned',
+      },
+    });
+
+    trace.emit({
+      type: 'status',
+      streamId,
+      phase: STREAM_PHASE.CANCELLED,
+      cause: STREAM_TRANSITION_CAUSE.USER_STOP,
+    });
+
+    const entries = store.get(streamId)?.getRange(0) ?? [];
+    expect(entries.find((entry) => entry.id === phase.id)).toMatchObject({
+      settlementSeqNo: 1,
+    });
+    expect(entries.find((entry) => entry.id === response.id)).toMatchObject({
+      settlementSeqNo: 2,
+      data: { status: 'completed' },
+    });
+    expect(entries.find((entry) => entry.id === 'tool:pending')).toMatchObject({
+      settlementSeqNo: 3,
+      data: {
+        status: 'failed',
+        error: 'The stream ended before this tool completed.',
+        isError: true,
+      },
+    });
+    expect(
+      entries.find((entry) => entry.id === 'task:planned'),
+    ).not.toHaveProperty('settlementSeqNo');
+
+    // The terminal status is the authoritative boundary for recorder-owned
+    // streams/tools. Late provider cleanup cannot mutate a row already made
+    // printable in append-only Static scrollback.
+    trace.emit({
+      type: 'stream.chunk',
+      id: response.id,
+      text: ' late text',
+    });
+    trace.emit({
+      type: 'stream.end',
+      id: response.id,
+      finalText: 'Late replacement',
+    });
+    trace.toolEnd({
+      logId: 'tool:pending',
+      status: TOOL_USE_STATUS.COMPLETED,
+      result: { toolName: 'read', output: 'late result' },
+    });
+    const afterLateEvents = store.get(streamId)?.getRange(0) ?? [];
+    expect(
+      afterLateEvents.find((entry) => entry.id === response.id),
+    ).toMatchObject({
+      settlementSeqNo: 2,
+      text: 'Partial answer',
+      data: { status: 'completed' },
+    });
+    expect(
+      afterLateEvents.find((entry) => entry.id === 'tool:pending'),
+    ).toMatchObject({
+      settlementSeqNo: 3,
+      data: {
+        status: 'failed',
+        error: 'The stream ended before this tool completed.',
+      },
+    });
+
+    trace.emit({
+      type: 'workflow.task',
+      logId: 'task:planned',
+      task: {
+        id: 'planned',
+        label: 'Audit later',
+        status: 'skipped',
+        reason: 'not-reached',
+      },
+    });
+    expect(
+      store
+        .get(streamId)
+        ?.getRange(0)
+        .find((entry) => entry.id === 'task:planned'),
+    ).toMatchObject({
+      settlementSeqNo: 4,
+      data: { status: 'skipped', reason: 'not-reached' },
+    });
+
+    trace.emit({
+      type: 'status',
+      streamId,
+      phase: STREAM_PHASE.RUNNING,
+      previousPhase: STREAM_PHASE.CANCELLED,
+      cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    });
+    trace.responseFinalized('Fresh turn response');
+    const responses =
+      store
+        .get(streamId)
+        ?.getRange(0)
+        .filter(
+          (entry) => entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE,
+        ) ?? [];
+    expect(responses).toMatchObject([
+      {
+        id: response.id,
+        settlementSeqNo: 2,
+        text: 'Partial answer',
+      },
+      {
+        settlementSeqNo: 5,
+        text: 'Fresh turn response',
+      },
+    ]);
+    expect(responses[1]?.id).not.toBe(response.id);
+  });
+
+  it('closes source rows at waiting and accepts fresh rows after resume', () => {
+    const trace = new TraceEmitter();
+    const store = StreamLogStore.ephemeral('test');
+    const streamId = 'stream:waiting-settlement' as StreamTabId;
+    store.ensureStream(streamId);
+    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+
+    const waitingResponse = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    waitingResponse.append('Waiting response');
+    trace.toolStart({
+      logId: 'tool:waiting',
+      toolName: 'read',
+      input: { path: 'waiting.tex' },
+    });
+    trace.emit({
+      type: 'status',
+      streamId,
+      phase: STREAM_PHASE.WAITING,
+      cause: STREAM_TRANSITION_CAUSE.WAIT,
+    });
+
+    expect(store.get(streamId)?.getRange(0)).toMatchObject([
+      {
+        id: waitingResponse.id,
+        settlementSeqNo: 1,
+        text: 'Waiting response',
+        data: { status: 'completed' },
+      },
+      {
+        id: 'tool:waiting',
+        settlementSeqNo: 2,
+        data: { status: 'failed' },
+      },
+    ]);
+
+    trace.emit({
+      type: 'status',
+      streamId,
+      phase: STREAM_PHASE.RUNNING,
+      previousPhase: STREAM_PHASE.WAITING,
+      cause: STREAM_TRANSITION_CAUSE.RESUME,
+    });
+    const resumedResponse = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    resumedResponse.append('Resumed response');
+    resumedResponse.finalize();
+    trace.toolStart({
+      logId: 'tool:resumed',
+      toolName: 'read',
+      input: { path: 'resumed.tex' },
+    });
+    trace.toolEnd({
+      logId: 'tool:resumed',
+      status: TOOL_USE_STATUS.COMPLETED,
+      result: { toolName: 'read', output: 'done' },
+    });
+
+    expect(store.get(streamId)?.getRange(0)).toMatchObject([
+      {
+        id: waitingResponse.id,
+        settlementSeqNo: 1,
+        text: 'Waiting response',
+        data: { status: 'completed' },
+      },
+      {
+        id: 'tool:waiting',
+        settlementSeqNo: 2,
+        data: { status: 'failed' },
+      },
+      {
+        id: resumedResponse.id,
+        settlementSeqNo: 3,
+        text: 'Resumed response',
+        data: { status: 'completed' },
+      },
+      {
+        id: 'tool:resumed',
+        settlementSeqNo: 4,
+        data: { status: 'completed' },
+      },
+    ]);
+  });
+
+  it('updates one typed task entry from planned to completed', () => {
+    const trace = new TraceEmitter();
+    const store = StreamLogStore.ephemeral('test');
+    const streamId = 'stream:workflow-task' as StreamTabId;
+    store.ensureStream(streamId);
+    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+
+    trace.emit({
+      type: 'workflow.task',
+      logId: 'task-card',
+      task: {
+        id: 'audit-core',
+        label: 'Audit core',
+        phase: 'Audit',
+        status: 'planned',
+      },
+    });
+    trace.emit({
+      type: 'workflow.task',
+      logId: 'task-card',
+      stageId: 'phase-audit',
+      task: {
+        id: 'audit-core',
+        label: 'Audit core',
+        phase: 'Audit',
+        status: 'completed',
+        model: 'gpt56',
+        durationMs: 12_000,
+        totalCostUsd: 0.03,
+      },
+    });
+
+    const entries = store.get(streamId)?.getRange(0) ?? [];
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      id: 'task-card',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: 'info',
+      groupId: 'phase-audit',
+      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+      text: 'Audit core',
+      data: {
+        status: 'completed',
+        model: 'gpt56',
+        durationMs: 12_000,
+        totalCostUsd: 0.03,
+      },
+    });
   });
 });
 

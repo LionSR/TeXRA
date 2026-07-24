@@ -68,6 +68,7 @@ export function isRenderableTranscriptEntry(entry: ConversationEntry): boolean {
     case 'error':
     case 'user':
     case 'phase':
+    case 'workflowTask':
       return terminalVisibleTranscriptText(entry.text).trim().length > 0;
     case 'process':
     case 'tool':
@@ -100,7 +101,7 @@ function userPromptAwaitsLiveContinuation(
 }
 
 /** Whether an entry belongs in append-only terminal scrollback now. */
-export function isStaticTranscriptEntryAt(
+function isStaticTranscriptEntryAt(
   entries: readonly ConversationEntry[],
   index: number,
   status: StreamPhase | undefined,
@@ -112,6 +113,46 @@ export function isStaticTranscriptEntryAt(
     isRenderableTranscriptEntry(entry) &&
     !userPromptAwaitsLiveContinuation(entries, index, status)
   );
+}
+
+/**
+ * Printable rows in their append-only scrollback order.
+ *
+ * Source-backed rows use the durable order in which they became immutable.
+ * Synthetic rows retain the settlement cursor captured when the CLI appended
+ * them, with their original array position as the final stable tie-breaker.
+ * Consumers that place rows relative to `<Static>` output must use this same
+ * order rather than the stream's mutable storage order.
+ */
+export function orderedStaticTranscriptEntries(
+  entries: readonly ConversationEntry[],
+  status: StreamPhase | undefined,
+): readonly ConversationEntry[] {
+  return entries
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ index }) => isStaticTranscriptEntryAt(entries, index, status))
+    .toSorted((left, right) => {
+      const leftSynthetic =
+        left.entry.syntheticAfterSettlementSeqNo !== undefined;
+      const rightSynthetic =
+        right.entry.syntheticAfterSettlementSeqNo !== undefined;
+      const leftSeq =
+        left.entry.settlementSeqNo ??
+        left.entry.syntheticAfterSettlementSeqNo ??
+        left.entry.sourceSeqNo ??
+        left.index + 1;
+      const rightSeq =
+        right.entry.settlementSeqNo ??
+        right.entry.syntheticAfterSettlementSeqNo ??
+        right.entry.sourceSeqNo ??
+        right.index + 1;
+      return (
+        leftSeq - rightSeq ||
+        Number(leftSynthetic) - Number(rightSynthetic) ||
+        left.index - right.index
+      );
+    })
+    .map(({ entry }) => entry);
 }
 
 export function splitTranscriptEntries(
@@ -142,7 +183,7 @@ export function splitTranscriptEntries(
       finalized.push(entry);
       continue;
     }
-    if (entry.role === 'tool') {
+    if (entry.role === 'tool' || entry.role === 'workflowTask') {
       pending.push(entry);
       continue;
     }

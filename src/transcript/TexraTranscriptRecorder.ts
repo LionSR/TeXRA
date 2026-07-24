@@ -26,12 +26,17 @@ import {
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
+  TOOL_USE_STATUS,
+  isTerminalWorkflowTaskProgress,
   type LogLevel,
   type MessageType,
   type ToolUseLog,
+  type WorkflowTaskProgress,
 } from '@shared/schemas';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import { generateShortId } from '@utils/core';
 
+import type { StreamLogAppendInput, StreamLogUpdatePatch } from './StreamLog';
 import type { TranscriptWriter } from './StreamLogStore';
 
 const STREAM_UPDATE_THROTTLE_MS = 50;
@@ -88,6 +93,11 @@ interface StreamSinkState {
   updateTimer: ReturnType<typeof setTimeout> | null;
 }
 
+type StageMetadata = Pick<
+  Extract<AgentEvent, { type: 'stage.start' }>,
+  'kind' | 'index' | 'total'
+>;
+
 /**
  * Subscribe to a trace and route every event into the StreamLogStore for the
  * given streamId. Returns an `unsubscribe()` plus a `flushPending()` used by
@@ -113,13 +123,16 @@ export function attachTranscriptRecorder(
       state.enabled = false;
     }
   };
-  // stage.start's `kind` lives only on that event — `store.update` at
+  // Stage presentation lives only on stage.start — `store.update` at
   // stage.end replaces `data` wholesale (see StreamLog.update), so without
   // this the persisted GROUP_END row would forget whether the stage was the
   // root "Run:" stage or a nested round/phase/session. Replayed legacy traces
   // rely on that distinction to tell a root run's terminal status apart from
   // a round's (see toStreamLifecycleStatus in packages/trace-viewer).
-  const stageKinds = new Map<string, 'run' | 'round' | 'phase' | 'session'>();
+  const stageMetadata = new Map<string, StageMetadata>();
+  const workflowTaskEntries = new Set<string>();
+  const activeToolEntries = new Map<string, ToolUseLog>();
+  let transcriptBoundaryClosed = false;
   // Id of the current model invocation's MODEL_RESPONSE stream entry, so a
   // subsequent `response.finalized` event (#7086) can upsert that entry's text
   // instead of appending a duplicate row. Set on `stream.start` for a
@@ -142,7 +155,7 @@ export function attachTranscriptRecorder(
     if (!state.enabled) return;
 
     if (!state.created) {
-      const appended = writer.append({
+      const entry = {
         id,
         type: STREAM_LOG_ENTRY_TYPES.LOG,
         level: state.level,
@@ -152,7 +165,10 @@ export function attachTranscriptRecorder(
         text: state.buffer,
         data: { status: state.ended ? 'completed' : 'running' },
         verbose: isDebugModeEnabled(),
-      });
+      } satisfies StreamLogAppendInput;
+      const appended = state.ended
+        ? writer.appendSettled(entry)
+        : writer.append(entry);
       state.created = !!appended;
       if (!state.created) state.enabled = false;
       return;
@@ -164,7 +180,7 @@ export function attachTranscriptRecorder(
     }
 
     if (state.ended) {
-      writer.update(id, {
+      writer.settle(id, {
         text: state.buffer,
         data: { status: 'completed' },
       });
@@ -204,7 +220,7 @@ export function attachTranscriptRecorder(
     data?: unknown;
     verbose?: boolean;
   }): void => {
-    writer.append({
+    writer.appendSettled({
       id: generateShortId(),
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: params.level ?? 'info',
@@ -235,12 +251,17 @@ export function attachTranscriptRecorder(
           return;
         }
 
-        case 'stage.start':
-          if (event.kind) stageKinds.set(event.id, event.kind);
+        case 'stage.start': {
+          const metadata = {
+            ...(event.kind !== undefined ? { kind: event.kind } : {}),
+            ...(event.index !== undefined ? { index: event.index } : {}),
+            ...(event.total !== undefined ? { total: event.total } : {}),
+          } satisfies StageMetadata;
+          stageMetadata.set(event.id, metadata);
           // A new round starts fresh: whatever MODEL_RESPONSE stream the
           // previous round may have opened is no longer this round's to reuse.
           if (event.kind === 'round') pendingModelResponseId = undefined;
-          writer.append({
+          writer.appendSettled({
             id: event.id,
             type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
             level: 'info',
@@ -250,33 +271,38 @@ export function attachTranscriptRecorder(
             text: event.label,
             data: {
               status: STREAM_PHASE.RUNNING,
-              ...(event.kind ? { kind: event.kind } : {}),
-              ...(event.index !== undefined ? { index: event.index } : {}),
-              ...(event.total !== undefined ? { total: event.total } : {}),
+              ...metadata,
             },
             verbose: isDebugModeEnabled(),
           });
           return;
+        }
 
         case 'stage.end': {
-          const kind = stageKinds.get(event.id);
-          stageKinds.delete(event.id);
+          const metadata = stageMetadata.get(event.id);
+          stageMetadata.delete(event.id);
           writer.update(event.id, {
             type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
             data: {
               status: event.status ?? RUN_OUTCOME.COMPLETED,
               endTime: Date.now(),
-              ...(kind ? { kind } : {}),
+              ...metadata,
             },
           });
           return;
         }
 
-        case 'tool.start':
+        case 'tool.start': {
+          if (transcriptBoundaryClosed) return;
           pendingModelResponseId = undefined;
           // event.logId is the canonical id — SDK consumers correlate
           // tool.start/end by it and the store entry shares the same id so
           // callers can lookup with store.get(streamId).find(e => e.id === logId).
+          const data = {
+            toolName: event.toolName,
+            input: redactToolInputForLog(event.toolName, event.input),
+            status: TOOL_USE_STATUS.IN_PROGRESS,
+          } satisfies ToolUseLog;
           writer.append({
             id: event.logId,
             type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -284,16 +310,15 @@ export function attachTranscriptRecorder(
             timestamp: Date.now(),
             groupId: event.stageId,
             messageType: MESSAGE_TYPES.TOOL_USE,
-            data: {
-              toolName: event.toolName,
-              input: redactToolInputForLog(event.toolName, event.input),
-              status: 'in_progress',
-            } satisfies ToolUseLog,
+            data,
             verbose: isDebugModeEnabled(),
           });
+          activeToolEntries.set(event.logId, data);
           return;
+        }
 
         case 'tool.end': {
+          if (transcriptBoundaryClosed) return;
           const result = (event.result ?? {}) as Partial<ToolUseLog>;
           const redactedResult =
             typeof result.toolName === 'string'
@@ -305,13 +330,49 @@ export function attachTranscriptRecorder(
           // Omit groupId on update — undefined would clobber the canonical
           // value stamped at tool.start (deferred tools never copy the
           // resolved id back into their ref).
-          writer.update(event.logId, {
+          const patch = {
             messageType: MESSAGE_TYPES.TOOL_USE,
             data: {
               ...redactedResult,
               status: event.status,
             } as ToolUseLog,
-          });
+          } satisfies StreamLogUpdatePatch;
+          if (event.status === TOOL_USE_STATUS.IN_PROGRESS) {
+            writer.update(event.logId, patch);
+            activeToolEntries.set(event.logId, patch.data);
+          } else {
+            writer.settle(event.logId, patch);
+            activeToolEntries.delete(event.logId);
+          }
+          return;
+        }
+
+        case 'workflow.task': {
+          const level: LogLevel =
+            event.task.status === 'failed' ? 'error' : 'info';
+          const entry = {
+            level,
+            groupId: event.stageId,
+            messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+            text: event.task.label,
+            data: event.task satisfies WorkflowTaskProgress,
+          };
+          const terminal = isTerminalWorkflowTaskProgress(event.task);
+          if (workflowTaskEntries.has(event.logId)) {
+            if (terminal) writer.settle(event.logId, entry);
+            else writer.update(event.logId, entry);
+          } else {
+            workflowTaskEntries.add(event.logId);
+            const taskEntry = {
+              id: event.logId,
+              type: STREAM_LOG_ENTRY_TYPES.LOG,
+              timestamp: Date.now(),
+              ...entry,
+              verbose: isDebugModeEnabled(),
+            } satisfies StreamLogAppendInput;
+            if (terminal) writer.appendSettled(taskEntry);
+            else writer.append(taskEntry);
+          }
           return;
         }
 
@@ -325,8 +386,44 @@ export function attachTranscriptRecorder(
           });
           return;
 
-        case 'status':
+        case 'status': {
+          if (event.streamId !== streamId) return;
+          if (event.phase === STREAM_PHASE.RUNNING) {
+            transcriptBoundaryClosed = false;
+            return;
+          }
+          if (
+            event.phase !== STREAM_PHASE.WAITING &&
+            !isTerminalOutcomePhase(event.phase)
+          ) {
+            return;
+          }
+          // Status is emitted through AgentTrace before StreamStatusMachine
+          // notifies host listeners. Settle recorder-owned source rows here,
+          // so every row the CLI may promote at the boundary already has one
+          // durable settlement coordinate. Workflow tasks are deliberately
+          // absent: their typed bridge cleanup owns planned/running terminal
+          // transitions and settles them afterward.
+          transcriptBoundaryClosed = true;
+          pendingModelResponseId = undefined;
+          for (const [id, state] of streams) {
+            state.ended = true;
+            flushStream(state, id);
+            streams.delete(id);
+          }
+          for (const [id, data] of activeToolEntries) {
+            writer.settle(id, {
+              data: {
+                ...data,
+                status: TOOL_USE_STATUS.FAILED,
+                error: 'The stream ended before this tool completed.',
+                isError: true,
+              } satisfies ToolUseLog,
+            });
+          }
+          activeToolEntries.clear();
           return;
+        }
 
         case 'context.state': {
           const utilizationPercent = computeUtilizationPercent(
@@ -347,6 +444,7 @@ export function attachTranscriptRecorder(
         }
 
         case 'stream.start': {
+          if (transcriptBoundaryClosed) return;
           const state: StreamSinkState = {
             buffer: '',
             pending: [],
@@ -374,6 +472,7 @@ export function attachTranscriptRecorder(
         }
 
         case 'stream.chunk': {
+          if (transcriptBoundaryClosed) return;
           const state = streams.get(event.id);
           if (!state || !state.enabled) return;
           state.pending.push(event.text);
@@ -389,6 +488,7 @@ export function attachTranscriptRecorder(
         }
 
         case 'stream.end': {
+          if (transcriptBoundaryClosed) return;
           const state = streams.get(event.id);
           if (!state) return;
           if (typeof event.finalText === 'string') {
@@ -402,6 +502,7 @@ export function attachTranscriptRecorder(
         }
 
         case 'response.finalized': {
+          if (transcriptBoundaryClosed) return;
           if (!event.text) return;
           // Upsert by id, not by text: if this round's own MODEL_RESPONSE
           // stream already wrote a (possibly raw, pre-replacement) entry,
@@ -410,7 +511,7 @@ export function attachTranscriptRecorder(
           const correlatorId = pendingModelResponseId;
           pendingModelResponseId = undefined;
           if (correlatorId) {
-            writer.update(correlatorId, {
+            writer.settle(correlatorId, {
               text: event.text,
               data: { status: 'completed' },
             });
