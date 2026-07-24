@@ -336,6 +336,9 @@ export class LeanSession {
     this.requireRpc();
     let existing = this.openFiles.get(absolute);
     if (existing && !options.forceReload) return;
+    // Uses fs/promises directly rather than platform().fs: this must read the
+    // same real on-disk bytes the spawned `lean --server` process itself sees,
+    // not a host's virtual/faked workspace fs.
     const text = await readFile(absolute, 'utf8').catch((error) => {
       throw new Error(`Failed to read ${absolute}: ${toErrorMessage(error)}`, {
         cause: error,

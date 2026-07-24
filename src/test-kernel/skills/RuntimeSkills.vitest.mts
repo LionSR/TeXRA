@@ -4,7 +4,7 @@ import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { buildInitialToolUsePrompts } from '@agent/prompt';
+import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import {
   formatRuntimeSkillActivation,
   loadRuntimeSkillCatalog,

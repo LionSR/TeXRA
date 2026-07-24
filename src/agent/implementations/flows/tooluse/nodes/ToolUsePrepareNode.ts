@@ -1,6 +1,6 @@
 import { Node } from '@agent/node';
 import { logUserMessage } from '@agent/trace';
-import { buildInitialToolUsePrompts } from '@agent/prompt';
+import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
