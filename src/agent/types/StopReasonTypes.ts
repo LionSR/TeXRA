@@ -41,6 +41,7 @@ type MCPStopReason = (typeof MCP_STOP)[keyof typeof MCP_STOP];
 export const ANTHROPIC_STOP = {
   END_TURN: 'end_turn',
   MAX_TOKENS: 'max_tokens',
+  MODEL_CONTEXT_WINDOW_EXCEEDED: 'model_context_window_exceeded',
   STOP_SEQUENCE: 'stop_sequence',
   TOOL_USE: 'tool_use',
   PAUSE_TURN: 'pause_turn',
@@ -74,6 +75,7 @@ const TOKEN_LIMIT_STOP_REASONS: readonly ProviderStopReason[] = [
   OPENAI_CHAT_FINISH.LENGTH,
   OPENAI_COMPLETION_FINISH.LENGTH,
   ANTHROPIC_STOP.MAX_TOKENS,
+  ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED,
   MCP_STOP.MAX_TOKENS,
   GOOGLE_FINISH.MAX_TOKENS,
 ];

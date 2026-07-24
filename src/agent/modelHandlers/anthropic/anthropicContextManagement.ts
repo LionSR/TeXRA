@@ -107,7 +107,9 @@ export function setupContextManagement(
   isCompactionEligibleModel: boolean,
   forceCompaction: boolean,
 ): boolean {
-  if (!isToolUseMode) {
+  // Automatic context management is tool-use-only. A manual request also
+  // enables the same native compaction path for workflow recovery.
+  if (!isToolUseMode && !forceCompaction) {
     return false;
   }
 
