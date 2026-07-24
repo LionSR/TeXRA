@@ -340,6 +340,53 @@ describe('StreamSnapshotStore', () => {
     expect(goalPausedOnly.runUsage).toEqual({});
   });
 
+  it('treats run.start as authoritative after run.config synthesizes identity', async () => {
+    const events = new SessionEventHub();
+    const writer = new StreamSnapshotStore();
+    const detach = writer.attachSessionEvents(events);
+    const executionId = 'a1b2c3d4' as ExecutionId;
+    const taskState = toolUseTaskState('worker-agent');
+    const workflowDescriptor = buildRunDescriptor({
+      streamId: STREAM,
+      executionId,
+      agent: 'workflow-script',
+      category: AgentCategory.Workflow,
+      kind: 'workflowScript',
+    });
+
+    events.emit({
+      scope: 'run',
+      streamId: STREAM,
+      event: {
+        type: 'run.config',
+        streamId: STREAM,
+        executionId,
+        config: taskState.agentConfig,
+      },
+    });
+    expect(writer.getRunDescriptor(STREAM)).toMatchObject({
+      agent: 'worker-agent',
+      kind: 'agent',
+    });
+
+    events.emit({
+      scope: 'run',
+      streamId: STREAM,
+      event: {
+        type: 'run.start',
+        descriptor: workflowDescriptor,
+      },
+    });
+    detach();
+    await writer.flush();
+
+    expect(writer.getRunDescriptor(STREAM)).toEqual(workflowDescriptor);
+    const reader = new StreamSnapshotStore();
+    await reader.load([STREAM]);
+    expect(reader.getExecutionId(STREAM)).toBe(executionId);
+    expect(reader.getRunDescriptor(STREAM)).toEqual(workflowDescriptor);
+  });
+
   it('returns an empty (valid) snapshot for a stream with no sidecar', async () => {
     const snap = await new StreamSnapshotStore().read(STREAM);
     expect(snap.streamId).toBe(STREAM);

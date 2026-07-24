@@ -1499,11 +1499,10 @@ export class StreamSnapshotStore {
   setRunDescriptor(descriptor: RunDescriptor): void {
     const stream = descriptor.streamId;
     const record = this.getOrCreateRecord(stream);
-    const identity = record.runDescriptor ?? descriptor;
-    record.runDescriptor = identity;
+    record.runDescriptor = descriptor;
     this.queueMetaPatch(stream, {
-      executionId: identity.executionId,
-      runDescriptor: identity,
+      executionId: descriptor.executionId,
+      runDescriptor: descriptor,
     });
   }
 
