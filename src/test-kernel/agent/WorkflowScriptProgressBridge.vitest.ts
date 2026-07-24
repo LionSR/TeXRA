@@ -5,8 +5,13 @@ import { TraceEmitter, type AgentEvent } from '@agent/trace';
 import {
   WorkflowRunAbortError,
   type WorkflowAgentInvocation,
+  type WorkflowScriptControl,
 } from '@agent/workflowScript';
-import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  type ExecutionId,
+  type WorkflowTaskProgress,
+} from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { runPersistedWorkflowScriptWithProgress } from '@tools/delegation/workflowScriptRun';
 
@@ -37,16 +42,30 @@ function stageId(events: readonly AgentEvent[], label: string): string {
   return event.id;
 }
 
+function workflowTaskEvent(
+  events: readonly AgentEvent[],
+  label: string,
+  status: WorkflowTaskProgress['status'],
+): Extract<AgentEvent, { type: 'workflow.task' }> | undefined {
+  return events.find(
+    (event): event is Extract<AgentEvent, { type: 'workflow.task' }> =>
+      event.type === 'workflow.task' &&
+      event.task.label === label &&
+      event.task.status === status,
+  );
+}
+
 beforeEach(() => clearStoreCache());
 
 describe('workflow-script progress bridge', () => {
-  it('projects phases and logs under the captured parent stage', async () => {
+  it('keeps planned task cards in one stage across incremental updates', async () => {
     const { trace, events } = recordingTrace();
     const parent = trace.openStage('Parent');
     const plannedMeta = `export const meta = {
   name: 'planned-progress-test',
   description: 'tests planned workflow progress projection',
   phases: [{ title: 'Research' }, { title: 'Write' }],
+  tasks: [{ id: 'inspect', label: 'Inspect source', phase: 'Research' }],
 }`;
 
     await parent.within(() =>
@@ -57,7 +76,7 @@ describe('workflow-script progress bridge', () => {
 log('Preparing the workflow')
 phase('Research')
 log('Checking the source')
-return await agent('Inspect')`,
+return await agent('Inspect', { id: 'inspect' })`,
         runAgent: async () => 'done',
       }),
     );
@@ -70,6 +89,23 @@ return await agent('Inspect')`,
         stageId: parent.id,
       }),
     );
+    const planned = workflowTaskEvent(events, 'Inspect source', 'planned');
+    const running = workflowTaskEvent(events, 'Inspect source', 'running');
+    const completed = workflowTaskEvent(events, 'Inspect source', 'completed');
+    expect(planned).toMatchObject({
+      type: 'workflow.task',
+      stageId: parent.id,
+    });
+    expect(running).toMatchObject({
+      type: 'workflow.task',
+      logId: planned?.logId,
+      stageId: parent.id,
+    });
+    expect(completed).toMatchObject({
+      type: 'workflow.task',
+      logId: planned?.logId,
+      stageId: parent.id,
+    });
     expect(events).toContainEqual(
       expect.objectContaining({
         type: 'stage.start',
@@ -97,6 +133,133 @@ return await agent('Inspect')`,
     );
   });
 
+  it('marks declared tasks not reached by the script as skipped', async () => {
+    const { trace, events } = recordingTrace();
+    const activities: string[] = [];
+    await runPersistedWorkflowScriptWithProgress(trace, {
+      store: getExecutionStore(executionId),
+      checkpointId: 'not-reached-plan',
+      script: `export const meta = {
+  name: 'conditional-plan',
+  description: 'declares all possible work',
+  phases: [{ title: 'Research' }],
+  tasks: [
+    { id: 'used', label: 'Used task', phase: 'Research' },
+    { id: 'unused', label: 'Unused task', phase: 'Research' },
+  ],
+}
+phase('Research')
+return await agent('Run one', { id: 'used' })`,
+      runAgent: async () => 'done',
+      onActivity: (line) => activities.push(line),
+    });
+
+    const unusedPlanned = workflowTaskEvent(events, 'Unused task', 'planned');
+    expect(workflowTaskEvent(events, 'Used task', 'completed')).toBeDefined();
+    expect(workflowTaskEvent(events, 'Unused task', 'skipped')).toMatchObject({
+      logId: unusedPlanned?.logId,
+      stageId: unusedPlanned?.stageId,
+      task: {
+        reason: 'not-reached',
+      },
+    });
+    expect(activities).toContain('Skipped: Unused task');
+  });
+
+  it('marks a planned task failed when the live-call cap refuses it', async () => {
+    const { trace, events } = recordingTrace();
+    await expect(
+      runPersistedWorkflowScriptWithProgress(trace, {
+        store: getExecutionStore(executionId),
+        checkpointId: 'planned-call-cap',
+        script: `export const meta = {
+  name: 'planned-call-cap',
+  description: 'distinguishes refused work from work not reached',
+  phases: [{ title: 'Audit' }],
+  tasks: [
+    { id: 'first', label: 'First audit', phase: 'Audit' },
+    { id: 'refused', label: 'Refused audit', phase: 'Audit' },
+  ],
+}
+await agent('Run first', { id: 'first' })
+return await agent('Run refused', { id: 'refused' })`,
+        maxAgentCalls: 1,
+        runAgent: async () => 'done',
+      }),
+    ).rejects.toThrow(/agent-call cap/);
+
+    expect(workflowTaskEvent(events, 'Refused audit', 'failed')).toMatchObject({
+      task: {
+        error: expect.stringContaining('agent-call cap'),
+      },
+    });
+    expect(
+      workflowTaskEvent(events, 'Refused audit', 'skipped'),
+    ).toBeUndefined();
+  });
+
+  it.each([
+    [
+      'sequential',
+      `await agent('First prompt', {
+  id: 'shared-journal-id',
+  label: 'First task',
+  phase: 'Review',
+})
+return await agent('Second prompt', {
+  id: 'shared-journal-id',
+  label: 'Second task',
+  phase: 'Write',
+})`,
+    ],
+    [
+      'parallel',
+      `return await parallel([
+  () => agent('First prompt', {
+    id: 'shared-journal-id',
+    label: 'First task',
+    phase: 'Review',
+  }),
+  () => agent('Second prompt', {
+    id: 'shared-journal-id',
+    label: 'Second task',
+    phase: 'Write',
+  }),
+])`,
+    ],
+  ] as const)(
+    'keeps %s calls with one journal id as separate progress records',
+    async (mode, body) => {
+      const { trace, events } = recordingTrace();
+      await runPersistedWorkflowScriptWithProgress(trace, {
+        store: getExecutionStore(executionId),
+        checkpointId: `reused-journal-id-${mode}`,
+        script: `${meta}
+${body}`,
+        runAgent: async () => 'done',
+      });
+
+      const firstRunning = workflowTaskEvent(events, 'First task', 'running');
+      const firstCompleted = workflowTaskEvent(
+        events,
+        'First task',
+        'completed',
+      );
+      const secondRunning = workflowTaskEvent(events, 'Second task', 'running');
+      const secondCompleted = workflowTaskEvent(
+        events,
+        'Second task',
+        'completed',
+      );
+
+      expect(firstRunning?.task.id).toBe('call-0');
+      expect(firstCompleted?.logId).toBe(firstRunning?.logId);
+      expect(secondRunning?.task.id).toBe('call-1');
+      expect(secondCompleted?.logId).toBe(secondRunning?.logId);
+      expect(firstRunning?.logId).not.toBe(secondRunning?.logId);
+    },
+  );
+
   it('projects a cached completion without synthesizing a start event', async () => {
     const store = getExecutionStore(executionId);
     const script = `${meta}
@@ -119,16 +282,11 @@ return await agent('Read', { phase: 'Review' })`;
 
     const phaseId = stageId(events, 'Review');
     expect(runner).not.toHaveBeenCalled();
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'log',
-        message: 'Using saved result: Read',
-        stageId: phaseId,
-      }),
-    );
-    expect(events).not.toContainEqual(
-      expect.objectContaining({ type: 'log', message: 'Running: Read' }),
-    );
+    expect(workflowTaskEvent(events, 'Read', 'cached')).toMatchObject({
+      type: 'workflow.task',
+      stageId: phaseId,
+    });
+    expect(workflowTaskEvent(events, 'Read', 'running')).toBeUndefined();
   });
 
   it('keeps phase counts when an agent opens the stage before phase()', async () => {
@@ -160,6 +318,54 @@ return await early`;
     );
   });
 
+  it('projects trimmed runtime and declared task phases onto one stage', async () => {
+    const { trace, events } = recordingTrace();
+    const script = `export const meta = {
+  name: 'trimmed-declared-task-phase',
+  description: 'keeps task and runtime phase identity canonical',
+  phases: [{ title: '  Review  ' }],
+  tasks: [{
+    id: 'review-task',
+    label: '  Review argument  ',
+    phase: '  Review  ',
+  }],
+}
+phase('  Review  ')
+return await agent('Review the argument', { id: 'review-task' })`;
+
+    await runPersistedWorkflowScriptWithProgress(trace, {
+      store: getExecutionStore(executionId),
+      checkpointId: 'trimmed-declared-task-phase',
+      script,
+      runAgent: async () => 'done',
+    });
+
+    const phaseStarts = events.filter(
+      (event) => event.type === 'stage.start' && event.kind === 'phase',
+    );
+    expect(phaseStarts).toEqual([
+      expect.objectContaining({
+        label: 'Review',
+        index: 0,
+        total: 1,
+      }),
+    ]);
+    const planned = workflowTaskEvent(events, 'Review argument', 'planned');
+    for (const status of ['planned', 'running', 'completed'] as const) {
+      expect(
+        workflowTaskEvent(events, 'Review argument', status),
+      ).toMatchObject({
+        logId: planned?.logId,
+        task: {
+          id: 'review-task',
+          label: 'Review argument',
+          phase: 'Review',
+          status,
+        },
+      });
+    }
+  });
+
   it('renders the running total on live finish lines only', async () => {
     const store = getExecutionStore(executionId);
     const script = `${meta}
@@ -178,18 +384,16 @@ return await agent('Second')`;
       getLiveCostUsd: () => liveCostUsd,
     });
 
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'log',
-        message: 'Finished: First ($0.050 total)',
-      }),
+    expect(workflowTaskEvent(events, 'First', 'completed')?.task).toMatchObject(
+      {
+        totalCostUsd: 0.05,
+      },
     );
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'log',
-        message: 'Finished: Second ($0.100 total)',
-      }),
-    );
+    expect(
+      workflowTaskEvent(events, 'Second', 'completed')?.task,
+    ).toMatchObject({
+      totalCostUsd: 0.1,
+    });
 
     clearStoreCache();
     const replay = recordingTrace();
@@ -201,22 +405,14 @@ return await agent('Second')`;
       getLiveCostUsd: () => 0,
     });
 
-    expect(replay.events).toContainEqual(
-      expect.objectContaining({
-        type: 'log',
-        message: 'Using saved result: First',
-      }),
-    );
-    expect(replay.events).not.toContainEqual(
-      expect.objectContaining({
-        type: 'log',
-        message: expect.stringContaining('total)'),
-      }),
-    );
+    expect(
+      workflowTaskEvent(replay.events, 'First', 'cached')?.task,
+    ).not.toHaveProperty('totalCostUsd');
   });
 
   it('enriches live finish lines with the reported model and duration', async () => {
     const { trace, events } = recordingTrace();
+    const activities: string[] = [];
     let liveCostUsd = 0;
     await runPersistedWorkflowScriptWithProgress(trace, {
       store: getExecutionStore(executionId),
@@ -229,14 +425,71 @@ return await agent('Draft')`,
         return 'done';
       },
       getLiveCostUsd: () => liveCostUsd,
+      onActivity: (line) => activities.push(line),
     });
 
-    const finish = events.find(
-      (event) =>
-        event.type === 'log' && event.message.startsWith('Finished: Draft'),
+    expect(workflowTaskEvent(events, 'Draft', 'completed')?.task).toMatchObject(
+      {
+        model: 'deepseekT',
+        durationMs: expect.any(Number),
+        totalCostUsd: 0.02,
+      },
     );
-    expect(finish?.type === 'log' ? finish.message : '').toMatch(
-      /^Finished: Draft · deepseekT · \d+s \(\$0\.020 total\)$/,
+    expect(activities).toContainEqual(
+      expect.stringMatching(
+        /^Finished: Draft · deepseekT · .+ · \$0\.020 total$/,
+      ),
+    );
+  });
+
+  it('preserves live metadata when the user skips a running task', async () => {
+    const { trace, events } = recordingTrace();
+    const activities: string[] = [];
+    let control!: WorkflowScriptControl;
+    let markStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const run = runPersistedWorkflowScriptWithProgress(trace, {
+      store: getExecutionStore(executionId),
+      checkpointId: 'late-user-skip',
+      script: `${meta}
+return await agent('Late skip')`,
+      runAgent: async (invocation: WorkflowAgentInvocation) => {
+        invocation.reportModel?.('kimiK2');
+        markStarted?.();
+        return await new Promise<never>((_resolve, reject) => {
+          invocation.signal.addEventListener(
+            'abort',
+            () => reject(new Error('skipped')),
+            { once: true },
+          );
+        });
+      },
+      onControl: (handle) => {
+        control = handle;
+      },
+      getLiveCostUsd: () => 0.04,
+      onActivity: (line) => activities.push(line),
+    });
+
+    await started;
+    control.skip(0);
+    await run;
+
+    expect(
+      workflowTaskEvent(events, 'Late skip', 'skipped')?.task,
+    ).toMatchObject({
+      reason: 'user',
+      model: 'kimiK2',
+      durationMs: expect.any(Number),
+      totalCostUsd: 0.04,
+    });
+    expect(activities).toContain('Running: Late skip');
+    expect(activities).toContainEqual(
+      expect.stringMatching(
+        /^Skipped: Late skip · kimiK2 · .+ · \$0\.040 total$/,
+      ),
     );
   });
 
@@ -254,14 +507,13 @@ return await agent('Unsuccessful')`,
     });
 
     const phaseId = stageId(events, 'Analysis');
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'log',
-        level: 'error',
-        message: 'Failed: Unsuccessful - model unavailable',
-        stageId: phaseId,
-      }),
-    );
+    expect(workflowTaskEvent(events, 'Unsuccessful', 'failed')).toMatchObject({
+      type: 'workflow.task',
+      stageId: phaseId,
+      task: {
+        error: 'model unavailable',
+      },
+    });
     expect(events).toContainEqual({
       type: 'stage.end',
       id: phaseId,
@@ -294,20 +546,12 @@ return await parallel([
 
     const firstId = stageId(events, 'First');
     const secondId = stageId(events, 'Second');
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'log',
-        message: 'Finished: slow',
-        stageId: firstId,
-      }),
-    );
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'log',
-        message: 'Finished: fast',
-        stageId: secondId,
-      }),
-    );
+    expect(workflowTaskEvent(events, 'slow', 'completed')).toMatchObject({
+      stageId: firstId,
+    });
+    expect(workflowTaskEvent(events, 'fast', 'completed')).toMatchObject({
+      stageId: secondId,
+    });
   });
 
   it('does not move an unphased live call into a later phase', async () => {
@@ -322,37 +566,101 @@ return await pending`,
       runAgent: async () => 'done',
     });
 
-    const completion = events.find(
-      (event) =>
-        event.type === 'log' && event.message === 'Finished: before phase',
-    );
-    expect(completion).toMatchObject({ type: 'log', stageId: undefined });
+    const completion = workflowTaskEvent(events, 'before phase', 'completed');
+    expect(completion).toMatchObject({
+      type: 'workflow.task',
+      stageId: undefined,
+    });
     expect(completion).not.toMatchObject({ stageId: stageId(events, 'Later') });
   });
 
-  it('closes a started phase when the runner aborts without an end event', async () => {
+  it('preserves the exact cause when a runner aborts a started phase', async () => {
     const { trace, events } = recordingTrace();
+    const activities: string[] = [];
     await expect(
       runPersistedWorkflowScriptWithProgress(trace, {
         store: getExecutionStore(executionId),
         checkpointId: 'runner-abort',
         script: `${meta}
 return await agent('Abort', { phase: 'Execution' })`,
-        runAgent: async () => {
+        runAgent: async (invocation: WorkflowAgentInvocation) => {
+          invocation.reportModel?.('abort-model');
           throw new WorkflowRunAbortError('fatal runner error');
         },
+        getLiveCostUsd: () => 0.06,
+        onActivity: (line) => activities.push(line),
       }),
     ).rejects.toThrow('fatal runner error');
 
     const phaseId = stageId(events, 'Execution');
-    expect(events).not.toContainEqual(
-      expect.objectContaining({ type: 'log', message: 'Finished: Abort' }),
-    );
+    expect(workflowTaskEvent(events, 'Abort', 'failed')).toMatchObject({
+      stageId: phaseId,
+      task: {
+        error: 'fatal runner error',
+        model: 'abort-model',
+        durationMs: expect.any(Number),
+        totalCostUsd: 0.06,
+      },
+    });
     expect(events).toContainEqual({
       type: 'stage.end',
       id: phaseId,
       status: RUN_OUTCOME.FAILED,
     });
+    expect(activities).toContainEqual(
+      expect.stringMatching(
+        /^Failed: Abort · abort-model · .+ · \$0\.060 total — fatal runner error$/,
+      ),
+    );
+  });
+
+  it('marks a phase failed when an abandoned call outlives cleanup', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const { trace, events } = recordingTrace();
+      const activities: string[] = [];
+      let markStarted: (() => void) | undefined;
+      const started = new Promise<void>((resolve) => {
+        markStarted = resolve;
+      });
+      const run = runPersistedWorkflowScriptWithProgress(trace, {
+        store: getExecutionStore(executionId),
+        checkpointId: 'orphaned-runner',
+        script: `${meta}
+agent('Orphaned', { phase: 'Execution' })
+return 'guest success'`,
+        runAgent: async () => {
+          markStarted?.();
+          return await new Promise<never>(() => undefined);
+        },
+        getLiveCostUsd: () => 0.03,
+        onActivity: (line) => activities.push(line),
+      });
+
+      await started;
+      await vi.advanceTimersByTimeAsync(5_000);
+      await run;
+
+      const phaseId = stageId(events, 'Execution');
+      expect(workflowTaskEvent(events, 'Orphaned', 'failed')).toMatchObject({
+        stageId: phaseId,
+        task: {
+          error: 'The workflow ended before this task completed.',
+          totalCostUsd: 0.03,
+        },
+      });
+      expect(events).toContainEqual({
+        type: 'stage.end',
+        id: phaseId,
+        status: RUN_OUTCOME.FAILED,
+      });
+      expect(activities).toContain('Running: Orphaned');
+      expect(activities).toContain(
+        'Failed: Orphaned · $0.030 total — The workflow ended before this task completed.',
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('closes every opened phase after a script failure', async () => {

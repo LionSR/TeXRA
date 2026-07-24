@@ -85,7 +85,12 @@ function PlainEntryRows({
   return (
     <Box {...boxProps}>
       <Text
-        color={entry.role === 'error' ? COLOR_ERROR : undefined}
+        color={
+          entry.role === 'error' ||
+          (entry.role === 'workflowTask' && entry.task.status === 'failed')
+            ? COLOR_ERROR
+            : undefined
+        }
         inverse={entry.role === 'user' && colorEnabled !== false}
       >
         {lines.join('\n')}
@@ -218,6 +223,7 @@ export const TranscriptEntry = memo(function TranscriptEntry({
           />
         </Box>
       );
+    case 'workflowTask':
     default:
       return (
         <PlainEntryRows

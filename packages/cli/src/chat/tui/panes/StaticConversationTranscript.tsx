@@ -35,7 +35,7 @@ import {
 import { useSignal } from '../state/useSignal';
 import { COLOR_HINT } from '../ui/colors';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
-import { isStaticTranscriptEntryAt } from './transcriptEntries';
+import { orderedStaticTranscriptEntries } from './transcriptEntries';
 import { TranscriptEntry } from './TranscriptEntry';
 import {
   transcriptColumns,
@@ -344,8 +344,9 @@ export function appendStaticTranscriptItems({
     ? streams.get(scrollbackStreamId)
     : undefined;
   const entries = slice?.entries ?? [];
-  const staticEntries = entries.filter((entry, index) =>
-    isStaticTranscriptEntryAt(entries, index, slice?.status),
+  const orderedStaticEntries = orderedStaticTranscriptEntries(
+    entries,
+    slice?.status,
   );
   const unseenRequests = printRequests.filter(
     (request) => !seen.has(request.id),
@@ -369,7 +370,7 @@ export function appendStaticTranscriptItems({
     if (anchored) anchored.push(request);
     else requestsByUnseenAnchor.set(request.afterEntryId, [request]);
   }
-  for (const entry of staticEntries) {
+  for (const entry of orderedStaticEntries) {
     if (!seen.has(entry.id)) {
       appendItem({ id: entry.id, kind: 'entry', entry });
     }

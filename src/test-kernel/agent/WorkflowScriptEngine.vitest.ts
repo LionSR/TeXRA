@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   parseWorkflowScript,
   runWorkflowScript,
+  WORKFLOW_JOURNAL_KEY_FORMAT,
   WORKFLOW_SKIPPED_RESULT,
   WorkflowScriptParseError,
   type WorkflowAgentInvocation,
@@ -30,6 +31,41 @@ describe('parseWorkflowScript', () => {
     expect(meta.name).toBe('test-flow');
     expect(meta.phases?.[0]?.title).toBe('Work');
     expect(body).not.toContain('export ');
+  });
+
+  it('validates the declarative task plan as part of workflow metadata', () => {
+    const { meta } = parseWorkflowScript(`export const meta = {
+  name: 'planned',
+  description: 'declares progress before execution',
+  phases: [{ title: 'Audit' }],
+  tasks: [{ id: 'core', label: 'Audit core', phase: 'Audit' }],
+}
+return null`);
+    expect(meta.tasks).toEqual([
+      { id: 'core', label: 'Audit core', phase: 'Audit' },
+    ]);
+
+    expect(() =>
+      parseWorkflowScript(`export const meta = {
+  name: 'duplicate',
+  description: 'invalid duplicate ids',
+  tasks: [
+    { id: 'same', label: 'First' },
+    { id: 'same', label: 'Second' },
+  ],
+}
+return null`),
+    ).toThrow(/Duplicate task id "same"/);
+
+    expect(() =>
+      parseWorkflowScript(`export const meta = {
+  name: 'unknown-phase',
+  description: 'invalid phase reference',
+  phases: [{ title: 'Known' }],
+  tasks: [{ id: 'task', label: 'Task', phase: 'Unknown' }],
+}
+return null`),
+    ).toThrow(/not declared in meta\.phases/);
   });
 
   it('rejects scripts without a leading meta export', () => {
@@ -101,6 +137,104 @@ describe('parseWorkflowScript', () => {
 });
 
 describe('runWorkflowScript', () => {
+  it('uses meta.tasks as the single source for task labels and phases', async () => {
+    const events: WorkflowScriptEvent[] = [];
+    const runner = vi.fn(echoRunner);
+    await runWorkflowScript({
+      script: `export const meta = {
+  name: 'planned-run',
+  description: 'runs a declared plan',
+  phases: [{ title: 'Audit' }],
+  tasks: [{ id: 'core', label: 'Audit core', phase: 'Audit' }],
+}
+return await agent('Inspect src', { id: 'core' })`,
+      runAgent: runner,
+      onEvent: (event) => events.push(event),
+    });
+
+    expect(events[0]).toEqual({
+      type: 'plan',
+      tasks: [{ id: 'core', label: 'Audit core', phase: 'Audit' }],
+    });
+    expect(runner.mock.calls[0][0].options).toMatchObject({
+      id: 'core',
+      label: 'Audit core',
+      phase: 'Audit',
+    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'agent:start',
+        progressId: 'core',
+        label: 'Audit core',
+        phase: 'Audit',
+      }),
+    );
+  });
+
+  it('rejects calls outside a declared plan and duplicated presentation data', async () => {
+    const plannedMeta = `export const meta = {
+  name: 'strict-plan',
+  description: 'requires task references',
+  tasks: [{ id: 'known', label: 'Known task' }],
+}
+`;
+    await expect(
+      runWorkflowScript({
+        script: `${plannedMeta}return await agent('missing id')`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/must reference a task from meta\.tasks/);
+    await expect(
+      runWorkflowScript({
+        script: `${plannedMeta}return await agent('unknown', { id: 'other' })`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/undeclared task id "other"/);
+    await expect(
+      runWorkflowScript({
+        script: `${plannedMeta}return await agent('duplicate', {
+  id: 'known',
+  label: 'Duplicated label',
+})`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/do not duplicate them in agent\(\) options/);
+
+    await expect(
+      runWorkflowScript({
+        script: `${plannedMeta}return await parallel([
+  () => agent('first use', { id: 'known' }),
+  () => agent('second use', { id: 'known' }),
+])`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/may be issued only once per run/i);
+  });
+
+  it('treats an explicitly empty task plan as closed', async () => {
+    const emptyPlan = `export const meta = {
+  name: 'empty-plan',
+  description: 'declares that no agent work is planned',
+  tasks: [],
+}
+`;
+    await expect(
+      runWorkflowScript({
+        script: `${emptyPlan}return await agent('undeclared')`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/Every agent\(\) call must reference a task/);
+
+    const events: WorkflowScriptEvent[] = [];
+    const result = await runWorkflowScript({
+      script: `${emptyPlan}return 'done'`,
+      runAgent: echoRunner,
+      onEvent: (event) => events.push(event),
+    });
+    expect(result.result).toBe('done');
+    expect(events).toContainEqual({ type: 'plan', tasks: [] });
+  });
+
   it('runs a script end-to-end with agent calls and args', async () => {
     const run = await runWorkflowScript({
       script: `${META}
@@ -250,6 +384,29 @@ return await parallel([
       'second',
     ]);
 
+    const reusedIdInvocations: WorkflowAgentInvocation[] = [];
+    const reusedIdEvents: WorkflowScriptEvent[] = [];
+    await runWorkflowScript({
+      script: `${META}return await parallel([
+  () => agent('first prompt', { id: 'shared-id' }),
+  () => agent('second prompt', { id: 'shared-id' }),
+])`,
+      runAgent: (invocation) => {
+        reusedIdInvocations.push(invocation);
+        return echoRunner(invocation);
+      },
+      onEvent: (event) => reusedIdEvents.push(event),
+    });
+    expect(reusedIdInvocations).toHaveLength(2);
+    expect(
+      reusedIdInvocations.map((invocation) => invocation.options.id),
+    ).toEqual(['shared-id', 'shared-id']);
+    expect(
+      reusedIdEvents
+        .filter((event) => event.type === 'agent:start')
+        .map((event) => event.progressId),
+    ).toEqual(['call-0', 'call-1']);
+
     await expect(
       runWorkflowScript({
         script: `${META}return await parallel([
@@ -265,7 +422,7 @@ return await parallel([
         script: `${META}return await parallel([
   () => agent('same', { id: 'same-id' }),
   () => agent('same', { id: ' same-id ' }),
-])`,
+        ])`,
         runAgent: echoRunner,
       }),
     ).rejects.toThrow(/require distinct non-empty "id" options/i);
@@ -356,7 +513,7 @@ return await parallel([
         order.push(`checkpoint:${entry.index}`);
       },
       onEvent: (event) => {
-        if (event.type === 'agent:end' && !event.error) {
+        if (event.type === 'agent:end' && event.outcome !== 'failed') {
           order.push(`end:${event.index}`);
         }
       },
@@ -371,7 +528,8 @@ return await parallel([
     await expect(
       runWorkflowScript({
         script: `${META}agent('abandoned', { phase: 'Work' }); return 'guest success'`,
-        runAgent: async () => {
+        runAgent: async (invocation) => {
+          invocation.reportModel?.('checkpoint-model');
           await delay(5);
           return 'completed child';
         },
@@ -388,7 +546,12 @@ return await parallel([
       phaseIndex: 0,
       phaseTotal: 1,
       error: expect.stringContaining('checkpoint offline'),
+      model: 'checkpoint-model',
+      durationMs: expect.any(Number),
     });
+    expect(events.filter((event) => event.type === 'agent:end')).toHaveLength(
+      1,
+    );
   });
 
   it('does not let a guest error mask a late checkpoint failure', async () => {
@@ -530,6 +693,47 @@ return b`,
     );
   });
 
+  it('keeps resume identity stable when planned presentation changes', async () => {
+    const first = await runWorkflowScript({
+      script: `export const meta = {
+  name: 'planned-resume',
+  description: 'first presentation',
+  phases: [{ title: 'Draft' }],
+  tasks: [{ id: 'inspect', label: 'Inspect draft', phase: 'Draft' }],
+}
+return await agent('Inspect src', { id: 'inspect' })`,
+      runAgent: echoRunner,
+    });
+    const cachedRunner = vi.fn(echoRunner);
+    const events: WorkflowScriptEvent[] = [];
+
+    const resumed = await runWorkflowScript({
+      script: `export const meta = {
+  name: 'planned-resume',
+  description: 'revised presentation',
+  phases: [{ title: 'Audit' }],
+  tasks: [{ id: 'inspect', label: 'Audit implementation', phase: 'Audit' }],
+}
+return await agent('Inspect src', { id: 'inspect' })`,
+      runAgent: cachedRunner,
+      journal: first.journal,
+      onEvent: (event) => events.push(event),
+    });
+
+    expect(resumed.result).toBe(first.result);
+    expect(cachedRunner).not.toHaveBeenCalled();
+    expect(events).toContainEqual({
+      type: 'agent:end',
+      progressId: 'inspect',
+      index: 0,
+      label: 'Audit implementation',
+      phase: 'Audit',
+      phaseIndex: 0,
+      phaseTotal: 1,
+      outcome: 'cached',
+    });
+  });
+
   it('ends a cached call with an error when its journal value is invalid', async () => {
     const script = `${META}return await agent('cached')`;
     const first = await runWorkflowScript({ script, runAgent: echoRunner });
@@ -549,10 +753,11 @@ return b`,
     expect(events).toEqual([
       {
         type: 'agent:end',
+        progressId: 'call-0',
         index: 0,
         label: 'cached',
         phase: undefined,
-        cached: true,
+        outcome: 'failed',
         error: expect.stringMatching(/must be JSON-serializable/i),
       },
     ]);
@@ -640,12 +845,63 @@ return null`,
     });
     expect(events).toContainEqual({
       type: 'agent:start',
+      progressId: 'call-0',
       index: 0,
       label: 'labelled',
       phase: 'Work',
       phaseIndex: 0,
       phaseTotal: 1,
     });
+  });
+
+  it('normalizes executable phase titles to the declared metadata title', async () => {
+    const invocations: WorkflowAgentInvocation[] = [];
+    const events: WorkflowScriptEvent[] = [];
+    await runWorkflowScript({
+      script: `export const meta = {
+  name: 'trimmed-phase',
+  description: 'normalizes phase titles',
+  phases: [{ title: '  Work  ' }],
+}
+const early = agent('early', { label: 'Early', phase: '  Work  ' })
+phase('  Work  ')
+await early
+return await agent('active', { label: 'Active' })`,
+      runAgent: (invocation) => {
+        invocations.push(invocation);
+        return echoRunner(invocation);
+      },
+      onEvent: (event) => events.push(event),
+    });
+
+    expect(invocations.map((invocation) => invocation.options.phase)).toEqual([
+      'Work',
+      'Work',
+    ]);
+    expect(events).toContainEqual({
+      type: 'phase',
+      title: 'Work',
+      index: 0,
+      total: 1,
+    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'agent:start',
+        label: 'Early',
+        phase: 'Work',
+        phaseIndex: 0,
+        phaseTotal: 1,
+      }),
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'agent:start',
+        label: 'Active',
+        phase: 'Work',
+        phaseIndex: 0,
+        phaseTotal: 1,
+      }),
+    );
   });
 
   it('rejects invalid primitive usage with clear errors', async () => {
@@ -691,6 +947,18 @@ return null`,
         runAgent: echoRunner,
       }),
     ).rejects.toThrow(/option "model" must be a non-empty string/);
+    await expect(
+      runWorkflowScript({
+        script: `${META}phase('   ')\nreturn null`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/Workflow phase title must not be blank/);
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await agent('work', { phase: '   ' })`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/option "phase" must be a non-empty string/);
   });
 
   it('separates workflow file options from structured tool-use calls', async () => {
@@ -1226,24 +1494,31 @@ while (true) {}`,
     await expect(
       runWorkflowScript({
         script: `${META}return await agent('function-result')`,
-        runAgent: async () => () => undefined,
+        runAgent: async (invocation) => {
+          invocation.reportModel?.('serialization-model');
+          return () => undefined;
+        },
         onEvent: (event) => events.push(event),
       }),
     ).rejects.toThrow(/agent\(\) result must be JSON-serializable/i);
     expect(events).toEqual([
       {
         type: 'agent:start',
+        progressId: 'call-0',
         index: 0,
         label: 'function-result',
         phase: undefined,
       },
       {
         type: 'agent:end',
+        progressId: 'call-0',
         index: 0,
         label: 'function-result',
         phase: undefined,
-        cached: false,
+        outcome: 'failed',
         error: expect.stringMatching(/must be JSON-serializable/i),
+        model: 'serialization-model',
+        durationMs: expect.any(Number),
       },
     ]);
   });
@@ -1375,7 +1650,9 @@ return 'done'`,
   });
 
   it('stops the workflow when a runner surfaces the run abort', async () => {
-    const runner = () => {
+    const events: WorkflowScriptEvent[] = [];
+    const runner = (invocation: WorkflowAgentInvocation) => {
+      invocation.reportModel?.('abort-model');
       const abortError = new Error('runner observed abort');
       abortError.name = 'WorkflowRunAbortError';
       return Promise.reject(abortError);
@@ -1385,8 +1662,23 @@ return 'done'`,
         script: `${META}
 return await parallel([() => agent('x')])`,
         runAgent: runner,
+        onEvent: (event) => events.push(event),
       }),
     ).rejects.toThrow(/runner observed abort/);
+    expect(events).toContainEqual({
+      type: 'agent:end',
+      progressId: 'call-0',
+      index: 0,
+      label: 'x',
+      phase: undefined,
+      outcome: 'failed',
+      error: 'runner observed abort',
+      model: 'abort-model',
+      durationMs: expect.any(Number),
+    });
+    expect(events.filter((event) => event.type === 'agent:end')).toHaveLength(
+      1,
+    );
   });
 
   it('does not let script code suppress a fatal runner abort', async () => {
@@ -1447,6 +1739,7 @@ return 'incorrect success'`,
     const runner = (invocation: WorkflowAgentInvocation) =>
       new Promise<string>((resolve, reject) => {
         started.add(invocation.index);
+        invocation.reportModel?.('skip-model');
         release.set(invocation.index, () =>
           resolve(`done:${invocation.index}`),
         );
@@ -1486,11 +1779,14 @@ return 'incorrect success'`,
     expect(run.journal.map((entry) => entry.index).toSorted()).toEqual([0, 2]);
     expect(events).toContainEqual({
       type: 'agent:end',
+      progressId: 'call-1',
       index: 1,
       label: 'b',
       phase: undefined,
-      cached: false,
-      skipped: true,
+      outcome: 'skipped',
+      reason: 'user',
+      model: 'skip-model',
+      durationMs: expect.any(Number),
     });
   });
 
@@ -1547,8 +1843,59 @@ return 'incorrect success'`,
     expect(run.result).toBe('attempt-2');
     // Journaled exactly once, with the new attempt's result (no double-journal).
     expect(run.journal).toEqual([
-      { index: 0, key: expect.any(String), result: 'attempt-2' },
+      {
+        index: 0,
+        key: expect.any(String),
+        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+        result: 'attempt-2',
+      },
     ]);
+  });
+
+  it('charges every retry attempt against the live-call cap', async () => {
+    let control!: WorkflowScriptControl;
+    const events: WorkflowScriptEvent[] = [];
+    const runner = vi.fn((invocation: WorkflowAgentInvocation) => {
+      invocation.reportModel?.('retry-model');
+      return new Promise<never>((_resolve, reject) => {
+        invocation.signal.addEventListener(
+          'abort',
+          () => reject(new Error('aborted')),
+          { once: true },
+        );
+      });
+    });
+    const run = runWorkflowScript({
+      script: `${META}return await agent('retry until refused')`,
+      runAgent: runner,
+      maxAgentCalls: 2,
+      onControl: (handle) => {
+        control = handle;
+      },
+      onEvent: (event) => events.push(event),
+    });
+
+    await vi.waitFor(() => expect(runner).toHaveBeenCalledTimes(1));
+    control.retry(0);
+    await vi.waitFor(() => expect(runner).toHaveBeenCalledTimes(2));
+    control.retry(0);
+
+    await expect(run).rejects.toThrow(/agent-call cap/);
+    expect(runner).toHaveBeenCalledTimes(2);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'agent:end',
+        progressId: 'call-0',
+        index: 0,
+        outcome: 'failed',
+        error: expect.stringContaining('agent-call cap'),
+        model: 'retry-model',
+        durationMs: expect.any(Number),
+      }),
+    );
+    expect(events.filter((event) => event.type === 'agent:end')).toHaveLength(
+      1,
+    );
   });
 
   it('a whole-run abort cascades to every in-flight per-call controller', async () => {

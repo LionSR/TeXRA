@@ -1,34 +1,92 @@
 import { z } from 'zod';
 
+import {
+  WorkflowTaskIdentitySchema,
+  type WorkflowTaskIdentity,
+} from '@shared/schemas';
 import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
 
+const WorkflowScriptPhaseTitleSchema = z
+  .string()
+  .trim()
+  .min(1, 'Workflow phase title must not be blank.');
+
+/** Normalize every executable phase-title input to the metadata schema form. */
+export function normalizeWorkflowScriptPhaseTitle(title: string): string {
+  return WorkflowScriptPhaseTitleSchema.parse(title);
+}
+
 const WorkflowScriptPhaseSchema = z.object({
-  title: z.string().min(1),
+  title: WorkflowScriptPhaseTitleSchema,
   detail: z.string().optional(),
 });
+
+export type WorkflowScriptTask = WorkflowTaskIdentity;
 
 /**
  * The `export const meta = {...}` block every workflow script must begin
  * with. Must be a pure object literal — parsed and validated before the
  * script body ever runs.
  */
-export const WorkflowScriptMetaSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().min(1),
-  whenToUse: z.string().optional(),
-  phases: z.array(WorkflowScriptPhaseSchema).optional(),
-  /** Whole-run wall clock, bounded; an explicit run option still wins. */
-  timeoutMs: z
-    .int()
-    .min(1_000)
-    .max(60 * 60 * 1000)
-    .optional(),
-});
+export const WorkflowScriptMetaSchema = z
+  .object({
+    name: z.string().min(1),
+    description: z.string().min(1),
+    whenToUse: z.string().optional(),
+    phases: z.array(WorkflowScriptPhaseSchema).optional(),
+    /**
+     * Declarative task plan. When present, every agent() call references one
+     * task by id; label and phase live here rather than being duplicated in
+     * executable code.
+     */
+    tasks: z.array(WorkflowTaskIdentitySchema).optional(),
+    /** Whole-run wall clock, bounded; an explicit run option still wins. */
+    timeoutMs: z
+      .int()
+      .min(1_000)
+      .max(60 * 60 * 1000)
+      .optional(),
+  })
+  .superRefine((meta, context) => {
+    const phaseTitles = new Set<string>();
+    for (const [index, phase] of (meta.phases ?? []).entries()) {
+      if (phaseTitles.has(phase.title)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['phases', index, 'title'],
+          message: `Duplicate phase title "${phase.title}".`,
+        });
+      }
+      phaseTitles.add(phase.title);
+    }
+
+    const taskIds = new Set<string>();
+    for (const [index, task] of (meta.tasks ?? []).entries()) {
+      if (taskIds.has(task.id)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['tasks', index, 'id'],
+          message: `Duplicate task id "${task.id}".`,
+        });
+      }
+      taskIds.add(task.id);
+      if (task.phase !== undefined && !phaseTitles.has(task.phase)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['tasks', index, 'phase'],
+          message: `Task phase "${task.phase}" is not declared in meta.phases.`,
+        });
+      }
+    }
+  });
 
 export type WorkflowScriptMeta = z.infer<typeof WorkflowScriptMetaSchema>;
 
 interface WorkflowAgentCallBaseOptions {
-  /** Stable identity when otherwise-identical calls occur more than once. */
+  /**
+   * Journal disambiguator when otherwise-identical calls occur more than
+   * once. This does not identify the call's run-local progress record.
+   */
   id?: string;
   /** Display label for progress UIs; defaults to a prompt excerpt. */
   label?: string;
@@ -78,7 +136,7 @@ export type WorkflowAgentCallOptions =
 export interface WorkflowAgentInvocation {
   /** 0-based call sequence number; also the journal key position. */
   index: number;
-  /** Stable hash of the prompt and normalized call options. */
+  /** Stable hash of the prompt and normalized execution-affecting options. */
   key: string;
   prompt: string;
   options: WorkflowAgentCallOptions;
@@ -106,11 +164,28 @@ export type WorkflowAgentRunner = (
   invocation: WorkflowAgentInvocation,
 ) => Promise<unknown>;
 
+/** Hash semantics carried by each journal entry across checkpoint migrations. */
+export const WORKFLOW_JOURNAL_KEY_FORMAT = {
+  LEGACY_V1: 'legacy-v1',
+  PRESENTATION_INDEPENDENT_V2: 'presentation-independent-v2',
+} as const;
+
+export const WorkflowJournalKeyFormatSchema = z.enum(
+  WORKFLOW_JOURNAL_KEY_FORMAT,
+);
+type WorkflowJournalKeyFormat = z.infer<typeof WorkflowJournalKeyFormatSchema>;
+
 /** One completed agent() call, cached for resume. */
 export interface WorkflowJournalEntry {
   index: number;
-  /** Stable hash of (prompt, options); mismatch forces a live re-run. */
+  /**
+   * Stable call hash interpreted according to `keyFormat`. Current entries
+   * exclude display labels and phases; migrated v1 entries include them.
+   * A mismatch forces a live re-run.
+   */
   key: string;
+  /** Hash semantics used to verify and migrate this persisted entry. */
+  keyFormat: WorkflowJournalKeyFormat;
   result: unknown;
 }
 
@@ -122,7 +197,24 @@ export interface WorkflowScriptPhaseContext {
   phaseTotal?: number;
 }
 
+/** Identity used only to correlate one changing progress record in a run. */
+export type WorkflowScriptProgressId = WorkflowTaskIdentity['id'];
+
+interface WorkflowScriptAgentEventBase extends WorkflowScriptPhaseContext {
+  /**
+   * Declarative task id, or a unique run-local id for an undeclared dynamic
+   * call. Distinct from the optional journal disambiguator on agent options.
+   */
+  progressId: WorkflowScriptProgressId;
+  index: number;
+  label: string;
+}
+
 export type WorkflowScriptEvent =
+  | {
+      type: 'plan';
+      tasks: readonly WorkflowScriptTask[];
+    }
   | {
       type: 'phase';
       title: string;
@@ -132,23 +224,38 @@ export type WorkflowScriptEvent =
       total?: number;
     }
   | { type: 'log'; message: string }
-  | (WorkflowScriptPhaseContext & {
+  | (WorkflowScriptAgentEventBase & {
       type: 'agent:start';
-      index: number;
-      label: string;
     })
-  | (WorkflowScriptPhaseContext & {
+  | (WorkflowScriptAgentEventBase & {
       type: 'agent:end';
-      index: number;
-      label: string;
-      cached: boolean;
-      error?: string;
+      outcome: 'cached';
+    })
+  | (WorkflowScriptAgentEventBase & {
+      type: 'agent:end';
+      outcome: 'completed';
       /** Child model resolved by the runner (live calls only). */
       model?: string;
       /** Host-measured wall time of the agent() call (live calls only). */
+      durationMs: number;
+    })
+  | (WorkflowScriptAgentEventBase & {
+      type: 'agent:end';
+      outcome: 'failed';
+      error: string;
+      /** Child model resolved by the runner, when resolution succeeded. */
+      model?: string;
+      /** Host-measured wall time, when an agent attempt began. */
       durationMs?: number;
-      /** Deliberately skipped via control.skip(index); not journaled. */
-      skipped?: boolean;
+    })
+  | (WorkflowScriptAgentEventBase & {
+      type: 'agent:end';
+      outcome: 'skipped';
+      reason: 'user';
+      /** Child model resolved before the user stopped the attempt, if known. */
+      model?: string;
+      /** Host-measured wall time before the user stopped the attempt. */
+      durationMs: number;
     });
 
 /**

@@ -230,6 +230,21 @@ describe('createWorkflowScriptAgentRunner', () => {
     );
   });
 
+  it('treats missing workspace files as run-fatal configuration', async () => {
+    mocks.assertWorkflowFilesExist.mockRejectedValueOnce(
+      new Error('Missing file: absent.tex'),
+    );
+    const runner = defaultRunner();
+
+    await expect(
+      runner(invocation({ inputFiles: ['absent.tex'] })),
+    ).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: expect.stringContaining('absent.tex'),
+    });
+    expect(mocks.preparedOptions).toHaveLength(0);
+  });
+
   it('passes each declarative model override to delegation policy', async () => {
     const runner = defaultRunner();
 
