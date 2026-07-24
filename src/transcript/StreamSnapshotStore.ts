@@ -61,6 +61,7 @@ import {
   type WorkPlanSnapshot,
 } from '@shared/schemas';
 import { getCleanAgentName } from '@shared/schemas/agent';
+import { isProcessAgent } from '@shared/streams/agentKind';
 import { mapToRecord, normalizeFilePath } from '@utils/core';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
@@ -218,6 +219,7 @@ function descriptorFromConfig(
     executionId,
     agent: config.agent,
     category: config.agentCategory,
+    kind: isProcessAgent(config.agent) ? 'process' : 'agent',
   });
 }
 
@@ -437,6 +439,9 @@ export class StreamSnapshotStore {
         const { event } = sessionEvent;
 
         switch (event.type) {
+          case 'run.start':
+            this.setRunDescriptor(event.descriptor);
+            return;
           case 'run.config':
             this.setTaskState(
               event.streamId,
@@ -470,6 +475,7 @@ export class StreamSnapshotStore {
       {
         scope: 'run',
         types: [
+          'run.start',
           'run.config',
           'usage',
           'updateTodos',
@@ -1473,13 +1479,30 @@ export class StreamSnapshotStore {
     const config = taskState.agentConfig;
     const record = this.getOrCreateRecord(stream);
     record.runConfig = config;
-    const descriptor = executionId
-      ? descriptorFromConfig(stream, executionId, config)
-      : undefined;
+    const descriptor =
+      record.runDescriptor ??
+      (executionId
+        ? descriptorFromConfig(stream, executionId, config)
+        : undefined);
     if (descriptor) record.runDescriptor = descriptor;
     this.queueMetaPatch(stream, {
       ...(executionId ? { executionId } : {}),
       ...(descriptor ? { runDescriptor: descriptor } : {}),
+    });
+  }
+
+  /**
+   * Persist the immutable identity emitted at run start. Later `run.config`
+   * facts may change model or instruction, but cannot rename or recategorize
+   * the stream.
+   */
+  setRunDescriptor(descriptor: RunDescriptor): void {
+    const stream = descriptor.streamId;
+    const record = this.getOrCreateRecord(stream);
+    record.runDescriptor = descriptor;
+    this.queueMetaPatch(stream, {
+      executionId: descriptor.executionId,
+      runDescriptor: descriptor,
     });
   }
 

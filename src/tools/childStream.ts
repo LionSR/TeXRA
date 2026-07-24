@@ -15,7 +15,12 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { classifyAgentError } from '@common/errors';
 import { RUN_OUTCOME, STREAM_PHASE, buildRunDescriptor } from '@shared/schemas';
-import type { ExecutionId, StreamTabId, StorageKey } from '@shared/schemas';
+import type {
+  ExecutionId,
+  RunKind,
+  StreamTabId,
+  StorageKey,
+} from '@shared/schemas';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
 import { createRunTrace } from '@transcript';
 import { formatDuration } from '@utils/core';
@@ -26,6 +31,7 @@ interface CreateChildStreamOptions {
   runtimeHost: AgentRuntimeHost;
   streamPrefix: string;
   streamCategory: AgentCategory;
+  runKind: RunKind;
   agentName: string;
   description: string;
   config: AgentConfig;
@@ -126,8 +132,9 @@ export function createChildStream(
     descriptor: buildRunDescriptor({
       streamId: childStreamId,
       executionId,
-      agent: options.config.agent,
-      category: options.config.agentCategory,
+      agent: options.agentName,
+      category: options.streamCategory,
+      kind: options.runKind,
     }),
   });
   runTrace.trace.emit({
@@ -153,7 +160,7 @@ export function createChildStream(
     parentStreamId,
     childStreamId,
     options.agentName,
-    'toolUse',
+    options.streamCategory,
     runtimeHost,
     runTrace.trace,
   );

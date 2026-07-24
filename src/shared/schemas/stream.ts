@@ -343,10 +343,11 @@ const StreamTabInfoBaseSchema = z.object({
 });
 
 /**
- * Discriminated on `kind`: a stream tab is either a live LLM-driven "agent"
- * run (carries `model`/`modelLabel`) or a raw OS "process" stream such as the
- * `bash` tool (carries `command`, no meaningful model). Renderers switch on
- * `kind` instead of probing which of `model`/`command` happens to be set.
+ * Discriminated on `kind`: a stream tab is a live LLM-driven `agent`, a raw
+ * OS `process`, or a deterministic `workflowScript` orchestration container.
+ * Only agents carry model metadata; only processes carry commands; workflow
+ * scripts carry their immutable script name. Renderers switch on `kind`
+ * instead of inferring ownership from whichever optional field is present.
  */
 export const StreamTabInfoSchema = z.discriminatedUnion('kind', [
   StreamTabInfoBaseSchema.extend({
@@ -359,6 +360,11 @@ export const StreamTabInfoSchema = z.discriminatedUnion('kind', [
     /** Full, untruncated command that spawned this stream; used by the
      * process stream view. */
     command: z.string().optional(),
+  }),
+  StreamTabInfoBaseSchema.extend({
+    kind: z.literal('workflowScript'),
+    /** Immutable `meta.name` of the orchestration script. */
+    workflowName: z.string(),
   }),
 ]);
 export type StreamTabInfo = z.infer<typeof StreamTabInfoSchema>;

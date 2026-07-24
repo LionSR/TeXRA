@@ -111,6 +111,20 @@ export class ProgressFactApplier {
    */
   private readonly runFactHandlers: RunFactHandlers = {
     usage: (_streamId, event) => this.handleUpdateStreamUsage(event.payload),
+    'run.start': (_streamId, event) => {
+      const streamId = event.descriptor.streamId;
+      if (this.stateOwnership === 'backend') {
+        this.state.snapshots.setRunDescriptor(event.descriptor);
+      }
+      this.state.refreshStreamMetadataFromSnapshot(streamId);
+      if (this.webviewUpdater.isAvailable()) {
+        this.webviewUpdater.updateStreamMetadata(
+          this.state,
+          streamId,
+          this.state.streamStatus.getAllStreamStates(),
+        );
+      }
+    },
     'run.config': (_streamId, event) =>
       this.handleSetTaskState({
         streamId: event.streamId,

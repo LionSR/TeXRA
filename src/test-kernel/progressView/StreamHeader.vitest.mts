@@ -15,7 +15,11 @@ import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 // Local file imports
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
-function baseStream(overrides: Partial<StreamTabInfo> = {}): StreamTabInfo {
+type AgentStreamTabInfo = Extract<StreamTabInfo, { kind: 'agent' }>;
+
+function baseStream(
+  overrides: Partial<AgentStreamTabInfo> = {},
+): AgentStreamTabInfo {
   return {
     kind: 'agent',
     name: 'stream-a',
