@@ -658,6 +658,12 @@ return null`,
         runAgent: echoRunner,
       }),
     ).rejects.toThrow(/inputFiles.*arrays of non-empty strings/);
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await agent('x', { inputFiles: ['   '] })`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/inputFiles.*arrays of non-empty strings/);
   });
 
   it('separates workflow file options from structured tool-use calls', async () => {

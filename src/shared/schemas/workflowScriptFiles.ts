@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
-const WorkflowScriptFileListSchema = z.array(z.string().min(1)).readonly();
+const WorkflowScriptFileListSchema = z
+  .array(z.string().trim().min(1))
+  .readonly();
 
 /** Files bound to a workflow-script run, separated by workflow-agent role. */
 export const WorkflowScriptFilesSchema = z
