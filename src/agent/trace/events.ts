@@ -146,20 +146,24 @@ export interface StatusEvent extends StageStamp {
   readonly substate?: StreamSubstate;
 }
 
-/** Session-owned child/process activity for a parent run stream. */
+/** Fields shared by every {@link ChildActivityEvent} arm. */
+interface ChildActivityEventBase extends StageStamp {
+  readonly type: 'child.activity';
+  readonly parentStreamId: StreamTabId;
+  readonly items: readonly ActiveChildInfo[];
+}
+
+/**
+ * Session-owned child/process activity for a parent run stream. Kept as a
+ * `kind`-discriminated union (rather than one interface with
+ * `kind: 'subagents' | 'processes'`) so that
+ * `Extract<AgentEvent, { type: 'child.activity'; kind: K }>` still distributes
+ * to a single arm on the SDK surface — a conditional type splits union members
+ * but not an interface whose `kind` is itself a union.
+ */
 type ChildActivityEvent =
-  | (StageStamp & {
-      readonly type: 'child.activity';
-      readonly kind: 'subagents';
-      readonly parentStreamId: StreamTabId;
-      readonly items: readonly ActiveChildInfo[];
-    })
-  | (StageStamp & {
-      readonly type: 'child.activity';
-      readonly kind: 'processes';
-      readonly parentStreamId: StreamTabId;
-      readonly items: readonly ActiveChildInfo[];
-    });
+  | (ChildActivityEventBase & { readonly kind: 'subagents' })
+  | (ChildActivityEventBase & { readonly kind: 'processes' });
 
 /** Incremental output from a child process owned by a parent run stream. */
 interface ProcessOutputEvent extends StageStamp {
