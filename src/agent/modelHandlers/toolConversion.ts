@@ -7,6 +7,11 @@ import * as logger from '@logger/logUtils';
 // Type imports
 import type { ToolDefinition } from '@model';
 import type { LanguageModelToolDefinition } from '@platform/languageModel';
+
+// Local imports - shared
+import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
+
+// Type imports - third-party
 import type {
   Tool as AnthropicTool,
   ToolUnion,
@@ -150,11 +155,10 @@ export function convertToolSchema(
 ): JSONSchemaObject | null {
   let schema: JSONSchemaObject | null;
   if (def.zodSchema) {
-    schema = toJSONSchema(def.zodSchema, {
-      target: 'draft-2020-12',
-      unrepresentable: 'any',
-      io: 'input',
-    }) as JSONSchemaObject;
+    schema = toJSONSchema(
+      def.zodSchema,
+      TOOL_JSON_SCHEMA_OPTIONS,
+    ) as JSONSchemaObject;
   } else {
     schema = (def.parameters ?? null) as JSONSchemaObject | null;
   }
