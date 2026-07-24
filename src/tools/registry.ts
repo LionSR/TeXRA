@@ -6,7 +6,10 @@ import {
   type ToolDefinition,
 } from '@model/ToolDefinition';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
-import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
+import {
+  DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+  type CanonicalDelegationToolName,
+} from '@shared/constants/delegationTools';
 
 // Local file imports
 import { BashTool } from './bash';
@@ -153,6 +156,11 @@ export type RegisteredToolName = keyof ReturnType<typeof createDefaultTools>;
 type AssertNever<T extends never> = T;
 type _CanonicalDisplayNamesAreRegistered = AssertNever<
   Exclude<CanonicalToolDisplayName, RegisteredToolName>
+>;
+
+/** Compile-time guard for canonical delegation names; historical aliases are excluded. */
+type _CanonicalDelegationNamesAreRegistered = AssertNever<
+  Exclude<CanonicalDelegationToolName, RegisteredToolName>
 >;
 
 /**

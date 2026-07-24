@@ -3,6 +3,15 @@ import { AgentCategory } from '../schemas/agent';
 export const DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME =
   'delegate_workflow_script' as const;
 
+const CANONICAL_DELEGATION_TOOL_NAMES = [
+  'delegate_workflow',
+  DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+  'delegate_agent',
+] as const;
+
+export type CanonicalDelegationToolName =
+  (typeof CANONICAL_DELEGATION_TOOL_NAMES)[number];
+
 /**
  * Tools that delegate work to sub-agents.
  *
@@ -12,9 +21,7 @@ export const DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME =
  * Includes legacy aliases for historical log entries.
  */
 export const DELEGATION_TOOLS: ReadonlySet<string> = new Set([
-  'delegate_workflow',
-  DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
-  'delegate_agent',
+  ...CANONICAL_DELEGATION_TOOL_NAMES,
   'resume_agent',
   'propose_workflow',
   'propose_agent',
