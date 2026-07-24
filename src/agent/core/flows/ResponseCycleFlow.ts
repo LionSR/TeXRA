@@ -87,6 +87,8 @@ interface CycleTransientFields {
   responseObject?: unknown;
   /** Whether this cycle already retried once with forced context compaction. */
   contextWindowRecoveryAttempted?: boolean;
+  /** Ownership token for clearing this cycle's pending compaction request. */
+  contextWindowRecoveryRequestId?: number;
 }
 
 /**
@@ -370,8 +372,13 @@ class ResponseProcessNode<C> extends BaseNode<
     shared.stopReason = result.stopReason;
 
     if (!result.hasResponse) {
-      shared.processedResponse = undefined;
       shared.endTurn = false;
+      if (result.stopReason === ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED) {
+        shared.processedResponse = '';
+        return FlowTransition.DEFAULT;
+      }
+
+      shared.processedResponse = undefined;
       shared.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
@@ -481,7 +488,11 @@ class ResponseContinuationNode<C> extends BaseNode<
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ContinuationPrepResult> {
-    if (shared.shouldStop || !shared.stopReason || !shared.processedResponse) {
+    if (
+      shared.shouldStop ||
+      !shared.stopReason ||
+      shared.processedResponse === undefined
+    ) {
       return { kind: 'skipped' };
     }
 
@@ -591,7 +602,7 @@ class ResponseContinuationNode<C> extends BaseNode<
       }
 
       shared.contextWindowRecoveryAttempted = true;
-      modelHandler.requestCompaction();
+      shared.contextWindowRecoveryRequestId = modelHandler.requestCompaction();
     } else if (!(shouldContinue || reachedTokenLimit)) {
       return FlowTransition.COMPLETE;
     }

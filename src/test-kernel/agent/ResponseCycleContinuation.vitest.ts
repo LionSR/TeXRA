@@ -8,7 +8,11 @@ import {
 } from '@agent/core/flows/ResponseCycleFlow';
 import type { ResponseCycleServices } from '@agent/core/flows/CycleServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { ANTHROPIC_STOP } from '@agent/types/StopReasonTypes';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
+import {
+  ANTHROPIC_STOP,
+  type ProviderStopReason,
+} from '@agent/types/StopReasonTypes';
 import type { AgentFileLocation } from '@shared/schemas';
 
 const outputLocation: AgentFileLocation = {
@@ -30,15 +34,47 @@ function createShared(
   };
 }
 
-function getContinuationNode() {
+function getProcessNode() {
   const prepNode = createResponseCycleFlow().start;
   const invocationNode = prepNode.getNextNode();
   const processNode = invocationNode?.getNextNode();
-  const continuationNode = processNode?.getNextNode();
+  if (!processNode) {
+    throw new Error('Response cycle process node is not wired');
+  }
+  return processNode;
+}
+
+function getContinuationNode() {
+  const processNode = getProcessNode();
+  const continuationNode = processNode.getNextNode();
   if (!continuationNode) {
     throw new Error('Response cycle continuation node is not wired');
   }
   return continuationNode;
+}
+
+async function processEmptyResponse(stopReason: ProviderStopReason) {
+  const shared = createShared({ responseObject: {} });
+  const services = {
+    round: { responseTimeMs: 0 },
+    workspace: AgentWorkspaceState.create(),
+    logger: {
+      openStage: () => ({ run: (run: () => unknown) => run() }),
+      debug: vi.fn(),
+      info: vi.fn(),
+    },
+    modelHandler: {
+      processThinkingBlock: vi.fn(() => null),
+      getStreamingConfig: vi.fn(() => false),
+      extractResponse: vi.fn(() => ({ text: '', usage: {}, stopReason })),
+      normalizeUsage: vi.fn(() => undefined),
+    },
+  } as unknown as ResponseCycleServices<unknown>;
+  const node = getProcessNode().setServices(services);
+  const prepResult = await node.prep(shared);
+  const execResult = await node.exec(prepResult);
+  const action = await node.post(shared, prepResult, execResult);
+  return { shared, action };
 }
 
 function createServices(interrupted = false, supportsManualCompaction = false) {
@@ -49,7 +85,7 @@ function createServices(interrupted = false, supportsManualCompaction = false) {
     shouldStop: false,
   }));
   const shouldContinue = vi.fn(() => false);
-  const requestCompaction = vi.fn();
+  const requestCompaction = vi.fn(() => 7);
   const addContinueMessage = vi.fn();
   const services = {
     checkInterruption,
@@ -140,6 +176,49 @@ describe('response cycle continuation phases', () => {
     expect(action).toBe(FlowTransition.CONTINUE);
   });
 
+  it('passes an empty Anthropic context-window overflow to continuation', async () => {
+    const { shared, action } = await processEmptyResponse(
+      ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED,
+    );
+
+    expect(shared).toMatchObject({
+      stopReason: ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED,
+      processedResponse: '',
+      shouldStop: false,
+      endTurn: false,
+    });
+    expect(action).toBe(FlowTransition.DEFAULT);
+  });
+
+  it('retains ordinary empty-response safety', async () => {
+    const { shared, action } = await processEmptyResponse(
+      ANTHROPIC_STOP.END_TURN,
+    );
+
+    expect(shared).toMatchObject({
+      processedResponse: undefined,
+      shouldStop: true,
+      endTurn: false,
+    });
+    expect(action).toBe(FlowTransition.COMPLETE);
+  });
+
+  it('forces compaction for an Anthropic overflow with empty assistant text', async () => {
+    const shared = createShared({
+      stopReason: ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED,
+      processedResponse: '',
+    });
+    const harness = createServices(false, true);
+    const node = getContinuationNode().setServices(harness.services);
+
+    const prepResult = await node.prep(shared);
+    const execResult = await node.exec(prepResult);
+    const action = await node.post(shared, prepResult, execResult);
+
+    expect(harness.requestCompaction).toHaveBeenCalledOnce();
+    expect(action).toBe(FlowTransition.CONTINUE);
+  });
+
   it('forces compaction before retrying an Anthropic context-window overflow', async () => {
     const shared = createShared({
       stopReason: ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED,
@@ -153,6 +232,7 @@ describe('response cycle continuation phases', () => {
     const action = await node.post(shared, prepResult, execResult);
 
     expect(harness.requestCompaction).toHaveBeenCalledOnce();
+    expect(shared.contextWindowRecoveryRequestId).toBe(7);
     expect(harness.round.continuationCount).toBe(1);
     expect(harness.addContinueMessage).toHaveBeenCalledOnce();
     expect(action).toBe(FlowTransition.CONTINUE);

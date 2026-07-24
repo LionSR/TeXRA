@@ -918,6 +918,7 @@ export abstract class ModelHandler<
    * attempted. Inert for handlers that don't run compaction.
    */
   protected compactionRequested = false;
+  private compactionRequestId = 0;
 
   /**
    * A successful client-side compaction whose generation request has not yet
@@ -947,9 +948,19 @@ export abstract class ModelHandler<
     return `${messages.length}:${last === undefined ? 0 : JSON.stringify(last).length}`;
   }
 
-  /** Request compaction on the next API call. */
-  requestCompaction(): void {
+  /** Request compaction on the next API call and return its ownership token. */
+  requestCompaction(): number {
     this.compactionRequested = true;
+    this.compactionRequestId += 1;
+    return this.compactionRequestId;
+  }
+
+  /** Cancel a pending compaction request when its owning flow is abandoned. */
+  clearCompactionRequest(requestId?: number): void {
+    if (requestId !== undefined && requestId !== this.compactionRequestId) {
+      return;
+    }
+    this.compactionRequested = false;
   }
 
   /**

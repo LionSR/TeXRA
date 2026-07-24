@@ -1471,6 +1471,56 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
+  it('does not leak an abandoned forced compaction into a later call', async () => {
+    const handler = createAnthropicHandler({
+      supportsTokenCounting: false,
+      supportsReasoning: false,
+    });
+    handler.config.fullName = 'claude-opus-4-6';
+    handler.setAgentCategory(AgentCategory.Workflow);
+    stubHandlerForTest(handler);
+    stubCompactionThresholdPercent(0);
+
+    const abandonedRequestId = handler.requestCompaction();
+    handler.clearCompactionRequest(abandonedRequestId);
+    const { client, messageOptions } =
+      createCapturingAnthropicClient('claude-opus-4-6');
+
+    await handler.createResponse({
+      client,
+      messages: helloMessages(),
+      temperature: 0,
+    });
+
+    assert.equal(messageOptions[0].context_management, undefined);
+  });
+
+  it('does not let an older recovery clear a newer compaction request', async () => {
+    const handler = createAnthropicHandler({
+      supportsTokenCounting: false,
+      supportsReasoning: false,
+    });
+    handler.config.fullName = 'claude-opus-4-6';
+    handler.setAgentCategory(AgentCategory.Workflow);
+    stubHandlerForTest(handler);
+    stubCompactionThresholdPercent(0);
+
+    const abandonedRequestId = handler.requestCompaction();
+    handler.requestCompaction();
+    handler.clearCompactionRequest(abandonedRequestId);
+    const { client, messageOptions } =
+      createCapturingAnthropicClient('claude-opus-4-6');
+
+    await handler.createResponse({
+      client,
+      messages: helloMessages(),
+      temperature: 0,
+    });
+
+    const edits = messageOptions[0].context_management?.edits ?? [];
+    assert.equal(edits[0]?.type, 'compact_20260112');
+  });
+
   it('announces expected compaction after the measured count crosses the trigger', async () => {
     const handler = createAnthropicHandler({
       supportsTokenCounting: true,

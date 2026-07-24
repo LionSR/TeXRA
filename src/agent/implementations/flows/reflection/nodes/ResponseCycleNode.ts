@@ -92,17 +92,17 @@ export class ResponseCycleNode<C = unknown> extends Node<
       return { outcome: 'completed', endTurn: true };
     }
 
-    try {
-      const cycleShared: ResponseCycleShared = {
-        messages: initializedMessages,
-        outputLocation: prepRes.outputLocation,
-        endTurn: false,
-        shouldStop: false,
-        outputExists: false,
-      };
+    const cycleShared: ResponseCycleShared = {
+      messages: initializedMessages,
+      outputLocation: prepRes.outputLocation,
+      endTurn: false,
+      shouldStop: false,
+      outputExists: false,
+    };
+    const { modelHandler } = this.services;
 
+    try {
       const flow = createResponseCycleFlow<C>();
-      const { modelHandler } = this.services;
       flow.setServices(
         await withModelClient(
           {
@@ -151,6 +151,12 @@ export class ResponseCycleNode<C = unknown> extends Node<
         failureLogEmitted: false,
         ...buildFailedRetryInfo(error),
       };
+    } finally {
+      if (cycleShared.contextWindowRecoveryAttempted) {
+        modelHandler.clearCompactionRequest(
+          cycleShared.contextWindowRecoveryRequestId,
+        );
+      }
     }
   }
 
