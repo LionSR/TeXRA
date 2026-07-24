@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import { z } from 'zod';
 
 import { BaseNode, Flow } from '@agent/node';
-import { getSystemPromptWithRules } from '@agent/prompt';
+import { getSystemPromptWithRules } from '@agent/prompt/PromptBuilder';
 import { recordRound } from '@agent/core/state/AgentState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {

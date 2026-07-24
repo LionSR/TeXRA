@@ -3,7 +3,10 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Type imports
-import { buildInitialToolUsePrompts, PromptBuilder } from '@agent/prompt';
+import {
+  buildInitialToolUsePrompts,
+  PromptBuilder,
+} from '@agent/prompt/PromptBuilder';
 import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
 
 describe('PromptBuilder', () => {
