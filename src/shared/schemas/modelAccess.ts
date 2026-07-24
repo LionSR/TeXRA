@@ -17,13 +17,10 @@ export type ChatGptSubscriptionStatus = z.infer<
 >;
 
 /** Kimi Code subscription state shared by model-access presenters. */
-export const KimiCodeSubscriptionStatusSchema = z.object({
+const KimiCodeSubscriptionStatusSchema = z.object({
   keySet: z.boolean(),
   preferred: z.boolean(),
 });
-export type KimiCodeSubscriptionStatus = z.infer<
-  typeof KimiCodeSubscriptionStatusSchema
->;
 
 /** Complete model-access state, independent of any host or presentation. */
 export const ModelAccessStatusSchema = z.object({
@@ -35,7 +32,7 @@ export const ModelAccessStatusSchema = z.object({
 });
 export type ModelAccessStatus = z.infer<typeof ModelAccessStatusSchema>;
 
-export const ModelAccessRouteSchema = z.enum([
+const ModelAccessRouteSchema = z.enum([
   'chatgpt',
   'kimi-code',
   'included',

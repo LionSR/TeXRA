@@ -14,4 +14,3 @@ export const AgentSkillsEnabledSchema = z
 export const AgentSkillsSettingsSchema = z.strictObject({
   enabled: AgentSkillsEnabledSchema.prefault(AGENT_SKILLS_ENABLED_DEFAULT),
 });
-export type AgentSkillsSettings = z.infer<typeof AgentSkillsSettingsSchema>;
