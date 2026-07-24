@@ -4,6 +4,11 @@ import type * as vscode from 'vscode';
 /**
  * A `vscode.Memento`-compatible wrapper that transparently shares selected
  * repository-level workspace keys across git worktrees.
+ *
+ * Shared values are durable repository settings, not a cache. Their global
+ * namespaces intentionally survive workspace removal and extension sessions so
+ * settings return when a repository is reopened, re-cloned at the same path,
+ * or becomes available again after removable storage is reattached.
  */
 export class WorktreeMemento implements vscode.Memento {
   constructor(
