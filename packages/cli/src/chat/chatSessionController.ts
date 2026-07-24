@@ -271,7 +271,6 @@ export function createChatSessionController(
     session.interruptedStreamId = session.streamId;
     defaultSession().executions.stopAgentStream(session.streamId, {
       detachActiveChildren: detachSubagentsOnStop(),
-      runtimeHost: session.runtimeHost,
     });
   };
 
@@ -771,7 +770,6 @@ export function createChatSessionController(
     }
     current.executions.stopAgentStream(streamId, {
       detachActiveChildren: true,
-      runtimeHost: session.runtimeHost,
     });
   };
 

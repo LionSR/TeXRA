@@ -166,7 +166,7 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('observes the current handle, replacements, and removal in order', () => {
+  it('observes handle replacements and removal in order', () => {
     const registry = new ExecutionRegistry();
     const executionId = 'exec-observe-handle';
     const streamId = 'stream-observe-handle' as StreamTabId;
@@ -192,14 +192,14 @@ describe('executionRegistry', () => {
     );
     registry.track(first);
     const seen: unknown[] = [];
-    const detach = registry.observeHandle(executionId, (handle) => {
+    const detach = registry.addListener(executionId, (handle) => {
       seen.push(handle);
     });
 
     registry.track(second);
     registry.untrack(executionId);
 
-    expect(seen).toEqual([first, second, undefined]);
+    expect(seen).toEqual([second, undefined]);
     expect(registrations).toEqual([first, second, undefined]);
     detach();
     detachRegistrations();
@@ -988,15 +988,7 @@ describe('executionRegistry', () => {
       childHandle.attachInterruptHandler({ interrupt: childInterrupt });
       registry.track(childHandle);
 
-      expect(
-        registry.stopAgentStream(rootStreamId, {
-          runtimeHost: explicit.host,
-        }),
-      ).toEqual({
-        kind: 'interrupted',
-        streamId: rootStreamId,
-        childPolicy: 'cascade',
-      });
+      registry.stopAgentStream(rootStreamId);
 
       expect(rootInterrupt).toHaveBeenCalledOnce();
       expect(childInterrupt).toHaveBeenCalledOnce();
@@ -1167,15 +1159,8 @@ describe('executionRegistry', () => {
       });
       registry.track(grandchildHandle);
 
-      expect(
-        registry.stopAgentStream(rootStreamId, {
-          detachActiveChildren: true,
-          runtimeHost: explicit.host,
-        }),
-      ).toEqual({
-        kind: 'interrupted',
-        streamId: rootStreamId,
-        childPolicy: 'detach',
+      registry.stopAgentStream(rootStreamId, {
+        detachActiveChildren: true,
       });
 
       expect(rootInterrupt).toHaveBeenCalledOnce();
@@ -1258,15 +1243,8 @@ describe('executionRegistry', () => {
       });
       registry.track(descendantHandle);
 
-      expect(
-        registry.stopAgentStream(childStreamId, {
-          detachActiveChildren: true,
-          runtimeHost: explicit.host,
-        }),
-      ).toEqual({
-        kind: 'interrupted',
-        streamId: childStreamId,
-        childPolicy: 'detach',
+      registry.stopAgentStream(childStreamId, {
+        detachActiveChildren: true,
       });
 
       expect(childInterrupt).toHaveBeenCalledOnce();
@@ -1289,8 +1267,7 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('marks an ownerless stream stopped when a host can publish status', () => {
-    const explicit = createRecordingHost();
+  it('cancels an ownerless stream', () => {
     const streamStatus = new StreamStatusMachine();
     const events = new SessionEventHub();
     const recorded = recordSessionEvents(events, { scope: 'session' });
@@ -1298,15 +1275,8 @@ describe('executionRegistry', () => {
     const streamId = 'ownerless-stop-policy-test' as StreamTabId;
 
     try {
-      expect(
-        registry.stopAgentStream(streamId, {
-          runtimeHost: explicit.host,
-        }),
-      ).toEqual({
-        kind: 'marked_stopped',
-        streamId,
-        childPolicy: 'cascade',
-      });
+      registry.stopAgentStream(streamId);
+
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(
         sessionFactPayloads(recorded.events, 'updateStreamStatus').at(-1),
@@ -1319,18 +1289,17 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('reports no target when no execution or host owns the stream', () => {
+  it('leaves an already-terminal stream phase untouched', () => {
     const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
-    const streamId = 'missing-stop-target-test' as StreamTabId;
+    const streamId = 'terminal-stop-policy-test' as StreamTabId;
 
     try {
-      expect(registry.stopAgentStream(streamId)).toEqual({
-        kind: 'no_target',
-        streamId,
-        childPolicy: 'cascade',
-      });
-      expect(streamStatus.get(streamId)).toBeUndefined();
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.COMPLETED);
+
+      registry.stopAgentStream(streamId);
+
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
     } finally {
       registry.dispose();
     }
@@ -1444,22 +1413,46 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('reports a missing runtime host when detach cannot be applied', () => {
-    const registry = new ExecutionRegistry();
-    const streamId = 'missing-host-detach-stop-policy-test' as StreamTabId;
+  it('detaches children of an ownerless stream and cancels it', () => {
+    const explicit = createRecordingHost();
+    const streamStatus = new StreamStatusMachine();
+    const events = new SessionEventHub();
+    const recorded = recordSessionEvents(events, { scope: 'session' });
+    const registry = new ExecutionRegistry({ streamStatus, events });
+    const parentStreamId = 'parent-ownerless-detach-test' as StreamTabId;
+    const childStreamId = 'child-ownerless-detach-test' as StreamTabId;
+    const childInterrupt = vi.fn();
 
     try {
-      expect(
-        registry.stopAgentStream(streamId, {
-          detachActiveChildren: true,
-        }),
-      ).toEqual({
-        kind: 'missing_runtime_host',
-        streamId,
-        childPolicy: 'detach',
+      // No root handle owns `parentStreamId` — only a tracked child does.
+      const childHandle = createHandle(
+        'exec-child-ownerless-detach-test',
+        parentStreamId,
+        childStreamId,
+        explicit.host,
+      );
+      childHandle.attachInterruptHandler({ interrupt: childInterrupt });
+      registry.track(childHandle);
+
+      registry.stopAgentStream(parentStreamId, {
+        detachActiveChildren: true,
       });
+
+      expect(childInterrupt).not.toHaveBeenCalled();
+      expect(
+        registry.getAgentHandleByStream(childStreamId)?.parentStreamId,
+      ).toBe(childStreamId);
+      expect(
+        sessionFactPayloads(recorded.events, 'setParentStream'),
+      ).toContainEqual({
+        childStreamId,
+        parentStreamId: null,
+      });
+      expect(streamStatus.get(parentStreamId)).toBe(STREAM_PHASE.CANCELLED);
+      expect(streamStatus.get(childStreamId)).toBeUndefined();
     } finally {
       registry.dispose();
+      recorded.detach();
     }
   });
 
@@ -1785,7 +1778,7 @@ describe('executionRegistry', () => {
 
       registry.track(handle);
       expect(handle.deliveryTargetStreamId).toBe(parentStreamId);
-      registry.detachActiveChildren(parentStreamId, explicit.host);
+      registry.detachActiveChildren(parentStreamId);
       expect(handle.deliveryTargetStreamId).toBeUndefined();
 
       expect(
@@ -1828,7 +1821,7 @@ describe('executionRegistry', () => {
       ]);
       registry.track(handle);
 
-      registry.detachActiveChildren(parentStreamId, explicit.host);
+      registry.detachActiveChildren(parentStreamId);
       approvals.toolEdit.bypass.setBypass(parentStreamId, false);
 
       expect(approvals.toolEdit.bypass.isBypassed(childStreamId)).toBe(true);
@@ -1859,7 +1852,7 @@ describe('executionRegistry', () => {
       );
 
       registry.track(handle);
-      registry.detachActiveChildren(parentStreamId, explicit.host);
+      registry.detachActiveChildren(parentStreamId);
 
       expect(explicit.events).toEqual([]);
       expect(seen).toContainEqual({

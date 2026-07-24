@@ -240,7 +240,6 @@ export class DesktopProgressBridge {
           });
           this.session.executions.stopAgentStream(stream, {
             detachActiveChildren: detachSubagentsOnStop(),
-            runtimeHost: this.runtimeHost,
           });
         },
         cleanupDeletedStream: (stream) => {

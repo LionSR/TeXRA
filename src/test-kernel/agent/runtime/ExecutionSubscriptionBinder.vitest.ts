@@ -58,18 +58,18 @@ function setupBinder(executionId: string) {
     explicit.host,
   );
   registry.track(handle);
-  return { registry, releaseSource, logger, explicit, binder, executionId };
+  return { registry, releaseSource, logger, binder, executionId };
 }
 
 describe('ExecutionSubscriptionBinder', () => {
   it('owns bind and unbind state per stream/execution pair', () => {
-    const { registry, logger, explicit, binder, executionId } = setupBinder(
+    const { registry, logger, binder, executionId } = setupBinder(
       'exec-subscription-bind-test',
     );
 
     try {
-      binder.bind(streamId, executionId, explicit.host);
-      binder.bind(streamId, executionId, explicit.host);
+      binder.bind(streamId, executionId);
+      binder.bind(streamId, executionId);
 
       expect(binder.unbind(streamId, executionId)).toBe(true);
       expect(binder.unbind(streamId, executionId)).toBe(false);
@@ -81,11 +81,12 @@ describe('ExecutionSubscriptionBinder', () => {
   });
 
   it('disposes stream subscriptions when the follow-up queue is released', () => {
-    const { registry, releaseSource, explicit, binder, executionId } =
-      setupBinder('exec-subscription-release-test');
+    const { registry, releaseSource, binder, executionId } = setupBinder(
+      'exec-subscription-release-test',
+    );
 
     try {
-      binder.bind(streamId, executionId, explicit.host);
+      binder.bind(streamId, executionId);
 
       releaseSource.release(streamId);
 
@@ -97,11 +98,12 @@ describe('ExecutionSubscriptionBinder', () => {
   });
 
   it('unregisters the release observer when disposed', () => {
-    const { registry, releaseSource, explicit, binder, executionId } =
-      setupBinder('exec-subscription-dispose-test');
+    const { registry, releaseSource, binder, executionId } = setupBinder(
+      'exec-subscription-dispose-test',
+    );
 
     try {
-      binder.bind(streamId, executionId, explicit.host);
+      binder.bind(streamId, executionId);
 
       expect(releaseSource.hasObserver()).toBe(true);
       binder.dispose();

@@ -60,7 +60,6 @@ export class AgentReviewRunController {
     if (!handle) return;
     if (run.session.executions.getHandle(handle.executionId) !== handle) return;
     run.session.executions.stopAgentStream(handle.childStreamId, {
-      runtimeHost: handle.runtimeHost,
       detachActiveChildren: detachSubagentsOnStop(),
     });
   }

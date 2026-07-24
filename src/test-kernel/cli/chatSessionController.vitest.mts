@@ -624,7 +624,6 @@ describe('createChatSessionController', () => {
     );
     expect(mocks.stopAgentStream).toHaveBeenCalledWith('stream-1', {
       detachActiveChildren: true,
-      runtimeHost,
     });
   });
 
@@ -646,7 +645,6 @@ describe('createChatSessionController', () => {
     });
     expect(mocks.stopAgentStream).toHaveBeenCalledWith('root-stream', {
       detachActiveChildren: true,
-      runtimeHost,
     });
     expect(mocks.workspaceGet).not.toHaveBeenCalled();
   });
@@ -669,7 +667,6 @@ describe('createChatSessionController', () => {
     });
     expect(mocks.stopAgentStream).toHaveBeenCalledWith('child-a', {
       detachActiveChildren: true,
-      runtimeHost,
     });
   });
 
