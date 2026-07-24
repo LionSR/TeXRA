@@ -1,4 +1,5 @@
 // Node imports
+import { Buffer } from 'node:buffer';
 import { basename } from 'node:path';
 
 // Third-party imports
@@ -74,6 +75,7 @@ import {
   describeAttachments,
   formatAttachmentSummaryFromNotes,
   formatToolResultAsText,
+  wipeBuffer,
 } from '../utils/toolAttachmentUtils';
 import { tagAnthropicSdkError } from './anthropicSdkError';
 import {
@@ -91,6 +93,7 @@ import {
   enforceCacheControlLimit,
 } from './anthropicContextManagement';
 import {
+  countPdfPagesFromBuffer,
   extractDocumentBlocks,
   analyzeDocumentSources,
   replaceDocumentDataWithUploads,
@@ -176,6 +179,36 @@ const INTERLEAVED_THINKING_BETA: AnthropicBeta =
 /** Anthropic's documented upper typical text-token estimate per PDF page. */
 const ANTHROPIC_PDF_TOKENS_PER_PAGE_ESTIMATE = 3_000;
 
+/** Keeps resumed-PDF inspection bounded before the model request begins. */
+const MAX_PDF_PAGE_COUNT_DOWNLOAD_BYTES = 1024 * 1024;
+
+/** Counts live Files API references after the latest compaction boundary. */
+function collectFileReferenceCounts(
+  messages: MessageParam[],
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const message of messages) {
+    const contentBlocks = message.content;
+    if (!Array.isArray(contentBlocks)) continue;
+
+    if (
+      contentBlocks.some(
+        (block) => (block as { type?: unknown }).type === 'compaction',
+      )
+    ) {
+      counts.clear();
+    }
+    for (const block of extractDocumentBlocks(contentBlocks)) {
+      const source = block.source as
+        { type: string; file_id?: string } | undefined;
+      if (source?.type === 'file' && source.file_id) {
+        counts.set(source.file_id, (counts.get(source.file_id) ?? 0) + 1);
+      }
+    }
+  }
+  return counts;
+}
+
 export class ModelHandlerAnthropic extends ModelHandler<
   MessageParam,
   BetaUsage,
@@ -186,6 +219,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
 > {
   /** Tracks PDF page counts for files uploaded to the Anthropic Files API. */
   private uploadedPdfPageCounts = new Map<string, number>();
+  /** Caches file-size token estimates for references that countTokens rejects. */
+  private fileTokenEstimates = new Map<string, number>();
 
   /** Sum of all tracked PDF page counts across uploaded files. */
   private getTrackedPdfPageCount(): number {
@@ -195,37 +230,110 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   /**
-   * Removes entries from uploadedPdfPageCounts whose file IDs are no longer
-   * referenced in the current messages. This keeps the tracked total accurate
-   * after server-side compaction drops old messages.
+   * Removes page counts and token estimates for file IDs no longer referenced
+   * in the current messages. This keeps both caches accurate after server-side
+   * compaction drops old messages.
    */
-  private pruneTrackedPdfPages(messages: MessageParam[]): void {
-    const liveFileIds = new Set<string>();
-    for (const message of messages) {
-      const contentBlocks = message.content;
-      if (!Array.isArray(contentBlocks)) continue;
-
-      if (
-        contentBlocks.some(
-          (block) => (block as { type?: unknown }).type === 'compaction',
-        )
-      ) {
-        liveFileIds.clear();
-      }
-      for (const block of extractDocumentBlocks(contentBlocks)) {
-        const source = block.source as
-          { type: string; file_id?: string } | undefined;
-        if (source?.type === 'file' && source.file_id) {
-          liveFileIds.add(source.file_id);
-        }
-      }
-    }
+  private pruneTrackedFileMetadata(messages: MessageParam[]): void {
+    const liveFileIds = collectFileReferenceCounts(messages);
 
     for (const fileId of this.uploadedPdfPageCounts.keys()) {
       if (!liveFileIds.has(fileId)) {
         this.uploadedPdfPageCounts.delete(fileId);
       }
     }
+    for (const fileId of this.fileTokenEstimates.keys()) {
+      if (!liveFileIds.has(fileId)) {
+        this.fileTokenEstimates.delete(fileId);
+      }
+    }
+  }
+
+  /**
+   * Estimates the context consumed by Files API references from their metadata.
+   * Anthropic cannot count requests containing file sources, while serializing
+   * the file_id alone omits the document. Cache the best available estimate so
+   * repeated tool-use rounds do not add a metadata request per file.
+   */
+  private async estimateFileReferenceTokens(
+    client: Anthropic,
+    messages: MessageParam[],
+    signal?: AbortSignal,
+    stopAtTokens = Number.POSITIVE_INFINITY,
+  ): Promise<number> {
+    const fileReferenceCounts = collectFileReferenceCounts(messages);
+
+    let total = 0;
+    for (const [fileId, referenceCount] of fileReferenceCounts) {
+      signal?.throwIfAborted();
+      const pageEstimate =
+        (this.uploadedPdfPageCounts.get(fileId) ?? 0) *
+        ANTHROPIC_PDF_TOKENS_PER_PAGE_ESTIMATE;
+      if (pageEstimate > 0) {
+        total += pageEstimate * referenceCount;
+        if (total >= stopAtTokens) break;
+        continue;
+      }
+
+      let sizeEstimate = this.fileTokenEstimates.get(fileId);
+      if (sizeEstimate === undefined) {
+        let metadataFallback: number | undefined;
+        try {
+          const metadata = await client.beta.files.retrieveMetadata(
+            fileId,
+            { betas: [FILES_API_BETA] },
+            { signal, maxRetries: 0 },
+          );
+          metadataFallback = Math.ceil(metadata.size_bytes / 4);
+          if (
+            metadata.mime_type === 'application/pdf' &&
+            metadata.size_bytes <= MAX_PDF_PAGE_COUNT_DOWNLOAD_BYTES
+          ) {
+            const response = await client.beta.files.download(
+              fileId,
+              { betas: [FILES_API_BETA] },
+              { signal, maxRetries: 0 },
+            );
+            const buffer = Buffer.from(await response.arrayBuffer());
+            try {
+              signal?.throwIfAborted();
+              const pageCount = await countPdfPagesFromBuffer(buffer);
+              if (pageCount > 0) {
+                this.uploadedPdfPageCounts.set(fileId, pageCount);
+                sizeEstimate =
+                  pageCount * ANTHROPIC_PDF_TOKENS_PER_PAGE_ESTIMATE;
+              } else {
+                sizeEstimate = metadataFallback;
+                this.fileTokenEstimates.set(fileId, sizeEstimate);
+              }
+            } finally {
+              wipeBuffer(buffer);
+            }
+          } else {
+            // Match the shared no-tokenizer heuristic without materializing a
+            // large remote document. Small PDFs are inspected to avoid using
+            // compressed bytes as a misleading page-count proxy.
+            sizeEstimate = metadataFallback;
+            this.fileTokenEstimates.set(fileId, sizeEstimate);
+          }
+        } catch (error) {
+          signal?.throwIfAborted();
+          if (metadataFallback !== undefined) {
+            // A PDF that cannot be downloaded or parsed must still contribute
+            // a stable fallback without repeating the failed body request.
+            sizeEstimate = metadataFallback;
+            this.fileTokenEstimates.set(fileId, sizeEstimate);
+          }
+          this.logger.debug(
+            'Unable to estimate Anthropic file-reference tokens.',
+            { data: { fileId, error } },
+          );
+        }
+      }
+      total += (sizeEstimate ?? 0) * referenceCount;
+      if (total >= stopAtTokens) break;
+    }
+    return total;
   }
 
   /** Returns the PDF page limit based on the model's effective context window. */
@@ -534,10 +642,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const documentAnalysis = analyzeDocumentSources(messages);
     let hasFileReference = documentAnalysis.hasFileSource;
 
-    // Prune tracked PDF page counts for file IDs no longer in messages
+    // Prune tracked file metadata for file IDs no longer in messages
     // (e.g. after server-side compaction drops old messages)
-    if (this.uploadedPdfPageCounts.size > 0) {
-      this.pruneTrackedPdfPages(messages);
+    if (
+      this.uploadedPdfPageCounts.size > 0 ||
+      this.fileTokenEstimates.size > 0
+    ) {
+      this.pruneTrackedFileMetadata(messages);
     }
 
     // Phase 1: BUILD - Construct provider-specific request parameters
@@ -742,9 +853,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const compactionEdit = options.context_management?.edits?.find(
       (edit) => edit.type === 'compact_20260112',
     );
-    const inputTokensForCompaction =
-      measuredInputTokens ??
-      estimateTokensFromText(
+    const compactionTrigger =
+      !useStreaming && compactionEdit?.trigger?.type === 'input_tokens'
+        ? compactionEdit.trigger.value
+        : undefined;
+    let inputTokensForCompaction = measuredInputTokens;
+    if (inputTokensForCompaction === undefined) {
+      const textTokens = estimateTokensFromText(
         JSON.stringify({
           messages: options.messages,
           system: options.system,
@@ -752,12 +867,23 @@ export class ModelHandlerAnthropic extends ModelHandler<
           thinking: options.thinking,
           outputConfig: options.output_config,
         }),
-      ) +
-        this.getTrackedPdfPageCount() * ANTHROPIC_PDF_TOKENS_PER_PAGE_ESTIMATE;
+      );
+      const tokensUntilCompaction =
+        compactionTrigger === undefined ? 0 : compactionTrigger - textTokens;
+      const fileReferenceTokens =
+        hasFileReference && tokensUntilCompaction > 0
+          ? await this.estimateFileReferenceTokens(
+              client,
+              messages,
+              signal,
+              tokensUntilCompaction,
+            )
+          : 0;
+      inputTokensForCompaction = textTokens + fileReferenceTokens;
+    }
     const nonStreamingCompactionExpected =
-      !useStreaming &&
-      compactionEdit?.trigger?.type === 'input_tokens' &&
-      inputTokensForCompaction >= compactionEdit.trigger.value;
+      compactionTrigger !== undefined &&
+      inputTokensForCompaction >= compactionTrigger;
 
     if (nonStreamingCompactionExpected) {
       logCompactionActivity(this.logger, 'started');
