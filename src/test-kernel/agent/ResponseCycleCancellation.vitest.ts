@@ -9,6 +9,8 @@ const flowState = vi.hoisted(() => ({
   lastError: undefined as
     { message: string; userRetryable: boolean } | undefined,
   failureLogEmitted: false,
+  contextWindowRecoveryAttempted: false,
+  contextWindowRecoveryRequestId: undefined as number | undefined,
 }));
 
 // Replace the inner cycle flow with a stub that just applies the scripted flags.
@@ -22,11 +24,17 @@ vi.mock('@agent/core/flows/ResponseCycleFlow', () => ({
       endTurn: boolean;
       lastError?: { message: string; userRetryable: boolean };
       failureLogEmitted?: boolean;
+      contextWindowRecoveryAttempted?: boolean;
+      contextWindowRecoveryRequestId?: number;
     }) {
       shared.shouldStop = flowState.shouldStop;
       shared.endTurn = flowState.endTurn;
       shared.lastError = flowState.lastError;
       shared.failureLogEmitted = flowState.failureLogEmitted;
+      shared.contextWindowRecoveryAttempted =
+        flowState.contextWindowRecoveryAttempted;
+      shared.contextWindowRecoveryRequestId =
+        flowState.contextWindowRecoveryRequestId;
     },
   }),
 }));
@@ -82,12 +90,14 @@ function makeNode(
     error: vi.fn(),
     debug: vi.fn(),
   },
+  clearCompactionRequest: () => void = vi.fn(),
 ): ResponseCycleNode {
   return new ResponseCycleNode().setServices({
     getOutputFileLocation: async () => outputLocation,
     checkInterruption,
     modelHandler: {
       initializeOutputAndPrefill: async () => [false, []],
+      clearCompactionRequest,
     },
     config: {},
     setting: {},
@@ -107,6 +117,8 @@ describe('ResponseCycleNode outcome classification', () => {
     flowState.endTurn = false;
     flowState.lastError = undefined;
     flowState.failureLogEmitted = false;
+    flowState.contextWindowRecoveryAttempted = false;
+    flowState.contextWindowRecoveryRequestId = undefined;
   });
 
   it('does NOT cancel a stop-without-end-of-turn when the run is not interrupted', async () => {
@@ -141,6 +153,47 @@ describe('ResponseCycleNode outcome classification', () => {
     if (result.outcome === 'completed') {
       expect(result.endTurn).toBe(true);
     }
+  });
+
+  it('clears forced compaction when interruption abandons recovery', async () => {
+    flowState.shouldStop = true;
+    flowState.contextWindowRecoveryAttempted = true;
+    flowState.contextWindowRecoveryRequestId = 7;
+    const clearCompactionRequest = vi.fn();
+
+    const node = makeNode(
+      () => true,
+      { error: vi.fn(), debug: vi.fn() },
+      clearCompactionRequest,
+    );
+    const prep = await node.prep(reflectionShared());
+
+    const result = await node.exec(prep);
+
+    expect(result.outcome).toBe('cancelled');
+    expect(clearCompactionRequest).toHaveBeenCalledWith(7);
+  });
+
+  it('clears forced compaction after invocation retries are exhausted', async () => {
+    flowState.shouldStop = true;
+    flowState.contextWindowRecoveryAttempted = true;
+    flowState.contextWindowRecoveryRequestId = 7;
+    flowState.lastError = {
+      message: 'HTTP 503 Service Unavailable',
+      userRetryable: true,
+    };
+    const clearCompactionRequest = vi.fn();
+    const node = makeNode(
+      () => false,
+      { error: vi.fn(), debug: vi.fn() },
+      clearCompactionRequest,
+    );
+    const prep = await node.prep(reflectionShared());
+
+    const result = await node.exec(prep);
+
+    expect(result.outcome).toBe('failed');
+    expect(clearCompactionRequest).toHaveBeenCalledWith(7);
   });
 
   it('does not repeat a model failure already logged by RetryState', async () => {

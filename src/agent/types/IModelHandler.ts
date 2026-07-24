@@ -51,6 +51,7 @@ export type IModelHandler<
   | 'supportsForcedToolChoice'
   | 'requiresPerCallSystemPrompt'
   | 'requestCompaction'
+  | 'clearCompactionRequest'
   | 'getEffectiveContextWindow'
   | 'requiresBatchedParallelToolResults'
   | 'setLogger'
