@@ -381,9 +381,10 @@ describe('BashTool', () => {
 
     const result = await new BashTool().call({ command: 'whitespace-gap' });
     const output = String(result.output);
-    assert.match(
-      output,
-      /\[\.\.\. 6,002 characters elided from stdout \.\.\.\]/,
+    assert.ok(
+      output.includes(
+        `[... ${(6_002).toLocaleString()} characters elided from stdout ...]`,
+      ),
     );
     assert.ok(output.startsWith(`A${' '.repeat(3_999)}`));
     assert.ok(output.endsWith(`${' '.repeat(49_999)}B`));

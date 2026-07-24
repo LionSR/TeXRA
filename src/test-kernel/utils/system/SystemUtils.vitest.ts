@@ -160,6 +160,30 @@ describe('executeCommand', () => {
     assert.equal(streamedStderr, '\ufffd');
   });
 
+  it('disables maxBuffer enforcement when buffering is disabled', async () => {
+    const outputChars = 10_000;
+    let streamedChars = 0;
+    const result = await executeCommand(
+      [
+        process.execPath,
+        '-e',
+        `process.stdout.write('x'.repeat(${outputChars}))`,
+      ],
+      {
+        buffer: false,
+        maxBuffer: 64,
+        onStdout: (chunk) => {
+          streamedChars += chunk.length;
+        },
+      },
+    );
+
+    assert.equal(result.success, true);
+    assert.equal(result.stdout, null);
+    assert.equal(streamedChars, outputChars);
+    assert.equal(result.outputLimitExceeded, undefined);
+  });
+
   it('reports maxBuffer overflow as an error instead of partial success', async () => {
     const result = await executeCommand(
       [process.execPath, '-e', `process.stdout.write('x'.repeat(10_000))`],

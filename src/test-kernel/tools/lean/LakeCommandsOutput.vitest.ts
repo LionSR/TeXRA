@@ -1,3 +1,10 @@
+/**
+ * Mocked execa-result normalization for states that are impractical to produce
+ * at small scale, especially `failed: true` + `isMaxBuffer: true` + exit 0.
+ * Kept separate from LeanTools.vitest.ts because this file's hoisted module
+ * mock would contaminate that suite's real Node subprocess integration tests.
+ */
+
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
