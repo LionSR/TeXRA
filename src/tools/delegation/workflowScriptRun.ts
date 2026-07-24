@@ -36,6 +36,13 @@ interface PhaseStage {
   failed: boolean;
 }
 
+interface ProjectedWorkflowTask {
+  readonly logId: string;
+  readonly stageId: string | undefined;
+  readonly definition: Pick<WorkflowTaskProgress, 'id' | 'label' | 'phase'>;
+  status: WorkflowTaskProgress['status'];
+}
+
 export class WorkflowJournalCostError extends Error {
   constructor(index: number, options?: ErrorOptions) {
     super(
@@ -114,14 +121,9 @@ export async function runPersistedWorkflowScriptWithProgress(
   const parentStageId = trace.activeStageId();
   const phases = new Map<string, PhaseStage>();
   const callPhases = new Map<WorkflowScriptProgressId, string | undefined>();
-  const taskLogIds = new Map<WorkflowScriptProgressId, string>();
-  const taskStates = new Map<
+  const projectedTasks = new Map<
     WorkflowScriptProgressId,
-    WorkflowTaskProgress['status']
-  >();
-  const taskDefinitions = new Map<
-    WorkflowScriptProgressId,
-    Pick<WorkflowTaskProgress, 'id' | 'label' | 'phase'>
+    ProjectedWorkflowTask
   >();
   let currentPhase: string | undefined;
   let closed = false;
@@ -162,30 +164,38 @@ export async function runPersistedWorkflowScriptWithProgress(
     task: WorkflowTaskProgress,
     stageId: string | undefined,
   ): void => {
-    let logId = taskLogIds.get(task.id);
-    if (!logId) {
-      logId = `workflow-task-${generateShortId()}`;
-      taskLogIds.set(task.id, logId);
+    let projected = projectedTasks.get(task.id);
+    if (!projected) {
+      projected = {
+        logId: `workflow-task-${generateShortId()}`,
+        stageId,
+        definition: {
+          id: task.id,
+          label: task.label,
+          ...(task.phase !== undefined ? { phase: task.phase } : {}),
+        },
+        status: task.status,
+      };
+      projectedTasks.set(task.id, projected);
+    } else {
+      projected.status = task.status;
     }
-    taskStates.set(task.id, task.status);
-    taskDefinitions.set(task.id, {
-      id: task.id,
-      label: task.label,
-      ...(task.phase !== undefined ? { phase: task.phase } : {}),
-    });
     trace.emit({
       type: 'workflow.task',
-      logId,
+      logId: projected.logId,
       task,
-      stageId,
+      stageId: projected.stageId,
     });
   };
-  const finalStageIdFor = (
-    task: Pick<WorkflowTaskProgress, 'phase'>,
-  ): string | undefined =>
-    task.phase === undefined
-      ? parentStageId
-      : (phases.get(task.phase)?.handle.id ?? parentStageId);
+  const markPhaseFailed = (
+    title: string | undefined,
+    index?: number,
+    total?: number,
+  ): void => {
+    if (title) {
+      phaseFor(title, index, total).failed = true;
+    }
+  };
 
   const project = (event: WorkflowScriptEvent): void => {
     if (closed) return;
@@ -248,10 +258,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         // a bare orphan. Cached replays report neither, so the suffix is empty.
         switch (event.outcome) {
           case 'failed': {
-            if (phaseTitle) {
-              phaseFor(phaseTitle, event.phaseIndex, event.phaseTotal).failed =
-                true;
-            }
+            markPhaseFailed(phaseTitle, event.phaseIndex, event.phaseTotal);
             const task: WorkflowTaskProgress = {
               id: event.progressId,
               label: event.label,
@@ -337,9 +344,11 @@ export async function runPersistedWorkflowScriptWithProgress(
     return result;
   } finally {
     closed = true;
-    for (const [progressId, status] of taskStates) {
-      const task = taskDefinitions.get(progressId);
-      if (!task) continue;
+    for (const {
+      definition: task,
+      stageId,
+      status,
+    } of projectedTasks.values()) {
       if (status === 'planned') {
         emitTask(
           {
@@ -347,16 +356,17 @@ export async function runPersistedWorkflowScriptWithProgress(
             status: 'skipped',
             reason: 'not-reached',
           },
-          finalStageIdFor(task),
+          stageId,
         );
       } else if (status === 'running') {
+        markPhaseFailed(task.phase);
         emitTask(
           {
             ...task,
             status: 'failed',
             error: 'The workflow ended before this task completed.',
           },
-          finalStageIdFor(task),
+          stageId,
         );
       }
     }

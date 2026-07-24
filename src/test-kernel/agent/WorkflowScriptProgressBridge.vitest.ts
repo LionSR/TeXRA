@@ -57,7 +57,7 @@ function workflowTaskEvent(
 beforeEach(() => clearStoreCache());
 
 describe('workflow-script progress bridge', () => {
-  it('projects phases and logs under the captured parent stage', async () => {
+  it('keeps planned task cards in one stage across incremental updates', async () => {
     const { trace, events } = recordingTrace();
     const parent = trace.openStage('Parent');
     const plannedMeta = `export const meta = {
@@ -89,15 +89,21 @@ return await agent('Inspect', { id: 'inspect' })`,
       }),
     );
     const planned = workflowTaskEvent(events, 'Inspect source', 'planned');
+    const running = workflowTaskEvent(events, 'Inspect source', 'running');
     const completed = workflowTaskEvent(events, 'Inspect source', 'completed');
     expect(planned).toMatchObject({
       type: 'workflow.task',
       stageId: parent.id,
     });
+    expect(running).toMatchObject({
+      type: 'workflow.task',
+      logId: planned?.logId,
+      stageId: parent.id,
+    });
     expect(completed).toMatchObject({
       type: 'workflow.task',
       logId: planned?.logId,
-      stageId: phaseId,
+      stageId: parent.id,
     });
     expect(events).toContainEqual(
       expect.objectContaining({
@@ -145,10 +151,11 @@ return await agent('Run one', { id: 'used' })`,
       runAgent: async () => 'done',
     });
 
-    const researchStageId = stageId(events, 'Research');
+    const unusedPlanned = workflowTaskEvent(events, 'Unused task', 'planned');
     expect(workflowTaskEvent(events, 'Used task', 'completed')).toBeDefined();
     expect(workflowTaskEvent(events, 'Unused task', 'skipped')).toMatchObject({
-      stageId: researchStageId,
+      logId: unusedPlanned?.logId,
+      stageId: unusedPlanned?.stageId,
       task: {
         reason: 'not-reached',
       },
@@ -451,6 +458,47 @@ return await agent('Abort', { phase: 'Execution' })`,
       id: phaseId,
       status: RUN_OUTCOME.FAILED,
     });
+  });
+
+  it('marks a phase failed when an abandoned call outlives cleanup', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const { trace, events } = recordingTrace();
+      let markStarted: (() => void) | undefined;
+      const started = new Promise<void>((resolve) => {
+        markStarted = resolve;
+      });
+      const run = runPersistedWorkflowScriptWithProgress(trace, {
+        store: getExecutionStore(executionId),
+        checkpointId: 'orphaned-runner',
+        script: `${meta}
+agent('Orphaned', { phase: 'Execution' })
+return 'guest success'`,
+        runAgent: async () => {
+          markStarted?.();
+          return await new Promise<never>(() => undefined);
+        },
+      });
+
+      await started;
+      await vi.advanceTimersByTimeAsync(5_000);
+      await run;
+
+      const phaseId = stageId(events, 'Execution');
+      expect(workflowTaskEvent(events, 'Orphaned', 'failed')).toMatchObject({
+        stageId: phaseId,
+        task: {
+          error: 'The workflow ended before this task completed.',
+        },
+      });
+      expect(events).toContainEqual({
+        type: 'stage.end',
+        id: phaseId,
+        status: RUN_OUTCOME.FAILED,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('closes every opened phase after a script failure', async () => {
