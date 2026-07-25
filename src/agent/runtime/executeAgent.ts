@@ -316,6 +316,8 @@ export interface SubagentRunOptions {
 export interface ExecuteAgentOptions extends SubagentRunOptions {
   /** Host services used by the runtime to report progress/UI events. */
   runtimeHost: AgentRuntimeHost;
+  /** The caller owns presentation for failures before the run lifecycle. */
+  suppressErrorNotification?: boolean;
   /** When true, proposal tools are filtered out to prevent nesting. */
   isSubagent?: boolean;
   /**
@@ -382,7 +384,8 @@ export async function executeAgent(
       onBeforeActivation: options.onStreamResolved,
       suppressViewSwitch: options.isSubagent,
       enforceCategory: options.enforceCategory,
-      suppressErrorNotification: options.isSubagent,
+      suppressErrorNotification:
+        options.suppressErrorNotification ?? options.isSubagent,
       session: options.session,
       modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
     });
@@ -468,7 +471,7 @@ export async function executeAgent(
 
 export interface ResumeToolUseFromResumeDataOptions extends SubagentRunOptions {
   /** Recheck canonical admission atomically while acquiring the resumed lease. */
-  readonly canAcquireResumeLease?: () => boolean;
+  readonly canAcquireResumeLease?: () => boolean | Promise<boolean>;
   /**
    * Take messages queued after the initial drain. The flow invokes this once
    * after attaching its live context and before resuming the persisted cursor.

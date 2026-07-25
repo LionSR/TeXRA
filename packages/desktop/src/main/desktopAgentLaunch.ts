@@ -1,5 +1,6 @@
 // Agent imports
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
+import type { AgentRunHandle } from '@agent/runtime/ExecutionHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
@@ -20,13 +21,15 @@ export interface DesktopAgentLaunchContext {
   readonly ready: Promise<void>;
   readonly session: SessionHandle;
   /** Resume-only canonical admission checked under the execution lease lock. */
-  readonly canAcquireResumeLease?: () => boolean;
+  readonly canAcquireResumeLease?: () => boolean | Promise<boolean>;
 }
 
 export interface DesktopAgentLaunchOptions {
   readonly modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
-  /** Reports that the run lifecycle now owns terminal error presentation. */
-  readonly onLifecycleStart?: () => void;
+  /** Observe the concrete run identity used by process-session result events. */
+  readonly onRun?: (handle: AgentRunHandle) => void | Promise<void>;
+  /** The caller owns presentation for failures before the run lifecycle. */
+  readonly suppressErrorNotification?: boolean;
 }
 
 /** Start a desktop run with process-owned dependencies only. */
@@ -43,7 +46,8 @@ export async function launchDesktopAgent(
     session: context.session,
     runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
-    onRun: options.onLifecycleStart,
+    onRun: options.onRun,
+    suppressErrorNotification: options.suppressErrorNotification,
     ...(context.canAcquireResumeLease && {
       canAcquireResumeLease: context.canAcquireResumeLease,
     }),
