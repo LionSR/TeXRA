@@ -201,4 +201,32 @@ describe('trace-viewer TraceDataSchema', () => {
     expect(TraceDataSchema.safeParse(undefined).success).toBe(false);
     expect(TraceDataSchema.safeParse('trace').success).toBe(false);
   });
+
+  it('parses a legacy trace carrying the retired child-activity keys', () => {
+    // Pre-#9145 exports recorded `activeSubagents`/`activeProcesses` plus the
+    // two finished-child counters. Neither schema on this path is strict, so
+    // those keys are stripped rather than rejected — and no data is lost,
+    // because they were always written at their prefault values.
+    const legacy = {
+      executionId: 'abcdef',
+      streamId: 'stream-1',
+      config: config(),
+      meta: null,
+      entries: [],
+      snapshot: {
+        streamId: 'stream-1',
+        activeSubagents: [],
+        activeProcesses: [],
+        finishedSubagentCount: 3,
+        finishedProcessCount: 2,
+      },
+      terminalStatus: null,
+    };
+
+    const parsed = parseTraceData(legacy);
+    expect(parsed.snapshot.subagents).toEqual([]);
+    expect(parsed.snapshot.processes).toEqual([]);
+    expect(parsed.snapshot).not.toHaveProperty('finishedSubagentCount');
+    expect(parsed.snapshot).not.toHaveProperty('activeSubagents');
+  });
 });

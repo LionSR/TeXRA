@@ -19,10 +19,8 @@ function activeStateFields(data: StreamContentRenderPayload) {
   return {
     conversationProgress,
     roundStage: roundStage ?? undefined,
-    activeSubagents: badges.activeSubagents,
-    finishedSubagentCount: badges.finishedSubagentCount,
-    activeProcesses: badges.activeProcesses,
-    finishedProcessCount: badges.finishedProcessCount,
+    subagents: badges.subagents,
+    processes: badges.processes,
   };
 }
 

@@ -1109,14 +1109,12 @@ describe('DesktopProgressBridge', () => {
     expect(streamSync?.streamStates?.parent).toMatchObject({
       conversationProgress: { toolCallCount: 5 },
       roundStage: { index: 2 },
-      activeSubagents: [{ executionId: 'agent-1', agentName: 'reviewer' }],
-      finishedSubagentCount: 0,
-      activeProcesses: [{ executionId: 'process-1', agentName: 'bash' }],
-      finishedProcessCount: 0,
+      subagents: [{ executionId: 'agent-1', agentName: 'reviewer' }],
+      processes: [{ executionId: 'process-1', agentName: 'bash' }],
     });
   });
 
-  it('accumulates finished child counts without clobbering the other active dimension', async () => {
+  it('retains finished children per arm without clobbering the other active dimension', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_000);
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
@@ -1161,11 +1159,25 @@ describe('DesktopProgressBridge', () => {
       messages,
       PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
     ).at(-1);
+    // Each arm keeps its own finished child as a full row — a retained entry
+    // is exactly the vanished one, stamped with `finishedAt`.
     expect(badgeUpdate).toMatchObject({
-      activeSubagents: [],
-      finishedSubagentCount: 1,
-      activeProcesses: [],
-      finishedProcessCount: 1,
+      subagents: [
+        {
+          kind: 'subagent',
+          executionId: 'agent-1',
+          agentName: 'reviewer',
+          finishedAt: 1_000,
+        },
+      ],
+      processes: [
+        {
+          kind: 'process',
+          executionId: 'process-1',
+          agentName: 'bash',
+          finishedAt: 1_000,
+        },
+      ],
     });
   });
 
@@ -1909,10 +1921,8 @@ describe('DesktopProgressBridge', () => {
         conversationProgress: { toolCallCount: 0 },
         roundStage: null,
         badges: {
-          activeSubagents: [],
-          finishedSubagentCount: 0,
-          activeProcesses: [],
-          finishedProcessCount: 0,
+          subagents: [],
+          processes: [],
         },
         parentStreamId: null,
       },
@@ -3005,7 +3015,7 @@ describe('DesktopProgressBridge', () => {
         ).toMatchObject({
           streamStates: {
             [streamId]: {
-              activeProcesses: [
+              processes: [
                 expect.objectContaining({
                   executionId: processExecutionId,
                   agentName: 'bash',
@@ -3143,7 +3153,7 @@ describe('DesktopProgressBridge', () => {
           ),
         ).toMatchObject({
           streamStates: {
-            [streamId]: { activeProcesses: [] },
+            [streamId]: { processes: [] },
           },
         });
       } finally {
@@ -3928,10 +3938,10 @@ describe('DesktopProgressBridge', () => {
         ).toMatchObject({
           streamStates: {
             [streamId]: {
-              activeSubagents: [
+              subagents: [
                 expect.objectContaining({ executionId: childExecutionId }),
               ],
-              activeProcesses: [
+              processes: [
                 expect.objectContaining({ executionId: processExecutionId }),
               ],
             },

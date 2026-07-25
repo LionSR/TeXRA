@@ -25,10 +25,8 @@ interface ActiveStreamContentSync {
   conversationProgress: ConversationProgress;
   roundStage: RoundStage | null;
   badges: {
-    activeSubagents: ActiveChildInfo[];
-    finishedSubagentCount: number;
-    activeProcesses: ActiveChildInfo[];
-    finishedProcessCount: number;
+    subagents: ActiveChildInfo[];
+    processes: ActiveChildInfo[];
   };
   parentStreamId: StreamTabId | null;
 }

@@ -162,8 +162,8 @@ describe('StreamSnapshotStore', () => {
     });
 
     // Liveness is never persisted — a resumed stream shows nothing stale.
-    expect(snap.activeSubagents).toEqual([]);
-    expect(snap.activeProcesses).toEqual([]);
+    expect(snap.subagents).toEqual([]);
+    expect(snap.processes).toEqual([]);
     expect(snap.status).toBeUndefined();
 
     // Cross-host identity: the exact field-scoped filenames every host shares.
