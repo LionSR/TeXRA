@@ -1,4 +1,3 @@
-import stripAnsi from 'strip-ansi';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -30,11 +29,10 @@ import {
   type SelectItem,
 } from '@cli/chat/tui/ui/Select';
 import { AgentCategory, STREAM_PHASE, type StreamTabId } from '@shared/schemas';
-import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import { buildChildStreamEntries } from '@test/support/childStreamEntries';
 import {
   loadInk,
-  renderWithTerminalSize,
+  renderOutputAtTerminalSize,
 } from '@test/support/inkTestHarness.mts';
 
 function session(id: string, active = false): StreamView {
@@ -567,7 +565,7 @@ describe('CLI child list display model', () => {
       rootStreamId: run,
       streams,
     });
-    const { instance, stdout } = renderWithTerminalSize(
+    const output = await renderOutputAtTerminalSize(
       ink,
       React.createElement(SubagentList, {
         listRootStreamId: run,
@@ -576,28 +574,23 @@ describe('CLI child list display model', () => {
         sessions,
       }),
       100,
+      { until: (frame) => frame.includes('5 tool calls') },
     );
 
-    try {
-      await waitFor(() => stdout.output.includes('5 tool calls'));
-      const output = stripAnsi(stdout.output);
-
-      expect(sessions.find(({ id }) => id === bash)?.toolName).toBe('bash');
-      expect(sessions.find(({ id }) => id === agent)?.toolName).toBeUndefined();
-      expect(output.match(/bash running/g)).toHaveLength(2);
-      expect(output).not.toContain('gemini35f');
-      expect(output).toContain('bash running · gpt56');
-      expect(output).toContain('5 tool calls');
-      expect(output).toContain('↓40k');
-    } finally {
-      instance.unmount();
-    }
+    expect(sessions.find(({ id }) => id === bash)?.toolName).toBe('bash');
+    expect(sessions.find(({ id }) => id === agent)?.toolName).toBeUndefined();
+    expect(output.match(/bash running/g)).toHaveLength(2);
+    expect(output).not.toContain('gemini35f');
+    expect(output).toContain('bash running · gpt56');
+    expect(output).toContain('5 tool calls');
+    expect(output).toContain('↓40k');
   });
 
   it('keeps run-file metadata out of the compact row', async () => {
     const { ink, React } = await loadInk();
     const run = 'run' as StreamTabId;
-    const output = ink.renderToString(
+    const output = await renderOutputAtTerminalSize(
+      ink,
       React.createElement(SubagentList, {
         maxRows: 3,
         sessions: [
@@ -616,7 +609,7 @@ describe('CLI child list display model', () => {
           },
         ],
       }),
-      { columns: 100 },
+      100,
     );
 
     expect(output).toContain('devise completed');
@@ -630,7 +623,8 @@ describe('CLI child list display model', () => {
       const { ink, React } = await loadInk();
       const run = 'run' as StreamTabId;
       const reflection = 'reflect' as StreamTabId;
-      const output: string = ink.renderToString(
+      const output = await renderOutputAtTerminalSize(
+        ink,
         React.createElement(SubagentList, {
           maxRows: 4,
           sessions: [
@@ -654,7 +648,8 @@ describe('CLI child list display model', () => {
             },
           ],
         }),
-        { columns },
+        columns,
+        { until: (frame) => frame.includes('r2/3') },
       );
 
       // One line per row at every width — the phase takes the round's slot
@@ -729,15 +724,15 @@ describe('CLI child list display model', () => {
       rootStreamId: run,
       streams,
     });
-    const output: string = stripAnsi(
-      ink.renderToString(
-        React.createElement(SubagentList, {
-          listRootStreamId: run,
-          maxRows: 10,
-          sessions,
-        }),
-        { columns: 100 },
-      ),
+    const output = await renderOutputAtTerminalSize(
+      ink,
+      React.createElement(SubagentList, {
+        listRootStreamId: run,
+        maxRows: 10,
+        sessions,
+      }),
+      100,
+      { until: (frame) => frame.includes('◆ Reduce') },
     );
 
     expect(output).toContain('◆ Map');
@@ -766,7 +761,8 @@ describe('CLI child list display model', () => {
     const { ink, React } = await loadInk();
     const run = 'nested-workflow' as StreamTabId;
     const child = 'ordinary-child' as StreamTabId;
-    const output: string = ink.renderToString(
+    const output = await renderOutputAtTerminalSize(
+      ink,
       React.createElement(SubagentList, {
         listRootStreamId: run,
         maxRows: 5,
@@ -781,7 +777,8 @@ describe('CLI child list display model', () => {
           { ...session(child), parentId: run },
         ],
       }),
-      { columns: 100 },
+      100,
+      { until: (frame) => frame.includes('ordinary-child') },
     );
 
     expect(output).toContain('nested-workflow');
@@ -794,7 +791,8 @@ describe('CLI child list display model', () => {
     const run = 'windowed-run' as StreamTabId;
     const map = 'map-agent' as StreamTabId;
     const reduce = 'reduce-agent' as StreamTabId;
-    const output: string = ink.renderToString(
+    const output = await renderOutputAtTerminalSize(
+      ink,
       React.createElement(SubagentList, {
         listRootStreamId: run,
         maxRows: 3,
@@ -818,7 +816,8 @@ describe('CLI child list display model', () => {
           },
         ],
       }),
-      { columns: 100 },
+      100,
+      { until: (frame) => frame.includes('reduce-agent') },
     );
 
     expect(output).toContain('◆ Reduce');
@@ -915,7 +914,7 @@ describe('CLI child list display model', () => {
     ];
 
     async function renderAtColumns(columns: number): Promise<string> {
-      const { instance, stdout } = renderWithTerminalSize(
+      return renderOutputAtTerminalSize(
         ink,
         React.createElement(SubagentList, {
           listRootStreamId: run,
@@ -923,13 +922,8 @@ describe('CLI child list display model', () => {
           sessions,
         }),
         columns,
+        { until: (frame) => frame.includes(freeFormPhase) },
       );
-      try {
-        await waitFor(() => stdout.output.includes(freeFormPhase));
-        return stripAnsi(stdout.output);
-      } finally {
-        instance.unmount();
-      }
     }
 
     const wideOutput = await renderAtColumns(60);
@@ -969,7 +963,8 @@ describe('CLI child list display model', () => {
   it('never shows both a phase and a round on one row', async () => {
     const { ink, React } = await loadInk();
     const run = 'run' as StreamTabId;
-    const output: string = ink.renderToString(
+    const output = await renderOutputAtTerminalSize(
+      ink,
       React.createElement(SubagentList, {
         maxRows: 3,
         sessions: [
@@ -985,10 +980,67 @@ describe('CLI child list display model', () => {
           },
         ],
       }),
-      { columns: 100 },
+      100,
+      { until: (frame) => frame.includes('workflow-script') },
     );
 
     expect(output).toContain('Reduce 2/3');
     expect(output).not.toContain('r1/9');
   });
+
+  // The right-aligned metadata column is the one row element `SubagentList`
+  // drops purely on terminal width (`CHILD_ROW_METADATA_MIN_COLUMNS`), so it is
+  // what proves a width test drives the width it names: through
+  // `renderToString` both cases below lay out at the ambient terminal width
+  // instead, and whichever side of the threshold that width falls on is the
+  // only case actually exercised. Widths are spelled out rather than derived
+  // from the constant so that moving the threshold has to move the test.
+  it.each([
+    { columns: 60, metadataColumn: true },
+    { columns: 59, metadataColumn: false },
+  ])(
+    'renders the row metadata column at $columns columns: $metadataColumn',
+    async ({ columns, metadataColumn }) => {
+      const { ink, React } = await loadInk();
+      const run = 'run' as StreamTabId;
+      const child = 'child' as StreamTabId;
+      const output = await renderOutputAtTerminalSize(
+        ink,
+        React.createElement(SubagentList, {
+          listRootStreamId: run,
+          maxRows: 4,
+          sessions: [
+            {
+              id: run,
+              label: 'run',
+              active: false,
+              slice: workflowAgentSlice('run', {
+                status: STREAM_PHASE.RUNNING,
+              }),
+            },
+            {
+              id: child,
+              label: 'writer',
+              active: false,
+              parentId: run,
+              slice: workflowAgentSlice('child', {
+                status: STREAM_PHASE.RUNNING,
+                conversation: { toolCallCount: 5 },
+                cumulativeUsage: {
+                  inputTokens: 1000,
+                  outputTokens: 39_900,
+                  cost: 0,
+                },
+              }),
+            },
+          ],
+        }),
+        columns,
+        { until: (frame) => frame.includes('writer') },
+      );
+
+      expect(output).toContain('writer running');
+      expect(output.includes('5 tool calls · ↓40k')).toBe(metadataColumn);
+    },
+  );
 });

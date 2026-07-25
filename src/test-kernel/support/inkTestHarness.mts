@@ -2,6 +2,12 @@
 import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 
+// Third-party imports
+import stripAnsi from 'strip-ansi';
+
+// Local imports
+import { waitForCondition } from '@test/support/asyncTestUtils';
+
 const cliRequire = createRequire(
   new URL('../../../packages/cli/package.json', import.meta.url),
 );
@@ -60,6 +66,33 @@ export function renderWithTerminalSize(
     patchConsole: false,
   });
   return { instance, stdout };
+}
+
+/** Render at an explicit terminal size, wait for the frame under test, and
+ *  return what Ink wrote with ANSI stripped — the shape every test that only
+ *  reads output wants, so the render / wait / unmount dance has one owner.
+ *  Tests that drive keystrokes or their own clock keep the handles from
+ *  `renderWithTerminalSize` instead.
+ *
+ *  `until` receives the same stripped output that is returned; it defaults to
+ *  "Ink has painted something". */
+export async function renderOutputAtTerminalSize(
+  ink: any,
+  node: any,
+  columns: number,
+  options: { readonly until?: (output: string) => boolean } = {},
+): Promise<string> {
+  const { instance, stdout } = renderWithTerminalSize(ink, node, columns);
+  const settled =
+    options.until ?? ((output: string) => output.trim().length > 0);
+  try {
+    await waitForCondition(() => settled(stripAnsi(stdout.output)), {
+      timeoutMessage: `Ink rendered no matching frame at ${columns} columns`,
+    });
+    return stripAnsi(stdout.output);
+  } finally {
+    instance.unmount();
+  }
 }
 
 /** Minimal readable TTY used by interactive Ink tests. */
