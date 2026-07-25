@@ -6,6 +6,11 @@ export type AgentRuntimeEventPayloads = RuntimeInteractionEventPayloads &
 
 export type AgentRuntimeEvent = keyof AgentRuntimeEventPayloads;
 
+export interface AgentRuntimeEmitOptions {
+  /** Retain a presentation event until a temporarily detached UI returns. */
+  readonly replayWhenAttached?: boolean;
+}
+
 /**
  * The direct host-event sink the agent core emits through during a run. Hosts
  * (VS Code extension, CLI, desktop, or an SDK embedder) implement `emit` and
@@ -29,6 +34,7 @@ export interface AgentRuntimeHost {
   emit<K extends AgentRuntimeEvent>(
     event: K,
     payload: AgentRuntimeEventPayloads[K],
+    options?: AgentRuntimeEmitOptions,
   ): void;
 }
 

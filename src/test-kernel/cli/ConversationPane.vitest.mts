@@ -29,6 +29,7 @@ import {
   createTuiViewportController,
   type TuiRepaintOptions,
 } from '@cli/chat/tui/render/tuiViewportController';
+import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
 import {
   estimateLiveTranscriptEntryRows,
   estimateTranscriptEntryRows,
@@ -511,6 +512,25 @@ describe('CLI conversation transcript splitting', () => {
     expect(selectTranscriptEntriesForViewport([tool], 20, 20).usedRows).toBe(
       transcriptEntryLayoutRows(liveLayout),
     );
+  });
+
+  it('clips a standalone loaded-image event to one transcript row', () => {
+    const media: ConversationEntry = {
+      id: 'media-1',
+      role: 'media',
+      text: '',
+      finalized: true,
+      images: [
+        {
+          path: '/private/tmp/plot-with-a-long-name.png',
+          sizeBytes: 8704,
+        },
+      ],
+    };
+    const layout = transcriptEntryLayout(media, { width: 24 });
+
+    expect(layout.lines).toEqual(['› [image] /pr… (8.5 KiB)']);
+    expect(textDisplayWidth(layout.lines[0] ?? '')).toBe(24);
   });
 
   it('keeps bounded rich display rows unwrapped', () => {

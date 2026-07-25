@@ -71,6 +71,9 @@ All notable changes to this project will be documented in this file.
   running, finished, saved-result, skipped, and failed, instead of every row
   looking alike. A task the run never reached now also explains itself the way
   the progress view already did.
+- **Loaded images are visible in the terminal transcript** — image and PDF
+  inputs show their file path and size after they are prepared as context
+  media.
 
 ## [0.39.8] - 2026-07-24
 

@@ -1437,6 +1437,77 @@ describe('CLI transcript state', () => {
     );
   });
 
+  it('renders typed loaded images once and excludes ordinary file lists', () => {
+    const logger = createRunTrace(root, defaultSession().transcripts).trace;
+    logger.domain({
+      key: 'filesLoaded',
+      data: {
+        category: 'all',
+        entries: [
+          {
+            path: '/private/tmp/loaded.png',
+            ok: true,
+            media: {
+              kind: 'image',
+              mimeType: 'image/png',
+              sizeBytes: 8704,
+            },
+          },
+          {
+            path: '/private/tmp/loaded.png',
+            ok: true,
+            media: {
+              kind: 'image',
+              mimeType: 'image/png',
+              sizeBytes: 8704,
+            },
+          },
+          {
+            path: '/private/tmp/paper.pdf',
+            ok: true,
+            media: {
+              kind: 'image',
+              mimeType: 'application/pdf',
+              sizeBytes: 8192,
+            },
+          },
+          {
+            path: '/private/tmp/audio.wav',
+            ok: true,
+            media: {
+              kind: 'audio',
+              mimeType: 'audio/wav',
+              sizeBytes: 4096,
+            },
+          },
+          {
+            path: 'paper.tex',
+            ok: true,
+            source: 'inputFiles',
+          },
+        ],
+      },
+    });
+
+    syncStreamLog(root);
+    syncStreamLog(root);
+
+    const entries = streams.get().get(root)?.entries ?? [];
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      role: 'media',
+      finalized: true,
+      images: [
+        { path: '/private/tmp/loaded.png', sizeBytes: 8704 },
+        { path: '/private/tmp/paper.pdf', sizeBytes: 8192 },
+      ],
+    });
+    expect(transcriptEntryLayout(entries[0]).lines).toEqual([
+      '› [image] /private/tmp/loaded.png (8.5 KiB)',
+      '› [image] /private/tmp/paper.pdf (8 KiB)',
+    ]);
+  });
+
   it('summarizes subagent protocol continuations in the visible transcript', () => {
     const logger = createRunTrace(root, defaultSession().transcripts).trace;
     logger.info('Please solve the problem.', {

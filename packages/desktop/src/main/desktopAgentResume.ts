@@ -8,6 +8,7 @@ import {
   resolveAndResumeStream,
 } from '@agent/runtime/resolveAndResumeStream';
 import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
+import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultToast';
 
 // Shared imports
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -103,33 +104,40 @@ async function resolveDesktopResumeState(
   };
 }
 
-function reportResumeFailure(
-  streamId: StreamTabId,
-  error: unknown,
-  context: DesktopResumeContext,
-  lifecycleStarted: boolean,
-): void {
-  context.logger.error(`Failed to resume desktop stream ${streamId}`, {
-    data: toLogData(error),
-  });
-  if (lifecycleStarted) return;
-  context.session.interactions.emit(
-    'requestShowError',
-    { message: `Resume failed: ${toErrorMessage(error)}` },
-    { replayWhenAttached: true },
-  );
-}
-
 function resumeDesktopStream(
   streamId: StreamTabId,
   context: DesktopResumeContext,
 ): Promise<boolean> {
   if (!context.session.transcripts.has(streamId)) return Promise.resolve(false);
+  const terminalResult = trackTerminalResultPresentation(
+    context.session,
+    (event) => event.streamId === streamId,
+  );
+  let authoritativeStreamMissing = false;
   const isResumeInvalidated = (): boolean =>
     context.isCancellationRequested() ||
+    authoritativeStreamMissing ||
     !context.session.transcripts.has(streamId);
+  const canAcquireResumeLease = async (): Promise<boolean> => {
+    if (isResumeInvalidated()) return false;
+    if (!(await context.session.transcripts.hasAuthoritativeStream(streamId))) {
+      authoritativeStreamMissing = true;
+      return false;
+    }
+    return !isResumeInvalidated();
+  };
+  const reportUnhandledFailure = (id: StreamTabId, error: unknown): void => {
+    context.logger.error(`Failed to resume desktop stream ${id}`, {
+      data: toLogData(error),
+    });
+    if (terminalResult.isHandled()) return;
+    context.session.interactions.emit(
+      'requestShowError',
+      { message: `Resume failed: ${toErrorMessage(error)}` },
+      { replayWhenAttached: true },
+    );
+  };
   const runtimeHost = context.session.interactions;
-  let lifecycleStarted = false;
   return resolveAndResumeStream(streamId, {
     runtimeHost,
     streamStatus: context.session.status,
@@ -166,13 +174,9 @@ function resumeDesktopStream(
         {
           session: context.session,
           runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
-          canAcquireResumeLease: () => !isResumeInvalidated(),
+          canAcquireResumeLease,
           isCancellationRequested: isResumeInvalidated,
-          onRun: () => {
-            lifecycleStarted = true;
-          },
-          onError: (error) =>
-            reportResumeFailure(streamId, error, context, lifecycleStarted),
+          onError: (error) => reportUnhandledFailure(streamId, error),
         },
       ),
     executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
@@ -181,13 +185,11 @@ function resumeDesktopStream(
         {
           ready: Promise.resolve(),
           session: context.session,
-          canAcquireResumeLease: () => !isResumeInvalidated(),
+          canAcquireResumeLease,
         },
         {
           modelHandlerCompatibilityKey,
-          onLifecycleStart: () => {
-            lifecycleStarted = true;
-          },
+          suppressErrorNotification: true,
         },
       ),
     reportNoResumableSession: () =>
@@ -195,8 +197,7 @@ function resumeDesktopStream(
         'This run has no resumable session state. Start a new run instead.',
         { replayWhenAttached: true },
       ),
-    reportFailure: (id, error) =>
-      reportResumeFailure(id, error, context, lifecycleStarted),
+    reportFailure: reportUnhandledFailure,
     isCancellationRequested: isResumeInvalidated,
-  });
+  }).finally(terminalResult.dispose);
 }

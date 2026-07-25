@@ -54,14 +54,16 @@ largest hosts**. Recounted at `1f7082f`:
 
 \*_Census note (Codex review, P2)._ The complete distinct-`@agent/*`-specifier
 count includes both static `from`-imports **and** dynamic `import('@agent/…')`.
-Desktop is the only host with dynamic `@agent` imports — 2 of them
-(`@agent/runtime/runAgent`, `@agent/runtime/helperModelName`) — so its complete
-count is **29**, not the 27 a static-`from`-only census reports; extension and
-CLI have **zero** dynamic `@agent` imports, so their static and complete
-censuses coincide at 44/34. The north-star's stated desktop `27` appears to be a
-static-`from` count, so the desktop `+2` is largely this **census correction**,
-not confirmed new drift — and it is a caution for the R-b baseline, which must
-count dynamic imports or it will under-freeze desktop by exactly these two. The
+Desktop is the only host with dynamic `@agent` imports: five distinct
+specifiers occur dynamically, of which two (`@agent/runtime/runAgent` and
+`@agent/runtime/helperModelName`) do not also occur in static imports. Those two
+raise its complete count to **29**, rather than the 27 reported by a
+static-`from`-only census; extension and CLI have **zero** dynamic `@agent`
+imports, so their static and complete censuses coincide at 44/34. The
+north-star's stated desktop `27` appears to be a static-`from` count, so the
+desktop `+2` is largely this **census correction**, not confirmed new drift —
+and it is a caution for the R-b baseline, which must count dynamic imports or
+it will under-freeze desktop by exactly these two. The
 headline rests on the two hosts whose drop is unambiguous under either census:
 extension (−5) and CLI (−1).
 
@@ -354,11 +356,11 @@ or `RetryableInvocationNode`; do not sweep the reviewed-train items unattended.
   `RetryState.vitest.ts`.
 - Boundary metric recounted at `1f7082f`: distinct `@agent/*` deep-import
   specifiers (static `from` + dynamic `import()`) — extension **44**, CLI
-  **34**, desktop **29** (north-star baseline 49/35/27). Desktop-only: 2 dynamic
-  `import('@agent/…')` (`runAgent`, `helperModelName`) beyond its 27 static
-  `from`-imports; extension/CLI have 0 dynamic `@agent` imports (static ==
-  complete). `src/**` → extension-homed / `@cli` / `@desktop` alias imports:
-  **0**.
+  **34**, desktop **29** (north-star baseline 49/35/27). Desktop has 5 distinct
+  dynamic `import('@agent/…')` specifiers, 2 of which (`runAgent`,
+  `helperModelName`) are not among its 27 static `from`-imports; extension/CLI
+  have 0 dynamic `@agent` imports (static == complete). `src/**` →
+  extension-homed / `@cli` / `@desktop` alias imports: **0**.
 - Logger census corrected: `createChannelTrace` importers **36** (35 as the
   module-logger idiom), 71 total occurrences — not ~210.
 - Delegation depth verified still tracked-but-ungated (no `maxDelegationDepth`,

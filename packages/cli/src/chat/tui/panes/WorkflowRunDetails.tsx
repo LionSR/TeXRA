@@ -15,7 +15,7 @@ import {
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { formatDuration } from '@utils/text/stringUtils';
 
-import { safeTerminalText } from '../state/transcriptLines';
+import { safeTerminalText } from '../render/terminalText';
 import {
   COLOR_BORDER,
   COLOR_ERROR,
