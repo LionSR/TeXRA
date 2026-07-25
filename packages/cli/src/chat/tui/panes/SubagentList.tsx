@@ -277,6 +277,13 @@ export function SubagentList(
 
     const nextItems: SelectItem<ChildListValue>[] = [];
     const nextHeaders = new Map<ChildListValue, PhaseHeaderDetails>();
+    // A header only ever *opens* a group; nothing closes one. That is sound
+    // only because `sessions` arrives from `streamTreeViews`, whose
+    // `groupWorkflowPhaseEntries` makes same-phase rows contiguous and puts
+    // every phase-less row ahead of the first group — so no row can land under
+    // a header it does not belong to, and no phase can open a second header.
+    // Order has one owner: do not re-sort here, it would desynchronise the
+    // Alt+1..9 numbers `streamTreeEntries` assigns from the rows on screen.
     let previousPhase: string | undefined;
     let headerOrdinal = 0;
     for (const session of sessions) {
