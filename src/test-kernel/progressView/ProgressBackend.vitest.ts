@@ -3491,22 +3491,24 @@ describe('retained finished children', () => {
         subagent('doomed', { childStreamId }),
       ]);
       backend.factApplier.updateChildRoster(PARENT, []);
+      // Transition only the authoritative status machine. Deliberately avoid
+      // `setStreamStatus`, which also caches the terminal status into the
+      // retained row and would let this test pass without the projection.
       backend.state.streamStatus.transitionToTerminal(
         childStreamId,
         STREAM_PHASE.FAILED,
       );
-      await backend.factApplier.setStreamStatus(
-        childStreamId,
+      expect(backend.state.getStreamState(PARENT)?.subagents?.[0]?.status).toBe(
+        STREAM_PHASE.RUNNING,
+      );
+      expect(backend.state.streamStatus.get(childStreamId)).toBe(
         STREAM_PHASE.FAILED,
       );
-      // Auto-close/deletion can clear the child's status-machine entry before
-      // a later structural rebuild. The retained row must keep the outcome.
-      backend.state.streamStatus.clearStream(childStreamId);
       messages.length = 0;
 
       // A structural rebuild (view reopen, theme change, filter switch) is the
-      // frontend's other writer of `subagents`; it must not ship the stale
-      // stamped status back over the resolved one.
+      // frontend's other writer of `subagents`; it must overlay the stale row
+      // with the authoritative status-machine outcome.
       backend.webviewUpdater.sendStreamMetadata(
         backend.state,
         backend.factApplier.getAllStreamStates(),
