@@ -206,8 +206,8 @@ describe('executionRegistry', () => {
 
   it('drains a background-bash AgentExecutionHandle on shutdown without disturbing a resumable agent execution (issue #8155)', () => {
     // Regression for #8155: killBackgroundProcesses() previously only walked
-    // the (now deleted) ProcessExecutionHandles, missing a background `bash`
-    // run — which is registered as an AgentExecutionHandle (see
+    // a since-deleted background-process handle class, missing a background
+    // `bash` run — which is registered as an AgentExecutionHandle (see
     // createChildStream in tools/bash.ts) with its OS-process kill reachable
     // only via the interrupt handler BashBackgroundSession attaches. The two
     // AgentExecutionHandles below are tracked concurrently, mirroring the real
