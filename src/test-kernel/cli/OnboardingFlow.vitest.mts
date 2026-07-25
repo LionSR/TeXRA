@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 
 const mocks = vi.hoisted(() => ({
-  selectCliApiModelAccessRoute: vi.fn(),
+  updateCliModelAccess: vi.fn(),
   saveProviderApiKey: vi.fn(),
   writeTextStderr: vi.fn(),
   writeTextStdout: vi.fn(),
@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@cli/runtime/modelAccessSelection', () => ({
-  selectCliApiModelAccessRoute: mocks.selectCliApiModelAccessRoute,
+  updateCliModelAccess: mocks.updateCliModelAccess,
 }));
 
 vi.mock('@cli/runtime/providerApiKey', () => ({
@@ -115,7 +115,7 @@ function restoreProcessStream(
 beforeEach(() => {
   mocks.state.clear();
   mocks.saveProviderApiKey.mockReset().mockResolvedValue(undefined);
-  mocks.selectCliApiModelAccessRoute.mockReset();
+  mocks.updateCliModelAccess.mockReset();
   mocks.writeTextStderr.mockReset();
   mocks.writeTextStdout.mockReset();
 });
@@ -136,7 +136,7 @@ describe('provider-key onboarding flow', () => {
     const warning =
       'DISTINCTIVE OVERRIDE: workspace policy keeps ChatGPT subscription active.';
     const providerKey = 'sk-ant-integration-secret';
-    mocks.selectCliApiModelAccessRoute.mockResolvedValue({
+    mocks.updateCliModelAccess.mockResolvedValue({
       apiMode: 'personal',
       message: warning,
     });
@@ -191,7 +191,10 @@ describe('provider-key onboarding flow', () => {
       'anthropic',
       providerKey,
     );
-    expect(mocks.selectCliApiModelAccessRoute).toHaveBeenCalledWith('personal');
+    expect(mocks.updateCliModelAccess).toHaveBeenCalledWith(undefined, {
+      kind: 'api-fallback',
+      apiMode: 'personal',
+    });
     expect(mocks.writeTextStdout).toHaveBeenCalledWith(
       'Saved your Anthropic API key. Stored in TeXRA secrets as `apiKey.anthropic` (or set ANTHROPIC_API_KEY in your environment). ' +
         warning,

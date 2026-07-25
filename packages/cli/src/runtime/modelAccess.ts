@@ -274,7 +274,11 @@ export function formatModelStatusForCliMode(
   model: CliModelAccess,
   apiMode: CliApiMode,
 ): string {
-  if (apiMode === 'personal') return `api: ${model.status}`;
+  if (apiMode === 'personal') {
+    return model.model.provider === 'kimiCode'
+      ? 'api: Kimi Code subscription'
+      : `api: ${model.status}`;
+  }
 
   const availability = model.model.availability;
   if (availability == null) return `included: ${model.status}`;
