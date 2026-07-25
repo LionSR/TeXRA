@@ -54,7 +54,8 @@ export async function createTempDirPlatform(
 
 /** Removes every directory recorded by `createTempDirPlatform` (or pushed manually), then clears the list. */
 export async function cleanupTempDirs(tempDirs: string[]): Promise<void> {
+  const uniqueDirs = [...new Set(tempDirs.splice(0))];
   await Promise.all(
-    tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
+    uniqueDirs.map((dir) => rm(dir, { recursive: true, force: true })),
   );
 }
