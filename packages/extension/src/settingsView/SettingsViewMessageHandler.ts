@@ -96,7 +96,7 @@ import {
 } from '@tools/toolAvailability';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import { findExternalToolDef } from '@tools/externalToolDefs';
-import { StorageFS } from '@utils/files';
+import { StorageFS, WorkspaceFS } from '@utils/files';
 import { debounce } from '@utils/core';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config';
 import { hasExtension } from '@utils/core/pathCore';
@@ -840,7 +840,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     // than alarm. Re-send the persisted settings afterwards so the webview's
     // (optimistically-toggled) switch snaps back to the actual, unwritten
     // value instead of drifting from it.
-    if (!vscode.workspace.workspaceFolders?.length) {
+    if (!WorkspaceFS.getPath()) {
       void showLoggedInfoMessage(
         this.channel,
         'Bash approval is a per-workspace setting. Open a workspace folder before changing it.',
@@ -869,7 +869,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleSetAgentSkillsEnabled(enabled: boolean): Promise<void> {
-    if (!vscode.workspace.workspaceFolders?.length) {
+    if (!WorkspaceFS.getPath()) {
       void showLoggedInfoMessage(
         this.channel,
         'Agent skills are a per-workspace setting. Open a workspace folder before changing them.',

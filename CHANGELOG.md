@@ -9,8 +9,8 @@ All notable changes to this project will be documented in this file.
 #### New Features
 
 - **Agent skills can be switched on or off from every interface** — the CLI
-  launcher and the extension or desktop Tools settings now control whether
-  tool-use agents receive TeXRA and imported skills.
+  launcher, the VS Code setting, and the desktop Tools settings now control
+  whether tool-use agents receive TeXRA and imported skills.
 - **Claude Opus 5 support** — the latest Opus 5 models (`opus5`, `opus5T`) are
   available for demanding research and engineering tasks, replacing Opus 4.8
   as the default Anthropic model. Opus 5 keeps the full 1M context window and

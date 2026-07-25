@@ -506,6 +506,7 @@ export class SettingsApp extends SettingsAppBase {
               .loaded=${toolDashboardLoaded.get()}
               .bashApprovalEnabled=${bashApprovalEnabled.get()}
               .agentSkillsEnabled=${agentSkillsEnabled.get()}
+              .showAgentSkillsSettings=${this.isDesktopHost}
               .showDesktopCrashReporting=${!isKnownUnsupported(
                 unsupportedCommands.get(),
                 SETTINGS_VIEW_COMMANDS.GET_DESKTOP_CRASH_REPORTING,

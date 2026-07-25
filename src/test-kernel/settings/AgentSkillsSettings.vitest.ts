@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import type { ConfigInspection, ConfigTarget } from '@platform/interfaces';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AGENT_SKILLS_CONFIG_KEY,
@@ -11,41 +10,16 @@ import {
 import {
   AGENT_SKILLS_CONFIG_TARGET,
   buildAgentSkillsSettingsMessage,
+  readAgentSkillsEnabled,
   setAgentSkillsEnabled,
 } from '@shared/settingsView/handlers/agentSkillsHandlers';
-
-class RecordingConfigProvider {
-  value: boolean | undefined = AGENT_SKILLS_ENABLED_DEFAULT;
-  readonly updateCalls: Array<{
-    key: string;
-    value: unknown;
-    target: ConfigTarget | undefined;
-  }> = [];
-
-  get<T>(_key: string, defaultValue?: T): T {
-    return (this.value ?? defaultValue) as T;
-  }
-
-  async update<T>(key: string, value: T, target?: ConfigTarget): Promise<void> {
-    this.updateCalls.push({ key, value, target });
-  }
-
-  inspect<T = unknown>(_key: string): ConfigInspection<T> | undefined {
-    return undefined;
-  }
-
-  isExplicitlySet(): boolean {
-    return false;
-  }
-
-  watch(): { dispose(): void } {
-    return { dispose: () => undefined };
-  }
-}
+import { FakeConfigProvider } from '@test/support/FakePlatform';
 
 describe('agent skills settings', () => {
   it('builds the shared extension and desktop settings message', () => {
-    const config = new RecordingConfigProvider();
+    const config = new FakeConfigProvider({
+      [AGENT_SKILLS_CONFIG_KEY]: true,
+    });
 
     expect(buildAgentSkillsSettingsMessage(config)).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS,
@@ -54,25 +28,30 @@ describe('agent skills settings', () => {
   });
 
   it('uses the documented default when no setting is present', () => {
-    const config = new RecordingConfigProvider();
-    config.value = undefined;
+    const config = new FakeConfigProvider();
 
     expect(buildAgentSkillsSettingsMessage(config).enabled).toBe(
       AGENT_SKILLS_ENABLED_DEFAULT,
     );
   });
 
+  it('rejects malformed present values at the configuration boundary', () => {
+    const config = new FakeConfigProvider({
+      [AGENT_SKILLS_CONFIG_KEY]: 'false',
+    });
+
+    expect(() => readAgentSkillsEnabled(config)).toThrow();
+  });
+
   it('persists the switch in workspace configuration', async () => {
-    const config = new RecordingConfigProvider();
+    const config = new FakeConfigProvider();
 
     await setAgentSkillsEnabled(config, false);
 
-    expect(config.updateCalls).toEqual([
-      {
-        key: AGENT_SKILLS_CONFIG_KEY,
-        value: false,
-        target: AGENT_SKILLS_CONFIG_TARGET,
-      },
-    ]);
+    expect(config.get(AGENT_SKILLS_CONFIG_KEY)).toBe(false);
+    expect(config.inspect(AGENT_SKILLS_CONFIG_KEY)).toMatchObject({
+      workspaceValue: false,
+    });
+    expect(AGENT_SKILLS_CONFIG_TARGET).toBe('workspace');
   });
 });

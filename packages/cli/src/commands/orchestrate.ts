@@ -5,12 +5,10 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
-import {
-  AGENT_SKILLS_CONFIG_KEY,
-  AGENT_SKILLS_ENABLED_DEFAULT,
-} from '@shared/schemas/agentSkills';
+import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
+import { readAgentSkillsEnabled } from '@shared/settingsView/handlers/agentSkillsHandlers';
 import { getFirstRunDone } from '@shared/state/onboardingState';
-import { getConfig, updateConfig } from '@utils/config';
+import { updateConfig } from '@utils/config';
 
 import { firstRunSetupAgentOverride } from '../onboarding/setupContinuation';
 import { CliExitCode } from '../runtime/exitCodes';
@@ -193,10 +191,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
       includeMultiAgentLoginHint: !presetPlanSet.remoteAgentLoadAttempted,
       modelAccess: launcherModelAccess,
       account: accountStatus,
-      agentSkillsEnabled: getConfig<boolean>(
-        AGENT_SKILLS_CONFIG_KEY,
-        AGENT_SKILLS_ENABLED_DEFAULT,
-      ),
+      agentSkillsEnabled: readAgentSkillsEnabled(platform().config),
       presetLaunchBlockReason:
         launchContext.approvalPolicy === 'never'
           ? 'delegation-denied'

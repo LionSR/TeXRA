@@ -197,6 +197,7 @@ export class ToolsTab extends LitElement {
   @property({ type: Boolean }) loaded = false;
   @property({ type: Boolean }) bashApprovalEnabled = true;
   @property({ type: Boolean }) agentSkillsEnabled = true;
+  @property({ attribute: false }) showAgentSkillsSettings = false;
   @property({ attribute: false }) showDesktopCrashReporting = false;
   @property({ attribute: false }) desktopCrashReportingEnabled = false;
   @property({ attribute: false }) desktopCrashReportingConfigured = false;
@@ -248,7 +249,8 @@ export class ToolsTab extends LitElement {
     `;
   }
 
-  private renderAgentSkillsSettings(): TemplateResult {
+  private renderAgentSkillsSettings(): TemplateResult | typeof nothing {
+    if (!this.showAgentSkillsSettings) return nothing;
     return html`
       <div class="category-section">
         <div class="category-header">${waIcon('robot')} Agent Skills</div>

@@ -34,10 +34,14 @@ function tool(
   };
 }
 
-async function mount(items: ToolDashboardItem[]): Promise<ToolsTab> {
+async function mount(
+  items: ToolDashboardItem[],
+  configure: (element: ToolsTab) => void = () => undefined,
+): Promise<ToolsTab> {
   const element = document.createElement('tools-tab') as ToolsTab;
   element.loaded = true;
   element.items = items;
+  configure(element);
   document.body.append(element);
   await element.updateComplete;
   return element;
@@ -77,8 +81,16 @@ describe('tools-tab availability summary', () => {
     expect(element.shadowRoot?.textContent).not.toContain('need setup');
   });
 
-  it('renders and updates the shared agent-skills switch', async () => {
+  it('leaves the VS Code setting as the extension editable surface', async () => {
     const element = await mount([]);
+
+    expect(element.shadowRoot?.textContent).not.toContain('Agent Skills');
+  });
+
+  it('renders and updates the shared agent-skills switch', async () => {
+    const element = await mount([], (toolsTab) => {
+      toolsTab.showAgentSkillsSettings = true;
+    });
     const skillSwitch = [
       ...(element.shadowRoot?.querySelectorAll('wa-switch') ?? []),
     ].find((candidate) =>

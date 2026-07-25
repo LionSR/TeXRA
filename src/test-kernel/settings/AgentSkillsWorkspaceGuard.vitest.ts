@@ -35,6 +35,9 @@ vi.mock('@frontend/ui/errorHandlingUtils', async (original) => {
 
 // Local imports
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
+import { setupPlatform } from '@test/support/setupPlatform';
+
+setupPlatform({ workspacePath: undefined });
 
 type AgentSkillsHarness = {
   handleSetAgentSkillsEnabled(enabled: boolean): Promise<void>;
@@ -60,16 +63,10 @@ function createHarness(): AgentSkillsHarness {
 
 describe('agent skills workspace guard', () => {
   afterEach(() => {
-    vi.restoreAllMocks();
     vi.clearAllMocks();
-    Reflect.deleteProperty(vscode.workspace, 'workspaceFolders');
   });
 
   it('restores the switch without writing in an empty VS Code window', async () => {
-    Object.defineProperty(vscode.workspace, 'workspaceFolders', {
-      configurable: true,
-      value: undefined,
-    });
     const handler = createHarness();
 
     await handler.handleSetAgentSkillsEnabled(false);

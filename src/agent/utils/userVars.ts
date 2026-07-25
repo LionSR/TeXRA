@@ -17,6 +17,7 @@ import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import {
   AGENT_SKILLS_CONFIG_KEY,
   AGENT_SKILLS_ENABLED_DEFAULT,
+  AgentSkillsEnabledSchema,
 } from '@shared/schemas/agentSkills';
 import {
   loadRuntimeSkillCatalog,
@@ -196,7 +197,9 @@ export async function buildUserVars(
     // work for workflow agents. The settings toggle gives users a hard off
     // switch that skips discovery and leaves AVAILABLE_SKILLS empty.
     agentSetting.agentCategory === AgentCategory.ToolUse &&
-    getConfig<boolean>(AGENT_SKILLS_CONFIG_KEY, AGENT_SKILLS_ENABLED_DEFAULT)
+    AgentSkillsEnabledSchema.parse(
+      getConfig<unknown>(AGENT_SKILLS_CONFIG_KEY, AGENT_SKILLS_ENABLED_DEFAULT),
+    )
       ? loadRuntimeSkillCatalog()
       : Promise.resolve({ catalog: '', issues: [] }),
   ]);
