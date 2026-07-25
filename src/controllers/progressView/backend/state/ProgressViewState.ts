@@ -113,20 +113,16 @@ export interface StreamExecutionState {
   conversationProgress: ConversationProgress;
   roundStage?: RoundStage;
   /** Live children plus the finished ones retained for display (`finishedAt`
-   *  set). Field names match the `child.activity` event `kind`. */
+   *  set). */
   subagents: ActiveChildInfo[];
-  processes: ActiveChildInfo[];
 }
 
 /**
- * Per-stream child-activity rosters, projected from
+ * Per-stream child-activity roster, projected from
  * {@link StreamExecutionState}. Sent to the webview on tab switch and whenever
- * subagent/process activity changes.
+ * subagent activity changes.
  */
-export type StreamBadgeSnapshot = Pick<
-  StreamExecutionState,
-  'subagents' | 'processes'
->;
+export type StreamBadgeSnapshot = Pick<StreamExecutionState, 'subagents'>;
 
 function createExecutionState(
   kind: (typeof AgentCategory)[keyof typeof AgentCategory],
@@ -135,7 +131,6 @@ function createExecutionState(
     kind,
     conversationProgress: { toolCallCount: 0 },
     subagents: [],
-    processes: [],
   };
 }
 
@@ -407,12 +402,8 @@ export class ProgressViewState {
     const retainedSubagents = current.subagents.filter(
       (child) => child.finishedAt !== undefined,
     );
-    const retainedProcesses = current.processes.filter(
-      (child) => child.finishedAt !== undefined,
-    );
     const needsReset =
       retainedSubagents.length > 0 ||
-      retainedProcesses.length > 0 ||
       current.conversationProgress.toolCallCount !== 0 ||
       current.roundStage !== undefined;
 
@@ -420,9 +411,6 @@ export class ProgressViewState {
       this._streamStates.set(stream, {
         ...current,
         subagents: current.subagents.filter(
-          (child) => child.finishedAt === undefined,
-        ),
-        processes: current.processes.filter(
           (child) => child.finishedAt === undefined,
         ),
         conversationProgress: { toolCallCount: 0 },
@@ -436,7 +424,7 @@ export class ProgressViewState {
   }
 
   /**
-   * Project a stream's child rosters for the wire. `streamStatus` — not the
+   * Project a stream's child roster for the wire. `streamStatus` — not the
    * roster row — owns a subagent's phase: a child's roster drop can arrive
    * BEFORE its terminal status (the cancel path untracks the handle, then
    * transitions the stream), so the status stamped into a retained row at drop
@@ -444,16 +432,6 @@ export class ProgressViewState {
    * roster-carrying payload passes through — badges, the tab-switch content
    * sync, and the structural `UPDATE_STREAMS` / `UPDATE_STREAM_METADATA`
    * rebuild alike — so no send path can ship the stale stamped value.
-   *
-   * Processes are passed through, and the trap above is subagent-only.
-   * `childStreamId` is exclusive to subagents (see `ActiveChildInfoSchema`), so
-   * a process owns no stream, has no entry in the status machine, and there is
-   * no second source to resolve its row against — its roster row is the only
-   * report of its state. Nor can one appear: `processes` is projected from
-   * `collectChildSummary(parent, ProcessExecutionHandle)`, and production never
-   * constructs a `ProcessExecutionHandle` — a background `bash`/`codex` run is
-   * an `AgentExecutionHandle` (see `executionRegistry.killBackgroundProcesses`),
-   * so the roster is empty outside tests.
    */
   projectChildRosters(state: StreamExecutionState): StreamBadgeSnapshot {
     return {
@@ -466,7 +444,6 @@ export class ProgressViewState {
             }
           : child,
       ),
-      processes: state.processes,
     };
   }
 

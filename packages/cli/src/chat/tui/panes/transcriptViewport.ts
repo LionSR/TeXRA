@@ -36,7 +36,7 @@ function estimateLiveTranscriptEntryRows(
   executionLabels?: ExecutionLabels,
 ): number {
   // Live mode captures the pending-pane paint contract: assistant text uses
-  // its capped raw tail, while rich tool/process rows keep one descriptor
+  // its capped raw tail, while rich tool rows keep one descriptor
   // line per terminal row instead of being reflowed like plain projections.
   return estimateEntryRows(() =>
     transcriptEntryLayoutRows(

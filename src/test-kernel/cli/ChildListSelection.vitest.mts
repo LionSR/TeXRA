@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  childListProcessId,
   childListStreamId,
-  childProcessListValue,
   childStreamListValue,
   INITIAL_CHILD_LIST_SELECTION,
   reduceChildListSelection,
@@ -14,9 +12,10 @@ import type { StreamTabId } from '@shared/schemas';
 
 const main = 'main' as StreamTabId;
 const strategy = 'strategy' as StreamTabId;
+const analysis = 'analysis' as StreamTabId;
 const mainValue = childStreamListValue(main);
 const strategyValue = childStreamListValue(strategy);
-const processValue = childProcessListValue('latexmk-1');
+const analysisValue = childStreamListValue(analysis);
 
 function reconcileSelection(
   state: ChildListSelectionState,
@@ -31,35 +30,32 @@ function reconcileSelection(
 }
 
 describe('CLI child list selection', () => {
-  it('uses stable prefixed values for heterogeneous rows', () => {
+  it('uses stable prefixed values for child rows', () => {
     expect(mainValue).toBe('stream:main');
-    expect(processValue).toBe('process:latexmk-1');
     expect(childListStreamId(mainValue)).toBe(main);
-    expect(childListStreamId(processValue)).toBeUndefined();
-    expect(childListProcessId(processValue)).toBe('latexmk-1');
-    expect(childListProcessId(mainValue)).toBeUndefined();
+    expect(childListStreamId(undefined)).toBeUndefined();
   });
 
-  it('preserves a process selection across list focus and row reordering', () => {
+  it('preserves a selection across list focus and row reordering', () => {
     let state = reconcileSelection(
       INITIAL_CHILD_LIST_SELECTION,
-      [mainValue, strategyValue, processValue],
+      [mainValue, strategyValue, analysisValue],
       main,
     );
     state = reduceChildListSelection(state, { kind: 'focus' });
     state = reduceChildListSelection(state, {
       kind: 'highlight',
-      value: processValue,
+      value: analysisValue,
     });
     state = reconcileSelection(
       state,
-      [strategyValue, processValue, mainValue],
+      [strategyValue, analysisValue, mainValue],
       main,
     );
 
     expect(state).toEqual({
       focused: true,
-      selectedValue: processValue,
+      selectedValue: analysisValue,
     });
   });
 
@@ -115,7 +111,7 @@ describe('CLI child list selection', () => {
       {
         kind: 'syncActiveStream',
         streamId: main,
-        values: [processValue],
+        values: [analysisValue],
       },
     );
 
@@ -129,38 +125,42 @@ describe('CLI child list selection', () => {
     let state = reconcileSelection(
       {
         focused: true,
-        selectedValue: childProcessListValue('gone'),
+        selectedValue: childStreamListValue('gone' as StreamTabId),
       },
-      [processValue, mainValue],
+      [analysisValue, mainValue],
       main,
     );
     expect(state.selectedValue).toBe(mainValue);
 
-    state = reconcileSelection(state, [processValue, strategyValue], undefined);
-    expect(state.selectedValue).toBe(processValue);
+    state = reconcileSelection(
+      state,
+      [analysisValue, strategyValue],
+      undefined,
+    );
+    expect(state.selectedValue).toBe(analysisValue);
   });
 
-  it('does not preselect a process while the active root is absent from the list', () => {
+  it('does not preselect a row while the active root is absent from the list', () => {
     let state = reconcileSelection(
       INITIAL_CHILD_LIST_SELECTION,
-      [processValue],
+      [analysisValue],
       main,
     );
     expect(state.selectedValue).toBeUndefined();
 
     state = reduceChildListSelection(state, {
       kind: 'focus',
-      value: processValue,
+      value: analysisValue,
     });
     expect(state).toEqual({
       focused: true,
-      selectedValue: processValue,
+      selectedValue: analysisValue,
     });
   });
 
   it('returns input after a stream is focused', () => {
     const state = reduceChildListSelection(
-      { focused: true, selectedValue: processValue },
+      { focused: true, selectedValue: analysisValue },
       { kind: 'focusStream', streamId: strategy },
     );
     expect(state).toEqual({

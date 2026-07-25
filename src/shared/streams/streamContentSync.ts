@@ -26,7 +26,6 @@ interface ActiveStreamContentSync {
   roundStage: RoundStage | null;
   badges: {
     subagents: ActiveChildInfo[];
-    processes: ActiveChildInfo[];
   };
   parentStreamId: StreamTabId | null;
 }
