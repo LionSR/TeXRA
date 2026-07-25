@@ -404,9 +404,8 @@ export class SessionHandle {
   private teardownOwners(): void {
     this.subscriptions.dispose();
     this.executions.dispose();
-    // Settle any approval still pending in this session (rejected) and drop
-    // its bypass state before the interaction slot itself is torn down.
-    this.approvals.rejectAndClearAll();
+    // Drop bypass state before the interaction slot settles pending approvals.
+    this.approvals.clearAll();
     this.modelRetries.dispose();
     this.interactions.dispose();
     this.artifactFlushers.clear();

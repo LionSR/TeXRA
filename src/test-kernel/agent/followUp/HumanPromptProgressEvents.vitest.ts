@@ -218,12 +218,8 @@ describe('human prompt progress events', () => {
     const explicit = createRecordingHost();
     const streamId = 'stream:tool-edit-bypass' as StreamTabId;
 
-    const enabled = defaultSession().approvals.toolEdit.bypass.toggleBypass(
-      streamId,
-      explicit.host,
-    );
+    setToolEditApprovalSessionBypass(streamId, true, explicit.host);
 
-    expect(enabled).toBe(true);
     expect(explicit.events).toEqual([
       {
         event: 'updateToolEditApprovalBypassState',
@@ -236,12 +232,8 @@ describe('human prompt progress events', () => {
     const explicit = createRecordingHost();
     const streamId = 'stream:bash-bypass' as StreamTabId;
 
-    const enabled = defaultSession().approvals.bash.bypass.toggleBypass(
-      streamId,
-      explicit.host,
-    );
+    setBashApprovalSessionBypass(streamId, true, explicit.host);
 
-    expect(enabled).toBe(true);
     expect(explicit.events).toEqual([
       {
         event: 'updateBashApprovalBypassState',
@@ -332,9 +324,8 @@ describe('human prompt progress events', () => {
     const explicit = createRecordingHost();
     const streamId = 'stream:proposal-bypass' as StreamTabId;
 
-    const enabled = proposalApprovals().toggleBypass(streamId, explicit.host);
+    proposalApprovals().setBypass(streamId, true, explicit.host);
 
-    expect(enabled).toBe(true);
     expect(explicit.events).toEqual([
       {
         event: 'updateSuperYoloBypassState',

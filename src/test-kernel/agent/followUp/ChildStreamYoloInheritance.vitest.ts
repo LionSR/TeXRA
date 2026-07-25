@@ -176,10 +176,7 @@ describe('child subagent stream approval inheritance', () => {
     expect(isApprovalBypassedForStream(roundTwo)).toBe(true);
   });
 
-  it('toggling a stream that only inherits bypass turns it off on the first press', () => {
-    // Toggle used to flip the stream's own (unset) explicit entry —
-    // `!undefined` — landing on an explicit `true` that looked like a no-op
-    // to the user. It must flip the *resolved* state instead.
+  it('an explicit child value overrides inherited bypass without touching the parent', () => {
     const { host } = createRecordingHost();
     const parent = 'stream:parent-toggle' as StreamTabId;
     const child = 'stream:child-toggle' as StreamTabId;
@@ -187,13 +184,9 @@ describe('child subagent stream approval inheritance', () => {
     configureDelegatedChildApprovals(child, parent);
     expect(isBashApprovalBypassedForStream(child)).toBe(true);
 
-    const first = currentSession().approvals.bash.bypass.toggleBypass(
-      child,
-      host,
-    );
-    expect(first).toBe(false);
+    setBashApprovalSessionBypass(child, false, host);
     expect(isBashApprovalBypassedForStream(child)).toBe(false);
-    // The parent's own bypass is untouched by the child's toggle.
+    // The parent's own bypass is untouched by the child's explicit value.
     expect(isBashApprovalBypassedForStream(parent)).toBe(true);
   });
 
