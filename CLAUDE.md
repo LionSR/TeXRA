@@ -144,9 +144,6 @@ services/shared-store split: AGENTS.md "Patterns across the codebase"
   `npm run check:dead-code-ratchet` enforces it against
   `config/ratchets/knip-baseline.json`.
 - **Serialize async work with `p-queue`**, never a hand-rolled promise chain.
-  Standing migration targets, adopt when touched: `writeChains` in
-  `src/platform/defaults/jsonStore.ts` and `todoPersistChain` in
-  `ToolUseCycleNode.ts`.
 
 Full rationale and the evidence behind each: AGENTS.md "Design and
 refactoring" and "Code quality rules".

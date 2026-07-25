@@ -1,4 +1,5 @@
 // Third-party imports
+import PQueue from 'p-queue';
 import { z } from 'zod';
 
 // Local imports - storage
@@ -292,12 +293,12 @@ async function runPersistedWorkflowScriptLocked(
   });
 
   let acceptingEntries = true;
-  let writeQueue = Promise.resolve();
+  const writeQueue = new PQueue({ concurrency: 1 });
   const persistEntry = async (entry: WorkflowJournalEntry): Promise<void> => {
     if (!acceptingEntries) return;
     journalByIndex.set(entry.index, entry);
     const snapshot = orderedJournal(journalByIndex.values());
-    writeQueue = writeQueue.then(() =>
+    await writeQueue.add(() =>
       writeWorkflowScriptCheckpoint(store, checkpointId, {
         script,
         args,
@@ -305,7 +306,6 @@ async function runPersistedWorkflowScriptLocked(
         journal: snapshot,
       }),
     );
-    await writeQueue;
   };
 
   try {
@@ -318,7 +318,7 @@ async function runPersistedWorkflowScriptLocked(
       onJournalEntry: persistEntry,
     });
     acceptingEntries = false;
-    await writeQueue;
+    await writeQueue.onIdle();
     await writeWorkflowScriptCheckpoint(store, checkpointId, {
       script,
       args,
@@ -330,9 +330,9 @@ async function runPersistedWorkflowScriptLocked(
     acceptingEntries = false;
     // L2 cleanup: each journal write is awaited by the engine before it can
     // continue, so this rejection is the error already leaving the run.
-    // Observe the queue here only to prevent a duplicate unhandled-rejection
-    // report.
-    await writeQueue.catch(() => {});
+    // `onIdle` never rejects, so draining here can't produce a duplicate
+    // unhandled-rejection report.
+    await writeQueue.onIdle();
     throw error;
   }
 }

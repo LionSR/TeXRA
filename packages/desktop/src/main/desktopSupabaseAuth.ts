@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
+import PQueue from 'p-queue';
 import { z } from 'zod';
 
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
@@ -110,17 +111,15 @@ export function createDesktopAuthCallbackState(
   store?: Pick<StateStore, 'get' | 'update'>,
 ): DesktopAuthCallbackState {
   let pendingState = readPendingOAuthState(store);
-  let persistQueue = Promise.resolve();
+  const persistQueue = new PQueue({ concurrency: 1 });
 
   const persistPendingState = async (
     state: DesktopPendingOAuthState | null,
   ): Promise<void> => {
     if (!store) return;
-    const update = persistQueue.then(() =>
+    await persistQueue.add(() =>
       store.update(DESKTOP_PENDING_OAUTH_STATE_KEY, state),
     );
-    persistQueue = update.catch(() => undefined);
-    await update;
   };
 
   if (pendingState && isPendingOAuthStateExpired(pendingState)) {
@@ -200,15 +199,11 @@ export function createDesktopSupabaseAuth(
     { readonly generation: number; readonly nonce: string } | undefined;
   const ownsAttempt = (generation: number, nonce: string): boolean =>
     activeAttempt?.generation === generation && activeAttempt.nonce === nonce;
-  let authCommitQueue = Promise.resolve();
-  const runAuthCommit = <T>(commit: () => Promise<T>): Promise<T> => {
-    const result = authCommitQueue.then(commit);
-    authCommitQueue = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    return result;
-  };
+  const authCommitQueue = new PQueue({ concurrency: 1 });
+  // `add` widens to `T | void` to cover abort via signal/timeout; we pass
+  // neither, so the task always runs and resolves with `T`.
+  const runAuthCommit = <T>(commit: () => Promise<T>): Promise<T> =>
+    authCommitQueue.add(commit) as Promise<T>;
   const invalidateActiveAttempt = (): void => {
     attemptGeneration += 1;
     activeAttempt = undefined;
