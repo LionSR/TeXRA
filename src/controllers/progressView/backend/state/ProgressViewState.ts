@@ -4,7 +4,6 @@ import { z } from 'zod';
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { TaskState } from '@agent/core/state/TaskState';
 import type { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
@@ -365,38 +364,15 @@ export class ProgressViewState {
     return metadata;
   }
 
-  setStreamTaskState(
-    stream: StreamTabId,
-    taskState: TaskState,
-    executionId?: ExecutionId,
-    stateOwnership: 'backend' | 'session' = 'backend',
-  ): void {
-    if (stateOwnership === 'backend') {
-      this.snapshots.setTaskState(stream, taskState, executionId);
-    }
-    this.refreshStreamMetadataFromSnapshot(stream);
-  }
-
   setStreamParent(
     stream: StreamTabId,
     parent: StreamTabId | null | undefined,
-    stateOwnership: 'backend' | 'session' = 'backend',
   ): void {
-    if (stateOwnership === 'backend') {
-      this.snapshots.setParentStream(stream, parent);
-    }
     const metadata = this.getOrCreateSession(stream).metadata;
     metadata.parentStreamId = parent ?? undefined;
   }
 
-  setStreamDescription(
-    stream: StreamTabId,
-    description: string,
-    stateOwnership: 'backend' | 'session' = 'backend',
-  ): void {
-    if (stateOwnership === 'backend') {
-      this.snapshots.setDescription(stream, description);
-    }
+  setStreamDescription(stream: StreamTabId, description: string): void {
     this.getOrCreateSession(stream).metadata.description = description;
   }
 
