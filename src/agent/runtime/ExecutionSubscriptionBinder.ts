@@ -14,7 +14,6 @@
 import { createChannelTrace } from '@agent/trace';
 import type { ExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { StreamTabId } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
@@ -85,7 +84,6 @@ class ExecutionSubscription implements Disposable {
   constructor(
     private readonly streamId: StreamTabId,
     handle: ExecutionHandle,
-    private readonly runtimeHost: AgentRuntimeHost,
     private readonly registry: Pick<
       ExecutionRegistry,
       'addListener' | 'getHandle' | 'getStatus'
@@ -207,11 +205,7 @@ export class ExecutionSubscriptionBinder {
    * not currently tracked — terminal executions cannot be subscribed (use
    * `executions view` to read the final report).
    */
-  bind(
-    streamId: StreamTabId,
-    executionId: string,
-    runtimeHost: AgentRuntimeHost,
-  ): void {
+  bind(streamId: StreamTabId, executionId: string): void {
     this.ensureReleaseHook();
 
     const handle = this.registry.getHandle(executionId);
@@ -231,7 +225,6 @@ export class ExecutionSubscriptionBinder {
     const subscription = new ExecutionSubscription(
       streamId,
       handle,
-      runtimeHost,
       this.registry,
       this.logger,
       () => this.removeBoundKey(streamId, executionId),

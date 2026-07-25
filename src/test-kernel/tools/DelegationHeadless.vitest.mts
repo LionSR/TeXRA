@@ -1179,7 +1179,7 @@ describe('headless delegation', () => {
         // Detach happens between the loop capturing the handle (onRun, above)
         // and the loop delivering this turn's result (after this resolves) —
         // the same ordering a real stop-with-detach produces mid-turn.
-        defaultSession().executions.detachActiveChildren(parentStreamId, host);
+        defaultSession().executions.detachActiveChildren(parentStreamId);
         return {
           category: 'toolUse',
           outcome: STREAM_PHASE.WAITING,
