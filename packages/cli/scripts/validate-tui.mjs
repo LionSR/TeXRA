@@ -672,7 +672,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       '/api',
-      'Choose ChatGPT, included TeXRA',
+      'Choose ChatGPT, Kimi Code',
       '/auth',
       'Show both accounts and active',
       '/login',
@@ -1046,7 +1046,7 @@ const SCENARIOS = [
     name: 'config-category-back-responsive',
     env: { HARNESS_ENTRIES: '4' },
     // Reuses the shared Select instance across category -> list -> category.
-    keys: ['/config', '\r', '\r', ESC, DOWN, '\r'],
+    keys: ['/config', '\r', '\r', ESC, DOWN, DOWN, '\r'],
     frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
@@ -1118,7 +1118,7 @@ const SCENARIOS = [
       '/tools',
       'Toggle available external integrations',
       'always on ·',
-      'enabled · detected · Ready',
+      'disabled · detected · Ready',
     ],
     unexpect: ['[TeXRA]', 'toolUtils', 'enabled -', 'TeXRA CLI'],
     maxBlankLinesBetween: [
@@ -1307,7 +1307,7 @@ const SCENARIOS = [
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/memory',
-      'Choose a memory to preview in the transcript.',
+      'Choose a memory to preview. Press Esc to close.',
       '/memories/project.md',
       '/memories/ideas.md',
       '/memories/notes/plan.md',
@@ -1358,9 +1358,9 @@ const SCENARIOS = [
     expect: [
       '/tools',
       'Toggle available external integrations',
-      '+1 earlier, +4 more',
+      '+1 earlier, +5 more',
       '↑/↓ navigate',
-      '1-6/Enter toggle',
+      '1-7/Enter toggle',
       'Esc close',
     ],
     unexpect: ['[TeXRA]', 'toolUtils', 'enabled -', 'TeXRA CLI'],
@@ -2256,9 +2256,9 @@ const SCENARIOS = [
       'strategy',
       'leanSolver',
       'reviewer',
-      // Child rows summarize the subagent's latest instruction/response.
-      '· Please handle the harness-child-review',
-      'main.tex: Proof sketch',
+      // Child rows show the stream description supplied by the harness.
+      'reviewer sub-workflow',
+      'leanSolver sub-workflow',
       // Right-aligned metadata column: generated tokens for a child with usage.
       '↓40k',
       '3 sub',
@@ -2433,16 +2433,17 @@ const SCENARIOS = [
       { expect: ['1 sub', 'orderChecker running'] },
       { expect: ['1 sub', 'orderChecker running'] },
       {
-        // Promoted to top-level: no longer active under root, but the
-        // unified root session list no longer includes the unrelated row.
-        expect: ['main running'],
-        unexpect: ['1 sub', 'orderChecker'],
+        // Promoted to top-level: no longer active under root. The historical
+        // relationship still contributes to the retained subagent count, but
+        // the unified root session list omits the unrelated row.
+        expect: ['main running', '1 sub'],
+        unexpect: ['orderChecker'],
       },
       {
         // A stale roster resend from the former parent must not resurrect
-        // the edge or active membership.
-        expect: ['main running'],
-        unexpect: ['1 sub', 'orderChecker'],
+        // the edge or active membership; only retained history remains.
+        expect: ['main running', '1 sub'],
+        unexpect: ['orderChecker'],
       },
     ],
     // Prove the root session list remains interactive after the late fact.
@@ -2530,12 +2531,11 @@ const SCENARIOS = [
       {
         // Untrack (roster omission) arrives before the terminal status: the
         // retained/historical row survives, but active membership does not.
-        expect: ['orderChecker running'],
-        unexpect: ['1 sub'],
+        expect: ['orderChecker running', '1 sub'],
       },
       {
-        expect: ['orderChecker completed'],
-        unexpect: ['1 sub', 'orderChecker running'],
+        expect: ['orderChecker completed', '1 sub'],
+        unexpect: ['orderChecker running'],
       },
       {
         // Removal scrubs every trace, including the retained/historical row.
@@ -2582,10 +2582,10 @@ const SCENARIOS = [
       'strategy running',
       'leanSolver waiting for you',
       'reviewer error',
-      '2 sub',
+      '3 sub',
       'Tab children',
     ],
-    unexpect: ['reviewer running', '3 sub'],
+    unexpect: ['reviewer running'],
   },
   {
     name: 'subagents-with-todos-compact',
