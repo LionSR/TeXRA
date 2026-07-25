@@ -20,6 +20,13 @@ const originalGlobals = {
   CSSStyleSheet: globalThis.CSSStyleSheet,
   Event: globalThis.Event,
   CustomEvent: globalThis.CustomEvent,
+  AbortController: globalThis.AbortController,
+  AbortSignal: globalThis.AbortSignal,
+  HTMLSlotElement: globalThis.HTMLSlotElement,
+  requestAnimationFrame: (globalThis as { requestAnimationFrame?: unknown })
+    .requestAnimationFrame,
+  cancelAnimationFrame: (globalThis as { cancelAnimationFrame?: unknown })
+    .cancelAnimationFrame,
   ResizeObserver: globalThis.ResizeObserver,
   Node: (globalThis as { Node?: unknown }).Node,
 };
@@ -44,6 +51,17 @@ function installDom(): void {
   globalThis.CSSStyleSheet = dom.window.CSSStyleSheet;
   globalThis.Event = dom.window.Event;
   globalThis.CustomEvent = dom.window.CustomEvent;
+  globalThis.AbortController = dom.window.AbortController;
+  globalThis.AbortSignal = dom.window.AbortSignal;
+  globalThis.HTMLSlotElement = dom.window.HTMLSlotElement;
+  globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) =>
+    setTimeout(() => cb(performance.now()), 0) as unknown as number) as (
+    cb: FrameRequestCallback,
+  ) => number;
+  globalThis.cancelAnimationFrame = ((handle: number) =>
+    clearTimeout(handle as unknown as ReturnType<typeof setTimeout>)) as (
+    handle: number,
+  ) => void;
   globalThis.ResizeObserver = NoopResizeObserver;
   (globalThis as { Node: unknown }).Node = dom.window.Node;
   installAttachInternalsFallback(
@@ -64,11 +82,30 @@ function restoreDom(): void {
   globalThis.CSSStyleSheet = originalGlobals.CSSStyleSheet;
   globalThis.Event = originalGlobals.Event;
   globalThis.CustomEvent = originalGlobals.CustomEvent;
+  globalThis.AbortController = originalGlobals.AbortController;
+  globalThis.AbortSignal = originalGlobals.AbortSignal;
+  restoreOptionalGlobal('HTMLSlotElement', originalGlobals.HTMLSlotElement);
+  restoreOptionalGlobal(
+    'requestAnimationFrame',
+    originalGlobals.requestAnimationFrame,
+  );
+  restoreOptionalGlobal(
+    'cancelAnimationFrame',
+    originalGlobals.cancelAnimationFrame,
+  );
   globalThis.ResizeObserver = originalGlobals.ResizeObserver;
   if (originalGlobals.Node === undefined) {
     delete (globalThis as { Node?: unknown }).Node;
   } else {
     (globalThis as { Node: unknown }).Node = originalGlobals.Node;
+  }
+}
+
+function restoreOptionalGlobal(key: string, value: unknown): void {
+  if (value === undefined) {
+    delete (globalThis as Record<string, unknown>)[key];
+  } else {
+    (globalThis as Record<string, unknown>)[key] = value;
   }
 }
 
@@ -100,6 +137,32 @@ describe('worktree-chip', () => {
     });
 
     expect(element.shadowRoot?.textContent).toContain('issue-4018');
+  });
+
+  it('uses shared tooltips for PR metadata without duplicate ids', async () => {
+    const element = await mountChip({
+      workingDirectory: '/tmp/texra/issue-4018',
+      branch: 'issue-4018',
+      pr: {
+        number: 42,
+        state: 'open',
+        title: 'Tooltip migration',
+        additions: 3,
+        deletions: 1,
+        ciState: 'success',
+      },
+    });
+    const shadow = element.shadowRoot!;
+    const ids = [...shadow.querySelectorAll<HTMLElement>('[id]')].map(
+      (node) => node.id,
+    );
+
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(shadow.querySelector('[title]')).toBeNull();
+    expect(shadow.querySelectorAll('wa-tooltip')).toHaveLength(6);
+    expect(
+      shadow.querySelector('wa-tooltip[for="worktree-pr-title"]')?.textContent,
+    ).toBe('Tooltip migration');
   });
 
   it('exposes dirty state to assistive technology', async () => {

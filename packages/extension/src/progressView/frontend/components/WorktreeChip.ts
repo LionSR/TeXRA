@@ -14,6 +14,7 @@ import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
 
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 const PR_STATE_LABEL: Record<WorktreePRState, string> = {
   [WORKTREE_PR_STATE.OPEN]: 'Open',
@@ -182,12 +183,14 @@ export class WorktreeChip extends LitElement {
 
   private renderPRPill(state: WorktreePRState): TemplateResult {
     return html`<wa-badge
-      class="pill"
-      variant=${PR_STATE_VARIANT[state]}
-      appearance="filled"
-      title=${`PR ${PR_STATE_LABEL[state]}`}
-      >${PR_STATE_LABEL[state]}</wa-badge
-    >`;
+        id="worktree-pr-state"
+        class="pill"
+        variant=${PR_STATE_VARIANT[state]}
+        appearance="filled"
+        >${PR_STATE_LABEL[state]}</wa-badge
+      ><wa-tooltip for="worktree-pr-state"
+        >PR ${PR_STATE_LABEL[state]}</wa-tooltip
+      >`;
   }
 
   private renderBranch(): TemplateResult | typeof nothing {
@@ -197,20 +200,21 @@ export class WorktreeChip extends LitElement {
     const tooltip = this.info.dirty
       ? `${branchKind} ${branch} (uncommitted changes)`
       : `${branchKind} ${branch}`;
-    return html`<span class="branch" title=${tooltip}>
-      ${waIcon('code-branch')}
-      <span class="branch-name">${branch}</span>
-      ${
-        this.info.dirty
-          ? html`<span
-                class="dirty-dot"
-                role="img"
-                aria-label="uncommitted changes"
-              ></span>
-              <span class="sr-only">uncommitted changes</span>`
-          : nothing
-      }
-    </span>`;
+    return html`<span id="worktree-branch" class="branch">
+        ${waIcon('code-branch')}
+        <span class="branch-name">${branch}</span>
+        ${
+          this.info.dirty
+            ? html`<span
+                  class="dirty-dot"
+                  role="img"
+                  aria-label="uncommitted changes"
+                ></span>
+                <span class="sr-only">uncommitted changes</span>`
+            : nothing
+        }
+      </span>
+      <wa-tooltip for="worktree-branch">${tooltip}</wa-tooltip>`;
   }
 
   private worktreeLabel(): string | undefined {
@@ -224,37 +228,41 @@ export class WorktreeChip extends LitElement {
     const titleAttr = pr.title ? `#${pr.number} ${pr.title}` : `#${pr.number}`;
     const showStats = pr.additions != null || pr.deletions != null;
     return html`
-      <span class="pr-number" title=${titleAttr}>#${pr.number}</span>
+      <span id="worktree-pr-number" class="pr-number">#${pr.number}</span>
+      <wa-tooltip for="worktree-pr-number">${titleAttr}</wa-tooltip>
       ${
         pr.title
-          ? html`<span class="pr-title" title=${pr.title}>${pr.title}</span>`
+          ? html`<span id="worktree-pr-title" class="pr-title">${pr.title}</span
+              ><wa-tooltip for="worktree-pr-title">${pr.title}</wa-tooltip>`
           : nothing
       }
       ${
         showStats
-          ? html`<span class="diff-stats" title="Lines changed">
-              ${
-                pr.additions != null
-                  ? html`<span class="diff-added">+${pr.additions}</span>`
-                  : nothing
-              }
-              ${
-                pr.deletions != null
-                  ? html`<span class="diff-removed">−${pr.deletions}</span>`
-                  : nothing
-              }
-            </span>`
+          ? html`<span id="worktree-diff-stats" class="diff-stats">
+                ${
+                  pr.additions != null
+                    ? html`<span class="diff-added">+${pr.additions}</span>`
+                    : nothing
+                }
+                ${
+                  pr.deletions != null
+                    ? html`<span class="diff-removed">−${pr.deletions}</span>`
+                    : nothing
+                }
+              </span>
+              <wa-tooltip for="worktree-diff-stats">Lines changed</wa-tooltip>`
           : nothing
       }
       ${
         pr.ciState
           ? html`<wa-icon
-              library=${TEXRA_ICON_LIBRARY}
-              name=${CI_ICON[ci]}
-              class=${classMap({ 'ci-icon': true, [`ci-${ci}`]: true })}
-              title=${CI_LABEL[ci]}
-              aria-label=${CI_LABEL[ci]}
-            ></wa-icon>`
+                id="worktree-ci-status"
+                library=${TEXRA_ICON_LIBRARY}
+                name=${CI_ICON[ci]}
+                class=${classMap({ 'ci-icon': true, [`ci-${ci}`]: true })}
+                aria-label=${CI_LABEL[ci]}
+              ></wa-icon>
+              <wa-tooltip for="worktree-ci-status">${CI_LABEL[ci]}</wa-tooltip>`
           : nothing
       }
     `;
