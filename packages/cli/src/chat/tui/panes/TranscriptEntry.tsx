@@ -17,6 +17,7 @@ import { childStatusColor } from './SubagentListDisplay';
 import { ToolUseRow } from './ToolUseRow';
 import {
   LIVE_TAIL_ROWS,
+  WORKFLOW_TASK_STATUS_STYLE,
   boundedTranscriptEntryLayout,
   transcriptEntryLayout,
   type TranscriptEntryLayout,
@@ -82,15 +83,19 @@ function PlainEntryRows({
     );
   }
 
+  // Workflow-task rows carry the same status color as their layout marker, so
+  // the six statuses stay distinguishable at a glance.
+  let rowColor: string | undefined;
+  if (entry.role === 'error') {
+    rowColor = COLOR_ERROR;
+  } else if (entry.role === 'workflowTask' && colorEnabled !== false) {
+    rowColor = WORKFLOW_TASK_STATUS_STYLE[entry.task.status].color;
+  }
+
   return (
     <Box {...boxProps}>
       <Text
-        color={
-          entry.role === 'error' ||
-          (entry.role === 'workflowTask' && entry.task.status === 'failed')
-            ? COLOR_ERROR
-            : undefined
-        }
+        color={rowColor}
         inverse={entry.role === 'user' && colorEnabled !== false}
       >
         {lines.join('\n')}

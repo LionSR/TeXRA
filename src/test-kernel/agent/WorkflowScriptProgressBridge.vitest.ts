@@ -163,7 +163,9 @@ return await agent('Run one', { id: 'used' })`,
         reason: 'not-reached',
       },
     });
-    expect(activities).toContain('Skipped: Unused task');
+    expect(activities).toContain(
+      'Skipped: Unused task — The workflow ended before this task was reached.',
+    );
   });
 
   it('marks a planned task failed when the live-call cap refuses it', async () => {

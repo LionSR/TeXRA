@@ -28,6 +28,12 @@ export const TODO_DONE = '☑';
 export const TODO_ACTIVE = '☐';
 export const TODO_PENDING = '□';
 
+/** Terminal-failure marker; the ✗/✓ counterpart to TICK. */
+export const CROSS = '✗';
+
+/** Work deliberately not done: a user skip or a task the run never reached. */
+export const SKIP_CIRCLE = '⊘';
+
 /** Transcript row prefixes (trailing space included for the gutter). User rows
  *  (and the default fallback) reuse the same chevron as selects (POINTER) so the
  *  look stays consistent; error rows use a bang. Assistant rows carry no prefix
