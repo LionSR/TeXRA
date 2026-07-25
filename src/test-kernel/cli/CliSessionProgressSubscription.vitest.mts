@@ -279,21 +279,6 @@ const PROGRESS_PROJECTION_CASES = {
     }),
     payload: { parentStreamId: streamId, processes: [process] },
   },
-  updateProcessOutput: {
-    source: runEvent({
-      type: 'process.output',
-      parentStreamId: streamId,
-      executionId: processExecutionId,
-      stdout: 'compiled paper.pdf\n',
-      stderr: '',
-    }),
-    payload: {
-      parentStreamId: streamId,
-      executionId: processExecutionId,
-      stdout: 'compiled paper.pdf\n',
-      stderr: '',
-    },
-  },
   updateStreamDescription: {
     source: sessionFact('updateStreamDescription', {
       streamId,

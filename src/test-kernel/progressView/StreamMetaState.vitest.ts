@@ -19,7 +19,6 @@ import {
   createStreamState,
   STREAM_PHASE,
   STREAM_SUBSTATE,
-  STREAM_STATUS,
   type ProgressViewOutboundHandlerRegistry,
   type ProgressViewOutboundMessage,
   type StreamTabId,
@@ -31,32 +30,6 @@ import { assertSupported } from '@shared/utils/dispatcher';
 function seedState(initialState: ProgressState): () => ProgressState {
   appState.set(initialState);
   return () => appState.get();
-}
-
-function createProcessState(streamId: StreamTabId): ProgressState {
-  const state = createInitialState();
-  state.activeStreamId = streamId;
-  state.streamStates.set(
-    streamId,
-    createStreamState(AgentCategory.Workflow, {
-      processes: [
-        {
-          kind: 'process',
-          executionId: 'active-process',
-          agentName: 'bash',
-          status: STREAM_STATUS.RUNNING,
-        },
-      ],
-    } satisfies Partial<StreamState>),
-  );
-  state.processOutputs.set(
-    streamId,
-    new Map([
-      ['active-process', { stdout: 'old-active', stderr: '' }],
-      ['stale-process', { stdout: 'old-stale', stderr: '' }],
-    ]),
-  );
-  return state;
 }
 
 function dispatch(
@@ -81,7 +54,7 @@ function registerWorkflowStream(
   });
 }
 
-describe('process output frontend state', () => {
+describe('stream meta frontend state', () => {
   beforeEach(() => {
     resetProgressState();
   });
@@ -173,85 +146,6 @@ describe('process output frontend state', () => {
     expect(getState().activeStreamId).toBe(siblingId);
     expect(getState().streamFilter).toBe('toolUse');
     expect([...getState().streamById.keys()]).toEqual([siblingId, streamId]);
-  });
-
-  it('appends output without pruning sibling process entries', () => {
-    const streamId = 'stream-a' as StreamTabId;
-    const getState = seedState(createProcessState(streamId));
-
-    dispatch(streamMetaHandlers, {
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT,
-      stream: streamId,
-      executionId: 'active-process',
-      stdout: '-new',
-      stderr: 'warn',
-    });
-
-    const outputs = getState().processOutputs.get(streamId);
-    expect(outputs?.get('active-process')).toEqual({
-      stdout: 'old-active-new',
-      stderr: 'warn',
-    });
-    expect(outputs?.get('stale-process')).toEqual({
-      stdout: 'old-stale',
-      stderr: '',
-    });
-  });
-
-  it('prunes stale process entries when badges change', () => {
-    const streamId = 'stream-a' as StreamTabId;
-    const getState = seedState(createProcessState(streamId));
-
-    dispatch(streamMetaHandlers, {
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
-      stream: streamId,
-      subagents: [],
-      processes: [
-        {
-          kind: 'process',
-          executionId: 'active-process',
-          agentName: 'bash',
-          status: STREAM_STATUS.RUNNING,
-        },
-      ],
-    });
-
-    const outputs = getState().processOutputs.get(streamId);
-    expect(outputs?.has('active-process')).toBe(true);
-    expect(outputs?.has('stale-process')).toBe(false);
-  });
-
-  it('still prunes when the roster carries retained finished processes', () => {
-    const streamId = 'stream-a' as StreamTabId;
-    const getState = seedState(createProcessState(streamId));
-
-    // The retained finished row must not keep `stale-process` output alive:
-    // only the live subset feeds the prune.
-    dispatch(streamMetaHandlers, {
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
-      stream: streamId,
-      subagents: [],
-      processes: [
-        {
-          kind: 'process',
-          executionId: 'active-process',
-          agentName: 'bash',
-          status: STREAM_STATUS.RUNNING,
-        },
-        {
-          kind: 'process',
-          executionId: 'stale-process',
-          agentName: 'bash',
-          status: STREAM_PHASE.COMPLETED,
-          finishedAt: 1,
-        },
-      ],
-    });
-
-    const outputs = getState().processOutputs.get(streamId);
-    expect(outputs?.has('active-process')).toBe(true);
-    expect(outputs?.has('stale-process')).toBe(false);
-    expect(getState().streamStates.get(streamId)?.processes).toHaveLength(2);
   });
 
   it('updates and clears stream substate with status changes', () => {

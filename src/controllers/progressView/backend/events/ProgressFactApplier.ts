@@ -32,7 +32,6 @@ import {
   type UpdateConversationProgressPayload,
   type UpdateMissingOutputsPayload,
   type UpdatePlanPayload,
-  type UpdateProcessOutputPayload,
   type UpdateQueuedFollowUpsPayload,
   type UpdateRoundStagePayload,
   type UpdateStreamDescriptionPayload,
@@ -161,13 +160,6 @@ export class ProgressFactApplier {
       this.updateChildRoster(event.parentStreamId, event.kind, [
         ...event.items,
       ]),
-    'process.output': (_streamId, event) =>
-      this.handleUpdateProcessOutput({
-        parentStreamId: event.parentStreamId,
-        executionId: event.executionId,
-        stdout: event.stdout,
-        stderr: event.stderr,
-      }),
   };
 
   constructor(
@@ -319,24 +311,6 @@ export class ProgressFactApplier {
       this.webviewUpdater.updateParentStream(
         childStreamId,
         parentStreamId ?? undefined,
-      );
-    }
-  }
-
-  public handleUpdateProcessOutput({
-    parentStreamId,
-    executionId,
-    stdout,
-    stderr,
-  }: UpdateProcessOutputPayload): void {
-    // Always send — output accumulates in frontend state per-stream,
-    // so it must not be dropped when the stream is inactive.
-    if (this.webviewUpdater.isAvailable()) {
-      this.webviewUpdater.updateProcessOutput(
-        parentStreamId,
-        executionId,
-        stdout,
-        stderr,
       );
     }
   }

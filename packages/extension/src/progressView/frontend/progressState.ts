@@ -31,11 +31,9 @@ import { setsEqual } from './utils';
 import { clearFollowUpInputTransientStateStore } from './followUpInputState';
 import {
   createInitialState,
-  EMPTY_PROCESS_OUTPUTS,
   EMPTY_STREAM_LOGS,
   getStreamState,
   isToolUseState,
-  type ProcessOutputMap,
   type StreamState,
 } from './store';
 import {
@@ -101,7 +99,6 @@ export const streamFilter$ = select(appState, (s) => s.streamFilter);
 export const streamStates$ = select(appState, (s) => s.streamStates);
 const streamLogs$ = select(appState, (s) => s.streamLogs);
 export const activeStreamId$ = select(appState, (s) => s.activeStreamId);
-const processOutputs$ = select(appState, (s) => s.processOutputs);
 const inquiries$ = select(appState, (s) => s.inquiries);
 const followupOptions$ = select(appState, (s) => s.followupOptionsByStream);
 
@@ -222,15 +219,6 @@ const activeStreamLogs$ = new Signal.Computed(() => {
   if (!info) return EMPTY_STREAM_LOGS;
   return streamLogs$.get().get(info.name) ?? EMPTY_STREAM_LOGS;
 });
-
-/** Only changes when the ACTIVE stream's process outputs change. */
-export const activeProcessOutputs$ = new Signal.Computed(
-  (): ProcessOutputMap => {
-    const info = activeStreamInfo$.get();
-    if (!info) return EMPTY_PROCESS_OUTPUTS;
-    return processOutputs$.get().get(info.name) ?? EMPTY_PROCESS_OUTPUTS;
-  },
-);
 
 // ---------------------------------------------------------------------------
 // Leaf selectors for logContext$.

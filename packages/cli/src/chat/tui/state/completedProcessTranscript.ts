@@ -15,7 +15,7 @@ import type {
   StreamSlice,
 } from './cliState';
 
-export const COMPLETED_PROCESS_TAIL_LINES = 20;
+const COMPLETED_PROCESS_TAIL_LINES = 20;
 
 function completedProcessTailLines(
   tail: ProcessOutputTail | undefined,

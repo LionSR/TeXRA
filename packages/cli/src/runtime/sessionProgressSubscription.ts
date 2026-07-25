@@ -184,18 +184,6 @@ function projectCliRunFact(
     }
   }
 
-  if (event.type === 'process.output') {
-    return {
-      event: 'updateProcessOutput',
-      payload: {
-        parentStreamId: event.parentStreamId,
-        executionId: event.executionId,
-        stdout: event.stdout,
-        stderr: event.stderr,
-      },
-    };
-  }
-
   return undefined;
 }
 
