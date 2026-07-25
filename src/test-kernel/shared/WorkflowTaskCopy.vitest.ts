@@ -44,4 +44,31 @@ describe('workflow task copy', () => {
       'Failed: Audit source · kimiK2 · 7s · $0.040 total — Runner stopped.',
     );
   });
+
+  it('explains a task the run never reached on every textual host', () => {
+    expect(
+      formatWorkflowTaskLine({
+        id: 'audit',
+        label: 'Audit later',
+        status: 'skipped',
+        reason: 'not-reached',
+      }),
+    ).toBe(
+      'Skipped: Audit later — The workflow ended before this task was reached.',
+    );
+  });
+
+  it('leaves a user skip without an explanatory clause', () => {
+    expect(
+      formatWorkflowTaskLine({
+        id: 'review',
+        label: 'Stopped review',
+        status: 'skipped',
+        reason: 'user',
+        model: 'kimiK2',
+        durationMs: 7_320,
+        totalCostUsd: 0.04,
+      }),
+    ).toBe('Skipped: Stopped review · kimiK2 · 7s · $0.040 total');
+  });
 });

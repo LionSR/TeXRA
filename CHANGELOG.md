@@ -27,6 +27,16 @@ All notable changes to this project will be documented in this file.
   view retains at most 4,000 complete lines and marks when earlier lines have
   been removed.
 
+### CLI
+
+#### New Features
+
+- **Workflow-script task rows show their status at a glance** — each task in
+  the terminal transcript carries its own marker and color for planned,
+  running, finished, saved-result, skipped, and failed, instead of every row
+  looking alike. A task the run never reached now also explains itself the way
+  the progress view already did.
+
 ## [0.39.8] - 2026-07-24
 
 ### Shared (all surfaces)

@@ -1,13 +1,26 @@
 // Declarative conversation-entry geometry shared by Ink renderers, viewport
 // budgeting, static scrollback, and print-once full output.
 
+import type { WorkflowTaskProgress } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
 import {
+  COLOR_BORDER,
+  COLOR_ERROR,
+  COLOR_HINT,
+  COLOR_SUCCESS,
+} from '../ui/colors';
+import {
+  CROSS,
   ERROR_ENTRY_PREFIX,
+  SKIP_CIRCLE,
   STATUS_DIAMOND,
+  TICK,
+  TODO_ACTIVE,
+  TODO_DONE,
+  TODO_PENDING,
   TOOL_OUTPUT_CORNER,
   USER_ENTRY_PREFIX,
 } from '../ui/glyphs';
@@ -78,17 +91,41 @@ const ROLE_GEOMETRY = {
     marginTopRows: USER_ENTRY_MARGIN_TOP_ROWS,
   },
   workflowTask: {
+    // The first-line marker is per-status (WORKFLOW_TASK_STATUS_STYLE), so the
+    // role carries only the alignment used by wrapped continuation lines.
     firstPrefix: '',
-    continuationPrefix: '',
+    continuationPrefix: '  ',
     inset: 0,
     marginBottomRows: 0,
     marginTopRows: 0,
   },
 } as const satisfies Record<TranscriptEntryRole, RoleGeometry>;
 
-export interface TranscriptEntryLayout extends RoleGeometry {
+/**
+ * Marker glyph + color per workflow-task status. Steady glyphs only — an
+ * animated `running` marker would need a per-component timer, which repaints
+ * the whole live region for no added information (see CHILD_STATUS_MARKER).
+ * Exhaustive on purpose: a seventh status must break this build rather than
+ * render an undefined marker.
+ */
+export const WORKFLOW_TASK_STATUS_STYLE = {
+  planned: { marker: TODO_PENDING, color: undefined },
+  running: { marker: TODO_ACTIVE, color: COLOR_HINT },
+  completed: { marker: TODO_DONE, color: COLOR_SUCCESS },
+  cached: { marker: TICK, color: COLOR_SUCCESS },
+  skipped: { marker: SKIP_CIRCLE, color: COLOR_BORDER },
+  failed: { marker: CROSS, color: COLOR_ERROR },
+} as const satisfies Record<
+  WorkflowTaskProgress['status'],
+  { readonly marker: string; readonly color: string | undefined }
+>;
+
+export interface TranscriptEntryLayout {
   readonly columns: number;
+  readonly inset: number;
   readonly lines: readonly string[];
+  readonly marginBottomRows: number;
+  readonly marginTopRows: number;
   readonly role: TranscriptEntryRole;
 }
 
@@ -224,6 +261,15 @@ function entryLines(
         geometry.continuationPrefix,
       );
     }
+    case 'workflowTask':
+      // The status marker belongs to the layout, not the Ink row: the print-once
+      // scrollback snapshot is built from these lines.
+      return wrapWithPrefix(
+        entry.text,
+        columns,
+        `${WORKFLOW_TASK_STATUS_STYLE[entry.task.status].marker} `,
+        ROLE_GEOMETRY.workflowTask.continuationPrefix,
+      );
     default: {
       const geometry = ROLE_GEOMETRY[entry.role];
       return wrapWithPrefix(
@@ -267,7 +313,6 @@ export function transcriptEntryLayout(
   }
   const columns = transcriptColumns(width, inset);
   return {
-    ...base,
     columns,
     lines: entryLines(
       entry,
