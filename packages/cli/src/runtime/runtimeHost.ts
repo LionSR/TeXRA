@@ -5,11 +5,6 @@ import type {
   AgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
 import {
-  isRuntimeInteractionEvent,
-  type RuntimeInteractionEvent,
-  type RuntimeInteractionEventPayloads,
-} from '@agent/runtime/runtimeInteractionEvents';
-import {
   isRuntimePresentationEvent,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
@@ -20,7 +15,6 @@ import { INSTRUCTION_ACTION, type InstructionAction } from '@shared/schemas';
 import { assertNever } from '@utils/core';
 
 // Local imports - CLI runtime
-import { handleCliApprovalEvent } from './approvalAdapter';
 import {
   createCliLogger,
   createCliLogSink,
@@ -113,20 +107,6 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       payload: AgentRuntimeEventPayloads[K],
     ) {
       if (closed) return;
-
-      if (
-        isRuntimeInteractionEvent(event) &&
-        handleCliApprovalEvent(
-          event as RuntimeInteractionEvent,
-          payload as RuntimeInteractionEventPayloads[RuntimeInteractionEvent],
-          context,
-          {
-            beforePrompt: prepareInteractivePrompt,
-          },
-        )
-      ) {
-        return;
-      }
 
       if (context.outputFormat === 'ndjson') {
         if (isRuntimePresentationEvent(event)) {
