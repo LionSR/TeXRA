@@ -14,6 +14,7 @@ import {
   FakeStdin,
   FakeStdout,
   loadInk,
+  renderOutputAtTerminalSize,
 } from '@test/support/inkTestHarness.mts';
 
 describe('CLI retry request', () => {
@@ -123,12 +124,14 @@ describe('CLI retry request', () => {
     'hides the impossible %s switch and names the missing key',
     async (_route, payload, provider) => {
       const { ink, React } = await loadInk();
-      const output = ink.renderToString(
+      const output = await renderOutputAtTerminalSize(
+        ink,
         React.createElement(RetryRequest, {
           payload,
           onDecide: vi.fn(),
         }),
-        { columns: 100 },
+        100,
+        { until: (frame) => frame.includes('API key is configured.') },
       );
 
       expect(output).toContain(`No ${provider} API key is configured.`);
@@ -140,7 +143,8 @@ describe('CLI retry request', () => {
 
   it('derives the fallback copy from the failed provider', async () => {
     const { ink, React } = await loadInk();
-    const output = ink.renderToString(
+    const output = await renderOutputAtTerminalSize(
+      ink,
       React.createElement(RetryRequest, {
         payload: {
           requestId: 'anthropic-fallback',
@@ -156,7 +160,8 @@ describe('CLI retry request', () => {
         },
         onDecide: vi.fn(),
       }),
-      { columns: 100 },
+      100,
+      { until: (frame) => frame.includes('API key is configured.') },
     );
 
     expect(output).toContain('No Anthropic API key is configured.');
