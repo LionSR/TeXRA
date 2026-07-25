@@ -80,7 +80,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   private _activePlacement: ProgressViewPlacement = 'sidebar';
   /** Set by disposePanelResources so showInSidebar knows replay is needed. */
   private _panelJustDisposed = false;
-  private _pendingUpdateOptions: { forceRebuild: boolean } | null = null;
   private readonly logger: AgentTrace;
   private readonly restartRepairRetry = new RestartRepairRetryScheduler();
 
@@ -136,7 +135,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
           this.messageHandler.cleanupDeletedStream(stream),
         cleanupDeletedStreams: (options) =>
           this.messageHandler.cleanupDeletedStreams(options),
-        rebuildRenderedStreams: (options) => this.syncFullView(options),
+        rebuildRenderedStreams: () => this.syncFullView(),
         activateStream: (stream) => this.setActiveStream(stream),
         notifyDeletionRetained: async (activeCount, failedCount) => {
           await vscode.window.showInformationMessage(
@@ -194,7 +193,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
       vscode.workspace.onDidChangeWorkspaceFolders(async () => {
         try {
           await this.backend.load();
-          this.syncFullView({ forceRebuild: true });
+          this.syncFullView();
         } catch (error) {
           this.logger.error(
             'Failed to reload transcripts after workspace change',
@@ -253,7 +252,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
   public resetSidebarReady(): void {
     this._sidebarReady = false;
-    this._pendingUpdateOptions = null;
   }
 
   /**
@@ -312,16 +310,10 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     );
   }
 
-  public syncFullView(options?: { forceRebuild?: boolean }): void {
+  public syncFullView(): void {
     if (!this.getActiveWebview()) return;
 
-    if (!this.isActivePlacementReady()) {
-      const currentForce = this._pendingUpdateOptions?.forceRebuild ?? false;
-      this._pendingUpdateOptions = {
-        forceRebuild: currentForce || !!options?.forceRebuild,
-      };
-      return;
-    }
+    if (!this.isActivePlacementReady()) return;
 
     const theme =
       vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark
@@ -363,8 +355,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
         this.backend.factApplier.syncStreamContent(activeStream);
       }
     }
-
-    this._pendingUpdateOptions = null;
   }
 
   public async markWebviewReady(
@@ -380,9 +370,8 @@ export class ProgressViewProvider extends BaseWebviewProvider {
       return;
     }
 
-    this._pendingUpdateOptions = null;
     this._panelJustDisposed = false;
-    this.syncFullView({ forceRebuild: true });
+    this.syncFullView();
     await this.replayPendingPrompts();
   }
 
@@ -425,7 +414,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
         this.logger.warn('Failed delayed restart repair', { data: error });
       });
     });
-    this.syncFullView({ forceRebuild: true });
+    this.syncFullView();
   }
 
   public isViewVisible(): boolean {
@@ -515,7 +504,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     }
 
     if (this.isActivePlacementReady()) {
-      this.syncFullView({ forceRebuild: true });
+      this.syncFullView();
       // Only replay permissions when switching from editor → sidebar.
       // If already on sidebar, the webview already has the correct permissions;
       // replaying would cause duplicates.
@@ -529,7 +518,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     if (this.isEditorMode()) {
       this.revealEditorPanel();
       if (this.isActivePlacementReady()) {
-        this.syncFullView({ forceRebuild: true });
+        this.syncFullView();
       }
       return;
     }
@@ -548,7 +537,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
       this._activePlacement = 'editor';
       await this.restoreSidebarToLauncher();
       this.revealEditorPanel();
-      this.syncFullView({ forceRebuild: true });
+      this.syncFullView();
       if (placementChanged) await this.replayPendingPrompts();
       return;
     }
