@@ -190,10 +190,13 @@ export async function runPersistedWorkflowScriptWithProgress(
     onActivity?.(formatWorkflowTaskLine(task));
   };
   /**
-   * A task's group is derived from the phase recorded on its first emission
-   * and never from the phase active when a later update arrives, so the same
-   * card cannot land in two groups: host progress trees classify a card once
-   * and cannot move it afterwards.
+   * The phase recorded on a task's first emission is the single owner of
+   * "which phase is this task in", and it stamps both halves of that answer:
+   * the `stageId` its card is grouped under, and the `phase` on the emitted
+   * payload that hosts fold `done/total` by. A later update carrying the phase
+   * active at call time never overrides it, so the group and the fold cannot
+   * drift apart, and the same card cannot land in two groups — host progress
+   * trees classify a card once and cannot move it afterwards.
    */
   const emitTask = (task: WorkflowTaskProgress): void => {
     let projected = projectedTasks.get(task.id);
@@ -215,7 +218,7 @@ export async function runPersistedWorkflowScriptWithProgress(
     trace.emit({
       type: 'workflow.task',
       logId: projected.logId,
-      task,
+      task: { ...task, phase },
       stageId: phase === undefined ? parentStageId : phaseStageIdFor(phase),
     });
   };

@@ -12,6 +12,7 @@ import {
   type ExecutionId,
   type WorkflowTaskProgress,
 } from '@shared/schemas';
+import { workflowPhaseTaskProgress } from '@shared/copy/workflowTask';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { runPersistedWorkflowScriptWithProgress } from '@tools/delegation/workflowScriptRun';
 
@@ -53,6 +54,23 @@ function workflowTaskEvent(
       event.task.label === label &&
       event.task.status === status,
   );
+}
+
+/**
+ * The current card set, one entry per `logId` — what a host progress tree
+ * holds after applying every update.
+ */
+function latestWorkflowTaskEvents(
+  events: readonly AgentEvent[],
+): Extract<AgentEvent, { type: 'workflow.task' }>[] {
+  const byLogId = new Map<
+    string,
+    Extract<AgentEvent, { type: 'workflow.task' }>
+  >();
+  for (const event of events) {
+    if (event.type === 'workflow.task') byLogId.set(event.logId, event);
+  }
+  return [...byLogId.values()];
 }
 
 beforeEach(() => clearStoreCache());
@@ -228,12 +246,33 @@ return await agent('Run loose', { id: 'loose' })`,
 
     // meta.tasks[].phase is optional, so the plan can declare a task with no
     // phase while a phase() is active. Its card must stay where it was first
-    // classified — a progress tree cannot move a card between groups.
+    // classified — a progress tree cannot move a card between groups — and the
+    // payload every host folds `done/total` by must say the same thing, so a
+    // phase-less task is counted under no phase rather than under the wrong one.
     for (const status of ['planned', 'running', 'completed'] as const) {
       expect(workflowTaskEvent(events, 'Loose task', status)).toMatchObject({
         stageId: undefined,
       });
+      expect(
+        workflowTaskEvent(events, 'Loose task', status)?.task.phase,
+      ).toBeUndefined();
     }
+
+    // The two answers agree by construction: the phase whose group holds the
+    // card and the phase the shared fold reads off the payload are the same
+    // recorded value. Under the active phase both are empty.
+    const researchId = stageId(events, 'Research');
+    const latest = latestWorkflowTaskEvents(events);
+    expect(
+      workflowPhaseTaskProgress(
+        latest.flatMap((event) =>
+          event.task.phase === 'Research' ? [event.task] : [],
+        ),
+      ),
+    ).toEqual({ done: 0, total: 0 });
+    expect(latest.filter((event) => event.stageId === researchId)).toHaveLength(
+      0,
+    );
   });
 
   it('marks a planned task failed when the live-call cap refuses it', async () => {
