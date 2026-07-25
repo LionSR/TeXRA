@@ -170,6 +170,20 @@ describe('CLI child controls', () => {
     expect(groupWorkflowPhaseEntries(ordered)).toBe(ordered);
   });
 
+  // A header opens a group and nothing closes one, so an untagged row left
+  // between or after groups would render under a phase it is not part of.
+  it('partitions untagged rows ahead of every phase group', () => {
+    expect(
+      groupWorkflowPhaseEntries([
+        { id: 'a', workflowPhase: 'Map' },
+        { id: 'b', workflowPhase: undefined },
+        { id: 'c', workflowPhase: 'Map' },
+        { id: 'd', workflowPhase: undefined },
+        { id: 'e', workflowPhase: 'Reduce' },
+      ]).map(({ id }) => id),
+    ).toEqual(['b', 'd', 'a', 'c', 'e']);
+  });
+
   it('stably groups phases before assigning visible shortcut indices', () => {
     const ids = ['a', 'b', 'c', 'd', 'e'].map((id) => id as StreamTabId);
     const [a, b, c, d, e] = ids as [
@@ -243,11 +257,13 @@ describe('CLI child controls', () => {
         rootStreamId: root,
         streams,
       }),
+      // `d` carries no phase, so it heads the list rather than trailing the
+      // `Map` group, whose header would otherwise appear to own it.
     ).toEqual([
       { id: root },
-      { id: e, shortcutIndex: 1 },
-      { id: b, shortcutIndex: 2 },
-      { id: d, shortcutIndex: 3 },
+      { id: d, shortcutIndex: 1 },
+      { id: e, shortcutIndex: 2 },
+      { id: b, shortcutIndex: 3 },
       { id: c, shortcutIndex: 4 },
       { id: a, shortcutIndex: 5 },
     ]);
@@ -258,10 +274,10 @@ describe('CLI child controls', () => {
       rootStreamId: root,
       streams,
     });
-    expect(views.map(({ id }) => id)).toEqual([root, e, b, d, c, a]);
+    expect(views.map(({ id }) => id)).toEqual([root, d, e, b, c, a]);
     expect(views.find(({ id }) => id === b)).toMatchObject({
       parentId: undefined,
-      shortcutIndex: 2,
+      shortcutIndex: 3,
       workflowPhase: 'Map',
     });
     expect(
@@ -270,7 +286,7 @@ describe('CLI child controls', () => {
         childStreamEntries: entries,
         parentStream,
         streams,
-        zeroBasedIndex: 1,
+        zeroBasedIndex: 2,
       }),
     ).toBe(b);
   });

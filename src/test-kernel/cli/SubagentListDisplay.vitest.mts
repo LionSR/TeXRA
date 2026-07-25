@@ -658,6 +658,99 @@ describe('CLI child list display model', () => {
     },
   );
 
+  // A `◆ {phase}` header opens a group and nothing closes one, so a row that
+  // carries no phase must never be painted after one — an `agent()` call issued
+  // outside any `phase()`, or a roster row from before the field existed, would
+  // otherwise read as belonging to the phase above it. Driven through
+  // `streamTreeViews`, the one owner of row order, rather than a hand-ordered
+  // `sessions` array, so it guards the production path.
+  it('never renders a phase-less row beneath a phase header', async () => {
+    const { ink, React } = await loadInk();
+    const run = 'run' as StreamTabId;
+    const mapAgent = 'map-agent' as StreamTabId;
+    const looseAgent = 'loose-agent' as StreamTabId;
+    const reduceAgent = 'reduce-agent' as StreamTabId;
+    const children = [reduceAgent, looseAgent, mapAgent];
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [run, workflowAgentSlice('run', { status: STREAM_PHASE.RUNNING })],
+      ...children.map(
+        (id) =>
+          [
+            id,
+            workflowAgentSlice(id, { status: STREAM_PHASE.RUNNING }),
+          ] as const,
+      ),
+    ]);
+    const childStreamEntries = buildChildStreamEntries({
+      parentStreamId: run,
+      // Oldest first, as the roster retains them; the list reverses to
+      // newest-first, which is what interleaves `loose` between the groups.
+      retained: [
+        {
+          kind: 'subagent',
+          executionId: 'reduce-exec',
+          agentName: 'reduce-agent',
+          childStreamId: reduceAgent,
+          status: STREAM_PHASE.RUNNING,
+          workflowPhase: 'Reduce',
+        },
+        {
+          kind: 'subagent',
+          executionId: 'loose-exec',
+          agentName: 'loose-agent',
+          childStreamId: looseAgent,
+          status: STREAM_PHASE.RUNNING,
+        },
+        {
+          kind: 'subagent',
+          executionId: 'map-exec',
+          agentName: 'map-agent',
+          childStreamId: mapAgent,
+          status: STREAM_PHASE.RUNNING,
+          workflowPhase: 'Map',
+        },
+      ],
+    });
+    const sessions = streamTreeViews({
+      activeStreamId: run,
+      childStreamEntries,
+      parentStream: new Map(children.map((id) => [id, run] as const)),
+      rootStreamId: run,
+      streams,
+    });
+    const output: string = stripAnsi(
+      ink.renderToString(
+        React.createElement(SubagentList, {
+          listRootStreamId: run,
+          maxRows: 10,
+          sessions,
+        }),
+        { columns: 100 },
+      ),
+    );
+
+    expect(output).toContain('◆ Map');
+    expect(output).toContain('◆ Reduce');
+    expect(output).toContain('loose-agent running');
+    // The phase-less row sits above every header, so no header can be read as
+    // owning it.
+    expect(output.indexOf('loose-agent running')).toBeLessThan(
+      output.indexOf('◆'),
+    );
+    // One header per phase, and each group's rows still follow its own header.
+    expect(output.split('◆ Map')).toHaveLength(2);
+    expect(output.split('◆ Reduce')).toHaveLength(2);
+    expect(output.indexOf('◆ Map')).toBeLessThan(
+      output.indexOf('map-agent running'),
+    );
+    expect(output.indexOf('map-agent running')).toBeLessThan(
+      output.indexOf('◆ Reduce'),
+    );
+    expect(output.indexOf('◆ Reduce')).toBeLessThan(
+      output.indexOf('reduce-agent running'),
+    );
+  });
+
   it('does not group a list root by its inherited workflow phase', async () => {
     const { ink, React } = await loadInk();
     const run = 'nested-workflow' as StreamTabId;
@@ -785,6 +878,10 @@ describe('CLI child list display model', () => {
           ],
         }),
       },
+      // Phase-less rows head the list, as `groupWorkflowPhaseEntries` orders
+      // them — never between or after groups, where the header above would
+      // appear to own them.
+      { ...session(loose), label: 'unphased', parentId: run },
       {
         ...session(mapRetry),
         label: 'writer-retry',
@@ -798,7 +895,6 @@ describe('CLI child list display model', () => {
         parentId: run,
         workflowPhase: freeFormPhase,
       },
-      { ...session(loose), label: 'unphased', parentId: run },
       {
         ...session(reduce),
         label: 'editor',
@@ -851,6 +947,9 @@ describe('CLI child list display model', () => {
     expect(wideOutput.split(freeFormPhase)).toHaveLength(2);
     expect(wideOutput).toContain('writer-retry');
     expect(wideOutput).toContain('writer-attempt');
+    expect(wideOutput.indexOf('unphased')).toBeLessThan(
+      wideOutput.indexOf(`${freeFormPhase} (1/2)`),
+    );
     expect(wideOutput.indexOf(`${freeFormPhase} (1/2)`)).toBeLessThan(
       wideOutput.indexOf('writer-retry'),
     );
@@ -858,9 +957,6 @@ describe('CLI child list display model', () => {
       wideOutput.indexOf('writer-attempt'),
     );
     expect(wideOutput.indexOf('writer-attempt')).toBeLessThan(
-      wideOutput.indexOf('unphased'),
-    );
-    expect(wideOutput.indexOf('unphased')).toBeLessThan(
       wideOutput.indexOf('Reduce (2/2)'),
     );
   });
