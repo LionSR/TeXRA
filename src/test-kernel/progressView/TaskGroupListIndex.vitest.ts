@@ -543,9 +543,7 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
     );
     expect(content?.textContent).toContain('Review manuscript');
     expect(content?.textContent).toContain('Finished');
-    expect(content?.textContent).toContain(
-      'claude-opus-4 · 12s · $0.040 total',
-    );
+    expect(content?.textContent).toContain('claude-opus-4 · 12s · $0.040');
     expect(content?.textContent).toContain('Check argument');
     expect(content?.textContent).toContain('timed out');
     expect(content?.querySelector('.workflow-task--failed')).not.toBeNull();
@@ -562,7 +560,7 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
     expect(notReached?.querySelector('.workflow-task-meta')).toBeNull();
     const userSkipped = content?.querySelector('[data-log-id="agent-d"]');
     expect(userSkipped?.textContent).toContain('Stopped review');
-    expect(userSkipped?.textContent).toContain('kimi-k2 · 2s · $0.020 total');
+    expect(userSkipped?.textContent).toContain('kimi-k2 · 2s · $0.020');
     expect(userSkipped?.querySelector('.workflow-task-detail')).toBeNull();
   });
 

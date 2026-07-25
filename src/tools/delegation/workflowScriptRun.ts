@@ -21,8 +21,8 @@ type WorkflowScriptRunWithProgressOptions = Omit<
   PersistedWorkflowScriptRunOptions,
   'onEvent'
 > & {
-  /** Cumulative live spend across this run's children, for progress lines. */
-  readonly getLiveCostUsd?: () => number;
+  /** Accumulated live spend for one logical call, for progress lines. */
+  readonly getCallCostUsd?: (index: number) => number | undefined;
   /**
    * Receives every progress line also written to the trace (phases, script
    * log() output, per-call outcomes) so the caller can hand the run log back
@@ -116,11 +116,12 @@ export async function runPersistedWorkflowScriptWithProgress(
   trace: AgentTrace,
   options: WorkflowScriptRunWithProgressOptions,
 ): Promise<WorkflowScriptRunResult> {
-  const { getLiveCostUsd, onActivity, ...runOptions } = options;
+  const { getCallCostUsd, onActivity, ...runOptions } = options;
   const parentStageId = trace.activeStageId();
   const phases = new Map<string, PhaseStage>();
   const phaseStageIds = new Map<string, string>();
   const callPhases = new Map<WorkflowScriptProgressId, string | undefined>();
+  const callIndexes = new Map<WorkflowScriptProgressId, number>();
   const projectedTasks = new Map<
     WorkflowScriptProgressId,
     ProjectedWorkflowTask
@@ -257,6 +258,7 @@ export async function runPersistedWorkflowScriptWithProgress(
       case 'agent:start': {
         const phaseTitle = event.phase ?? currentPhase;
         callPhases.set(event.progressId, phaseTitle);
+        callIndexes.set(event.progressId, event.index);
         // Open the phase the moment the run reaches it; `emitTask` resolves
         // the card's group on its own from the task's recorded phase.
         openPhaseStage(phaseTitle, event.phaseIndex, event.phaseTotal);
@@ -276,15 +278,16 @@ export async function runPersistedWorkflowScriptWithProgress(
           ? callPhases.get(event.progressId)
           : (event.phase ?? currentPhase);
         callPhases.delete(event.progressId);
+        callIndexes.delete(event.progressId);
         // A cached replay has no agent:start, so this is where its phase opens.
         openPhaseStage(phaseTitle, event.phaseIndex, event.phaseTotal);
         // Cached replays spend nothing, so their lines stay cost-free; live
-        // onCost settles before agent:end, so the total here is current.
+        // onCost settles before agent:end, so the call cost here is current.
         const spent =
           event.outcome === 'completed' ||
           event.outcome === 'failed' ||
           event.outcome === 'skipped'
-            ? getLiveCostUsd?.()
+            ? getCallCostUsd?.(event.index)
             : undefined;
         // Live terminal events carry all attempt metadata known by the engine.
         // Cached replays report none because they perform no live attempt.
@@ -383,7 +386,9 @@ export async function runPersistedWorkflowScriptWithProgress(
       } else if (status === 'running') {
         markPhaseFailed(task.phase);
         const error = 'The workflow ended before this task completed.';
-        const totalCostUsd = getLiveCostUsd?.();
+        const callIndex = callIndexes.get(task.id);
+        const totalCostUsd =
+          callIndex === undefined ? undefined : getCallCostUsd?.(callIndex);
         const failedTask: WorkflowTaskProgress = {
           ...task,
           status: 'failed',

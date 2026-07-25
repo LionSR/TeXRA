@@ -25,7 +25,7 @@ export function formatWorkflowTaskMetadataParts(
       : formatCompactDuration(task.durationMs),
     task.totalCostUsd === undefined
       ? undefined
-      : `${formatCostUsd(task.totalCostUsd)} total`,
+      : formatCostUsd(task.totalCostUsd),
   ].filter((part): part is string => part !== undefined);
 }
 
