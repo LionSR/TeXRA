@@ -127,10 +127,18 @@ export function writeErrorStderr(error: unknown): void {
   writeTextStderr(toErrorMessage(error));
 }
 
-export async function askCliQuestion(question: string): Promise<string> {
+export async function askCliQuestion(
+  question: string,
+  input: NodeJS.ReadableStream & { ref?: () => void } = process.stdin,
+  output: NodeJS.WritableStream = process.stderr,
+): Promise<string> {
+  // Ink releases its ownership of stdin with `unref()` when a TUI exits.
+  // A following readline prompt must acquire its own live handle or Node can
+  // terminate while the top-level command is still awaiting the answer.
+  input.ref?.();
   const prompt = createInterface({
-    input: process.stdin,
-    output: process.stderr,
+    input,
+    output,
   });
   try {
     return await prompt.question(question);
