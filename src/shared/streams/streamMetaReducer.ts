@@ -21,7 +21,7 @@ export interface StreamMeta {
 }
 
 /** Sets the active-process list AND prunes output for processes that vanished. */
-export interface StreamMetaCommand {
+interface StreamMetaCommand {
   readonly kind: 'activeProcesses';
   readonly processes: readonly ActiveChildInfo[];
 }
