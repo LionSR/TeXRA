@@ -16,6 +16,19 @@ import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { createFakePlatform } from './FakePlatform';
 
 /**
+ * Creates a fresh temp directory and records it on `tempDirs` for later
+ * cleanup via `cleanupTempDirs`.
+ */
+export async function makeTempDir(
+  prefix: string,
+  tempDirs: string[],
+): Promise<string> {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), prefix));
+  tempDirs.push(tempDir);
+  return tempDir;
+}
+
+/**
  * Creates a node-backed `FakePlatform` rooted in a fresh temp directory
  * (`<tempDir>/workspace` and `<tempDir>/storage`), and records the temp
  * directory on `tempDirs` for later cleanup via `cleanupTempDirs`.
@@ -24,8 +37,7 @@ export async function createTempDirPlatform(
   prefix: string,
   tempDirs: string[],
 ): Promise<Platform> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), prefix));
-  tempDirs.push(tempDir);
+  const tempDir = await makeTempDir(prefix, tempDirs);
   const workspaceDir = path.join(tempDir, 'workspace');
   const storageRoot = path.join(tempDir, 'storage');
   return createFakePlatform(

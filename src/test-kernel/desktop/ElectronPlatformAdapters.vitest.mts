@@ -1,13 +1,5 @@
 // Node imports
-import {
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  stat,
-  writeFile,
-} from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Third-party imports
@@ -20,6 +12,10 @@ import {
 } from '@platform/defaults/workspaceStorage';
 
 // Local imports - test support
+import {
+  cleanupTempDirs,
+  makeTempDir as makeSharedTempDir,
+} from '@test/support/tempDirPlatform';
 import {
   app as electronApp,
   configureElectronTestStub,
@@ -107,16 +103,11 @@ describe('desktop platform adapters', () => {
     if (stubUserDataPath != null) tempDirs.push(stubUserDataPath);
     resetElectronTestStub();
     vi.restoreAllMocks();
-    const pathsToRemove = [...new Set(tempDirs.splice(0))];
-    await Promise.all(
-      pathsToRemove.map((path) => rm(path, { recursive: true, force: true })),
-    );
+    await cleanupTempDirs(tempDirs);
   });
 
   async function makeTempDir(prefix: string): Promise<string> {
-    const tempDir = await mkdtemp(join(tmpdir(), prefix));
-    tempDirs.push(tempDir);
-    return tempDir;
+    return makeSharedTempDir(prefix, tempDirs);
   }
 
   async function loadSecrets(

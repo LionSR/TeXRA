@@ -12,6 +12,7 @@ import {
   type SupabaseSessionStorage,
 } from '@auth/SupabaseSession';
 import { fetchWithTimeout } from '@auth/fetchWithTimeout';
+import { createDeferred } from '@test/support/asyncTestUtils';
 
 // Third-party imports
 import type {
@@ -78,17 +79,6 @@ function createClient(overrides?: Partial<Client['auth']>): Client {
       ...overrides,
     },
   } as unknown as Client;
-}
-
-function createDeferred(): {
-  promise: Promise<void>;
-  resolve: () => void;
-} {
-  let resolve!: () => void;
-  const promise = new Promise<void>((innerResolve) => {
-    resolve = innerResolve;
-  });
-  return { promise, resolve };
 }
 
 const COORDINATOR_CONFIG = {

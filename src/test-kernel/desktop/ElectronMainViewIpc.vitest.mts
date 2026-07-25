@@ -12,6 +12,7 @@ import { AgentCategory } from '@shared/schemas/agent';
 import { AGENT_MODE_PRESETS } from '@shared/schemas/agentPresets';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
+import { createDeferred } from '@test/support/asyncTestUtils';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
@@ -115,17 +116,6 @@ function flushAsyncWork(): Promise<void> {
   return new Promise((resolve) =>
     setImmediate(() => setImmediate(() => resolve())),
   );
-}
-
-function createDeferred(): {
-  promise: Promise<void>;
-  resolve(): void;
-} {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
 }
 
 type RendererListener = (event: { sender: unknown }, message: unknown) => void;
