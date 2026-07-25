@@ -928,7 +928,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     }
   });
 
-  it('keeps an immutable round header ahead of its later log rows', async () => {
+  it('projects round lifecycle separately from its ordinary log rows', async () => {
     const runTrace = createRunTrace(STREAM_ID, defaultSession().transcripts);
     try {
       const round = runTrace.trace.openStage('Round one', {
@@ -961,15 +961,19 @@ describe('CLI workflow-script child-stream transcript', () => {
           .filter((item) => item.kind === 'entry')
           .map((item) => item.entry.text);
 
-      expect(entryTexts(incrementalItems)).toEqual([
-        'Round one',
-        'Round work completed',
-      ]);
+      expect(entryTexts(incrementalItems)).toEqual(['Round work completed']);
       expect(entryTexts(coldItems)).toEqual(entryTexts(incrementalItems));
+      expect(streams.get().get(STREAM_ID)?.taskGroups).toMatchObject([
+        {
+          id: 'round-one',
+          name: 'Round one',
+          kind: 'round',
+          status: STREAM_PHASE.COMPLETED,
+        },
+      ]);
       const output = await renderStaticTranscript();
-      expect(output.indexOf('Round one')).toBeLessThan(
-        output.indexOf('Round work completed'),
-      );
+      expect(output).not.toContain('Round one');
+      expect(output).toContain('Round work completed');
     } finally {
       runTrace.dispose();
     }

@@ -233,7 +233,7 @@ jobs:
             orchestrate-launcher orchestrate-agent-submenu \
             orchestrate-delegated-history orchestrate-resume-submenu \
             compact-orchestrate-launcher single-run-liveness \
-            agent-proposal-approve-all
+            agent-proposal-approve-all workflow-timeline
 
       - name: Upload CLI TUI smoke frames
         if: always()

@@ -1492,6 +1492,10 @@ function sliceWithEntries(
     plan: null,
     bypass: { bash: false, toolEdit: false, superYolo: false },
     ...init,
+    outputFilesByRound: init.outputFilesByRound ?? {},
+    missingOutputsByRound: init.missingOutputsByRound ?? {},
+    compileFailuresByRound: init.compileFailuresByRound ?? {},
+    taskGroups: init.taskGroups ?? [],
   };
 }
 
