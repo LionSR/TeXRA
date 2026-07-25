@@ -57,7 +57,11 @@ import {
 import { StorageFS } from '@utils/files';
 
 // Local file imports
-import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
+import {
+  createRecordingHost,
+  recordSessionEvents,
+  runEventsOfType,
+} from '../progressTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
   finalizeExecution: vi.fn(
@@ -602,6 +606,58 @@ describe('runFlowWithLifecycle', () => {
       expect(staleCleanup).not.toHaveBeenCalled();
       expect(captured?.runWaitingCleanup()).toBe(false);
     } finally {
+      defaultSession().executions.untrack(executionId);
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  it('carries workflowPhase on the first child roster emission', async () => {
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-workflow-phase',
+    );
+    const parentStreamId = 'parent-lifecycle-workflow-phase' as StreamTabId;
+    const recorded = recordSessionEvents(ctx.runScope.session.events, {
+      scope: 'run',
+      streamId: parentStreamId,
+      types: ['child.activity'],
+    });
+    // `track()` emits the roster synchronously, so onRun — which fires after
+    // tracking — is structurally too late to stamp a display field.
+    let rosterEmissionsBeforeOnRun = -1;
+
+    try {
+      await runFlowWithLifecycle(
+        ctx,
+        async () => ({
+          category: 'toolUse',
+          outcome: RUN_OUTCOME.COMPLETED,
+          executionId,
+          streamId,
+        }),
+        {
+          isSubagent: true,
+          parentStreamId,
+          workflowPhase: 'Reduce',
+          onRun: () => {
+            rosterEmissionsBeforeOnRun = runEventsOfType(
+              recorded.events,
+              'child.activity',
+            ).length;
+          },
+        },
+      );
+
+      const [firstRoster] = runEventsOfType(recorded.events, 'child.activity');
+      expect(firstRoster?.items).toEqual([
+        expect.objectContaining({
+          executionId,
+          childStreamId: streamId,
+          workflowPhase: 'Reduce',
+        }),
+      ]);
+      expect(rosterEmissionsBeforeOnRun).toBeGreaterThan(0);
+    } finally {
+      recorded.detach();
       defaultSession().executions.untrack(executionId);
       clearStreamStatusForTest(streamStatus, streamId);
     }

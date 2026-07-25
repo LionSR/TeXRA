@@ -53,6 +53,13 @@ const logger = createChannelTrace('agentRunLifecycle');
 export interface RunFlowLifecycleOptions {
   isSubagent?: boolean;
   parentStreamId?: StreamTabId;
+  /**
+   * Workflow-script phase owning this run, stamped on the handle before it is
+   * tracked so the parent's very first child roster already groups the row.
+   * Deliberately not an `onRun` responsibility: `onRun` fires after `track()`
+   * has already emitted `child.activity`.
+   */
+  workflowPhase?: string;
   onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
   /**
    * Fires once with the live per-run handle, right after it is tracked (F-2) —
@@ -327,6 +334,10 @@ export async function runFlowWithLifecycle(
   if (executionLeaseScope) {
     handle.attachExecutionLeaseScope(executionLeaseScope);
   }
+  // Roster display fields must be on the handle BEFORE it is tracked:
+  // `track()` emits `child.activity` synchronously, so anything assigned
+  // later (e.g. from `onRun`) misses the parent's first roster snapshot.
+  if (options?.workflowPhase) handle.workflowPhase = options.workflowPhase;
   handle.enablePendingInterrupt();
   session.executions.track(handle);
   let leaseLost = false;
