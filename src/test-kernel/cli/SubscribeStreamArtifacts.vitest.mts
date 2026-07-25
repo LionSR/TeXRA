@@ -164,6 +164,64 @@ describe('subscribeStreamArtifacts', () => {
     dispose();
   });
 
+  it('discards the first read when a completed stream is refocused', async () => {
+    const pendingA: Array<(value: StreamSnapshot) => void> = [];
+    const reader = {
+      preload: vi.fn(async () => undefined),
+      read: vi.fn((streamId: StreamTabId) =>
+        streamId === STREAM_A
+          ? new Promise<StreamSnapshot>((resolve) => {
+              pendingA.push(resolve);
+            })
+          : Promise.resolve(
+              snapshot(STREAM_B, {
+                outputFilesByRound: {},
+                missingOutputsByRound: {},
+                compileFailuresByRound: {},
+              }),
+            ),
+      ),
+    } as StreamArtifactReader;
+
+    patchStream(STREAM_A, (slice) => ({ ...slice }));
+    activeStreamId.set(STREAM_A);
+    const dispose = subscribeStreamArtifacts(reader);
+    await flushSignals();
+    activeStreamId.set(STREAM_B);
+    await flushSignals();
+    activeStreamId.set(STREAM_A);
+    await flushSignals();
+
+    expect(pendingA).toHaveLength(2);
+    const [resolveStale, resolveFresh] = pendingA;
+    if (!resolveStale || !resolveFresh) {
+      throw new Error('Expected two pending reads for the refocused stream');
+    }
+
+    resolveStale(
+      snapshot(STREAM_A, {
+        outputFilesByRound: {},
+        missingOutputsByRound: { 0: ['stale.tex'] },
+        compileFailuresByRound: {},
+      }),
+    );
+    await flushSignals();
+    expect(streams.get().get(STREAM_A)?.missingOutputsByRound).toEqual({});
+
+    resolveFresh(
+      snapshot(STREAM_A, {
+        outputFilesByRound: {},
+        missingOutputsByRound: { 0: ['fresh.tex'] },
+        compileFailuresByRound: {},
+      }),
+    );
+    await flushSignals();
+    expect(streams.get().get(STREAM_A)?.missingOutputsByRound).toEqual({
+      0: ['fresh.tex'],
+    });
+    dispose();
+  });
+
   it('cannot resurrect a removed or reset stream after a late read', async () => {
     for (const retire of [
       () => removeStream(STREAM_A),

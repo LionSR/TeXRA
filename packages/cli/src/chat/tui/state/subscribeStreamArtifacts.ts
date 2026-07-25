@@ -33,8 +33,10 @@ export type StreamArtifactReader = Pick<
 function streamCanReceiveArtifacts(
   streamId: StreamTabId,
   generation: number,
+  focusIsCurrent: () => boolean,
 ): boolean {
   return (
+    focusIsCurrent() &&
     generation === getCliStateGeneration() &&
     activeStreamId.get() === streamId &&
     !isCliStreamRetired(streamId) &&
@@ -75,6 +77,7 @@ function mergeArtifactSnapshot(
 async function hydrateFocusedStream(
   store: StreamArtifactReader,
   streamId: StreamTabId,
+  focusIsCurrent: () => boolean,
 ): Promise<void> {
   const generation = getCliStateGeneration();
   const artifactRevision = streamArtifactRevision(streamId);
@@ -83,10 +86,14 @@ async function hydrateFocusedStream(
     // claim an authoritative complete stream set and evict sibling state.
     await store.preload([streamId]);
     const snapshot = await store.read(streamId);
-    if (!streamCanReceiveArtifacts(streamId, generation)) return;
+    if (!streamCanReceiveArtifacts(streamId, generation, focusIsCurrent)) {
+      return;
+    }
     mergeArtifactSnapshot(streamId, snapshot, artifactRevision);
   } catch (error) {
-    if (!streamCanReceiveArtifacts(streamId, generation)) return;
+    if (!streamCanReceiveArtifacts(streamId, generation, focusIsCurrent)) {
+      return;
+    }
     setTransientNotice(
       `Could not load workflow artifacts: ${toErrorMessage(error)}`,
     );
@@ -104,13 +111,26 @@ export function subscribeStreamArtifacts(
   store: StreamArtifactReader,
 ): () => void {
   let previous = activeStreamId.get();
-  if (previous) void hydrateFocusedStream(store, previous);
+  let focusRevision = 0;
+  const hydrate = (streamId: StreamTabId): void => {
+    const revision = ++focusRevision;
+    void hydrateFocusedStream(
+      store,
+      streamId,
+      () => focusRevision === revision,
+    );
+  };
+  if (previous) hydrate(previous);
 
   return subscribeToSignalChanges([activeStreamId], () => {
     const next = activeStreamId.get();
     const changed = next !== previous;
     previous = next;
-    if (!next || !changed) return;
-    void hydrateFocusedStream(store, next);
+    if (!changed) return;
+    if (!next) {
+      focusRevision += 1;
+      return;
+    }
+    hydrate(next);
   });
 }
