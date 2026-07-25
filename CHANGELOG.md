@@ -12,6 +12,12 @@ All notable changes to this project will be documented in this file.
   available for demanding research and engineering tasks, replacing Opus 4.8
   as the default Anthropic model. Opus 5 keeps the full 1M context window and
   adaptive thinking.
+- **Agents can read a background command's output while it runs** — the
+  `executions` tool's `/executions/{id}/output` path returns a long build or
+  test run's stdout and stderr in arrival order, updating as the command
+  proceeds instead of only at completion. Reads default to the last 200 lines
+  and accept `view_range` to page back through the retained log, which stays
+  readable after the command finishes.
 
 #### Bug Fixes
 

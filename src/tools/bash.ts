@@ -32,7 +32,10 @@ import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwn
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { tryPlatform } from '@platform/platform';
-import { BASH_TOOL_DEFAULT_TIMEOUT_MS } from '@shared/toolUse';
+import {
+  BASH_BACKGROUND_LOG_CAP_CHARS,
+  BASH_TOOL_DEFAULT_TIMEOUT_MS,
+} from '@shared/toolUse';
 import { type StreamTabId, type ExecutionId } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import {
@@ -76,8 +79,6 @@ const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
  * recover it from the follow-up.
  */
 const BACKGROUND_OUTPUT_HEAD_CHARS = 1_000;
-/** Max chars logged to the child stream tab to prevent unbounded memory growth. */
-const BACKGROUND_LOG_CAP_CHARS = 200_000;
 const FOREGROUND_OUTPUT_HEAD_CHARS = TOOL_RESULT_TRUNCATION_HEAD_CHARS;
 const FOREGROUND_OUTPUT_TAIL_CHARS = TOOL_RESULT_TRUNCATION_TAIL_CHARS;
 const SHELL_BACKGROUNDING_PATTERN =
@@ -420,10 +421,10 @@ export class BashTool extends defineTool({
     const logChunk = (chunk: string, level: 'info' | 'warn'): void => {
       if (logCapReached) return;
       loggedChars += chunk.length;
-      if (loggedChars > BACKGROUND_LOG_CAP_CHARS) {
+      if (loggedChars > BASH_BACKGROUND_LOG_CAP_CHARS) {
         logCapReached = true;
         logger.warn(
-          `[Stream log truncated at ${(BACKGROUND_LOG_CAP_CHARS / 1000).toFixed(0)}k chars — tail available in follow-up result]`,
+          `[Stream log truncated at ${(BASH_BACKGROUND_LOG_CAP_CHARS / 1000).toFixed(0)}k chars — tail available in follow-up result]`,
         );
         return;
       }
@@ -678,6 +679,7 @@ export class BashTool extends defineTool({
         `Command launched in background.`,
         `Execution ID: ${executionId}`,
         `Stream tab: ${childStreamId}`,
+        `To read its output so far (works while it runs): executions tool with path=/executions/${executionId}/output`,
         `To wait for completion: executions tool with path=/executions/${executionId} action=wait`,
         'Result will be delivered as a follow-up message when complete.',
       ].join('\n'),

@@ -29,8 +29,16 @@ import {
 } from '@agent/runtime/RunContext';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { platform } from '@platform/platform';
-import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
 import {
+  ExecutionIdSchema,
+  LOG_LEVELS,
+  MESSAGE_TYPES,
+  STREAM_LOG_ENTRY_TYPES,
+  type ExecutionId,
+  type StreamLogEntry,
+} from '@shared/schemas';
+import {
+  BASH_BACKGROUND_LOG_CAP_CHARS,
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
@@ -42,6 +50,7 @@ import { assertNoParentTraversal } from '@tools/pathResolution';
 import {
   readCompletedRunConversation,
   readCompletedRunTodos,
+  resolvePersistedStreamIdForExecution,
 } from '@transcript';
 import { AbsoluteFS, StorageFS } from '@utils/files';
 import { clamp, unique } from '@utils/core';
@@ -54,6 +63,7 @@ import { splitContentLines } from '@utils/text/stringUtils';
 // Local file imports
 import {
   formatListingLine,
+  formatStatusInfo,
   formatTodoHeader,
   formatTodoSection,
   getExecutionStatusInfo,
@@ -86,6 +96,77 @@ import {
   type ExecutionSummaryOptions,
 } from './executions/summaryFormat';
 import { formatSizedEntryLines } from './executions/fileListingFormat';
+
+// ============================================================================
+// Background command output
+// ============================================================================
+
+/** Lines returned by /executions/{id}/output when no view_range is given. */
+const OUTPUT_TAIL_LINES = 200;
+
+/** Hard ceiling on lines a single /output read returns, view_range included. */
+const OUTPUT_MAX_LINES = 1_000;
+
+/** Marks a projected line that the command wrote to stderr. */
+const OUTPUT_STDERR_PREFIX = 'err: ';
+
+/**
+ * Line break in captured terminal output. A bare CR counts: progress bars
+ * (curl, pip, docker) redraw with `\r` and no newline, so splitting on LF
+ * alone would collapse a whole build's progress into one enormous "line" and
+ * hand the caller the entire log however small the requested window was.
+ */
+const OUTPUT_LINE_BREAK = /\r\n|\r|\n/;
+
+interface ProcessOutputProjection {
+  readonly lines: readonly string[];
+  readonly chars: number;
+}
+
+/**
+ * Flatten a background command's transcript rows into display lines.
+ *
+ * Rows stay in append order — the only surviving record of how stdout and
+ * stderr actually interleaved. Consecutive rows on the same channel are
+ * concatenated before the split so a line straddling two chunk boundaries
+ * stays one line; `warn`/`error` rows are the stderr channel and every line
+ * they contribute is marked. Structured rows (usage, context state, tool
+ * frames) carry a non-default `messageType` and are dropped: this endpoint
+ * projects command output, not the run's own bookkeeping.
+ */
+function projectProcessOutput(
+  entries: readonly StreamLogEntry[],
+): ProcessOutputProjection {
+  const runs: { stderr: boolean; text: string }[] = [];
+  let chars = 0;
+
+  for (const entry of entries) {
+    if (entry.type !== STREAM_LOG_ENTRY_TYPES.LOG) continue;
+    if ((entry.messageType ?? MESSAGE_TYPES.DEFAULT) !== MESSAGE_TYPES.DEFAULT)
+      continue;
+    const text = entry.text;
+    if (!text) continue;
+
+    chars += text.length;
+    const stderr =
+      entry.level === LOG_LEVELS.WARN || entry.level === LOG_LEVELS.ERROR;
+    const open = runs.at(-1);
+    if (open && open.stderr === stderr) open.text += text;
+    else runs.push({ stderr, text });
+  }
+
+  const lines: string[] = [];
+  for (const run of runs) {
+    // A trailing break terminates the last line rather than opening an empty
+    // one; blank lines inside the text still survive the split.
+    const text = run.text.replace(/\r\n$|[\r\n]$/, '');
+    for (const line of text.split(OUTPUT_LINE_BREAK)) {
+      lines.push(run.stderr ? `${OUTPUT_STDERR_PREFIX}${line}` : line);
+    }
+  }
+
+  return { lines, chars };
+}
 
 // ============================================================================
 // Schema
@@ -177,6 +258,7 @@ Paths:
 - /executions/{id}/todos - Task list (tool-use subagents)
 - /executions/{id}/report - Result report (persists after context compaction)
 - /executions/{id}/result - Final result envelope (JSON) for chaining; process result for background commands
+- /executions/{id}/output - stdout/stderr of a background command, readable WHILE IT RUNS (report/result only exist once it finishes)
 - /executions/{id}/children - Child executions
 - /executions/{id}/files - Generated files (workflows only)
 - /executions/{id}/files/{path} - Read specific generated file (workflows only)
@@ -185,7 +267,7 @@ Paths:
 
 Use "current" as {id} to access the active execution.
 Use offset/limit to paginate the /executions listing (default: offset 0, limit 100).
-Use view_range: [start, end] to paginate conversation and file content.
+Use view_range: [start, end] to paginate conversation, file, and background-command output content.
 Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
 Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed executions to change.
 Use action: "kill" on /executions/{id} to terminate a running execution.
@@ -252,13 +334,7 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
       case 'children':
         return this.showChildren(executionId);
       case 'output':
-        // Undocumented compatibility route. A background `bash` run streams its
-        // live output through its own child stream (`createChildStream` in
-        // `tools/bash.ts`), so this endpoint has nothing of its own to read.
-        return {
-          status: 'executed',
-          output: `Output for ${executionId} is no longer available (ephemeral output is cleaned up on completion). Use /executions/${executionId}/report to view the result summary.`,
-        };
+        return this.showOutput(executionId, input.view_range ?? undefined);
       case 'files':
         if (rest.length === 0) {
           return this.listFiles(executionId);
@@ -286,6 +362,7 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
         `- /executions/{id}/config       - Agent configuration\n` +
         `- /executions/{id}/report       - Result report (prose)\n` +
         `- /executions/{id}/result       - Final result envelope (JSON) for chaining\n` +
+        `- /executions/{id}/output       - Background command stdout/stderr (readable while running)\n` +
         `- /executions/{id}/conversation - Message history (subagents)\n` +
         `- /executions/{id}/todos        - Task list (tool-use subagents)\n` +
         `- /executions/{id}/children     - Child executions\n` +
@@ -733,6 +810,118 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
     const output = applyViewRange(formatConversation(conversation), viewRange);
 
     return { status: 'executed', output };
+  }
+
+  /**
+   * stdout/stderr of a background command, projected from the transcript log
+   * its child stream already writes (`createChildStream` in `tools/bash.ts`).
+   *
+   * This is the only route readable *while the command runs*: `/report` and
+   * `/result` are written at completion, and the completion follow-up carries
+   * only a 20-line preview, so without this the middle of a long build log is
+   * unreachable even after the run ends. Restricted to process executions —
+   * an agent run's rows are a model transcript, which `/conversation` already
+   * renders properly.
+   */
+  private async showOutput(
+    executionId: ExecutionId,
+    viewRange?: [number, number],
+  ): Promise<ToolResult> {
+    // A tracked handle is also the liveness fact: the shared terminal
+    // finalizer untracks it, so its presence means the command is still up.
+    const handle = currentSession().executions.getHandle(executionId);
+    const meta = await getExecutionStore(executionId).readMeta();
+    if (!meta && !handle) {
+      throw new ToolError(`Execution not found: ${executionId}`);
+    }
+    if (meta?.category !== 'process') {
+      return {
+        status: 'executed',
+        output:
+          `/executions/${executionId}/output is only available for background commands (bash with run_in_background). ` +
+          `Use /executions/${executionId}/conversation for an agent run's message history.`,
+      };
+    }
+
+    const transcripts = currentSession().transcripts;
+    const streamId =
+      handle instanceof AgentExecutionHandle
+        ? handle.childStreamId
+        : (
+            await resolvePersistedStreamIdForExecution(executionId, {
+              streamLogStore: transcripts,
+            })
+          )?.streamId;
+    // Resident while the command runs (an open writer refuses eviction); a
+    // released stream rehydrates from disk, and an ephemeral store no-ops.
+    if (streamId) await transcripts.ensureLoaded(streamId);
+    const log = streamId ? transcripts.get(streamId) : undefined;
+    if (!log) {
+      return {
+        status: 'executed',
+        output:
+          `No retained output for ${executionId} — its stream log is no longer available. ` +
+          `Use /executions/${executionId}/report for the result summary.`,
+      };
+    }
+
+    const { lines, chars } = projectProcessOutput(log.toJSON());
+    const info = getExecutionStatusInfo(executionId, meta.terminalStatus);
+    const footer = handle
+      ? `[still running — re-read for more output, or use action='wait' on /executions/${executionId} to block until it finishes]`
+      : `[finished — this is the retained log; /executions/${executionId}/report has the result summary]`;
+    const out: string[] = [
+      // `process` rather than a hardcoded `bash`: the category is what the
+      // guard above actually verified, and it stays true if another tool ever
+      // registers a process-kind execution.
+      `Output for ${executionId} (process, ${formatStatusInfo(info)}) — ${chars.toLocaleString()} of ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} logged chars, ${lines.length.toLocaleString()} lines.`,
+    ];
+
+    if (lines.length === 0) {
+      out.push('', footer);
+      return { status: 'executed', output: out.join('\n') };
+    }
+    out.push('Lines are in arrival order; `err:` marks one written to stderr.');
+
+    // Default to the tail, where a live build's news is; a view_range window
+    // is clamped so a wide request still can't return an unbounded log.
+    const first = viewRange
+      ? viewRange[0]
+      : Math.max(lines.length - OUTPUT_TAIL_LINES, 0) + 1;
+    const requestedLast = Math.min(
+      viewRange?.[1] ?? lines.length,
+      lines.length,
+    );
+    const last = Math.min(requestedLast, first + OUTPUT_MAX_LINES - 1);
+
+    if (first > last) {
+      out.push(
+        `No lines in the requested range; the log has ${lines.length} lines.`,
+        '',
+        footer,
+      );
+      return { status: 'executed', output: out.join('\n') };
+    }
+
+    let hint = '';
+    if (last < requestedLast) {
+      hint = ` (capped at ${OUTPUT_MAX_LINES} lines per read — continue from view_range: [${last + 1}, …])`;
+    } else if (!viewRange && first > 1) {
+      hint = ` (the last ${OUTPUT_TAIL_LINES} by default — use view_range to page earlier ones)`;
+    }
+    out.push(
+      `Showing lines ${first}-${last} of ${lines.length}${hint}.`,
+      '',
+      applyViewRange(lines.join('\n'), [first, last]),
+      '',
+      footer,
+    );
+
+    return {
+      status: 'executed',
+      summary: `Read lines ${first}-${last} of /executions/${executionId}/output`,
+      output: out.join('\n'),
+    };
   }
 
   private async listFiles(executionId: ExecutionId): Promise<ToolResult> {
