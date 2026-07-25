@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { render } from 'ink';
+import { nanoid } from 'nanoid';
 import React from 'react';
 
 import {
@@ -20,19 +21,14 @@ import {
   getVisibleAgents,
   loadAgents,
 } from '@agent/index';
+import type { RetryResult } from '@agent/runtime/HostInteractions';
 import {
   defaultSession,
   initializeDefaultSession,
 } from '@agent/runtime/SessionHandle';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  isInFlightPhase,
-  STREAM_TRANSITION_CAUSE,
-} from '@shared/streams/streamStatus';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { platform, tryPlatform } from '@platform/platform';
+import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
   AgentCategory,
   LIVE_ELAPSED_STREAM_STATUSES,
@@ -54,13 +50,18 @@ import {
   type StreamTabId,
   type UserQuestionPermission,
 } from '@shared/schemas';
-import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import {
+  isInFlightPhase,
+  STREAM_TRANSITION_CAUSE,
+} from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
+import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { StreamLogStore } from '@transcript';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { App } from '../src/chat/tui/App';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
-import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 import { cliSettingsStores } from '../src/runtime/settingsStores';
 import {
   formatSlashCommandHelp,
@@ -114,6 +115,7 @@ import {
 } from '../src/chat/tui/state/approvalQueue';
 import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
 import { attachTuiRunFactSubscription } from '../src/chat/tui/state/subscribeRuntimeHost';
+import { createTuiHostInteractions } from '../src/chat/tui/state/subscribeApprovals';
 import { subscribeStreamStatus } from '../src/chat/tui/state/subscribeStreamStatus';
 import { resolveLocalTranscriptStreamId } from '../src/chat/tui/state/transcript';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
@@ -123,6 +125,7 @@ import {
   formatCliModelAccessRouteInline,
   resolveCliModelAccessRoute,
 } from '../src/runtime/modelAccessRoute';
+import { selectCliModelAccessRoute } from '../src/runtime/modelAccessSelection';
 import {
   formatCliApiStatusActionHint,
   formatCliAuthStatusLine,
@@ -131,7 +134,6 @@ import {
   formatCliApprovalPolicy,
   parseCliApprovalPolicy,
 } from '../src/runtime/approvalPolicyText';
-import type { CliModelAccess } from '../src/runtime/modelAccess';
 import {
   cliMultiAgentPresets,
   planCliMultiAgentPresets,
@@ -148,7 +150,15 @@ import {
 } from '../src/runtime/history';
 import { type CliApprovalPolicy } from '../src/schemas/cliSettings';
 import { initLocalCliPlatform } from '../src/runtime/initPlatform';
+import { saveProviderApiKey } from '../src/runtime/providerApiKey';
 import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
+import {
+  createCliRuntimeHost,
+  type CliRuntimeHost,
+} from '../src/runtime/runtimeHost';
+import type { CliContext } from '../src/runtime/cliContext';
+import type { CliModelAccess } from '../src/runtime/modelAccess';
+import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 
 const STREAM_ID = 'harness-stream-1';
 const HARNESS_APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
@@ -307,6 +317,27 @@ const HARNESS_CWD_INPUT = process.env.HARNESS_CWD?.trim();
 const HARNESS_CWD =
   HARNESS_CWD_INPUT || mkdtempSync(path.join(tmpdir(), 'texra-tui-harness-'));
 const HARNESS_COLOR_ENABLED = process.env.HARNESS_COLOR_ENABLED !== '0';
+const HARNESS_RESOURCES_PATH = resolveCliResourcesPath();
+const HARNESS_CLI_CONTEXT: CliContext = {
+  apiMode: HARNESS_API_MODE,
+  approvalPolicy: harnessApprovalPolicy,
+  cliConfig: {},
+  commandName: 'texra',
+  configWarnings: [],
+  cwd: HARNESS_CWD,
+  helperModel: 'harness-model',
+  mode: 'interactive',
+  outputFormat: 'text',
+  quietLogs: true,
+  resourcesPath: HARNESS_RESOURCES_PATH,
+  skillSourceOptions: {},
+  stderrColorEnabled: HARNESS_COLOR_ENABLED,
+  stderrIsTty: true,
+  stdoutColorEnabled: HARNESS_COLOR_ENABLED,
+  stdoutIsTty: true,
+  termIsDumb: false,
+  version: '0.0.0-harness',
+};
 const HARNESS_STDOUT = tuiOutputStreamForColor(
   process.stdout,
   HARNESS_COLOR_ENABLED,
@@ -372,9 +403,11 @@ await initLocalCliPlatform({
   apiMode: HARNESS_API_MODE,
   cwd: HARNESS_CWD,
   installSignalHandlers: false,
-  resourcesPath: resolveCliResourcesPath(),
+  resourcesPath: HARNESS_RESOURCES_PATH,
   storageRoot: path.join(HARNESS_CWD, '.texra-storage'),
   helperModel: 'harness-model',
+  skillSourceOptions: {},
+  version: '0.0.0-harness',
 });
 // Seed workspace-storage memory files so `/memory` has rows to list. Files
 // get descending mtimes in list order, so the first name is the newest row
@@ -842,7 +875,7 @@ function isDifferentExecution(
 function harnessMessageEntry(
   id: string,
   text: string,
-  role: ConversationEntry['role'] = 'assistant',
+  role: 'assistant' | 'error' | 'user' = 'assistant',
   finalized = true,
 ): ConversationEntry {
   return {
@@ -910,23 +943,32 @@ function makeBashApprovalPayload(index = 1) {
 function makeRetryApprovalPayload(): RetryPermission {
   if (RETRY_APPROVAL_CHATGPT) {
     return {
+      requestId: `harness-retry-${nanoid()}`,
       streamId: STREAM_ID,
       operation: 'Model request',
+      model: 'harness-model',
       errorMessage: 'ChatGPT subscription usage limit reached. Resets in 2h.',
       errorDetails: {
         exhaustionReason: 'chatgpt-subscription',
         isRelayError: false,
+        provider: 'openai',
         statusCode: 429,
       },
     };
   }
   return {
+    requestId: `harness-retry-${nanoid()}`,
     streamId: STREAM_ID,
     operation: 'Model request',
+    model: 'harness-model',
     errorMessage: 'HTTP 429 Too Many Requests',
     errorDetails: {
-      exhaustionReason: 'relay-limit',
+      // Keep this fixture interactive: relay-limit retries auto-switch when
+      // a usable personal key exists, while upstream-credit requires an
+      // explicit user decision before changing credentials.
+      exhaustionReason: 'upstream-credit',
       isRelayError: true,
+      provider: 'openai',
       statusCode: 429,
     },
   };
@@ -1057,17 +1099,18 @@ function appendHarnessExternalInquiryDecision(
   );
 }
 
-function appendHarnessRetryDecision(decision: ApprovalDecision): void {
-  if (decision.accepted && decision.apiMode) {
-    sessionMeta.set({
-      ...sessionMeta.get(),
-      apiMode: decision.apiMode,
-    });
-    appendHarnessAssistantTranscript(`RETRY-API-MODE ${decision.apiMode}`);
+function appendHarnessRetryResult(
+  result: RetryResult,
+  credentialSelection: 'configured' | 'personal' | undefined,
+): void {
+  if (result.action === 'retry' && credentialSelection === 'personal') {
+    appendHarnessAssistantTranscript(
+      `RETRY-API-MODE ${sessionMeta.get().apiMode}`,
+    );
     return;
   }
   appendHarnessAssistantTranscript(
-    decision.accepted ? 'RETRY-APPROVED' : 'RETRY-REJECTED',
+    result.action === 'retry' ? 'RETRY-APPROVED' : 'RETRY-REJECTED',
   );
 }
 
@@ -1113,11 +1156,14 @@ function harnessInitialEntries(): ConversationEntry[] {
 
 sessionMeta.set({
   agent: 'chat',
+  category: AgentCategory.ToolUse,
   model: 'harness-model',
+  modelSource: 'builtin-default',
   cwd: HARNESS_CWD,
   apiMode: HARNESS_API_MODE,
   approvalPolicy: harnessApprovalPolicy,
   canDelegate: CAN_DELEGATE,
+  transcriptMode: 'persistent',
   teamName: TEAM_NAME,
   version: '0.0.0-harness',
 });
@@ -1165,7 +1211,7 @@ const CHILD_EVENT_ORDER_OTHER_PARENT_ID =
 const CHILD_EVENT_ORDER_MARKER_PREFIX =
   '\u001b]777;texra-harness-child-event-order:';
 const CHILD_EVENT_ORDER_MARKER_SUFFIX = '\u0007';
-const CHILD_EVENT_ORDER_DISPOSERS: Array<() => void> = [];
+const HARNESS_DISPOSERS: Array<() => void> = [];
 
 function childEventOrderRosterRow(): ActiveChildInfo {
   return {
@@ -1590,14 +1636,23 @@ if (SHOW_BASH_APPROVAL) {
   }
 }
 
+let harnessRetryRuntimeHost: CliRuntimeHost | undefined;
 if (SHOW_RETRY_APPROVAL) {
-  void enqueueApproval(
-    {
-      kind: 'retry',
-      payload: makeRetryApprovalPayload(),
-    },
-    { onPresent: () => notify({ kind: 'approvalNeeded' }) },
-  ).then(appendHarnessRetryDecision);
+  await saveProviderApiKey('openai', 'sk-harness-openai-key');
+  harnessRetryRuntimeHost = createCliRuntimeHost(HARNESS_CLI_CONTEXT);
+  HARNESS_DISPOSERS.push(
+    defaultSession().useHostInteractions(
+      createTuiHostInteractions(harnessRetryRuntimeHost, HARNESS_CLI_CONTEXT),
+    ),
+  );
+  let credentialSelection: 'configured' | 'personal' | undefined;
+  void defaultSession()
+    .interactions.requestRetry(makeRetryApprovalPayload(), {
+      prepareRetry: async (selection) => {
+        credentialSelection = selection;
+      },
+    })
+    .then((result) => appendHarnessRetryResult(result, credentialSelection));
 }
 
 if (SHOW_EXTERNAL_INQUIRY) {
@@ -1759,7 +1814,7 @@ function appendHarnessUserTranscript(text: string): void {
 }
 
 function appendHarnessTranscript(
-  role: ConversationEntry['role'],
+  role: 'assistant' | 'error' | 'user',
   text: string,
   explicitStreamId?: StreamTabId,
   options: { readonly finalized?: boolean } = {},
@@ -1896,7 +1951,6 @@ function handleHarnessSubmit(line: string): void {
   if (focusedChildRoute.kind === 'reject') {
     appendHarnessAssistantTranscript(
       stoppedFocusedChildFollowUpMessage({
-        childStreamEntries: childStreamEntries.get(),
         parentStream: parentStream.get(),
         streamId: focusedChildRoute.streamId,
         streams: streams.get(),
@@ -2026,6 +2080,16 @@ registerBuiltinSlashCommands({
       );
       return;
     }
+    if (route === 'kimi-code') {
+      return selectCliModelAccessRoute(
+        { ...HARNESS_CLI_CONTEXT, apiMode: sessionMeta.get().apiMode },
+        route,
+        { writeProgress: appendHarnessAssistantTranscript },
+      ).then((access) => {
+        sessionMeta.set({ ...sessionMeta.get(), apiMode: access.apiMode });
+        appendHarnessAssistantTranscript(access.message);
+      });
+    }
     sessionMeta.set({ ...sessionMeta.get(), apiMode: route });
     appendHarnessAssistantTranscript(`API mode set to ${route}.`);
   },
@@ -2095,15 +2159,13 @@ const ink = render(renderHarnessApp(), {
 });
 inkRef.current = ink;
 
-CHILD_EVENT_ORDER_DISPOSERS.push(subscribeStreamStatus());
+HARNESS_DISPOSERS.push(subscribeStreamStatus());
 
 if (CHILD_EVENT_ORDER) {
   // Mirror real CLI startup: `runChatTui.tsx` installs
   // `subscribeStreamStatus()` and the run-fact subscription once per TUI
   // session.
-  CHILD_EVENT_ORDER_DISPOSERS.push(
-    attachTuiRunFactSubscription(defaultSession().events),
-  );
+  HARNESS_DISPOSERS.push(attachTuiRunFactSubscription(defaultSession().events));
   void runChildEventOrderFixture(ink, CHILD_EVENT_ORDER).catch((error) => {
     process.stderr.write(
       `[tui-harness] HARNESS_CHILD_EVENT_ORDER failed: ${toErrorMessage(error)}\n`,
@@ -2116,11 +2178,12 @@ let harnessExiting = false;
 async function exitHarness(exitCode: number): Promise<void> {
   if (harnessExiting) return;
   harnessExiting = true;
-  for (const dispose of CHILD_EVENT_ORDER_DISPOSERS.splice(0).toReversed()) {
+  for (const dispose of HARNESS_DISPOSERS.splice(0).toReversed()) {
     dispose();
   }
   ink.unmount();
   try {
+    await harnessRetryRuntimeHost?.close();
     await tryPlatform()?.lifecycle.runShutdown();
   } finally {
     process.exit(exitCode);
