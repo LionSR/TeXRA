@@ -19,7 +19,7 @@ import {
 import { attachProviderError } from '@common/errors/sdkErrorUtils';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { AbsoluteFS, pathToLocation, getShortDisplayPath } from '@utils/files';
+import { AbsoluteFS, getComparablePath, pathToLocation } from '@utils/files';
 
 interface MediaLogRecorder extends AgentTrace {
   debugMessages: string[];
@@ -175,7 +175,7 @@ describe('MediaAttachmentProcessor', () => {
   it('processes PDF fixtures using native ingestion when supported', async () => {
     const pdfPath = await createPdfFixture();
     const pdfLocation = pathToLocation(pdfPath);
-    const displayPath = getShortDisplayPath(pdfLocation);
+    const displayPath = getComparablePath(pdfLocation);
     const { logger, stub } = createMediaLogRecorder();
     const processor = createProcessor(logger, {
       supportsVision: true,
@@ -184,7 +184,22 @@ describe('MediaAttachmentProcessor', () => {
 
     const { entries, results } = await processor.loadEntries([pdfLocation]);
 
-    assert.deepEqual(results, [{ path: displayPath, ok: true }]);
+    assert.deepEqual(results, [
+      {
+        path: displayPath,
+        ok: true,
+        media: {
+          kind: 'image',
+          mimeType: 'application/pdf',
+          sizeBytes: fs.statSync(pdfPath).size,
+        },
+      },
+    ]);
+    assert.equal(
+      displayPath,
+      pdfPath,
+      'external media keeps its absolute path',
+    );
     assert.equal(entries.length, 1, 'expected a single PDF entry');
 
     const [entry] = entries;
@@ -206,7 +221,7 @@ describe('MediaAttachmentProcessor', () => {
   it('processes native audio fixtures into audio media entries', async () => {
     const audioPath = createAudioFixture();
     const audioLocation = pathToLocation(audioPath);
-    const displayPath = getShortDisplayPath(audioLocation);
+    const displayPath = getComparablePath(audioLocation);
     const { logger, stub } = createMediaLogRecorder();
     const processor = createProcessor(
       logger,
@@ -218,7 +233,17 @@ describe('MediaAttachmentProcessor', () => {
 
     const { entries, results } = await processor.loadEntries([audioLocation]);
 
-    assert.deepEqual(results, [{ path: displayPath, ok: true }]);
+    assert.deepEqual(results, [
+      {
+        path: displayPath,
+        ok: true,
+        media: {
+          kind: 'audio',
+          mimeType: 'audio/wav',
+          sizeBytes: fs.statSync(audioPath).size,
+        },
+      },
+    ]);
     assert.equal(entries.length, 1, 'expected a single audio entry');
 
     const [entry] = entries;
@@ -232,6 +257,37 @@ describe('MediaAttachmentProcessor', () => {
     assert.equal(stub.fileListEntries.length, 1, 'should log processed audio');
   });
 
+  it('keeps loaded workspace media relative in its typed result', async () => {
+    const relativePath = 'documents/workspace.pdf';
+    const mediaPath = await createPdfFixture();
+    const sizeBytes = fs.statSync(mediaPath).size;
+    const location = {
+      kind: 'workspace',
+      absolutePath: mediaPath,
+      relativePath,
+    } as const;
+    const { logger, stub } = createMediaLogRecorder();
+    const processor = createProcessor(logger, {
+      supportsVision: true,
+      supportsNativePdf: true,
+    });
+
+    const { results } = await processor.loadEntries([location]);
+
+    assert.deepEqual(stub.errorMessages, []);
+    assert.deepEqual(results, [
+      {
+        path: relativePath,
+        ok: true,
+        media: {
+          kind: 'image',
+          mimeType: 'application/pdf',
+          sizeBytes,
+        },
+      },
+    ]);
+  });
+
   for (const [extension, mediaType] of [
     ['.opus', 'audio/opus'],
     ['.l16', 'audio/l16'],
@@ -241,7 +297,7 @@ describe('MediaAttachmentProcessor', () => {
     it(`processes ${extension} audio with provider-supported MIME type`, async () => {
       const audioPath = createRawAudioFixture(extension);
       const audioLocation = pathToLocation(audioPath);
-      const displayPath = getShortDisplayPath(audioLocation);
+      const displayPath = getComparablePath(audioLocation);
       const { logger } = createMediaLogRecorder();
       const processor = createProcessor(
         logger,
@@ -253,7 +309,17 @@ describe('MediaAttachmentProcessor', () => {
 
       const { entries, results } = await processor.loadEntries([audioLocation]);
 
-      assert.deepEqual(results, [{ path: displayPath, ok: true }]);
+      assert.deepEqual(results, [
+        {
+          path: displayPath,
+          ok: true,
+          media: {
+            kind: 'audio',
+            mimeType: mediaType,
+            sizeBytes: fs.statSync(audioPath).size,
+          },
+        },
+      ]);
       assert.equal(entries.length, 1, 'expected a single audio entry');
 
       const [entry] = entries;
@@ -268,7 +334,7 @@ describe('MediaAttachmentProcessor', () => {
   it('reports empty media fixtures as failed loads', async () => {
     const emptyPath = createEmptyFixture();
     const emptyLocation = pathToLocation(emptyPath);
-    const displayPath = getShortDisplayPath(emptyLocation);
+    const displayPath = getComparablePath(emptyLocation);
     const { logger, stub } = createMediaLogRecorder();
     const processor = createProcessor(logger, { supportsVision: true });
 
@@ -292,7 +358,7 @@ describe('MediaAttachmentProcessor', () => {
   it('keeps SDK-specific media load errors in the visible log message', async () => {
     const mediaPath = createTempFile('sdk-error.png', Buffer.from('not-png'));
     const mediaLocation = pathToLocation(mediaPath);
-    const displayPath = getShortDisplayPath(mediaLocation);
+    const displayPath = getComparablePath(mediaLocation);
     const { logger, stub } = createMediaLogRecorder();
     const processor = createProcessor(logger, { supportsVision: true });
     const originalExists = absoluteFsAny.exists;

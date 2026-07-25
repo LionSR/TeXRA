@@ -928,6 +928,87 @@ describe('CLI workflow-script child-stream transcript', () => {
     }
   });
 
+  it('keeps cold static FILE_LIST order equal to incremental settlement order', async () => {
+    const runTrace = createRunTrace(STREAM_ID, defaultSession().transcripts);
+    try {
+      runTrace.trace.toolStart({
+        logId: 'audit-tool',
+        toolName: 'bash',
+        input: { command: 'pwd' },
+      });
+      runTrace.trace.domain({
+        key: 'filesLoaded',
+        data: {
+          category: 'all',
+          entries: [
+            {
+              path: '/private/tmp/loaded.png',
+              ok: true,
+              media: {
+                kind: 'image',
+                mimeType: 'image/png',
+                sizeBytes: 8704,
+              },
+            },
+          ],
+        },
+      });
+      syncStreamLog(STREAM_ID);
+
+      let incrementalItems = appendStaticTranscriptItems({
+        currentItems: [],
+        meta: SESSION_META,
+        scrollbackStreamId: STREAM_ID,
+        streams: streams.get(),
+      });
+      const firstEntries = incrementalItems.filter(
+        (item) => item.kind === 'entry',
+      );
+      expect(firstEntries.map((item) => item.entry.role)).toEqual(['media']);
+
+      runTrace.trace.toolEnd({
+        logId: 'audit-tool',
+        status: TOOL_USE_STATUS.COMPLETED,
+        result: {
+          toolName: 'bash',
+          input: { command: 'pwd' },
+          output: '/tmp/project',
+        },
+      });
+      syncStreamLog(STREAM_ID);
+      incrementalItems = appendStaticTranscriptItems({
+        currentItems: incrementalItems,
+        meta: SESSION_META,
+        scrollbackStreamId: STREAM_ID,
+        streams: streams.get(),
+      });
+      const coldItems = appendStaticTranscriptItems({
+        currentItems: [],
+        meta: SESSION_META,
+        scrollbackStreamId: STREAM_ID,
+        streams: streams.get(),
+      });
+      const entries = (
+        items: ReturnType<typeof appendStaticTranscriptItems>,
+      ): readonly ConversationEntry[] =>
+        items.filter((item) => item.kind === 'entry').map((item) => item.entry);
+
+      expect(entries(incrementalItems).map((entry) => entry.role)).toEqual([
+        'media',
+        'tool',
+      ]);
+      expect(entries(coldItems).map((entry) => entry.id)).toEqual(
+        entries(incrementalItems).map((entry) => entry.id),
+      );
+      const output = await renderStaticTranscript();
+      expect(output.indexOf('[image] /private/tmp/loaded.png')).toBeLessThan(
+        output.indexOf('bash'),
+      );
+    } finally {
+      runTrace.dispose();
+    }
+  });
+
   it('keeps an immutable round header ahead of its later log rows', async () => {
     const runTrace = createRunTrace(STREAM_ID, defaultSession().transcripts);
     try {

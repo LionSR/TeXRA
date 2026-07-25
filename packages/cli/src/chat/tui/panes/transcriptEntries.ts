@@ -70,6 +70,8 @@ export function isRenderableTranscriptEntry(entry: ConversationEntry): boolean {
     case 'phase':
     case 'workflowTask':
       return terminalVisibleTranscriptText(entry.text).trim().length > 0;
+    case 'media':
+      return entry.images.length > 0;
     case 'tool':
       return true;
   }
