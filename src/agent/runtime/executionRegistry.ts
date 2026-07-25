@@ -708,6 +708,9 @@ export class ExecutionRegistry {
         elapsed: elapsed ?? null,
         childStreamId: handle.childStreamId,
         ...(handle.toolName ? { toolName: handle.toolName } : {}),
+        ...(handle.workflowPhase
+          ? { workflowPhase: handle.workflowPhase }
+          : {}),
       });
     }
     return result;

@@ -21,6 +21,8 @@ export interface StreamView {
   readonly label: string;
   /** Canonical spawning tool retained with the child execution. */
   readonly toolName?: string;
+  /** Workflow-script phase owning this child, when its parent runs a script. */
+  readonly workflowPhase?: string;
   readonly parentId?: StreamTabId;
   readonly parentLabel?: string;
   readonly slice: StreamSlice | undefined;
@@ -144,6 +146,10 @@ export function streamViewForId(init: {
     label: streamDisplayLabel(init),
     toolName:
       childEntry?.kind === 'live' ? childEntry.summary?.toolName : undefined,
+    workflowPhase:
+      childEntry?.kind === 'live'
+        ? childEntry.summary?.workflowPhase
+        : undefined,
     parentId,
     parentLabel: parentId
       ? streamDisplayLabel({

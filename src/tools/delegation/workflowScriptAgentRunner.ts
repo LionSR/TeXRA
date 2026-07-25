@@ -277,6 +277,11 @@ export function createWorkflowScriptAgentRunner(
             signal: invocation.signal,
             approvalPromptsUnavailable: parent.approvalPromptsUnavailable,
             runtimeUnavailableTools: parent.runtimeUnavailableTools,
+            // The engine settles the owning phase onto the call options before
+            // handing them here (declared task phase, else the phase active at
+            // call time), so this is a single-owner read rather than a
+            // reconstruction of the engine's rule.
+            workflowPhase: invocation.options.phase,
             // Live per-kind ancestry, matching LLM delegation: each approval
             // follows the parent's corresponding bypass. The run's own stream
             // inherits from the orchestrator, so nested delegation remains
