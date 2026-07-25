@@ -58,6 +58,7 @@ import {
   type NormalizedToolUse,
   type RunOutcome,
   type StreamTabId,
+  type WorkflowTaskProgress,
 } from '@shared/schemas';
 import { buildChildStreamEntries } from '@test/support/childStreamEntries';
 
@@ -419,17 +420,18 @@ describe('CLI conversation transcript splitting', () => {
     expect(selected.rowLimits.has('a1')).toBe(false);
   });
 
-  it('derives prefixes, insets, margins, and row counts from one layout', () => {
+  it('derives insets, margins, prefixed lines, and row counts from one layout', () => {
     const user = entry('u1', 'user', 'x'.repeat(77), true);
     const userLayout = transcriptEntryLayout(user, { width: 80 });
     expect(userLayout).toMatchObject({
       columns: 78,
-      continuationPrefix: '  ',
-      firstPrefix: '› ',
       inset: 2,
       marginBottomRows: 1,
       marginTopRows: 1,
     });
+    // Row prefixes are baked into the lines, not advertised as layout fields.
+    expect(userLayout.lines[0]?.startsWith('› ')).toBe(true);
+    expect(userLayout.lines[1]?.startsWith('  ')).toBe(true);
     expect(userLayout.lines).toHaveLength(2);
     expect(transcriptEntryLayoutRows(userLayout)).toBe(4);
     expect(estimateTranscriptEntryRows(user, 80)).toBe(
@@ -447,6 +449,25 @@ describe('CLI conversation transcript splitting', () => {
     expect(estimateTranscriptEntryRows(tool, 80)).toBe(
       transcriptEntryLayoutRows(toolLayout),
     );
+  });
+
+  it('gives every workflow-task status its own steady marker', () => {
+    const tasks: readonly WorkflowTaskProgress[] = [
+      { id: 'a', label: 'Task', status: 'planned' },
+      { id: 'a', label: 'Task', status: 'running' },
+      { id: 'a', label: 'Task', status: 'completed' },
+      { id: 'a', label: 'Task', status: 'cached' },
+      { id: 'a', label: 'Task', status: 'skipped', reason: 'user' },
+      { id: 'a', label: 'Task', status: 'failed', error: 'Runner stopped.' },
+    ];
+    const markers = tasks.map((task) =>
+      transcriptEntryLayout(
+        { id: 'a', role: 'workflowTask', text: 'Task', finalized: true, task },
+        { width: 80 },
+      ).lines[0]?.slice(0, 2),
+    );
+
+    expect(markers).toEqual(['□ ', '☐ ', '☑ ', '✓ ', '⊘ ', '✗ ']);
   });
 
   it('budgets live rich tool rows without reflowing their display lines', () => {
