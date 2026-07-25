@@ -473,12 +473,15 @@ export class FileList extends LitElement {
         ${
           failure
             ? html`<wa-icon
-                library=${TEXRA_ICON_LIBRARY}
-                name="warning"
-                class="compile-warning"
-                title="Compile check failed"
-                aria-label="Compile check failed"
-              ></wa-icon>`
+                  id="${idPrefix}-compile-warning"
+                  library=${TEXRA_ICON_LIBRARY}
+                  name="warning"
+                  class="compile-warning"
+                  aria-label="Compile check failed"
+                ></wa-icon>
+                <wa-tooltip for="${idPrefix}-compile-warning"
+                  >Compile check failed</wa-tooltip
+                >`
             : nothing
         }
         <span class="file-name">
