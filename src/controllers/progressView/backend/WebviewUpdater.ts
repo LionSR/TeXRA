@@ -453,6 +453,7 @@ export class WebviewUpdater {
       lastTimestamp: state.streamLogs.getLastTimestamp(streamInfo.name),
       conversationProgress: current?.conversationProgress,
       roundStage: current?.roundStage,
+      phaseStage: current?.phaseStage,
       subagents: rosters?.subagents,
     });
   }

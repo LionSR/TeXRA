@@ -6,6 +6,7 @@ import {
   StreamStatusSchema,
   streamStatusToPhase,
   streamStatusToSubstate,
+  type PhaseStage,
   type RoundStage,
   type StreamPhase,
   type StreamSubstate,
@@ -166,5 +167,19 @@ export function formatRoundStageLabel(
 ): string | undefined {
   if (stage === undefined) return undefined;
   const current = `r${stage.index + 1}`;
+  return stage.total !== undefined ? `${current}/${stage.total}` : current;
+}
+
+/** Compact phase progress label for a workflow-script run: `Reduce 2/3` when
+ *  the phase was declared with a position and a planned total, `Reduce 2` with
+ *  only a position, and the bare title for a dynamically opened phase.
+ *  Zero-based `index` renders one-based. Occupies the same row slot as
+ *  `formatRoundStageLabel` — a run opens phases or rounds, never both. */
+export function formatPhaseStageLabel(
+  stage: Readonly<PhaseStage> | undefined,
+): string | undefined {
+  if (stage === undefined) return undefined;
+  if (stage.index === undefined) return stage.label;
+  const current = `${stage.label} ${stage.index + 1}`;
   return stage.total !== undefined ? `${current}/${stage.total}` : current;
 }

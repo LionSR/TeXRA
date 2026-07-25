@@ -14,6 +14,9 @@ export function metadataToStreamStatePartial(
     ...(Object.hasOwn(metadata, 'roundStage') && {
       roundStage: metadata.roundStage ?? undefined,
     }),
+    ...(Object.hasOwn(metadata, 'phaseStage') && {
+      phaseStage: metadata.phaseStage ?? undefined,
+    }),
   } as Partial<StreamState>;
 }
 
