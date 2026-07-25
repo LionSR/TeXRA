@@ -3435,6 +3435,65 @@ describe('retained finished children', () => {
     }
   });
 
+  it('keeps the resolved terminal status on a later structural sync', async () => {
+    const { backend, messages } = createRecordingBackend();
+    try {
+      seedParent(backend);
+      const childStreamId = 'doomed-stream' as StreamTabId;
+      backend.state.setStreamParent(childStreamId, PARENT);
+
+      // Roster drop first, so the retained row is stamped `running` forever.
+      backend.factApplier.updateChildRoster(PARENT, 'subagents', [
+        subagent('doomed', { childStreamId }),
+      ]);
+      backend.factApplier.updateChildRoster(PARENT, 'subagents', []);
+      backend.state.streamStatus.transitionToTerminal(
+        childStreamId,
+        STREAM_PHASE.FAILED,
+      );
+      await backend.factApplier.setStreamStatus(
+        childStreamId,
+        STREAM_PHASE.FAILED,
+      );
+      messages.length = 0;
+
+      // A structural rebuild (view reopen, theme change, filter switch) is the
+      // frontend's other writer of `subagents`; it must not ship the stale
+      // stamped status back over the resolved one.
+      backend.webviewUpdater.sendStreamMetadata(
+        backend.state,
+        backend.factApplier.getAllStreamStates(),
+      );
+      backend.webviewUpdater.updateStreamMetadata(
+        backend.state,
+        PARENT,
+        backend.factApplier.getAllStreamStates(),
+      );
+
+      const rosters = messages.flatMap((message) => {
+        if (message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS) {
+          return [message.streamStates?.[PARENT]?.subagents ?? []];
+        }
+        if (message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA) {
+          return [message.streamState.subagents];
+        }
+        return [];
+      });
+
+      expect(rosters).toHaveLength(2);
+      for (const roster of rosters) {
+        expect(roster).toEqual([
+          expect.objectContaining({
+            executionId: 'doomed',
+            status: STREAM_PHASE.FAILED,
+          }),
+        ]);
+      }
+    } finally {
+      backend.dispose();
+    }
+  });
+
   it('caps retained rows, evicting the oldest and keeping every live one', () => {
     const { backend } = createRecordingBackend();
     // Mirrors RETAINED_FINISHED_CHILDREN_CAP in ProgressFactApplier.

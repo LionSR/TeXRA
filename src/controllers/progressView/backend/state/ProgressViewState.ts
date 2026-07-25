@@ -435,6 +435,41 @@ export class ProgressViewState {
     return this._streamStates.get(stream);
   }
 
+  /**
+   * Project a stream's child rosters for the wire. `streamStatus` — not the
+   * roster row — owns a subagent's phase: a child's roster drop can arrive
+   * BEFORE its terminal status (the cancel path untracks the handle, then
+   * transitions the stream), so the status stamped into a retained row at drop
+   * time can read `running` forever. Resolve it here, at the one boundary every
+   * roster-carrying payload passes through — badges, the tab-switch content
+   * sync, and the structural `UPDATE_STREAMS` / `UPDATE_STREAM_METADATA`
+   * rebuild alike — so no send path can ship the stale stamped value.
+   *
+   * Processes are passed through, and the trap above is subagent-only.
+   * `childStreamId` is exclusive to subagents (see `ActiveChildInfoSchema`), so
+   * a process owns no stream, has no entry in the status machine, and there is
+   * no second source to resolve its row against — its roster row is the only
+   * report of its state. Nor can one appear: `processes` is projected from
+   * `collectChildSummary(parent, ProcessExecutionHandle)`, and production never
+   * constructs a `ProcessExecutionHandle` — a background `bash`/`codex` run is
+   * an `AgentExecutionHandle` (see `executionRegistry.killBackgroundProcesses`),
+   * so the roster is empty outside tests.
+   */
+  projectChildRosters(state: StreamExecutionState): StreamBadgeSnapshot {
+    return {
+      subagents: state.subagents.map((child) =>
+        child.kind === 'subagent'
+          ? {
+              ...child,
+              status:
+                this.streamStatus.get(child.childStreamId) ?? child.status,
+            }
+          : child,
+      ),
+      processes: state.processes,
+    };
+  }
+
   getAllStreamStates(): ReadonlyMap<StreamTabId, StreamExecutionState> {
     return this._streamStates;
   }

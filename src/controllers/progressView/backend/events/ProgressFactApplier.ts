@@ -663,7 +663,7 @@ export class ProgressFactApplier {
           .map((child) => ({ ...child, finishedAt })),
       ].slice(-RETAINED_FINISHED_CHILDREN_CAP);
       const updatedState = { ...prev, [field]: [...next, ...retained] };
-      nextBadges = this.toBadgeSnapshot(updatedState);
+      nextBadges = this.state.projectChildRosters(updatedState);
       return updatedState;
     });
 
@@ -674,29 +674,6 @@ export class ProgressFactApplier {
     ) {
       this.webviewUpdater.updateStreamBadges(parentStreamId, nextBadges);
     }
-  }
-
-  /**
-   * A child's roster drop can arrive BEFORE its terminal status (the cancel
-   * path untracks the handle, then transitions the stream), so the status
-   * stamped at drop time can still read `running`. Overlay the displayed
-   * status from the status machine — the same source the registry reads —
-   * rather than trusting the stamped value.
-   */
-  private toBadgeSnapshot(state: StreamExecutionState): StreamBadgeSnapshot {
-    return {
-      subagents: state.subagents.map((child) =>
-        child.kind === 'subagent'
-          ? {
-              ...child,
-              status:
-                this.state.streamStatus.get(child.childStreamId) ??
-                child.status,
-            }
-          : child,
-      ),
-      processes: state.processes,
-    };
   }
 
   public markAllRunningTasksAsCancelled(): void {
@@ -794,7 +771,7 @@ export class ProgressFactApplier {
     return {
       conversationProgress: state.conversationProgress,
       roundStage: state.roundStage ?? null,
-      badges: this.toBadgeSnapshot(state),
+      badges: this.state.projectChildRosters(state),
       parentStreamId: this.state.snapshots.getParentStreamId(stream) ?? null,
     };
   }
@@ -838,7 +815,7 @@ export class ProgressFactApplier {
       if (parentState) {
         this.webviewUpdater.updateStreamBadges(
           parentStreamId,
-          this.toBadgeSnapshot(parentState),
+          this.state.projectChildRosters(parentState),
         );
       }
     }
