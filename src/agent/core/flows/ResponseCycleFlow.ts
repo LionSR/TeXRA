@@ -15,7 +15,7 @@ import {
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import {
-  ANTHROPIC_STOP,
+  isContextWindowExceededStopReason,
   isTokenLimitStopReason,
   type ProviderStopReason,
 } from '@agent/types/StopReasonTypes';
@@ -373,7 +373,7 @@ class ResponseProcessNode<C> extends BaseNode<
 
     if (!result.hasResponse) {
       shared.endTurn = false;
-      if (result.stopReason === ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED) {
+      if (isContextWindowExceededStopReason(result.stopReason)) {
         shared.processedResponse = '';
         return FlowTransition.DEFAULT;
       }
@@ -542,8 +542,7 @@ class ResponseContinuationNode<C> extends BaseNode<
       setting,
     );
     const reachedTokenLimit = isTokenLimitStopReason(stopReason);
-    const contextWindowExceeded =
-      stopReason === ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED;
+    const contextWindowExceeded = isContextWindowExceededStopReason(stopReason);
 
     return {
       kind: 'success',

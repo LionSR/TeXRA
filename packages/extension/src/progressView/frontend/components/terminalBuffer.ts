@@ -2,6 +2,8 @@
 
 import stripAnsi from 'strip-ansi';
 
+import { countLines } from '@utils/text/stringUtils';
+
 const ESCAPE_CHARACTER = String.fromCharCode(27);
 // Null byte used as a sentinel for ANSI erase-line sequences inside processTerminalText.
 // Real null bytes in the input are stripped first so the sentinel is unambiguous.
@@ -99,7 +101,7 @@ export class TerminalBuffer {
     if (lastNl >= 0) {
       const processed = processTerminalText(combined.slice(0, lastNl + 1));
       this.committedLines += processed;
-      this.committedLineCount += this.countLines(processed);
+      this.committedLineCount += countLines(processed);
       this.rawTail = this.capRawTail(combined.slice(lastNl + 1));
       this.trimCommittedLines();
     } else {
@@ -132,14 +134,6 @@ export class TerminalBuffer {
 
   private capRawTail(text: string): string {
     return text.length > MAX_TAIL ? text.slice(text.length - MAX_TAIL) : text;
-  }
-
-  private countLines(text: string): number {
-    let count = 0;
-    for (const char of text) {
-      if (char === '\n') count += 1;
-    }
-    return count;
   }
 
   /** Imperatively sync committedLines into the supplied <pre> element. */
