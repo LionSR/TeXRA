@@ -10,7 +10,6 @@ import {
   setChatDefaultAgent,
 } from '@cli/chat/tui/forms/AgentRosterForm';
 import { formatCliAgentRoster } from '@cli/runtime/agentRoster';
-import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import {
   loadInk,
   renderWithTerminalSize,
