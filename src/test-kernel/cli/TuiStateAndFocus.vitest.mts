@@ -269,6 +269,78 @@ describe('cliState Phase 4 fields', () => {
     expect(parentStream.get().has(child1)).toBe(false);
   });
 
+  it('projects phase stages onto the run slice and leaves rounds alone', () => {
+    const hub = new SessionEventHub();
+    const detach = attachTuiRunFactSubscription(hub);
+
+    try {
+      hub.emit({
+        scope: 'run',
+        streamId: child1,
+        event: {
+          type: 'stage.start',
+          id: 'phase-2',
+          label: 'Reduce',
+          kind: 'phase',
+          index: 1,
+          total: 3,
+        },
+      });
+
+      expect(streams.get().get(child1)?.phaseStage).toEqual({
+        label: 'Reduce',
+        index: 1,
+        total: 3,
+      });
+      expect(streams.get().get(child1)?.roundStage).toBeUndefined();
+
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'stage.start',
+          id: 'round-2',
+          label: 'round 2',
+          kind: 'round',
+          index: 1,
+          total: 4,
+        },
+      });
+
+      expect(streams.get().get(root)?.roundStage).toEqual({
+        index: 1,
+        total: 4,
+      });
+      expect(streams.get().get(root)?.phaseStage).toBeUndefined();
+    } finally {
+      detach();
+    }
+  });
+
+  it('keeps a dynamically opened phase positionless', () => {
+    const hub = new SessionEventHub();
+    const detach = attachTuiRunFactSubscription(hub);
+
+    try {
+      hub.emit({
+        scope: 'run',
+        streamId: child1,
+        event: {
+          type: 'stage.start',
+          id: 'phase-x',
+          label: 'Cleanup',
+          kind: 'phase',
+        },
+      });
+
+      expect(streams.get().get(child1)?.phaseStage).toEqual({
+        label: 'Cleanup',
+      });
+    } finally {
+      detach();
+    }
+  });
+
   it('registers subagent parent edges when active child rows arrive', () => {
     const hub = new SessionEventHub();
     const detach = attachTuiRunFactSubscription(hub);

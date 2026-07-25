@@ -7,6 +7,7 @@ import { useMemo } from 'react';
 // Local imports - shared stream state
 import type { StreamTabId } from '@shared/schemas';
 import {
+  formatPhaseStageLabel,
   formatRoundStageLabel,
   formatStreamStatusLabel,
 } from '@shared/streams/streamStatusDisplay';
@@ -105,7 +106,11 @@ function SessionRow({
   // this truncate-end text sheds inline elapsed (narrow mode only), the round,
   // and last the pending-approval kind. The metadata column never shrinks.
   const approvalSuffix = pendingApprovalRowSuffix(pendingKinds);
-  const roundLabel = formatRoundStageLabel(session.slice?.roundStage);
+  // A workflow-script run advances through phases, a tool-use run through
+  // rounds; one slot carries whichever this stream has.
+  const stageLabel =
+    formatPhaseStageLabel(session.slice?.phaseStage) ??
+    formatRoundStageLabel(session.slice?.roundStage);
   // The resolved model is per-agent identity (a workflow run's grandchildren
   // can each resolve a different model); the list-root row is the conversation
   // itself, whose model already rides the status bar. A background bash stream
@@ -146,7 +151,7 @@ function SessionRow({
           {session.label}
           {statusLabel ? ` ${statusLabel}` : ''}
           {approvalSuffix ? ` · ${approvalSuffix}` : ''}
-          {roundLabel ? ` · ${roundLabel}` : ''}
+          {stageLabel ? ` · ${stageLabel}` : ''}
           {modelLabel ? ` · ${modelLabel}` : ''}
           {!metadataColumn && elapsed ? ` · ${elapsed}` : ''}
         </Text>

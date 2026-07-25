@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { BackgroundTasksPanel } from '@progressView/frontend/components/BackgroundTasksPanel';
+import type { phaseStagesContext as PhaseStagesContext } from '@progressView/frontend/contexts/streamContexts';
+import type { StreamTabId } from '@shared/schemas';
 
 // Local file imports
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+import type { ContextProvider } from '@lit/context';
 
 interface StyledBackgroundTasksPanelConstructor extends CustomElementConstructor {
   readonly elementStyles: readonly (
@@ -13,10 +16,19 @@ interface StyledBackgroundTasksPanelConstructor extends CustomElementConstructor
   )[];
 }
 
+// @lit/context captures the global Event constructor at module scope, so it
+// and the context definitions can only be imported after the test DOM globals
+// are installed (that is what useLitComponentTestDom's hook does).
+let ContextProviderCtor: typeof ContextProvider;
+let phaseStagesContext: typeof PhaseStagesContext;
+
 describe('background-tasks-panel', () => {
-  useLitComponentTestDom(
-    () => import('@progressView/frontend/components/BackgroundTasksPanel'),
-  );
+  useLitComponentTestDom(async () => {
+    ({ ContextProvider: ContextProviderCtor } = await import('@lit/context'));
+    ({ phaseStagesContext } =
+      await import('@progressView/frontend/contexts/streamContexts'));
+    await import('@progressView/frontend/components/BackgroundTasksPanel');
+  });
 
   it('strips the redundant Web Awesome card around its contents', () => {
     const element = document.createElement(
@@ -97,6 +109,54 @@ describe('background-tasks-panel', () => {
     expect(shadow.textContent).toContain('1 done');
 
     element.remove();
+  });
+
+  it('labels a running workflow-script row with its current phase', async () => {
+    const element = document.createElement(
+      'background-tasks-panel',
+    ) as BackgroundTasksPanel;
+    element.subagents = [
+      {
+        kind: 'subagent',
+        executionId: 'exec-run',
+        childStreamId: 'workflow-run',
+        agentName: 'workflow-script',
+        status: 'running',
+      },
+      {
+        kind: 'subagent',
+        executionId: 'exec-plain',
+        childStreamId: 'plain-child',
+        agentName: 'reviewer',
+        status: 'running',
+      },
+    ];
+    const container = document.createElement('div');
+    document.body.append(container);
+    // A plain (non-ReactiveElement) provider host must be connected by hand.
+    new ContextProviderCtor(container, {
+      context: phaseStagesContext,
+      initialValue: new Map([
+        [
+          'workflow-run' as StreamTabId,
+          { label: 'Reduce', index: 1, total: 3 },
+        ],
+      ]),
+    }).hostConnected();
+    container.append(element);
+    await element.updateComplete;
+
+    const shadow = element.shadowRoot!;
+    const phases = [...shadow.querySelectorAll('.task-phase')].map(
+      (node) => node.textContent,
+    );
+    // Only the run carries a phase; a stream without one gains no span.
+    expect(phases).toEqual(['Reduce 2/3']);
+    const rows = [...shadow.querySelectorAll('.task-item')];
+    expect(rows[0]?.textContent).toContain('Reduce 2/3');
+    expect(rows[1]?.textContent).not.toContain('Reduce');
+
+    container.remove();
   });
 
   it('does not show success while a retained subagent status still lags', async () => {

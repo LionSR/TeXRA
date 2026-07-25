@@ -31,6 +31,7 @@ import {
   type UpdateCompileFailuresPayload,
   type UpdateConversationProgressPayload,
   type UpdateMissingOutputsPayload,
+  type UpdatePhaseStagePayload,
   type UpdatePlanPayload,
   type UpdateQueuedFollowUpsPayload,
   type UpdateRoundStagePayload,
@@ -144,6 +145,18 @@ export class ProgressFactApplier {
         progress: event.progress,
       }),
     'stage.start': (streamId, event) => {
+      if (event.kind === 'phase') {
+        return this.handleUpdatePhaseStage({
+          streamId,
+          phaseStage: {
+            label: event.label,
+            ...(event.index !== undefined ? { index: event.index } : {}),
+            ...(event.total !== undefined && event.total > 0
+              ? { total: event.total }
+              : {}),
+          },
+        });
+      }
       if (event.kind !== 'round') return;
       return this.handleUpdateRoundStage({
         streamId,
@@ -580,6 +593,29 @@ export class ProgressFactApplier {
     ) {
       this.webviewUpdater.updateRoundStage(streamId, roundStage);
     }
+  }
+
+  /**
+   * A workflow-script run's phase is read from its *parent's* viewport (the
+   * Background Tasks row for that run), so unlike `roundStage` this cannot be
+   * pushed only for the active stream. It rides the existing per-stream
+   * metadata patch instead of a new targeted message: phases advance a
+   * handful of times per run, so the extra fields on the wire cost nothing
+   * and no new command has to be added to the outbound union.
+   */
+  private handleUpdatePhaseStage(data: UpdatePhaseStagePayload): void {
+    const { streamId, phaseStage } = data;
+    this.state.updateStreamState(streamId, (prev) => ({
+      ...prev,
+      phaseStage,
+    }));
+
+    if (!this.webviewUpdater.isAvailable()) return;
+    this.webviewUpdater.updateStreamMetadata(
+      this.state,
+      streamId,
+      this.state.streamStatus.getAllStreamStates(),
+    );
   }
 
   private flushProgressUpdates(): void {

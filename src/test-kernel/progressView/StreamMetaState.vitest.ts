@@ -7,7 +7,9 @@ import { streamMetaHandlers } from '@progressView/frontend/slices/streamMetaSlic
 import { syncHandlers } from '@progressView/frontend/slices/syncSlice';
 import {
   appState,
+  phaseStages$,
   resetProgressState,
+  setStreamStateForId,
 } from '@progressView/frontend/progressState';
 import {
   createInitialState,
@@ -252,6 +254,104 @@ describe('stream meta frontend state', () => {
     dispatch(streamMetaHandlers, message);
 
     expect(getState().streamStates.get(streamId)?.roundStage).toBeUndefined();
+  });
+
+  it('merges and clears a phase stage from a transport-safe metadata patch', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const state = createInitialState();
+    registerWorkflowStream(state, streamId);
+    const getState = seedState(state);
+
+    const patch = (
+      phaseStage: { label: string; index?: number; total?: number } | null,
+    ): ProgressViewOutboundMessage =>
+      JSON.parse(
+        JSON.stringify({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+          streamInfo: {
+            name: streamId,
+            label: 'stream-a',
+            kind: 'agent',
+            agentCategory: AgentCategory.Workflow,
+            creationTimestamp: 1,
+          },
+          streamState: {
+            kind: AgentCategory.Workflow,
+            status: STREAM_PHASE.RUNNING,
+            conversationProgress: {
+              toolCallCount: 0,
+            },
+            roundStage: null,
+            phaseStage,
+            subagents: [],
+          },
+        } satisfies ProgressViewOutboundMessage),
+      ) as ProgressViewOutboundMessage;
+
+    dispatch(
+      streamMetaHandlers,
+      patch({ label: 'Reduce', index: 1, total: 3 }),
+    );
+    expect(getState().streamStates.get(streamId)?.phaseStage).toEqual({
+      label: 'Reduce',
+      index: 1,
+      total: 3,
+    });
+
+    dispatch(streamMetaHandlers, patch(null));
+    expect(getState().streamStates.get(streamId)?.phaseStage).toBeUndefined();
+  });
+
+  it('keeps the phase-stage projection stable across unrelated stream ticks', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const otherId = 'stream-b' as StreamTabId;
+    const state = createInitialState();
+    registerWorkflowStream(state, streamId);
+    registerWorkflowStream(state, otherId);
+    state.streamStates.set(
+      streamId,
+      createStreamState(AgentCategory.Workflow, {
+        phaseStage: { label: 'Reduce', index: 1, total: 3 },
+      } satisfies Partial<StreamState>),
+    );
+    seedState(state);
+
+    const initial = phaseStages$.get();
+    expect(initial.get(streamId)).toEqual({
+      label: 'Reduce',
+      index: 1,
+      total: 3,
+    });
+
+    // An unrelated stream's progress tick rebuilds streamStates, so the
+    // projection recomputes — but its identity must not change, or every
+    // consumer re-renders on a tick that touched no phase.
+    setStreamStateForId(otherId, (prev) => ({
+      ...prev,
+      conversationProgress: { toolCallCount: 7 },
+    }));
+    expect(phaseStages$.get()).toBe(initial);
+
+    // A real phase advance does change identity.
+    setStreamStateForId(streamId, (prev) => ({
+      ...prev,
+      phaseStage: { label: 'Publish', index: 2, total: 3 },
+    }));
+    const advanced = phaseStages$.get();
+    expect(advanced).not.toBe(initial);
+    expect(advanced.get(streamId)).toEqual({
+      label: 'Publish',
+      index: 2,
+      total: 3,
+    });
+
+    // A structurally identical value arriving as a fresh object (every
+    // metadata patch that crosses postMessage) must not count as a change.
+    setStreamStateForId(streamId, (prev) => ({
+      ...prev,
+      phaseStage: { label: 'Publish', index: 2, total: 3 },
+    }));
+    expect(phaseStages$.get()).toBe(advanced);
   });
 
   it('clears round stage when synced content explicitly clears it', () => {

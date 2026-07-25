@@ -21,6 +21,7 @@ import {
   type AgentCategoryFilter,
   type ConversationProgress,
   type ExecutionId,
+  type PhaseStage,
   type RoundStage,
   type StreamTabId,
 } from '@shared/schemas';
@@ -112,6 +113,7 @@ export interface StreamExecutionState {
   kind: (typeof AgentCategory)[keyof typeof AgentCategory];
   conversationProgress: ConversationProgress;
   roundStage?: RoundStage;
+  phaseStage?: PhaseStage;
   /** Live children plus the finished ones retained for display (`finishedAt`
    *  set). */
   subagents: ActiveChildInfo[];
@@ -405,7 +407,8 @@ export class ProgressViewState {
     const needsReset =
       retainedSubagents.length > 0 ||
       current.conversationProgress.toolCallCount !== 0 ||
-      current.roundStage !== undefined;
+      current.roundStage !== undefined ||
+      current.phaseStage !== undefined;
 
     if (needsReset) {
       this._streamStates.set(stream, {
@@ -415,6 +418,7 @@ export class ProgressViewState {
         ),
         conversationProgress: { toolCallCount: 0 },
         roundStage: undefined,
+        phaseStage: undefined,
       });
     }
   }
