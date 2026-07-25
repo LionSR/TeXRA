@@ -532,15 +532,21 @@ function getTaskIcon(child: ActiveChildInfo): string {
 }
 
 /**
- * Status badge for a background-task row. A retained finished child
- * (`finishedAt` set) shows its terminal outcome; a live one shows whether it
- * is waiting/idle or actively processing.
+ * Status badge for a background-task row. A retained subagent can briefly
+ * keep its last in-flight phase while the terminal status catches up; show
+ * that phase rather than falsely reporting success. Processes have no child
+ * status source, so their retained rows use the terminal fallback below.
  */
 function taskStatusBadge(child: ActiveChildInfo): {
   readonly text: string;
   readonly variant: 'neutral' | 'warning' | 'success' | 'danger';
 } {
-  if (child.finishedAt === undefined) {
+  const subagentStatusStillInFlight =
+    child.kind === 'subagent' &&
+    (child.status === STREAM_PHASE.RUNNING ||
+      child.status === STREAM_PHASE.WAITING ||
+      child.status === DEFAULT_STREAM_METADATA_STATUS);
+  if (child.finishedAt === undefined || subagentStatusStillInFlight) {
     return child.status === STREAM_PHASE.WAITING ||
       child.status === DEFAULT_STREAM_METADATA_STATUS
       ? { text: 'waiting', variant: 'neutral' }

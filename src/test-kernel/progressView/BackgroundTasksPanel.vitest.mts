@@ -95,6 +95,30 @@ describe('background-tasks-panel', () => {
     element.remove();
   });
 
+  it('does not show success while a retained subagent status still lags', async () => {
+    const element = document.createElement(
+      'background-tasks-panel',
+    ) as BackgroundTasksPanel;
+    element.subagents = [
+      {
+        kind: 'subagent',
+        executionId: 'subagent-1',
+        childStreamId: 'child-1',
+        agentName: 'reviewer',
+        status: 'running',
+        finishedAt: 1_000,
+      },
+    ];
+    document.body.append(element);
+    await element.updateComplete;
+
+    const badge = element.shadowRoot?.querySelector('wa-badge.task-status');
+    expect(badge?.textContent).toBe('running');
+    expect(badge?.getAttribute('variant')).toBe('warning');
+
+    element.remove();
+  });
+
   it('uses completed as the deterministic fallback for retained processes', async () => {
     const element = document.createElement(
       'background-tasks-panel',
