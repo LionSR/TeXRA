@@ -13,7 +13,7 @@ import { appendTail } from '@utils/strings/appendTail';
 export const PROCESS_OUTPUT_MAX_CHARS = 100_000;
 
 /** Per-execution captured stdout/stderr tail held in stream meta. */
-export interface StreamProcessOutput {
+interface StreamProcessOutput {
   readonly stdout: string;
   readonly stderr: string;
 }
