@@ -1,14 +1,14 @@
 // Node imports
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - test support
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import {
   configureElectronTestStub,
   resetElectronTestStub,
@@ -36,20 +36,11 @@ describe('desktop app log', () => {
   afterEach(async () => {
     resetElectronTestStub();
     vi.restoreAllMocks();
-    const pathsToRemove = [...new Set(tempDirs.splice(0))];
-    await Promise.all(
-      pathsToRemove.map((path) => rm(path, { recursive: true, force: true })),
-    );
+    await cleanupTempDirs(tempDirs);
   });
 
-  async function makeTempDir(prefix: string): Promise<string> {
-    const tempDir = await mkdtemp(join(tmpdir(), prefix));
-    tempDirs.push(tempDir);
-    return tempDir;
-  }
-
   it('does not abort startup when the logs directory cannot be created', async () => {
-    const root = await makeTempDir('texra-electron-log-');
+    const root = await makeTempDir('texra-electron-log-', tempDirs);
     const userDataFile = join(root, 'userData-file');
     await writeFile(userDataFile, '');
     configureElectronTestStub({ userDataPath: userDataFile });
@@ -65,7 +56,7 @@ describe('desktop app log', () => {
   });
 
   it('truncates viewer snapshots by bytes and redacts log paths', async () => {
-    const root = await makeTempDir('texra-electron-log-');
+    const root = await makeTempDir('texra-electron-log-', tempDirs);
     const userDataPath = join(root, 'userData');
     const logsPath = join(userDataPath, 'logs');
     const logPath = join(logsPath, 'texra-desktop.log');
