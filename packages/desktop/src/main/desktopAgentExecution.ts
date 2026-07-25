@@ -253,7 +253,7 @@ export class DesktopProgressBridge {
           this.clearDesktopPresentationState();
           this.workflowFileActions.clearAllBackups();
         },
-        rebuildRenderedStreams: ({ syncActiveStream = true }) => {
+        rebuildRenderedStreams: ({ syncActiveStream }) => {
           const activeStream = this.updateStreamMetadata();
           if (syncActiveStream) this.syncStreamContent(activeStream);
         },

@@ -50,10 +50,7 @@ interface ProgressBackendLifecycleOptions {
   ): Promise<void> | void;
   cleanupDeletedStream(stream: StreamTabId): void;
   cleanupDeletedStreams(options: { allDeleted: boolean }): void;
-  rebuildRenderedStreams(options: {
-    forceRebuild: boolean;
-    syncActiveStream?: boolean;
-  }): void;
+  rebuildRenderedStreams(options: { syncActiveStream: boolean }): void;
   /** Desktop refreshes metadata after deleting an inactive stream. */
   refreshRenderedStreamsAfterDeletion?(): void;
   activateStream(stream: StreamTabId): Promise<void> | void;
@@ -213,7 +210,7 @@ export class ProgressBackend {
 
     const deletion = await this.state.clearStream(stream);
     if (deletion !== 'deleted') {
-      this.lifecycle.rebuildRenderedStreams({ forceRebuild: true });
+      this.lifecycle.rebuildRenderedStreams({ syncActiveStream: true });
       await this.notifyDeletionRetained(deletion);
       return;
     }
@@ -294,10 +291,7 @@ export class ProgressBackend {
         });
       }
     }
-    this.lifecycle.rebuildRenderedStreams({
-      forceRebuild: true,
-      syncActiveStream: !allDeleted,
-    });
+    this.lifecycle.rebuildRenderedStreams({ syncActiveStream: !allDeleted });
     if (!allDeleted) {
       await this.lifecycle.notifyDeletionRetained(
         retained.active.size,

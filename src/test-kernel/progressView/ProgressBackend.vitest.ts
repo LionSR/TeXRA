@@ -698,7 +698,6 @@ describe('ProgressBackend', () => {
         command: PROGRESS_VIEW_COMMANDS.DELETE_ALL,
       });
       expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
-        forceRebuild: true,
         syncActiveStream: false,
       });
       expect(lifecycle.notifyDeletionRetained).not.toHaveBeenCalled();
@@ -815,7 +814,6 @@ describe('ProgressBackend', () => {
         command: PROGRESS_VIEW_COMMANDS.DELETE_ALL,
       });
       expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
-        forceRebuild: true,
         syncActiveStream: true,
       });
       expect(lifecycle.notifyDeletionRetained).toHaveBeenCalledWith(1, 0);
@@ -846,7 +844,7 @@ describe('ProgressBackend', () => {
 
       expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalled();
       expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
-        forceRebuild: true,
+        syncActiveStream: true,
       });
       expect(lifecycle.notifyDeletionRetained).toHaveBeenCalledWith(0, 1);
     } finally {
