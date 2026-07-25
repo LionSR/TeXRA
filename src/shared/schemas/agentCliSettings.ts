@@ -11,9 +11,10 @@ function parseEnumSetting<T extends string>(
   values: readonly T[],
   fallback: T,
   aliases?: Readonly<Record<string, T>>,
-): (raw: string) => T {
+): (raw: unknown) => T {
   const known = values as readonly string[];
-  return (raw: string): T => {
+  return (raw: unknown): T => {
+    if (typeof raw !== 'string') return fallback;
     if (known.includes(raw)) return raw as T;
     return aliases?.[raw] ?? fallback;
   };
