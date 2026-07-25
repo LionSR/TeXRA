@@ -1,12 +1,10 @@
 /**
  * Collapsible panel for displaying background tasks (subagents and inquiries).
  *
- * Uses `<wa-details>` for the outer panel and for each nested section
- * (Processes, Subagents, Inquiries) and per-task output, for consistent
- * styling with other panels (Todos, Files, etc.) — the nested sections use the
+ * Uses `<wa-details>` for the outer panel and each nested section, matching the
+ * styling of other panels (Todos, Files, etc.); nested sections use the
  * `.collapsible-quiet` variant. Each subagent row is clickable to navigate to
- * its stream tab — finished ones included, their tab is still there. Processes
- * don't have their own tab so they are not clickable.
+ * its stream tab, including finished rows whose tabs are retained.
  *
  * Rows are live children followed by the finished children the backend retains
  * (`ActiveChildInfo.finishedAt`); this panel never counts what it cannot list.
@@ -468,16 +466,16 @@ function isAgentTool(child: ActiveChildInfo): boolean {
 function getTaskIcon(child: ActiveChildInfo): string {
   if (child.toolName === 'bash') return 'terminal';
   if (isAgentTool(child)) return 'robot';
-  // Subagents (delegation, workflow) default to server-process;
-  // processes without a toolName fall back to terminal.
+  // Subagents (delegation, workflow) default to server-process; a
+  // legacy process-shaped record without a tool name falls back to terminal.
   return child.kind === 'subagent' ? 'server-process' : 'terminal';
 }
 
 /**
  * Status badge for a background-task row. A retained subagent can briefly
  * keep its last in-flight phase while the terminal status catches up; show
- * that phase rather than falsely reporting success. Processes have no child
- * status source, so their retained rows use the terminal fallback below.
+ * that phase rather than falsely reporting success. Legacy process-shaped
+ * records have no child status source, so they use the terminal fallback.
  */
 function taskStatusBadge(child: ActiveChildInfo): {
   readonly text: string;

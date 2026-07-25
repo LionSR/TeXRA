@@ -1,7 +1,6 @@
 // Append `chunk` to `current` and keep at most `maxChars` UTF-16 code units,
-// truncating at the head. Used by the bash background tail, the CLI TUI
-// process-output buffer, and the shared stream-meta reducer; consolidated here
-// to avoid drift.
+// truncating at the head. Shared by the bash output tails and model attachment
+// truncation so their Unicode-safe head cuts do not drift.
 //
 // `retainChars` is the length to keep once the cap is crossed; it defaults to
 // `maxChars` (an exact head-cut at the cap). Passing a smaller `retainChars`

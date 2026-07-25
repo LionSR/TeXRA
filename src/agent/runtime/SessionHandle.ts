@@ -98,7 +98,7 @@ export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
   >;
 
 export class SessionHandle {
-  /** Per-run execution handles; owns the process-output poller + status sub. */
+  /** Per-run execution handles and their status subscription. */
   readonly executions: ExecutionRegistry;
   /** Execution-status subscriptions bound to agent stream lifecycles. */
   readonly subscriptions: ExecutionSubscriptionBinder;
